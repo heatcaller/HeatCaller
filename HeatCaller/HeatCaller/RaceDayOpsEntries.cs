@@ -335,7 +335,7 @@ public sealed partial class RaceDayService
         }
 
         return OpResult.Done(
-            $"Added driver {NameOf(profile)}" + (className.Length > 0 ? $" in {className}" : string.Empty) + (checkIn ? ", checked in" : string.Empty),
+            $"Added driver {NameOf(profile)}" + (className.Length > 0 ? $" in {className}" : string.Empty) + (checkIn ? (_host.CheckIns.IsCheckedIn(transponder) ? ", checked in" : ", not checked in (this day is closed)") : string.Empty),
             $"{ShownNameOf(profile, context.Channel)} is added.",
             new { driver = DriverRow(profile, context.Channel) });
     }
@@ -539,6 +539,13 @@ public sealed partial class RaceDayService
     {
         var profile = RequireDriver(context);
         var wanted = context.Bool("checkedIn") ?? throw new OpRefused("\"checkedIn\" is needed.");
+
+        // Not onto a closed day - see CheckInStore.ClosedCurrentDay. Said to
+        // the phone, rather than read back as unchanged with no reason.
+        if (CheckInStore.ClosedCurrentDay(_host.Events) is { } closedDay)
+        {
+            throw new OpRefused($"This day is closed (\"{closedDay.DisplayName}\"), so check-ins can't be changed on it. Start tonight's race day, or reopen that one, first.");
+        }
 
         var changed = _host.SetCheckedIn(profile.Transponder, wanted);
 

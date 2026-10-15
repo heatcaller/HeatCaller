@@ -84,8 +84,30 @@ internal static class NightRecap
     /// ShowTreatment.RunLongAsync and WaitForTheReadAsync by the two
     /// callers that read this out. Found 12 Oct 2026.
     /// </summary>
+    /// AND ONE PIECE MORE THAN THE BACKSTOP (14 Oct 2026), because the
+    /// sign-off is added past it - see <see cref="SignOff"/>. Sixteen
+    /// pieces rather than fifteen, which is twenty seconds nobody will
+    /// ever use and the alternative is the music coming up under the one
+    /// sentence this change exists to guarantee.
     internal static readonly TimeSpan LongestRead =
-        (LongestChunk * MostChunks) + TimeSpan.FromMinutes(1);
+        (LongestChunk * (MostChunks + 1)) + TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// How long a recap - or a driver's own piece, which is read the same
+    /// way - may hold the broadcast floor: the writing, then the read.
+    ///
+    /// THE FLOOR'S OWN CEILING WAS SHORTER THAN THIS (14 Oct 2026). A claim
+    /// is let go after six minutes (see ShowFloor), and the floor is claimed
+    /// BEFORE the model is asked - so up to three minutes of writing and
+    /// then a read of up to LongestRead came to more than nine, and the
+    /// claim was broken partway through the recap with the director's tick
+    /// free to open a second show on top of it. Five minutes on top of the
+    /// read covers the long-piece write timeout, the driver's clip, the
+    /// opener and the playout. A write that runs longer still is caught
+    /// once it comes back: the caller checks it still holds the floor
+    /// before it plays anything.
+    /// </summary>
+    internal static readonly TimeSpan LongestHold = LongestRead + TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// Extra words the recap is allowed over the club's own per-line limit.
@@ -178,6 +200,106 @@ internal static class NightRecap
     }
 
     /// <summary>
+    /// How the host signs the show off - written here, not asked for.
+    ///
+    /// ASKED FOR FROM THE FLOOR (14 Oct 2026). A recap show has to END
+    /// rather than stop: the host names himself and names the show, the
+    /// way every broadcast anybody has ever posted does - "I'm Frankie
+    /// Johnny, see you next time on Race Day Ruckus". This is the one
+    /// output of the app somebody outside the building sits through, and a
+    /// four-minute piece that simply runs out of sentences is the thing a
+    /// listener notices about it.
+    ///
+    /// WRITTEN IN CODE AND NOT BY THE MODEL, which is the whole point.
+    /// The requirement is "always", and the model is the one part of this
+    /// that cannot promise always: <see cref="Instruction"/> now asks it
+    /// NOT to sign off and this line is put on afterwards. Asking nicely
+    /// was the obvious cheaper fix and it fails in two directions at once
+    /// - the 0.6B that ships in the installer drops a closing line often
+    /// enough to notice, and the sign-off is also the LAST sentence of a
+    /// four-hundred-word piece, so on the nights the word allowance ran
+    /// out it was the sentence that got cut. A club cannot tell those two
+    /// apart from the floor, and neither can the log.
+    ///
+    /// SAID EVEN WITH NEITHER NAME TYPED. A show with no name still has
+    /// to end, and "that's the night, see you next time" is a sign-off
+    /// where silence is not. Every other naming in this app goes quiet
+    /// when the club has typed nothing, which is right for a name dropped
+    /// mid-paragraph and wrong for the last thing said all evening.
+    /// </summary>
+    internal static string SignOff(string? host, string? show)
+    {
+        var who = CommentaryService.Field(host, CommentaryService.MaxShowNameChars);
+        var what = CommentaryService.Field(show, CommentaryService.MaxShowNameChars);
+
+        if (who.Length > 0 && what.Length > 0)
+        {
+            return $"I'm {who}. See you next time on {what}.";
+        }
+
+        if (who.Length > 0)
+        {
+            return $"I'm {who}. See you next time.";
+        }
+
+        if (what.Length > 0)
+        {
+            return $"That's the night from {what}. See you next time.";
+        }
+
+        return "That's the night. See you next time.";
+    }
+
+    /// <summary>
+    /// What marks a sentence as the model having said goodbye on its own.
+    ///
+    /// Only ever matched against the LAST sentences of a piece, and only
+    /// against short ones - see <see cref="LongestFarewell"/>. "We'll see
+    /// you back here when the championship goes down to the last round"
+    /// in the middle of a paragraph is a figure of speech, not a sign-off,
+    /// and a list like this one applied to a whole script would eat real
+    /// writing.
+    /// </summary>
+    private static readonly string[] Farewells =
+    {
+        "see you", "see ya", "goodnight", "good night", "until next", "next time",
+        "that's all", "thats all", "that is all", "from me", "from all of us",
+        "signing off", "sign off", "take care", "drive safe", "safe home",
+        "thanks for listening", "thanks for joining", "thank you for listening",
+        "thank you for joining", "goodbye", "good bye", "bye for now",
+    };
+
+    /// <summary>
+    /// The longest a sentence may run and still be read as a goodbye
+    /// rather than a paragraph that happens to contain one of the words.
+    /// </summary>
+    private const int LongestFarewell = 22;
+
+    private static bool IsFarewell(string sentence)
+    {
+        var words = sentence.Split(
+            new[] { ' ', '\t', '\n', '\r' },
+            StringSplitOptions.RemoveEmptyEntries).Length;
+
+        if (words == 0 || words > LongestFarewell)
+        {
+            return false;
+        }
+
+        var lower = sentence.ToLowerInvariant();
+
+        foreach (var mark in Farewells)
+        {
+            if (lower.Contains(mark, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// The script broken into pieces a voice can take, in order.
     ///
     /// Split at SENTENCE boundaries and never inside one, through
@@ -190,7 +312,13 @@ internal static class NightRecap
     /// mid-clause by a voice engine is worse than a long one, and a model
     /// asked for a broadcast piece does not write minute-long sentences.
     /// </summary>
-    internal static IReadOnlyList<string> Chunks(string? script)
+    /// <param name="signOff">
+    /// The last thing said, added as a piece of its own - see
+    /// <see cref="SignOff"/>. Null or empty leaves the piece exactly as
+    /// written, which is what a caller that only wants to measure it
+    /// wants.
+    /// </param>
+    internal static IReadOnlyList<string> Chunks(string? script, string? signOff = null)
     {
         var said = new List<string>();
 
@@ -199,7 +327,24 @@ internal static class NightRecap
             return said;
         }
 
-        var sentences = SponsorCopy.Sentences(OneBlock(script));
+        var sentences = SponsorCopy.Sentences(OneBlock(script)).ToList();
+
+        // THE MODEL'S OWN GOODBYE, TAKEN OFF THE END (14 Oct 2026). A
+        // sign-off is put on below whatever happens, so a model that said
+        // goodbye anyway would have the room hear two of them back to
+        // back - which sounds like a fault rather than a flourish.
+        //
+        // Never the last sentence standing: a piece that was ONLY a
+        // goodbye would otherwise come back empty and be reported to the
+        // club as "the model did not write anything usable", which is a
+        // different and wrong complaint.
+        if (!string.IsNullOrWhiteSpace(signOff))
+        {
+            while (sentences.Count > 1 && IsFarewell(sentences[^1]))
+            {
+                sentences.RemoveAt(sentences.Count - 1);
+            }
+        }
 
         var building = new System.Text.StringBuilder();
 
@@ -243,6 +388,23 @@ internal static class NightRecap
         if (building.Length > 0 && said.Count < MostChunks)
         {
             said.Add(building.ToString());
+        }
+
+        // AND THE SIGN-OFF, PAST THE BACKSTOP ON PURPOSE.
+        // <see cref="MostChunks"/> throws away everything after the
+        // fifteenth piece, and the sign-off is the one piece that must be
+        // said - so it goes on AFTER that cut rather than queueing behind
+        // it. A model that ignored the length entirely would otherwise
+        // have taken the sign-off down with the rest of its overrun, which
+        // is precisely the night a club most wants the show to end
+        // properly. LongestRead allows for the extra piece.
+        //
+        // Not onto nothing, though: the caller reads an empty list as "the
+        // model wrote nothing usable" and tells the club so, and a show
+        // that is a sign-off and nothing else is worse than that message.
+        if (said.Count > 0 && !string.IsNullOrWhiteSpace(signOff))
+        {
+            said.Add(signOff.Trim());
         }
 
         return said;
@@ -292,5 +454,12 @@ internal static class NightRecap
         + "somebody who was not watching, so say what it was. "
         + "Everything you say must come from the facts above - every name, time, position and count. Do not add a "
         + "result, a lap time, an incident, a championship position or a mood that is not there, and where the "
-        + "facts are thin, write a shorter piece rather than filling it out.";
+        + "facts are thin, write a shorter piece rather than filling it out. "
+        // THE SIGN-OFF IS NOT THE MODEL'S JOB (14 Oct 2026) - see SignOff
+        // for why it is written in code instead. Said here as well so the
+        // piece does not run into the one that is added: a model told
+        // nothing writes its own goodbye about a third of the time, and
+        // Chunks then has to take it back off.
+        + "Do not sign off, say goodbye, name yourself or name the show at the end - the sign-off is a "
+        + "separate line added afterwards. Finish on the night itself.";
 }

@@ -38,6 +38,20 @@ public sealed class CheckInControl : UserControl
     private Section? _pnlNoDay;
 
     /// <summary>
+    /// The banner's two lines, held so it can say which of its two things
+    /// is wrong: no race day at all, or a current day that is closed - see
+    /// RefreshNoDayBanner.
+    /// </summary>
+    private Label? _lblNoDayHeadline;
+    private Label? _lblNoDayDetail;
+
+    private const string NoDayHeadline = "No race day is open.";
+    private const string NoDayDetail =
+        "Check-ins are filed against a race day, so ticks made now are not kept with tonight's racing "
+        + "and the heats cannot be built from them. Start one and this page starts counting.";
+    private const string ClosedDayHeadline = "This day is closed.";
+
+    /// <summary>
     /// Whether the banner is MEANT to be showing.
     ///
     /// Held separately because Control.Visible reports effective
@@ -344,6 +358,14 @@ public sealed class CheckInControl : UserControl
         _btnTechLog.Click += (_, _) => TechLogRequested?.Invoke();
         btnCheckOutAll.Click += (_, _) =>
         {
+            // Not on a closed day: its sheet is the record of who was at
+            // that meeting, and this used to wipe it - see
+            // CheckInStore.ClosedCurrentDay.
+            if (RefusedOnClosedDay())
+            {
+                return;
+            }
+
             if (AppDialog.Show(this, "Clear all check-ins? Do this at the start of a new event day.",
                 "Confirm check-out", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
             {
@@ -501,7 +523,7 @@ public sealed class CheckInControl : UserControl
         var headline = _textSize.Wear(
             new Label
             {
-                Text = "No race day is open.",
+                Text = NoDayHeadline,
                 AutoSize = true,
                 ForeColor = AppTheme.Warning,
             },
@@ -509,11 +531,14 @@ public sealed class CheckInControl : UserControl
 
         var detail = new Label
         {
-            Text = "Check-ins are filed against a race day, so ticks made now are not kept with tonight's racing "
-                 + "and the heats cannot be built from them. Start one and this page starts counting.",
+            Text = NoDayDetail,
             AutoSize = true,
             ForeColor = AppTheme.TextDark,
         };
+
+        // Rewritten by RefreshNoDayBanner when it is a closed day showing.
+        _lblNoDayHeadline = headline;
+        _lblNoDayDetail = detail;
 
         var start = new Button { Text = "Start a Race Day" };
         start.Click += (_, _) => StartRaceDayRequested?.Invoke();
@@ -531,11 +556,18 @@ public sealed class CheckInControl : UserControl
     }
 
     /// <summary>
-    /// Shows the banner only when check-ins have nowhere real to go.
+    /// Shows the banner only when check-ins have nowhere real to go - or
+    /// when the current day is closed.
     ///
     /// The legacy holder counts as nowhere: it is the cabinet everything
     /// recorded before race days existed lives in, not a day anybody is
     /// running.
+    ///
+    /// A closed day used to count as somewhere. Picking last week's day to
+    /// look at its results leaves it current, and this page then showed a
+    /// full working grid with no warning: tonight's arrivals were ticked
+    /// onto last week's sheet. It now says the day is closed, and the desk,
+    /// the phones and the relay refuse check-ins onto it.
     /// </summary>
     private void RefreshNoDayBanner()
     {
@@ -544,8 +576,25 @@ public sealed class CheckInControl : UserControl
             return;
         }
 
+        var closed = CheckInStore.ClosedCurrentDay(_events);
         var open = _events?.Active is { IsLegacy: false };
-        var wanted = _events is not null && !open;
+        var wanted = _events is not null && (!open || closed is not null);
+
+        // Which of the two it says, every time - the banner can stay up
+        // while what is wrong changes from one to the other.
+        if (_lblNoDayHeadline is not null && _lblNoDayDetail is not null)
+        {
+            _lblNoDayHeadline.Text = closed is null ? NoDayHeadline : ClosedDayHeadline;
+            _lblNoDayDetail.Text = closed is null ? NoDayDetail : ClosedDayDetail(closed);
+        }
+
+        // And the ticks cannot be changed by hand while it is closed. The
+        // click handler refuses too (Grid_CellClick); this stops the space
+        // bar getting round it.
+        if (_grid.Columns["checkedIn"] is { } tickColumn)
+        {
+            tickColumn.ReadOnly = closed is not null;
+        }
 
         // Against the field, not against panel.Visible. That getter answers
         // EFFECTIVE visibility - false for everything on a page that is not
@@ -576,6 +625,12 @@ public sealed class CheckInControl : UserControl
     /// </summary>
     public void CheckInEveryoneShown()
     {
+        // Not onto a closed day - see CheckInStore.ClosedCurrentDay.
+        if (RefusedOnClosedDay())
+        {
+            return;
+        }
+
         var shown = CurrentlyShownProfiles().Select(p => p.Transponder).ToList();
 
         _checkIns.CheckInAll(shown);
@@ -643,6 +698,14 @@ public sealed class CheckInControl : UserControl
             return;
         }
 
+        // Said on the status line rather than in a window, so a queue at the
+        // scanner is not held up by a box to click - see ClosedCurrentDay.
+        if (CheckInStore.ClosedCurrentDay(_events) is { } closedDay)
+        {
+            SetScanStatus($"Not checked in: this day is closed (\"{closedDay.DisplayName}\"). Start tonight's race day first.", AppTheme.Danger);
+            return;
+        }
+
         _checkIns.SetCheckedIn(profile.Transponder, true);
         CheckInChangedAtDesk?.Invoke(profile.Transponder);
         RefreshDriverList();
@@ -657,6 +720,13 @@ public sealed class CheckInControl : UserControl
     /// </summary>
     private void AddDriver()
     {
+        // Asked before the window opens: the add checks them in, and not
+        // onto a closed day - see CheckInStore.ClosedCurrentDay.
+        if (RefusedOnClosedDay())
+        {
+            return;
+        }
+
         var classes = _raceClasses.All.Select(c => c.Name).ToList();
 
         // Starts on the class being filtered to - somebody working through
@@ -713,6 +783,32 @@ public sealed class CheckInControl : UserControl
         }
 
         SetScanStatus($"Added and checked in: {form.DriverName}", AppTheme.Success);
+    }
+
+    /// <summary>What the banner says under "This day is closed."</summary>
+    private static string ClosedDayDetail(RaceEvent day) =>
+        $"\"{day.DisplayName}\" is closed. This page is showing who was checked in that day, and it will not take "
+        + "check-ins or check-outs: start tonight's race day, or reopen this one on The Day, to change them.";
+
+    /// <summary>
+    /// Says no, in a window, when the current day is closed - see
+    /// CheckInStore.ClosedCurrentDay. True when it refused.
+    ///
+    /// Owned by the window this page is in rather than the page itself: the
+    /// Today tab calls CheckInEveryoneShown while this page is not on screen.
+    /// </summary>
+    private bool RefusedOnClosedDay()
+    {
+        if (CheckInStore.ClosedCurrentDay(_events) is not { } day)
+        {
+            return false;
+        }
+
+        AppDialog.Show(FindForm() ?? (IWin32Window)this,
+            $"\"{day.DisplayName}\" is closed, so its check-in sheet can't be changed - it is the record of who was there that day.\r\n\r\n"
+            + "For tonight, start a new race day. To change that day's sheet, reopen it on The Day first.",
+            "This day is closed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return true;
     }
 
     private static string DisplayName(DriverProfile profile) =>
@@ -1036,6 +1132,12 @@ public sealed class CheckInControl : UserControl
             return;
         }
 
+        // Not on a closed day - see CheckInStore.ClosedCurrentDay.
+        if (RefusedOnClosedDay())
+        {
+            return;
+        }
+
         // Clicking directly toggles the checkbox and commits immediately -
         // without this, a single click only starts editing and needs a
         // second click/Enter to actually register, which reads as broken.
@@ -1058,6 +1160,16 @@ public sealed class CheckInControl : UserControl
 
         if (e.ColumnIndex == 0)
         {
+            // A tick that got past the click handler and the read-only
+            // column (the day closed while the page was up): not written,
+            // and put back to what the sheet says once this event is done.
+            if (CheckInStore.ClosedCurrentDay(_events) is { } closedDay)
+            {
+                SetScanStatus($"Not changed: this day is closed (\"{closedDay.DisplayName}\").", AppTheme.Danger);
+                BeginInvoke(new Action(RefreshCheckInMarks));
+                return;
+            }
+
             var isChecked = (bool)(_grid.Rows[e.RowIndex].Cells[0].Value ?? false);
             _checkIns.SetCheckedIn(profile.Transponder, isChecked);
             CheckInChangedAtDesk?.Invoke(profile.Transponder);

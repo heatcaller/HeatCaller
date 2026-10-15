@@ -60,6 +60,21 @@ public sealed class CheckInStore
 
     private Sheet Current => SheetFor(CurrentEventId);
 
+    /// <summary>
+    /// The current race day when it is CLOSED, or null.
+    ///
+    /// A closed day can still be the current one - picking last week's day
+    /// to look at its results makes it current, open or not - and every
+    /// check-in made after that went onto last week's sheet: tonight's
+    /// arrivals were filed as having been at last week's meeting, and Check
+    /// Out Everyone wiped who really was there. The desk, the phones and the
+    /// relay all ask this before they change a sheet, and refuse while it
+    /// answers a day. Static, as this store does not know the event store
+    /// (see CurrentEventId).
+    /// </summary>
+    public static RaceEvent? ClosedCurrentDay(RaceEventStore? events) =>
+        events?.Active is { IsLegacy: false, IsOpen: false } day ? day : null;
+
     private Sheet SheetFor(string eventId)
     {
         if (!_sheets.TryGetValue(eventId, out var sheet))

@@ -1173,7 +1173,7 @@ public static class CommentaryRaceFacts
     /// <param name="mains">The mains' history here, as CommentaryReaders.MainsHere worked it out.</param>
     /// <param name="winnerId">Tonight's winner, as a transponder. Empty when nobody won in a way worth counting.</param>
     /// <param name="winnerName">The announcer's name for them. Empty is no fact, not an anonymous one.</param>
-    /// <param name="key">Which race - a run ending is this race's news, and the next main of the night is a different question.</param>
+    /// <param name="key">Which night - the recap passes the race day (14 Oct 2026), so with the layout and class in the fact's key the line is said once a meeting, not once per A-main leg.</param>
     public static FactBlock? RunOfMainsHere(MainsOnLayout mains, string? winnerId, string? winnerName, string key)
     {
         var layout = CommentaryFacts.Clean(mains.LayoutName);

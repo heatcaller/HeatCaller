@@ -3,10 +3,15 @@
 /// <summary>
 /// Settings for local LLM colour commentary.
 ///
-/// The page leads with what this actually requires - a separate Ollama
-/// install - because the most likely reason it won't work is that the model
-/// isn't running, and that should be obvious from here rather than
-/// discovered mid-race.
+/// The page leads with what actually writes the lines - the club relay, or
+/// the small model built into HeatCaller - because the most likely question
+/// anyone has here is which of the two is doing the work tonight, and that
+/// should be obvious from this page rather than discovered mid-race.
+///
+/// Neither needs anything installed any more. Until 14 Oct 2026 the local
+/// path was Ollama, which asked a club volunteer for a command prompt and an
+/// "ollama pull" before the best feature in the app did anything; it is now
+/// one choice among three rather than the only way.
 /// </summary>
 public sealed class CommentaryControl : UserControl
 {
@@ -14,8 +19,15 @@ public sealed class CommentaryControl : UserControl
     private readonly CommentaryService _commentary;
 
     private readonly CheckBox _chkEnabled = new ThemedCheckBox();
-    private readonly TextBox _txtEndpoint = new();
-    private readonly TextBox _txtModel = new();
+    // --- The model on this PC (14 Oct 2026) ---
+    //
+    // Was Ollama, which meant a separate install and a command prompt
+    // before the best feature in the app did anything - a thing no club
+    // volunteer should be asked for. A small model now ships inside the
+    // installer and runs in this process, so there is nothing to set up and
+    // nothing to point at: one tick box, and the Endpoint and Model fields
+    // that configured Ollama are gone with it.
+    private readonly CheckBox _chkLocalModel = new ThemedCheckBox();
     private readonly NumericUpDown _numTimeout = new();
     private readonly CheckBox _chkUseRelay = new ThemedCheckBox();
 
@@ -63,6 +75,23 @@ public sealed class CommentaryControl : UserControl
     // the picker says what the club has just chosen in its consequences
     // rather than its label, the way the show music's Describe lines do.
     private readonly ComboBox _cmbCoHostStance = new();
+
+    // --- How much the two of them actually talk (14 Oct 2026) ---
+    //
+    // A two-hander was always two turns - a remark and a reply - which is a
+    // call-and-response rather than a conversation, and the segments that
+    // can be exchanges are the ones with something worth talking about. And
+    // the co-host was held for the mains unless the whole evening was made
+    // chattier, which is a blunt way to ask for one thing.
+    private readonly ComboBox _cmbExchangeTurns = new();
+
+    /// <summary>
+    /// Delivery tags on spoken commentary. Was the recap's alone and not a
+    /// choice at all - segments were never tagged, so the show's energy
+    /// dropped the moment the recap ended.
+    /// </summary>
+    private readonly CheckBox _chkVoiceTags = new ThemedCheckBox();
+    private readonly CheckBox _chkTwoVoicesInHeats = new ThemedCheckBox();
     private readonly Label _lblCoHostStance = new();
 
     // --- How chatty the night is (12 Oct 2026) ---
@@ -122,7 +151,7 @@ public sealed class CommentaryControl : UserControl
     /// What the last test found, beside the Test Connection button. As tall
     /// as the longest of the things it usually says at the width it has, so
     /// a result coming back never moves the cards under it (SteadyLabel);
-    /// Ollama's own error text can run longer, and then it grows.
+    /// the brain's own error text can run longer, and then it grows.
     /// </summary>
     private readonly SteadyLabel _lblTestResult = new();
 
@@ -284,6 +313,7 @@ public sealed class CommentaryControl : UserControl
     private (Font Font, int Count, int Width)? _voiceWidth;
     private (Font Font, int Count, int Width)? _coHostVoiceWidth;
     private (Font Font, int Count, int Width)? _coHostStanceWidth;
+    private (Font Font, int Count, int Width)? _exchangeTurnsWidth;
     private (Font Font, int Count, int Width)? _chatterWidth;
 
     /// <summary>
@@ -340,7 +370,6 @@ public sealed class CommentaryControl : UserControl
     private const string NightBeforeCaption = "Write The Preview";
 
     /// <summary>The boxes' and pickers' widths at the normal text size - see SizeFields.</summary>
-    private const int EndpointWidth = 300;
     private const int TonePickerWidth = 220;
     private const int ShowNameWidth = 280;
 
@@ -675,7 +704,7 @@ public sealed class CommentaryControl : UserControl
         var lblIntro = new Label
         {
             Text = "Optional colour commentary from a language model. HeatCaller can have it written by the club relay, "
-                 + "which needs nothing installed here, or by an Ollama install on this machine.",
+                 + "or by a small model built into HeatCaller that runs on this PC. Neither needs anything installed.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -684,8 +713,8 @@ public sealed class CommentaryControl : UserControl
             new Label
             {
                 Text = "The relay writes for clubs whose plan includes commentary - set the Club Website page up and leave the "
-                     + "box below ticked. Ollama is what writes otherwise, and it needs ollama.com running locally with a model "
-                     + "pulled - e.g. \"ollama pull llama3.2:3b\". If neither answers, commentary is skipped and the normal "
+                     + "box below ticked. The built-in model covers everything else, including nights with no internet at all, "
+                     + "and there is nothing to install for it. If neither writes, commentary is skipped and the normal "
                      + "announcement lines are used instead.",
                 AutoSize = true,
                 ForeColor = AppTheme.Accent,
@@ -726,38 +755,31 @@ public sealed class CommentaryControl : UserControl
         };
 
         var relayHint = Hint(
-            "The relay writes with a hosted model no race laptop could run, and needs nothing installed here. Ollama below "
-            + "covers whatever the relay can't write - the internet down, the club's lines for the month used up, or "
-            + "commentary not included in the club's plan yet. Untick this and Ollama writes everything.");
+            "The relay writes with a hosted model no race laptop could run, and needs nothing installed here. The model "
+            + "on this PC covers whatever the relay can't write - the internet down, the club's lines for the month used up, or "
+            + "commentary not included in the club's plan yet. Untick this and the model on this PC writes everything.");
 
-        _lblRelayState.Wordings = new[]
-        {
-            "Everything is written by Ollama below.",
-            "The Club Website page isn't set up yet, so everything is written by Ollama below.",
-            "The Club Website page is set up, so the relay writes first and Ollama below covers what it can't.",
-        };
+        // Every sentence UpdateRelayState can produce, built by the same
+        // method that produces it. The list is only here so the label can
+        // size itself to the longest; typing them out a second time is how
+        // it silently stopped matching last time the wording changed.
+        _lblRelayState.Wordings = AllRelayStates();
 
         // ------------------------------------------------------------------
         // Connection
         // ------------------------------------------------------------------
 
-        _txtEndpoint.Text = _settings.CommentaryEndpoint;
-        _txtEndpoint.TextChanged += (_, _) =>
+        Check(_chkLocalModel, "Let the model on this PC write when the relay can't");
+        _chkLocalModel.Checked = _settings.CommentaryUseLocalModel;
+        _chkLocalModel.CheckedChanged += (_, _) =>
         {
-            _settings.CommentaryEndpoint = _txtEndpoint.Text.Trim();
+            _settings.CommentaryUseLocalModel = _chkLocalModel.Checked;
             _settings.Save();
             ApplyToService();
+            UpdateEnabledState();
+            UpdateRelayState();
+            TriggerWarmUp();
         };
-        _txtEndpoint.Leave += (_, _) => TriggerWarmUp();
-
-        _txtModel.Text = _settings.CommentaryModel;
-        _txtModel.TextChanged += (_, _) =>
-        {
-            _settings.CommentaryModel = _txtModel.Text.Trim();
-            _settings.Save();
-            ApplyToService();
-        };
-        _txtModel.Leave += (_, _) => TriggerWarmUp();
 
         _numTimeout.Minimum = 2;
         _numTimeout.Maximum = 60;
@@ -771,9 +793,12 @@ public sealed class CommentaryControl : UserControl
 
         var connectionGrid = new FieldGrid();
 
-        Flush(connectionGrid.AddRow("Endpoint:", _txtEndpoint));
-        Flush(connectionGrid.AddRow("Model:", _txtModel));
-        connectionGrid.AddHint("A small model is the right choice here - it only has to rephrase facts, and a big one is too slow to be useful.");
+        Stepped(connectionGrid.AddRow(string.Empty, _chkLocalModel));
+        connectionGrid.AddHint(
+            "It ships inside HeatCaller - nothing to install, and it works with the internet down. It is small, so its "
+            + "lines are plainer than the relay's, which is the point: it only has to cover the races the relay cannot. "
+            + "Untick it and those races are simply quieter.");
+
         Flush(connectionGrid.AddRow("Give up after:", Line(_numTimeout, Suffix("seconds - after this the normal announcement line is used instead"))));
 
         // Right under the fields it checks. It used to be the last thing on
@@ -786,13 +811,13 @@ public sealed class CommentaryControl : UserControl
         {
             "Enable commentary first.",
             "Testing...",
-            "No response - check Ollama is running and the model name is right. "
+            "No response - any [llm] line in the console says why. "
                 + "Commentary will be skipped and normal announcements used.",
             "Working - replied in 99.9s. That's comfortably within the gap between races.",
         };
 
         // The result beside the button, wrapping to the room to its right -
-        // Ollama's own error text can run to two lines and more. The button
+        // the brain's own error text can run to two lines and more. The button
         // is a column of its own (Beside), so a long result never runs under
         // it, and is level with its caption while it is one line (the Keep
         // at the end).
@@ -809,8 +834,8 @@ public sealed class CommentaryControl : UserControl
         var connection = new Section("Connection");
 
         connection.Add(Hint(
-            "Ollama on this machine. It writes everything when the relay box above is off, and covers whatever the relay "
-            + "can't write when it is on."));
+            "What writes on this PC. It writes everything when the relay box above is off, and covers whatever the relay "
+            + "can't write when it is on - which is what keeps the announcer talking through an internet outage."));
         connection.Add(connectionGrid);
         connection.Add(testRow, gapBelow: 0);
 
@@ -933,6 +958,9 @@ public sealed class CommentaryControl : UserControl
             {
                 _settings.CommentaryToneStyle = item.Tone;
                 _settings.Save();
+
+                // The tag box lives or dies by this - see UpdateEnabledState.
+                UpdateEnabledState();
             }
         };
 
@@ -957,8 +985,21 @@ public sealed class CommentaryControl : UserControl
         // from the width of "words" before it.
         var styleGrid = new FieldGrid();
 
+        Check(_chkVoiceTags, "Mark the lines excited when they're spoken");
+        _chkVoiceTags.Checked = _settings.CommentaryVoiceTags;
+        _chkVoiceTags.CheckedChanged += (_, _) =>
+        {
+            _settings.CommentaryVoiceTags = _chkVoiceTags.Checked;
+            _settings.Save();
+            UpdateEnabledState();
+        };
+
         Flush(styleGrid.AddRow("Writing tone:", _cmbTone));
-        styleGrid.AddHint("Enthusiastic also marks every sentence of the recap as excited on a v3 voice, so the energy holds to the end.");
+        Flush(styleGrid.AddRow(string.Empty, _chkVoiceTags));
+        styleGrid.AddHint(
+            "Marks every sentence of the recap AND the segments as excited, so the energy holds past the recap - "
+            + "and opens the cold open and the sign-off on a shout. Needs an ElevenLabs v3 voice and the "
+            + "Enthusiastic tone; it does nothing otherwise, and a club that picked Dry is left alone.");
         Flush(styleGrid.AddRow("Max length:", Line(_numMaxWords, Suffix("words", muted: false))));
         Flush(styleGrid.AddRow("Phrasing variety:", _numVariety));
 
@@ -1459,12 +1500,45 @@ public sealed class CommentaryControl : UserControl
 
         _lblCoHostStance.Text = CoHostStance.Describe(_settings.CoHostStance);
 
+        // Index 0 is two turns, so the index plus two IS the turn count.
+        _cmbExchangeTurns.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbExchangeTurns.Items.Clear();
+        _cmbExchangeTurns.Items.Add("Brief - a remark and a reply");
+        _cmbExchangeTurns.Items.Add("Conversational - three turns");
+        _cmbExchangeTurns.Items.Add("Full - four turns");
+        _cmbExchangeTurns.SelectedIndex = Math.Clamp(_settings.CommentaryExchangeTurns, 2, CommentaryExchange.MostTurns) - 2;
+
+        _cmbExchangeTurns.SelectedIndexChanged += (_, _) =>
+        {
+            _settings.CommentaryExchangeTurns = _cmbExchangeTurns.SelectedIndex + 2;
+            _settings.Save();
+        };
+
+        Check(_chkTwoVoicesInHeats, "Two voices in the heats too, not just the mains");
+        _chkTwoVoicesInHeats.Checked = _settings.CommentaryTwoVoicesInHeats;
+        _chkTwoVoicesInHeats.CheckedChanged += (_, _) =>
+        {
+            _settings.CommentaryTwoVoicesInHeats = _chkTwoVoicesInHeats.Checked;
+            _settings.Save();
+            UpdateEnabledState();
+        };
+
         var coHostGrid = new FieldGrid();
 
         Stepped(coHostGrid.AddRow("Co-host's name:", Line(_txtCoHostName, Suffix("blank and they are talked to but never named - the model never makes one up"))));
         Stepped(coHostGrid.AddRow("Co-host's voice:", Line(_cmbCoHostVoice)));
         Stepped(coHostGrid.AddRow("What they're like:", Line(_cmbCoHostStance)));
         coHostGrid.AddHint(_lblCoHostStance);
+
+        Stepped(coHostGrid.AddRow("How much they talk:", Line(_cmbExchangeTurns)));
+        coHostGrid.AddHint(
+            "Longer conversations are more airtime and more writing - each turn is another line the brain writes, "
+            + "and on the relay that is another line of the club's month.");
+
+        Stepped(coHostGrid.AddRow(string.Empty, _chkTwoVoicesInHeats));
+        coHostGrid.AddHint(
+            "Normally the two-hander is saved for the mains, which is part of what makes a main sound like one. "
+            + "Tick this to hear them all evening without making the whole night chattier.");
         coHostGrid.AddHint(
             "With no voice picked for the engine in use, the announcer's own voice reads both halves - still a conversation, "
             + "and better than nothing. The list is filled from the same engine as the mechanic's, beside Load Voices above.");
@@ -2095,8 +2169,6 @@ public sealed class CommentaryControl : UserControl
     /// </summary>
     private void SizeFields()
     {
-        Fit(_txtEndpoint, UiLayout.AtTextSize(EndpointWidth));
-        Fit(_txtModel, UiLayout.AtTextSize(EndpointWidth));
         Fit(_txtShowName, UiLayout.AtTextSize(ShowNameWidth));
         Fit(_txtAnnouncerName, UiLayout.AtTextSize(ShowNameWidth));
         Fit(_cmbOpenerPiece, UiLayout.AtTextSize(ShowPieceWidth));
@@ -2112,6 +2184,9 @@ public sealed class CommentaryControl : UserControl
         Fit(_cmbMechanicVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbMechanicVoice, ref _voiceWidth)));
         Fit(_cmbCoHostVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbCoHostVoice, ref _coHostVoiceWidth)));
         Fit(_cmbCoHostStance, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbCoHostStance, ref _coHostStanceWidth)));
+        // Sized to its longest choice like the stance picker above - left at
+        // the default width, "Conversational - three turns" was cut off.
+        Fit(_cmbExchangeTurns, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbExchangeTurns, ref _exchangeTurnsWidth)));
         Fit(_cmbChatter, Math.Max(UiLayout.AtTextSize(ShowPieceWidth), Pieces.PickerWidth(_cmbChatter, ref _chatterWidth)));
         Fit(_cmbHonoursVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbHonoursVoice, ref _honoursVoiceWidth)));
 
@@ -3219,9 +3294,16 @@ public sealed class CommentaryControl : UserControl
 
         var on = _chkEnabled.Checked;
         _chkUseRelay.Enabled = on;
-        _txtEndpoint.Enabled = on;
-        _txtModel.Enabled = on;
+        _chkLocalModel.Enabled = on;
         _numTimeout.Enabled = on;
+
+        // The tag pass does nothing unless the tone is Enthusiastic, so the
+        // box says so by going grey rather than by quietly doing nothing.
+        _chkVoiceTags.Enabled = on && _settings.CommentaryToneStyle == CommentaryTone.Enthusiastic;
+
+        var coHost = on && _chkCoHost.Checked;
+        _cmbExchangeTurns.Enabled = coHost;
+        _chkTwoVoicesInHeats.Enabled = coHost;
         _chkIntros.Enabled = on;
         _chkIntrosSelective.Enabled = on && _chkIntros.Checked;
         _chkSummaries.Enabled = on;
@@ -3401,20 +3483,67 @@ public sealed class CommentaryControl : UserControl
     /// </summary>
     private void UpdateRelayState()
     {
-        if (!_chkUseRelay.Checked)
+        var useRelay = _chkUseRelay.Checked;
+        var useLocal = _settings.CommentaryUseLocalModel;
+
+        // Only asked when it matters - building a client to answer it is
+        // cheap, but pointless when the relay is switched off anyway.
+        var ready = useRelay && new RelayCommentaryClient(_settings).RelayConfigured;
+
+        _lblRelayState.Text = RelayStateText(useRelay, ready, useLocal);
+
+        // Amber whenever nothing would be written, which is the one state
+        // worth interrupting someone over: commentary is ticked on and the
+        // page is quietly telling them it will never say a word.
+        var willWrite = ready || useLocal;
+
+        _lblRelayState.ForeColor = willWrite ? AppTheme.TextMuted : AppTheme.Accent;
+    }
+
+    /// <summary>
+    /// What the line under the relay box says. Pure, so the sizing list and
+    /// the live text cannot drift apart - see AllRelayStates.
+    /// </summary>
+    private static string RelayStateText(bool useRelay, bool ready, bool useLocal)
+    {
+        var local = useLocal ? "the built-in model" : null;
+
+        if (!useRelay)
         {
-            _lblRelayState.Text = "Everything is written by Ollama below.";
-            _lblRelayState.ForeColor = AppTheme.TextMuted;
-            return;
+            return local is null
+                ? "Nothing is set to write - the relay is off and so is the model on this PC."
+                : $"Everything is written by {local} below.";
         }
 
-        var ready = new RelayCommentaryClient(_settings).RelayConfigured;
+        if (!ready)
+        {
+            return local is null
+                ? "The Club Website page isn't set up yet, and nothing on this PC is set to write."
+                : $"The Club Website page isn't set up yet, so everything is written by {local} below.";
+        }
 
-        _lblRelayState.Text = ready
-            ? "The Club Website page is set up, so the relay writes first and Ollama below covers what it can't."
-            : "The Club Website page isn't set up yet, so everything is written by Ollama below.";
+        return local is null
+            ? "The Club Website page is set up, so the relay writes - and nothing covers the races it can't."
+            : $"The Club Website page is set up, so the relay writes first and {local} below covers what it can't.";
+    }
 
-        _lblRelayState.ForeColor = ready ? AppTheme.TextMuted : AppTheme.Accent;
+    /// <summary>
+    /// Every sentence RelayStateText can return, for the label to size to.
+    /// Enumerated rather than typed out, so a reworded sentence cannot end
+    /// up missing from the list and clipping on the night.
+    /// </summary>
+    private static string[] AllRelayStates()
+    {
+        var all = new List<string>();
+
+        foreach (var useLocal in new[] { true, false })
+        {
+            all.Add(RelayStateText(useRelay: false, ready: false, useLocal));
+            all.Add(RelayStateText(useRelay: true, ready: false, useLocal));
+            all.Add(RelayStateText(useRelay: true, ready: true, useLocal));
+        }
+
+        return all.Distinct().ToArray();
     }
 
     /// <summary>
@@ -3422,33 +3551,86 @@ public sealed class CommentaryControl : UserControl
     /// change so edits take effect immediately rather than at next launch.
     /// </summary>
     /// <summary>
-    /// The most recent detail from the client itself - e.g. "Request failed
-    /// (404): model 'llama3.2:3b' not found, try pulling it first". Ollama's
-    /// own error text is almost always more useful than anything generic
-    /// this page could show instead, so the Test button surfaces this
+    /// The most recent detail from the client itself - e.g. "no model file
+    /// is installed", or a timeout with the seconds it waited. The brain's
+    /// own account of a failure is almost always more useful than anything
+    /// generic this page could show instead, so the Test button surfaces it
     /// directly rather than guessing at a cause.
     /// </summary>
     private string? _lastClientDetail;
+
+    /// <summary>
+    /// The local brain this page last built, kept so it can be let go when a
+    /// different one is built - and, far more importantly, so it is NOT
+    /// rebuilt when nothing about it changed. BundledLlmClient holds the
+    /// model's weights in memory.
+    /// </summary>
+    private ICommentaryBrain? _localBrain;
+
+    /// <summary>
+    /// What the client currently handed to the service was built from. Null
+    /// when there isn't one.
+    ///
+    /// ApplyToService is called from six places and on every settings
+    /// change, which was free when the local brain was an HTTP client with
+    /// an endpoint on it. The built-in model is not free: rebuilding meant
+    /// reading 440 MB off disk and holding a second copy of the weights
+    /// while the old one was collected, and the console showed it - two
+    /// "Loaded commentary.gguf" lines a minute apart, from nothing more than
+    /// opening the page. So the work is done when the configuration actually
+    /// differs, and skipped when it doesn't.
+    /// </summary>
+    private string? _clientKey;
 
     private void ApplyToService()
     {
         if (!_settings.CommentaryEnabled)
         {
+            ReleaseClient();
             _commentary.Client = null;
             return;
         }
 
-        var local = new LocalLlmClient
-        {
-            Endpoint = _settings.CommentaryEndpoint,
-            Model = _settings.CommentaryModel,
-            Timeout = TimeSpan.FromSeconds(Math.Clamp(_settings.CommentaryTimeoutSeconds, 2, 60)),
-        };
+        var budget = TimeSpan.FromSeconds(Math.Clamp(_settings.CommentaryTimeoutSeconds, 2, 60));
 
-        // The relay goes in front of Ollama when the Club Website page is
-        // set up and the club hasn't turned it off: it writes through a
-        // model no race laptop could run, and needs nothing installed.
-        // Ollama stays behind it rather than being replaced - it is what
+        // Everything below is built from these. The relay's own address,
+        // club and token are deliberately absent: RelayCommentaryClient
+        // asks the settings again on every line, so a change there needs no
+        // new client - only turning the relay off or on does.
+        var key = string.Join(
+            '\u001f',
+            _settings.CommentaryUseLocalModel,
+            _settings.CommentaryLocalModelPath,
+            budget.Ticks,
+            _settings.CommentaryUseRelay);
+
+        if (_clientKey == key && _commentary.Client is not null)
+        {
+            return;
+        }
+
+        ReleaseClient();
+
+        // The model that ships inside the installer, run in this process.
+        // It is only what writes when the relay cannot - see below - and a
+        // club that would rather a quiet segment than a plainly-written one
+        // unticks it and gets null here.
+        ICommentaryBrain? local = _settings.CommentaryUseLocalModel
+            ? new BundledLlmClient
+            {
+                ModelPathOverride = string.IsNullOrWhiteSpace(_settings.CommentaryLocalModelPath)
+                    ? null
+                    : _settings.CommentaryLocalModelPath,
+                Timeout = budget,
+            }
+            : null;
+
+        _localBrain = local;
+
+        // The relay goes in front of the local model when the Club Website
+        // page is set up and the club hasn't turned it off: it writes with a
+        // model no race laptop could run, and needs nothing installed. The
+        // local model stays behind it rather than being replaced - it is what
         // writes with the internet down, and what writes for a club the
         // relay has not included for commentary yet. The choice is made
         // per line, not here; see FallbackCommentaryBrain.
@@ -3475,13 +3657,40 @@ public sealed class CommentaryControl : UserControl
         // Wrapped whenever the box is ticked, set up or not. The Club
         // Website page is usually filled in after this one, and a restored
         // relay address is only let through once it is checked; deciding
-        // here would leave a club on Ollama alone all night while the page
-        // tells them the relay writes first. The relay client asks the
+        // here would leave a club on the local model alone all night while
+        // the page tells them the relay writes first. The relay client asks the
         // settings again on every line and steps aside when there is
         // nothing to ask.
-        ICommentaryBrain client = relay is not null
-            ? new FallbackCommentaryBrain(relay, local)
-            : local;
+        // Both, one, or neither. FallbackCommentaryBrain needs two brains, so
+        // it is only built when there are two; with the local brain turned
+        // off the relay stands alone, and with no relay the local one does.
+        // Neither leaves Client null, which CommentaryService already treats
+        // as "no brain" everywhere.
+        //
+        // Written out rather than as a switch on the pair: a tuple pattern
+        // does not narrow the nullability of the variables it matched, so the
+        // tidier version warns on both arguments under <Nullable>enable</Nullable>.
+        ICommentaryBrain client;
+
+        if (relay is not null && local is not null)
+        {
+            client = new FallbackCommentaryBrain(relay, local);
+        }
+        else if (relay is not null)
+        {
+            client = relay;
+        }
+        else if (local is not null)
+        {
+            client = local;
+        }
+        else
+        {
+            // Relay off and local off. Nothing can write, and saying so
+            // plainly beats a client that fails on every line.
+            _commentary.Client = null;
+            return;
+        }
 
         client.StatusMessage += msg =>
         {
@@ -3503,13 +3712,30 @@ public sealed class CommentaryControl : UserControl
         };
 
         _commentary.Client = client;
+        _clientKey = key;
+    }
+
+    /// <summary>
+    /// Lets go of the client currently in use, so the next one can be built.
+    ///
+    /// Only the local brain is disposable, and only the built-in one holds
+    /// anything worth releasing - the model's weights, several hundred
+    /// megabytes of them. Called before building a replacement and when
+    /// commentary is switched off, which is the one case where nothing is
+    /// built afterwards and the memory would otherwise sit there all night.
+    /// </summary>
+    private void ReleaseClient()
+    {
+        (_localBrain as IDisposable)?.Dispose();
+        _localBrain = null;
+        _clientKey = null;
     }
 
     /// <summary>
     /// Fires a background warm-up, guarded so it only happens at moments
-    /// that plausibly mean "the configuration just settled" - not on every
-    /// keystroke while editing the endpoint or model, which would spam
-    /// Ollama with a load request per character typed.
+    /// that plausibly mean "the configuration just settled" - loading the
+    /// model is seconds of work, and firing it on every keystroke in a
+    /// settings box would be seconds of work per character typed.
     /// </summary>
     private void TriggerWarmUp() => _ = _commentary.Client?.WarmUpAsync();
 
@@ -3543,13 +3769,13 @@ public sealed class CommentaryControl : UserControl
 
             if (reply is null)
             {
-                // The client already knows exactly why - a 404 with Ollama's
-                // own "model not found, try pulling it first", a timeout, a
-                // refused connection - showing that beats guessing at a
-                // cause the client has already ruled in or out.
+                // The client already knows exactly why - no model file, a
+                // timeout with the seconds it waited, a PC too slow to keep
+                // up - showing that beats guessing at a cause the client has
+                // already ruled in or out.
                 _lblTestResult.Text = _lastClientDetail is { Length: > 0 }
                     ? $"{_lastClientDetail} Commentary will be skipped and normal announcements used."
-                    : "No response - check Ollama is running and the model name is right. "
+                    : "No response - any [llm] line in the console says why. "
                       + "Commentary will be skipped and normal announcements used.";
                 _lblTestResult.ForeColor = AppTheme.Danger;
             }

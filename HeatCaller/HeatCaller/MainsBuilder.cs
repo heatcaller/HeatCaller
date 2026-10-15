@@ -67,8 +67,14 @@ public static class MainsBuilder
                 Kind = RoundKind.Main,
                 MainTier = tier,
 
-                // The lowest tier has nothing below it to receive from.
-                BumpUpCount = tier == plan.TierCount - 1 ? 0 : bumpUpCount,
+                // Every tier gets the count, the lowest included - the same
+                // rule AddMainByHand follows. The lowest used to get 0, so a
+                // main added by hand below it later (late arrivals turning a
+                // single A-main into A and B) left the old lowest refused
+                // every bump-up as "not set up to receive" them. While it
+                // really is the lowest the count is never read: the blocker
+                // check stops first at "no main below this one".
+                BumpUpCount = bumpUpCount,
 
                 TrackLayoutName = trackLayoutName,
                 AssignedTransponders = plan.Tiers[tier].ToList(),

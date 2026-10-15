@@ -20,16 +20,40 @@
 /// HOLD IS THE POINT
 ///
 /// A warning you cannot act on is just an extra thing to look at. The
-/// button is what makes the light worth having: a prize giving, a crash
+/// button is what makes the warning worth having: a prize giving, a crash
 /// to talk through, a word with a driver, and the announcer stays out of
 /// it until it comes off. Nothing is lost by holding - a fight is still a
 /// fight afterwards, and a fact that went unsaid is unspent.
+///
+/// ONE LABEL, NOT A LAMP AND A LABEL (14 Oct 2026)
+///
+/// The row began as a lamp, an "Announcer: on air" state and a line
+/// saying what had last been said. Once the middle one could say WHAT was
+/// going out rather than merely that something was, the first two were
+/// saying a weaker version of the same thing - so both came off, and the
+/// name itself goes to the accent while it is being spoken. A race
+/// director glances at this row for half a second on their way to a flag
+/// button; it should take one reading, not three.
 /// </summary>
 internal sealed class AnnouncerStrip : FlowLayoutPanel
 {
-    private readonly Label _lamp = new();
-    private readonly SteadyLabel _state = new();
-    private readonly Label _said = new();
+    /// <summary>
+    /// What is on air now, or what was last said - see <see cref="NowOn"/>
+    /// and <see cref="Lately"/>.
+    ///
+    /// A STEADY LABEL, which it had to become when it started saying what
+    /// is on air (14 Oct 2026). The note on Lately records what happened
+    /// the last time this label was allowed to size itself to whatever it
+    /// said: it pushed every button along the row about as it grew and
+    /// shrank. Showing what is ON now changes it far more often than
+    /// showing what was last said - a lap call, a flag, the next piece of a
+    /// recap - so on a busy race the whole row would have jittered once a
+    /// second, on the screen where somebody is reaching for a flag button.
+    ///
+    /// Sized to every wording it can hold rather than to a width somebody
+    /// typed: see <see cref="EverySaying"/>.
+    /// </summary>
+    private readonly SteadyLabel _said = new();
     private readonly Button _hold = new();
 
     /// <summary>Plays the last segment again - see <see cref="ReplayWanted"/>.</summary>
@@ -73,19 +97,10 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         Margin = Padding.Empty;
         Tag = AppTheme.KeepBackColor;
 
-        _lamp.AutoSize = true;
-        _lamp.Text = "●";
-        _lamp.Margin = new Padding(0, 2, 6, 0);
-
-        // As wide as the longest thing it says, so the line beside it
-        // never shuffles sideways as the state changes.
-        _state.AutoSize = true;
-        _state.Margin = new Padding(0, 2, 10, 0);
-        _state.Wordings = new[] { OffText, ReadyText, WritingText, HeldText, OnAirText };
-
         _said.AutoSize = true;
         _said.ForeColor = AppTheme.TextMuted;
         _said.Margin = new Padding(0, 2, 10, 0);
+        _said.Wordings = EverySaying();
 
         _hold.Text = HoldCaption;
         _hold.AutoSize = true;
@@ -124,8 +139,6 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         // rather than by Race Control because the buttons are this class's.
         AppTheme.ReleaseFocusAfterClick(_hold, _replay, _skip, _notes, _votes);
 
-        Controls.Add(_lamp);
-        Controls.Add(_state);
         Controls.Add(_said);
         Controls.Add(_hold);
         Controls.Add(_replay);
@@ -134,11 +147,83 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         Controls.Add(_votes);
     }
 
-    private const string OffText = "Announcer: off";
-    private const string ReadyText = "Announcer: ready";
-    private const string WritingText = "Announcer: writing...";
-    private const string HeldText = "Announcer: held";
-    private const string OnAirText = "Announcer: on air";
+    /// <summary>
+    /// Every line <see cref="_said"/> can show, so it is sized once to the
+    /// widest of them and never moves the buttons beside it again.
+    ///
+    /// WORKED OUT FROM THE TABLES RATHER THAN TYPED. A list of names
+    /// written out here would be a fourth copy of ShowBlock's table, and
+    /// the first segment anybody added would be the one that made the row
+    /// jump - which is exactly the class of fault nobody reports, because
+    /// it only shows up on a race night. Walking the enums means a new
+    /// segment kind or a new call type is measured the first time the strip
+    /// is built.
+    ///
+    /// Both readings of the slot, because it swaps between them: "On air:"
+    /// while something is being spoken and "Last:" when it is not.
+    /// </summary>
+    private static IReadOnlyList<string> EverySaying()
+    {
+        var sayings = new List<string>();
+
+        foreach (var kind in Enum.GetValues<SegmentKind>())
+        {
+            var named = ShowBlock.NameFor(kind);
+
+            sayings.Add($"On air: {named}");
+            sayings.Add($"Last: {named}");
+
+            // The longest of the three, and the one most likely to be the
+            // widest thing this label ever holds.
+            sayings.Add($"Last: {named} (two voices)");
+        }
+
+        foreach (var call in Enum.GetValues<AnnouncementEventType>())
+        {
+            sayings.Add($"On air: {VoiceProfile.Describe(call).Label}");
+        }
+
+        sayings.Add(WritingText);
+        sayings.Add(MutedText);
+
+        return sayings;
+    }
+
+    /// <summary>
+    /// What the one label says when nothing is being spoken and the
+    /// announcer is busy writing.
+    ///
+    /// THE ONE READING THE LAMP HAD THAT NOTHING ELSE DOES. The lamp and
+    /// its "Announcer: ..." label came off on 14 Oct 2026 - the state the
+    /// row was built to show is now shown by the name lighting up, and two
+    /// indicators for one fact is one too many on this screen. Held was
+    /// already readable from the Hold button, which says Release; ready and
+    /// on air are the lit state and its absence. Writing was the only one
+    /// left with nowhere to go, and it is the state the class's own notes
+    /// call the one worth catching: it is the two to five seconds in which
+    /// somebody can decide not to talk.
+    /// </summary>
+    private const string WritingText = "Writing...";
+
+    /// <summary>
+    /// What the label says when the announcer is muted on the Mixer.
+    ///
+    /// REPORTED FROM THE FLOOR (14 Oct 2026): the row "displays something
+    /// entirely different when on mute". It did, and it was worse than
+    /// different - it was wrong. Muting returns before anything is queued,
+    /// so nothing speaks and the row fell through to its quiet reading:
+    /// "Last: Form Guide", for a segment the brain really had written and
+    /// the room had never heard a word of. A row claiming lines went out
+    /// over a muted PA is the one thing on this screen that must not
+    /// happen, because it is the screen somebody checks when they think
+    /// the announcer has stopped working.
+    ///
+    /// FIRST, BEFORE EVERYTHING ELSE, for the same reason. Writing is
+    /// still true while muted and so is the last segment, and neither is
+    /// worth saying to somebody whose PA is silent: the answer they came
+    /// for is that it is muted.
+    /// </summary>
+    private const string MutedText = "Muted";
 
     private const string HoldCaption = "Hold";
     private const string ReleaseCaption = "Release";
@@ -146,9 +231,6 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     private const string SkipCaption = "Skip";
     private const string NotesCaption = "Notes";
     private const string VotesCaption = "Votes";
-
-    /// <summary>What the strip says when nothing has been said yet tonight.</summary>
-    private const string NothingYet = "Nothing yet";
 
     /// <summary>Raised when the race director holds the segments, or lets them go again.</summary>
     public event Action<bool>? HoldChanged;
@@ -204,7 +286,23 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// none is - see RoomVote. The second number on this row, and the
     /// reason is the same as the first's.
     /// </param>
-    public void Show(CommentaryDirector? director, bool enabled, bool speaking, int notesWaiting = 0, int votesIn = 0)
+    /// <param name="onAir">
+    /// What is going out of the speakers RIGHT NOW, in words - the segment's
+    /// name where one is on, and otherwise the kind of call. From
+    /// AnnouncementService.OnAirNow; null when nothing is being spoken.
+    ///
+    /// ASKED FOR FROM THE FLOOR (14 Oct 2026). "Announcer: on air" and
+    /// "Last: Race Recap" between them could not answer the one question
+    /// somebody holding a microphone has, which is what the thing they can
+    /// hear IS: a four-minute recap is worth waiting out and a two-second
+    /// lap call is not, and the strip gave the same light for both.
+    /// </param>
+    /// <param name="muted">
+    /// Whether the announcer is muted on the Mixer. Shown ahead of
+    /// everything else, because nothing else on this row is audible while
+    /// it is true - see <see cref="MutedText"/>.
+    /// </param>
+    public void Show(CommentaryDirector? director, bool enabled, bool speaking, string? onAir = null, bool muted = false, int notesWaiting = 0, int votesIn = 0)
     {
         if (director is null || !enabled)
         {
@@ -216,7 +314,6 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
                 Visible = false;
             }
 
-            _state.Text = OffText;
             _said.Text = string.Empty;
 
             return;
@@ -227,41 +324,58 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
             Visible = true;
         }
 
-        // On air first: whatever else is true, somebody talking over the
-        // PA right now is the thing not to talk over. Held is still
-        // readable from the button, which says Release.
-        if (speaking)
+        // ONE LABEL, LIT WHILE SOMETHING IS BEING SPOKEN (14 Oct 2026).
+        //
+        // What is on air takes the slot and the name goes to the accent;
+        // the last thing said gets the slot back, muted, the moment the
+        // speakers are quiet. The lamp and the "Announcer: on air" label
+        // that used to carry this came off in the same change: they said
+        // THAT something was on where this says WHAT, and a race director
+        // glancing at this row for half a second should not have to read
+        // two things to learn one.
+        //
+        // On air first, whatever else is true: somebody talking over the PA
+        // right now is the thing not to talk over. Held is readable from
+        // the Hold button, which says Release, so it does not compete for
+        // the slot - a held announcer has still said something last, and
+        // that is the more useful of the two.
+        if (muted)
         {
-            _state.Text = OnAirText;
-            _state.ForeColor = AppTheme.Accent;
-            _lamp.ForeColor = AppTheme.Accent;
+            // Not in the accent. The accent on this row means "something is
+            // going out"; mute is the opposite of that, and a lit "Muted"
+            // would read as an alarm where this is a setting somebody
+            // chose. See MutedText.
+            _said.Text = MutedText;
+            _said.ForeColor = AppTheme.TextMuted;
         }
-        else if (director.Held)
+        else if (speaking)
         {
-            _state.Text = HeldText;
-            _state.ForeColor = AppTheme.TextMuted;
-            _lamp.ForeColor = AppTheme.TextMuted;
+            _said.Text = NowOn(director, onAir);
+            _said.ForeColor = AppTheme.Accent;
         }
         else if (director.Writing)
         {
-            _state.Text = WritingText;
-            _state.ForeColor = AppTheme.Accent;
-            _lamp.ForeColor = AppTheme.Accent;
+            // In the accent too, because it is a warning rather than a
+            // record: a line is seconds away. See WritingText.
+            _said.Text = WritingText;
+            _said.ForeColor = AppTheme.Accent;
         }
         else
         {
-            _state.Text = ReadyText;
-            _state.ForeColor = AppTheme.TextMuted;
-            _lamp.ForeColor = AppTheme.TextMuted;
+            _said.Text = Lately(director);
+            _said.ForeColor = AppTheme.TextMuted;
         }
-
-        _said.Text = Lately(director);
 
         // Both only mean anything once there is something to act on, and a
         // button that does nothing reads as a fault rather than as a
         // setting - the same rule the Commentary page's Test button goes by.
-        _replay.Enabled = director.LastSaid is not null;
-        _skip.Enabled = speaking || ShowOnAir.Playing;
+        // AND NEITHER WORKS MUTED, which both of them already knew and
+        // only found out about after the press - Play again answers "not
+        // playing it again, the announcer is muted" and Skip stops a show
+        // that was never audible. A button that can only fail is better
+        // greyed. See MutedText.
+        _replay.Enabled = !muted && director.LastSaid is not null;
+        _skip.Enabled = !muted && (speaking || ShowOnAir.Playing);
 
         // ALWAYS ENABLED, unlike the two above, and the difference is the
         // point: Play again and Skip act on something that may not exist,
@@ -297,6 +411,46 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     }
 
     /// <summary>
+    /// What to show beside the state while the speakers are busy.
+    ///
+    /// A SHOW NAMES ITSELF FIRST. ShowOnAir.Caption is set by the
+    /// treatment that opened the music, so it is right for every part of
+    /// the programme that has a bed under it - and it is right even when
+    /// the line being spoken is the third chunk of a recap, which carries
+    /// no name of its own.
+    ///
+    /// Then what the line itself said it was, which covers the segments
+    /// read plainly - a club with no music files, or a segment whose music
+    /// the club unticked. Then the kind of call, which is already what
+    /// OnAirNow falls back to.
+    ///
+    /// AND "On air" RATHER THAN A BARE NAME, because the slot it shares
+    /// says "Last:" the rest of the time and a label that silently
+    /// switched meaning would be worse than no label at all.
+    /// </summary>
+    private static string NowOn(CommentaryDirector director, string? onAir)
+    {
+        if (ShowOnAir.Caption is { Length: > 0 } caption)
+        {
+            return $"On air: {caption}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(onAir))
+        {
+            return $"On air: {onAir.Trim()}";
+        }
+
+        // Nothing named it and nothing said what kind it was, which should
+        // not happen - but a strip saying something true and vague beats
+        // one that goes blank at the moment it is being read. The director
+        // is taken for the same reason Lately takes it: if a segment is
+        // what is on, its name is the useful thing to say.
+        return director.LastSaid is { } last
+            ? $"On air: {ShowBlock.NameFor(last.Kind)}"
+            : "On air: race call";
+    }
+
+    /// <summary>
     /// What to show beside the state: what the announcer last did, and
     /// what the night has spent before there is one.
     ///
@@ -324,13 +478,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
             return director.Describe();
         }
 
-        var named = ShowBlock.CaptionFor(last.Kind)
-            ?? CommentaryBudget.Spec(last.Kind).Title;
-
-        if (string.IsNullOrWhiteSpace(named))
-        {
-            named = NothingYet;
-        }
+        var named = ShowBlock.NameFor(last.Kind);
 
         // Said plainly that it was the two of them, since the strip no
         // longer shows the words and so no longer shows the two voices.

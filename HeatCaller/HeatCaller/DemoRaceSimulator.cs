@@ -75,11 +75,44 @@ public sealed class DemoRaceSimulator : IDisposable
     /// </summary>
     private bool _drivingSession;
 
+    /// <summary>
+    /// True when this demo switched a split loop on for itself, so Stop
+    /// can switch it back off.
+    ///
+    /// WHY IT HAS TO (14 Oct 2026, asked for from the floor). The sector
+    /// calls - a sector best, a split up on a driver's own lap, a split
+    /// ahead of record pace - were unrehearsable: every one of them needs
+    /// RaceControlSession.SplitCount above nought, and that is set from the
+    /// Connection page's split-loop tick box, which a club cannot
+    /// honestly tick without a second decoder physically wired to the
+    /// track. So a club could set those calls up, pick their phrasing, and
+    /// have no way at all to hear one before a race night.
+    ///
+    /// The demo already pretends to be the line decoder; pretending to be
+    /// the split decoder as well is the same promise. PUT BACK on Stop
+    /// because it is the club's setting and not the demo's: a rehearsal
+    /// that left the split loop switched on would have Race Control
+    /// expecting sector reads from hardware that is not there.
+    /// </summary>
+    private bool _lentASplitLoop;
+
     private sealed class DemoRacer
     {
         public required string TransponderId { get; init; }
         public double BaseLapSeconds { get; init; }
         public double NextLapDueAtMs { get; set; }
+
+        /// <summary>
+        /// When this car is next due at each split loop, in order, on the
+        /// simulated decoder clock - nought for a loop it is not booked at
+        /// yet. Sized to the session's SplitCount when the demo starts.
+        ///
+        /// Scheduled a lap ahead by FireLap rather than worked out here,
+        /// for the reason the lap times are stamped at their due moment:
+        /// the tick is about every 100ms and a sector quantised to that
+        /// reads as a rounding fault.
+        /// </summary>
+        public double[] SplitDueAtMs { get; set; } = Array.Empty<double>();
     }
 
     public DemoRaceSimulator(RaceControlSession race, AnnouncementService announcer)
@@ -98,6 +131,31 @@ public sealed class DemoRaceSimulator : IDisposable
     /// </summary>
     private bool OwnsSession() =>
         IsRunning && _race.IsDemoMode && _race.SessionGeneration == _ownedGeneration;
+
+    /// <summary>
+    /// Switches off the split loop this demo lent itself, if it did - see
+    /// <see cref="_lentASplitLoop"/>.
+    ///
+    /// CALLED FROM EVERY WAY A DEMO CAN END, which is why it is a method
+    /// and not two lines in Stop: a takeover is the dangerous one. Race
+    /// Control stages a real race over a running demo, Release hands the
+    /// session over, and a split loop left switched on would have that real
+    /// race waiting on sector reads from a decoder nobody has wired up -
+    /// every lap missing its sectors, and nothing anywhere saying why.
+    ///
+    /// Safe twice, and safe when the club had its own split loop on all
+    /// along: the flag is only ever set when this demo turned one on.
+    /// </summary>
+    private void GiveBackTheSplitLoop()
+    {
+        if (!_lentASplitLoop)
+        {
+            return;
+        }
+
+        _lentASplitLoop = false;
+        _race.SplitCount = 0;
+    }
 
     /// <summary>Runs one of the demo's own session calls with the state watcher told it is the demo's.</summary>
     private void DriveSession(Action call)
@@ -158,6 +216,8 @@ public sealed class DemoRaceSimulator : IDisposable
         _tickTimer.Stop();
         IsRunning = false;
         _race.IsDemoMode = false;
+
+        GiveBackTheSplitLoop();
 
         if (clearAudio)
         {
@@ -240,6 +300,29 @@ public sealed class DemoRaceSimulator : IDisposable
         }
 
         SelectedGhosts = ghosts;
+
+        // A SPLIT LOOP FOR THE RUN, when the club has none - see
+        // _lentASplitLoop. One, which is what the Connection page's tick
+        // box buys; a club that already has it on keeps its own setting and
+        // this lends nothing.
+        _lentASplitLoop = _race.SplitCount == 0;
+
+        if (_lentASplitLoop)
+        {
+            _race.SplitCount = 1;
+        }
+
+        foreach (var racer in _racers)
+        {
+            racer.SplitDueAtMs = new double[Math.Max(0, _race.SplitCount)];
+        }
+
+        LogMessage?.Invoke(_race.SplitCount > 0
+            ? _lentASplitLoop
+                ? $"Split timing on for the demo: {Plural.Of(_race.SplitCount, "loop")}, switched back off when it stops."
+                : $"Split timing on: the club's own {Plural.Of(_race.SplitCount, "split loop")}."
+            : "No split timing - sector calls will not fire.");
+
         _race.IsDemoMode = true;
         _deviceTimeMs = 0;
         IsRunning = true;
@@ -267,6 +350,13 @@ public sealed class DemoRaceSimulator : IDisposable
         return 5.0 + _random.NextDouble() * 2.5;
     }
 
+    /// <summary>
+    /// The longest the countdown waits for the staging cue to finish. The
+    /// same ten seconds Race Control's own start sequence allows - see
+    /// RaceControlControl.LongestStagingCue, and keep the two the same.
+    /// </summary>
+    private static readonly TimeSpan LongestStagingCue = TimeSpan.FromSeconds(10);
+
     private async Task RunStartSequenceAsync(int stagingSeconds, int countdownSeconds, CancellationToken ct)
     {
         try
@@ -275,6 +365,25 @@ public sealed class DemoRaceSimulator : IDisposable
             DriveSession(_race.Stage);
             _ownedGeneration = _race.SessionGeneration;
             await Task.Delay(TimeSpan.FromSeconds(Math.Max(1, stagingSeconds)), ct);
+
+            // AND THEN LET THE STAGING CUE FINISH (13 Oct 2026).
+            //
+            // This is a SECOND copy of the start sequence - Race Control has
+            // its own in RunAutoStartSequenceAsync - and the same fix had to
+            // be made in both, which is the whole trouble with there being
+            // two. Fixing only Race Control's left the demo cutting "bring
+            // your cars to the grid" off mid-word exactly as before, because
+            // a demo never goes near that method.
+            //
+            // The delay above is the staging length off this page's spinner,
+            // whose minimum is one second, and it has no relationship to how
+            // long the staging sound actually plays. So on a demo it is
+            // nearly always too short.
+            //
+            // Bounded, for the reason Race Control's copy gives: a club may
+            // point its staging sound at a long bed and the start must not
+            // wait that out.
+            await _announcer.WaitForAudioAsync(LongestStagingCue, ct);
 
             // Each step checks the session is still the demo's first. The
             // delays are cancelled by Stop and by a takeover, but a session
@@ -447,6 +556,18 @@ public sealed class DemoRaceSimulator : IDisposable
             foreach (var racer in _racers)
             {
                 racer.NextLapDueAtMs += heldBackMs;
+
+                // The splits with them. Held back only where one is
+                // actually booked: adding to a nought would book a car at
+                // the loop a moment into the race, before it has a lap for
+                // the read to belong to.
+                for (var slot = 0; slot < racer.SplitDueAtMs.Length; slot++)
+                {
+                    if (racer.SplitDueAtMs[slot] > 0)
+                    {
+                        racer.SplitDueAtMs[slot] += heldBackMs;
+                    }
+                }
             }
         }
 
@@ -457,9 +578,61 @@ public sealed class DemoRaceSimulator : IDisposable
 
         foreach (var racer in _racers)
         {
+            // THE SPLITS BEFORE THE LINE, because that is the order a car
+            // meets them: a split booked at 0.5 of the lap is read before
+            // the crossing that ends it. Fired the other way round, the
+            // read would arrive after the lap it belongs to had already
+            // been counted, and the session would carry it over to the next
+            // one - a whole lap of sectors wrong, on every lap.
+            FireSplits(racer);
+
             if (_deviceTimeMs >= racer.NextLapDueAtMs)
             {
                 FireLap(racer);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Any split loop this car is now due at, read into the session.
+    ///
+    /// STRAIGHT TO ProcessSplitPass, not through SplitLoop. That class
+    /// exists to work out WHOSE split transponder a number is and to put
+    /// the read on the line decoder's clock - two problems a demo does not
+    /// have and cannot fake honestly: the made-up cars have no split
+    /// transponder registered to anybody, so SplitLoop would correctly
+    /// decide every read was nobody's and drop it. The simulator already
+    /// goes straight to ProcessLapEvent for the same reason, and this is
+    /// the same depth in: the session is where a real split read ends up,
+    /// and everything downstream of it - the sectors, the sector calls, the
+    /// leaderboard's split column - cannot tell the difference.
+    ///
+    /// ONE CLOCK. The demo's clock IS the line's clock, so the read goes
+    /// in as it stands. On real hardware the two clocks are different and
+    /// relating them is most of what SplitLoop does.
+    /// </summary>
+    private void FireSplits(DemoRacer racer)
+    {
+        for (var slot = 0; slot < racer.SplitDueAtMs.Length; slot++)
+        {
+            var due = racer.SplitDueAtMs[slot];
+
+            if (due <= 0 || _deviceTimeMs < due)
+            {
+                continue;
+            }
+
+            // Cleared first: a read the session refuses - the car has no
+            // counted lap yet, a red is out, it has taken the flag - must
+            // not be offered again on every tick for the rest of the race.
+            racer.SplitDueAtMs[slot] = 0;
+
+            var point = (TimingPoint)(slot + 1);
+            var at = (long)Math.Round(due);
+
+            if (_race.ProcessSplitPass(racer.TransponderId, point, at))
+            {
+                LogMessage?.Invoke($"{racer.TransponderId} {SplitLoopNames.Of(point).ToLowerInvariant()}: {at / 1000.0:0.000}s");
             }
         }
     }
@@ -498,6 +671,22 @@ public sealed class DemoRaceSimulator : IDisposable
 
         racer.NextLapDueAtMs = crossingMs + lapSeconds * 1000;
 
+        // WHERE ROUND THE NEXT LAP THIS CAR MEETS EACH LOOP. Evenly spaced
+        // on paper - one loop sits at half distance, two at a third and two
+        // thirds - with a few per cent of wander on each, because the whole
+        // point of rehearsing the sector calls is that the sectors DIFFER:
+        // loops placed at exactly the same fraction every lap would give
+        // every car the same two sector times all race, and a sector best
+        // would be set once on lap two and never again.
+        for (var slot = 0; slot < racer.SplitDueAtMs.Length; slot++)
+        {
+            var evenly = (slot + 1.0) / (racer.SplitDueAtMs.Length + 1.0);
+            var wander = (_random.NextDouble() - 0.5) * 0.08;
+            var through = Math.Clamp(evenly + wander, 0.05, 0.95);
+
+            racer.SplitDueAtMs[slot] = crossingMs + lapSeconds * 1000 * through;
+        }
+
         _race.ProcessLapEvent(new DirectLapEvent
         {
             TransponderId = racer.TransponderId,
@@ -530,6 +719,8 @@ public sealed class DemoRaceSimulator : IDisposable
         _tickTimer.Stop();
         IsRunning = false;
         _race.IsDemoMode = false;
+
+        GiveBackTheSplitLoop();
 
         // Clear the audio backlog, exactly as Stop() does. A demo can
         // generate laps faster than they can be announced, so finishing on
@@ -574,6 +765,8 @@ public sealed class DemoRaceSimulator : IDisposable
         // Only the simulator ever sets this, so clearing it is right
         // whoever has the session now.
         _race.IsDemoMode = false;
+
+        GiveBackTheSplitLoop();
 
         if (wasRunning && !ownsSession)
         {

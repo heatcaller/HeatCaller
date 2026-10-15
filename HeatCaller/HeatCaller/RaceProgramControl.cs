@@ -2624,11 +2624,22 @@ public sealed class RaceProgramControl : UserControl
     }
 
     /// <summary>
-    /// Runs the selected round as a demo. Deliberately lighter-touch than a
-    /// real start: nothing is recorded against the round, so the "already
-    /// run" and "no drivers" warnings that guard a real start are not
-    /// needed - a demo on an empty or already-raced round is a perfectly
-    /// reasonable thing to want.
+    /// Runs the selected round as a demo.
+    ///
+    /// Lighter-touch than a real start - the "no drivers" warning that
+    /// guards a real start is not needed, because a demo on an empty round
+    /// is a perfectly reasonable thing to want.
+    ///
+    /// WHAT IT DOES TO THE ROUND DEPENDS ON THE CLUB (13 Oct 2026). With
+    /// "Let a demo fill in the race program" off, as it ships, nothing is
+    /// recorded against the round and this is a rehearsal of one race. With
+    /// it on, the demo marks the round run and the night fills in - which is
+    /// the point of it - and the dialog below says so, because the two are
+    /// very different things to agree to.
+    ///
+    /// Either way a demo never REPLACES a heat that really ran: RaceFiling
+    /// refuses that, and the dialog says so before it is started rather
+    /// than afterwards in the console.
     /// </summary>
     private void StartRoundAsDemo()
     {
@@ -2637,10 +2648,21 @@ public sealed class RaceProgramControl : UserControl
             return;
         }
 
+        var fillsTheProgramme = _settings.DemoFillsTheProgramme;
+
+        var what = fillsTheProgramme
+            ? round.IsRecorded
+                ? "This round has already been run, so the demo will NOT be tied to it - delete its race from Race "
+                  + "History first if you meant to run it again."
+                : "This round will be marked as run and the program will move on to the next one, so you can rehearse "
+                  + "the night through to the mains. It still scores nothing: no championship points, no badges, no "
+                  + "personal bests, no track records."
+            : "Nothing is recorded against this round.";
+
         if (AppDialog.Show(this,
                 $"Run \"{round.RoundLabel}\" as a DEMO?\r\n\r\n"
-                + $"{Plural.Of(round.AssignedTransponders.Count, "driver")} will be simulated. "
-                + "Nothing is recorded against this round and no real timing hardware is used.",
+                + $"{Plural.Of(round.AssignedTransponders.Count, "driver")} will be simulated and no real timing "
+                + $"hardware is used.\r\n\r\n{what}",
                 "Start as demo", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
         {
             return;
@@ -3129,7 +3151,7 @@ public sealed class RaceProgramControl : UserControl
             // pace - see HeatSeeding.
             // Null - no buttons - when nobody in the class has a lap on record.
             pace: HeatSeeding.BestLaps(className, _sessionHistory.All, _rounds.Get,
-                DateTime.UtcNow - HeatSeeding.RecentForm) is { Count: > 0 } recent ? recent : null);
+                DateTime.UtcNow - HeatSeeding.RecentForm, _profiles.PrimaryForAlternate) is { Count: > 0 } recent ? recent : null);
 
         if (form.ShowDialog(this) != DialogResult.OK || form.Changes.Count == 0)
         {

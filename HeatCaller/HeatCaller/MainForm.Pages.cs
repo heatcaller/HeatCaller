@@ -612,7 +612,8 @@ public partial class MainForm
                     PlanBuild: () => _raceProgram.PlanQualifyingBuild(),
                     Build: () => _raceProgram.BuildQualifying(string.Empty),
                     Sound: MakeSoundOfferHost(),
-                    SetCheckedIn: SetCheckedInFromWizard),
+                    SetCheckedIn: SetCheckedInFromWizard,
+                    Undo: _undo),
                 startStep);
 
             wizard.ShowDialog(this);
@@ -1274,13 +1275,55 @@ public partial class MainForm
                 return;
             }
 
-            // A demo must never consume a real round. With a round selected
-            // in the session row, the demo's FAKE results would save against
-            // it, mark it recorded, and the Next Up bar would skip it as
-            // done - a heat nobody actually ran, gone from the day. Dropped
-            // to freeform BEFORE the simulator stages, so the saved session
-            // carries no round id and the real heat stays runnable.
-            cmbActiveRound.SelectedIndex = 0;
+            // WHETHER THE DEMO CONSUMES THE ROUND IS THE CLUB'S CALL NOW
+            // (13 Oct 2026).
+            //
+            // This used to drop to freeform always, so the demo's results
+            // could never save against a real heat. That is right for a demo
+            // run on its own - and it is exactly what made a whole night
+            // impossible to rehearse, because a heat that never marks itself
+            // run gives qualifying nothing to read and the mains nothing to
+            // seed from.
+            //
+            // With the box ticked the round stays selected and the night
+            // fills in as a real one would. It still scores nothing: every
+            // record is guarded by IsDemoSession where it is computed, and
+            // RaceFiling refuses to let a demo land on a heat that really
+            // ran. See AppSettings.DemoFillsTheProgramme.
+            if (!_settings.DemoFillsTheProgramme)
+            {
+                cmbActiveRound.SelectedIndex = 0;
+            }
+            else
+            {
+                // Selected the same way every other restore in MainForm
+                // does it - by round id over RoundComboItem, because the
+                // index means nothing once the list is rebuilt.
+                //
+                // The box only holds rounds that have NOT been run, so a
+                // round being demoed a second time is not in it. Freeform
+                // then, and said plainly: the alternative is a demo that
+                // silently saves against whatever happens to be selected.
+                var picked = false;
+
+                for (var i = 0; i < cmbActiveRound.Items.Count; i++)
+                {
+                    if ((cmbActiveRound.Items[i] as RoundComboItem)?.Round.Id == round.Id)
+                    {
+                        cmbActiveRound.SelectedIndex = i;
+                        picked = true;
+                        break;
+                    }
+                }
+
+                if (!picked)
+                {
+                    cmbActiveRound.SelectedIndex = 0;
+
+                    OnClientRawMessage($"{AppTime.LogStampNow()}  [program] \"{round.RoundLabel}\" has already been "
+                        + "run, so this demo is not tied to it. Delete its race from Race History to run it again.");
+                }
+            }
 
             // Refresh first: the driver list has to know about this round's
             // drivers before StartDemoForRound can tick them.

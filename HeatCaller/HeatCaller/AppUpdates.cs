@@ -170,6 +170,17 @@ internal static class AppUpdates
     /// </summary>
     internal static Func<string, bool>? HoldForNextStart { get; set; }
 
+    /// <summary>
+    /// Runs the "Update now" install on the UI thread, after the last saves
+    /// closing the window would have made - tonight's transponder readings,
+    /// the journal, the settings - and SafeFile.Freeze, handing back false
+    /// when the window could not take it (it is closing). Set once by
+    /// MainForm. Velopack ends the process straight away, so FormClosing
+    /// never runs: without this, all of that was skipped, from this
+    /// background thread. Unset, the install runs here as it always did.
+    /// </summary>
+    internal static Func<Action, bool>? RunInstallOnUiThread { get; set; }
+
     /// <summary>Where this class says things. The console, by way of MainForm.</summary>
     internal static Action<string>? Log { get; set; }
 
@@ -311,11 +322,10 @@ internal static class AppUpdates
 
         try
         {
-            // Exit rather than restart: this is the start of a run that has
-            // barely begun - there is no window up yet and nothing for the
-            // club to be looking at - so the installer puts the new version
-            // in and the club opens it again. Nothing is lost, and it keeps
-            // the promise that the app never relaunches itself unasked.
+            // Installs and restarts into the new version. This is the start
+            // of a run that has barely begun - there is no window up yet and
+            // nothing for the club to be looking at - and the restart was
+            // asked for: "After tonight" is somebody saying yes, just later.
             manager.ApplyUpdatesAndRestart(pending, RestartArgs());
             return true;
         }
@@ -460,7 +470,42 @@ internal static class AppUpdates
 
                 try
                 {
-                    manager.ApplyUpdatesAndRestart(update.TargetFullRelease, RestartArgs());
+                    if (RunInstallOnUiThread is { } onUiThread)
+                    {
+                        // On the UI thread, after the saves closing would
+                        // have made - see RunInstallOnUiThread. A failed
+                        // install is caught there and carried back here, so
+                        // it is not mistaken for the window having gone.
+                        Exception? failed = null;
+
+                        var ran = onUiThread(() =>
+                        {
+                            try
+                            {
+                                manager.ApplyUpdatesAndRestart(update.TargetFullRelease, RestartArgs());
+                            }
+                            catch (Exception ex)
+                            {
+                                failed = ex;
+                            }
+                        });
+
+                        if (failed is not null)
+                        {
+                            // The saves were frozen just before the install,
+                            // so nothing more is written this run.
+                            Say($"The update couldn't be installed ({failed.GetType().Name}: {failed.Message}) - nothing was changed, "
+                                + "but HeatCaller has stopped saving for this run. Close it and open it again before carrying on.");
+                        }
+                        else if (!ran)
+                        {
+                            Say("HeatCaller is closing down - not installing now. It will be offered again.");
+                        }
+                    }
+                    else
+                    {
+                        manager.ApplyUpdatesAndRestart(update.TargetFullRelease, RestartArgs());
+                    }
                 }
                 catch (Exception ex)
                 {

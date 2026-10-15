@@ -1288,6 +1288,17 @@ public sealed partial class RaceControlSession
             standing.Laps = Math.Max(0, standing.Laps + delta);
         }
 
+        // A credited jump-starter's zero start lap folded away: what is left
+        // in the start-lap slot is their dash, already merged into it, so
+        // nothing is "the start lap in effect" any more. Left set, their
+        // first real flying lap after this was taken for that dash and kept
+        // out of their best and the race's fastest. Undo puts it back - see
+        // StandingEdit.StartLapCreditedBefore.
+        if (mergedAny && standing.StartLapCredited && standing.LapTimesMs.Count <= 1)
+        {
+            standing.StartLapCredited = false;
+        }
+
         if (mergedAny)
         {
             RecomputeAfterLapRemoval(standing);
@@ -1647,6 +1658,10 @@ public sealed partial class RaceControlSession
         internal List<long> WarningPenaltiesBefore { get; init; } = new();
         internal long? OwedJumpStartBefore { get; init; }
 
+        // Taking a lap off a credited jump-starter can clear their start-lap
+        // credit (see AdjustLaps), and putting the laps back needs it back.
+        internal bool StartLapCreditedBefore { get; init; }
+
         // Stamped once the correction has been made.
         internal int LapsAfter { get; set; }
         internal List<long> LapTimesAfter { get; set; } = new();
@@ -1708,6 +1723,7 @@ public sealed partial class RaceControlSession
             WarningPenaltiesBefore = standing.Warnings.Select(w => w.PenaltyMs).ToList(),
             OwedJumpStartBefore = _pendingJumpStartPenalties.TryGetValue(transponderId, out var owed) ? (long?)owed : null,
             TookTheFlagBefore = _tookTheFlag.Contains(standing.TransponderId),
+            StartLapCreditedBefore = standing.StartLapCredited,
         };
 
         if (!change())
@@ -1803,6 +1819,10 @@ public sealed partial class RaceControlSession
             standing.RecoveryLapIndexes.AddRange(newRecovery);
 
             standing.Laps = Math.Max(0, edit.LapsBefore + lapsCountedSince);
+
+            // With the lap list it went with, and before the recompute below
+            // reads it - see StandingEdit.StartLapCreditedBefore.
+            standing.StartLapCredited = edit.StartLapCreditedBefore;
 
             if (newTimes.Count == 0)
             {
@@ -2513,6 +2533,10 @@ public sealed partial class RaceControlSession
 
                 Log($"{transponder} was past the line at the green - credited with the start lap.");
             }
+
+            // A credited jumper has counted a lap already - numbered now, as
+            // ProcessLapEvent numbers everybody else on their first lap.
+            RenumberStartPositionsOverStarters();
         }
         _startReferenceChecked = false;
         // The monotonic reading first: read from another thread (the
@@ -2520,8 +2544,13 @@ public sealed partial class RaceControlSession
         // start would make it look minutes into the race.
         _raceStartClockMs = TimingClock.NowMs;
         RaceStartUtc = DateTime.UtcNow;
-        SetState(RaceState.Racing);
+
+        // Set before the state changes, not just before the flag: Race
+        // Control's StateChanged handler reads it to tell a fresh start
+        // (clear the board and the announcer) from anything else, and set
+        // after SetState it still held the last green's value there.
         GreenStartedTheRace = true;
+        SetState(RaceState.Racing);
         SetFlag(FlagState.Green);
         Log("Green flag - racing begins.");
     }
@@ -2705,7 +2734,12 @@ public sealed partial class RaceControlSession
         // to it before the reset can still be undone. See
         // _restoredGenerations. Null - the journal, whose generations meant
         // nothing to the app that is now running - answers to none.
-        IReadOnlyList<int>? Generations = null);
+        IReadOnlyList<int>? Generations = null,
+
+        // Whether the grid is the last race's order, numbered over the cars
+        // that race - see RenumberStartPositionsOverStarters. Null - the
+        // journal - leaves it as it is.
+        bool? RenumberGridOverStarters = null);
 
     public SessionSnapshot CreateSnapshot()
     {
@@ -2770,7 +2804,8 @@ public sealed partial class RaceControlSession
             _lastLapAnnounced,
             _finalMinuteAnnounced,
             _elapsedAtFinish,
-            _restoredGenerations.Append(SessionGeneration).ToList());
+            _restoredGenerations.Append(SessionGeneration).ToList(),
+            _renumberGridOverStarters);
     }
 
     /// <summary>Replaces a live collection's contents with a snapshot's, or leaves it alone when the snapshot didn't carry it.</summary>
@@ -2907,6 +2942,7 @@ public sealed partial class RaceControlSession
         RestoreInto(_releaseOffsetsMs, snapshot.ReleaseOffsetsMs);
         RestoreInto(_releaseCalled, snapshot.ReleaseCalled);
         RestoreInto(_startPositions, snapshot.StartPositions);
+        _renumberGridOverStarters = snapshot.RenumberGridOverStarters ?? _renumberGridOverStarters;
         RestoreInto(_jumpStarters, snapshot.JumpStarters);
         RestoreInto(_pendingJumpStartPenalties, snapshot.PendingJumpStartPenalties);
         RestoreInto(_jumpStartCrossingMs, snapshot.JumpStartCrossingMs);
@@ -2926,11 +2962,11 @@ public sealed partial class RaceControlSession
         _finalMinuteAnnounced = snapshot.FinalMinuteAnnounced
             ?? (TimeLimit is { } timeLimit && RaceStartUtc.HasValue && timeLimit - ElapsedRaceTime <= TimeSpan.FromMinutes(1));
 
-        SetState(snapshot.State);
-
         // A race put back is not a race starting, whatever flag it comes
-        // back under.
+        // back under. Set before the state changes, so StateChanged
+        // handlers see it too - see GreenFlag.
         GreenStartedTheRace = false;
+        SetState(snapshot.State);
         SetFlag(snapshot.Flag);
         Log("Session restored (reset undone).");
     }
@@ -3146,6 +3182,7 @@ public sealed partial class RaceControlSession
         _releaseCalled.Clear();
         _grid.Clear();
         _startPositions.Clear();
+        _renumberGridOverStarters = false;
 
         IsFinishing = false;
         _finishingOnTime = false;
@@ -3461,7 +3498,9 @@ public sealed partial class RaceControlSession
     /// <summary>The grid as set for this race - empty when it wasn't known. Read by TimingWatch's host, to expect every car on it.</summary>
     public IReadOnlyList<string> Grid => _grid;
 
-    public void SetGrid(IEnumerable<string> transponders)
+    /// <param name="transponders">The grid, in order.</param>
+    /// <param name="renumberOverStarters">True when the grid is only a guess at the field - the last race's finishing order - so start positions are numbered over the cars on it that actually race, not its slots. See RenumberStartPositionsOverStarters.</param>
+    public void SetGrid(IEnumerable<string> transponders, bool renumberOverStarters = false)
     {
         _grid.Clear();
 
@@ -3470,6 +3509,47 @@ public sealed partial class RaceControlSession
         _grid.AddRange(transponders
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .Distinct(StringComparer.OrdinalIgnoreCase));
+
+        _renumberGridOverStarters = renumberOverStarters && _grid.Count > 0;
+    }
+
+    /// <summary>
+    /// Whether this race's grid is the last race's finishing order rather
+    /// than a stated roster, so its start positions are renumbered over the
+    /// cars that actually race. See RenumberStartPositionsOverStarters.
+    /// </summary>
+    private bool _renumberGridOverStarters;
+
+    /// <summary>
+    /// For a grid borrowed from the last race: numbers start positions over
+    /// the cars on it that have counted a lap in THIS race, in grid order.
+    ///
+    /// That field's slots are not this one's. Drivers from it who are not
+    /// here left gaps, so the fifth car of a five-car heat was saved as
+    /// starting 8th - "up from 8th on the grid", and a Comeback Kid or Pole
+    /// Converted awarded off a race it never ran. A car on the grid that has
+    /// not raced (never turned up, or still held in a hand-released start)
+    /// has no start position at all. Run as each car counts its first lap,
+    /// so by the flag every car that raced is numbered.
+    /// </summary>
+    private void RenumberStartPositionsOverStarters()
+    {
+        if (!_renumberGridOverStarters)
+        {
+            return;
+        }
+
+        var position = 0;
+
+        foreach (var transponder in _grid)
+        {
+            if (!_standings.TryGetValue(transponder, out var standing))
+            {
+                continue;
+            }
+
+            standing.StartPosition = standing.Laps > 0 ? ++position : 0;
+        }
     }
 
     /// <summary>

@@ -73,6 +73,7 @@ public sealed class RelaySettingsControl : UserControl
     private readonly TextBox _txtToken = new();
     private readonly CheckBox _chkShowToken = new ThemedCheckBox();
     private readonly CheckBox _chkRoster = new ThemedCheckBox();
+    private readonly CheckBox _chkDriverNights = new ThemedCheckBox();
     private readonly CheckBox _chkAbbreviate = new ThemedCheckBox();
     private readonly Button _btnTest = new();
     private readonly Button _btnSave = new();
@@ -526,6 +527,40 @@ public sealed class RelaySettingsControl : UserControl
             + "club is set up to allow it, so both ends have to agree before that list is public. Heat line-ups "
             + "are held back here, on the laptop: with this off, the schedule shows the heats but not who is in them.");
 
+        _chkDriverNights.Text = "Give each driver their own night at a private address";
+        _chkDriverNights.AutoSize = true;
+        _chkDriverNights.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.PublishDriverNightsToTheRelay = _chkDriverNights.Checked;
+            _settings.Save();
+
+            // UNTICKING IS SENT, not left to be inferred from nothing being
+            // published. The relay cannot tell a club that has withdrawn
+            // this from a club that has not raced this week, so it is told -
+            // and being told is what makes it throw away every night it
+            // holds. See RelayPublisher.CloseDriverNightsOnTheRelay.
+            if (!_chkDriverNights.Checked)
+            {
+                _publisher.CloseDriverNightsOnTheRelay();
+            }
+
+            _publisher.SettingsChanged();
+        };
+
+        var lblNightsHint = HintLabel(
+            "Off by default. Each driver who raced gets a page of their own evening - their races, where "
+            + "they finished, their best laps and what the night's moments say they did - at an address "
+            + "that carries the twenty-character code already printed on their check-in badge. Nobody "
+            + "without that code can open it or find it, and the relay answers everybody else the same way "
+            + "whether the code is wrong or the driver simply did not race. Needs online check-in set up, "
+            + "because the badge is what the address is built from. Unticking this takes every night back "
+            + "off the relay.");
+
         _chkAbbreviate.Text = "Shorten published names to a first name and an initial";
         _chkAbbreviate.AutoSize = true;
         _chkAbbreviate.CheckedChanged += (_, _) =>
@@ -550,6 +585,8 @@ public sealed class RelaySettingsControl : UserControl
         card.Add(lblAlways);
         card.Add(_chkRoster, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblRosterHint);
+        card.Add(_chkDriverNights, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblNightsHint);
         card.Add(_chkAbbreviate, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblNameHint, gapBelow: 0);
 
@@ -2173,6 +2210,7 @@ public sealed class RelaySettingsControl : UserControl
 
             _chkEnabled.Checked = _settings.RelayEnabled;
             _chkRoster.Checked = _settings.RelayPublishRoster;
+            _chkDriverNights.Checked = _settings.PublishDriverNightsToTheRelay;
             _chkAbbreviate.Checked = _settings.RelayAbbreviateNames;
 
             _txtTagline.Text = _settings.RelayTagline;

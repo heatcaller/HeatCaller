@@ -1123,7 +1123,7 @@ public sealed partial class AnnouncementService
         var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.ProvisionalPole));
         if (VoiceCandidateCanSpeak(AnnouncementEventType.ProvisionalPole, config))
         {
-            ConsiderPerLapAction("voice", transponderId, config.Weight, Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap),
+            ConsiderPerLapAction("voice", transponderId, config.Weight, MaxVoicePerLap,
                 () => EnqueueVoice(AnnouncementEventType.ProvisionalPole, standing, null, lapMs));
         }
 

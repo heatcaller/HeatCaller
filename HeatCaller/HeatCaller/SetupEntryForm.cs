@@ -594,14 +594,36 @@ public sealed class SetupEntryForm : Form
                     IntegralHeight = false,
                 };
                 var selected = current.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                // The stored pieces each option accounts for - so whatever is
+                // left over can be kept (below).
+                var matched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var option in field.Options)
                 {
                     var index = list.Items.Add(option);
-                    if (selected.Contains(option, StringComparer.OrdinalIgnoreCase))
+
+                    // An option with a comma in it (from before options were
+                    // refused one) was saved joined to the rest, so it comes
+                    // back as pieces: ticked when all of its pieces are there.
+                    var pieces = option.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (pieces.Length > 0 && pieces.All(p => selected.Contains(p, StringComparer.OrdinalIgnoreCase)))
                     {
                         list.SetItemChecked(index, true);
+                        matched.UnionWith(pieces);
                     }
                 }
+
+                // A value that isn't in the option list any more (the
+                // template was edited) - kept as an extra ticked row, as the
+                // drop-down above keeps one, rather than silently dropped the
+                // next time the sheet is saved (the list is read back from
+                // what is ticked).
+                foreach (var stale in selected.Where(v => !matched.Contains(v)).Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    var index = list.Items.Add(stale);
+                    list.SetItemChecked(index, true);
+                }
+                listRows = Math.Clamp(list.Items.Count, 2, 5);
                 list.ItemCheck += (_, _) =>
                 {
                     if (!IsHandleCreated || IsDisposed) { return; }

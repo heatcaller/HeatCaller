@@ -1847,15 +1847,27 @@ public sealed partial class VoiceSettingsControl : UserControl
             // Here because this is the one place the catalogue is read for
             // the announcer's own voice, and the gate runs on every spoken
             // line: asking the relay per line is not an option, and
-            // guessing is not either. Replaced wholesale rather than added
-            // to, so a voice that stops being a clone stops needing a
-            // consent from the next look at this page.
-            var clones = catalogue.Voices
-                .Where(one => one.Cloned && one.Id.Length > 0)
-                .Select(one => one.Id)
+            // guessing is not either.
+            //
+            // STICKY, NOT REPLACED WHOLESALE (14 Oct 2026). A voice the
+            // relay calls a clone is added; a voice already on the list
+            // comes off ONLY when the relay lists it and says it is not a
+            // clone. Replacing the list each time meant that once a club
+            // took a consent back and the relay stopped listing the voice,
+            // it stopped counting as a clone at all - and every saved and
+            // prepared line in that person's voice played again. A voice
+            // the relay no longer mentions tells us nothing, so it stays.
+            var listedNotCloned = new HashSet<string>(
+                catalogue.Voices.Where(one => one.ClonedStated && !one.Cloned && one.Id.Length > 0).Select(one => one.Id),
+                StringComparer.OrdinalIgnoreCase);
+
+            var clones = (_appSettings.HeatCallerClonedVoices ?? new List<string>())
+                .Where(one => !string.IsNullOrWhiteSpace(one) && !listedNotCloned.Contains(one))
+                .Concat(catalogue.Voices.Where(one => one.Cloned && one.Id.Length > 0).Select(one => one.Id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (!clones.SequenceEqual(_appSettings.HeatCallerClonedVoices, StringComparer.OrdinalIgnoreCase))
+            if (!clones.SequenceEqual(_appSettings.HeatCallerClonedVoices ?? new List<string>(), StringComparer.OrdinalIgnoreCase))
             {
                 _appSettings.HeatCallerClonedVoices = clones;
                 _appSettings.Save();

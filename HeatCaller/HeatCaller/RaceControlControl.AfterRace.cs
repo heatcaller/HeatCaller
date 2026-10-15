@@ -653,6 +653,13 @@ public sealed partial class RaceControlControl
             nextRace.Cancel();
         }
 
+        // The recording this recap belongs to, taken now on the UI thread.
+        // Several waits in the sequence below are not cancelled by the next
+        // race being called, so the end of the recap can land after the next
+        // green - and must not stop THAT race's recording seconds in, the same
+        // guard SignalSessionAudioFinishedAfterFinishCall already has.
+        var recapRecording = _raceAudioRecorder;
+
         _ = Task.Run(async () =>
         {
             // The writing and rendering of the recap, the interview and the
@@ -1280,7 +1287,7 @@ public sealed partial class RaceControlControl
                 // must not sit on top of.
                 try
                 {
-                    await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(60), nextRace.Token);
+                    await _announcer.WaitForAudioAsync(SpokenWait(), nextRace.Token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -1312,7 +1319,8 @@ public sealed partial class RaceControlControl
                 // night; and raising it in more than one place risked a
                 // second fade or stop landing on the next race's music.
                 // First, so nothing below can keep it from being raised.
-                RaiseSessionAudioFinished();
+                // Only this race's recording is finished - see recapRecording.
+                RaiseSessionAudioFinished(onlyThisRecording: true, recapRecording);
 
                 // And here, for any way out of the sequence that raised the
                 // deep duck but skipped the release above - an early return
@@ -1399,8 +1407,35 @@ public sealed partial class RaceControlControl
     /// </summary>
     private static readonly TimeSpan FollowOnWait = TimeSpan.FromSeconds(15);
 
-    /// <summary>The longest a line of the recap sequence is waited on to be heard before the next is queued behind it anyway.</summary>
-    private static readonly TimeSpan RecapLineLimit = TimeSpan.FromSeconds(90);
+    /// <summary>
+    /// How long a spoken line of the broadcast is waited on, worked out
+    /// from what the club asked for rather than fixed.
+    ///
+    /// IT USED TO BE FIXED, AND THAT OVERRULED THE CLUB (14 Oct 2026). A
+    /// flat 60 seconds waited on the broadcast and a flat 90 on each line
+    /// of it - set Max length to 300 words and the recap is legitimately
+    /// two minutes of speech, so the wait expired part way through, the
+    /// block was abandoned, and the music bed and the "coming up" segment
+    /// went with it. A club that asks for a long recap has asked to hear
+    /// it play.
+    ///
+    /// A hundred words a minute, deliberately slower than conversation:
+    /// the announcer voices are measured, and on v3 the delivery tags add
+    /// a beat of their own. Trebled, because the number on the page is what
+    /// ONE line may run to and the recap gets its own extra allowance on
+    /// top, plus room for an opening and a closing.
+    ///
+    /// Floored so a terse setting still waits a sensible time, and capped
+    /// so a runaway answer cannot hold the floor all evening. Nothing here
+    /// is a hard stop anyway: both callers pass the next race's token, so
+    /// a race being called ends the wait whatever this says.
+    /// </summary>
+    private TimeSpan SpokenWait()
+    {
+        var words = Math.Max(8, _settings.CommentaryMaxWords) * 3;
+
+        return TimeSpan.FromSeconds(Math.Clamp(words * 60.0 / 100.0, 60, 300));
+    }
 
     /// <summary>
     /// What this sequence calls itself while it holds the broadcast floor -
@@ -2176,91 +2211,129 @@ public sealed partial class RaceControlControl
 
         var (timedOut, segments) = await WithinAsync(written, FollowOnWait, nextRace);
 
-        if (nextRace.IsCancellationRequested)
-        {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+        // THE DIRECTOR IS TOLD WHICH WENT OUT (14 Oct 2026). It settles a
+        // segment only when told Spoken - see
+        // CommentaryDirector.CommitWhenSpoken - so every colour segment not
+        // reached below is answered for as Dropped in the finally.
+        var director = Commentary?.Invoke();
 
-            return;
+        // Not waited for - it came back too late, or the next race went
+        // first - so whatever it writes later is dropped as it lands rather
+        // than held until the director's own ceiling gives it back.
+        if (timedOut && director is { } lateDirector)
+        {
+            _ = written.ContinueWith(
+                late =>
+                {
+                    foreach (var unsaid in late.Result ?? new List<SpokenSegment>())
+                    {
+                        lateDirector.Dropped(unsaid);
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnRanToCompletion,
+                TaskScheduler.Default);
         }
 
-        if (segments is null || segments.Count == 0)
+        try
         {
-            if (timedOut)
-            {
-                StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [commentary] The programme's colour was not written within {FollowOnWait.TotalSeconds:0}s of the honours, so it is skipped.");
-            }
-
-            return;
-        }
-
-        var treatment = ShowMusic?.Invoke();
-
-        foreach (var said in segments)
-        {
-            if (!await HeardOutAsync(nextRace))
+            if (nextRace.IsCancellationRequested)
             {
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
 
                 return;
             }
 
-            // The mark between two items of a programme - the same one a
-            // block puts between its own items, so a colour segment inside
-            // the recap is punctuated the way one inside a block is. False
-            // also means "nothing to play" (show music off, or no sting),
-            // which is a reason to go on without the mark, not to drop the
-            // colour - so only the next race being called stops it here.
-            if (treatment is not null
-                && !await treatment.PunctuateAsync(nextRace)
-                && nextRace.IsCancellationRequested)
+            if (segments is null || segments.Count == 0)
             {
-                SayUnlessTheNextRaceStopped(stopped, nextRace);
+                if (timedOut)
+                {
+                    StatusMessage?.Invoke(
+                        $"{AppTime.LogStampNow()}  [commentary] The programme's colour was not written within {FollowOnWait.TotalSeconds:0}s of the honours, so it is skipped.");
+                }
 
                 return;
             }
 
-            if (said.IsExchange)
+            var treatment = ShowMusic?.Invoke();
+
+            foreach (var said in segments)
             {
-                for (var at = 0; at < said.Turns.Count; at++)
+                if (!await HeardOutAsync(nextRace))
                 {
-                    if (at > 0 && !await HeardOutAsync(nextRace))
-                    {
-                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
 
-                        return;
-                    }
-
-                    // The beat at a change of voice, and the pads trimmed
-                    // for a turn with another hard against it - exactly as
-                    // the honours do it. See CommentaryExchange.ExchangeRun.
-                    if (at > 0 && treatment is not null && !await treatment.HandOverAsync(show, nextRace))
-                    {
-                        SayUnlessTheNextRaceStopped(stopped, nextRace);
-
-                        return;
-                    }
-
-                    var turn = said.Turns[at];
-                    var run = CommentaryExchange.ExchangeRun.At(at, said.Turns.Count);
-
-                    _announcer.SpeakReminder(
-                        turn.Line,
-                        null,
-                        turn.FromCoHost ? _settings.CoHostVoice : null,
-                        showOnScreens: true,
-                        tail: run.AnotherFollows
-                            ? AnnouncementService.SpeechTail.BackToBack
-                            : AnnouncementService.SpeechTail.Normal,
-                        lead: run.FollowsAnother
-                            ? AnnouncementService.SpeechLead.FollowsOn
-                            : AnnouncementService.SpeechLead.Normal);
+                    return;
                 }
 
-                continue;
-            }
+                // The mark between two items of a programme - the same one a
+                // block puts between its own items, so a colour segment inside
+                // the recap is punctuated the way one inside a block is. False
+                // also means "nothing to play" (show music off, or no sting),
+                // which is a reason to go on without the mark, not to drop the
+                // colour - so only the next race being called stops it here.
+                if (treatment is not null
+                    && !await treatment.PunctuateAsync(nextRace)
+                    && nextRace.IsCancellationRequested)
+                {
+                    SayUnlessTheNextRaceStopped(stopped, nextRace);
 
-            _announcer.SpeakReminder(said.Text, showOnScreens: true);
+                    return;
+                }
+
+                // Going out now - see the director note above.
+                director?.Spoken(said);
+
+                if (said.IsExchange)
+                {
+                    for (var at = 0; at < said.Turns.Count; at++)
+                    {
+                        if (at > 0 && !await HeardOutAsync(nextRace))
+                        {
+                            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+
+                            return;
+                        }
+
+                        // The beat at a change of voice, and the pads trimmed
+                        // for a turn with another hard against it - exactly as
+                        // the honours do it. See CommentaryExchange.ExchangeRun.
+                        if (at > 0 && treatment is not null && !await treatment.HandOverAsync(show, nextRace))
+                        {
+                            SayUnlessTheNextRaceStopped(stopped, nextRace);
+
+                            return;
+                        }
+
+                        var turn = said.Turns[at];
+                        var run = CommentaryExchange.ExchangeRun.At(at, said.Turns.Count);
+
+                        _announcer.SpeakReminder(
+                            turn.Line,
+                            null,
+                            turn.FromCoHost ? _settings.CoHostVoice : null,
+                            showOnScreens: true,
+                            tail: run.AnotherFollows
+                                ? AnnouncementService.SpeechTail.BackToBack
+                                : AnnouncementService.SpeechTail.Normal,
+                            lead: run.FollowsAnother
+                                ? AnnouncementService.SpeechLead.FollowsOn
+                                : AnnouncementService.SpeechLead.Normal);
+                    }
+
+                    continue;
+                }
+
+                _announcer.SpeakReminder(said.Text, showOnScreens: true);
+            }
+        }
+        finally
+        {
+            // Nothing for the ones already Spoken - see the note above.
+            foreach (var unsaid in segments ?? new List<SpokenSegment>())
+            {
+                director?.Dropped(unsaid);
+            }
         }
     }
 
@@ -2324,10 +2397,12 @@ public sealed partial class RaceControlControl
             // the recap overran and everything after it arrived bunched up
             // behind looked, in the log, exactly like a night where each
             // part was heard out properly.
-            if (!await _announcer.WaitForAudioAsync(RecapLineLimit, nextRace))
+            var lineLimit = SpokenWait();
+
+            if (!await _announcer.WaitForAudioAsync(lineLimit, nextRace))
             {
                 StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [commentary] Still speaking after {RecapLineLimit.TotalSeconds:0}s, so the next part "
+                    $"{AppTime.LogStampNow()}  [commentary] Still speaking after {lineLimit.TotalSeconds:0}s, so the next part "
                     + "of the programme is queued behind it rather than waited for any longer.");
             }
         }
@@ -3898,7 +3973,12 @@ public sealed partial class RaceControlControl
         // no badges, no personal bests or records. Every lap time in it was
         // invented, and a rehearsal quietly filling in a real heat (or
         // handing out a real driver's win) is worse than it not being saved.
-        if (_currentRaceIsDemo && !_settings.SaveDemoSessions)
+        // A DEMO NIGHT IMPLIES SAVING. There is nothing to tie a round to
+        // otherwise, so a club that asked to rehearse a whole night and
+        // left this box unticked would watch every heat finish and the
+        // program never move - with the reason buried in a setting on
+        // another page. See AppSettings.DemoFillsTheProgramme.
+        if (_currentRaceIsDemo && !_settings.SaveDemoSessions && !_settings.DemoFillsTheProgramme)
         {
             StatusMessage?.Invoke(
                 "[session] Demo race finished but was NOT saved - tick \"Save demo races to Race History\" "
@@ -4146,7 +4226,8 @@ public sealed partial class RaceControlControl
                 SessionSaved?.Invoke();
             },
             log: message => StatusMessage?.Invoke(message),
-            raceDayOpen: RoundPicker.RaceDayOpen(_events));
+            raceDayOpen: RoundPicker.RaceDayOpen(_events),
+            demoMayFillTheProgramme: _settings.DemoFillsTheProgramme);
 
         if (filed == RaceFiling.Outcome.NotSaved)
         {
@@ -4304,7 +4385,8 @@ public sealed partial class RaceControlControl
                     }
                 },
                 log: message => StatusMessage?.Invoke(message),
-                raceDayOpen: RoundPicker.RaceDayOpen(_events));
+                raceDayOpen: RoundPicker.RaceDayOpen(_events),
+                demoMayFillTheProgramme: _settings.DemoFillsTheProgramme);
 
             if (outcome == RaceFiling.Outcome.Saved)
             {

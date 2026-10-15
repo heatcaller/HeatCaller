@@ -117,7 +117,13 @@ public sealed partial class AnnouncementService
     private bool VoiceCandidateCanSpeak(AnnouncementEventType type, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] AnnouncementEventConfig? config) =>
         config is not null
         && config.IsEnabledFor(IsPracticeMode)
-        && !HeldByCaution(type, config);
+        && !HeldByCaution(type, config)
+        // The dial too, and for the reason this method exists at all: a
+        // call EnqueueVoice is going to hold must not first take a per-lap
+        // slot off one that would have been said. That is the same fault
+        // the note below records for a switched-off effect, arriving by a
+        // new route. See DialLetsItSpeak.
+        && DialLetsItSpeak(type, config);
 
     /// <summary>
     /// The sound-effect side of VoiceCandidateCanSpeak, for the same reason:
@@ -559,7 +565,7 @@ public sealed partial class AnnouncementService
             var voiceCfg = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.LeaderChange));
             if (!poleSaysIt && VoiceCandidateCanSpeak(AnnouncementEventType.LeaderChange, voiceCfg))
             {
-                ConsiderPerLapAction("voice", leader.Transponder, voiceCfg.Weight, Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap),
+                ConsiderPerLapAction("voice", leader.Transponder, voiceCfg.Weight, MaxVoicePerLap,
                     () => EnqueueVoice(AnnouncementEventType.LeaderChange, leader, null));
             }
         }
@@ -838,7 +844,7 @@ public sealed partial class AnnouncementService
         // fast lap and a lead change, or was dropped for the announcer being
         // busy, was still put on the Big Screen and still made the crowd
         // ambience surge for a call nobody heard. See EnqueueVoiceWork.
-        ConsiderPerLapAction("voice", transponder, config.Weight, Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap),
+        ConsiderPerLapAction("voice", transponder, config.Weight, MaxVoicePerLap,
             () => EnqueueVoiceWork(AnnouncementEventType.StreakLead, transponder,
                 () => SynthesizeAndPlayAsync(text, "[voice] Longest streak", speedOverride: speed),
                 displayText: text));
@@ -1079,7 +1085,7 @@ public sealed partial class AnnouncementService
         // The text goes up only once the line wins its slot and is accepted
         // (see EnqueueVoiceWork), not when it is offered - or a lapping the
         // cap dropped was still shown on the Big Screen and in the feed.
-        ConsiderPerLapAction("voice", driverTransponder, config.Weight, Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap), () =>
+        ConsiderPerLapAction("voice", driverTransponder, config.Weight, MaxVoicePerLap, () =>
         {
             // This runs on a thread-pool thread, and the batches for
             // different cars can run at the same time - so the pair is
@@ -1253,7 +1259,7 @@ public sealed partial class AnnouncementService
         // --- Per-lap "good lap" / "invalid lap" sound feedback ---
         var sounds = _soundStore.Current;
         var maxSoundsPerLap = Math.Max(1, sounds.MaxEffectsPerLap);
-        var maxVoicePerLap = Math.Max(1, _voiceStore.Current.MaxAnnouncementsPerLap);
+        var maxVoicePerLap = MaxVoicePerLap;
         var transponder = gate.Transponder;
 
         // Every candidate below is offered only when it could be heard, so a

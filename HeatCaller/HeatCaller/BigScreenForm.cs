@@ -1217,9 +1217,21 @@ public sealed class BigScreenForm : Form
 
         var names = _sponsors.SlideFileNames;
 
+        // FROM ZERO WHEN NOTHING HAS BEEN SHOWN YET (13 Oct 2026).
+        // _sponsorIndex starts at -1 to mean "no slide yet", and the
+        // rotation itself normalises that by doing (+1) before it reads -
+        // but this search and NextStillSlide below did not, so (-1 + 0) %
+        // count is -1 in C# and List[-1] threw.
+        //
+        // Reached by opening the Big Screen while a commercial break was
+        // already running: the break asks for a video before any slide has
+        // been shown, so the sentinel was still -1. A crash dialog in front
+        // of a crowd, from the one screen a club cannot quietly close.
+        var from = Math.Max(0, _sponsorIndex);
+
         for (var step = 0; step < names.Count; step++)
         {
-            var at = (_sponsorIndex + step) % names.Count;
+            var at = (from + step) % names.Count;
 
             // The file has to be THERE as well as be a video: a path that
             // no longer resolves is skipped by the rotation anyway, and
@@ -1262,9 +1274,13 @@ public sealed class BigScreenForm : Form
 
         var names = _sponsors.SlideFileNames;
 
+        // From zero when nothing has been shown yet, for the reason
+        // NextVideoSlide gives at length.
+        var from = Math.Max(0, _sponsorIndex);
+
         for (var step = 0; step < names.Count; step++)
         {
-            var at = (_sponsorIndex + step) % names.Count;
+            var at = (from + step) % names.Count;
 
             if (!SponsorMedia.IsVideoName(names[at]) && _sponsors.ResolvePath(names[at]) is not null)
             {

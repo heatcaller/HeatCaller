@@ -188,6 +188,41 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
    * rule this file opens with.
    */
   preview: { name: "preview", kind: "snapshot", what: "a preview of a meeting that has not happened yet" },
+  /*
+   * ONE DRIVER'S NIGHT - what they did at the club tonight, as finished
+   * sentences, one document per driver.
+   *
+   * PRIVATE, AND THE FIRST PRIVATE COLLECTION THIS RELAY HAS HAD. Until
+   * now every private channel was a snapshot, and only readSnapshot
+   * honoured the flag - readCollection and readItem did not check it at
+   * all. Adding this channel without fixing that would have served every
+   * driver's night to anybody, and `?meta=1` would have listed every
+   * document id. These ids are badge ids (RelayCheckIn.IdFor): eighty
+   * unguessable bits that are ALSO what lets somebody be checked in, so a
+   * listing of them would have given away check-in with the nights. Both
+   * readers now refuse a private collection, and readSomeItems refuses
+   * one too.
+   *
+   * So a night is read through its own route and only by somebody who
+   * already has the id - "the id itself is the credential", the rule this
+   * relay's check-in was built on.
+   *
+   * ROLLOLDEST, because the ids are hex and carry no order: an ownBudget
+   * channel evicts the lowest id first and only ever considers ids below
+   * the one arriving, so without this a full budget would start REFUSING
+   * incoming nights rather than making room. That is the trap the listen
+   * channel's own entry records.
+   */
+  nights: {
+    name: "nights",
+    kind: "collection",
+    what: "one driver's own night, for the driver whose badge id it is",
+    private: true,
+    ownBudget: 4 * 1024 * 1024,
+    maxItems: 400,
+    maxItemBytes: 64 * 1024,
+    rollOldest: true,
+  },
   site: { name: "site", kind: "snapshot", what: "the club's colours, welcome line and logo" },
   // Online check-in: who can be checked in, the PIN's hash, and the
   // drivers' names and photos. Private - the relay hands out pieces of

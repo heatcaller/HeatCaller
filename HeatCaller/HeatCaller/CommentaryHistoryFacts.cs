@@ -43,12 +43,30 @@ public readonly record struct DriverForm(
 /// <param name="AAhead">Races where A finished ahead of B.</param>
 /// <param name="BAhead">Races where B finished ahead of A.</param>
 /// <param name="LastMetDescribed">"in the second heat", "at the last meeting" - the caller's words.</param>
+/// <param name="LastMetMoment">
+/// One thing the saved result PROVES happened in that race, already
+/// worded - "Dave took the lead on the last lap in the A-Main". Null is
+/// the usual answer: most races prove nothing worth a sentence.
+///
+/// THE LONG CALLBACK (13 Oct 2026), and the reason it took this long is
+/// worth a line: <see cref="LastMetDescribed"/> has been spoken as "They
+/// last met ..." since the rivalry line was written and was populated by
+/// NOBODY - declared, consumed, never set. The counting reader already
+/// walked every shared past race and kept two integers. See PastMeetings.
+/// </param>
+/// <param name="LastMetFrontRow">
+/// Whether they started that race first and second, in either order -
+/// which is what lets the line say "the last time these two shared a
+/// front row" rather than "the last time these two met".
+/// </param>
 public readonly record struct HeadToHead(
     string AId,
     string BId,
     int AAhead,
     int BAhead,
-    string? LastMetDescribed = null);
+    string? LastMetDescribed = null,
+    string? LastMetMoment = null,
+    bool LastMetFrontRow = false);
 
 /// <summary>
 /// A race's drivers as the club's history knew them BEFORE it, with the
@@ -375,6 +393,53 @@ public static class CommentaryHistoryFacts
     }
 
     /// <summary>
+    /// What gets appended to a rivalry line about the last time these two
+    /// actually raced each other - the long callback.
+    ///
+    /// THREE SHAPES, and the first is the one the feature is for:
+    ///
+    ///   a shared FRONT ROW with something provable in it - "The last time
+    ///   these two shared a front row, Dave took the lead on the last lap
+    ///   in the A-Main." The grid slot is what makes it a story rather
+    ///   than a statistic;
+    ///
+    ///   a meeting with something provable in it - "They last met three
+    ///   weeks ago. Dave took the lead on the last lap in the A-Main.";
+    ///
+    ///   and a meeting that proves nothing, which is most of them - "They
+    ///   last met in the A-Main three weeks ago." The clause carries the
+    ///   label in that case and only that case, so the room is never told
+    ///   it twice - see PastMeetings.Clause.
+    ///
+    /// Empty when the pair have no recallable meeting, and then the
+    /// rivalry line reads exactly as it did before any of this.
+    ///
+    /// The moment is left capitalised after the comma on purpose: it
+    /// starts with a driver's name, and a driver called Dave does not
+    /// become "dave" because of where the comma fell.
+    /// </summary>
+    private static string LastMeeting(HeadToHead record)
+    {
+        var moment = record.LastMetMoment is { Length: > 0 } what
+            ? CommentaryFacts.CleanLong(what)
+            : string.Empty;
+
+        if (record.LastMetFrontRow && moment.Length > 0)
+        {
+            return $" The last time these two shared a front row, {moment}";
+        }
+
+        if (record.LastMetDescribed is not { Length: > 0 } last)
+        {
+            return string.Empty;
+        }
+
+        var met = $" They last met {CommentaryFacts.CleanLong(last)}.";
+
+        return moment.Length > 0 ? $"{met} {moment}" : met;
+    }
+
+    /// <summary>
     /// Two drivers whose record against each other is worth knowing.
     ///
     /// Worth knowing means one of two things: one of them nearly always
@@ -405,9 +470,7 @@ public static class CommentaryHistoryFacts
         // mean neither of them may be talked about again, and a battle
         // call about the same two does. See FactTheme.Rivalry.
         var theme = FactTheme.Rivalry(record.AId, record.BId);
-        var when = record.LastMetDescribed is { Length: > 0 } last
-            ? $" They last met {CommentaryFacts.CleanLong(last)}."
-            : string.Empty;
+        var when = LastMeeting(record);
 
         var share = (double)Math.Max(record.AAhead, record.BAhead) / met;
 

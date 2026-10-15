@@ -595,6 +595,16 @@ public sealed partial class RaceControlControl : UserControl
                     Commentary?.Invoke(),
                     _settings.CommentaryEnabled,
                     _speaking,
+                    // READ ON THE TICK, not stored from SpeakingChanged.
+                    // The event only says that something started or
+                    // stopped; what is actually in the speakers changes
+                    // under it as a flag call cuts in or a recap moves on
+                    // to its next piece. See AnnouncementService.OnAirNow.
+                    _announcer.OnAirNow,
+                    // Read on the tick like the rest: mute is a button on
+                    // the Mixer, which is a different page, so nothing
+                    // tells this row about it.
+                    _announcer.Muted,
                     NotesWaitingForApproval(),
                     VotesCastSoFar());
             }

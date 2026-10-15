@@ -35,6 +35,12 @@ layout-check/
 # carried in here, where it would be in every clone and every fetch forever.
 HeatCaller/HeatCaller/Assets/Kokoro/
 
+# The commentary model, fetched by fetch-llm.cmd into
+# HeatCaller\HeatCaller\Assets\LocalModel and shipped beside the exe by the
+# publish (see PublishLocalModel in the csproj). 440 MB of someone else's
+# published weights, same reasoning as the Kokoro model above.
+HeatCaller/HeatCaller/Assets/LocalModel/
+
 # Python leftovers from audio-tools
 __pycache__/
 *.pyc

@@ -104,6 +104,7 @@ public sealed class DemoModeControl : UserControl
 
     /// <summary>The save-to-history box, and the settings' captions, measured for the least the cards beside the racers can do with - see RacersWidth.</summary>
     private readonly CheckBox _chkSaveDemo = new ThemedCheckBox();
+    private readonly CheckBox _chkDemoNight = new ThemedCheckBox();
     private readonly List<Label> _settingsCaptions = new();
 
     /// <summary>The racers' card and the caption of its round picker, which the column's width is measured from - see RacersWidth.</summary>
@@ -233,14 +234,49 @@ public sealed class DemoModeControl : UserControl
         var lblSaveDemoHint = new Label
         {
             Text = "Off by default so fake results stay out of your real history. Turn it on to keep a copy of each demo "
-                 + "race, marked [DEMO], to look back over or print a results card from. A saved demo is never scored: it is "
-                 + "never linked to a heat - even if a round is picked in the Round: box on Race Control - and never earns "
-                 + "championship points, badges, personal bests or track records.",
+                 + "race, marked [DEMO], to look back over or print a results card from. A saved demo is never scored - no "
+                 + "championship points, no badges, no personal bests, no track records - whatever else it is tied to.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
 
         _textSize.Wear(lblSaveDemoHint, () => AppTheme.SmallFont);
+
+        _chkDemoNight.Text = "Let a demo fill in the race program (rehearse a whole night)";
+        _chkDemoNight.AutoSize = true;
+        _chkDemoNight.Checked = _settings.DemoFillsTheProgramme;
+        _chkDemoNight.CheckedChanged += (_, _) =>
+        {
+            _settings.DemoFillsTheProgramme = _chkDemoNight.Checked;
+
+            // Implied, not merely required: there is nothing to tie a round
+            // to without a saved race, and a club that ticked this and then
+            // watched the program never move would have no way of knowing
+            // why. Shown as well as set, so the box agrees with what is
+            // happening.
+            if (_chkDemoNight.Checked && !_settings.SaveDemoSessions)
+            {
+                _settings.SaveDemoSessions = true;
+                _chkSaveDemo.Checked = true;
+            }
+
+            _settings.Save();
+        };
+
+        var lblDemoNightHint = new Label
+        {
+            Text = "Off by default. With this on, a demo race marks its heat as run, the program moves to the next one, "
+                 + "and qualifying and the mains - bump-ups and all - are worked out from the demo results. That is how you "
+                 + "rehearse a whole night: heats, qualifying, mains, bump-ups, the lot. It still scores nothing - no "
+                 + "championship points, no badges, no personal bests, no track records - because every one of those is "
+                 + "worked out separately and each one ignores a demo. A demo will not replace a heat that has really been "
+                 + "run. To clear a rehearsed night, delete its [DEMO] races from Race History and the heats go back to "
+                 + "unrun. Needs demo races saved to history, so ticking this ticks that.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblDemoNightHint, () => AppTheme.SmallFont);
 
         var fields = new FieldGrid();
 
@@ -256,7 +292,9 @@ public sealed class DemoModeControl : UserControl
 
         settings.Add(fields);
         settings.Add(_chkSaveDemo, stretch: false, gapBelow: UiLayout.HintGap);
-        settings.Add(lblSaveDemoHint, gapBelow: 0);
+        settings.Add(lblSaveDemoHint, gapBelow: UiLayout.HintGap);
+        settings.Add(_chkDemoNight, stretch: false, gapBelow: UiLayout.HintGap);
+        settings.Add(lblDemoNightHint, gapBelow: 0);
 
         // --- The log ---
 

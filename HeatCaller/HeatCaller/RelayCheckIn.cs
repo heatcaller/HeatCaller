@@ -158,11 +158,15 @@ internal static class RelayCheckIn
         pin is { Length: >= 4 and <= 8 } && pin.All(char.IsAsciiDigit);
 
     /// <summary>
-    /// The fewest digits a NEW staff PIN may have. The relay lets anybody
-    /// try fifty PINs before closing sign-in for the club, and then keeps
-    /// closing it for longer each time - about a hundred guesses a day for
-    /// somebody who keeps at it. Against four digits that is weeks; against
-    /// six it is years.
+    /// The fewest digits a NEW staff PIN may have. The relay closes sign-in
+    /// for the club after fifty wrong PINs in ten minutes, for longer each
+    /// time - but somebody who paces themselves at forty-nine every ten
+    /// minutes never trips that, and on a relay without a daily ceiling
+    /// gets about seven thousand guesses a day: a four-digit PIN in about
+    /// a day, a six-digit one in a few months. A relay with the daily
+    /// ceiling (a hundred and fifty wrong PINs a day, then closed) holds
+    /// that to about a month for four digits and years for six. Either
+    /// way six is what keeps a PIN safe, so it is the minimum for a new one.
     /// </summary>
     public const int MinNewPinLength = 6;
 

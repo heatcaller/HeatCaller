@@ -552,13 +552,35 @@ internal sealed class ShowBed : ISampleProvider
 
         if (_beenRound && _at < _seam)
         {
-            // The seam: the body's tail fading out over its head fading in.
+            // THE SEAM, MIXED WITHOUT TOUCHING THE LEVEL (13 Oct 2026).
+            //
+            // This used to be an equal-GAIN crossfade - head * up plus tail
+            // * (1 - up) - and it was audible: the bed swelled for about a
+            // second at every time round and then settled. Two different
+            // bars of the same piece summed at matched gain do not hold a
+            // steady level. Where their low end happens to line up they
+            // reinforce and the bed jumps; where it does not they cancel and
+            // it dips. Either way the room hears the loop, which is the one
+            // thing a bed must never do.
+            //
+            // Equal POWER instead: the two gains are the sine and cosine of
+            // the same quarter turn, so their squares always sum to one.
+            // That is flat for material that does not correlate, which two
+            // bars of music generally do not - and it is the standard fix
+            // for exactly this artefact.
+            //
+            // ShowShape has already measured the body so that the loop
+            // points are musical, so there is little to hide here; the seam
+            // is short and this keeps it from being heard rather than
+            // smoothing over a bad join.
             var tail = (_loopStart + _period + _at) * _channels;
-            var up = (float)_at / _seam;
+            var turn = (float)(Math.PI / 2 * _at / _seam);
+            var up = (float)Math.Sin(turn);
+            var down = (float)Math.Cos(turn);
 
             for (var c = 0; c < _channels; c++)
             {
-                buffer[into + c] = Sample(head + c) * up + Sample(tail + c) * (1f - up);
+                buffer[into + c] = Sample(head + c) * up + Sample(tail + c) * down;
             }
         }
         else

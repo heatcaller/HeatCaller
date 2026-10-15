@@ -681,6 +681,34 @@ internal sealed class ShowBlock
         SegmentKind.ComingUpNext => "Coming Up",
         _ => null,
     };
+
+    /// <summary>
+    /// What a segment is called, for ANY kind - the show caption where
+    /// there is one, and the budget's own title for the in-race kinds that
+    /// are not programmes.
+    ///
+    /// ONE PLACE, because this pairing was being written out by hand
+    /// wherever it was wanted (the announcer strip, the replay button, the
+    /// on-air label) and the three would have drifted apart the first time
+    /// anybody changed a wording. <see cref="CaptionFor"/> answers null for
+    /// a battle call, which is correct for a crowd's screen and no use at
+    /// all to a race director who wants to know what is going out.
+    ///
+    /// Never empty: a kind with neither a caption nor a title is a kind
+    /// that does not exist, and "Segment" is still better on a strip than
+    /// a blank.
+    /// </summary>
+    internal static string NameFor(SegmentKind kind)
+    {
+        if (CaptionFor(kind) is { Length: > 0 } caption)
+        {
+            return caption;
+        }
+
+        var title = (CommentaryBudget.Spec(kind).Title ?? string.Empty).Trim();
+
+        return title.Length > 0 ? title : "Segment";
+    }
 }
 
 /// <summary>

@@ -473,6 +473,13 @@ public sealed class CommentaryBudget
     private readonly List<DateTime> _spokenAt = new();
     private readonly Dictionary<long, Reservation> _open = new();
 
+    /// <summary>
+    /// The reservations in <see cref="_open"/> whose line has come back and
+    /// is waiting to be SAID - see <see cref="Written"/>. Still held, so
+    /// still refundable, but no longer a request in the air.
+    /// </summary>
+    private readonly HashSet<long> _written = new();
+
     private long _nextTicket = 1;
     private int _nightsLeft = 4;
     private DateTime? _lastSpoken;
@@ -497,6 +504,35 @@ public sealed class CommentaryBudget
     {
         get => _nightsLeft;
         set => _nightsLeft = Math.Max(1, value);
+    }
+
+    /// <summary>
+    /// About how many of a month's race days are still to come, tonight's
+    /// included, for a club that races <paramref name="nightsPerMonth"/>
+    /// times a month (14 Oct 2026).
+    ///
+    /// WHY THIS IS WORKED OUT AND NOT JUST THE SETTING. NightAllotment
+    /// divides what is left of the month by this, and it used to be handed
+    /// the nights-per-month figure as it stood - which never counts down.
+    /// So the last night of the month got a quarter of what was left rather
+    /// than all of it: 400 lines came out as 100, 75, 56 and 42, and about
+    /// a third of the allowance was never spent at all.
+    ///
+    /// The club's nights spread evenly over the month, counted from today:
+    /// a weekly club on the 22nd of a 31-day month has ten days left, which
+    /// is about 1.3 of its four nights - so two, tonight and next week.
+    /// Rounded UP so a night is never handed more than its share, never
+    /// more than the setting, and never below one, or the last night of the
+    /// month would divide by nothing.
+    /// </summary>
+    public static int NightsLeft(int nightsPerMonth, DateTime today)
+    {
+        var perMonth = Math.Max(1, nightsPerMonth);
+        var daysInMonth = DateTime.DaysInMonth(today.Year, today.Month);
+        var daysLeft = daysInMonth - today.Day + 1;
+        var left = (int)Math.Ceiling(perMonth * (double)daysLeft / daysInMonth);
+
+        return Math.Clamp(left, 1, perMonth);
     }
 
     /// <summary>
@@ -643,7 +679,8 @@ public sealed class CommentaryBudget
         {
             lock (_gate)
             {
-                return _open.Count;
+                // Lines written and waiting to be said are not in the air.
+                return _open.Count - _written.Count;
             }
         }
     }
@@ -849,6 +886,7 @@ public sealed class CommentaryBudget
         _perClass.Clear();
         _spokenAt.Clear();
         _open.Clear();
+        _written.Clear();
     }
 
     /// <summary>
@@ -1021,6 +1059,8 @@ public sealed class CommentaryBudget
     {
         lock (_gate)
         {
+            _written.Remove(ticket);
+
             if (!_open.Remove(ticket, out var held))
             {
                 return;
@@ -1043,6 +1083,26 @@ public sealed class CommentaryBudget
     }
 
     /// <summary>
+    /// The line has come back from the writer and is waiting for the host
+    /// to say it (14 Oct 2026). Still held - it is settled when it is SAID
+    /// and released if the host drops it - but no longer counted as a
+    /// request in the air, so a programme writing two or three colour
+    /// segments ahead of saying them is not turned away by
+    /// RelayInFlightCap for lines that finished with the relay long ago.
+    /// Unknown tickets are ignored.
+    /// </summary>
+    public void Written(long ticket)
+    {
+        lock (_gate)
+        {
+            if (_open.ContainsKey(ticket))
+            {
+                _written.Add(ticket);
+            }
+        }
+    }
+
+    /// <summary>
     /// Nothing was written - the relay refused, the line came back too
     /// late to be worth saying, or the facts turned out to be nothing. The
     /// hold is given back whole; the relay refunds its own count the same
@@ -1052,6 +1112,8 @@ public sealed class CommentaryBudget
     {
         lock (_gate)
         {
+            _written.Remove(ticket);
+
             if (!_open.Remove(ticket, out var held))
             {
                 return;
@@ -1225,7 +1287,9 @@ public sealed class CommentaryBudget
             return No($"{_spokenAt.Count} lines in the last ten minutes already{why}", BudgetRefusal.TheAirtimeCap);
         }
 
-        if (_open.Count >= RelayInFlightCap && spec.Tier > SegmentTier.Core)
+        // Only the requests actually in the air - a line written and
+        // waiting to be said has finished with the relay. See Written.
+        if (_open.Count - _written.Count >= RelayInFlightCap && spec.Tier > SegmentTier.Core)
         {
             return No("the relay is busy with something that matters more", BudgetRefusal.TheRelayIsBusy);
         }

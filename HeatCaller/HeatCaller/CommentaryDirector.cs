@@ -220,6 +220,139 @@ public sealed class CommentaryDirector
     /// </summary>
     public bool Held { get; set; }
 
+    /// <summary>
+    /// True when the host tells this class whether each segment it was
+    /// handed actually went out - <see cref="Spoken"/> or
+    /// <see cref="Dropped"/> - and the segment is only settled when it was
+    /// (14 Oct 2026).
+    ///
+    /// Off, a segment is settled the moment it is written, which is how
+    /// this class always behaved and what a caller that never reports back
+    /// needs. On, the budget's spend, the facts, the club note or room vote
+    /// marked said, the promises and Repeat's line all wait for Spoken, and
+    /// a Dropped segment gives every one of them back - so a birthday
+    /// dedication written and then dropped because the next race was called
+    /// is still waiting to be said, not quietly spent.
+    /// </summary>
+    public bool CommitWhenSpoken { get; set; }
+
+    /// <summary>
+    /// The host said this segment: settle it - spend, facts, marks,
+    /// promises, Repeat. Does nothing for a segment that is not waiting
+    /// (already settled, already dropped, or never this class's).
+    /// </summary>
+    public void Spoken(SpokenSegment? segment)
+    {
+        if (TakeAwaiting(segment) is not { } waiting)
+        {
+            return;
+        }
+
+        try
+        {
+            waiting.Commit();
+        }
+        catch (Exception ex)
+        {
+            Say($"[brain] Couldn't settle a spoken segment: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The host dropped this segment unheard: give back its budget and
+    /// leave its facts and marks unspent, exactly as a segment dropped
+    /// inside TryAsync is. Safe to call for a segment already settled or
+    /// dropped - it does nothing.
+    /// </summary>
+    public void Dropped(SpokenSegment? segment)
+    {
+        if (TakeAwaiting(segment) is not { } waiting)
+        {
+            return;
+        }
+
+        Budget.Release(waiting.Ticket);
+        Account.DroppedAfterWriting();
+
+        // Nobody heard it, so it is not the line Repeat offers.
+        _commentary.ForgetLine(segment!.Text);
+    }
+
+    /// <summary>A segment written and waiting for the host's word. See CommitWhenSpoken.</summary>
+    private sealed record AwaitingWord(Action Commit, long Ticket, IReadOnlyList<string> Keys, DateTime WrittenAt);
+
+    /// <summary>
+    /// How long a written segment waits for Spoken or Dropped before it is
+    /// taken as dropped. Longer than any show holds the floor (see
+    /// NightRecap.LongestHold), so it only ever catches a path that wrote a
+    /// line and then lost it without a word - a programme whose colour came
+    /// back after it had stopped waiting, say.
+    /// </summary>
+    private static readonly TimeSpan AwaitingWordCeiling = TimeSpan.FromMinutes(15);
+
+    /// <summary>Guards _awaiting: written on the pass's thread, answered on the host's.</summary>
+    private readonly object _awaitingGate = new();
+
+    /// <summary>
+    /// Segments handed to the host and not yet answered for. By reference:
+    /// SpokenSegment is a record, and two lines can read the same.
+    /// </summary>
+    private readonly Dictionary<SpokenSegment, AwaitingWord> _awaiting = new(ReferenceEqualityComparer.Instance);
+
+    private AwaitingWord? TakeAwaiting(SpokenSegment? segment)
+    {
+        if (segment is null)
+        {
+            return null;
+        }
+
+        lock (_awaitingGate)
+        {
+            return _awaiting.Remove(segment, out var waiting) ? waiting : null;
+        }
+    }
+
+    /// <summary>The fact keys of every segment still waiting to be said.</summary>
+    private HashSet<string> KeysAwaiting()
+    {
+        lock (_awaitingGate)
+        {
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var waiting in _awaiting.Values)
+            {
+                keys.UnionWith(waiting.Keys);
+            }
+
+            return keys;
+        }
+    }
+
+    /// <summary>Drops every segment that has waited past AwaitingWordCeiling.</summary>
+    private void DropStale()
+    {
+        List<SpokenSegment> stale;
+        var now = _clock();
+
+        lock (_awaitingGate)
+        {
+            if (_awaiting.Count == 0)
+            {
+                return;
+            }
+
+            stale = _awaiting
+                .Where(pair => now - pair.Value.WrittenAt > AwaitingWordCeiling)
+                .Select(pair => pair.Key)
+                .ToList();
+        }
+
+        foreach (var segment in stale)
+        {
+            Dropped(segment);
+        }
+    }
+
     /// <summary>What the night has spent, in a line. See CommentaryBudget.Describe.</summary>
     public string Describe() => Budget.Describe();
 
@@ -497,7 +630,10 @@ public sealed class CommentaryDirector
     {
         Budget.Restore(_settings.CommentaryBudgetNight, dayId);
         Budget.RestoreSwitches(_settings.CommentarySegmentsOff);
-        Budget.NightsLeftThisMonth = _settings.CommentaryNightsPerMonth;
+        // The nights still to come this month, not the month's whole count -
+        // which never counted down, so the last night was handed a quarter
+        // of what was left. See CommentaryBudget.NightsLeft.
+        Budget.NightsLeftThisMonth = CommentaryBudget.NightsLeft(_settings.CommentaryNightsPerMonth, _clock());
         Budget.KeepEverythingRunning = _settings.CommentaryKeepEverything;
 
         // RESTORED, NOT RESET (13 Oct 2026). This was NewMeeting, and
@@ -856,6 +992,10 @@ public sealed class CommentaryDirector
     /// </summary>
     private async Task<SpokenSegment?> PassAsync(CancellationToken ct)
     {
+        // A line the host never answered for is given back once it is
+        // older than any show could hold it - see AwaitingWordCeiling.
+        DropStale();
+
         if (Held)
         {
             return null;
@@ -1495,6 +1635,16 @@ public sealed class CommentaryDirector
             return null;
         }
 
+        // Facts in a line written and still waiting to be said are not
+        // offered again - they are not marked said until it is (see
+        // CommitWhenSpoken), and a programme writes its colour segments
+        // before it says any of them, so without this the second could be
+        // built from the first one's facts.
+        if (KeysAwaiting() is { Count: > 0 } awaitingKeys)
+        {
+            blocks = blocks.Where(block => !awaitingKeys.Contains(block.Key)).ToList();
+        }
+
         var pack = FactPack.Build(blocks, Said);
 
         if (pack.Empty)
@@ -1603,67 +1753,103 @@ public sealed class CommentaryDirector
                 return null;
             }
 
-            Budget.Settle(verdict.Ticket);
-
-            // IT WENT OUT, with the facts it was built from, at the same
-            // instant as everything else that is settled here - so a
-            // segment written and then dropped is not counted as said and
-            // its facts are not offered as the proof of a line nobody
-            // heard. See NightAccount.Proof.
-            Account.Spoke(kind, pack);
-
-            // THE MARK FOR THIS KIND, at the same instant as the facts
-            // and for the same reason: every path out above gives the
-            // ticket back and marks nothing, so a dedication whose segment
-            // was dropped is still waiting to be said rather than quietly
-            // spent. See _marks.
-            if (_marks.TryGetValue(kind, out var mark) && mark.Length > 0)
-            {
-                if (kind == SegmentKind.ClubAside)
-                {
-                    ClubAsideSaid?.Invoke(mark);
-                }
-                else if (kind == SegmentKind.RoomVerdict)
-                {
-                    RoomsCallSaid?.Invoke(mark);
-                }
-            }
-
-            // THE PROMISE LEDGER, both halves of it, at the same instant
-            // and under the same rule as everything else settled here: a
-            // segment written and then dropped pointed the room at nobody
-            // and came back to nothing. See NightPromises.
+            // WHAT IS SETTLED WHEN THE LINE IS SAID, kept together so it can
+            // wait for the host (14 Oct 2026). Everything below used to run
+            // here, the instant the line came back - and the host can still
+            // drop a line after that: the next race called to the grid, the
+            // floor taken, the hold pressed. A dropped club note was then
+            // marked said and never heard, the segment's caps were spent and
+            // Repeat offered a line nobody had heard. With CommitWhenSpoken
+            // on, this waits for Spoken, and Dropped gives it all back.
             //
-            // Retired first, recorded second, and the order is deliberate.
-            // A callback is itself a segment about a driver, so recording
-            // comes back round and files a FRESH promise about the same
-            // person - which is right, because the room has just been
-            // reminded about Carl and there is something to come back to
-            // again. It cannot loop: the race that paid the old promise
-            // off had to have gone green before this line went out, so it
-            // is already too early to pay the new one. Coming back to Carl
-            // twice needs two races, which is the right answer.
-            foreach (var key in pack.Keys)
+            // What it needs is taken NOW, while it is still this pass's:
+            // the next pass clears the marks and moves the fight and the
+            // pace note being called on.
+            var ticket = verdict.Ticket;
+            var calling = _calling;
+            var paceCalling = _paceCalling;
+            _marks.TryGetValue(kind, out var mark);
+            SpokenSegment spokenLine = written;
+
+            void Commit()
             {
-                if (Promises.IsPayOffKey(key))
+                Budget.Settle(ticket);
+
+                // IT WENT OUT, with the facts it was built from, at the same
+                // instant as everything else that is settled here - so a
+                // segment written and then dropped is not counted as said and
+                // its facts are not offered as the proof of a line nobody
+                // heard. See NightAccount.Proof.
+                Account.Spoke(kind, pack);
+
+                // THE MARK FOR THIS KIND, at the same instant as the facts
+                // and for the same reason: every path out above gives the
+                // ticket back and marks nothing, so a dedication whose segment
+                // was dropped is still waiting to be said rather than quietly
+                // spent. See _marks.
+                if (mark is { Length: > 0 })
                 {
-                    Promises.MarkPaid(key);
+                    if (kind == SegmentKind.ClubAside)
+                    {
+                        ClubAsideSaid?.Invoke(mark);
+                    }
+                    else if (kind == SegmentKind.RoomVerdict)
+                    {
+                        RoomsCallSaid?.Invoke(mark);
+                    }
                 }
+
+                // THE PROMISE LEDGER, both halves of it, at the same instant
+                // and under the same rule as everything else settled here: a
+                // segment written and then dropped pointed the room at nobody
+                // and came back to nothing. See NightPromises.
+                //
+                // Retired first, recorded second, and the order is deliberate.
+                // A callback is itself a segment about a driver, so recording
+                // comes back round and files a FRESH promise about the same
+                // person - which is right, because the room has just been
+                // reminded about Carl and there is something to come back to
+                // again. It cannot loop: the race that paid the old promise
+                // off had to have gone green before this line went out, so it
+                // is already too early to pay the new one. Coming back to Carl
+                // twice needs two races, which is the right answer.
+                foreach (var key in pack.Keys)
+                {
+                    if (Promises.IsPayOffKey(key))
+                    {
+                        Promises.MarkPaid(key);
+                    }
+                }
+
+                Promises.Note(kind, pack, NameFor, spokenLine.IsExchange, _clock());
+
+                // The pack, not just its keys: the themes have to be marked
+                // with them or the variety rule never fires and nothing says
+                // so. See SaidTonight.Mark(PackedFacts) - and note that every
+                // path out above gives the ticket back and marks NOTHING, so a
+                // segment written and then dropped costs the night neither its
+                // facts nor its variety.
+                Said.Mark(pack);
+                Spent(kind, calling, paceCalling);
+                SaveOn(ui);
+
+                LastSaid = spokenLine;
             }
 
-            Promises.Note(kind, pack, NameFor, written.IsExchange, _clock());
+            if (!CommitWhenSpoken)
+            {
+                Commit();
 
-            // The pack, not just its keys: the themes have to be marked
-            // with them or the variety rule never fires and nothing says
-            // so. See SaidTonight.Mark(PackedFacts) - and note that every
-            // path out above gives the ticket back and marks NOTHING, so a
-            // segment written and then dropped costs the night neither its
-            // facts nor its variety.
-            Said.Mark(pack);
-            Spent(kind);
-            SaveOn(ui);
+                return written;
+            }
 
-            LastSaid = written;
+            // Held for the host's word, still refundable - see Written.
+            Budget.Written(ticket);
+
+            lock (_awaitingGate)
+            {
+                _awaiting[written] = new AwaitingWord(Commit, ticket, pack.Keys, _clock());
+            }
 
             return written;
         }
@@ -1709,13 +1895,21 @@ public sealed class CommentaryDirector
         // means the count - holding the co-host back through the heats of a
         // big meeting with a crowd in is the pacing being clever at the
         // club's expense. See ShowChatter.TwoVoicesEverywhere.
+        // AND THE CLUB CAN JUST ASK (14 Oct 2026). The chattiness dial
+        // already let the two voices out everywhere at its top settings,
+        // but only by making the whole evening chattier - a club that wants
+        // the co-host in the heats and the same number of segments had no
+        // way to say so. This is that, on its own.
         var twoVoices = _settings.CommentaryCoHost
-                        && (Stature.WorthTwoVoices || ShowChatter.TwoVoicesEverywhere(Chatter));
+                        && (Stature.WorthTwoVoices
+                            || _settings.CommentaryTwoVoicesInHeats
+                            || ShowChatter.TwoVoicesEverywhere(Chatter));
 
         if (!twoVoices && _settings.CommentaryCoHost && spec.CanBeExchange)
         {
             Say($"[brain] {spec.Title} in one voice - {Stature.Describe}, and the two-hander is held for the mains. "
-                + $"Turn the chattiness up past {ShowChatter.Standard.Name} to hear them in the heats.");
+                + "Tick \"two voices in the heats too\" on the Commentary page, or turn the chattiness up past "
+                + $"{ShowChatter.Standard.Name}, to hear them in the heats.");
         }
 
         if (twoVoices && spec.CanBeExchange)
@@ -1731,12 +1925,28 @@ public sealed class CommentaryDirector
             // CommentaryExchange.Brief, which has always taken both.
             var host = CommentaryService.Field(_settings.RecapAnnouncerName);
 
+            // HOW LONG A CONVERSATION RUNS IS THE CLUB'S CALL (14 Oct
+            // 2026). This asked for the default two - a remark and a reply -
+            // which is a call-and-response rather than two people talking.
+            // BuildExchangeAsync clamps, so a stored value out of range
+            // cannot ask for something CommentaryExchange will not write.
             var turns = await _commentary
-                .BuildExchangeAsync(kind, pack, host, _settings.CommentaryCoHostName, ct: ct)
+                .BuildExchangeAsync(
+                    kind, pack, host, _settings.CommentaryCoHostName,
+                    _settings.CommentaryExchangeTurns, ct)
                 .ConfigureAwait(false);
 
             if (turns.Count > 0)
             {
+                // SAID WHEN IT WORKS, not only when it doesn't (14 Oct
+                // 2026). Every other outcome here has a line - held for the
+                // mains, came back in one piece - and a two-hander that
+                // actually ran had none, so a night with no co-host in it
+                // looked exactly like a night where one was written and
+                // something later swallowed it. Three evenings were spent
+                // guessing between those two.
+                Say($"[brain] {spec.Title} written as a two-hander - {turns.Count} turns.");
+
                 return new SpokenSegment(
                     kind,
                     CommentaryExchange.Flatten(turns, host, _settings.CommentaryCoHostName),
@@ -2073,8 +2283,13 @@ public sealed class CommentaryDirector
     /// <summary>The fight this pass's battle facts were built from. See Candidates.</summary>
     private Battle? _calling;
 
-    /// <summary>What a segment has to do once its line has actually been said.</summary>
-    private void Spent(SegmentKind kind)
+    /// <summary>
+    /// What a segment has to do once its line has actually been said - for
+    /// the fight and the pace note it was written about, taken when it was
+    /// written, because by the time a held line is said the next pass may
+    /// be calling on others. See TryAsync.
+    /// </summary>
+    private void Spent(SegmentKind kind, Battle? calling, PaceNote? paceCalling)
     {
         switch (kind)
         {
@@ -2084,7 +2299,7 @@ public sealed class CommentaryDirector
                 // for a whole heat are one story and not twenty. The one
                 // that was actually announced, not whatever Pick would
                 // answer now.
-                if (_calling is { } battle)
+                if (calling is { } battle)
                 {
                     Battles.Said(battle);
                 }
@@ -2098,7 +2313,7 @@ public sealed class CommentaryDirector
                 // PaceWatch will not raise it again. Exchanged rather than
                 // compared and set, because Lap writes this from the UI
                 // thread while this runs wherever the write came back.
-                if (_paceCalling is { } said)
+                if (paceCalling is { } said)
                 {
                     Interlocked.CompareExchange(ref _pending, null, said);
                 }

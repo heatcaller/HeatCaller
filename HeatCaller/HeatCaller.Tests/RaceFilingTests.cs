@@ -111,6 +111,67 @@ public sealed class RaceFilingTests : IDisposable
     }
 
     [Fact]
+    public void A_demo_marks_the_heat_when_the_club_is_rehearsing_a_night()
+    {
+        // The other half of the test above: off, a demo leaves the heat
+        // alone; on, it fills the programme in so a club can rehearse
+        // through to the mains. What it never does either way is score -
+        // that is guarded where each record is computed, not here.
+        var heat = AddRound("Q1 Heat 1");
+        var demo = Race("[DEMO] Q1 Heat 1");
+        demo.IsDemo = true;
+
+        var outcome = Commit(demo, heat, SessionHistoryStore.Load(), demoMayFillTheProgramme: true);
+
+        Assert.Equal(RaceFiling.Outcome.Saved, outcome);
+        Assert.True(_rounds.Get(heat.Id)!.IsRecorded);
+    }
+
+    [Fact]
+    public void A_demo_is_refused_a_heat_that_really_ran()
+    {
+        // THE ONE THING A DEMO NIGHT MUST NOT DO. MarkRecorded overwrites,
+        // so without this a rehearsal landing on a heat that had really been
+        // raced would replace its result in the programme with invented
+        // laps - and the real result, still in history, would be attached to
+        // nothing. Qualifying and the mains would then seed off the demo.
+        var history = SessionHistoryStore.Load();
+        var heat = AddRound("Q1 Heat 1");
+
+        var real = Race("Q1 Heat 1");
+        Assert.Equal(RaceFiling.Outcome.Saved, Commit(real, heat, history));
+        Assert.True(_rounds.Get(heat.Id)!.IsRecorded);
+
+        var demo = Race("[DEMO] Q1 Heat 1");
+        demo.IsDemo = true;
+
+        var outcome = Commit(demo, heat, history, demoMayFillTheProgramme: true);
+
+        // Saved to history as any demo is - and the heat still points at the
+        // race that really happened.
+        Assert.Equal(RaceFiling.Outcome.Saved, outcome);
+        Assert.Equal(real.Id, _rounds.Get(heat.Id)!.LinkedSessionId);
+        Assert.Contains(_log, line => line.Contains("has a real result"));
+    }
+
+    [Fact]
+    public void A_demo_may_replace_another_demo_so_a_rehearsal_can_be_run_again()
+    {
+        var history = SessionHistoryStore.Load();
+        var heat = AddRound("Q1 Heat 1");
+
+        var first = Race("[DEMO] Q1 Heat 1");
+        first.IsDemo = true;
+        Commit(first, heat, history, demoMayFillTheProgramme: true);
+
+        var second = Race("[DEMO] Q1 Heat 1");
+        second.IsDemo = true;
+        Commit(second, heat, history, demoMayFillTheProgramme: true);
+
+        Assert.Equal(second.Id, _rounds.Get(heat.Id)!.LinkedSessionId);
+    }
+
+    [Fact]
     public void A_heat_deleted_since_it_was_picked_is_reported_not_silently_skipped()
     {
         var gone = new RoundDefinition { ClassName = "Stock", RoundLabel = "Q1 Heat 1" }; // never in the store
@@ -173,7 +234,11 @@ public sealed class RaceFilingTests : IDisposable
         },
     };
 
-    private RaceFiling.Outcome Commit(SessionRecord record, RoundDefinition? round, SessionHistoryStore history) =>
+    private RaceFiling.Outcome Commit(
+        SessionRecord record,
+        RoundDefinition? round,
+        SessionHistoryStore history,
+        bool demoMayFillTheProgramme = false) =>
         RaceFiling.Commit(
             record,
             round,
@@ -189,5 +254,6 @@ public sealed class RaceFilingTests : IDisposable
                 _roundLinkedWhenAnnounced = round is not null && _rounds.Get(round.Id)?.IsRecorded == true;
                 _journalThereWhenAnnounced = File.Exists(JournalPath);
             },
-            _log.Add);
+            _log.Add,
+            demoMayFillTheProgramme: demoMayFillTheProgramme);
 }

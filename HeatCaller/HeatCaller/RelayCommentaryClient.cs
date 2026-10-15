@@ -107,13 +107,30 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
     }
 
     /// <inheritdoc />
-    public async Task<string?> GenerateAsync(
+    public Task<string?> GenerateAsync(
         string systemPrompt,
         string userPrompt,
         int maxTokens,
         double temperature = 0.7,
         CancellationToken ct = default,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null) =>
+        GenerateCoreAsync(systemPrompt, userPrompt, maxTokens, temperature, ct, timeout, trimCutOff: true);
+
+    /// <summary>
+    /// The write itself. <paramref name="trimCutOff"/> is false only for the
+    /// Test button: its answer is a bare "OK", which has no full stop and is
+    /// under the twenty characters a kept sentence needs, so the cut-off
+    /// check below threw away every correct answer and the button always
+    /// said the relay had failed.
+    /// </summary>
+    private async Task<string?> GenerateCoreAsync(
+        string systemPrompt,
+        string userPrompt,
+        int maxTokens,
+        double temperature,
+        CancellationToken ct,
+        TimeSpan? timeout,
+        bool trimCutOff)
     {
         if (Target() is not { } target)
         {
@@ -191,7 +208,38 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
             // its allowance should not have to ask the relay for it.
             StatusMessage?.Invoke($"[brain] Written by the relay.{Allowance(root)}");
 
-            return text.Trim();
+            var written = text.Trim();
+
+            // A RELAY ANSWER CAN BE CUT OFF TOO (14 Oct 2026). The local
+            // brain has trimmed a truncated answer back to its last whole
+            // sentence since it was written - a model that runs past its
+            // length limit stops mid-clause, and the announcer then reads
+            // "...but let's be CRYSTAL CLEAR - this" and stops. The relay
+            // path never did. On 14 Oct a recap went to air exactly like
+            // that, and the show block then waited sixty seconds for a line
+            // that had already run long, gave up, and took the music bed and
+            // the "coming up" segment with it.
+            //
+            // No done_reason comes back from the relay, so the tell is the
+            // text itself: a finished line ends on a full stop, a question
+            // mark or an exclamation. One that does not was cut.
+            //
+            // Not for a two-hander: its turns are split on their A:/B: tags
+            // and a half-written last turn is dropped there, where the
+            // structure is understood. Trimming by sentence here would take
+            // a whole turn off a conversation that was perfectly fine.
+            if (!trimCutOff || LlmText.AsksForTaggedTurns(userPrompt) || EndsFinished(written))
+            {
+                return written;
+            }
+
+            var whole = LlmText.UpToLastWholeSentence(written);
+
+            StatusMessage?.Invoke(whole is null
+                ? "[brain] The relay's answer was cut off before it finished a sentence - not used."
+                : "[brain] The relay's answer was cut off - kept it up to the last complete sentence.");
+
+            return whole;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -271,13 +319,14 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
 
     /// <inheritdoc />
     public Task<string?> TestAsync(CancellationToken ct = default) =>
-        GenerateAsync(
+        GenerateCoreAsync(
             "You are testing a race announcer's connection. Reply with exactly: OK",
             "Reply with exactly: OK",
             maxTokens: 10,
             temperature: 0,
             ct: ct,
-            timeout: TimeSpan.FromSeconds(20));
+            timeout: TimeSpan.FromSeconds(20),
+            trimCutOff: false);
 
     /// <summary>A relay answer is a line and a count. Anything much bigger is not this relay answering.</summary>
     private const int MaxBodyChars = 8_000;
@@ -287,6 +336,27 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
     /// The club's month as the relay tells it, for the console - and, on
     /// the way past, for anything listening on AllowanceSeen.
     /// </summary>
+    /// <summary>
+    /// True when the text ends the way a finished line does - terminal
+    /// punctuation, allowing for a closing quote or bracket after it.
+    /// </summary>
+    private static bool EndsFinished(string text)
+    {
+        for (var i = text.Length - 1; i >= 0; i--)
+        {
+            var ch = text[i];
+
+            if (ch is '"' or '\'' or '\u201D' or '\u2019' or ')' or ']')
+            {
+                continue;
+            }
+
+            return ch is '.' or '!' or '?';
+        }
+
+        return false;
+    }
+
     private string Allowance(JsonElement root)
     {
         if (!root.TryGetProperty("used", out var used)

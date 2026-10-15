@@ -35,7 +35,20 @@ public sealed partial class AnnouncementService
     private readonly RivalryStore? _rivalries;
     private readonly ElevenLabsClient _elevenLabs = new();
 
-    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work);
+    /// <param name="OnAir">
+    /// What to call this line on the race director's strip while it is
+    /// being spoken - "Race Recap", "Tonight's Racing" - or null to be
+    /// named after the KIND of call instead.
+    ///
+    /// CARRIED WITH THE LINE RATHER THAN SET WHEN IT IS ASKED FOR (14 Oct
+    /// 2026), which is the only arrangement that can be right: speaking is
+    /// a queue, and the gap between a segment deciding to speak and the
+    /// speakers actually saying it is seconds on a busy night. A label set
+    /// at the asking would have named whatever was queued, not what the
+    /// room is hearing - and on a night with a flag call cutting in, those
+    /// are different lines.
+    /// </param>
+    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work, string? OnAir = null);
 
     private readonly List<QueuedVoiceItem> _voiceQueue = new();
     private readonly object _voiceQueueLock = new();
@@ -224,6 +237,42 @@ public sealed partial class AnnouncementService
     /// the real drivers' positions and gaps stay right (MutedGhost).
     /// </summary>
     public Func<bool>? AnnounceGhostsProvider { get; set; }
+
+    /// <summary>
+    /// How chatty the club has asked the announcer to be - the key of one
+    /// of ShowChatter.All, or null/blank for Standard.
+    ///
+    /// ASKED ON DEMAND, like practice and qualifying beside it, so turning
+    /// the dial mid-race takes effect at the next crossing rather than the
+    /// next race. That is what the commentary segments have always done and
+    /// what a club reasonably expects of a control that calls itself
+    /// chattiness.
+    ///
+    /// WHY THIS CLASS CARES AT ALL (14 Oct 2026). It did not, and that was
+    /// the fault: the dial governed the written segments and left every
+    /// per-event call off the timing loop untouched, so a club that turned
+    /// it to Sparing mid-race heard no difference at all in the thing that
+    /// was actually talking. See ShowChatter, which has the report it came
+    /// from. Null leaves every call and the club's own per-lap cap exactly
+    /// as they were, which is what a host that never sets this gets.
+    /// </summary>
+    public Func<string?>? ChatterProvider { get; set; }
+
+    /// <summary>The dial's current setting, or blank for Standard - see <see cref="ChatterProvider"/>.</summary>
+    private string? Chatter => ChatterProvider?.Invoke();
+
+    /// <summary>
+    /// The club's per-lap announcement cap with the dial applied - see
+    /// ShowChatter.ScaledPerLap.
+    ///
+    /// One property rather than the expression written out at each of the
+    /// seven places that offer a per-lap candidate: they were already seven
+    /// copies of Math.Max(1, ...) before this, and seven copies of a
+    /// SCALED cap would be seven chances for one of them to be the stop
+    /// that behaves differently.
+    /// </summary>
+    private int MaxVoicePerLap =>
+        ShowChatter.ScaledPerLap(_voiceStore.Current.MaxAnnouncementsPerLap, Chatter);
 
     /// <summary>True for a ghost car's transponder while ghosts are not to be announced - see AnnounceGhostsProvider.</summary>
     private bool MutedGhost(string? transponder) =>
@@ -615,6 +664,70 @@ public sealed partial class AnnouncementService
     /// <summary>How many lines are speaking right now, across the queue and the flag calls.</summary>
     private int _speakingCount;
 
+    /// <summary>
+    /// What the line that is speaking called itself, or null for one that
+    /// is named after its kind instead. See <see cref="OnAirNow"/>.
+    /// </summary>
+    private string? _onAirNamed;
+
+    /// <summary>And which kind of call it is - see <see cref="OnAirNow"/>.</summary>
+    private AnnouncementEventType? _onAirCall;
+
+    /// <summary>
+    /// What is going out of the speakers RIGHT NOW, in words a race
+    /// director can read in the second they have for it - "Race Recap",
+    /// "Yellow flag", "Lap time". Null when nothing is being spoken.
+    ///
+    /// ASKED FOR FROM THE FLOOR (14 Oct 2026). The announcer strip could
+    /// say that the PA was busy and what the announcer had LAST said, and
+    /// those are not the same question: a race director with a microphone
+    /// in their hand wants to know whether the thing they can hear is a
+    /// four-minute recap or a two-second lap call, because one of those is
+    /// worth waiting out and the other is not.
+    ///
+    /// THE OUTERMOST LINE'S NAME, not the newest, which matches
+    /// ShowOnAir.Caption and is right for the same reason: a flag call
+    /// cutting across a segment is counted here too, and a label that
+    /// flipped to the interruption and back would read as a fault on a
+    /// strip somebody glances at once.
+    ///
+    /// A segment's own name where the line carried one, and otherwise the
+    /// call's label from VoiceProfile.Describe - which is the table the
+    /// Voice page's own list is built from, so the strip and the settings
+    /// cannot disagree about what a call is called. The parenthetical half
+    /// of those labels ("Fast lap (race best)") is settings wording and is
+    /// dropped: a strip is not a place to explain a setting.
+    /// </summary>
+    public string? OnAirNow
+    {
+        get
+        {
+            lock (_speakingLock)
+            {
+                if (_speakingCount == 0)
+                {
+                    return null;
+                }
+
+                if (_onAirNamed is { Length: > 0 } named)
+                {
+                    return named;
+                }
+
+                if (_onAirCall is not { } call)
+                {
+                    return null;
+                }
+
+                var label = VoiceProfile.Describe(call).Label ?? string.Empty;
+
+                var bracket = label.IndexOf(" (", StringComparison.Ordinal);
+
+                return bracket > 0 ? label[..bracket] : label;
+            }
+        }
+    }
+
     /// <summary>What SpeakingChanged last reported, so it only fires on a real change.</summary>
     private bool _speakingReported;
 
@@ -632,7 +745,13 @@ public sealed partial class AnnouncementService
     /// started speaking, and flag calls - which play outside the queue -
     /// never ducked anything at all.
     /// </summary>
-    private void BeginSpeaking()
+    /// <param name="call">Which kind of call this line is, for <see cref="OnAirNow"/>.</param>
+    /// <param name="named">
+    /// What the line calls itself, where it carried a name - see
+    /// QueuedVoiceItem.OnAir. Null is normal: most lines are named after
+    /// their kind.
+    /// </param>
+    private void BeginSpeaking(AnnouncementEventType? call = null, string? named = null)
     {
         lock (_speakingLock)
         {
@@ -640,6 +759,13 @@ public sealed partial class AnnouncementService
 
             if (!_speakingReported)
             {
+                // Set before the event, so a handler asking what is on air
+                // on the way in is answered about THIS line rather than the
+                // last one - the same ordering ShowOnAir.Begin keeps, and
+                // for the same reason.
+                _onAirCall = call;
+                _onAirNamed = string.IsNullOrWhiteSpace(named) ? null : named.Trim();
+
                 _speakingReported = true;
                 RaiseSpeakingChanged(true);
             }
@@ -655,6 +781,12 @@ public sealed partial class AnnouncementService
 
             if (_speakingCount == 0 && _speakingReported)
             {
+                // Cleared before the event, the mirror of BeginSpeaking's
+                // reason: a handler being told nothing is speaking must not
+                // be handed the line that has just stopped.
+                _onAirCall = null;
+                _onAirNamed = null;
+
                 _speakingReported = false;
                 RaiseSpeakingChanged(false);
             }
@@ -855,8 +987,15 @@ public sealed partial class AnnouncementService
     /// And how much in front of it - none when it follows another
     /// immediately. See SpeechLead.
     /// </param>
+    /// <param name="onAir">
+    /// What to call this line on the race director's strip while it is
+    /// spoken - the segment's own name, where it is part of one. Null
+    /// leaves it named after the kind of call, which is right for a level
+    /// check or one of the day's timers and wrong for a four-minute recap.
+    /// See QueuedVoiceItem.OnAir and OnAirNow.
+    /// </param>
     public void SpeakReminder(string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null, bool showOnScreens = false,
-        SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal)
+        SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null)
     {
         if (Muted || string.IsNullOrWhiteSpace(text))
         {
@@ -866,7 +1005,8 @@ public sealed partial class AnnouncementService
         var spoken = SpellOutTimesForSpeech(text);
         EnqueueVoiceWork(AnnouncementEventType.Reminder, null,
             () => SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice, tail: tail, lead: lead),
-            displayText: showOnScreens ? text : null);
+            displayText: showOnScreens ? text : null,
+            onAir: onAir);
     }
 
     /// <summary>A line already rendered to audio, ready to play the instant it's wanted.</summary>
@@ -1009,7 +1149,14 @@ public sealed partial class AnnouncementService
     /// How much silence to leave in FRONT of the line - none when it
     /// follows another immediately. See SpeechLead.
     /// </param>
-    public void SpeakPrepared(PreparedSpeech prepared, SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal)
+    /// <param name="onAir">
+    /// What to call this line on the race director's strip - see
+    /// SpeakReminder's own, and OnAirNow. A turn of a two-hander rendered
+    /// ahead comes through here rather than SpeakReminder, so without this
+    /// an exchange would have been the one segment the strip could not
+    /// name.
+    /// </param>
+    public void SpeakPrepared(PreparedSpeech prepared, SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null)
     {
         if (Muted)
         {
@@ -1027,7 +1174,7 @@ public sealed partial class AnnouncementService
 
         // The text goes up only if the line is accepted - see
         // EnqueueVoiceWork, which raises it once nothing will drop it.
-        EnqueueVoiceWork(AnnouncementEventType.Reminder, null, async () =>
+        EnqueueVoiceWork(AnnouncementEventType.Reminder, null, onAir: onAir, work: async () =>
         {
             StatusMessage?.Invoke($"[voice] Reminder (prepared): \"{prepared.Text}\"");
 
@@ -1062,6 +1209,11 @@ public sealed partial class AnnouncementService
                     StatusMessage?.Invoke("[voice] Reminder (prepared): dropped - the announcer was muted.");
                     return;
                 }
+
+                // Listeners at home hear a prepared line (recap, teaser, a
+                // two-hander's turn) too - offered just before the speaker,
+                // the way the queued lines are. This path never did.
+                OfferLineToListeners(prepared.Text, prepared.Audio);
 
                 await PlayAsync(prepared.Audio, volume, trailing, leading);
             }

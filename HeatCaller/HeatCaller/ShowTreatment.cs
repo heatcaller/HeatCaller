@@ -979,7 +979,13 @@ internal sealed class ShowTreatment
         }
         finally
         {
-            await run.FinishAsync().ConfigureAwait(true);
+            // CUT SHORT WHEN THE CALLER CALLED IT OFF (14 Oct 2026). A
+            // caller cancels when the next race is called to the grid - the
+            // countdown clears the voice queue, the wait for quiet returns,
+            // and this used to play the piece's whole ending over the beeps
+            // and the horn. A show whose moment has been overtaken gets no
+            // flourish, the rule RunBlockAsync already follows.
+            await run.FinishAsync(cutShort: ct.IsCancellationRequested).ConfigureAwait(true);
         }
 
         return true;

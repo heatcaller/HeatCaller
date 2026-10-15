@@ -971,6 +971,13 @@ public partial class MainForm : Form
             PublishResultsIndexFor(record);
             PublishStandingsToRelay();
 
+            // AND EACH OF ITS DRIVERS THEIR OWN NIGHT, while the club
+            // offers them - see PublishDriverNightsFor. Here rather than
+            // anywhere earlier for the reason everything else in this
+            // handler is here: a FILED result is the first moment the
+            // night a document describes is true.
+            PublishDriverNightsFor(record);
+
             // A finished session is when badges are earned; read them
             // afresh on the next pass rather than waiting out the cache -
             // and the badge list with them, so a badge not on offer where
@@ -1015,6 +1022,13 @@ public partial class MainForm : Form
         {
             PublishSessionToRelay(record);
             PublishStandingsToRelay();
+
+            // A correction changes what a driver's night SAYS - a position,
+            // a lap count, whether they won it - so their document is
+            // built again from the corrected results, exactly as the
+            // results and the standings are. Without this a driver would
+            // go on holding the evening the result used to say they had.
+            PublishDriverNightsFor(record);
 
             // The index carries the label, the track and the winner, so a
             // corrected result changes it too - without this, the archive
@@ -1231,6 +1245,12 @@ public partial class MainForm : Form
         // without pressing Stop.
         _announcer.PracticeModeProvider = () => _race.IsPracticeMode;
         _announcer.AnnounceGhostsProvider = () => _ghostStore.Current.AnnounceGhosts;
+
+        // How chatty the club wants it, asked on demand for the same
+        // reason as the two around it: the dial is on the Commentary page
+        // and moving it mid-race has to take effect at the next crossing.
+        // See AnnouncementService.ChatterProvider.
+        _announcer.ChatterProvider = () => _settings.CommentaryChatter;
 
         // Qualifying calls (provisional pole, improvements) fire only when
         // the session was started as a qualifier - asked on demand, same as
@@ -2310,8 +2330,11 @@ public partial class MainForm : Form
         // one's fallback is the cautious answer - nothing is in progress is
         // answered "something is", which holds the update back, and the
         // question nobody can be shown is answered "not now".
+        // A race-days file that could not be read counts as a day being
+        // open, the same as the held-update check at start-up does: it
+        // cannot be told that one is not.
         AppUpdates.NothingInProgressNow = () => TryAsk(() => AppUpdates.NothingInProgress(
-            raceDayOpen: _raceEvents.Active is { IsLegacy: false, IsOpen: true },
+            raceDayOpen: _raceEvents.LoadedUnreadable || _raceEvents.Active is { IsLegacy: false, IsOpen: true },
             raceState: _race.State,
             unfinishedRaceInJournal: RaceJournal.Unfinished() is not null), whenGone: false);
 
@@ -2330,6 +2353,41 @@ public partial class MainForm : Form
         {
             _settings.UpdateWaitingForNextStart = newVersion;
             return _settings.Save();
+        }, whenGone: false);
+
+        // "Update now" ends the process from inside Velopack, so FormClosing
+        // never runs. Its last saves are made here first, on this thread,
+        // the same way it makes them - then everything is frozen, as before
+        // a restore, so nothing lands after them - and only then the
+        // install, which restarts into the new version.
+        AppUpdates.RunInstallOnUiThread = install => TryAsk(() =>
+        {
+            try
+            {
+                _transponderHealth.Save();
+            }
+            catch
+            {
+                // Best effort - a few minutes of readings are all that is lost.
+            }
+
+            try
+            {
+                _raceControlControl.FlushJournal();
+            }
+            catch
+            {
+                // Best effort - the journal from a moment ago still stands.
+            }
+
+            // Not "maximized" just because Race Mode is - see FormClosing.
+            var windowState = _raceMode ? _preRaceModeState : WindowState;
+            _settings.StartMaximized = windowState == FormWindowState.Maximized;
+            _settings.Save();
+
+            SafeFile.Freeze();
+            install();
+            return true;
         }, whenGone: false);
 
         // The secrets have to be taken on this thread (BackupSecrets.Capture

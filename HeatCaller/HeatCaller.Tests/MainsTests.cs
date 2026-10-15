@@ -57,8 +57,11 @@ public sealed class MainsTests : IDisposable
         Assert.Equal(new[] { 2, 1, 0 }, rounds.Select(r => r.MainTier));
         Assert.All(rounds, r => Assert.Equal(RoundKind.Main, r.Kind));
 
-        // The bottom main has nothing below it to receive from.
-        Assert.Equal(new[] { 0, 2, 2 }, rounds.Select(r => r.BumpUpCount));
+        // Every main is set up to receive, the bottom one included: a main
+        // added by hand below it later (late arrivals) must be able to move
+        // its finishers up. While nothing is below, the blocker stops first
+        // at "no main below this one".
+        Assert.Equal(new[] { 2, 2, 2 }, rounds.Select(r => r.BumpUpCount));
         Assert.Equal(new[] { "D1", "D2", "D3", "D4" }, rounds.Single(r => r.MainTier == 0).AssignedTransponders);
     }
 

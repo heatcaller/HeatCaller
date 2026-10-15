@@ -998,6 +998,17 @@ internal sealed class ModalScrim : NativeWindow
             return;
         }
 
+        // Windows disables EVERY window of the app for any modal, not just
+        // the one it opened over - so a dialog on the director's screen
+        // used to black out the announcer's window on the second monitor
+        // too. These free-standing windows are someone else's screen, not
+        // the window behind the dialog, so they are never dimmed. The main
+        // window and the dialogs themselves keep dimming as before.
+        if (_form is AnnouncerForm or MissionControlForm or PhotoFinishForm)
+        {
+            return;
+        }
+
         var area = _form.RectangleToScreen(_form.ClientRectangle);
 
         if (area.Width <= 0 || area.Height <= 0)

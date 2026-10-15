@@ -821,6 +821,17 @@ public sealed partial class RaceControlControl
     /// checkered refused before the green, which does nothing - see
     /// RefuseCheckeredWithoutARace.)
     /// </summary>
+    /// <summary>
+    /// The longest the countdown waits for the staging cue to finish.
+    ///
+    /// Ten seconds covers every stock staging sound and a club's own
+    /// recording of somebody saying "cars to the grid". It is deliberately
+    /// NOT the twenty ChainAfterAudio allows: that one is waiting out a
+    /// spoken line before a flag, and this is holding up the start of a
+    /// race while a room stands waiting.
+    /// </summary>
+    private static readonly TimeSpan LongestStagingCue = TimeSpan.FromSeconds(10);
+
     private async Task RunAutoStartSequenceAsync()
     {
         CancelAutoStart();
@@ -833,9 +844,32 @@ public sealed partial class RaceControlControl
             var generation = _race.SessionGeneration;
             await Task.Delay(TimeSpan.FromSeconds(_fmt.StagingSeconds), cts.Token);
 
+            // AND THEN LET THE STAGING CUE FINISH (13 Oct 2026), which is
+            // the same fault the countdown-to-green seam below already had
+            // and the same fix. The delay above is the club's configured
+            // staging length and has no relationship to how long the
+            // staging sound actually plays - so a club whose staging cue is
+            // longer than its staging seconds heard "bring your cars to the
+            // grid" cut off mid-word by the countdown, every single race.
+            //
+            // It showed up first on a demo, where the staging seconds come
+            // from a spinner that can be set to one, but it is not a demo
+            // bug: a real race with StagingSeconds short enough does the
+            // same thing.
+            //
+            // BOUNDED, because a club is free to point its staging sound at
+            // a thirty-second bed and the start must not wait that out. Past
+            // the ceiling the cue IS cut, as before - the difference is that
+            // it now only happens to a sound genuinely too long to wait for
+            // rather than to every sound that outlasts a short timer.
+            await _announcer.WaitForAudioAsync(LongestStagingCue, cts.Token);
+
             // The same test as the chained start (see ChainAfterAudio): a
             // flag thrown, or the session changed, from anywhere that does
             // not go through CancelAutoStart still stops the sequence.
+            //
+            // Checked AFTER the wait as well as the delay, because the wait
+            // is more time in which somebody can throw a flag or reset.
             if (!AutoStartMayContinue(generation, RaceState.Staging))
             {
                 return;
@@ -1046,9 +1080,22 @@ public sealed partial class RaceControlControl
     /// a staggered start work at a club night that isn't running a formal
     /// race program. Requiring a round was silently turning every staggered
     /// start into a standard one.
+    ///
+    /// The last-race fallback is for staggered and hand-released starts
+    /// only, and only when the last race was the same kind of race - run
+    /// without a round too, so the same class of freeform running. A
+    /// standard or qualifying start needs no grid to run, and handing it a
+    /// different field's finishing order saved start positions nobody
+    /// started from: "up from 8th" for a five-car heat, and Comeback Kid
+    /// or Pole Converted awarded off another race's result.
+    /// <paramref name="fromLastRace"/> says the grid came from that
+    /// fallback, so the session numbers start positions over the cars
+    /// that actually turn up rather than the old field's slots.
     /// </summary>
-    private List<string> GridForStagger()
+    private List<string> GridForStagger(out bool fromLastRace)
     {
+        fromLastRace = false;
+
         var roster = _activeRound?.Invoke()?.AssignedTransponders?
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -1060,11 +1107,22 @@ public sealed partial class RaceControlControl
             return roster;
         }
 
+        // No round, and a start that does not need a grid to run: no grid,
+        // so start positions stay at zero rather than borrowed - see above.
+        if (_race.StartType is RaceStartType.Standard or RaceStartType.Qualifier)
+        {
+            return new List<string>();
+        }
+
         // Never a saved demo: its grid is the simulator's made-up cars.
         var lastRace = _sessionHistory.All
             .FirstOrDefault(r => r.SessionType == RaceSessionType.Race && !r.IsDemoSession() && r.Results.Count > 0);
 
-        if (lastRace is null)
+        // Only the same kind of race: a race run from a round was a class's
+        // own field, not the one at a freeform start, so it is no grid for
+        // this one. There is no class to compare without a round, so "the
+        // same class" is the last race also being run without one.
+        if (lastRace is null || !string.IsNullOrWhiteSpace(lastRace.RoundId))
         {
             return new List<string>();
         }
@@ -1079,6 +1137,7 @@ public sealed partial class RaceControlControl
         if (fromResult.Count > 0)
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] No round selected - grid taken from the last race ({lastRace.Label}): {Plural.Of(fromResult.Count, "car")}.");
+            fromLastRace = true;
         }
 
         return fromResult;
@@ -1119,8 +1178,12 @@ public sealed partial class RaceControlControl
         // knowing where everyone started is what makes "won from the back"
         // answerable afterwards. Empty when nothing could supply one, which
         // leaves start positions at zero rather than invented.
-        var startingGrid = GridForStagger();
-        _race.SetGrid(startingGrid);
+        //
+        // A grid borrowed from the last race is numbered over the cars that
+        // actually race in this one, not that field's slots - see
+        // GridForStagger.
+        var startingGrid = GridForStagger(out var gridFromLastRace);
+        _race.SetGrid(startingGrid, renumberOverStarters: gridFromLastRace);
 
         if (type == RaceStartType.Standard)
         {

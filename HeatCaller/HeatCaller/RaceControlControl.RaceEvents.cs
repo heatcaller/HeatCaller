@@ -288,9 +288,18 @@ public sealed partial class RaceControlControl
             // there until someone crossed the line. Clear it now, and only
             // for a genuine start: resuming from a caution must keep the
             // laps already counted.
-            if (_race.GetOrderedStandings().Count == 0)
+            //
+            // Told by the session's own signal, not by the standings being
+            // empty: a hand-released start puts its held grid on the board
+            // at the green, so a start that skipped Stage never looked
+            // empty and kept the last race's standings in the announcer.
+            if (_race.GreenStartedTheRace)
             {
-                _dgvLeaderboard.Rows.Clear();
+                // Redrawn from the session rather than just emptied, now
+                // that this also runs when a held grid is already in it:
+                // empty standings draw an empty board as before, and a
+                // hand-released grid shows its held cars to be released.
+                RenderLeaderboard();
 
                 // Practice and quick starts skip staging - same reset.
                 _announcer.ResetSession();

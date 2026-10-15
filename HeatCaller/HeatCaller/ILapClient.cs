@@ -113,6 +113,13 @@ public sealed class ILapClient : IDisposable
     private static readonly TimeSpan CaptureCloseWait = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
+    /// How long a connect waits for the same port's last close to finish -
+    /// see WaitForClosing. A healthy close takes well under a second; one
+    /// still going after this is a pulled adapter's hung close.
+    /// </summary>
+    private static readonly TimeSpan ClosingWait = TimeSpan.FromSeconds(4);
+
+    /// <summary>
     /// Serialises everything that touches the line buffer and the
     /// duplicate-suppression table.
     ///
@@ -317,7 +324,20 @@ public sealed class ILapClient : IDisposable
             // Waited for here, where waiting is allowed - only for this
             // port, so a dead adapter that never closes holds up nothing
             // but itself.
-            WaitForClosing(portName);
+            //
+            // But only for a few seconds. The wait used to have no limit, and
+            // a USB adapter pulled mid-race can leave its close hung for
+            // good: this thread then never came back, _connecting was never
+            // cleared, and every later Connect was dropped or queued behind
+            // it - no laps until the app was restarted. Now the attempt gives
+            // up and says why; the finally below clears _connecting, so the
+            // next Connect (after a replug, or on another port) really runs.
+            if (!WaitForClosing(portName))
+            {
+                Report(DecoderConnectionState.Error,
+                    $"Windows is still releasing {portName} from the last connection. Unplug the decoder's USB cable and plug it back in, or pick another port, then Connect again.");
+                return;
+            }
 
             SerialPort port;
 
@@ -325,7 +345,10 @@ public sealed class ILapClient : IDisposable
             {
                 port = new SerialPort(portName, baudRate, Parity.None, 8, StopBits.One)
                 {
-                    ReadTimeout = 1000,
+                    // Short: the reader blocks in Read for at most this long
+                    // when the decoder is quiet, then looks again whether it
+                    // should stop - see ReadLoop. Data ends the wait at once.
+                    ReadTimeout = 100,
                     NewLine = "\n",
                     // Asserted, as a terminal program does. Off by default in
                     // .NET, and a USB serial device commonly stays silent until
@@ -366,13 +389,14 @@ public sealed class ILapClient : IDisposable
                 _sawClockTick = false;
             }
 
-            // Read on a thread of our own, polling as a terminal does, rather
-            // than waiting on SerialPort.DataReceived. On 3 Oct 2026 the I-Lap
+            // Read on a thread of our own, as a terminal does, rather than
+            // waiting on SerialPort.DataReceived. On 3 Oct 2026 the I-Lap
             // streamed to a PowerShell loop calling ReadExisting on this very
             // port while HeatCaller, waiting on the event, captured nothing at
-            // all from it. Polling every 20ms is well inside one character's
-            // worth of club-racing precision and does not depend on the USB
-            // serial driver raising the event.
+            // all from it. The reader sits in a blocking Read, which comes
+            // back the moment bytes arrive - see ReadLoop for why that matters
+            // to lap times - and does not depend on the USB serial driver
+            // raising the event.
             //
             // Connected is said BEFORE the reader starts, as DirectDecoderClient
             // does. The other way round, a read that failed in the moment
@@ -470,8 +494,12 @@ public sealed class ILapClient : IDisposable
     /// <summary>
     /// Waits for every port called <paramref name="portName"/> that is still
     /// being let go of - see Teardown. On the connect thread only.
+    ///
+    /// For at most <see cref="ClosingWait"/> in all. False if one is still
+    /// closing after that - the port is wedged and opening it would fail
+    /// (or hang) anyway.
     /// </summary>
-    private void WaitForClosing(string portName)
+    private bool WaitForClosing(string portName)
     {
         List<Thread> waits;
 
@@ -483,10 +511,20 @@ public sealed class ILapClient : IDisposable
                 .ToList();
         }
 
+        // One deadline for all of them, so several hung closers can't add up.
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+
         foreach (var closer in waits)
         {
-            closer.Join();
+            var left = ClosingWait - waited.Elapsed;
+
+            if (!closer.Join(left > TimeSpan.Zero ? left : TimeSpan.Zero))
+            {
+                return false;
+            }
         }
+
+        return true;
     }
 
     /// <summary>Closes a port a connect opened and is not going to use. Never throws.</summary>
@@ -505,23 +543,66 @@ public sealed class ILapClient : IDisposable
     /// <summary>
     /// The reader thread: drains the port while this connection is the
     /// current one, and says once if the decoder sends nothing at all.
+    ///
+    /// Every I-Lap lap is timed by when its line reached the app (see
+    /// ParseLine), so how soon this thread sees the bytes IS the lap time's
+    /// accuracy. It used to look every 20ms with Thread.Sleep(20) - which
+    /// on Windows' default 15.6ms timer is really ~31ms - so a pass could sit
+    /// in the driver for up to that long before being stamped, and two laps
+    /// could differ by that much for nothing the car did. It now waits in a
+    /// blocking Read, which returns as soon as the driver hands bytes over,
+    /// and the arrival is stamped right there, before any parsing or
+    /// logging. What remains is the USB adapter's own latency (an FTDI's is
+    /// 16ms by default), which no reading loop can remove.
+    ///
+    /// Why not the decoder's own time in the passing record instead: the
+    /// rest of the app treats an I-Lap's DeviceTimeMs as the app's own clock
+    /// (TimingClock) - the split loop places I-Lap passes against EasyLap
+    /// ones on it, and the race's start is anchored on it - and the I-Lap
+    /// resets its clock when the port opens, so a reconnect mid-race would
+    /// send it backwards. That needs a DecoderClockMap for the I-Lap and
+    /// changes well outside this class; until then, arrival time it is.
     /// </summary>
     private void ReadLoop(SerialPort port, string portName)
     {
         var quiet = System.Diagnostics.Stopwatch.StartNew();
         var anything = false;
         var warned = false;
+        var buffer = new char[512];
 
         while (_reading && ReferenceEquals(_port, port))
         {
-            int waiting;
+            int read;
+            long arrivedMs;
 
             try
             {
-                waiting = port.IsOpen ? port.BytesToRead : 0;
+                if (!port.IsOpen)
+                {
+                    // As before: a port not (yet) open is waited on, not
+                    // reported. Read would throw on it.
+                    read = 0;
+                    arrivedMs = 0;
+                    Thread.Sleep(20);
+                }
+                else
+                {
+                    // Blocks until at least one character is in, or
+                    // ReadTimeout (100ms) passes with nothing.
+                    read = port.Read(buffer, 0, buffer.Length);
+                    arrivedMs = TimingClock.NowMs;
+                }
+            }
+            catch (TimeoutException)
+            {
+                // Nothing came in ReadTimeout - the quiet case below.
+                read = 0;
+                arrivedMs = 0;
             }
             catch (Exception ex)
             {
+                // A Disconnect closing the port under a blocked Read lands
+                // here too; _reading is already false then, so nothing is said.
                 if (_reading && ReferenceEquals(_port, port) && State is not (DecoderConnectionState.Disconnected or DecoderConnectionState.Error))
                 {
                     SetState(DecoderConnectionState.Error, $"Read failed: {ex.Message}");
@@ -530,11 +611,11 @@ public sealed class ILapClient : IDisposable
                 return;
             }
 
-            if (waiting > 0)
+            if (read > 0)
             {
                 anything = true;
 
-                if (!DrainPort(port))
+                if (!DrainPort(port, new string(buffer, 0, read), arrivedMs))
                 {
                     return;
                 }
@@ -548,8 +629,6 @@ public sealed class ILapClient : IDisposable
                 Log($"[ilap] Nothing at all has come from {portName} in {NothingReceivedWarning.TotalSeconds:0} seconds. " +
                     "A working I-Lap sends its clock every second, so check this is the I-Lap's port and that nothing else has it open.");
             }
-
-            Thread.Sleep(20);
         }
     }
 
@@ -558,8 +637,13 @@ public sealed class ILapClient : IDisposable
     /// in arbitrary fragments, so bytes are buffered until a terminator -
     /// CR, LF, or CRLF all count, because the terminator is one of the
     /// things not being assumed about this device.
+    ///
+    /// <paramref name="chunk"/> is what ReadLoop's Read just returned, and
+    /// <paramref name="arrivedMs"/> when it did (TimingClock) - the time
+    /// every line completed in this chunk is stamped with, so a slow log
+    /// subscriber for one line can't push the next line's time later.
     /// </summary>
-    private bool DrainPort(SerialPort port)
+    private bool DrainPort(SerialPort port, string chunk, long arrivedMs)
     {
         // The passes this chunk turned out to hold. Collected under the lock
         // and raised below it: LapEventReceived ends in MainForm.OnILapPass
@@ -574,8 +658,6 @@ public sealed class ILapClient : IDisposable
         {
             lock (_lineLock)
             {
-                var chunk = port.ReadExisting();
-
                 foreach (var ch in chunk)
                 {
                     if (ch is '\r' or '\n')
@@ -585,7 +667,7 @@ public sealed class ILapClient : IDisposable
                             var line = _lineBuffer.ToString();
                             _lineBuffer.Clear();
 
-                            if (FeedLineLocked(line) is { } pass)
+                            if (FeedLineLocked(line, arrivedMs) is { } pass)
                             {
                                 (passes ??= new List<DirectLapEvent>()).Add(pass);
                             }
@@ -649,8 +731,11 @@ public sealed class ILapClient : IDisposable
     /// Reads one line and hands back the pass it carried, or null. Raising
     /// it is the caller's job, once _lineLock is free - see DrainPort.
     /// Caller holds _lineLock.
+    ///
+    /// <paramref name="arrivedMs"/> is when the line reached the app
+    /// (TimingClock), from the reader; null (a test's FeedLine) means now.
     /// </summary>
-    private DirectLapEvent? FeedLineLocked(string line)
+    private DirectLapEvent? FeedLineLocked(string line, long? arrivedMs = null)
     {
         Capture(line);
 
@@ -671,10 +756,12 @@ public sealed class ILapClient : IDisposable
 
         Log($"[ilap raw] {line}");
 
-        if (ParseLine(line) is { } lap)
-        {
-            var now = TimingClock.NowMs;
+        // Taken once, before parsing, and used for both the lap's time and
+        // the repeat check below, so the two can't disagree.
+        var now = arrivedMs ?? TimingClock.NowMs;
 
+        if (ParseLine(line, now) is { } lap)
+        {
             if (_lastPassMs.TryGetValue(lap.TransponderId, out var last) && now - last < DuplicateWindowMs)
             {
                 Log($"[ilap] Suppressed repeat of {lap.TransponderId} ({now - last}ms after the last).");
@@ -704,15 +791,21 @@ public sealed class ILapClient : IDisposable
     /// Tolerant reading of one line: strip framing marks, split on the
     /// common separators, and take the first plausible transponder number.
     ///
-    /// The time the RACE uses is this client's own monotonic clock at
-    /// receipt, not anything parsed from the line. Latency jitter on a
-    /// serial line is a millisecond or two - noise at club-racing
-    /// precision - and it means lap deltas stay consistent whether or not
-    /// the device's own timestamps turn out to be parseable. The captured
-    /// raw lines keep the device's times for the day-one protocol read.
+    /// The time the RACE uses is the app's monotonic clock (TimingClock) at
+    /// receipt - <paramref name="receivedMs"/>, stamped by the reader the
+    /// moment the bytes came in (see ReadLoop) - not anything parsed from
+    /// the line. That is not free of jitter: the USB serial adapter holds
+    /// bytes back for its latency timer (16ms by default on an FTDI), so a
+    /// lap can be off by up to about that much. It does mean lap deltas stay
+    /// consistent whether or not the device's own timestamps turn out to be
+    /// parseable, and on the same clock as everything else (see ReadLoop for
+    /// why the decoder's own time isn't used). The captured raw lines keep
+    /// the device's times for the day-one protocol read.
     /// </summary>
-    private DirectLapEvent? ParseLine(string line)
+    private DirectLapEvent? ParseLine(string line, long? receivedMs = null)
     {
+        var deviceTimeMs = (uint)(receivedMs ?? TimingClock.NowMs);
+
         // The I-Lap's real passing record, read off the bench on 2 Oct 2026:
         //   SOH '@' TAB decoder TAB transponder TAB seconds CR LF
         //   e.g. "\u0001@\t210\t4385919\t344.699"
@@ -726,7 +819,7 @@ public sealed class ILapClient : IDisposable
             return new DirectLapEvent
             {
                 TransponderId = transponder,
-                DeviceTimeMs = (uint)TimingClock.NowMs,
+                DeviceTimeMs = deviceTimeMs,
                 SignalHits = 0,
                 SignalStrength = 0,
             };
@@ -764,7 +857,7 @@ public sealed class ILapClient : IDisposable
                 return new DirectLapEvent
                 {
                     TransponderId = token.TrimStart('0').Length > 0 ? token.TrimStart('0') : token,
-                    DeviceTimeMs = (uint)TimingClock.NowMs,
+                    DeviceTimeMs = deviceTimeMs,
                     // 0 = unknown. Nothing in the line is known to be a hit
                     // count yet, and TransponderWatch treats any value from 1
                     // to 2 as a marginal pass - claiming 1 made every I-Lap

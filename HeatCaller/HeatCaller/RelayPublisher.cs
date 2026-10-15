@@ -806,6 +806,25 @@ public sealed partial class RelayPublisher : IDisposable
         if (!sameQueue)
         {
             ForgetAppliedTaps();
+
+            // AND NEITHER SWITCH HAS BEEN TOLD ANYTHING. Both flags mean
+            // "this relay knows" rather than "this laptop has decided", so
+            // a different relay or club has to be told again from scratch -
+            // and until it is, it refuses what the switch guards.
+            //
+            // Listening recovers from this by itself: a line refused with a
+            // 403 clears the flag where it is sent. A driver's night goes
+            // through the results queue instead and cannot, which is why
+            // this line exists rather than being left to heal.
+            _listenOpenTold = false;
+            _nightsOpenTold = false;
+
+            // And the shout-outs switch and the vote's ballot, which never
+            // healed at all: the notes inbox answers 200 and empty for a
+            // club whose flag is missing, so nothing looked wrong while
+            // phones on the club page got "not found" all evening.
+            _notesOpenTold = false;
+            _ballotAsPublished = null;
         }
 
         _nextPollTick = 0;
@@ -1343,6 +1362,16 @@ public sealed partial class RelayPublisher : IDisposable
         // short of a different relay or club.
         ForgetManageAnswered();
 
+        // And every switch it had been told about went with it: the
+        // shout-outs flag, the vote's ballot, listening and drivers'
+        // nights. Left marked as told, none of them was ever sent again
+        // until a restart, so the club page said shout-outs were closed
+        // while this laptop still thought they were open.
+        _notesOpenTold = false;
+        _ballotAsPublished = null;
+        _listenOpenTold = false;
+        _nightsOpenTold = false;
+
         // And the results the index was describing. Left set, the
         // next index published would name a season of sessions
         // that were deleted a moment ago. Done on the caller's thread
@@ -1490,11 +1519,11 @@ public sealed partial class RelayPublisher : IDisposable
                     // queued behind.
                     _snapshots[channel] = item;
                 }
-                else
+                else if (!ReplaceQueuedResult(item))
                 {
                     if (_results.Count >= MaxQueuedResults)
                     {
-                        _results.Dequeue();
+                        DropOneQueuedResult();
                         _dropped++;
                     }
 
@@ -1512,6 +1541,87 @@ public sealed partial class RelayPublisher : IDisposable
             // worth propagating.
             return false;
         }
+    }
+
+    /// <summary>
+    /// Puts a newer copy of a document in the place of one already waiting
+    /// under the same channel and id, and says whether it did. Call under
+    /// _gate.
+    ///
+    /// WITHOUT THIS THE QUEUE HELD EVERY COPY. A driver's night is queued
+    /// again after every race they run and the results index after every
+    /// session, so an evening offline filled the queue with stale copies of
+    /// the same few documents - and the drop-oldest rule then pushed real
+    /// results out to make room for them. Only the newest copy is worth
+    /// sending: the relay keeps the latest by seq anyway.
+    ///
+    /// The head is left alone, because the worker may be sending it right
+    /// now and recognises it by reference (CompleteResult). A newer copy of
+    /// the head simply queues behind it, as before.
+    /// </summary>
+    private bool ReplaceQueuedResult(Pending item)
+    {
+        if (_results.Count < 2)
+        {
+            return false;
+        }
+
+        var held = _results.ToArray();
+
+        for (var i = 1; i < held.Length; i++)
+        {
+            if (string.Equals(held[i].Channel, item.Channel, StringComparison.Ordinal)
+                && string.Equals(held[i].ItemId, item.ItemId, StringComparison.Ordinal))
+            {
+                held[i] = item;
+
+                _results.Clear();
+
+                foreach (var one in held)
+                {
+                    _results.Enqueue(one);
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Makes room in a full results queue. Call under _gate.
+    ///
+    /// A driver's night or a results index goes first, oldest of them
+    /// first: both are built again from the facts (a night when the
+    /// driver next races, the index after the next session), and a result
+    /// is what a club actually needs the relay for. Only a queue holding
+    /// nothing else loses its oldest result, which is what it always did.
+    /// The head is never picked out of the middle like this, because the
+    /// worker may be sending it - see <see cref="ReplaceQueuedResult"/>.
+    /// </summary>
+    private void DropOneQueuedResult()
+    {
+        var held = _results.ToList();
+
+        for (var i = 1; i < held.Count; i++)
+        {
+            if (held[i].Channel is DriverNight.Channel or RelayResultsIndex.Channel)
+            {
+                held.RemoveAt(i);
+
+                _results.Clear();
+
+                foreach (var one in held)
+                {
+                    _results.Enqueue(one);
+                }
+
+                return;
+            }
+        }
+
+        _results.Dequeue();
     }
 
     /// <summary>
@@ -1702,7 +1812,19 @@ public sealed partial class RelayPublisher : IDisposable
                     }
                     else if (!_settings.ClubNotesFromTheRelay)
                     {
-                        _notesProblem = null;
+                        // Switched off: the relay told, until it has taken
+                        // it - see CloseClubNotesOnTheRelay. On the notes'
+                        // own tick, so a relay that is down is asked twice
+                        // a minute rather than twice a second.
+                        if (_notesClosePending && Environment.TickCount64 >= _nextNotesPollTick)
+                        {
+                            _nextNotesPollTick = Environment.TickCount64 + (long)NotesPollEvery.TotalMilliseconds;
+                            SendNotesClose(pass.Token);
+                        }
+                        else if (!_notesClosePending)
+                        {
+                            _notesProblem = null;
+                        }
                     }
 
                     // The announcer's voice, out to anyone listening from
@@ -1738,6 +1860,35 @@ public sealed partial class RelayPublisher : IDisposable
                         }
                     }
 
+                    // A driver's own night - see RelayPublisher.Nights. On
+                    // NO tick of its own either, but for the opposite
+                    // reason to listening: the documents themselves go
+                    // into the results queue as each race is filed, so all
+                    // this pass does is make sure the relay has been TOLD
+                    // the club offers them. It refuses a night to a club it
+                    // has not been told about, and a 403 per driver per
+                    // race - discovered after a night of racing - is a far
+                    // worse way to find that out than one request at the
+                    // start. Cheap after the first: the flag goes once and
+                    // then this is a field comparison.
+                    if (_settings.PublishDriverNightsToTheRelay)
+                    {
+                        SendNightsOpen(pass.Token);
+                    }
+                    else
+                    {
+                        _nightsProblem = null;
+
+                        // Until the relay takes it - see
+                        // CloseDriverNightsOnTheRelay. This is what takes
+                        // a club's drivers' evenings back DOWN rather than
+                        // merely stopping new ones.
+                        if (_nightsClosePending)
+                        {
+                            SendNightsClose(pass.Token);
+                        }
+                    }
+
                     // The room's vote, on a faster tick than the notes -
                     // see RelayPublisher.Vote. Faster because the number
                     // the race director watches to decide when to close
@@ -1750,7 +1901,18 @@ public sealed partial class RelayPublisher : IDisposable
                     }
                     else if (!_settings.RoomVoteFromTheRelay)
                     {
-                        ForgetVoteTrouble();
+                        // Switched off: the relay told, until it has taken
+                        // it - see CloseRoomVoteOnTheRelay. On the vote's
+                        // own tick, for the same reason as the notes above.
+                        if (_voteClosePending && Environment.TickCount64 >= _nextVotePollTick)
+                        {
+                            _nextVotePollTick = Environment.TickCount64 + (long)VotePollEvery.TotalMilliseconds;
+                            SendVoteClose(pass.Token);
+                        }
+                        else if (!_voteClosePending)
+                        {
+                            ForgetVoteTrouble();
+                        }
                     }
 
                     // Driver sign-up on its own, slower tick. Answers owed
@@ -3138,7 +3300,37 @@ public sealed partial class RelayPublisher : IDisposable
             // and asking again cannot change that. Retried, it sat at the
             // head of the queue and held every result behind it for good.
             var indexRefused = code == 507 && item.ItemId is not null && item.Channel == RelayResultsIndex.Channel;
-            var outcome = code is 400 or 413 || unknownChannel || indexRefused ? SendOutcome.Rejected : SendOutcome.Retry;
+
+            // A NIGHT REFUSED IS DROPPED, NEVER RETRIED, and this is the
+            // one decision putting drivers' nights through this queue
+            // forced. The relay refuses a night to a club it has not been
+            // TOLD offers them, with a 403 - and 401 and 403 are retried
+            // here on purpose, because they are what a mistyped token looks
+            // like and the queue should drain the moment it is corrected.
+            //
+            // A night retried would sit at the head of this queue and hold
+            // every RESULT behind it, which is the exact fault the results
+            // index comment above records. Results are what a club actually
+            // needs the relay for. A night is a courtesy and is built again
+            // from the facts the next time a race is filed, and again on the
+            // re-send pass - so letting one go costs nothing and keeping it
+            // costs the evening's results.
+            //
+            // AND THE SWITCH IS MARKED TO BE TOLD AGAIN. A 403 here means
+            // this laptop believes the club offers nights and the relay does
+            // not: a relay redeployed onto an empty volume, or a club moved
+            // to a different one. Without this the flag would stay "told"
+            // and every night of the evening would be refused in turn.
+            var nightRefused = code is 401 or 403 && item.Channel == DriverNight.Channel;
+
+            if (nightRefused)
+            {
+                _nightsOpenTold = false;
+            }
+
+            var outcome = code is 400 or 413 || unknownChannel || indexRefused || nightRefused
+                ? SendOutcome.Rejected
+                : SendOutcome.Retry;
 
             if (isSignup && outcome == SendOutcome.Rejected)
             {

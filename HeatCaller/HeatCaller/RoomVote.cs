@@ -512,7 +512,17 @@ internal sealed class RoomVote
     /// </summary>
     /// <param name="voterId">Whatever identifies the phone. Never read for anything but keeping one vote to one voter.</param>
     /// <param name="optionId">The driver they picked.</param>
-    internal string? Cast(string? voterId, string? optionId)
+    /// <param name="expectedPollId">
+    /// The vote the caller was asked about, by <see cref="OnPollId"/>, or
+    /// null for whichever is open. The relay's collector passes the poll
+    /// its published ballot was for: a vote is opened on the UI thread
+    /// while the collector is between reading the relay's inbox and
+    /// casting, and without this the previous race's votes went into the
+    /// new one - same grid, same drivers, so nothing else refused them.
+    /// Checked here, under the same lock as the cast, so the poll cannot
+    /// change between the check and the vote.
+    /// </param>
+    internal string? Cast(string? voterId, string? optionId, string? expectedPollId = null)
     {
         lock (_gate)
         {
@@ -527,6 +537,11 @@ internal sealed class RoomVote
             if (_file.Current is not { } poll)
             {
                 return "There is no vote running at the moment.";
+            }
+
+            if (expectedPollId is not null && !string.Equals(poll.Id, expectedPollId, StringComparison.Ordinal))
+            {
+                return "That vote was for a race that has gone.";
             }
 
             if (!Taking)

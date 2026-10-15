@@ -339,24 +339,71 @@ internal static class AppDataMigration
     }
 
     /// <summary>The JSON with old folder names in paths, and old voice field names, replaced.</summary>
-    internal static string UpdateJson(string json)
+    internal static string UpdateJson(string json) => UpdateJson(json, AppData, Documents);
+
+    /// <summary>
+    /// As above, with the AppData and Documents folders the old folders sat
+    /// in given - so it can be tried against any.
+    ///
+    /// Only a path INTO one of the old folders themselves is moved:
+    /// %AppData%\(old) and Documents\(old) Results / Backups, as Run moves
+    /// them. It used to rewrite any folder of that name anywhere - a sound
+    /// or export folder of the same name on another drive, or the app's own
+    /// source folder - pointing the setting at a folder that doesn't exist;
+    /// and it did it again on the start after every restore.
+    /// </summary>
+    internal static string UpdateJson(string json, string appData, string documents)
     {
-        // Longest first: "X Results" and "X Backups" before plain "X".
         var folders = new[]
         {
-            (LegacyNames.ResultsFolder, ResultsFolderName),
-            (LegacyNames.BackupsFolder, BackupsFolderName),
-            (LegacyNames.DataFolder, DataFolderName),
+            (Path.Combine(documents, LegacyNames.ResultsFolder), Path.Combine(documents, ResultsFolderName)),
+            (Path.Combine(documents, LegacyNames.BackupsFolder), Path.Combine(documents, BackupsFolderName)),
+            (Path.Combine(appData, LegacyNames.DataFolder), Path.Combine(appData, DataFolderName)),
         };
 
-        foreach (var (oldName, newName) in folders)
+        // Every JSON string, decoded, so a path is compared as the path it is
+        // (escapes and all). Only one that starts with an old folder - as a
+        // whole segment: followed by a separator or nothing - is changed, and
+        // written back as a JSON string again.
+        json = Regex.Replace(json, @"""(?:[^""\\]|\\.)*""", match =>
         {
-            // Only as a whole path segment: after a separator (JSON writes a
-            // backslash as \\, a forward slash as itself), and followed by
-            // another separator or the end of the string.
-            var pattern = @"(?<=\\\\|/)" + Regex.Escape(oldName) + @"(?=\\\\|/|"")";
-            json = Regex.Replace(json, pattern, newName, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        }
+            if (match.Value.IndexOf(LegacyNames.DataFolder, StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return match.Value;
+            }
+
+            string? value;
+            try
+            {
+                value = JsonSerializer.Deserialize<string>(match.Value);
+            }
+            catch (JsonException)
+            {
+                return match.Value;
+            }
+
+            if (value is null)
+            {
+                return match.Value;
+            }
+
+            var path = value.Replace('/', '\\');
+            foreach (var (oldRoot, newRoot) in folders)
+            {
+                var root = oldRoot.Replace('/', '\\').TrimEnd('\\');
+                // Rooted only: with no AppData or Documents folder to hand
+                // (an odd account) the "root" would be a bare folder name,
+                // and match anything of that name again.
+                if (Path.IsPathRooted(root)
+                    && path.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+                    && (path.Length == root.Length || path[root.Length] == '\\'))
+                {
+                    return JsonSerializer.Serialize(newRoot + value[root.Length..]);
+                }
+            }
+
+            return match.Value;
+        }, RegexOptions.CultureInvariant);
 
         foreach (var (oldField, newField) in LegacyNames.VoiceProfileFields)
         {

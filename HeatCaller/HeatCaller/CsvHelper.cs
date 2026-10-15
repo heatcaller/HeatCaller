@@ -148,31 +148,117 @@ public static class CsvHelper
     /// import's "Row 12: missing transponder" points at line 12 of the file
     /// even when there are blank lines above it. Lines break the same way
     /// File.ReadAllLines breaks them (\r\n, \n or \r).
+    ///
+    /// A quoted field with line breaks in it (a note typed over two lines in
+    /// Excel) keeps its row together: the lines it spans come back as ONE
+    /// entry, joined by a line break, numbered by the line it starts on.
+    /// Each of those lines used to be a row of its own, and the second half
+    /// of the note was imported as a junk driver. A quote only opens a
+    /// quoted field at the start of one (as CSV has it), and a quote never
+    /// closed by the end of the file joins nothing - those lines are read
+    /// one by one, as they always were.
     /// </summary>
     public static List<(string Text, int LineNumber)> NonBlankLines(string text)
     {
-        var result = new List<(string Text, int LineNumber)>();
-        using var reader = new StringReader(text);
-        var number = 0;
-
-        while (reader.ReadLine() is { } line)
+        var lines = new List<string>();
+        using (var reader = new StringReader(text))
         {
-            number++;
-
-            if (!string.IsNullOrWhiteSpace(line))
+            while (reader.ReadLine() is { } line)
             {
-                result.Add((line, number));
+                lines.Add(line);
             }
+        }
+
+        var result = new List<(string Text, int LineNumber)>();
+        var index = 0;
+
+        while (index < lines.Count)
+        {
+            // How many lines this record spans: one, unless it ends inside
+            // a quoted field and a later line closes it.
+            var span = 1;
+            var inQuotes = EndsInQuotes(lines[index], false);
+
+            while (inQuotes && index + span < lines.Count)
+            {
+                inQuotes = EndsInQuotes(lines[index + span], true);
+                span++;
+            }
+
+            if (inQuotes)
+            {
+                // Never closed: not a field over several lines after all.
+                span = 1;
+            }
+
+            var record = span == 1
+                ? lines[index]
+                : string.Join(Environment.NewLine, lines.GetRange(index, span));
+
+            if (!string.IsNullOrWhiteSpace(record))
+            {
+                result.Add((record, index + 1));
+            }
+
+            index += span;
         }
 
         return result;
     }
 
     /// <summary>
+    /// Whether a line of CSV ends inside a quoted field - given whether it
+    /// starts inside one (the line before ended in it). A quote opens a
+    /// field only at its start: the start of the line, or after a comma,
+    /// semicolon or tab (any of the separators an import accepts), spaces
+    /// aside. "" inside quotes is a quote, not the end.
+    /// </summary>
+    private static bool EndsInQuotes(string line, bool inQuotes)
+    {
+        var atFieldStart = !inQuotes;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        i++;
+                    }
+                    else
+                    {
+                        inQuotes = false;
+                    }
+                }
+            }
+            else if (c == '"' && atFieldStart)
+            {
+                inQuotes = true;
+                atFieldStart = false;
+            }
+            else if (c is ',' or ';' or '\t')
+            {
+                atFieldStart = true;
+            }
+            else if (c != ' ')
+            {
+                atFieldStart = false;
+            }
+        }
+
+        return inQuotes;
+    }
+
+    /// <summary>
     /// Parses one line of CSV into fields, handling quoted fields (with
-    /// embedded commas/escaped quotes) but NOT fields containing embedded
-    /// newlines - adequate for simple tabular exports like driver rosters,
-    /// not a full RFC 4180 parser.
+    /// embedded commas/escaped quotes). A field with a line break in it is
+    /// parsed too when given the whole record (see NonBlankLines, which
+    /// keeps one together) - adequate for simple tabular exports like
+    /// driver rosters, not a full RFC 4180 parser.
     /// </summary>
     public static List<string> ParseLine(string line)
     {

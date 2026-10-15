@@ -533,7 +533,9 @@ public sealed partial class AnnouncementService
         _ = Task.Run(async () =>
         {
             Interlocked.Increment(ref _voiceInFlight);
-            BeginSpeaking();
+            // Named, so the "On air" strip says which flag call this is
+            // rather than whatever it would guess with no call given.
+            BeginSpeaking(type);
 
             try
             {
@@ -559,6 +561,11 @@ public sealed partial class AnnouncementService
                         StatusMessage?.Invoke($"[voice] {type} (prepared): dropped - the announcer was muted.");
                         return;
                     }
+
+                    // Listeners at home hear the flag call too - offered
+                    // just before the speaker, the way the queued lines are.
+                    // A prepared take never went through that path.
+                    OfferLineToListeners(prepared.Text, prepared.Audio);
 
                     await PlayAsync(prepared.Audio, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence);
                 }

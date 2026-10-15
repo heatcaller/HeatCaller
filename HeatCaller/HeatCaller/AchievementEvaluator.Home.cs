@@ -175,8 +175,27 @@ public static partial class AchievementEvaluator
         IReadOnlyList<SessionRecord> history,
         AchievementStore store,
         AchievementContext context)
+        => EvaluatePractice(record, history, store, context, out _);
+
+    /// <summary>
+    /// As above, and says what it kept: <paramref name="lapsSaved"/> is the
+    /// laps it added to each driver's lap total (by transponder) when the
+    /// store was saved with them, and null when nothing was saved - so a
+    /// caller that judges the same practice again (Practice mode, part-way
+    /// through) takes back only laps that really are in the file. Without
+    /// this it took back laps whose save had failed, and the career lap
+    /// total shrank for good.
+    /// </summary>
+    public static List<AchievementUnlock> EvaluatePractice(
+        SessionRecord record,
+        IReadOnlyList<SessionRecord> history,
+        AchievementStore store,
+        AchievementContext context,
+        out Dictionary<string, int>? lapsSaved)
     {
+        lapsSaved = null;
         var unlocks = new List<AchievementUnlock>();
+        var lapsAdded = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         if (!context.AtHome || record.SessionType != RaceSessionType.Practice || record.IsDemoSession())
         {
@@ -206,6 +225,7 @@ public static partial class AchievementEvaluator
 
             // Laps are laps: at home, practice counts towards the totals.
             driver.TotalLaps += entry.Laps;
+            lapsAdded[entry.Transponder] = lapsAdded.GetValueOrDefault(entry.Transponder) + entry.Laps;
 
             void Award(string id, string detail = "")
             {
@@ -330,6 +350,8 @@ public static partial class AchievementEvaluator
         {
             return new List<AchievementUnlock>();
         }
+
+        lapsSaved = lapsAdded;
 
         return unlocks
             .OrderByDescending(unlock => (int)unlock.Badge.Tier)

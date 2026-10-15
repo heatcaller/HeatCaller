@@ -79,22 +79,14 @@ public partial class MainForm
         // "which races were tonight" is the sort of thing that agrees all
         // season and then disagrees about a race that started at five to
         // midnight.
-        announcer.RacesTonight = () =>
-        {
-            // A BLOCK RATHER THAN A TERNARY, because the two branches are an
-            // array and a List and those have no common type - CS0173, which
-            // the compiler is right about and which a cast would only have
-            // hidden.
-            if (_rounds is null)
-            {
-                return Array.Empty<SessionRecord>();
-            }
-
-            return TonightAtTheTrack
-                .Races(_sessionHistory.All, id => _rounds.Get(id), DateTime.Now)
-                .Select(one => one.Session)
-                .ToList();
-        };
+        // ONE ANSWER, AND IT LIVES IN ONE PLACE (13 Oct 2026). This used
+        // to hold its own copy of the TonightAtTheTrack call, and then a
+        // driver's night needed the same list on the relay side - so the
+        // copy moved to MainForm.Relay.RacesTonight and both read it. Two
+        // answers to "which races were tonight" is the sort of thing that
+        // agrees all season and then disagrees about a race that started at
+        // five to midnight.
+        announcer.RacesTonight = RacesTonight;
 
         // The layouts, for a record falling. Null would mean no record is
         // claimed rather than a guess at one - see NightMoments.ForRace.
@@ -790,15 +782,27 @@ public partial class MainForm
             _sessionHistory,
             _raceEvents.ActiveRoundScope());
 
-        director.Championship = () => CommentaryReaders.Championship(
-            ChampionshipLive.Compute(
-                LastFiledResults(),
-                _activeRound,
-                _seasonStore,
-                _rounds,
-                _raceEvents,
-                _sessionHistory,
-                _profiles));
+        // Scored under the filed race's OWN round, not the active one (14
+        // Oct 2026). Candidates leaves out the race filed under the round it
+        // is given, so the filed race is not counted twice - but by the time
+        // this runs the active round has often moved on to the next race,
+        // and then the filed race stayed in the counted table AND was added
+        // again as the "live" one, and its points went to air doubled.
+        director.Championship = () =>
+        {
+            var filed = LastFiled();
+            var filedRound = filed?.RoundId is { } roundId ? _rounds.Get(roundId) : null;
+
+            return CommentaryReaders.Championship(
+                ChampionshipLive.Compute(
+                    LastFiledResults(),
+                    filedRound,
+                    _seasonStore,
+                    _rounds,
+                    _raceEvents,
+                    _sessionHistory,
+                    _profiles));
+        };
     }
 
     /// <summary>The class the active round belongs to, for the qualifying method and its lap counts.</summary>
@@ -820,20 +824,17 @@ public partial class MainForm
     /// filed, and the live session may already have been reset for the
     /// next one.
     /// </summary>
-    private IReadOnlyList<SessionResultEntry> LastFiledResults()
-    {
-        var all = _sessionHistory.All;
+    private IReadOnlyList<SessionResultEntry> LastFiledResults() =>
+        LastFiled()?.Results ?? (IReadOnlyList<SessionResultEntry>)Array.Empty<SessionResultEntry>();
 
-        for (var i = all.Count - 1; i >= 0; i--)
-        {
-            if (all[i].SessionType != RaceSessionType.Practice && all[i].Results.Count > 0)
-            {
-                return all[i].Results;
-            }
-        }
-
-        return Array.Empty<SessionResultEntry>();
-    }
+    /// <summary>The last race filed with results, or null - the record LastFiledResults reads, kept whole so its round can be asked too.</summary>
+    //
+    // SessionHistoryStore.All is newest FIRST, so this reads it from the
+    // front (14 Oct 2026). It used to walk it from the end, which is the
+    // oldest race the club ever filed - so "the last race filed" was the
+    // first one, and the championship check talked about that.
+    private SessionRecord? LastFiled() =>
+        _sessionHistory.All.FirstOrDefault(s => s.SessionType != RaceSessionType.Practice && s.Results.Count > 0);
 
     /// <summary>
     /// The setup lines for the winner of a saved race - see MechanicBrief.

@@ -284,7 +284,11 @@ public sealed class TechInspectionControl : UserControl
     {
         _grid.Rows.Clear();
 
-        var inspections = (_chkTodayOnly.Checked ? _store.ForDay(DateTime.Now) : _store.All)
+        // "Today" as clearance means it - this race day, or the recent
+        // window when none is open (TechInspectionStore.CountingNow) - not
+        // the calendar date, which emptied the log at midnight and on the
+        // second day of a weekend meeting while every car was still cleared.
+        var inspections = (_chkTodayOnly.Checked ? _store.CountingNow() : _store.All)
             .Where(i => SelectedClass is null || string.Equals(i.ClassName, SelectedClass, StringComparison.OrdinalIgnoreCase))
             .ToList();
 

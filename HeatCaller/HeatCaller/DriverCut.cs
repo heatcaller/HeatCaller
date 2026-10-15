@@ -212,7 +212,12 @@ internal static class DriverCut
                 bestPlace = Math.Min(bestPlace, row.Position);
             }
 
-            if (row.StartPosition > 0 && row.Position > 0 && row.StartPosition != row.Position)
+            // Only a slot that could be one in THIS race. A freeform race
+            // used to take its grid from the previous race's whole field, so
+            // results already saved can carry "8th on the grid" in a five-car
+            // heat - and "up from 8th" is a climb that never happened.
+            if (row.StartPosition > 0 && row.Position > 0 && row.StartPosition != row.Position
+                && row.StartPosition <= field)
             {
                 said.Append(row.StartPosition > row.Position
                     ? $", up from {Ordinal(row.StartPosition)} on the grid"

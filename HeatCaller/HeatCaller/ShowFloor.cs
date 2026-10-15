@@ -71,6 +71,12 @@ internal static class ShowFloor
     private static DateTime _takenUtc;
 
     /// <summary>
+    /// How long THIS claim is honoured - <see cref="Longest"/> unless the
+    /// holder asked for longer. See TryClaim(string, TimeSpan).
+    /// </summary>
+    private static TimeSpan _ceiling = Longest;
+
+    /// <summary>
     /// Reports a claim being broken because it went stale, for the
     /// developer console. A broken claim is a bug somewhere else, and this
     /// is the only place it can be noticed.
@@ -104,7 +110,7 @@ internal static class ShowFloor
                     return null;
                 }
 
-                if (DateTime.UtcNow - _takenUtc < Longest)
+                if (DateTime.UtcNow - _takenUtc < _ceiling)
                 {
                     return _who;
                 }
@@ -117,7 +123,7 @@ internal static class ShowFloor
                 // a console line. Kept short for that reason - see
                 // ShowOnAir.Gate, which this follows.
                 Report($"[show] The broadcast floor was still claimed by {stale} after "
-                    + $"{Longest.TotalMinutes:0} minutes, so it has been let go. "
+                    + $"{_ceiling.TotalMinutes:0} minutes, so it has been let go. "
                     + "Something ended without releasing it.");
 
                 return null;
@@ -133,7 +139,21 @@ internal static class ShowFloor
     /// is not a failure and needs no handling beyond not starting a show:
     /// the caller is the filler, and filler stands down.
     /// </summary>
-    internal static bool TryClaim(string who)
+    internal static bool TryClaim(string who) => TryClaim(who, Longest);
+
+    /// <summary>
+    /// The same, for a holder that legitimately keeps the floor longer than
+    /// <see cref="Longest"/> - the night's recap and a driver's own piece,
+    /// which write for up to three minutes and then read for over six.
+    ///
+    /// A CEILING PER CLAIM (14 Oct 2026). The one six-minute ceiling was
+    /// set for Race Control's sequence and was shorter than the recap's
+    /// worst case, so a long recap had its claim quietly broken halfway
+    /// through and the director's tick started a second show over it.
+    /// Never shorter than Longest, whatever is asked: this is the safety
+    /// net, and pulling it tighter only breaks claims that are still live.
+    /// </summary>
+    internal static bool TryClaim(string who, TimeSpan longest)
     {
         // Read first, so a stale claim is cleared before this asks.
         _ = HeldBy;
@@ -147,6 +167,7 @@ internal static class ShowFloor
 
             _who = string.IsNullOrWhiteSpace(who) ? "a show" : who.Trim();
             _takenUtc = DateTime.UtcNow;
+            _ceiling = longest < Longest ? Longest : longest;
 
             return true;
         }

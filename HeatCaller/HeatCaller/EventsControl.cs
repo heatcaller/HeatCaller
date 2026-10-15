@@ -389,10 +389,11 @@ public sealed class EventsControl : UserControl
 
         if (raceEvent.IsOpen)
         {
-            if (AppDialog.Show(this,
-                    $"Close \"{raceEvent.DisplayName}\"?\r\n\r\nIts rounds stay linked and its results stay reportable - "
-                    + "closing only stops new rounds joining it.",
-                    "Close day", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            // The same guards as The Day's Close Day - refused while one of
+            // its rounds is on track, and asked with No as the default. This
+            // used to be a one-line Yes-default question of its own, so the
+            // second button for the same close had neither.
+            if (!RaceDayEventControl.AskToCloseDay(this, raceEvent, _rounds))
             {
                 return;
             }

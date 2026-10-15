@@ -381,6 +381,10 @@ public sealed class SeasonsControl : UserControl
         var wasBest = season.CountBestRounds;
         var wasEvents = season.IncludedEventIds.ToList();
 
+        // And the rounds planned, which the dialog also sets - undo used to
+        // leave the new number in place (the commentary's "rounds to go").
+        var wasPlanned = season.PlannedRounds;
+
         // And the races ticked in and out, which turning the rule off now
         // writes to (see ApplyRules).
         var wasIncluded = season.IncludedSessionIds.ToList();
@@ -403,6 +407,7 @@ public sealed class SeasonsControl : UserControl
             current.MainsOnly = wasMains;
             current.CountBestRounds = wasBest;
             current.IncludedEventIds = wasEvents.ToList();
+            current.PlannedRounds = wasPlanned;
             current.IncludedSessionIds = wasIncluded.ToList();
             current.ExcludedSessionIds = wasExcluded.ToList();
 

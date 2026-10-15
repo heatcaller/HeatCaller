@@ -4,6 +4,54 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Each driver can now be given their own night, at an address only their own badge opens.** On the **Club Website** page: *Give each driver their own night at a private address*. Every driver who raced gets a page of their own evening - their races, where they finished, how many they beat, their grid moves, their best laps and what the night's moments say they did. The address carries the twenty-character code already printed on their check-in badge, so there is nothing for them to sign up for, nothing for you to hand out that they do not already have, and no password to forget.
+
+  **Off until you turn it on**, like every public route in HeatCaller. It is milder than most - it is text, and your results page already names everybody publicly - but it puts a named person's evening on the internet, and the shout-outs and the room's vote both ship off for less. An update does not get to decide that for your club.
+
+  **Nobody without the code can open it, or find it.** The code is eighty bits worked out from the transponder under your club's own secret, which means it cannot be guessed and it says nothing about the car it came from. The relay answers everybody else identically whether the code is wrong, the driver did not race, or your club does not offer this at all - deliberately the same, because three different answers would let somebody working through guesses learn which codes are real. And one button on the check-in card reissues every badge in the club at once, if you ever need it to.
+
+  **It needs online check-in set up**, because the badge is what the address is built from.
+
+  **Every word in it is the announcer's own facts, unchanged.** Nothing rewrites, rounds or summarises - which matters because the one person reading it was standing there and can check all of it. It also means it works for *everybody* who raced rather than the two or three whose spoken piece you played: a written piece is made by being read out, and fifteen drivers would have opened a page with nothing on it.
+
+  **It shows the full name** even if you have short names switched on for the club's public pages. A results table is a list of other people and shortening it is right there; a driver opening their own night and reading "B. Hargrove" has been shown a bug.
+
+  **Unticking it takes every night back off the relay**, rather than just stopping new ones going up.
+
+  **They find it from the check-in page**, under the Check in button, once they have scanned their badge: *See your racing from last time*. That is the only page in your club's site that already has their code, so there is nothing for you to send out - and the link only appears for a club that has this switched on, and only for somebody who actually scanned a badge rather than signing in with a PIN.
+
+  **Their code stays out of every log it could land in.** The page reads it, asks for the night over a POST with the code in the body rather than in the address, and then rewrites the address into a form that browsers never send to any server at all - so a reload, a bookmark or a link they forward on keeps it out of access logs, out of referrers and out of a shared phone's history.
+
+  **A Make a picture to share button**, and a Save this as a text file one under it. Both are built in the browser out of what is already on screen - nothing is stored and there is nothing extra to fetch.
+
+  The picture is the 1200x630 shape a chat app or a club group draws as a banner rather than a thumbnail, in your club's own colours, with your club's name on it. It fills with as much of the night as fits and says "and 3 more" rather than quietly dropping the rest.
+
+  **It is drawn on the driver's own phone, and that is the point rather than a shortcut.** HeatCaller already draws cards for a shared result, and pointing the same machinery at a driver's night was the obvious thing to do - and it is the one thing this feature must not do. A picture served from a web address has to be filed under something, and the only thing a night is filed under is the driver's own badge code. So the moment they posted it, that code would be in the post for anybody to read - and it opens their whole night and checks them in and out. The one thing the picture is *for* would have published the key to it. Drawn on the phone instead, a driver shares a picture and never an address.
+
+  **Every kind of nothing reads the same.** A club that does not offer this, a driver with nothing filed, and a code that was mistyped all get one message that names both possibilities and says which it was for neither. Three different answers would let somebody working through guesses learn which codes are real, which is the one thing eighty bits are there to prevent.
+
+- **A driver's own piece now opens with a few seconds of their own race.** The clips HeatCaller has been cutting for each driver out of each race's recording - the seconds they were actually called over - have been sitting in a folder on the laptop since recording shipped, and nothing played one. **Write And Play It** for a driver now starts with a line of handoff and then up to twenty seconds of their night as the room heard it, before the music and the written piece.
+
+  Twenty seconds against a spoken piece of a minute and a half, and from the start of the clip, which is where the run-up to the moment is. A clip may be two and a half minutes long, and three of those around a minute of words is not a piece about somebody's night - it is the night played back.
+
+  **It is in the saved recording too**, without anything being stitched together: it goes out through the same mixer the voice and the music do, with the recorder listening to the mixer.
+
+  **Nothing about it can cost you the piece.** No recording tonight, the file gone, a disk that will not read, no clip for that driver - any of those and the piece plays exactly as it did before, with a line in the console saying which it was. Most drivers most nights have no clip, and that has never been a fault.
+
+  **It follows the clip switch**, so a club that has unticked *cut a clip for each driver* does not get them used. A clip the encoder refused and left as a `.wav` is played too, which is every clip on a machine without Windows Media Foundation.
+
+- **The announcer now remembers the last time two drivers met.** When two of them are racing each other again, it can say when they last did and what happened - *"the two of them were nose to tail in Heat 2 last week, and Bill came out in front"* - rather than treating every battle as the first. It reaches back a season and says how long ago in the way somebody in the room would: earlier today, yesterday, a few days ago, last week, three weeks ago, last season.
+
+  **It only claims what the saved results prove.** It will not call something a fastest lap moment, because every race has one of those and it says nothing about the two drivers in question. A meeting that proves nothing names itself and no more.
+
+- **Fixed: a private page on the relay could be fetched whole by anybody.** Channels on the relay can be marked as holding something private, and that mark was being honoured in one of the three places documents are read and ignored in the other two. Nothing had leaked, because everything private until now happened to be the kind of document the one working check covered - but the first per-person thing anybody added would have been served complete, to anybody, with no token at all. All three now refuse.
+
+  The worse half was the listing. Asking a collection for its index returns every id in it, and for a driver's night an id *is* that driver's badge code - the thing that lets somebody be checked in. A listing would have turned the credential into a public list and handed over check-in along with it.
+
+  Found by reading the relay rather than from anything going wrong, and fixed before the first feature that would have been bitten by it.
+
+- **Fixed: a club that switched a public route off could have it filled straight back up.** Switching off listening along, or drivers' own nights, tells the relay to throw away what it is holding - and then the next thing the laptop sent was accepted anyway. For nights the relay was checking the switch when somebody *read* one and not when the laptop *sent* one, so the folder emptied and refilled a second later and the club's "no" meant nothing. Both ends now refuse, and a refused night is dropped rather than queued - a courtesy must never sit at the front of the queue your results are waiting in.
+
 - **A shout-out that cannot be read out is now refused, instead of being accepted and thrown away.** If the night's list was already full, somebody sending a message from your club's page was told it had gone through - and then it was quietly discarded on the laptop, with nothing but a line in your own console to show for it. Somebody's dedication could vanish with a tick beside it. They are now told the announcer has plenty to get through already, in the same words a phone on the club Wi-Fi gets, and can try again once you have read a few out.
 
 - **A sponsor's slide can no longer land on the crowd screen over another sponsor's read.** A commercial break starting while a sponsor's name was being said put the next sponsor's picture up on top of it - one sponsor's paid airtime carrying another's logo. The break now waits the few seconds for the read to finish.

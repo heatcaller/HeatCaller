@@ -406,9 +406,19 @@ public static class CommentaryReportFacts
         // Whether it is still a contest. The caller works out who is
         // mathematically alive, because only the season's own rules know
         // how many rounds are left and how the drops fall.
-        var alive = ranked.Count(c => c.StillAlive);
+        //
+        // ONLY WHEN THE CALLER ACTUALLY WORKED IT OUT (14 Oct 2026).
+        // StillAlive defaults to true, and no reader in the app can fill it
+        // in yet (see CommentaryReaders.Championship), so "everyone alive"
+        // is what "not known" looks like. Counted anyway, a table of one -
+        // the season's first round, one driver scored - came out as one
+        // alive, and the announcer said "that settles it: nobody can catch"
+        // a driver after a single race. So the count is only trusted when
+        // somebody on the table has been marked out of it, and "nobody can
+        // catch" needs somebody else on the table to be the nobody.
+        var alive = ranked.Any(c => !c.StillAlive) ? ranked.Count(c => c.StillAlive) : 0;
 
-        if (alive == 1)
+        if (alive == 1 && ranked.Count > 1)
         {
             found.Add(new FactBlock($"champdecided:{raceKey}",
                 $"That settles it: nobody can catch {leaderName} in {cls} now."));

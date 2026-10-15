@@ -239,8 +239,13 @@ public static class CommentaryExchange
     /// guessing which half belongs to whom would put words in the wrong
     /// voice over a PA.
     /// </summary>
-    public static IReadOnlyList<ExchangeTurn> Split(string? written)
+    /// <param name="announcer">The lead's name, accepted as a label in its own right - see the remarks on Labelled.</param>
+    /// <param name="coHost">The co-host's name, likewise.</param>
+    public static IReadOnlyList<ExchangeTurn> Split(string? written, string? announcer = null, string? coHost = null)
     {
+        var announcerLabels = LabelsFor(announcer, "A", "ANNOUNCER", "HOST", "COMMENTATOR");
+        var coHostLabels = LabelsFor(coHost, "B", "CO-HOST", "COHOST", "CO HOST", "COLOUR", "COLOR", "GUEST");
+
         var turns = new List<ExchangeTurn>();
 
         if (string.IsNullOrWhiteSpace(written))
@@ -260,14 +265,17 @@ public static class CommentaryExchange
             }
 
             bool fromCoHost;
+            int after;
 
-            if (StartsWithTag(line, AnnouncerTag))
+            if (Labelled(line, announcerLabels) is > 0 and var fromLead)
             {
                 fromCoHost = false;
+                after = fromLead;
             }
-            else if (StartsWithTag(line, CoHostTag))
+            else if (Labelled(line, coHostLabels) is > 0 and var fromSecond)
             {
                 fromCoHost = true;
+                after = fromSecond;
             }
             else
             {
@@ -277,7 +285,10 @@ public static class CommentaryExchange
                 continue;
             }
 
-            var said = line[2..].Trim().Trim('*', ' ');
+            // Past the label and its colon, wherever that ended. This used
+            // to be a hard-coded line[2..], which was only ever right for
+            // "A:" and "B:" - see Labelled.
+            var said = line[after..].Trim().Trim('*', '_', ' ');
 
             if (said.Length == 0)
             {
@@ -319,6 +330,82 @@ public static class CommentaryExchange
 
             return who.Length > 0 ? $"{who}: {t.Line}" : t.Line;
         }));
+    }
+
+    /// <summary>
+    /// What this side's turns may be labelled with: the letter the brief
+    /// asks for, the words a model reaches for instead, and the speaker's
+    /// own name and first name where the club has typed one.
+    /// </summary>
+    private static List<string> LabelsFor(string? name, params string[] fixedLabels)
+    {
+        var labels = new List<string>(fixedLabels);
+
+        var trimmed = name?.Trim();
+
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            return labels;
+        }
+
+        labels.Add(trimmed);
+
+        var firstName = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+
+        if (!string.IsNullOrEmpty(firstName) && !string.Equals(firstName, trimmed, StringComparison.OrdinalIgnoreCase))
+        {
+            labels.Add(firstName);
+        }
+
+        // Longest first, so "Billy Bob" is not matched as "Billy" with the
+        // rest of the name left sitting in the spoken line.
+        labels.Sort((one, two) => two.Length.CompareTo(one.Length));
+
+        return labels;
+    }
+
+    /// <summary>
+    /// Where this line's words start when it carries one of these labels,
+    /// or 0 when it carries none.
+    ///
+    /// WHY THIS IS SO FORGIVING (14 Oct 2026). It accepted a literal "A:"
+    /// or "B:" and nothing else, and quietly dropped every line that was
+    /// not one - so an exchange the model had written perfectly well, but
+    /// labelled with the two names the brief had just told it to use, came
+    /// back with nothing tagged and was said in one voice. Three evenings
+    /// of two-handers were lost that way while the prompt was blamed.
+    ///
+    /// CommentaryService.ParseInterview had already learned this for the
+    /// mechanic - it takes the role word, the person's name, decoration and
+    /// a space before the colon - and the interview worked throughout. This
+    /// is the same tolerance, and the reason the mechanic was the one voice
+    /// that always turned up.
+    /// </summary>
+    private static int Labelled(string line, List<string> labels)
+    {
+        foreach (var label in labels)
+        {
+            if (!line.StartsWith(label, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var at = label.Length;
+
+            // "Host :", "**Host**:", "Host_:" - the decoration and the
+            // space are the model's, not the club's.
+            while (at < line.Length && (line[at] is ' ' or '*' or '_'))
+            {
+                at++;
+            }
+
+            if (at < line.Length && line[at] == ':')
+            {
+                return at + 1;
+            }
+        }
+
+        return 0;
     }
 
     private static bool StartsWithTag(string line, string tag) =>

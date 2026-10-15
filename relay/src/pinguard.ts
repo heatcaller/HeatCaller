@@ -31,9 +31,38 @@ export const LOCK_STEPS_MS: readonly number[] = Object.freeze([
 /** A day with no lockout and the next one starts from the first step again. */
 export const QUIET_RESET_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Wrong PINs, from every address together, in a day - the ceiling for a
+ * guesser who paces themselves. Forty-nine every ten minutes never trips
+ * the fifty above, so without this the list never closed and the lockout
+ * never grew: seven thousand guesses a day, a legacy four-digit staff PIN
+ * in about a day. Past this the list closes for the longest step at once,
+ * and the lockout history jumps to its top; and since these are counted
+ * over a rolling day, any wrong PIN after that lockout ends closes it
+ * again, until the day's guesses have aged out. So a patient guesser gets
+ * about this many a day, all told.
+ *
+ * Only wrong PINs that aged out of the ten-minute count are kept for this
+ * - the ones a lockout already answered are not counted twice, so a club
+ * hammered in bursts escalates exactly as it always did. A hundred and
+ * fifty is far beyond any club night's typos, and well short of anything
+ * that finds a PIN: at this pace a four-digit PIN takes about a month on
+ * average, a six-digit one years.
+ */
+export const DAY_FAIL_LIMIT = 150;
+
+/** How far back DAY_FAIL_LIMIT's wrong PINs are counted. */
+export const DAY_FAIL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 interface GuardState {
   /** When each recent wrong PIN arrived, oldest first, milliseconds. */
   fails: number[];
+  /**
+   * Wrong PINs within the last day that have aged out of `fails` without
+   * a lockout answering them, oldest first - see DAY_FAIL_LIMIT. Saved only
+   * when there are any, so a file from before this reads as none.
+   */
+  earlier: number[];
   /** How many lockouts in a row, 0 for none. Picks the next lockout's length. */
   level: number;
   /** Milliseconds; the list is closed until then. 0 for never locked. */
@@ -169,6 +198,10 @@ export class PinGuard {
       return Promise.resolve();
     }
 
+    // The guesses leaving the ten-minute count go on counting for the day.
+    const agedOut = state.fails.filter((t) => t <= now - CLUB_FAIL_WINDOW_MS);
+
+    state.earlier = [...state.earlier, ...agedOut].filter((t) => t > now - DAY_FAIL_WINDOW_MS).slice(-DAY_FAIL_LIMIT);
     state.fails = [...state.fails.filter((t) => t > now - CLUB_FAIL_WINDOW_MS), now];
 
     if (state.fails.length >= CLUB_FAIL_LIMIT) {
@@ -179,6 +212,21 @@ export class PinGuard {
       this.log(
         `[relay] "${club}": ${CLUB_FAIL_LIMIT} wrong ${this.guardedPins} PINs - the PIN list is closed for ` +
           `${Math.round((state.lockedUntil - now) / 60000)} minutes (lockout ${state.level} in a row).`,
+      );
+    } else if (state.earlier.length + state.fails.length >= DAY_FAIL_LIMIT) {
+      // Paced to stay under the fifty, all day: closed for the longest
+      // step, and the next lockout of any kind is the longest too. The
+      // day's count is kept (only the ten-minute one is answered by this),
+      // so the next wrong PIN after this one ends closes it again.
+      state.level = LOCK_STEPS_MS.length;
+      state.lockedUntil = now + (LOCK_STEPS_MS[LOCK_STEPS_MS.length - 1] as number);
+      state.earlier = [...state.earlier, ...state.fails].slice(-DAY_FAIL_LIMIT);
+      state.fails = [];
+
+      this.log(
+        `[relay] WARNING "${club}": ${DAY_FAIL_LIMIT} wrong ${this.guardedPins} PINs in a day, paced to stay under ` +
+          `the ten-minute limit - somebody is working through PINs. The PIN list is closed for ` +
+          `${Math.round((state.lockedUntil - now) / 60000)} minutes, and again after each wrong PIN until the day's have aged out.`,
       );
     }
 
@@ -191,11 +239,12 @@ export class PinGuard {
 
     const state = this.held(club);
 
-    if (state.level === 0 && state.lockedUntil === 0 && state.fails.length === 0 && state.loaded) {
+    if (state.level === 0 && state.lockedUntil === 0 && state.fails.length === 0 && state.earlier.length === 0 && state.loaded) {
       return;
     }
 
     state.fails = [];
+    state.earlier = [];
     state.level = 0;
     state.lockedUntil = 0;
     state.resetUnsaved = !state.loaded;
@@ -364,7 +413,10 @@ export class PinGuard {
         await this.store.putSnapshot(club, this.docName, {
           seq: 0,
           publishedAt: new Date(this.clock()).toISOString(),
-          body: { fails: state.fails, level: state.level, lockedUntil: state.lockedUntil },
+          body:
+            state.earlier.length > 0
+              ? { fails: state.fails, earlier: state.earlier, level: state.level, lockedUntil: state.lockedUntil }
+              : { fails: state.fails, level: state.level, lockedUntil: state.lockedUntil },
         });
       } catch (error) {
         // Once a minute at most: a full disk under a stream of guesses
@@ -391,9 +443,11 @@ export class PinGuard {
 /** The file's count and the one kept in memory while it could not be read, together. */
 function merge(disk: GuardState, memory: GuardState): GuardState {
   const fails = [...disk.fails, ...memory.fails].sort((a, b) => a - b).slice(-CLUB_FAIL_LIMIT);
+  const earlier = [...disk.earlier, ...memory.earlier].sort((a, b) => a - b).slice(-DAY_FAIL_LIMIT);
 
   return {
     fails,
+    earlier,
     level: Math.max(disk.level, memory.level),
     lockedUntil: Math.max(disk.lockedUntil, memory.lockedUntil),
     loaded: true,
@@ -403,7 +457,7 @@ function merge(disk: GuardState, memory: GuardState): GuardState {
 
 /** Nothing counted, as read from a file that says so (or has nothing in it). */
 function fresh(): GuardState {
-  return { fails: [], level: 0, lockedUntil: 0, loaded: true, resetUnsaved: false };
+  return { fails: [], earlier: [], level: 0, lockedUntil: 0, loaded: true, resetUnsaved: false };
 }
 
 /**
@@ -426,6 +480,12 @@ function clean(value: unknown, now: number): GuardState {
         .slice(-CLUB_FAIL_LIMIT)
     : [];
 
+  const earlier = Array.isArray(raw["earlier"])
+    ? (raw["earlier"] as unknown[])
+        .filter((t): t is number => typeof t === "number" && Number.isFinite(t) && t <= now && t > now - DAY_FAIL_WINDOW_MS)
+        .slice(-DAY_FAIL_LIMIT)
+    : [];
+
   const level =
     typeof raw["level"] === "number" && Number.isInteger(raw["level"])
       ? Math.max(0, Math.min(raw["level"] as number, LOCK_STEPS_MS.length))
@@ -433,5 +493,5 @@ function clean(value: unknown, now: number): GuardState {
 
   const until = typeof raw["lockedUntil"] === "number" && Number.isFinite(raw["lockedUntil"]) ? (raw["lockedUntil"] as number) : 0;
 
-  return { fails, level, lockedUntil: Math.max(0, Math.min(until, now + longest)), loaded: true, resetUnsaved: false };
+  return { fails, earlier, level, lockedUntil: Math.max(0, Math.min(until, now + longest)), loaded: true, resetUnsaved: false };
 }

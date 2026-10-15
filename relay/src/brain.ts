@@ -64,6 +64,13 @@ export interface BrainConfig {
   readonly monthlyLines: number;
   /** The longest answer the brain will ask for, whatever a laptop requests. */
   readonly maxWords: number;
+  /**
+   * The longest a LONG piece may be - a night recap or a preview, which
+   * the laptop asks for at more than maxWords. Used only for a request
+   * over maxWords; a normal line is still held to maxWords. Absent means
+   * BRAIN_DEFAULT_MAX_LONG_WORDS, and never less than maxWords.
+   */
+  readonly maxLongWords?: number;
 }
 
 /**
@@ -85,6 +92,16 @@ export const BRAIN_DEFAULT_MONTHLY_LINES = 400;
 
 /** Long enough for a broadcast recap, short enough that nothing blocks the announcer's queue behind it. */
 export const BRAIN_DEFAULT_MAX_WORDS = 120;
+
+/**
+ * A night recap or a preview runs to three or four hundred words, and
+ * every one of them used to be cut to maxWords - the laptop got the first
+ * paragraph and nothing after it. Long pieces get this cap instead.
+ */
+export const BRAIN_DEFAULT_MAX_LONG_WORDS = 450;
+
+/** The most any config may set maxLongWords to, and what the relay's route clamps a request to before the service clamps it further. */
+export const BRAIN_LONG_WORDS_CEILING = 1000;
 
 /** The plan a club has when the config says nothing: the brain is not included. */
 export const BRAIN_PLAN_OFF: BrainPlan = Object.freeze({ enabled: false, monthlyLines: 0 });
@@ -338,7 +355,14 @@ export class BrainService {
     }
 
     try {
-      const words = Math.max(10, Math.min(maxWords, this.config.maxWords));
+      // A normal line is held to maxWords, as ever. A request for more than
+      // that is a long piece - a recap, a preview - and gets maxLongWords,
+      // so it is not cut off after its first paragraph. The token budget
+      // below follows whichever cap applies.
+      const longest = Math.max(this.config.maxWords, this.config.maxLongWords ?? BRAIN_DEFAULT_MAX_LONG_WORDS);
+      const words = maxWords > this.config.maxWords
+        ? Math.min(maxWords, longest)
+        : Math.max(10, Math.min(maxWords, this.config.maxWords));
 
       // Roughly four tokens to three words, rounded up and given room:
       // the cap is a safety net against a model that will not stop, not
@@ -441,6 +465,15 @@ export class BrainService {
   private async refund(club: string, month: string): Promise<void> {
     try {
       await this.serialise(club, async () => {
+        // A line reserved just before midnight on the last of the month can
+        // fail just after it. Its line came out of the old month, which has
+        // gone - and the file now holds the new one, so counting it back
+        // there would write the old month over the new month's count and
+        // lose its history. Nothing is handed back then, as the voice does.
+        if (monthOf(this.now()) !== month) {
+          return;
+        }
+
         const read = await this.readCount(club, month);
 
         if (read === "unreadable") {
@@ -629,7 +662,12 @@ export function anthropicWriter(apiKey: string, model: string, timeoutMs = 20_00
 /** Reads the brain block of the config, and refuses to start rather than starting wrong. */
 export function readBrainConfig(value: unknown, source: string): BrainConfig {
   if (value === undefined || value === null) {
-    return { model: "", monthlyLines: BRAIN_DEFAULT_MONTHLY_LINES, maxWords: BRAIN_DEFAULT_MAX_WORDS };
+    return {
+      model: "",
+      monthlyLines: BRAIN_DEFAULT_MONTHLY_LINES,
+      maxWords: BRAIN_DEFAULT_MAX_WORDS,
+      maxLongWords: BRAIN_DEFAULT_MAX_LONG_WORDS,
+    };
   }
 
   if (typeof value !== "object" || Array.isArray(value)) {
@@ -650,6 +688,14 @@ export function readBrainConfig(value: unknown, source: string): BrainConfig {
       source,
     ),
     maxWords: wholeNumber(raw["maxWords"], BRAIN_DEFAULT_MAX_WORDS, 10, 500, "brain.maxWords", source),
+    maxLongWords: wholeNumber(
+      raw["maxLongWords"],
+      BRAIN_DEFAULT_MAX_LONG_WORDS,
+      10,
+      BRAIN_LONG_WORDS_CEILING,
+      "brain.maxLongWords",
+      source,
+    ),
   };
 }
 

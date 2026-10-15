@@ -816,6 +816,16 @@ public partial class MainForm
                 return true;
             }
 
+            // Not onto a closed day - see CheckInStore.ClosedCurrentDay.
+            // Refused like the old and overruled taps above: said on the
+            // console and acknowledged, so the relay does not keep offering
+            // it, and the phone's next look at the roster shows it unchanged.
+            if (CheckInStore.ClosedCurrentDay(_raceEvents) is { } closedDay)
+            {
+                OnClientRawMessage($"[relay] Refused a check-{(tap.Wanted ? "in" : "out")} for {name} from their phone - this day is closed (\"{closedDay.DisplayName}\"). Start tonight's race day, or reopen that one, first.");
+                return true;
+            }
+
             _checkInStore.SetCheckedIn(transponder, tap.Wanted);
 
             OnClientRawMessage($"[relay] {name} checked {(tap.Wanted ? "in" : "out")} from their phone.");
@@ -1268,6 +1278,13 @@ public partial class MainForm
             {
                 PublishResultsIndexForYear(year);
             }
+
+            // And every driver who raced tonight sent their night again,
+            // for the reason ResendDriverNights gives: a night is queued
+            // once, when the race it changed was filed, so a relay that was
+            // down for an hour of racing leaves one out of date with
+            // nothing else to put it right.
+            ResendDriverNights();
         }
         catch (Exception ex)
         {
@@ -1578,4 +1595,177 @@ public partial class MainForm
             OnClientRawMessage($"[relay] Could not build the results document: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// TONIGHT'S RACES, and the one answer to that question on this
+    /// laptop.
+    ///
+    /// Through <see cref="TonightAtTheTrack"/> rather than filtered again
+    /// here: its night runs 6am to 6am and it is the same answer every
+    /// pace figure on the page is read from. A second answer to "which
+    /// races were tonight" is the sort of thing that agrees all season and
+    /// then disagrees about a race that started at five to midnight - which
+    /// is why the announcer's own RacesTonight calls this rather than
+    /// holding a copy of it.
+    /// </summary>
+    private IReadOnlyList<SessionRecord> RacesTonight()
+    {
+        if (_rounds is null)
+        {
+            return Array.Empty<SessionRecord>();
+        }
+
+        return TonightAtTheTrack
+            .Races(_sessionHistory.All, id => _rounds.Get(id), DateTime.Now)
+            .Select(one => one.Session)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Every driver in a race just filed, sent their own night - see
+    /// <see cref="DriverNight"/>.
+    ///
+    /// ONLY THE DRIVERS IN THAT RACE, which is both cheaper and more
+    /// nearly correct than sending everybody. A night is built from
+    /// DriverCut.FactsFor over the whole evening, so each document is
+    /// already their night ENTIRE rather than one race of it - and the only
+    /// documents a filed race can have changed are those of the drivers who
+    /// were in it. A driver who raced heat one and went home has a correct
+    /// night from the moment heat one was filed, and re-sending it after
+    /// every heat afterwards would be twenty documents a race to say the
+    /// same thing.
+    /// </summary>
+    private void PublishDriverNightsFor(SessionRecord session)
+    {
+        // A demo race is a rehearsal rather than a result, exactly as
+        // PublishSessionToRelay has it: it never reaches the club's public
+        // results and it must not reach a driver's night either.
+        if (!session.IsDemoSession())
+        {
+            PublishNightsFor(DriversIn(session));
+        }
+    }
+
+    /// <summary>
+    /// Every driver who has raced tonight, sent their night again.
+    ///
+    /// FROM THE RE-SEND PASS ONLY, where the recent results go after a
+    /// connection has come back. A night is queued once, when the race it
+    /// changed was filed, and the queue drops its oldest when it fills - so
+    /// a laptop shut with a full queue, or a relay that was down all
+    /// evening, can leave a driver's night a race or two out of date with
+    /// nothing to put it right. This is what puts it right, in the one
+    /// place in this file that already exists for exactly that problem.
+    ///
+    /// EACH DRIVER ONCE across the whole evening, and not once per race
+    /// they were in. The document is their night entire either way, so a
+    /// driver in four heats sent four times is the same four kilobytes
+    /// written four times into a queue five hundred deep that drops its
+    /// oldest when it fills - which on the one pass that exists to catch up
+    /// is the last thing worth spending it on.
+    /// </summary>
+    private void ResendDriverNights() =>
+        PublishNightsFor(RacesTonight()
+            .Where(race => race is not null && !race.IsDemoSession())
+            .SelectMany(DriversIn)
+            .Distinct(StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The documents themselves: one per driver, built from their whole
+    /// evening and keyed by their badge id.
+    ///
+    /// A CAR NOBODY HAS NAMED GETS NOTHING. The results page publishes
+    /// those under their transponder number, because a results table with
+    /// a hole in it is worse. A document whose only subject is a number is
+    /// not somebody's night, and the badge it would be keyed to is one
+    /// nobody has been given.
+    ///
+    /// NOTHING HERE MAY THROW INTO THE FILING PATH. This runs from
+    /// SessionHistoryStore.SessionAdded, on the thread that has just saved
+    /// a race, and a driver's night is a courtesy. One profile that cannot
+    /// be read, or a secret that has gone, leaves the result filed and
+    /// published exactly as before this existed.
+    /// </summary>
+    private void PublishNightsFor(IEnumerable<string> drivers)
+    {
+        if (!_settings.PublishDriverNightsToTheRelay)
+        {
+            return;
+        }
+
+        try
+        {
+            // A club that never set up online check-in has no badges, so
+            // there is no id to key a night to. Not a fault and not worth a
+            // line in the console every race: the box cannot sensibly be
+            // ticked without check-in, and the Club Website page is where
+            // that belongs being said.
+            var secret = _settings.RelayCheckInSecret;
+
+            if (string.IsNullOrWhiteSpace(secret))
+            {
+                return;
+            }
+
+            var tonight = RacesTonight();
+
+            if (tonight.Count == 0)
+            {
+                return;
+            }
+
+            var night = TonightAtTheTrack.NightOf(DateTime.Now);
+            var dayName = _raceEvents.Active?.Name;
+            var atUtc = DateTime.UtcNow;
+            var sent = 0;
+
+            foreach (var who in drivers)
+            {
+                // THE FULL NAME, not the club's abbreviated one. See the
+                // note at the top of DriverNight: a results table is a
+                // list of other people and shortening it is right there,
+                // but a driver who opens their own night and reads
+                // "B. Hargrove" has been shown a bug.
+                var named = _profiles.Get(who)?.DriverName;
+
+                if (string.IsNullOrWhiteSpace(named))
+                {
+                    continue;
+                }
+
+                var facts = DriverCut.FactsFor(who, named, tonight, _trackLayouts);
+                var document = DriverNight.Document(named, night, dayName, facts, atUtc);
+
+                if (document is null)
+                {
+                    continue;
+                }
+
+                if (_relayPublisher.PublishDriverNight(RelayCheckIn.IdFor(who, secret), document))
+                {
+                    sent++;
+                }
+            }
+
+            if (sent > 0)
+            {
+                OnClientRawMessage($"[relay] {Plural.Of(sent, "driver")} had their own night published.");
+            }
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"[relay] Could not build the drivers' own nights: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Everybody who really raced in one session: no ghosts, no blanks, and
+    /// each transponder once however many rows carry it.
+    /// </summary>
+    private static IEnumerable<string> DriversIn(SessionRecord session) =>
+        session.Results
+            .Select(row => row.Transponder)
+            .Where(who => !string.IsNullOrWhiteSpace(who) && !GhostService.IsGhost(who))
+            .Select(who => who.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase);
 }

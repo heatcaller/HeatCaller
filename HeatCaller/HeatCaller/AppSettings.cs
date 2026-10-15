@@ -213,12 +213,69 @@ public sealed class AppSettings
     public int PracticeLapLimit { get; set; }
     public int PracticeTimeLimitMinutes { get; set; }
 
-    // Local LLM colour commentary. Off by default - it depends on a
-    // separate Ollama install, and an app that silently needs something
-    // that isn't there is worse than one that plainly says it's disabled.
+    // Colour commentary. Off by default: it is a thing a club opts into,
+    // and an announcer that starts editorialising unasked is worse than one
+    // that plainly says it is disabled.
+    //
+    // Until 14 Oct 2026 the local half of this was Ollama, which meant a
+    // separate install and a command prompt. The model now ships inside
+    // HeatCaller (see BundledLlmClient), so the Endpoint and Model settings
+    // that pointed at Ollama are gone - a settings file still carrying them
+    // just ignores them.
     public bool CommentaryEnabled { get; set; }
-    public string CommentaryEndpoint { get; set; } = "http://localhost:11434";
-    public string CommentaryModel { get; set; } = "llama3.2:3b";
+
+    /// <summary>
+    /// Let the model on this PC write when the relay cannot.
+    ///
+    /// On by default, because it needs nothing installed and it is what
+    /// keeps the announcer talking with the internet down. Turning it off
+    /// means the relay writes or nothing does, which is a reasonable choice
+    /// for a club that would rather a quiet segment than a plainly-written
+    /// one - see BrainFallback.
+    /// </summary>
+    public bool CommentaryUseLocalModel { get; set; } = true;
+
+    /// <summary>
+    /// A model file named by hand, for a club with a strong PC that wants
+    /// something bigger than the ~440 MB model that ships. Empty on every
+    /// normal install, and the box stays out of the way until someone wants
+    /// it.
+    /// </summary>
+    public string CommentaryLocalModelPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// How many turns a two-hander runs to - a remark and a reply at 2, a
+    /// conversation at 3 or 4. Clamped to CommentaryExchange.MostTurns.
+    ///
+    /// Three by default. Two is a call-and-response, and the segments that
+    /// can be exchanges are the ones with something to actually talk about.
+    /// </summary>
+    public int CommentaryExchangeTurns { get; set; } = 3;
+
+    /// <summary>
+    /// Let the co-host out in the heats, not only the races the programme
+    /// says are worth two voices.
+    ///
+    /// Off by default, because the pacing exists for a reason: holding the
+    /// two-hander for the mains is what makes a main sound like a main. A
+    /// club that wants the show all evening can have it - the chattiness
+    /// dial already does this at its top settings (ShowChatter
+    /// .TwoVoicesEverywhere), and this is the same thing without having to
+    /// make the whole night chattier to get it.
+    /// </summary>
+    public bool CommentaryTwoVoicesInHeats { get; set; }
+
+    /// <summary>
+    /// Put ElevenLabs delivery tags on spoken commentary, so a line lands
+    /// excited rather than however the voice happens to read it.
+    ///
+    /// On by default, and does nothing unless the voice is an ElevenLabs v3
+    /// one (VoiceProfile.SupportsAudioTags) and the tone is Enthusiastic -
+    /// a club that picked Dry did not ask to be shouted at. The tags are
+    /// added in code, never by the model: see the note on
+    /// BuildBroadcastSystemPrompt for the race nights that settled that.
+    /// </summary>
+    public bool CommentaryVoiceTags { get; set; } = true;
 
     /// <summary>
     /// Write the commentary through the club's relay when it can, rather
@@ -530,6 +587,29 @@ public sealed class AppSettings
     /// announcer going quiet - see RelayPublisher.CloseListeningOnTheRelay.
     /// </summary>
     public bool ListenAlongOnTheRelay { get; set; }
+
+    /// <summary>
+    /// Whether the club offers each driver their own night: their races,
+    /// their finishes and what the night's moments say they did, at an
+    /// address only somebody holding that driver's badge can reach.
+    ///
+    /// OFF until a club turns it on. It is milder than listening along -
+    /// it is text, and the club's own results page already names everybody
+    /// publicly - but it puts a named person's evening on the internet, and
+    /// the shout-outs and the room's vote both ship off for less. An update
+    /// does not get to decide this for a club.
+    ///
+    /// NO LOGIN, because there already is one: the address carries the
+    /// twenty-character badge id the club prints for check-in, HMAC'd from
+    /// the transponder under the club's own secret. Eighty bits that cannot
+    /// be guessed, revocable for everybody at once, and already in the
+    /// driver's pocket. See DriverNight and RelayCheckIn.IdFor.
+    ///
+    /// Unticking it is SENT to the relay rather than left to be inferred
+    /// from nothing being published - and the relay then throws away every
+    /// night it holds. See RelayPublisher.CloseDriverNightsOnTheRelay.
+    /// </summary>
+    public bool PublishDriverNightsToTheRelay { get; set; }
 
     /// <summary>
     /// Whether the night-before preview also goes onto the club's own web
@@ -1308,8 +1388,9 @@ public sealed class AppSettings
     ///
     /// Remembered rather than asked each time, because the gate runs on
     /// every spoken line and the catalogue is fetched when a club opens
-    /// Voice Settings. Written whenever the catalogue is read, so a voice
-    /// that stops being a clone - or starts - is right from the next look.
+    /// Voice Settings. Added to whenever the catalogue is read, and a voice
+    /// comes off only when the relay lists it as not a clone - one the
+    /// relay stops listing stays, see VoiceSettingsControl.
     ///
     /// AN EMPTY LIST MEANS NO CLONES, NOT "DO NOT KNOW", and that is safe
     /// in the one direction that matters: a club with no clones is every
@@ -1349,10 +1430,19 @@ public sealed class AppSettings
     /// <summary>
     /// Whether this voice id is one the relay called a clone - see
     /// <see cref="HeatCallerClonedVoices"/>.
+    ///
+    /// ALSO TRUE FOR ANY VOICE A CONSENT HAS BEEN RECORDED FOR, taken back
+    /// or not (14 Oct 2026). Nobody records a consent for a stock voice, so
+    /// a record is proof enough that it is somebody's own - and it is the
+    /// backstop for a clone that has fallen off the list: without it, a
+    /// taken-back voice the relay stopped listing read as "not a clone",
+    /// the gate waved it through, and its saved lines played again.
     /// </summary>
     public bool HeatCallerVoiceIsCloned(string? voiceId) =>
         voiceId is { Length: > 0 } wanted
-        && HeatCallerClonedVoices.Any(one => string.Equals(one, wanted.Trim(), StringComparison.OrdinalIgnoreCase));
+        && wanted.Trim().Length > 0
+        && ((HeatCallerClonedVoices ?? new List<string>()).Any(one => string.Equals(one?.Trim(), wanted.Trim(), StringComparison.OrdinalIgnoreCase))
+            || string.Equals(HeatCallerConsentVoiceId?.Trim(), wanted.Trim(), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// The club's consent as VoiceConsent reads it, or null when nothing
@@ -1850,6 +1940,35 @@ public sealed class AppSettings
     public bool SaveDemoSessions { get; set; }
 
     /// <summary>
+    /// Whether a demo race fills in the race program the way a real one
+    /// does: the round marked as run, the next one up, qualifying computed
+    /// from it and the mains seeded and bumped off it.
+    ///
+    /// FOR REHEARSING A WHOLE NIGHT, which is what a club of one has
+    /// instead of race nights. Without it a demo is a single race in
+    /// isolation and the one thing you cannot rehearse is the part most
+    /// likely to go wrong in front of people: heats into qualifying into
+    /// mains into bump-ups.
+    ///
+    /// IT CHANGES NOTHING ABOUT WHAT A DEMO COUNTS FOR. Every record in
+    /// this app is guarded by SessionRecord.IsDemoSession at the place it
+    /// is computed, not by whether a round is linked - the championship
+    /// (ComputeStandings), badges (AchievementEvaluator), personal bests,
+    /// lap records and driver stats (DriverStats), the event report, the
+    /// club's website and every commentary reader all check it for
+    /// themselves. So a demo night still scores nothing, anywhere, however
+    /// much of the program it fills in.
+    ///
+    /// OFF by default, and it implies saving demo races to history: there
+    /// is nothing to tie a round to otherwise. See DemoModeControl.
+    ///
+    /// The way back is to delete the demo races from Race History, which
+    /// unlinks their rounds and leaves the day runnable again - see
+    /// RoundDefinitionStore.ClearRecorded.
+    /// </summary>
+    public bool DemoFillsTheProgramme { get; set; }
+
+    /// <summary>
     /// When a race finishes with no "Race Round" explicitly selected, link
     /// it to the next unrecorded round in the race program and mark that
     /// round complete. On by default: working through heats in order is
@@ -2020,6 +2139,13 @@ public sealed class AppSettings
         PracticeKpis = Clean(PracticeKpis);
         BigScreenKpis = Clean(BigScreenKpis);
         WebKpis = Clean(WebKpis);
+
+        // The voice gate reads these on every HeatCaller line, and the
+        // Voice Settings page as it is built - a null in the file threw
+        // from both rather than meaning "none".
+        HeatCallerClonedVoices = Clean(HeatCallerClonedVoices);
+        HeatCallerConsentVoiceId ??= string.Empty;
+        HeatCallerConsentWho ??= string.Empty;
 
         // Rebuilt rather than copied straight across: two keys differing
         // only in case would make the copy constructor throw, so the later

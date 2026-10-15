@@ -407,7 +407,7 @@ public static class CommentaryReaders
                 Since(lastWin, today)));
         }
 
-        return (grid, HeadToHeads(grid, races));
+        return (grid, HeadToHeads(grid, races, today));
     }
 
     /// <summary>
@@ -511,7 +511,10 @@ public static class CommentaryReaders
     /// rivalry (CommentaryHistoryFacts.Rivalry); this only decides which
     /// few are worth offering it.
     /// </summary>
-    private static List<HeadToHead> HeadToHeads(IReadOnlyList<DriverForm> grid, List<SessionRecord> races)
+    private static List<HeadToHead> HeadToHeads(
+        IReadOnlyList<DriverForm> grid,
+        List<SessionRecord> races,
+        DateTime nowUtc)
     {
         var found = new List<(HeadToHead Pair, int Met, double Lopsided)>();
 
@@ -524,6 +527,20 @@ public static class CommentaryReaders
 
                 var aAhead = 0;
                 var bAhead = 0;
+
+                // AND WHICH RACE WAS THE LAST ONE (13 Oct 2026). This loop
+                // already walked every race the pair shared and kept two
+                // integers; the long callback is that one line kept
+                // instead of discarded. The races arrive newest first (see
+                // RacesIn), so the first that qualifies IS their most
+                // recent meeting.
+                //
+                // Captured HERE rather than matched again somewhere else,
+                // because the rule for whether two drivers met at all is
+                // the three lines below it - and two implementations of
+                // that rule are two that eventually disagree about a
+                // seven-one record.
+                SessionRecord? lastMet = null;
 
                 foreach (var race in races)
                 {
@@ -538,6 +555,8 @@ public static class CommentaryReaders
                     {
                         continue;
                     }
+
+                    lastMet ??= race;
 
                     if (placedA < placedB)
                     {
@@ -556,8 +575,33 @@ public static class CommentaryReaders
                     continue;
                 }
 
+                // THE GRID'S OWN NAMES, rather than a profile lookup
+                // threaded in: both drivers of a pair are on it by
+                // definition, and PastMeetings falls back to the name the
+                // race was saved with for anybody else - which here is
+                // nobody, because it only words a moment belonging to one
+                // of these two.
+                var aName = grid[i].Name;
+                var bName = grid[j].Name;
+
+                var recalled = PastMeetings.Describe(
+                    lastMet,
+                    a,
+                    b,
+                    t => string.Equals(t, a, StringComparison.OrdinalIgnoreCase) ? aName
+                        : string.Equals(t, b, StringComparison.OrdinalIgnoreCase) ? bName
+                        : null,
+                    nowUtc);
+
                 found.Add((
-                    new HeadToHead(a, b, aAhead, bAhead),
+                    new HeadToHead(
+                        a,
+                        b,
+                        aAhead,
+                        bAhead,
+                        recalled?.Clause,
+                        recalled?.Moment,
+                        recalled?.FrontRow ?? false),
                     met,
                     (double)Math.Max(aAhead, bAhead) / met));
             }
@@ -640,11 +684,11 @@ public static class CommentaryReaders
     ///
     /// Whether a title is mathematically settled needs the rounds left and
     /// the points on offer, and neither is here. So nothing is claimed:
-    /// with every driver alive, the "that settles it" line never fires, and
-    /// "N drivers can still win" only fires for a field of four or fewer -
-    /// where, early in a season, it is usually true. It is still a claim
-    /// this cannot stand behind, and a reader that knows the season's rules
-    /// is what would let it.
+    /// with nobody marked out of it, ChampionshipCheck reads the table as
+    /// "not known" and says neither "that settles it" nor "N drivers can
+    /// still win" (14 Oct 2026 - before that, a one-row table after round
+    /// one had "nobody can catch" its only driver). A reader that knows the
+    /// season's rules is what would let those lines back.
     /// </summary>
     public static IReadOnlyList<ChampionshipStanding> Championship(IfItEndedNow? table)
     {
@@ -2708,6 +2752,10 @@ public static class CommentaryReaders
         // midnight is one meeting.
         var topOfEachMeeting = new Dictionary<DateTime, (SessionRecord Session, int Tier)>();
 
+        // Tonight's own top-tier mains of this class here, filed so far -
+        // kept aside for the "not until the last A leg" check below.
+        var topTonight = new List<SessionRecord>();
+
         foreach (var session in history.All)
         {
             if (session.SessionType == RaceSessionType.Practice
@@ -2725,6 +2773,11 @@ public static class CommentaryReaders
             // not part of it. See the remarks.
             if (night == tonight)
             {
+                if (tier == 0)
+                {
+                    topTonight.Add(session);
+                }
+
                 continue;
             }
 
@@ -2733,6 +2786,41 @@ public static class CommentaryReaders
                 || (tier == already.Tier && session.EndedAtUtc > already.Session.EndedAtUtc))
             {
                 topOfEachMeeting[night] = (session, tier);
+            }
+        }
+
+        // NOT UNTIL THE LAST A LEG (14 Oct 2026). A club that runs its A-main
+        // as two or three legs had each leg's recap judge the meetings' run
+        // on its own: "that run ends tonight" after A1, and then "that is
+        // fifteen in a row" after A2 - both on air, minutes apart. So while
+        // another top-tier main of this class is still to run after the one
+        // just filed, there is nothing to say yet. "Still to run" is an
+        // unrecorded top main later in the programme than tonight's latest
+        // filed one: Order only grows as rounds are added, so a leftover
+        // from an old meeting sits earlier and does not hold this up. The
+        // round being recapped is not linked yet when this is asked, hence
+        // the check against tonight's filed round ids as well. The recap
+        // keys the line on the night, so it is said once an evening too.
+        if (topTonight.Count > 0
+            && topTonight.MaxBy(one => one.EndedAtUtc) is { RoundId: { } latestId }
+            && rounds.Get(latestId) is { } latestRound)
+        {
+            var filedTonight = topTonight
+                .Select(one => one.RoundId)
+                .OfType<string>()
+                .ToHashSet(StringComparer.Ordinal);
+
+            var anotherLegToCome = rounds.All.Any(round =>
+                round.Kind == RoundKind.Main
+                && round.MainTier <= 0
+                && !round.IsRecorded
+                && !filedTonight.Contains(round.Id)
+                && round.Order > latestRound.Order
+                && string.Equals(Typed(round.ClassName), cls, StringComparison.OrdinalIgnoreCase));
+
+            if (anotherLegToCome)
+            {
+                return null;
             }
         }
 

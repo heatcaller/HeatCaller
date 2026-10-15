@@ -2038,7 +2038,17 @@ public sealed partial class WebServerService
         catch (Exception ex) when (ex is IOException or HttpListenerException)
         {
             // The phone went away mid-upload - not worth a 500 and a log
-            // line, since there is nobody left to read either.
+            // line, since there is nobody left to read either. Aborted
+            // rather than just left, so the listener lets go of the request.
+            try
+            {
+                context.Response.Abort();
+            }
+            catch
+            {
+                // Already gone.
+            }
+
             return;
         }
 
@@ -2399,9 +2409,26 @@ public sealed partial class WebServerService
     {
         const int ChunkBytes = 80 * 1024;
 
+        // OPENED BEFORE ANYTHING IS SENT, on its own. A video removed or
+        // locked after ResolvePath found it used to throw inside the catch
+        // below, which said nothing and closed nothing - the phone hung
+        // until its browser gave up. Now it is told there is no such file.
+        FileStream file;
+
         try
         {
-            using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+        catch
+        {
+            context.Response.StatusCode = 404;
+            WriteText(context, "Not found");
+            return;
+        }
+
+        try
+        {
+            using var held = file;
 
             var length = file.Length;
             var from = 0L;
@@ -2464,6 +2491,17 @@ public sealed partial class WebServerService
             // closes the connection under the write above. Nothing to say
             // and nowhere to say it - and setting a status now would throw
             // again, because the headers went out with the first chunk.
+            // But the response is still let go of: aborted, so the
+            // connection and the listener's hold on this request are
+            // released rather than left open.
+            try
+            {
+                context.Response.Abort();
+            }
+            catch
+            {
+                // Already gone.
+            }
         }
     }
 
@@ -5251,12 +5289,25 @@ public sealed partial class WebServerService
             // A total, as the laptop takes it (ResultAdjust). This used to
             // call 0 no change, and a 1 typed for one more lap was read as
             // the one lap the driver already had.
-            var addedLaps = prompt('Total laps added for ' + r.name + ' (now ' + (r.addedLaps || 0) + '; 0 = none):', r.addedLaps || 0);
-            if (addedLaps === null) { return; }
+            //
+            // A whole number only, asked again until it is one: parseInt read
+            // "two" or a slip of the thumb as 0 and quietly took every added
+            // lap away. Negative is allowed - laps taken off.
+            var addedLaps = null;
+            for (;;) {
+              var typed = prompt('Total laps added for ' + r.name + ' (now ' + (r.addedLaps || 0) + '; 0 = none):', r.addedLaps || 0);
+              if (typed === null) { return; }
+              if (/^\s*-?[0-9]{1,4}\s*$/.test(typed)) { addedLaps = parseInt(typed, 10); break; }
+              alert('"' + typed + '" is not a whole number of laps. Type a number such as 0, 1 or -1.');
+            }
             var outcome = prompt('Outcome for ' + r.name + ' (blank = finished, or DNF / DQ):', r.outcome || '');
             if (outcome === null) { return; }
-            changes.push({ driverId: r.id, addedLaps: parseInt(addedLaps, 10) || 0, outcome: outcome || '' });
+            // Only the rows that changed, so a row nobody touched is never
+            // sent back as an edit of itself.
+            if (addedLaps === (r.addedLaps || 0) && (outcome || '') === (r.outcome || '')) { continue; }
+            changes.push({ driverId: r.id, addedLaps: addedLaps, outcome: outcome || '' });
           }
+          if (changes.length === 0) { alert('Nothing was changed.'); return; }
           doOp('result.adjust', { sessionId: currentResult.id, reason: reason, changes: changes },
             function(){ openResult(currentResult.id); refreshResults(); });
         }

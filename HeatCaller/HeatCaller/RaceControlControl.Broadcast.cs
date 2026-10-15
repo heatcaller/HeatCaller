@@ -74,7 +74,7 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        var named = ShowBlock.CaptionFor(last.Kind) ?? CommentaryBudget.Spec(last.Kind).Title;
+        var named = ShowBlock.NameFor(last.Kind);
 
         // The floor, so the announcer screen's director does not start a
         // segment of its own over the top of this one - the same claim the
@@ -122,13 +122,14 @@ public sealed partial class RaceControlControl
                                 : AnnouncementService.SpeechTail.Normal,
                             lead: run.FollowsAnother
                                 ? AnnouncementService.SpeechLead.FollowsOn
-                                : AnnouncementService.SpeechLead.Normal);
+                                : AnnouncementService.SpeechLead.Normal,
+                            onAir: named);
                     }
 
                     return;
                 }
 
-                _announcer.SpeakReminder(last.Text, showOnScreens: true);
+                _announcer.SpeakReminder(last.Text, showOnScreens: true, onAir: named);
             }
 
             var treatment = ShowMusic?.Invoke();

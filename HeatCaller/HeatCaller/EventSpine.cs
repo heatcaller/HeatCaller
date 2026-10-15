@@ -62,6 +62,10 @@ public static class EventSpine
         // order, and one that has to be built with the other can only ever be
         // built in one order.
         schedule.ProgramOrder = () => Programme(events, rounds).Select(r => r.Id).ToList();
+
+        // So a deleted race day's inspections - kept for its undo - stop
+        // showing in a by-date report. See TechInspectionStore.EventExists.
+        tech.EventExists = id => events.Get(id) is not null;
     }
 
     /// <summary>

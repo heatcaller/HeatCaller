@@ -12,9 +12,9 @@ namespace HeatCaller.Tests;
 ///    window to drive; what is pinned down here instead is the reader
 ///    contract the fix leans on - the sixth argument is the only thing
 ///    that keeps a report inside tonight.
-///  - LocalLlmClient.CleanLine took the leading "A:" off a two-hander and
+///  - LlmText.CleanLine took the leading "A:" off a two-hander and
 ///    flattened its line breaks, so CommentaryExchange.Split could never
-///    find a tagged line: the co-host silently never worked on Ollama and
+///    find a tagged line: the co-host silently never worked locally and
 ///    every exchange paid for a second, single-voice write on top.
 ///  - The newer fact builders formatted lap times, gaps and margins on the
 ///    current culture, so on a comma-decimal PC "12,345s" went into the
@@ -69,13 +69,13 @@ public sealed class BugHunt5CommentaryTests : IDisposable
     }
 
     // ------------------------------------------------------------------
-    // The co-host's two-hander, coming back through Ollama
+    // The co-host's two-hander, coming back from the local model
     // ------------------------------------------------------------------
 
     [Fact]
     public void A_two_hander_keeps_its_tags_and_its_line_breaks_so_the_split_can_find_them()
     {
-        var tidied = LocalLlmClient.CleanLine(
+        var tidied = LlmText.CleanLine(
             "A: Bill is all over him.\nB: And he still cannot get by.",
             maxTokens: 64,
             taggedTurns: true);
@@ -92,7 +92,7 @@ public sealed class BugHunt5CommentaryTests : IDisposable
     [Fact]
     public void A_two_hander_written_with_windows_line_endings_still_splits()
     {
-        var tidied = LocalLlmClient.CleanLine(
+        var tidied = LlmText.CleanLine(
             "A: Four tenths, and holding.\r\nB: He has had three goes at it already.",
             maxTokens: 64,
             taggedTurns: true);
@@ -106,7 +106,7 @@ public sealed class BugHunt5CommentaryTests : IDisposable
         // The old behaviour, kept here as the thing the flag turns off: the
         // "A:" is taken for a label and the break becomes a space, so Split
         // sees one untagged paragraph and the exchange is lost.
-        var flattened = LocalLlmClient.CleanLine(
+        var flattened = LlmText.CleanLine(
             "A: Bill is all over him.\nB: And he still cannot get by.",
             maxTokens: 64);
 
@@ -118,7 +118,7 @@ public sealed class BugHunt5CommentaryTests : IDisposable
     [Fact]
     public void A_single_voice_line_is_still_stripped_of_its_label_and_joined_up_for_speech()
     {
-        var tidied = LocalLlmClient.CleanLine(
+        var tidied = LlmText.CleanLine(
             "Commentary:\nThey are nose to tail out there.\nNeither will give an inch.",
             maxTokens: 64);
 
@@ -128,12 +128,12 @@ public sealed class BugHunt5CommentaryTests : IDisposable
     [Fact]
     public void The_brief_for_a_two_hander_is_recognised_and_an_ordinary_segment_s_is_not()
     {
-        Assert.True(LocalLlmClient.AsksForTaggedTurns(CommentaryExchange.Brief("Alex", "Dave")));
+        Assert.True(LlmText.AsksForTaggedTurns(CommentaryExchange.Brief("Alex", "Dave")));
 
-        Assert.False(LocalLlmClient.AsksForTaggedTurns(
+        Assert.False(LlmText.AsksForTaggedTurns(
             "Call this fight for the crowd in one sentence. Say who is ahead and by how much."));
 
-        Assert.False(LocalLlmClient.AsksForTaggedTurns(null));
+        Assert.False(LlmText.AsksForTaggedTurns(null));
     }
 
     // ------------------------------------------------------------------

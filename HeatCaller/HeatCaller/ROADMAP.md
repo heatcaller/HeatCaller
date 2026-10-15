@@ -49,7 +49,7 @@ What follows from that:
 | Version | 0.59.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.59.0 was cut on 28 Sep 2026 from everything since 0.52.0; its notes are in `website\docs\release-notes.md`, where "Unreleased" has grown again and is owed a 0.60.0 cut |
 | App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 362 source files, ~259k lines with the tests, 25 pages |
 | Tests | `HeatCaller.Tests`: **2,180 tests, measured** (`check.cmd`, 11 Oct 2026 - 2,180 passed, 0 failed, 0 warnings, 15.3 minutes; the relay's 507 are counted separately below), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`). This run is the commentary depth round complete - the 166 tests it added over the 2,014 measured earlier the same day are the bookends, the night's thread, the championship conditional and the four new kinds of material. **Only ever write a figure `check.cmd` has actually measured, with its date**: the row carried 1,921 for a day after the suite had grown, and a number nobody measured is worse than an old one, because it reads as current |
-| Relay | TypeScript on Fly.io (`relay\`), 36 test files, 507 tests (measured 10 Oct). **Deployed 5 Oct 2026** with the heat line-up privacy fix and the check-in PIN fix. **UNDEPLOYED CHANGES since 10 Oct:** the voice-sample and Preview routes, and the refusal messages renamed off the retired Windows voice - `Hear It` and `Preview` in the app do nothing until `fly deploy --ha=false` has run |
+| Relay | TypeScript on Fly.io (`relay\`), **46 test files and 710 tests, measured 13 Oct 2026** (710 passed, 0 failed, 45 seconds, `tsc --noEmit` clean). The "47" written here an hour earlier counted `helpers.ts`, which is not a test file - the rule at the top of the Tests row applies to this one too. **Deployed 5 Oct 2026** with the heat line-up privacy fix and the check-in PIN fix. **UNDEPLOYED CHANGES since 10 Oct:** the voice-sample and Preview routes and the refusal messages renamed off the retired Windows voice; the night-before preview channel and its slot on the club page; the vote's per-race identity and the notes-full flag; **the private-collection fix** (see below - the one on this list that is a security fix rather than a feature); the `nights` channel, its switch and its read route; the publish gate widened to refuse a night to a club that has not said yes; and the night page itself, the link to it from check-in, and the shareable picture. `Hear It`, `Preview`, the night-before preview and drivers' own nights all do nothing until `fly deploy --ha=false` has run |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
 | Real use | Four solo rehearsal nights at home; rehearsal 4 (4-5 Oct) called clean. The I-Lap is proven on real hardware, split times and all. No club has run a night on it yet |
@@ -651,9 +651,10 @@ In its own order of work:
    12-13 Oct 2026, the laptop's push and the club switch 13 Oct.** See
    "Listening along" below.
 9. ~~**The race director's private channel**~~ - skipped.
-10. **The long callback and the season film** - the two still open. See the
-    long callback under "Not done" above; the season film has no entry of
-    its own yet and wants one before it is started.
+10. **The long callback and the season film** - the long callback is
+    **BUILT 13 Oct 2026** (`PastMeetings`, see its own section). The season
+    film now has the entry it wanted: **"The season's own piece"** below.
+    Scoped 13 Oct 2026, not started, and the scoping renamed it.
 
 **Decided 12 Oct 2026, the same day it was written.** Stat density is right
 as it is and no more statistics are to be added. Item 6, the race director's
@@ -2279,6 +2280,546 @@ Normalised once at the top instead.
   running. The habit worth having: a thing built in one batch and wired in
   the next needs the wiring written down as owed, in the roadmap, the same
   day.
+
+## A driver's night, and their own clip in it (13 Oct 2026)
+
+Two halves of `claude\driver-night-download-2026-10-12.md` and the last
+open item on `DriverCut`, built together because they are the same subject
+from two directions: what a driver is handed about their own evening.
+
+### What landed
+
+**The relay half, first (committed earlier on 13 Oct).** A private `nights`
+collection in the frozen `CHANNELS` registry, a `nightsopen` switch the
+laptop sets, `POST /c/<club>/night` with the badge id **in the body** - a
+query string lands in access logs, in referrers and in a shared browser's
+history, and this id is the whole credential - and one bare 404 for a
+closed club, a missing night and an id that is not an id, because three
+answers would let somebody working through guesses learn which ids exist.
+
+**And the privacy fix it could not exist without.** `ChannelSpec.private`
+was honoured by `readSnapshot` and by nothing else. Nothing had leaked,
+because every private channel until then was a snapshot - but the flag read
+as a promise the registry made and the collection readers did not keep, and
+the first per-person collection anybody added would have been served whole,
+to anybody, with no token. The listing was worse than the bodies: `?meta=1`
+returns every id in a collection, and for nights an id is a badge id -
+twenty hex characters HMAC'd from a transponder, and also what lets
+somebody be checked in. A listing would have turned the credential into a
+public list and handed over check-in with it. `readCollection`, `readItem`
+and `readSomeItems` all check it now (`relay\test\nights.test.ts`).
+
+**The publish gate, widened (13 Oct).** `setNightsOpen(false)` deletes
+every night held, and the reason is written at the top of it: a club that
+has just declined should not have a folder full of its drivers' evenings on
+a relay. But the publish route gated only the `listen` channel, so a laptop
+with a stale switch would have filled the folder straight back up on its
+next pass - the close emptied it, nothing kept it empty. `SWITCHED_CHANNELS`
+and `switchedOff` now hold both, in both places the listen gate already
+stood: before `readBody`, and again inside the lock.
+
+**The laptop half.** `DriverNight` builds one document per driver per night
+from `DriverCut.FactsFor` **unchanged** - the lines split where `FactPack`
+broke them and not touched otherwise. `RelayPublisher.Nights` sends the
+switch; the documents go through the ordinary results queue, keyed by
+`RelayCheckIn.IdFor`. `MainForm.Relay.PublishNightsFor` builds them from
+`SessionAdded` and `SessionEdited`, for the drivers in that race only, and
+again for everybody on the re-send pass. `PublishDriverNightsToTheRelay`,
+off by default, with the tick on the Club Website page.
+
+**A driver's own clip, in their own piece.** `DriversOwnClip` finds this
+driver's clip in tonight's `Highlights\` folder and plays the first twenty
+seconds of it as a cold open to `PlayADriversNightAsync` - a line of
+handoff, then the audio, then the opener and the written piece.
+
+### The decisions worth keeping
+
+**The facts, not the script.** `CommentaryService.BuildDriverCutAsync`
+returns through `RecordAndReturn`, which sets `LastLine` in memory and
+nothing else: the written piece survives as an mp3 and is never saved. The
+plan recommended re-packing `FactsFor` instead, and the reason that is
+right is not the saving - it is that the facts exist for **everybody** who
+raced. A feature built on the script would be one fifteen drivers open to
+find empty, because a piece is made by being played, two to five a night.
+It also cannot drift: no model runs, so the same night built twice is the
+same document.
+
+**The full name, not `RelayAbbreviateNames`.** Shortening is right on a
+public page, which is a list of other people. A driver opening their own
+night and reading "B. Hargrove" has been shown a bug.
+
+**The transponder never leaves the laptop**, which is the rule this was
+built around rather than a nicety. The document is keyed by the badge id,
+so the relay holds a name and an evening under an id that says nothing
+about the car.
+
+**Through the results queue, unlike listening along.** Listening goes round
+that queue because an evening of announcing would push results off the
+front of it. Nights are the opposite shape - a handful per race, each the
+finished article, each worth retrying exactly as a result is - so they go
+in it. **With one consequence that had to be handled:** 401 and 403 are
+retried there on purpose, because they are what a mistyped token looks
+like, and a night refused by the gate would have sat at the head of the
+queue holding every **result** behind it - the exact fault the results
+index's own 507 comment records. A refused night is `Rejected` and dropped,
+and the switch marked to be told again. Results are what a club needs the
+relay for; a night is built again from the facts next race.
+
+**One answer to "which races were tonight".** `MainForm.Commentary` held
+its own copy of the `TonightAtTheTrack` call and the relay side needed the
+same list, so it moved to `MainForm.Relay.RacesTonight` and both read it.
+Two answers to that question agree all season and then disagree about a
+race that started at five to midnight.
+
+**The clip goes through `AudioBus`, and nothing is concatenated.** There is
+no silent render path in this app - the only route from something to audio
+is to play it with `BookendRecording` tapping the bus - and three problems
+then solve themselves: the format question (a clip is 44.1 kHz mono or
+stereo and the voice is 24 kHz mono; `PlayAsync` resamples and up-mixes on
+the way in), the recording question (the tap is on the bus, so the clip is
+in the saved piece without stitching), and the single-listener question
+(`AudioBus` holds exactly one listener, so a second output would have been
+inaudible in the file AND not the mix the room heard). A byte-level join
+would have had to reckon with `CutWav`'s half-second seam being in the file
+but not in `DriverClip.LengthMs`, and with `DecodeMp3` throwing away eighty
+milliseconds off the front of every mp3. Both are real; neither is worth
+meeting when the bus will mix for you.
+
+**In front of the piece rather than inside it**, and that is a constraint
+rather than a preference. `RunLongAsync` opens the music, speaks and plays
+out in one call; `SayTheRecap` queues every chunk without awaiting any of
+them. "Between the second and third chunk" is not a place the code can
+stand. In front of all of it is, and a cold open before the title music is
+what this shape of thing has always been.
+
+**The whole file-name shape is matched, not just the end of it.** A plain
+"ends with the driver's name" would have handed Dave Smith the clip of a
+club-mate called Big Dave Smith - thirty seconds of somebody else's race,
+under Dave's name, with nothing saying so. ` - P<digits> ` has to sit in
+front of the name: exactly what `ClipNameFor` writes, and nothing a club's
+own words can imitate. Searched from the end, because a club that calls a
+race "P1 Shootout" writes the shape twice.
+
+**A `.wav` counts.** `RaceAudioRecorder` cuts each clip as a wav and then
+encodes it, and a clip the encoder **refused** is deliberately left as a
+wav and logged - so on a machine without Media Foundation every clip of
+every night is a wav. Looking only for mp3s would have meant the feature
+silently doing nothing on exactly those machines.
+
+### What is NOT in this
+
+- ~~**The page.**~~ **Done 13 Oct 2026**, with the link that makes it
+  reachable - see below.
+- ~~**The shareable card**~~ **done 13 Oct 2026, and NOT the way Phase 1b
+  proposed** - see "The picture, and why it is not a card the relay draws"
+  below. The plan's own recommendation would have published a credential.
+- **The audio half** (plan, Phase 2): two to three weeks, and it forces a
+  real decision about whether the relay becomes the archive. Not started.
+- **A per-driver opt-in.** The plan's decision 4 - that a driver's
+  recorded voice and name is a step up from their results, and some of
+  these drivers are children - is about the **audio**, and the audio is
+  not built. Text and a club-wide switch is where this stands, and the
+  decision is still owed before any audio goes up.
+- **A setting of its own for the clip.** It follows
+  `RaceAudioStore.DriverHighlights`, the club's own "cut a clip for each
+  driver" switch. Open question: whether a club wants the clips cut and
+  not used. Nothing suggests one does.
+
+### The page, and how a driver finds it (13 Oct 2026)
+
+`nightPage` in `relay\src\pages.ts`: outside `PAGES`, `noindex: true`,
+`Shell.active` widened, served for any club and any code so that a link
+somebody was sent never 404s. The download is built in the browser with
+`Blob` plus `URL.createObjectURL`, and revoked after - the words are
+already on screen, so a download route would be the relay serving the same
+text twice. 19 tests in `relay\test\nightpage.test.ts`.
+
+**THE CREDENTIAL IN THE ADDRESS BAR is what that file is really about.**
+`readOneNight` takes the code in a POST **body** for a stated reason: a
+query string lands in access logs, in the referrer any outbound link
+carries, and in a shared browser's history. A page that then put the same
+code back into a GET would have undone all of it, quietly, and nothing
+would have failed. So the page reads `?d=` **or** `#d=`, POSTs the code in
+the body, and then `history.replaceState`s the address into the `#d=`
+form - a fragment is never sent to any server, so a reload, a bookmark or
+a forwarded link keeps it out of every log from that point on. The query
+form has to be READ because it is the shape of the badge the club already
+prints; it does not have to be kept.
+
+**ONE ANSWER FOR EVERY KIND OF NOTHING**, as a single `NOTHING` constant
+rather than typed twice - two copies of that prose are two places for it
+to drift into saying which. It names both possibilities and commits to
+neither, which tells somebody guessing nothing and tells a real driver
+what to do. The test that asserted a bare "not found" was **wrong**:
+naming both is not a leak, and was corrected rather than the page.
+
+**AND THE LINK, WHICH IS THE DIFFERENCE BETWEEN BUILT AND USED.** A
+driver's night is opened by the code on their check-in badge, and
+`checkin?d=<code>` is the only page in a club's whole site that already
+has it. Without a link from there a club would have to compose and send
+every driver their own address by hand. So `checkin/one` - the one answer
+that already knows which driver it is about, because the phone sent their
+code - now carries `nights`, and `drawOne` draws *See your racing from
+last time* with the code in the **fragment**. Only with a real badge in
+the address (a racer signed in by PIN has shown no code) and only for a
+club that offers it. 7 more tests.
+
+Nothing is given away by that flag: the `driver === undefined` guard
+directly above answers 404 for an id that is not on the list, so the line
+is only reached by somebody already holding a real code. A first draft
+made the flag conditional on a driver being found, which was **dead code
+with a confident wrong comment** - the guard makes it unreachable. Removed.
+
+**Relay: 689 tests (measured 13 Oct 2026**, 689 passed, 0 failed, 45
+seconds, `tsc --noEmit` clean).
+
+### The picture, and why it is not a card the relay draws (13 Oct 2026)
+
+Phase 1b of the plan said to point `card.ts` at the per-driver document:
+the relay already draws 1200x630 cards for a shared RESULT at
+`/c/<club>/results/<id>/card.png`, caches them, and serves them, so a
+"your night" card is the same machinery. **It is also the one thing this
+feature must not do, and the reason is the feature's whole purpose.**
+
+A card served from an address has to be KEYED by something, and the only
+key a night has is the driver's badge code. So the moment a driver posted
+their card to a club group - which is what the plan correctly identifies as
+the point of a card - the address carrying that code would be in the post,
+in the referrer, and in the logs of whatever fetched it to draw the
+preview. Anybody reading the post could lift the twenty characters back
+out and open that driver's whole night. **And check them in or out**:
+`checkin/tap` takes the badge id and `wanted` and asks for no PIN, which
+`nights.test.ts` already records at its head. Sharing the card would have
+published the credential.
+
+So the card is drawn **in the browser**, on the night page, from what the
+page already holds, and handed over with `toBlob` as a file. A driver
+shares a PICTURE, never an address. There is no route, no cache, no budget
+and nothing to leak - and it is less work than the relay version, not more.
+`No_card_is_ever_served_from_an_address` holds that line from the outside.
+
+**What is on it:** the club's name, the driver's name, the day, and as many
+facts as fit - filled until the rows run out rather than cut to a fixed
+count, because one fact may take two rows and the next one. A fact that
+does not fit WHOLE is left off whole, and the card says "and 3 more": a
+card that quietly dropped half a night would have a driver sharing a
+picture that is not their evening. Colours come from the page's own CSS
+variables, so it is the club's look rather than HeatCaller's, and a value
+that is not hex falls back rather than being drawn as a fill.
+
+**AND A BUG THIS FOUND THAT WAS ALREADY ON DISK.** The page's JavaScript
+lives inside a TypeScript template literal, which consumes every escape it
+recognises. `\s` is not an escape and became a bare `s`, so `wrap` was
+splitting on the letter. Worse, `\r\n` IS an escape, so `.join('\r\n')`
+became a real line break inside a string literal - a syntax error that
+took the **whole page's script** down. Both were in the version committed
+an hour earlier; neither had been deployed.
+
+`pages.test.ts` has done `new Script(scriptOf(html))` on every page since
+it was written, and it walks `PAGES` - and the night page is deliberately
+not in `PAGES`, so nothing was checking it. That guard is now in
+`nightpage.test.ts` too, and is the test that catches this whole class of
+fault on any future edit to the page.
+
+The two other faults of mine this round, both in the tests rather than the
+code: a leak assertion that matched the comment EXPLAINING the leak
+(`card.png` appears in that note), now run against the script with the
+comments stripped and asserting where `CODE` may go rather than whether it
+appears; and a blanket ban on `CODE` that would have failed on its five
+legitimate uses.
+
+**Relay: 710 tests (measured 13 Oct 2026**, 710 passed, 0 failed, 45
+seconds, `tsc --noEmit` clean).
+
+### What it costs on the filing thread, unmeasured (13 Oct 2026)
+
+Recorded rather than optimised, because it cannot be measured from here.
+
+`PublishNightsFor` calls `DriverCut.FactsFor` once per driver, and
+`FactsFor` calls `NightMoments.Over(theirs, layouts, int.MaxValue)` - every
+moment of every race that driver was in, uncapped, then filtered to theirs.
+`Over` calls `ForRace` per race, and `ForRace` builds that race's whole
+lap-by-lap timeline: `MarksFrom` per driver per lap, `CrossingTimesMs` per
+row, a `HashSet` of the scoring drivers, a sort, and a walk for lead
+changes.
+
+**So a race's moments are rebuilt once per driver in it**, producing
+identical output each time, because the filter happens afterwards. For a
+ten-driver heat on a night where each of them has raced four times, that is
+forty `ForRace` calls on the thread that has just saved a race -
+`SessionAdded` runs there, and the timing desk is waiting on it. A practice
+evening where everybody is in every session is the bad case: twenty drivers
+times twenty sessions is four hundred.
+
+Three things make this acceptable for now rather than urgent. The existing
+handler beside it already calls `PublishStandingsToRelay` on the same
+thread, which walks the season. The whole of it is inside one try/catch, so
+the worst case is slow rather than a lost result. And it is **off by
+default**, so no club pays it until it asks to.
+
+What NOT to do about it: move it off the thread. The commentary readers and
+the stores are written to be driven from one thread and say so.
+
+The two real options, if a night ever feels slow: memoise `ForRace` per
+race for the life of one publish pass (a dictionary keyed by session id,
+thrown away after), or give `FactsFor` an optional pre-computed moment list
+so the caller can compute the night's moments ONCE and hand the same list
+to every driver. The second is better and touches `DriverCut`, which the
+announcer path also calls - so it needs the existing tests run, not a
+guess. **Measure it on a real night first.**
+
+### Open question recorded
+
+**A driver who raced more than once has their most recent clip played**,
+because that is the freshest memory and picking their best-placed would
+mean reading finishing positions out of file names. Nothing indexes a clip
+- `RaceHighlights.DriverClip` is a plan that lives inside one method and is
+never persisted - so the file name is the only record one exists, and
+`PlainFileName.SafePart` is lossy, so two drivers whose names differ only
+in punctuation collide. That is as good as this can honestly be without a
+manifest, and a manifest is a second record of the night, which is the
+thing `RaceHighlights` opens by refusing. A bracketed number on the end of
+a name is read as a copy number, so a driver genuinely called "Dave (2)" is
+not found; recorded in `DriversOwnClipTests` rather than worked around.
+
+---
+
+## The season's own piece (scoped 13 Oct 2026, not started)
+
+The entry item 10 asked for before this is started. Every figure and file
+reference below was checked against the code on this date.
+
+### First, the name, because it has been carrying a promise the project
+### already refused
+
+It has been called "the season film" since the broadcast-value page was
+written, and **a film is the one thing it cannot be**. Video is out
+everywhere in this codebase by standing decision - it is listed under
+"what is NOT on this page, and why" on the broadcast page, on the driver
+night page, and in the 12 Oct decisions. Nothing in the app draws a frame
+of video and nothing is going to.
+
+So what this item can be is a **spoken piece about a season**: the night's
+recap, over a year. Calling it a film invites a club to expect something
+this app will never make, which is the worst way for a feature to be
+received. It is "the season's own piece" from here on.
+
+### The plumbing is nearly free, and that is not where the work is
+
+Everything a spoken piece needs already exists and is already general:
+
+- `BookendRecording.StartForAPiece(label, called, log)` is the hook the
+  night's recap and a driver's cut both go through - one more caller, one
+  line.
+- `ShowTreatment.RunLongAsync` with `SegmentKind.SignOffNumbers` and a
+  `caption` is what both of those borrow for a long piece; the `caption`
+  parameter exists precisely so a borrowed treatment does not borrow the
+  wrong band (13 Oct).
+- `NightRecap.Chunks` breaks a script at sentence boundaries, and
+  `ShowFloor`, the mute check and the race-in-progress guard are all
+  written and all in `PlayADriversNightAsync` to copy.
+- `CommentaryService.BuildDriverCutAsync` is the pattern for the model
+  call; a `BuildSeasonPieceAsync` is the same shape.
+
+**And the facts are all there, for every season, at any time.**
+`SeasonStore.ComputeStandings` gives points, wins, podiums, best finish and
+sessions counted. `SessionHistoryStore` prunes nothing, so every race of
+every season is still on disk. `NightMoments.Over(every race of the season,
+most: 12)` already ranks by kind and then by recency, so "the season's
+twelve best moments" is an existing function called with a bigger list.
+`RaceHonours` and the layout records give what fell and what stood.
+`CommentaryStakesFacts.TitleOnTheLine` already proves a championship by
+playing a rival's best case against the leader's worst.
+
+Nothing new has to be computed. That is the unusual part of this item.
+
+### Where the work actually is: this is a SELECTION problem, and every
+### other segment in this app is a summary problem
+
+`NightRecap` is 400 words, 15 chunks of 20 seconds, 6,000 characters, a
+six-minute ceiling - **for one night**. A season is twenty to thirty of
+them. At the same density a season piece is eight thousand words and three
+quarters of an hour, which nobody will sit through and no model will write
+well.
+
+So the piece's job is to LEAVE THINGS OUT, and nothing in this app has had
+that job before. Every existing segment is handed the facts of one race or
+one night and says them. This one is handed a year and has to decide what a
+year was about. That is the whole of the design, and it is the reason this
+wants an entry rather than a ticket.
+
+The honest selectors, all already computed:
+
+1. **The championship, and when it was settled.** The spine of any season.
+   `ComputeStandings` plus `TitleOnTheLine` for the arithmetic of whether
+   it was ever in doubt.
+2. **What fell.** Lap records by layout, and whose they were before.
+   `RaceHonours`.
+3. **The twelve moments.** `NightMoments.Over` over the season, which is
+   the existing rank: a last-lap lead change before a photo finish before a
+   charge, and the fastest lap last. The 13 Oct lesson from `PastMeetings`
+   applies and should be written into this from the start - **skip
+   `Kind.FastestLap`**, because every race has one and it says nothing
+   about a season.
+4. **Who got better.** The one claim a season can make that a night cannot,
+   and the most likely thing a driver remembers being told. Pace over the
+   year from the saved lap times.
+5. **How big the club got.** Field sizes over the season, which is the
+   club's own story rather than any driver's, and the one figure a
+   committee will repeat.
+
+### What it must not do
+
+- **Invent a record.** The standing rule. A season of derived figures is
+  the easiest place in this app to state something nobody can check.
+- **Rank the drivers it does not name.** A piece that says who improved
+  most implies an order for everybody else. Name the few; do not imply the
+  table.
+- **Be about the winner.** Most of the club did not win, and the night's
+  recap already learned this (`DriverCut`'s instruction says it at length).
+  A season piece that only works for a champion is a piece most of the club
+  sits through.
+- **Say anything about a driver who has left.** A season holds people who
+  stopped coming, and some of them stopped for reasons a club knows about
+  and this app does not.
+
+### Three freedoms it has that nothing else here has
+
+Worth stating because they change what is worth building. This is for a
+prize night or a presentation evening - once a year, with the room sitting
+down and listening on purpose. So:
+
+- **It can be long.** Six minutes is the ceiling on everything else because
+  a race is coming. Nothing is coming. Ten minutes is fine.
+- **It does not have to be fast.** Every other segment is on a deadline
+  measured in seconds. This one can take a minute to write.
+- **It does not have to run unattended.** Somebody is standing there, on
+  purpose, having decided to play it.
+
+### The one thing it genuinely needs that does not exist
+
+**A way to hear it before the room does.** Every spoken piece in this app
+is made BY BEING PLAYED - the no-silent-render decision, recorded twice
+now and still right. For a race night that is correct: the piece is for the
+room and the room is there.
+
+A prize night is different. Nobody wants to discover at the presentation
+that the model wrote badly about the champion, and "play it and see" in
+front of the club is not a rehearsal. So this is the first piece that has a
+real reason to be prepared in advance and played from a file.
+
+Two routes, and the choice should be taken deliberately:
+
+- **Play it with nobody in the room.** It already records itself through
+  `BookendRecording`, so playing it once in an empty clubhouse leaves an
+  mp3 that can be played again at the presentation. Costs nothing to build
+  - it is the existing path, used at a quiet moment - and it means the
+  piece a club hears twice is the identical file. **Recommended.**
+- **Build the silent render.** The thing the project has twice declined.
+  It would serve this and the driver nights both, and it is the honest
+  answer if preparing pieces ever becomes ordinary rather than annual. It
+  is also a real piece of work and should be costed as one, not smuggled in
+  under a season piece.
+
+`Rehearsal` is NOT the answer to this, which is worth saying because the
+name suggests it is: it is a data-copy mode (`--rehearsal`, a copy of
+%AppData% in a folder of its own) for practising a race night without
+touching the club's results. Useful for trying a season piece safely;
+nothing to do with rendering one quietly.
+
+### And the audio question, which is the same one the driver night hit
+
+A season piece with the season's own sound in it - the clips of the moments
+it names - is the version a club would actually treasure. The constraint is
+`RaceAudioStore.KeepNights`: it **defaults to 6 nights** and is clamped to
+1..104, so a club CAN keep a season. At 6-29 MB a race recording and twenty
+files a night, a season is tens of gigabytes of a clubhouse laptop's disk.
+
+So it is possible, it is the club's own disk rather than the relay's, and
+the setting already exists - which makes it a conversation with a club
+rather than a feature to build. The clips themselves are already cut and
+already findable: `DriversOwnClip.FindFor` does exactly this lookup for one
+night and would need the night's folder passed in rather than today's.
+
+### Cost
+
+| | Piece | Cost | Notes |
+|---|---|---|---|
+| 1 | ~~`SeasonPiece` facts - the five selectors~~ | **BUILT 13 Oct 2026** | `SeasonPiece.FactsFor`. Four of the five; see below for the one left out |
+| 2 | ~~The instruction~~ | **BUILT 13 Oct 2026** | `SeasonPiece.Instruction`. Two rules of its own beyond `DriverCut`'s |
+| 3 | The button, the season picker, the guards, `BuildSeasonPieceAsync` | ~1 day | `PlayADriversNightAsync` is the shape, guards and all. **Not started - nothing calls FactsFor yet** |
+| 4 | ~~Tests~~ | **BUILT 13 Oct 2026** | 24 tests, `SeasonPieceTests` |
+| 5 | The clips, if a club keeps a season of audio | ~1 day | `DriversOwnClip` already finds them |
+
+### What landed, 13 Oct 2026
+
+`SeasonPiece.FactsFor(season, races, standings, layouts)` and its 24 tests.
+Pure, deterministic, and called by nothing yet - item 3 is the wiring.
+
+**It borrows rather than builds.** `NightRecap.Chunks`, `NightRecap.MostChars`
+and `NightRecap.LongestRead` are taken as they are, because fifteen chunks
+of twenty seconds is five minutes of speech and that is about seven hundred
+and fifty words - enough for a season, so there was no new chunker to
+write. `Words` is 700 against the recap's 400. Each moment's sentence comes
+from `DriverCut.Describe`, whose own comment asks for exactly that: two
+wordings for one moment is two wordings that drift, and a club would hear
+one at a prize night and the other in a callback about the same race.
+
+**Four selectors, not five.** What the season was, who won it and by how
+much, who turned up most, the moments, and the busiest night. **"Who got
+better" is deliberately NOT in it** - see the open question below.
+
+**The decision this file turns on**: the standings are used in the order
+`ComputeStandings` returned them and are never re-sorted. That method
+tie-breaks on points, then wins, then best finish, then podiums, then
+name - a chain this class has no business second-guessing. Re-sorting on
+points alone would name the wrong champion in exactly the season a club
+would most want the piece for: the one that went to a tie.
+`A_season_that_went_to_a_tie_names_the_champion_the_table_names` is the
+test that holds it.
+
+**And the fastest lap is skipped from the moments**, which is the
+`PastMeetings` lesson arriving before it could cost anything: every race
+has one, so over a season of two hundred races the pack fills with them and
+says nothing about the year.
+
+### Open question recorded: "who got better"
+
+The scoping called this "the one claim a season can make that a night
+cannot", and it is still the most valuable selector left. It is not in,
+because the sound version and the easy version are different things.
+
+The easy version - compare a driver's best lap early in the season against
+late - is **wrong**, and wrong in a way nobody would catch: it compares
+across layouts, across classes and across track conditions, so a club that
+moved from the winter indoor track to the summer outdoor one would have
+every driver "improving" or "declining" by half a second for a reason that
+has nothing to do with them.
+
+The sound version is like-for-like: the same driver, the same **layout**
+and the same **class**, at least three races in each window, and the gap
+reported in seconds. `SessionRecord` carries `TrackLayoutName` and the
+round carries the class, so the data is there. It is a day's careful work
+and it is the single most error-prone thing on this page, which is why it
+is written down rather than guessed at.
+
+Until it exists the piece says who raced the most rounds instead, which is
+unarguable and is a real club honour.
+
+**About a day for item 3**, and the piece can be heard. Item 5 waits on a
+club that has actually kept the audio.
+
+### What this does NOT include
+
+- Video, under any reading of the word.
+- Any new storage, channel or relay route. This is a piece played in a
+  room, like the night's recap.
+- Putting it on the club's web page. It is an mp3 of a named person's
+  season; that is the driver-night audio question again and takes the same
+  decision.
+- The silent render, unless the second route above is chosen deliberately.
+
+---
 
 ## Next, in order
 

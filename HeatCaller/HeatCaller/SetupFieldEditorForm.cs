@@ -103,7 +103,7 @@ public sealed class SetupFieldEditorForm : Form
         btnAdd.Click += (_, _) =>
         {
             var name = Prompt("Add option", "Option text:", string.Empty);
-            if (!string.IsNullOrWhiteSpace(name))
+            if (!string.IsNullOrWhiteSpace(name) && !RefusedForComma(name))
             {
                 _lstOptions.Items.Add(name.Trim());
                 _lstOptions.SelectedIndex = _lstOptions.Items.Count - 1;
@@ -117,7 +117,7 @@ public sealed class SetupFieldEditorForm : Form
 
             var index = _lstOptions.SelectedIndex;
             var name = Prompt("Rename option", "Option text:", _lstOptions.Items[index]?.ToString() ?? string.Empty);
-            if (!string.IsNullOrWhiteSpace(name))
+            if (!string.IsNullOrWhiteSpace(name) && !RefusedForComma(name))
             {
                 _lstOptions.Items[index] = name.Trim();
                 _lstOptions.SelectedIndex = index;
@@ -269,6 +269,23 @@ public sealed class SetupFieldEditorForm : Form
 
         DialogResult = DialogResult.OK;
         Close();
+    }
+
+    /// <summary>
+    /// True (after saying why) when an option's text has a comma in it. A
+    /// multi-choice entry is saved as its ticked options joined with ", "
+    /// and read back by splitting on commas, so an option with a comma in
+    /// it came back as two pieces that matched nothing - and was lost.
+    /// </summary>
+    private bool RefusedForComma(string name)
+    {
+        if (!name.Contains(','))
+        {
+            return false;
+        }
+
+        AppDialog.Show(this, "An option can't contain a comma - commas separate the options ticked in a multi-choice entry.", "Comma in option", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        return true;
     }
 
     /// <summary>

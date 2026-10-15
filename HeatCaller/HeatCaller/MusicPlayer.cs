@@ -899,7 +899,11 @@ public sealed class MusicPlayer : IDisposable
             // stuttered like a scratched CD for as long as the line
             // lasted. Four buffers ride that out.
             output = new WaveOutEvent { DesiredLatency = BedLatencyMs, NumberOfBuffers = BedBuffers };
-            output.Init(duckGain);
+            // Sent to the device as 16-bit, exactly as AudioBus does: some
+            // drivers play 32-bit float as silence without complaint. The
+            // volume and the duck are both held at or below 1, so nothing
+            // here is pushed into clipping by the conversion.
+            output.Init(new SampleToWaveProvider16(duckGain));
             output.PlaybackStopped += OnPlaybackStopped;
             output.Play();
         }

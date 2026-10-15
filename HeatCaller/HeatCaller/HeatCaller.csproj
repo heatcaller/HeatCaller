@@ -91,6 +91,25 @@
     <PackageReference Include="KokoroSharp.CPU" Version="0.8.4" />
     <PackageReference Include="Velopack" Version="1.2.161" />
 
+    <!-- The commentary model that runs when the club has no internet
+         (BundledLlmClient). LLamaSharp is the managed binding; the Cpu
+         backend carries llama.cpp's native libraries, one set per
+         instruction set (avx, avx2, avx512), and picks the right one for
+         the PC at runtime - which is how one installer serves a new i7 and
+         an old club desktop without shipping two builds.
+
+         BOTH VERSIONS ARE PINNED, and must move together. LLamaSharp's own
+         README warns that llama.cpp break changes invalidate model weights
+         between releases, so a floating version here is a release that
+         silently stops loading commentary.gguf. 0.27.0 is the release whose
+         verified-model list covers the Qwen3 family fetch-llm.cmd pulls.
+
+         The CPU backend only. The Cuda and Vulkan backends are hundreds of
+         megabytes and a 0.6B model does not need a GPU - see fetch-llm.cmd
+         for why the model is this small. -->
+    <PackageReference Include="LLamaSharp" Version="0.27.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.27.0" />
+
     <!-- Sponsor VIDEO slides on the Big Screen (see SponsorVideo.cs). The
          managed wrapper, its WinForms VideoView, and VLC's own native
          libraries - all three from VideoLAN, all LGPL-2.1-or-later, which
@@ -395,6 +414,38 @@
          never see it; fetch-kokoro.cmd is the one-line fix and the message
          says so. -->
     <Error Condition="'@(_KokoroModelFile)' == ''" Text="Assets\Kokoro\kokoro.onnx is not there, so the Kokoro voice would NOT be in this publish - and since the Windows voice was retired Kokoro is the only voice that always works, so that installer could not speak at all until a club downloaded 310 MB. Run fetch-kokoro.cmd and publish again." />
+  </Target>
+
+  <!-- The commentary model (~440 MB), shipped beside the exe so a club with
+       no internet still gets colour commentary. BundledLlmClient's
+       BundledModelPath is where it looks for it, which is why it lands flat
+       beside HeatCaller.exe under the app's own name for it rather than the
+       model's - swapping which model ships is then a change to fetch-llm.cmd
+       and nothing else.
+
+       NOT IN GIT, and not copied into a build either - only into a publish,
+       for the same reasons as the Kokoro model above.
+
+       Globbed rather than named: a literal Include of a file that is not
+       there fails the copy outright (MSB3030), while a glob that matches
+       nothing is simply empty - so a clone with no model still builds and
+       publishes, and the warning below says what that publish is missing. -->
+  <Target Name="PublishLocalModel" BeforeTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_LocalModelFile Include="Assets\LocalModel\commentary.gguf" Condition="Exists('Assets\LocalModel\commentary.gguf')" />
+      <ResolvedFileToPublish Include="@(_LocalModelFile)">
+        <RelativePath>commentary.gguf</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+    <!-- A WARNING, not an error, and the difference from PublishKokoroModel
+         is deliberate. Kokoro is the only voice that always works, so a
+         publish without it cannot speak at all. This model only writes when
+         the relay cannot be reached, so a publish without it is a working
+         installer that goes quiet on segments during an internet outage -
+         worse, but not broken. Publish-only, so an ordinary build and
+         check.cmd never see it. -->
+    <Warning Condition="'@(_LocalModelFile)' == ''" Text="Assets\LocalModel\commentary.gguf is not there, so this publish has NO offline commentary - a club with the internet down will get no colour from the Core segments at all. Run fetch-llm.cmd and publish again." />
   </Target>
 
 </Project>

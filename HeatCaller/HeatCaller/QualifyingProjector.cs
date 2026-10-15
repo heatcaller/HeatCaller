@@ -185,9 +185,27 @@ public sealed class QualifyingProjector
         var after = QualifyingCalculator
             .Compute(round.ClassName, _rounds, _history, _profiles, raceClass, filter, live);
 
-        var onTrack = standings
-            .Select(s => s.TransponderId)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Keyed by the driver, the way the calculator files them: a car on
+        // its owner's ALTERNATE transponder, timed as a row of its own, is
+        // ranked under the owner's main transponder. Keyed by the raw row
+        // id, that driver was never found on track - no "in this heat" mark
+        // and no projected place beside their row on the leaderboard. Each
+        // driver keeps the row ids they are on the board under, because the
+        // leaderboard looks a slot up by the row's own id.
+        var onTrack = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var s in standings)
+        {
+            var driverKey = _profiles.PrimaryForAlternate(s.TransponderId) ?? s.TransponderId;
+
+            if (!onTrack.TryGetValue(driverKey, out var rowIds))
+            {
+                rowIds = new List<string>();
+                onTrack[driverKey] = rowIds;
+            }
+
+            rowIds.Add(s.TransponderId);
+        }
 
         var rows = new List<Row>(after.Count);
         var slots = new Dictionary<string, Slot>(StringComparer.OrdinalIgnoreCase);
@@ -213,13 +231,20 @@ public sealed class QualifyingProjector
                 entry.BestConsecutiveMs,
                 entry.HeatsRun,
                 entry.HeatsCounted,
-                onTrack.Contains(entry.Transponder),
+                onTrack.ContainsKey(entry.Transponder),
                 change,
                 !known));
 
-            if (onTrack.Contains(entry.Transponder))
+            if (onTrack.TryGetValue(entry.Transponder, out var rowIdsOnTrack))
             {
-                slots[entry.Transponder] = new Slot(position, change, !known);
+                var slot = new Slot(position, change, !known);
+                slots[entry.Transponder] = slot;
+
+                // And under every row the driver is on the board as.
+                foreach (var rowId in rowIdsOnTrack)
+                {
+                    slots[rowId] = slot;
+                }
             }
         }
 

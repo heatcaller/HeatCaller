@@ -100,13 +100,18 @@ public sealed class DeleteRaceDayForm : Form
         // race days were introduced to remove, and the next launch would
         // sweep them into the legacy holder where they would fold into
         // somebody else's qualifying.
+        //
+        // Its check-in sheet, scrutineering and timetable are NOT erased -
+        // they are kept, so that Undo brings them back with
+        // the day (see CheckInStore.AdoptOrphans). This used to say they
+        // went with it, which was not true.
         var lblAlways = new Label
         {
-            Text = counts.Rounds == 1
-                ? "The day goes, and so does the one heat or final on it, with its check-in sheet, "
-                  + "its scrutineering and its timetable."
-                : $"The day goes, and so do the {counts.Rounds} heats and finals on it, with its check-in sheet, "
-                  + "its scrutineering and its timetable.",
+            Text = (counts.Rounds == 1
+                    ? "The day goes, and so does the one heat or final on it."
+                    : $"The day goes, and so do the {counts.Rounds} heats and finals on it.")
+                + " Its check-in sheet, scrutineering and timetable are kept rather than erased, "
+                + "so Undo can bring them back with the day.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.BodyFont,

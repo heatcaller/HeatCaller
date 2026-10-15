@@ -620,8 +620,11 @@ public static class KpiCatalog
             (s, _, ctx) => new KpiValue(ctx.Tracker.PersonalBests(s.TransponderId).ToString())),
 
         new("penalty", "Penalty", "Manually applied time penalties.", 60,
+            // To the tenth when there is one: a 2.5 s penalty rounded to
+            // "+3s" (or a 0.4 s jump-start penalty to "+0s") is a number the
+            // director cannot check against what was given.
             (s, _, _) => s.PenaltyMs > 0
-                ? new KpiValue($"+{s.PenaltyMs / 1000.0:0}s", KpiEmphasis.Bad)
+                ? new KpiValue($"+{s.PenaltyMs / 1000.0:0.#}s", KpiEmphasis.Bad)
                 : new KpiValue("-")),
 
         new("warnings", "Warnings", "Warnings from race control this race - and a black flag, once the class's ladder reaches one.", 70,

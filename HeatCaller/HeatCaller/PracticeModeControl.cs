@@ -1498,15 +1498,18 @@ public sealed class PracticeModeControl : UserControl
                 }
             }
 
-            var unlocks = AchievementEvaluator.EvaluatePractice(record, _history.All, store, context);
-            _judgedPracticeStart = record.StartedAtUtc;
+            var unlocks = AchievementEvaluator.EvaluatePractice(record, _history.All, store, context, out var lapsSaved);
 
-            // What EvaluatePractice added to the totals: every real driver
-            // with a lap.
-            _judgedPracticeLaps = record.Results
-                .Where(e => e.Laps > 0 && !string.IsNullOrWhiteSpace(e.Transponder) && !GhostService.IsGhost(e.Transponder))
-                .GroupBy(e => e.Transponder, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.Sum(e => e.Laps), StringComparer.OrdinalIgnoreCase);
+            // What EvaluatePractice added to the totals - and only when it
+            // saved them. When its save failed the file still holds what the
+            // last judgement left (or nothing of this practice), so what is
+            // taken back next time stays as it was: taking back laps that
+            // were never saved shrank the career lap total for good.
+            if (lapsSaved is not null)
+            {
+                _judgedPracticeStart = record.StartedAtUtc;
+                _judgedPracticeLaps = lapsSaved;
+            }
 
             if (unlocks.Count > 0)
             {

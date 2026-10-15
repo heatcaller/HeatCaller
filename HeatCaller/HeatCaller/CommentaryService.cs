@@ -362,6 +362,74 @@ public sealed class CommentaryService
 
     private bool VoiceSupportsAudioTags => VoiceSupportsAudioTagsProvider?.Invoke() ?? false;
 
+    /// <summary>
+    /// The system prompt a SEGMENT is written against.
+    ///
+    /// Segments used to get BuildSystemPrompt alone, which carries one line
+    /// of tone, while the recap got that plus a paragraph of coaching on
+    /// what the tone actually sounds like. Same dial, a fraction of the
+    /// steering - and it showed: the recap landed on the club's chosen
+    /// voice and the segments around it came out flat and samey whatever
+    /// the dropdown said. This gives a segment the same kind of coaching,
+    /// written for what a segment is: a remark during an evening, not the
+    /// close of a race.
+    ///
+    /// Also carries the no-tags rule, for the same reason the recap does -
+    /// delivery cues are added in code afterwards (PrepareForSpeech), never
+    /// left to the model.
+    /// </summary>
+    /// <param name="forExchange">
+    /// True when this segment is being written as a two-hander.
+    ///
+    /// IT CANNOT BE THE SAME COACHING, and finding that out cost a race
+    /// night (14 Oct 2026). The single-voice coaching tells the model to
+    /// pick ONE detail and write ONE punchy line, and shows it an example of
+    /// exactly that - which lands immediately before CommentaryExchange's
+    /// "use exactly N lines, each starting with A: or B:". The model took
+    /// the nearer, more concrete instruction, wrote one good line, and
+    /// Split found nothing tagged: every two-hander in the evening came back
+    /// "in one piece rather than two" and was said in one voice. So the
+    /// exchange gets coaching about how two people talk, and its example is
+    /// a two-hander.
+    /// </param>
+    private string BuildSegmentSystemPrompt(int extraWords = 0, bool forExchange = false)
+    {
+        var basePrompt = BuildSystemPrompt(extraWords);
+
+        const string noTagsLine =
+            " Do not write any square-bracket tags or stage directions - delivery cues are added separately.";
+
+        var coaching = _settings.CommentaryToneStyle switch
+        {
+            // Left alone, exactly as the recap leaves it. Someone who picked
+            // dry wants the asides dry too.
+            CommentaryTone.DryUnderstated => string.Empty,
+
+            CommentaryTone.Neutral => forExchange
+                ? " Two paddock reporters talking to each other between races - informed, unhurried, specific. "
+                  + "Each turn answers the one before it rather than restating it; the second voice adds a fact or "
+                  + "a read the first did not give."
+                : " Talk the way a paddock reporter does between races - informed, unhurried, specific. "
+                  + "Lead with the fact that matters and let it stand; no build-up, no sign-off, no summarising "
+                  + "what you just said. Avoid commentator filler: no folks, no ladies and gentlemen.",
+
+            _ => forExchange
+                ? " Two trackside hype-men bouncing off each other, not one person reading both halves. Each turn "
+                  + "REACTS to the one before it - picks up its last thought, argues with it, or tops it - and "
+                  + "nobody repeats a number already said. Keep every turn short; a real conversation is quick. "
+                  + "Example of the ENERGY wanted: \"A: Three on the bounce for Sam!\" / "
+                  + "\"B: And nobody has got near him - who is even going to try?\""
+                : " This is a trackside hype-man filling the gap between races, not a news reader. Pick the one "
+                  + "detail worth getting loud about and get loud about it. Short punchy clauses beat long tidy "
+                  + "sentences, and a specific number beats an adjective. "
+                  + "Example of the ENERGY wanted: given \"Sam has won three in a row\", write something like "
+                  + "\"Three on the bounce for Sam - who is going to take one off him?\" - not "
+                  + "\"Sam has now won three consecutive races.\"",
+        };
+
+        return basePrompt + coaching + noTagsLine;
+    }
+
     /// <param name="extraWords">On top of the shared Max length - the recap's own extra, plus room for an opening or closing it has been asked for.</param>
     private string BuildBroadcastSystemPrompt(int extraWords)
     {
@@ -440,11 +508,45 @@ public sealed class CommentaryService
     /// button, so a repeat sounds the same as the original. On non-v3 models
     /// the voice layer strips tags anyway, so this is harmless there.
     /// </summary>
-    public string PrepareSummaryForSpeech(string summary)
+    public string PrepareSummaryForSpeech(string summary) => Tagged(summary, opener: null);
+
+    /// <summary>
+    /// The same, for a segment or one turn of a two-hander.
+    ///
+    /// Two segments open on a lift rather than a level read: the cold open
+    /// is the first thing the room hears all night, and the sign-off is the
+    /// last. Those get [shouting] on their opening sentence and [excited]
+    /// after it; everything else is [excited] throughout, which is what the
+    /// recap has always done.
+    /// </summary>
+    /// <param name="opening">
+    /// True for the first thing said in this segment - the single line, or
+    /// the opening turn of an exchange. Only that line can take the lift;
+    /// a co-host answering mid-conversation should not be shouting.
+    /// </param>
+    public string PrepareSegmentForSpeech(SegmentKind kind, string line, bool opening = true) =>
+        Tagged(line, opener: opening && Lifts(kind) ? "[shouting]" : null);
+
+    /// <summary>Segments that open on a lift. See PrepareSegmentForSpeech.</summary>
+    private static bool Lifts(SegmentKind kind) =>
+        kind is SegmentKind.ColdOpen or SegmentKind.SignOffNumbers;
+
+    /// <summary>
+    /// Puts a delivery tag in front of every sentence, or hands the text
+    /// back untouched when tags would do nothing or would be wrong.
+    ///
+    /// Three gates, and all three have to pass. The club has to have asked
+    /// for tags at all; the voice has to be one that understands them (only
+    /// ElevenLabs v3 - every other engine either reads the tag aloud or
+    /// strips it); and the tone has to be Enthusiastic, because a club that
+    /// picked Dry did not ask to be shouted at.
+    /// </summary>
+    private string Tagged(string text, string? opener)
     {
-        var clean = StripAudioTags(summary);
+        var clean = StripAudioTags(text);
 
         if (clean.Length == 0
+            || !_settings.CommentaryVoiceTags
             || !VoiceSupportsAudioTags
             || _settings.CommentaryToneStyle != CommentaryTone.Enthusiastic)
         {
@@ -454,7 +556,7 @@ public sealed class CommentaryService
         var sentences = SentenceBreak.Split(clean)
             .Select(s => s.Trim())
             .Where(s => s.Length > 0)
-            .Select(s => $"[excited] {s}");
+            .Select((s, at) => $"{(at == 0 ? opener ?? "[excited]" : "[excited]")} {s}");
 
         return string.Join(" ", sentences);
     }
@@ -2403,12 +2505,19 @@ public sealed class CommentaryService
         // at each of the last fourteen meetings" in their head, across
         // three classes and four layouts and two years of Thursday nights.
         //
-        // KEYED ON THE RACE, not the night, and this is the one section of
-        // the recap where that is right: a run ending is news about this
-        // result, and the next main of the evening is a different class
-        // with a different run. See RunOfMainsHere.
+        // KEYED ON THE NIGHT (14 Oct 2026), not the race. It was the race,
+        // on the reasoning that the next main is a different class - but the
+        // fact's key already carries the class and the layout, and a club
+        // that runs its A-main in legs had the run judged once per leg, the
+        // second contradicting the first. Night + layout + class is one
+        // meeting's one A-main, which is what a run of mains is counted in;
+        // MainsHere also holds the line back until the last leg has run.
+        // See RunOfMainsHere.
+        var mainsNight = TonightAtTheTrack.NightOf(session.EndedAtUtc.ToLocalTime())
+            .ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
         var mainsPack = HistoryPack(
-            CommentaryRaceFacts.ForTheMainsHere(mains, winner.Transponder, PromptName(winner.Transponder), session.Id),
+            CommentaryRaceFacts.ForTheMainsHere(mains, winner.Transponder, PromptName(winner.Transponder), $"night:{mainsNight}"),
             MaxMainsChars);
 
         var mainsLines = HistoryLines(mainsPack);
@@ -3060,7 +3169,7 @@ public sealed class CommentaryService
             "\n\n" + InstructionFor(kind) + HostBrief(kind);
 
         return await RecordAndReturn(LabelFor(kind), Client.GenerateAsync(
-            BuildSystemPrompt(), body, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct));
+            BuildSegmentSystemPrompt(), body, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct));
     }
 
     /// <summary>
@@ -3104,6 +3213,22 @@ public sealed class CommentaryService
             ct: ct,
             timeout: LongPieceTimeout));
     }
+
+    /// <summary>
+    /// How the recap show ends - the host's own name and the show's,
+    /// written from the two the club typed on the Commentary page.
+    ///
+    /// HERE RATHER THAN IN THE PROMPT (14 Oct 2026), and
+    /// <see cref="NightRecap.SignOff"/> has the full note on why: the
+    /// requirement is that the show ALWAYS ends properly, and a model
+    /// cannot promise always. This method exists only because the two
+    /// settings live behind this class; the wording is NightRecap's.
+    ///
+    /// Never empty. A club that has typed neither name gets a generic
+    /// close, because a show with no name still has to end.
+    /// </summary>
+    public string NightRecapSignOff() =>
+        NightRecap.SignOff(_settings.RecapAnnouncerName, _settings.RecapShowName);
 
     /// <summary>
     /// ONE DRIVER'S NIGHT, written for that driver (12 Oct 2026) - see
@@ -3271,16 +3396,25 @@ public sealed class CommentaryService
             "\n\n" + InstructionFor(kind) +
             "\n\n" + CommentaryExchange.Brief(announcer, coHost, turns, _settings.CoHostStance);
 
-        // Two people need more words than one. The limit on the page is
-        // what a single line may run to, so each extra turn is given
-        // another line's worth rather than the pair sharing one.
+        // Two people need more words than one - but LESS than a whole line
+        // each, and that is the change (14 Oct 2026). Every turn used to get
+        // a full line's allowance, so a four-turn exchange could run to four
+        // paragraphs: two people delivering monologues in sequence rather
+        // than talking to each other. Real back-and-forth is quick, and a
+        // turn that runs long also keeps the other voice waiting - the pause
+        // is what kills it. Two thirds of a line each, with the coaching in
+        // BuildSegmentSystemPrompt asking for short turns on top.
         var extra = Math.Max(0, _settings.CommentaryMaxWords)
-            * Math.Clamp(turns - 1, 1, CommentaryExchange.MostTurns - 1);
+            * Math.Clamp(turns - 1, 1, CommentaryExchange.MostTurns - 1) * 2 / 3;
 
         var written = await Client.GenerateAsync(
-            BuildSystemPrompt(extra), body, maxTokens: MaxTokensForWordLimit(extra), temperature: Variety, ct: ct);
+            BuildSegmentSystemPrompt(extra, forExchange: true), body,
+            maxTokens: MaxTokensForWordLimit(extra), temperature: Variety, ct: ct);
 
-        var split = CommentaryExchange.Split(written);
+        // The names go in too: the brief introduces both speakers by name,
+        // so a model labelling its turns with those names rather than the
+        // letters is following instructions, not ignoring them.
+        var split = CommentaryExchange.Split(written, announcer, coHost);
 
         if (split.Count == 0)
         {

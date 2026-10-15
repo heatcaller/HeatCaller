@@ -207,7 +207,8 @@ public sealed class ShowChatterTests
 
         // And the two things a club would otherwise conclude the setting
         // was broken over.
-        Assert.Contains("Intros and recaps are never held back", said, StringComparison.Ordinal);
+        Assert.Contains("Intros, recaps", said, StringComparison.Ordinal);
+        Assert.Contains("are never held back", said, StringComparison.Ordinal);
         Assert.Contains("allowance", said, StringComparison.OrdinalIgnoreCase);
 
         Assert.Contains("co-host out in the heats", ShowChatter.Describe("nonstop"), StringComparison.Ordinal);

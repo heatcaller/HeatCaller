@@ -317,6 +317,19 @@ public partial class MainForm
             return false;
         }
 
+        // Not onto a closed day: picking last week's day to look at its
+        // results leaves it current, and phones tapping in tonight used to
+        // land on last week's sheet - see CheckInStore.ClosedCurrentDay.
+        // Refused the way this path refuses anything: nothing changes, the
+        // phone's next poll shows it unchanged, and the console says why.
+        if (CheckInStore.ClosedCurrentDay(_raceEvents) is { } closedDay)
+        {
+            var whoProfile = _profiles.Get(transponder);
+            var who = string.IsNullOrWhiteSpace(whoProfile?.DriverName) ? transponder : whoProfile!.DriverName;
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [check-in] Refused a check-{(wanted ? "in" : "out")} for {who} from a phone - this day is closed (\"{closedDay.DisplayName}\"). Start tonight's race day, or reopen that one, first.");
+            return false;
+        }
+
         _checkInStore.SetCheckedIn(transponder, wanted);
         _checkInChangedUtc[transponder] = DateTime.UtcNow;
 
@@ -340,6 +353,13 @@ public partial class MainForm
     /// </summary>
     private void SetCheckedInFromWizard(string transponder, bool wanted)
     {
+        // Not onto a closed day - the wizard says so itself before it asks
+        // (RaceDaySetupWizard.RefusedOnClosedDay); this is the backstop.
+        if (CheckInStore.ClosedCurrentDay(_raceEvents) is not null)
+        {
+            return;
+        }
+
         _checkInStore.SetCheckedIn(transponder, wanted);
         _checkInChangedUtc[transponder] = DateTime.UtcNow;
 

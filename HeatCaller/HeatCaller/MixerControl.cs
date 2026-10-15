@@ -930,17 +930,23 @@ public sealed class MixerControl : UserControl
 
         // Restore, don't just stop: whatever was running before the
         // audition should still be running after it.
-        if (!_ambienceWasRunning)
-        {
-            _ambience.Stop();
-        }
-        else if (_ambience.CurrentIntensity == AmbienceService.Intensity.Racing)
+        //
+        // The mood is put back first, whether or not the crowd keeps
+        // playing: the audition set race level, and a crowd it then stopped
+        // kept that level, so the next start between races came up at race
+        // level (the same fix as the Ambience page's Preview).
+        if (_ambience.CurrentIntensity == AmbienceService.Intensity.Racing)
         {
             // The audition set the crowd to race level to balance against.
             // Put the mood back, or a between-races crowd stays at race
             // level after the audition. Left alone if something has since
             // moved the mood off Racing (a finish, a caution).
             _ambience.SetIntensity(_ambienceMoodBefore);
+        }
+
+        if (!_ambienceWasRunning)
+        {
+            _ambience.Stop();
         }
 
         if (!_musicWasPlaying)

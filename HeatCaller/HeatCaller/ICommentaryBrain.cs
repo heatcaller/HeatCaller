@@ -52,6 +52,6 @@ public interface ICommentaryBrain
     /// <summary>Diagnostic detail for the console - a misconfigured brain has to be findable.</summary>
     event Action<string>? StatusMessage;
 
-    /// <summary>One short phrase naming this brain, for the console and the page: "the relay" or "Ollama (llama3.2:3b)".</summary>
+    /// <summary>One short phrase naming this brain, for the console and the page: "the relay" or "the built-in model".</summary>
     string Describe { get; }
 }

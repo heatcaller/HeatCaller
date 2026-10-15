@@ -821,7 +821,7 @@ internal sealed class RaceDaySetupWizard : Form
         _btnCheckAllShown.Click += (_, _) => SetAllShown(true);
 
         _btnClearAll.Text = "Clear All";
-        _btnClearAll.Click += (_, _) => SetAllShown(false);
+        _btnClearAll.Click += (_, _) => ClearAllShown();
 
         _btnGoToCheckIn.Text = "Open the full check-in page";
         _btnGoToCheckIn.Click += (_, _) =>
@@ -906,6 +906,16 @@ internal sealed class RaceDaySetupWizard : Form
             return;
         }
 
+        // Not onto a closed day - see CheckInStore.ClosedCurrentDay. The
+        // tick is held where it was, and the reason said once this event
+        // is over rather than from inside it.
+        if (CheckInStore.ClosedCurrentDay(_events) is not null)
+        {
+            e.NewValue = e.CurrentValue;
+            BeginInvoke(new Action(() => RefusedOnClosedDay()));
+            return;
+        }
+
         // NewValue, not the item's current state: ItemCheck runs before the
         // tick actually changes, so reading the list here would write back
         // the value being replaced.
@@ -918,6 +928,12 @@ internal sealed class RaceDaySetupWizard : Form
 
     private void SetAllShown(bool here)
     {
+        // Not on a closed day - see CheckInStore.ClosedCurrentDay.
+        if (RefusedOnClosedDay())
+        {
+            return;
+        }
+
         // Only what is on screen. "Check In All Shown" under a class filter
         // means that class, which is the whole point of the filter; Clear
         // All is the same promise in reverse and deliberately does not
@@ -928,6 +944,90 @@ internal sealed class RaceDaySetupWizard : Form
         }
 
         FillWhosHere();
+    }
+
+    /// <summary>
+    /// Clear All: asked first, and with an undo, as Check Out Everyone on
+    /// the check-in page is.
+    ///
+    /// It used to check out everyone shown the moment it was pressed - no
+    /// question, no undo - from a button that sits right beside Check In
+    /// All Shown. One slip at the door and the night's check-ins were gone,
+    /// to be ticked in again one by one.
+    /// </summary>
+    private void ClearAllShown()
+    {
+        // Before the question - see CheckInStore.ClosedCurrentDay.
+        if (RefusedOnClosedDay())
+        {
+            return;
+        }
+
+        // Who it would actually check out: the shown drivers who are in.
+        var cleared = _lstWhosHere.Items.Cast<object>().OfType<DriverItem>()
+            .Select(item => item.Transponder)
+            .Where(_checkIns.IsCheckedIn)
+            .ToList();
+
+        if (cleared.Count == 0)
+        {
+            return;
+        }
+
+        if (AppDialog.Show(this, $"Check out the {Plural.Of(cleared.Count, "driver")} shown in the list?",
+                "Confirm check-out", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        // Which event, as well as who - the same as Check Out Everyone: an
+        // undo made after switching days must put them back where they were.
+        var eventId = _checkIns.CurrentEventId;
+        var host = _host;
+        var checkIns = _checkIns;
+
+        host.Undo?.Capture($"Check out {Plural.Of(cleared.Count, "driver")} (Set Up Tonight)", () =>
+        {
+            checkIns.RestoreCheckedIn(eventId, cleared);
+
+            // Timed through the desk as well, when it is still this day, so
+            // a slower online tap made before the undo cannot take it back -
+            // and the roster the phones see is republished.
+            if (string.Equals(eventId, checkIns.CurrentEventId, StringComparison.Ordinal) && host.SetCheckedIn is { } timed)
+            {
+                foreach (var transponder in cleared)
+                {
+                    timed(transponder, true);
+                }
+            }
+
+            // The wizard is usually closed by the time Undo is pressed; the
+            // sheet is what matters.
+            if (!IsDisposed && !Disposing)
+            {
+                FillWhosHere();
+            }
+        });
+
+        SetAllShown(false);
+    }
+
+    /// <summary>
+    /// Says no, in a window, when the current day is closed - see
+    /// CheckInStore.ClosedCurrentDay. True when it refused.
+    /// </summary>
+    private bool RefusedOnClosedDay()
+    {
+        if (CheckInStore.ClosedCurrentDay(_events) is not { } day)
+        {
+            return false;
+        }
+
+        AppDialog.Show(this,
+            $"\"{day.DisplayName}\" is closed, so its check-in sheet can't be changed - it is the record of who was there that day.\r\n\r\n"
+            + "For tonight, start a new race day on \"The day\" step. To change that day's sheet, reopen it on The Day first.",
+            "This day is closed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return true;
     }
 
     /// <summary>
@@ -2501,6 +2601,7 @@ internal sealed class QuickDriverForm : Form
 /// <param name="Build">The programme's BuildQualifying.</param>
 /// <param name="Sound">What the day step needs to offer tonight's sound - see SoundOffer. None, and the step does not offer it.</param>
 /// <param name="SetCheckedIn">The desk's timed check-in (MainForm.SetCheckedInFromWizard). None, and the Drivers step writes the check-in sheet itself.</param>
+/// <param name="Undo">The app's undo list, for Clear All on the Drivers step. None, and Clear All still asks but cannot be undone.</param>
 internal sealed record RaceDaySetupHost(
     Func<RaceDayShape, IReadOnlyList<string>, bool> StartDay,
     Action<Action<RaceEvent>> ChangeDay,
@@ -2508,4 +2609,5 @@ internal sealed record RaceDaySetupHost(
     Func<ProgramAnswer> PlanBuild,
     Func<ProgramAnswer> Build,
     SoundOfferHost? Sound = null,
-    Action<string, bool>? SetCheckedIn = null);
+    Action<string, bool>? SetCheckedIn = null,
+    UndoService? Undo = null);

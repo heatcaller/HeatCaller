@@ -218,10 +218,24 @@ public static class QualifyingCalculator
         {
             var session = history.Get(round.LinkedSessionId!);
 
-            // A saved demo race is simulated. Demo races are no longer
-            // linked to heats, but one saved by an older version may be -
-            // and invented lap times must never seed a real main.
-            if (session is null || session.IsDemoSession())
+            // A DEMO-LINKED HEAT DOES SEED, and that is the point of a
+            // demo night (13 Oct 2026).
+            //
+            // This used to skip demos outright, with the reason "invented
+            // lap times must never seed a real main" - written when a demo
+            // could only reach a round by accident, because nothing linked
+            // one deliberately. Now something does: a club rehearsing a
+            // whole night (AppSettings.DemoFillsTheProgramme), and skipping
+            // here left that night's mains seeded off nothing at all.
+            //
+            // The main it seeds is not a real one. A round is only linked to
+            // a demo because the club asked for a demo night, and
+            // RaceFiling.WouldOverwriteARealResult refuses to let a demo
+            // land on a heat that really ran - so a demo in here means the
+            // whole programme is a rehearsal. The results it produces still
+            // score nothing: the championship, badges, personal bests and
+            // every record check IsDemoSession for themselves.
+            if (session is null)
             {
                 continue;
             }
@@ -248,6 +262,28 @@ public static class QualifyingCalculator
                 }
 
                 var (windowMs, startLap) = BestFlyingWindow(result.LapTimesMs, lapCount);
+
+                // Penalties from the result editor count here too. They
+                // only ever reached Laps and ElapsedMs - which the
+                // total-laps rule reads - while the window is worked out
+                // from the lap times, which a penalty leaves alone. So under
+                // best-consecutive-laps a penalised driver qualified as if
+                // nothing had been given.
+                //
+                // A time penalty is added to the window as it is to the
+                // total time. A lap penalty is a ruling that takes the lap
+                // COUNT down and leaves every lap time standing (see
+                // ResultEditor), so it does not take the window away; it is
+                // charged as one average lap of the window per lap
+                // penalised - the time the driver would have needed to make
+                // up each lap they lost. Only a heat with a window is
+                // touched: one without has nothing to add to.
+                if (windowMs > 0)
+                {
+                    var averageLapMs = windowMs / lapCount;
+                    windowMs += Math.Max(0, result.TimePenaltyMs) + Math.Max(0, result.LapPenalty) * averageLapMs;
+                }
+
                 var driverKey = DriverKey(result.Transponder, profiles);
 
                 AddHeat(byDriver, driverKey, method, new HeatScore(round.Id, round.RoundLabel, round.LinkedSessionId, session.StartedAtUtc,

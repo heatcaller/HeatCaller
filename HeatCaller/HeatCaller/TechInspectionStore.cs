@@ -137,12 +137,65 @@ public sealed class TechInspectionStore
     public IReadOnlyList<TechInspection> All =>
         _inspections.OrderByDescending(i => i.InspectedAtUtc).ToList();
 
-    /// <summary>Inspections carried out on a given local day.</summary>
+    /// <summary>
+    /// Whether a race day still exists - set by EventSpine.Bind from the
+    /// event store, and asked by ForDay. A hook rather than a constructor
+    /// argument for the same reason as DayScheduleStore.ProgramOrder: the
+    /// stores load independently.
+    ///
+    /// Deleting a race day leaves its inspections here on purpose, so that
+    /// undoing the delete brings them back - the same as its check-in sheet
+    /// (CheckInStore.AdoptOrphans). Until then the day is gone, but ForDay
+    /// went on listing them, so a test day created, scrutineered and
+    /// deleted still put its inspections in that date's Event Report. Null
+    /// (no event store to ask) counts every day as existing, as before.
+    /// </summary>
+    public Func<string, bool>? EventExists { get; set; }
+
+    /// <summary>Inspections carried out on a given local day - leaving out any filed against a race day that has since been deleted (see EventExists).</summary>
     public IReadOnlyList<TechInspection> ForDay(DateTime localDay) =>
         _inspections
-            .Where(i => i.InspectedAtUtc.ToLocalTime().Date == localDay.Date)
+            .Where(i => i.InspectedAtUtc.ToLocalTime().Date == localDay.Date && OnExistingDay(i))
             .OrderByDescending(i => i.InspectedAtUtc)
             .ToList();
+
+    /// <summary>
+    /// False only for an inspection filed against a real race day that has
+    /// been deleted. No event, the legacy holder, or no EventExists hook all
+    /// count as there.
+    /// </summary>
+    private bool OnExistingDay(TechInspection inspection) =>
+        EventExists is not { } exists
+        || string.IsNullOrEmpty(inspection.EventId)
+        || string.Equals(inspection.EventId, RaceEventStore.LegacyEventId, StringComparison.Ordinal)
+        || exists(inspection.EventId);
+
+    /// <summary>
+    /// Every inspection that "is this car cleared?" can read right now,
+    /// newest first: the ones Latest considers, for any driver and class.
+    ///
+    /// For the scrutineering log's "Today only". That used to be the
+    /// calendar date (ForDay(DateTime.Now)), while clearance goes by the
+    /// race day and the NoRaceDayWindow - so after midnight, or on the
+    /// second day of a weekend meeting, the log showed nothing while every
+    /// car it should have listed was still cleared to race.
+    ///
+    /// The same two rules as Latest: filed against the current event (and
+    /// recent, when that is the legacy holder), or filed against no event
+    /// or the legacy holder and recent.
+    /// </summary>
+    public IReadOnlyList<TechInspection> CountingNow()
+    {
+        var noRealEvent = string.Equals(CurrentEventId, RaceEventStore.LegacyEventId, StringComparison.Ordinal);
+
+        return _inspections
+            .Where(i => (string.Equals(i.EventId, CurrentEventId, StringComparison.Ordinal) && (!noRealEvent || IsRecent(i)))
+                        || ((string.IsNullOrEmpty(i.EventId)
+                             || string.Equals(i.EventId, RaceEventStore.LegacyEventId, StringComparison.Ordinal))
+                            && IsRecent(i)))
+            .OrderByDescending(i => i.InspectedAtUtc)
+            .ToList();
+    }
 
     /// <summary>
     /// The inspection that counts for this driver now, or null - the same

@@ -840,6 +840,11 @@ internal sealed class ThinScrollBar : Control
             // assignment - a refresh on another thread's callback, say.
             // Losing one scroll step is not worth taking the app down for.
         }
+        catch (InvalidOperationException)
+        {
+            // The grid refuses to scroll while a cell edit it can't commit
+            // is open (or onto a frozen row). Same answer: skip the step.
+        }
     }
 
     /// <summary>

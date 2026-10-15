@@ -163,6 +163,10 @@ footer .links a:hover { text-decoration: underline; }
       color: var(--on-primary, #FFFFFF); cursor: pointer; }
 .go.on { background: var(--good); color: var(--bg); }
 .go:disabled { opacity: 0.6; }
+/* A second button under the first: the same size to tap, visibly not the
+   main thing to do. */
+.go.quiet { background: var(--surface); color: var(--text); border: 1px solid var(--border);
+            font-size: 1rem; font-weight: 600; margin-top: 10px; }
 .pin { display: grid; gap: 12px; max-width: 360px; margin: 8px auto; text-align: center; }
 .pin label { font-weight: 600; }
 .pin input { font: inherit; font-size: 1.6rem; letter-spacing: 0.3em; text-align: center; padding: 12px;
@@ -203,6 +207,15 @@ a.go { text-align: center; text-decoration: none; }
 .facts { max-width: 360px; margin: 18px auto 0; text-align: left; }
 .facts li { padding: 8px 0; }
 .facts .when { flex: 0 0 5.5rem; }
+/* A driver's own night: their evening as the timing desk recorded it, one
+   fact to a line, ruled rather than bulleted. Held to a reading width
+   rather than the page's, because these are sentences and a line of prose
+   the width of a laptop is a line nobody finishes. */
+.night { list-style: none; max-width: 42rem; margin: 18px auto 0; padding: 0; text-align: left; }
+.night li { padding: 11px 2px; border-top: 1px solid var(--border); }
+.night li:first-child { border-top: 0; }
+#nt h2 { margin: 0 0 2px; font-size: 1.3rem; }
+#nt .sub { margin-bottom: 4px; }
 
 /* Light themes: the few colours chosen for a dark page that vanish on a pale one */
 html.light .tier-gold { color: #9A6B00; }
@@ -368,6 +381,10 @@ mark { background: var(--primary); color: var(--on-primary, #FFFFFF); border-rad
 /** Shared by every page: escaping, time formatting, and polling that stops when nobody is looking. */
 const COMMON_JS = `
 const CLUB = document.body.dataset.club;
+// What a person reads, where CLUB is what addresses are built from. Only
+// the night's card draws it so far; it is here rather than in that page's
+// own script because the shell is what knows it.
+const CLUB_NAME = document.body.dataset.clubName || '';
 const stamp = document.getElementById('stamp');
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => (
@@ -548,7 +565,7 @@ function poll(load, everyMs) {
 interface Shell {
   readonly club: string;
   readonly clubName: string;
-  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup";
+  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night";
   readonly heading: string;
   readonly sub: string;
   readonly body: string;
@@ -706,7 +723,7 @@ ${preview}${twitter}
 <style>${STYLE}</style>
 ${overrides}
 </head>
-<body data-club="${club}">
+<body data-club="${club}" data-club-name="${name}">
 <div class="wrap">
   <header>
     ${brand}
@@ -3184,6 +3201,9 @@ let built = false;
 let closed = false;
 // True while a racer's own PIN has this page showing just them.
 let racer = false;
+// Whether this club offers drivers their own night - the relay says, on
+// the one answer that already knows which driver this is.
+let nights = false;
 
 async function api(action, payload) {
   const r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/checkin/' + action, {
@@ -3279,7 +3299,24 @@ function drawOne() {
     '<div class="when">' + [facts(d), esc(eventName)].filter(Boolean).join(' &middot; ') + '</div>' +
     '<button class="go' + (on ? ' on' : '') + '" id="go" type="button">' + (on ? 'Checked in &#10003;' : 'Check in') + '</button>' +
     '<p class="when">' + (on ? 'Tap again if you need to check out.' : 'One tap and the timing desk knows you are here.') + '</p>' +
-    '</div><p class="note">' +
+    '</div>' +
+    // THEIR OWN NIGHT, FROM THE ONE PAGE THEY ALREADY REACH WITH THEIR
+    // CODE. A driver's night is opened by the twenty characters on their
+    // badge, and this is the only page in the club's whole site that
+    // already has them - so without this link a club would have to
+    // compose and send every driver their own address by hand, and the
+    // feature would go unused.
+    //
+    // The code goes in the FRAGMENT, which is never sent to any server:
+    // the night's own route takes it in a POST body for exactly that
+    // reason, and a link that put it back in a query would have undone it
+    // from here. Only drawn with a real badge in the address - a racer
+    // signed in by PIN has not shown a code - and only for a club that
+    // offers it.
+    (nights && BADGE
+      ? '<p class="note"><a class="more" href="/c/' + encodeURIComponent(CLUB) + '/night#d=' + encodeURIComponent(BADGE) + '">See your racing from last time</a></p>'
+      : '') +
+    '<p class="note">' +
     (racer
       ? '<a class="more" href="?" id="signout">Not you? Sign out</a>'
       : '<a class="more" href="?">Not you? Open the full list</a>') +
@@ -3322,6 +3359,7 @@ async function loadOne() {
   closed = false;
   drivers = [answer.body.driver];
   eventName = answer.body.event || '';
+  nights = answer.body.nights === true;
   drawOne();
   touched();
 }
@@ -3876,6 +3914,385 @@ export function signupPage(club: string, clubName: string, context: PageContext 
     sub: "New to the club? Put yourself on its books from your own phone, with the invite the timing desk sent you.",
     body: '<div id="su"><p class="note">Loading&hellip;</p></div>',
     script: SIGNUP_JS,
+    noindex: true,
+  }, context);
+}
+
+// ------------------------------------------------- a driver's own night
+
+/**
+ * ONE DRIVER'S OWN NIGHT, for somebody holding that driver's badge.
+ *
+ * Reached only by a link with their code in it, so it is never in the nav
+ * bar, never on the home page, and noindex: there is nothing here for
+ * anybody without a code, and nothing a search engine should hold a copy
+ * of.
+ *
+ * THE CODE GOES IN THE BODY, NEVER THE QUERY, which is the one thing about
+ * this page that is not ordinary. The code is the whole credential - twenty
+ * hex characters HMAC'd from a transponder under the club's own secret -
+ * and a query string lands in access logs, in the referrer any outbound
+ * link carries, and in a shared browser's history. So the page reads the
+ * code out of the address, POSTs it, and then REWRITES the address into the
+ * "#d=" form: a fragment is never sent to any server, so a reload, a
+ * bookmark or a forwarded link from that point on keeps the code out of
+ * every log it would otherwise have reached.
+ *
+ * Both forms are read because both exist in the wild. The club's own
+ * check-in badge is printed as "?d=<code>" and a driver may simply edit the
+ * last word of it; a link the club sends should be the "#d=" form, and is
+ * what this page hands back.
+ *
+ * ONE ANSWER FOR EVERY KIND OF NOTHING. The relay answers a bare 404
+ * whether the club does not offer this, the driver has no night, or the
+ * code is not a code - deliberately the same, so that somebody working
+ * through guesses cannot learn which codes are real. This page keeps that
+ * promise: one message, for all of it, and it never says which it was.
+ *
+ * THE DOWNLOAD IS BUILT HERE, in the browser, out of what the page already
+ * holds. No endpoint, nothing stored, and nothing for the relay to serve
+ * twice - the words are already on the screen.
+ */
+const NIGHT_JS = `
+const box = document.getElementById('nt');
+
+// The code, from either form. Validated to the relay's own shape before
+// anything is sent, so a typed address cannot even make a request.
+function codeFrom(raw) {
+  const m = /[#?&]?d=([0-9a-fA-F]{20})(?:&|$)/.exec(String(raw || ''));
+  return m ? m[1].toLowerCase() : '';
+}
+
+const CODE = codeFrom(location.hash) || codeFrom(location.search);
+
+// Out of the query and into the fragment - see the note above. Only when
+// it came from the query, and only when the browser will let us: a page
+// that threw here would show nothing at all.
+function tuck() {
+  try {
+    if (CODE && !codeFrom(location.hash)) {
+      history.replaceState(null, '', location.pathname + '#d=' + CODE);
+    }
+  } catch (e) { /* the page still works; the code simply stays where it was */ }
+}
+
+let night = null;
+
+// ONE ANSWER FOR EVERY KIND OF NOTHING, written once - see the note above.
+// A closed club, a driver with no night, and a code that is not a code all
+// land here. It names both possibilities and commits to neither, which
+// tells somebody guessing nothing and tells a real driver what to do.
+// Defined as a constant rather than typed twice: two copies of this are
+// two places for it to drift into saying which.
+const NOTHING = 'No night was found for that code. It may be that your club does not offer this, '
+  + 'or that there is nothing filed for you yet.';
+
+function lines(list) {
+  return Array.isArray(list) ? list.filter((l) => typeof l === 'string' && l.trim() !== '') : [];
+}
+
+function nothing(message) {
+  box.innerHTML = '<p class="note">' + esc(message) + '</p>';
+}
+
+function draw() {
+  const said = lines(night.lines);
+
+  if (said.length === 0) {
+    // A document with a name and no lines cannot come off the laptop -
+    // it refuses to build one - so this is a relay holding something
+    // from a build that could. Said plainly rather than drawn empty.
+    nothing('There is nothing in this night yet. Ask at the timing desk.');
+    return;
+  }
+
+  const head = [
+    '<h2>' + esc(night.driver || 'Your night') + '</h2>',
+    '<div class="sub">' + esc([night.title, night.when].filter(Boolean).join(' · ')) + '</div>',
+  ].join('');
+
+  const body = '<ul class="night">' + said.map((l) => '<li>' + esc(l) + '</li>').join('') + '</ul>';
+
+  box.innerHTML = head + body
+    + '<button id="pic" class="go" type="button">Make a picture to share</button>'
+    + '<button id="dl" class="go quiet" type="button">Save this as a text file</button>';
+
+  const shot = document.getElementById('pic');
+  if (shot) shot.addEventListener('click', picture);
+
+  const button = document.getElementById('dl');
+  if (button) button.addEventListener('click', save);
+}
+
+// What a saved file is called. Their own name and the date, so a driver
+// with three of these in a downloads folder can tell them apart - and
+// through a character filter, because a name is whatever the club typed
+// and this becomes a file name on somebody's phone.
+function fileName(what, ext) {
+  const who = String((what && what.driver) || '').replace(/[^A-Za-z0-9 ._-]/g, '_').trim();
+  const day = String((what && what.night) || '').replace(/[^0-9-]/g, '');
+
+  return (who || 'my night') + (day ? ' - ' + day : '') + '.' + ext;
+}
+
+// Handed straight to the browser. revokeObjectURL after, or every press
+// leaks the whole file for as long as the tab is open.
+function hand(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+function save() {
+  const text = [night.driver || '', [night.title, night.when].filter(Boolean).join(' · '), '']
+    .concat(lines(night.lines))
+    .join('\\r\\n') + '\\r\\n';
+
+  hand(new Blob([text], { type: 'text/plain;charset=utf-8' }), fileName(night, 'txt'));
+}
+
+// ---- the picture a driver actually shares ------------------------------
+//
+// DRAWN IN THIS BROWSER, AND THAT IS THE WHOLE POINT RATHER THAN A
+// SHORTCUT (13 Oct 2026).
+//
+// The relay already draws 1200x630 cards for a shared RESULT, at
+// /c/<club>/results/<id>/card.png, and pointing that machinery at a
+// driver's night was the obvious next step. It is also the one thing this
+// feature must not do. A card served from an address has to be KEYED by
+// something, and the only key a night has is the driver's badge code - so
+// the moment a driver posted their card to a club group, the address
+// carrying that code would be in the post, in the referrer, and in the
+// logs of whatever fetched it to draw the preview. Anybody who read the
+// post could lift the twenty characters back out of it and open that
+// driver's whole night - and check them in or out, because a tap needs
+// the badge code and nothing else.
+//
+// So the one thing the card is FOR - being shared - is the thing that
+// would turn its address into a published credential. A driver shares a
+// PICTURE, never an address: the canvas is drawn here from what the page
+// already holds, handed over as a file, and nothing about it exists on
+// the relay. No route, no cache, no budget, and nothing to leak.
+//
+// 1200x630 all the same, because that is the size a chat app draws as a
+// banner rather than a thumbnail (see CARD_WIDTH in card.ts).
+
+const CARD_W = 1200;
+const CARD_H = 630;
+
+// Where the facts sit, and how many rows of them there is room for.
+const CARD_PAD = 64;
+const CARD_ROW = 34;
+const CARD_FACTS_TOP = 250;
+const CARD_ROWS = Math.floor((CARD_H - CARD_FACTS_TOP - CARD_PAD - 30) / CARD_ROW);
+
+// One line of text broken into rows that fit. "measure" is passed in
+// rather than taken from a canvas, so this can be reasoned about - and
+// tested - without one.
+//
+// A single word wider than the whole card goes on a row of its own and
+// overflows it. There is no hyphenation in a canvas, and the alternative,
+// breaking mid-word, makes a lap time unreadable.
+function wrap(text, width, measure) {
+  const words = String(text || '').split(/\\s+/).filter(Boolean);
+  const rows = [];
+  let row = '';
+
+  for (const word of words) {
+    const next = row === '' ? word : row + ' ' + word;
+
+    if (row !== '' && measure(next) > width) {
+      rows.push(row);
+      row = word;
+    } else {
+      row = next;
+    }
+  }
+
+  if (row !== '') rows.push(row);
+
+  return rows;
+}
+
+// Which facts fit, in the order they happened, and how many were left
+// off. Filled until the rows run out rather than cut to a fixed count:
+// one fact may take two rows and another one, so a fixed count either
+// overflows the card or wastes half of it.
+function fitLines(said, width, rows, measure) {
+  const blocks = [];
+  let used = 0;
+
+  for (const line of said) {
+    const wrapped = wrap(line, width, measure);
+
+    if (used + wrapped.length > rows) break;
+
+    blocks.push(wrapped);
+    used += wrapped.length;
+  }
+
+  return { blocks: blocks, more: said.length - blocks.length };
+}
+
+// The club's own colours, off the page the shell has already styled, so
+// the card looks like the club rather than like HeatCaller. Falls back to
+// the stock palette for anything a club has not set.
+function paint(name, fallback) {
+  try {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return /^#[0-9a-fA-F]{3,8}$/.test(value) ? value : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function picture() {
+  const canvas = document.createElement('canvas');
+
+  canvas.width = CARD_W;
+  canvas.height = CARD_H;
+
+  const ctx = canvas.getContext('2d');
+
+  if (!ctx || !canvas.toBlob) {
+    nothing('This browser cannot make the picture. The text file still works.');
+    return;
+  }
+
+  const face = '-apple-system, "Segoe UI", Roboto, system-ui, sans-serif';
+  const bg = paint('--bg', '#0F0722');
+  const text = paint('--text', '#F7F2FF');
+  const muted = paint('--muted', '#9E8AC7');
+  const primary = paint('--primary', '#FF2E9A');
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+
+  // A band of the club's own colour down the left, which is what makes
+  // two clubs' cards tell themselves apart in a feed.
+  ctx.fillStyle = primary;
+  ctx.fillRect(0, 0, 14, CARD_H);
+
+  ctx.textBaseline = 'alphabetic';
+
+  ctx.fillStyle = muted;
+  ctx.font = '600 26px ' + face;
+  ctx.fillText(CLUB_NAME, CARD_PAD, 96);
+
+  ctx.fillStyle = text;
+  ctx.font = '700 68px ' + face;
+  ctx.fillText(night.driver || 'My night', CARD_PAD, 172);
+
+  ctx.fillStyle = muted;
+  ctx.font = '400 28px ' + face;
+  ctx.fillText([night.title, night.when].filter(Boolean).join(' · '), CARD_PAD, 214);
+
+  ctx.font = '400 26px ' + face;
+
+  const room = CARD_W - CARD_PAD * 2;
+  const fitted = fitLines(lines(night.lines), room, CARD_ROWS, (v) => ctx.measureText(v).width);
+
+  let y = CARD_FACTS_TOP;
+
+  for (const block of fitted.blocks) {
+    for (let i = 0; i < block.length; i++) {
+      ctx.fillStyle = i === 0 ? text : muted;
+      ctx.fillText(block[i], CARD_PAD, y);
+      y += CARD_ROW;
+    }
+
+    y += 8;
+  }
+
+  // Said rather than hidden: a card that quietly dropped half a night
+  // would have a driver sharing a picture that is not their evening.
+  if (fitted.more > 0) {
+    ctx.fillStyle = muted;
+    ctx.font = 'italic 400 24px ' + face;
+    ctx.fillText('and ' + fitted.more + ' more', CARD_PAD, y + 6);
+  }
+
+  ctx.fillStyle = muted;
+  ctx.font = '400 22px ' + face;
+  ctx.fillText('Timed and called by HeatCaller', CARD_PAD, CARD_H - 40);
+
+  canvas.toBlob((blob) => {
+    if (blob) hand(blob, fileName(night, 'png'));
+  }, 'image/png');
+}
+
+async function load() {
+  if (!CODE) {
+    nothing('This page needs the code from your check-in badge. Open the link your club sent you, or ask at the timing desk.');
+    return;
+  }
+
+  tuck();
+
+  let answer;
+
+  try {
+    answer = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/night', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: CODE }),
+      cache: 'no-store',
+    });
+  } catch (e) {
+    nothing('Could not reach the club. Check your connection and try again.');
+    return;
+  }
+
+  if (answer.status === 429) {
+    nothing('Too many tries from here. Wait a minute and reload.');
+    return;
+  }
+
+  if (!answer.ok) {
+    nothing(NOTHING);
+    return;
+  }
+
+  let body = {};
+  try { body = await answer.json(); } catch (e) { /* an empty answer is still an answer */ }
+
+  night = body && typeof body.night === 'object' && body.night !== null ? body.night : null;
+
+  // A 200 whose body is not a night. The same answer as every other kind
+  // of nothing, for the same reason - and it should not be reachable at
+  // all, because readOneNight sends the document or a 404.
+  if (night === null) {
+    nothing(NOTHING);
+    return;
+  }
+
+  draw();
+}
+
+load();
+`;
+
+/**
+ * The page itself. Served whether or not the club offers this, and whatever
+ * the code is, for the reason sign-up's page is: a link somebody was sent
+ * that 404s is a link they think is broken. The page asks, and says what
+ * came back.
+ */
+export function nightPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+  return shell({
+    club,
+    clubName,
+    active: "night",
+    heading: "Your night",
+    sub: "Your own races, from the timing desk's own record - opened with the code on your check-in badge.",
+    body: '<div id="nt"><p class="note">Loading&hellip;</p></div>',
+    script: NIGHT_JS,
     noindex: true,
   }, context);
 }
@@ -4753,12 +5170,26 @@ function openEditResult() {
     // A total, as the laptop takes it (ResultAdjust). This used to call 0
     // no change, and a 1 typed for one more lap was read as the one lap
     // the driver already had.
-    const addedLaps = prompt('Total laps added for ' + r.name + ' (now ' + (r.addedLaps || 0) + '; 0 = none):', String(r.addedLaps || 0));
-    if (addedLaps === null) return;
+    //
+    // A whole number only, asked again until it is one: parseInt read
+    // "two" or a slip of the thumb as 0 and quietly took every added lap
+    // away. Negative is allowed - laps taken off, as the laptop's own
+    // editor takes them.
+    let addedLaps = null;
+    for (;;) {
+      const typed = prompt('Total laps added for ' + r.name + ' (now ' + (r.addedLaps || 0) + '; 0 = none):', String(r.addedLaps || 0));
+      if (typed === null) return;
+      if (/^\\s*-?[0-9]{1,4}\\s*$/.test(typed)) { addedLaps = parseInt(typed, 10); break; }
+      alert('"' + typed + '" is not a whole number of laps. Type a number such as 0, 1 or -1.');
+    }
     const outcome = prompt('Outcome for ' + r.name + ' (blank = finished, or DNF / DQ):', r.outcome || '');
     if (outcome === null) return;
-    changes.push({ driverId: r.id, addedLaps: parseInt(addedLaps, 10) || 0, outcome: outcome || '' });
+    // Only the rows that changed, so a row nobody touched is never sent
+    // back as an edit of itself.
+    if (addedLaps === (r.addedLaps || 0) && (outcome || '') === (r.outcome || '')) continue;
+    changes.push({ driverId: r.id, addedLaps: addedLaps, outcome: outcome || '' });
   }
+  if (changes.length === 0) { alert('Nothing was changed.'); return; }
   doOp('result.adjust', { sessionId: currentResult.id, reason, changes },
     () => { openResult(currentResult.id); refreshResults(); });
 }

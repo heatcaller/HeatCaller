@@ -74,6 +74,15 @@ internal static class LayoutFreeze
     private static readonly object Mark = new();
 
     /// <summary>
+    /// Where a slow thaw is reported, set by MainForm. Null until then, and
+    /// null in the tests, where nothing is watching.
+    /// </summary>
+    public static Action<string>? Trace;
+
+    /// <summary>Under this, letting go is not worth a line in the log.</summary>
+    private const long SlowThawMs = 150;
+
+    /// <summary>
     /// The pieces made since BeginBuilding that are still holding
     /// themselves - a page held meanwhile (Freeze) takes its own over. Null
     /// when no window is being built.
@@ -237,7 +246,17 @@ internal static class LayoutFreeze
 
         Dictionary<TabPage, List<Control>>? waiting = null;
 
-        foreach (var control in childrenFirst ? Enumerable.Reverse(held) : held)
+        // WORKED OUT FIRST, IN THE ORDER IT WAS HELD - parents before
+        // children - and only then let go in whichever order was asked for.
+        //
+        // The reversing used to happen here, while the containers were being
+        // sorted into "let go now" and "wait for the tab", and that quietly
+        // undid itself: a tab's list came out children-first, and the tab's
+        // own thaw reversed it again, back to the slow order. Sorting in one
+        // order and releasing in another keeps the two apart.
+        var release = new List<Control>(held.Count);
+
+        foreach (var control in held)
         {
             if (control.IsDisposed)
             {
@@ -258,8 +277,27 @@ internal static class LayoutFreeze
                 continue;
             }
 
+            release.Add(control);
+        }
+
+        if (childrenFirst)
+        {
+            release.Reverse();
+        }
+
+        var clock = Trace is null ? null : System.Diagnostics.Stopwatch.StartNew();
+
+        foreach (var control in release)
+        {
             Holding.Remove(control);
             control.ResumeLayout(true);
+        }
+
+        if (clock is not null && clock.ElapsedMilliseconds >= SlowThawMs)
+        {
+            Trace?.Invoke(
+                $"{AppTime.LogStampNow()}  [layout] Letting go of {Describe(root)} laid out {release.Count} container(s) "
+                + $"in {clock.ElapsedMilliseconds}ms, {(childrenFirst ? "children first" : "parents first")}.");
         }
 
         if (waiting is null)
@@ -276,10 +314,16 @@ internal static class LayoutFreeze
             // picked it - and no VisibleChanged is coming to let it go.
             if (tab.Visible && !tab.IsDisposed)
             {
-                Thaw(tab);
+                Thaw(tab, childrenFirst);
             }
         }
     }
+
+    /// <summary>What to call a held thing in the log - a tab by its caption, anything else by its kind.</summary>
+    private static string Describe(Control root) =>
+        root is TabPage tab && !string.IsNullOrWhiteSpace(tab.Text)
+            ? $"the {tab.Text} tab"
+            : root.GetType().Name;
 
     /// <summary>Whether <paramref name="root"/> is held - as a hold of its own, or as part of one.</summary>
     public static bool IsFrozen(Control root) => Held.TryGetValue(root, out _) || Holding.TryGetValue(root, out _);
@@ -449,7 +493,11 @@ internal static class LayoutFreeze
         {
             if (tab.Visible && !tab.IsDisposed)
             {
-                Thaw(tab);
+                // Children first, for the reason the class notes give: a tab
+                // like Commentary is hundreds of controls deep, and letting
+                // its parents go first has each child ask its column to work
+                // itself out all over again.
+                Thaw(tab, childrenFirst: true);
             }
         };
     }

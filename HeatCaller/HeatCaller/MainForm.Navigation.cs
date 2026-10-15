@@ -471,7 +471,23 @@ public partial class MainForm
     private bool _rebuildingNav;
 
     /// <summary>How long a page can take to open before the session log says so - see ShowPage.</summary>
-    private const int SlowPageMs = 500;
+    /// <summary>
+    /// How slow a page has to be before it is written to the log.
+    ///
+    /// A fifth of a second rather than half, since 13 Oct 2026: half a
+    /// second is already past what anybody would call quick, so a page
+    /// sitting just under it was invisible to the one thing that could have
+    /// said so.
+    /// </summary>
+    private const int SlowPageMs = 200;
+
+    /// <summary>
+    /// Which pages have been opened this run, so the log can say whether a
+    /// slow open was the first - the one that builds and themes - or a
+    /// later one, which should be nearly free and is the interesting case
+    /// when it is not.
+    /// </summary>
+    private readonly HashSet<string> _pageShownBefore = new(StringComparer.Ordinal);
 
     private void ShowPage(string name)
     {
@@ -512,6 +528,7 @@ public partial class MainForm
             // it is shown, as they were when the whole window was themed at
             // once - see CatchUpTextSize.
             CatchUpTextSize(item.Page);
+            var afterTextSize = opening.ElapsedMilliseconds;
 
             // The wanted page first, and in front: with it already covering
             // the area, nothing behind it is ever exposed to begin with.
@@ -549,19 +566,62 @@ public partial class MainForm
             // so that only sizes it - and the page is then let go, laid out
             // once, at that size and in the faces it has now. Before its
             // refresh, so what the refresh reads is laid out.
+            var afterSwap = opening.ElapsedMilliseconds;
+
             pnlContent.ResumeLayout(true);
             resumed = true;
 
-            LayoutFreeze.Thaw(item.Page);
+            // Where a slow let-go says so. Set here rather than at startup
+            // because this is the only place that knows where the console
+            // is; setting it again costs nothing.
+            LayoutFreeze.Trace ??= OnClientRawMessage;
+
+            // CHILDREN BEFORE PARENTS (14 Oct 2026). The class notes on
+            // LayoutFreeze have said since 1 Oct why this order matters -
+            // let go parents first, "the column was laid out again for every
+            // line in it, each time measuring them all", and the Setup
+            // Sheet's lines were measured sixty thousand times. The
+            // childrenFirst switch was added for that, and then only ever
+            // passed by the window-building path: every page and every tab
+            // went on being let go the slow way. The Voice page took 4.3s to
+            // come back, and the Commentary tab inside it hung on the click.
+            LayoutFreeze.Thaw(item.Page, childrenFirst: true);
+            var afterLayout = opening.ElapsedMilliseconds;
 
             if (_navRefreshHooks.TryGetValue(name, out var refresh))
             {
                 refresh();
             }
 
+            // BROKEN DOWN, BECAUSE ONE NUMBER NEVER SAID WHERE IT WENT
+            // (13 Oct 2026).
+            //
+            // This has reported "X took 1.4s to open" since it was written,
+            // which tells you a page is slow and nothing whatever about
+            // why - and the four things it could be want completely
+            // different fixes:
+            //
+            //   text size   - the theme pass over a page opened at a size it
+            //                 has not been themed at (CatchUpTextSize, which
+            //                 does nothing at all on a repeat visit);
+            //   swap        - showing this page, hiding the last one, and
+            //                 holding the other thirty;
+            //   layout      - the page laid out once as it is let go, which
+            //                 for a page with hundreds of controls in it is
+            //                 the one most likely to be the answer;
+            //   refresh     - the page's own hook repopulating its lists.
+            //
+            // The same instrumented-rather-than-reasoned approach
+            // AnnouncementService.WaitForAudioAsync records at length, and
+            // for the same reason: three attempts at that timing were made
+            // by reasoning about the code and each was wrong.
             if (opening.ElapsedMilliseconds >= SlowPageMs && !LayoutFreeze.Building)
             {
-                OnClientRawMessage($"{AppTime.LogStampNow()}  [ui] {name} took {opening.Elapsed.TotalSeconds:0.0}s to open.");
+                OnClientRawMessage(
+                    $"{AppTime.LogStampNow()}  [ui] {name} took {opening.Elapsed.TotalSeconds:0.00}s to open - "
+                    + $"text size {afterTextSize}ms, swap {afterSwap - afterTextSize}ms, "
+                    + $"layout {afterLayout - afterSwap}ms, refresh {opening.ElapsedMilliseconds - afterLayout}ms"
+                    + $"{(_pageShownBefore.Add(name) ? ", first time" : string.Empty)}.");
             }
 
             // The "one yellow button per page" pass used to run here, on a
@@ -593,7 +653,7 @@ public partial class MainForm
             // is not held does nothing.
             if (_shownPage == name)
             {
-                LayoutFreeze.Thaw(item.Page);
+                LayoutFreeze.Thaw(item.Page, childrenFirst: true);
             }
 
             // In a finally: a panel left with its painting switched off

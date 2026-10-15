@@ -65,6 +65,19 @@ public sealed partial class RelayPublisher
     /// </summary>
     private volatile string? _ballotAsPublished;
 
+    /// <summary>
+    /// Whether the switch was turned off and the relay has not yet taken
+    /// the close. Cleared only when it has - see <see cref="SendVoteClose"/>.
+    /// </summary>
+    private volatile bool _voteClosePending;
+
+    /// <summary>
+    /// The poll id the relay's ballot was last published for, so the votes
+    /// read back from it are cast into that poll and no other - see the
+    /// expectedPollId on <see cref="RoomVote.Cast"/>.
+    /// </summary>
+    private volatile string? _pollAsPublished;
+
     /// <summary>What went wrong taking the room's vote from the relay, or null.</summary>
     public string? VoteProblem => _votePollProblem;
 
@@ -158,6 +171,13 @@ public sealed partial class RelayPublisher
             return;
         }
 
+        // THE POLL THE RELAY'S BALLOT IS FOR, taken now. The relay holds
+        // that poll's votes, so they are cast into that poll only: a new
+        // vote opened while the inbox is being read is refused them by
+        // RoomVote.Cast, and gets its own on the next pass, once its own
+        // ballot has been published.
+        var polledFor = _pollAsPublished;
+
         // NOTHING TO READ WHILE NO VOTE IS OPEN. The relay would answer
         // with an empty set anyway, and a club that has the switch on but
         // has not opened a vote tonight should not be making a request
@@ -223,7 +243,7 @@ public sealed partial class RelayPublisher
                         // driver no longer on the grid. Left on the relay,
                         // which is right: it is refused again next pass
                         // for the same reason, and it costs nothing.
-                        if (vote.Cast(who, driver) is not null)
+                        if (vote.Cast(who, driver, polledFor ?? string.Empty) is not null)
                         {
                             refused++;
                         }
@@ -334,6 +354,7 @@ public sealed partial class RelayPublisher
 
         if (string.Equals(_ballotAsPublished, fingerprint, StringComparison.Ordinal))
         {
+            _pollAsPublished = ballot;
             return true;
         }
 
@@ -358,6 +379,7 @@ public sealed partial class RelayPublisher
             }
 
             _ballotAsPublished = fingerprint;
+            _pollAsPublished = ballot;
 
             return true;
         }
@@ -380,8 +402,29 @@ public sealed partial class RelayPublisher
     /// poll loop, because the poll loop stops asking the moment it is off
     /// - so without this the relay would go on taking votes for a club
     /// that had declined them.
+    ///
+    /// THE WORKER SENDS IT, AND KEEPS SENDING IT - the pattern listening
+    /// along and drivers' nights already use. This used to send once on a
+    /// thread of its own and forget the answer, so an untick during a
+    /// Wi-Fi blip left the relay taking votes. It also sent nothing when
+    /// this run had not published a ballot yet, when a previous run had.
+    /// Now it is marked here and the worker's pass tries it, on the vote's
+    /// own fifteen-second tick, until the relay takes it.
     /// </summary>
     public void CloseRoomVoteOnTheRelay()
+    {
+        _voteClosePending = true;
+
+        // Tried on the next pass rather than after the rest of the tick.
+        _nextVotePollTick = 0;
+        _wake.Set();
+    }
+
+    /// <summary>
+    /// The close, from the worker's pass while the switch is off. Clears
+    /// <see cref="_voteClosePending"/> only once the relay has it.
+    /// </summary>
+    private void SendVoteClose(CancellationToken token)
     {
         var target = _target;
 
@@ -390,12 +433,8 @@ public sealed partial class RelayPublisher
             return;
         }
 
-        // Nothing to close if the relay was never told it was open.
-        if (_ballotAsPublished is null)
-        {
-            return;
-        }
-
+        // Left pending until MainForm has wired the vote in: the ballot is
+        // built from it, even a closed one.
         if (TonightsVote?.Invoke() is not { } vote)
         {
             return;
@@ -403,9 +442,9 @@ public sealed partial class RelayPublisher
 
         var club = Uri.EscapeDataString(target.Club);
 
-        // On a thread of its own: this is called from a settings page, and
-        // a page that waited for a network round trip to redraw a tick box
-        // is a page that appears to have frozen.
-        Task.Run(() => PublishTheBallot(target, club, vote, enabled: false, CancellationToken.None));
+        if (PublishTheBallot(target, club, vote, enabled: false, token))
+        {
+            _voteClosePending = false;
+        }
     }
 }

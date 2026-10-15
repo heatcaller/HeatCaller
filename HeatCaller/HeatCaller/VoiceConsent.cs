@@ -142,6 +142,18 @@ internal static class VoiceConsent
             return Verdict.NoVoiceChosen;
         }
 
+        // A CONSENT FOR THIS VOICE MAKES IT A CLONE, taken back or not
+        // (14 Oct 2026). Nobody records one for a stock voice, and the
+        // relay's flag can be lost - a clone it stops listing once its
+        // consent is taken back. Without this, that voice read as "not a
+        // clone" and its saved lines played again.
+        if (!cloned
+            && consent is not null
+            && string.Equals(consent.VoiceId?.Trim(), wanted.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            cloned = true;
+        }
+
         if (!cloned)
         {
             return Verdict.NotACloneAtAll;
@@ -157,12 +169,14 @@ internal static class VoiceConsent
         // about this one either way - and a club that has cloned a second
         // announcer must not find the first one's agreement standing in
         // for theirs.
-        if (!string.Equals(consent.VoiceId.Trim(), wanted.Trim(), StringComparison.OrdinalIgnoreCase))
+        // Null-safe: a hand-edited settings.json can leave either string
+        // null, and a throw here stopped every HeatCaller line.
+        if (!string.Equals(consent.VoiceId?.Trim(), wanted.Trim(), StringComparison.OrdinalIgnoreCase))
         {
             return Verdict.ForAnotherVoice;
         }
 
-        if (consent.Who.Trim().Length == 0)
+        if (string.IsNullOrWhiteSpace(consent.Who))
         {
             return Verdict.NobodyNamed;
         }
@@ -228,7 +242,7 @@ internal static class VoiceConsent
             return "No consent is recorded on this PC. A cloned voice will not be used until one is.";
         }
 
-        var who = consent.Who.Trim();
+        var who = consent.Who?.Trim() ?? string.Empty;
         var named = who.Length > 0 ? who : "somebody not named";
 
         if (consent.RevokedAtUtc is { } revoked)
@@ -258,12 +272,12 @@ internal static class VoiceConsent
 
         if (consent is not { RevokedAtUtc: null }
             || now.Length == 0
-            || string.Equals(consent.VoiceId.Trim(), now, StringComparison.OrdinalIgnoreCase))
+            || string.Equals(consent.VoiceId?.Trim(), now, StringComparison.OrdinalIgnoreCase))
         {
             return line;
         }
 
-        line += $" It is for the voice {consent.VoiceId.Trim()}, not the one now chosen";
+        line += $" It is for the voice {consent.VoiceId?.Trim()}, not the one now chosen";
 
         return nowCloned
             ? line + ", so the free voice reads every line until this one has a consent of its own."

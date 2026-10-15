@@ -525,9 +525,10 @@ public static partial class AchievementEvaluator
             // Still turning up a year later. Taken from the earliest race
             // this driver actually appears in, not from when their profile
             // was created - a profile can be made months before anyone uses
-            // it.
-            var firstSeen = earlier
-                .Where(r => r.Results.Any(e => string.Equals(e.Transponder, entry.Transponder, StringComparison.OrdinalIgnoreCase)))
+            // it. Races they turned a lap in (myEarlier), like the badges
+            // around it: a grid row that never left the line - a no-show on
+            // a hand-released grid - is not having been here.
+            var firstSeen = myEarlier
                 .Select(r => r.StartedAtUtc)
                 .Where(d => d != default)
                 .DefaultIfEmpty(default)
@@ -1258,9 +1259,10 @@ public static partial class AchievementEvaluator
     /// </summary>
     private static bool WonTheLastTwo(IReadOnlyList<SessionRecord> earlier, string transponder)
     {
-        var recent = earlier
-            .Where(r => r.Results.Any(e => string.Equals(e.Transponder, transponder, StringComparison.OrdinalIgnoreCase)))
-            .OrderByDescending(r => r.StartedAtUtc)
+        // Races they turned a lap in (RacesEntered, newest first), as for
+        // every other run: a 0-lap no-show row on a hand-released grid is
+        // not a race entered, and used to break (or stand in for) the run.
+        var recent = RacesEntered(earlier, transponder)
             .Take(2)
             .ToList();
 

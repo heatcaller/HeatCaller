@@ -1,8 +1,8 @@
 namespace HeatCaller;
 
 /// <summary>
-/// Two brains, tried in order: the relay first, Ollama on this laptop if
-/// the relay didn't write the line.
+/// Two brains, tried in order: the relay first, the model built into
+/// HeatCaller on this PC if the relay didn't write the line.
 ///
 /// Per LINE, not per settings change, and that is the whole point. A club
 /// can have the relay set up and still not be included for commentary on
@@ -51,7 +51,7 @@ public sealed class FallbackCommentaryBrain : ICommentaryBrain
 
         // Both brains' console lines pass through, already tagged by the
         // brain that wrote them ("[brain] ..." and "[llm] ..."), so an
-        // evening where the relay quietly handed over to Ollama reads as
+        // evening where the relay quietly handed over to the local model reads as
         // what it was rather than as nothing happening.
         _first.StatusMessage += Say;
         _second.StatusMessage += Say;
@@ -105,7 +105,7 @@ public sealed class FallbackCommentaryBrain : ICommentaryBrain
     }
 
     /// <summary>
-    /// Warms both. Ollama's is the one that matters - it loads a model -
+    /// Warms both. The local one's is what matters - it loads the model,
     /// and the relay's is a cheap question that also tells the console
     /// whether this club is included, which is the first thing anyone
     /// wants to know when commentary is on and nothing is being said.

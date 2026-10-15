@@ -173,19 +173,36 @@ public sealed class BugHunt5RaceNightTests : IDisposable
     {
         // It used to call RaceEventStore.Close straight from the Click
         // handler. Both the guard and the question have to come before it,
-        // and there is no way to press that button in a test.
-        var close = MethodBody(Source("RaceDayEventControl.cs"), "private void CloseOrReopen()", null);
+        // and there is no way to press that button in a test. They now live
+        // in AskToCloseDay, which The Day and the Calendar both go through,
+        // so the two Close Day buttons cannot disagree.
+        var source = Source("RaceDayEventControl.cs");
+        var ask = MethodBody(source, "internal static bool AskToCloseDay(", "private void CloseOrReopen()");
+        var close = MethodBody(source, "private void CloseOrReopen()", null);
 
-        var guard = close.IndexOf("DayWithRoundOnTrack", StringComparison.Ordinal);
-        var asked = close.IndexOf("CloseDayQuestion", StringComparison.Ordinal);
-        var closed = close.IndexOf("_events.Close(", StringComparison.Ordinal);
+        var guard = ask.IndexOf("DayWithRoundOnTrack", StringComparison.Ordinal);
+        var asked = ask.IndexOf("CloseDayQuestion", StringComparison.Ordinal);
+        var noByDefault = ask.IndexOf("MessageBoxDefaultButton.Button2", StringComparison.Ordinal);
 
         Assert.True(guard >= 0, "Close Day does not check for a round on track at all.");
         Assert.True(asked >= 0, "Close Day does not ask anything at all.");
-        Assert.True(closed >= 0, "Close Day no longer closes the day.");
+        Assert.True(noByDefault >= 0, "Close Day's question no longer has No as the default.");
+        Assert.True(guard < asked, "The round-on-track guard must run before the question.");
 
-        Assert.True(guard < closed, "The round-on-track guard must run before the day is closed.");
-        Assert.True(asked < closed, "The question must be asked before the day is closed.");
+        var gate = close.IndexOf("AskToCloseDay(", StringComparison.Ordinal);
+        var closed = close.IndexOf("_events.Close(", StringComparison.Ordinal);
+
+        Assert.True(gate >= 0, "The Day's Close Day no longer goes through AskToCloseDay.");
+        Assert.True(closed >= 0, "Close Day no longer closes the day.");
+        Assert.True(gate < closed, "The guard and the question must come before the day is closed.");
+
+        // The Calendar's Close Day used to skip both.
+        var calendar = Source("EventsControl.cs");
+        var calendarGate = calendar.IndexOf("AskToCloseDay(", StringComparison.Ordinal);
+        var calendarClosed = calendar.IndexOf(".Close(", StringComparison.Ordinal);
+
+        Assert.True(calendarGate >= 0, "The Calendar's Close Day does not go through AskToCloseDay.");
+        Assert.True(calendarGate < calendarClosed, "The Calendar must ask before it closes the day.");
     }
 
     // --- Two Big Screens ----------------------------------------------------

@@ -362,7 +362,19 @@ public sealed class GhostEditForm : Form
         var existingIndex = _drivers.FindIndex(d =>
             string.Equals(d.Transponder, Result.SourceTransponder, StringComparison.OrdinalIgnoreCase));
 
-        if (_cmbDriver.Items.Count > 0)
+        // Not a driver's main transponder - perhaps their alternate one, so
+        // looked up as everywhere else does (ProfileStore.Get).
+        var hasSource = !string.IsNullOrWhiteSpace(Result.SourceTransponder);
+        if (existingIndex < 0 && hasSource && _profiles.Get(Result.SourceTransponder) is { } owner)
+        {
+            existingIndex = _drivers.FindIndex(d =>
+                string.Equals(d.Transponder, owner.Transponder, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // A ghost whose driver can't be found any more is left with nobody
+        // picked (and keeps its transponder when saved - see BtnSave_Click)
+        // rather than quietly moved onto whoever is first in the list.
+        if (_cmbDriver.Items.Count > 0 && (existingIndex >= 0 || !hasSource))
         {
             _cmbDriver.SelectedIndex = existingIndex >= 0 ? existingIndex : 0;
         }
@@ -513,9 +525,13 @@ public sealed class GhostEditForm : Form
 
         Result.FixedLapMs = (int)(_numFixedLap.Value * 1000);
 
-        Result.SourceTransponder = needsDriver && _cmbDriver.SelectedIndex >= 0
-            ? _drivers[_cmbDriver.SelectedIndex].Transponder
-            : string.Empty;
+        // Nobody picked (its driver couldn't be found when the form opened):
+        // the transponder it had is kept, not lost.
+        Result.SourceTransponder = !needsDriver
+            ? string.Empty
+            : _cmbDriver.SelectedIndex >= 0
+                ? _drivers[_cmbDriver.SelectedIndex].Transponder
+                : Result.SourceTransponder;
 
         // Stored as UTC, and the end date covers the whole day rather than
         // midnight at its start - "up to the 14th" ought to include the 14th.

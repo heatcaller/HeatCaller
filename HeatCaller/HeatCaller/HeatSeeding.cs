@@ -33,8 +33,15 @@ public static class HeatSeeding
     /// <paramref name="sinceUtc"/>, by transponder - from the saved races
     /// run for a round of that class. Demo races and ghosts left out.
     /// </summary>
+    /// <param name="primaryForAlternate">
+    /// ProfileStore.PrimaryForAlternate, so a lap set on a driver's
+    /// ALTERNATE transponder is filed under their main one - the id the
+    /// rosters being sorted hold. Left null, every lap stays under the id it
+    /// was set on, as before.
+    /// </param>
     public static Dictionary<string, long> BestLaps(
-        string className, IEnumerable<SessionRecord> history, Func<string, RoundDefinition?> roundOf, DateTime sinceUtc)
+        string className, IEnumerable<SessionRecord> history, Func<string, RoundDefinition?> roundOf, DateTime sinceUtc,
+        Func<string, string?>? primaryForAlternate = null)
     {
         var best = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
@@ -58,9 +65,16 @@ public static class HeatSeeding
                     continue;
                 }
 
-                if (!best.TryGetValue(result.Transponder, out var had) || result.FastLapMs < had)
+                // Under the driver's main transponder. Keyed by the id the
+                // lap was set on, a driver whose recent laps were all in
+                // their second car had no pace at all on the roster - which
+                // holds main transponders - and was sorted in with the
+                // drivers nobody has a lap for.
+                var driver = primaryForAlternate?.Invoke(result.Transponder) ?? result.Transponder;
+
+                if (!best.TryGetValue(driver, out var had) || result.FastLapMs < had)
                 {
-                    best[result.Transponder] = result.FastLapMs;
+                    best[driver] = result.FastLapMs;
                 }
             }
         }

@@ -90,7 +90,9 @@ internal static class DriverImport
     /// <summary>
     /// One line split into fields, quotes honoured ("Smith, Jr." is one
     /// field, and "" inside quotes is a quote). A field spread over two
-    /// lines is not supported - driver lists don't have them.
+    /// lines is read as one when given the whole record - which
+    /// CsvHelper.NonBlankLines now keeps together, so a note typed over two
+    /// lines in Excel is no longer split into a junk driver.
     /// </summary>
     internal static List<string> ParseLine(string line, char delimiter)
     {

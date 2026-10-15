@@ -15,6 +15,7 @@ import {
   livePage,
   managePage,
   manifest,
+  nightPage,
   resultsPage,
   schedulePage,
   signupPage,
@@ -23,7 +24,7 @@ import {
   type PageContext,
 } from "./pages.js";
 import { DEFAULT_LOOK, flagColours, lookFrom, type Look } from "./site.js";
-import { BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
+import { BRAIN_LONG_WORDS_CEILING, BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
 import { VOICE_PLAN_OFF, type VoiceService } from "./voice.js";
 
 /** The public pages under /c/<club>/, by their last path segment. */
@@ -107,6 +108,9 @@ const CARD_CACHE_MAX_TOTAL = 8 * 1024 * 1024;
  * be bounded here is TIME, and that is what these two do.
  */
 const CARDS_PER_ADDRESS = 60;
+
+/** What a sign-in is told when SLOW_HASHES_PER_ADDRESS or SLOW_HASHES_IN_ALL is used up. Not a wrong PIN, and not counted as one. */
+const SLOW_HASH_BUSY = "Too many sign-ins right now. Wait a minute and try again.";
 const CARDS_IN_ALL = 400;
 
 /** A tap older than this is from another day, and applying it now would be wrong rather than late. */
@@ -200,8 +204,51 @@ const NOTES_OPEN_DOC = "notesopen";
  */
 const LISTEN_OPEN_DOC = "listenopen";
 
+/** The flag the laptop sets to say its club offers drivers their own night - see nightsOpenFor. */
+const NIGHTS_OPEN_DOC = "nightsopen";
+
+/** The channel one driver's night lives in - see CHANNELS.nights. */
+const NIGHTS_CHANNEL = "nights";
+
 /** The collection the announcer's lines arrive in - see CHANNELS.listen. */
 const LISTEN_CHANNEL = "listen";
+
+/**
+ * The channels a club has to switch ON before this relay will take a
+ * document for one, and the plain refusal for one that is off.
+ *
+ * WHY A PUBLISH IS REFUSED AND NOT JUST A READ (13 Oct 2026). Both of
+ * these channels hold something about a named person - the club's own
+ * announcer going out to anybody with the address, and a driver's evening
+ * under their badge id - and both switches DELETE what is held when they
+ * are turned off, because a club that has just declined should not have
+ * that sitting on a relay. A publish the relay accepted anyway would undo
+ * that a second later: the close empties the folder, the next pass of a
+ * laptop with a stale switch fills it again, and the club's "no" means
+ * nothing. The nights channel had exactly that hole until this existed -
+ * the read was gated and the write was not.
+ *
+ * Refused HERE rather than trusted to the laptop, for the reason the
+ * listen gate already gave: a switch on one machine is not a guarantee.
+ * An older build, a restored backup, or a second laptop somebody set up
+ * with the same token all send without knowing about it.
+ *
+ * A channel that is not in here has no switch and is always taken.
+ */
+const SWITCHED_CHANNELS: ReadonlyMap<string, string> = new Map([
+  [LISTEN_CHANNEL, "This club is not letting people listen along, so the announcer's lines are not accepted."],
+  [NIGHTS_CHANNEL, "This club is not offering drivers their own night, so those are not accepted."],
+]);
+
+/**
+ * What a club is told when it publishes to a channel it has not switched
+ * on. The fallback cannot be reached from the two gates above - they only
+ * fire for a channel in the map - and is here so that a third switched
+ * channel added without a message says something true rather than
+ * "undefined".
+ */
+const refusalFor = (channel: string): string =>
+  SWITCHED_CHANNELS.get(channel) ?? `This club has not switched on "${channel}", so those are not accepted.`;
 
 /**
  * A note's whole body, in bytes.
@@ -763,6 +810,11 @@ export class Limiter {
     return this.recent(key).length >= this.limit;
   }
 
+  /** Whether this key still has room for `count` more - for a request that costs more than one. */
+  allows(key: string, count: number): boolean {
+    return this.recent(key).length + count <= this.limit;
+  }
+
   /** Counts one. */
   hit(key: string): void {
     const kept = this.recent(key);
@@ -874,6 +926,10 @@ export class Relay {
   private readonly signupPinGuard: PinGuard;
   /** signin, status and submit together, per club and address. */
   private readonly signupTraffic: Limiter;
+  /** Slow PIN hashes paid, per club and address, across check-in, the manager and sign-up together. See SLOW_HASHES_PER_ADDRESS. */
+  private readonly slowHashes: Limiter;
+  /** The same for the whole relay, one key. See SLOW_HASHES_IN_ALL. */
+  private readonly slowHashBudget: Limiter;
 
   /**
    * Shout-outs from one address, per club: four in five minutes.
@@ -1045,6 +1101,15 @@ export class Relay {
     // a club night's newcomers may all be on the venue's one address - so
     // more room than the manager's, still a wall for a script.
     this.signupTraffic = new Limiter(300, 60 * 1000, () => this.now().getTime());
+
+    // Every slow PIN hash, right guess or wrong. The PIN limits above only
+    // count wrong ones, so a racer with their own PIN could sign in over
+    // and over - or keep a stale pass's PIN coming, or an expired invite
+    // code - and make the relay pay a tenth of a second each time with
+    // every club waiting. These count the hashes themselves, before any
+    // is worked out. See SLOW_HASHES_PER_ADDRESS.
+    this.slowHashes = new Limiter(SLOW_HASHES_PER_ADDRESS, 60 * 1000, () => this.now().getTime());
+    this.slowHashBudget = new Limiter(SLOW_HASHES_IN_ALL, 60 * 1000, () => this.now().getTime(), 1);
     this.notesTraffic = new Limiter(4, 5 * 60 * 1000, () => this.now().getTime());
 
     // Looser than the notes limiter, and matching the laptop's own Wi-Fi
@@ -1811,6 +1876,24 @@ export class Relay {
             sendHtml(response, 200, signupPage(tenant.club, tenant.name, context), context.nonce);
             return;
           }
+
+          // A driver's own night. Not in PAGES, for the same reasons again
+          // and one more: the page itself is noindex, because there is
+          // nothing on it for anybody without the code from their badge.
+          //
+          // SERVED WHATEVER THE ANSWER WILL BE, and that is not laziness.
+          // This route knows nothing about the code - it is never in the
+          // address this handler sees when the link is the "#d=" form a
+          // fragment is never sent - so the page is the thing that asks,
+          // over POST, and the thing that says what came back. Refusing
+          // here for a club with the switch off would also hand a stranger
+          // a way to learn which clubs offer this, which is the opposite of
+          // what readOneNight's single 404 is for.
+          if (page === "night") {
+            const context = await this.contextFor(request, tenant.club);
+            sendHtml(response, 200, nightPage(tenant.club, tenant.name, context), context.nonce);
+            return;
+          }
         }
 
         // One session's own address, which exists so that a link to it
@@ -2022,6 +2105,20 @@ export class Relay {
     // notes switch above: the laptop says whether its club wants it, and
     // switching it off clears what is held. The lines themselves arrive
     // through publish/listen like anything else.
+    // A DRIVER ASKING FOR THEIR OWN NIGHT. A POST rather than a GET
+    // because the badge id goes in the BODY: a query string lands in
+    // access logs, in referrers and in a shared browser's history, and
+    // this id is the whole credential.
+    if (method === "POST" && rest.length === 1 && rest[0] === "night") {
+      await this.readOneNight(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "nights" && rest[1] === "open") {
+      await this.setNightsOpen(request, response, club);
+      return;
+    }
+
     if (method === "POST" && rest.length === 2 && rest[0] === "listen" && rest[1] === "open") {
       await this.setListeningOpen(request, response, club);
       return;
@@ -2191,23 +2288,14 @@ export class Relay {
       return;
     }
 
-    // THE ANNOUNCER'S VOICE IS REFUSED UNTIL THE CLUB HAS SAID YES.
-    //
-    // Refused rather than quietly dropped, and refused HERE rather than
-    // trusted to the laptop not to send. The laptop has its own switch and
-    // will not send with it off, but a switch on one machine is not a
-    // guarantee: an older build, a restored backup, a second laptop
-    // somebody set up with the same token. This is the club's own voice
-    // going onto a public address, so the relay is the thing that holds
-    // the line.
+    // A CHANNEL WITH A SWITCH IS REFUSED UNTIL THE CLUB HAS SAID YES - see
+    // SWITCHED_CHANNELS for which, and why the WRITE is gated and not only
+    // the read.
     //
     // 403 and said plainly, because the laptop has a bug worth seeing if
     // it is sending these at all.
-    if (spec.name === LISTEN_CHANNEL && !(await this.listeningOpenFor(club))) {
-      sendJson(response, 403, {
-        ok: false,
-        error: "This club is not letting people listen along, so the announcer's lines are not accepted.",
-      });
+    if (await this.switchedOff(club, spec.name)) {
+      sendJson(response, 403, { ok: false, error: refusalFor(spec.name) });
       return;
     }
 
@@ -2338,11 +2426,12 @@ export class Relay {
           }
         }
       } else {
-        // Read again inside the lock: the club may have switched listening
-        // off while this line was arriving, and that switch takes down
-        // every line under this same lock. Written after it, this line
-        // would sit on a public address the club has just said no to.
-        if (spec.name === LISTEN_CHANNEL && !(await this.listeningOpenFor(club))) {
+        // Read again inside the lock: the club may have switched this
+        // channel off while the document was arriving, and that switch
+        // takes down everything held under this same lock. Written after
+        // it, this document would sit on a relay the club has just said no
+        // to.
+        if (await this.switchedOff(club, spec.name)) {
           return "closed" as const;
         }
 
@@ -2370,10 +2459,7 @@ export class Relay {
 
     // The same refusal as before the body was read. See there.
     if (outcome === "closed") {
-      sendJson(response, 403, {
-        ok: false,
-        error: "This club is not letting people listen along, so the announcer's lines are not accepted.",
-      });
+      sendJson(response, 403, { ok: false, error: refusalFor(spec.name) });
       return;
     }
 
@@ -2749,7 +2835,24 @@ export class Relay {
   ): Promise<void> {
     const spec = channelSpec(channel);
 
-    if (spec === undefined || spec.kind !== "collection") {
+    // A PRIVATE COLLECTION IS ANSWERED AS A MISSING ONE, exactly as
+    // readSnapshot has always answered a private snapshot (13 Oct 2026).
+    //
+    // IT WAS NOT CHECKED HERE AT ALL, and that was a hole waiting for the
+    // first private collection to be added. Nothing leaked, because every
+    // private channel until then - checkin, manage, signup - is a
+    // SNAPSHOT, and readSnapshot has always honoured the flag. But
+    // ChannelSpec.private read as a promise the registry made and this
+    // reader did not keep, so the first per-person collection anybody
+    // added would have been served whole, to anybody, with no token.
+    //
+    // And worse than its bodies: ?meta=1 lists every id in a collection.
+    // The nights channel is keyed by the badge ids from
+    // RelayCheckIn.IdFor, so a listing would have turned eighty
+    // unguessable bits into a public list - and those same ids are what
+    // let somebody be checked in, so it would have handed over check-in
+    // as well.
+    if (spec === undefined || spec.kind !== "collection" || spec.private === true) {
       sendJson(response, 404, { ok: false, error: `No collection called "${channel}".` });
       return;
     }
@@ -2894,6 +2997,16 @@ export class Relay {
     channel: string,
     asked: string,
   ): Promise<void> {
+    // Guarded again, though readCollection is its only caller and refuses
+    // a private channel before reaching here. A reader that is correct
+    // only because of who happens to call it is one edit away from not
+    // being - and this one hands back bodies by id, which is exactly what
+    // a private collection must not do.
+    if (channelSpec(channel)?.private === true) {
+      sendJson(response, 404, { ok: false, error: `No collection called "${channel}".` });
+      return;
+    }
+
     const wanted = asked
       .split(",")
       .map((id) => id.trim())
@@ -3141,7 +3254,9 @@ export class Relay {
   ): Promise<void> {
     const spec = channelSpec(channel);
 
-    if (spec === undefined || spec.kind !== "collection" || !isValidItemId(id)) {
+    // Private here too - see readCollection. One document of a private
+    // collection is the whole of what somebody would want from it.
+    if (spec === undefined || spec.kind !== "collection" || spec.private === true || !isValidItemId(id)) {
       sendJson(response, 404, { ok: false, error: "No such document." });
       return;
     }
@@ -3639,8 +3754,11 @@ export class Relay {
       system,
       facts,
       // Clamped here as well as in the service: a laptop asking for a
-      // thousand words is a bug, and the bill is HeatCaller's.
-      Math.max(10, Math.min(Math.round(words), 300)),
+      // thousand words is a bug, and the bill is HeatCaller's. Up to the
+      // long-piece ceiling, not 300: the service holds a normal line to
+      // maxWords and a recap or preview to maxLongWords, and a clamp here
+      // below that cut every long piece short before it got there.
+      Math.max(10, Math.min(Math.round(words), BRAIN_LONG_WORDS_CEILING)),
       Math.max(0, Math.min(variety, 1)),
     );
 
@@ -3876,6 +3994,16 @@ export class Relay {
       // like for free.
       const wellFormed = /^[0-9]{4,8}$/.test(offered);
 
+      // What the two hashes below will cost, taken before either is worked
+      // out - right PIN, wrong one, or a stale pass's PIN alike, since all
+      // of them pay. Refused, not counted as a guess, when there is no room.
+      const slow = wellFormed && checkin.salt !== "" ? (checkin.pinSha256 !== "" ? 2 : 1) : 0;
+
+      if (!this.takeSlowHashes(who, slow)) {
+        sendJson(response, 429, { ok: false, error: SLOW_HASH_BUSY });
+        return;
+      }
+
       // Staff first, compared in constant time as ever.
       const staffHash = wellFormed && checkin.pinSha256 !== "" ? pinHash(club, offered, checkin.salt) : "";
 
@@ -3935,10 +4063,23 @@ export class Relay {
     }
 
     if (action === "one") {
+      // AND WHETHER THERE IS A NIGHT TO OFFER THEM (13 Oct 2026). This is
+      // the one place a driver has already shown their own badge code and
+      // the page is already showing just them - so it is the one place the
+      // relay can hand them a link to their own night without anybody
+      // having to print a new badge or send them an address.
+      //
+      // Told plainly, because nothing is given away by it: the guard
+      // directly above answers 404 for an id that is not on the list, so
+      // this line is only ever reached by somebody already holding a real
+      // badge code - and whether a club offers this is not a secret from
+      // its own drivers. What IS a secret is which codes are real, and
+      // that is what the 404 above and readOneNight's single 404 keep.
       sendJson(response, 200, {
         ok: true,
         event: checkin.event,
         driver,
+        nights: await this.nightsOpenFor(club),
       });
       return;
     }
@@ -4258,6 +4399,30 @@ export class Relay {
   }
 
   /**
+   * Takes `count` slow PIN hashes from this address's allowance and the
+   * relay's, or none at all when either has no room - false then, and the
+   * caller must not hash. No await in it, so it sits in the same step as
+   * the PIN checks around it. Nothing to take for none (a laptop with no
+   * salt still hashes with the old single SHA-256, which costs nothing).
+   */
+  private takeSlowHashes(who: string, count: number): boolean {
+    if (count <= 0) {
+      return true;
+    }
+
+    if (!this.slowHashes.allows(who, count) || !this.slowHashBudget.allows("all", count)) {
+      return false;
+    }
+
+    for (let i = 0; i < count; i++) {
+      this.slowHashes.hit(who);
+      this.slowHashBudget.hit("all");
+    }
+
+    return true;
+  }
+
+  /**
    * A phone trading the manager PIN for a pass - manage's own version of
    * checkinRequest's "list" action, without a roster to hand back: the
    * pass is all a manager needs, and the manage page asks for whatever it
@@ -4316,6 +4481,12 @@ export class Relay {
     // shorter is answered and counted exactly as a wrong PIN, the same
     // treatment check-in gives a badly-shaped guess.
     const wellFormed = /^[0-9]{6,32}$/.test(offered);
+
+    // The hash below is paid for right PINs too - taken first, as check-in's.
+    if (!this.takeSlowHashes(who, wellFormed && manage.salt !== "" ? 1 : 0)) {
+      sendJson(response, 429, { ok: false, error: SLOW_HASH_BUSY });
+      return;
+    }
 
     if (wellFormed && sameHash(managePinHash(club, offered, manage.salt), manage.pinSha256)) {
       // The salt goes back with the pass: the phone makes the key it signs
@@ -4823,7 +4994,14 @@ export class Relay {
         // it stands.
         await this.signupPinGuard.ready(club);
 
-        if (this.signupPinFailures.blocked(who) || this.signupPinGuard.lockedUntilNow(club) > 0) {
+        // And the same, taken at its word, when this address or the relay
+        // has used up its slow hashes (see takeSlowHashes): a pass holder
+        // sending its own code over and over must not cost a hash each time.
+        if (
+          this.signupPinFailures.blocked(who) ||
+          this.signupPinGuard.lockedUntilNow(club) > 0 ||
+          !this.takeSlowHashes(who, typedHash === undefined && view?.salt ? 1 : 0)
+        ) {
           h = byPass;
         } else {
           h = hashOfTyped() === byPass ? byPass : undefined;
@@ -4892,7 +5070,13 @@ export class Relay {
 
     // wellFormed is worked out at the top. A badly-shaped code is answered
     // and counted exactly as a wrong one; a well-formed one is hashed now -
-    // or not again, if the pass above already did.
+    // or not again, if the pass above already did. Its slow hash is taken
+    // first, for right and expired codes as much as wrong ones.
+    if (!this.takeSlowHashes(who, wellFormed && typedHash === undefined && view.salt !== "" ? 1 : 0)) {
+      sendJson(response, 429, { ok: false, error: SLOW_HASH_BUSY });
+      return;
+    }
+
     const h = wellFormed ? hashOfTyped() : "";
 
     // A lookup by hash, as a racer PIN is found: the hash is what the
@@ -5105,6 +5289,155 @@ export class Relay {
    * every time - nothing is taken off by collecting, only by answering, so
    * a laptop that closes half way loses nothing (RelaySignupDesk).
    */
+  /**
+   * Whether this club offers drivers their own night.
+   *
+   * ABSENT MEANS NO, like every other switch here, and off is what the
+   * laptop ships with: this publishes a named person's results to an
+   * address, and the club notes and the room's vote both ship off for
+   * less.
+   */
+  /**
+   * Whether this club has NOT switched on the channel a document is being
+   * published to - see SWITCHED_CHANNELS.
+   *
+   * False for every channel without a switch, which is all but two of
+   * them, and it costs nothing for those: the lookup is in memory and no
+   * snapshot is read.
+   */
+  private async switchedOff(club: string, channel: string): Promise<boolean> {
+    if (!SWITCHED_CHANNELS.has(channel)) {
+      return false;
+    }
+
+    if (channel === LISTEN_CHANNEL) {
+      return !(await this.listeningOpenFor(club));
+    }
+
+    return !(await this.nightsOpenFor(club));
+  }
+
+  private async nightsOpenFor(club: string): Promise<boolean> {
+    const body = (await this.store.getSnapshot(club, NIGHTS_OPEN_DOC))?.body;
+
+    return isPlainObject(body) && body["open"] === true;
+  }
+
+  /**
+   * The laptop saying whether its club offers drivers their own night -
+   * sent when the setting changes and on every start, so a club that
+   * turns it off is CLOSED here rather than merely stopping publishing.
+   *
+   * Closing throws away every night held, for the reason closing
+   * shout-outs does: a club that has just declined this should not have a
+   * folder full of its drivers' evenings sitting on a relay.
+   */
+  private async setNightsOpen(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const body = await readBody(request, response, NOTES_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const open = body["open"] === true;
+
+    await this.store.putSnapshot(club, NIGHTS_OPEN_DOC, {
+      seq: this.now().getTime(),
+      publishedAt: this.now().toISOString(),
+      body: { open },
+    });
+
+    if (!open) {
+      await this.withLock(club, async () => {
+        for (const item of await this.store.listItems(club, NIGHTS_CHANNEL)) {
+          await this.store.deleteItem(club, NIGHTS_CHANNEL, item.id);
+        }
+
+        // The cached listing with them. A private collection is never
+        // served through the listing cache, so this is belt and braces
+        // rather than a leak - but prune pairs the two and so does the
+        // listen switch, and a cache that outlived its files is the bug
+        // that taught them to.
+        this.forgetListing(club, NIGHTS_CHANNEL);
+      });
+    }
+
+    sendJson(response, 200, { ok: true, open });
+  }
+
+  /**
+   * One driver's own night, for somebody holding that driver's badge id.
+   *
+   * NO LOGIN, AND THAT IS THE DESIGN RATHER THAN A SHORTCUT. The id is
+   * twenty hex characters HMAC'd from the transponder under the club's own
+   * thirty-two random bytes - eighty bits that cannot be guessed, that the
+   * club can revoke for everybody at once, and that are already printed on
+   * the badge in the driver's hand. "The id itself is the credential" is
+   * the rule check-in was built on and this keeps it. A password would be
+   * a worse version of something that already works.
+   *
+   * THE ID IS NEVER THE TRANSPONDER, which is the other half of it: a
+   * transponder on a public address is a key that follows somebody from
+   * meeting to meeting.
+   *
+   * ANSWERED THE SAME WAY whether the club is closed, the driver has no
+   * night or the id is not an id at all - a 404 with no detail. Three
+   * different answers would let somebody working through guesses learn
+   * which ids exist, which is the one thing eighty bits are there to
+   * prevent.
+   */
+  private async readOneNight(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.checkinReads.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.checkinReads.hit(who);
+
+    const body = await readBody(request, response, CHECKIN_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const id = typeof body["id"] === "string" ? body["id"].trim().toLowerCase() : "";
+
+    if (!DRIVER_ID.test(id)) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    if (!(await this.nightsOpenFor(club))) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const doc = await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined);
+
+    if (doc === undefined) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true, night: doc.body });
+  }
+
   /**
    * Whether this club wants shout-outs from its page at all.
    *
@@ -5992,6 +6325,30 @@ export class Relay {
  * attempts small.
  */
 export const PIN_KDF_ITERATIONS = 100_000;
+
+/**
+ * Slow PIN hashes one address may make the relay pay for one club in a
+ * minute - check-in, the manager and sign-up together, right PINs as well
+ * as wrong ones. A right PIN is not a guess, so the PIN limits never count
+ * it, and before this a racer holding their own PIN could sign in in a
+ * loop and spend twenty seconds or more of the relay's CPU a minute, with
+ * every club's live timing waiting behind it. Forty is a paddock of phones
+ * on the venue's one address all signing in in the same minute (a
+ * check-in sign-in costs two: the staff PIN and the racer's) - and four
+ * seconds of CPU a minute at most from any one address.
+ */
+export const SLOW_HASHES_PER_ADDRESS = 40;
+
+/**
+ * And for the whole relay at once, whoever asks - the ceiling that holds
+ * however many addresses somebody has (an IPv6 /64 each is not hard to
+ * come by). About eighteen seconds of CPU a minute, under a third of the
+ * small machine, so live timing always has the rest. Past either, the
+ * sign-in is refused with "busy, try again in a minute" and nothing is
+ * hashed or counted as a guess. A phone already signed in is not affected:
+ * it proves itself with a pass, which costs no slow hash.
+ */
+export const SLOW_HASHES_IN_ALL = 180;
 
 /** A club's PIN salt as the laptop publishes it: 32 random bytes, hex. */
 const PIN_SALT = /^[0-9a-f]{64}$/;

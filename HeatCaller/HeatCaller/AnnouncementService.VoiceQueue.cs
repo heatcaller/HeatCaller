@@ -95,6 +95,23 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // THE CLUB'S DIAL, HERE BECAUSE THIS IS THE FUNNEL (14 Oct 2026).
+        // Every template-based call comes through EnqueueVoice, and only
+        // some of them go through the per-lap candidate gate - so a floor
+        // applied only there would have left the running order, a lapping
+        // and the split calls louder than the lap count beside them, at
+        // the same stop on the same dial.
+        //
+        // Said in the log like every other refusal above it: a club that
+        // has turned the dial down and then wonders where a call went has
+        // to be able to read the answer.
+        if (!DialLetsItSpeak(type, config))
+        {
+            StatusMessage?.Invoke(
+                $"[voice] {type} held - the announcer is set to {ShowChatter.For(Chatter).Name}.");
+            return;
+        }
+
         // A flag with a line already rendered skips synthesis entirely.
         if (IsInterruptingAnnouncement(type) && TrySpeakPreparedFlag(type, config))
         {
@@ -174,36 +191,38 @@ public sealed partial class AnnouncementService
 
             foreach (var (name, value) in extras)
             {
-                line = line.Replace("{" + name + "}", AnnouncementText.OrMissing(display ? value.Display : value.Spoken));
+                line = line.Replace("{" + name + "}", AnnouncementText.OrMissing(display ? value.Display : value.Spoken), StringComparison.OrdinalIgnoreCase);
             }
 
             return line;
         }
 
+        // Placeholders matched whatever their case, the way the release
+        // call matches them - "{Driver}" was otherwise spoken out loud.
         var text = WithExtras(chosenTemplate, display: false)
-            .Replace("{driver}", driver)
-            .Replace("{car}", AnnouncementText.OrMissing(car))
-            .Replace("{lap}", AnnouncementText.OrMissing(lap))
-            .Replace("{time}", AnnouncementText.OrMissing(time))
-            .Replace("{laptime}", AnnouncementText.OrMissing(lapTimeText))
-            .Replace("{gate}", AnnouncementText.OrMissing(gateId))
-            .Replace("{streak}", AnnouncementText.OrMissing(streakText))
-            .Replace("{round}", AnnouncementText.OrMissing(roundText))
-            .Replace("{class}", AnnouncementText.OrMissing(classText))
+            .Replace("{driver}", driver, StringComparison.OrdinalIgnoreCase)
+            .Replace("{car}", AnnouncementText.OrMissing(car), StringComparison.OrdinalIgnoreCase)
+            .Replace("{lap}", AnnouncementText.OrMissing(lap), StringComparison.OrdinalIgnoreCase)
+            .Replace("{time}", AnnouncementText.OrMissing(time), StringComparison.OrdinalIgnoreCase)
+            .Replace("{laptime}", AnnouncementText.OrMissing(lapTimeText), StringComparison.OrdinalIgnoreCase)
+            .Replace("{gate}", AnnouncementText.OrMissing(gateId), StringComparison.OrdinalIgnoreCase)
+            .Replace("{streak}", AnnouncementText.OrMissing(streakText), StringComparison.OrdinalIgnoreCase)
+            .Replace("{round}", AnnouncementText.OrMissing(roundText), StringComparison.OrdinalIgnoreCase)
+            .Replace("{class}", AnnouncementText.OrMissing(classText), StringComparison.OrdinalIgnoreCase)
             .WithMarshals(marshalsText)
             .WithDriverDetails(driverProfile)
             .TidyTemplate();
 
         var displayText = WithExtras(chosenTemplate, display: true)
-            .Replace("{driver}", driver)
-            .Replace("{car}", AnnouncementText.OrMissing(car))
-            .Replace("{lap}", AnnouncementText.OrMissing(lap))
-            .Replace("{time}", AnnouncementText.OrMissing(timeDisplay))
-            .Replace("{laptime}", AnnouncementText.OrMissing(lapTimeDisplay))
-            .Replace("{gate}", AnnouncementText.OrMissing(gateId))
-            .Replace("{streak}", AnnouncementText.OrMissing(streakText))
-            .Replace("{round}", AnnouncementText.OrMissing(roundText))
-            .Replace("{class}", AnnouncementText.OrMissing(classText))
+            .Replace("{driver}", driver, StringComparison.OrdinalIgnoreCase)
+            .Replace("{car}", AnnouncementText.OrMissing(car), StringComparison.OrdinalIgnoreCase)
+            .Replace("{lap}", AnnouncementText.OrMissing(lap), StringComparison.OrdinalIgnoreCase)
+            .Replace("{time}", AnnouncementText.OrMissing(timeDisplay), StringComparison.OrdinalIgnoreCase)
+            .Replace("{laptime}", AnnouncementText.OrMissing(lapTimeDisplay), StringComparison.OrdinalIgnoreCase)
+            .Replace("{gate}", AnnouncementText.OrMissing(gateId), StringComparison.OrdinalIgnoreCase)
+            .Replace("{streak}", AnnouncementText.OrMissing(streakText), StringComparison.OrdinalIgnoreCase)
+            .Replace("{round}", AnnouncementText.OrMissing(roundText), StringComparison.OrdinalIgnoreCase)
+            .Replace("{class}", AnnouncementText.OrMissing(classText), StringComparison.OrdinalIgnoreCase)
             .WithMarshals(marshalsText)
             .WithDriverDetails(driverProfile)
             .TidyTemplate();
@@ -622,6 +641,31 @@ public sealed partial class AnnouncementService
     /// losing one because the announcer happened to be mid-sentence about
     /// someone's lap time is exactly backwards.
     /// </summary>
+    /// <summary>
+    /// Whether the club's chattiness dial will let this call be said at
+    /// all - see ShowChatter.CallIsWorthIt, which has the reasoning and
+    /// the floors.
+    ///
+    /// AN INSTRUCTION IS NEVER HELD, and the list of those is
+    /// <see cref="IsPriorityAnnouncement"/> rather than a second list kept
+    /// here. That list already means exactly the right thing - it is what
+    /// a flag's queue purge spares, for the same reason a taste dial must
+    /// not swallow it: a countdown, a green, a grid call, a driver's
+    /// release and the finish are the race being run.
+    ///
+    /// JUMP START WITH THEM, which the priority list does not include and
+    /// this does. A jump start is a RULING - it is what the penalty on the
+    /// Classes page is applied for - and at its shipped weight of 50 the
+    /// quiet stops would have silenced it. It is not on the priority list
+    /// because it does not need to cut across a flag, which is a different
+    /// question from whether taste may drop it.
+    /// </summary>
+    private bool DialLetsItSpeak(AnnouncementEventType type, AnnouncementEventConfig config) =>
+        ShowChatter.CallIsWorthIt(
+            config.Weight,
+            Chatter,
+            alwaysSaid: IsPriorityAnnouncement(type) || type == AnnouncementEventType.JumpStart);
+
     private static bool IsPriorityAnnouncement(AnnouncementEventType type) => type is
         AnnouncementEventType.RaceStaging or
         AnnouncementEventType.CountdownStarted or
@@ -768,7 +812,7 @@ public sealed partial class AnnouncementService
     /// CheckCloseBattles. Accepted is not a promise it is heard: a flag can
     /// still clear it from the queue, as it always could.
     /// </summary>
-    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null)
+    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null)
     {
         // A line about a ghost - its lap, its streak, the lead it took -
         // while ghosts are not announced (AnnounceGhostsProvider).
@@ -845,7 +889,7 @@ public sealed partial class AnnouncementService
                 }
             }
 
-            _voiceQueue.Add(new QueuedVoiceItem(type, transponder, async () =>
+            _voiceQueue.Add(new QueuedVoiceItem(type, transponder, OnAir: onAir, Work: async () =>
             {
                 try
                 {
@@ -919,7 +963,11 @@ public sealed partial class AnnouncementService
             _leadInFor.Value = type;
 
             Interlocked.Increment(ref _voiceInFlight);
-            BeginSpeaking();
+
+            // Named by its kind rather than carrying a label: a flag call
+            // IS the thing the strip should say - "Yellow flag" - and
+            // nothing wraps one in a segment.
+            BeginSpeaking(type);
 
             try
             {
@@ -978,12 +1026,22 @@ public sealed partial class AnnouncementService
             Func<Task>? work;
             int? generation;
             int? countdownGeneration;
+
+            // What this line is, for the race director's strip - see
+            // AnnouncementService.OnAirNow. Taken here, with the work,
+            // because this is the only point at which the queue knows which
+            // line is about to be spoken rather than merely waiting.
+            AnnouncementEventType? onAirCall = null;
+            string? onAirNamed = null;
+
             lock (_voiceQueueLock)
             {
                 if (_voiceQueue.Count > 0)
                 {
                     var item = _voiceQueue[0];
                     work = item.Work;
+                    onAirCall = item.Type;
+                    onAirNamed = item.OnAir;
                     _voiceQueue.RemoveAt(0);
 
                     // Captured under the queue lock, which ClearTheDecksFor's
@@ -1036,7 +1094,7 @@ public sealed partial class AnnouncementService
             // the voice covers the real speaking window rather than the
             // moment a line was queued - those can be seconds apart when
             // the queue is busy.
-            BeginSpeaking();
+            BeginSpeaking(onAirCall, onAirNamed);
 
             try
             {

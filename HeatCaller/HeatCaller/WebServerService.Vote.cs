@@ -127,7 +127,7 @@ public sealed partial class WebServerService
     /// <summary>
     /// The driver a phone tapped, back from the opaque id the ballot gave
     /// it to the option's own id - or null when it matches nobody on the
-    /// ballot, which RoomVote.Cast then refuses as not on the grid.
+    /// ballot, which HandleRoomVote then refuses as not on the grid.
     /// </summary>
     internal string? VoteOptionFor(RoomVote vote, string? servedId)
     {
@@ -193,12 +193,28 @@ public sealed partial class WebServerService
         // whoever it is beyond the fact that they have voted once.
         //
         // The page sends the ballot's opaque id; Cast wants the option's
-        // own. One that matches nobody goes in as it came, so the phone is
-        // told the driver is not on the grid (or that voting has closed)
-        // rather than that its vote did not come through.
+        // own. One that matches nobody is turned away here and never handed
+        // to Cast as it came: the option ids are transponder numbers, so
+        // passing a raw one through let anybody on the Wi-Fi ask "is this
+        // transponder in the next race?" (and have the answer counted as a
+        // vote). The phone is told the driver is not on the grid instead.
         var served = context.Request.QueryString["d"];
 
-        if (vote.Cast(device, VoteOptionFor(vote, served) ?? served) is { } why)
+        if (VoteOptionFor(vote, served) is not { } option)
+        {
+            // The same words Cast would have used, in the same order, so a
+            // phone on a closed vote is still told it has closed.
+            var whyNot = string.IsNullOrWhiteSpace(served) ? "That vote did not come through - try again."
+                : vote.OnPollId is null ? "There is no vote running at the moment."
+                : !vote.Taking ? "Voting on this one has closed."
+                : "That driver is not on the grid for this race.";
+
+            context.Response.StatusCode = 400;
+            WriteJson(context, JsonSerializer.Serialize(new { ok = false, error = whyNot }));
+            return;
+        }
+
+        if (vote.Cast(device, option) is { } why)
         {
             context.Response.StatusCode = 400;
             WriteJson(context, JsonSerializer.Serialize(new { ok = false, error = why }));

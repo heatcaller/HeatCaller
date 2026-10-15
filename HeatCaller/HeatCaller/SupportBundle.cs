@@ -570,7 +570,7 @@ internal static class SupportBundle
         text.AppendLine();
         text.AppendLine("ANNOUNCER");
         text.AppendLine($"  Muted:                   {YesNo(s.AnnouncerMuted)}");
-        text.AppendLine($"  Commentary:              {YesNo(s.CommentaryEnabled)} - {s.CommentaryModel} at {s.CommentaryEndpoint}, {s.CommentaryTimeoutSeconds}s");
+        text.AppendLine($"  Commentary:              {YesNo(s.CommentaryEnabled)} - local model {YesNo(s.CommentaryUseLocalModel)}, {s.CommentaryTimeoutSeconds}s");
         text.AppendLine($"  Intros / recaps / notes: {YesNo(s.CommentaryRaceIntros)} / {YesNo(s.CommentaryRaceSummaries)} / {YesNo(s.CommentaryTalkingPoints)}");
         text.AppendLine($"  Tone, max length:        {s.CommentaryToneStyle}, {s.CommentaryMaxWords} words");
         text.AppendLine($"  Sound with races:        {YesNo(s.AudioStartWithRaces)} (music {YesNo(s.AudioStartMusic)}, ambience {YesNo(s.AudioStartAmbience)})");

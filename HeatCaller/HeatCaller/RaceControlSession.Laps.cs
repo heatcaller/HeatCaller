@@ -606,6 +606,14 @@ public sealed partial class RaceControlSession
             standing.Laps++;
             standing.LastLapDeviceTimeMs = lap.DeviceTimeMs;
 
+            // A car's first counted lap is what puts it in this race, so a
+            // grid borrowed from the last race is renumbered over the cars
+            // that are actually here - see RenumberStartPositionsOverStarters.
+            if (standing.Laps == 1)
+            {
+                RenumberStartPositionsOverStarters();
+            }
+
             // A jump-start penalty is owed from before the race began, so
             // it's applied on the driver's first counted lap - the earliest
             // point at which there's an elapsed time to add it to.

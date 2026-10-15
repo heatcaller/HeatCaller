@@ -505,6 +505,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     {
         if (ReportEvent(options) is not { } raceEvent)
         {
+            // ForDay leaves out inspections filed against a race day that
+            // has been deleted - kept only for its undo - which used to show
+            // here as if that day's scrutineering still happened.
             return tech.ForDay(options.Day);
         }
 

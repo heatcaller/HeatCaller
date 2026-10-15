@@ -1717,6 +1717,55 @@ public sealed class RaceDayEventControl : UserControl
             + "Reopen Day puts it back.";
     }
 
+    /// <summary>
+    /// Everything that stands between a Close Day button and the close: the
+    /// on-track refusal, then the question with No as the default. True when
+    /// the day may be closed.
+    ///
+    /// Shared with the Calendar's Close Day (EventsControl), which used to
+    /// ask its own one-line question with Yes as the default and no look at
+    /// the track at all - the same close, from a second button, with neither
+    /// of the guards this one had been given.
+    /// </summary>
+    internal static bool AskToCloseDay(IWin32Window owner, RaceEvent raceEvent, RoundDefinitionStore rounds)
+    {
+        // Closing used to go straight from the Click handler into
+        // RaceEventStore.Close - no question and no look at the track,
+        // from a button that sits beside Delete Day, which refuses
+        // outright while a round is on track for a strictly smaller
+        // consequence. One press at 7pm and automatic round picking
+        // stopped for the night, every later check-in landed on the
+        // legacy day, and tonight's heats dropped out of the standings
+        // and out of Seed Mains.
+        //
+        // The same guard the delete uses, through the pure half of it, so
+        // the two cannot disagree about what "on track" means - see
+        // RaceDayDeleter.DayWithRoundOnTrack. Refused rather than asked,
+        // for its reason: there is no answer that makes it safe, and the
+        // day can close as soon as that race has been saved.
+        if (RaceDayDeleter.DayWithRoundOnTrack(new[] { raceEvent }, RaceDayDeleter.RoundOnTrackId?.Invoke()) is { } busy)
+        {
+            AppDialog.Show(owner,
+                $"\"{busy.DisplayName}\" has a round on track - its result would have nothing to be saved against. "
+                + "Close the day when that race has finished and been saved.",
+                "Round on track", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+
+        // Rounds on the day that have not been run, counted the same way
+        // the status line counts them - see RefreshStatus.
+        var leftToRun = raceEvent.RoundIds.Count(id => rounds.Get(id) is { IsRecorded: false });
+
+        // No is the default: a stray Enter on this page must not end the
+        // night. See CloseDayQuestion for what it says and why.
+        return AppDialog.Show(owner,
+                CloseDayQuestion(raceEvent.DisplayName, leftToRun),
+                "Close race day",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+    }
+
     private void CloseOrReopen()
     {
         if (Selected is not { IsLegacy: false } raceEvent)
@@ -1729,41 +1778,9 @@ public sealed class RaceDayEventControl : UserControl
 
         if (raceEvent.IsOpen)
         {
-            // Closing used to go straight from the Click handler into
-            // RaceEventStore.Close - no question and no look at the track,
-            // from a button that sits beside Delete Day, which refuses
-            // outright while a round is on track for a strictly smaller
-            // consequence. One press at 7pm and automatic round picking
-            // stopped for the night, every later check-in landed on the
-            // legacy day, and tonight's heats dropped out of the standings
-            // and out of Seed Mains.
-            //
-            // The same guard the delete uses, through the pure half of it, so
-            // the two cannot disagree about what "on track" means - see
-            // RaceDayDeleter.DayWithRoundOnTrack. Refused rather than asked,
-            // for its reason: there is no answer that makes it safe, and the
-            // day can close as soon as that race has been saved.
-            if (RaceDayDeleter.DayWithRoundOnTrack(new[] { raceEvent }, RaceDayDeleter.RoundOnTrackId?.Invoke()) is { } busy)
-            {
-                AppDialog.Show(this,
-                    $"\"{busy.DisplayName}\" has a round on track - its result would have nothing to be saved against. "
-                    + "Close the day when that race has finished and been saved.",
-                    "Round on track", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // Rounds on the day that have not been run, counted the same way
-            // the status line counts them - see RefreshStatus.
-            var leftToRun = raceEvent.RoundIds.Count(id => _rounds.Get(id) is { IsRecorded: false });
-
-            // No is the default: a stray Enter on this page must not end the
-            // night. See CloseDayQuestion for what it says and why.
-            if (AppDialog.Show(this,
-                    CloseDayQuestion(raceEvent.DisplayName, leftToRun),
-                    "Close race day",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning,
-                    MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            // The on-track refusal and the No-default question - shared with
+            // the Calendar's Close Day, see AskToCloseDay.
+            if (!AskToCloseDay(this, raceEvent, _rounds))
             {
                 return;
             }

@@ -602,7 +602,10 @@ public sealed class AmbienceService : IDisposable
                 // ran dry while the announcer's output opened (see MusicPlayer).
                 _output = new WaveOutEvent { DesiredLatency = MusicPlayer.BedLatencyMs, NumberOfBuffers = MusicPlayer.BedBuffers };
                 _duckGain = new SmoothGainSampleProvider(_mixer, DuckFactor, DuckDownSeconds, DuckUpSeconds);
-                _output.Init(_duckGain);
+                // Sent to the device as 16-bit, exactly as AudioBus does: some
+                // drivers play 32-bit float as silence without complaint. Every
+                // gain in front of it is already held at or below 1.
+                _output.Init(new SampleToWaveProvider16(_duckGain));
 
                 // Watched like AudioBus and MusicPlayer watch theirs. Without
                 // it, a device that went away (a Bluetooth speaker switched
@@ -772,6 +775,16 @@ public sealed class AmbienceService : IDisposable
         if (_current == intensity && !resumed)
         {
             return;
+        }
+
+        // A real mood change ends any surge still running. Left live, the
+        // surge's peak was still what EffectiveIntensity reported, and its
+        // settle timer gave up (the mood had moved) without clearing it - so
+        // a fader drag in the Mixer (RefreshLevels) put the crowd back up to
+        // Excited during a caution or while staging.
+        if (_current != intensity)
+        {
+            _surgeUntilUtc = DateTime.MinValue;
         }
 
         _current = intensity;

@@ -53,6 +53,13 @@ internal static class RaceFiling
     /// <param name="autoAdvanceWanted">Whether automatic round picking is on - only for the log line when there is no round.</param>
     /// <param name="afterSaved">Runs once the history write has landed, before the round is linked: badges, the spoken summary.</param>
     /// <param name="raceDayOpen">False when no race day is open - which is why no round was picked automatically (RoundPicker), and the log says so.</param>
+    /// <param name="demoMayFillTheProgramme">
+    /// Whether a DEMO race may mark its round as run - see
+    /// AppSettings.DemoFillsTheProgramme, which is how a club rehearses a
+    /// whole night. It does not change what a demo counts for: every
+    /// record in this app is guarded by IsDemoSession where it is computed,
+    /// not by the round link.
+    /// </param>
     /// <param name="beforeJournalCleared">
     /// Runs once the round is linked, before the journal goes: the results
     /// card and SessionSaved. SessionSaved must come AFTER the link - the
@@ -60,6 +67,46 @@ internal static class RaceFiling
     /// before, it kept the round that had just been run selected, so the
     /// next race was filed against it too.
     /// </param>
+    /// <summary>
+    /// Whether linking this race to that round would throw away a result
+    /// that really happened - a DEMO landing on a round a real race has
+    /// already run.
+    ///
+    /// THE ONE THING A DEMO NIGHT MUST NOT DO. MarkRecorded overwrites the
+    /// link, so without this, demoing a heat that had already been raced
+    /// for real would replace its result in the program with invented laps -
+    /// and the real result, still in history, would no longer be attached
+    /// to anything. Qualifying and the mains would then seed off the demo.
+    ///
+    /// A demo replacing ANOTHER demo is fine and is how re-running a
+    /// rehearsal works. A real race replacing anything is fine too: that is
+    /// a club re-running a heat, which is theirs to do.
+    /// </summary>
+    private static bool WouldOverwriteARealResult(
+        SessionRecord record,
+        RoundDefinition round,
+        SessionHistoryStore history,
+        Action<string> log)
+    {
+        if (!record.IsDemo || string.IsNullOrEmpty(round.LinkedSessionId))
+        {
+            return false;
+        }
+
+        // A link pointing at a session that is no longer there is not a real
+        // result - it is a stale link, and ClearRecorded exists for it.
+        if (history.Get(round.LinkedSessionId) is not { } already || already.IsDemoSession())
+        {
+            return false;
+        }
+
+        log($"[session] This demo was NOT tied to \"{round.RoundLabel}\" - that round has a real result "
+            + "already, and a rehearsal must not replace one. Delete the real race from Race History first "
+            + "if you meant to run the round again.");
+
+        return true;
+    }
+
     public static Outcome Commit(
         SessionRecord record,
         RoundDefinition? round,
@@ -71,7 +118,8 @@ internal static class RaceFiling
         Action afterSaved,
         Action beforeJournalCleared,
         Action<string> log,
-        bool raceDayOpen = true)
+        bool raceDayOpen = true,
+        bool demoMayFillTheProgramme = false)
     {
         // The one thing everything below stands on. SafeFile returns false
         // rather than throwing when a write cannot be made - a locked or full
@@ -94,9 +142,22 @@ internal static class RaceFiling
         afterSaved();
 
         // Tie the round to this session so the race program shows it as run,
-        // and qualifying/seeding can find its results. Never for a demo: it
-        // would mark a real heat as run with invented results.
-        if (!record.IsDemo && round is not null && rounds is not null)
+        // and qualifying/seeding can find its results.
+        //
+        // A DEMO ONLY WHEN THE CLUB HAS ASKED FOR ONE (13 Oct 2026). This
+        // used to be a flat "never for a demo", which was right while a
+        // demo was a single race in isolation - and it is exactly what made
+        // a whole night impossible to rehearse, because heats that never
+        // mark themselves run give qualifying nothing to read and mains
+        // nothing to seed from. See AppSettings.DemoFillsTheProgramme.
+        //
+        // The old comment's worry - "it would mark a real heat as run with
+        // invented results" - is answered by the guard below rather than by
+        // refusing every demo: what must not happen is a demo replacing a
+        // result that really happened.
+        var demoMayLink = !record.IsDemo || demoMayFillTheProgramme;
+
+        if (demoMayLink && round is not null && rounds is not null && !WouldOverwriteARealResult(record, round, history, log))
         {
             if (rounds.MarkRecorded(round.Id, record.Id))
             {
@@ -118,7 +179,7 @@ internal static class RaceFiling
                     + "program (deleted or re-generated since it was selected).");
             }
         }
-        else if (!record.IsDemo && rounds is not null)
+        else if (demoMayLink && !record.IsDemo && rounds is not null)
         {
             // Saved, but not attached to anything. Worth saying: a heat
             // staying on "Scheduled" after a race looks like a bug, and the

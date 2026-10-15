@@ -126,13 +126,29 @@ public sealed class QualifyingTests : IDisposable
     }
 
     [Fact]
-    public void A_demo_race_never_seeds_a_real_main()
+    public void A_demo_heat_seeds_the_mains_of_the_night_it_was_rehearsing()
     {
+        // CHANGED 13 Oct 2026, and the old name said what it used to do:
+        // "a demo race never seeds a real main". Qualifying skipped any
+        // demo-linked heat outright, which was right while nothing linked a
+        // demo to a heat on purpose - and it is what made a whole night
+        // impossible to rehearse, because the mains then seeded off nothing.
+        //
+        // A demo only reaches a heat because the club asked for a demo
+        // night (AppSettings.DemoFillsTheProgramme), and RaceFiling refuses
+        // to let one land on a heat that really ran - so a demo in here
+        // means the whole programme is a rehearsal, and seeding it is the
+        // point. It still scores nothing: the championship, badges,
+        // personal bests and every record check IsDemoSession themselves.
+        //
+        // The heat that must never be seeded from is covered where it is
+        // actually prevented - see
+        // RaceFilingTests.A_demo_is_refused_a_heat_that_really_ran.
         RunHeat("Q1", Result("A", 10, 300_000));
         RunHeat("Q2", Result("B", 14, 300_000));
         _sessions.Last().IsDemo = true;
 
-        Assert.Equal(new[] { "A" }, Order(Compute()));
+        Assert.Equal(new[] { "B", "A" }, Order(Compute()));
     }
 
     [Fact]

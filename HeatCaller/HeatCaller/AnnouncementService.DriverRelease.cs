@@ -64,6 +64,14 @@ public sealed partial class AnnouncementService
                         return;
                     }
 
+                    // Listeners at home hear the release call too. Held as
+                    // raw PCM, so wrapped as a wav first - and only when
+                    // something is listening, as that is a copy of the clip.
+                    if (SendToListeners is not null && ListenersWanted?.Invoke() == true)
+                    {
+                        OfferLineToListeners(prepared.Text, EncodeWav(prepared.Pcm, prepared.Format));
+                    }
+
                     await PlayPcmAsync(prepared.Pcm, prepared.Format, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence);
                 }
                 finally
@@ -148,6 +156,18 @@ public sealed partial class AnnouncementService
             return false; // nothing to batch - one line is its own request
         }
 
+        // The cuts are found by looking for the separator's "..." in what
+        // came back. A line that has "..." of its own (a template like
+        // "{driver}... GO!") would be cut in the wrong place, and every clip
+        // after it saved under the wrong driver - so render those one by one.
+        var marker = ReleaseBatchSeparator.Trim();
+
+        if (lines.Any(l => l.Text.Contains(marker, StringComparison.Ordinal)))
+        {
+            StatusMessage?.Invoke("[voice] A release call has \"...\" in it, which would hide the split points - rendering release calls separately instead.");
+            return false;
+        }
+
         var combined = string.Join(ReleaseBatchSeparator, lines.Select(l => l.Text));
         var timed = await SynthesizeTimedGatedAsync(renderProfile, combined);
 
@@ -161,6 +181,22 @@ public sealed partial class AnnouncementService
         // normalisation and audio tags can both change the text, and the
         // timings line up with the former.
         var spoken = new string(timed.Characters.ToArray());
+
+        // Exactly one separator between each pair of lines, or the API
+        // added or dropped one and the cuts can't be trusted.
+        var separatorCount = 0;
+
+        for (var at = spoken.IndexOf(marker, StringComparison.Ordinal); at >= 0; at = spoken.IndexOf(marker, at + marker.Length, StringComparison.Ordinal))
+        {
+            separatorCount++;
+        }
+
+        if (separatorCount != lines.Count - 1)
+        {
+            StatusMessage?.Invoke("[voice] Couldn't find the split points in the batched render - rendering release calls separately instead.");
+            return false;
+        }
+
         var bounds = new List<(int Start, int End)>();
         var cursor = 0;
 

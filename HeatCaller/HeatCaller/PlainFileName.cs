@@ -57,6 +57,14 @@ internal static class PlainFileName
         "CON", "PRN", "AUX", "NUL",
         "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
         "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+
+        // Windows also counts the superscript digits 1, 2 and 3 as port
+        // numbers, so "COM" + superscript one + ".png" opens a serial port
+        // just as "COM1.png" does. COM0 /
+        // LPT0 and the console's own CONIN$ / CONOUT$ are devices too.
+        "COM0", "COM¹", "COM²", "COM³",
+        "LPT0", "LPT¹", "LPT²", "LPT³",
+        "CONIN$", "CONOUT$",
     };
 
     /// <summary>

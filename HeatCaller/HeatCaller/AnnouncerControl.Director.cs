@@ -157,6 +157,15 @@ public partial class AnnouncerControl
             _director.NameFor = NameFor;
             _director.Status += line => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  {line}");
 
+            // A SEGMENT IS SETTLED WHEN IT IS SAID, NOT WHEN IT IS WRITTEN
+            // (14 Oct 2026). This screen can still drop a written line - the
+            // next race called to the grid, the floor taken, the hold - and
+            // until now the director had already marked it said: a club
+            // note spent unheard, the caps used, Repeat offering it. Every
+            // way out of SpeakNextSegmentAsync, and Race Control's colour,
+            // now tells it Spoken or Dropped.
+            _director.CommitWhenSpoken = true;
+
             // THE NIGHT'S LEDGER, HANDED TO THE TWO PROMPT BUILDERS THAT DO
             // NOT COME THROUGH THE DIRECTOR (10 Oct 2026).
             //
@@ -367,12 +376,25 @@ public partial class AnnouncerControl
                 + "Run the races first - this is for after the last one.";
         }
 
-        if (!ShowFloor.TryClaim(TheNightRecap))
+        // For as long as the recap can hold it, not the floor's ordinary
+        // six minutes - see NightRecap.LongestHold.
+        if (!ShowFloor.TryClaim(TheNightRecap, NightRecap.LongestHold))
         {
             return $"{ShowFloor.HeldBy ?? "Something else"} has the broadcast. Wait for it to finish and try again.";
         }
 
         BookendRecording? recording = null;
+
+        // CALLED OFF WHEN THE NEXT RACE IS (14 Oct 2026). The checks above
+        // are all made before the model is asked, and the writing takes up
+        // to three minutes - long enough for the next race to be called to
+        // the grid. Cancelled the moment it is, so the writing stops, the
+        // show is cut short rather than playing its ending over the
+        // countdown, and the read is not waited out. See NextRaceCalled.
+        using var nextRace = new CancellationTokenSource();
+        Action<RaceState> onNextRace = state => NextRaceCalled(state, nextRace);
+
+        _race.StateChanged += onNextRace;
 
         try
         {
@@ -428,9 +450,28 @@ public partial class AnnouncerControl
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {heard}");
             }
 
-            var script = await _commentary.BuildNightRecapAsync(facts).ConfigureAwait(true);
+            var script = await _commentary.BuildNightRecapAsync(facts, nextRace.Token).ConfigureAwait(true);
 
-            var chunks = NightRecap.Chunks(script);
+            // ASKED AGAIN NOW THE WRITING IS BACK (14 Oct 2026). Everything
+            // checked before the model was asked can have changed in the
+            // minutes it took: a race on track, the floor broken or taken,
+            // a segment already on air. Refused and said, rather than read
+            // over the top of any of them.
+            if (WhyNotAfterWriting(TheNightRecap, nextRace) is { } whyNot)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Tonight's recap was written but not played - {whyNot}");
+
+                return $"Tonight's recap was written but not played - {whyNot}";
+            }
+
+            // AND THE HOST'S OWN SIGN-OFF ON THE END (14 Oct 2026), added
+            // here rather than written by the model - see
+            // NightRecap.SignOff. Chunks takes it as its own last piece,
+            // past the backstop that drops an overrunning recap's tail, so
+            // the show ends with the host naming himself and the show on
+            // every night including the ones where the model wrote too
+            // much or stopped early.
+            var chunks = NightRecap.Chunks(script, _commentary.NightRecapSignOff());
 
             if (chunks.Count == 0)
             {
@@ -465,7 +506,8 @@ public partial class AnnouncerControl
                     () => SayTheRecap(chunks),
                     SegmentKind.SignOffNumbers,
                     NightRecap.LongestRead,
-                    caption: NightRecap.OnTheBand).ConfigureAwait(true))
+                    caption: NightRecap.OnTheBand,
+                    ct: nextRace.Token).ConfigureAwait(true))
             {
                 return null;
             }
@@ -487,9 +529,15 @@ public partial class AnnouncerControl
             // path was right because RunLongAsync waits for quiet inside
             // itself; the two were one line apart and behaved completely
             // differently.
-            await treatment.WaitForTheReadAsync(NightRecap.LongestRead).ConfigureAwait(true);
+            await treatment.WaitForTheReadAsync(NightRecap.LongestRead, nextRace.Token).ConfigureAwait(true);
 
             return null;
+        }
+        catch (OperationCanceledException) when (nextRace.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Tonight's recap was cut off - the next race was called to the grid.");
+
+            return "The next race was called to the grid, so tonight's recap was cut off. Play it again after the flag.";
         }
         catch (Exception ex)
         {
@@ -497,6 +545,8 @@ public partial class AnnouncerControl
         }
         finally
         {
+            _race.StateChanged -= onNextRace;
+
             recording?.Finish(line => StatusMessage?.Invoke(line));
 
             ShowFloor.Release(TheNightRecap);
@@ -604,18 +654,35 @@ public partial class AnnouncerControl
             return "A commentary segment is on air. Wait for it to finish and try again.";
         }
 
-        if (!ShowFloor.TryClaim(ADriversNight))
+        // As long as the recap's own hold, being read the same way - see
+        // NightRecap.LongestHold.
+        if (!ShowFloor.TryClaim(ADriversNight, NightRecap.LongestHold))
         {
             return $"{ShowFloor.HeldBy ?? "Something else"} has the broadcast. Wait for it to finish and try again.";
         }
 
         BookendRecording? recording = null;
 
+        // Called off when the next race is, for the reason the recap's own
+        // path gives - see NextRaceCalled.
+        using var nextRace = new CancellationTokenSource();
+        Action<RaceState> onNextRace = state => NextRaceCalled(state, nextRace);
+
+        _race.StateChanged += onNextRace;
+
         try
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Writing {named}'s night...");
 
-            var script = await _commentary.BuildDriverCutAsync(facts).ConfigureAwait(true);
+            var script = await _commentary.BuildDriverCutAsync(facts, nextRace.Token).ConfigureAwait(true);
+
+            // Asked again now the writing is back - see the recap's path.
+            if (WhyNotAfterWriting(ADriversNight, nextRace) is { } whyNot)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {named}'s night was written but not played - {whyNot}");
+
+                return $"{named}'s night was written but not played - {whyNot}";
+            }
 
             var chunks = DriverCut.Chunks(script);
 
@@ -629,6 +696,26 @@ public partial class AnnouncerControl
                 + $"about {SponsorCopy.SpokenLength(script!).TotalSeconds:0} seconds. Playing it now.");
 
             recording = BookendRecording.StartForADriver(named, line => StatusMessage?.Invoke(line));
+
+            // THEIR OWN NIGHT, AS IT SOUNDED (13 Oct 2026). A cold open:
+            // a line of handoff, then a few seconds of the race audio this
+            // driver was actually called over, and then the opener and the
+            // written piece.
+            //
+            // IN FRONT RATHER THAN INSIDE, which is a constraint and not a
+            // preference. RunLongAsync below opens the music, speaks and
+            // plays out in one call and returns true when it has; there is
+            // no addressable moment inside it, and SayTheRecap queues every
+            // chunk without awaiting any of them, so "between the second
+            // and third chunk" is not a place this code can stand. In front
+            // of all of it is a place, and it is also the right one: a cold
+            // open before the title music is what this shape of thing has
+            // always been.
+            //
+            // AFTER THE RECORDER STARTS, so the clip is in the saved file.
+            // That is the whole reason it goes through AudioBus rather than
+            // being stitched on - see DriversOwnClip.
+            await PlayTheirOwnClipAsync(treatment, named).ConfigureAwait(true);
 
             // THE SIGN-OFF'S TREATMENT, like the night's recap: this is the
             // same shape of thing, an opener in front and a playout at the
@@ -644,7 +731,8 @@ public partial class AnnouncerControl
                     () => SayTheRecap(chunks),
                     SegmentKind.SignOffNumbers,
                     NightRecap.LongestRead,
-                    caption: DriverCut.OnTheBand(driverName)).ConfigureAwait(true))
+                    caption: DriverCut.OnTheBand(driverName),
+                    ct: nextRace.Token).ConfigureAwait(true))
             {
                 return null;
             }
@@ -655,9 +743,15 @@ public partial class AnnouncerControl
             // length: SpeakReminder queues and returns, so without this the
             // finally below would close the file and free the floor before a
             // word had been said.
-            await treatment.WaitForTheReadAsync(NightRecap.LongestRead).ConfigureAwait(true);
+            await treatment.WaitForTheReadAsync(NightRecap.LongestRead, nextRace.Token).ConfigureAwait(true);
 
             return null;
+        }
+        catch (OperationCanceledException) when (nextRace.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {named}'s night was cut off - the next race was called to the grid.");
+
+            return $"The next race was called to the grid, so {named}'s night was cut off. Play it again after the flag.";
         }
         catch (Exception ex)
         {
@@ -665,9 +759,150 @@ public partial class AnnouncerControl
         }
         finally
         {
+            _race.StateChanged -= onNextRace;
+
             recording?.Finish(line => StatusMessage?.Invoke(line));
 
             ShowFloor.Release(ADriversNight);
+        }
+    }
+
+    /// <summary>
+    /// Calls a long piece off when the race moves towards the next green -
+    /// staged, counted down or started. Raised on whatever thread the race
+    /// session raises it on; cancelling is safe from any of them.
+    /// </summary>
+    private static void NextRaceCalled(RaceState state, CancellationTokenSource nextRace)
+    {
+        if (state is not (RaceState.Staging or RaceState.Countdown or RaceState.Racing))
+        {
+            return;
+        }
+
+        try
+        {
+            nextRace.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The piece finished between the race moving and this - nothing
+            // left to call off.
+        }
+    }
+
+    /// <summary>
+    /// Why a long piece that has just come back from the model must not be
+    /// played now, or null when it may - the checks made before the model
+    /// was asked, made again (14 Oct 2026). The writing takes minutes, and
+    /// a recap that reads four minutes of "tonight's racing" over a heat
+    /// that went green while it was written is the thing those checks were
+    /// there to stop.
+    /// </summary>
+    /// <param name="who">What the piece calls itself on the broadcast floor.</param>
+    /// <param name="nextRace">Cancelled when the next race was called while it was written.</param>
+    private string? WhyNotAfterWriting(string who, CancellationTokenSource nextRace)
+    {
+        if (nextRace.IsCancellationRequested
+            || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+        {
+            return "a race was called while it was being written. Wait for the flag and try again.";
+        }
+
+        // Still ours. Asking HeldBy also breaks a claim that has gone
+        // stale, which is the honest answer: if it went stale, something
+        // else may already have started on the floor.
+        if (!string.Equals(ShowFloor.HeldBy, who, StringComparison.Ordinal))
+        {
+            return "the broadcast was taken by something else while it was being written. Wait for it to finish and try again.";
+        }
+
+        if (_segmentInFlight || ShowOnAir.Playing)
+        {
+            return "a commentary segment went on air while it was being written. Wait for it to finish and try again.";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The cold open of a driver's own piece: a line of handoff and then a
+    /// few seconds of the race audio they were called over.
+    ///
+    /// NOTHING HERE CAN TAKE THE PIECE DOWN, which is why the whole of it
+    /// sits in one catch. A clip is a courtesy. Every way it can fail - no
+    /// recording tonight, the folder gone, a file half-written, a disk that
+    /// will not read, no output device at all - leaves the piece exactly as
+    /// it was before this existed: written, read and recorded, without the
+    /// twenty seconds in front of it.
+    ///
+    /// THE CLUB'S OWN SWITCH is read, and only the one that is about this:
+    /// DriverHighlights, "cut a clip for each driver". A club that has
+    /// unticked that is saying it does not want driver clips, so this does
+    /// not go looking for last hour's. The RECORDING switch is deliberately
+    /// NOT read: a club that unticks recording while packing up has not said
+    /// anything about the clip that already exists, and reading it would
+    /// have cost them this.
+    ///
+    /// THE LINE FIRST, because without it a hall hears twenty seconds of its
+    /// own race audio out of nowhere and reads it as a fault. It goes
+    /// through SpeakReminder like every other line, so it is on the screens
+    /// and in the recording with the rest.
+    ///
+    /// AND WAITED FOR. SpeakReminder queues and returns, so without the wait
+    /// the clip would start over the top of the line introducing it.
+    /// </summary>
+    private async Task PlayTheirOwnClipAsync(ShowTreatment treatment, string named)
+    {
+        try
+        {
+            var store = RaceAudioStore.Load();
+
+            if (!store.DriverHighlights)
+            {
+                return;
+            }
+
+            // Tonight's folder, by the night it is rather than the calendar
+            // date - a meeting that runs past midnight is one night, and
+            // FolderForNight is the one place that decision lives.
+            if (DriversOwnClip.FindFor(store.FolderForNight(DateTime.Now), named) is not { } path)
+            {
+                return;
+            }
+
+            var clip = ShowClip.Load(path, out var problem);
+
+            if (clip is null)
+            {
+                // Said rather than swallowed: a club that has the clips
+                // switched on and never hears one should be able to find out
+                // why from the log.
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [show] {named}'s clip couldn't be read ({problem}) - "
+                    + "the piece is being read without it.");
+
+                return;
+            }
+
+            var seconds = Math.Min(DriversOwnClip.MostSeconds, clip.Length.TotalSeconds);
+
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] Opening {named}'s piece with {seconds:0} seconds of "
+                + $"{Path.GetFileName(path)}.");
+
+            _announcer.SpeakReminder(
+                $"First, a few seconds of {named}'s night as it sounded trackside.",
+                showOnScreens: true);
+
+            await treatment.WaitForTheReadAsync().ConfigureAwait(true);
+
+            await AudioBus.PlayAsync(new DriversOwnClip.Excerpt(clip), DriversOwnClip.Level).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] Couldn't play {named}'s own clip ({ex.Message}) - "
+                + "the piece is being read without it.");
         }
     }
 
@@ -730,7 +965,13 @@ public partial class AnnouncerControl
                     : AnnouncementService.SpeechTail.Normal,
                 lead: run.FollowsAnother
                     ? AnnouncementService.SpeechLead.FollowsOn
-                    : AnnouncementService.SpeechLead.Normal);
+                    : AnnouncementService.SpeechLead.Normal,
+                // Every piece, not just the first: a race director reading
+                // the strip two minutes in has to be told it is still the
+                // recap. The Big Screen's own band says the same thing -
+                // see NightRecap.OnTheBand, which is deliberately this and
+                // not the recording's file name.
+                onAir: NightRecap.OnTheBand);
         }
     }
 
@@ -1089,9 +1330,12 @@ public partial class AnnouncerControl
 
         _segmentInFlight = true;
 
+        // Outside the try so the finally can answer for it - see below.
+        SpokenSegment? said = null;
+
         try
         {
-            var said = await director.NextAsync().ConfigureAwait(true);
+            said = await director.NextAsync().ConfigureAwait(true);
 
             // THE GAP MAY HAVE GONE WHILE IT WAS WRITTEN (bug hunt 7).
             // FeedTheDirector turns away staging and a claimed floor only
@@ -1157,6 +1401,11 @@ public partial class AnnouncerControl
             _handedOver = HandOverKey(director.ContinuityNow());
 
             await SpeakAsync(said, director).ConfigureAwait(true);
+
+            // It went out. A block the race overtook before a word of it was
+            // queued has already said Dropped (RunAsShowAsync), and then
+            // this does nothing.
+            director.Spoken(said);
         }
         catch (Exception ex)
         {
@@ -1164,6 +1413,13 @@ public partial class AnnouncerControl
         }
         finally
         {
+            // EVERY OTHER WAY OUT IS A DROP (14 Oct 2026): the gap went while
+            // it was written, the hold went on, the screen went away, or the
+            // staging threw. The director settles a segment only on Spoken -
+            // see CommitWhenSpoken - so this gives the rest back. Does
+            // nothing for one already answered for, or for none at all.
+            director.Dropped(said);
+
             _segmentInFlight = false;
         }
     }
@@ -1334,9 +1590,22 @@ public partial class AnnouncerControl
             return RunAsShowAsync(treatment, said, director);
         }
 
-        SpeakPlainly(said);
+        // No block round it, so the turns go out back to back - but they are
+        // still synthesised one at a time unless they are rendered first,
+        // and the hand-over is where that lands. See RenderTurnsAsync.
+        return said.IsExchange ? SpeakRenderedAsync(said) : SpeakNow(said);
 
-        return Task.CompletedTask;
+        Task SpeakNow(SpokenSegment one)
+        {
+            SpeakPlainly(one);
+            return Task.CompletedTask;
+        }
+
+        async Task SpeakRenderedAsync(SpokenSegment one)
+        {
+            _renderedTurns = await RenderTurnsAsync(one).ConfigureAwait(true);
+            SpeakPlainly(one);
+        }
     }
 
     /// <summary>
@@ -1361,6 +1630,34 @@ public partial class AnnouncerControl
     /// </summary>
     private async Task RunAsShowAsync(ShowTreatment treatment, SpokenSegment said, CommentaryDirector director)
     {
+        // EVERY TURN RENDERED BEFORE THE BLOCK STARTS. The staging below
+        // waits for each turn to be heard before queueing the next, so a
+        // turn rendered late puts its network round trip in the hand-over -
+        // see RenderTurnsAsync.
+        if (said.IsExchange)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+
+            _renderedTurns = await RenderTurnsAsync(said).ConfigureAwait(true);
+
+            var ready = 0;
+
+            foreach (var one in _renderedTurns)
+            {
+                if (one is not null)
+                {
+                    ready++;
+                }
+            }
+
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [brain] {ready} of {said.Turns.Count} turns rendered ahead in "
+                + $"{clock.ElapsedMilliseconds}ms - the hand-overs have nothing to wait for."
+                + (ready == said.Turns.Count
+                    ? string.Empty
+                    : " The rest are rendered as they are reached, which leaves a gap where the voice changes."));
+        }
+
         // Whether the staging got as far as queueing the words. See the
         // remarks: this is the ONE signal, and it is deliberately not
         // "did the block report an item" - an exchange that got one turn
@@ -1376,7 +1673,29 @@ public partial class AnnouncerControl
         void SpeakTurn(ExchangeTurn turn, CommentaryExchange.ExchangeRun run)
         {
             spoken = true;
-            SpeakTurnPlainly(turn, run);
+
+            // Found by reference rather than by value: two turns of an
+            // exchange can legitimately read the same, and the audio is not
+            // interchangeable - they are in different voices.
+            var at = -1;
+
+            for (var i = 0; i < said.Turns.Count; i++)
+            {
+                if (ReferenceEquals(said.Turns[i], turn))
+                {
+                    at = i;
+                    break;
+                }
+            }
+
+            // Which turn this is, so only the opening one can take a lift -
+            // a co-host answering mid-conversation should not be shouting.
+            SpeakTurnPlainly(
+                turn,
+                run,
+                said.Kind,
+                opening: at == 0,
+                prepared: at >= 0 && at < _renderedTurns.Count ? _renderedTurns[at] : null);
         }
 
         // A race moved on and took the block with it. The segment is then
@@ -1464,6 +1783,11 @@ public partial class AnnouncerControl
             {
                 StatusMessage?.Invoke(
                     $"{AppTime.LogStampNow()}  [show] Written, then dropped - the race moved on before the block reached it.");
+
+                // And the director told so, so the line's facts, marks and
+                // budget are given back rather than spent unheard - see
+                // CommentaryDirector.CommitWhenSpoken.
+                director.Dropped(said);
             }
 
             // No music to play, or it failed before the lines went in, or
@@ -1576,6 +1900,19 @@ public partial class AnnouncerControl
     }
 
     /// <summary>Says it with no music in front of it - what every segment did before the show treatment.</summary>
+    /// <summary>
+    /// The audio for the turns of the exchange being spoken, index for
+    /// index with them, or empty when nothing was rendered ahead.
+    ///
+    /// A field rather than an argument because the show block speaks its
+    /// turns through a callback it owns the shape of (ShowTreatment), so
+    /// there is nowhere to thread this through. Only ever one exchange is
+    /// in the air at a time - the director writes one segment at a time and
+    /// waits for it - so one slot is enough.
+    /// </summary>
+    private IReadOnlyList<AnnouncementService.PreparedSpeech?> _renderedTurns =
+        Array.Empty<AnnouncementService.PreparedSpeech?>();
+
     private void SpeakPlainly(SpokenSegment said)
     {
         if (_settings is null)
@@ -1585,13 +1922,28 @@ public partial class AnnouncerControl
 
         if (!said.IsExchange)
         {
-            _announcer.SpeakReminder(said.Text, showOnScreens: true);
+            // Delivery tags go on here, at the last moment before the voice,
+            // exactly where the recap puts them on
+            // (RaceControlControl.AfterRace). The service decides whether
+            // any are wanted - club setting, v3 voice, Enthusiastic tone -
+            // and hands the line straight back when they are not.
+            var spoken = _commentary?.PrepareSegmentForSpeech(said.Kind, said.Text) ?? said.Text;
+
+            // Named as it goes out, so the strip says "Form Guide" rather
+            // than the kind of call this happens to be queued as. See
+            // AnnouncementService.OnAirNow.
+            _announcer.SpeakReminder(spoken, showOnScreens: true, onAir: ShowBlock.NameFor(said.Kind));
             return;
         }
 
         for (var at = 0; at < said.Turns.Count; at++)
         {
-            SpeakTurnPlainly(said.Turns[at], CommentaryExchange.ExchangeRun.At(at, said.Turns.Count));
+            SpeakTurnPlainly(
+                said.Turns[at],
+                CommentaryExchange.ExchangeRun.At(at, said.Turns.Count),
+                said.Kind,
+                opening: at == 0,
+                prepared: at < _renderedTurns.Count ? _renderedTurns[at] : null);
         }
     }
 
@@ -1613,10 +1965,99 @@ public partial class AnnouncerControl
     /// AnnouncementService.SpeechLead for the second-and-a-half of dead air
     /// this took out of a two-hander.
     /// </param>
-    private void SpeakTurnPlainly(ExchangeTurn turn, CommentaryExchange.ExchangeRun run)
+    /// <param name="kind">Which segment this turn belongs to - only the cold open and the sign-off open on a lift.</param>
+    /// <param name="opening">True for the first turn of the exchange. See CommentaryService.PrepareSegmentForSpeech.</param>
+    /// <summary>
+    /// Renders every turn of a two-hander before any of them is spoken,
+    /// each in the voice that says it.
+    ///
+    /// WHY AHEAD, AND NOT AS EACH TURN COMES UP (14 Oct 2026). SpeakReminder
+    /// synthesises at speak time, and a show block waits for each turn to
+    /// have been heard before it queues the next - so the network round trip
+    /// for turn two did not even START until turn one had finished speaking,
+    /// and it landed squarely in the hand-over. The beat between voices was
+    /// tuned to 180ms and the pads either side were trimmed to nothing, and
+    /// none of that mattered against a render sitting in the gap: the room
+    /// heard two people who could not quite keep up with each other.
+    ///
+    /// The whole exchange is written in ONE model call, so every turn's
+    /// words exist before the first is spoken - there is nothing to wait
+    /// for. This is the same thing RaceControlControl.RenderHonoursAsync
+    /// does for the honours hand-over, and for the same reason, which is
+    /// why PrepareReminderAsync exists at all.
+    ///
+    /// Index for index with the turns. A null entry is a render that failed
+    /// or a voice that is not configured - PrepareReminderAsync returns null
+    /// for both - and that turn is spoken the old way instead, which is the
+    /// fallback its own documentation asks callers to make.
+    /// </summary>
+    private async Task<IReadOnlyList<AnnouncementService.PreparedSpeech?>> RenderTurnsAsync(SpokenSegment said)
+    {
+        var rendered = new List<AnnouncementService.PreparedSpeech?>(said.Turns.Count);
+
+        for (var at = 0; at < said.Turns.Count; at++)
+        {
+            var turn = said.Turns[at];
+
+            var line = _commentary?.PrepareSegmentForSpeech(said.Kind, turn.Line, at == 0) ?? turn.Line;
+            var voice = turn.FromCoHost ? _settings?.CoHostVoice : null;
+
+            try
+            {
+                rendered.Add(await _announcer.PrepareReminderAsync(line, null, voice).ConfigureAwait(true));
+            }
+            catch (Exception ex)
+            {
+                // One turn that would not render is not a reason to lose the
+                // segment: it is spoken the old way and the rest still flow.
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [brain] A turn of the two-hander could not be rendered ahead "
+                    + $"({ex.GetType().Name}) - it will be spoken as it is reached.");
+
+                rendered.Add(null);
+            }
+        }
+
+        return rendered;
+    }
+
+    /// <param name="prepared">
+    /// This turn's audio, rendered ahead by RenderTurnsAsync. Null falls
+    /// through to synthesising as it is spoken, which is what used to put a
+    /// network round trip in the middle of the conversation.
+    /// </param>
+    private void SpeakTurnPlainly(
+        ExchangeTurn turn,
+        CommentaryExchange.ExchangeRun run,
+        SegmentKind kind,
+        bool opening,
+        AnnouncementService.PreparedSpeech? prepared = null)
     {
         if (_settings is null)
         {
+            return;
+        }
+
+        // As in SpeakPlainly: tagged at the last moment, and only when the
+        // service says tags are wanted at all.
+        turn = turn with { Line = _commentary?.PrepareSegmentForSpeech(kind, turn.Line, opening) ?? turn.Line };
+
+        var tail = run.AnotherFollows
+            ? AnnouncementService.SpeechTail.BackToBack
+            : AnnouncementService.SpeechTail.Normal;
+
+        var lead = run.FollowsAnother
+            ? AnnouncementService.SpeechLead.FollowsOn
+            : AnnouncementService.SpeechLead.Normal;
+
+        // The segment's name, not the speaker's: a strip that said
+        // "Co-host" would be naming a voice where the useful thing is which
+        // part of the programme is on. See AnnouncementService.OnAirNow.
+        var onAir = ShowBlock.NameFor(kind);
+
+        if (prepared is not null)
+        {
+            _announcer.SpeakPrepared(prepared, tail, lead, onAir);
             return;
         }
 
@@ -1628,11 +2069,8 @@ public partial class AnnouncerControl
             null,
             turn.FromCoHost ? _settings.CoHostVoice : null,
             showOnScreens: true,
-            tail: run.AnotherFollows
-                ? AnnouncementService.SpeechTail.BackToBack
-                : AnnouncementService.SpeechTail.Normal,
-            lead: run.FollowsAnother
-                ? AnnouncementService.SpeechLead.FollowsOn
-                : AnnouncementService.SpeechLead.Normal);
+            tail: tail,
+            lead: lead,
+            onAir: onAir);
     }
 }

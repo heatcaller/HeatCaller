@@ -24,7 +24,13 @@ namespace HeatCaller;
 /// asked rather than assumed. The default is false only because a relay
 /// that does not mention it has no clones to mention.
 /// </param>
-internal sealed record HeatCallerVoiceChoice(string Id, string Name, string What, string Rev, bool Cloned = false)
+/// <param name="ClonedStated">
+/// Whether the relay actually said true or false about Cloned. False when
+/// the field was absent (an older relay): that is "not told", and the
+/// sticky clone list in VoiceSettingsControl must not take a voice off on
+/// the strength of it.
+/// </param>
+internal sealed record HeatCallerVoiceChoice(string Id, string Name, string What, string Rev, bool Cloned = false, bool ClonedStated = false)
 {
     public override string ToString() => string.IsNullOrWhiteSpace(What) ? Name : $"{Name} - {What}";
 }
@@ -428,7 +434,9 @@ internal sealed class HeatCallerVoiceClient
                             // which is the same opt-in rule the relay's own
                             // config parser applies at the other end.
                             entry.TryGetProperty("cloned", out var cloned)
-                                && cloned.ValueKind == JsonValueKind.True));
+                                && cloned.ValueKind == JsonValueKind.True,
+                            entry.TryGetProperty("cloned", out var stated)
+                                && stated.ValueKind is JsonValueKind.True or JsonValueKind.False));
                     }
                 }
 

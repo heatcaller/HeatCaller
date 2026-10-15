@@ -70,6 +70,12 @@ public sealed partial class RelayPublisher
     /// </summary>
     private volatile bool _notesFullAsTold;
 
+    /// <summary>
+    /// Whether the switch was turned off and the relay has not yet taken
+    /// the close. Cleared only when it has - see <see cref="SendNotesClose"/>.
+    /// </summary>
+    private volatile bool _notesClosePending;
+
     /// <summary>What went wrong collecting shout-outs from the relay, or null.</summary>
     public string? NotesProblem => _notesProblem;
 
@@ -329,8 +335,29 @@ public sealed partial class RelayPublisher
     /// poll loop, because the poll loop stops asking the moment it is off
     /// - so without this the relay would go on taking strangers' messages
     /// for a club that had declined them, and holding them.
+    ///
+    /// THE WORKER SENDS IT, AND KEEPS SENDING IT - the pattern listening
+    /// along and drivers' nights already use. This used to send once on a
+    /// thread of its own and forget the answer, so an untick during a
+    /// Wi-Fi blip left the relay taking shout-outs all night. It also sent
+    /// nothing when this run had not opened it yet, when a previous run
+    /// had. Now it is marked here and the worker's pass tries it, on the
+    /// notes' own thirty-second tick, until the relay takes it.
     /// </summary>
     public void CloseClubNotesOnTheRelay()
+    {
+        _notesClosePending = true;
+
+        // Tried on the next pass rather than after the rest of the tick.
+        _nextNotesPollTick = 0;
+        _wake.Set();
+    }
+
+    /// <summary>
+    /// The close, from the worker's pass while the switch is off. Clears
+    /// <see cref="_notesClosePending"/> only once the relay has it.
+    /// </summary>
+    private void SendNotesClose(CancellationToken token)
     {
         var target = _target;
 
@@ -339,21 +366,15 @@ public sealed partial class RelayPublisher
             return;
         }
 
-        // Nothing to close if the relay was never told it was open.
-        if (!_notesOpenTold || !_notesOpenAsTold)
-        {
-            return;
-        }
-
         var club = Uri.EscapeDataString(target.Club);
 
-        // On a thread of its own: this is called from a settings page, and
-        // a page that waited for a network round trip to redraw a tick box
-        // is a page that appears to have frozen.
         // full: false with it, because a closed club has no list to be
         // full - and leaving the old value behind would have the relay
         // holding "off and full", which is two reasons to refuse where
         // there is one.
-        Task.Run(() => TellTheRelayNotesAreOpen(target, club, wanted: false, full: false, CancellationToken.None));
+        if (TellTheRelayNotesAreOpen(target, club, wanted: false, full: false, token))
+        {
+            _notesClosePending = false;
+        }
     }
 }
