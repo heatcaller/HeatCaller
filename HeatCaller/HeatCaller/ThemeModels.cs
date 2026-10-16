@@ -34,8 +34,16 @@ public sealed class Theme
     /// (16 Oct 2026). A club on Synthwave follows it to Classic (see
     /// RenamedBuiltIns). Every built-in also names the app look it puts on
     /// (LookKey).
+    /// 6: Broadcast plays its own four songs (Broadcast Song 1 to 4) as its
+    /// music, in place of Race Day Live.
+    /// 7: Pit Lane plays its own four songs (Pit Lane Song 1 to 4).
+    /// 8: Classic adds its own four songs (Classic Song 1 to 4) to the
+    /// Synthwave soundtrack it already played.
+    /// 9: six streak lines in every built-in instead of three - with the
+    /// no-repeat picker (TemplateBag) a call now goes round six before
+    /// any comes back.
     /// </summary>
-    public const int CurrentBuiltInVersion = 5;
+    public const int CurrentBuiltInVersion = 9;
 
     /// <summary>
     /// Built-ins that were renamed when the packs arrived, old name to new.
@@ -226,7 +234,10 @@ public sealed class Theme
         Lines(v, AnnouncementEventType.Streak, true, 70,
             "[cheerful] Wonderful consistency from {driver} - {streak} clean laps.",
             "{driver} is in rhythm - {streak} in a row.",
-            "[cheerful] {streak} clean laps and counting for {driver}.");
+            "[cheerful] {streak} clean laps and counting for {driver}.",
+            "{driver} hasn't put a wheel wrong - {streak} straight.",
+            "Another clean one for {driver} - that's {streak}.",
+            "[cheerful] {streak} on the bounce for {driver}.");
         Lines(v, AnnouncementEventType.RaceTimeOver, true, null,
             "That's time. One lap remains.",
             "[excited] The final lap is underway.",
@@ -284,7 +295,10 @@ public sealed class Theme
         Lines(v, AnnouncementEventType.Streak, true, 70,
             "[excited] {driver} is on a combo streak - {streak}x!",
             "[excited] Combo x{streak} for {driver}!",
-            "[excited] {driver}'s on a hot streak, {streak} in a row!");
+            "[excited] {driver}'s on a hot streak, {streak} in a row!",
+            "[excited] {driver} keeps the combo alive - {streak}!",
+            "[excited] {streak}-hit combo for {driver}!",
+            "[excited] No dropped inputs from {driver} - {streak} straight!");
         Lines(v, AnnouncementEventType.RaceTimeOver, true, null,
             "[excited] Final lap! Time's almost up!",
             "[shouting] Hurry up! Last lap!",
@@ -342,7 +356,10 @@ public sealed class Theme
         Lines(v, AnnouncementEventType.Streak, true, 70,
             "{driver} continuing a strong run of {streak} consecutive clean laps.",
             "A very consistent {streak}-lap stretch from {driver}.",
-            "{driver} finding real rhythm out there - {streak} in a row.");
+            "{driver} finding real rhythm out there - {streak} in a row.",
+            "Lap after lap from {driver} - that's {streak} without a mistake.",
+            "{streak} clean laps now for {driver}. Metronomic.",
+            "{driver} has strung together {streak} tidy laps.");
         Lines(v, AnnouncementEventType.RaceTimeOver, true, null,
             "That's time - one lap remains.",
             "The clock has expired; this is the final lap.");
@@ -403,7 +420,10 @@ public sealed class Theme
         Lines(v, AnnouncementEventType.Streak, true, 70,
             "[cheerful] {driver} is in the groove - {streak} clean laps.",
             "[cheerful] {streak} in a row for {driver}. Keep that rhythm.",
-            "[excited] {driver} is on fire - {streak} straight!");
+            "[excited] {driver} is on fire - {streak} straight!",
+            "[cheerful] {driver} riding the wave - {streak} clean laps.",
+            "[excited] {streak} straight for {driver}, smooth as neon!",
+            "[cheerful] That's {streak} clean on the trot for {driver}.");
         Lines(v, AnnouncementEventType.RaceTimeOver, true, null,
             "[excited] That's time - one last lap under the lights!",
             "[shouting] Final lap! Leave it all out there!");
@@ -459,7 +479,10 @@ public sealed class Theme
         Lines(v, AnnouncementEventType.Streak, true, 70,
             "[shouting] {driver} IS UNSTOPPABLE - {streak} IN A ROW!",
             "[shouting] {driver}'S ON A RAMPAGE, {streak} CLEAN LAPS RUNNING!",
-            "[shouting] NOBODY CAN TOUCH {driver} - {streak} STRAIGHT!");
+            "[shouting] NOBODY CAN TOUCH {driver} - {streak} STRAIGHT!",
+            "[shouting] {streak} CLEAN LAPS FOR {driver}!",
+            "[shouting] {driver} WON'T MISS - {streak} IN A ROW!",
+            "[shouting] {driver} KEEPS STACKING THEM - {streak}!");
         Lines(v, AnnouncementEventType.RaceTimeOver, true, null,
             "[shouting] THERE'S THE BELL - LAST LAP!",
             "[shouting] TIME'S UP! ONE MORE LAP TO SETTLE THIS!",

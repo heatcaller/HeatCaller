@@ -516,7 +516,7 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var template = config.EffectiveTemplates[TemplatePicker.Next(config.EffectiveTemplates.Count)];
+        var template = TemplateBag.Pick(config.EffectiveTemplates);
 
         var text = template
             .Replace("{driver}", DisplayNameFor(humanTransponder), StringComparison.OrdinalIgnoreCase)
@@ -559,7 +559,7 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var template = config.EffectiveTemplates[TemplatePicker.Next(config.EffectiveTemplates.Count)];
+        var template = TemplateBag.Pick(config.EffectiveTemplates);
         var driverProfile = _profiles.Get(transponderId);
 
         var text = _voiceStore.Current.SanitiseForModel(template

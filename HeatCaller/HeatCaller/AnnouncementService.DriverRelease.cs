@@ -83,7 +83,7 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var template = config.EffectiveTemplates[TemplatePicker.Next(config.EffectiveTemplates.Count)];
+        var template = TemplateBag.Pick(config.EffectiveTemplates);
 
         var text = ReleaseTextFor(transponderId, template, _voiceStore.Current);
 
@@ -346,7 +346,7 @@ public sealed partial class AnnouncementService
 
         foreach (var transponder in toRender)
         {
-            var template = config.EffectiveTemplates[TemplatePicker.Next(config.EffectiveTemplates.Count)];
+            var template = TemplateBag.Pick(config.EffectiveTemplates);
             var text = ReleaseTextFor(transponder, template, renderProfile);
 
             if (text.Length > 0)

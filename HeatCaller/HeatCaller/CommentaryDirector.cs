@@ -73,6 +73,19 @@ public sealed class CommentaryDirector
     private bool _racing;
 
     /// <summary>
+    /// Whether the gap a paid read may go into is open: from a race's flag
+    /// until the next race is on its way (staged, or On Air pressed for it).
+    /// Shut until the night's first race has finished. See ReadsBelongHere.
+    /// </summary>
+    private bool _afterARace;
+
+    /// <summary>BroadcastImaging.OnAirsBegun when the last flag fell - a different count means On Air has been pressed since.</summary>
+    private int _onAirsAtFlag;
+
+    /// <summary>CommercialBreak.BreaksBegun when the last flag fell - a different count means a stop set has run since.</summary>
+    private int _breaksAtFlag;
+
+    /// <summary>
     /// The last reason each segment was refused, so the refusal is said
     /// once instead of twice a second.
     ///
@@ -805,6 +818,7 @@ public sealed class CommentaryDirector
         _raceKey = string.IsNullOrWhiteSpace(raceKey) ? _clock().Ticks.ToString() : raceKey;
         _className = className;
         _racing = true;
+        _afterARace = false;
 
         Battles.Reset();
         Pace.Reset();
@@ -812,7 +826,73 @@ public sealed class CommentaryDirector
     }
 
     /// <summary>The flag is out. Nothing in-race is worth saying from here.</summary>
-    public void RaceFinished() => _racing = false;
+    public void RaceFinished()
+    {
+        _racing = false;
+        _afterARace = true;
+        _onAirsAtFlag = BroadcastImaging.OnAirsBegun;
+        _breaksAtFlag = CommercialBreak.BreaksBegun;
+    }
+
+    /// <summary>
+    /// The next race is on its way - staged or counting down. The gap
+    /// after the last race is over, so no paid read goes out until the
+    /// next flag. See ReadsBelongHere.
+    /// </summary>
+    public void RaceComing() => _afterARace = false;
+
+    /// <summary>
+    /// Whether this is the gap AFTER a race, the only place a paid read
+    /// goes (16 Oct 2026).
+    ///
+    /// The club heard Ralph's Tavern read out while On Air was getting the
+    /// next race's opening ready - the copy landed in the quiet before the
+    /// cold open, then the jingle came in on top of the tail of it. The top
+    /// of a race is the programme's own: the jingle, the bed and the
+    /// opening are what the room is waiting for, and an advert in front of
+    /// them is an advert nobody wanted. So a read is owed to the gap after
+    /// a flag and nowhere else: not before the night's first race, not once
+    /// On Air has been pressed, not while the next race is staged. A read
+    /// that does not fit is not lost - it waits for the next race's flag.
+    /// </summary>
+    private bool ReadsBelongHere => _afterARace && BroadcastImaging.OnAirsBegun == _onAirsAtFlag;
+
+    /// <summary>
+    /// Whether a stop set has run since the last flag. When one has, the
+    /// sponsor's copy went out INSIDE it (16 Oct 2026 - see NextBreakRead),
+    /// so the gap-filling reads stand down until the next race: the club
+    /// heard the same copy again at the end of the recap, outside the
+    /// break, which is the read it had already had.
+    /// </summary>
+    private bool StopSetHasRun => CommercialBreak.BreaksBegun != _breaksAtFlag;
+
+    /// <summary>
+    /// The paid read for the stop set itself, or null (16 Oct 2026).
+    ///
+    /// Asked by the commercial break once the video advert has finished
+    /// (RaceControlControl.ReadTheSponsorsInTheBreakAsync), so the copy is
+    /// read IN the break - after the video, with the sponsor on the screen
+    /// - rather than in whatever quiet came after the recap. None of the
+    /// show-is-on gates the gap reads have: the break IS the slot, and the
+    /// break itself makes sure no video is playing under it. A hold still
+    /// stops it, and so does anything other than the gap after a race.
+    ///
+    /// Settles the ad-break debt as it goes - the read this is is the one
+    /// that debt was for.
+    /// </summary>
+    public SponsorRead? NextBreakRead(TimeSpan gap)
+    {
+        if (_racing || !ReadsBelongHere || Held)
+        {
+            return null;
+        }
+
+        _adBreaksSeen = AdBreak.BreaksEnded;
+        _adBreakOwed = false;
+
+        return SalesRead(SponsorPlacement.AdBreaks, SponsorMoment.AfterTheAdvert, gap)
+               ?? SalesRead(SponsorPlacement.Segments, SponsorMoment.BetweenRaces, gap);
+    }
 
     /// <summary>One tick of the running order - every adjacent pair, as the race stands. See BattleWatch.</summary>
     public void Standings(IReadOnlyList<PairGap> pairs) => Standings(pairs, 0, null);
@@ -1480,7 +1560,7 @@ public sealed class CommentaryDirector
         // sitting there waiting exactly while one is playing - and a video
         // that starts slowly, or a break that ended under it, puts the two
         // in the same few seconds. See CommercialBreak.VideoOnScreen.
-        if (_racing || Held || Writing || ShowOnAir.Playing || ShowFloor.Busy || CommercialBreak.VideoOnScreen)
+        if (_racing || !ReadsBelongHere || StopSetHasRun || Held || Writing || ShowOnAir.Playing || ShowFloor.Busy || CommercialBreak.VideoOnScreen)
         {
             return null;
         }
@@ -1512,7 +1592,9 @@ public sealed class CommentaryDirector
         // And VideoOnScreen for the reason NextAdBreakRead gives at length:
         // a gap with a sponsor's video advert playing in it is not a gap
         // either, and two adverts over each other sell neither.
-        if (_racing || Held || Writing || ShowOnAir.Playing || ShowFloor.Busy || CommercialBreak.VideoOnScreen)
+        //
+        // And only after a race - see ReadsBelongHere.
+        if (_racing || !ReadsBelongHere || StopSetHasRun || Held || Writing || ShowOnAir.Playing || ShowFloor.Busy || CommercialBreak.VideoOnScreen)
         {
             return null;
         }

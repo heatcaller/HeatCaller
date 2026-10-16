@@ -1755,8 +1755,12 @@ internal sealed class ShowTreatment
         // in a row. Either can be missing, and the club's own show music -
         // when it is switched on - fills in for the one that is. See
         // BroadcastImaging.
-        var imagingOpener = ImagingTreats(kind) ? BroadcastImaging.Next(ImagingCue.RecapOpen) : null;
-        var imagingBed = ImagingTreats(kind) ? BroadcastImaging.Next(ImagingCue.RecapBed) : null;
+        var openerPiece = ImagingTreats(kind) ? BroadcastImaging.NextPiece(ImagingCue.RecapOpen) : null;
+        var imagingOpener = openerPiece?.Clip;
+        var imagingBed = ImagingTreats(kind) && !BroadcastImaging.Muted ? BroadcastImaging.NextPiece(ImagingCue.RecapBed)?.Clip : null;
+
+        // Where the host hits the post - see BroadcastImaging.PostOf.
+        var imagingPost = openerPiece is { } piece ? BroadcastImaging.PostOf(piece.Path, piece.Clip) : TimeSpan.Zero;
 
         if (!_settings.ShowThemeEnabled && imagingOpener is null && imagingBed is null)
         {
@@ -1850,7 +1854,12 @@ internal sealed class ShowTreatment
                 // machinery to be right about, and one that leaves the
                 // club's music muted with nothing playing at all.
                 openerGain = new SmoothGainSampleProvider(
-                    new ShowOneShot(opener, billing.OpenerFrom(opener), Frames(billing.AirSeconds, opener)),
+                    // The station's jingle starts on the instant, from its
+                    // top: no beat of air in front of it, which is dead air
+                    // between two sections of the show (16 Oct 2026).
+                    imagingOpener is not null
+                        ? new ShowOneShot(opener)
+                        : new ShowOneShot(opener, billing.OpenerFrom(opener), Frames(billing.AirSeconds, opener)),
                     1f,
                     downSeconds: HandOverSeconds,
                     upSeconds: HandOverSeconds);
@@ -1868,9 +1877,11 @@ internal sealed class ShowTreatment
 
                 // Starts at nothing and comes up, so the bed arrives under
                 // the opener rather than beginning on an edge beside it.
+                // Under the station's recap open the bed waits for the
+                // post and crossfades in as the jingle goes - see below.
                 bedGain = new SmoothGainSampleProvider(running, 0f, downSeconds: 0.5, upSeconds: 0.8)
                 {
-                    Target = opener is null ? bedLevel : bedLevel * BedUnderOpener,
+                    Target = opener is null ? bedLevel : imagingOpener is not null ? 0f : bedLevel * BedUnderOpener,
                 };
 
                 bedPlaying = Play(bedGain, 1f, "bed");
@@ -1883,17 +1894,17 @@ internal sealed class ShowTreatment
             // which is where the lines that follow are queued from.
             if (opener is not null)
             {
+                // The station's recap open: the host HITS THE POST - talks
+                // the instant the sung part stops - and whatever the jingle
+                // still has to play crossfades into the bed coming up under
+                // the voice. It is never cut short or ended early.
                 var entersAfter = imagingOpener is not null
-                    ? ImagingVoiceEntersAfter(imagingOpener, billing)
+                    ? imagingPost
                     : VoiceEntersAfter(opener, billing);
 
                 await Task.Delay(entersAfter, ct).ConfigureAwait(true);
 
-                // A jingle cut off by the longest hold is faded away rather
-                // than left ringing under the host for the rest of its run.
-                openerGain!.Target = imagingOpener is not null && imagingOpener.Length - entersAfter > TimeSpan.FromSeconds(1.5)
-                    ? 0f
-                    : OpenerUnderVoice;
+                openerGain!.Target = imagingOpener is not null ? 0f : OpenerUnderVoice;
             }
             else if (billing.BedAloneSeconds > 0)
             {
@@ -1936,7 +1947,13 @@ internal sealed class ShowTreatment
 
             return new ShowRun(
                 _announcer, onSpeaking, speaking, running, bedGain, bedPlaying,
-                bed?.Length ?? TimeSpan.Zero, bedLevel, Status, billing, openerGain);
+                bed?.Length ?? TimeSpan.Zero, bedLevel, Status, billing, openerGain)
+            {
+                // A station bed is never chopped to an ending of its own:
+                // it crossfades out under whatever the run of show plays
+                // next (16 Oct 2026). See ShowRun.FinishAsync.
+                CrossfadeOnly = imagingBed is not null,
+            };
         }
         catch (Exception ex)
         {
@@ -2154,19 +2171,6 @@ internal sealed class ShowTreatment
         var most = Math.Max(LeastOpenerAlone, heard - LeastOpenerUnder);
 
         return TimeSpan.FromSeconds(Math.Clamp(into, LeastOpenerAlone, most));
-    }
-
-    /// <summary>
-    /// Where the host comes in over the soundscape's recap open: once it
-    /// has played, or at the longest hold the Broadcast Imaging page allows,
-    /// whichever is sooner. Not where the piece's body ends, which is what
-    /// the club's opener is measured for - a station ID is heard whole.
-    /// </summary>
-    private static TimeSpan ImagingVoiceEntersAfter(ShowClip opener, ShowBilling billing)
-    {
-        var whole = billing.AirSeconds + Math.Max(LeastOpenerAlone, opener.Length.TotalSeconds - 0.3);
-
-        return TimeSpan.FromSeconds(Math.Min(whole, BroadcastImaging.LongestHoldSeconds));
     }
 
     /// <summary>Seconds of a clip's own rate, as whole frames.</summary>
@@ -2514,8 +2518,19 @@ internal sealed class ShowRun
     /// A race intro's show passes true when the countdown starts, because
     /// a three second fade would play over the beeps and the horn.
     /// </param>
+    /// <summary>
+    /// The bed is the soundscape's own imaging: at the end it crossfades
+    /// out under the next piece - no lift, and never a jump to the piece's
+    /// own ending (16 Oct 2026). The producer's elements finish the show;
+    /// a bed cut up to make an ending of its own is what the club heard as
+    /// "chopping up an element".
+    /// </summary>
+    internal bool CrossfadeOnly { get; init; }
+
     public async Task FinishAsync(bool cutShort = false)
     {
+        cutShort |= CrossfadeOnly;
+
         if (Interlocked.Exchange(ref _finished, 1) == 1)
         {
             return;

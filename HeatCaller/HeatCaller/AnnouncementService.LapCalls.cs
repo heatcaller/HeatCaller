@@ -365,7 +365,7 @@ public sealed partial class AnnouncementService
         // The line is picked BEFORE the order is worded, because what the
         // club asked for changes how the list reads. Still one line per
         // report - only the order of these two steps moved.
-        var template = config.Templates[TemplatePicker.Next(config.Templates.Count)];
+        var template = TemplateBag.Pick(config.Templates);
 
         // The gaps are said only if the club switched them on AND left
         // somewhere for them to go. Reading the tick box alone would let a
@@ -693,7 +693,7 @@ public sealed partial class AnnouncementService
             }
 
             var driver = DisplayNameFor(transponder);
-            var template = config.EffectiveTemplates[TemplatePicker.Next(config.EffectiveTemplates.Count)];
+            var template = TemplateBag.Pick(config.EffectiveTemplates);
 
             var text = template
                 .Replace("{driver}", driver, StringComparison.OrdinalIgnoreCase)
@@ -839,7 +839,7 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var template = config.EffectiveTemplates[TemplatePicker.Next(config.EffectiveTemplates.Count)];
+        var template = TemplateBag.Pick(config.EffectiveTemplates);
 
         var text = template
             .Replace("{driver}", DisplayNameFor(transponder), StringComparison.OrdinalIgnoreCase)
@@ -1082,7 +1082,7 @@ public sealed partial class AnnouncementService
             return false;
         }
 
-        var template = config.EffectiveTemplates[TemplatePicker.Next(config.EffectiveTemplates.Count)];
+        var template = TemplateBag.Pick(config.EffectiveTemplates);
 
         var text = template
             .Replace("{driver}", DisplayNameFor(driverTransponder), StringComparison.OrdinalIgnoreCase)
@@ -1236,7 +1236,7 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var chosenTemplate = templates.Count == 1 ? templates[0] : templates[TemplatePicker.Next(templates.Count)];
+        var chosenTemplate = templates.Count == 1 ? templates[0] : TemplateBag.Pick(templates);
         var text = chosenTemplate
             .Replace("{overtaker}", overtakerName)
             .Replace("{overtaken}", overtakenName)

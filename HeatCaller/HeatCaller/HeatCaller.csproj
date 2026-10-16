@@ -198,6 +198,8 @@
          nothing of its own. -->
     <None Include="Assets\Imaging\**\*.mp3" Link="Assets\Imaging\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets\Imaging\**\*.wav" Link="Assets\Imaging\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Where each shipped piece's post is (BroadcastImaging.ShippedPost). -->
+    <None Include="Assets\Imaging\**\posts.json" Link="Assets\Imaging\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
 
     <!-- Licence texts that have to travel with the app because the package
          they belong to does not carry one: MisakiSharp's NOTICE (Apache-2.0

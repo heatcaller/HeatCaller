@@ -1118,7 +1118,12 @@ public sealed class BigScreenForm : Form
         // the ad break - and outside a break the rotation steps over a
         // video to the next still rather than showing nothing, so a club
         // whose slides are mostly videos still gets a board.
-        if (!_breakHasTheScreen && NextStillSlide() is { } still)
+        // A sponsor's copy being read in the break holds a still too: a
+        // video started under the read is two adverts over each other
+        // (16 Oct 2026 - see CommercialBreak.ReadOnAir).
+        var stillsOnly = !_breakHasTheScreen || CommercialBreak.ReadOnAir;
+
+        if (stillsOnly && NextStillSlide() is { } still)
         {
             _sponsorIndex = still;
         }
@@ -1129,7 +1134,7 @@ public sealed class BigScreenForm : Form
         // is shown rather than a video being played out of turn: the
         // standings stay up, which is the right thing on the wall between
         // races, and the adverts get the screen the moment a break starts.
-        if (!_breakHasTheScreen && SponsorMedia.IsVideoName(fileName))
+        if (stillsOnly && SponsorMedia.IsVideoName(fileName))
         {
             return;
         }

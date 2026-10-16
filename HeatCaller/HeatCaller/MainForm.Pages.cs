@@ -1254,7 +1254,7 @@ public partial class MainForm
 
         // Wired here rather than beside RoundStartRequested above, because
         // demoMode doesn't exist yet at that point in this method.
-        raceProgram.RoundDemoRequested += round =>
+        raceProgram.RoundDemoRequested += async round =>
         {
             // A demo drives the same session practice is running on, and
             // would wipe the practice laps just as a real start would.
@@ -1328,14 +1328,23 @@ public partial class MainForm
             // Refresh first: the driver list has to know about this round's
             // drivers before StartDemoForRound can tick them.
             demoMode.RefreshAvailableData();
-            demoMode.StartDemoForRound(round);
 
             // Race Control rather than the Demo Mode page - a demo drives
             // the same session, leaderboard and announcer as a real race,
             // so that's where someone actually wants to be watching.
             GoToPage("Race Control");
 
-            OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Running \"{round.RoundLabel}\" as a demo.");
+            // THROUGH ON AIR (16 Oct 2026), not straight to staging: the
+            // jingle or sweeper, the opening for this round and a bumper,
+            // and then the demo starts and stages itself - the same top of
+            // the race a real one gets from the On Air button. See
+            // RaceControlControl.GoOnAirThenAsync.
+            await _raceControlControl.GoOnAirThenAsync(round, () =>
+            {
+                demoMode.StartDemoForRound(round);
+
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Running \"{round.RoundLabel}\" as a demo.");
+            });
         };
 
         StartupMark("Practice, Ghost Cars and Demo Mode");

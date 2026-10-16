@@ -68,8 +68,6 @@ public sealed partial class AnnouncementService
         return $"{ms / 1000.0:0.000}s";
     }
 
-    private static readonly Random TemplatePicker = new();
-
     /// <param name="suffix">
     /// Appended to the finished line, for context the template itself can't
     /// carry - currently the runner-up's streak.
@@ -136,7 +134,7 @@ public sealed partial class AnnouncementService
         // legitimately fire many times in a row (e.g. several new fastest
         // laps back to back) doesn't read out the identical sentence
         // every single time.
-        var chosenTemplate = candidates.Count == 1 ? candidates[0] : candidates[TemplatePicker.Next(candidates.Count)];
+        var chosenTemplate = candidates.Count == 1 ? candidates[0] : TemplateBag.Pick(candidates);
 
         var transponder = standing?.Transponder ?? gate?.Transponder;
         var driverProfile = transponder is not null ? _profiles.Get(transponder) : null;

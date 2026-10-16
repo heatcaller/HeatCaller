@@ -259,6 +259,69 @@ internal static class CommercialBreak
 
     private static int _running;
 
+    /// <summary>How many breaks have begun this run - see <see cref="BreaksBegun"/>.</summary>
+    private static int _breaksBegun;
+
+    /// <summary>Paid reads being spoken inside the break right now - see <see cref="ReadOnAir"/>.</summary>
+    private static int _readsOnAir;
+
+    /// <summary>
+    /// How many commercial breaks have begun since the app started. The
+    /// commentary director compares it with the count at the last flag: a
+    /// break that has run since is where tonight's paid read went, so no
+    /// other read follows it (16 Oct 2026 - see
+    /// CommentaryDirector.ReadsBelongHere).
+    /// </summary>
+    internal static int BreaksBegun
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return _breaksBegun;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a sponsor's copy is being read inside the break right now
+    /// (16 Oct 2026). The Big Screen holds a still slide rather than start
+    /// a video under it - two adverts over each other sell neither - and
+    /// the break does not end beneath it. See
+    /// RaceControlControl.ReadTheSponsorsInTheBreakAsync.
+    /// </summary>
+    internal static bool ReadOnAir
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return _readsOnAir > 0;
+            }
+        }
+    }
+
+    /// <summary>A paid read has started inside the break. Pair with <see cref="ReadEnds"/>, from a finally.</summary>
+    internal static void ReadBegins()
+    {
+        lock (Gate)
+        {
+            _readsOnAir++;
+        }
+    }
+
+    /// <summary>The paid read inside the break is over. Never counts below zero.</summary>
+    internal static void ReadEnds()
+    {
+        lock (Gate)
+        {
+            if (_readsOnAir > 0)
+            {
+                _readsOnAir--;
+            }
+        }
+    }
+
     /// <summary>
     /// True once the rotation has been round every one of the club's slides
     /// during this break - see <see cref="EverySponsorShown"/>. Cleared by
@@ -422,6 +485,8 @@ internal static class CommercialBreak
         {
             if (_running++ == 0)
             {
+                _breaksBegun++;
+
                 // Cleared on the way in rather than on the way out, so the
                 // break that is starting cannot inherit the last one's
                 // answer - a second race's break would otherwise end at its
@@ -468,6 +533,7 @@ internal static class CommercialBreak
         lock (Gate)
         {
             _running = 0;
+            _readsOnAir = 0;
             _shownEverything = false;
             _screenSaidAt = -1;
             _videoSaidAt = -1;

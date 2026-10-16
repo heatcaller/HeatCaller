@@ -704,7 +704,10 @@ public sealed partial class RaceControlControl
             // the handle that gives it back.
             Task<ShowRun?>? opening = null;
 
-            async Task EndShowAsync()
+            // crossfade: a bumper is being fired over the end of the show,
+            // so the bed crossfades out under it rather than lifting into an
+            // ending of its own (16 Oct 2026).
+            async Task EndShowAsync(bool crossfade = false)
             {
                 // Plainly, not interlocked: the natural end and the finally
                 // run one after the other on this one sequence, never at
@@ -735,7 +738,7 @@ public sealed partial class RaceControlControl
                 {
                     try
                     {
-                        await run.FinishAsync();
+                        await run.FinishAsync(cutShort: crossfade);
                     }
                     catch
                     {
@@ -1075,7 +1078,7 @@ public sealed partial class RaceControlControl
                 // BroadcastImaging for the run of show.
                 if (!(_settings.RecapAdBreak && !nextRace.IsCancellationRequested && CommercialBreak.SponsorScreenUp))
                 {
-                    await PlayImagingAsync(ImagingCue.AfterRaceOver, nextRace.Token);
+                    await PlayImagingAsync(ImagingCue.AfterRaceOver, nextRace.Token, crossfadeAtPost: false);
                 }
 
                 await HoldTheCommercialBreakAsync(recapTask!, nextRace.Token);
@@ -1324,13 +1327,18 @@ public sealed partial class RaceControlControl
                 // The broadcast is over and the queue is drained, so the
                 // bed hands over to its own fade now - over the quiet
                 // after the sign-off, which is what that fade is for.
-                await EndShowAsync();
-
                 // ... -> RACE RECAP BED -> BUMPER: the way out of the recap
-                // show, over the bed's fade (16 Oct 2026). Heard out before
-                // the floor is given back below, so a filler segment does
-                // not start its own music on top of it.
-                await PlayImagingAsync(ImagingCue.AfterRecap, nextRace.Token);
+                // show (16 Oct 2026). Fired the instant the last word is
+                // heard - crushed straight in, no gap - and the bed
+                // crossfades out underneath it rather than playing an
+                // ending of its own. The bumper is the ending. Heard out
+                // before the floor is given back below, so a filler segment
+                // does not start its own music on top of it.
+                var bumperOut = BroadcastImaging.Has(ImagingCue.AfterRecap);
+                var wayOut = PlayImagingAsync(ImagingCue.AfterRecap, nextRace.Token, crossfadeAtPost: false);
+
+                await EndShowAsync(crossfade: bumperOut);
+                await wayOut;
             }
             catch
             {
@@ -1505,7 +1513,16 @@ public sealed partial class RaceControlControl
         // badges arriving after the show had ended, outside the programme.
         //
         // A sign-off is the last thing or it is not a sign-off.
-        var follows = interview || honoursFollow;
+        //
+        // AND IT IS ALWAYS A LINE OF ITS OWN NOW (16 Oct 2026). Left
+        // inline at the end of the recap, it was the first thing lost when
+        // the model's answer ran long and was cut back to its last whole
+        // sentence - which is how the 16 Oct recap ended on "first ever
+        // win here" with no goodbye at all. Written apart from the recap,
+        // in the recap host's voice, with a fixed line of its own when the
+        // model gives nothing back (see SignOffFallback), the programme
+        // ends on a sign-off every time.
+        var follows = true;
 
         var context = new CommentaryService.RecapContext(
             kind,
@@ -1540,7 +1557,7 @@ public sealed partial class RaceControlControl
                     $"{AppTime.LogStampNow()}  [commentary] The sign-off is held back to come after the honours, so the programme ends on it.");
             }
 
-            return new RecapPlan(context, false, closing && honoursFollow, string.Empty, Array.Empty<string>(), null);
+            return new RecapPlan(context, false, closing, string.Empty, Array.Empty<string>(), null);
         }
 
         var mechanicName = (_settings.RecapMechanicName ?? string.Empty).Trim();
@@ -1830,11 +1847,28 @@ public sealed partial class RaceControlControl
                 return null;
             }
 
-            var line = await _commentary!.BuildBroadcastClosingAsync(record, plan.Context, cancel);
+            string? line = null;
 
-            if (string.IsNullOrWhiteSpace(line) || cancel.IsCancellationRequested)
+            try
+            {
+                line = await _commentary!.BuildBroadcastClosingAsync(record, plan.Context, cancel);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The model's sign-off failed ({ex.Message}) - the show's own sign-off goes out instead.");
+            }
+
+            if (cancel.IsCancellationRequested)
             {
                 return null;
+            }
+
+            // THE SHOW SIGNS OFF EVERY TIME (16 Oct 2026). Nothing back from
+            // the model used to mean no goodbye; now it means the fixed one.
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                line = SignOffFallback(plan.Context);
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No sign-off came back from the model - the show's own goes out: \"{line}\"");
             }
 
             // Tagged for delivery like the recap, and rendered in its voice.
@@ -2378,6 +2412,31 @@ public sealed partial class RaceControlControl
         }
     }
 
+    /// <summary>
+    /// The sign-off the show says when the model gives it nothing: the
+    /// show's name, the host's name and what is up next, whichever of them
+    /// the club has. Never empty.
+    /// </summary>
+    internal static string SignOffFallback(CommentaryService.RecapContext context)
+    {
+        var show = (context.ShowName ?? string.Empty).Trim();
+        var host = (context.AnnouncerName ?? string.Empty).Trim();
+        var next = (context.UpNext ?? string.Empty).Trim().TrimEnd('.', '!');
+
+        var line = show.Length > 0 ? $"And that's the recap here on {show}." : "And that's the recap.";
+
+        if (host.Length > 0)
+        {
+            line += $" I'm {host}.";
+        }
+
+        line += next.Length > 0
+            ? $" Up next, {next} - stay with us!"
+            : " Stay with us - there's more racing on the way!";
+
+        return line;
+    }
+
     /// <summary>Speaks the sign-off kept back for the end, once everything before it has been heard.</summary>
     /// <param name="nextRace">Cancelled when the next race is called to the grid.</param>
     private async Task SpeakClosingAsync(Task<SpokenLine?> closingTask, CancellationToken nextRace)
@@ -2648,6 +2707,30 @@ public sealed partial class RaceControlControl
             return;
         }
 
+        // THE BUMPER INTO THE STOP SET PLAYS OUT BEFORE THE BREAK BEGINS
+        // (16 Oct 2026). It used to be started inside the break, not
+        // awaited, and the break's first sponsor video - which has a
+        // soundtrack of its own - came up over the top of it. The bumper is
+        // the door into the adverts; the adverts go after it, not through
+        // it. Heard out WHOLE rather than to its post, because what follows
+        // is somebody else's audio and not the programme's own voice, so
+        // there is nothing to crossfade under it. The break's clock starts
+        // after it, so the bumper does not eat the sponsors' time.
+        //
+        // Before Begin() and not between it and the try, which
+        // CommercialBreakTests keeps empty - see the note inside the try.
+        if (BroadcastImaging.Has(ImagingCue.AfterRaceOver))
+        {
+            try
+            {
+                await BroadcastImaging.PlayWholeAsync(ImagingCue.AfterRaceOver, nextRace);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] {BroadcastImaging.Describe(ImagingCue.AfterRaceOver)} didn't play - {ex.Message}");
+            }
+        }
+
         var started = DateTime.UtcNow;
 
         StatusMessage?.Invoke(
@@ -2686,9 +2769,41 @@ public sealed partial class RaceControlControl
             // has been called. The token fades it if that happens.
             MarkTheBreak(BreakEnding.Running, goingIn: true, nextRace);
 
+            // The sponsor's copy, read INSIDE the stop set (16 Oct 2026) -
+            // once, after the video advert, and before the break can end.
+            var readDone = false;
+            var sawVideo = false;
+
             while (true)
             {
                 var on = DateTime.UtcNow - started;
+
+                // AdBreak.Playing as well as the screen's report: the report
+                // is a heartbeat that stays true for a few seconds after the
+                // video ends, and the read should follow the advert at once
+                // rather than after three seconds of nothing.
+                sawVideo |= CommercialBreak.VideoOnScreen || AdBreak.Playing;
+
+                // THE COPY GOES IN THE BREAK, AFTER THE VIDEO (16 Oct 2026).
+                // It used to wait for a quiet the director found on its own
+                // tick, and with the recap show holding the floor the first
+                // quiet was after the sign-off - so the club heard the
+                // sponsor's words at the end of the recap, out of the break
+                // and away from the sponsor's video. Now the break reads it:
+                // once the video has played (or, with only stills, once the
+                // break is past its floor), and before the break can end on
+                // the recap being ready. Not once the next race is called or
+                // the ceiling is reached - those end the break as before.
+                if (!readDone
+                    && !nextRace.IsCancellationRequested
+                    && on < CommercialBreak.Longest
+                    && !AdBreak.Playing
+                    && (sawVideo || on >= CommercialBreak.Shortest))
+                {
+                    readDone = true;
+                    await ReadTheSponsorsInTheBreakAsync(nextRace);
+                    continue;
+                }
 
                 // IsCompleted and not awaited: a recap that failed or was
                 // called off is just as much a reason to stop the adverts,
@@ -2807,9 +2922,10 @@ public sealed partial class RaceControlControl
         // it always did.
         if (goingIn && BroadcastImaging.Has(ImagingCue.AfterRaceOver))
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Commercial break - the bumper in, the sponsors have the crowd's screen.");
-
-            _ = PlayImagingAsync(ImagingCue.AfterRaceOver, nextRace);
+            // Already played out whole, BEFORE the break began - see
+            // HoldTheCommercialBreakAsync - so the first sponsor video
+            // never starts over it.
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Commercial break - the bumper played in, the sponsors have the crowd's screen.");
 
             return;
         }
@@ -2863,6 +2979,83 @@ public sealed partial class RaceControlControl
         }
     }
 
+    /// <summary>
+    /// Reads the sponsor's copy inside the commercial break, with the
+    /// sponsor on the crowd's screen and no video started under it, and
+    /// returns once it has been heard (16 Oct 2026). Does nothing when the
+    /// director has no read for this break - none due, a hold on, the club
+    /// selling none - or the announcer is muted. Never throws.
+    /// </summary>
+    private async Task ReadTheSponsorsInTheBreakAsync(CancellationToken nextRace)
+    {
+        try
+        {
+            if (_announcer.Muted || Commentary?.Invoke() is not { } director)
+            {
+                return;
+            }
+
+            // On the UI thread, where the director's other reads are asked
+            // - its rotation is not meant to be touched from two at once.
+            SponsorRead? read = null;
+            var gap = director.Upcoming?.Invoke().InAbout ?? SponsorCopy.NoLimit;
+
+            void Pick()
+            {
+                read = director.NextBreakRead(gap);
+
+                if (read is not null)
+                {
+                    // Counted before it is said, for the reason
+                    // AnnouncerControl.SayTheSponsorsReadIfThereIsOne gives.
+                    director.SalesReadSaid(read);
+                }
+            }
+
+            if (InvokeRequired)
+            {
+                Invoke((Action)Pick);
+            }
+            else
+            {
+                Pick();
+            }
+
+            if (read is null)
+            {
+                return;
+            }
+
+            CommercialBreak.ReadBegins();
+
+            try
+            {
+                if (director.SponsorOnScreenFor?.Invoke(read.SponsorId) is { } onScreen)
+                {
+                    SponsorOnAir.Begin(onScreen.PictureFileName, onScreen.Name, SponsorCopy.SpokenLength(read.Text));
+                }
+
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Commercial break - the sponsor's copy, read after the advert.");
+
+                _announcer.SpeakReminder(read.Text, showOnScreens: true);
+
+                await _announcer.WaitForAudioAsync(SpokenWait(), nextRace);
+            }
+            finally
+            {
+                CommercialBreak.ReadEnds();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The next race - the break's own loop says so.
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The sponsor's read in the break didn't go out - {ex.Message}");
+        }
+    }
+
     // ==================== Broadcast imaging (16 Oct 2026) ====================
 
     /// <summary>
@@ -2897,11 +3090,16 @@ public sealed partial class RaceControlControl
     /// holds until it has played - see BroadcastImaging.PlayAsync. Never
     /// throws: imaging is decoration, and a race night carries on without it.
     /// </summary>
-    private async Task PlayImagingAsync(ImagingCue cue, CancellationToken nextRace)
+    /// <param name="crossfadeAtPost">
+    /// True when something starts at the piece's post and the rest of the
+    /// piece crossfades into it; false when nothing follows at once and the
+    /// piece plays out whole. Either way this returns at the post.
+    /// </param>
+    private async Task PlayImagingAsync(ImagingCue cue, CancellationToken nextRace, bool crossfadeAtPost = true)
     {
         try
         {
-            await BroadcastImaging.PlayAsync(cue, nextRace);
+            await BroadcastImaging.PlayAsync(cue, nextRace, crossfadeAtPost);
         }
         catch (Exception ex)
         {

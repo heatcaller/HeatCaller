@@ -650,6 +650,15 @@ public sealed class MusicStore
 
         // The sound packs' own tracks (0.55) - see SoundPacks.PackMusic.
         "Victory Lane", "Insert Coin", "Race Day Live", "Neon Grid",
+
+        // Broadcast's own songs (16 Oct 2026).
+        "Broadcast Song 1", "Broadcast Song 2", "Broadcast Song 3", "Broadcast Song 4",
+
+        // Pit Lane's own songs (16 Oct 2026).
+        "Pit Lane Song 1", "Pit Lane Song 2", "Pit Lane Song 3", "Pit Lane Song 4",
+
+        // Classic's own songs (16 Oct 2026).
+        "Classic Song 1", "Classic Song 2", "Classic Song 3", "Classic Song 4",
     };
 
     public static bool IsBundledTitle(string title) => BundledTitles.Contains(title.Trim());

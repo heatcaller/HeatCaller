@@ -35,8 +35,12 @@ internal sealed class ShowClip
     /// The longest piece either part may be. A bed is looped, so a club
     /// pointing this at an hour-long album track is a mistake worth
     /// telling them about rather than quietly holding 1.4 GB.
+    ///
+    /// 320 rather than 300 since 16 Oct 2026: the Broadcast soundscape's
+    /// music beds are five minutes to the tenth of a second, and an MP3's
+    /// encoder padding was enough to tip one over a limit of exactly 300.
     /// </summary>
-    public const double MostSeconds = 300;
+    public const double MostSeconds = 320;
 
     private ShowClip(float[] samples, WaveFormat format, ShowShape shape)
     {

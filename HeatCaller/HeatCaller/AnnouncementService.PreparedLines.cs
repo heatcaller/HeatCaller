@@ -139,7 +139,7 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        var template = fixedTemplates[TemplatePicker.Next(fixedTemplates.Count)];
+        var template = TemplateBag.Pick(fixedTemplates);
 
         // Tidied exactly as EnqueueVoice tidies the same line when it has to
         // speak it live, so the two are one request and share one saved copy.

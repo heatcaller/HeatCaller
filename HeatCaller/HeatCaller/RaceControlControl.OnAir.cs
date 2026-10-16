@@ -60,11 +60,34 @@ public sealed partial class RaceControlControl
         return said;
     }
 
-    private async Task RunOnAirAsync()
+    /// <summary>
+    /// On Air for a demo (16 Oct 2026): the Race Program's "Run as Demo"
+    /// comes through here, so a demo opens the way a real race does - the
+    /// jingle or sweeper, the opening for <paramref name="round"/>, a bumper
+    /// - and then <paramref name="start"/> starts the demo, which stages the
+    /// race itself, in place of On Air pressing Stage.
+    ///
+    /// The round is handed over rather than read from the Round box: a demo
+    /// that is not allowed to fill the programme leaves the box on freeform,
+    /// and the opening would then have no race to be about.
+    /// </summary>
+    internal Task GoOnAirThenAsync(RoundDefinition round, Action start) => RunOnAirAsync(round, start);
+
+    private async Task RunOnAirAsync(RoundDefinition? round = null, Action? start = null)
     {
-        // Pressed again: the rest of it is skipped and the race staged now.
         if (_onAirCts is { } running)
         {
+            // A demo asked for while On Air is already running starts the
+            // demo straight away; the On Air already going is called off,
+            // since it was opening some other race.
+            if (start is not null)
+            {
+                running.Cancel();
+                start();
+                return;
+            }
+
+            // Pressed again: the rest of it is skipped and the race staged now.
             _onAirStageNow = true;
             running.Cancel();
             return;
@@ -77,8 +100,10 @@ public sealed partial class RaceControlControl
 
         // Only between races. A race that is staged or running has had its
         // top already, and Stage's own question about abandoning it is the
-        // right one to ask - so On Air leaves it to Stage.
-        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+        // right one to ask - so On Air leaves it to Stage. A demo already
+        // running is the exception: the new demo replaces it, as it always
+        // has, so the top of the new one is played.
+        if (start is null && _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air is for between races - this one is already {_race.State.ToString().ToLowerInvariant()}.");
             return;
@@ -87,6 +112,10 @@ public sealed partial class RaceControlControl
         var cts = new CancellationTokenSource();
         _onAirCts = cts;
         _onAirStageNow = false;
+
+        // No sponsor read from here until this race's flag - the opening
+        // is about to be written, and the quiet while it is is not a gap.
+        BroadcastImaging.OnAirBegins();
         _openingSaidByOnAir = false;
         _btnOnAir.Lit = true;
 
@@ -112,23 +141,58 @@ public sealed partial class RaceControlControl
 
         var stage = false;
 
+        // What is on air, held so a call-off can take it away again.
+        ImagingPlay? jingle = null;
+        ImagingBed? bed = null;
+
         try
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - the top of the race.");
+            // 1. THE OPENING, WRITTEN AND RENDERED BEFORE ANYTHING PLAYS
+            //    (16 Oct 2026). The voice has to HIT THE POST - start talking
+            //    the instant the jingle's sung part stops - and it can only
+            //    do that with the audio already in hand. Nothing is on air
+            //    yet, so the wait for the model is silence before the show,
+            //    never dead air in the middle of it.
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - getting the opening ready.");
 
-            // Written while the jingle plays, so the wait for the model is
-            // under the music rather than after it.
-            var opening = WriteOpeningAsync(cts.Token);
+            var line = await WriteOpeningAsync(round, cts.Token);
 
-            await PlayImagingAsync(ImagingCue.TopOfRace, cts.Token);
+            AnnouncementService.PreparedSpeech? audio = null;
 
-            var line = await opening;
+            if (line is { } toRender)
+            {
+                audio = await _announcer.PrepareReminderAsync(toRender.Text);
+            }
 
             cts.Token.ThrowIfCancellationRequested();
 
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - the top of the race.");
+
+            // 2. The jingle, to its post.
+            jingle = BroadcastImaging.Start(ImagingCue.TopOfRace);
+
+            if (jingle is not null)
+            {
+                await jingle.AtPost.WaitAsync(cts.Token);
+            }
+
+            // 3. On the post: the bed comes up under the voice, the rest of
+            //    the jingle crossfades into it, and the voice hits the post.
+            //    No voice before the race is in the clear from here to the
+            //    countdown - see HandTheBedToTheStart.
+            bed = ImagingBed.Start(ImagingCue.OpeningBed, _announcer, OpeningBedLevel, OpeningBedDuck);
+            jingle?.CrossfadeOut();
+
             if (line is { } said)
             {
-                _announcer.SpeakReminder(said.Text);
+                if (audio is not null)
+                {
+                    _announcer.SpeakPrepared(audio);
+                }
+                else
+                {
+                    _announcer.SpeakReminder(said.Text);
+                }
 
                 // As Stage's own intro does: recorded as said, and its facts
                 // spent, only once the line has been queued.
@@ -138,7 +202,22 @@ public sealed partial class RaceControlControl
 
                 await _announcer.WaitForAudioAsync(IntroShowLimit, cts.Token);
 
-                await PlayImagingAsync(ImagingCue.AfterOpening, cts.Token);
+                // 4. The bumper, crushed straight in off the last word, the
+                //    bed dipped under it. The staging call hits ITS post.
+                if (BroadcastImaging.Start(ImagingCue.AfterOpening) is { } bumper)
+                {
+                    bed?.Dip(true);
+
+                    try
+                    {
+                        await bumper.AtPost.WaitAsync(cts.Token);
+                    }
+                    finally
+                    {
+                        bumper.CrossfadeOut();
+                        bed?.Dip(false);
+                    }
+                }
 
                 cts.Token.ThrowIfCancellationRequested();
             }
@@ -169,6 +248,17 @@ public sealed partial class RaceControlControl
         if (!stage || IsDisposed || Disposing)
         {
             _openingSaidByOnAir = false;
+            jingle?.CrossfadeOut();
+            bed?.Finish();
+            return;
+        }
+
+        // A demo stages itself - see GoOnAirThenAsync.
+        if (start is not null)
+        {
+            _openingSaidByOnAir = false;
+            HandTheBedToTheStart(bed);
+            start();
             return;
         }
 
@@ -176,10 +266,63 @@ public sealed partial class RaceControlControl
         if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
         {
             _openingSaidByOnAir = false;
+            bed?.Finish();
             return;
         }
 
+        HandTheBedToTheStart(bed);
         _actStage?.Invoke(false, null);
+    }
+
+    /// <summary>The opening bed on its own - the show bed level set on the Commentary page.</summary>
+    private float OpeningBedLevel =>
+        _settings.ShowBedLevel is >= 0 and <= 100 ? _settings.ShowBedLevel / 100f : 0.22f;
+
+    /// <summary>How far the opening bed drops under the voice - the show bed's own duck.</summary>
+    private float OpeningBedDuck => Math.Clamp(_settings.ShowBedDuckPercent / 100f, 0.05f, 1f);
+
+    /// <summary>
+    /// The longest the opening bed may run after On Air hands over - a start
+    /// that never reaches its countdown (a warm-up, a race director who is
+    /// not ready) must not leave it looping under the rest of the night.
+    /// </summary>
+    private static readonly TimeSpan LongestOpeningBed = TimeSpan.FromMinutes(3);
+
+    /// <summary>
+    /// Keeps the opening bed under the staging call and takes it away when
+    /// the race moves on: the countdown starting - its beeps and the horn
+    /// want the room to themselves - a reset, or <see cref="LongestOpeningBed"/>.
+    /// </summary>
+    private void HandTheBedToTheStart(ImagingBed? bed)
+    {
+        if (bed is null)
+        {
+            return;
+        }
+
+        Action<RaceState>? watcher = null;
+
+        void End()
+        {
+            if (Interlocked.Exchange(ref watcher, null) is { } w)
+            {
+                _race.StateChanged -= w;
+            }
+
+            bed.Finish();
+        }
+
+        watcher = state =>
+        {
+            if (state is not RaceState.Staging)
+            {
+                End();
+            }
+        };
+
+        _race.StateChanged += watcher;
+
+        _ = Task.Delay(LongestOpeningBed).ContinueWith(_ => End(), TaskScheduler.Default);
     }
 
     /// <summary>
@@ -191,7 +334,7 @@ public sealed partial class RaceControlControl
     /// Read on the UI thread up to the model call, as Stage's is - see
     /// ReadIntroFacts.
     /// </summary>
-    private async Task<(string Text, PackedFacts? History)?> WriteOpeningAsync(CancellationToken ct)
+    private async Task<(string Text, PackedFacts? History)?> WriteOpeningAsync(RoundDefinition? forRound, CancellationToken ct)
     {
         try
         {
@@ -200,7 +343,7 @@ public sealed partial class RaceControlControl
                 return null;
             }
 
-            var round = _activeRound?.Invoke();
+            var round = forRound ?? _activeRound?.Invoke();
 
             if (round is null)
             {

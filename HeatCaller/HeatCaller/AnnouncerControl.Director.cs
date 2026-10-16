@@ -1123,6 +1123,13 @@ public partial class AnnouncerControl
             director.RaceFinished();
         }
 
+        // The next race on its way closes the gap after the last one, so no
+        // paid read lands on the grid. See CommentaryDirector.ReadsBelongHere.
+        if (_race.State is RaceState.Staging or RaceState.Countdown)
+        {
+            director.RaceComing();
+        }
+
         if (racing)
         {
             var ordered = RacingField(_race.GetOrderedStandings());

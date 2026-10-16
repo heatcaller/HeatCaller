@@ -239,11 +239,19 @@ public static class SoundPacks
         {
             ["Podium"] = new[] { "Victory Lane" },
             ["Arcade"] = new[] { "Insert Coin" },
-            ["Broadcast"] = new[] { "Race Day Live" },
+            // The club's own four songs since 16 Oct 2026, in place of
+            // Race Day Live - which still ships and stays in the library.
+            ["Broadcast"] = new[] { "Broadcast Song 1", "Broadcast Song 2", "Broadcast Song 3", "Broadcast Song 4" },
+            // Pit Lane's own four songs (16 Oct 2026) - it had no music of its own before.
+            ["PitLane"] = new[] { "Pit Lane Song 1", "Pit Lane Song 2", "Pit Lane Song 3", "Pit Lane Song 4" },
             ["Synthwave"] = new[]
             {
                 "Neon Grid", "Horizon Line", "Chasing Sunset", "Grid Runner", "Afterglow", "Cooldown Lap",
                 "Vanishing Point", "Last Lap Lights", "Redline Memory", "One More Run", "Back to the Grid", "Long Way Home",
+
+                // Classic's own four songs (16 Oct 2026), added to the
+                // soundtrack rather than in place of it.
+                "Classic Song 1", "Classic Song 2", "Classic Song 3", "Classic Song 4",
             },
         };
 

@@ -24,7 +24,8 @@ public sealed class BroadcastImagingControl : UserControl
     private readonly ComboBox _cmbElement = new();
     private readonly Label _lblStatus = new();
     private readonly NumericUpDown _numLevel = new();
-    private readonly NumericUpDown _numHold = new();
+    private readonly NumericUpDown _numPost = new();
+    private readonly Label _lblPostSource = new();
 
     /// <summary>One picker per point in the run of show.</summary>
     private readonly Dictionary<ImagingCue, ComboBox> _cuePickers = new();
@@ -208,7 +209,9 @@ public sealed class BroadcastImagingControl : UserControl
         _grid.Columns.AddRange(
             new DataGridViewTextBoxColumn { Name = "element", HeaderText = "Element", FillWeight = 40 },
             new DataGridViewTextBoxColumn { Name = "file", HeaderText = "File", FillWeight = 120 },
+            new DataGridViewTextBoxColumn { Name = "post", HeaderText = "Post", FillWeight = 40 },
             new DataGridViewTextBoxColumn { Name = "from", HeaderText = "From", FillWeight = 40 });
+        _grid.SelectionChanged += (_, _) => ShowPost();
         _grid.CellDoubleClick += (_, args) =>
         {
             if (args.RowIndex >= 0)
@@ -237,6 +240,34 @@ public sealed class BroadcastImagingControl : UserControl
         var btnStop = new Button { Text = "Stop" };
         btnStop.Click += (_, _) => StopPreview();
 
+        // THE POST (16 Oct 2026): where the voice - or the next piece -
+        // comes in. On a jingle, the instant the sung part stops.
+        _numPost.DecimalPlaces = 2;
+        _numPost.Increment = 0.05m;
+        _numPost.Minimum = 0;
+        _numPost.Maximum = (decimal)ShowClip.MostSeconds;
+
+        _lblPostSource.AutoSize = true;
+        _lblPostSource.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblPostSource, () => AppTheme.SmallFont);
+
+        var btnSetPost = new Button { Text = "Set Post" };
+        btnSetPost.Click += (_, _) => SetPost();
+
+        var btnAutoPost = new Button { Text = "Auto Post" };
+        btnAutoPost.Click += (_, _) => ClearPost();
+
+        var btnPlayPost = new Button { Text = "Play Into Post" };
+        btnPlayPost.Click += (_, _) => PlaySelected(intoPost: true);
+
+        var postGrid = new FieldGrid();
+        postGrid.AddRow("Post at:", FieldGrid.Inline(_numPost, new Label { Text = "s" }, btnSetPost, btnAutoPost, btnPlayPost, _lblPostSource));
+        postGrid.AddHint(
+            "The post is where the next thing comes in over a piece - on a jingle, the instant the sung part stops, so the "
+            + "voice hits it. Whatever plays after it crossfades into the bed or the next piece; nothing is ever cut short. "
+            + "Play Into Post plays the three seconds up to it. Auto Post goes back to the shipped mark, or one measured "
+            + "from the piece.");
+
         var btnRemove = new Button { Text = "Remove" };
         btnRemove.Click += (_, _) => RemoveSelected();
 
@@ -264,6 +295,7 @@ public sealed class BroadcastImagingControl : UserControl
 
         pieces.AddFill(_grid, () => _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height + 2);
         pieces.Add(new ButtonBar().With(_cmbElement, btnAdd, btnPlay, btnStop, btnRemove, btnRestoreElement, btnRestoreSoundscape));
+        pieces.Add(postGrid);
         pieces.Add(lblAddHint);
         pieces.Add(_lblStatus, gapBelow: 0);
 
@@ -307,11 +339,12 @@ public sealed class BroadcastImagingControl : UserControl
 
         var lblRunHint = new Label
         {
-            Text = "The night runs: jingle or sweeper  ->  opening  ->  bumper  ->  staging  ...  race over  ->  bumper  ->  "
-                 + "stop set  ->  jingle or sweeper  ->  race recap open  ->  race recap bed under the recap host  ->  bumper. "
-                 + "The first three are On Air's, on Race Control. With no commercial break, the race-over bumper plays after the "
-                 + "teaser and nothing comes back from a break that never ran. A point whose soundscape has none of what it is "
-                 + "set to simply plays nothing.",
+            Text = "The night runs: jingle or sweeper  ->  opening, hitting the jingle's post over the opening bed  ->  bumper  "
+                 + "->  staging call over the bed  ...  race over  ->  bumper  ->  stop set  ->  jingle or sweeper  ->  race recap "
+                 + "open  ->  the recap host hits its post as it crossfades into the recap bed  ->  stinger between parts  ->  "
+                 + "bumper over the bed's crossfade. The first part is On Air's, on Race Control. Every piece plays whole: the "
+                 + "next thing starts at its post and the rest crossfades under it, so nothing is cut and nothing drops to "
+                 + "silence. A point whose soundscape has none of what it is set to simply plays nothing.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -336,28 +369,13 @@ public sealed class BroadcastImagingControl : UserControl
             }
         };
 
-        _numHold.Minimum = BroadcastImaging.MinHoldSeconds;
-        _numHold.Maximum = BroadcastImaging.MaxHoldSeconds;
-        _numHold.Increment = 1;
-        _numHold.ValueChanged += (_, _) =>
-        {
-            if (!_filling)
-            {
-                BroadcastImaging.LongestHoldSeconds = (int)_numHold.Value;
-            }
-        };
-
         var lblLevelSuffix = new Label { Text = "%  - the bed plays at the show bed level on the Commentary page", AutoSize = true, ForeColor = AppTheme.TextMuted };
         _textSize.Wear(lblLevelSuffix, () => AppTheme.SmallFont);
 
-        var lblHoldSuffix = new Label { Text = "seconds - a longer piece is faded out here so the show carries on", AutoSize = true, ForeColor = AppTheme.TextMuted };
-        _textSize.Wear(lblHoldSuffix, () => AppTheme.SmallFont);
-
         var levelGrid = new FieldGrid();
         levelGrid.AddRow("Level:", FieldGrid.Inline(_numLevel, lblLevelSuffix));
-        levelGrid.AddRow("Longest hold:", FieldGrid.Inline(_numHold, lblHoldSuffix));
 
-        var levels = new Section("Level and timing");
+        var levels = new Section("Level");
         levels.Add(levelGrid, gapBelow: 0);
 
         // --- The page ----------------------------------------------------
@@ -394,7 +412,7 @@ public sealed class BroadcastImagingControl : UserControl
         }
 
         Fit(_numLevel, NumberWidth(_numLevel));
-        Fit(_numHold, NumberWidth(_numHold));
+        Fit(_numPost, NumberWidth(_numPost));
 
         static void Fit(Control field, int width)
         {
@@ -408,7 +426,8 @@ public sealed class BroadcastImagingControl : UserControl
     /// <summary>A number box as wide as its largest value and its arrows need - the same sum the Music page does.</summary>
     private int NumberWidth(NumericUpDown box)
     {
-        var digits = decimal.Truncate(box.Maximum).ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+        var digits = decimal.Truncate(box.Maximum).ToString(System.Globalization.CultureInfo.InvariantCulture).Length
+            + (box.DecimalPlaces > 0 ? box.DecimalPlaces + 1 : 0);
 
         return Math.Max(
             UiLayout.AtTextSize(UiLayout.NumericWidth),
@@ -424,7 +443,6 @@ public sealed class BroadcastImagingControl : UserControl
         {
             _chkEnabled.Checked = BroadcastImaging.Enabled;
             _numLevel.Value = Math.Clamp(BroadcastImaging.Level, (int)_numLevel.Minimum, (int)_numLevel.Maximum);
-            _numHold.Value = Math.Clamp(BroadcastImaging.LongestHoldSeconds, (int)_numHold.Minimum, (int)_numHold.Maximum);
 
             var keep = (SelectedSoundscape ?? BroadcastImaging.Active)?.Id;
             var activeId = _themes.ActiveThemeId;
@@ -504,9 +522,12 @@ public sealed class BroadcastImagingControl : UserControl
                 var isShipped = shipped.Contains(path, StringComparer.OrdinalIgnoreCase);
                 var there = File.Exists(path);
 
+                var marked = BroadcastImaging.ClubPost(path) ?? BroadcastImaging.ShippedPost(path);
+
                 var row = _grid.Rows.Add(
                     BroadcastImaging.Describe(element),
                     Path.GetFileName(path),
+                    marked is { } post ? $"{post:0.00}s" : "auto",
                     !there ? "missing" : isShipped ? "ships with it" : "added");
 
                 _grid.Rows[row].Tag = new PieceRow(element, path);
@@ -517,7 +538,7 @@ public sealed class BroadcastImagingControl : UserControl
                 }
                 else if (!isShipped)
                 {
-                    _grid.Rows[row].Cells[2].Style.ForeColor = AppTheme.Success;
+                    _grid.Rows[row].Cells[3].Style.ForeColor = AppTheme.Success;
                 }
 
                 if (selected is not null && string.Equals(selected, path, StringComparison.OrdinalIgnoreCase))
@@ -609,7 +630,7 @@ public sealed class BroadcastImagingControl : UserControl
         }
     }
 
-    private void PlaySelected()
+    private void PlaySelected(bool intoPost = false)
     {
         if (SelectedPiece is not { } piece)
         {
@@ -619,12 +640,84 @@ public sealed class BroadcastImagingControl : UserControl
 
         StopPreview();
 
-        _preview = BroadcastImaging.Preview(piece.Path, out var problem);
+        // Into the post: the three seconds up to it, then a beat past - the
+        // part a club listens to when it is placing the mark.
+        var from = intoPost && PostOfSelected(piece) is { } post ? Math.Max(0, post - 3) : 0;
+
+        _preview = BroadcastImaging.Preview(piece.Path, out var problem, from);
 
         if (_preview is null)
         {
             AppDialog.Show(this, problem ?? "That piece couldn't play.", "Couldn't play it", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    /// <summary>The selected piece's post in seconds - the mark when there is one, otherwise measured from the piece.</summary>
+    private static double? PostOfSelected(PieceRow piece)
+    {
+        if ((BroadcastImaging.ClubPost(piece.Path) ?? BroadcastImaging.ShippedPost(piece.Path)) is { } marked)
+        {
+            return marked;
+        }
+
+        return BroadcastImaging.Load(piece.Path, out _) is { } clip
+            ? BroadcastImaging.PostOf(piece.Path, clip).TotalSeconds
+            : null;
+    }
+
+    /// <summary>Shows the selected piece's post in the box under the list.</summary>
+    private void ShowPost()
+    {
+        _filling = true;
+
+        try
+        {
+            if (SelectedPiece is not { } piece)
+            {
+                _numPost.Value = 0;
+                _lblPostSource.Text = string.Empty;
+                return;
+            }
+
+            var marked = BroadcastImaging.ClubPost(piece.Path) ?? BroadcastImaging.ShippedPost(piece.Path);
+
+            _numPost.Value = Math.Clamp((decimal)(marked ?? 0), _numPost.Minimum, _numPost.Maximum);
+            _lblPostSource.Text = BroadcastImaging.PostSource(piece.Path) switch
+            {
+                "set" => "set by the club",
+                "shipped" => "as it ships",
+                _ => "measured from the piece when it plays",
+            };
+        }
+        finally
+        {
+            _filling = false;
+        }
+    }
+
+    private void SetPost()
+    {
+        if (SelectedPiece is not { } piece)
+        {
+            AppDialog.Show(this, "Pick a piece in the list first.", "Nothing selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        BroadcastImaging.SetPost(piece.Path, (double)_numPost.Value);
+        RefreshPieces();
+        ShowPost();
+    }
+
+    private void ClearPost()
+    {
+        if (SelectedPiece is not { } piece)
+        {
+            return;
+        }
+
+        BroadcastImaging.SetPost(piece.Path, null);
+        RefreshPieces();
+        ShowPost();
     }
 
     private void StopPreview()

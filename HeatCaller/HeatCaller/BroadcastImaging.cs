@@ -47,6 +47,13 @@ internal enum ImagingCue
     /// <summary>Top of the race - the first thing On Air plays, before the opening.</summary>
     TopOfRace,
 
+    /// <summary>
+    /// The music under the opening and the staging call (16 Oct 2026): in at
+    /// the jingle's post, ducked under the voice, out when the countdown
+    /// starts - so no voice before the race is ever in the clear.
+    /// </summary>
+    OpeningBed,
+
     /// <summary>After the opening, before the race is staged.</summary>
     AfterOpening,
 
@@ -91,11 +98,13 @@ internal sealed class ImagingSettings
     public int Level { get; set; } = 80;
 
     /// <summary>
-    /// The longest any one piece may hold the show up, in seconds. A piece
-    /// longer than this is faded out at this point so the voice can carry
-    /// on - a 40-second jingle in front of every race is a long wait.
+    /// Where each piece's post is, in seconds from its top, by file name -
+    /// the club's own marks from the Imaging page. A piece with none here
+    /// takes the one shipped beside it (posts.json in its soundscape's
+    /// folder), and failing that the post is measured (see
+    /// BroadcastImaging.PostOf).
     /// </summary>
-    public int LongestHoldSeconds { get; set; } = 30;
+    public Dictionary<string, double>? Posts { get; set; } = new();
 
     /// <summary>What each point in the run of show plays, by ImagingCue name. A missing one plays its default.</summary>
     public Dictionary<string, ImagingChoice>? RunOfShow { get; set; } = new();
@@ -149,7 +158,22 @@ internal static class BroadcastImaging
     /// <summary>The fewest clips held loaded at once. A Classic jingle is around 15 MB held.</summary>
     private const int ClipsKept = 12;
 
+    /// <summary>The most audio held loaded at once, in samples - 64 million floats is 256 MB, two beds and the short pieces.</summary>
+    private const long SamplesKept = 64L * 1024 * 1024;
+
     private static readonly object Gate = new();
+
+    private static int _onAirsBegun;
+
+    /// <summary>
+    /// How many times On Air has been pressed this run. The commentary
+    /// director keeps paid reads to the gap after a race, and On Air being
+    /// pressed is that gap closing. See CommentaryDirector.ReadsBelongHere.
+    /// </summary>
+    public static int OnAirsBegun => Volatile.Read(ref _onAirsBegun);
+
+    /// <summary>On Air has been pressed - the next race's top is coming, so the gap after the last race is over.</summary>
+    public static void OnAirBegins() => Interlocked.Increment(ref _onAirsBegun);
 
     private static ImagingSettings _settings = new();
 
@@ -225,6 +249,7 @@ internal static class BroadcastImaging
         // A hand-edited file can say null for either.
         loaded.RunOfShow ??= new Dictionary<string, ImagingChoice>();
         loaded.Soundscapes ??= new Dictionary<string, Dictionary<string, List<string>>>();
+        loaded.Posts ??= new Dictionary<string, double>();
 
         _settings = loaded;
         _loadedFrom = path;
@@ -295,32 +320,6 @@ internal static class BroadcastImaging
         }
     }
 
-    /// <summary>The longest one piece may hold the show, in seconds.</summary>
-    internal static int LongestHoldSeconds
-    {
-        get
-        {
-            lock (Gate)
-            {
-                return Math.Clamp(Loaded().LongestHoldSeconds, MinHoldSeconds, MaxHoldSeconds);
-            }
-        }
-        set
-        {
-            lock (Gate)
-            {
-                Loaded().LongestHoldSeconds = Math.Clamp(value, MinHoldSeconds, MaxHoldSeconds);
-                SaveLocked();
-            }
-
-            Saved();
-        }
-    }
-
-    internal const int MinHoldSeconds = 3;
-
-    internal const int MaxHoldSeconds = 60;
-
     // ==================== The run of show ====================
 
     /// <summary>Every point, in the order the night hears them.</summary>
@@ -330,6 +329,7 @@ internal static class BroadcastImaging
     internal static ImagingChoice DefaultFor(ImagingCue cue) => cue switch
     {
         ImagingCue.TopOfRace => ImagingChoice.JingleOrSweeper,
+        ImagingCue.OpeningBed => ImagingChoice.Bed,
         ImagingCue.AfterOpening => ImagingChoice.Bumper,
         ImagingCue.AfterRaceOver => ImagingChoice.Bumper,
         ImagingCue.BackFromBreak => ImagingChoice.JingleOrSweeper,
@@ -341,7 +341,7 @@ internal static class BroadcastImaging
     };
 
     /// <summary>What a point can be set to. The bed loops under a voice, so it is the only thing the bed's point can play - and nothing else can.</summary>
-    internal static IReadOnlyList<ImagingChoice> ChoicesFor(ImagingCue cue) => cue == ImagingCue.RecapBed
+    internal static IReadOnlyList<ImagingChoice> ChoicesFor(ImagingCue cue) => cue is ImagingCue.RecapBed or ImagingCue.OpeningBed
         ? new[] { ImagingChoice.Off, ImagingChoice.Bed }
         : new[]
         {
@@ -427,6 +427,7 @@ internal static class BroadcastImaging
     internal static string Describe(ImagingCue cue) => cue switch
     {
         ImagingCue.TopOfRace => "Top of the race",
+        ImagingCue.OpeningBed => "Opening bed",
         ImagingCue.AfterOpening => "After the opening",
         ImagingCue.AfterRaceOver => "Race over",
         ImagingCue.BackFromBreak => "Back from the stop set",
@@ -440,11 +441,12 @@ internal static class BroadcastImaging
     /// <summary>When a point fires, in words for the page.</summary>
     internal static string When(ImagingCue cue) => cue switch
     {
-        ImagingCue.TopOfRace => "the first thing On Air plays, before the opening",
-        ImagingCue.AfterOpening => "after the opening, just before On Air stages the race",
+        ImagingCue.TopOfRace => "the first thing On Air plays - the opening hits its post",
+        ImagingCue.OpeningBed => "in at the jingle's post, under the opening and the staging call, out at the countdown",
+        ImagingCue.AfterOpening => "straight off the opening's last word - the staging call hits its post",
         ImagingCue.AfterRaceOver => "after the finish and the teaser, going into the stop set",
         ImagingCue.BackFromBreak => "coming back out of the stop set, before the recap",
-        ImagingCue.RecapOpen => "lands in front of the recap host",
+        ImagingCue.RecapOpen => "the recap host hits its post, and it crossfades into the recap bed",
         ImagingCue.RecapBed => "loops under the recap host for the whole recap show",
         ImagingCue.BetweenRecapParts => "between the recap, honours, colour, interview and sign-off",
         ImagingCue.AfterRecap => "after the recap show's last word",
@@ -886,7 +888,12 @@ internal static class BroadcastImaging
             ClipOrder.Remove(path);
             ClipOrder.AddLast(path);
 
-            while (ClipOrder.Count > ClipsKept && ClipOrder.First is { } oldest)
+            // By count AND by size: a five-minute music bed is over 100 MB
+            // held, and twelve of those would be most of a race laptop's
+            // memory. The newest is always kept, whatever its size.
+            while (ClipOrder.Count > 1
+                   && (ClipOrder.Count > ClipsKept || Clips.Values.Sum(c => (long)c.Samples.Length) > SamplesKept)
+                   && ClipOrder.First is { } oldest)
             {
                 Clips.Remove(oldest.Value);
                 ClipOrder.RemoveFirst();
@@ -913,36 +920,217 @@ internal static class BroadcastImaging
         }
     }
 
-    // ==================== Playing ====================
+    // ==================== Posts ====================
+
+    /// <summary>The shipped posts, read once per soundscape folder.</summary>
+    private static readonly Dictionary<string, Dictionary<string, double>> ShippedPosts = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Plays the next piece for a point and holds until it has played - or
-    /// for <see cref="LongestHoldSeconds"/>, when it fades the rest out so the
-    /// show can carry on. Returns false when nothing played or it was cut
-    /// short by <paramref name="ct"/>, which fades it out.
-    ///
-    /// The club's playlist steps aside while it plays (ShowOnAir), the way it
-    /// does for the show's own music.
+    /// The club's own mark for a piece's post, or null when it has none.
+    /// By file name, so a mark survives the file being copied in again.
     /// </summary>
-    internal static async Task<bool> PlayAsync(ImagingCue cue, CancellationToken ct = default)
+    internal static double? ClubPost(string path)
     {
-        if (Muted || ct.IsCancellationRequested)
+        lock (Gate)
         {
-            return false;
+            return Loaded().Posts!.TryGetValue(Path.GetFileName(path), out var at) ? at : null;
+        }
+    }
+
+    /// <summary>Sets - or, with null, clears - the club's own mark for a piece's post.</summary>
+    internal static void SetPost(string path, double? seconds)
+    {
+        lock (Gate)
+        {
+            var posts = Loaded().Posts!;
+
+            if (seconds is { } at && at > 0)
+            {
+                posts[Path.GetFileName(path)] = Math.Round(at, 2);
+            }
+            else
+            {
+                posts.Remove(Path.GetFileName(path));
+            }
+
+            SaveLocked();
         }
 
-        var clip = Next(cue);
+        Saved();
+    }
+
+    /// <summary>The post shipped with a piece - posts.json beside it - or null.</summary>
+    internal static double? ShippedPost(string path)
+    {
+        try
+        {
+            var folder = Path.GetDirectoryName(path);
+
+            if (string.IsNullOrEmpty(folder))
+            {
+                return null;
+            }
+
+            Dictionary<string, double>? posts;
+
+            lock (Gate)
+            {
+                if (!ShippedPosts.TryGetValue(folder, out posts))
+                {
+                    posts = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
+                    var file = Path.Combine(folder, "posts.json");
+
+                    if (File.Exists(file))
+                    {
+                        foreach (var (name, at) in JsonSerializer.Deserialize<Dictionary<string, double>>(File.ReadAllText(file)) ?? new())
+                        {
+                            posts[name] = at;
+                        }
+                    }
+
+                    ShippedPosts[folder] = posts;
+                }
+            }
+
+            return posts.TryGetValue(Path.GetFileName(path), out var post) ? post : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Where the next thing starts over a piece: its POST.
+    ///
+    /// On a jingle that is the instant the sung part stops, and the voice
+    /// starts talking right on it - hitting the post, which is the whole
+    /// trick of it. Whatever the piece still has to play after its post is
+    /// crossfaded into what comes next, never cut.
+    ///
+    /// The club's own mark first, then the one shipped beside the piece,
+    /// then a measured one: where the piece stops being its body and starts
+    /// ringing out (ShowShape) - which on a piece with no ring-out is its
+    /// end.
+    /// </summary>
+    internal static TimeSpan PostOf(string path, ShowClip clip)
+    {
+        var length = clip.Length.TotalSeconds;
+        var marked = ClubPost(path) ?? ShippedPost(path);
+
+        var at = marked ?? (double)clip.Shape.LoopEnd / clip.SampleRate;
+
+        return TimeSpan.FromSeconds(Math.Clamp(at, Math.Min(0.3, length), Math.Max(0, length)));
+    }
+
+    /// <summary>Where a piece's post came from, for the page.</summary>
+    internal static string PostSource(string path) =>
+        ClubPost(path) is not null ? "set" : ShippedPost(path) is not null ? "shipped" : "measured";
+
+    // ==================== Playing ====================
+
+    /// <summary>The next piece for a point, loaded, with the file it came from - see <see cref="NextFile"/>.</summary>
+    internal static (ShowClip Clip, string Path)? NextPiece(ImagingCue cue)
+    {
+        var path = NextFile(cue);
+
+        if (path is null)
+        {
+            return null;
+        }
+
+        var clip = Load(path, out var problem);
 
         if (clip is null)
         {
+            Status?.Invoke($"[imaging] {Describe(cue)}: {problem ?? "couldn't load " + Path.GetFileName(path)}");
+            return null;
+        }
+
+        Status?.Invoke($"[imaging] {Describe(cue)}: {Path.GetFileName(path)}");
+        return (clip, path);
+    }
+
+    /// <summary>
+    /// Starts the next piece for a point and hands back the handle to it -
+    /// null when there is nothing to play, or everything is muted. It plays
+    /// whole, from its top: nothing here ever cuts a piece short or fires
+    /// an ending of its own. See <see cref="ImagingPlay"/>.
+    /// </summary>
+    internal static ImagingPlay? Start(ImagingCue cue)
+    {
+        if (Muted || NextPiece(cue) is not { } piece)
+        {
+            return null;
+        }
+
+        return ImagingPlay.Start(piece.Clip, PostOf(piece.Path, piece.Clip), Level / 100f, Describe(cue), Status);
+    }
+
+    /// <summary>
+    /// Plays the next piece for a point and returns at its POST, where the
+    /// next thing goes. With <paramref name="crossfadeAtPost"/> the rest of
+    /// the piece is then crossfaded away under what comes next; without it
+    /// the piece plays out whole, for a point nothing follows at once.
+    /// Returns false when nothing played or <paramref name="ct"/> called it
+    /// off, which crossfades it away.
+    /// </summary>
+    internal static async Task<bool> PlayAsync(ImagingCue cue, CancellationToken ct = default, bool crossfadeAtPost = true)
+    {
+        if (ct.IsCancellationRequested || Start(cue) is not { } playing)
+        {
             return false;
         }
 
-        return await PlayClipAsync(clip, Level / 100f, Describe(cue), ct).ConfigureAwait(false);
+        try
+        {
+            await playing.AtPost.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            playing.CrossfadeOut();
+            return false;
+        }
+
+        if (crossfadeAtPost)
+        {
+            playing.CrossfadeOut();
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Plays the next piece for a point and returns when the WHOLE of it
+    /// has played - for an edge where what follows has a soundtrack of its
+    /// own and must not start over the top of it (the bumper into the stop
+    /// set, whose sponsor videos bring their own audio). Returns false when
+    /// nothing played or <paramref name="ct"/> called it off, which
+    /// crossfades it away.
+    /// </summary>
+    internal static async Task<bool> PlayWholeAsync(ImagingCue cue, CancellationToken ct = default)
+    {
+        if (ct.IsCancellationRequested || Start(cue) is not { } playing)
+        {
+            return false;
+        }
+
+        try
+        {
+            await playing.Played.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            playing.CrossfadeOut();
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>Whether everything is muted - nothing plays then.</summary>
-    private static bool Muted
+    internal static bool Muted
     {
         get
         {
@@ -958,95 +1146,10 @@ internal static class BroadcastImaging
     }
 
     /// <summary>
-    /// One piece, once, at a level - held for its length up to the longest
-    /// hold, then faded if there is more of it. See <see cref="PlayAsync"/>.
-    /// </summary>
-    internal static async Task<bool> PlayClipAsync(ShowClip clip, float level, string what, CancellationToken ct)
-    {
-        var gain = new SmoothGainSampleProvider(new ShowOneShot(clip), 1f, downSeconds: FadeSeconds);
-        var stop = new CancellationTokenSource();
-        var released = 0;
-
-        // Exactly once, however it ends - the club's music must come back.
-        void Release()
-        {
-            if (Interlocked.Exchange(ref released, 1) == 0)
-            {
-                ShowOnAir.End();
-            }
-        }
-
-        // Fades it, then takes it off the bus - and gives the music back.
-        void FadeOut()
-        {
-            gain.Target = 0f;
-
-            _ = Task.Delay(TimeSpan.FromSeconds(FadeSeconds + 0.1)).ContinueWith(_ =>
-            {
-                try
-                {
-                    stop.Cancel();
-                }
-                catch (ObjectDisposedException)
-                {
-                    // Already played out.
-                }
-
-                Release();
-            }, TaskScheduler.Default);
-        }
-
-        ShowOnAir.Begin();
-
-        Task playing;
-
-        try
-        {
-            playing = AudioBus.PlayAsync(gain, level, stop.Token);
-        }
-        catch (Exception ex)
-        {
-            Release();
-            stop.Dispose();
-            Status?.Invoke($"[imaging] The {what} couldn't play: {ex.Message}");
-            return false;
-        }
-
-        _ = playing.ContinueWith(done =>
-        {
-            _ = done.Exception;
-            Release();
-            stop.Dispose();
-        }, TaskScheduler.Default);
-
-        var longest = TimeSpan.FromSeconds(LongestHoldSeconds);
-        var hold = clip.Length < longest ? clip.Length : longest;
-
-        try
-        {
-            await Task.Delay(hold, ct).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            FadeOut();
-            return false;
-        }
-
-        // Longer than the show will wait for: the rest is faded so the next
-        // thing can start, rather than left ringing on under it.
-        if (clip.Length - hold > TimeSpan.FromSeconds(0.25))
-        {
-            FadeOut();
-        }
-
-        return true;
-    }
-
-    /// <summary>
     /// Plays one file for the page's Play button, with nothing held for it.
     /// Hand back the result to <see cref="StopPreview"/> to stop it.
     /// </summary>
-    internal static CancellationTokenSource? Preview(string path, out string? problem)
+    internal static CancellationTokenSource? Preview(string path, out string? problem, double fromSeconds = 0)
     {
         var clip = Load(path, out problem);
 
@@ -1059,7 +1162,9 @@ internal static class BroadcastImaging
 
         try
         {
-            _ = AudioBus.PlayAsync(new ShowOneShot(clip), Level / 100f, stop.Token)
+            var from = (int)(Math.Max(0, fromSeconds) * clip.SampleRate);
+
+            _ = AudioBus.PlayAsync(new ShowOneShot(clip, from), Level / 100f, stop.Token)
                 .ContinueWith(done => _ = done.Exception, TaskScheduler.Default);
         }
         catch (Exception ex)
@@ -1086,6 +1191,254 @@ internal static class BroadcastImaging
         catch (ObjectDisposedException)
         {
             // Already gone.
+        }
+    }
+}
+
+/// <summary>
+/// One piece of imaging playing - see BroadcastImaging.Start.
+///
+/// It plays WHOLE, from its top, as the producer made it. Nothing here cuts
+/// a piece at a time of its own choosing or fires an ending of its own: the
+/// next thing starts at the piece's post (<see cref="AtPost"/>), and
+/// whatever the piece still has to play after that is crossfaded away under
+/// it (<see cref="CrossfadeOut"/>) - the sound never drops to nothing in
+/// between.
+///
+/// The club's playlist steps aside while it plays (ShowOnAir), as it does for
+/// the show's own music, and comes back exactly once however it ends.
+/// </summary>
+internal sealed class ImagingPlay
+{
+    /// <summary>How long the rest of a piece takes to cross into what follows it.</summary>
+    internal const double CrossfadeSeconds = 1.2;
+
+    private readonly SmoothGainSampleProvider _gain;
+
+    /// <summary>Takes it off the bus once it has been crossfaded away. Never disposed: a late cancel must not throw.</summary>
+    private readonly CancellationTokenSource _stop = new();
+
+    private int _fading;
+    private int _released;
+
+    private ImagingPlay(SmoothGainSampleProvider gain, TimeSpan post, TimeSpan length)
+    {
+        _gain = gain;
+        Post = post;
+        Length = length;
+    }
+
+    /// <summary>Where the next thing goes, from the piece's top.</summary>
+    internal TimeSpan Post { get; }
+
+    internal TimeSpan Length { get; }
+
+    /// <summary>Completes at the post.</summary>
+    internal Task AtPost { get; private set; } = Task.CompletedTask;
+
+    /// <summary>Completes when the piece has played out or been crossfaded away.</summary>
+    internal Task Played { get; private set; } = Task.CompletedTask;
+
+    internal static ImagingPlay? Start(ShowClip clip, TimeSpan post, float level, string what, Action<string>? status)
+    {
+        var gain = new SmoothGainSampleProvider(new ShowOneShot(clip), 1f, downSeconds: CrossfadeSeconds, upSeconds: 0.3);
+        var play = new ImagingPlay(gain, post, clip.Length);
+
+        ShowOnAir.Begin();
+
+        try
+        {
+            play.Played = AudioBus.PlayAsync(gain, level, play._stop.Token);
+        }
+        catch (Exception ex)
+        {
+            play.Release();
+            status?.Invoke($"[imaging] The {what} couldn't play: {ex.Message}");
+            return null;
+        }
+
+        play.AtPost = Task.Delay(post);
+
+        _ = play.Played.ContinueWith(done =>
+        {
+            _ = done.Exception;
+            play.Release();
+        }, TaskScheduler.Default);
+
+        return play;
+    }
+
+    /// <summary>
+    /// Crosses whatever is left of the piece into what is starting over it:
+    /// ridden down over <see cref="CrossfadeSeconds"/>, then taken off. Safe
+    /// to call more than once, and on a piece that has already finished.
+    /// </summary>
+    internal void CrossfadeOut()
+    {
+        if (Interlocked.Exchange(ref _fading, 1) == 1)
+        {
+            return;
+        }
+
+        _gain.Target = 0f;
+
+        _ = Task.Delay(TimeSpan.FromSeconds(CrossfadeSeconds + 0.1)).ContinueWith(_ =>
+        {
+            try
+            {
+                _stop.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already gone.
+            }
+
+            Release();
+        }, TaskScheduler.Default);
+    }
+
+    private void Release()
+    {
+        if (Interlocked.Exchange(ref _released, 1) == 0)
+        {
+            ShowOnAir.End();
+        }
+    }
+}
+
+/// <summary>
+/// A music bed running under the voice outside the recap show - the opening
+/// bed, under On Air's opening and the staging call (16 Oct 2026), so no
+/// voice before the race is ever in the clear.
+///
+/// Ducked under the voice whenever the announcer is talking, and dipped
+/// under a bumper fired over it. It comes in from nothing at the jingle's
+/// post and leaves with a short fade when <see cref="Finish"/> is called -
+/// never by jumping to an ending of its own.
+/// </summary>
+internal sealed class ImagingBed
+{
+    private readonly ShowBed _bed;
+    private readonly SmoothGainSampleProvider _gain;
+    private readonly AnnouncementService _announcer;
+    private readonly float _level;
+    private readonly float _underVoice;
+
+    private Action<bool>? _onSpeaking;
+    private volatile bool _speaking;
+    private volatile bool _dipped;
+    private int _finished;
+    private int _released;
+
+    private ImagingBed(ShowBed bed, SmoothGainSampleProvider gain, AnnouncementService announcer, float level, float underVoice)
+    {
+        _bed = bed;
+        _gain = gain;
+        _announcer = announcer;
+        _level = level;
+        _underVoice = underVoice;
+    }
+
+    /// <summary>
+    /// Starts the next bed for a point, coming up from nothing. Null when
+    /// there is no bed for it, or everything is muted.
+    /// </summary>
+    /// <param name="level">The bed on its own, 0 to 1 - the show bed level on the Commentary page.</param>
+    /// <param name="duck">How far it drops under the voice, as a fraction of <paramref name="level"/>.</param>
+    internal static ImagingBed? Start(ImagingCue cue, AnnouncementService announcer, float level, float duck)
+    {
+        if (BroadcastImaging.Muted || BroadcastImaging.NextPiece(cue) is not { } piece)
+        {
+            return null;
+        }
+
+        var bed = new ShowBed(piece.Clip);
+        var gain = new SmoothGainSampleProvider(bed, 0f, downSeconds: 0.5, upSeconds: 0.8);
+        var run = new ImagingBed(bed, gain, announcer, Math.Clamp(level, 0f, 1f), Math.Clamp(level * duck, 0f, 1f));
+
+        // A plain delegate held in a field, so the -= in Finish takes off
+        // exactly what was put on - see ShowTreatment.OpenShowAsync.
+        run._onSpeaking = now =>
+        {
+            run._speaking = now;
+            run.Settle();
+        };
+
+        announcer.SpeakingChanged += run._onSpeaking;
+
+        ShowOnAir.Begin();
+
+        Task playing;
+
+        try
+        {
+            playing = AudioBus.PlayAsync(gain, 1f);
+        }
+        catch
+        {
+            announcer.SpeakingChanged -= run._onSpeaking;
+            bed.CutShort();
+            run.Release();
+            return null;
+        }
+
+        _ = playing.ContinueWith(done =>
+        {
+            _ = done.Exception;
+            run.Release();
+        }, TaskScheduler.Default);
+
+        run.Settle();
+
+        return run;
+    }
+
+    /// <summary>Under a bumper fired over it (true), or back up when the bumper has gone (false).</summary>
+    internal void Dip(bool under)
+    {
+        _dipped = under;
+        Settle();
+    }
+
+    private void Settle()
+    {
+        if (Volatile.Read(ref _finished) == 1)
+        {
+            return;
+        }
+
+        _gain.Target = _speaking || _dipped ? _underVoice : _level;
+    }
+
+    /// <summary>
+    /// Takes the bed away with a short fade - the countdown has started, the
+    /// race has moved on, or On Air was called off. Safe to call more than once.
+    /// </summary>
+    internal void Finish()
+    {
+        if (Interlocked.Exchange(ref _finished, 1) == 1)
+        {
+            return;
+        }
+
+        if (_onSpeaking is { } onSpeaking)
+        {
+            _announcer.SpeakingChanged -= onSpeaking;
+        }
+
+        _bed.CutShort();
+
+        // The bed reports itself done once its fade has played. In case a
+        // device going away means it never does, the music is given back
+        // anyway.
+        _ = Task.Delay(TimeSpan.FromSeconds(ShowBed.CutShortSeconds + 3)).ContinueWith(_ => Release(), TaskScheduler.Default);
+    }
+
+    private void Release()
+    {
+        if (Interlocked.Exchange(ref _released, 1) == 0)
+        {
+            ShowOnAir.End();
         }
     }
 }
