@@ -24,7 +24,7 @@ internal static partial class WindowCatalog
             heatCallerVoice: true,
             library: new List<string>())),
         ("Edit soundscape (a copy of a built-in)", () => SoundscapeEditor(
-            SoundscapeFromBuiltIn("Synthwave", "Synthwave - Friday nights"),
+            SoundscapeFromBuiltIn("Classic", "Classic - Friday nights"),
             isNew: false,
             heatCallerVoice: false,
             library: SoundscapeWholeLibrary())),

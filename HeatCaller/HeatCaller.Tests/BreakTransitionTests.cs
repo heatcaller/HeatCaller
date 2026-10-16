@@ -129,13 +129,26 @@ public sealed class BreakTransitionTests
     }
 
     [Fact]
-    public void The_sting_sits_under_the_level_it_has_inside_a_show()
+    public void A_boundary_sting_invents_no_level_of_its_own()
     {
-        // A mark between two items of a block lands between two things the
-        // room is already listening to. This one lands into a gap, where
-        // the same level reads as louder than it is.
-        Assert.InRange(BreakTransition.StingLevel, 0.1f, 1f);
-        Assert.True(BreakTransition.StingLevel < 1f, "a boundary sting is not at full show level");
+        // The first draft of this class carried a StingLevel constant that
+        // scaled the club's setting down by a fifth, on the reasoning that
+        // a mark landing into a gap reads as louder. AppSettings.ShowStingLevel
+        // says the opposite and has actually been listened to: the
+        // in-block sting is "a shade under" the opener BECAUSE it lands on
+        // a running bed "where the opener lands on nothing". A break edge
+        // lands on nothing too.
+        //
+        // So the constant went, and a boundary sting plays at the level the
+        // club set. Asserted as an absence, because the fault would be
+        // somebody reintroducing a second level nobody chose.
+        Assert.DoesNotContain(
+            "StingLevel",
+            typeof(BreakTransition).GetFields(
+                System.Reflection.BindingFlags.Public
+                | System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Static)
+                .Select(one => one.Name));
     }
 
     // ------------------------------------------------------------------

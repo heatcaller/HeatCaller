@@ -353,6 +353,10 @@ public sealed partial class RaceControlControl
         // minimum width would not fit on one line beside the clock. It
         // wraps rather than clipping the last flag off the end when even
         // that is too wide - a longer language, a bigger text size.
+        // On Air, in front of Stage: the jingle, the opening and a bumper,
+        // then it presses Stage itself. See RaceControlControl.OnAir.cs.
+        BuildOnAirButton();
+
         _btnStage.Text = "Stage";
         _actStage = (confirmedOverRunningRace, restoreHostOnUndo) =>
         {
@@ -430,7 +434,13 @@ public sealed partial class RaceControlControl
 
             // After Stage, so it knows which race it is for - it is spoken
             // only if this race is still staging when the model answers.
-            var introComing = _race.State == RaceState.Staging && SpeakRoundIntro(generationAfterStage);
+            //
+            // Not when On Air has just said it as the opening - the room
+            // has heard this race's intro, and a second one would be the
+            // model asked twice for the same race.
+            var introComing = !TakeOpeningSaidByOnAir()
+                && _race.State == RaceState.Staging
+                && SpeakRoundIntro(generationAfterStage);
 
             // Chain onward once the staging call - and the round intro, when
             // one is being written - has finished speaking. Driven by the
@@ -892,7 +902,7 @@ public sealed partial class RaceControlControl
         // re-start a race that is already running - and the focus ring it
         // draws over a flag colour looks like a fault besides.
         AppTheme.ReleaseFocusAfterClick(
-            _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset);
+            _btnOnAir, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset);
 
         // The chip wraps to the card's width - the value can run long - and
         // wears the window's font.
@@ -1050,7 +1060,7 @@ public sealed partial class RaceControlControl
         var flags = new Section("Race Control");
 
         flags.Add(new ButtonBar(tight: true).With(
-            _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset));
+            _btnOnAir, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset));
 
         var status = new FlowLayoutPanel
         {

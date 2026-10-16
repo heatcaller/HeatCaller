@@ -200,7 +200,7 @@ public partial class MainForm
             "voice announcements", "announcements", "announcement", "lines", "phrasing", "wording",
         },
         ["Ghost Cars"] = new[] { "ghost", "virtual", "opponent", "rival", "solo", "practice alone", "ai car", "pace" },
-        ["Sounds"] = new[] { "soundscape", "soundscapes", "preset", "voice pack", "sound pack", "announcer style", "personality", "sound effects", "music", "soundtrack", "track", "song", "playlist", "beep", "beeps", "cue", "chime", "per-driver", "ambience", "crowd", "atmosphere", "track noise", "tone", "beep", "audio", "volume", "test" },
+        ["Sounds"] = new[] { "soundscape", "soundscapes", "preset", "voice pack", "sound pack", "announcer style", "personality", "sound effects", "music", "soundtrack", "track", "song", "playlist", "beep", "beeps", "cue", "chime", "per-driver", "ambience", "crowd", "atmosphere", "track noise", "tone", "beep", "audio", "volume", "test", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "run of show", "radio" },
         ["Backup & Restore"] = new[] { "save", "restore", "export", "zip", "auto backup", "support", "help", "logs", "log file", "crash", "send logs" },
         ["Garage"] = new[] { "car", "cars", "chassis", "shell", "bodyshell", "tuning", "setup log", "setup", "tires", "gearing", "ride height", "springs", "loan", "borrow", "club car" },
     };
@@ -281,6 +281,7 @@ public partial class MainForm
             ("Effects", new[] { "effects", "sound effects", "cue", "chime" }),
             ("Ambience", new[] { "ambience", "crowd", "atmosphere", "track noise" }),
             ("Music", new[] { "music", "soundtrack", "song", "playlist" }),
+            ("Imaging", new[] { "broadcast imaging", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "run of show", "radio" }),
             ("Lap Beeps", new[] { "lap beeps", "beep", "per-driver", "tone" }),
         },
     };

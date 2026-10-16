@@ -204,6 +204,11 @@ public sealed class CommentaryControl : UserControl
     private readonly ComboBox _cmbHonoursVoice = new();
     private readonly Button _btnTestHonours = new();
 
+    // The race recap host - the voice that reads the recap show and only
+    // the recap show (16 Oct 2026). See AppSettings.RecapHostVoice.
+    private readonly ComboBox _cmbRecapHostVoice = new();
+    private readonly Button _btnTestRecapHost = new();
+
     // --- The commercial break (10 Oct 2026) ---
     //
     // One switch and no timings: how long the break runs is however long
@@ -371,6 +376,7 @@ public sealed class CommentaryControl : UserControl
     /// </summary>
     internal event Action? NightBeforeClosedOnTheRelay;
     private (Font Font, int Count, int Width)? _honoursVoiceWidth;
+    private (Font Font, int Count, int Width)? _recapHostVoiceWidth;
 
     /// <summary>The usual captions of the two buttons that say so while they work - see BuildLayout's Steady.</summary>
     private const string TestCaption = "Test Connection";
@@ -452,6 +458,9 @@ public sealed class CommentaryControl : UserControl
     /// about whether they sound right reading out badges.
     /// </summary>
     internal Action<SecondVoice>? SpeakAsHonours { get; set; }
+
+    /// <summary>The same for the race recap host, with a line of the kind a recap opens on. Set by the host.</summary>
+    internal Action<SecondVoice>? SpeakAsRecapHost { get; set; }
 
     /// <summary>
     /// Plays a show open with a test line over it, as a real segment
@@ -1236,11 +1245,24 @@ public sealed class CommentaryControl : UserControl
         _lblVoiceSource.ForeColor = AppTheme.TextMuted;
         _textSize.Wear(_lblVoiceSource, () => AppTheme.SmallFont);
 
+        _cmbRecapHostVoice.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbRecapHostVoice.SelectedIndexChanged += (_, _) => SaveRecapHostVoice();
+
+        _btnTestRecapHost.Text = "Test Voice";
+        _btnTestRecapHost.Click += (_, _) => SpeakAsRecapHost?.Invoke(_settings.RecapHostVoice);
+
         var showGrid = new FieldGrid();
 
         Stepped(showGrid.AddRow("Show name:", Line(_txtShowName, Suffix("named in the opening and the sign-off - leave it blank for none"))));
 
         Stepped(showGrid.AddRow("Announcer's name:", Line(_txtAnnouncerName, Suffix("he introduces himself at the cold open and the top of the recap - blank and he is never named"))));
+
+        Stepped(showGrid.AddRow("Recap host's voice:", Line(_cmbRecapHostVoice, _btnTestRecapHost)));
+        showGrid.AddHint(
+            "The race recap show has a host of its own: this voice reads the recap, the colour, the questions to the "
+            + "mechanic and the sign-off, and is heard nowhere else - the announcer keeps the race calls, the teaser and "
+            + "the openings. Filled from the same engine as the mechanic's, beside Load Voices below, and kept per engine "
+            + "the same way. With none picked, the announcer hosts the recap too.");
 
         Check(_chkAdBreak, "Play the sponsors as a commercial break while the recap is being written");
         _chkAdBreak.Checked = _settings.RecapAdBreak;
@@ -2257,6 +2279,7 @@ public sealed class CommentaryControl : UserControl
         // "Room to breathe" was cut off at every size the layout test checks.
         Fit(_cmbDensity, Math.Max(UiLayout.AtTextSize(ShowPieceWidth), Pieces.PickerWidth(_cmbDensity, ref _densityWidth)));
         Fit(_cmbHonoursVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbHonoursVoice, ref _honoursVoiceWidth)));
+        Fit(_cmbRecapHostVoice, Math.Max(UiLayout.AtTextSize(VoicePickerWidth), Pieces.PickerWidth(_cmbRecapHostVoice, ref _recapHostVoiceWidth)));
 
         foreach (var number in new[]
                  {
@@ -2324,6 +2347,9 @@ public sealed class CommentaryControl : UserControl
 
     /// <summary>And for the honours reader, the third voice. Same shape again - see SavedSecondVoice.</summary>
     private VoiceChoice SavedHonoursVoice(VoiceEngine engine) => SavedSecondVoice(_settings.HonoursVoice, engine);
+
+    /// <summary>And for the race recap host. Same shape again - see SavedSecondVoice.</summary>
+    private VoiceChoice SavedRecapHostVoice(VoiceEngine engine) => SavedSecondVoice(_settings.RecapHostVoice, engine);
 
     /// <summary>
     /// Which voice a second speaker has saved for an engine, as the
@@ -2430,6 +2456,7 @@ public sealed class CommentaryControl : UserControl
 
             FillSecondVoice(_cmbCoHostVoice, SavedCoHostVoice(shown));
             FillSecondVoice(_cmbHonoursVoice, SavedHonoursVoice(shown));
+            FillSecondVoice(_cmbRecapHostVoice, SavedRecapHostVoice(shown));
         }
         finally
         {
@@ -2447,6 +2474,7 @@ public sealed class CommentaryControl : UserControl
         _chatterWidth = null;
         _densityWidth = null;
         _honoursVoiceWidth = null;
+        _recapHostVoiceWidth = null;
         SizeFields();
     }
 
@@ -3216,6 +3244,35 @@ public sealed class CommentaryControl : UserControl
         _settings.Save();
     }
 
+    /// <summary>Saves the recap host's picked voice against the engine the list is showing - per engine, as the others are.</summary>
+    private void SaveRecapHostVoice()
+    {
+        if (_fillingVoices || _cmbRecapHostVoice.SelectedItem is not VoiceChoice choice)
+        {
+            return;
+        }
+
+        switch (_voiceListEngine)
+        {
+            case VoiceEngine.Kokoro:
+                _settings.RecapHostKokoroVoiceName = choice.Id;
+                break;
+
+            case VoiceEngine.HeatCaller:
+                _settings.RecapHostHeatCallerVoice = choice.Id;
+                _settings.RecapHostHeatCallerVoiceName = choice.Name;
+                _settings.RecapHostHeatCallerRev = choice.Rev;
+                break;
+
+            default:
+                _settings.RecapHostElevenLabsVoiceId = choice.Id;
+                _settings.RecapHostElevenLabsVoiceName = choice.Name;
+                break;
+        }
+
+        _settings.Save();
+    }
+
     /// <summary>Saves the picked voice against the engine the list is showing.</summary>
     private void SaveMechanicVoice()
     {
@@ -3419,11 +3476,15 @@ public sealed class CommentaryControl : UserControl
         _cmbHonoursVoice.Enabled = honoursOn;
         _btnTestHonours.Enabled = honoursOn;
 
+        // The recap host reads the recap show, so it goes dark with recaps.
+        _cmbRecapHostVoice.Enabled = summariesOn;
+        _btnTestRecapHost.Enabled = summariesOn;
+
         // Load Voices fills all three lists in one pass
         // (FillMechanicVoices), so it is live while ANY of the three
         // speakers is set up. Dark only when none of them is, which is when
         // there is nothing for a voice list to be for.
-        _btnLoadVoices.Enabled = interviewOn || honoursOn || (on && _chkCoHost.Checked);
+        _btnLoadVoices.Enabled = interviewOn || honoursOn || summariesOn || (on && _chkCoHost.Checked);
 
         var talkingOn = on && _chkTalkingPoints.Checked;
         _numInterval.Enabled = talkingOn;

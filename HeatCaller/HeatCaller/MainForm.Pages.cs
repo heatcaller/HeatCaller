@@ -1581,6 +1581,23 @@ public partial class MainForm
         _musicControl = musicControl;
         subPageMusic.Controls.Add(musicControl);
 
+        // Broadcast Imaging (16 Oct 2026): each soundscape's jingles,
+        // sweepers, bumpers, stingers and beds, and the run of show that
+        // fires them. The imaging itself is static - see BroadcastImaging -
+        // so it is told here which soundscape is in use and whether the
+        // sound is muted, and its console lines go where everything else's do.
+        BroadcastImaging.ActiveSoundscape = () => _themeStore.ActiveThemeId is { } activeId ? _themeStore.Get(activeId) : null;
+        BroadcastImaging.IsMuted = () => _announcer.Muted;
+        BroadcastImaging.Status += OnClientRawMessage;
+
+        // "Imaging" on the tab, and Broadcast Imaging on the page itself:
+        // the Sounds tabs are all as wide as the widest caption
+        // (AppTheme.StyleTabControl), and "Broadcast Imaging" made all
+        // seven too wide for the row at 1280 wide and at 200% text.
+        var subPageImaging = new TabPage("Imaging");
+        var imagingControl = new BroadcastImagingControl(_themeStore) { Dock = DockStyle.Fill };
+        subPageImaging.Controls.Add(imagingControl);
+
         // First tab: the blend matters more often than any individual
         // setting, and it's the page someone opens mid-event.
         var subPageMixer = new TabPage("Mixer");
@@ -1605,6 +1622,7 @@ public partial class MainForm
         var themes = new ThemesControl(_themeStore, _voiceStore, _soundStore, _undo, _ambienceStore, _musicStore, _settings) { Dock = DockStyle.Fill, Announcer = _announcer };
         _themesControl = themes;
         themes.ThemeApplied += AfterSoundscapeApplied;
+        themes.SoundscapeApplied += PutOnSoundscapeLook;
 
         // Editing or deleting the applied soundscape changes what Theme music
         // plays (or leaves it none): the player's copy is refreshed here, and
@@ -1613,6 +1631,7 @@ public partial class MainForm
         {
             _music.Theme = _themeStore.ActiveThemeMusic();
             _musicControl?.RefreshAll();
+            imagingControl.RefreshAll();
         };
         subPageSoundscapes.Controls.Add(themes);
 
@@ -1621,6 +1640,7 @@ public partial class MainForm
         _tabSoundSubNav.TabPages.Add(subPageEffects);
         _tabSoundSubNav.TabPages.Add(subPageAmbience);
         _tabSoundSubNav.TabPages.Add(subPageMusic);
+        _tabSoundSubNav.TabPages.Add(subPageImaging);
         _tabSoundSubNav.TabPages.Add(subPageLapBeeps);
         AppTheme.StyleTabControl(_tabSoundSubNav);
 
@@ -1631,6 +1651,11 @@ public partial class MainForm
             if (_tabSoundSubNav.SelectedTab == subPageLapBeeps)
             {
                 lapBeeps.RefreshAll();
+            }
+            else if (_tabSoundSubNav.SelectedTab == subPageImaging)
+            {
+                // The soundscape in use may have been changed on its own tab.
+                imagingControl.RefreshAll();
             }
             else if (_tabSoundSubNav.SelectedTab == subPageMixer)
             {

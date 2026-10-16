@@ -1059,6 +1059,33 @@ public sealed class AppSettings
         HonoursHeatCallerRev ?? string.Empty,
         HonoursKokoroVoiceName ?? string.Empty);
 
+    // --- The race recap host (16 Oct 2026) -------------------------------
+    //
+    // A voice of its own for the race recap show and nothing else: the
+    // recap, the colour, the questions to the mechanic and the sign-off.
+    // The announcer keeps everything outside the show - the race calls, the
+    // teaser into the break, the openings. Held per engine exactly as the
+    // mechanic's, the co-host's and the honours reader's are, because a
+    // voice id means nothing to another engine. Blank for an engine means
+    // the announcer reads the recap show too, as before there was a host.
+
+    public string RecapHostElevenLabsVoiceId { get; set; } = string.Empty;
+    public string RecapHostElevenLabsVoiceName { get; set; } = string.Empty;
+    public string RecapHostHeatCallerVoice { get; set; } = string.Empty;
+    public string RecapHostHeatCallerVoiceName { get; set; } = string.Empty;
+    public string RecapHostHeatCallerRev { get; set; } = string.Empty;
+    public string RecapHostKokoroVoiceName { get; set; } = string.Empty;
+
+    /// <summary>The recap host's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
+    [JsonIgnore]
+    public SecondVoice RecapHostVoice => new(
+        RecapHostElevenLabsVoiceId ?? string.Empty,
+        RecapHostElevenLabsVoiceName ?? string.Empty,
+        RecapHostHeatCallerVoice ?? string.Empty,
+        RecapHostHeatCallerVoiceName ?? string.Empty,
+        RecapHostHeatCallerRev ?? string.Empty,
+        RecapHostKokoroVoiceName ?? string.Empty);
+
     // --- The commercial break (10 Oct 2026) ------------------------------
     //
     // The club's sponsor slides, played as a real commercial break on the

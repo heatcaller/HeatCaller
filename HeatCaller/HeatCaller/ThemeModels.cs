@@ -29,8 +29,13 @@ public sealed class Theme
     /// row, and the load gives a missing one Invalid lap's setting - off -
     /// so applying a built-in switched warnings off on an updated PC while
     /// a new install's copy left them on.
+    /// 5: Classic is the old Synthwave - its pack, its crowd and music, its
+    /// late-night DJ - and Synthwave is gone as a soundscape of its own
+    /// (16 Oct 2026). A club on Synthwave follows it to Classic (see
+    /// RenamedBuiltIns). Every built-in also names the app look it puts on
+    /// (LookKey).
     /// </summary>
-    public const int CurrentBuiltInVersion = 4;
+    public const int CurrentBuiltInVersion = 5;
 
     /// <summary>
     /// Built-ins that were renamed when the packs arrived, old name to new.
@@ -42,6 +47,9 @@ public sealed class Theme
             ["Arcade / Video Game"] = "Arcade",
             ["Pro Broadcast"] = "Broadcast",
             ["Monster Truck Rally"] = "Pit Lane",
+
+            // Classic took Synthwave's sound over whole (16 Oct 2026).
+            ["Synthwave"] = "Classic",
         };
 
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -73,6 +81,37 @@ public sealed class Theme
     public SoundscapeBackground? Background { get; set; }
 
     /// <summary>
+    /// The app look (Looks key) this soundscape puts the app in when it is
+    /// applied on the Soundscapes page - Classic in Synthwave's neon, Pit
+    /// Lane in hazard yellow. Empty follows the sound pack (see
+    /// <see cref="LookFor"/>), so a club's copy of a built-in wears the same
+    /// look; a soundscape on Classic tones changes nothing.
+    /// </summary>
+    public string LookKey { get; set; } = string.Empty;
+
+    /// <summary>The look a soundscape puts on, or null when it changes nothing.</summary>
+    public static string? LookFor(Theme theme)
+    {
+        if (!string.IsNullOrWhiteSpace(theme.LookKey))
+        {
+            return theme.LookKey;
+        }
+
+        return LookForPack(theme.SoundPack);
+    }
+
+    /// <summary>The look that goes with each sound pack - the built-ins' own.</summary>
+    public static string? LookForPack(string? pack) => (pack ?? string.Empty).ToLowerInvariant() switch
+    {
+        "synthwave" => Looks.SynthwaveKey,
+        "podium" => "podium-gold",
+        "arcade" => "race-wall",
+        "broadcast" => "racing-blue",
+        "pitlane" => "pitlane",
+        _ => null,
+    };
+
+    /// <summary>
     /// The built-in soundscapes: Classic (the original tones and lines) and
     /// one per sound pack, each with an announcer personality to match.
     /// </summary>
@@ -84,12 +123,12 @@ public sealed class Theme
             CreatePodium(),
             CreateArcade(),
             CreateBroadcast(),
-            CreateSynthwave(),
             CreatePitLane(),
         };
 
         foreach (var theme in themes)
         {
+            theme.LookKey = LookForPack(theme.SoundPack) ?? string.Empty;
             theme.IsBuiltIn = true;
             theme.BuiltInVersion = CurrentBuiltInVersion;
             theme.Id = BuiltInId(theme.Name);
@@ -137,14 +176,17 @@ public sealed class Theme
         voice.Events[key] = config;
     }
 
-    private static Theme CreateClassic() => new()
+    /// <summary>
+    /// Classic - what was Synthwave until 16 Oct 2026: the Synthwave pack,
+    /// its crowd and music, and the retro late-night DJ. See
+    /// CreateSynthwave, which it is built from.
+    /// </summary>
+    private static Theme CreateClassic()
     {
-        Name = "Classic",
-        Description = "The original HeatCaller sound - generated tones and the standard announcer lines. Plain and clear.",
-        SoundPack = SoundPacks.ClassicKey,
-        Voice = VoiceProfile.CreateDefault(),
-        SoundEffects = SoundEffectsProfile.CreateDefault(),
-    };
+        var classic = CreateSynthwave();
+        classic.Name = "Classic";
+        return classic;
+    }
 
     private static Theme CreatePodium()
     {
@@ -320,6 +362,10 @@ public sealed class Theme
         };
     }
 
+    /// <summary>
+    /// The old Synthwave soundscape. No longer a built-in of its own - it is
+    /// what Classic is now (see CreateClassic).
+    /// </summary>
     private static Theme CreateSynthwave()
     {
         var v = VoiceProfile.CreateDefault();

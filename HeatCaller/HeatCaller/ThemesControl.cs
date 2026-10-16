@@ -74,6 +74,13 @@ public sealed class ThemesControl : UserControl
     public event Action? ThemeApplied;
 
     /// <summary>
+    /// Raised when the club applies a soundscape here - not for an undo - so
+    /// the host can put the app in the soundscape's look (16 Oct 2026). See
+    /// Theme.LookKey.
+    /// </summary>
+    public event Action<Theme>? SoundscapeApplied;
+
+    /// <summary>
     /// Raised after a soundscape is edited or deleted here (or either is
     /// undone), so the host can bring what reads the applied soundscape -
     /// the Music page's Theme music - back in step. Applying raises
@@ -883,6 +890,7 @@ public sealed class ThemesControl : UserControl
         RefreshCards();
         _lblStatus.Text = $"Applied \"{theme.Name}\".";
         ThemeApplied?.Invoke();
+        SoundscapeApplied?.Invoke(theme);
     }
 
     // ------------------------------------------------------------ edit

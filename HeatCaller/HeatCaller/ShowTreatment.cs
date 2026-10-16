@@ -850,7 +850,20 @@ internal sealed class ShowTreatment
     /// club has ticked.
     /// </summary>
     public bool Treats(SegmentKind kind) =>
-        _settings.ShowThemeEnabled && ShowSegments.Parse(_settings.ShowSegments).Contains(kind);
+        (_settings.ShowThemeEnabled && ShowSegments.Parse(_settings.ShowSegments).Contains(kind))
+        || ImagingTreats(kind);
+
+    /// <summary>
+    /// Whether the soundscape's own imaging makes this segment a show - the
+    /// race recap, when the run of show has a recap open or a recap bed for
+    /// the soundscape in use (16 Oct 2026). See BroadcastImaging. Separate
+    /// from the club's show music switch on purpose: the Broadcast Imaging
+    /// page is its own switch, and a club who never ticked the show music
+    /// still gets the station's recap open.
+    /// </summary>
+    private static bool ImagingTreats(SegmentKind? kind) =>
+        kind == SegmentKind.RaceRecap
+        && (BroadcastImaging.Has(ImagingCue.RecapOpen) || BroadcastImaging.Has(ImagingCue.RecapBed));
 
     /// <summary>
     /// Runs a segment as a show: the air, the opener, the bed, the read,
@@ -1566,23 +1579,11 @@ internal sealed class ShowTreatment
         {
             if (sting is not null)
             {
-                // Discarded on purpose: the sting plays itself out while the
-                // block carries on over the top of it once the hold below is
-                // done. Play has already swallowed any failure.
-                //
-                // But faded out if the block is abandoned or the next race
-                // is called: a club's sting can run far past the hold, and
-                // left alone it would play on over the countdown and the
-                // horn. The registration goes when the sting has played out.
-                var stingGain = new SmoothGainSampleProvider(new ShowOneShot(sting), 1f, downSeconds: 0.3);
-                var playing = Play(stingGain, Level(_settings.ShowStingLevel, 0.8f), "sting");
-                var cut = ct.Register(() => stingGain.Target = 0f);
-
-                _ = playing.ContinueWith(_ => cut.Dispose(), TaskScheduler.Default);
-
-                var held = sting.Length < ShowBlock.LongestSting ? sting.Length : ShowBlock.LongestSting;
-
-                await Task.Delay(held, ct).ConfigureAwait(true);
+                // MOVED TO MarkOnceAsync ON 15 OCT 2026, unchanged, so the
+                // mark between two items of a block and the mark at a
+                // commercial break's edge are the same code. See that
+                // method for the whole of what used to be here.
+                await MarkOnceAsync(sting, Level(_settings.ShowStingLevel, 0.8f), "sting", ct).ConfigureAwait(true);
 
                 return true;
             }
@@ -1748,13 +1749,25 @@ internal sealed class ShowTreatment
 
     private async Task<ShowRun?> OpenShowAsync(SegmentKind? kind, string? caption, CancellationToken ct)
     {
-        if (!_settings.ShowThemeEnabled)
+        // THE SOUNDSCAPE'S IMAGING FIRST (16 Oct 2026), for the race recap:
+        // its recap open in front of the host and its music bed under them,
+        // picked fresh for every recap so the same jingle never opens two
+        // in a row. Either can be missing, and the club's own show music -
+        // when it is switched on - fills in for the one that is. See
+        // BroadcastImaging.
+        var imagingOpener = ImagingTreats(kind) ? BroadcastImaging.Next(ImagingCue.RecapOpen) : null;
+        var imagingBed = ImagingTreats(kind) ? BroadcastImaging.Next(ImagingCue.RecapBed) : null;
+
+        if (!_settings.ShowThemeEnabled && imagingOpener is null && imagingBed is null)
         {
             return null;
         }
 
-        var opener = Music.Opener(out var openerProblem);
-        var bed = Music.Bed(out var bedProblem);
+        string? openerProblem = null;
+        string? bedProblem = null;
+
+        var opener = imagingOpener ?? (_settings.ShowThemeEnabled ? Music.Opener(out openerProblem) : null);
+        var bed = imagingBed ?? (_settings.ShowThemeEnabled ? Music.Bed(out bedProblem) : null);
 
         foreach (var problem in new[] { openerProblem, bedProblem })
         {
@@ -1769,7 +1782,9 @@ internal sealed class ShowTreatment
             return null;
         }
 
-        var openerLevel = Level(_settings.ShowOpenerLevel, 0.9f);
+        var openerLevel = imagingOpener is not null
+            ? BroadcastImaging.Level / 100f
+            : Level(_settings.ShowOpenerLevel, 0.9f);
         var bedLevel = Level(_settings.ShowBedLevel, 0.22f);
         var duck = Math.Clamp(_settings.ShowBedDuckPercent / 100f, 0.05f, 1f);
 
@@ -1810,7 +1825,9 @@ internal sealed class ShowTreatment
         // TakeDrama, not Peek: this is the show that gets the extra beat, and
         // the night shapes one show. MusicSeconds above peeks at the same
         // value for its estimate, which is why the two agree.
-        var billing = _order.Billing(kind, DateTime.UtcNow, _settings.ShowRejoinEnabled, TakeDrama());
+        // A station's jingle is played whole every time - it is never cut
+        // in at its ring-out the way a rejoin plays the club's own opener.
+        var billing = _order.Billing(kind, DateTime.UtcNow, _settings.ShowRejoinEnabled && imagingOpener is null, TakeDrama());
 
         LastBillingForTests = billing;
 
@@ -1866,9 +1883,17 @@ internal sealed class ShowTreatment
             // which is where the lines that follow are queued from.
             if (opener is not null)
             {
-                await Task.Delay(VoiceEntersAfter(opener, billing), ct).ConfigureAwait(true);
+                var entersAfter = imagingOpener is not null
+                    ? ImagingVoiceEntersAfter(imagingOpener, billing)
+                    : VoiceEntersAfter(opener, billing);
 
-                openerGain!.Target = OpenerUnderVoice;
+                await Task.Delay(entersAfter, ct).ConfigureAwait(true);
+
+                // A jingle cut off by the longest hold is faded away rather
+                // than left ringing under the host for the rest of its run.
+                openerGain!.Target = imagingOpener is not null && imagingOpener.Length - entersAfter > TimeSpan.FromSeconds(1.5)
+                    ? 0f
+                    : OpenerUnderVoice;
             }
             else if (billing.BedAloneSeconds > 0)
             {
@@ -1986,6 +2011,97 @@ internal sealed class ShowTreatment
     /// letting it take the show down. The returned task completes when the
     /// clip has played out.
     /// </summary>
+    /// <summary>
+    /// Plays one clip, once, through the show's own output - and holds for
+    /// it, up to <see cref="ShowBlock.LongestSting"/>.
+    ///
+    /// WHY IT IS PUBLIC AND WHY IT IS HERE (15 Oct 2026)
+    ///
+    /// This was the body of <see cref="MarkAsync"/>, which is the mark
+    /// between two items of a block. Two other things want exactly the
+    /// same behaviour and neither could reach it: the sound at the edges
+    /// of a commercial break (see <see cref="BreakTransition"/>), and
+    /// replaying a few seconds of the race recording later in the evening.
+    ///
+    /// Copying it to those call sites was the obvious thing and would have
+    /// been wrong. Each would have needed its own ShowMusic, its own level
+    /// clamp and its own fade-on-cancel, which is a second piece of audio
+    /// logic that drifts from the first - the fault this codebase names
+    /// repeatedly, most plainly in RaceHorizon: "two detectors reading the
+    /// same thing two ways is how they end up disagreeing".
+    ///
+    /// So it moved out whole and MarkAsync calls it, which means the path
+    /// a new caller gets is the one that has been running at every show
+    /// all along rather than a fresh copy nobody has heard.
+    ///
+    /// EVERYTHING IT LEARNED IS KEPT, and all of it is load-bearing:
+    ///
+    ///  - The returned task is DISCARDED on purpose. The clip plays itself
+    ///    out while whatever asked for it carries on over the top, once the
+    ///    hold below is done. Play has already swallowed any failure.
+    ///
+    ///  - But it is FADED OUT if the caller's token goes. A club's sting
+    ///    can run far past the hold, and left alone it would play on over
+    ///    the countdown and the horn. The registration is disposed when
+    ///    the clip has played out, not when the hold ends.
+    ///
+    ///  - The hold is the shorter of the clip and ShowBlock.LongestSting,
+    ///    so a club that has put a thirty-second piece of music in as its
+    ///    sting does not stop the show for thirty seconds.
+    /// </summary>
+    /// <param name="clip">The clip. Null does nothing and is not a failure - see BreakTransition on a club with no sting.</param>
+    /// <param name="level">0 to 1. Callers pass Level(...) against their own setting.</param>
+    /// <param name="what">What this is, for the console line if it cannot play.</param>
+    internal async Task MarkOnceAsync(ShowClip? clip, float level, string what, CancellationToken ct)
+    {
+        if (clip is null)
+        {
+            return;
+        }
+
+        var gain = new SmoothGainSampleProvider(new ShowOneShot(clip), 1f, downSeconds: 0.3);
+        var playing = Play(gain, level, what);
+        var cut = ct.Register(() => gain.Target = 0f);
+
+        _ = playing.ContinueWith(_ => cut.Dispose(), TaskScheduler.Default);
+
+        var held = clip.Length < ShowBlock.LongestSting ? clip.Length : ShowBlock.LongestSting;
+
+        await Task.Delay(held, ct).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The club's own show sting, or null when it has not set one - so a
+    /// caller outside this class can mark a boundary with it without
+    /// holding a ShowMusic of its own.
+    ///
+    /// A problem reading the file is said in the console and comes back as
+    /// null, which is the same thing MarkAsync's caller does with it: "the
+    /// sting is the one part whose absence is not an absence".
+    /// </summary>
+    internal ShowClip? StingForABoundary()
+    {
+        var sting = Music.Sting(out var problem);
+
+        if (problem is not null)
+        {
+            Status?.Invoke($"[show] {problem}");
+        }
+
+        return sting;
+    }
+
+    /// <summary>
+    /// The level a boundary sting plays at: the club's own show sting
+    /// level, unscaled.
+    ///
+    /// Identical to what MarkAsync uses for the mark inside a block, on
+    /// purpose - see BreakTransition, which explains why the first draft's
+    /// separate, quieter boundary level was a guess in the wrong
+    /// direction.
+    /// </summary>
+    internal float BoundaryStingLevel => Level(_settings.ShowStingLevel, 0.8f);
+
     private Task Play(ISampleProvider source, float level, string what)
     {
         try
@@ -2038,6 +2154,19 @@ internal sealed class ShowTreatment
         var most = Math.Max(LeastOpenerAlone, heard - LeastOpenerUnder);
 
         return TimeSpan.FromSeconds(Math.Clamp(into, LeastOpenerAlone, most));
+    }
+
+    /// <summary>
+    /// Where the host comes in over the soundscape's recap open: once it
+    /// has played, or at the longest hold the Broadcast Imaging page allows,
+    /// whichever is sooner. Not where the piece's body ends, which is what
+    /// the club's opener is measured for - a station ID is heard whole.
+    /// </summary>
+    private static TimeSpan ImagingVoiceEntersAfter(ShowClip opener, ShowBilling billing)
+    {
+        var whole = billing.AirSeconds + Math.Max(LeastOpenerAlone, opener.Length.TotalSeconds - 0.3);
+
+        return TimeSpan.FromSeconds(Math.Min(whole, BroadcastImaging.LongestHoldSeconds));
     }
 
     /// <summary>Seconds of a clip's own rate, as whole frames.</summary>

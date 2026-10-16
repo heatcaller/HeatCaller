@@ -3048,7 +3048,14 @@ public static class AppTheme
             .DefaultIfEmpty(0)
             .Max();
 
-        tabs.ItemSize = new Size(Math.Max(150, widest + BoldFont.Height), Math.Max(32, BoldFont.Height + 16));
+        //
+        // The room either side is three quarters of a line (16 Oct 2026),
+        // not a whole one. Sounds has seven tabs since Imaging joined it,
+        // and at 200% text a whole line either side made the row 6px wider
+        // than the window. At the normal text size the 150 floor decides
+        // and nothing moves; at the larger sizes every caption still has
+        // room on both sides.
+        tabs.ItemSize = new Size(Math.Max(150, widest + BoldFont.Height * 3 / 4), Math.Max(32, BoldFont.Height + 16));
 
         TabStripSkin.Attach(tabs);
     }

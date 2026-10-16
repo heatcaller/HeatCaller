@@ -39,16 +39,25 @@ namespace HeatCaller;
 internal static class BreakTransition
 {
     /// <summary>
-    /// How loud the sting is at a break boundary, as a fraction of the
-    /// club's show level.
+    /// THERE IS NO SEPARATE LEVEL FOR A BOUNDARY STING, and the first
+    /// draft of this class was wrong about that in an instructive way.
     ///
-    /// Slightly under the sting inside a block. A mark between two items
-    /// of a show lands between two things the room is already listening
-    /// to; this one lands into a gap, where the same level reads as louder
-    /// than it is.
+    /// It scaled the club's sting level down by a fifth, reasoning that a
+    /// mark landing into a gap reads as louder than one landing between
+    /// two things the room is already listening to. AppSettings.ShowStingLevel's
+    /// own note says the opposite, and it is the one that has been
+    /// listened to: the in-block sting sits "a shade under" the opener
+    /// precisely because "the sting lands on top of a bed that is already
+    /// running, where the opener lands on nothing". A break boundary lands
+    /// on nothing too - so if anything it wants MORE than the in-block
+    /// mark, not less, and certainly not a fifth less.
+    ///
+    /// Which leaves a judgement about a room nobody here can hear. So it
+    /// makes none: a boundary sting plays at the level the club set for
+    /// its sting, the same as every other mark - see
+    /// ShowTreatment.BoundaryStingLevel. A club that wants it different
+    /// has one dial and it does what it says.
     /// </summary>
-    internal const float StingLevel = 0.8f;
-
     /// <summary>
     /// What the announcer says coming back out of a break, or NULL when
     /// something else already says it - which is most of the time.

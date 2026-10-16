@@ -22,6 +22,9 @@ public partial class MainForm
     /// </summary>
     private const string HonoursTestLine = "Billy Bob picks up Nail-Biter. Jane Doe takes Personal Best and Hat-Trick.";
 
+    /// <summary>And one for the race recap host - the kind of thing the top of a recap says.</summary>
+    private const string RecapHostTestLine = "And we're back! What a finish that was - let's take you through how that one unfolded.";
+
     /// <summary>Hooks the recap's broadcast up to Race Control and the Commentary page. Called once, when both exist.</summary>
     private void WireRecapBroadcast(RaceControlControl raceControl, CommentaryControl commentary)
     {
@@ -34,6 +37,7 @@ public partial class MainForm
         // Heard even while the announcer is muted - it was asked for by hand.
         commentary.SpeakAsMechanic = voice => _announcer.SpeakTest(MechanicTestLine, _voiceStore.Current.Speed, voice);
         commentary.SpeakAsHonours = voice => _announcer.SpeakTest(HonoursTestLine, _voiceStore.Current.Speed, voice);
+        commentary.SpeakAsRecapHost = voice => _announcer.SpeakTest(RecapHostTestLine, _voiceStore.Current.Speed, voice);
     }
 
     /// <summary>

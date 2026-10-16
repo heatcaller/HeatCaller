@@ -191,6 +191,14 @@
     <None Include="Assets\ShowMusic\**\*.mp3" Link="Assets\ShowMusic\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets\ShowMusic\**\*.wav" Link="Assets\ShowMusic\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
 
+    <!-- Each soundscape's broadcast imaging - Assets\Imaging\<Soundscape>\
+         "<Soundscape> <Element> <N>.mp3", read by BroadcastImaging. Link=
+         keeps the soundscape folders, for the reason the show music's
+         comment above gives: flattened, every soundscape would find
+         nothing of its own. -->
+    <None Include="Assets\Imaging\**\*.mp3" Link="Assets\Imaging\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Assets\Imaging\**\*.wav" Link="Assets\Imaging\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+
     <!-- Licence texts that have to travel with the app because the package
          they belong to does not carry one: MisakiSharp's NOTICE (Apache-2.0
          4(d) asks for it) and OpenTK's MIT notice. Kokoro's own LICENSE is

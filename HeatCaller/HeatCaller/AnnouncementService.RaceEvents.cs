@@ -69,11 +69,6 @@ public sealed partial class AnnouncementService
         // to a club that presses green from Idle without staging at all.
         ResetAnnouncerLoad();
 
-        // And the record watch: "fastest of the race so far" means THIS
-        // race, and a driver who had the record called for them in the
-        // heat is eligible again in the main.
-        ResetRecordWatch();
-
         // A countdown abandoned for a fresh staging takes its ticks with it.
         CancelCountdownTicks();
 

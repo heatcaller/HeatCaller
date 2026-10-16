@@ -1479,24 +1479,25 @@ public sealed partial class AnnouncementService
             }
         }
 
-        // THE RECORD, which until now nothing in the app ever looked at
-        // (15 Oct 2026). "Track record" and "On record pace" are two tick
-        // boxes on the Voice page with templates, weights and a written
-        // promise about when they fire, and NOTHING HAS EVER CALLED
-        // EITHER - see AnnouncementService.Records.cs, which is the caller
-        // NotifyRecordPace's own doc comment describes and nobody wrote.
+        // THE RECORD IS NOT CHECKED HERE, and the note is worth keeping
+        // because a hand that goes looking for it will find a gap that is
+        // not one (15 Oct 2026).
         //
-        // Here rather than in the gate.Fast block above, because a record
-        // lap is not necessarily a fast lap: gate.Fast is the decoder's
-        // view of this session, and the layout's all-time record is a
-        // different question that a first lap can answer.
+        // Both record calls already have a caller, and a good one:
+        // RaceControlControl.CheckAndAnnounceTrackRecord fires
+        // NotifyTrackRecord and persists the new mark, and the method
+        // above it fires NotifyRecordPace once per driver per race from
+        // their third counted lap. Between them they refuse a demo, a
+        // practice session, a ghost, a rental, a driver flagged out of
+        // records, and - through IsPlausibleRecord, against the operator's
+        // own minimum lap time - a lap too quick to be believed.
         //
-        // NOT through ConsiderPerLapAction either. The per-lap batch keeps
-        // the highest-weight candidates and drops the rest, and a record
-        // is the one thing in the set that must never lose a slot - which
-        // is the reasoning NotifyTrackRecord already gives for firing
-        // directly.
-        CheckTheRecord(transponder, standing, lapTimeMs);
+        // A second caller here announced every record TWICE for one lap.
+        // That was shipped on 15 Oct and taken out the same day. It was
+        // added on the strength of a search that found no caller, run
+        // against a copy of the repo that was missing
+        // RaceControlControl.RaceEvents.cs - which is where the caller
+        // lives.
 
         // The flying laps a best-consecutive qualifier is scored on. Only the
         // session's own lap times: the start lap has none, and the qualifying

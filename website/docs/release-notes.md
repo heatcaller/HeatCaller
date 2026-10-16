@@ -4,21 +4,17 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
-- **The announcer can finally say what a lap beat, and who held it.** When a driver sets a quick one, the commentary could never tell you what it went faster than - only that it was the fastest of the race so far. The detector behind it takes its history as three questions it asks the app, and **two of the three were never hooked up to anything**: the layout's all-time record and the fastest lap of the night were both permanently blank. So *"that takes two tenths off Dave's mark from the second heat"* was a sentence the app was built to say and never could.
+- **The commercial break now has a sound at its edges.** Your own show sting marks the way into the break, the way a station goes to the adverts. Coming back it stays out of the way: the recap already opens by saying you are back live at the track, and a grid call speaks for itself, so nothing is added in front of either.
+
+  **The one case it does cover is the break that runs out.** If the break hits its ceiling with the recap still being written, or runs out of sponsors to show, the slides simply stop and the room is left with silence and no idea whether anything else is coming. That one gets the sting and a short line saying you are back at the track - deliberately *not* a promise about the recap, because a break that hit its ceiling is one where the recap may never arrive.
+
+  **No new file to record.** It uses the show sting you have already set, at the level you set it. A club with no sting hears the break exactly as it does now.
+
+- **The AI commentary can now say what a quick lap beat, and who held it.** The spoken *Track record* call has always named a new record when one falls. What the written commentary could not do is put a lap next to anything: the detector it reads takes its history as three questions it asks the app, and **two of the three were never hooked up** - the layout's all-time record and the fastest lap of the night were both permanently blank. So *"that takes two tenths off Dave's mark from the second heat"* was a sentence it was built to say and never could.
 
   Both are now wired. **The night's best is counted per layout**, which matters for a club that moves the track between classes: a lap set on a different configuration is not something the lap in front of you can be compared to, and calling it "fastest of the night" would be wrong about something the room watched. **Demo races never hold it either** - a club with "save demo races to history" ticked would otherwise have an invented lap holding the night's best for every real race after it - and nor do ghosts.
 
   **Known, and still open:** the third question - a driver's own best *before tonight* - is still blank, so "a personal best" means their best so far in that race rather than ever. Wiring it properly needs a cheap index rather than a question asked once per driver per lap; the roadmap has it.
-
-- **The track record is now actually announced when it falls.** *Track record* and *On record pace* have been tick boxes on the **Voice** page for as long as that page has existed - with their own templates, their own weight and a written description of exactly when they fire. **Nothing in HeatCaller has ever called either one.** They were two switches that did nothing, and the biggest live moment the app can detect - the all-time record for your track going - has never once been called over the PA.
-
-  Both now fire. *Track record* is on by default and needs nothing from you beyond having a layout selected in Race Control with a record standing on it. *On record pace* is **off** by default, like every voice line we add - tick it on the Voice page if you want the build-up as well as the record.
-
-  **The build-up call needs pace rather than one lap.** It fires when at least two of a driver's last three laps are within one and a half percent of the record - not on a single quick lap, which is usually a tow or a short cut. At most twice for a driver in a race: once when their pace reaches the record's doorstep, and once more if they go on to match it. Never before their third counted lap.
-
-  The console also gets a fuller line than the PA can carry - what the pace is against, who holds it and how much is still to find.
-
-  **Known, and not fixed by this:** the AI commentary's own record segment still cannot say *what* a lap beat or *who* held it. That is a separate gap - `PaceWatch`'s history is wired only in its tests - and it is written up in the roadmap.
 
 - **A second dial for the announcer: how much ROOM it leaves between calls.** On the **Commentary** page, under *How chatty*, there is now a *Pacing* dial - five stops from **Room to breathe** to **Wall to wall**. It sets the shortest gap the announcer will leave between one timing call and the next, whoever they are about, and it is wide in practice and tight in the top main so the night still has a shape.
 

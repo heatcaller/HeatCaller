@@ -2670,41 +2670,59 @@ this is the analyst half of a broadcast pair. Its brief carries the refusal
 that makes it safe - where the facts hold no reason it says so rather than
 supplying one.
 
-### Done, and live - the record (15 Oct 2026)
+### WITHDRAWN - the record was never broken (corrected 15 Oct 2026)
 
-**4. The record watch - and the two announcements nobody ever called**
-(15 Oct 2026). `RecordWatch` is now wired, and wiring it turned up a
-bigger fault than the feature it was for.
+**This section previously claimed that `NotifyTrackRecord` and
+`NotifyRecordPace` had no caller, and that `AnnouncementService.Records.cs`
+was the caller nobody had written. All of that was wrong.** The claim, the
+code and the Voice page edit that went with it have been taken out. Kept
+here because the way it went wrong is the useful part.
 
-`NotifyTrackRecord` and `NotifyRecordPace` have existed for as long as the
-voice settings have: a tick box each on the Voice page, templates, weights,
-and a description promising exactly when they fire. **Neither was ever
-called by anything** - no caller in the app, none in the tests. So two
-switches did nothing, and the all-time record for the track going had never
-been announced.
+**What is actually there, and has been all along.**
+`RaceControlControl.CheckAndAnnounceTrackRecord` (RaceEvents.cs:680) is
+called from the lap handler, persists the new mark to the layout store and
+fires `NotifyTrackRecord`. The method above it fires `NotifyRecordPace`,
+once per driver per race from their third counted lap, within
+`RecordPaceWindow` of the record and only for drivers who could take it.
+Between them they refuse a demo, a practice session, a ghost, a rental and
+a driver flagged out of records - and, through `IsPlausibleRecord`, a lap
+too quick to be believed, measured against the operator's own
+`MinLapTimeMs` and said in the log. It is more careful than what was built
+to replace it.
 
-`NotifyRecordPace`'s own doc comment says why it had no guards of its own:
-*"the caller has already decided this is worth saying (once per driver per
-race, and not before their third counted lap)"*. That caller was never
-written, and those rules existed only in that sentence.
-`AnnouncementService.Records.cs` is now that caller and `RecordWatch` holds
-the rules.
+**What the mistake cost.** A second caller was shipped, so a track record
+would have been announced TWICE for one lap. Live for about five hours. The
+Voice page's description of the pace call was also rewritten to match the
+new caller's behaviour, which made a correct description wrong. Both
+reverted.
 
-Two things worth keeping from doing it:
+**How it happened, because the shape of it matters more than the instance.**
+The search that "proved" there was no caller was run over a copy of the
+repo staged into a cloud session - 183 of roughly 362 app files. Missing
+from it was `RaceControlControl.RaceEvents.cs`, which is where the caller
+lives, along with 4 of the 11 `RaceControlControl` partials. Three separate
+wrong findings came out of the same root in two days: a call site that
+"could not compile", a provider that was "never assigned", and this. Each
+time the files in hand were FRESH and the conclusion was still wrong,
+because freshness was checked and COMPLETENESS was not. A negative result -
+"nothing calls this" - is only as strong as the set it was searched over,
+and that set has to be counted before the claim is made.
 
-- **The stored record does not move mid-race.** It is written when the
-  result is filed, so a driver two tenths under it beats the *stored*
-  figure again on every remaining lap. Without a once-per-driver guard the
-  first record of the night is announced eight times.
-- **The pace call keeps no guard at all, deliberately.** The first draft
-  marked the driver as called the moment the watch reported a threat -
-  before knowing the line was accepted. A pace call weighs 88, under
-  `AnnouncerDensity.Commanding`, so the new pacing gap can hold one; held,
-  it would have been marked said and never offered again. That is the fault
-  `CheckCloseBattles` records for itself. `RecordWatch`'s escalation is the
-  guard instead, which means at most two pace calls per driver per race -
-  and the Voice page's description was corrected to say so, because it had
-  been promising one.
+**The one real finding in the area survives** and is unrelated to the
+above: see the `PaceWatch` history entry under "Known open issues". Those
+three callbacks genuinely were assigned only in tests, and two of them are
+now wired through `PaceHistory`.
+
+**`RecordWatch` and `RecordWatchTests` are kept, unwired.** The rolling,
+escalating pace watch is a genuinely different detector from the shipped
+single-lap `RecordPace` call, and it is tested and documented. Nothing
+calls it, deliberately, and it must NOT be wired to `NotifyRecordPace` or
+`NotifyTrackRecord` - those have a caller. If it is ever used it wants a
+segment of its own. The same recorded-unwired state `SeasonPiece.FactsFor`
+is in.
+
+**`TrackRecordClaim` was written and never committed.** It duplicated
+`IsPlausibleRecord` less well. Binned.
 
 ### Built and tested, not yet fed
 
@@ -2762,10 +2780,68 @@ the horizon by construction). Nothing else from that race - a fastest lap
 or a mid-race lead change could have come before it - and no other kind
 gets the exception.
 
-### The seam items 6 and 8 both need (15 Oct 2026)
+### The seam items 6 and 8 both need - BUILT (15 Oct 2026)
 
-Both want the same thing the app has no public way to do: **play one clip,
-once, through the show's own output, on demand.**
+`ShowTreatment.MarkOnceAsync(clip, level, what, ct)` is it, with
+`StingForABoundary()` and `BoundaryStingLevel` beside it so a caller does
+not need a `ShowMusic` of its own. `MarkAsync` was changed to call it, so
+there is ONE implementation and the path a new caller gets is the one that
+has been running at every show all along.
+
+**Item 8 is wired with it.** `RaceControlControl.MarkTheBreak` marks both
+edges of `HoldTheCommercialBreakAsync` through `BreakTransition`: the
+club's sting going in, and - for `Ceiling` and `EverySponsorShown`, the two
+endings where the recap's "we're back live" has not been written yet - a
+sting and a line. Nothing in that path throws or is awaited, so the break's
+loop and the recap behind it are untouched.
+
+**One thing was got wrong and fixed in the same session.** The first draft
+gave a boundary sting its own level, a fifth under the club's setting,
+reasoning that a mark landing into a gap reads as louder.
+`AppSettings.ShowStingLevel`'s own note says the opposite and has actually
+been listened to: the in-block sting is "a shade under" the opener BECAUSE
+it lands on a running bed "where the opener lands on nothing". A break edge
+lands on nothing too. So the invented level went and a boundary sting plays
+at whatever the club set.
+
+**Item 6 is unblocked but not built - and the design is settled.** The
+original note below is kept for the reasoning.
+
+#### Item 6: replaying a call, and the one constraint that decides it
+
+The replay must come from a RING BUFFER IN MEMORY, not from the recording
+file. `RaceAudioRecorder` streams PCM to a `WaveFileWriter` on its own
+writer thread and flushes every few seconds, rewriting the header as it
+goes; reading the part-written file while the writer holds it is a
+file-sharing problem and a mid-flush race, for no gain. Keeping the last
+half-minute of the mix in memory costs about 6 MB at 16-bit and has
+neither problem.
+
+It cannot be a second `AudioBus` listener: `AudioBus.Listen` keeps ONE
+listener (`_listener = listener`) and the recorder is it. So the buffer
+hangs off `RaceAudioRecorder.Mixed(float[], int, int)`, which is already
+the tap.
+
+**And that is the constraint that makes this careful work rather than
+plumbing.** `Mixed` runs on the audio thread. `AudioBus`'s own opening
+paragraph says it "exists to keep clear of anything that can block", and
+`RaceHighlights` repeats it. A ring-buffer write there has to be
+allocation-free and lock-free, or the cost is a glitch in the club's own
+race recording - the artefact they keep. That wants writing against a
+compiler and listened to on real hardware, which is why it is recorded
+here rather than guessed at.
+
+What is left to DECIDE, and it is not an audio question: which moment is
+worth replaying and how long after. A photo finish is the obvious one;
+`NightMoments.Rank` already orders the kinds, and a replay wants the same
+once-per-race restraint the record calls have.
+
+---
+
+Original note, kept for the reasoning:
+
+Both wanted the same thing the app had no public way to do: **play one
+clip, once, through the show's own output, on demand.**
 
 `ShowTreatment.MarkAsync` already does exactly this for a sting between two
 items of a block - load the clip, wrap it in a `SmoothGainSampleProvider`
@@ -2806,9 +2882,9 @@ With that in place:
 
 ### Still on the list, from the same brainstorm
 
-6. **Audio replay** - replay a big call half a minute later from the
-   recording. Nothing in the app replays audio mid-race today, so this one
-   is real. See the shared seam below.
+6. **Audio replay** - unblocked, not built. The seam exists; what remains
+   is a ring buffer on the audio thread and one ranking decision. See
+   "Item 6" below.
 7. **Duck, don't gate - ALREADY DONE** (found 15 Oct 2026, nothing built).
    The bed already ducks rather than gating, and more thoroughly than the
    brainstorm assumed: `_settings.ShowBedDuckPercent` is a club-settable
@@ -2830,14 +2906,13 @@ With that in place:
 
    What was missing is the PUNCTUATION - a station marks a boundary with a
    sound as well as a sentence - and the one genuinely uncovered case.
-   `BreakTransition` (built and tested, 15 Oct) is that decision: the
-   club's existing show sting marks the way in; coming back it marks
-   nothing when the recap or a grid call already does; and for the two
-   endings where the recap never arrived (`Ceiling`,
-   `EverySponsorShown`) the room is left hanging, so it gets a sting and a
-   line that promises nothing about a recap that may never come.
-
-   Not wired yet - see the shared seam below.
+   `BreakTransition` is that decision and it is now WIRED, through
+   `RaceControlControl.MarkTheBreak`: the club's existing show sting marks
+   the way in; coming back it marks nothing when the recap or a grid call
+   already does; and for the two endings where the recap never arrived
+   (`Ceiling`, `EverySponsorShown`) the room is left hanging, so it gets a
+   sting and a line that promises nothing about a recap that may never
+   come. **Done.**
 9. Crowd ambience swelling on a pass (`AmbienceService`).
 10. Pronunciation overrides per driver (`RacingWordsForm`).
 11. A clock with stakes - "two minutes to go" (see the horizon question
@@ -4467,10 +4542,19 @@ fits.
 
 ## Known open issues
 
-- **`PaceWatch`'s three history callbacks are never assigned in the app**
-  (found 14 Oct 2026; still open). The sibling fault - two record
-  announcements with no caller - was fixed on 15 Oct, see "Sounding like a
-  broadcast". This half is not. `LayoutRecord`, `NightBest` and
+- **`PaceWatch`'s `PersonalBestBefore` callback is still not assigned**
+  (found 14 Oct 2026; two of the three now wired). `LayoutRecord` and
+  `NightBest` are wired through `PaceHistory` as of 15 Oct. The third wants
+  a driver's best lap on this layout BEFORE tonight, and the only thing
+  that knows is the whole session history - so a callback asked once per
+  driver per lap would walk every race ever run, every lap. It needs a
+  cheap index. Unset, `PaceWatch` falls back to the driver's own best
+  earlier in the same race, which overclaims slightly for a driver with
+  history.
+
+  NOTE: the "sibling fault" this entry used to claim - two record
+  announcements with no caller - was not a fault at all. See the withdrawn
+  section under "Sounding like a broadcast". `LayoutRecord`, `NightBest` and
   `PersonalBestBefore` are set **only in `PaceWatchTests`**; a grep of
   every `.cs` in the app finds no assignment to any of them. So in the
   field the detector can only ever report `SessionBest`, plus a

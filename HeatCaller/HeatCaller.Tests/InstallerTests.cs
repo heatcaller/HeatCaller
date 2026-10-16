@@ -99,6 +99,20 @@ public sealed class InstallerTests
     }
 
     [Fact]
+    public void The_installer_carries_every_soundscapes_broadcast_imaging()
+    {
+        // Every file under Assets\Imaging goes beside the exe in its
+        // soundscape's own folder - so a jingle added tonight ships in the
+        // next installer with nothing else to change. Flattened, every
+        // soundscape would find nothing of its own (BroadcastImaging reads
+        // Assets\Imaging\<Soundscape>).
+        Assert.Contains(
+            "<None Include=\"Assets\\Imaging\\**\\*.mp3\" Link=\"Assets\\Imaging\\%(RecursiveDir)%(Filename)%(Extension)\" CopyToOutputDirectory=\"PreserveNewest\" />",
+            AppProject,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_publish_ships_the_model_flat_beside_the_exe()
     {
         // Flat, not in a subfolder: BundledModelPath is
