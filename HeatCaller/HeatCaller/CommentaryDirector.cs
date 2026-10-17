@@ -2065,7 +2065,14 @@ public sealed class CommentaryDirector
             // name for the unnamed one. On 11 Oct the co-host called him
             // Laura, on air, twice. See AppSettings.RecapAnnouncerName and
             // CommentaryExchange.Brief, which has always taken both.
-            var host = CommentaryService.Field(_settings.RecapAnnouncerName);
+            //
+            // In the recap show the lead voice is the recap host's, not the
+            // announcer's (Race Control reads the programme's colour in the
+            // host voice), so the two-hander names whoever is really
+            // speaking - see AppSettings.HostNameForRecapShow.
+            var host = CommentaryService.Field(_forTheProgramme
+                ? _settings.HostNameForRecapShow
+                : _settings.RecapAnnouncerName);
 
             // HOW LONG A CONVERSATION RUNS IS THE CLUB'S CALL (14 Oct
             // 2026). This asked for the default two - a remark and a reply -

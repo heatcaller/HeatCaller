@@ -889,8 +889,16 @@ public sealed class ThemesControl : UserControl
         _themeStore.MarkApplied(theme);
         RefreshCards();
         _lblStatus.Text = $"Applied \"{theme.Name}\".";
-        ThemeApplied?.Invoke();
+
+        // THE LOOK QUESTION FIRST (16 Oct 2026). Answering it Yes restarts
+        // the app, and ThemeApplied rebuilds the Voice and Sounds pages and
+        // restarts the music and the crowd - seconds of work the restart
+        // throws straight away, all done while the club sat waiting for the
+        // question to appear. Everything is already applied and saved
+        // above, so the restart comes up with it; on No the rebuild runs as
+        // it always did.
         SoundscapeApplied?.Invoke(theme);
+        ThemeApplied?.Invoke();
     }
 
     // ------------------------------------------------------------ edit

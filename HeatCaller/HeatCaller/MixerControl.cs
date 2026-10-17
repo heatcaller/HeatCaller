@@ -76,6 +76,9 @@ public sealed class MixerControl : UserControl
     /// <summary>The strips' Test buttons, which the least a strip can do with is measured from - see StripLeastWidth.</summary>
     private readonly List<Button> _testButtons = new();
 
+    /// <summary>The level boxes above the faders, sized with the text - see SizeFields.</summary>
+    private readonly List<NumericUpDown> _levelBoxes = new();
+
     /// <summary>The drop-downs' widths as last measured - see Pieces.PickerWidth. Their choices never change, so only a new text size measures them again.</summary>
     private (Font Font, int Count, int Width)? _startAtWidth;
     private (Font Font, int Count, int Width)? _musicEndWidth;
@@ -207,7 +210,11 @@ public sealed class MixerControl : UserControl
         public required string Name { get; init; }
         public required string Description { get; init; }
         public required FaderControl Slider { get; init; }
-        public required Label ValueLabel { get; init; }
+        /// <summary>
+        /// The level as a number to type into, above the fader (17 Oct
+        /// 2026). The fader and the box follow each other both ways.
+        /// </summary>
+        public required NumericUpDown ValueBox { get; init; }
         public required Label StateLabel { get; init; }
         public required Func<float> Read { get; init; }
         public required Action<float> Write { get; init; }
@@ -739,6 +746,11 @@ public sealed class MixerControl : UserControl
         Fit(_numMusicFade, NumberWidth(_numMusicFade));
         Fit(_numAnnounceEvery, NumberWidth(_numAnnounceEvery));
 
+        foreach (var box in _levelBoxes)
+        {
+            Fit(box, NumberWidth(box));
+        }
+
         // Only when it changed: a new width lays the row out again.
         static void Fit(Control field, int width)
         {
@@ -1061,13 +1073,37 @@ public sealed class MixerControl : UserControl
             }
         });
 
-        var valueLabel = new Label
+        // THE LEVEL AS A NUMBER YOU CAN TYPE (17 Oct 2026), above the
+        // fader - type 63 and press Enter, or use its arrows, and the fader
+        // goes there. It was a label beside the fader that only showed it.
+        var valueBox = new NumericUpDown
         {
-            Text = $"{slider.Percent}%",
-            AutoSize = true,
+            Minimum = 0,
+            Maximum = 100,
+            Increment = 1,
+            DecimalPlaces = 0,
+            Value = slider.Percent,
         };
 
-        _textSize.Wear(valueLabel, () => AppTheme.BoldFont);
+        _textSize.Wear(valueBox, () => AppTheme.BoldFont);
+        _levelBoxes.Add(valueBox);
+
+        valueBox.ValueChanged += (_, _) =>
+        {
+            var typed = (int)valueBox.Value;
+
+            // Only when it differs: the fader setting the box below would
+            // otherwise come straight back round here.
+            if (typed != slider.Percent)
+            {
+                slider.Percent = typed;
+            }
+        };
+
+        var lblPercent = new Label { Text = "%", AutoSize = true };
+        _textSize.Wear(lblPercent, () => AppTheme.BoldFont);
+
+        var levelRow = FieldGrid.Inline(valueBox, lblPercent);
 
         var stateLabel = new Label
         {
@@ -1082,7 +1118,10 @@ public sealed class MixerControl : UserControl
         {
             var percent = slider.Percent;
 
-            valueLabel.Text = $"{percent}%";
+            if ((int)valueBox.Value != percent)
+            {
+                valueBox.Value = percent;
+            }
 
             // Guarded so ResetLevels writing the sliders doesn't count as
             // four separate user edits and save four times over.
@@ -1107,7 +1146,6 @@ public sealed class MixerControl : UserControl
         };
 
         band.AddSide(slider, gapBelow: 0);
-        band.Add(valueLabel);
         band.Add(stateLabel, gapBelow: 0);
 
         if (test is not null)
@@ -1162,6 +1200,7 @@ public sealed class MixerControl : UserControl
 
         card.Add(lblName, gapBelow: UiLayout.HintGap);
         card.Add(lblDescription, gapBelow: UiLayout.RowGap);
+        card.Add(levelRow, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(band, gapBelow: 0);
 
         _channels.Add(new Channel
@@ -1169,7 +1208,7 @@ public sealed class MixerControl : UserControl
             Name = name,
             Description = description,
             Slider = slider,
-            ValueLabel = valueLabel,
+            ValueBox = valueBox,
             StateLabel = stateLabel,
             Read = read,
             Write = write,
@@ -1515,8 +1554,8 @@ public sealed class MixerControl : UserControl
             _loading = true;
             try
             {
+                // The box follows the fader on its own - see PercentChanged.
                 _channels[i].Slider.Percent = LevelToPercent(defaults[i]);
-                _channels[i].ValueLabel.Text = $"{LevelToPercent(defaults[i])}%";
             }
             finally
             {

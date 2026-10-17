@@ -953,7 +953,31 @@ public sealed partial class RaceControlControl
                 // top of the configured pause rather than inside it. Starting
                 // it here means the pause is the only thing being waited for.
                 var teaser = wantsTeaser ? teaserLines[Random.Shared.Next(teaserLines.Count)] : null;
+
+                // THE ANNOUNCER SIGNS OFF INTO THE STOP SET (16 Oct 2026):
+                // the teaser is the line into the break, so his name goes
+                // on the end of it - "This is Dave Marsh - back after the
+                // break." Asked the same question 4a below asks about
+                // whether a break runs, so the words match what follows.
+                if (teaser is not null)
+                {
+                    var breakFollows = _settings.RecapAdBreak && CommercialBreak.SponsorScreenUp;
+                    teaser = AnnouncerIntro.IntoStopSet(teaser, _settings.RecapAnnouncerName, breakFollows);
+                }
+
                 var teaserRender = teaser is null ? null : _announcer.PrepareReminderAsync(teaser);
+
+                // THE BUMPER HITS ON HIS LAST WORD (16 Oct 2026). With no
+                // stop set to go into, the bumper below follows the teaser
+                // the moment it is heard out - so the teaser ends on the
+                // short back-to-back tail rather than the usual 0.9s of
+                // silence, which the room heard as dead air waiting for the
+                // bumper. The same question the bumper asks below.
+                var bumperAfterTeaser = !(_settings.RecapAdBreak && CommercialBreak.SponsorScreenUp)
+                    && BroadcastImaging.Has(ImagingCue.AfterRaceOver);
+                var teaserTail = bumperAfterTeaser
+                    ? AnnouncementService.SpeechTail.BackToBack
+                    : AnnouncementService.SpeechTail.Normal;
 
                 var flagPause = Math.Clamp(_settings.SummaryDelaySeconds, 0, 120);
                 if (flagPause > 0)
@@ -991,14 +1015,14 @@ public sealed partial class RaceControlControl
                     {
                         if (prepared is not null)
                         {
-                            _announcer.SpeakPrepared(prepared);
+                            _announcer.SpeakPrepared(prepared, teaserTail);
                         }
                         else
                         {
                             // Voice not configured, muted, or the render failed -
                             // the teaser still speaks, just with the round trip
                             // in front of it.
-                            _announcer.SpeakReminder(teaser, showOnScreens: true);
+                            _announcer.SpeakReminder(teaser, showOnScreens: true, tail: teaserTail);
                         }
                     }, nextRace.Token);
 
@@ -1040,7 +1064,25 @@ public sealed partial class RaceControlControl
                 // words still have to play, and starting the gap at the queue
                 // meant the gap ran out during the teaser and the recap
                 // followed it with no air at all.
-                await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
+                //
+                // RACE OVER -> BUMPER, HITTING THE POST (17 Oct 2026). When
+                // there is a bumper into the stop set, it is fired WHILE the
+                // teaser is still being said, so its own voice comes in on
+                // the teaser's last word - no gap between them - and this
+                // returns as it starts. Below, the break waits for it to play
+                // out before the first sponsor video; with no break it plays
+                // out over the wait for the recap. See TalkUp.
+                ImagingPlay? intoTheStopSet = null;
+
+                if (teaser is not null && BroadcastImaging.Has(ImagingCue.AfterRaceOver) && !nextRace.IsCancellationRequested)
+                {
+                    intoTheStopSet = await BroadcastImaging.TalkUpAsync(
+                        ImagingCue.AfterRaceOver, _announcer, TimeSpan.FromSeconds(30), nextRace.Token);
+                }
+                else
+                {
+                    await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
+                }
 
                 // Started, not awaited. Anything still outstanding on the
                 // recap runs alongside the gap rather than after it - the
@@ -1078,10 +1120,38 @@ public sealed partial class RaceControlControl
                 // BroadcastImaging for the run of show.
                 if (!(_settings.RecapAdBreak && !nextRace.IsCancellationRequested && CommercialBreak.SponsorScreenUp))
                 {
-                    await PlayImagingAsync(ImagingCue.AfterRaceOver, nextRace.Token, crossfadeAtPost: false);
+                    if (intoTheStopSet is not null)
+                    {
+                        // Already playing off the teaser - held to its out,
+                        // and left to play out whole, exactly as the bumper
+                        // played here before it was talked up.
+                        try
+                        {
+                            await intoTheStopSet.AtPost.WaitAsync(nextRace.Token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            intoTheStopSet.CrossfadeOut();
+                        }
+                    }
+                    else
+                    {
+                        await PlayImagingAsync(ImagingCue.AfterRaceOver, nextRace.Token, crossfadeAtPost: false);
+                    }
+                }
+                else
+                {
+                    // The break plays it out whole before its first video -
+                    // see PlayTheWayIntoTheBreakAsync.
+                    _intoTheStopSet = intoTheStopSet;
                 }
 
                 await HoldTheCommercialBreakAsync(recapTask!, nextRace.Token);
+
+                // Never carried into the next race's break: a break that did
+                // not open leaves the bumper playing out on its own, and the
+                // handle is no use to anything after this.
+                _intoTheStopSet = null;
 
                 // ... -> STOP SET -> JINGLE/SWEEPER -> RECAP OPEN. Started by
                 // MarkTheBreak as the break ended, and heard out here so the
@@ -1254,7 +1324,7 @@ public sealed partial class RaceControlControl
                 // then the pit lane and the sign-off close the programme.
                 if (honours is { } honoursSegment && honoursRender is { } honoursLines)
                 {
-                    await StingBetweenRecapPartsAsync(nextRace.Token);
+                    await StingBetweenRecapPartsAsync(show, nextRace.Token);
                     await SpeakHonoursAsync(honoursSegment, honoursLines, show, nextRace.Token);
                 }
 
@@ -1273,7 +1343,7 @@ public sealed partial class RaceControlControl
                 // front of it for the same reason and it has been fine.
                 if (colourTask is not null)
                 {
-                    await StingBetweenRecapPartsAsync(nextRace.Token);
+                    await StingBetweenRecapPartsAsync(show, nextRace.Token);
                     await SpeakColourAsync(colourTask, show, nextRace.Token);
                 }
 
@@ -1283,7 +1353,7 @@ public sealed partial class RaceControlControl
                 // once the next race has been called to the grid.
                 if (interviewTask is not null)
                 {
-                    await StingBetweenRecapPartsAsync(nextRace.Token);
+                    await StingBetweenRecapPartsAsync(show, nextRace.Token);
                 }
 
                 var interview = interviewTask is null
@@ -1300,7 +1370,7 @@ public sealed partial class RaceControlControl
                     }
                     else if (interview != FollowOn.Stopped)
                     {
-                        await StingBetweenRecapPartsAsync(nextRace.Token);
+                        await StingBetweenRecapPartsAsync(show, nextRace.Token);
                         await SpeakClosingAsync(closingTask, nextRace.Token);
                     }
                 }
@@ -1308,37 +1378,76 @@ public sealed partial class RaceControlControl
                 // Nothing still being written or rendered is wanted now.
                 followOnWork.Cancel();
 
-                // Music handled AFTER the recap, not at the flag. Waiting
-                // for the voice queue means the fade starts when the
-                // broadcast actually ends rather than cutting across it -
-                // unless the next race has been called, which the deep duck
-                // must not sit on top of.
-                try
-                {
-                    await _announcer.WaitForAudioAsync(SpokenWait(), nextRace.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    // The next race was called while the broadcast finished.
-                }
-
-                ReleaseDeepDuck();
-
-                // The broadcast is over and the queue is drained, so the
-                // bed hands over to its own fade now - over the quiet
-                // after the sign-off, which is what that fade is for.
                 // ... -> RACE RECAP BED -> BUMPER: the way out of the recap
-                // show (16 Oct 2026). Fired the instant the last word is
-                // heard - crushed straight in, no gap - and the bed
-                // crossfades out underneath it rather than playing an
-                // ending of its own. The bumper is the ending. Heard out
-                // before the floor is given back below, so a filler segment
-                // does not start its own music on top of it.
-                var bumperOut = BroadcastImaging.Has(ImagingCue.AfterRecap);
-                var wayOut = PlayImagingAsync(ImagingCue.AfterRecap, nextRace.Token, crossfadeAtPost: false);
+                // show (16 Oct 2026), and since 17 Oct HITTING THE POST: the
+                // bumper is fired while the host is still on his last line,
+                // so its own voice comes in on his last word - no gap - and
+                // the bed crossfades out underneath it rather than playing an
+                // ending of its own. The bumper is the ending. See TalkUp.
+                // With no bumper this simply waits for the host to finish,
+                // as it always did.
+                ImagingPlay? wayOut = null;
 
-                await EndShowAsync(crossfade: bumperOut);
-                await wayOut;
+                if (BroadcastImaging.Has(ImagingCue.AfterRecap) && !nextRace.IsCancellationRequested)
+                {
+                    wayOut = await BroadcastImaging.TalkUpAsync(ImagingCue.AfterRecap, _announcer, SpokenWait(), nextRace.Token);
+                }
+
+                if (wayOut is not null)
+                {
+                    // The bed goes under the bumper as it starts...
+                    var showEnding = EndShowAsync(crossfade: true);
+
+                    // ...and the music handling waits for the host's last
+                    // word, as it always has - see below.
+                    try
+                    {
+                        await _announcer.WaitForAudioAsync(SpokenWait(), nextRace.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // The next race was called while the broadcast finished.
+                    }
+
+                    ReleaseDeepDuck();
+
+                    await showEnding;
+
+                    // Heard to its out before the floor is given back below,
+                    // so a filler segment does not start its own music on top
+                    // of it; the rest of it plays out whole.
+                    try
+                    {
+                        await wayOut.AtPost.WaitAsync(nextRace.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        wayOut.CrossfadeOut();
+                    }
+                }
+                else
+                {
+                    // Music handled AFTER the recap, not at the flag. Waiting
+                    // for the voice queue means the fade starts when the
+                    // broadcast actually ends rather than cutting across it -
+                    // unless the next race has been called, which the deep
+                    // duck must not sit on top of.
+                    try
+                    {
+                        await _announcer.WaitForAudioAsync(SpokenWait(), nextRace.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // The next race was called while the broadcast finished.
+                    }
+
+                    ReleaseDeepDuck();
+
+                    // The broadcast is over and the queue is drained, so the
+                    // bed hands over to its own fade now - over the quiet
+                    // after the sign-off, which is what that fade is for.
+                    await EndShowAsync(crossfade: false);
+                }
             }
             catch
             {
@@ -1539,8 +1648,10 @@ public sealed partial class RaceControlControl
             InterviewFollows: interview,
 
             // The host's own name, for the opening to introduce himself
-            // with - see AppSettings.RecapAnnouncerName.
-            AnnouncerName: (_settings.RecapAnnouncerName ?? string.Empty).Trim(),
+            // with: the recap host's when the show has a host voice, the
+            // announcer's when he reads it himself - see
+            // AppSettings.HostNameForRecapShow.
+            AnnouncerName: _settings.HostNameForRecapShow,
 
             // Anything following the recap stops it signing off - the
             // honours as much as the mechanic. See RecapContext.MoreFollows.
@@ -1870,6 +1981,11 @@ public sealed partial class RaceControlControl
                 line = SignOffFallback(plan.Context);
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No sign-off came back from the model - the show's own goes out: \"{line}\"");
             }
+
+            // THE SHOW IS NAMED EVERY TIME (17 Oct 2026). The model is asked
+            // to say the show's name and does not always: a sign-off that
+            // came back without it gets it on the end. See WithShowName.
+            line = WithShowName(line, plan.Context.ShowName);
 
             // Tagged for delivery like the recap, and rendered in its voice.
             var spoken = _commentary!.PrepareSummaryForSpeech(line);
@@ -2323,13 +2439,40 @@ public sealed partial class RaceControlControl
 
             var treatment = ShowMusic?.Invoke();
 
+            // ONE ELEMENT BETWEEN TWO VOICES (16 Oct 2026). With the
+            // soundscape's "between recap parts" stinger in the run of show,
+            // that stinger has already played in front of the colour - so the
+            // first colour segment gets nothing more, and the ones after it
+            // get that same stinger rather than the club's show sting. Two
+            // stingers back to back was what the room was hearing. Only a
+            // soundscape with no stinger there falls back to the show sting.
+            var imagingStinger = BroadcastImaging.Has(ImagingCue.BetweenRecapParts);
+            var index = 0;
+
             foreach (var said in segments)
             {
+                var firstSegment = index++ == 0;
+
                 if (!await HeardOutAsync(nextRace))
                 {
                     StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
 
                     return;
+                }
+
+                if (imagingStinger)
+                {
+                    if (!firstSegment)
+                    {
+                        await StingBetweenRecapPartsAsync(show, nextRace);
+                    }
+
+                    if (nextRace.IsCancellationRequested)
+                    {
+                        SayUnlessTheNextRaceStopped(stopped, nextRace);
+
+                        return;
+                    }
                 }
 
                 // The mark between two items of a programme - the same one a
@@ -2338,7 +2481,7 @@ public sealed partial class RaceControlControl
                 // also means "nothing to play" (show music off, or no sting),
                 // which is a reason to go on without the mark, not to drop the
                 // colour - so only the next race being called stops it here.
-                if (treatment is not null
+                else if (treatment is not null
                     && !await treatment.PunctuateAsync(nextRace)
                     && nextRace.IsCancellationRequested)
                 {
@@ -2413,6 +2556,32 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// The sign-off with the show's name in it (17 Oct 2026): unchanged when
+    /// it already says it, or when the club has typed no show name, and
+    /// otherwise with "This has been &lt;show&gt;!" on the end.
+    /// </summary>
+    internal static string WithShowName(string line, string? showName)
+    {
+        var show = (showName ?? string.Empty).Trim().TrimEnd('.', '!', '?');
+
+        if (show.Length == 0 || string.IsNullOrWhiteSpace(line) || line.Contains(show, StringComparison.OrdinalIgnoreCase))
+        {
+            return line;
+        }
+
+        var said = line.TrimEnd();
+
+        // A line the model left without an ending stop gets one, so the tag
+        // reads as a sentence of its own.
+        if (said.Length > 0 && said[^1] is not ('.' or '!' or '?'))
+        {
+            said += ".";
+        }
+
+        return $"{said} This has been {show}!";
+    }
+
+    /// <summary>
     /// The sign-off the show says when the model gives it nothing: the
     /// show's name, the host's name and what is up next, whichever of them
     /// the club has. Never empty.
@@ -2465,7 +2634,13 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        Say(closing, AnnouncementService.SpeechTail.Long);
+        // The long tail is for a sign-off the bed's own ending follows.
+        // With a bumper out of the show it is the bumper that follows, fired
+        // the instant the last word is heard - so the short tail, or the
+        // room hears two seconds of nothing before it (16 Oct 2026).
+        Say(closing, BroadcastImaging.Has(ImagingCue.AfterRecap)
+            ? AnnouncementService.SpeechTail.BackToBack
+            : AnnouncementService.SpeechTail.Long);
     }
 
     /// <summary>
@@ -2987,6 +3162,15 @@ public sealed partial class RaceControlControl
     {
         try
         {
+            // Talked up off the teaser and already playing (17 Oct 2026) -
+            // heard out here, not played a second time.
+            if (Interlocked.Exchange(ref _intoTheStopSet, null) is { } started)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Into the break - the bumper, off the teaser, plays out first.");
+                await started.Played.WaitAsync(nextRace);
+                return;
+            }
+
             if (BroadcastImaging.Has(ImagingCue.AfterRaceOver))
             {
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Into the break - the bumper plays out first.");
@@ -3128,6 +3312,14 @@ public sealed partial class RaceControlControl
     private Task? _backFromBreak;
 
     /// <summary>
+    /// The bumper into the stop set, when it was talked up off the teaser
+    /// and is already playing as the break opens (17 Oct 2026) - taken by
+    /// PlayTheWayIntoTheBreakAsync, which waits for it rather than playing
+    /// another. Null otherwise.
+    /// </summary>
+    private ImagingPlay? _intoTheStopSet;
+
+    /// <summary>
     /// The race recap host's voice for everything the host says in the recap
     /// show - the recap, the colour, the questions to the mechanic, the
     /// sign-off - or null when no host voice is picked for any engine, and
@@ -3209,20 +3401,60 @@ public sealed partial class RaceControlControl
     /// has been heard out. Nothing when the run of show has no stinger for
     /// the soundscape in use, or the next race has been called.
     /// </summary>
-    private async Task StingBetweenRecapPartsAsync(CancellationToken nextRace)
+    private async Task StingBetweenRecapPartsAsync(ShowRun? show, CancellationToken nextRace)
     {
         if (!BroadcastImaging.Has(ImagingCue.BetweenRecapParts))
         {
             return;
         }
 
-        if (!await HeardOutAsync(nextRace))
+        if (nextRace.IsCancellationRequested)
         {
             return;
         }
 
-        await PlayImagingAsync(ImagingCue.BetweenRecapParts, nextRace);
+        // HITTING THE POST (17 Oct 2026): the stinger is fired while the
+        // part before it is still being said, so a stinger with a voice in
+        // it comes in on the last word. One with no voice in it - its post
+        // left at zero - fires as the last word ends, with no gap. See
+        // TalkUp. This wait is also what used to be HeardOutAsync's: the
+        // part before has been heard by the time it returns.
+        //
+        // The recap bed ducks under it the moment it starts and is HELD
+        // there until its out - the host stopping must not bring the bed
+        // back up on top of it (16 Oct 2026's trainwreck). See
+        // ShowRun.DuckForSting.
+        try
+        {
+            // ONE STINGER PER GAP (16 Oct 2026). A part that turns out to
+            // have nothing to say - no colour due, say - still had its
+            // stinger, and then the next part had its own, so the room heard
+            // two stingers back to back with nobody talking between them.
+            // Nothing said since the last one means this is the same gap.
+            // Asked at the moment to fire rather than up front, because the
+            // part in front may only just have been queued - by then it has
+            // been heard. See BroadcastImaging.TalkUpAsync.
+            await BroadcastImaging.PlayTalkedUpAsync(
+                ImagingCue.BetweenRecapParts,
+                _announcer,
+                SpokenWait(),
+                nextRace,
+                onFire: () => show?.DuckForSting(),
+                stillWanted: () => _stingSpeakingMark is not { } mark || mark != _announcer.TimesStartedSpeaking);
+        }
+        finally
+        {
+            show?.LetUp();
+        }
+
+        _stingSpeakingMark = _announcer.TimesStartedSpeaking;
     }
+
+    /// <summary>
+    /// The announcer's TimesStartedSpeaking when the last stinger between
+    /// recap parts played - see StingBetweenRecapPartsAsync.
+    /// </summary>
+    private long? _stingSpeakingMark;
 
     /// <summary>Queues one line: its audio when it rendered in advance, otherwise rendered as it is spoken.</summary>
     private void Say(

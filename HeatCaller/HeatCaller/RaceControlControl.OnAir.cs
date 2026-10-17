@@ -40,9 +40,13 @@ public sealed partial class RaceControlControl
     private bool _openingSaidByOnAir;
 
     /// <summary>Wires the button. Called from BuildLayout beside Stage.</summary>
+    /// <summary>The button's own caption, and what it says while the opening is still being got ready.</summary>
+    private const string OnAirCaption = "On Air";
+    private const string OnAirWaitingCaption = "Waiting\u2026";
+
     private void BuildOnAirButton()
     {
-        _btnOnAir.Text = "On Air";
+        _btnOnAir.Text = OnAirCaption;
         _btnOnAir.Click += async (_, _) => await RunOnAirAsync();
 
         var tip = new ToolTip();
@@ -155,7 +159,22 @@ public sealed partial class RaceControlControl
             //    never dead air in the middle of it.
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - getting the opening ready.");
 
+            // SAYS SO ON THE BUTTON (16 Oct 2026). Nothing is heard while
+            // the opening is written and rendered, so the button reads
+            // "Waiting..." until the show actually starts - the race
+            // director can see it was pressed and is on its way.
+            _btnOnAir.Text = OnAirWaitingCaption;
+
             var line = await WriteOpeningAsync(round, cts.Token);
+
+            // THE ANNOUNCER SAYS WHO HE IS (16 Oct 2026), a line into the
+            // opening - "Welcome back to the track! I'm Dave Marsh. Heat
+            // three..." Put in here rather than asked of the model, so it is
+            // there every time and in the same place. See AnnouncerIntro.
+            if (line is { } written)
+            {
+                line = (AnnouncerIntro.IntoOpening(written.Text, _settings.RecapAnnouncerName), written.History);
+            }
 
             AnnouncementService.PreparedSpeech? audio = null;
 
@@ -168,6 +187,8 @@ public sealed partial class RaceControlControl
 
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - the top of the race.");
 
+            _btnOnAir.Text = OnAirCaption;
+
             // 2. The jingle, to its post.
             jingle = BroadcastImaging.Start(ImagingCue.TopOfRace);
 
@@ -178,8 +199,8 @@ public sealed partial class RaceControlControl
 
             // 3. On the post: the bed comes up under the voice, the rest of
             //    the jingle crossfades into it, and the voice hits the post.
-            //    No voice before the race is in the clear from here to the
-            //    countdown - see HandTheBedToTheStart.
+            //    The bed is done the moment the race is staged - see
+            //    HandTheBedToTheStart.
             bed = ImagingBed.Start(ImagingCue.OpeningBed, _announcer, OpeningBedLevel, OpeningBedDuck);
             jingle?.CrossfadeOut();
 
@@ -200,11 +221,14 @@ public sealed partial class RaceControlControl
                 _commentary?.HistorySpoken(said.History);
                 _openingSaidByOnAir = true;
 
-                await _announcer.WaitForAudioAsync(IntroShowLimit, cts.Token);
-
-                // 4. The bumper, crushed straight in off the last word, the
-                //    bed dipped under it. The staging call hits ITS post.
-                if (BroadcastImaging.Start(ImagingCue.AfterOpening) is { } bumper)
+                // 4. The bumper, HITTING THE POST (17 Oct 2026): fired while
+                //    the opening is still being said, so the bumper's own
+                //    voice comes in on the opening's last word - no gap
+                //    between the two. The bed dips the moment it starts, and
+                //    the staging call comes in at the bumper's out. With no
+                //    bumper this simply waits for the opening to finish, as
+                //    it always did. See TalkUp.
+                if (await BroadcastImaging.TalkUpAsync(ImagingCue.AfterOpening, _announcer, IntroShowLimit, cts.Token) is { } bumper)
                 {
                     bed?.Dip(true);
 
@@ -242,6 +266,7 @@ public sealed partial class RaceControlControl
             _onAirCts = null;
             _onAirStageNow = false;
             _btnOnAir.Lit = false;
+            _btnOnAir.Text = OnAirCaption;
             cts.Dispose();
         }
 
@@ -289,9 +314,12 @@ public sealed partial class RaceControlControl
     private static readonly TimeSpan LongestOpeningBed = TimeSpan.FromMinutes(3);
 
     /// <summary>
-    /// Keeps the opening bed under the staging call and takes it away when
-    /// the race moves on: the countdown starting - its beeps and the horn
-    /// want the room to themselves - a reset, or <see cref="LongestOpeningBed"/>.
+    /// Takes the opening bed away when the race is staged (16 Oct 2026,
+    /// asked for from the floor: "the bed from the open should be done at
+    /// staging, not later"). It used to run on under the staging call until
+    /// the countdown; now the open is finished the moment Stage takes hold,
+    /// and the staging call has the room. Any other move - a reset - or
+    /// <see cref="LongestOpeningBed"/> ends it too.
     /// </summary>
     private void HandTheBedToTheStart(ImagingBed? bed)
     {
@@ -312,13 +340,8 @@ public sealed partial class RaceControlControl
             bed.Finish();
         }
 
-        watcher = state =>
-        {
-            if (state is not RaceState.Staging)
-            {
-                End();
-            }
-        };
+        // Any move at all, staging included - see the summary.
+        watcher = _ => End();
 
         _race.StateChanged += watcher;
 
@@ -406,5 +429,109 @@ public sealed partial class RaceControlControl
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] No opening - {ex.Message}");
             return null;
         }
+    }
+}
+
+/// <summary>
+/// The announcer saying his own name (16 Oct 2026) - a line into each race's
+/// opening, and at the end of the line that takes the show into the stop set.
+///
+/// The name is the one typed as "Announcer's name" on the Commentary page
+/// (AppSettings.RecapAnnouncerName - the setting's name is older than this).
+/// It is the race announcer's, NOT the recap show's: the recap has a host of
+/// its own.
+///
+/// WRITTEN IN HERE, NOT ASKED OF THE MODEL. A model asked to "say your name
+/// near the top" does it most of the time and somewhere different each time;
+/// a station's presenter says it in the same place every time. Blank name:
+/// nothing changes. A line that already has the name in it (the model used
+/// it on its own) is left alone, so he is never introduced twice.
+/// </summary>
+internal static class AnnouncerIntro
+{
+    /// <summary>
+    /// The opening with "I'm &lt;name&gt;." put in after its first sentence -
+    /// "Welcome back to the track! I'm Dave Marsh. Heat three is..." A
+    /// one-sentence opening gets it on the end.
+    /// </summary>
+    internal static string IntoOpening(string text, string? name)
+    {
+        var who = Who(name);
+
+        if (who.Length == 0 || string.IsNullOrWhiteSpace(text) || Names(text, who))
+        {
+            return text;
+        }
+
+        var said = $"I'm {who}.";
+        var cut = FirstSentenceEnds(text);
+
+        return cut < 0
+            ? $"{text.TrimEnd()} {said}"
+            : $"{text[..cut].TrimEnd()} {said} {text[cut..].TrimStart()}";
+    }
+
+    /// <summary>
+    /// The line into the stop set with the announcer's sign-off on the end:
+    /// "This is Dave Marsh - back after the break." With no break to go to
+    /// (the commercial break off, or no sponsors up) it is "This is Dave
+    /// Marsh - stay with us." - never his bare name as the last words
+    /// (16 Oct 2026): a name as the very end of a line is the word a voice
+    /// clips, and a sign-off that stops dead on it sounds cut off, which is
+    /// what the room heard. A closing phrase puts the name safely inside the
+    /// line and gives the bumper something to hit.
+    /// </summary>
+    internal static string IntoStopSet(string line, string? name, bool breakFollows)
+    {
+        var who = Who(name);
+
+        if (who.Length == 0 || string.IsNullOrWhiteSpace(line) || Names(line, who))
+        {
+            return line;
+        }
+
+        var signOff = breakFollows ? $"This is {who} - back after the break." : $"This is {who} - stay with us.";
+
+        return $"{line.TrimEnd()} {signOff}";
+    }
+
+    private static string Who(string? name) => (name ?? string.Empty).Trim().TrimEnd('.', '!', '?', ',');
+
+    private static bool Names(string text, string who) => text.Contains(who, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Where the first sentence ends - just past its full stop, exclamation
+    /// or question mark (and any closing quote), where the next sentence
+    /// starts. -1 when the whole thing is one sentence. A stop with no space
+    /// after it - "4.2 seconds" - is not the end of a sentence.
+    /// </summary>
+    private static int FirstSentenceEnds(string text)
+    {
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] is not ('.' or '!' or '?'))
+            {
+                continue;
+            }
+
+            var after = i + 1;
+
+            while (after < text.Length && text[after] is '"' or '\'' or '”' or '’' or ')')
+            {
+                after++;
+            }
+
+            if (after >= text.Length)
+            {
+                return -1;
+            }
+
+            if (char.IsWhiteSpace(text[after]))
+            {
+                return after;
+            }
+        }
+
+        return -1;
     }
 }

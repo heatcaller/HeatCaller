@@ -1583,7 +1583,22 @@ internal sealed class ShowTreatment
                 // mark between two items of a block and the mark at a
                 // commercial break's edge are the same code. See that
                 // method for the whole of what used to be here.
-                await MarkOnceAsync(sting, Level(_settings.ShowStingLevel, 0.8f), "sting", ct).ConfigureAwait(true);
+                //
+                // The bed ducks under the sting (16 Oct 2026) - nobody is
+                // talking, so it would otherwise be at full level on top
+                // of it. The next item's voice takes the level from here.
+                run?.DuckForSting();
+
+                try
+                {
+                    await MarkOnceAsync(sting, Level(_settings.ShowStingLevel, 0.8f), "sting", ct).ConfigureAwait(true);
+                }
+                finally
+                {
+                    // The sting has been held for - the bed follows the
+                    // voice again from here. See ShowRun.LetUp.
+                    run?.LetUp();
+                }
 
                 return true;
             }
@@ -1812,7 +1827,9 @@ internal sealed class ShowTreatment
 
             if (bedGain is not null)
             {
-                bedGain.Target = now ? bedLevel * duck : bedLevel;
+                // Held under a stinger as well as under the voice - see
+                // ShowSpeaking.HeldUnder.
+                bedGain.Target = now || speaking.HeldUnder ? bedLevel * duck : bedLevel;
             }
         };
 
@@ -1953,6 +1970,10 @@ internal sealed class ShowTreatment
                 // it crossfades out under whatever the run of show plays
                 // next (16 Oct 2026). See ShowRun.FinishAsync.
                 CrossfadeOnly = imagingBed is not null,
+
+                // So a stinger between two parts ducks the bed the same
+                // distance the voice does - see ShowRun.DuckForSting.
+                UnderVoiceLevel = bedLevel * duck,
             };
         }
         catch (Exception ex)
@@ -2304,11 +2325,25 @@ internal sealed class ShowSpeaking
 {
     private volatile bool _now;
 
+    private volatile bool _heldUnder;
+
     /// <summary>Safe to set and read from any thread.</summary>
     public bool Now
     {
         get => _now;
         set => _now = value;
+    }
+
+    /// <summary>
+    /// The bed is held under a piece of imaging playing over it (17 Oct
+    /// 2026) - a stinger fired while the host was still talking - so the
+    /// host stopping does not bring the bed back up on top of it. See
+    /// ShowRun.DuckForSting and ShowRun.LetUp. Safe from any thread.
+    /// </summary>
+    public bool HeldUnder
+    {
+        get => _heldUnder;
+        set => _heldUnder = value;
     }
 }
 
@@ -2489,6 +2524,52 @@ internal sealed class ShowRun
 
     /// <summary>Back under the voice, after a swell or a nudge.</summary>
     internal void Settle() => SetBed(_bedLevel);
+
+    /// <summary>
+    /// The bed's level under the voice - its own level times the club's duck.
+    /// Null for a run built without one, which ducks for a sting to a third
+    /// of its level instead.
+    /// </summary>
+    internal float? UnderVoiceLevel { get; init; }
+
+    /// <summary>
+    /// Takes the bed down under a sting or stinger fired over it (16 Oct
+    /// 2026). Nobody is talking while a stinger plays, so without this the
+    /// bed sits at its full level right on top of it and the two
+    /// trainwreck. Nothing brings it back up here on purpose: the next
+    /// voice's own speaking edge sets the level again (down while it talks,
+    /// back up when it stops), and FinishAsync sets it whichever way the
+    /// show ends. Says whether there was a bed to duck.
+    /// </summary>
+    internal bool DuckForSting()
+    {
+        // HELD, not just set (17 Oct 2026): a stinger can now start while
+        // the host is still talking - see TalkUp - and the host stopping
+        // would otherwise bring the bed straight back up on top of it.
+        // LetUp takes the hold off at the stinger's out.
+        Speaking.HeldUnder = true;
+
+        return SetBed(UnderVoiceLevel ?? _bedLevel / 3f);
+    }
+
+    /// <summary>
+    /// Takes off the hold <see cref="DuckForSting"/> put on, at the
+    /// stinger's out: the bed goes back under the voice if someone is
+    /// talking, and back to its own level if not.
+    /// </summary>
+    internal void LetUp()
+    {
+        Speaking.HeldUnder = false;
+
+        // Never on a show that has already ended: its bed has been handed
+        // to its ending, and bringing it back up here would undo that.
+        if (Volatile.Read(ref _finished) == 1)
+        {
+            return;
+        }
+
+        SetBed(Speaking.Now ? UnderVoiceLevel ?? _bedLevel / 3f : _bedLevel);
+    }
 
     /// <summary>
     /// Points the bed's glide at a level, or says there is no bed. The glide

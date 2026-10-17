@@ -24,8 +24,30 @@ public sealed class BroadcastImagingControl : UserControl
     private readonly ComboBox _cmbElement = new();
     private readonly Label _lblStatus = new();
     private readonly NumericUpDown _numLevel = new();
+    /// <summary>The selected piece's OUT - the mark the app called its post until 17 Oct 2026. See TalkUp.</summary>
     private readonly NumericUpDown _numPost = new();
     private readonly Label _lblPostSource = new();
+
+    /// <summary>The selected piece's POST - where its own voice comes in (17 Oct 2026). See TalkUp.</summary>
+    private readonly NumericUpDown _numTalkUp = new();
+    private readonly Label _lblTalkUpRoom = new();
+
+    /// <summary>The nudge on every post, in seconds - see BroadcastImaging.PostNudge.</summary>
+    private readonly NumericUpDown _numNudge = new();
+
+    /// <summary>
+    /// Where the preview playing now started in the piece, and when - so
+    /// Mark Post and Mark Out can read off where it has got to.
+    /// </summary>
+    private (string Path, double From, DateTime StartedUtc)? _previewAt;
+
+    /// <summary>
+    /// Taken off a mark made by pressing a button while listening - about
+    /// how long it takes to hear the moment and press. Marks a touch late
+    /// otherwise, which on a post is the piece's voice landing on the last
+    /// word instead of after it.
+    /// </summary>
+    private const double ReactionSeconds = 0.15;
 
     /// <summary>One picker per point in the run of show.</summary>
     private readonly Dictionary<ImagingCue, ComboBox> _cuePickers = new();
@@ -210,6 +232,7 @@ public sealed class BroadcastImagingControl : UserControl
             new DataGridViewTextBoxColumn { Name = "element", HeaderText = "Element", FillWeight = 40 },
             new DataGridViewTextBoxColumn { Name = "file", HeaderText = "File", FillWeight = 120 },
             new DataGridViewTextBoxColumn { Name = "post", HeaderText = "Post", FillWeight = 40 },
+            new DataGridViewTextBoxColumn { Name = "out", HeaderText = "Out", FillWeight = 40 },
             new DataGridViewTextBoxColumn { Name = "from", HeaderText = "From", FillWeight = 40 });
         _grid.SelectionChanged += (_, _) => ShowPost();
         _grid.CellDoubleClick += (_, args) =>
@@ -240,8 +263,32 @@ public sealed class BroadcastImagingControl : UserControl
         var btnStop = new Button { Text = "Stop" };
         btnStop.Click += (_, _) => StopPreview();
 
-        // THE POST (16 Oct 2026): where the voice - or the next piece -
-        // comes in. On a jingle, the instant the sung part stops.
+        // TWO MARKS PER PIECE (17 Oct 2026). The POST is where the piece's
+        // own voice or singing comes in: the announcer talks over the intro
+        // in front of it and stops right on it - hitting the post. The OUT
+        // is where the piece's own voice stops: the next line starts on it.
+        // Until today the page called the out "the post". See TalkUp.
+        _numTalkUp.DecimalPlaces = 2;
+        _numTalkUp.Increment = 0.05m;
+        _numTalkUp.Minimum = 0;
+        _numTalkUp.Maximum = (decimal)ShowClip.MostSeconds;
+
+        _lblTalkUpRoom.AutoSize = true;
+        _lblTalkUpRoom.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblTalkUpRoom, () => AppTheme.SmallFont);
+
+        var btnMarkTalkUp = new Button { Text = "Mark Post" };
+        btnMarkTalkUp.Click += (_, _) => MarkWhilePlaying(post: true);
+
+        var btnSetTalkUp = new Button { Text = "Set" };
+        btnSetTalkUp.Click += (_, _) => SetTalkUp();
+
+        var btnClearTalkUp = new Button { Text = "Clear" };
+        btnClearTalkUp.Click += (_, _) => ClearTalkUp();
+
+        var btnPlayToTalkUp = new Button { Text = "Play to Post" };
+        btnPlayToTalkUp.Click += (_, _) => PlayToTalkUp();
+
         _numPost.DecimalPlaces = 2;
         _numPost.Increment = 0.05m;
         _numPost.Minimum = 0;
@@ -251,22 +298,32 @@ public sealed class BroadcastImagingControl : UserControl
         _lblPostSource.ForeColor = AppTheme.TextMuted;
         _textSize.Wear(_lblPostSource, () => AppTheme.SmallFont);
 
-        var btnSetPost = new Button { Text = "Set Post" };
+        var btnMarkOut = new Button { Text = "Mark Out" };
+        btnMarkOut.Click += (_, _) => MarkWhilePlaying(post: false);
+
+        var btnSetPost = new Button { Text = "Set" };
         btnSetPost.Click += (_, _) => SetPost();
 
-        var btnAutoPost = new Button { Text = "Auto Post" };
+        var btnAutoPost = new Button { Text = "Auto" };
         btnAutoPost.Click += (_, _) => ClearPost();
 
-        var btnPlayPost = new Button { Text = "Play Into Post" };
-        btnPlayPost.Click += (_, _) => PlaySelected(intoPost: true);
+        var btnPlayPost = new Button { Text = "Play from Out" };
+        btnPlayPost.Click += (_, _) => PlayFromOut();
 
         var postGrid = new FieldGrid();
-        postGrid.AddRow("Post at:", FieldGrid.Inline(_numPost, new Label { Text = "s" }, btnSetPost, btnAutoPost, btnPlayPost, _lblPostSource));
+        postGrid.AddRow("Post at:", FieldGrid.Inline(_numTalkUp, new Label { Text = "s" }, btnMarkTalkUp, btnSetTalkUp, btnClearTalkUp, btnPlayToTalkUp, _lblTalkUpRoom));
         postGrid.AddHint(
-            "The post is where the next thing comes in over a piece - on a jingle, the instant the sung part stops, so the "
-            + "voice hits it. Whatever plays after it crossfades into the bed or the next piece; nothing is ever cut short. "
-            + "Play Into Post plays the three seconds up to it. Auto Post goes back to the shipped mark, or one measured "
-            + "from the piece.");
+            "The POST is where the piece's own voice or singing comes in. The announcer talks over the intro in front of it "
+            + "and stops right on it - hitting the post, no gap between the two voices. Press Play and then Mark Post the "
+            + "instant you hear the piece's voice, or type it and press Set. Play to Post plays the intro and stops on the "
+            + "mark. Clear takes it back to the top of the piece: no intro to talk over, so the piece starts as the last "
+            + "word ends - right for a stinger with no voice in it.");
+        postGrid.AddRow("Out at:", FieldGrid.Inline(_numPost, new Label { Text = "s" }, btnMarkOut, btnSetPost, btnAutoPost, btnPlayPost, _lblPostSource));
+        postGrid.AddHint(
+            "The OUT is where the piece's own voice stops and only music is left - on a jingle, the instant the sung part "
+            + "ends. The next line starts right on it, and whatever the piece still has crossfades away underneath, so "
+            + "nothing is ever cut short. Mark Out works like Mark Post. Auto goes back to the mark it ships with, or one "
+            + "measured from the piece.");
 
         var btnRemove = new Button { Text = "Remove" };
         btnRemove.Click += (_, _) => RemoveSelected();
@@ -339,12 +396,14 @@ public sealed class BroadcastImagingControl : UserControl
 
         var lblRunHint = new Label
         {
-            Text = "The night runs: jingle or sweeper  ->  opening, hitting the jingle's post over the opening bed  ->  bumper  "
-                 + "->  staging call over the bed  ...  race over  ->  bumper  ->  stop set  ->  jingle or sweeper  ->  race recap "
-                 + "open  ->  the recap host hits its post as it crossfades into the recap bed  ->  stinger between parts  ->  "
-                 + "bumper over the bed's crossfade. The first part is On Air's, on Race Control. Every piece plays whole: the "
-                 + "next thing starts at its post and the rest crossfades under it, so nothing is cut and nothing drops to "
-                 + "silence. A point whose soundscape has none of what it is set to simply plays nothing.",
+            Text = "The night runs: jingle or sweeper  ->  opening, in at the jingle's out over the opening bed  ->  bumper, "
+                 + "with the opening hitting its post  ->  staging call at the bumper's out  ...  race over: the teaser hits "
+                 + "the bumper's post  ->  stop set  ->  jingle or sweeper  ->  race recap open  ->  the recap host in at its "
+                 + "out, over the recap bed  ->  stinger between parts, each part hitting its post  ->  the host's last word "
+                 + "hits the closing bumper's post. The first part is On Air's, on Race Control. Hitting the post needs a line "
+                 + "rendered ahead of time - the opening, the teaser and the recap's lines are - and an intro no longer than "
+                 + "the line in front of it. Every piece plays whole: nothing is cut, and a point whose soundscape has none of "
+                 + "what it is set to simply plays nothing.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -372,10 +431,34 @@ public sealed class BroadcastImagingControl : UserControl
         var lblLevelSuffix = new Label { Text = "%  - the bed plays at the show bed level on the Commentary page", AutoSize = true, ForeColor = AppTheme.TextMuted };
         _textSize.Wear(lblLevelSuffix, () => AppTheme.SmallFont);
 
+        // THE NUDGE (17 Oct 2026) - one setting for every post, for taste:
+        // some like the piece's voice right on the last word, some a hair
+        // under it.
+        _numNudge.DecimalPlaces = 2;
+        _numNudge.Increment = 0.05m;
+        _numNudge.Minimum = (decimal)-BroadcastImaging.MostNudge;
+        _numNudge.Maximum = (decimal)BroadcastImaging.MostNudge;
+        _numNudge.ValueChanged += (_, _) =>
+        {
+            if (!_filling)
+            {
+                BroadcastImaging.PostNudge = (double)_numNudge.Value;
+            }
+        };
+
+        var lblNudgeSuffix = new Label
+        {
+            Text = "s  - below zero brings the piece's voice in a touch before the announcer's last word ends, above zero a touch after",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+        _textSize.Wear(lblNudgeSuffix, () => AppTheme.SmallFont);
+
         var levelGrid = new FieldGrid();
         levelGrid.AddRow("Level:", FieldGrid.Inline(_numLevel, lblLevelSuffix));
+        levelGrid.AddRow("Post timing:", FieldGrid.Inline(_numNudge, lblNudgeSuffix));
 
-        var levels = new Section("Level");
+        var levels = new Section("Level and timing");
         levels.Add(levelGrid, gapBelow: 0);
 
         // --- The page ----------------------------------------------------
@@ -413,6 +496,8 @@ public sealed class BroadcastImagingControl : UserControl
 
         Fit(_numLevel, NumberWidth(_numLevel));
         Fit(_numPost, NumberWidth(_numPost));
+        Fit(_numTalkUp, NumberWidth(_numTalkUp));
+        Fit(_numNudge, NumberWidth(_numNudge));
 
         static void Fit(Control field, int width)
         {
@@ -443,6 +528,7 @@ public sealed class BroadcastImagingControl : UserControl
         {
             _chkEnabled.Checked = BroadcastImaging.Enabled;
             _numLevel.Value = Math.Clamp(BroadcastImaging.Level, (int)_numLevel.Minimum, (int)_numLevel.Maximum);
+            _numNudge.Value = Math.Clamp((decimal)BroadcastImaging.PostNudge, _numNudge.Minimum, _numNudge.Maximum);
 
             var keep = (SelectedSoundscape ?? BroadcastImaging.Active)?.Id;
             var activeId = _themes.ActiveThemeId;
@@ -523,11 +609,13 @@ public sealed class BroadcastImagingControl : UserControl
                 var there = File.Exists(path);
 
                 var marked = BroadcastImaging.ClubPost(path) ?? BroadcastImaging.ShippedPost(path);
+                var talkUp = BroadcastImaging.ClubTalkUp(path);
 
                 var row = _grid.Rows.Add(
                     BroadcastImaging.Describe(element),
                     Path.GetFileName(path),
-                    marked is { } post ? $"{post:0.00}s" : "auto",
+                    talkUp is { } post ? $"{post:0.00}s" : "top",
+                    marked is { } at ? $"{at:0.00}s" : "auto",
                     !there ? "missing" : isShipped ? "ships with it" : "added");
 
                 _grid.Rows[row].Tag = new PieceRow(element, path);
@@ -538,7 +626,7 @@ public sealed class BroadcastImagingControl : UserControl
                 }
                 else if (!isShipped)
                 {
-                    _grid.Rows[row].Cells[3].Style.ForeColor = AppTheme.Success;
+                    _grid.Rows[row].Cells[4].Style.ForeColor = AppTheme.Success;
                 }
 
                 if (selected is not null && string.Equals(selected, path, StringComparison.OrdinalIgnoreCase))
@@ -644,12 +732,174 @@ public sealed class BroadcastImagingControl : UserControl
         // part a club listens to when it is placing the mark.
         var from = intoPost && PostOfSelected(piece) is { } post ? Math.Max(0, post - 3) : 0;
 
+        StartPreview(piece, from);
+    }
+
+    /// <summary>Plays the selected piece from a point in it, noting where and when for Mark Post and Mark Out.</summary>
+    private CancellationTokenSource? StartPreview(PieceRow piece, double from)
+    {
         _preview = BroadcastImaging.Preview(piece.Path, out var problem, from);
 
         if (_preview is null)
         {
+            _previewAt = null;
             AppDialog.Show(this, problem ?? "That piece couldn't play.", "Couldn't play it", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return null;
         }
+
+        _previewAt = (piece.Path, from, DateTime.UtcNow);
+
+        return _preview;
+    }
+
+    /// <summary>
+    /// Plays the intro and stops on the post - so a club hears exactly the
+    /// stretch the announcer talks over, and the piece's voice cut off as it
+    /// starts. Plays from the top when the intro is short, and from four
+    /// seconds before the post when it is long.
+    /// </summary>
+    private void PlayToTalkUp()
+    {
+        if (SelectedPiece is not { } piece)
+        {
+            AppDialog.Show(this, "Pick a piece in the list first.", "Nothing selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var post = BroadcastImaging.ClubTalkUp(piece.Path) ?? 0;
+
+        if (post <= 0)
+        {
+            AppDialog.Show(
+                this,
+                "This piece has no post marked yet, so its voice is taken to be at its very top. Press Play, then Mark Post the "
+                + "moment you hear its voice come in.",
+                "No post yet",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        StopPreview();
+
+        var from = Math.Max(0, post - 4);
+
+        if (StartPreview(piece, from) is { } playing)
+        {
+            StopLater(playing, TimeSpan.FromSeconds(post - from));
+        }
+    }
+
+    /// <summary>Plays from just before the out, to hear the piece's voice stop and the music carry on.</summary>
+    private void PlayFromOut()
+    {
+        if (SelectedPiece is not { } piece)
+        {
+            AppDialog.Show(this, "Pick a piece in the list first.", "Nothing selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        StopPreview();
+
+        var from = PostOfSelected(piece) is { } at ? Math.Max(0, at - 3) : 0;
+
+        StartPreview(piece, from);
+    }
+
+    /// <summary>Stops a preview after a while, if it is still the one playing.</summary>
+    private async void StopLater(CancellationTokenSource playing, TimeSpan after)
+    {
+        try
+        {
+            await Task.Delay(after);
+        }
+        catch
+        {
+            return;
+        }
+
+        if (!IsDisposed && ReferenceEquals(_preview, playing))
+        {
+            StopPreview();
+        }
+    }
+
+    /// <summary>
+    /// Marks the post - or the out - where the preview has got to: press
+    /// Play, and press this the instant you hear the moment. Saved straight
+    /// away, and the number box shows it for fine-tuning.
+    /// </summary>
+    private void MarkWhilePlaying(bool post)
+    {
+        if (SelectedPiece is not { } piece)
+        {
+            AppDialog.Show(this, "Pick a piece in the list first.", "Nothing selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var length = BroadcastImaging.Load(piece.Path, out _)?.Length.TotalSeconds ?? 0;
+
+        if (_preview is null
+            || _previewAt is not { } at
+            || !string.Equals(at.Path, piece.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            AppDialog.Show(
+                this,
+                $"Press Play first, then Mark {(post ? "Post" : "Out")} the instant you hear the piece's voice "
+                + $"{(post ? "come in" : "stop")}.",
+                "Nothing playing",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        var heard = at.From + (DateTime.UtcNow - at.StartedUtc).TotalSeconds - ReactionSeconds;
+
+        if (length > 0 && heard > length)
+        {
+            AppDialog.Show(this, "The piece has already finished. Press Play and mark it while it plays.", "Already finished", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // To the box's own step, so what is saved is what the box shows.
+        var mark = Math.Round(Math.Max(0, heard) * 20, MidpointRounding.AwayFromZero) / 20;
+
+        if (post)
+        {
+            BroadcastImaging.SetTalkUp(piece.Path, mark);
+        }
+        else
+        {
+            BroadcastImaging.SetPost(piece.Path, mark);
+        }
+
+        RefreshPieces();
+        ShowPost();
+    }
+
+    private void SetTalkUp()
+    {
+        if (SelectedPiece is not { } piece)
+        {
+            AppDialog.Show(this, "Pick a piece in the list first.", "Nothing selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        BroadcastImaging.SetTalkUp(piece.Path, (double)_numTalkUp.Value);
+        RefreshPieces();
+        ShowPost();
+    }
+
+    private void ClearTalkUp()
+    {
+        if (SelectedPiece is not { } piece)
+        {
+            return;
+        }
+
+        BroadcastImaging.SetTalkUp(piece.Path, null);
+        RefreshPieces();
+        ShowPost();
     }
 
     /// <summary>The selected piece's post in seconds - the mark when there is one, otherwise measured from the piece.</summary>
@@ -676,8 +926,17 @@ public sealed class BroadcastImagingControl : UserControl
             {
                 _numPost.Value = 0;
                 _lblPostSource.Text = string.Empty;
+                _numTalkUp.Value = 0;
+                _lblTalkUpRoom.Text = string.Empty;
                 return;
             }
+
+            var talkUp = BroadcastImaging.ClubTalkUp(piece.Path);
+
+            _numTalkUp.Value = Math.Clamp((decimal)(talkUp ?? 0), _numTalkUp.Minimum, _numTalkUp.Maximum);
+            _lblTalkUpRoom.Text = talkUp is { } room && room > 0
+                ? $"{room:0.00}s of intro to talk over"
+                : "voice at the top - no intro to talk over";
 
             var marked = BroadcastImaging.ClubPost(piece.Path) ?? BroadcastImaging.ShippedPost(piece.Path);
 
@@ -724,6 +983,7 @@ public sealed class BroadcastImagingControl : UserControl
     {
         BroadcastImaging.StopPreview(_preview);
         _preview = null;
+        _previewAt = null;
     }
 
     private void RemoveSelected()

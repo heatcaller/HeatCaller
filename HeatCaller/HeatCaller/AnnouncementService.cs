@@ -843,8 +843,23 @@ public sealed partial class AnnouncementService
     public (double Stability, double Style) CurrentDelivery =>
         (_voiceStore.Current.Stability, _voiceStore.Current.Style);
 
+    /// <summary>
+    /// How many times the announcer has started speaking since the app
+    /// opened (16 Oct 2026) - so the recap can tell whether anything was
+    /// said since its last stinger, and not fire a second one into the same
+    /// silence. Only ever goes up.
+    /// </summary>
+    public long TimesStartedSpeaking => Interlocked.Read(ref _timesStartedSpeaking);
+
+    private long _timesStartedSpeaking;
+
     private void RaiseSpeakingChanged(bool speaking)
     {
+        if (speaking)
+        {
+            Interlocked.Increment(ref _timesStartedSpeaking);
+        }
+
         try
         {
             SpeakingChanged?.Invoke(speaking);
@@ -1215,7 +1230,10 @@ public sealed partial class AnnouncementService
                 // the way the queued lines are. This path never did.
                 OfferLineToListeners(prepared.Text, prepared.Audio);
 
-                await PlayAsync(prepared.Audio, volume, trailing, leading);
+                // Noting when its last word lands, so a piece of imaging
+                // can hit the post on it (17 Oct 2026) - see TalkUp. Plays
+                // exactly as PlayAsync did.
+                await PlayNotingLastWordAsync(prepared.Audio, volume, trailing, leading);
             }
             finally
             {

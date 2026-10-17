@@ -30,13 +30,14 @@ public partial class MainForm
             }
 
             SaveSoundscapeLook(look);
-            _looksControl?.RefreshAll();
 
             var raceUnderWay = _race.IsPracticeMode
                 || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
 
             if (raceUnderWay)
             {
+                _looksControl?.RefreshAll();
+
                 OnClientRawMessage(
                     $"{AppTime.LogStampNow()}  [looks] {theme.Name} wears the \"{look.Name}\" look - the app switches to it "
                     + "when HeatCaller next starts, since a race is running.");
@@ -56,6 +57,11 @@ public partial class MainForm
                 RestartForNewLook();
                 return;
             }
+
+            // After the question rather than before it: redrawing the Looks
+            // page's previews is no use to an app about to restart, and it
+            // kept the question waiting (16 Oct 2026).
+            _looksControl?.RefreshAll();
 
             OnClientRawMessage(
                 $"{AppTime.LogStampNow()}  [looks] The app switches to \"{look.Name}\" when HeatCaller next starts.");

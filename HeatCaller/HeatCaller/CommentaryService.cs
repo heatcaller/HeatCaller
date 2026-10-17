@@ -2786,7 +2786,9 @@ public sealed class CommentaryService
             FactsClose + "\n" +
             "\nWrite the closing line of this race's broadcast segment in the style of a flashy TV sports broadcast - "
             + "a big, polished sign-off"
-            + (showName.Length > 0 ? " for the Show named in the facts" : " (no show name is given, so don't make one up)")
+            + (showName.Length > 0
+                ? $" for the Show named in the facts - say the show's name, \"{showName}\", word for word"
+                : " (no show name is given, so don't make one up)")
             + (upNext.Length > 0 ? ", teeing up what is up next on the program" : string.Empty)
             + (host.Length > 0 ? ", signing off as the Host named in the facts" : string.Empty)
             + ". The result has already been told: name the winner once at most and add nothing else about the race. "
@@ -3252,7 +3254,7 @@ public sealed class CommentaryService
     /// close, because a show with no name still has to end.
     /// </summary>
     public string NightRecapSignOff() =>
-        NightRecap.SignOff(_settings.RecapAnnouncerName, _settings.RecapShowName);
+        NightRecap.SignOff(_settings.AnnouncerNameForRecap, _settings.RecapShowName);
 
     /// <summary>
     /// ONE DRIVER'S NIGHT, written for that driver (12 Oct 2026) - see

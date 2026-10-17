@@ -98,13 +98,34 @@ internal sealed class ImagingSettings
     public int Level { get; set; } = 80;
 
     /// <summary>
-    /// Where each piece's post is, in seconds from its top, by file name -
-    /// the club's own marks from the Imaging page. A piece with none here
-    /// takes the one shipped beside it (posts.json in its soundscape's
-    /// folder), and failing that the post is measured (see
-    /// BroadcastImaging.PostOf).
+    /// Where each piece's OUT is, in seconds from its top, by file name -
+    /// where the piece's own voice stops and the next line starts. The
+    /// club's own marks from the Imaging page. A piece with none here takes
+    /// the one shipped beside it (posts.json in its soundscape's folder),
+    /// and failing that it is measured (see BroadcastImaging.PostOf).
+    ///
+    /// Called "Posts" in the file because that is what the app called this
+    /// mark until 17 Oct 2026 - kept so saved marks still load. The real
+    /// post is <see cref="TalkUps"/>.
     /// </summary>
     public Dictionary<string, double>? Posts { get; set; } = new();
+
+    /// <summary>
+    /// Where each piece's POST is, in seconds from its top, by file name -
+    /// where the piece's own voice or singing comes in (17 Oct 2026). The
+    /// announcer's line in front of the piece ends right on it: he talks
+    /// over the intro and stops as the piece's voice starts. A piece with
+    /// none here has its voice at its top, and fires as the last word ends.
+    /// See TalkUp.
+    /// </summary>
+    public Dictionary<string, double>? TalkUps { get; set; } = new();
+
+    /// <summary>
+    /// Moves every post, in seconds: below zero brings the piece's voice in
+    /// a touch before the last word ends, above zero a touch after it. One
+    /// setting for the whole show, -0.3 to +0.3.
+    /// </summary>
+    public double PostNudge { get; set; }
 
     /// <summary>What each point in the run of show plays, by ImagingCue name. A missing one plays its default.</summary>
     public Dictionary<string, ImagingChoice>? RunOfShow { get; set; } = new();
@@ -250,6 +271,7 @@ internal static class BroadcastImaging
         loaded.RunOfShow ??= new Dictionary<string, ImagingChoice>();
         loaded.Soundscapes ??= new Dictionary<string, Dictionary<string, List<string>>>();
         loaded.Posts ??= new Dictionary<string, double>();
+        loaded.TalkUps ??= new Dictionary<string, double>();
 
         _settings = loaded;
         _loadedFrom = path;
@@ -1028,6 +1050,194 @@ internal static class BroadcastImaging
     internal static string PostSource(string path) =>
         ClubPost(path) is not null ? "set" : ShippedPost(path) is not null ? "shipped" : "measured";
 
+    // ==================== Talk-ups (the real post) ====================
+    //
+    // NAMING (17 Oct 2026). Everything above called "post" - PostOf,
+    // ClubPost, SetPost, ShippedPost, ImagingPlay.AtPost - is the piece's
+    // OUT: where its own voice stops and the next line starts. The names
+    // are older than the page's wording and were kept so nothing that works
+    // had to move. The real post - where the piece's own voice comes IN,
+    // which the line in front of it ends on - is the talk-up below. See
+    // TalkUp for both.
+
+    /// <summary>The piece's OUT - the same mark as <see cref="PostOf"/>, by the name the page uses.</summary>
+    internal static TimeSpan OutOf(string path, ShowClip clip) => PostOf(path, clip);
+
+    /// <summary>The club's own mark for a piece's post, or null when it has none.</summary>
+    internal static double? ClubTalkUp(string path)
+    {
+        lock (Gate)
+        {
+            return Loaded().TalkUps!.TryGetValue(Path.GetFileName(path), out var at) ? at : null;
+        }
+    }
+
+    /// <summary>Sets - or, with null or zero, clears - the club's own mark for a piece's post.</summary>
+    internal static void SetTalkUp(string path, double? seconds)
+    {
+        lock (Gate)
+        {
+            var talkUps = Loaded().TalkUps!;
+
+            if (seconds is { } at && at > 0)
+            {
+                talkUps[Path.GetFileName(path)] = Math.Round(at, 2);
+            }
+            else
+            {
+                talkUps.Remove(Path.GetFileName(path));
+            }
+
+            SaveLocked();
+        }
+
+        Saved();
+    }
+
+    /// <summary>
+    /// Where the piece's own voice comes in - its post - from its top. Zero
+    /// when the club has not marked one. Never past the piece's out: a post
+    /// after the out would be a voice that stopped before it started.
+    /// </summary>
+    internal static TimeSpan TalkUpOf(string path, ShowClip clip)
+    {
+        var marked = ClubTalkUp(path) ?? 0;
+        var limit = Math.Min(PostOf(path, clip).TotalSeconds, clip.Length.TotalSeconds);
+
+        return TimeSpan.FromSeconds(Math.Clamp(marked, 0, Math.Max(0, limit)));
+    }
+
+    /// <summary>The most the post nudge moves every post, either way, in seconds.</summary>
+    internal const double MostNudge = 0.3;
+
+    /// <summary>The club's nudge on every post - see ImagingSettings.PostNudge.</summary>
+    internal static double PostNudge
+    {
+        get
+        {
+            lock (Gate)
+            {
+                var nudge = Loaded().PostNudge;
+
+                return double.IsFinite(nudge) ? Math.Clamp(nudge, -MostNudge, MostNudge) : 0;
+            }
+        }
+        set
+        {
+            lock (Gate)
+            {
+                Loaded().PostNudge = Math.Round(Math.Clamp(value, -MostNudge, MostNudge), 2);
+                SaveLocked();
+            }
+
+            Saved();
+        }
+    }
+
+    /// <summary>
+    /// Plays the next piece for a point so it HITS THE POST: fired while the
+    /// announcer is still talking, timed so the piece's own voice comes in
+    /// on his last word (17 Oct 2026). See TalkUp for how, and for when it
+    /// cannot - then it fires when he stops, as every piece did before.
+    ///
+    /// Waits for the announcer even when there is no piece for the point,
+    /// so a caller can use this in place of waiting for the voice to stop.
+    /// Returns the piece playing, or null when there was none, everything
+    /// is muted, or <paramref name="ct"/> called it off. Never throws.
+    /// </summary>
+    /// <param name="limit">The longest to wait for the announcer - see TalkUp.WaitToFireAsync.</param>
+    /// <param name="stillWanted">
+    /// Asked once the moment to fire has come, before anything plays: false
+    /// leaves the piece unplayed. For a caller whose reason to play depends
+    /// on what the announcer has said by then.
+    /// </param>
+    internal static async Task<ImagingPlay?> TalkUpAsync(
+        ImagingCue cue, AnnouncementService announcer, TimeSpan limit, CancellationToken ct, Func<bool>? stillWanted = null)
+    {
+        try
+        {
+            var piece = ct.IsCancellationRequested || Muted ? null : NextPiece(cue);
+
+            if (piece is not { } chosen)
+            {
+                await announcer.WaitForAudioAsync(limit, ct);
+                return null;
+            }
+
+            // The nudge moves the piece, not the voice: below zero is the
+            // piece's voice in a touch early, so the piece fires a touch
+            // early - a bigger post to wait off.
+            var post = TalkUpOf(chosen.Path, chosen.Clip) - TimeSpan.FromSeconds(PostNudge);
+
+            await TalkUp.WaitToFireAsync(announcer, post, limit, ct);
+
+            if (ct.IsCancellationRequested || Muted || (stillWanted is not null && !stillWanted()))
+            {
+                return null;
+            }
+
+            Status?.Invoke(announcer.LastWordDueUtc is { } due && due > DateTime.UtcNow
+                ? $"[imaging] {Describe(cue)} - talked up: its voice is due {(due - DateTime.UtcNow).TotalSeconds:0.00}s from now, on the last word."
+                : $"[imaging] {Describe(cue)} - straight off the last word.");
+
+            return StartPiece(cue, chosen);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="TalkUpAsync"/>, then holds to the piece's out the way
+    /// <see cref="PlayAsync"/> does - crossfading the rest of it under what
+    /// comes next, or letting it play out whole. Returns false when nothing
+    /// played or <paramref name="ct"/> called it off. Never throws.
+    /// </summary>
+    /// <param name="onFire">Run the instant the piece starts - to dip a bed under it.</param>
+    /// <param name="stillWanted">See <see cref="TalkUpAsync"/>.</param>
+    internal static async Task<bool> PlayTalkedUpAsync(
+        ImagingCue cue,
+        AnnouncementService announcer,
+        TimeSpan limit,
+        CancellationToken ct,
+        bool crossfadeAtPost = true,
+        Action? onFire = null,
+        Func<bool>? stillWanted = null)
+    {
+        if (await TalkUpAsync(cue, announcer, limit, ct, stillWanted) is not { } playing)
+        {
+            return false;
+        }
+
+        try
+        {
+            onFire?.Invoke();
+        }
+        catch
+        {
+            // A dip that threw is a bed at the wrong level, not a reason to
+            // lose the piece.
+        }
+
+        try
+        {
+            await playing.AtPost.WaitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            playing.CrossfadeOut();
+            return false;
+        }
+
+        if (crossfadeAtPost)
+        {
+            playing.CrossfadeOut();
+        }
+
+        return true;
+    }
+
     // ==================== Playing ====================
 
     /// <summary>The next piece for a point, loaded, with the file it came from - see <see cref="NextFile"/>.</summary>
@@ -1065,8 +1275,12 @@ internal static class BroadcastImaging
             return null;
         }
 
-        return ImagingPlay.Start(piece.Clip, PostOf(piece.Path, piece.Clip), Level / 100f, Describe(cue), Status);
+        return StartPiece(cue, piece);
     }
+
+    /// <summary>Starts a piece already picked for a point - see <see cref="Start"/>.</summary>
+    private static ImagingPlay? StartPiece(ImagingCue cue, (ShowClip Clip, string Path) piece) =>
+        Muted ? null : ImagingPlay.Start(piece.Clip, PostOf(piece.Path, piece.Clip), Level / 100f, Describe(cue), Status);
 
     /// <summary>
     /// Plays the next piece for a point and returns at its POST, where the

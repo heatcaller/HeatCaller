@@ -980,6 +980,32 @@ public sealed class AppSettings
     /// </summary>
     public string RecapAnnouncerName { get; set; } = string.Empty;
 
+    // THE ANNOUNCER'S NAME, NOT THE RECAP SHOW'S (16 Oct 2026). Despite the
+    // "Recap" in its name (kept so saved settings still load), the name above
+    // is the race announcer's: he says it a line into each On Air opening and
+    // at the end of the line into the stop set (see AnnouncerIntro), and at
+    // the cold open. The recap show has a host voice of its own, and that
+    // host is not him - so the recap only uses this name when no recap host
+    // voice is picked and the announcer is hosting the recap himself.
+
+    /// <summary>
+    /// The announcer's name where the recap show may use it - empty when the
+    /// recap has a host voice of its own. See the note above.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string AnnouncerNameForRecap
+    {
+        get
+        {
+            // The same test Race Control uses to decide who reads the recap.
+            var ownHost = !string.IsNullOrWhiteSpace(RecapHostElevenLabsVoiceId)
+                || !string.IsNullOrWhiteSpace(RecapHostHeatCallerVoice)
+                || !string.IsNullOrWhiteSpace(RecapHostKokoroVoiceName);
+
+            return ownHost ? string.Empty : (RecapAnnouncerName ?? string.Empty).Trim();
+        }
+    }
+
     /// <summary>
     /// After a main only: a short pit-lane interview with the winner's
     /// mechanic, in a second voice, about the race and the setup changes
@@ -1075,6 +1101,35 @@ public sealed class AppSettings
     public string RecapHostHeatCallerVoiceName { get; set; } = string.Empty;
     public string RecapHostHeatCallerRev { get; set; } = string.Empty;
     public string RecapHostKokoroVoiceName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The recap host's name (16 Oct 2026), said when the recap show opens
+    /// and at its sign-off, the way the announcer says his at the On Air
+    /// openings. Blank and the host is never named. Only used while a recap
+    /// host voice is picked - with none, the announcer hosts the recap and
+    /// it is his name the show uses. See HostNameForRecapShow.
+    /// </summary>
+    public string RecapHostName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The name of whoever actually reads the race recap show: the recap
+    /// host's when a host voice is picked for any engine (the same test
+    /// Race Control uses to pick the voice - see AnnouncerNameForRecap),
+    /// otherwise the announcer's, who then hosts the recap himself. Empty
+    /// when that person has no name typed.
+    /// </summary>
+    [JsonIgnore]
+    public string HostNameForRecapShow
+    {
+        get
+        {
+            var ownHost = !string.IsNullOrWhiteSpace(RecapHostElevenLabsVoiceId)
+                || !string.IsNullOrWhiteSpace(RecapHostHeatCallerVoice)
+                || !string.IsNullOrWhiteSpace(RecapHostKokoroVoiceName);
+
+            return (ownHost ? RecapHostName : RecapAnnouncerName)?.Trim() ?? string.Empty;
+        }
+    }
 
     /// <summary>The recap host's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
     [JsonIgnore]

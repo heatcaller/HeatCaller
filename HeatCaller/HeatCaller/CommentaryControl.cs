@@ -208,6 +208,7 @@ public sealed class CommentaryControl : UserControl
     // the recap show (16 Oct 2026). See AppSettings.RecapHostVoice.
     private readonly ComboBox _cmbRecapHostVoice = new();
     private readonly Button _btnTestRecapHost = new();
+    private readonly TextBox _txtRecapHostName = new();
 
     // --- The commercial break (10 Oct 2026) ---
     //
@@ -1251,11 +1252,20 @@ public sealed class CommentaryControl : UserControl
         _btnTestRecapHost.Text = "Test Voice";
         _btnTestRecapHost.Click += (_, _) => SpeakAsRecapHost?.Invoke(_settings.RecapHostVoice);
 
+        // The recap host's own name - see AppSettings.RecapHostName.
+        _txtRecapHostName.MaxLength = 60;
+        _txtRecapHostName.Text = _settings.RecapHostName ?? string.Empty;
+        _txtRecapHostName.TextChanged += (_, _) =>
+        {
+            _settings.RecapHostName = _txtRecapHostName.Text.Trim();
+            _settings.Save();
+        };
+
         var showGrid = new FieldGrid();
 
         Stepped(showGrid.AddRow("Show name:", Line(_txtShowName, Suffix("named in the opening and the sign-off - leave it blank for none"))));
 
-        Stepped(showGrid.AddRow("Announcer's name:", Line(_txtAnnouncerName, Suffix("he introduces himself at the cold open and the top of the recap - blank and he is never named"))));
+        Stepped(showGrid.AddRow("Announcer's name:", Line(_txtAnnouncerName, Suffix("the race announcer, not the recap host - he says it a line into each On Air opening, going into the stop set and at the cold open; blank and he is never named"))));
 
         Stepped(showGrid.AddRow("Recap host's voice:", Line(_cmbRecapHostVoice, _btnTestRecapHost)));
         showGrid.AddHint(
@@ -1263,6 +1273,8 @@ public sealed class CommentaryControl : UserControl
             + "mechanic and the sign-off, and is heard nowhere else - the announcer keeps the race calls, the teaser and "
             + "the openings. Filled from the same engine as the mechanic's, beside Load Voices below, and kept per engine "
             + "the same way. With none picked, the announcer hosts the recap too.");
+
+        Stepped(showGrid.AddRow("Recap host's name:", Line(_txtRecapHostName, Suffix("said when the recap opens and at the sign-off; blank and the host is never named"))));
 
         Check(_chkAdBreak, "Play the sponsors as a commercial break while the recap is being written");
         _chkAdBreak.Checked = _settings.RecapAdBreak;
@@ -2257,6 +2269,7 @@ public sealed class CommentaryControl : UserControl
     {
         Fit(_txtShowName, UiLayout.AtTextSize(ShowNameWidth));
         Fit(_txtAnnouncerName, UiLayout.AtTextSize(ShowNameWidth));
+        Fit(_txtRecapHostName, UiLayout.AtTextSize(ShowNameWidth));
         Fit(_cmbOpenerPiece, UiLayout.AtTextSize(ShowPieceWidth));
         Fit(_cmbBedPiece, UiLayout.AtTextSize(ShowPieceWidth));
         Fit(_cmbStingPiece, UiLayout.AtTextSize(ShowPieceWidth));
@@ -3479,6 +3492,7 @@ public sealed class CommentaryControl : UserControl
         // The recap host reads the recap show, so it goes dark with recaps.
         _cmbRecapHostVoice.Enabled = summariesOn;
         _btnTestRecapHost.Enabled = summariesOn;
+        _txtRecapHostName.Enabled = summariesOn;
 
         // Load Voices fills all three lists in one pass
         // (FillMechanicVoices), so it is live while ANY of the three
