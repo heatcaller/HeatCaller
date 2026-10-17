@@ -490,13 +490,17 @@ public sealed class AppSettings
     public bool ShowRejoinEnabled { get; set; } = true;
 
     /// <summary>
-    /// The club's voice-ID: one line saying whose station this is, said at
-    /// the top of the night and on the way out - see ShowIdent. Blank means
-    /// none, and the show is exactly the show it always was.
-    ///
-    /// Recorded for free alongside the fixed race calls on Themes -&gt;
-    /// Soundscapes, so after one press it plays from the club's own PC with
-    /// no internet; unrecorded, the free Kokoro voice says it live.
+    /// Race Control's "Start races On Air" box (17 Oct 2026): Start Next,
+    /// the program's Start, F1, the phone and the day schedule all go
+    /// through On Air first. On by default - On Air is the normal start, and
+    /// pressing it again skips straight to Stage.
+    /// </summary>
+    public bool RaceStartWithOnAir { get; set; } = true;
+
+    /// <summary>
+    /// The club's old voice-ID line. Retired 17 Oct 2026 - the On Air
+    /// opening and the announcer's own name do that job now - and kept only
+    /// so settings saved before then still load. Nothing reads it.
     /// </summary>
     public string ShowIdentLine { get; set; } = string.Empty;
 
@@ -953,10 +957,15 @@ public sealed class AppSettings
     /// <summary>The recap opens like a TV broadcast coming back on air - naming <see cref="RecapShowName"/> when there is one.</summary>
     public bool RecapBroadcastOpening { get; set; }
 
-    /// <summary>The recap ends on a TV-style sign-off, sending it to what is next on the program. After an interview it is a line of its own.</summary>
+    /// <summary>
+    /// The recap show ends on a TV-style sign-off, sending it to what is
+    /// next on the program - only when this is ticked. Always a line of its
+    /// own after everything else in the show (17 Oct 2026), never the end of
+    /// the recap's own text.
+    /// </summary>
     public bool RecapBroadcastClosing { get; set; }
 
-    /// <summary>The show the opening and closing name - "Friday Night Thunder". Blank for none; the model is told not to make one up.</summary>
+    /// <summary>The show the opening, the closing and the end-of-night sign-off name - "Friday Night Thunder". Blank for none; the model is told not to make one up.</summary>
     public string RecapShowName { get; set; } = string.Empty;
 
     /// <summary>
@@ -984,27 +993,13 @@ public sealed class AppSettings
     // "Recap" in its name (kept so saved settings still load), the name above
     // is the race announcer's: he says it a line into each On Air opening and
     // at the end of the line into the stop set (see AnnouncerIntro), and at
-    // the cold open. The recap show has a host voice of its own, and that
-    // host is not him - so the recap only uses this name when no recap host
-    // voice is picked and the announcer is hosting the recap himself.
-
-    /// <summary>
-    /// The announcer's name where the recap show may use it - empty when the
-    /// recap has a host voice of its own. See the note above.
-    /// </summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public string AnnouncerNameForRecap
-    {
-        get
-        {
-            // The same test Race Control uses to decide who reads the recap.
-            var ownHost = !string.IsNullOrWhiteSpace(RecapHostElevenLabsVoiceId)
-                || !string.IsNullOrWhiteSpace(RecapHostHeatCallerVoice)
-                || !string.IsNullOrWhiteSpace(RecapHostKokoroVoiceName);
-
-            return ownHost ? string.Empty : (RecapAnnouncerName ?? string.Empty).Trim();
-        }
-    }
+    // the cold open. The recap show names its own host - see RecapHostName.
+    //
+    // NAMED INDEPENDENTLY (17 Oct 2026). The recap used to fall back to this
+    // name when no recap host voice was picked. The owner asked for the two
+    // to be named separately, so the recap now only ever says RecapHostName
+    // (HostNameForRecapShow), and AnnouncerNameForRecap - which had become
+    // the same thing - is gone.
 
     /// <summary>
     /// After a main only: a short pit-lane interview with the winner's
@@ -1105,31 +1100,20 @@ public sealed class AppSettings
     /// <summary>
     /// The recap host's name (16 Oct 2026), said when the recap show opens
     /// and at its sign-off, the way the announcer says his at the On Air
-    /// openings. Blank and the host is never named. Only used while a recap
-    /// host voice is picked - with none, the announcer hosts the recap and
-    /// it is his name the show uses. See HostNameForRecapShow.
+    /// openings. Blank and the host is never named. Independent of the
+    /// announcer's name (17 Oct 2026) - see HostNameForRecapShow.
     /// </summary>
     public string RecapHostName { get; set; } = string.Empty;
 
     /// <summary>
-    /// The name of whoever actually reads the race recap show: the recap
-    /// host's when a host voice is picked for any engine (the same test
-    /// Race Control uses to pick the voice - see AnnouncerNameForRecap),
-    /// otherwise the announcer's, who then hosts the recap himself. Empty
-    /// when that person has no name typed.
+    /// The name the race recap show uses for its host: RecapHostName,
+    /// trimmed, whichever voice reads it. INDEPENDENT (17 Oct 2026): this
+    /// used to fall back to the announcer's name when no recap host voice
+    /// was picked; the owner wants the announcer and the recap host named
+    /// separately, so blank here means the recap host is never named.
     /// </summary>
     [JsonIgnore]
-    public string HostNameForRecapShow
-    {
-        get
-        {
-            var ownHost = !string.IsNullOrWhiteSpace(RecapHostElevenLabsVoiceId)
-                || !string.IsNullOrWhiteSpace(RecapHostHeatCallerVoice)
-                || !string.IsNullOrWhiteSpace(RecapHostKokoroVoiceName);
-
-            return (ownHost ? RecapHostName : RecapAnnouncerName)?.Trim() ?? string.Empty;
-        }
-    }
+    public string HostNameForRecapShow => (RecapHostName ?? string.Empty).Trim();
 
     /// <summary>The recap host's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
     [JsonIgnore]

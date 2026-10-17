@@ -2701,12 +2701,6 @@ public static class AppTheme
                 });
                 break;
 
-            case "Rivalries":
-                // Two overlapping circles.
-                g.DrawEllipse(pen, cx - r, cy - r * 0.65f, r * 1.3f, r * 1.3f);
-                g.DrawEllipse(pen, cx - r * 0.3f, cy - r * 0.65f, r * 1.3f, r * 1.3f);
-                break;
-
             case "Venues":
                 // Map pin.
                 var pinR = r * 0.75f;
@@ -2752,7 +2746,6 @@ public static class AppTheme
                 break;
 
             case "Voice":
-            case "Voice Announcements":
                 // Megaphone with sound waves.
                 g.FillPolygon(brush, new[]
                 {
@@ -2764,10 +2757,7 @@ public static class AppTheme
                 g.DrawArc(pen, cx + r * 0.15f, cy - r * 0.55f, r * 0.9f, r * 1.1f, -50, 100);
                 break;
 
-            // Also matches the old name so a renamed nav entry doesn't
-            // silently fall through to the generic dot.
             case "Sounds":
-            case "Sound Effects":
             {
                 // Level meter - four bars of differing height, like a mixer
                 // display. A single musical note used to sit here, but this

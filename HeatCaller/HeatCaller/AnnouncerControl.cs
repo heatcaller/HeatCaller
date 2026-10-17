@@ -56,10 +56,9 @@ public sealed partial class AnnouncerControl : UserControl
     private readonly ComboBox _cmbSpotlight = new();
     private readonly Label _lblSpotlight = new();
     private readonly Label _lblOnDeck = new();
-    private readonly Button _btnRepeat = new();
     private readonly Label _lblLastSummary = new();
 
-    /// <summary>The heading over the last summary, which says what kind of line it is - see RefreshRepeatButton. As tall as the longest it can say.</summary>
+    /// <summary>The heading over the last summary, which says what kind of line it is - see RefreshLastSummary. As tall as the longest it can say.</summary>
     private readonly SteadyLabel _lblSummaryCaption = new();
 
     /// <summary>Events worth mentioning, newest first. Capped so it stays readable at a glance.</summary>
@@ -122,13 +121,9 @@ public sealed partial class AnnouncerControl : UserControl
     private const int SpotlightLines = 5;
     private const int SummaryLines = 4;
 
-    /// <summary>The Repeat button's two captions - it says which line it will speak. The column it is in is wide enough for either (SideWidth).</summary>
-    private const string RepeatSummaryCaption = "Repeat Race Summary";
-    private const string RepeatLineCaption = "Repeat Last Line";
-
     private const string ClearPointsCaption = "Clear Points";
 
-    /// <summary>The heading over a race summary. A talking point shown there instead has its own - see RefreshRepeatButton.</summary>
+    /// <summary>The heading over a race summary. A talking point shown there instead has its own - see RefreshLastSummary.</summary>
     private const string SummaryCaption = "LAST RACE SUMMARY";
 
     public AnnouncerControl(RaceControlSession race, ProfileStore profiles,
@@ -210,11 +205,11 @@ public sealed partial class AnnouncerControl : UserControl
     ///     that the page scrolls), Clear Points under the list it clears.
     ///   - The spotlight beside the last summary, in the same two columns,
     ///     the two cards ending level: the driver picker and their story;
-    ///     the summary's heading, the Repeat button and the line it speaks.
+    ///     the summary's heading and the line itself.
     ///
     /// The columns are shared out equally, as the page always had them,
-    /// but never narrower than the picker's longest name or the Repeat
-    /// button's longer caption need (SideWidth). Nothing is placed by hand,
+    /// but never narrower than the picker's longest name or Clear Points
+    /// needs (SideWidth). Nothing is placed by hand,
     /// and a window too short for all of it scrolls the page.
     ///
     /// It used to be placed in pixels: two 470x300 boxes side by side at
@@ -367,7 +362,7 @@ public sealed partial class AnnouncerControl : UserControl
         // --- Last race summary ---
         //
         // Its heading is not the card's own: it says what KIND of line is
-        // shown under it (RefreshRepeatButton), so it is a label the page
+        // shown under it (RefreshLastSummary), so it is a label the page
         // rewrites, dressed as a card's caption is - the small face, muted,
         // spaced when short (CardCaption).
         _lblSummaryCaption.ForeColor = AppTheme.TextMuted;
@@ -389,39 +384,14 @@ public sealed partial class AnnouncerControl : UserControl
         _textSize.Keep(KeepLowerCards);
         _page.Resize += (_, _) => KeepLowerCards();
 
-        _btnRepeat.Text = RepeatSummaryCaption;
-        _btnRepeat.Enabled = false;
-        _btnRepeat.Click += (_, _) =>
-        {
-            // Repeats the stored text rather than asking the model again -
-            // regenerating could come back with different wording, or fail
-            // outright if the model's since gone offline, neither of which
-            // is what "repeat that" means.
-            //
-            // Prefers the race summary over whatever was generated most
-            // recently: talking points regenerate every 20 seconds during a
-            // race, so "most recent" would almost never be the summary by
-            // the time anyone wants it repeated.
-            var summary = _commentary?.LastRaceSummary;
-            if (summary is { Length: > 0 } && _commentary is not null)
-            {
-                // Same tags and delivery as the automatic recap. The repeat
-                // used to send the bare text with the profile's normal
-                // voice settings, so it sounded different from the original.
-                (double, double)? delivery = _settings?.SummaryUseBroadcastVoice == true
-                    ? (_settings.SummaryVoiceStability, _settings.SummaryVoiceStyle)
-                    : null;
-
-                _announcer.SpeakReminder(_commentary.PrepareSummaryForSpeech(summary), delivery);
-                return;
-            }
-
-            var line = _commentary?.LastLine;
-            if (line is { Length: > 0 })
-            {
-                _announcer.SpeakReminder(line);
-            }
-        };
+        // NO REPEAT BUTTON HERE ANY MORE (17 Oct 2026). "Repeat Race
+        // Summary" spoke the stored recap again, which Race Control's Play
+        // again on the announcer strip now does better - with its show
+        // round it, the exchange in its own voices, and the broadcast floor
+        // claimed so the director cannot talk over it. Two buttons for one
+        // job, on two screens, meant two different-sounding replays. The
+        // card still shows the last summary. See
+        // RaceControlControl.ReplayLastSegmentAsync.
 
         // The other half of the pair - see RaceControlControl.
         var btnRaceControl = new Button { Text = "Race Control" };
@@ -455,13 +425,11 @@ public sealed partial class AnnouncerControl : UserControl
         Pieces.KeepHeightTold(_cmbSpotlight);
         spotlight.Add(_lblSpotlight, gapBelow: 0);
 
-        // The summary sits directly under the Repeat button that speaks it,
-        // so it's obvious what pressing that button will say - and the
-        // button stays put however long the summary runs.
+        // The summary under its heading. It had the Repeat button between
+        // the two until 17 Oct 2026 - see the note above.
         var summaryCard = new Section();
 
         summaryCard.Add(_lblSummaryCaption, gapBelow: UiLayout.HeadingGap);
-        summaryCard.Add(new ButtonBar().With(_btnRepeat));
         summaryCard.Add(_lblLastSummary, gapBelow: 0);
 
         // Before the bands, which ask for them as they are put together.
@@ -547,8 +515,8 @@ public sealed partial class AnnouncerControl : UserControl
     /// last summary. Half of the band, as the page always had it: two equal
     /// columns. But never so wide that the left-hand cards get less than
     /// the spotlight picker's longest name, the running order's headings or
-    /// their captions need; and never narrower itself than the Repeat
-    /// button's longer caption, Clear Points or its captions need. Too
+    /// their captions need; and never narrower itself than
+    /// Clear Points or its captions need. Too
     /// narrow for both, and each gives up the same share of its width, as
     /// Batteries' two cards do. Nothing here scrolls sideways (FillPage).
     ///
@@ -568,9 +536,7 @@ public sealed partial class AnnouncerControl : UserControl
 
         // A button in a bar keeps a gap beside it, which the bar counts when
         // it decides whether the button fits on its line.
-        var buttons = Math.Max(
-            Math.Max(UiLayout.WidthFor(RepeatSummaryCaption), UiLayout.WidthFor(RepeatLineCaption)),
-            UiLayout.WidthFor(ClearPointsCaption)) + UiLayout.ButtonGap;
+        var buttons = UiLayout.WidthFor(ClearPointsCaption) + UiLayout.ButtonGap;
 
         var right = Math.Max(
             buttons,
@@ -747,7 +713,7 @@ public sealed partial class AnnouncerControl : UserControl
         // card's edges round them.
         var chrome = Pieces.LineHeight(AppTheme.MicroFont)
             + UiLayout.HeadingGap
-            + Math.Max(_cmbSpotlight.Height, _btnRepeat.Height)
+            + _cmbSpotlight.Height
             + UiLayout.RowGap
             + Section.Inset.Vertical;
 
@@ -1116,29 +1082,20 @@ public sealed partial class AnnouncerControl : UserControl
         RefreshTalkingPoints();
         RefreshSpotlight();
         MaybeRequestSuggestion();
-        RefreshRepeatButton();
+        RefreshLastSummary();
     }
 
-    /// <summary>Keeps the Repeat button's state, label and displayed text matched to whatever CommentaryService last generated.</summary>
-    private void RefreshRepeatButton()
+    /// <summary>Keeps the last summary's text and heading matched to whatever CommentaryService last generated.</summary>
+    private void RefreshLastSummary()
     {
-        // Mirrors the click handler's own preference exactly, so the text
-        // shown below can never differ from the line that gets spoken.
+        // The race summary first, the last line when there is none.
         var summary = _commentary?.LastRaceSummary;
         var line = summary ?? _commentary?.LastLine;
 
-        _btnRepeat.Enabled = !string.IsNullOrWhiteSpace(line);
-
-        // The label tracks what it will actually say - falling back to the
-        // generic wording when no summary exists yet avoids promising a
-        // race summary it can't deliver.
-        _btnRepeat.Text = summary is { Length: > 0 } ? RepeatSummaryCaption : RepeatLineCaption;
-
-        // Shows the same line the button speaks, so what you'll hear is
-        // visible at a glance. The caption tracks which KIND of line
-        // it is, since the button falls back to the last talking point when
-        // no summary exists - and a heading saying "race summary" over a
-        // talking point would be quietly wrong.
+        // The caption tracks which KIND of line it is, since this falls
+        // back to the last talking point when no summary exists - and a
+        // heading saying "race summary" over a talking point would be
+        // quietly wrong.
         if (line is { Length: > 0 } shown)
         {
             _lblLastSummary.Text = $"\u201C{shown}\u201D";

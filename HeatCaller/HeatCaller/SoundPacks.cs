@@ -12,7 +12,7 @@ namespace HeatCaller;
 /// HOW A SOUND IS CHOSEN. Per effect, in this order:
 ///   1. the club's own file, if one is set and still there;
 ///   2. the pack the effect is set to, if that file is there;
-///   3. the generated tone ("Classic tones") - always available, so a
+///   3. the generated tone ("Generated tones") - always available, so a
 ///      missing or damaged Assets folder costs the sound's style, never
 ///      the sound itself.
 /// </summary>
@@ -28,7 +28,11 @@ public static class SoundPacks
         new Pack("Podium", "Podium", "Polished bells and chimes - premium, clean, never harsh."),
         new Pack("Arcade", "Arcade", "8-bit chiptune - playful, punchy, cuts through motor whine."),
         new Pack("Broadcast", "Broadcast", "TV sports graphics - whooshes, brass stabs, hits, big hall."),
-        new Pack("Synthwave", "Synthwave", "80s supersaws, arps and gated reverb."),
+        // Key "Synthwave", shown as "Classic" (17 Oct 2026): Classic took
+        // this pack over whole on 16 Oct, and the pickers, the crowd layer
+        // and the soundscape cards still said Synthwave. The key stays -
+        // every saved soundscape, sound setting and crowd layer names it.
+        new Pack("Synthwave", "Classic", "80s supersaws, arps and gated reverb."),
         new Pack("PitLane", "Pit Lane", "Realistic trackside - decoder beeps, air horns, lap bell, crowd."),
     };
 
@@ -37,8 +41,12 @@ public static class SoundPacks
     public static Pack? Find(string? key) =>
         string.IsNullOrWhiteSpace(key) ? null : All.FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>"Classic tones" for the generated sounds, otherwise the pack's name.</summary>
-    public static string DisplayName(string? key) => Find(key)?.Name ?? "Classic tones";
+    /// <summary>
+    /// "Generated tones" for the generated sounds, otherwise the pack's
+    /// name. They were "Classic tones" until 17 Oct 2026, which read as the
+    /// Classic soundscape's sounds once Classic became the old Synthwave.
+    /// </summary>
+    public static string DisplayName(string? key) => Find(key)?.Name ?? "Generated tones";
 
     /// <summary>The pack's file for this effect, or null if it isn't on disk.</summary>
     public static string? FileFor(string? packKey, SoundEffectKind kind)
@@ -230,20 +238,24 @@ public static class SoundPacks
     /// <summary>
     /// The music that ships with each pack, by track title - installed into
     /// the music library like the rest of the bundled soundtrack (see
-    /// MusicStore). Synthwave also takes the synthwave tracks the app has
-    /// always shipped with. Pit Lane has none: at a real track the music is
-    /// the club's own.
+    /// MusicStore). Synthwave - Classic's pack - also takes the synthwave
+    /// tracks the app has always shipped with. Every pack has music of its
+    /// own now; Pit Lane's four songs came on 16 Oct 2026.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> PackMusic =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Podium"] = new[] { "Victory Lane" },
+            // Podium's own four songs (17 Oct 2026), in place of Victory
+            // Lane - which still ships and stays in the library.
+            ["Podium"] = new[] { "Full Throttle", "Top Step", "Burnout", "Champagne Spray" },
             ["Arcade"] = new[] { "Insert Coin" },
             // The club's own four songs since 16 Oct 2026, in place of
             // Race Day Live - which still ships and stays in the library.
-            ["Broadcast"] = new[] { "Broadcast Song 1", "Broadcast Song 2", "Broadcast Song 3", "Broadcast Song 4" },
+            // Named since 17 Oct 2026 - they shipped as Broadcast Song 1 to 4
+            // (see MusicStore.NamedSongs).
+            ["Broadcast"] = new[] { "Prime Time", "Highlight Reel", "Under the Lights", "Post-Race Show" },
             // Pit Lane's own four songs (16 Oct 2026) - it had no music of its own before.
-            ["PitLane"] = new[] { "Pit Lane Song 1", "Pit Lane Song 2", "Pit Lane Song 3", "Pit Lane Song 4" },
+            ["PitLane"] = new[] { "Gravel and Gasoline", "Dirt Road Dash", "Pit Stop Two-Step", "Back Forty Straight" },
             ["Synthwave"] = new[]
             {
                 "Neon Grid", "Horizon Line", "Chasing Sunset", "Grid Runner", "Afterglow", "Cooldown Lap",
@@ -251,7 +263,13 @@ public static class SoundPacks
 
                 // Classic's own four songs (16 Oct 2026), added to the
                 // soundtrack rather than in place of it.
-                "Classic Song 1", "Classic Song 2", "Classic Song 3", "Classic Song 4",
+                "Chrome Apex", "Midnight Pit Wall", "Starlight Straight", "Afterburn",
+
+                // Victory Lane and Race Day Live (17 Oct 2026): Podium and
+                // Broadcast swapped them for songs of their own, so nothing
+                // played them any more. They still ship, and Classic keeps
+                // them in the rotation.
+                "Victory Lane", "Race Day Live",
             },
         };
 

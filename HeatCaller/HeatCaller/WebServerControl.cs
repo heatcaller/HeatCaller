@@ -265,7 +265,7 @@ public sealed class WebServerControl : UserControl
         // switch here could only disagree with it.
         var lblLooksNote = new Label
         {
-            Text = "The Big Screen and these pages use the crowd-screen look set in the Looks card on Themes.",
+            Text = "The Big Screen and these pages use the crowd-screen look set in the Looks card on the Themes page.",
             AutoSize = true,
         };
 

@@ -805,21 +805,6 @@ internal sealed class ShowTreatment
     /// </summary>
     private readonly ShowRunningOrder _order = new();
 
-    /// <summary>
-    /// What the race or the night the NEXT show is about actually did - see
-    /// ShowDrama. A photo finish earns its recap a beat more air and a beat
-    /// more bed held up at the end, and nothing else at all.
-    ///
-    /// Held rather than passed in, because the two ways into a show are
-    /// called from two different screens and widening both would mean
-    /// changing signatures that have no opinion about this. A lock of its
-    /// own rather than _blockGate: that one is held across a block's own
-    /// bookkeeping, and this is read from inside OpenShowAsync.
-    /// </summary>
-    private readonly object _dramaGate = new();
-
-    private ShowDrama _drama = ShowDrama.None;
-
     /// <summary>Serialises the handle below against the block that owns it.</summary>
     private readonly object _blockGate = new();
 
@@ -1034,67 +1019,6 @@ internal sealed class ShowTreatment
     /// why it is here anyway.
     /// </summary>
     public void NewNight() => _order.NewNight();
-
-    /// <summary>
-    /// What the race or the night this next show is about actually did - see
-    /// ShowDrama. Set it on the line before staging the show. The show TAKES
-    /// it, so a recap that never ran cannot make the sign-off bigger.
-    /// </summary>
-    internal ShowDrama NextShowDrama
-    {
-        set
-        {
-            lock (_dramaGate)
-            {
-                _drama = value;
-            }
-        }
-    }
-
-    /// <summary>
-    /// What the next show was given, WITHOUT spending it - for the block's
-    /// cost estimate, which has to reckon the same music the staging is
-    /// about to play. If the estimate spent it, the fitting would reckon the
-    /// bigger open and the staging would play the smaller one, and a block
-    /// would be six tenths of a second out either way.
-    /// </summary>
-    private ShowDrama PeekDrama()
-    {
-        lock (_dramaGate)
-        {
-            return _drama;
-        }
-    }
-
-    /// <summary>The same, and clears it: the night shapes ONE show.</summary>
-    private ShowDrama TakeDrama()
-    {
-        lock (_dramaGate)
-        {
-            var drama = _drama;
-            _drama = ShowDrama.None;
-
-            return drama;
-        }
-    }
-
-    /// <summary>
-    /// The club's voice-ID for this next show, or null when it is not this
-    /// show's turn or there is nothing typed - see ShowIdent and
-    /// ShowRunningOrder.IdentDue. Goes at the HEAD of a block's items, where
-    /// it lands over the opener's ring-out.
-    ///
-    /// A Bridge rather than a segment, which is load-bearing: ShowBlock.Fit
-    /// drops continuity first and gives it no overrun, so on a night running
-    /// late the two seconds come off the station and never off the race.
-    /// </summary>
-    internal ShowItem? IdentItem(SegmentKind? kind) =>
-        _order.IdentDue(kind, DateTime.UtcNow)
-            ? ShowIdent.Item(
-                _settings.ShowIdentLine,
-                line => _announcer.SpeakReminder(line, showOnScreens: false),
-                () => _order.IdentWent(DateTime.UtcNow))
-            : null;
 
     /// <summary>
     /// How fast a block moves between the things it says - see
@@ -1698,12 +1622,12 @@ internal sealed class ShowTreatment
             return TimeSpan.Zero;
         }
 
-        // PeekDrama, not Take: this is the estimate, and it has to reckon the
-        // same music OpenShowAsync is about to play. If the estimate spent
-        // the drama, the fitting would cost the bigger open and the staging
-        // would play the smaller one - a block out by six tenths of a second
-        // against a gap it was built to fit.
-        var billing = _order.Billing(kind, DateTime.UtcNow, _settings.ShowRejoinEnabled, PeekDrama());
+        // No drama passed, the same as OpenShowAsync, so the estimate and the
+        // staging reckon the same music. 17 Oct 2026: the held "next show's
+        // drama" (NextShowDrama, PeekDrama, TakeDrama) went - nothing ever
+        // set it, so every show was billed with ShowDrama.None anyway. The
+        // parameter on ShowRunningOrder.Billing stays for whoever wires it.
+        var billing = _order.Billing(kind, DateTime.UtcNow, _settings.ShowRejoinEnabled);
 
         var front = opener is not null
             ? VoiceEntersAfter(opener, billing)
@@ -1804,8 +1728,16 @@ internal sealed class ShowTreatment
         var openerLevel = imagingOpener is not null
             ? BroadcastImaging.Level / 100f
             : Level(_settings.ShowOpenerLevel, 0.9f);
-        var bedLevel = Level(_settings.ShowBedLevel, 0.22f);
-        var duck = Math.Clamp(_settings.ShowBedDuckPercent / 100f, 0.05f, 1f);
+        // The soundscape's recap bed takes the Imaging page's own bed level
+        // and duck (17 Oct 2026), not the Commentary page's show bed ones -
+        // those grey out when the club's own show music is unticked, which
+        // left a club on imaging alone with a bed level it could not set.
+        var bedLevel = imagingBed is not null
+            ? BroadcastImaging.BedLevel
+            : Level(_settings.ShowBedLevel, 0.22f);
+        var duck = imagingBed is not null
+            ? BroadcastImaging.BedDuck
+            : Math.Clamp(_settings.ShowBedDuckPercent / 100f, 0.05f, 1f);
 
         ShowBed? running = null;
         Task bedPlaying = Task.CompletedTask;
@@ -1843,12 +1775,11 @@ internal sealed class ShowTreatment
         // see ShowRunningOrder.Went for why that waits until the run is
         // actually handed back.
         //
-        // TakeDrama, not Peek: this is the show that gets the extra beat, and
-        // the night shapes one show. MusicSeconds above peeks at the same
-        // value for its estimate, which is why the two agree.
+        // No drama passed - see MusicSeconds, which bills the same way so
+        // the two agree.
         // A station's jingle is played whole every time - it is never cut
         // in at its ring-out the way a rejoin plays the club's own opener.
-        var billing = _order.Billing(kind, DateTime.UtcNow, _settings.ShowRejoinEnabled && imagingOpener is null, TakeDrama());
+        var billing = _order.Billing(kind, DateTime.UtcNow, _settings.ShowRejoinEnabled && imagingOpener is null);
 
         LastBillingForTests = billing;
 

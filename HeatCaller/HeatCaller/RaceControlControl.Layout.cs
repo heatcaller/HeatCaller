@@ -853,7 +853,12 @@ public sealed partial class RaceControlControl
 
         var shortcutTips = new ToolTip();
         AppTheme.StyleToolTip(shortcutTips, keep: true);
-        shortcutTips.SetToolTip(_btnStage, "Shortcut: F1 (while this page is active)");
+        // F1 is the START key now, not this button's (17 Oct 2026): through
+        // On Air when Start races On Air is ticked. This button stages
+        // straight away, as it always has. See TriggerStart.
+        shortcutTips.SetToolTip(_btnStage,
+            "Stages the race straight away, with no On Air. F1 starts the race the normal way - through On Air when "
+            + "Start races On Air is ticked (press F1 again to skip to Stage).");
         shortcutTips.SetToolTip(_btnCountdown, "Shortcut: F2");
         shortcutTips.SetToolTip(_btnGreen, "Shortcut: F3");
         shortcutTips.SetToolTip(_btnYellow, "Shortcut: F4");
@@ -894,7 +899,14 @@ public sealed partial class RaceControlControl
         // AFTER its checks. Applying them here first changed the rules of a
         // race that was still running, even when the person then chose not
         // to abandon it.
-        _actAutoStart = (confirmedOverRunningRace, restoreHostOnUndo) => _actStage?.Invoke(confirmedOverRunningRace, restoreHostOnUndo);
+        //
+        // THROUGH ON AIR (17 Oct 2026) when Start races On Air is ticked -
+        // the Program's Start, Start Next, the phone's Start Round and the
+        // day schedule all come in here (MainForm.StartRoundNow). On Air's
+        // hand-over is this same Stage, with the same confirmation and
+        // undo, so the staging chain and its auto-advance timers run
+        // exactly as they did. See StartThroughOnAir.
+        _actAutoStart = (confirmedOverRunningRace, restoreHostOnUndo) => StartThroughOnAir(confirmedOverRunningRace, restoreHostOnUndo);
 
         // Attached after every Click above, so the action runs and then
         // focus moves off. A flag button that keeps focus keeps answering
@@ -1062,6 +1074,10 @@ public sealed partial class RaceControlControl
         flags.Add(new ButtonBar(tight: true).With(
             _btnOnAir, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset));
 
+        // Under the flags, beside On Air's end of the row: whether a start
+        // goes through On Air. See BuildOnAirButton.
+        flags.Add(_chkStartWithOnAir, stretch: false);
+
         var status = new FlowLayoutPanel
         {
             AutoSize = true,
@@ -1130,6 +1146,18 @@ public sealed partial class RaceControlControl
 
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] "
                     + (held ? "Segments held by the race director." : "Segments released."));
+            }
+
+            // AND THE RECAP SHOW (17 Oct 2026). Hold used to reach only the
+            // director's segments, so the recap's honours, interview and
+            // sign-off went on starting while the race director had the
+            // mic. Treated as Skip for the recap - the simpler of the two
+            // safe readings: one cancel the sequence already handles, rather
+            // than a held check before each of its parts. Release does not
+            // bring it back. See EndRecapShow.
+            if (held)
+            {
+                EndRecapShow("the segments were held from Race Control");
             }
         };
 

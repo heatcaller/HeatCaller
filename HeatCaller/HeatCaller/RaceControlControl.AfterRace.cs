@@ -285,6 +285,89 @@ public sealed partial class RaceControlControl
     private HonoursPlan? _honours;
 
     /// <summary>
+    /// The recap show running now - teaser, recap, honours, colour, the
+    /// mechanic, the sign-off - or null when none is.
+    ///
+    /// SKIP AND HOLD STOP IT (17 Oct 2026). The sequence only ever stopped
+    /// when the next race was called to the grid; Skip on the announcer
+    /// strip asked ShowTreatment to abandon a segment block, and the recap
+    /// opens its show without one, so Skip said "none is on air" over a
+    /// recap the whole room could hear. Held here so Skip and Hold can cancel
+    /// the same token the next race does, and the sequence then ends by the
+    /// one way out it already has for that: the show ended, the club's
+    /// music given back, the deep duck and the floor released. See
+    /// <see cref="EndRecapShow"/>.
+    /// </summary>
+    private RecapShowRun? _recapShow;
+
+    /// <summary>
+    /// The race whose recap was put on air (its SessionGeneration), or -1.
+    /// Read by <see cref="OnAirFollowsTheRecap"/>.
+    /// </summary>
+    private int _recapAiredGeneration = -1;
+
+    /// <summary>The token a recap show stops on, and who stopped it when it was not the next race.</summary>
+    private sealed class RecapShowRun
+    {
+        public RecapShowRun(CancellationTokenSource stop) => Stop = stop;
+
+        public CancellationTokenSource Stop { get; }
+
+        /// <summary>Why it was stopped, in words for the console, when Skip or Hold stopped it. Null for the next race.</summary>
+        public volatile string? StoppedBy;
+    }
+
+    /// <summary>
+    /// Ends the recap show that is running, as the next race being called
+    /// would (17 Oct 2026) - see <see cref="_recapShow"/>. What has already
+    /// been queued to the voice finishes its sentence, as Skip's own note
+    /// says it must: the queue also holds the flag calls. Nothing after it
+    /// starts. False when no recap show is running.
+    /// </summary>
+    private bool EndRecapShow(string why)
+    {
+        if (Volatile.Read(ref _recapShow) is not { } run || run.Stop.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        run.StoppedBy ??= why;
+
+        // Async, as the next race's own cancel is: Cancel() would run the
+        // sequence's continuations here, on the UI thread, inside a click.
+        try
+        {
+            _ = run.Stop.CancelAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The sequence had already ended.
+        }
+
+        StatusMessage?.Invoke(
+            $"{AppTime.LogStampNow()}  [show] Recap show stopped - {why}. The line being spoken finishes; nothing after it starts.");
+
+        return true;
+    }
+
+    /// <summary>
+    /// The recap show has just been on air for the race on the board and
+    /// the next race opens through On Air (17 Oct 2026) - so the gap from
+    /// here to On Air's jingle is On Air's, and the announcer screen's
+    /// director should not put its own hand-over or "coming up" into it.
+    /// The room had the recap's way out, then "still to come", then the
+    /// opening saying the same thing again: three hand-overs for one race.
+    ///
+    /// As narrow as it can be: only while the race the recap was about is
+    /// still the one on the board and finished. A reset, a Stage or a new
+    /// green ends it, and so does unticking Start races On Air.
+    /// </summary>
+    internal bool OnAirFollowsTheRecap =>
+        StartWithOnAir
+        && _race.State == RaceState.Finished
+        && _race.SessionGeneration == Volatile.Read(ref _recapAiredGeneration);
+
+    /// <summary>
     /// Who won, for the room's vote: position one and an actual finish - a
     /// DNF or a DQ placed first is not a win, the same rule the records
     /// use. Null when nobody won, and always null for a demo.
@@ -395,11 +478,24 @@ public sealed partial class RaceControlControl
         // One of the configured teasers, picked at random - the same line
         // after every race is what makes an announcer sound canned.
         var teaserLines = _settings.EffectiveTeaserLines;
-        var wantsTeaser = _settings.SummaryTeaserEnabled && teaserLines.Count > 0;
 
         var commentaryAvailable = _commentary is not null
                                   && _commentary.IsAvailable
                                   && _settings.CommentaryRaceSummaries;
+
+        // ONLY WITH A RECAP TO FOLLOW IT (17 Oct 2026). The teaser is the
+        // line that says the recap is coming, so with recaps switched off -
+        // or nothing able to write one - the room heard "stand by for the
+        // recap" and then nothing. Still not behind the model's REACHABILITY
+        // on the night, which is what the note above is about: a recap that
+        // was asked for and then failed is the model's fault, and the
+        // teaser has already gone by then.
+        var wantsTeaser = _settings.SummaryTeaserEnabled && teaserLines.Count > 0 && commentaryAvailable;
+
+        // Why there will be no recap, in words, for the console line below.
+        var noRecapBecause = !_settings.CommentaryRaceSummaries
+            ? "race recaps are switched off on the Commentary page"
+            : "no commentary writer is available (the AI announcer is switched off, or neither the relay nor a local model is set up)";
 
         // The honours, built by AwardAchievements a moment ago on this same
         // thread - TAKEN, so nothing of this race's badges can be read out
@@ -654,6 +750,29 @@ public sealed partial class RaceControlControl
             nextRace.Cancel();
         }
 
+        // Skip and Hold stop it too - see _recapShow. Taken over from any
+        // earlier sequence still finishing, which only clears its own.
+        var recapShow = new RecapShowRun(nextRace);
+        Volatile.Write(ref _recapShow, recapShow);
+
+        // The race this recap is about, for OnAirFollowsTheRecap. Read here
+        // on the UI thread, before anything can stage the next one.
+        var recapGeneration = _race.SessionGeneration;
+
+        // HOLD ON AT THE FLAG (17 Oct 2026): the race director has the mic,
+        // and Hold is the button that says nothing new starts - the recap
+        // show included. Stopped before its first part, the same way a Hold
+        // pressed halfway through stops it. See RaceControlControl.Layout's
+        // HoldChanged.
+        if (Commentary?.Invoke()?.Held == true)
+        {
+            recapShow.StoppedBy = "the segments were held from Race Control";
+            nextRace.Cancel();
+
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] Recap show not started - the segments are held. Release them on the announcer strip.");
+        }
+
         // The recording this recap belongs to, taken now on the UI thread.
         // Several waits in the sequence below are not cancelled by the next
         // race being called, so the end of the recap can land after the next
@@ -668,6 +787,10 @@ public sealed partial class RaceControlControl
             // sequence has given up on them, so nothing goes on costing
             // characters or holding the local model after it is over.
             using var followOnWork = CancellationTokenSource.CreateLinkedTokenSource(nextRace.Token);
+
+            // What called this sequence off, for its console lines - the
+            // next race unless Skip or Hold did (17 Oct 2026).
+            string CalledOff() => recapShow.StoppedBy ?? "the next race was called to the grid";
 
             // Whether this sequence raised the recap's deep duck and has yet
             // to release it: 0 never raised, 1 raised, 2 released. Released
@@ -1028,7 +1151,7 @@ public sealed partial class RaceControlControl
 
                     if (!teaserQueued)
                     {
-                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Teaser and recap dropped - the next race was called to the grid.");
+                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Teaser and recap dropped - {CalledOff()}.");
                         ForgetUnheardRecap();
                         return;
                     }
@@ -1039,14 +1162,16 @@ public sealed partial class RaceControlControl
                 }
                 else
                 {
-                    StatusMessage?.Invoke(_settings.SummaryTeaserEnabled
-                        ? $"{AppTime.LogStampNow()}  [commentary] No teaser - every teaser line is empty on the Commentary tab."
-                        : $"{AppTime.LogStampNow()}  [commentary] No teaser - it's switched off on the Commentary tab.");
+                    StatusMessage?.Invoke(!_settings.SummaryTeaserEnabled
+                        ? $"{AppTime.LogStampNow()}  [commentary] No teaser - it's switched off on the Commentary tab."
+                        : teaserLines.Count == 0
+                            ? $"{AppTime.LogStampNow()}  [commentary] No teaser - every teaser line is empty on the Commentary tab."
+                            : $"{AppTime.LogStampNow()}  [commentary] No teaser - no recap would follow it ({noRecapBecause}).");
                 }
 
                 if (!commentaryAvailable)
                 {
-                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No recap - the local model isn't reachable.");
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No recap - {noRecapBecause}.");
 
                     // The honours do not need one. This is the evening the
                     // segment is written the way it is for - see
@@ -1074,7 +1199,13 @@ public sealed partial class RaceControlControl
                 // out over the wait for the recap. See TalkUp.
                 ImagingPlay? intoTheStopSet = null;
 
-                if (teaser is not null && BroadcastImaging.Has(ImagingCue.AfterRaceOver) && !nextRace.IsCancellationRequested)
+                // NOT ONLY OFF THE TEASER (17 Oct 2026). With the teaser
+                // unticked this used to wait for the finish call and play no
+                // bumper here at all, and the stop set lost its way in.
+                // TalkUp waits for whatever is still being said - the finish
+                // call, the badges - and fires the bumper on its last word,
+                // which is just as right without a teaser in front of it.
+                if (BroadcastImaging.Has(ImagingCue.AfterRaceOver) && !nextRace.IsCancellationRequested)
                 {
                     intoTheStopSet = await BroadcastImaging.TalkUpAsync(
                         ImagingCue.AfterRaceOver, _announcer, TimeSpan.FromSeconds(30), nextRace.Token);
@@ -1167,7 +1298,7 @@ public sealed partial class RaceControlControl
                     // never arrived and nothing said why. Called off by the
                     // next race is said as such, not blamed on the model.
                     StatusMessage?.Invoke(nextRace.IsCancellationRequested
-                        ? $"{AppTime.LogStampNow()}  [commentary] Recap called off after {tookSeconds:0.0}s - the next race was called to the grid before it was written."
+                        ? $"{AppTime.LogStampNow()}  [commentary] Recap called off after {tookSeconds:0.0}s - {CalledOff()} before it was written."
                         : $"{AppTime.LogStampNow()}  [commentary] No recap after {tookSeconds:0.0}s - the model returned nothing. "
                           + "Any [llm] line above says whether it timed out, refused, or wasn't reachable.");
 
@@ -1282,7 +1413,7 @@ public sealed partial class RaceControlControl
                 if (!recapQueued)
                 {
                     StatusMessage?.Invoke(
-                        $"{AppTime.LogStampNow()}  [commentary] Recap dropped - the next race was called to the grid before it was ready "
+                        $"{AppTime.LogStampNow()}  [commentary] Recap dropped - {CalledOff()} before it was ready "
                         + $"(it took {tookSeconds:0.0}s to write and render).");
                     ForgetUnheardRecap();
                     return;
@@ -1291,6 +1422,10 @@ public sealed partial class RaceControlControl
                 StatusMessage?.Invoke(
                     $"{AppTime.LogStampNow()}  [commentary] Recap queued {(DateTime.UtcNow - teaserEnded).TotalSeconds:0.0}s after the teaser finished "
                     + $"({teaserGap}s gap set, {(recap.Audio is null ? "rendered live" : "already rendered")}).");
+
+                // The recap show is on air for this race - see
+                // OnAirFollowsTheRecap.
+                Volatile.Write(ref _recapAiredGeneration, recapGeneration);
 
                 // SPENT HERE, and nowhere earlier. The recap is queued to
                 // the announcer, which is the same bar the teaser above is
@@ -1501,6 +1636,10 @@ public sealed partial class RaceControlControl
 
                 _race.StateChanged -= onNextRace;
 
+                // No longer the recap show Skip and Hold would stop - unless
+                // a newer one has already taken its place.
+                Interlocked.CompareExchange(ref _recapShow, null, recapShow);
+
                 // However the sequence ended, nothing it started carries on
                 // writing or rendering. Before the using disposes it.
                 try
@@ -1648,9 +1787,8 @@ public sealed partial class RaceControlControl
             InterviewFollows: interview,
 
             // The host's own name, for the opening to introduce himself
-            // with: the recap host's when the show has a host voice, the
-            // announcer's when he reads it himself - see
-            // AppSettings.HostNameForRecapShow.
+            // with: the recap host's own name, never the race announcer's
+            // - see AppSettings.HostNameForRecapShow.
             AnnouncerName: _settings.HostNameForRecapShow,
 
             // Anything following the recap stops it signing off - the

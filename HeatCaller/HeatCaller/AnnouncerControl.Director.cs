@@ -131,6 +131,17 @@ public partial class AnnouncerControl
     public Func<string?>? ListenedAlong { get; set; }
 
     /// <summary>
+    /// True while the gap after the recap show belongs to On Air (17 Oct
+    /// 2026): the recap has just been on air and the next race will open
+    /// through On Air - see RaceControlControl.OnAirFollowsTheRecap. Null
+    /// when nothing is wired, and then nothing changes.
+    /// </summary>
+    internal Func<bool>? OnAirOpensTheNextRace { get; set; }
+
+    /// <summary>Whether the console has been told the director is standing down for On Air, so it is said once per gap rather than twice a second.</summary>
+    private bool _saidOnAirHasTheGap;
+
+    /// <summary>
     /// The broadcast segments' console lines - every refusal, with its
     /// reason. MainForm sends these to the developer console; a race night
     /// that went quiet is otherwise impossible to account for.
@@ -1181,6 +1192,38 @@ public partial class AnnouncerControl
         {
             return;
         }
+
+        // AND NOT IN THE GAP ON AIR IS ABOUT TO FILL (17 Oct 2026).
+        //
+        // Reported as too many hand-overs a race: the recap show signed off
+        // into its bumper, then this put "still to come, the A-main" or a
+        // Coming Up into the quiet, and then On Air's opening said it all
+        // again. Three goodbyes-and-hellos between two races.
+        //
+        // Stood down for the whole pass rather than for the two segments
+        // alone, which is the narrowest SAFE version: a Coming Up refused
+        // after it was written is given back unspent and asked for again on
+        // the next tick - a model write twice a second for nothing. And only
+        // while it is true: the recap was put on air for the race still on
+        // the board, that race is finished, and Start races On Air is
+        // ticked. A reset, a Stage or unticking the box ends it, and a
+        // hand-over refused here is not marked as given, so it still goes
+        // out if the box is unticked. See RaceControlControl.OnAirFollowsTheRecap.
+        if (OnAirOpensTheNextRace?.Invoke() == true)
+        {
+            if (!_saidOnAirHasTheGap)
+            {
+                _saidOnAirHasTheGap = true;
+
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [brain] Standing down until the next race - the recap has just been on air and On Air "
+                    + "opens the next one, so no hand-over or Coming Up in between.");
+            }
+
+            return;
+        }
+
+        _saidOnAirHasTheGap = false;
 
         _ = SpeakNextSegmentAsync(director);
     }

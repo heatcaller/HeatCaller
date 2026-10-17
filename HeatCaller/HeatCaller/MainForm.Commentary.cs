@@ -32,6 +32,10 @@ public partial class MainForm
         raceControl.RecapCarFacts = RecapCarFactsFor;
 
         commentary.EngineInUse = () => _voiceStore.Current.EffectiveEngine;
+
+        // The club's own "Max spoken announcements per lap", so How chatty
+        // describes what it does to their calls, not the default's (17 Oct 2026).
+        commentary.MaxCallsPerLap = () => _voiceStore.Current.MaxAnnouncementsPerLap;
         commentary.LoadVoices = MechanicVoiceChoicesAsync;
 
         // Heard even while the announcer is muted - it was asked for by hand.

@@ -249,10 +249,16 @@ public sealed class MixerControl : UserControl
     /// </summary>
     private void BuildLayout()
     {
+        // 17 Oct 2026: it said "every sound the app makes", and the
+        // soundscape's imaging (jingles, sweepers, stingers and its beds)
+        // has no strip here - so it says where those levels are instead. Not
+        // a fifth strip: StripBank only lays out rows of one length, so five
+        // would drop from two-by-two straight to one under another.
         var lblIntro = new Label
         {
-            Text = "Balance every sound the app makes, in one place. These are the same levels as on the other tabs - "
-                 + "changing one here changes it there. Adjustments apply immediately, so you can set the blend by ear.",
+            Text = "Balance the app's main sounds in one place. These are the same levels as on the other tabs - "
+                 + "changing one here changes it there. Adjustments apply immediately, so you can set the blend by ear. "
+                 + "The soundscape's jingles, stingers and music beds have their own levels on the Imaging tab.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

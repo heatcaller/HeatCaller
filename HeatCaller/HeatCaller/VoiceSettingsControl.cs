@@ -2957,6 +2957,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         playback.AddRow("Playback volume (%):", _numVolumePercent);
         playback.AddRow("Max spoken announcements per lap:", _numMaxPerLap);
 
+        // NOT THE ONLY SAY IN IT (17 Oct 2026): the Commentary page's How
+        // chatty scales this figure and Pacing holds calls back between
+        // others, so a club hearing fewer calls than this was told nothing
+        // here about why.
+        playback.AddHint("The Commentary page's How chatty scales this up or down, and its Pacing holds calls back to leave gaps - both apply even with AI commentary off.");
+
         var card = new Section("Voice parameters");
 
         card.Add(tuning, gapBelow: UiLayout.SectionGap);

@@ -223,7 +223,12 @@ public partial class MainForm
         {
             switch (e.KeyCode)
             {
-                case Keys.F1: rc.TriggerStage(); e.Handled = true; return;
+                // THROUGH ON AIR (17 Oct 2026) when Race Control's "Start
+                // races On Air" is ticked - the normal start - and straight
+                // to Stage when it is not, or when On Air cannot open this
+                // race. Pressed again while On Air runs, it skips to Stage.
+                // The Stage button itself still stages directly.
+                case Keys.F1: rc.TriggerStart(); e.Handled = true; return;
                 case Keys.F2: rc.TriggerCountdown(); e.Handled = true; return;
                 case Keys.F3: rc.TriggerGreen(); e.Handled = true; return;
                 case Keys.F4: rc.TriggerYellow(); e.Handled = true; return;
@@ -268,6 +273,11 @@ public partial class MainForm
             case Keys.B when !e.Shift: rc.TriggerOpenBigScreen(); break;
             case Keys.R when !e.Shift: rc.TriggerReadinessCheck(); break;
             case Keys.A when !e.Shift: rc.TriggerAnnouncerScreen(); break;
+
+            // On Air itself (17 Oct 2026), whatever "Start races On Air" is
+            // set to - a letter rather than Shift+F1, since the F-keys stay
+            // bare (see the top of this method).
+            case Keys.O when !e.Shift: rc.TriggerOnAir(); break;
 
             default:
                 handled = false;

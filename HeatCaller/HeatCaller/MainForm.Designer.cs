@@ -77,15 +77,11 @@ partial class MainForm
     private Panel pageLiveSession = new();
     private Panel pageRaceControl = new();
     private Panel pageDriverProfiles = new();
-    private Panel pageRaceProgram = new();
-    private Panel pageDaySchedule = new();
-    private Panel pageCheckIn = new();
     private Panel pageTrackLayouts = new();
     private Panel pageRaceHistory = new();
     private Panel pageAchievements = new();
     private Panel pageAnalytics = new();
     private Panel pageSetupLog = new();
-    private Panel pageSeasons = new();
     private Panel pageDemoMode = new();
     private Panel pagePractice = new();
     private Panel pageVenues = new();
@@ -191,8 +187,8 @@ partial class MainForm
 
         foreach (Panel page in new[]
                  {
-                     pageLiveSession, pageRaceControl, pageDriverProfiles, pageRaceProgram, pageDaySchedule, pageCheckIn, pageTrackLayouts,
-                     pageRaceHistory, pageAnalytics, pageAchievements, pageSetupLog, pageSeasons, pagePractice, pageDemoMode, pageVenues, pageThemes, pageSponsors, pageWebServer, pageVoice, pageSound, pageBackup,
+                     pageLiveSession, pageRaceControl, pageDriverProfiles, pageTrackLayouts,
+                     pageRaceHistory, pageAnalytics, pageAchievements, pageSetupLog, pagePractice, pageDemoMode, pageVenues, pageThemes, pageSponsors, pageWebServer, pageVoice, pageSound, pageBackup,
                  })
         {
             page.Dock = DockStyle.Fill;

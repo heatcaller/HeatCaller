@@ -16,7 +16,8 @@ public static class ShortcutCatalog
     {
         new Section("Race Control", "While Race Control is showing, or in Race Mode", new[]
         {
-            new Shortcut("F1", "Stage"),
+            new Shortcut("F1", "Start the race - through On Air when Start races On Air is ticked"),
+            new Shortcut("O", "On Air (again skips to Stage)"),
             new Shortcut("F2", "Countdown"),
             new Shortcut("F3", "Green flag"),
             new Shortcut("F4", "Yellow flag"),

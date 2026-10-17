@@ -393,35 +393,12 @@ internal sealed class ShowRunningOrder
     /// </summary>
     internal static readonly TimeSpan AfterABreak = TimeSpan.FromMinutes(20);
 
-    /// <summary>
-    /// The least time between two voice-IDs - see <see cref="IdentDue"/>.
-    ///
-    /// Forty minutes, which is twice <see cref="AfterABreak"/> and chosen
-    /// off it. Without a floor the voice-ID would ride every
-    /// BackAfterABreak show, and a small club whose turnaround between
-    /// heats is twenty-five minutes gets BackAfterABreak ALL EVENING - so
-    /// the one thing that is meant to sound like a station would have
-    /// introduced the station nine times, which is the definition of a
-    /// jingle. At forty minutes a three hour meeting gets it three or four
-    /// times: the top, somewhere around the tea break, and the way out.
-    /// </summary>
-    internal static readonly TimeSpan IdentApart = TimeSpan.FromMinutes(40);
-
     private readonly object _gate = new();
 
     /// <summary>When the last show opened. MinValue until one has.</summary>
     private DateTime _lastShowUtc = DateTime.MinValue;
 
-    /// <summary>
-    /// When the club's voice-ID last went out. MinValue until it has, which
-    /// is what makes the first one of the night due however late in the
-    /// evening the app was started - see <see cref="IdentDue"/>.
-    /// </summary>
-    private DateTime _lastIdentUtc = DateTime.MinValue;
-
     private int _shows;
-
-    private int _idents;
 
     /// <summary>How many shows have opened tonight. For the test run.</summary>
     internal int ShowsTonight
@@ -431,24 +408,6 @@ internal sealed class ShowRunningOrder
             lock (_gate)
             {
                 return _shows;
-            }
-        }
-    }
-
-    /// <summary>
-    /// How many times the club's voice-ID has gone out tonight. For the
-    /// test run, and for the same reason ShowsTonight is: nothing can be
-    /// listened to in a test, so the count is the only way to show that
-    /// "once at the top, not before every heat" is what actually happens
-    /// across a whole evening.
-    /// </summary>
-    internal int IdentsTonight
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _idents;
             }
         }
     }
@@ -501,112 +460,6 @@ internal sealed class ShowRunningOrder
         var billing = ShowBilling.For(Cue(kind, nowUtc), earned);
 
         return rejoinAllowed ? billing : billing with { EnterOpenerLate = false };
-    }
-
-    /// <summary>
-    /// Whether the club's voice-ID should ride this next show - "You're
-    /// listening to Thunder Valley Raceway".
-    ///
-    /// WHY THE RUNNING ORDER DECIDES THIS
-    ///
-    /// Because "how often" is the whole of the design. The line itself is
-    /// one sentence in one voice; what makes it sound like a station rather
-    /// than a jingle is that it comes round at a station's rate. That is a
-    /// question about where in the evening a show sits, which is precisely
-    /// what this class is for and the only place that knows it.
-    ///
-    /// WHICH SHOWS CARRY IT
-    ///
-    /// The top of the night, because that is the moment a listener is told
-    /// what they have tuned into. A show after a long quiet spell, because
-    /// the room has turned over and the ones who came in at the tea break
-    /// have not been told anything. And the sign-off, because the last
-    /// thing said should be whose night it was. Not a rejoin: a rejoin is
-    /// the show that exists BECAUSE the room has already been told, and
-    /// putting the station name in front of every heat is the exact mistake
-    /// the rejoin was written to undo.
-    ///
-    /// AND NEVER A RACE INTRO, whatever the clock says. A voice-ID is two
-    /// seconds and a beat, and the race intro's show is the one the staging
-    /// chain waits out before calling the next race to the grid - so those
-    /// two seconds come off the race, not off the programme. A club whose
-    /// only show is the race intro therefore hears their voice-ID at the
-    /// sign-off and nowhere else, which is a smaller price than a grid kept
-    /// waiting. Clubs with the cold open ticked - which is where this
-    /// belongs and what it is for - hear it at the top of the night as
-    /// intended.
-    ///
-    /// DOES NOT RECORD ANYTHING. Exactly as <see cref="Billing"/> does not:
-    /// see <see cref="IdentWent"/>, and ShowIdent.Item for where that call
-    /// actually ends up.
-    /// </summary>
-    /// <param name="kind">The segment being staged, where the caller knows it.</param>
-    /// <param name="nowUtc">Now, as the caller sees it.</param>
-    internal bool IdentDue(SegmentKind? kind, DateTime nowUtc)
-    {
-        if (kind == SegmentKind.RaceIntro)
-        {
-            return false;
-        }
-
-        // Outside the lock: Cue takes the same lock, and while that is
-        // re-entrant on this thread, a method whose locking depends on its
-        // caller's is the shape that bites a year later.
-        var cue = Cue(kind, nowUtc);
-
-        if (cue == ShowCue.Rejoin)
-        {
-            return false;
-        }
-
-        // The sign-off, every time, floor or no floor. A short meeting -
-        // the top of the night at seven and the way out at half past eight
-        // - would otherwise end without naming the club, and the end is the
-        // one place a listener is expecting to be told. Two voice-IDs in a
-        // short evening is what a station does with a short programme.
-        if (cue == ShowCue.Playout)
-        {
-            return true;
-        }
-
-        lock (_gate)
-        {
-            // MinValue and not "the first show": a club who spent half an
-            // hour setting their levels with Play It has had shows go out
-            // and no voice-ID, and the real cold open is still the first
-            // time anybody has been told where they are.
-            return _lastIdentUtc == DateTime.MinValue || nowUtc - _lastIdentUtc >= IdentApart;
-        }
-    }
-
-    /// <summary>
-    /// Records that the voice-ID actually went out, which is what the floor
-    /// in <see cref="IdentDue"/> is measured from.
-    ///
-    /// APART FROM <see cref="IdentDue"/> FOR BILLING'S OWN REASON. A show
-    /// can be billed and never heard, and a block can be built with the
-    /// voice-ID in it and then drop it - the running order of a block that
-    /// will not fit its gap loses its continuity first (ShowBlock.Fit), and
-    /// the voice-ID IS continuity. If being asked for counted as going out,
-    /// a club whose gaps are tight would spend the night's one voice-ID on
-    /// a show that never said it, and the next one - the one with room -
-    /// would be told it had already been introduced.
-    ///
-    /// So this is called from the voice-ID's own say, at the point the words
-    /// are handed to the announcer: see ShowIdent.Item.
-    ///
-    /// A clock that has gone backwards cannot lock the voice-ID out for the
-    /// evening, because MinValue is the only thing <see cref="IdentDue"/>
-    /// treats specially and a negative gap simply reads as "too soon" -
-    /// which it then stops being once the clock catches up.
-    /// </summary>
-    internal void IdentWent(DateTime nowUtc)
-    {
-        lock (_gate)
-        {
-            _idents++;
-            _lastIdentUtc = nowUtc;
-        }
     }
 
     private ShowCue Cue(SegmentKind? kind, DateTime nowUtc)
@@ -683,21 +536,6 @@ internal sealed class ShowRunningOrder
         {
             _shows = 0;
             _lastShowUtc = DateTime.MinValue;
-
-            // The voice-ID too, so a second night in one run of the app is
-            // introduced from the top.
-            //
-            // GUARDED BY ITS CALLER AND NOT BY A TIMER, and that matters
-            // here: CommentaryDirector.NewMeeting runs on a twice-a-second
-            // tick, and per-night state cleared on something like that
-            // could never reach the floor in IdentDue at all - the voice-ID
-            // would be due at every single show, which is the one outcome
-            // this feature must not have. Nothing calls NewNight yet; the
-            // forty minute floor is what carries an evening either way, so
-            // this is correctness for the day somebody wires it and not
-            // something the feature leans on.
-            _idents = 0;
-            _lastIdentUtc = DateTime.MinValue;
         }
     }
 }

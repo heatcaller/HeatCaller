@@ -2307,7 +2307,13 @@ public sealed class CommentaryService
     /// </summary>
     /// <param name="Kind">DescribeKind's words for the race - "qualifying heat", "the A-Main, the top final of the class" - or null.</param>
     /// <param name="Opening">Open like a TV broadcast coming back on air.</param>
-    /// <param name="Closing">End on a TV-style sign-off. False when the sign-off is a line of its own after the mechanic's interview.</param>
+    /// <param name="Closing">
+    /// End on a TV-style sign-off. Not read by the recap's own prompt any
+    /// more (17 Oct 2026): the sign-off is always a line of its own
+    /// (BuildBroadcastClosingAsync), so Race Control always passes false and
+    /// the inline branch that used it could never run. Kept so the record's
+    /// shape does not change under its callers.
+    /// </param>
     /// <param name="ShowName">The show the opening and closing name, as typed on the Commentary page; empty for none.</param>
     /// <param name="UpNext">What is next on the program, for the sign-off to tee up - "A-Main (Stock Buggy)" - or null.</param>
     /// <param name="InterviewFollows">The mechanic's interview comes after the recap, so the recap wraps up without signing off.</param>
@@ -2347,7 +2353,7 @@ public sealed class CommentaryService
     /// <summary>Extra words the recap is allowed for a broadcast opening - a welcome back takes a sentence of its own.</summary>
     internal const int OpeningWords = 25;
 
-    /// <summary>Extra words for a sign-off at the end of the recap, or the most a sign-off on its own may run to.</summary>
+    /// <summary>The most a sign-off on its own may run to - the recap no longer ends on one inline (17 Oct 2026).</summary>
     internal const int ClosingWords = 20;
 
     /// <summary>
@@ -2555,10 +2561,15 @@ public sealed class CommentaryService
         // The broadcast around it (27 Sep 2026). The show's name and what's
         // next were typed by somebody, so they go in the facts, cleaned, and
         // the instructions below only ever point at them.
+        //
+        // NO INLINE SIGN-OFF (17 Oct 2026). The sign-off is always written
+        // apart from the recap now (Race Control's PlanRecap, and
+        // BuildBroadcastClosingAsync), so Closing is always false here and
+        // the branch that ended the recap on one - with the up-next fact
+        // and the extra words it needed - was dead and is gone.
         var kind = context?.Kind;
         var opening = context?.Opening == true;
-        var closing = context?.Closing == true;
-        var showName = opening || closing ? Field(context?.ShowName, MaxShowNameChars) : string.Empty;
+        var showName = opening ? Field(context?.ShowName, MaxShowNameChars) : string.Empty;
 
         // The announcer's own name, for the opening to introduce himself
         // with. Only when there IS an opening: a name dropped into the
@@ -2569,11 +2580,9 @@ public sealed class CommentaryService
         // Anything at all after the recap, which is what decides whether it
         // signs off - see MoreFollows, and the note at the instruction.
         var moreFollows = interviewFollows || context?.MoreFollows == true;
-        var upNext = closing ? Field(context?.UpNext, MaxFieldChars * 2) : string.Empty;
 
         var extraWords = _settings.CommentarySummaryExtraWords
-                         + (opening ? OpeningWords : 0)
-                         + (closing ? ClosingWords : 0);
+                         + (opening ? OpeningWords : 0);
 
         var facts =
             FactsOpen + "\n" +
@@ -2606,7 +2615,6 @@ public sealed class CommentaryService
                   + string.Join("\n", mainsLines) + "\n"
                 : string.Empty) +
             (championshipLines.Count > 0 ? string.Join("\n", championshipLines) + "\n" : string.Empty) +
-            (upNext.Length > 0 ? $"Up next on the program: {upNext}\n" : string.Empty) +
             FactsClose + "\n" +
             // Deliberately NOT "write one sentence" - that was hardcoded
             // here as well as in the system prompt, so it capped the
@@ -2730,13 +2738,7 @@ public sealed class CommentaryService
                 : opening
                     ? " You are the only announcer. Do not name, address or hand over to a co-host, a colleague or "
                       + "any other commentator, and do not give yourself a name."
-                    : string.Empty)
-            + (closing
-                ? " End on a flashy TV-broadcast sign-off"
-                  + (showName.Length > 0 ? " for the Show named in the facts" : string.Empty)
-                  + (upNext.Length > 0 ? ", teeing up what is up next on the program" : string.Empty)
-                  + "."
-                : string.Empty);
+                    : string.Empty);
 
         return await RecordAndReturn(SummaryKind, Client.GenerateAsync(
             BuildBroadcastSystemPrompt(extraWords), facts,
@@ -3252,9 +3254,12 @@ public sealed class CommentaryService
     ///
     /// Never empty. A club that has typed neither name gets a generic
     /// close, because a show with no name still has to end.
+    ///
+    /// The recap host's name, not the announcer's (17 Oct 2026): the two
+    /// are named independently now - see AppSettings.HostNameForRecapShow.
     /// </summary>
     public string NightRecapSignOff() =>
-        NightRecap.SignOff(_settings.AnnouncerNameForRecap, _settings.RecapShowName);
+        NightRecap.SignOff(_settings.HostNameForRecapShow, _settings.RecapShowName);
 
     /// <summary>
     /// ONE DRIVER'S NIGHT, written for that driver (12 Oct 2026) - see

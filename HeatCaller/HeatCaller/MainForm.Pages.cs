@@ -1252,6 +1252,23 @@ public partial class MainForm
         pageDemoMode.Controls.Add(demoMode);
         _navRefreshHooks["Demo Mode"] = demoMode.RefreshAvailableData;
 
+        // The Demo Mode page's own Start, through On Air like the Race
+        // Program's "Run as Demo" below (17 Oct 2026) - it used to be the
+        // one demo that skipped it. Straight to the demo page's own start
+        // over a real race staged or running, which refuses it in its own
+        // words; On Air would otherwise play its jingle over that race
+        // first. See RaceControlControl.GoOnAirThenAsync.
+        demoMode.GoOnAirThen = (round, start) =>
+        {
+            if (!_race.IsDemoMode && _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+            {
+                start();
+                return Task.CompletedTask;
+            }
+
+            return _raceControlControl.GoOnAirThenAsync(round, start);
+        };
+
         // Wired here rather than beside RoundStartRequested above, because
         // demoMode doesn't exist yet at that point in this method.
         raceProgram.RoundDemoRequested += async round =>
@@ -1337,7 +1354,8 @@ public partial class MainForm
             // THROUGH ON AIR (16 Oct 2026), not straight to staging: the
             // jingle or sweeper, the opening for this round and a bumper,
             // and then the demo starts and stages itself - the same top of
-            // the race a real one gets from the On Air button. See
+            // the race a real one gets from the On Air button. Straight to
+            // the demo when Start races On Air is unticked (17 Oct 2026). See
             // RaceControlControl.GoOnAirThenAsync.
             await _raceControlControl.GoOnAirThenAsync(round, () =>
             {
@@ -1404,6 +1422,11 @@ public partial class MainForm
         // starts a new night rather than carrying the last one's budget.
         announcer.RaceDayId = () => _raceEvents.Active?.Id ?? string.Empty;
 
+        // And the gap after the recap show, when On Air opens the next race:
+        // the director stands down in it rather than adding a hand-over of
+        // its own (17 Oct 2026). See RaceControlControl.OnAirFollowsTheRecap.
+        announcer.OnAirOpensTheNextRace = () => _raceControlControl.OnAirFollowsTheRecap;
+
         // And the other way: Race Control shows what the announcer is
         // about to say, and holds it when the race director needs the mic.
         // Wired here because this is the first point at which both exist.
@@ -1413,6 +1436,11 @@ public partial class MainForm
         // sequence itself, so it opens and ends the show rather than
         // handing a line to the director.
         _raceControlControl.ShowMusic = () => announcer.ShowMusicTreatment;
+
+        // And the session's music and crowd, opened silent when On Air is
+        // pressed rather than at staging, where opening them skipped the
+        // broadcast - see ReadySessionAudioForOnAir.
+        _raceControlControl.OnAirStarting = ReadySessionAudioForOnAir;
 
         // And tonight's club notes, for the Notes button on the announcer
         // strip - the approval list for anything the room sent in. The

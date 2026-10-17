@@ -424,11 +424,84 @@ public sealed class AmbienceService : IDisposable
 
     private bool _ducked;
 
+    /// <summary>
+    /// Opened and running, but held at silence until <see cref="Release"/> -
+    /// see <see cref="StartHeld"/>. Read and written under the lock.
+    /// </summary>
+    private bool _held;
+
+    /// <summary>
+    /// Opens the crowd's sound output now and keeps it silent (17 Oct 2026),
+    /// for <see cref="Release"/> to bring up later.
+    ///
+    /// WHY. Opening a sound output makes Windows reconfigure the sound for a
+    /// moment, and everything else playing stalls - the music used to skip
+    /// like a scratched CD for exactly this reason (see AudioBus). The crowd
+    /// opened its output the instant a race was staged, which with On Air
+    /// is the instant the bumper and the staging call are playing - so the
+    /// broadcast skipped right at the hand-over. On Air opens it here
+    /// instead, before anything is on air, and staging only has to bring
+    /// the level up.
+    ///
+    /// Does nothing to a crowd already running - holding that would silence
+    /// it. Returns whether a held crowd is now open.
+    /// </summary>
+    public bool StartHeld(bool ignoreEnabledSetting = false)
+    {
+        lock (_lock)
+        {
+            if (_running)
+            {
+                return false;
+            }
+
+            _held = true;
+        }
+
+        StartBeds(ignoreEnabledSetting, keepFade: null);
+
+        lock (_lock)
+        {
+            if (!_running)
+            {
+                _held = false;
+                return false;
+            }
+        }
+
+        StatusMessage?.Invoke("[ambience] Opened ahead of the race and held silent until it is staged.");
+        return true;
+    }
+
+    /// <summary>Whether the crowd is open but held silent - see <see cref="StartHeld"/>.</summary>
+    public bool IsHeld
+    {
+        get { lock (_lock) { return _held && _running; } }
+    }
+
+    /// <summary>Brings a held crowd up to where it should be - see <see cref="StartHeld"/>. Nothing when it isn't held.</summary>
+    public void Release()
+    {
+        lock (_lock)
+        {
+            if (!_held)
+            {
+                return;
+            }
+
+            _held = false;
+            ApplyDuckLocked();
+        }
+
+        StatusMessage?.Invoke("[ambience] Brought up for the race - its output was already open, so nothing else skipped.");
+    }
+
     /// <summary>The factor applied to every layer while ducked. 1.0 when not.</summary>
     private float DuckFactor =>
         // An ad break wins over everything: silence, not a duck, and not
-        // subject to DuckUnderAnnouncements. See SetAdBreakMuted.
-        _adBreakMuted ? 0f
+        // subject to DuckUnderAnnouncements. See SetAdBreakMuted. So does
+        // a crowd held silent ahead of its race (see StartHeld).
+        _adBreakMuted || _held ? 0f
         : _ducked && Settings.DuckUnderAnnouncements
             // The override wins when set - the recap ducks deeper than a
             // routine announcement does.
@@ -665,6 +738,10 @@ public sealed class AmbienceService : IDisposable
 
         lock (_lock)
         {
+            // A stopped crowd is never still held - the next start is a
+            // normal one unless StartHeld says otherwise.
+            _held = false;
+
             if (!_running)
             {
                 return;

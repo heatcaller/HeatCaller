@@ -348,7 +348,7 @@ public sealed class SoundEffectsControl : UserControl
         var lblIntro = new Label
         {
             Text = "Mimics Next Level Timing's audio cues: per-lap feedback plus sounds for race moments.\n" +
-                   "Pick a sound for each row - Classic tones or one of the built-in packs - or point it at your own file, which wins over both.\n" +
+                   "Pick a sound for each row - the generated tones or one of the built-in packs - or point it at your own file, which wins over both.\n" +
                    "\"Weight\" decides which per-lap sounds win when several fire on the same lap - see \"Max sounds per lap\" below.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
@@ -1195,7 +1195,7 @@ public sealed class SoundEffectsControl : UserControl
         _tips.SetToolTip(chkPractice, $"Play \"{name}\" during practice.");
 
         var cmbSound = NewSoundCombo(config.BuiltInSound);
-        _tips.SetToolTip(cmbSound, "The built-in sound this row plays - Classic tones or one of the packs. Your own file, if set, plays instead.");
+        _tips.SetToolTip(cmbSound, "The built-in sound this row plays - the generated tones or one of the packs. Your own file, if set, plays instead.");
 
         var fileBox = new TextBox
         {
@@ -1434,7 +1434,7 @@ public sealed class SoundEffectsControl : UserControl
             ? "Your own sound file for this row (optional). Browse to pick one - it plays instead of the pack sound."
             : path;
 
-    /// <summary>One entry in a sound dropdown: "Classic tones" or a pack.</summary>
+    /// <summary>One entry in a sound dropdown: "Generated tones" or a pack (Synthwave shown as Classic - see SoundPacks.All).</summary>
     private sealed record SoundChoice(string Key, string Name)
     {
         public override string ToString() => Name;
@@ -1454,7 +1454,7 @@ public sealed class SoundEffectsControl : UserControl
         return combo;
     }
 
-    /// <summary>Selects the entry for a pack key; anything unknown shows as Classic tones, which is what it would play.</summary>
+    /// <summary>Selects the entry for a pack key; anything unknown shows as Generated tones, which is what it would play.</summary>
     private static void SelectSound(ComboBox combo, string? key)
     {
         var match = SoundPacks.Find(key)?.Key ?? SoundPacks.ClassicKey;

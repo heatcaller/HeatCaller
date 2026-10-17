@@ -345,8 +345,18 @@ internal static class ShowChatter
     ///
     /// The figures are worked out from the real thing rather than written
     /// down, so a change to either table cannot leave this line lying.
+    ///
+    /// THE CLUB'S OWN FIGURES (17 Oct 2026). This worked the lap calls out
+    /// from a default VoiceProfile's "Max spoken announcements per lap"
+    /// rather than the one the club has set on Voice Settings, and said
+    /// "co-host held for the mains" even with "Two voices in the heats too"
+    /// ticked - which the director ORs in (CommentaryDirector's twoVoices).
+    /// Both are passed in now; left out, they read as before.
     /// </summary>
-    internal static string Describe(string? key)
+    /// <param name="key">The chattiness setting.</param>
+    /// <param name="maxPerLap">The club's own max spoken announcements per lap, or null for the default profile's.</param>
+    /// <param name="twoVoicesInHeats">"Two voices in the heats too" is ticked.</param>
+    internal static string Describe(string? key, int? maxPerLap = null, bool twoVoicesInHeats = false)
     {
         var level = For(key);
 
@@ -358,13 +368,13 @@ internal static class ShowChatter
         // this class for the night that cost. Named rather than counted:
         // "holds back Every lap completed, Lap time, ..." is the sentence
         // that would have answered the question from the floor.
-        var perLap = ScaledPerLap(new VoiceProfile().MaxAnnouncementsPerLap, key);
+        var perLap = ScaledPerLap(maxPerLap ?? new VoiceProfile().MaxAnnouncementsPerLap, key);
 
         var held = CallsHeldBack(key);
 
         return $"{level.Blurb} Up to {heat} spoken {(heat == 1 ? "segment" : "segments")} in ten minutes in a heat "
              + $"and {main} in the top main"
-             + (level.TwoVoicesBelowTheMains
+             + (level.TwoVoicesBelowTheMains || twoVoicesInHeats
                  ? ", with the co-host out in the heats too."
                  : ", with the co-host held for the mains.")
              + $" On the timing calls it allows {perLap} per lap"

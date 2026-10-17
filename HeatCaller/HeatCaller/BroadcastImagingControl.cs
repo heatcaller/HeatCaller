@@ -24,6 +24,12 @@ public sealed class BroadcastImagingControl : UserControl
     private readonly ComboBox _cmbElement = new();
     private readonly Label _lblStatus = new();
     private readonly NumericUpDown _numLevel = new();
+
+    /// <summary>The soundscape's music beds under the voice (17 Oct 2026) - see BroadcastImaging.BedLevelPercent.</summary>
+    private readonly NumericUpDown _numBedLevel = new();
+
+    /// <summary>How far those beds drop while the announcer speaks - see BroadcastImaging.BedDuckPercent.</summary>
+    private readonly NumericUpDown _numBedDuck = new();
     /// <summary>The selected piece's OUT - the mark the app called its post until 17 Oct 2026. See TalkUp.</summary>
     private readonly NumericUpDown _numPost = new();
     private readonly Label _lblPostSource = new();
@@ -280,10 +286,13 @@ public sealed class BroadcastImagingControl : UserControl
         var btnMarkTalkUp = new Button { Text = "Mark Post" };
         btnMarkTalkUp.Click += (_, _) => MarkWhilePlaying(post: true);
 
-        var btnSetTalkUp = new Button { Text = "Set" };
+        // "Set Post" / "Set Out" and one "Reset" for both (17 Oct 2026):
+        // two buttons both called Set, and a Clear beside an Auto that did
+        // the same kind of job, read as four different things.
+        var btnSetTalkUp = new Button { Text = "Set Post" };
         btnSetTalkUp.Click += (_, _) => SetTalkUp();
 
-        var btnClearTalkUp = new Button { Text = "Clear" };
+        var btnClearTalkUp = new Button { Text = "Reset" };
         btnClearTalkUp.Click += (_, _) => ClearTalkUp();
 
         var btnPlayToTalkUp = new Button { Text = "Play to Post" };
@@ -301,10 +310,10 @@ public sealed class BroadcastImagingControl : UserControl
         var btnMarkOut = new Button { Text = "Mark Out" };
         btnMarkOut.Click += (_, _) => MarkWhilePlaying(post: false);
 
-        var btnSetPost = new Button { Text = "Set" };
+        var btnSetPost = new Button { Text = "Set Out" };
         btnSetPost.Click += (_, _) => SetPost();
 
-        var btnAutoPost = new Button { Text = "Auto" };
+        var btnAutoPost = new Button { Text = "Reset" };
         btnAutoPost.Click += (_, _) => ClearPost();
 
         var btnPlayPost = new Button { Text = "Play from Out" };
@@ -315,15 +324,15 @@ public sealed class BroadcastImagingControl : UserControl
         postGrid.AddHint(
             "The POST is where the piece's own voice or singing comes in. The announcer talks over the intro in front of it "
             + "and stops right on it - hitting the post, no gap between the two voices. Press Play and then Mark Post the "
-            + "instant you hear the piece's voice, or type it and press Set. Play to Post plays the intro and stops on the "
-            + "mark. Clear takes it back to the top of the piece: no intro to talk over, so the piece starts as the last "
+            + "instant you hear the piece's voice, or type it and press Set Post. Play to Post plays the intro and stops on the "
+            + "mark. Reset puts the post back at the top of the piece: no intro to talk over, so the piece starts as the last "
             + "word ends - right for a stinger with no voice in it.");
         postGrid.AddRow("Out at:", FieldGrid.Inline(_numPost, new Label { Text = "s" }, btnMarkOut, btnSetPost, btnAutoPost, btnPlayPost, _lblPostSource));
         postGrid.AddHint(
             "The OUT is where the piece's own voice stops and only music is left - on a jingle, the instant the sung part "
             + "ends. The next line starts right on it, and whatever the piece still has crossfades away underneath, so "
-            + "nothing is ever cut short. Mark Out works like Mark Post. Auto goes back to the mark it ships with, or one "
-            + "measured from the piece.");
+            + "nothing is ever cut short. Mark Out works like Mark Post, and Set Out takes a typed time. Reset puts the out "
+            + "back on the mark the piece ships with, or one measured from the piece.");
 
         var btnRemove = new Button { Text = "Remove" };
         btnRemove.Click += (_, _) => RemoveSelected();
@@ -428,8 +437,39 @@ public sealed class BroadcastImagingControl : UserControl
             }
         };
 
-        var lblLevelSuffix = new Label { Text = "%  - the bed plays at the show bed level on the Commentary page", AutoSize = true, ForeColor = AppTheme.TextMuted };
+        var lblLevelSuffix = new Label { Text = "%  - the jingles, sweepers, bumpers and stingers", AutoSize = true, ForeColor = AppTheme.TextMuted };
         _textSize.Wear(lblLevelSuffix, () => AppTheme.SmallFont);
+
+        // THE BEDS' OWN LEVEL (17 Oct 2026). The On Air opening bed and the
+        // recap bed took the Commentary page's show bed level, which greys
+        // out when the club's own show music is unticked - so a club on the
+        // soundscape alone had a bed level it could not reach. Same ranges
+        // as the Commentary page's boxes.
+        _numBedLevel.Minimum = 2;
+        _numBedLevel.Maximum = 100;
+        _numBedLevel.ValueChanged += (_, _) =>
+        {
+            if (!_filling)
+            {
+                BroadcastImaging.BedLevelPercent = (int)_numBedLevel.Value;
+            }
+        };
+
+        var lblBedLevelSuffix = new Label { Text = "%  - the soundscape's music beds; a bed sits well under the voice, so this is low on purpose", AutoSize = true, ForeColor = AppTheme.TextMuted };
+        _textSize.Wear(lblBedLevelSuffix, () => AppTheme.SmallFont);
+
+        _numBedDuck.Minimum = 5;
+        _numBedDuck.Maximum = 100;
+        _numBedDuck.ValueChanged += (_, _) =>
+        {
+            if (!_filling)
+            {
+                BroadcastImaging.BedDuckPercent = (int)_numBedDuck.Value;
+            }
+        };
+
+        var lblBedDuckSuffix = new Label { Text = "% of the bed level while the announcer is actually speaking", AutoSize = true, ForeColor = AppTheme.TextMuted };
+        _textSize.Wear(lblBedDuckSuffix, () => AppTheme.SmallFont);
 
         // THE NUDGE (17 Oct 2026) - one setting for every post, for taste:
         // some like the piece's voice right on the last word, some a hair
@@ -456,6 +496,8 @@ public sealed class BroadcastImagingControl : UserControl
 
         var levelGrid = new FieldGrid();
         levelGrid.AddRow("Level:", FieldGrid.Inline(_numLevel, lblLevelSuffix));
+        levelGrid.AddRow("Bed level:", FieldGrid.Inline(_numBedLevel, lblBedLevelSuffix));
+        levelGrid.AddRow("Under the voice:", FieldGrid.Inline(_numBedDuck, lblBedDuckSuffix));
         levelGrid.AddRow("Post timing:", FieldGrid.Inline(_numNudge, lblNudgeSuffix));
 
         var levels = new Section("Level and timing");
@@ -495,6 +537,8 @@ public sealed class BroadcastImagingControl : UserControl
         }
 
         Fit(_numLevel, NumberWidth(_numLevel));
+        Fit(_numBedLevel, NumberWidth(_numBedLevel));
+        Fit(_numBedDuck, NumberWidth(_numBedDuck));
         Fit(_numPost, NumberWidth(_numPost));
         Fit(_numTalkUp, NumberWidth(_numTalkUp));
         Fit(_numNudge, NumberWidth(_numNudge));
@@ -528,6 +572,8 @@ public sealed class BroadcastImagingControl : UserControl
         {
             _chkEnabled.Checked = BroadcastImaging.Enabled;
             _numLevel.Value = Math.Clamp(BroadcastImaging.Level, (int)_numLevel.Minimum, (int)_numLevel.Maximum);
+            _numBedLevel.Value = Math.Clamp(BroadcastImaging.BedLevelPercent, (int)_numBedLevel.Minimum, (int)_numBedLevel.Maximum);
+            _numBedDuck.Value = Math.Clamp(BroadcastImaging.BedDuckPercent, (int)_numBedDuck.Minimum, (int)_numBedDuck.Maximum);
             _numNudge.Value = Math.Clamp((decimal)BroadcastImaging.PostNudge, _numNudge.Minimum, _numNudge.Maximum);
 
             var keep = (SelectedSoundscape ?? BroadcastImaging.Active)?.Id;

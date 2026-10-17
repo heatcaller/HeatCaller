@@ -361,24 +361,44 @@ public sealed partial class RaceControlControl
     ///
     /// Safe when nothing is on air - AbandonBlock does nothing then - and
     /// safe twice.
+    ///
+    /// AND THE RECAP SHOW (17 Oct 2026). The post-race sequence opens its
+    /// show without a block, so this used to answer "none is on air" over a
+    /// recap the whole room could hear. It is now ended first, by the same
+    /// cancel the next race being called uses - the show ended, the music
+    /// given back, the deep duck and the floor released - with the same rule
+    /// as above: the line being spoken finishes. See EndRecapShow.
     /// </summary>
     private void SkipWhatIsOnAir()
     {
+        // Before the show music check: a recap runs, and is worth stopping,
+        // on a PC with no show music too.
+        var recapStopped = EndRecapShow("it was skipped from Race Control");
+
         if (ShowMusic?.Invoke() is not { } treatment)
         {
-            StatusMessage?.Invoke(
-                $"{AppTime.LogStampNow()}  [show] Nothing to skip - this PC has no show music set up.");
+            if (!recapStopped)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [show] Nothing to skip - this PC has no show music set up.");
+            }
 
             return;
         }
 
         try
         {
-            // Only a segment block can be stopped this way. The recap, the
-            // honours, a race intro and Play again open their show without
-            // one, so say so rather than claim a stop that did not happen.
+            // Only a segment block can be stopped this way. A race intro and
+            // Play again open their show without one, so say so rather than
+            // claim a stop that did not happen. The recap show was stopped
+            // above, and has said so.
             if (!treatment.AbandonBlock())
             {
+                if (recapStopped)
+                {
+                    return;
+                }
+
                 StatusMessage?.Invoke(
                     $"{AppTime.LogStampNow()}  [show] Skip stops a commentary segment block, and none is on air - "
                     + "whatever is playing now runs to its end.");

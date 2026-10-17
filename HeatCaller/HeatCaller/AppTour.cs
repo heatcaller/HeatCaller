@@ -48,7 +48,8 @@ public sealed class AppTour : Form
         new("Race Control", "Race Control",
             "Where a race is actually run: stage, start, flags, the live leaderboard and the finish. Race Day "
             + "hands it each heat in order. F1-F6 work the flags from the keyboard, clicking a driver gives laps, "
-            + "penalties and warnings, and F11 is full-screen Race Mode."),
+            + "penalties and warnings, and F11 is full-screen Race Mode. On Air is the normal way to start a race - "
+            + "a jingle, the opening and a bumper, then staging - and Stage skips straight to staging."),
 
         new("Practice", "Practice",
             "Open lapping with rolling averages and best laps, kept apart from race results. Ghost Cars lets drivers "
@@ -62,12 +63,15 @@ public sealed class AppTour : Form
             "Seasons and points. Results from each event add up automatically, with drop rounds and CSV export."),
 
         new("Voice", "Voice",
-            "The announcer: which voice speaks (the free Windows voice, your own ElevenLabs key, or the HeatCaller "
-            + "voice) and every line it can say, from the start to lead changes and track records."),
+            "The announcer: which voice speaks (Kokoro, the free voice that runs on this laptop, your own ElevenLabs "
+            + "key, or the HeatCaller voice) and every line it can say, from the start to lead changes and track "
+            + "records."),
 
         new("Sounds", "Sounds",
-            "Soundscapes set the mood in one click: sound effects, a crowd that reacts to the racing, and music "
-            + "between races. Each part can be tuned on its own tab."),
+            "Soundscapes set the mood in one click: sound effects, a crowd that reacts to the racing, music "
+            + "between races and the app's look. Imaging is each soundscape's radio side - jingles, sweepers, "
+            + "bumpers, stingers and beds in a run of show, with Post and Out marks so the voice hits the post. "
+            + "The Mixer balances them all, and each part can be tuned on its own tab."),
 
         new("Local Screens", "Local Screens",
             "Screens and phones at the track, over the laptop's own Wi-Fi - no internet needed. Live results on "
@@ -79,7 +83,7 @@ public sealed class AppTour : Form
 
         new("Themes", "Themes",
             "The look of the app and of everything racers see - colours, and your club logo on screens, pages and "
-            + "printed QR check-ins."),
+            + "printed QR check-ins. Applying a soundscape on Sounds can change the app's look too."),
 
         new("Connection", "Connection",
             "Where the app talks to your timing decoder. Pick EasyLap or I-Lap, press Connect, and the status "

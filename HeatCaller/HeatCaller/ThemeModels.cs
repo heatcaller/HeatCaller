@@ -44,8 +44,13 @@ public sealed class Theme
     /// any comes back.
     /// 10: every call a soundscape writes its own lines for has twelve of
     /// them, in that soundscape's voice - they had two to six.
+    /// 11: Podium plays its own four songs in place of Victory Lane, and
+    /// every soundscape's own songs are listed by the names they have had
+    /// since 17 Oct 2026 (see MusicStore.NamedSongs).
+    /// 12: Classic adds Victory Lane and Race Day Live to its music - the
+    /// two tracks Podium and Broadcast stopped playing (17 Oct 2026).
     /// </summary>
-    public const int CurrentBuiltInVersion = 10;
+    public const int CurrentBuiltInVersion = 12;
 
     /// <summary>
     /// Built-ins that were renamed when the packs arrived, old name to new.
@@ -74,7 +79,7 @@ public sealed class Theme
 
     /// <summary>
     /// The sound pack this soundscape is built around (a SoundPacks key), or
-    /// empty for Classic tones. For display - each effect's own
+    /// empty for the generated tones. For display - each effect's own
     /// SoundEffectConfig.BuiltInSound is what actually plays, so a custom
     /// soundscape can mix packs freely.
     /// </summary>
@@ -95,7 +100,7 @@ public sealed class Theme
     /// applied on the Soundscapes page - Classic in Synthwave's neon, Pit
     /// Lane in hazard yellow. Empty follows the sound pack (see
     /// <see cref="LookFor"/>), so a club's copy of a built-in wears the same
-    /// look; a soundscape on Classic tones changes nothing.
+    /// look; a soundscape on the generated tones changes nothing.
     /// </summary>
     public string LookKey { get; set; } = string.Empty;
 
@@ -122,8 +127,9 @@ public sealed class Theme
     };
 
     /// <summary>
-    /// The built-in soundscapes: Classic (the original tones and lines) and
-    /// one per sound pack, each with an announcer personality to match.
+    /// The built-in soundscapes, one per sound pack, each with an announcer
+    /// personality to match. Classic is the Synthwave pack since 16 Oct
+    /// 2026 - the original generated tones are no soundscape's any more.
     /// </summary>
     public static List<Theme> CreateBuiltInDefaults()
     {

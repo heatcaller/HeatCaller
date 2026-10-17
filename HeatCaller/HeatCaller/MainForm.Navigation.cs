@@ -120,8 +120,13 @@ public partial class MainForm
             // The announcer's screen is opened from this page - it is
             // no longer a tab anywhere - so this is where searching for
             // it has to land.
-            "announcer", "announcer screen", "spotlight", "mc", "microphone", "mic", "talking points" },
-        ["Connection"] = new[] { "connect", "decoder", "easylap", "i-lap", "ilap", "com port", "serial", "baud", "auto-connect", "console", "quick race" },
+            "announcer", "announcer screen", "spotlight", "mc", "microphone", "mic", "talking points",
+
+            // On Air is the normal way into a race now - the jingle, the
+            // opening and a bumper before staging - and Mission Control
+            // opens from here as well as from Connection.
+            "on air", "mission control" },
+        ["Connection"] = new[] { "connect", "decoder", "easylap", "i-lap", "ilap", "com port", "serial", "baud", "auto-connect", "console", "quick race", "mission control" },
         ["Driver Hub"] = new[]
         {
             "transponder", "car", "name", "roster", "import", "export", "driver profiles", "profile", "setups", "transfer",
@@ -200,7 +205,7 @@ public partial class MainForm
             "voice announcements", "announcements", "announcement", "lines", "phrasing", "wording",
         },
         ["Ghost Cars"] = new[] { "ghost", "virtual", "opponent", "rival", "solo", "practice alone", "ai car", "pace" },
-        ["Sounds"] = new[] { "soundscape", "soundscapes", "preset", "voice pack", "sound pack", "announcer style", "personality", "sound effects", "music", "soundtrack", "track", "song", "playlist", "beep", "beeps", "cue", "chime", "per-driver", "ambience", "crowd", "atmosphere", "track noise", "tone", "beep", "audio", "volume", "test", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "run of show", "radio" },
+        ["Sounds"] = new[] { "soundscape", "soundscapes", "preset", "voice pack", "sound pack", "announcer style", "personality", "sound effects", "music", "soundtrack", "track", "song", "playlist", "beep", "beeps", "cue", "chime", "per-driver", "ambience", "crowd", "atmosphere", "track noise", "tone", "beep", "audio", "volume", "test", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "run of show", "radio", "hit the post", "post mark", "out mark", "on air" },
         ["Backup & Restore"] = new[] { "save", "restore", "export", "zip", "auto backup", "support", "help", "logs", "log file", "crash", "send logs" },
         ["Garage"] = new[] { "car", "cars", "chassis", "shell", "bodyshell", "tuning", "setup log", "setup", "tires", "gearing", "ride height", "springs", "loan", "borrow", "club car" },
     };
@@ -271,7 +276,16 @@ public partial class MainForm
         {
             ("Voice Settings", new[] { "voice", "elevenlabs", "speech", "tts", "api key" }),
             ("Announcements", new[] { "announcements", "announcement", "lines", "phrasing", "templates", "wording", "weight", "caution" }),
-            ("Commentary", new[] { "commentary", "commentator", "llm", "ai", "ollama", "narration", "local model" }),
+            // The club's own show music - its opener and its sting - lives
+            // here, not on Sounds > Imaging: Imaging is each soundscape's
+            // jingles, beds and stingers.
+            ("Commentary", new[]
+            {
+                "commentary", "commentator", "llm", "ai", "ollama", "narration", "local model",
+                "show music", "opener", "club sting", "recap", "recap host", "vote", "room vote",
+                "notes", "club notes", "co-host", "recording", "record each race", "listen along",
+                "teaser", "sign-off", "show name", "announcer name", "mechanic",
+            }),
             ("Rivalries", new[] { "rivalries", "rivalry" }),
         },
         ["Sounds"] = new[]
@@ -281,7 +295,7 @@ public partial class MainForm
             ("Effects", new[] { "effects", "sound effects", "cue", "chime" }),
             ("Ambience", new[] { "ambience", "crowd", "atmosphere", "track noise" }),
             ("Music", new[] { "music", "soundtrack", "song", "playlist" }),
-            ("Imaging", new[] { "broadcast imaging", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "run of show", "radio" }),
+            ("Imaging", new[] { "broadcast imaging", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "bed", "run of show", "radio", "hit the post", "post mark", "out mark", "on air" }),
             ("Lap Beeps", new[] { "lap beeps", "beep", "per-driver", "tone" }),
         },
     };

@@ -215,6 +215,27 @@ public sealed class ShowChatterTests
         Assert.Contains("co-host held for the mains", ShowChatter.Describe("sparing"), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void The_page_counts_from_the_clubs_own_calls_per_lap_and_its_two_voices_tick()
+    {
+        // 17 Oct 2026: the line worked the lap calls out from a default
+        // profile's cap, and said the co-host was held for the mains with
+        // "Two voices in the heats too" ticked - which the director ORs in.
+        var five = ShowChatter.ScaledPerLap(5, "sparing");
+
+        Assert.Contains($"allows {five} per lap", ShowChatter.Describe("sparing", maxPerLap: 5), StringComparison.Ordinal);
+
+        Assert.Contains(
+            "co-host out in the heats",
+            ShowChatter.Describe("sparing", twoVoicesInHeats: true),
+            StringComparison.Ordinal);
+
+        // Left out, it reads as it always has.
+        Assert.Equal(
+            ShowChatter.Describe("sparing", new VoiceProfile().MaxAnnouncementsPerLap, false),
+            ShowChatter.Describe("sparing"));
+    }
+
     // ------------------------------------------------------------------
     //  The budget acts on it
     // ------------------------------------------------------------------

@@ -162,6 +162,20 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         // rather than by Race Control because the buttons are this class's.
         AppTheme.ReleaseFocusAfterClick(_hold, _replay, _skip, _notes, _votes);
 
+        // WHAT HOLD AND SKIP STOP, said where they are pressed (17 Oct
+        // 2026), now that both reach the recap show as well as the
+        // director's segments. Neither cuts a word off: the voice queue
+        // holds the flag calls too - see RaceControlControl.SkipWhatIsOnAir.
+        var tips = new ToolTip();
+        AppTheme.StyleToolTip(tips, keep: true);
+        tips.SetToolTip(_hold,
+            "Holds the announcer: no new commentary segment, hand-over or recap show starts until you press Release. "
+            + "A recap show already running stops after the line being spoken.");
+        tips.SetToolTip(_skip,
+            "Stops what is on air: a commentary segment block, or the post-race recap show (teaser, recap, honours, "
+            + "interview, sign-off). The line being spoken finishes; nothing after it starts, and the show music rides down.");
+        tips.SetToolTip(_replay, "Plays the last commentary segment again.");
+
         Controls.Add(_said);
         Controls.Add(_hold);
         Controls.Add(_replay);
@@ -326,7 +340,11 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// everything else, because nothing else on this row is audible while
     /// it is true - see <see cref="MutedText"/>.
     /// </param>
-    public void Show(CommentaryDirector? director, bool enabled, bool speaking, string? onAir = null, bool muted = false, int notesWaiting = 0, int votesIn = 0, AnnouncerLoad? load = null)
+    /// <param name="programmeRunning">
+    /// Race Control's recap show is running (17 Oct 2026) - Skip has
+    /// something to stop even in the quiet while the model writes it.
+    /// </param>
+    public void Show(CommentaryDirector? director, bool enabled, bool speaking, string? onAir = null, bool muted = false, int notesWaiting = 0, int votesIn = 0, AnnouncerLoad? load = null, bool programmeRunning = false)
     {
         if (director is null || !enabled)
         {
@@ -399,7 +417,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         // that was never audible. A button that can only fail is better
         // greyed. See MutedText.
         _replay.Enabled = !muted && director.LastSaid is not null;
-        _skip.Enabled = !muted && (speaking || ShowOnAir.Playing);
+        _skip.Enabled = !muted && (speaking || ShowOnAir.Playing || programmeRunning);
 
         // ALWAYS ENABLED, unlike the two above, and the difference is the
         // point: Play again and Skip act on something that may not exist,

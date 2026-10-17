@@ -2921,6 +2921,37 @@ With that in place:
 13. Delivery energy driven by `RaceStature`, not just segment count
     (ElevenLabs stability and style).
 
+---
+
+## On air (16-17 Oct 2026)
+
+What was built over the two days, in short. The detail is on the classes
+named.
+
+- **Broadcast imaging, per soundscape.** Each soundscape carries its own
+  jingles, sweepers, bumpers, stingers and beds, played to a run of show
+  (`BroadcastImaging`, the **Sounds - Imaging** tab in
+  `BroadcastImagingControl`). Every soundscape's songs are named, and the
+  Podium has its own imaging and songs. Applying a soundscape also puts the
+  app in that soundscape's look (`MainForm.SoundscapeLook.cs`).
+- **On Air** (`RaceControlControl.OnAir.cs`): jingle, then the opening, then
+  a bumper, then staging. It is the normal way to start a race now; Stage
+  skips straight to staging. Music and crowd open at On Air, so staging no
+  longer skips them.
+- **The announcer's name** is said in the On Air opening and carried into
+  the stop set.
+- **The recap show** has its own host voice and its own name. Stingers sit
+  between its parts with the bed ducked and held under them, one stinger
+  per gap. The sign-off always names the race and the show.
+- **Hitting the post.** Each imaging piece has a Post and an Out mark;
+  talk-ups are timed to the last word of the rendered line, with a post
+  timing nudge to correct the fit.
+- **The Mixer** has typed level boxes above its faders.
+- **Menu clean-up (17 Oct).** Removed: the voice ID (the jingles do that
+  job), Repeat Race Summary, and segment ticks that did nothing. The
+  Synthwave names are Classic now, and the built-in beeps are listed as
+  Generated tones.
+
 ## The season's own piece (scoped 13 Oct 2026, not started)
 
 The entry item 10 asked for before this is started. Every figure and file
@@ -4605,10 +4636,9 @@ the voice round, the name check and race audio.
   `HandOverIfItIsTimeAsync` calls `RunBlockAsync` without asking
   `treatment.Treats`, so a hand-over gets music whatever is ticked.
 - **No control for `AppSettings.ShowStingLevel`** (default 80) on any page.
-- **Race recording has no switch.** It is on, and turning it off means
-  creating `%AppData%\HeatCaller\race-audio.json` by hand, because nothing
-  calls a `RaceAudioStore` setter and so the file never gets written.
-  Nothing prunes the folder either.
+- **Race recording has a switch now** (corrected 17 Oct 2026): **Voice -
+  Commentary** has "Record each race, and cut each driver their own clip".
+  Old nights are pruned (`RaceAudioStore.PruneOldNights`).
 - **Two stale user-facing strings naming the retired Windows voice**:
   `RivalriesControl.cs:216` and `SoundscapeEditorForm.cs:401`. Both offer a
   club a voice that no longer exists as the way to write its own lines. Two
@@ -4644,11 +4674,11 @@ a page describing something a club can't reach is worse than no page.
 
 | What | Where | What's missing |
 |---|---|---|
-| The club's voice ID / station ident | `ShowIdent`, `ShowRunningOrder.IdentDue` (40-minute floor), `AppSettings.ShowIdentLine`, `ShowTreatment.IdentItem` | No block builder calls `IdentItem`, and no page has the text box. One field on **Voice - Commentary** |
+| ~~The club's voice ID / station ident~~ | - | Removed 17 Oct 2026; each soundscape's jingles do that job now |
 | The drama-shaped show | `ShowDrama`, `ShowBilling.BiggerAir` (0.25 s), `LongerLift` (0.35 s) | `ShowTreatment.NextShowDrama` is never set, so every show is `ShowDrama.None` |
 | The ad-break bumper | `ShowTreatment.PunctuateAsync` | Nothing calls it |
 | The sting level | `AppSettings.ShowStingLevel` | No control (above) |
-| Turning race recording off | `RaceAudioStore` | No control (above) |
+| ~~Turning race recording off~~ | `RaceAudioStore` | Done: "Record each race" on **Voice - Commentary** (above) |
 
 ## Parked
 

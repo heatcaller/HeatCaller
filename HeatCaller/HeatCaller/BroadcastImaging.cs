@@ -98,6 +98,22 @@ internal sealed class ImagingSettings
     public int Level { get; set; } = 80;
 
     /// <summary>
+    /// How loud the soundscape's music beds play under the voice, 0 to 100
+    /// (17 Oct 2026) - the On Air opening bed and the recap bed. They took
+    /// the Commentary page's show bed level until now, which greys out when
+    /// the club's own show music is unticked, so a club on the soundscape's
+    /// imaging alone could not set it. 22, the show bed's own default.
+    /// </summary>
+    public int BedLevel { get; set; } = 22;
+
+    /// <summary>
+    /// How far those beds drop while the announcer is speaking, as a
+    /// percentage of their own level (17 Oct 2026). 55, the show bed's own
+    /// default (AppSettings.ShowBedDuckPercent).
+    /// </summary>
+    public int BedDuckPercent { get; set; } = 55;
+
+    /// <summary>
     /// Where each piece's OUT is, in seconds from its top, by file name -
     /// where the piece's own voice stops and the next line starts. The
     /// club's own marks from the Imaging page. A piece with none here takes
@@ -341,6 +357,56 @@ internal static class BroadcastImaging
             Saved();
         }
     }
+
+    /// <summary>How loud the soundscape's beds play under the voice, 0 to 100 - see ImagingSettings.BedLevel.</summary>
+    internal static int BedLevelPercent
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return Math.Clamp(Loaded().BedLevel, 0, 100);
+            }
+        }
+        set
+        {
+            lock (Gate)
+            {
+                Loaded().BedLevel = Math.Clamp(value, 0, 100);
+                SaveLocked();
+            }
+
+            Saved();
+        }
+    }
+
+    /// <summary>How far the beds drop under the voice, 5 to 100 percent of their level - see ImagingSettings.BedDuckPercent.</summary>
+    internal static int BedDuckPercent
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return Math.Clamp(Loaded().BedDuckPercent, 5, 100);
+            }
+        }
+        set
+        {
+            lock (Gate)
+            {
+                Loaded().BedDuckPercent = Math.Clamp(value, 5, 100);
+                SaveLocked();
+            }
+
+            Saved();
+        }
+    }
+
+    /// <summary>The beds' level as a gain, 0 to 1 - what the On Air opening bed and the recap bed play at.</summary>
+    internal static float BedLevel => BedLevelPercent / 100f;
+
+    /// <summary>The beds' duck as a gain on their own level, 0.05 to 1.</summary>
+    internal static float BedDuck => Math.Clamp(BedDuckPercent / 100f, 0.05f, 1f);
 
     // ==================== The run of show ====================
 
@@ -1557,7 +1623,7 @@ internal sealed class ImagingBed
     /// Starts the next bed for a point, coming up from nothing. Null when
     /// there is no bed for it, or everything is muted.
     /// </summary>
-    /// <param name="level">The bed on its own, 0 to 1 - the show bed level on the Commentary page.</param>
+    /// <param name="level">The bed on its own, 0 to 1 - BroadcastImaging.BedLevel, set on the Imaging page.</param>
     /// <param name="duck">How far it drops under the voice, as a fraction of <paramref name="level"/>.</param>
     internal static ImagingBed? Start(ImagingCue cue, AnnouncementService announcer, float level, float duck)
     {

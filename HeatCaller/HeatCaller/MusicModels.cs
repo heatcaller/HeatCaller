@@ -102,7 +102,12 @@ public sealed record ThemeMusicSource(string SoundscapeName, IReadOnlyList<strin
     /// <summary>The library's tracks this soundscape plays, in library order, that are on disk.</summary>
     public List<MusicTrack> TracksIn(IEnumerable<MusicTrack> library) =>
         library
-            .Where(t => Titles.Contains(t.DisplayName.Trim(), StringComparer.OrdinalIgnoreCase) && File.Exists(t.FilePath))
+            // Through MusicStore.CurrentTitle both ways, so a soundscape
+            // saved before its songs were named (17 Oct 2026) still finds
+            // them, and a library not yet re-labelled still plays.
+            .Where(t => File.Exists(t.FilePath)
+                        && Titles.Any(title => string.Equals(
+                            MusicStore.CurrentTitle(title), MusicStore.CurrentTitle(t.DisplayName), StringComparison.OrdinalIgnoreCase)))
             .ToList();
 }
 
@@ -610,6 +615,20 @@ public sealed class MusicStore
             // as an error they can fix rather than silently vanishing.
             Current.Tracks.RemoveAll(t => t.IsBuiltIn && !File.Exists(t.FilePath));
 
+            // THE SONGS' NAMES (17 Oct 2026): a shipped song listed under its
+            // working name - "Broadcast Song 1" - takes the name it has now.
+            // Shipped ones only: a club's own track is called what they
+            // called it.
+            foreach (var track in Current.Tracks.Where(t => t.IsBuiltIn))
+            {
+                var named = CurrentTitle(track.DisplayName);
+
+                if (!string.Equals(named, track.DisplayName.Trim(), StringComparison.Ordinal))
+                {
+                    track.Title = named;
+                }
+            }
+
             if (save)
             {
                 Save();
@@ -659,7 +678,65 @@ public sealed class MusicStore
 
         // Classic's own songs (16 Oct 2026).
         "Classic Song 1", "Classic Song 2", "Classic Song 3", "Classic Song 4",
+
+        // Podium's own songs (17 Oct 2026).
+        "Podium Song 1", "Podium Song 2", "Podium Song 3", "Podium Song 4",
+
+        // ...and the names all of them have had since 17 Oct 2026 - see
+        // NamedSongs. The working names above stay, so a library listed
+        // before then is still recognised as the shipped set.
+        "Prime Time", "Highlight Reel", "Under the Lights", "Post-Race Show",
+        "Gravel and Gasoline", "Dirt Road Dash", "Pit Stop Two-Step", "Back Forty Straight",
+        "Chrome Apex", "Midnight Pit Wall", "Starlight Straight", "Afterburn",
+        "Full Throttle", "Top Step", "Burnout", "Champagne Spray",
     };
+
+    /// <summary>
+    /// The soundscapes' own songs, from the working name each file ships
+    /// under to the title it plays as (17 Oct 2026). They shipped as
+    /// "Broadcast Song 1" and so on; the club asked for every song to have
+    /// a real name. The files keep their working names, so nothing on disk
+    /// moves - TitleForFile reads this, and SyncBuiltInTracks re-labels a
+    /// library listed before it.
+    /// </summary>
+    private static readonly Dictionary<string, string> NamedSongs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Broadcast - the TV sports show.
+        ["Broadcast Song 1"] = "Prime Time",
+        ["Broadcast Song 2"] = "Highlight Reel",
+        ["Broadcast Song 3"] = "Under the Lights",
+        ["Broadcast Song 4"] = "Post-Race Show",
+
+        // Pit Lane - country.
+        ["Pit Lane Song 1"] = "Gravel and Gasoline",
+        ["Pit Lane Song 2"] = "Dirt Road Dash",
+        ["Pit Lane Song 3"] = "Pit Stop Two-Step",
+        ["Pit Lane Song 4"] = "Back Forty Straight",
+
+        // Classic - synthwave.
+        ["Classic Song 1"] = "Chrome Apex",
+        ["Classic Song 2"] = "Midnight Pit Wall",
+        ["Classic Song 3"] = "Starlight Straight",
+        ["Classic Song 4"] = "Afterburn",
+
+        // Podium - rock.
+        ["Podium Song 1"] = "Full Throttle",
+        ["Podium Song 2"] = "Top Step",
+        ["Podium Song 3"] = "Burnout",
+        ["Podium Song 4"] = "Champagne Spray",
+    };
+
+    /// <summary>
+    /// The title a song plays as now: its name when <paramref name="title"/>
+    /// is one of the working names in <see cref="NamedSongs"/>, and
+    /// otherwise the title as it is.
+    /// </summary>
+    public static string CurrentTitle(string? title)
+    {
+        var trimmed = (title ?? string.Empty).Trim();
+
+        return NamedSongs.TryGetValue(trimmed, out var named) ? named : trimmed;
+    }
 
     public static bool IsBundledTitle(string title) => BundledTitles.Contains(title.Trim());
 
@@ -718,6 +795,11 @@ public sealed class MusicStore
     public static string TitleForFile(string path)
     {
         var stem = Path.GetFileNameWithoutExtension(path);
+
+        if (NamedSongs.TryGetValue(stem, out var named))
+        {
+            return named;
+        }
 
         return SourceNameToTitle.TryGetValue(stem, out var mapped)
             ? mapped

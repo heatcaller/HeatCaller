@@ -76,7 +76,7 @@ public enum BrainFallback
     /// <summary>Don't say it at all.</summary>
     None,
 
-    /// <summary>Let Ollama write it - rough phrasing beats silence for this one.</summary>
+    /// <summary>Let the bundled model on this PC write it - rough phrasing beats silence for this one.</summary>
     LocalModel,
 
     /// <summary>Fall all the way to the fixed announcement line. This must happen.</summary>

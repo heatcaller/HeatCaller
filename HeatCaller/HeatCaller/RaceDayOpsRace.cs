@@ -207,7 +207,9 @@ public sealed partial class RaceDayService
         {
             // The yes was given on the phone - passed on so the laptop does
             // not put the same question to nobody.
-            "stage" => () => control.TriggerStage(confirmedOverRunningRace: StillConfirmed()),
+            // Through On Air when it is the normal start (17 Oct 2026) -
+            // see RaceControlControl.TriggerStart.
+            "stage" => () => control.TriggerStart(confirmedOverRunningRace: StillConfirmed()),
             "countdown" => () => control.TriggerCountdown(confirmedOverRunningRace: StillConfirmed()),
             "green" => control.TriggerGreen,
             "yellow" => control.TriggerYellow,

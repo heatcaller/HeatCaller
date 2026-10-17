@@ -228,7 +228,8 @@ public sealed class ThemesControl : UserControl
         {
             Text = "A soundscape is the whole sound of race day: a sound for every moment, and an announcer's words and delivery to match. " +
                    "Preview one to hear a short pretend race, Apply it to use it, or Customize to mix packs and rewrite lines. " +
-                   "Applying never touches your API key, which voice speaks, or this PC's volumes. Colours and the club logo are on the Themes page.",
+                   "Applying also puts the app in the soundscape's own look (Classic's neon, Pit Lane's hazard yellow and so on) after a restart, " +
+                   "and never touches your API key, which voice speaks, or this PC's volumes. The club logo, and changing the look back, are on the Themes page.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -415,10 +416,13 @@ public sealed class ThemesControl : UserControl
             .Distinct()
             .ToList();
 
-        // The club's voice-ID rides along here, which is what gives it the
-        // recorder, the count, the undo and Re-record all for nothing - see
-        // ShowIdent. recordable flows from here to RecordVoiceLinesAsync.
-        var recordable = StingerLibrary.RecordableLines(theme.Voice, ShowIdent.Line(_settings?.ShowIdentLine));
+        // The soundscape's own lines only. 17 Oct 2026: the club's voice-ID
+        // used to ride along here, but nothing ever said it (no page set the
+        // line and nothing put it in a show - the soundscape's jingles do
+        // that job now), so counting it made "N of M voice lines recorded"
+        // promise a line that would never play. recordable flows from here
+        // to RecordVoiceLinesAsync.
+        var recordable = StingerLibrary.RecordableLines(theme.Voice);
         var recorded = StingerLibrary.Shared.CountRecorded(recordable);
         var recordedNote = recorded == 0 ? string.Empty : $"  \u2022  {recorded} of {recordable.Count} voice lines recorded";
         var backgroundNote = theme.Background is { } bg
@@ -857,11 +861,23 @@ public sealed class ThemesControl : UserControl
               + "were before, with this soundscape's announcements and sounds.\n\n"
             : string.Empty;
 
+        // The look it puts on (17 Oct 2026) - since 16 Oct applying changes
+        // the app's colours too (MainForm.PutOnSoundscapeLook), and this
+        // question used to leave that out. Not said when the app already
+        // wears it, which is when nothing changes.
+        var look = Looks.Find(Theme.LookFor(theme));
+        var looksChange = look is not null
+            && (_settings is null || !string.Equals(Looks.ForApp(_settings).Key, look.Key, StringComparison.OrdinalIgnoreCase));
+        var lookNote = looksChange
+            ? $"It also changes the app's look to \"{look!.Name}\" - the app asks to restart to put it on. You can change the look back on the Themes page.\n\n"
+            : string.Empty;
+
         var confirm = AppDialog.Show(this,
             $"Apply \"{theme.Name}\"? This replaces {replaces}.\n\n"
             + leavesLapTimesOnly
             + (switches.Length > 0 ? $"{switches}.\n\n" : string.Empty)
             + (background.Length > 0 ? $"{background}\n\n" : string.Empty)
+            + lookNote
             + notAffected,
             "Apply soundscape", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 

@@ -657,7 +657,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 log($"{AppTime.LogStampNow()}  [audio] Nothing worth keeping was recorded for "
                     + $"\"{recording.BaseName}\" ({recording.LengthMs}ms). "
                     + (recording.LengthMs == 0
-                        ? "No sound came out of HeatCaller at all - check the speakers and the Mixer page."
+                        ? "No sound came out of HeatCaller at all - check the speakers and Sounds > Mixer."
                         : "The file has been removed."));
                 TryDelete(recording.WavPath, log);
                 SweepOrphans(store, recording.WavPath, log);

@@ -686,11 +686,21 @@ public sealed class DemoModeControl : UserControl
             : NoPaceHint;
     }
 
+    /// <summary>
+    /// On Air in front of the demo (17 Oct 2026) - the round, or null for a
+    /// demo of the checked drivers, and the demo's own start, which On Air
+    /// calls in place of Stage. Wired by MainForm to Race Control's
+    /// GoOnAirThenAsync, the same way the Race Program's "Run as Demo" goes,
+    /// which starts it straight away when Start races On Air is unticked.
+    /// Null: the demo starts straight away, as it always did.
+    /// </summary>
+    internal Func<RoundDefinition?, Action, Task>? GoOnAirThen { get; set; }
+
     private void BtnStart_Click(object? sender, EventArgs e)
     {
         if (ChosenRound() is { } round)
         {
-            RunRound(round);
+            StartThroughOnAir(round, () => RunRound(round));
             return;
         }
 
@@ -704,7 +714,23 @@ public sealed class DemoModeControl : UserControl
             return;
         }
 
-        StartSimulation(realTransponders, placeholderCount);
+        StartThroughOnAir(null, () => StartSimulation(realTransponders, placeholderCount));
+    }
+
+    /// <summary>
+    /// The Start button's demo, through On Air when MainForm has wired it -
+    /// see <see cref="GoOnAirThen"/>. Async void, as a click is, so a fault
+    /// surfaces the same way it did when the click started the demo itself.
+    /// </summary>
+    private async void StartThroughOnAir(RoundDefinition? round, Action start)
+    {
+        if (GoOnAirThen is { } onAir)
+        {
+            await onAir(round, start);
+            return;
+        }
+
+        start();
     }
 
     /// <summary>

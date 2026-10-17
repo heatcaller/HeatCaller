@@ -562,12 +562,22 @@ public partial class MainForm
         // with nothing said about why - the setting looked broken.
         if (_settings.AudioStartMusic)
         {
-            if (_music.IsPlaying)
+            if (_music.IsPlaying && _musicReadiedForOnAir && !staysMuted)
+            {
+                // Opened and paused by On Air (see ReadySessionAudioForOnAir)
+                // - just carried on, so no output opens at the staging call.
+                _musicReadiedForOnAir = false;
+                _music.CancelFade();
+                _music.Resume();
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Music started for the new session - opened when On Air was pressed, so nothing skipped.");
+            }
+            else if (_music.IsPlaying)
             {
                 // Already going - leave it rather than restarting a track
                 // someone is part-way through. But not fading out: the last
                 // session's end may still be taking it down, and that fade
                 // used to stop it a few seconds into this one.
+                _musicReadiedForOnAir = false;
                 _music.CancelFade();
             }
             else if (_musicStore.Current.Tracks.Count == 0)
@@ -595,6 +605,22 @@ public partial class MainForm
                         ? $"{AppTime.LogStampNow()}  [audio] Music started for the new session."
                         : $"{AppTime.LogStampNow()}  [audio] Music couldn't start - no enabled track has a readable file.");
                 }
+            }
+        }
+
+        // Opened silent by On Air (see ReadySessionAudioForOnAir): brought
+        // up rather than opened, so nothing skips at the staging call - or,
+        // when the session stays muted, closed again and held as below.
+        if (_ambience.IsHeld)
+        {
+            if (staysMuted || !_settings.AudioStartAmbience)
+            {
+                _ambience.Stop();
+            }
+            else
+            {
+                _ambience.Release();
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Ambience started for the new session - opened when On Air was pressed, so nothing skipped.");
             }
         }
 
@@ -626,6 +652,75 @@ public partial class MainForm
         {
             SetAllSoundMuted(false);
             OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Unmuted for the new session.");
+        }
+    }
+
+    /// <summary>The music was opened and paused by On Air, for the staging call to carry on - see ReadySessionAudioForOnAir.</summary>
+    private bool _musicReadiedForOnAir;
+
+    /// <summary>
+    /// Opens the session's music and crowd when On Air is pressed, silent,
+    /// so the race being staged a minute later only has to bring them up
+    /// (17 Oct 2026).
+    ///
+    /// WHY. Music and the crowd each open a sound output of their own when
+    /// they start, and opening one makes Windows reconfigure the sound for a
+    /// moment - everything else playing stalls. They started at staging,
+    /// which with On Air is the very moment the bumper and the staging call
+    /// are playing, so the broadcast skipped like an old Discman right at
+    /// the hand-over. When On Air is pressed nothing is on air yet - the
+    /// opening is still being written - so a stall there is heard by nobody.
+    ///
+    /// Only what the staging call would start anyway: races, set to come up
+    /// at staging, not already started for this session, and not while the
+    /// sound is muted (the session decides that at staging, as it always
+    /// has). The music is opened under the show's own silence and paused at
+    /// once; the crowd is opened held at silence (AmbienceService.StartHeld).
+    /// If On Air is called off and the race is never staged, both stay
+    /// quiet, and the next staging brings them up.
+    /// </summary>
+    private void ReadySessionAudioForOnAir()
+    {
+        var settings = _settings;
+
+        if (_race.IsPracticeMode
+            || !settings.AudioStartWithRaces
+            || !settings.AudioStartAtStaging
+            || _sessionAudioStarted
+            || _announcer.Muted)
+        {
+            return;
+        }
+
+        if (settings.AudioStartMusic && !_music.IsPlaying && _musicStore.Current.Tracks.Count > 0)
+        {
+            _music.Settings = _musicStore.Current;
+
+            // Under the show's silence, so the first moment of the track -
+            // between it opening and the pause - is never heard.
+            ShowOnAir.Begin();
+
+            try
+            {
+                _music.Play();
+
+                if (_music.IsPlaying)
+                {
+                    _music.Pause();
+                    _musicReadiedForOnAir = true;
+                    OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Music opened ahead of the race and paused - it starts at staging without a skip.");
+                }
+            }
+            finally
+            {
+                ShowOnAir.End();
+            }
+        }
+
+        if (settings.AudioStartAmbience && !_ambience.IsRunning)
+        {
+            _ambience.Settings = _ambienceStore.Current;
+            _ambience.StartHeld(ignoreEnabledSetting: true);
         }
     }
 

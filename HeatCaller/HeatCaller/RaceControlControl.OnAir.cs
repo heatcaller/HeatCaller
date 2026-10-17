@@ -21,6 +21,15 @@ namespace HeatCaller;
 /// Pressing On Air again while it runs skips the rest and stages straight
 /// away. Anything else that moves the race on - Stage pressed by hand, the
 /// remote, the day schedule - calls it off, and staging is theirs.
+///
+/// THE NORMAL START (17 Oct 2026). Only the Race Program's demo came through
+/// here; Start Next, the Program's Start, F1, the phone and the day schedule
+/// all staged directly, so the top of the race was heard only when somebody
+/// remembered the button. With "Start races On Air" ticked (beside the
+/// button, on by default) they all go through On Air first and its hand-over
+/// is the Stage they would have called - see StartThroughOnAir. The Stage
+/// button itself still stages directly, and On Air pressed again still
+/// skips to Stage.
 /// </summary>
 public sealed partial class RaceControlControl
 {
@@ -39,22 +48,110 @@ public sealed partial class RaceControlControl
     /// </summary>
     private bool _openingSaidByOnAir;
 
-    /// <summary>Wires the button. Called from BuildLayout beside Stage.</summary>
+    /// <summary>
+    /// "Start races On Air" - see <see cref="StartWithOnAir"/>. Under the
+    /// flag row, at On Air's end of it.
+    /// </summary>
+    private readonly ThemedCheckBox _chkStartWithOnAir = new();
+
+    /// <summary>
+    /// Whether a race started any way but the Stage button goes through On
+    /// Air first (17 Oct 2026) - Start Next, the Program's Start, F1, the
+    /// phone and the day schedule. On by default: On Air is the normal
+    /// start. Remembered between launches - AppSettings.RaceStartWithOnAir.
+    /// </summary>
+    internal bool StartWithOnAir
+    {
+        get => _settings.RaceStartWithOnAir;
+        set
+        {
+            if (_settings.RaceStartWithOnAir != value)
+            {
+                _settings.RaceStartWithOnAir = value;
+                _settings.Save();
+            }
+
+            if (_chkStartWithOnAir.Checked != value)
+            {
+                _chkStartWithOnAir.Checked = value;
+            }
+        }
+    }
+
+    /// <summary>What On Air calls itself while it holds the broadcast floor - see ShowFloor.</summary>
+    private const string OnAirHoldsTheFloor = "On Air opening the next race";
+
     /// <summary>The button's own caption, and what it says while the opening is still being got ready.</summary>
     private const string OnAirCaption = "On Air";
     private const string OnAirWaitingCaption = "Waiting\u2026";
 
+    /// <summary>Wires the button. Called from BuildLayout beside Stage.</summary>
     private void BuildOnAirButton()
     {
         _btnOnAir.Text = OnAirCaption;
-        _btnOnAir.Click += async (_, _) => await RunOnAirAsync();
+        _btnOnAir.Click += (_, _) => PressOnAir();
+
+        _chkStartWithOnAir.Text = "Start races On Air";
+        _chkStartWithOnAir.AutoSize = true;
+        _chkStartWithOnAir.Checked = _settings.RaceStartWithOnAir;
+        _chkStartWithOnAir.CheckedChanged += (_, _) => StartWithOnAir = _chkStartWithOnAir.Checked;
 
         var tip = new ToolTip();
         AppTheme.StyleToolTip(tip, keep: true);
         tip.SetToolTip(_btnOnAir,
             "Kicks the race off like a radio show: the soundscape's jingle or sweeper, the opening, a bumper, then "
-            + "Stage. Press it again to skip straight to Stage. The pieces are set on Sounds -> Imaging.");
+            + "Stage. Press it again to skip straight to Stage. The pieces are set on Sounds -> Imaging. Shortcut: O");
+        tip.SetToolTip(_chkStartWithOnAir,
+            "Ticked, Start Next, the program's Start, F1, the phone and the day schedule all go through On Air first. "
+            + "Unticked, they stage straight away. The Stage button always stages straight away.");
     }
+
+    /// <summary>The On Air button, pressed - by a click or the O key.</summary>
+    private async void PressOnAir() => await RunOnAirAsync();
+
+    /// <summary>
+    /// Starts a race the normal way (17 Oct 2026): through On Air when
+    /// <see cref="StartWithOnAir"/> is ticked, with On Air's hand-over the
+    /// very Stage the caller would have pressed - the same confirmation over
+    /// a running race and the same undo - so the staging chain, its
+    /// auto-advance and the warm-up all run exactly as before.
+    ///
+    /// Straight to Stage, as before, whenever On Air would not open this
+    /// race: practice running (Stage refuses it itself), a warm-up open
+    /// (Stage skips it), or a race already staged, counting down or running
+    /// (Stage's own question about abandoning it is the right one). On Air
+    /// already running is the exception - this is then its second press, and
+    /// it skips to Stage.
+    /// </summary>
+    internal void StartThroughOnAir(bool confirmedOverRunningRace = false, Action? restoreHostOnUndo = null)
+    {
+        void StageNow() => _actStage?.Invoke(confirmedOverRunningRace, restoreHostOnUndo);
+
+        var onAirCanOpen = _onAirCts is not null
+                           || (!_race.IsPracticeMode
+                               && !_race.IsWarmingUp
+                               && _race.State is not (RaceState.Staging or RaceState.Countdown or RaceState.Racing));
+
+        if (!StartWithOnAir || !onAirCanOpen)
+        {
+            StageNow();
+            return;
+        }
+
+        StartOnAir(StageNow);
+    }
+
+    /// <summary>On Air with the caller's Stage as its hand-over - async void, as the button's click is, so a fault surfaces the same way.</summary>
+    private async void StartOnAir(Action handOver) => await RunOnAirAsync(handOver: handOver);
+
+    /// <summary>
+    /// Run as On Air starts, before anything plays (17 Oct 2026): MainForm
+    /// opens the session's music and crowd silent here, so the staging call
+    /// does not open them on top of the broadcast - opening a sound output
+    /// stalls everything else playing for a moment. See
+    /// MainForm.ReadySessionAudioForOnAir.
+    /// </summary>
+    internal Action? OnAirStarting { get; set; }
 
     /// <summary>Takes On Air's word that the opening has been said, for the Stage it hands over to. See <see cref="_openingSaidByOnAir"/>.</summary>
     private bool TakeOpeningSaidByOnAir()
@@ -74,10 +171,31 @@ public sealed partial class RaceControlControl
     /// The round is handed over rather than read from the Round box: a demo
     /// that is not allowed to fill the programme leaves the box on freeform,
     /// and the opening would then have no race to be about.
+    ///
+    /// AND THE DEMO MODE PAGE'S OWN START (17 Oct 2026), which skipped all
+    /// of this. Its demo of the checked drivers has no round, and then there
+    /// is no opening - the jingle and the demo, never an opening about
+    /// whatever the Round box happens to hold. With Start races On Air
+    /// unticked, both demos start straight away, like every other start.
     /// </summary>
-    internal Task GoOnAirThenAsync(RoundDefinition round, Action start) => RunOnAirAsync(round, start);
+    internal Task GoOnAirThenAsync(RoundDefinition? round, Action start)
+    {
+        if (!StartWithOnAir)
+        {
+            start();
+            return Task.CompletedTask;
+        }
 
-    private async Task RunOnAirAsync(RoundDefinition? round = null, Action? start = null)
+        return RunOnAirAsync(round, start);
+    }
+
+    /// <param name="round">The race to open, or null for the one in the Round box (a demo's: none).</param>
+    /// <param name="start">A demo's own start, in place of staging - see GoOnAirThenAsync.</param>
+    /// <param name="handOver">
+    /// The Stage to call at the end, in place of a plain Stage press - see
+    /// StartThroughOnAir. Null for the button itself.
+    /// </param>
+    private async Task RunOnAirAsync(RoundDefinition? round = null, Action? start = null, Action? handOver = null)
     {
         if (_onAirCts is { } running)
         {
@@ -113,6 +231,52 @@ public sealed partial class RaceControlControl
             return;
         }
 
+        // THE BROADCAST FLOOR, FROM THE PRESS UNTIL THE RACE IS STAGED OR
+        // ON AIR IS CALLED OFF (17 Oct 2026). Without it the announcer
+        // screen's director, which asks for a segment twice a second, saw a
+        // quiet gap while the opening was written and started a segment of
+        // its own - over the jingle, or under the opening. Taken as the
+        // recap sequence takes it; not failed on, since On Air is the race
+        // director's own press. Released on every way out - see the finally.
+        //
+        // The recap show still running is called off first: On Air is the
+        // next race being called, which is what used to end it at Stage.
+        EndRecapShow("On Air was pressed for the next race");
+
+        _onAirHasFloor = ShowFloor.TryClaim(OnAirHoldsTheFloor);
+
+        if (!_onAirHasFloor)
+        {
+            // Usually the recap just called off, still winding down - asked
+            // again once the opening is written. See OnAirAsync.
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [imaging] On Air - {ShowFloor.HeldBy ?? "something else"} still has the broadcast floor; "
+                + "On Air takes it as soon as it is free.");
+        }
+
+        try
+        {
+            await OnAirAsync(round, start, handOver);
+        }
+        finally
+        {
+            // After the hand-over, which stages synchronously: by now the
+            // race is staging and the director stands down for that itself.
+            if (_onAirHasFloor)
+            {
+                ShowFloor.Release(OnAirHoldsTheFloor);
+            }
+
+            _onAirHasFloor = false;
+        }
+    }
+
+    /// <summary>On Air holds the broadcast floor - see RunOnAirAsync. Only one On Air runs at a time.</summary>
+    private bool _onAirHasFloor;
+
+    /// <summary>The run of show itself, with the floor held - see RunOnAirAsync.</summary>
+    private async Task OnAirAsync(RoundDefinition? round, Action? start, Action? handOver)
+    {
         var cts = new CancellationTokenSource();
         _onAirCts = cts;
         _onAirStageNow = false;
@@ -122,6 +286,17 @@ public sealed partial class RaceControlControl
         BroadcastImaging.OnAirBegins();
         _openingSaidByOnAir = false;
         _btnOnAir.Lit = true;
+
+        // The music and crowd the staging call will bring up, opened now
+        // while nothing is on air - see OnAirStarting.
+        try
+        {
+            OnAirStarting?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - couldn't open the session's music and crowd early ({ex.Message}). They start at staging as usual.");
+        }
 
         // Anything else moving the race on calls this off - see the class
         // remarks. Async, because Cancel() would run whatever is waiting on
@@ -165,7 +340,8 @@ public sealed partial class RaceControlControl
             // director can see it was pressed and is on its way.
             _btnOnAir.Text = OnAirWaitingCaption;
 
-            var line = await WriteOpeningAsync(round, cts.Token);
+            // A demo with no round has no race to open - see GoOnAirThenAsync.
+            var line = start is not null && round is null ? null : await WriteOpeningAsync(round, cts.Token);
 
             // THE ANNOUNCER SAYS WHO HE IS (16 Oct 2026), a line into the
             // opening - "Welcome back to the track! I'm Dave Marsh. Heat
@@ -184,6 +360,13 @@ public sealed partial class RaceControlControl
             }
 
             cts.Token.ThrowIfCancellationRequested();
+
+            // The floor, asked again if it was not free at the press - the
+            // recap called off by this press lets go of it as it winds down.
+            if (!_onAirHasFloor)
+            {
+                _onAirHasFloor = ShowFloor.TryClaim(OnAirHoldsTheFloor);
+            }
 
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - the top of the race.");
 
@@ -296,15 +479,28 @@ public sealed partial class RaceControlControl
         }
 
         HandTheBedToTheStart(bed);
-        _actStage?.Invoke(false, null);
+
+        // The caller's own Stage when one was handed over - see
+        // StartThroughOnAir - and a plain Stage press otherwise.
+        if (handOver is not null)
+        {
+            handOver();
+        }
+        else
+        {
+            _actStage?.Invoke(false, null);
+        }
     }
 
-    /// <summary>The opening bed on its own - the show bed level set on the Commentary page.</summary>
-    private float OpeningBedLevel =>
-        _settings.ShowBedLevel is >= 0 and <= 100 ? _settings.ShowBedLevel / 100f : 0.22f;
+    /// <summary>
+    /// The opening bed on its own - the imaging bed's level, set on Sounds ->
+    /// Imaging with the rest of the imaging (17 Oct 2026). It used to read the
+    /// Commentary page's show bed, which is the recap's music, not this.
+    /// </summary>
+    private static float OpeningBedLevel => BroadcastImaging.BedLevel;
 
-    /// <summary>How far the opening bed drops under the voice - the show bed's own duck.</summary>
-    private float OpeningBedDuck => Math.Clamp(_settings.ShowBedDuckPercent / 100f, 0.05f, 1f);
+    /// <summary>How far the opening bed drops under the voice - the imaging bed's own duck.</summary>
+    private static float OpeningBedDuck => BroadcastImaging.BedDuck;
 
     /// <summary>
     /// The longest the opening bed may run after On Air hands over - a start

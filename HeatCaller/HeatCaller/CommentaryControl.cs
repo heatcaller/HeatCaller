@@ -42,6 +42,21 @@ public sealed class CommentaryControl : UserControl
     /// </summary>
     private readonly Dictionary<SegmentKind, CheckBox> _segmentBoxes = new();
 
+    /// <summary>
+    /// Segments with no box on this page (17 Oct 2026), the way the
+    /// Essentials have none. Nothing writes them: the director has no
+    /// facts for either (CommentaryDirector.Candidates' default), so a
+    /// tick did nothing. The mechanic's interview is really the Broadcast
+    /// card's "quick interview with the winner's mechanic"
+    /// (RecapMechanicInterview). Hidden rather than deleted from
+    /// SegmentKind, because other code still names them.
+    /// </summary>
+    private static readonly HashSet<SegmentKind> NotOffered = new()
+    {
+        SegmentKind.MechanicInterview,
+        SegmentKind.Honours,
+    };
+
     private readonly CheckBox _chkCoHost = new ThemedCheckBox();
     private readonly TextBox _txtCoHostName = new();
     private readonly ComboBox _cmbCoHostVoice = new();
@@ -238,6 +253,9 @@ public sealed class CommentaryControl : UserControl
     private readonly ComboBox _cmbStingPiece = new();
 
     private readonly NumericUpDown _numOpenerLevel = new();
+
+    /// <summary>AppSettings.ShowStingLevel, which had no box (17 Oct 2026) - built like the opener's.</summary>
+    private readonly NumericUpDown _numStingLevel = new();
     private readonly NumericUpDown _numBedLevel = new();
     private readonly NumericUpDown _numBedDuck = new();
     private readonly NumericUpDown _numVoiceEnters = new();
@@ -442,6 +460,13 @@ public sealed class CommentaryControl : UserControl
 
     /// <summary>Which engine speaks, as chosen on Voice Settings. Set by the host; without it the list offers ElevenLabs.</summary>
     internal Func<VoiceEngine>? EngineInUse { get; set; }
+
+    /// <summary>
+    /// The club's "Max spoken announcements per lap" from Voice Settings
+    /// (17 Oct 2026), so the How chatty line counts from the club's own
+    /// figure rather than a default profile's. Unset, it reads the default.
+    /// </summary>
+    internal Func<int>? MaxCallsPerLap { get; set; }
 
     /// <summary>Fetches the voices one engine offers. Set by the host, which has the clients. Throws with a sentence for the page when it can't.</summary>
     internal Func<VoiceEngine, Task<IReadOnlyList<VoiceChoice>>>? LoadVoices { get; set; }
@@ -745,7 +770,7 @@ public sealed class CommentaryControl : UserControl
             },
             () => AppTheme.SmallFont);
 
-        Check(_chkEnabled, "Enable local LLM commentary");
+        Check(_chkEnabled, "Enable AI commentary");
         _textSize.Wear(_chkEnabled, () => AppTheme.BoldFont);
         _chkEnabled.Checked = _settings.CommentaryEnabled;
         _chkEnabled.CheckedChanged += (_, _) =>
@@ -823,7 +848,10 @@ public sealed class CommentaryControl : UserControl
             + "lines are plainer than the relay's, which is the point: it only has to cover the races the relay cannot. "
             + "Untick it and those races are simply quieter.");
 
-        Flush(connectionGrid.AddRow("Give up after:", Line(_numTimeout, Suffix("seconds - after this the normal announcement line is used instead"))));
+        // FOR THE MODEL ON THIS PC (17 Oct 2026): this sets
+        // BundledLlmClient.Timeout only - the relay keeps its own fixed wait
+        // (RelayCommentaryClient.Timeout) - so it greys with the box above.
+        Flush(connectionGrid.AddRow("Give up after:", Line(_numTimeout, Suffix("seconds, for the model on this PC - after this the normal announcement line is used instead"))));
 
         // Right under the fields it checks. It used to be the last thing on
         // the page, a whole scroll away from the endpoint and model.
@@ -838,6 +866,7 @@ public sealed class CommentaryControl : UserControl
             "No response - any [llm] line in the console says why. "
                 + "Commentary will be skipped and normal announcements used.",
             "Working - replied in 99.9s. That's comfortably within the gap between races.",
+            "Working - replied in 99.9s. That's slow for live lines - intros and recaps get longer and should still make it.",
         };
 
         // The result beside the button, wrapping to the room to its right -
@@ -958,8 +987,10 @@ public sealed class CommentaryControl : UserControl
         // Belongs with what it writes - it is the answer to "why not a line
         // every lap?", which is a question about this list.
         writes.Add(
-            Hint("Commentary is written between races, not lap by lap. A lap takes a few seconds and a local model usually "
-                 + "takes longer than that to answer, so a live per-lap line would describe a moment that had already passed."),
+            Hint("Commentary is not written lap by lap. A lap takes a few seconds and a model usually takes longer than "
+                 + "that to answer, so a per-lap line would describe a moment that had already passed. Most of it is "
+                 + "written between races; the live segments under During the race below are written while a race is "
+                 + "on, for a fight or a record that lasts longer than a lap."),
             gapBelow: 0);
 
         // ------------------------------------------------------------------
@@ -1139,7 +1170,9 @@ public sealed class CommentaryControl : UserControl
         teaserGrid.AddField(_txtTeaser);
         teaserGrid.AddHint(
             "One line per teaser - one is picked at random each race, so it isn't the same sentence every time. "
-            + "It's fixed text rather than something the AI writes, so it plays even when the local model is unreachable.");
+            + "It's fixed text rather than something the AI writes, so it plays even with no writer available (the relay, "
+            + "or the model on this PC) - but only when a recap is going to follow it. The bumper into the stop set "
+            + "(Sounds > Imaging) plays whether or not there's a teaser.");
         Stepped(teaserGrid.AddRow("then wait:", Line(_numTeaserGap, Suffix("seconds"))));
 
         // Stability and style on lines of their own, so neither is ever
@@ -1263,9 +1296,9 @@ public sealed class CommentaryControl : UserControl
 
         var showGrid = new FieldGrid();
 
-        Stepped(showGrid.AddRow("Show name:", Line(_txtShowName, Suffix("named in the opening and the sign-off - leave it blank for none"))));
+        Stepped(showGrid.AddRow("Show name:", Line(_txtShowName, Suffix("named in the opening, the sign-off and the end-of-night sign-off - leave it blank for none"))));
 
-        Stepped(showGrid.AddRow("Announcer's name:", Line(_txtAnnouncerName, Suffix("the race announcer, not the recap host - he says it a line into each On Air opening, going into the stop set and at the cold open; blank and he is never named"))));
+        Stepped(showGrid.AddRow("Announcer's name:", Line(_txtAnnouncerName, Suffix("the race announcer only - he says it in the On Air openings, going into the stop set and at the cold open; the recap show never uses it; blank and he is never named"))));
 
         Stepped(showGrid.AddRow("Recap host's voice:", Line(_cmbRecapHostVoice, _btnTestRecapHost)));
         showGrid.AddHint(
@@ -1274,7 +1307,7 @@ public sealed class CommentaryControl : UserControl
             + "the openings. Filled from the same engine as the mechanic's, beside Load Voices below, and kept per engine "
             + "the same way. With none picked, the announcer hosts the recap too.");
 
-        Stepped(showGrid.AddRow("Recap host's name:", Line(_txtRecapHostName, Suffix("said when the recap opens and at the sign-off; blank and the host is never named"))));
+        Stepped(showGrid.AddRow("Recap host's name:", Line(_txtRecapHostName, Suffix("the recap show only - said when the recap opens and at its sign-off, even when the announcer's voice reads it; blank and the host is never named"))));
 
         Check(_chkAdBreak, "Play the sponsors as a commercial break while the recap is being written");
         _chkAdBreak.Checked = _settings.RecapAdBreak;
@@ -1338,9 +1371,14 @@ public sealed class CommentaryControl : UserControl
         // switch at the top of this one. A running order on a settings page
         // is the only map a volunteer has of what their club is about to
         // hear, and a map that leaves three things out is worse than none.
+        //
+        // And (17 Oct 2026) the sign-off only happens when "End with a
+        // TV-style sign-off" is ticked, and the bumper and jingle from
+        // Sounds > Imaging now sit either side of the break.
         broadcast.Add(Hint(
-            "finish call  ->  badge calls  ->  teaser  ->  commercial break  ->  recap  ->  honours  ->  interview (after "
-            + "a main)  ->  sign-off.   That is the whole of what a club hears after a flag. The badge calls go out at the "
+            "finish call  ->  badge calls  ->  teaser  ->  bumper  ->  commercial break (the stop set)  ->  jingle  ->  "
+            + "recap  ->  honours  ->  interview (after a main)  ->  sign-off, when \"End with a TV-style sign-off\" is "
+            + "ticked.   That is the whole of what a club hears after a flag. The badge calls go out at the "
             + "flag as they always have, unless the honours box below is ticked - that MOVES them into the recap rather "
             + "than adding to them. The teaser and the waits either side of it are set under Race recap above. The model "
             + "writes every part from the race's facts, like the recap itself - except the honours, which are built from "
@@ -1355,8 +1393,8 @@ public sealed class CommentaryControl : UserControl
         broadcast.Add(Hint(
             "WHERE THE SPONSORS SIT. The slides, the rotation and who has bought a read are all on the Sponsors page. The "
             + "paid reads themselves are SPOKEN from here, over the end of a sponsor video and in the gaps between races, "
-            + "so they need a race day open, the Commentary switch at the top of this page on, and the local model "
-            + "reachable - even though nothing writes them and the words are the ones you typed."));
+            + "so they need a race day open, the Commentary switch at the top of this page on, and a writer available "
+            + "(the relay, or the model on this PC) - even though nothing writes them and the words are the ones you typed."));
         broadcast.Add(_chkOpening, stretch: false);
         broadcast.Add(_chkClosing, stretch: false);
         broadcast.Add(showGrid);
@@ -1423,10 +1461,10 @@ public sealed class CommentaryControl : UserControl
                 : string.Empty;
 
             _settings.Save();
-            _lblChatter.Text = ShowChatter.Describe(_settings.CommentaryChatter);
+            DescribeChatter();
         };
 
-        _lblChatter.Text = ShowChatter.Describe(_settings.CommentaryChatter);
+        DescribeChatter();
 
         // PACING, directly under chattiness because the two are read
         // together and a club looking for one will find the other. Built
@@ -1499,7 +1537,7 @@ public sealed class CommentaryControl : UserControl
 
         foreach (var tier in new[] { SegmentTier.Core, SegmentTier.Colour, SegmentTier.Flourish })
         {
-            var inTier = CommentaryBudget.AllSpecs.Where(spec => spec.Tier == tier).ToList();
+            var inTier = CommentaryBudget.AllSpecs.Where(spec => spec.Tier == tier && !NotOffered.Contains(spec.Kind)).ToList();
 
             if (inTier.Count == 0)
             {
@@ -1554,6 +1592,7 @@ public sealed class CommentaryControl : UserControl
             _settings.CommentaryCoHost = _chkCoHost.Checked;
             _settings.Save();
             UpdateEnabledState();
+            DescribeChatter();
         };
 
         _txtCoHostName.MaxLength = 40;
@@ -1619,6 +1658,7 @@ public sealed class CommentaryControl : UserControl
             _settings.CommentaryTwoVoicesInHeats = _chkTwoVoicesInHeats.Checked;
             _settings.Save();
             UpdateEnabledState();
+            DescribeChatter();
         };
 
         var coHostGrid = new FieldGrid();
@@ -1854,6 +1894,16 @@ public sealed class CommentaryControl : UserControl
             _settings.Save();
         };
 
+        // The same floor and ceiling as the opener's, for the same reason.
+        _numStingLevel.Minimum = 10;
+        _numStingLevel.Maximum = 100;
+        _numStingLevel.Value = Math.Clamp(_settings.ShowStingLevel, 10, 100);
+        _numStingLevel.ValueChanged += (_, _) =>
+        {
+            _settings.ShowStingLevel = (int)_numStingLevel.Value;
+            _settings.Save();
+        };
+
         _numBedLevel.Minimum = 2;
         _numBedLevel.Maximum = 100;
         _numBedLevel.Value = Math.Clamp(_settings.ShowBedLevel, 2, 100);
@@ -1901,7 +1951,7 @@ public sealed class CommentaryControl : UserControl
         // and Choose... is for the club with a piece of their own.
         Stepped(showMusicGrid.AddRow("Opener:", Line(_cmbOpenerPiece, _btnOpenerPick, _btnOpenerClear, _lblOpenerFile)));
         Stepped(showMusicGrid.AddRow("Music bed:", Line(_cmbBedPiece, _btnBedPick, _btnBedClear, _lblBedFile)));
-        Stepped(showMusicGrid.AddRow("Sting:", Line(_cmbStingPiece, _btnStingPick, _btnStingClear, _lblStingFile)));
+        Stepped(showMusicGrid.AddRow("Club's sting:", Line(_cmbStingPiece, _btnStingPick, _btnStingClear, _lblStingFile)));
         showMusicGrid.AddHint(
             "Your own files, copied into the club's data so a backup carries them to the next laptop. The bed is "
             + "looped for as long as the show runs and then finishes on its own fade, so anything from half a minute "
@@ -1909,6 +1959,7 @@ public sealed class CommentaryControl : UserControl
             + "the next, a second or two at most; leave it out and the bed swells instead, which does the same job.");
 
         Stepped(showMusicGrid.AddRow("Opener level:", Line(_numOpenerLevel, Suffix("%", muted: false))));
+        Stepped(showMusicGrid.AddRow("Sting level:", Line(_numStingLevel, Suffix("%", muted: false))));
         Stepped(showMusicGrid.AddRow("Bed level:", Line(_numBedLevel, Suffix("% - a bed sits well under the voice, so this is low on purpose"))));
         Stepped(showMusicGrid.AddRow("and drops to:", Line(_numBedDuck, Suffix("% of that while the announcer is actually speaking"))));
         Stepped(showMusicGrid.AddRow("Voice comes in:", Line(_numVoiceEnters, Suffix("ms into the opener - 0 finds it, where the opener stops hitting and starts ringing out"))));
@@ -1944,6 +1995,14 @@ public sealed class CommentaryControl : UserControl
             + "an announcement. When the talking stops the bed comes up for a beat and then plays its own ending. "
             + "No two shows in an evening are the same shape: see the running order below. The club's own playlist "
             + "goes quiet while it runs and comes back after."));
+
+        // THE FALLBACK (17 Oct 2026). Imaging owns the show's music now, per
+        // soundscape; this card is what plays where the soundscape has no
+        // piece, and its levels are the club's own pieces' only.
+        show.Add(Hint(
+            "The soundscape's imaging (Sounds > Imaging) plays first wherever it has a piece; the club's opener, bed and "
+            + "sting below play only where it has none (and for the cold open and sign-off shows). Levels for the "
+            + "imaging beds are on the Imaging page - the levels here are for the club's own pieces."));
         show.Add(_chkShowMusic, stretch: false, gapBelow: UiLayout.HintGap);
         show.Add(showMusicGrid);
 
@@ -1959,19 +2018,29 @@ public sealed class CommentaryControl : UserControl
         // teaser. This hint still said they were not, which was true of the
         // list as it first shipped and has been wrong since; see
         // ShowSegments.Candidates for what is actually offered and why.
+        //
+        // REWRITTEN FOR THE ORDER AS IT IS (17 Oct 2026): the recap's music
+        // no longer "lands in the gap after the teaser" - the bumper, the
+        // stop set and the jingle come between - and "The honours" named
+        // no box on this page; the box is "Badges earned".
         show.Add(Hint(
             "The set pieces, where filling time is the point. The cold open and the sign-off come ticked. Race "
-            + "intros and recaps are here too: the recap's music lands in the gap after the teaser, and an intro's "
-            + "bed is taken away the moment the countdown starts rather than playing over the horn. The honours are "
-            + "a segment OF the recap, so on an ordinary night they play under the recap's own music - tick them "
-            + "here and they also get a show of their own on a night with no recap, which is the night they are the "
+            + "intros and recaps are here too. After a flag it runs teaser -> bumper -> stop set -> jingle -> the "
+            + "recap host over the recap bed; with imaging, the recap's music comes from the soundscape, and the club's "
+            + "only plays where it has none. The race intro's club music only plays when Stage is pressed without On "
+            + "Air, and its bed is taken away the moment the countdown starts rather than playing over the horn. "
+            + "Badges earned is a segment OF the recap, so on an ordinary night it plays under the recap's own music - tick it "
+            + "here and it also gets a show of its own on a night with no recap, which is the night it is the "
             + "whole programme. Nothing that fires during a race is on the list - a battle call is a remark over a "
             + "race in progress, not a set piece."),
             gapBelow: UiLayout.HintGap);
 
-        for (var i = 0; i < ShowSegments.Candidates.Count; i++)
+        // Not the hidden ones (17 Oct 2026) - see NotOffered.
+        var musicCandidates = ShowSegments.Candidates.Where(kind => !NotOffered.Contains(kind)).ToList();
+
+        for (var i = 0; i < musicCandidates.Count; i++)
         {
-            var kind = ShowSegments.Candidates[i];
+            var kind = musicCandidates[i];
             var box = new ThemedCheckBox();
 
             Check(box, CommentaryBudget.Spec(kind).Title);
@@ -1981,7 +2050,7 @@ public sealed class CommentaryControl : UserControl
             _showBoxes[kind] = box;
 
             // Nothing under the last one: the section's own room follows it.
-            var last = i == ShowSegments.Candidates.Count - 1;
+            var last = i == musicCandidates.Count - 1;
 
             show.Add(box, stretch: false, gapBelow: last ? 0 : UiLayout.RowGap);
         }
@@ -2244,6 +2313,12 @@ public sealed class CommentaryControl : UserControl
             // what the relay line says depends on it.
             UpdateRelayState();
 
+            // And Voice Settings' max calls per lap, which the How chatty
+            // line counts from, and its voice, which decides whether the
+            // excited marks can be read at all (17 Oct 2026).
+            DescribeChatter();
+            UpdateEnabledState();
+
             // So does whether listening along is actually going out: the
             // club website is switched on or off on that page, and this
             // line must not go on saying nothing is sent once it is.
@@ -2298,7 +2373,7 @@ public sealed class CommentaryControl : UserControl
                  {
                      _numTimeout, _numFinishers, _numInterval, _numObservations, _numMaxWords, _numVariety,
                      _numSummaryDelay, _numTeaserGap, _numStability, _numStyleEx, _numDuckPercent,
-                     _numOpenerLevel, _numBedLevel, _numBedDuck, _numVoiceEnters, _numKeepNights,
+                     _numOpenerLevel, _numStingLevel, _numBedLevel, _numBedDuck, _numVoiceEnters, _numKeepNights,
                  })
         {
             Fit(number, NumberWidth(number));
@@ -2513,6 +2588,16 @@ public sealed class CommentaryControl : UserControl
         SegmentTier.Colour => "Depth between the races. Paused before the live ones are.",
         _ => "The top and tail of the evening. The first to be paused.",
     };
+
+    /// <summary>
+    /// The line under How chatty, from the club's own max calls per lap and
+    /// "Two voices in the heats too" (17 Oct 2026) - see ShowChatter.Describe.
+    /// </summary>
+    private void DescribeChatter() =>
+        _lblChatter.Text = ShowChatter.Describe(
+            _settings.CommentaryChatter,
+            MaxCallsPerLap?.Invoke(),
+            _settings.CommentaryTwoVoicesInHeats && _settings.CommentaryCoHost);
 
     /// <summary>
     /// Writes the switched-off segments to settings.
@@ -3434,11 +3519,16 @@ public sealed class CommentaryControl : UserControl
         var on = _chkEnabled.Checked;
         _chkUseRelay.Enabled = on;
         _chkLocalModel.Enabled = on;
-        _numTimeout.Enabled = on;
+        _numTimeout.Enabled = on && _chkLocalModel.Checked;
 
         // The tag pass does nothing unless the tone is Enthusiastic, so the
         // box says so by going grey rather than by quietly doing nothing.
-        _chkVoiceTags.Enabled = on && _settings.CommentaryToneStyle == CommentaryTone.Enthusiastic;
+        //
+        // NOR WITHOUT A VOICE THAT READS TAGS (17 Oct 2026) - the same test
+        // CommentaryService.Tagged makes. Unknown (nothing wired)
+        // reads as supported, so the box is never greyed on a guess.
+        var voiceReadsTags = _commentary.VoiceSupportsAudioTagsProvider?.Invoke() ?? true;
+        _chkVoiceTags.Enabled = on && voiceReadsTags && _settings.CommentaryToneStyle == CommentaryTone.Enthusiastic;
 
         var coHost = on && _chkCoHost.Checked;
         _cmbExchangeTurns.Enabled = coHost;
@@ -3458,7 +3548,12 @@ public sealed class CommentaryControl : UserControl
         // The broadcast is the recap's, so it goes dark with recaps.
         _chkOpening.Enabled = summariesOn;
         _chkClosing.Enabled = summariesOn;
-        _txtShowName.Enabled = summariesOn && (_chkOpening.Checked || _chkClosing.Checked);
+
+        // NOT tied to the opening and closing ticks any more (17 Oct 2026):
+        // the end-of-night sign-off names the show whatever they say
+        // (CommentaryService.NightRecapSignOff), so a club with both
+        // unticked still needs somewhere to type it.
+        _txtShowName.Enabled = summariesOn;
 
         // NOT tied to the recap's opening the way the show name is. This
         // name is also used by the COLD OPEN, which is a segment of its own
@@ -3504,17 +3599,19 @@ public sealed class CommentaryControl : UserControl
         _numInterval.Enabled = talkingOn;
         _numObservations.Enabled = talkingOn;
 
-        // Style applies to whichever features are on, so it only fully goes
-        // dark when the master switch itself is off.
-        _chkBroadcastVoice.Enabled = on;
-        _numStability.Enabled = on && _chkBroadcastVoice.Checked;
-        _numStyleEx.Enabled = on && _chkBroadcastVoice.Checked;
-        _chkDeepDuck.Enabled = on;
-        _numDuckPercent.Enabled = on && _chkDeepDuck.Checked;
-        _numSummaryDelay.Enabled = on;
-        _chkTeaser.Enabled = on;
-        _txtTeaser.Enabled = on && _chkTeaser.Checked;
-        _numTeaserGap.Enabled = on && _chkTeaser.Checked;
+        // THE RACE RECAP CARD GOES DARK WITH RECAPS (17 Oct 2026). These
+        // were gated on the master switch, but every one of them is about
+        // the recap: its voice delivery, its duck, the pause before it, and
+        // the teaser - which now only plays when a recap will follow it.
+        _chkBroadcastVoice.Enabled = summariesOn;
+        _numStability.Enabled = summariesOn && _chkBroadcastVoice.Checked;
+        _numStyleEx.Enabled = summariesOn && _chkBroadcastVoice.Checked;
+        _chkDeepDuck.Enabled = summariesOn;
+        _numDuckPercent.Enabled = summariesOn && _chkDeepDuck.Checked;
+        _numSummaryDelay.Enabled = summariesOn;
+        _chkTeaser.Enabled = summariesOn;
+        _txtTeaser.Enabled = summariesOn && _chkTeaser.Checked;
+        _numTeaserGap.Enabled = summariesOn && _chkTeaser.Checked;
 
         _cmbTone.Enabled = on;
         _numMaxWords.Enabled = on;
@@ -3527,11 +3624,18 @@ public sealed class CommentaryControl : UserControl
 
         // The co-host is only worth setting up when something is going to
         // use them, so the row goes dark when every two-hander segment is
-        // switched off as well as when commentary is.
+        // switched off as well as when commentary is. The hidden segments
+        // (NotOffered) have no box, so the mechanic's interview - which
+        // nothing writes - no longer keeps the co-host row lit (17 Oct 2026).
         var anyExchange = _segmentBoxes.Any(pair => pair.Value.Checked && CommentaryBudget.Spec(pair.Key).CanBeExchange);
 
         _chkCoHost.Enabled = on && anyExchange;
-        _cmbChatter.Enabled = on;
+
+        // NOT GATED ON COMMENTARY (17 Oct 2026). How chatty also scales the
+        // announcer's own lap calls (AnnouncementService reads
+        // CommentaryChatter whether or not the AI is on), so greying it with
+        // the master switch hid a control that was still doing something.
+        _cmbChatter.Enabled = true;
 
         // NOT GATED ON THE ANNOUNCER being switched on, deliberately - the
         // same argument the recording card makes. A club can collect
@@ -3572,6 +3676,7 @@ public sealed class CommentaryControl : UserControl
         _cmbBedPiece.Enabled = musicOn && !_showMusic.IsTheirOwn(ShowPart.Bed);
         _cmbStingPiece.Enabled = musicOn && !_showMusic.IsTheirOwn(ShowPart.Sting);
         _numOpenerLevel.Enabled = musicOn;
+        _numStingLevel.Enabled = musicOn;
         _numBedLevel.Enabled = musicOn;
         _numBedDuck.Enabled = musicOn;
         _numVoiceEnters.Enabled = musicOn;
@@ -3931,7 +4036,7 @@ public sealed class CommentaryControl : UserControl
                 // that's discoverable.
                 _lblTestResult.Text = $"Working - replied in {elapsed:0.0}s. "
                                       + (elapsed > 8
-                                          ? "That's slow; consider a smaller model."
+                                          ? "That's slow for live lines - intros and recaps get longer and should still make it."
                                           : "That's comfortably within the gap between races.");
                 _lblTestResult.ForeColor = elapsed > 8 ? AppTheme.Accent : AppTheme.Success;
             }

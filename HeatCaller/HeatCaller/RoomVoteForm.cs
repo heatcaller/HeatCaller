@@ -74,8 +74,8 @@ internal sealed class RoomVoteForm : Form
         {
             Text = "The room votes on who wins, and after the race the announcer says what it reckoned - "
                    + "including the one line no timing system could ever produce, which is that nobody in the "
-                   + "room picked the driver who won. Open it when the race is called to the grid and close it "
-                   + "before the start; it closes itself when the result comes in, and the announcer stays quiet "
+                   + "room picked the driver who won. Open it when the race is called to the grid and stop it "
+                   + "before the start; it stops itself when the result comes in, and the announcer stays quiet "
                    + "unless enough people voted to speak for the room.",
             AutoSize = true,
             MaximumSize = new Size(UiLayout.AtTextSize(640), 0),
@@ -114,10 +114,13 @@ internal sealed class RoomVoteForm : Form
         // somebody would notice.
         _btnOpen.Click += (_, _) => OpenVoting();
 
-        _btnClose.Text = "Close voting";
+        // "Stop voting" and "Done", not "Close voting" beside "Close": side
+        // by side, one word apart, the two were easy to mix up - one ends the
+        // poll, the other only shuts this window.
+        _btnClose.Text = "Stop voting";
         _btnClose.Click += (_, _) => CloseVoting();
 
-        var btnDone = new Button { Text = "Close", DialogResult = DialogResult.OK };
+        var btnDone = new Button { Text = "Done", DialogResult = DialogResult.OK };
 
         _lblState.AutoSize = true;
         _lblState.ForeColor = AppTheme.TextMuted;

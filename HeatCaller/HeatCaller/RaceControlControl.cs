@@ -611,7 +611,11 @@ public sealed partial class RaceControlControl : UserControl
                     // not get out this race. Read on the tick like the
                     // rest - see AnnouncerStrip._load for the report that
                     // put a number on this row.
-                    _announcer.Load);
+                    _announcer.Load,
+                    // The recap show is running, so Skip has something to
+                    // stop even in the quiet while the model writes - see
+                    // EndRecapShow.
+                    programmeRunning: Volatile.Read(ref _recapShow) is not null);
             }
         };
         _clockRefreshTimer.Start();
@@ -662,6 +666,20 @@ public sealed partial class RaceControlControl : UserControl
     /// </param>
     public void TriggerStage(bool confirmedOverRunningRace = false, Action? restoreHostOnUndo = null) =>
         _actStage?.Invoke(confirmedOverRunningRace, restoreHostOnUndo);
+
+    /// <summary>
+    /// Starts the next race the normal way (17 Oct 2026): through On Air
+    /// when <see cref="StartWithOnAir"/> is ticked, and straight to Stage
+    /// when it is not or On Air cannot open this race - F1, the phone's
+    /// Stage, and Race Day Ops. See <see cref="StartThroughOnAir"/>.
+    /// </summary>
+    /// <param name="confirmedOverRunningRace">As for <see cref="TriggerStage"/>.</param>
+    /// <param name="restoreHostOnUndo">As for <see cref="TriggerStage"/>.</param>
+    public void TriggerStart(bool confirmedOverRunningRace = false, Action? restoreHostOnUndo = null) =>
+        StartThroughOnAir(confirmedOverRunningRace, restoreHostOnUndo);
+
+    /// <summary>The On Air button, from the keyboard (O) - see RaceControlControl.OnAir.cs.</summary>
+    public void TriggerOnAir() => PressOnAir();
 
     /// <param name="confirmedOverRunningRace">As for <see cref="TriggerStage"/>.</param>
     public void TriggerCountdown(bool confirmedOverRunningRace = false) => _actCountdown?.Invoke(confirmedOverRunningRace);
@@ -789,7 +807,8 @@ public sealed partial class RaceControlControl : UserControl
             // exactly what they run.
             switch (action)
             {
-                case "stage": TriggerStage(confirmedOverRunningRace); break;
+                // Through On Air when it is the normal start - see TriggerStart.
+                case "stage": TriggerStart(confirmedOverRunningRace); break;
                 case "countdown": TriggerCountdown(confirmedOverRunningRace); break;
                 case "green": TriggerGreen(); break;
                 case "yellow": TriggerYellow(); break;
@@ -814,6 +833,9 @@ public sealed partial class RaceControlControl : UserControl
             // and that press is still answered "Staged.".
             return RemoteCommandOutcome.Done(action switch
             {
+                // On Air is opening the race, and Stage comes at its end -
+                // so not "Staged." yet (17 Oct 2026).
+                "stage" when _onAirCts is not null && !_onAirStageNow => "On Air - the race is staged when the opening is done. Press Stage again to skip to it.",
                 "stage" when _race.IsWarmingUp => "Warm-up open - free laps first. Press Stage again to skip it and stage now.",
                 "stage" => "Staged.",
                 "countdown" => "Countdown started.",

@@ -152,7 +152,7 @@ public sealed class RelaySettingsControl : UserControl
     public event Action? RacerPinsChanged;
 
     /// <summary>
-    /// Raised by "Open Looks": the club pages' colours and logo are set on
+    /// Raised by "Open Themes": the club pages' colours and logo are set on
     /// Themes → Looks, shared with the app and the other screens, and the
     /// host (MainForm) takes the user there.
     /// </summary>
@@ -678,11 +678,11 @@ public sealed class RelaySettingsControl : UserControl
 
         var lblLooksNote = new Label
         {
-            Text = "Colours and club logo are set in the Looks card on Themes (shared with the app, Big Screen and Wi-Fi pages).",
+            Text = "Colours and club logo are set in the Looks card on the Themes page (shared with the app, Big Screen and Wi-Fi pages).",
             AutoSize = true,
         };
 
-        _btnOpenLooks.Text = "Open Looks";
+        _btnOpenLooks.Text = "Open Themes";
         _btnOpenLooks.Click += (_, _) => OpenLooksRequested?.Invoke();
 
         var lblLookHint = HintLabel("Changes reach the club's pages within a few seconds.");

@@ -1323,7 +1323,7 @@ public sealed partial class ProfileManagerControl : UserControl
 
             if (stats.PersonalBests.Count > shown)
             {
-                Paragraph(c, $"...and {stats.PersonalBests.Count - shown} more on the Personal Bests page.", AppTheme.BodyFont, AppTheme.TextMuted);
+                Paragraph(c, $"...and {stats.PersonalBests.Count - shown} more on Race Analytics > Personal Bests.", AppTheme.BodyFont, AppTheme.TextMuted);
             }
         }
 
