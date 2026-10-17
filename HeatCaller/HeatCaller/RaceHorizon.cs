@@ -233,6 +233,18 @@ public sealed class RaceHorizon
             // for that reason - two cars trading a position four times are
             // one story, and a key built from "who is ahead" would start a
             // new trail on every swap and never build a rate at all.
+            //
+            // THE RATE restarts on a swap, though (17 Oct 2026, Bug Hunt 8,
+            // A07-2). Each sample is the unsigned gap to whoever was ahead
+            // at the time, so a rate taken across a pass mixed gaps measured
+            // against different cars - "closing at three tenths a lap" for a
+            // car that had just lost the place. The trail, and with it the
+            // one story and the cooldown key, is kept.
+            if (!string.Equals(trail.AheadId, pair.AheadId, StringComparison.Ordinal))
+            {
+                trail.Seen.Clear();
+            }
+
             trail.AheadId = pair.AheadId;
             trail.BehindId = pair.BehindId;
             trail.Position = pair.Position;
@@ -501,8 +513,11 @@ public sealed class RaceHorizon
     /// </summary>
     internal static string Say(Horizon horizon, string aheadNamed, string behindNamed)
     {
-        var gap = RaceNumbers.GapSpoken(horizon.GapSeconds);
-        var rate = RaceNumbers.GapSpoken(Math.Abs(horizon.PerLap));
+        // MarginSpoken, not GapSpoken (17 Oct 2026, Bug Hunt 8, A07-5): a
+        // rate from MeaningfulRate (two hundredths) up to a twentieth was
+        // "closing at nothing a lap". From a tenth up the two read the same.
+        var gap = RaceNumbers.MarginSpoken(horizon.GapSeconds);
+        var rate = RaceNumbers.MarginSpoken(Math.Abs(horizon.PerLap));
 
         // In words, like every other figure the voice is handed (see
         // RaceNumbers) - and with "about" in front when the laps came off

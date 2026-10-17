@@ -396,6 +396,37 @@ internal sealed class RoomVote
     }
 
     /// <summary>
+    /// Stops the vote at the green flag of the race it is about.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A29-2: nothing touched the vote on the
+    /// green, so it kept taking votes all through the race and then read
+    /// them out as the room's "prediction". A prediction gathered after the
+    /// flag is not a prediction. Matched by the round's own id, so a heat
+    /// starting while the A-main vote is open leaves that vote alone.
+    /// Safe twice, and Finished stays the backstop.
+    /// </summary>
+    /// <param name="raceKey">The round whose green has just gone, by its own id.</param>
+    internal void StartedRace(string? raceKey)
+    {
+        lock (_gate)
+        {
+            if (_file.Current is not { } poll || poll.ClosedUtc is not null)
+            {
+                return;
+            }
+
+            if (!IsTheRace(poll, raceKey))
+            {
+                return;
+            }
+
+            poll.ClosedUtc = DateTime.UtcNow;
+
+            Save();
+        }
+    }
+
+    /// <summary>
     /// Whether a vote is taking votes right now: one is open, it was not
     /// closed, and it has not been open longer than
     /// <see cref="LongestOpen"/>.

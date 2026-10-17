@@ -426,7 +426,7 @@ public sealed class ChassisTemplateForm : Form
         using var dialog = new OpenFileDialog
         {
             Title = "Choose a chassis diagram or photo",
-            Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*",
+            Filter = "Images (*.png;*.jpg;*.jpeg;*.jfif;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.jfif;*.bmp;*.gif|All files (*.*)|*.*",
         };
 
         if (dialog.ShowDialog(this) != DialogResult.OK)

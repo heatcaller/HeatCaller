@@ -197,7 +197,7 @@ internal static class ThirdPartyCatalog
             "Apache-2.0",
             "The Kokoro voice itself - the model that speaks the lines.",
             Array.Empty<string>(),
-            Note: "By hexgrad. The voices (voices\\*.npy) ship beside the app with Kokoro's own LICENSE; the 310 MB model (kokoro.onnx) ships beside HeatCaller.exe too, in the installer. A club can also download it again from Voice Settings, into LocalAppData, if the bundled copy will not load."),
+            Note: "By hexgrad. The voices (voices\\*.npy) ship beside the app with Kokoro's own LICENSE; the 310 MB model (kokoro.onnx) ships beside HeatCaller.exe too, in the installer. A club can also download it again from the Voice tab, into LocalAppData, if the bundled copy will not load."),
 
         new Component(
             "MisakiSharp",

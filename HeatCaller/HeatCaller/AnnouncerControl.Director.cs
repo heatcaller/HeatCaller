@@ -351,7 +351,8 @@ public partial class AnnouncerControl
                 + "Unmute it on the Mixer and try again.";
         }
 
-        await treatment.RunAsync(() => _announcer.SpeakReminder(ShowTestLine, showOnScreens: false)).ConfigureAwait(true);
+        // Not for the listen-along page (17 Oct 2026, Bug Hunt 8, A06-10).
+        await treatment.RunAsync(() => _announcer.SpeakReminder(ShowTestLine, showOnScreens: false, forListeners: false)).ConfigureAwait(true);
 
         return null;
     }
@@ -526,7 +527,8 @@ public partial class AnnouncerControl
 
             if (chunks.Count == 0)
             {
-                return "The model did not write anything usable. Try again, or check the Connection card above.";
+                // Named, not "above" (17 Oct 2026, Bug Hunt 8, A15-2): this is shown on Sounds > Recording.
+                return "The model did not write anything usable. Try again, or check the Connection card on Voice > AI Commentary.";
             }
 
             StatusMessage?.Invoke(
@@ -739,7 +741,8 @@ public partial class AnnouncerControl
 
             if (chunks.Count == 0)
             {
-                return "The model did not write anything usable. Try again, or check the Connection card above.";
+                // Named, not "above" (17 Oct 2026, Bug Hunt 8, A15-2): this is shown on Sounds > Recording.
+                return "The model did not write anything usable. Try again, or check the Connection card on Voice > AI Commentary.";
             }
 
             StatusMessage?.Invoke(
@@ -766,7 +769,7 @@ public partial class AnnouncerControl
             // AFTER THE RECORDER STARTS, so the clip is in the saved file.
             // That is the whole reason it goes through AudioBus rather than
             // being stitched on - see DriversOwnClip.
-            await PlayTheirOwnClipAsync(treatment, named).ConfigureAwait(true);
+            await PlayTheirOwnClipAsync(treatment, named, transponder!, tonight).ConfigureAwait(true);
 
             // THE SIGN-OFF'S TREATMENT, like the night's recap: this is the
             // same shape of thing, an opener in front and a playout at the
@@ -876,6 +879,45 @@ public partial class AnnouncerControl
     }
 
     /// <summary>
+    /// The names a driver's clip may be filed under tonight: the name picked,
+    /// every name their transponder's result rows carried, and the
+    /// transponder itself (a clip of a row with no name is named after it -
+    /// see RaceHighlights). Bug Hunt 8, A14-5.
+    /// </summary>
+    internal static IReadOnlyList<string> ClipNamesFor(
+        string named, string transponder, IReadOnlyList<SessionRecord>? tonight)
+    {
+        var names = new List<string>();
+
+        void AddName(string? name)
+        {
+            if (!string.IsNullOrWhiteSpace(name)
+                && !names.Contains(name.Trim(), StringComparer.OrdinalIgnoreCase))
+            {
+                names.Add(name.Trim());
+            }
+        }
+
+        AddName(named);
+
+        foreach (var session in tonight ?? Array.Empty<SessionRecord>())
+        {
+            foreach (var row in session?.Results ?? new List<SessionResultEntry>())
+            {
+                if (row is not null
+                    && string.Equals(row.Transponder?.Trim(), transponder.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    AddName(row.DriverName);
+                }
+            }
+        }
+
+        AddName(transponder);
+
+        return names;
+    }
+
+    /// <summary>
     /// The cold open of a driver's own piece: a line of handoff and then a
     /// few seconds of the race audio they were called over.
     ///
@@ -902,7 +944,8 @@ public partial class AnnouncerControl
     /// AND WAITED FOR. SpeakReminder queues and returns, so without the wait
     /// the clip would start over the top of the line introducing it.
     /// </summary>
-    private async Task PlayTheirOwnClipAsync(ShowTreatment treatment, string named)
+    private async Task PlayTheirOwnClipAsync(
+        ShowTreatment treatment, string named, string transponder, IReadOnlyList<SessionRecord>? tonight)
     {
         try
         {
@@ -916,7 +959,12 @@ public partial class AnnouncerControl
             // Tonight's folder, by the night it is rather than the calendar
             // date - a meeting that runs past midnight is one night, and
             // FolderForNight is the one place that decision lives.
-            if (DriversOwnClip.FindFor(store.FolderForNight(DateTime.Now), named) is not { } path)
+            // 17 Oct 2026, Bug Hunt 8, A14-5: a clip is named after the name
+            // on the result row when it was cut - which may not be the name
+            // picked now (a renamed profile, a typo fixed later), or the
+            // transponder itself when the row had no name. So every name this
+            // transponder raced under tonight is looked for, newest clip wins.
+            if (DriversOwnClip.FindForAny(store.FolderForNight(DateTime.Now), ClipNamesFor(named, transponder, tonight)) is not { } path)
             {
                 return;
             }
@@ -1224,6 +1272,16 @@ public partial class AnnouncerControl
         }
 
         _saidOnAirHasTheGap = false;
+
+        // Not while muted (17 Oct 2026, Bug Hunt 8, A07-1): the segment was
+        // written (a paid write), SpeakReminder then dropped it silently,
+        // and director.Spoken still settled its facts, notes and budget for
+        // a line nobody heard. HERE and not at the top: the feeding above
+        // keeps the director current through the mute.
+        if (_announcer.Muted)
+        {
+            return;
+        }
 
         _ = SpeakNextSegmentAsync(director);
     }
@@ -1575,6 +1633,13 @@ public partial class AnnouncerControl
     /// </summary>
     private string? WhyNotNow(SpokenSegment? said)
     {
+        // 17 Oct 2026, Bug Hunt 8, A07-1: a line written and then muted
+        // goes back unspent (director.Dropped), not settled as said.
+        if (_announcer.Muted)
+        {
+            return "the announcer was muted while it was being written";
+        }
+
         if (_race.State is RaceState.Staging or RaceState.Countdown)
         {
             return "the next race was called to the grid while it was being written";
@@ -1625,7 +1690,11 @@ public partial class AnnouncerControl
         // Held means the race director has the mic and Writing means a line
         // is about to arrive; the director checks both before it offers a
         // paid read and this is in exactly the same position.
-        if (Treatment is not { } treatment || director.Held || director.Writing || IsDisposed)
+        //
+        // Nor while muted (17 Oct 2026, Bug Hunt 8, A07-1) - beds with no
+        // voice over them - and refused before _handedOver is marked, so
+        // the hand-over still happens after the unmute.
+        if (Treatment is not { } treatment || director.Held || director.Writing || IsDisposed || _announcer.Muted)
         {
             return;
         }

@@ -131,6 +131,15 @@ public sealed partial class RaceControlControl
                 return;
             }
 
+            // 17 Oct 2026, Bug Hunt 8, A03-1: not while On Air is opening the
+            // race already. NextRound would skip the round On Air is opening
+            // and start the one after it, under that round's opening.
+            if (OnAirRunning)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next: On Air is opening the race already.");
+                return;
+            }
+
             // Something is owed before the next race can go out - see
             // UpdateNextUpBar. The button is captioned for it, so it does
             // it.
@@ -516,7 +525,7 @@ public sealed partial class RaceControlControl
         };
         _btnCountdown.Click += (_, _) => _actCountdown(false);
 
-        _btnGreen.Text = "Green (Start)";
+        _btnGreen.Text = "Green";
         _actGreen = () =>
         {
             if (RefuseIfPracticeRunning("start a race"))

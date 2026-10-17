@@ -204,8 +204,22 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         {
             var local = startedUtc.ToLocalTime();
             var folder = store.FolderForNight(local);
+
+            // ONLY A FOLDER THIS MAKES IS MARKED (17 Oct 2026, Bug Hunt 8,
+            // A14-1). The marker is what lets the prune delete a night
+            // outside the default folder, and marking whatever was already
+            // there handed it a club's own Pictures/2026-10-17, photos and
+            // all. A folder that is missing or empty is ours; one that
+            // already holds the marker (an earlier race tonight) keeps it.
+            // A night left unmarked is only ever kept longer.
+            var ours = !Directory.Exists(folder) || !Directory.EnumerateFileSystemEntries(folder).Any();
+
             Directory.CreateDirectory(folder);
-            RaceAudioStore.MarkAsNight(folder);
+
+            if (ours)
+            {
+                RaceAudioStore.MarkAsNight(folder);
+            }
 
             var minFreeBytes = (long)store.MinFreeMb * 1024 * 1024;
 
@@ -276,9 +290,11 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     ///
     /// Worked out from the wall clock rather than from the file's length,
     /// because the two can differ by a buffer or two and this is the one
-    /// number every highlight is measured from. Clamped at zero for the
-    /// case where recording began after the green - a race already running
-    /// when Race Control was opened.
+    /// number every highlight is measured from. Negative when recording
+    /// began after the green - a race restored after a crash, or already
+    /// running when Race Control was opened - so a mark's race time still
+    /// lands on the right part of the file (RaceHighlights.WindowFor clamps
+    /// to the file).
     /// </summary>
     public void NoteGreen(DateTime greenUtc)
     {
@@ -287,7 +303,10 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             return;
         }
 
-        GreenAtMs = Math.Max(0, (long)(greenUtc - StartedUtc).TotalMilliseconds);
+        // Not clamped at zero any more (17 Oct 2026, Bug Hunt 8, A14-3): a
+        // zero here put every clip of a race recorded late by however long
+        // it had already run.
+        GreenAtMs = (long)(greenUtc - StartedUtc).TotalMilliseconds;
     }
 
     /// <summary>
@@ -697,6 +716,17 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 log($"{AppTime.LogStampNow()}  [audio] Could not make an mp3 of \"{baseName}\" ({why}). The "
                     + $"recording is kept as a wav instead and plays as it is: {kept}");
 
+                // THE CLIPS STILL GET CUT (17 Oct 2026, Bug Hunt 8, A14-4).
+                // WriteClips keeps a clip the encoder refuses as a wav, and
+                // DriversOwnClip plays wav clips for exactly this PC - but
+                // this branch returned before any were cut. From the kept
+                // wav, which is the renamed file or the original if the
+                // rename failed; either reads the same.
+                if (store.DriverHighlights && record is not null)
+                {
+                    WriteClips(recording with { WavPath = kept }, record, releaseOffsetsMs, baseName, log);
+                }
+
                 // The ceiling matters most here: a PC with no mp3 encoder
                 // fails like this every race, with five times the file.
                 store.PruneOldNights(log);
@@ -751,6 +781,12 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
         var written = 0;
 
+        // One line for every refused clip, not one per driver (17 Oct
+        // 2026, Bug Hunt 8, A14-4): on a PC whose encoder refuses the race
+        // it refuses every clip too, now that those clips get cut.
+        var keptAsWav = new List<string>();
+        string? refusedWhy = null;
+
         foreach (var clip in clips)
         {
             var name = RaceHighlights.ClipNameFor(baseName, clip.Position, clip.DriverName);
@@ -773,8 +809,8 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 }
                 else
                 {
-                    log($"{AppTime.LogStampNow()}  [audio] Could not make {clip.DriverName}'s clip an mp3 ({why}) - "
-                        + "it is kept as a wav.");
+                    keptAsWav.Add(clip.DriverName);
+                    refusedWhy ??= why;
                     continue;
                 }
             }
@@ -791,6 +827,12 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         if (written > 0)
         {
             log($"{AppTime.LogStampNow()}  [audio] {Plural.Of(written, "driver clip")} saved in {folder}.");
+        }
+
+        if (keptAsWav.Count > 0)
+        {
+            log($"{AppTime.LogStampNow()}  [audio] Could not make {Plural.Of(keptAsWav.Count, "driver clip")} an mp3 "
+                + $"({refusedWhy}) - kept as wavs in {folder}: {string.Join(", ", keptAsWav)}.");
         }
     }
 

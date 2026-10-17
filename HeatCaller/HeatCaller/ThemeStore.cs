@@ -793,8 +793,8 @@ public sealed class ThemeStore
                 .ToList();
 
             var mode = musicStore.Current.PlayThemeMusic == true
-                ? "the Music page is set to play theme music"
-                : "the Music page is set to play your music - switch it to Theme music to hear this";
+                ? "Sounds > Music is set to play theme music"
+                : "Sounds > Music is set to play your music - switch it to Theme music to hear this";
 
             parts.Add(have.Count == 0
                 ? "its music isn't in your library, so theme music will fall back to your own"

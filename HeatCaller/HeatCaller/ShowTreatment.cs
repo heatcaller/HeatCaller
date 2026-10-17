@@ -509,7 +509,7 @@ internal sealed class ShowMusic
             _settings.ShowMusicStarted = true;
             _settings.Save();
 
-            Status?.Invoke("[show] Keeping the show music this club already had - the pieces that ship with HeatCaller are on the Commentary page if you want them.");
+            Status?.Invoke("[show] Keeping the show music this club already had - the pieces that ship with HeatCaller are on Sounds > Imaging, under Show treatment, if you want them.");
 
             return;
         }
@@ -534,7 +534,7 @@ internal sealed class ShowMusic
         Reload();
 
         Status?.Invoke(
-            $"[show] The show starts on \"{opener ?? "no opener"}\" over \"{bed ?? "no bed"}\" - both change on the Commentary page, "
+            $"[show] The show starts on \"{opener ?? "no opener"}\" over \"{bed ?? "no bed"}\" - both change on Sounds > Imaging, under Show treatment, "
             + "and your own files still win wherever you set one.");
     }
 
@@ -1076,7 +1076,19 @@ internal sealed class ShowTreatment
         // The sting, once for the whole block rather than once per mark: a
         // file that will not load would otherwise put the same line in the
         // console between every pair of items.
-        var sting = Music.Sting(out var stingProblem);
+        //
+        // 17 Oct 2026, Bug Hunt 8, A05-4: the club's sting only. A
+        // soundscape stinger is picked by each mark that actually plays (see
+        // MarkAsync) - taken here it left the shuffle bag for every block,
+        // even one that never marked, and the one pick was repeated at every
+        // mark.
+        ShowSting? sting = null;
+        string? stingProblem = null;
+
+        if (!SoundscapeHasStinger)
+        {
+            sting = StingNow(out stingProblem);
+        }
 
         if (stingProblem is not null)
         {
@@ -1086,8 +1098,12 @@ internal sealed class ShowTreatment
         // What the staging will spend of the gap before a word is said, so
         // the fitting is working from what is actually going to happen with
         // THIS club's files rather than from what a show with all three in
-        // would do.
-        var cost = new ShowBlockCost(MusicSeconds(block.Kind), Pacing.Settle, MarkSeconds(sting));
+        // would do. A soundscape stinger is not picked yet, so it is costed
+        // at the longest a mark holds - conservative.
+        var cost = new ShowBlockCost(
+            MusicSeconds(block.Kind),
+            Pacing.Settle,
+            SoundscapeHasStinger ? ShowBlock.LongestSting : MarkSeconds(sting?.Clip));
 
         var fit = ShowBlock.Fit(block.Items, block.Gap, cost);
 
@@ -1263,12 +1279,12 @@ internal sealed class ShowTreatment
     /// </summary>
     internal async Task<bool> PunctuateAsync(CancellationToken ct = default)
     {
-        if (!_settings.ShowThemeEnabled)
+        if (!_settings.ShowThemeEnabled && !SoundscapeHasStinger)
         {
             return false;
         }
 
-        var sting = Music.Sting(out var problem);
+        var sting = StingNow(out var problem);
 
         if (problem is not null)
         {
@@ -1290,7 +1306,7 @@ internal sealed class ShowTreatment
         ShowFit fit,
         ShowSpeaking speaking,
         ShowRun? run,
-        ShowClip? sting,
+        ShowSting? sting,
         CancellationToken ct)
     {
         var said = 0;
@@ -1379,13 +1395,15 @@ internal sealed class ShowTreatment
     /// this existed. It also means there is no counter to leak on this path
     /// at all, which is the point worth having in this file.
     ///
-    /// A sting still plays, where a club has one: it is the one piece whose
-    /// job does not need a bed underneath it.
+    /// A sting still plays, where a club has one and show music is on (or
+    /// the soundscape has a stinger): it is the one piece whose job does not
+    /// need a bed underneath it. With show music switched off the club's own
+    /// sting is not played (17 Oct 2026, Bug Hunt 8, A05-6).
     /// </summary>
     private async Task<ShowBlockResult> SayItDryAsync(
         ShowBlock block,
         ShowFit fit,
-        ShowClip? sting,
+        ShowSting? sting,
         DateTime started,
         CancellationToken ct)
     {
@@ -1497,10 +1515,22 @@ internal sealed class ShowTreatment
     /// there - so a swell interrupted cannot leave the bed up underneath the
     /// club's music coming back.
     /// </summary>
-    private async Task<bool> MarkAsync(ShowClip? sting, ShowRun? run, CancellationToken ct)
+    private async Task<bool> MarkAsync(ShowSting? sting, ShowRun? run, CancellationToken ct)
     {
         try
         {
+            // 17 Oct 2026, Bug Hunt 8, A05-4: the soundscape's stinger is
+            // picked here, by the mark that plays it - see RunBlockAsync.
+            if (sting is null && SoundscapeHasStinger)
+            {
+                sting = StingNow(out var problem);
+
+                if (problem is not null)
+                {
+                    Status?.Invoke($"[show] {problem}");
+                }
+            }
+
             if (sting is not null)
             {
                 // MOVED TO MarkOnceAsync ON 15 OCT 2026, unchanged, so the
@@ -1515,7 +1545,7 @@ internal sealed class ShowTreatment
 
                 try
                 {
-                    await MarkOnceAsync(sting, Level(_settings.ShowStingLevel, 0.8f), "sting", ct).ConfigureAwait(true);
+                    await MarkOnceAsync(sting.Clip, sting.Level, "sting", ct, sting.Post).ConfigureAwait(true);
                 }
                 finally
                 {
@@ -1688,6 +1718,18 @@ internal sealed class ShowTreatment
 
     private async Task<ShowRun?> OpenShowAsync(SegmentKind? kind, string? caption, CancellationToken ct)
     {
+        // 17 Oct 2026, Bug Hunt 8, A04-1/A05-2: nothing for a show called
+        // off before it began, or for a muted announcer. A cancelled start
+        // picked its pieces, silenced the club's music and blipped the
+        // opener over the next race's staging call before the token was
+        // first looked at; and a mute still got the jingle and the club's
+        // own opener and bed. Null is what every caller already takes as
+        // "no music, just speak" - and speaking is a no-op while muted.
+        if (ct.IsCancellationRequested || _announcer.Muted)
+        {
+            return null;
+        }
+
         // THE SOUNDSCAPE'S IMAGING FIRST (16 Oct 2026), for the race recap:
         // its recap open in front of the host and its music bed under them,
         // picked fresh for every recap so the same jingle never opens two
@@ -2021,7 +2063,14 @@ internal sealed class ShowTreatment
     /// <param name="clip">The clip. Null does nothing and is not a failure - see BreakTransition on a club with no sting.</param>
     /// <param name="level">0 to 1. Callers pass Level(...) against their own setting.</param>
     /// <param name="what">What this is, for the console line if it cannot play.</param>
-    internal async Task MarkOnceAsync(ShowClip? clip, float level, string what, CancellationToken ct)
+    /// <param name="post">
+    /// A soundscape piece's Out (17 Oct 2026, Bug Hunt 8, A05-5): held to
+    /// there rather than to its end, and faded out on it, the way the
+    /// recap's own stingers are - an early Out left its ring-out as dead
+    /// air, and one past ShowBlock.LongestSting rang on at full level under
+    /// the next voice. Null - the club's own sting - holds for the clip.
+    /// </param>
+    internal async Task MarkOnceAsync(ShowClip? clip, float level, string what, CancellationToken ct, TimeSpan? post = null)
     {
         if (clip is null)
         {
@@ -2034,13 +2083,25 @@ internal sealed class ShowTreatment
 
         _ = playing.ContinueWith(_ => cut.Dispose(), TaskScheduler.Default);
 
-        var held = clip.Length < ShowBlock.LongestSting ? clip.Length : ShowBlock.LongestSting;
+        var held = post ?? clip.Length;
+
+        if (held > ShowBlock.LongestSting)
+        {
+            held = ShowBlock.LongestSting;
+        }
 
         await Task.Delay(held, ct).ConfigureAwait(true);
+
+        // On its Out: the 0.3 s glide down set on the gain above.
+        if (post is not null)
+        {
+            gain.Target = 0f;
+        }
     }
 
     /// <summary>
-    /// The club's own show sting, or null when it has not set one - so a
+    /// The sting for a boundary - the soundscape's stinger when it has one,
+    /// else the club's own show sting, else null (see <see cref="StingNow"/>) - so a
     /// caller outside this class can mark a boundary with it without
     /// holding a ShowMusic of its own.
     ///
@@ -2048,9 +2109,14 @@ internal sealed class ShowTreatment
     /// null, which is the same thing MarkAsync's caller does with it: "the
     /// sting is the one part whose absence is not an absence".
     /// </summary>
-    internal ShowClip? StingForABoundary()
+    /// <remarks>
+    /// With its level and Out (17 Oct 2026, Bug Hunt 8, A05-3/A05-5) - see
+    /// <see cref="ShowSting"/>. Play it through MarkOnceAsync with
+    /// <c>sting.Clip, sting.Level, ..., sting.Post</c>.
+    /// </remarks>
+    internal ShowSting? StingForABoundary()
     {
-        var sting = Music.Sting(out var problem);
+        var sting = StingNow(out var problem);
 
         if (problem is not null)
         {
@@ -2061,15 +2127,54 @@ internal sealed class ShowTreatment
     }
 
     /// <summary>
-    /// The level a boundary sting plays at: the club's own show sting
-    /// level, unscaled.
-    ///
-    /// Identical to what MarkAsync uses for the mark inside a block, on
-    /// purpose - see BreakTransition, which explains why the first draft's
-    /// separate, quieter boundary level was a guess in the wrong
-    /// direction.
+    /// SOUNDSCAPE BEFORE CLUB (17 Oct 2026). Whether the soundscape in use
+    /// has a stinger for the show to mark with: imaging on, and its
+    /// "between recap parts" point playing something. The recap already
+    /// used that stinger; the marks between a block's items and at a
+    /// commercial break's edges now do too, so a Podium night never has
+    /// the club's own sting in the middle of it.
     /// </summary>
-    internal float BoundaryStingLevel => Level(_settings.ShowStingLevel, 0.8f);
+    private static bool SoundscapeHasStinger => BroadcastImaging.Has(ImagingCue.BetweenRecapParts);
+
+    /// <summary>
+    /// The sting to mark with right now: the soundscape's stinger when it
+    /// has one, and the club's own show sting only when it has none (a
+    /// custom soundscape with no imaging). Null when there is neither.
+    ///
+    /// REWORKED 17 Oct 2026 (Bug Hunt 8, A05-2/3/5/6). Nothing while the
+    /// announcer is muted - mute is silence, and nothing else here checked
+    /// it. The level goes with the clip actually picked, so a club sting
+    /// standing in for a soundscape stinger that would not load plays at
+    /// the club's level, not the Imaging page's (this used to be asked
+    /// again separately, of the soundscape). The soundscape piece brings
+    /// its Out. And the club's own sting only with show music switched on,
+    /// where the Show treatment card lets it be heard and set - the
+    /// soundscape's stinger is kept with music off, as PunctuateAsync
+    /// always kept it.
+    /// </summary>
+    private ShowSting? StingNow(out string? problem)
+    {
+        problem = null;
+
+        if (_announcer.Muted)
+        {
+            return null;
+        }
+
+        if (SoundscapeHasStinger && BroadcastImaging.NextPiece(ImagingCue.BetweenRecapParts) is { } piece)
+        {
+            return new ShowSting(piece.Clip, BroadcastImaging.Level / 100f, BroadcastImaging.PostOf(piece.Path, piece.Clip));
+        }
+
+        if (!_settings.ShowThemeEnabled)
+        {
+            return null;
+        }
+
+        return Music.Sting(out problem) is { } club
+            ? new ShowSting(club, Level(_settings.ShowStingLevel, 0.8f), null)
+            : null;
+    }
 
     private Task Play(ISampleProvider source, float level, string what)
     {
@@ -2235,6 +2340,16 @@ internal sealed class ShowTreatment
     private static float Level(int percent, float fallback) =>
         percent is >= 0 and <= 100 ? percent / 100f : fallback;
 }
+
+/// <summary>
+/// A sting to mark with, and how it plays (17 Oct 2026, Bug Hunt 8,
+/// A05-3/A05-5): the level that goes with the clip actually picked - a club
+/// sting standing in for a soundscape stinger that would not load used to
+/// play at the soundscape's level - and the soundscape piece's Out, where it
+/// fades rather than ringing on. Post is null for the club's own sting,
+/// which holds for its own length as it always did.
+/// </summary>
+internal sealed record ShowSting(ShowClip Clip, float Level, TimeSpan? Post);
 
 /// <summary>
 /// Whether the announcer is speaking right now, as its own event last

@@ -155,6 +155,10 @@ public partial class MainForm
             "online", "relay", "cloud", "publish", "publishing", "internet", "remote", "public", "url",
             "share", "token", "club id", "results page", "standings page", "spectator", "stream",
             "https", "hosted", "away", "off site", "offsite", "website", "site", "web site", "club website",
+
+            // The Room & Web card, from the Commentary page (17 Oct 2026).
+            "room & web", "room and web", "club notes", "notes", "shout-out", "shout-outs", "dedication",
+            "vote", "votes", "room vote", "room's vote", "listen along", "listening along", "listen",
         },
         ["Classes"] = new[]
         {
@@ -196,16 +200,21 @@ public partial class MainForm
         // still land somewhere useful.
         ["Voice"] = new[]
         {
-            "elevenlabs", "speech", "tts", "api key", "rivalries", "volume",
+            "elevenlabs", "speech", "tts", "api key", "rivalries", "rivalry",
             "commentary", "commentator", "llm", "ai", "ollama", "colour", "color",
             "narration", "local model",
 
             // The old name of this page, so anyone who learned it still
-            // finds it, plus what its Announcements tab is now called.
+            // finds it, plus what its Race Calls tab holds.
             "voice announcements", "announcements", "announcement", "lines", "phrasing", "wording",
+            "race calls", "per lap", "max per lap", "streak", "streak threshold",
+
+            // The Cast tab (17 Oct 2026).
+            "cast", "co-host", "cohost", "recap host", "mechanic", "interview", "honours", "badges reader",
+            "badge reader", "announcer name", "announcer's name",
         },
         ["Ghost Cars"] = new[] { "ghost", "virtual", "opponent", "rival", "solo", "practice alone", "ai car", "pace" },
-        ["Sounds"] = new[] { "soundscape", "soundscapes", "preset", "voice pack", "sound pack", "announcer style", "personality", "sound effects", "music", "soundtrack", "track", "song", "playlist", "beep", "beeps", "cue", "chime", "per-driver", "ambience", "crowd", "atmosphere", "track noise", "tone", "beep", "audio", "volume", "test", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "run of show", "radio", "hit the post", "post mark", "out mark", "on air" },
+        ["Sounds"] = new[] { "soundscape", "soundscapes", "preset", "voice pack", "sound pack", "announcer style", "personality", "sound effects", "music", "soundtrack", "track", "song", "playlist", "beep", "beeps", "cue", "chime", "per-driver", "ambience", "crowd", "atmosphere", "track noise", "tone", "beep", "audio", "volume", "level", "duck", "ducking", "test", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "run of show", "radio", "hit the post", "post mark", "out mark", "on air", "show music", "show treatment", "opener", "club sting", "record", "recording", "record each race", "clips", "highlights", "night recap", "driver's night", "night before", "preview" },
         ["Backup & Restore"] = new[] { "save", "restore", "export", "zip", "auto backup", "support", "help", "logs", "log file", "crash", "send logs" },
         ["Garage"] = new[] { "car", "cars", "chassis", "shell", "bodyshell", "tuning", "setup log", "setup", "tires", "gearing", "ride height", "springs", "loan", "borrow", "club car" },
     };
@@ -272,31 +281,56 @@ public partial class MainForm
             ("Trends", new[] { "trend", "progress", "improvement", "over time", "history chart" }),
             ("Pace", new[] { "pace" }),
         },
+        // THE VOICE REGROUP (17 Oct 2026): Voice, Cast, Race Calls and AI
+        // Commentary. The club's own show music and the recording of the
+        // night moved to Sounds (Imaging's Show treatment card, and the
+        // Recording tab), and club notes, the room's vote and listening
+        // along to the Club Website page, so their words are filed there.
+        //
+        // AI Commentary is listed BEFORE Cast although its tab is after it:
+        // the first match wins, and Cast's "recap host" would otherwise take
+        // a plain "recap" search away from the Race recap card.
         ["Voice"] = new[]
         {
-            ("Voice Settings", new[] { "voice", "elevenlabs", "speech", "tts", "api key" }),
-            ("Announcements", new[] { "announcements", "announcement", "lines", "phrasing", "templates", "wording", "weight", "caution" }),
-            // The club's own show music - its opener and its sting - lives
-            // here, not on Sounds > Imaging: Imaging is each soundscape's
-            // jingles, beds and stingers.
-            ("Commentary", new[]
+            ("Voice", new[] { "voice settings", "elevenlabs", "speech", "tts", "api key", "kokoro", "stability", "similarity" }),
+            ("AI Commentary", new[]
             {
-                "commentary", "commentator", "llm", "ai", "ollama", "narration", "local model",
-                "show music", "opener", "club sting", "recap", "recap host", "vote", "room vote",
-                "notes", "club notes", "co-host", "recording", "record each race", "listen along",
-                "teaser", "sign-off", "show name", "announcer name", "mechanic",
+                "ai commentary", "commentary", "commentator", "llm", "ai", "ollama", "narration", "local model",
+                "relay", "recap", "teaser", "sign-off", "show name", "segments", "how chatty", "pacing",
+                "writing style", "tone", "commercial break", "talking points", "intros",
             }),
-            ("Rivalries", new[] { "rivalries", "rivalry" }),
+            ("Cast", new[]
+            {
+                "cast", "co-host", "cohost", "co host", "two voices", "recap host", "voice delivery",
+                "mechanic", "interview", "honours", "honours reader", "badges reader", "badge reader",
+                "announcer name", "announcer's name", "load voices",
+            }),
+            ("Race Calls", new[]
+            {
+                "race calls", "announcements", "announcement", "lines", "phrasing", "templates", "wording", "weight",
+                "caution", "how often", "per lap", "max per lap", "max spoken", "streak", "streak threshold",
+                "rivalries", "rivalry",
+            }),
         },
         ["Sounds"] = new[]
         {
-            ("Mixer", new[] { "mixer", "blend", "volume" }),
+            // Every level and duck is the Mixer's (17 Oct 2026), so its words
+            // come first. Music is listed BEFORE Imaging although its tab is
+            // after it: the first match wins, and Imaging's "music bed" and
+            // "show music" would otherwise take a plain "music" search away
+            // from the Music tab.
+            ("Mixer", new[] { "mixer", "blend", "volume", "level", "levels", "duck", "ducking", "recap duck", "voice lift", "boost" }),
             ("Soundscapes", new[] { "soundscape", "soundscapes", "announcer style", "personality", "voice pack", "sound pack", "preset" }),
             ("Effects", new[] { "effects", "sound effects", "cue", "chime" }),
             ("Ambience", new[] { "ambience", "crowd", "atmosphere", "track noise" }),
             ("Music", new[] { "music", "soundtrack", "song", "playlist" }),
-            ("Imaging", new[] { "broadcast imaging", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "bed", "run of show", "radio", "hit the post", "post mark", "out mark", "on air" }),
+            ("Imaging", new[]
+            {
+                "broadcast imaging", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "bed", "run of show", "radio", "hit the post", "post mark", "out mark", "on air",
+                "show music", "show treatment", "opener", "club sting", "voice comes in", "play it",
+            }),
             ("Lap Beeps", new[] { "lap beeps", "beep", "per-driver", "tone" }),
+            ("Recording", new[] { "recording", "record", "record each race", "clips", "highlights", "night recap", "tonight's recap", "driver's night", "check a line", "proof", "night before", "preview" }),
         },
     };
 

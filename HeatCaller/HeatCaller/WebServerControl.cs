@@ -685,7 +685,22 @@ public sealed class WebServerControl : UserControl
     {
         if (!string.IsNullOrWhiteSpace(text))
         {
-            Clipboard.SetText(text);
+            // Caught (17 Oct 2026, Bug Hunt 8, A18-1): a clipboard another
+            // program is holding throws, and on a button click that was the
+            // "Unexpected error" crash dialog. Every other copy in the app
+            // already catches it.
+            try
+            {
+                Clipboard.SetText(text);
+            }
+            catch (System.Runtime.InteropServices.ExternalException)
+            {
+                AppDialog.Show(this,
+                    "Couldn't copy - another program is using the clipboard. Try again.",
+                    "Not copied",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
         }
     }
 

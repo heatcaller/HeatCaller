@@ -48,8 +48,30 @@ public sealed partial class VoiceSettingsControl
     /// <summary>The page itself. The host parents this in its own tab; see the class remarks.</summary>
     private readonly AnnouncementsHost _announcementsPage = new() { Dock = DockStyle.Fill };
 
-    /// <summary>The Announcements page, for the host to put in a tab of its own.</summary>
+    /// <summary>The Announcements page, for the host to put in a tab of its own - Race Calls since 17 Oct 2026.</summary>
     public Control AnnouncementsPage => _announcementsPage;
+
+    /// <summary>The page's own layout, held so the rivalries' section can tell it when it needs more or less room.</summary>
+    private FillPage? _annFillPage;
+
+    // --- How often (17 Oct 2026) ---
+    //
+    // The most calls a lap - the voice profile's, from Voice parameters -
+    // and the two streak thresholds, from Sounds > Effects: how many laps in
+    // a row count as a streak decides the voice's streak call as much as the
+    // effect's, so it sits with the calls. The thresholds are still the
+    // effects profile's and are saved there (_soundStore).
+    private readonly NumericUpDown _numStreakRaces = new();
+    private readonly NumericUpDown _numStreakPractice = new();
+
+    /// <summary>
+    /// Where the host puts the rivalries (RivalriesControl), the last
+    /// section of the page - there is no Rivalries tab any more. Kept by the
+    /// host rather than this control because this one is rebuilt after a
+    /// soundscape is applied and the rivalries are not: see HostRivalries
+    /// and ReleaseRivalries.
+    /// </summary>
+    private readonly Panel _rivalriesSlot = new() { Tag = AppTheme.KeepBackColor };
 
     /// <summary>The scrolling band the rows live in - held so a rebuild can refill it.</summary>
     private AnnouncementRowsPanel? _annRows;
@@ -331,10 +353,8 @@ public sealed partial class VoiceSettingsControl
         var lblLegend2 = textSize.Wear(
             new Label
             {
-                Text = "One phrasing per line - a random one is picked each time the announcement fires, so it doesn't repeat "
-                     + "the same sentence back to back. WEIGHT decides which announcement wins when several fire on the same "
-                     + "lap; SPEED multiplies the voice's speaking rate, and is worth lowering for long lines like the "
-                     + "running order. The lines themselves are shared between races and practice - only the ticks differ.",
+                Text = "One phrasing per line, picked at random; races and practice share the lines, only the ticks differ. "
+                     + "WEIGHT picks the winner when several fire on one lap, and SPEED scales the speaking rate.",
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
             },
@@ -379,7 +399,7 @@ public sealed partial class VoiceSettingsControl
               + "[angry] [whispers] [laughs] [sighs] [awe] [sarcastic] [curious] [crying] [shouting]. "
               + "One per line is usually plenty - stacked tags fight each other."
             : "Audio tags like [excited] need eleven_v3 - on this model they'd be read out literally, so they're "
-              + "stripped before anything is spoken. Switch the model on Voice Settings to use them.";
+              + "stripped before anything is spoken. Switch the model on the Voice tab to use them.";
 
         // --- The rows ---
 
@@ -407,6 +427,14 @@ public sealed partial class VoiceSettingsControl
         _lblAnnouncementStatus.ForeColor = AppTheme.TextMuted;
         _lblAnnouncementStatus.Text = "Changes save as you make them.";
 
+        // --- How often, and the rivalries (17 Oct 2026) ---
+
+        var (howOften, howOftenGrid) = BuildHowOftenCard(textSize);
+
+        var lblRivalries = textSize.Wear(
+            new Label { Text = "Rivalries", AutoSize = true, ForeColor = AppTheme.TextDark },
+            () => AppTheme.BoldFont);
+
         // --- The page ---
 
         var page = new FillPage();
@@ -416,8 +444,18 @@ public sealed partial class VoiceSettingsControl
         page.Add(restore, gapBelow: UiLayout.RowGap);
         page.Add(_lblAudioTags, gapBelow: UiLayout.RowGap);
         page.AddFill(list, _ => AnnouncementListLeastHeight(), gapBelow: UiLayout.RowGap);
-        page.Add(_lblAnnouncementStatus, gapBelow: 0);
+        page.Add(_lblAnnouncementStatus, gapBelow: UiLayout.SectionGap);
+        page.Add(howOften);
 
+        // THE RIVALRIES, the last section of the page (17 Oct 2026) - they
+        // were a tab of their own. The host puts them in the slot
+        // (HostRivalries); they take what height the list leaves them, and
+        // never less than their own page needs, so neither is ever cut off -
+        // past that the page scrolls (FillPage).
+        page.Add(lblRivalries, stretch: false, gapBelow: UiLayout.HintGap);
+        page.AddFill(_rivalriesSlot, width => RivalriesHosted()?.LeastHeight(width) ?? 0, gapBelow: 0);
+
+        _annFillPage = page;
         _announcementsPage.Controls.Add(page);
 
         FillAnnouncementRows(current);
@@ -427,6 +465,19 @@ public sealed partial class VoiceSettingsControl
         // a longer message wraps onto more.
         textSize.ReserveLines(_lblAnnouncementStatus, 1);
         textSize.Keep(KeepAnnouncementsInStep);
+        textSize.Keep(() => FieldGrid.LineUp(new[] { howOftenGrid }));
+        textSize.Keep(KeepHowOftenInStep);
+
+        // The streak thresholds can be changed on another page's undo or by
+        // a soundscape while this one sits there - read again when it is
+        // shown.
+        _announcementsPage.VisibleChanged += (_, _) =>
+        {
+            if (_announcementsPage.Visible)
+            {
+                ShowStreakThresholds();
+            }
+        };
 
         // The page is not a child of this control, so the theming pass that
         // walks this one never reaches it. The band's layout is held while it
@@ -441,6 +492,187 @@ public sealed partial class VoiceSettingsControl
         finally
         {
             rows.ResumeLayout(true);
+        }
+    }
+
+    /// <summary>
+    /// The How often card: the most calls a lap, and how many laps in a row
+    /// make a streak, for races and for practice. Moved here on 17 Oct 2026 -
+    /// the most per lap from Voice parameters on the Voice tab, the
+    /// thresholds from Sounds > Effects - with the same settings.
+    ///
+    /// The most per lap is part of the voice profile and is saved with the
+    /// rest of this page (WireAutoSave reaches it here). The thresholds are
+    /// the EFFECTS profile's, so they are kept out of that walk and saved to
+    /// the effects store on their own (SaveStreakThresholds); without a store
+    /// they are not shown.
+    /// </summary>
+    private (Section Card, FieldGrid Grid) BuildHowOftenCard(TextSize textSize)
+    {
+        Label Hint(string text) => textSize.Wear(
+            new Label { Text = text, AutoSize = true, ForeColor = AppTheme.TextMuted },
+            () => AppTheme.SmallFont);
+
+        var grid = new FieldGrid();
+
+        grid.AddRow("Max spoken announcements per lap:", _numMaxPerLap);
+
+        // NOT THE ONLY SAY IN IT (17 Oct 2026): the AI Commentary tab's How
+        // chatty scales this figure and Pacing holds calls back between
+        // others, so a club hearing fewer calls than this was told nothing
+        // here about why.
+        grid.AddHint(Hint(
+            "The AI Commentary tab's How chatty scales this up or down, and its Pacing holds calls back to leave gaps - "
+            + "both apply even with AI commentary off."));
+
+        if (_soundStore is { } sounds)
+        {
+            var current = sounds.Current;
+
+            // Two is the floor, not one - a run of one lap is a lap. See
+            // SoundEffectsProfile.StreakThresholdFor.
+            foreach (var box in new[] { _numStreakRaces, _numStreakPractice })
+            {
+                box.Minimum = 2;
+                box.Maximum = 50;
+            }
+
+            _numStreakRaces.Value = Math.Clamp(current.StreakThreshold, 2, 50);
+            _numStreakPractice.Value = Math.Clamp(current.StreakThresholdInPractice ?? current.StreakThreshold, 2, 50);
+
+            // Not the voice profile's: kept out of WireAutoSave's walk, which
+            // runs over this page after it is built, and saved on their own.
+            _autoSaveWired.Add(_numStreakRaces);
+            _autoSaveWired.Add(_numStreakPractice);
+
+            _numStreakRaces.ValueChanged += (_, _) => SaveStreakThresholds();
+            _numStreakPractice.ValueChanged += (_, _) => SaveStreakThresholds();
+
+            grid.AddRow("Streak threshold - races:", _numStreakRaces);
+            grid.AddRow("Streak threshold - practice:", _numStreakPractice);
+            grid.AddHint(Hint(
+                "How many valid laps in a row count as a streak - for the Streak announcement above and the streak "
+                + "sound on Sounds > Effects alike. The Streak row's own boxes say how often it is called after that."));
+        }
+
+        var card = new Section("How often");
+
+        card.Add(grid, gapBelow: 0);
+
+        return (card, grid);
+    }
+
+    /// <summary>The How often card's number boxes, at the text size in use and in this page's face.</summary>
+    private void KeepHowOftenInStep()
+    {
+        foreach (var box in new[] { _numMaxPerLap, _numStreakRaces, _numStreakPractice })
+        {
+            var width = NumberBoxWidth(box, UiLayout.NumericWidth);
+
+            if (box.Width != width)
+            {
+                box.Width = width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes the two streak thresholds to the effects profile - a copy of
+    /// it, saved as a new object, so the Sounds > Effects page can tell that
+    /// someone else saved (see SoundEffectsStore.Copy). That page carries
+    /// them through its own saves from the store rather than from a box.
+    /// </summary>
+    private void SaveStreakThresholds()
+    {
+        if (_loadingSettings || _soundStore is not { } sounds)
+        {
+            return;
+        }
+
+        var races = (int)_numStreakRaces.Value;
+        var practice = (int)_numStreakPractice.Value;
+
+        if (sounds.Current.StreakThreshold == races && sounds.Current.StreakThresholdInPractice == practice)
+        {
+            return;
+        }
+
+        var profile = SoundEffectsStore.Copy(sounds.Current);
+
+        profile.StreakThreshold = races;
+        profile.StreakThresholdInPractice = practice;
+        sounds.Save(profile);
+
+        _lblAnnouncementStatus.Text = $"Streak thresholds saved {DateTime.Now:HH:mm:ss}.";
+    }
+
+    /// <summary>Puts the streak boxes back to what the effects store holds, without that counting as an edit.</summary>
+    private void ShowStreakThresholds()
+    {
+        if (_soundStore is not { } sounds)
+        {
+            return;
+        }
+
+        var current = sounds.Current;
+        var wasLoading = _loadingSettings;
+        _loadingSettings = true;
+
+        try
+        {
+            _numStreakRaces.Value = Math.Clamp(current.StreakThreshold, 2, 50);
+            _numStreakPractice.Value = Math.Clamp(current.StreakThresholdInPractice ?? current.StreakThreshold, 2, 50);
+        }
+        finally
+        {
+            _loadingSettings = wasLoading;
+        }
+    }
+
+    /// <summary>
+    /// Puts the rivalries in their slot at the foot of the page. The host
+    /// owns them; see ReleaseRivalries for taking them back before this
+    /// control is disposed.
+    /// </summary>
+    internal void HostRivalries(RivalriesControl rivalries)
+    {
+        rivalries.Dock = DockStyle.Fill;
+        rivalries.ShowAsSection();
+        rivalries.LeastHeightChanged += RivalriesLeastHeightChanged;
+        _rivalriesSlot.Controls.Add(rivalries);
+        _annFillPage?.LeastHeightMayHaveChanged();
+    }
+
+    /// <summary>
+    /// Takes the rivalries back out of the slot, so disposing this control's
+    /// page - which a soundscape rebuild does - does not dispose them with
+    /// it. Null when none were hosted.
+    /// </summary>
+    internal RivalriesControl? ReleaseRivalries()
+    {
+        if (RivalriesHosted() is not { } rivalries)
+        {
+            return null;
+        }
+
+        rivalries.LeastHeightChanged -= RivalriesLeastHeightChanged;
+        _rivalriesSlot.Controls.Remove(rivalries);
+
+        return rivalries;
+    }
+
+    private RivalriesControl? RivalriesHosted() => _rivalriesSlot.Controls.OfType<RivalriesControl>().FirstOrDefault();
+
+    /// <summary>
+    /// The rivalries' own page needs more or less room - a line shown or
+    /// hidden - so this page works its scrolling range out again. After the
+    /// rivalries' layout has finished, which is where this is raised from.
+    /// </summary>
+    private void RivalriesLeastHeightChanged()
+    {
+        if (_annFillPage is { IsDisposed: false, IsHandleCreated: true } page)
+        {
+            page.BeginInvoke(new Action(page.LeastHeightMayHaveChanged));
         }
     }
 

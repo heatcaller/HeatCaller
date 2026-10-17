@@ -197,7 +197,7 @@ public sealed class VoiceConsentTests
 
         // The one a club will actually hit, and the only one whose fix is
         // something they have to go and do.
-        Assert.Contains("Voice Settings", VoiceConsent.Because(VoiceConsent.Verdict.NothingRecorded));
+        Assert.Contains("Voice tab", VoiceConsent.Because(VoiceConsent.Verdict.NothingRecorded));
     }
 
     [Fact]

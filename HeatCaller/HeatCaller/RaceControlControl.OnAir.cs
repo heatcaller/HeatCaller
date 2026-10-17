@@ -38,6 +38,14 @@ public sealed partial class RaceControlControl
     /// <summary>The sequence On Air is running, or null when it is not running.</summary>
     private CancellationTokenSource? _onAirCts;
 
+    /// <summary>
+    /// On Air is running - opening a race (17 Oct 2026, Bug Hunt 8, A03-1).
+    /// Start Next and MainForm.StartRoundNow refuse a start while it is: a
+    /// second start would pick the round after the one being opened, and
+    /// then stage that one under this one's opening.
+    /// </summary>
+    internal bool OnAirRunning => _onAirCts is not null;
+
     /// <summary>On Air was pressed again while it ran: skip what is left and stage now.</summary>
     private bool _onAirStageNow;
 
@@ -231,6 +239,15 @@ public sealed partial class RaceControlControl
             return;
         }
 
+        // 17 Oct 2026, Bug Hunt 8, A03-4: nor over an open warm-up. The
+        // opening played over the free laps and its hand-over then cut them
+        // short. StartThroughOnAir already sends a warm-up straight to Stage.
+        if (start is null && _race.IsWarmingUp)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air is for between races - the warm-up is open. Press Stage to skip it and stage now.");
+            return;
+        }
+
         // THE BROADCAST FLOOR, FROM THE PRESS UNTIL THE RACE IS STAGED OR
         // ON AIR IS CALLED OFF (17 Oct 2026). Without it the announcer
         // screen's director, which asks for a segment twice a second, saw a
@@ -286,6 +303,9 @@ public sealed partial class RaceControlControl
         BroadcastImaging.OnAirBegins();
         _openingSaidByOnAir = false;
         _btnOnAir.Lit = true;
+
+        // 17 Oct 2026, Bug Hunt 8, A03-1: Start Next greys while On Air runs.
+        UpdateNextUpBar();
 
         // The music and crowd the staging call will bring up, opened now
         // while nothing is on air - see OnAirStarting.
@@ -360,6 +380,19 @@ public sealed partial class RaceControlControl
             }
 
             cts.Token.ThrowIfCancellationRequested();
+
+            // 17 Oct 2026, Bug Hunt 8, A04-2/A03-3: what the announcer is
+            // still saying finishes before the jingle - the recap's last
+            // line (EndRecapShow lets it finish) or the grid call StartRoundNow
+            // queued just before this. The jingle used to land on top of
+            // either. Cancelled by a second press or a call-off like the rest.
+            // Not over a demo still running (the only race On Air opens over,
+            // replacing it): its lap calls would keep the wait going.
+            if (_race.State is not RaceState.Racing)
+            {
+                await _announcer.WaitForAudioAsync(SpokenWait(), cts.Token);
+                cts.Token.ThrowIfCancellationRequested();
+            }
 
             // The floor, asked again if it was not free at the press - the
             // recap called off by this press lets go of it as it winds down.
@@ -451,6 +484,12 @@ public sealed partial class RaceControlControl
             _btnOnAir.Lit = false;
             _btnOnAir.Text = OnAirCaption;
             cts.Dispose();
+
+            // 17 Oct 2026, Bug Hunt 8, A03-1: and Start Next comes back.
+            if (!IsDisposed && !Disposing)
+            {
+                UpdateNextUpBar();
+            }
         }
 
         if (!stage || IsDisposed || Disposing)
@@ -465,19 +504,29 @@ public sealed partial class RaceControlControl
         if (start is not null)
         {
             _openingSaidByOnAir = false;
+
+            // 17 Oct 2026, Bug Hunt 8, A03-5/A04-9: a second press (or a
+            // failure) during the jingle left it playing to its end under
+            // the start. CrossfadeOut is safe to call twice.
+            jingle?.CrossfadeOut();
             HandTheBedToTheStart(bed);
             start();
             return;
         }
 
-        // Not when the race has been staged some other way in the meantime.
-        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+        // Not when the race has been staged some other way in the meantime -
+        // or a warm-up opened (17 Oct 2026, Bug Hunt 8, A03-4), which the
+        // hand-over's Stage would skip.
+        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing || _race.IsWarmingUp)
         {
             _openingSaidByOnAir = false;
+            jingle?.CrossfadeOut();
             bed?.Finish();
             return;
         }
 
+        // 17 Oct 2026, Bug Hunt 8, A03-5/A04-9: see the demo branch above.
+        jingle?.CrossfadeOut();
         HandTheBedToTheStart(bed);
 
         // The caller's own Stage when one was handed over - see

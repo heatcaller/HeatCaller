@@ -151,7 +151,7 @@ public sealed class NightAccountTests
 
         Assert.NotNull(report);
         Assert.Contains("chattiness dial", report!, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Commentary tab", report!, StringComparison.Ordinal);
+        Assert.Contains("AI Commentary tab", report!, StringComparison.Ordinal);
     }
 
     [Fact]

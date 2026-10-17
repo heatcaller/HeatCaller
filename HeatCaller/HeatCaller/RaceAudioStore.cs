@@ -359,7 +359,22 @@ internal sealed class RaceAudioStore
             {
                 try
                 {
-                    Directory.Delete(folder, recursive: true);
+                    // ONLY OUR OWN FILES OUTSIDE THE DEFAULT FOLDER (17 Oct
+                    // 2026, Bug Hunt 8, A14-1). A marked night in a club's
+                    // own folder can still hold the club's files: the photo
+                    // import files tonight's pictures under the same
+                    // yyyy-MM-dd the first race made. So there the
+                    // recordings, the clips and the marker go, and the
+                    // folder only if that leaves it empty.
+                    if (ownFolder)
+                    {
+                        Directory.Delete(folder, recursive: true);
+                    }
+                    else
+                    {
+                        DeleteOurOwnFrom(folder);
+                    }
+
                     gone++;
                 }
                 catch (Exception ex)
@@ -381,6 +396,60 @@ internal sealed class RaceAudioStore
             // A folder that cannot be listed costs the club some disk and
             // never a race.
             log?.Invoke($"{AppTime.LogStampNow()}  [audio] Couldn't tidy the recordings folder ({ex.Message}).");
+        }
+    }
+
+    /// <summary>
+    /// Deletes what HeatCaller writes into a night folder - the race and
+    /// piece recordings (mp3, wav, and an in-progress wav), the Highlights
+    /// clips, and the marker - and then the folder, only if nothing else is
+    /// left in it. 17 Oct 2026, Bug Hunt 8, A14-1.
+    ///
+    /// The marker goes LAST and only once every recording has gone, so a
+    /// file held open by a media player leaves the night marked and it is
+    /// tried again after the next race, as the recursive delete was.
+    /// Throws on a file that will not delete; the caller reports it.
+    /// </summary>
+    internal static void DeleteOurOwnFrom(string nightFolder)
+    {
+        static void DeleteRecordingsIn(string folder)
+        {
+            foreach (var file in Directory.EnumerateFiles(folder).ToList())
+            {
+                var extension = System.IO.Path.GetExtension(file);
+
+                if (string.Equals(extension, ".mp3", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(extension, ".wav", StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Delete(file);
+                }
+            }
+        }
+
+        DeleteRecordingsIn(nightFolder);
+
+        var highlights = System.IO.Path.Combine(nightFolder, DriversOwnClip.FolderName);
+
+        if (Directory.Exists(highlights))
+        {
+            DeleteRecordingsIn(highlights);
+
+            if (!Directory.EnumerateFileSystemEntries(highlights).Any())
+            {
+                Directory.Delete(highlights);
+            }
+        }
+
+        var marker = System.IO.Path.Combine(nightFolder, NightMarkerFileName);
+
+        if (File.Exists(marker))
+        {
+            File.Delete(marker);
+        }
+
+        if (!Directory.EnumerateFileSystemEntries(nightFolder).Any())
+        {
+            Directory.Delete(nightFolder);
         }
     }
 
@@ -422,7 +491,7 @@ internal sealed class RaceAudioStore
             if (!File.Exists(marker))
             {
                 File.WriteAllText(marker, "HeatCaller made this folder for one race night's recordings. It is "
-                    + "deleted with everything in it once it is older than the nights the Commentary page keeps.");
+                    + "deleted with everything in it once it is older than the nights Sounds > Recording keeps.");
             }
         }
         catch

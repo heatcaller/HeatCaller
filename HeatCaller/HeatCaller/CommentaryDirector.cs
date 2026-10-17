@@ -579,6 +579,9 @@ public sealed class CommentaryDirector
     /// </summary>
     public Action<string>? ClubAsideSaid { get; set; }
 
+    /// <summary>Asked after a club aside has been written whether its note may still be said (Bug Hunt 8, A29-1).</summary>
+    public Func<string, bool>? ClubAsideStillWanted { get; set; }
+
     /// <summary>
     /// Which note went into the facts of the segment being written, so it
     /// can be marked said if and only if that segment survives.
@@ -1894,6 +1897,22 @@ public sealed class CommentaryDirector
                 return null;
             }
 
+            // 17 Oct 2026, Bug Hunt 8, A29-1: a note removed (or unapproved,
+            // or a new meeting started) while the line was being written was
+            // still read out. Asked again now the line is back.
+            if (kind == SegmentKind.ClubAside
+                && _marks.TryGetValue(kind, out var noteId)
+                && noteId is { Length: > 0 }
+                && ClubAsideStillWanted?.Invoke(noteId) == false)
+            {
+                Budget.Release(verdict.Ticket);
+                Account.DroppedAfterWriting();
+                _commentary.ForgetLine(written.Text);
+
+                Say("[brain] Dropped club notes - the note was taken off the list while it was being written.");
+                return null;
+            }
+
             // WHAT IS SETTLED WHEN THE LINE IS SAID, kept together so it can
             // wait for the host (14 Oct 2026). Everything below used to run
             // here, the instant the line came back - and the host can still
@@ -2050,7 +2069,7 @@ public sealed class CommentaryDirector
         if (!twoVoices && _settings.CommentaryCoHost && spec.CanBeExchange)
         {
             Say($"[brain] {spec.Title} in one voice - {Stature.Describe}, and the two-hander is held for the mains. "
-                + "Tick \"two voices in the heats too\" on the Commentary page, or turn the chattiness up past "
+                + "Tick \"two voices in the heats too\" on Voice > Cast, or turn the chattiness up past "
                 + $"{ShowChatter.Standard.Name}, to hear them in the heats.");
         }
 

@@ -84,6 +84,56 @@ public static class MainsBuilder
         return rounds;
     }
 
+    /// <summary>
+    /// The label Add a Main by Hand offers: the lowest main tier not yet in
+    /// use among <paramref name="classRoundsToday"/>.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A24-3: it was a count of the mains, so with
+    /// A/B/C seeded and the B-Main deleted it offered "C-Main" - a second
+    /// tier 2 that nothing refused, leaving the A-Main with no main below it.
+    /// An untiered main ("Consolation") no longer shifts the letter either.
+    /// </summary>
+    internal static string DefaultHandMainLabel(IEnumerable<RoundDefinition> classRoundsToday)
+    {
+        var used = classRoundsToday
+            .Where(r => r.Kind == RoundKind.Main && r.MainTier >= 0)
+            .Select(r => r.MainTier)
+            .ToHashSet();
+
+        var tier = 0;
+        while (used.Contains(tier))
+        {
+            tier++;
+        }
+
+        return $"{SeedPlan.LetterFor(tier)}-Main";
+    }
+
+    /// <summary>
+    /// The main that feeds <paramref name="target"/>: one tier below it, and
+    /// of those the latest in the running order that still comes before it.
+    /// With none before it, the first one at that tier, as it always was -
+    /// which keeps a reordered programme, and mains whose Order was never
+    /// set, working.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A24-1: with no race day open the mains are
+    /// every week's, and the first one at the tier below was last week's
+    /// recorded B-Main. Tonight's A-Main took it as its feeder, passed every
+    /// check, and the bump-up stripped last week's roster. Tonight's B-Main
+    /// runs between last week's mains and tonight's A (lower tiers are put
+    /// first), so it is the one picked now.
+    /// </summary>
+    public static RoundDefinition? FeederFor(RoundDefinition target, IReadOnlyList<RoundDefinition> allMains)
+    {
+        var below = allMains.Where(r => r.MainTier == target.MainTier + 1).ToList();
+
+        return below
+                   .Where(r => r.Order < target.Order)
+                   .OrderByDescending(r => r.Order)
+                   .FirstOrDefault()
+               ?? below.FirstOrDefault();
+    }
+
     /// <summary>Why a bump-up can't be applied yet, or null if it can.</summary>
     public static string? DescribeBumpUpBlocker(RoundDefinition target, IReadOnlyList<RoundDefinition> allMains, SessionHistoryStore history)
     {
@@ -107,7 +157,7 @@ public static class MainsBuilder
             return "This main has already been run - bump-ups have to happen before it runs.";
         }
 
-        var feeder = allMains.FirstOrDefault(r => r.MainTier == target.MainTier + 1);
+        var feeder = FeederFor(target, allMains);
         if (feeder is null)
         {
             return "There's no main below this one to bump up from.";

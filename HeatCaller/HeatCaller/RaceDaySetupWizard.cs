@@ -360,7 +360,7 @@ internal sealed class RaceDaySetupWizard : Form
         _btnBack.Text = "Back";
         _btnBack.Click += (_, _) =>
         {
-            SaveCurrentStep();
+            SaveLeaving(_step - 1);
             ShowStep(_step - 1);
         };
 
@@ -487,7 +487,7 @@ internal sealed class RaceDaySetupWizard : Form
             // Any step can be jumped to - it is a checklist, not a gate.
             label.Click += (_, _) =>
             {
-                SaveCurrentStep();
+                SaveLeaving(index);
                 ShowStep(index);
             };
 
@@ -1824,6 +1824,27 @@ internal sealed class RaceDaySetupWizard : Form
     }
 
     // --- Loading and saving each step ------------------------------------
+
+    /// <summary>
+    /// Saves the step being left for <paramref name="toStep"/>.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A24-2: going back from "The day" (Back, or
+    /// "Tonight" on the rail), or clicking "The day" while on it, is not
+    /// moving on from it, so it must not open the day - SaveDay starts one
+    /// whenever none is open. Only the sound choice is kept then, the same
+    /// as SkipSetup does.
+    /// </summary>
+    private void SaveLeaving(int toStep)
+    {
+        if (_step == StepDay && OpenDay is null && toStep <= StepDay)
+        {
+            _sound?.Save();
+        }
+        else
+        {
+            SaveCurrentStep();
+        }
+    }
 
     private void SaveCurrentStep()
     {

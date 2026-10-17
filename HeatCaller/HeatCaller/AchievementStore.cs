@@ -160,6 +160,13 @@ public sealed class AchievementStore
     /// slightly generous race count is a better outcome than a wrong one,
     /// and deleting a day is rare.
     ///
+    /// SO THE BADGES THOSE TOTALS GIVE ARE KEPT TOO (17 Oct 2026, Bug Hunt
+    /// 8, A30-5) - see <see cref="KeptWithTheTotals"/>. Taking First Race
+    /// or Ten Wins away while leaving the totals that earned them meant the
+    /// very next race awarded them again, and a veteran heard "First Race"
+    /// read out over the PA. They keep their SessionId, are never in the
+    /// list returned, and so undo has nothing to do for them.
+    ///
     /// Does not save. The caller saves once, after everything else it is
     /// removing, so a half-finished delete never reaches disk.
     /// </summary>
@@ -177,7 +184,7 @@ public sealed class AchievementStore
         foreach (var driver in _drivers)
         {
             var going = driver.Unlocked
-                .Where(u => u.SessionId is { } id && wanted.Contains(id))
+                .Where(u => u.SessionId is { } id && wanted.Contains(id) && !KeptWithTheTotals.Contains(u.Id))
                 .ToList();
 
             foreach (var award in going)
@@ -189,6 +196,32 @@ public sealed class AchievementStore
 
         return removed;
     }
+
+    /// <summary>
+    /// The badges the evaluator re-derives from the running totals, which
+    /// RemoveForSessions does not wind back - so neither are these. An
+    /// explicit list rather than the whole milestone category, which also
+    /// holds per-race badges (night-owl, calendar) that do go with their race.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> KeptWithTheTotals = new HashSet<string>(StringComparer.Ordinal)
+    {
+        AchievementCatalogue.FirstRace,
+        AchievementCatalogue.TenRaces,
+        AchievementCatalogue.TwentyFiveRaces,
+        AchievementCatalogue.FiftyRaces,
+        AchievementCatalogue.HundredRaces,
+        AchievementCatalogue.ThousandLaps,
+        AchievementCatalogue.FiveThousandLaps,
+        AchievementCatalogue.TenThousandLaps,
+        AchievementCatalogue.FirstWin,
+        AchievementCatalogue.TenWins,
+        AchievementCatalogue.TwentyFiveWins,
+        AchievementCatalogue.FiftyWins,
+        AchievementCatalogue.FirstPodium,
+        AchievementCatalogue.PodiumRegular,
+        AchievementCatalogue.TenPodiums,
+        AchievementCatalogue.TwentyFivePodiums,
+    };
 
     /// <summary>Puts back what RemoveForSessions took. Does not save; the caller does.</summary>
     public void RestoreAwards(IEnumerable<RemovedAward> awards)

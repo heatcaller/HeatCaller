@@ -1010,16 +1010,19 @@ public sealed partial class AnnouncementService
     /// See QueuedVoiceItem.OnAir and OnAirNow.
     /// </param>
     public void SpeakReminder(string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null, bool showOnScreens = false,
-        SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null)
+        SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null, bool forListeners = true)
     {
         if (Muted || string.IsNullOrWhiteSpace(text))
         {
             return;
         }
 
+        // forListeners: false for the level checks and previews (17 Oct 2026,
+        // Bug Hunt 8, A06-10) - like SpeakTest, they are not the race and
+        // must not go out on the public listen-along page.
         var spoken = SpellOutTimesForSpeech(text);
         EnqueueVoiceWork(AnnouncementEventType.Reminder, null,
-            () => SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice, tail: tail, lead: lead),
+            () => SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice, tail: tail, lead: lead, forListeners: forListeners),
             displayText: showOnScreens ? text : null,
             onAir: onAir);
     }
@@ -1532,7 +1535,15 @@ public sealed partial class AnnouncementService
             }
             _pendingBatchCancellation.Clear();
             _pendingPerLapBatches.Clear();
+
+            // 17 Oct 2026, Bug Hunt 8, A06-5: and the field window, as a flag
+            // and the countdown already do - or a flush up to a third of a
+            // second behind still spoke about the race that was stopped.
+            BinTheFieldCallsUnderLock();
         }
+
+        // And the call kept for the end of a line (A06-5), for the same reason.
+        ForgetTheHeldOverCall(count: true);
 
         if (voiceCleared + soundCleared + batchesCleared > 0)
         {
@@ -1594,6 +1605,11 @@ public sealed partial class AnnouncementService
             }
             _pendingBatchCancellation.Clear();
             _pendingPerLapBatches.Clear();
+
+            // 17 Oct 2026, Bug Hunt 8, A06-5 - see StopAllPendingAudio.
+            BinTheFieldCallsUnderLock();
         }
+
+        ForgetTheHeldOverCall(count: true);
     }
 }

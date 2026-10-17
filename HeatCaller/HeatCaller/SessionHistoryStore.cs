@@ -76,6 +76,19 @@ public sealed class SessionHistoryStore
                 var list = JsonSerializer.Deserialize<List<SessionRecord>>(SafeFile.ReadAllTextWithRetry(FilePath));
                 if (list is not null)
                 {
+                    // 17 Oct 2026, Bug Hunt 8, A23-1: a hand-edited or
+                    // foreign file with a null entry (or "Results": null)
+                    // used to throw later, outside this try, while MainForm
+                    // was being built - "HeatCaller couldn't start" on every
+                    // launch. Same repair ProfileStore.Load does (it skips
+                    // nulls and calls FillMissingFields). The file WAS
+                    // readable, so LoadedUnreadable stays false.
+                    list.RemoveAll(s => s is null);
+                    foreach (var session in list)
+                    {
+                        Repair(session);
+                    }
+
                     return new SessionHistoryStore(list);
                 }
 
@@ -95,6 +108,31 @@ public sealed class SessionHistoryStore
         }
 
         return new SessionHistoryStore(new List<SessionRecord>()) { LoadedUnreadable = unreadable };
+    }
+
+    // 17 Oct 2026, Bug Hunt 8, A23-1: fills the fields a damaged file can
+    // leave null, so nothing that reads the history dereferences a null.
+    // Mirrors ProfileStore.FillMissingFields.
+    private static void Repair(SessionRecord s)
+    {
+        s.Id ??= Guid.NewGuid().ToString("N");
+        s.Results ??= new();
+        s.Results.RemoveAll(r => r is null);
+        s.Label ??= string.Empty;
+        s.TrackLayoutName ??= string.Empty;
+        s.Notes ??= string.Empty;
+        s.Edits ??= new();
+        s.Edits.RemoveAll(e => e is null);
+        foreach (var r in s.Results)
+        {
+            r.LapTimesMs ??= new();
+            r.Warnings ??= new();
+            r.Transponder ??= string.Empty;
+            r.DriverName ??= string.Empty;
+            r.CarModel ??= string.Empty;
+            r.Status ??= string.Empty;
+            r.Outcome ??= string.Empty;
+        }
     }
 
     /// <summary>
@@ -122,6 +160,10 @@ public sealed class SessionHistoryStore
     /// </summary>
     private bool Save()
     {
+        // 17 Oct 2026, Bug Hunt 8, A26-3: counted before any early return so
+        // every change (Add, SaveEdited, SaveChanges, Delete) moves it.
+        Revision++;
+
         if (_isView)
         {
             // A view over a subset must never persist - it would replace the
@@ -142,6 +184,13 @@ public sealed class SessionHistoryStore
         var json = JsonSerializer.Serialize(toWrite, new JsonSerializerOptions { WriteIndented = true });
         return SafeFile.WriteAllText(FilePath, json);
     }
+
+    /// <summary>
+    /// Goes up on every change to the history (each Save, written or not).
+    /// Lets a cache - the live qualifying projection - see an edited or
+    /// deleted result at once (17 Oct 2026, Bug Hunt 8, A26-3).
+    /// </summary>
+    public int Revision { get; private set; }
 
     public IReadOnlyList<SessionRecord> All => _sessions.OrderByDescending(s => s.StartedAtUtc).ToList();
 

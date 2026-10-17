@@ -152,7 +152,12 @@ internal static class PastMeetings
     /// sentence said out loud, and pretending to more precision than the
     /// room can check is how a true line sounds made up.
     /// </summary>
-    internal static string HowLongAgo(DateTime thenUtc, DateTime nowUtc)
+    /// <param name="zone">
+    /// The club's time zone, for which night each instant belongs to. Null -
+    /// as the app calls it - is this PC's own, the way TonightAtTheTrack
+    /// reads it; tests pass one so they say the same in any time zone.
+    /// </param>
+    internal static string HowLongAgo(DateTime thenUtc, DateTime nowUtc, TimeZoneInfo? zone = null)
     {
         var apart = nowUtc - thenUtc;
 
@@ -164,7 +169,11 @@ internal static class PastMeetings
             return "earlier today";
         }
 
-        var days = (int)apart.TotalDays;
+        // 17 Oct 2026, Bug Hunt 8, A09-2: counted in club nights (6am to
+        // 6am, TonightAtTheTrack.NightOf), not in 24-hour lumps - 23 hours
+        // across two nights of a weekend meeting was "earlier today", and
+        // 47 hours was "yesterday".
+        var days = (TonightAtTheTrack.NightOf(Local(nowUtc, zone)) - TonightAtTheTrack.NightOf(Local(thenUtc, zone))).Days;
 
         if (days < 1)
         {
@@ -198,6 +207,12 @@ internal static class PastMeetings
 
         return "last season";
     }
+
+    /// <summary>A UTC instant as the club's wall clock read it - see HowLongAgo.</summary>
+    private static DateTime Local(DateTime utc, TimeZoneInfo? zone) =>
+        zone is null
+            ? utc.ToLocalTime()
+            : TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), zone);
 
     /// <summary>
     /// Whether these two started that race first and second, in either

@@ -315,7 +315,7 @@ internal static class SecretRecovery
             }
             else
             {
-                notes.Add("The ElevenLabs key wasn't in the backup - enter it again in Voice Settings.");
+                notes.Add("The ElevenLabs key wasn't in the backup - enter it again on the Voice tab.");
                 profile.ForgetApiKey();
             }
 
@@ -468,13 +468,13 @@ internal static class SecretRecovery
             // left off this list (docs check, 30 Sep).
             if (!string.IsNullOrWhiteSpace(settings.VoiceRelayBaseUrl))
             {
-                toEnter.Add("the voice relay's token, if it had its own (Voice Settings, under Voice relay)");
+                toEnter.Add("the voice relay's token, if it had its own (the Voice tab, under Voice relay)");
             }
         }
 
         if (voiceLocked)
         {
-            toEnter.Add("the ElevenLabs key (Voice Settings)");
+            toEnter.Add("the ElevenLabs key (the Voice tab)");
         }
 
         if (settingsLocked)

@@ -199,9 +199,49 @@ public sealed partial class RelayPublisher : IDisposable
             Name = "relay-publisher",
         };
 
+        // EVERY OFF SWITCH IS TOLD ON EVERY START (17 Oct 2026, Bug Hunt 8,
+        // A16-1 / A14-2). These four were armed only by the untick itself,
+        // so an untick that never reached the relay - Wi-Fi down, or
+        // publishing switched off at the time - was forgotten on restart
+        // and the club's announcer, shout-outs, vote or drivers' evenings
+        // stayed public. Each close is idempotent, backed off, and cleared
+        // once the relay takes it (a 404 counts: see IsGoneForAClose).
+        ArmCloses(settings);
+
+        // The manager requests already run, from before a restart (17 Oct
+        // 2026, Bug Hunt 8, A16-2) - see ManageRunLedger.
+        foreach (var pair in ManageRunLedger.Load(ManageRunLedger.DefaultPath, DateTime.UtcNow))
+        {
+            _manageRunUntil[pair.Key] = pair.Value;
+        }
+
         RefreshStatus();
         _worker.Start();
     }
+
+    /// <summary>
+    /// Marks a close as owed for every relay feature that is switched off,
+    /// so the relay in use is told even when the untick that switched it
+    /// off was never sent (17 Oct 2026, Bug Hunt 8, A16-1 / A14-2).
+    /// </summary>
+    private void ArmCloses(AppSettings settings)
+    {
+        _listenClosePending = !settings.ListenAlongOnTheRelay;
+        _nightsClosePending = !settings.PublishDriverNightsToTheRelay;
+        _notesClosePending = !settings.ClubNotesFromTheRelay;
+        _voteClosePending = !settings.RoomVoteFromTheRelay;
+    }
+
+    /// <summary>
+    /// Whether a refused CLOSE (a switch going off) may count as taken.
+    /// A 404 on these routes means the relay has no such route (an old
+    /// relay) or no such club - and either way it cannot be serving the
+    /// feature, so there is nothing to close. Without this, the closes
+    /// armed on every start (17 Oct 2026, Bug Hunt 8, A16-1) would retry
+    /// against an old relay forever.
+    /// </summary>
+    private static bool IsGoneForAClose(HttpResponseMessage response) =>
+        (int)response.StatusCode == 404;
 
     /// <summary>
     /// Sends one request with a time limit worked out from how much it has
@@ -825,6 +865,11 @@ public sealed partial class RelayPublisher : IDisposable
             // phones on the club page got "not found" all evening.
             _notesOpenTold = false;
             _ballotAsPublished = null;
+
+            // And a new relay or club is told what is switched OFF, too
+            // (17 Oct 2026, Bug Hunt 8, A16-1 / A14-2) - it may be holding
+            // an open flag from before this laptop ever spoke to it.
+            ArmCloses(_settings);
         }
 
         _nextPollTick = 0;
@@ -1466,15 +1511,18 @@ public sealed partial class RelayPublisher : IDisposable
             // Shutting down. Nothing here is worth delaying an exit for.
         }
 
-        _http.Dispose();
-        _wake.Dispose();
-        _stopping.Dispose();
-
         // Not disposed if the worker may still be running - it sets this
         // on its way out of a pass, and a QuiesceAsync racing the exit may
         // be waiting on it. An event left to the collector costs nothing.
+        // 17 Oct 2026, Bug Hunt 8, A32-2: the same for the client, the wake
+        // event and the token source - a worker still inside a check-in
+        // handler when the two seconds ran out used them after they were
+        // freed. It is a background thread; the process exit takes them.
         if (!_worker.IsAlive)
         {
+            _http.Dispose();
+            _wake.Dispose();
+            _stopping.Dispose();
             _idle.Dispose();
         }
     }
@@ -1823,7 +1871,7 @@ public sealed partial class RelayPublisher : IDisposable
                         }
                         else if (!_notesClosePending)
                         {
-                            _notesProblem = null;
+                            ForgetNotesTrouble();
                         }
                     }
 
@@ -1849,7 +1897,7 @@ public sealed partial class RelayPublisher : IDisposable
                             // unticked mid-race does not send three more
                             // lines after it.
                             Listening.Wanted = false;
-                            _listenProblem = null;
+                            ForgetListenTrouble();
                         }
 
                         // And the relay told, until it has taken it - see
@@ -1877,7 +1925,7 @@ public sealed partial class RelayPublisher : IDisposable
                     }
                     else
                     {
-                        _nightsProblem = null;
+                        ForgetNightsTrouble();
 
                         // Until the relay takes it - see
                         // CloseDriverNightsOnTheRelay. This is what takes
@@ -3108,6 +3156,7 @@ public sealed partial class RelayPublisher : IDisposable
     private void RememberManageRun(string reqId)
     {
         var now = DateTime.UtcNow;
+        Dictionary<string, DateTime> snapshot;
 
         lock (_manageGate)
         {
@@ -3117,7 +3166,13 @@ public sealed partial class RelayPublisher : IDisposable
             }
 
             _manageRunUntil[reqId] = now + RelayManagerDevices.MaxAge + RelayManagerDevices.MaxAge;
+            snapshot = new Dictionary<string, DateTime>(_manageRunUntil, StringComparer.Ordinal);
         }
+
+        // On disk too, outside the lock (17 Oct 2026, Bug Hunt 8, A16-2):
+        // a request run just before a crash or a failed answer must not
+        // run again after the restart while the relay still lists it.
+        ManageRunLedger.Save(ManageRunLedger.DefaultPath, snapshot);
     }
 
     /// <summary>Posts one answer back to manage/answer. True once the relay has accepted it.</summary>
@@ -3702,9 +3757,9 @@ public sealed partial class RelayPublisher : IDisposable
 
         // "localhost." (with the dot) is a fully-qualified DNS name, not the
         // resolver's built-in localhost: whatever DNS server the Wi-Fi hands
-        // out may answer it. HostOnly takes the dot off, which is right for
-        // the local-network rule but not for this narrower one, so a name
-        // ending in a dot never counts as this laptop.
+        // out may answer it. So a name ending in a dot never counts as this
+        // laptop. (HostOnly used to take the dot off; since 17 Oct 2026 it
+        // keeps it - see there - and this check stays as the explicit rule.)
         if (uri.IdnHost.EndsWith('.'))
         {
             return false;
@@ -3739,6 +3794,14 @@ public sealed partial class RelayPublisher : IDisposable
     {
         var host = HostOnly(hostAndPort);
 
+        // A trailing dot is a DNS name, never this laptop or a literal
+        // address (17 Oct 2026, Bug Hunt 8, A16-4) - refused outright rather
+        // than left to whatever IPAddress.TryParse makes of "10.0.0.1.".
+        if (host.EndsWith('.'))
+        {
+            return false;
+        }
+
         if (host == "localhost")
         {
             return true;
@@ -3766,7 +3829,14 @@ public sealed partial class RelayPublisher : IDisposable
         return false;
     }
 
-    /// <summary>The host alone from "host", "host:port" or "[v6]:port" - lower case, without a trailing dot.</summary>
+    /// <summary>
+    /// The host alone from "host", "host:port" or "[v6]:port" - lower case.
+    /// A trailing dot is KEPT (17 Oct 2026, Bug Hunt 8, A16-4): it was
+    /// trimmed, so "localhost." and "10.0.0.1." passed the plain-http rule
+    /// as this laptop or a private address, when "localhost." is a DNS name
+    /// whatever server the Wi-Fi hands out may answer - the reason
+    /// IsLoopbackRoot already refused it.
+    /// </summary>
     private static string HostOnly(string hostAndPort)
     {
         var host = hostAndPort.Trim();
@@ -3781,7 +3851,7 @@ public sealed partial class RelayPublisher : IDisposable
             host = host[..host.IndexOf(':')];
         }
 
-        return host.TrimEnd('.').ToLowerInvariant();
+        return host.ToLowerInvariant();
     }
 
     /// <summary>The suffixes the relay itself serves, taken off a pasted address. See NormaliseBaseUrl.</summary>
@@ -3931,4 +4001,69 @@ public sealed partial class RelayPublisher : IDisposable
         HttpRequestException http when http.InnerException is not null => http.InnerException.Message,
         _ => ex.Message,
     };
+}
+
+/// <summary>
+/// The manager requests already run, on disk (17 Oct 2026, Bug Hunt 8,
+/// A16-2). RelayPublisher's replay guard was memory only, so a request
+/// still listed on the relay after a crash or a failed answer ran a second
+/// time when the laptop restarted inside its five-minute signing window.
+/// Tiny: bounded by the relay's queue and a ten-minute expiry. Never
+/// throws - a ledger that cannot be read or written is the old behaviour,
+/// not a fault.
+/// </summary>
+internal static class ManageRunLedger
+{
+    /// <summary>Where the ledger lives.</summary>
+    public static string DefaultPath => Path.Combine(AppPaths.Root, "relay-manage-ran.json");
+
+    /// <summary>The requests still inside their window at <paramref name="nowUtc"/>; empty when there is no readable ledger.</summary>
+    public static Dictionary<string, DateTime> Load(string path, DateTime nowUtc)
+    {
+        var kept = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return kept;
+            }
+
+            var read = JsonSerializer.Deserialize<Dictionary<string, DateTime>>(SafeFile.ReadAllTextWithRetry(path));
+
+            if (read is null)
+            {
+                return kept;
+            }
+
+            foreach (var pair in read)
+            {
+                var until = pair.Value.Kind == DateTimeKind.Utc ? pair.Value : pair.Value.ToUniversalTime();
+
+                if (!string.IsNullOrEmpty(pair.Key) && until > nowUtc)
+                {
+                    kept[pair.Key] = until;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Unreadable: start empty, as before this was saved at all.
+        }
+
+        return kept;
+    }
+
+    /// <summary>Writes the ledger. False when it could not be written.</summary>
+    public static bool Save(string path, IReadOnlyDictionary<string, DateTime> runUntil)
+    {
+        try
+        {
+            return SafeFile.WriteAllText(path, JsonSerializer.Serialize(runUntil));
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
 }

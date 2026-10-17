@@ -196,9 +196,14 @@ internal static class SeasonPiece
         var shape = new System.Text.StringBuilder(
             $"{Capitalised(called)} ran to {Plural.Of(ran.Count, "race")} across {Plural.Of(nights, "race night")}");
 
-        if (table.Count > 0)
+        // 17 Oct 2026, Bug Hunt 8, A09-6: the table holds everybody who
+        // raced, a 0-lap DNF and a finish outside the points included, so
+        // its length was not how many scored.
+        var scorers = table.Count(one => one.TotalPoints > 0);
+
+        if (scorers > 0)
         {
-            shape.Append($", with {Plural.Of(table.Count, "driver")} scoring");
+            shape.Append($", with {Plural.Of(scorers, "driver")} scoring");
         }
 
         shape.Append('.');
@@ -225,9 +230,14 @@ internal static class SeasonPiece
             var won = new System.Text.StringBuilder(
                 $"{champion.DriverName} won {called} on {Plural.Of(champion.TotalPoints, "point")}");
 
-            if (champion.SessionsCounted > 0)
+            // 17 Oct 2026, Bug Hunt 8, A09-3: SessionsCounted is every round
+            // scored, the ones the best-N rule dropped included - "from 12
+            // rounds counted" straight after "counted the best 8".
+            var counted = champion.SessionsCounted - champion.DroppedRounds;
+
+            if (counted > 0)
             {
-                won.Append($" from {Plural.Of(champion.SessionsCounted, "round")} counted");
+                won.Append($" from {Plural.Of(counted, "round")} counted");
             }
 
             if (champion.Wins > 0)
@@ -278,8 +288,11 @@ internal static class SeasonPiece
         {
             var most = table.OrderByDescending(one => one.SessionsCounted).First();
 
+            // 17 Oct 2026, Bug Hunt 8, A09-4: "the most of anybody" only when
+            // nobody else raced as many - a tie left the other driver out.
             if (most.SessionsCounted > table[0].SessionsCounted
                 && most.SessionsCounted > 1
+                && table.Count(one => one.SessionsCounted == most.SessionsCounted) == 1
                 && !string.Equals(most.DriverName, table[0].DriverName, System.StringComparison.OrdinalIgnoreCase))
             {
                 blocks.Add(new FactBlock(

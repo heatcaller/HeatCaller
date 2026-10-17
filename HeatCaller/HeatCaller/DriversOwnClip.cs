@@ -105,16 +105,36 @@ internal static class DriversOwnClip
     /// be read - comes back null. A clip is a courtesy, and the piece
     /// plays without it exactly as it did before this existed.
     /// </summary>
-    internal static string? FindFor(string? folderForNight, string? driverName)
+    internal static string? FindFor(string? folderForNight, string? driverName) =>
+        FindForAny(folderForNight, new[] { driverName });
+
+    /// <summary>
+    /// The newest clip from tonight under ANY of these names, or null - see
+    /// <see cref="FindFor"/> for everything else.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A14-5. A clip is named from the name on the
+    /// saved result (or the transponder, where that was blank), and the
+    /// picker asks with the profile's name. They differ when a driver is
+    /// renamed the same night, and the cold open was then quietly skipped.
+    /// So a caller can offer every name the driver went by tonight.
+    /// Its own name rather than an overload of FindFor, so FindFor(night,
+    /// null) stays unambiguous.
+    /// </summary>
+    internal static string? FindForAny(string? folderForNight, IEnumerable<string?>? driverNames)
     {
-        if (string.IsNullOrWhiteSpace(folderForNight) || string.IsNullOrWhiteSpace(driverName))
+        if (string.IsNullOrWhiteSpace(folderForNight) || driverNames is null)
         {
             return null;
         }
 
-        var safe = PlainFileName.SafePart(driverName, "driver");
+        var safes = driverNames
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => PlainFileName.SafePart(name, "driver"))
+            .Where(safe => safe.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
-        if (safe.Length == 0)
+        if (safes.Count == 0)
         {
             return null;
         }
@@ -133,7 +153,7 @@ internal static class DriversOwnClip
 
             foreach (var path in Directory.EnumerateFiles(folder))
             {
-                if (!Playable(path) || !IsFor(path, safe))
+                if (!Playable(path) || !safes.Any(safe => IsFor(path, safe)))
                 {
                     continue;
                 }

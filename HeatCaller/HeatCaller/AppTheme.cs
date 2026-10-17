@@ -755,7 +755,7 @@ public static class AppTheme
     /// fault rather than as a hint.
     ///
     /// And a focused button is one that SPACE AND ENTER STILL FIRE.
-    /// Leaving focus parked on "Green (Start)" after a start means the
+    /// Leaving focus parked on "Green" after a start means the
     /// next stray keypress - somebody alt-tabbing back to the window, a
     /// hand resting on the desk - greens a race that is already running.
     /// On a race-control row that is not a cosmetic problem.
@@ -2280,6 +2280,21 @@ public static class AppTheme
         // rather than drawing itself inside out.
         d = (int)Math.Min(d, Math.Min(r.Width, r.Height));
 
+        // 17 Oct 2026, Bug Hunt 8, A33-2: under 1px across the clamp reaches
+        // 0 (or below), and AddArc throws on a zero or negative size - which
+        // a collapsed control passing Width - 1 mid-layout can hit. Nothing
+        // to draw for an empty rectangle; a sliver is just a rectangle.
+        if (r.Width <= 0 || r.Height <= 0)
+        {
+            return path;
+        }
+
+        if (d < 1)
+        {
+            path.AddRectangle(r);
+            return path;
+        }
+
         path.AddArc(r.Left, r.Top, d, d, 180, 90);
         path.AddArc(r.Right - d, r.Top, d, d, 270, 90);
         path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
@@ -3020,8 +3035,16 @@ public static class AppTheme
     public static void StyleTabControl(TabControl tabs)
     {
         tabs.DrawMode = TabDrawMode.OwnerDrawFixed;
-        tabs.SizeMode = TabSizeMode.Fixed;
         tabs.Font = BoldFont;
+
+        // A row too long for one width per tab - see SizeTabsToCaptions.
+        if (CaptionSizedTabs.TryGetValue(tabs, out _))
+        {
+            StyleCaptionSizedTabs(tabs);
+            return;
+        }
+
+        tabs.SizeMode = TabSizeMode.Fixed;
 
         // Every tab as wide as the widest caption in the row needs in the
         // face it is drawn in, with room either side, and never narrower
@@ -3046,6 +3069,64 @@ public static class AppTheme
         // and nothing moves; at the larger sizes every caption still has
         // room on both sides.
         tabs.ItemSize = new Size(Math.Max(150, widest + BoldFont.Height * 3 / 4), Math.Max(32, BoldFont.Height + 16));
+
+        TabStripSkin.Attach(tabs);
+    }
+
+    /// <summary>The tab rows sized to their own captions - see SizeTabsToCaptions.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<TabControl, object> CaptionSizedTabs = new();
+
+    /// <summary>
+    /// Styles a tab row whose tabs are each as wide as their OWN caption
+    /// needs, rather than all as wide as the widest (17 Oct 2026).
+    ///
+    /// For Sounds, which has eight tabs since the Voice + Sounds regroup
+    /// added Recording. Eight at the width of "Soundscapes" - never less than
+    /// 150 - are 1,200px at the normal text size, wider than the page at
+    /// 1280 wide, and at 200% text seven were already only just in. Each tab
+    /// at its own caption's width plus room either side is a third shorter.
+    /// Remembered, so the theme pass's StyleTabControl keeps it.
+    /// </summary>
+    public static void SizeTabsToCaptions(TabControl tabs)
+    {
+        if (!CaptionSizedTabs.TryGetValue(tabs, out _))
+        {
+            CaptionSizedTabs.Add(tabs, new object());
+        }
+
+        StyleTabControl(tabs);
+    }
+
+    /// <summary>
+    /// Each tab its caption's width in the face it is drawn in, with
+    /// three eighths of a line either side (the row's Padding, which Windows
+    /// adds to the measured caption) - the three quarters of a line the
+    /// fixed rows give in all. As tall as a fixed row.
+    /// </summary>
+    private static void StyleCaptionSizedTabs(TabControl tabs)
+    {
+        tabs.SizeMode = TabSizeMode.Normal;
+
+        var padding = new Point(Math.Max(12, BoldFont.Height * 3 / 8), 3);
+
+        // Only while the row has no window yet (17 Oct 2026, Bug Hunt 8,
+        // A33-4): TabControl's Padding setter recreates the handle - and every
+        // child window on its pages - when it changes, and from about 1.75x
+        // text every Ctrl+/- step changed it, so focus jumped and open edits
+        // and drop-downs closed. The row keeps the padding worked out when it
+        // was built until restart; ItemSize (which doesn't recreate) still
+        // follows the text size live.
+        if (!tabs.IsHandleCreated && tabs.Padding != padding)
+        {
+            tabs.Padding = padding;
+        }
+
+        var size = new Size(0, Math.Max(32, BoldFont.Height + 16));
+
+        if (tabs.ItemSize != size)
+        {
+            tabs.ItemSize = size;
+        }
 
         TabStripSkin.Attach(tabs);
     }

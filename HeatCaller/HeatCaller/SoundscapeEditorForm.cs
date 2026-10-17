@@ -398,7 +398,7 @@ public sealed class SoundscapeEditorForm : Form
         {
             lblHeatCaller = new Label
             {
-                Text = "This PC speaks with the HeatCaller voice, which always uses the standard lines - these lines are saved, and apply once you use your own ElevenLabs key or the Windows voice.",
+                Text = "This PC speaks with the HeatCaller voice, which always uses the standard lines. These lines are saved and apply once you use your own ElevenLabs key or the Kokoro voice.",
                 AutoSize = true,
                 Font = AppTheme.SmallFont,
                 ForeColor = AppTheme.Accent,
@@ -617,9 +617,8 @@ public sealed class SoundscapeEditorForm : Form
         AppTheme.StyleToolTip(musicTip);
         Disposed += (_, _) => musicTip.Dispose();
         musicTip.SetToolTip(_cmbMusic,
-            "What Sounds \u2192 Music plays when it is set to Theme music. Your own playlist ticks are never changed. " +
-            "With no music of its own, Theme music plays your music instead. " +
-            "Whether music is on at all stays as you have it on Sounds \u2192 Music.");
+            "What Sounds \u2192 Music plays when it is set to Theme music (with none, your own music plays). " +
+            "Your playlist ticks, and whether music is on at all, stay as you have them.");
 
         return FieldGrid.Inline(_cmbAmbience, lblMusic, _cmbMusic);
     }

@@ -60,6 +60,13 @@ internal static class ShowOnAir
     /// shows at once, but if a second began while the first was winding up,
     /// the first is the one the room is still hearing - and a caption that
     /// changed under a crowd mid-show would read as a fault.
+    ///
+    /// A NAMELESS OUTER PIECE GIVES WAY (17 Oct 2026, Bug Hunt 8, A05-1).
+    /// An imaging jingle or bed counts here with no caption, and the back-
+    /// from-break jingle was still winding down when the recap's show began
+    /// - so the recap never got its name and the band read "THE SHOW" all
+    /// through it. The first named show now takes a caption the outer piece
+    /// never had; a named outer show is still never replaced.
     /// </summary>
     private static string? _caption;
 
@@ -111,13 +118,22 @@ internal static class ShowOnAir
     {
         lock (Gate)
         {
+            var cleaned = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim();
+
             if (_running++ == 0)
             {
                 // Set before Raise, so a handler reading Caption on the way
                 // in sees this show's own name rather than the last one's.
-                _caption = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim();
+                _caption = cleaned;
 
                 Raise(true);
+            }
+            else if (_caption is null && cleaned is not null)
+            {
+                // See _caption: a nameless piece gives way to the first
+                // named show. No event - the Big Screen reads Caption on
+                // its tick.
+                _caption = cleaned;
             }
         }
     }

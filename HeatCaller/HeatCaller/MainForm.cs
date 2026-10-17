@@ -339,10 +339,19 @@ public partial class MainForm : Form
     private TabPage _soundEffectsSubPage = null!;
 
     /// <summary>
-    /// The Announcements tab, held for the same reason the one above is:
-    /// RebuildVoiceAndSoundTabs has to swap what is inside it.
+    /// The Race Calls tab (Announcements until 17 Oct 2026), held for the
+    /// same reason the one above is: RebuildVoiceAndSoundTabs has to swap
+    /// what is inside it - and move the rivalries at its foot across.
     /// </summary>
     private TabPage _voiceAnnouncementsSubPage = null!;
+
+    /// <summary>
+    /// The Voice tab (Voice Settings until 17 Oct 2026), held for the same
+    /// reason (17 Oct 2026). It
+    /// was found as the Voice page's first tab, which is true only for as
+    /// long as nobody reorders the tabs.
+    /// </summary>
+    private TabPage _voiceSettingsSubPage = null!;
 
     /// <summary>
     /// The announcer's page. Built once at startup and kept for the life of
@@ -906,10 +915,9 @@ public partial class MainForm : Form
 
             // Synchronous, and that is the point: the publisher only
             // acknowledges a tap to the relay - which then forgets it -
-            // once this has said it was applied. Invoke rather than
-            // BeginInvoke so that "applied" means applied, not queued. Safe
-            // to block here: this runs on the publisher's own thread, never
-            // the UI thread.
+            // once this has said it was applied. Waited for rather than just
+            // queued, so that "applied" means applied. Safe to block here:
+            // this runs on the publisher's own thread, never the UI thread.
             _relayPublisher.CheckInReceived += relayTap =>
             {
                 if (_closingDown || IsDisposed || Disposing || !IsHandleCreated)
@@ -919,7 +927,25 @@ public partial class MainForm : Form
 
                 try
                 {
-                    return Invoke(new Func<bool>(() => !_closingDown && ApplyRelayCheckIn(relayTap))) is true;
+                    // 17 Oct 2026, Bug Hunt 8, A32-2: posted and waited for
+                    // against _closingDown rather than a blocking Invoke.
+                    // Closing joins this thread (RelayPublisher.Dispose) while
+                    // the UI thread no longer runs the posted call, so an
+                    // Invoke in flight held the exit for two seconds. Still
+                    // "applied means applied": the result is only true once
+                    // the UI thread has run it; a call left behind by closing
+                    // checks _closingDown first and applies nothing.
+                    var pending = BeginInvoke(new Func<bool>(() => !_closingDown && ApplyRelayCheckIn(relayTap)));
+
+                    while (!pending.AsyncWaitHandle.WaitOne(100))
+                    {
+                        if (_closingDown || IsDisposed)
+                        {
+                            return false;
+                        }
+                    }
+
+                    return EndInvoke(pending) is true;
                 }
                 catch
                 {
@@ -1747,7 +1773,12 @@ public partial class MainForm : Form
             // A new look only takes effect on a fresh start. The tour, if
             // it was asked for, waits for the restart so it shows the app
             // in the colours that were picked.
-            if (wizard.RestartForLook)
+            // 17 Oct 2026, Bug Hunt 8, A32-3: not when "Restore a backup
+            // instead" was asked for - the restart returned before the
+            // OpenBackups branch below and the request was lost. The new
+            // look is saved and shows on the next start (a restore restarts
+            // the app anyway).
+            if (wizard.RestartForLook && !wizard.OpenBackups)
             {
                 _settings.ShowTourOnNextStart = wizard.TakeTour;
                 _settings.Save();
@@ -1993,7 +2024,15 @@ public partial class MainForm : Form
             // in a window, and they would lose that choice next launch. The
             // state they had before pressing F11 is the one that is theirs.
             var windowState = _raceMode ? _preRaceModeState : WindowState;
-            _settings.StartMaximized = windowState == FormWindowState.Maximized;
+
+            // 17 Oct 2026, Bug Hunt 8, A32-1: closed while minimised (from
+            // the taskbar, at logoff) says nothing about maximised, so the
+            // choice saved last time stands - see StartMaximizedFor.
+            if (StartMaximizedFor(windowState) is { } startMaximized)
+            {
+                _settings.StartMaximized = startMaximized;
+            }
+
             _settings.Save();
 
             // Application.Idle is static. A window closed before it ever
@@ -2396,7 +2435,14 @@ public partial class MainForm : Form
 
             // Not "maximized" just because Race Mode is - see FormClosing.
             var windowState = _raceMode ? _preRaceModeState : WindowState;
-            _settings.StartMaximized = windowState == FormWindowState.Maximized;
+
+            // Not "not maximized" just because it is minimised (17 Oct 2026,
+            // Bug Hunt 8, A32-1) - see StartMaximizedFor.
+            if (StartMaximizedFor(windowState) is { } startMaximized)
+            {
+                _settings.StartMaximized = startMaximized;
+            }
+
             _settings.Save();
 
             SafeFile.Freeze();
@@ -2670,4 +2716,19 @@ public partial class MainForm : Form
             },
             uiThread);
     }
+
+    /// <summary>
+    /// What closing in this window state says about "start maximised": null
+    /// for minimised, which says nothing either way - closing from the
+    /// taskbar or at Windows logoff used to save "don't start maximised"
+    /// for someone who always runs it maximised (17 Oct 2026, Bug Hunt 8,
+    /// A32-1).
+    /// </summary>
+    internal static bool? StartMaximizedFor(FormWindowState state) =>
+        state switch
+        {
+            FormWindowState.Minimized => null,
+            FormWindowState.Maximized => true,
+            _ => false,
+        };
 }

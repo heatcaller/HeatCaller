@@ -586,15 +586,35 @@ public sealed class AmbienceService : IDisposable
                 keepFade = (_fadeOutGeneration, _layers.ToDictionary(kv => kv.Key, kv => kv.Value.Volume, StringComparer.OrdinalIgnoreCase));
             }
 
+            // A HELD CROWD STAYS HELD (17 Oct 2026, Bug Hunt 8, A12-2).
+            // Stop clears the hold, so a soundscape or layer edit between
+            // On Air and staging opened the new bed audible, over the
+            // show's opener - and staging, finding it running and not
+            // held, left it there. The new bed opens at the held level.
+            var wasHeld = _held;
+
             Stop();
+
+            _held = wasHeld;
 
             if (keepFade is null)
             {
                 Start(ignoreEnabledSetting);
+
+                if (!_running)
+                {
+                    _held = false;
+                }
+
                 return;
             }
 
             StartBeds(ignoreEnabledSetting, keepFade);
+
+            if (!_running)
+            {
+                _held = false;
+            }
         }
     }
 
@@ -1300,6 +1320,13 @@ public sealed class AmbienceService : IDisposable
         _fadeSpans.Clear();
         _fadeSpanTargets.Clear();
         _running = false;
+
+        // A crowd that is not open is not held either (17 Oct 2026, Bug
+        // Hunt 8, A12-1). The device going away came through here and left
+        // the hold set, so IsHeld read false, staging never released it,
+        // and the next Start opened its bed at the held level of zero for
+        // the whole race. Restart carries a hold over on purpose.
+        _held = false;
     }
 
     /// <summary>

@@ -75,7 +75,7 @@ public sealed class ILapClient : IDisposable
     /// Ports let go of on threads of their own and maybe not yet closed -
     /// see Teardown. Guarded by itself.
     /// </summary>
-    private readonly List<(string PortName, Thread Closer)> _closing = new();
+    internal readonly List<(string PortName, Thread Closer)> _closing = new();
 
     /// <summary>
     /// Bumped by every Connect and every Disconnect. A connect that comes
@@ -499,7 +499,16 @@ public sealed class ILapClient : IDisposable
     /// closing after that - the port is wedged and opening it would fail
     /// (or hang) anyway.
     /// </summary>
-    private bool WaitForClosing(string portName)
+    /// <remarks>
+    /// 17 Oct 2026, Bug Hunt 8, A02-1: a closer that is still alive after
+    /// the wait is taken off the list. Teardown only pruned dead ones, so a
+    /// close hung for good kept every later Connect on that port failing
+    /// after four seconds, however often the adapter was replugged. The
+    /// attempt that timed out still reports it; the next one goes straight
+    /// to opening the port, whose own failure is reported if Windows still
+    /// holds it. Internal, with the limit overridable, for the tests.
+    /// </remarks>
+    internal bool WaitForClosing(string portName, TimeSpan? limit = null)
     {
         List<Thread> waits;
 
@@ -516,10 +525,15 @@ public sealed class ILapClient : IDisposable
 
         foreach (var closer in waits)
         {
-            var left = ClosingWait - waited.Elapsed;
+            var left = (limit ?? ClosingWait) - waited.Elapsed;
 
             if (!closer.Join(left > TimeSpan.Zero ? left : TimeSpan.Zero))
             {
+                lock (_closing)
+                {
+                    _closing.RemoveAll(c => ReferenceEquals(c.Closer, closer));
+                }
+
                 return false;
             }
         }

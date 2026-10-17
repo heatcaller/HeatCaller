@@ -204,7 +204,7 @@ internal static class VoiceConsent
         Verdict.NotACloneAtAll => "this voice is one of the stock ones, which is nobody's own",
         Verdict.NothingRecorded =>
             "this is the club's own announcer's voice and nothing on this PC records that they agreed to it. "
-            + "Add who agreed, and when, on the Voice Settings page - until then the free voice reads every line.",
+            + "Add who agreed, and when, on the Voice tab - until then the free voice reads every line.",
         Verdict.ForAnotherVoice =>
             "the consent on this PC is for a different voice than the one that is set. A consent is for one "
             + "person's voice, so the voice that is set needs its own.",
@@ -282,6 +282,41 @@ internal static class VoiceConsent
         return nowCloned
             ? line + ", so the free voice reads every line until this one has a consent of its own."
             : line + ".";
+    }
+
+    /// <summary>
+    /// Whether recording a consent for <paramref name="newVoice"/> replaces
+    /// a record for ANOTHER voice - taken back or not - which the club is
+    /// asked about first. 17 Oct 2026, Bug Hunt 8, A10-2.
+    /// </summary>
+    internal static bool ReplacesAnotherVoice(Record? held, string? newVoice) =>
+        held is not null
+        && held.VoiceId?.Trim() is { Length: > 0 } before
+        && !string.Equals(before, newVoice?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The clone list with the voice a replaced consent was for kept on it
+    /// (17 Oct 2026, Bug Hunt 8, A10-2).
+    ///
+    /// WHY. This PC holds one consent record, and recording one for a second
+    /// voice overwrites the first. That record was the backstop that kept
+    /// the first voice counted as a clone (AppSettings.HeatCallerVoiceIsCloned)
+    /// once the relay stopped listing it - so without this, a taken-back
+    /// voice read as a stock one and its saved lines played again. Nobody
+    /// records a consent for a stock voice, so keeping it as a clone is
+    /// always right. A new list; the one passed in is not changed.
+    /// </summary>
+    internal static List<string> KeepReplacedVoiceAsClone(IEnumerable<string>? clones, string? replacedVoice)
+    {
+        var list = (clones ?? Enumerable.Empty<string>()).ToList();
+        var voice = replacedVoice?.Trim() ?? string.Empty;
+
+        if (voice.Length > 0 && !list.Any(one => string.Equals(one?.Trim(), voice, StringComparison.OrdinalIgnoreCase)))
+        {
+            list.Add(voice);
+        }
+
+        return list;
     }
 
     /// <summary>A day as a club writes it, in their own region's order.</summary>

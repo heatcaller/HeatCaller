@@ -75,7 +75,7 @@ public sealed partial class AnnouncementService
         if (profile.EffectiveEngine == VoiceEngine.HeatCaller)
         {
             throw new InvalidOperationException(
-                "The HeatCaller voice can't be tested from here. Choose \"My own ElevenLabs account\" on Voice Settings to test a voice you pay for.");
+                "The HeatCaller voice can't be tested from here. Choose \"My own ElevenLabs account\" on the Voice tab to test a voice you pay for.");
         }
 
         return (await SynthesizeOrReuseAsync(client, profile, text, reuseSaved)).Audio;
@@ -253,9 +253,21 @@ public sealed partial class AnnouncementService
         // voice is chosen - that is the point of recording it (see
         // StingerLibrary). Checked first, so it needs no key, no relay and
         // no internet.
-        if (StingerLibrary.Shared.TryLoad(text) is { } recorded)
+        //
+        // EXCEPT a take recorded in a cloned HeatCaller voice whose consent
+        // has been taken back (17 Oct 2026, Bug Hunt 8, A10-1): it falls
+        // through to the live path, which applies the same gate to new
+        // lines. A take recorded before the voice id was stored is matched
+        // by name to the HeatCaller voice chosen now - see TakeAllowed.
+        if (StingerLibrary.Shared.TryLoadWithEntry(text) is { } recorded)
         {
-            return new SynthesisResult(recorded, LineSource.Library);
+            if (HeatCallerVoice is not { } consent
+                || StingerLibrary.TakeAllowed(recorded.Entry, consent.ConsentAllows, profile.HeatCallerVoice, profile.HeatCallerVoiceName))
+            {
+                return new SynthesisResult(recorded.Audio, LineSource.Library);
+            }
+
+            StatusMessage?.Invoke("[voice] Passed over a recorded voice line - its HeatCaller voice's consent has been taken back.");
         }
 
         if (profile.EffectiveEngine == VoiceEngine.Kokoro)
@@ -389,7 +401,7 @@ public sealed partial class AnnouncementService
     /// button instead of each guessing at one.
     /// </summary>
     internal const string GetKokoroAdvice =
-        "Open Voice Settings and press Download beside the Kokoro voice ("
+        "Open the Voice tab and press Download beside the Kokoro voice ("
         + KokoroSpeech.DownloadSizeText + ", once) - until then the announcer can't say anything at all.";
 
     /// <summary>
@@ -703,7 +715,7 @@ public sealed partial class AnnouncementService
 
     private static string KeyTurnedDownMessage(Exception ex) =>
         $"[voice] ElevenLabs turned the API key down ({ShortReason(ex)}) - the free Kokoro voice is standing in. "
-        + "Lines already saved still play in your ElevenLabs voice. Check the key on Voice Settings: ElevenLabs is tried again "
+        + "Lines already saved still play in your ElevenLabs voice. Check the key on the Voice tab: ElevenLabs is tried again "
         + "in the background about once a minute, and straight away once the key is changed.";
 
     /// <summary>

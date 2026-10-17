@@ -507,6 +507,24 @@ public sealed class TrackLayoutEditForm : Form
         DialogResult = DialogResult.OK;
         Close();
     }
+
+    /// <summary>
+    /// 17 Oct 2026, Bug Hunt 8, A31-6: the last preview is ours to dispose
+    /// (TrackAttachmentStore.LoadPreviewImageFrom: "Caller owns and disposes
+    /// it"), and a PictureBox does not dispose an image it is given - so the
+    /// full-size decoded bitmap waited for the finalizer.
+    /// </summary>
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            var image = _picPreview.Image;
+            _picPreview.Image = null;
+            image?.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
 }
 
 /// <summary>
@@ -1043,6 +1061,12 @@ public sealed class TrackLayoutManagerControl : UserControl
         var oldHolder = track.RecordHolderName;
         var oldSet = track.RecordSetUtc;
         var oldRecordSectors = track.RecordSectorsMs?.ToList();
+
+        // 17 Oct 2026, Bug Hunt 8, A31-2: the cut those sectors were timed
+        // against, put back with them. A record set between the reset and
+        // the undo writes its own cut (or null), and the old sectors were
+        // then paired with it.
+        var oldRecordCut = track.RecordSectorCut;
         var oldSectorRecords = track.SectorRecordsCopy();
         var oldLatestCut = track.LatestSectorCut;
         var trackId = track.Id;
@@ -1065,6 +1089,7 @@ public sealed class TrackLayoutManagerControl : UserControl
                     restoreTarget.RecordHolderName = oldHolder;
                     restoreTarget.RecordSetUtc = oldSet;
                     restoreTarget.RecordSectorsMs = oldRecordSectors;
+                    restoreTarget.RecordSectorCut = oldRecordCut;
                 }
 
                 // Sector records merged back, not put over: a heat run
@@ -1080,6 +1105,7 @@ public sealed class TrackLayoutManagerControl : UserControl
         track.RecordHolderName = string.Empty;
         track.RecordSetUtc = null;
         track.RecordSectorsMs = null;
+        track.RecordSectorCut = null;
         track.SectorRecordsByCut = null;
         track.LatestSectorCut = null;
         _store.Upsert(track);

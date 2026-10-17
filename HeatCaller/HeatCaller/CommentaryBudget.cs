@@ -1398,12 +1398,40 @@ public sealed class CommentaryBudget
     {
         lock (_gate)
         {
+            // 17 Oct 2026, Bug Hunt 8, A08-2: the counts are taken at reserve
+            // time, so a line still in the air or waiting on the host was
+            // saved as said - and a restart before the next save treated an
+            // unheard once-a-night segment as done. The file gets the counts
+            // without the open holds (floored at zero, as Release does); the
+            // in-memory counts keep them, so the caps still bind in-process.
+            // _spentTonight is charged in Settle, so it already matches.
+            var perMeeting = new Dictionary<SegmentKind, int>(_perMeeting);
+            var perClass = new Dictionary<string, int>(_perClass, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var held in _open.Values)
+            {
+                if (perMeeting.TryGetValue(held.Kind, out var meeting) && meeting > 0)
+                {
+                    perMeeting[held.Kind] = meeting - 1;
+                }
+
+                if (held.ClassName is { Length: > 0 } className)
+                {
+                    var key = Key(held.Kind, className);
+
+                    if (perClass.TryGetValue(key, out var forClass) && forClass > 0)
+                    {
+                        perClass[key] = forClass - 1;
+                    }
+                }
+            }
+
             return JsonSerializer.Serialize(new SavedNight(
                 _dayId,
                 _spentTonight,
                 _entitledHighWater,
-                _perMeeting.ToDictionary(p => p.Key.ToString(), p => p.Value),
-                new Dictionary<string, int>(_perClass)));
+                perMeeting.ToDictionary(p => p.Key.ToString(), p => p.Value),
+                new Dictionary<string, int>(perClass)));
         }
     }
 

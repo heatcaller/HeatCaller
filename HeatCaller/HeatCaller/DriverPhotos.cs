@@ -40,7 +40,8 @@ public static class DriverPhotos
     private static readonly Dictionary<(string Name, int Size), Image> ThumbCache = new();
 
     /// <summary>
-    /// Stored photos that failed Thumb's size check. Remembered for the same
+    /// Stored photos that failed Thumb's size check, or passed it but could
+    /// not be decoded (Bug Hunt 8, A27-5). Remembered for the same
     /// reason thumbnails are - a name is never given to a different photo -
     /// so a bad file is read once rather than on every paint of every
     /// avatar that shows it.
@@ -299,8 +300,21 @@ public static class DriverPhotos
                 ThumbCache[(fileName, size)] = thumb;
                 return thumb;
             }
+            catch (IOException)
+            {
+                // Briefly locked or unreadable: worth another try next paint.
+                return null;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
             catch
             {
+                // 17 Oct 2026, Bug Hunt 8, A27-5: a file that passes the
+                // header check but GDI+ can't decode used to be re-read and
+                // re-decoded on every paint. Refused like PhotoStore does.
+                Refused.Add(fileName);
                 return null;
             }
         }

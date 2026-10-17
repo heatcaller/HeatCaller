@@ -63,6 +63,46 @@ public sealed partial class RelayPublisher
     /// <summary>What went wrong offering drivers their own night, or null.</summary>
     public string? DriverNightsProblem => _nightsProblem;
 
+    /// <summary>The problem last said out loud, so it is said once rather than every pass.</summary>
+    private volatile string? _nightsProblemAsSaid;
+
+    /// <summary>
+    /// Records what went wrong and says it once, on a change - the pattern
+    /// VoteTrouble set (17 Oct 2026, Bug Hunt 8, A17-2). The problem was
+    /// recorded in a field nothing read, so a route that silently stopped
+    /// working on a race night left no trace in the console or the log.
+    /// </summary>
+    private void NightsTrouble(string? problem)
+    {
+        _nightsProblem = problem;
+
+        if (string.Equals(_nightsProblemAsSaid, problem, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _nightsProblemAsSaid = problem;
+
+        if (problem is { Length: > 0 })
+        {
+            Log?.Invoke($"[relay] Drivers' own nights on the club's page: {problem}");
+        }
+        else
+        {
+            Log?.Invoke("[relay] Drivers' own nights on the club's page is working again.");
+        }
+    }
+
+    /// <summary>
+    /// Clears the problem without saying anything, for the club switching
+    /// the route off - not a fault, so no "working again" on its way out.
+    /// </summary>
+    private void ForgetNightsTrouble()
+    {
+        _nightsProblem = null;
+        _nightsProblemAsSaid = null;
+    }
+
     /// <summary>
     /// Queues one driver's night, keyed by their badge id.
     ///
@@ -100,13 +140,13 @@ public sealed partial class RelayPublisher
 
         if (!IsSafeForToken(target.Root))
         {
-            _nightsProblem = UnsafeAddressMessage;
+            NightsTrouble(UnsafeAddressMessage);
             return;
         }
 
         if (TellTheRelayNightsAreOpen(target, Uri.EscapeDataString(target.Club), wanted: true, token))
         {
-            _nightsProblem = null;
+            NightsTrouble(null);
         }
     }
 
@@ -145,11 +185,18 @@ public sealed partial class RelayPublisher
 
             using var response = Send(request, token);
 
+            if (!wanted && IsGoneForAClose(response))
+            {
+                // Nothing there to close (17 Oct 2026, Bug Hunt 8, A16-1).
+                _nextNightsOpenTick = 0;
+                return true;
+            }
+
             if (!response.IsSuccessStatusCode)
             {
-                _nightsProblem = (int)response.StatusCode == 404
+                NightsTrouble((int)response.StatusCode == 404
                     ? "The relay does not know about drivers' own nights yet - redeploy it (fly deploy --ha=false)."
-                    : $"Could not offer drivers their own night on the relay: it answered HTTP {(int)response.StatusCode}.";
+                    : $"Could not offer drivers their own night on the relay: it answered HTTP {(int)response.StatusCode}.");
 
                 return false;
             }
@@ -166,7 +213,7 @@ public sealed partial class RelayPublisher
         }
         catch (Exception ex)
         {
-            _nightsProblem = $"Could not reach the relay about drivers' own nights: {ex.Message}";
+            NightsTrouble($"Could not reach the relay about drivers' own nights: {ex.Message}");
             return false;
         }
     }

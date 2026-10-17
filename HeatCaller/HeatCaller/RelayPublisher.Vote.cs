@@ -369,6 +369,14 @@ public sealed partial class RelayPublisher
 
             using var response = Send(request, token);
 
+            if (!enabled && IsGoneForAClose(response))
+            {
+                // Nothing there to close (17 Oct 2026, Bug Hunt 8, A16-1):
+                // the close is armed on every start now, and an old relay
+                // must not log "redeploy" for a switch that is off.
+                return true;
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 VoteTrouble((int)response.StatusCode == 404

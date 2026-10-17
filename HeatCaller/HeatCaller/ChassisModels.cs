@@ -465,7 +465,11 @@ public sealed class ChassisTemplateStore
     /// <summary>What SetImage will take in. Lower-case, with the dot, as Path.GetExtension returns it.</summary>
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp",
+        // 17 Oct 2026, Bug Hunt 8, A27-6: .jpe and .jfif added - ImageProbe
+        // judges by content and lets a JPEG named .jfif (as Chrome saves
+        // them) through, which this then refused. .webp dropped: ImageProbe
+        // never lets one past, so it could not get here.
+        ".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".bmp", ".gif",
     };
 
     /// <summary>Copies a diagram image in and points the template at it. Returns false if the copy failed or it was not an image.</summary>

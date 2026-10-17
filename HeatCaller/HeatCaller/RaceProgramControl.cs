@@ -2464,16 +2464,18 @@ public sealed class RaceProgramControl : UserControl
             .Select(e => e.Transponder)
             .ToList();
 
-        // Counted over today's programme, so the first main added by hand
+        // Worked out over today's programme, so the first main added by hand
         // tonight is offered as "A-Main" even if the class ran mains last week.
-        var existingMains = DayRoundsForClass(className).Count(r => r.Kind == RoundKind.Main);
-
+        //
         // A lettered label for every main, the way MainsBuilder names the
         // ones it builds. The third used to be offered as "Main 3", which
         // MainRoundForm reads as untiered - so a director who took the
         // offered label got a final that sat outside the bump-up chain, and
         // the B-main above it was told there was no main below it.
-        var defaultLabel = $"{MainsBuilder.SeedPlan.LetterFor(existingMains)}-Main";
+        //
+        // 17 Oct 2026, Bug Hunt 8, A24-3: the lowest tier not in use, not a
+        // count of the mains - see MainsBuilder.DefaultHandMainLabel.
+        var defaultLabel = MainsBuilder.DefaultHandMainLabel(DayRoundsForClass(className));
 
         using var form = new MainRoundForm(className, roster, ranked, _trackLayouts, defaultLabel);
 
@@ -3938,7 +3940,9 @@ public sealed class RaceProgramControl : UserControl
         }
 
         var target = ready[0];
-        var feeder = mains.First(m => m.MainTier == target.MainTier + 1);
+        // 17 Oct 2026, Bug Hunt 8, A24-1: the same feeder the blocker check
+        // passed - see MainsBuilder.FeederFor.
+        var feeder = MainsBuilder.FeederFor(target, mains)!;
         var feederResults = _sessionHistory.Get(feeder.LinkedSessionId!)!;
 
         // Anyone already in the target cannot be promoted again - usually
@@ -4002,7 +4006,9 @@ public sealed class RaceProgramControl : UserControl
             return new ProgramAnswer(false, "Nothing to bump", $"{target.RoundLabel}: {blocker}");
         }
 
-        var feeder = mains.First(m => m.MainTier == target.MainTier + 1);
+        // 17 Oct 2026, Bug Hunt 8, A24-1: the same feeder the blocker check
+        // passed - see MainsBuilder.FeederFor.
+        var feeder = MainsBuilder.FeederFor(target, mains)!;
         var feederResults = _sessionHistory.Get(feeder.LinkedSessionId!)!;
 
         // Snapshot both rosters - a bump-up changes two rounds at once.

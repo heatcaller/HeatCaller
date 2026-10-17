@@ -263,7 +263,7 @@ internal static class RestoredSettings
 
         if ((held & Part.VoiceRelay) != 0)
         {
-            what.Add("the voice relay (Voice Settings)");
+            what.Add("the voice relay (the Voice tab)");
         }
 
         if ((held & Part.Mail) != 0)
@@ -309,8 +309,11 @@ internal static class RestoredSettings
             ? value.GetString() ?? fallback
             : fallback;
 
+    // 17 Oct 2026, Bug Hunt 8, A23-4: an old relay host is moved onto the
+    // current one first, as AppSettings.Load will move it once restored -
+    // otherwise the club's own pre-rename backup reads as a new address.
     private static string RelayAddress(JsonElement? settings, string name) =>
-        RelayPublisher.NormaliseBaseUrl(Text(settings, name, string.Empty));
+        RelayPublisher.NormaliseBaseUrl(AppSettings.MovedOffLegacyRelay(Text(settings, name, string.Empty)));
 
     /// <summary>A missing SmtpHost is AppSettings' default, as a fresh laptop reads it.</summary>
     private static string MailHost(JsonElement? settings) =>

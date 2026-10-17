@@ -141,10 +141,7 @@ public sealed class RacerPinsForm : Form
     /// </summary>
     private void CopyAll(Button button)
     {
-        var lines = new List<string> { "Name\tClass\tPIN\tEmail\tEmailed" };
-
-        lines.AddRange(_rows.Select(r =>
-            string.Join("\t", Clean(r.Name), Clean(r.ClassName), r.Pin, Clean(r.Email), r.Emailed ? "Yes" : "No")));
+        var lines = CopyAllLines(_rows);
 
         try
         {
@@ -176,6 +173,34 @@ public sealed class RacerPinsForm : Form
             // Another program holding the clipboard is enough to make this throw.
             AppDialog.Show(this, $"Couldn't copy: {ex.Message}", "Not copied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    /// <summary>
+    /// The lines Copy All puts on the clipboard, header first.
+    ///
+    /// SPREADSHEET-SAFE (17 Oct 2026, Bug Hunt 8, A35-1), the way the CSV
+    /// exports already are. Names come from online sign-up - public text -
+    /// and went in raw, so "=HYPERLINK(...)" pasted as a live formula; they
+    /// now go through <see cref="CsvHelper.NeutraliseFormula"/>. And a PIN
+    /// is text: about one in ten starts with 0, and pasted bare "042917"
+    /// became the number 42917, a PIN the check-in page refuses. The same
+    /// leading apostrophe NeutraliseFormula uses keeps it as typed.
+    /// </summary>
+    internal static List<string> CopyAllLines(
+        IEnumerable<(string Name, string ClassName, string Pin, string Email, bool Emailed)> rows)
+    {
+        var lines = new List<string> { "Name\tClass\tPIN\tEmail\tEmailed" };
+
+        lines.AddRange(rows.Select(r =>
+            string.Join(
+                "\t",
+                CsvHelper.NeutraliseFormula(Clean(r.Name)),
+                CsvHelper.NeutraliseFormula(Clean(r.ClassName)),
+                r.Pin.Length == 0 ? string.Empty : "'" + Clean(r.Pin),
+                CsvHelper.NeutraliseFormula(Clean(r.Email)),
+                r.Emailed ? "Yes" : "No")));
+
+        return lines;
     }
 
     /// <summary>A tab or line break inside a name would split it across cells.</summary>

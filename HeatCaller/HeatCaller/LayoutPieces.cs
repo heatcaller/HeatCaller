@@ -389,8 +389,12 @@ internal sealed class FillPage : Panel
 
     /// <summary>
     /// Adds a part that takes the height left over, never less than
-    /// <paramref name="leastHeight"/>. Two of them share what is left
-    /// equally.
+    /// <paramref name="leastHeight"/>. Two or more of them share what is
+    /// left in proportion to their leasts, so at the page's scrolling minimum
+    /// each gets exactly its least (17 Oct 2026, Bug Hunt 8, A33-1 - they
+    /// used to share it equally, which left the one with the larger least
+    /// short of it, scrolling inside the scrolling page). One on its own takes
+    /// all of it, as ever.
     ///
     /// The part goes in a plain panel of its own, filling it, rather than
     /// straight into the table. A list or grid gets a themed scrollbar
@@ -497,6 +501,8 @@ internal sealed class FillPage : Panel
             return false;
         }
 
+        UpdateFillWeights(Math.Max(1, ClientSize.Width - Padding.Horizontal));
+
         var least = Padding.Vertical + RowsHeight(Math.Max(1, ClientSize.Width - Padding.Horizontal));
 
         if (AutoScrollMinSize.Height == least && AutoScrollMinSize.Width == 0)
@@ -555,6 +561,68 @@ internal sealed class FillPage : Panel
         if (Visible && _rows is not null && AutoScrollMinSize.Height != Padding.Vertical + RowsHeight(Math.Max(1, ClientSize.Width - Padding.Horizontal)))
         {
             PerformLayout();
+        }
+    }
+
+    /// <summary>
+    /// Weights the filling rows by their least heights (gap included), so
+    /// the leftover height is shared in proportion and, at the scrolling
+    /// minimum, each gets its least - TableLayoutPanel shares Percent rows by
+    /// their weights alone, and every fill row used to be 100.
+    ///
+    /// Only with two or more filling parts in view: one on its own gets all
+    /// that is left whatever its weight, and is left at 100 exactly as before.
+    /// Only a weight that has changed is set, so this never lays the table
+    /// out for nothing. Width as RowsHeight is given it. TableLayoutPanel's
+    /// rounding can still leave a row a pixel short of its least.
+    /// (17 Oct 2026, Bug Hunt 8, A33-1.)
+    /// </summary>
+    private void UpdateFillWeights(int width)
+    {
+        var fills = new List<(Control Holder, float Weight)>();
+
+        foreach (Control part in _rows.Controls)
+        {
+            if (part.Visible && _leastHeights.TryGetValue(part, out var leastHeight))
+            {
+                fills.Add((part, Math.Max(1, leastHeight(Math.Max(1, width - part.Margin.Horizontal)) + part.Margin.Vertical)));
+            }
+        }
+
+        if (fills.Count < 2)
+        {
+            // Back to the weight they were added with.
+            foreach (var holder in _leastHeights.Keys)
+            {
+                SetRowWeight(holder, 100f);
+            }
+
+            return;
+        }
+
+        foreach (var holder in _leastHeights.Keys)
+        {
+            var index = fills.FindIndex(fill => fill.Holder == holder);
+
+            // A hidden one keeps the weight it was added with, as before.
+            SetRowWeight(holder, index >= 0 ? fills[index].Weight : 100f);
+        }
+    }
+
+    private void SetRowWeight(Control holder, float weight)
+    {
+        var row = _rows.GetRow(holder);
+
+        if (row < 0 || row >= _rows.RowStyles.Count)
+        {
+            return;
+        }
+
+        var style = _rows.RowStyles[row];
+
+        if (style.SizeType == SizeType.Percent && style.Height != weight)
+        {
+            style.Height = weight;
         }
     }
 

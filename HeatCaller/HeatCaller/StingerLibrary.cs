@@ -31,7 +31,45 @@ namespace HeatCaller;
 /// </summary>
 public sealed class StingerLibrary
 {
-    public sealed record Entry(string Key, string Text, string File, string VoiceName, string SoundscapeName, DateTime RecordedUtc);
+    /// <param name="HeatCallerVoiceId">
+    /// The HeatCaller voice id the take was recorded in, or null for any
+    /// other engine (and for every take recorded before this existed). Kept
+    /// so taking a cloned voice's consent back stops its recorded takes too
+    /// - see <see cref="TakeAllowed"/>. 17 Oct 2026, Bug Hunt 8, A10-1.
+    /// Optional and last, so an index written before it still reads.
+    /// </param>
+    public sealed record Entry(string Key, string Text, string File, string VoiceName, string SoundscapeName, DateTime RecordedUtc, string? HeatCallerVoiceId = null);
+
+    /// <summary>
+    /// Whether a recorded take may still play: one recorded in a HeatCaller
+    /// voice only while that voice's consent allows it (consentAllows is
+    /// HeatCallerVoiceClient.ConsentAllows). 17 Oct 2026, Bug Hunt 8,
+    /// A10-1: these takes played on after TakeConsentBack promised nothing
+    /// more would be said in that voice.
+    ///
+    /// A take from before the id was stored carries only its VoiceName. It
+    /// is gated when that name is the one the club's chosen HeatCaller voice
+    /// (<paramref name="heatCallerVoiceId"/>, <paramref name="heatCallerVoiceName"/>)
+    /// would be recorded under and that voice's consent is withheld - and
+    /// only a NAMED voice, so a revoked clone never silences every
+    /// unnamed stock-voice take.
+    /// </summary>
+    internal static bool TakeAllowed(Entry entry, Func<string?, bool> consentAllows, string? heatCallerVoiceId = null, string? heatCallerVoiceName = null)
+    {
+        if (!string.IsNullOrWhiteSpace(entry.HeatCallerVoiceId))
+        {
+            return consentAllows(entry.HeatCallerVoiceId.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(heatCallerVoiceId)
+            && !string.IsNullOrWhiteSpace(heatCallerVoiceName)
+            && SameVoice(entry.VoiceName, HeatCallerVoiceNameFor(heatCallerVoiceName)))
+        {
+            return consentAllows(heatCallerVoiceId.Trim());
+        }
+
+        return true;
+    }
 
     public static StingerLibrary Shared { get; } = new(Path.Combine(
         AppPaths.Root,
@@ -205,12 +243,16 @@ public sealed class StingerLibrary
     {
         VoiceEngine.Kokoro => "the Kokoro voice",
 
-        VoiceEngine.HeatCaller => string.IsNullOrWhiteSpace(voice.HeatCallerVoiceName)
-            ? "the HeatCaller voice"
-            : $"the HeatCaller voice ({voice.HeatCallerVoiceName})",
+        VoiceEngine.HeatCaller => HeatCallerVoiceNameFor(voice.HeatCallerVoiceName),
 
         _ => string.IsNullOrWhiteSpace(voice.VoiceName) ? "your ElevenLabs voice" : voice.VoiceName,
     };
+
+    /// <summary>The name a take in this HeatCaller voice is recorded under - <see cref="VoiceNameFor"/>'s, kept in one place for <see cref="TakeAllowed"/>.</summary>
+    internal static string HeatCallerVoiceNameFor(string? heatCallerVoiceName) =>
+        string.IsNullOrWhiteSpace(heatCallerVoiceName)
+            ? "the HeatCaller voice"
+            : $"the HeatCaller voice ({heatCallerVoiceName})";
 
     /// <summary>
     /// Whether two voice names written by <see cref="VoiceNameFor"/> mean
@@ -437,7 +479,14 @@ public sealed class StingerLibrary
     }
 
     /// <summary>The recorded audio for a line, or null to speak it live.</summary>
-    public byte[]? TryLoad(string text)
+    public byte[]? TryLoad(string text) => TryLoadWithEntry(text)?.Audio;
+
+    /// <summary>
+    /// The recorded audio for a line and the index entry it came from (for
+    /// <see cref="TakeAllowed"/>), or null to speak it live. 17 Oct 2026,
+    /// Bug Hunt 8, A10-1.
+    /// </summary>
+    public (byte[] Audio, Entry Entry)? TryLoadWithEntry(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -456,7 +505,7 @@ public sealed class StingerLibrary
         try
         {
             var path = PathFor(entry);
-            return path is not null && File.Exists(path) ? File.ReadAllBytes(path) : null;
+            return path is not null && File.Exists(path) ? (File.ReadAllBytes(path), entry) : null;
         }
         catch
         {
@@ -464,7 +513,8 @@ public sealed class StingerLibrary
         }
     }
 
-    public void Save(string text, byte[] audio, string voiceName, string soundscapeName)
+    /// <param name="heatCallerVoiceId">The HeatCaller voice id it was recorded in, or null - see <see cref="Entry"/>.</param>
+    public void Save(string text, byte[] audio, string voiceName, string soundscapeName, string? heatCallerVoiceId = null)
     {
         if (string.IsNullOrWhiteSpace(text) || audio.Length == 0)
         {
@@ -486,7 +536,8 @@ public sealed class StingerLibrary
 
         lock (_gate)
         {
-            Index()[key] = new Entry(key, text.Trim(), file, voiceName, soundscapeName, DateTime.UtcNow);
+            Index()[key] = new Entry(key, text.Trim(), file, voiceName, soundscapeName, DateTime.UtcNow,
+                string.IsNullOrWhiteSpace(heatCallerVoiceId) ? null : heatCallerVoiceId.Trim());
             SaveIndex();
         }
     }

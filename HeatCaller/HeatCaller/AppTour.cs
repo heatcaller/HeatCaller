@@ -64,8 +64,8 @@ public sealed class AppTour : Form
 
         new("Voice", "Voice",
             "The announcer: which voice speaks (Kokoro, the free voice that runs on this laptop, your own ElevenLabs "
-            + "key, or the HeatCaller voice) and every line it can say, from the start to lead changes and track "
-            + "records."),
+            + "key, or the HeatCaller voice), the cast around it - recap host, co-host, mechanic - every race call "
+            + "it can make from the start to lead changes and rivalries, and the AI commentary."),
 
         new("Sounds", "Sounds",
             "Soundscapes set the mood in one click: sound effects, a crowd that reacts to the racing, music "

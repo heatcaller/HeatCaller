@@ -16,7 +16,6 @@ public sealed class AmbienceControl : UserControl
     private readonly UndoService _undo;
 
     private readonly CheckBox _chkEnabled = new ThemedCheckBox();
-    private readonly NumericUpDown _numMasterVolume = new();
 
     // Which layers play. Music has the same idea as a pair; this is three,
     // because ambience layers mix rather than replace one another. See
@@ -33,10 +32,6 @@ public sealed class AmbienceControl : UserControl
     private readonly CheckBox _chkReact = new ThemedCheckBox();
     private readonly NumericUpDown _numSurgeSeconds = new();
     private readonly NumericUpDown _numFinishSeconds = new();
-    private readonly CheckBox _chkDuck = new ThemedCheckBox();
-    private readonly NumericUpDown _numDuckTo = new();
-    private readonly CheckBox _chkBoostVoice = new ThemedCheckBox();
-    private readonly NumericUpDown _numVoiceBoost = new();
     private readonly CheckBox _chkFastLap = new ThemedCheckBox();
     private readonly CheckBox _chkLeadChange = new ThemedCheckBox();
     private readonly CheckBox _chkTrackRecord = new ThemedCheckBox();
@@ -208,14 +203,14 @@ public sealed class AmbienceControl : UserControl
     }
 
     /// <summary>
-    /// Builds the page: what ambience is; the Enable switch with the overall
-    /// level beside it; the live monitor across the page; then three cards.
+    /// Builds the page: what ambience is; the Enable switch; the live monitor
+    /// across the page; then two cards (the overall level and the ducking
+    /// moved to the Mixer on 17 Oct 2026).
     /// Layers: which layers play and what that means, the list of layers
     /// taking whatever height the page has left, its buttons, and a line
     /// saying what will be heard. Reactions: why they may be greyed out, the
     /// React switch, how long a surge, the finish celebration and the fades
-    /// take, the ten triggers in columns, and the once-per-race note.
-    /// Ducking: its two switches, each with its level beside it. On the
+    /// take, the ten triggers in columns, and the once-per-race note. On the
     /// layout pieces (LayoutPieces.cs), so nothing is placed by hand.
     ///
     /// It used to be placed in pixels against a 980px page: every row at a y
@@ -228,9 +223,8 @@ public sealed class AmbienceControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Continuous crowd and track noise, mixed underneath the announcements rather than queued with them, "
-                 + "so the ambience keeps running while the announcer talks over it. You supply the audio files - "
-                 + "short looping clips of 10-30 seconds work best.",
+            Text = "Continuous crowd and track noise that keeps running under the announcer. "
+                 + "For your own layers, short looping clips of 10-30 seconds work best.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -270,32 +264,12 @@ public sealed class AmbienceControl : UserControl
             UpdateEnabledState();
         };
 
-        _numMasterVolume.Minimum = 0;
-        _numMasterVolume.Maximum = 100;
-        _numMasterVolume.Increment = 5;
-        _numMasterVolume.Value = (decimal)Math.Clamp(_store.Current.MasterVolume * 100f, 0, 100);
-        _numMasterVolume.ValueChanged += (_, _) =>
-        {
-            _store.Current.MasterVolume = (float)_numMasterVolume.Value / 100f;
-            _store.Save();
-            _ambience.Settings = _store.Current;
-
-            // Heard straight away, at the crowd's CURRENT mood. This asked
-            // for Racing, which moved a between-races crowd up to race level
-            // (and kept it there) the moment the level was touched - the
-            // same fault the Mixer's fader had. See RefreshLevels.
-            _ambience.RefreshLevels();
-        };
-
-        var lblMasterSuffix = new Label { Text = "%  - scales every layer at once", ForeColor = AppTheme.TextMuted };
-        _textSize.Wear(lblMasterSuffix, () => AppTheme.SmallFont);
-
-        // The level beside the switch, and under it when the line is too
-        // narrow for both (FieldRow).
+        // The switch on its own line (17 Oct 2026). The overall level that
+        // sat beside it is the Mixer's Ambience fader - the one place every
+        // level is set now - and the same stored value.
         var master = new FieldRow();
 
         master.Add(null, _chkEnabled);
-        master.Add(new Label { Text = "Overall level:" }, FieldGrid.Inline(_numMasterVolume, lblMasterSuffix));
 
         // --- Live monitor -------------------------------------------------
         //
@@ -538,68 +512,10 @@ public sealed class AmbienceControl : UserControl
         reactions.Add(lblOnceHint, gapBelow: 0);
 
         // --- Ducking ------------------------------------------------------
-
-        _chkDuck.Text = "Duck ambience while the announcer speaks";
-
-        // Sized with the switch under it, both as wide as the wider needs
-        // (SizeAlike, at the end of this method).
-        _chkDuck.AutoSize = false;
-        _chkDuck.Checked = _store.Current.DuckUnderAnnouncements;
-        _chkDuck.CheckedChanged += (_, _) =>
-        {
-            _store.Current.DuckUnderAnnouncements = _chkDuck.Checked;
-            _store.Save();
-            _ambience.Settings = _store.Current;
-            UpdateEnabledState();
-        };
-
-        _numDuckTo.Minimum = 5;
-        _numDuckTo.Maximum = 100;
-        _numDuckTo.Increment = 5;
-        _numDuckTo.Value = (decimal)Math.Clamp(_store.Current.DuckToFraction * 100f, 5, 100);
-        _numDuckTo.ValueChanged += (_, _) => { _store.Current.DuckToFraction = (float)_numDuckTo.Value / 100f; _store.Save(); _ambience.Settings = _store.Current; };
-
-        var lblDuckHint = new Label { Text = "%  - pulling the bed down reads clearer than pushing the voice up", ForeColor = AppTheme.TextMuted };
-        _textSize.Wear(lblDuckHint, () => AppTheme.SmallFont);
-
-        _chkBoostVoice.Text = "Also lift the voice when the bed is loud";
-        _chkBoostVoice.AutoSize = false;
-        _chkBoostVoice.Checked = _store.Current.BoostVoiceOverAmbience;
-        _chkBoostVoice.CheckedChanged += (_, _) =>
-        {
-            _store.Current.BoostVoiceOverAmbience = _chkBoostVoice.Checked;
-            _store.Save();
-            _ambience.Settings = _store.Current;
-            UpdateEnabledState();
-        };
-
-        _numVoiceBoost.DecimalPlaces = 1;
-        _numVoiceBoost.Increment = 0.1m;
-        _numVoiceBoost.Minimum = 1.0m;
-        _numVoiceBoost.Maximum = 2.0m;
-        _numVoiceBoost.Value = (decimal)Math.Clamp(_store.Current.VoiceBoostMultiplier, 1.0f, 2.0f);
-        _numVoiceBoost.ValueChanged += (_, _) => { _store.Current.VoiceBoostMultiplier = (float)_numVoiceBoost.Value; _store.Save(); _ambience.Settings = _store.Current; };
-
-        var lblBoostHint = new Label { Text = "scaled by how loud the bed actually is - no boost over a quiet one", ForeColor = AppTheme.TextMuted };
-        _textSize.Wear(lblBoostHint, () => AppTheme.SmallFont);
-
-        // Each level beside the switch it belongs to - the two switches one
-        // width, so "down to:" and "up to x" line up - and under it when the
-        // line is too narrow for both (FieldRow).
-        var duck = new FieldRow();
-
-        duck.Add(null, _chkDuck);
-        duck.Add(new Label { Text = "down to:" }, FieldGrid.Inline(_numDuckTo, lblDuckHint));
-
-        var boost = new FieldRow();
-
-        boost.Add(null, _chkBoostVoice);
-        boost.Add(new Label { Text = "up to x" }, FieldGrid.Inline(_numVoiceBoost, lblBoostHint));
-
-        var ducking = new Section("Ducking");
-
-        ducking.Add(duck);
-        ducking.Add(boost, gapBelow: 0);
+        //
+        // On the Mixer since 17 Oct 2026, with every other duck: whether the
+        // crowd ducks under the announcer and how far, and the voice lift
+        // over a loud crowd. The same stored settings.
 
         // --- The page -----------------------------------------------------
 
@@ -609,8 +525,7 @@ public sealed class AmbienceControl : UserControl
         page.Add(master, gapBelow: UiLayout.RowGap);
         page.Add(_monitor);
         page.AddFill(layers, layers.LeastHeight);
-        page.Add(reactions);
-        page.Add(ducking, gapBelow: 0);
+        page.Add(reactions, gapBelow: 0);
 
         Controls.Add(page);
 
@@ -620,7 +535,6 @@ public sealed class AmbienceControl : UserControl
         // size changes.
         _textSize.Keep(SizeFields);
         _textSize.Keep(() => SizeTriggers(triggerBar));
-        _textSize.Keep(() => SizeAlike(new[] { _chkDuck, _chkBoostVoice }, UiLayout.LabelGap));
 
         UpdateEnabledState();
     }
@@ -633,7 +547,7 @@ public sealed class AmbienceControl : UserControl
     /// </summary>
     private void SizeFields()
     {
-        var numbers = new[] { _numMasterVolume, _numSurgeSeconds, _numFinishSeconds, _numFadeUp, _numFadeDown, _numDuckTo, _numVoiceBoost };
+        var numbers = new[] { _numSurgeSeconds, _numFinishSeconds, _numFadeUp, _numFadeDown };
 
         foreach (var number in numbers)
         {
@@ -697,8 +611,7 @@ public sealed class AmbienceControl : UserControl
     /// <summary>
     /// Gives check boxes one size: as wide as the widest of them needs for
     /// its caption with <paramref name="room"/> after it, and as tall as the
-    /// tallest - for boxes that line up, the triggers in columns and the two
-    /// ducking switches with their levels beside them. The boxes do not size
+    /// tallest - for boxes that line up, the triggers in columns. The boxes do not size
     /// themselves (AutoSize is off), or each would be only as wide as its
     /// own caption. Returns the size.
     /// </summary>
@@ -979,7 +892,6 @@ public sealed class AmbienceControl : UserControl
     private void UpdateEnabledState()
     {
         var on = _chkEnabled.Checked;
-        _numMasterVolume.Enabled = on;
         _chkReact.Enabled = on;
 
         // The grid stays usable even when ambience is OFF. Disabling it
@@ -994,13 +906,6 @@ public sealed class AmbienceControl : UserControl
         // master switch rather than the reactions toggle.
         _numFadeUp.Enabled = on;
         _numFadeDown.Enabled = on;
-
-        // Ducking applies to any announcement, not just reactions, so it
-        // follows the master switch rather than the reactions toggle.
-        _chkDuck.Enabled = on;
-        _numDuckTo.Enabled = on && _chkDuck.Checked;
-        _chkBoostVoice.Enabled = on;
-        _numVoiceBoost.Enabled = on && _chkBoostVoice.Checked;
 
         var reacting = on && _chkReact.Checked;
 

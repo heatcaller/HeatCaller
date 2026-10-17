@@ -227,6 +227,18 @@ public partial class MainForm
                 : $"A race is running. Starting \"{round.RoundLabel}\" abandons it and clears its laps - confirm to go ahead.";
         }
 
+        // 17 Oct 2026, Bug Hunt 8, A03-1: not while On Air is opening a
+        // race. Starting now would select the NEXT round and then count as
+        // On Air's second press, so the opening's hand-over staged this
+        // round under the other's opening. Logged here as well, because the
+        // desk callers do not show the reason.
+        if (_raceControlControl.OnAirRunning)
+        {
+            const string busy = "On Air is opening a race - wait for it, or press On Air or F1 again to stage it now.";
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [program] {busy}");
+            return busy;
+        }
+
         // A demo is ended BEFORE the grid call is spoken: ending it
         // clears its backlog of queued lap calls, which would take the
         // grid call with it if Stage ended the demo afterwards.

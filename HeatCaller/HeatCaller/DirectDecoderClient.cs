@@ -279,7 +279,21 @@ public sealed class DirectDecoderClient : IDisposable
             // The stream let go of moments ago may still be closing on its
             // own thread - see Teardown - and the decoder is opened again
             // only once it has. Waited for here, where waiting is allowed.
-            Volatile.Read(ref _closing)?.Join();
+            //
+            // 17 Oct 2026, Bug Hunt 8, A02-2: for a few seconds only, as the
+            // I-Lap does (ILapClient.WaitForClosing). The wait had no limit,
+            // so one hung close left this attempt - and _connecting - stuck
+            // for good and the EasyLap never connected again. A close still
+            // going after that is forgotten, so the next attempt (after a
+            // replug) goes on to TryOpen, which reports its own failure.
+            var closing = Volatile.Read(ref _closing);
+            if (closing is not null && !closing.Join(TimeSpan.FromSeconds(4)))
+            {
+                Interlocked.CompareExchange(ref _closing, null, closing);
+                Report(DecoderConnectionState.Error,
+                    "The last EasyLap connection is still closing. Unplug the decoder's USB cable and plug it back in, then Connect again.");
+                return;
+            }
 
             // A new connection may be a different decoder, or the same one
             // restarted: its clock is learned again from scratch.
@@ -318,6 +332,11 @@ public sealed class DirectDecoderClient : IDisposable
                 return;
             }
 
+            // 17 Oct 2026, Bug Hunt 8, A02-3: the report length is read
+            // inside the try, so a throw there closes the stream rather than
+            // leaving it open for nobody.
+            int maxInputReportLength;
+
             try
             {
                 stream.SetFeature(UartEnableReport);
@@ -325,15 +344,15 @@ public sealed class DirectDecoderClient : IDisposable
 
                 stream.SetFeature(UartConfigReport);
                 Log($"Sent UART Config report (38400 8N1): {ToHex(UartConfigReport)}");
+
+                maxInputReportLength = device.GetMaxInputReportLength();
             }
             catch (Exception ex)
             {
-                Report(DecoderConnectionState.Error, $"Failed to configure the UART: {ex.Message}");
+                Report(DecoderConnectionState.Error, $"Failed to configure the decoder: {ex.Message}");
                 CloseQuietly(stream);
                 return;
             }
-
-            var maxInputReportLength = device.GetMaxInputReportLength();
 
             // The last look before this stream becomes the live one. A
             // Disconnect - or a later Connect - while the driver had us

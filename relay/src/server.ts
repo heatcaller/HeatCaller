@@ -453,6 +453,14 @@ const MANAGE_ANSWERS_MAX_BYTES = 16 * MANAGE_ANSWER_MAX_BODY;
 const CLUB_MAX_BYTES = 50 * 1024 * 1024;
 
 /**
+ * The largest ?meta=1&limit=N whose cut is kept beside its meta listing.
+ * The home page asks for limit=3; nothing asks for more than a handful.
+ * Keeping only small cuts keeps what is held bounded in count and bytes.
+ * 17 Oct 2026, Bug Hunt 8, A19-1.
+ */
+const META_LIMIT_CACHED = 50;
+
+/**
  * The most one collection listing may be. A listing is the newest
  * documents that fit, and the older ones past this are left out of it -
  * each is still there to fetch on its own. Real results are a few
@@ -918,6 +926,16 @@ export class Relay {
   private readonly managePinFailures: Limiter;
   /** The manager PIN's own club-wide lockout, kept apart from checkin's pinGuard - see PinGuard's own doc comment. */
   private readonly managePinGuard: PinGuard;
+  /**
+   * The last non-empty staff (checkin) and manager PIN hash each club
+   * published, in memory only. The laptop publishes an empty PIN while the
+   * feature is off, so comparing against the previous document alone let
+   * unticking and re-ticking the box (same PIN) lift a lockout. 17 Oct
+   * 2026, Bug Hunt 8, A19-3. After a restart these are empty and the
+   * previous document is compared against, as before.
+   */
+  private readonly lastStaffPin = new Map<string, string>();
+  private readonly lastManagePin = new Map<string, string>();
   /** signin, request and the response poll together - one manager, working at a human's pace, needs nowhere near checkin's traffic budget. */
   private readonly manageTraffic: Limiter;
   /** Ten wrong invite codes in ten minutes, per club and address - sign-up's own pinFailures. */
@@ -949,6 +967,13 @@ export class Relay {
   private readonly voice: VoiceService | undefined;
   private readonly brain: BrainService | undefined;
   private readonly listings = new Map<string, Buffer>();
+  /**
+   * ?meta=1&limit=N cuts, keyed to the very meta listing Buffer they were
+   * cut from, so a rebuilt listing (a new Buffer) never meets an old cut
+   * and forgetListing needs to do nothing for them. 17 Oct 2026, Bug Hunt
+   * 8, A19-1: without this every poll re-parsed the whole meta listing.
+   */
+  private readonly metaCuts = new WeakMap<Buffer, Map<number, Buffer>>();
   private listingBytes = 0;
   /**
    * Bumped by a whole club's delete; listingGens is bumped per collection
@@ -1021,6 +1046,13 @@ export class Relay {
   private readonly cardBudget: Limiter;
   /** Each club's pass key, read (or made) once - see passKeyOf. One per configured club at most: every route that asks has checked the club exists. */
   private readonly passKeys = new Map<string, Promise<Buffer>>();
+  /**
+   * Sign-up passes already made, keyed to the very pass key Buffer they
+   * were made with, so a new key (a club deleted and set up again) drops
+   * them with no code of its own. See signupPassOf. 17 Oct 2026, Bug Hunt
+   * 8, A20-3.
+   */
+  private readonly signupPasses = new WeakMap<Buffer, Map<string, string>>();
 
   constructor(options: RelayOptions) {
     this.store = options.store;
@@ -2380,9 +2412,16 @@ export class Relay {
           // changed is then unknown, and a lockout is not lifted on a guess.
           const before = staffPinOf(existing?.body);
           const after = staffPinOf(body);
+          // 17 Oct 2026, Bug Hunt 8, A19-3: compare against the last real
+          // PIN, not an empty one published while check-in was off.
+          const known = this.lastStaffPin.get(club) ?? before;
 
-          if (!unreadable && after !== "" && after !== before) {
+          if (!unreadable && after !== "" && after !== known) {
             await this.pinGuard.reset(club);
+          }
+
+          if (after !== "") {
+            this.lastStaffPin.set(club, after);
           }
         }
 
@@ -2397,11 +2436,19 @@ export class Relay {
           // above. Turning the manager off is not a PIN change and resets
           // nothing: a manager who guessed wrong minutes ago should not
           // find the count cleared just because the desk unticked a box.
+          // Nor is turning it back on with the same PIN: the comparison is
+          // with the last real PIN, not the empty one published while it
+          // was off (17 Oct 2026, Bug Hunt 8, A19-3).
           const before = managePinOf(existing?.body);
           const after = managePinOf(body);
+          const known = this.lastManagePin.get(club) ?? before;
 
-          if (!unreadable && after !== "" && after !== before) {
+          if (!unreadable && after !== "" && after !== known) {
             await this.managePinGuard.reset(club);
+          }
+
+          if (after !== "") {
+            this.lastManagePin.set(club, after);
           }
         }
 
@@ -2509,11 +2556,14 @@ export class Relay {
     const channel = spec.name;
     const maxItems = spec.maxItems ?? Number.POSITIVE_INFINITY;
 
-    const [items, used, tunnel, signups] = await Promise.all([
+    const [items, used, tunnel, signups, votes, notes, inbox] = await Promise.all([
       this.store.itemSizes(club, channel),
       this.store.usage(club),
       this.store.snapshotBytes(club, MANAGE_QUEUE),
       this.store.snapshotBytes(club, SIGNUP_BOX),
+      this.store.itemSizes(club, VOTE_CHANNEL),
+      this.store.itemSizes(club, NOTES_CHANNEL),
+      this.store.snapshotBytes(club, INBOX),
     ]);
     const replaced = items.find((item) => item.id === id);
     const others = items.filter((item) => item.id !== id).sort((a, b) => a.at - b.at);
@@ -2600,9 +2650,15 @@ export class Relay {
     // written by phones, not by the laptop, and a phone must never be able
     // to cost a result anything. They have their own ceiling instead -
     // SIGNUP_MAX_ITEMS, each needing an invite only the desk can make.
+    // Room votes, race notes and the check-in inbox are written by phones
+    // too, so they come off for the same reason; each has a ceiling of its
+    // own (VOTE_CHANNEL, NOTES_HELD_MOST, INBOX_MAX_ITEMS). 17 Oct 2026,
+    // Bug Hunt 8, A20-2.
     const offQuota = await this.offQuotaBytes(club);
+    const phoneWritten =
+      votes.reduce((sum, item) => sum + item.bytes, 0) + notes.reduce((sum, item) => sum + item.bytes, 0) + inbox;
 
-    let total = used - tunnel - signups - offQuota - (replaced?.bytes ?? 0) + bytes;
+    let total = used - tunnel - signups - phoneWritten - offQuota - (replaced?.bytes ?? 0) + bytes;
     let count = others.length + 1;
     const victims: string[] = [];
 
@@ -2887,7 +2943,45 @@ export class Relay {
       this.listings.get(key) ??
       ((await this.buildOnce(key, key, () => (meta ? this.buildMetaListing(club, channel) : this.buildListing(club, channel)))) as Buffer);
 
-    sendPublicBytes(response, 200, limit === undefined ? held : newestOfMeta(held, limit));
+    if (limit === undefined) {
+      sendPublicBytes(response, 200, held);
+      return;
+    }
+
+    // 17 Oct 2026, Bug Hunt 8, A19-1: the cut is parsed once per listing,
+    // not once per request. A limit too big to keep is charged like any
+    // other read that does real work, so it cannot be used to make the
+    // relay re-parse a large listing as often as a script likes.
+    let cuts = this.metaCuts.get(held);
+    const kept = cuts?.get(limit);
+
+    if (kept !== undefined) {
+      sendPublicBytes(response, 200, kept);
+      return;
+    }
+
+    if (limit > META_LIMIT_CACHED) {
+      const who = clientAddress(request);
+
+      if (this.collectionReads.blocked(who)) {
+        sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+        return;
+      }
+
+      this.collectionReads.hit(who);
+      sendPublicBytes(response, 200, newestOfMeta(held, limit));
+      return;
+    }
+
+    const cut = newestOfMeta(held, limit);
+
+    if (cuts === undefined) {
+      cuts = new Map<number, Buffer>();
+      this.metaCuts.set(held, cuts);
+    }
+
+    cuts.set(limit, cut);
+    sendPublicBytes(response, 200, cut);
   }
 
   /**
@@ -3821,6 +3915,9 @@ export class Relay {
       // so a club set up again under this id starts with a new one and no
       // pass from before the delete opens anything.
       this.passKeys.delete(club);
+      // 17 Oct 2026, Bug Hunt 8, A19-3: a club set up again starts fresh.
+      this.lastStaffPin.delete(club);
+      this.lastManagePin.delete(club);
 
       // And the voice's lines for this club - drivers' names, spoken -
       // which the voice keeps in a folder of its own rather than the
@@ -4852,7 +4949,10 @@ export class Relay {
    * Compared with sameHash against the pass of every sign-up held and, while
    * sign-up is open, every invite listed - all of them, whether or not one
    * before matched, as racerByPass does and for its reason: a pass is the
-   * secret exactly as sent. A few hundred HMACs at most.
+   * secret exactly as sent. Up to SIGNUP_MAX_ITEMS + SIGNUP_MAX_INVITES
+   * passes, each two HMACs - so each is made once per pass key and kept
+   * (signupPassOf), and an unauthenticated request costs comparisons, not
+   * HMACs. 17 Oct 2026, Bug Hunt 8, A20-3.
    *
    * A sign-up already held is found whether sign-up is open or not, and
    * whether or not its invite is still listed: the laptop takes an invite
@@ -4871,12 +4971,43 @@ export class Relay {
     let found: string | undefined;
 
     for (const h of hashes) {
-      if (sameHash(pass, keyedPass(key, "signup", club, h))) {
+      if (sameHash(pass, this.signupPassOf(club, key, h))) {
         found = h;
       }
     }
 
     return found;
+  }
+
+  /**
+   * keyedPass(key, "signup", club, h), made once per key and kept. The
+   * held map is cleared when it reaches the most hashes signupByPass can
+   * ever compare against, so it stays bounded whatever comes and goes.
+   * 17 Oct 2026, Bug Hunt 8, A20-3.
+   */
+  private signupPassOf(club: string, key: Buffer, h: string): string {
+    let made = this.signupPasses.get(key);
+
+    if (made === undefined) {
+      made = new Map<string, string>();
+      this.signupPasses.set(key, made);
+    }
+
+    const name = `${club}|${h}`;
+    const kept = made.get(name);
+
+    if (kept !== undefined) {
+      return kept;
+    }
+
+    if (made.size >= SIGNUP_MAX_ITEMS + SIGNUP_MAX_INVITES) {
+      made.clear();
+    }
+
+    const pass = keyedPass(key, "signup", club, h);
+    made.set(name, pass);
+
+    return pass;
   }
 
   /** Everything a phone is told once it holds a pass for invite h: the pass itself, what to show above the form, and where its sign-up stands. */

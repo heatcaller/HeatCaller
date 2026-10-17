@@ -898,6 +898,11 @@ public sealed class RcpTrackEditorForm : Form
 
         btnSave.Click += (_, _) =>
         {
+            // 17 Oct 2026, Bug Hunt 8, A31-1: a nudge clicked away from
+            // within its 350 ms settle would otherwise be saved with the
+            // nudged pieces stacked on what they hit.
+            _canvas.LandPendingNudge();
+
             if (string.IsNullOrWhiteSpace(TrackName))
             {
                 AppDialog.Show(this,
@@ -1505,7 +1510,13 @@ public sealed class RcpTrackEditorForm : Form
         // Typing in the name box keeps the box's own Ctrl+Z. It used to
         // take back the last stroke on the plan instead of the last
         // keystroke - out of sight, behind the box being typed in.
-        if (_txtName.ContainsFocus)
+        //
+        // 17 Oct 2026, Bug Hunt 8, A31-5: the same for the tile-size and
+        // room number boxes, whose edit box has its own undo too.
+        if (_txtName.ContainsFocus
+            || _numTileSize.ContainsFocus
+            || _numRoomWidth.ContainsFocus
+            || _numRoomDepth.ContainsFocus)
         {
             return base.ProcessCmdKey(ref msg, keyData);
         }

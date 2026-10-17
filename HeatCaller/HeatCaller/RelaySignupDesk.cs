@@ -173,7 +173,8 @@ internal sealed class RelaySignupDesk
 
                 if (_announced.Add(item.Identity))
                 {
-                    _log($"[signup] {item.Name} signed up online with an invite this laptop doesn't know - made on another laptop, "
+                    // No name - see A35-2 (17 Oct 2026, Bug Hunt 8) at Reject.
+                    _log($"[signup] Someone signed up online with an invite this laptop doesn't know - made on another laptop, "
                         + "or lost from this one. It's waiting under Online Sign-ups on Race Day → Who's Racing.");
                 }
 
@@ -205,7 +206,7 @@ internal sealed class RelaySignupDesk
             if (_announced.Add(item.Identity))
             {
                 var what = item.ClassName.Length > 0 ? $" for {item.ClassName}" : string.Empty;
-                _log($"[signup] {item.Name} signed up online{what}. Approve them under Online Sign-ups on Race Day → Who's Racing.");
+                _log($"[signup] A new driver signed up online{what}. Approve them under Online Sign-ups on Race Day → Who's Racing.");
             }
         }
 
@@ -369,7 +370,7 @@ internal sealed class RelaySignupDesk
                 _events.Upsert(current);
                 eventWithClassAdded = current.Id;
                 classAdded = profile.ClassName.Trim();
-                _log($"[signup] Added {profile.ClassName.Trim()} to {current.DisplayName} for {name}.");
+                _log($"[signup] Added {profile.ClassName.Trim()} to {current.DisplayName} for an online sign-up.");
             }
 
             CheckIn?.Invoke(transponder, true);
@@ -397,7 +398,7 @@ internal sealed class RelaySignupDesk
         }
         catch (Exception ex)
         {
-            _log($"[signup] Could not give {name} their check-in PIN: {ex.Message}");
+            _log($"[signup] Could not give an approved online sign-up their check-in PIN: {ex.Message}");
             pinComing = false;
         }
 
@@ -407,7 +408,7 @@ internal sealed class RelaySignupDesk
         SendApproved(invite);
 
         _waiting.RemoveAll(w => string.Equals(w.Hash, request.Hash, StringComparison.OrdinalIgnoreCase));
-        _log($"[signup] Approved {name}'s online sign-up{(checkedIn ? " and checked them in" : string.Empty)}"
+        _log($"[signup] Approved an online sign-up{(checkedIn ? " and checked them in" : string.Empty)}"
             + (rentalLent is null
                 ? "."
                 : $", lending them rental {rentalLent}. They have no profile of their own until they bring their own transponder - its laps go under the rental's name."));
@@ -489,7 +490,7 @@ internal sealed class RelaySignupDesk
 
         if (receipt.RentalUnit is { } unit && receipt.RentalOutUtc is { } outAt && !_rentals.UndoCheckOut(unit, outAt))
         {
-            _log($"[signup] Rental {unit} has changed hands since {receipt.Name} was approved, so it was left as it is.");
+            _log($"[signup] Rental {unit} has changed hands since that sign-up was approved, so it was left as it is.");
         }
 
         // Only a profile this approval added: one lent a rental added none,
@@ -515,7 +516,7 @@ internal sealed class RelaySignupDesk
 
         Reopen(invite, newCode: true);
 
-        _log($"[signup] Undid approving {receipt.Name}. Their phone was already told they're in"
+        _log($"[signup] Undid approving an online sign-up. Their phone was already told they're in"
             + " - that can't be taken back, so let them know in person. " + NewCodeNote);
     }
 
@@ -529,7 +530,7 @@ internal sealed class RelaySignupDesk
 
         Reopen(invite, newCode: true);
 
-        _log($"[signup] Undid turning down {name}. Their phone was already told no - that can't be taken back. " + NewCodeNote);
+        _log($"[signup] Undid turning down an online sign-up. Their phone was already told no - that can't be taken back. " + NewCodeNote);
     }
 
     /// <summary>
@@ -555,7 +556,9 @@ internal sealed class RelaySignupDesk
         // work again.
         Reopen(invite, newCode: true);
 
-        _log($"[signup] Undid cancelling the invite for {invite.ForText}."
+        // Not ForText: its note is whatever the desk typed, often a name -
+        // see A35-2 (17 Oct 2026, Bug Hunt 8) at Reject.
+        _log("[signup] Undid cancelling an invite."
             + (signupWasTurnedDown
                 ? " The sign-up already made with it was told it was cancelled - that can't be taken back, so they need to sign up again. "
                 : " ")
@@ -607,7 +610,11 @@ internal sealed class RelaySignupDesk
 
         Answer(request.Hash, approved: false, text, checkedIn: false, driver: null);
         _waiting.RemoveAll(w => string.Equals(w.Hash, request.Hash, StringComparison.OrdinalIgnoreCase));
-        _log($"[signup] Turned down {request.Name}'s online sign-up.");
+        // NO NAMES IN THE LOG (17 Oct 2026, Bug Hunt 8, A35-2): the session log
+        // goes into support bundles, and the Redactor knows only Driver Hub
+        // profiles - a sign-up turned down, still waiting, on a rental or
+        // undone has none, so its name went out in plain text.
+        _log("[signup] Turned down an online sign-up.");
         Changed?.Invoke();
     }
 

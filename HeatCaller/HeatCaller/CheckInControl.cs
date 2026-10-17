@@ -1138,12 +1138,21 @@ public sealed class CheckInControl : UserControl
             return;
         }
 
-        // Clicking directly toggles the checkbox and commits immediately -
-        // without this, a single click only starts editing and needs a
-        // second click/Enter to actually register, which reads as broken.
+        // A click anywhere in the cell toggles the tick and saves it - the
+        // native checkbox only toggles on a click on the small glyph itself,
+        // and the column is far wider than the box.
+        //
+        // 17 Oct 2026, Bug Hunt 8, A28-X: edit mode is ended first. A checkbox
+        // cell is in edit mode whenever it is current, and paints from its
+        // editing flags rather than Value; setting Value here left those flags
+        // stale, so a click beside the box saved the change but kept showing
+        // the old tick, and the next glyph click wrote the store twice with
+        // opposite values. Out of edit mode the native content-click toggle is
+        // a no-op and the cell paints from Value, so nothing is pending to
+        // commit. (Space still lands here: the cell's OnKeyUp raises CellClick.)
         var cell = _grid.Rows[e.RowIndex].Cells[e.ColumnIndex];
+        _grid.EndEdit();
         cell.Value = !(bool)(cell.Value ?? false);
-        _grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
     }
 
     private void Grid_CellValueChanged(object? sender, DataGridViewCellEventArgs e)

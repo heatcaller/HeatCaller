@@ -79,6 +79,46 @@ public sealed partial class RelayPublisher
     /// <summary>What went wrong collecting shout-outs from the relay, or null.</summary>
     public string? NotesProblem => _notesProblem;
 
+    /// <summary>The problem last said out loud, so it is said once rather than every pass.</summary>
+    private volatile string? _notesProblemAsSaid;
+
+    /// <summary>
+    /// Records what went wrong and says it once, on a change - the pattern
+    /// VoteTrouble set (17 Oct 2026, Bug Hunt 8, A17-2). The problem was
+    /// recorded in a field nothing read, so a route that silently stopped
+    /// working on a race night left no trace in the console or the log.
+    /// </summary>
+    private void NotesTrouble(string? problem)
+    {
+        _notesProblem = problem;
+
+        if (string.Equals(_notesProblemAsSaid, problem, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _notesProblemAsSaid = problem;
+
+        if (problem is { Length: > 0 })
+        {
+            Log?.Invoke($"[relay] Shout-outs from the club's page: {problem}");
+        }
+        else
+        {
+            Log?.Invoke("[relay] Shout-outs from the club's page is working again.");
+        }
+    }
+
+    /// <summary>
+    /// Clears the problem without saying anything, for the club switching
+    /// the route off - not a fault, so no "working again" on its way out.
+    /// </summary>
+    private void ForgetNotesTrouble()
+    {
+        _notesProblem = null;
+        _notesProblemAsSaid = null;
+    }
+
     /// <summary>
     /// Where a collected note is filed. Set by MainForm to the one
     /// ClubNotes instance the announcer reads from; null until then, and
@@ -118,7 +158,7 @@ public sealed partial class RelayPublisher
 
         if (!IsSafeForToken(target.Root))
         {
-            _notesProblem = UnsafeAddressMessage;
+            NotesTrouble(UnsafeAddressMessage);
             return;
         }
 
@@ -140,10 +180,10 @@ public sealed partial class RelayPublisher
 
             if (!response.IsSuccessStatusCode)
             {
-                _notesProblem = (int)response.StatusCode == 404
+                NotesTrouble((int)response.StatusCode == 404
                     ? "The relay answered \"not found\" for shout-outs. Check the club id on the Club Website page "
                       + "matches the relay's; if it does, the relay predates them - redeploy it (fly deploy --ha=false)."
-                    : $"Could not collect shout-outs: the relay answered HTTP {(int)response.StatusCode}.";
+                    : $"Could not collect shout-outs: the relay answered HTTP {(int)response.StatusCode}.");
 
                 return;
             }
@@ -192,7 +232,7 @@ public sealed partial class RelayPublisher
 
             if (collected.Count == 0)
             {
-                _notesProblem = null;
+                NotesTrouble(null);
                 return;
             }
 
@@ -204,7 +244,7 @@ public sealed partial class RelayPublisher
                 return;
             }
 
-            _notesProblem = null;
+            NotesTrouble(null);
 
             // Through Log, which is this class's one way of saying
             // anything - it has no StatusMessage of its own, and the
@@ -221,7 +261,7 @@ public sealed partial class RelayPublisher
         }
         catch (Exception ex)
         {
-            _notesProblem = $"Could not collect shout-outs: {ex.Message}";
+            NotesTrouble($"Could not collect shout-outs: {ex.Message}");
         }
     }
 
@@ -258,11 +298,17 @@ public sealed partial class RelayPublisher
 
             using var response = Send(request, token);
 
+            if (!wanted && IsGoneForAClose(response))
+            {
+                // Nothing there to close (17 Oct 2026, Bug Hunt 8, A16-1).
+                return true;
+            }
+
             if (!response.IsSuccessStatusCode)
             {
-                _notesProblem = (int)response.StatusCode == 404
+                NotesTrouble((int)response.StatusCode == 404
                     ? "The relay does not know about shout-outs yet - redeploy it (fly deploy --ha=false)."
-                    : $"Could not open shout-outs on the relay: it answered HTTP {(int)response.StatusCode}.";
+                    : $"Could not open shout-outs on the relay: it answered HTTP {(int)response.StatusCode}.");
 
                 return false;
             }
@@ -279,7 +325,7 @@ public sealed partial class RelayPublisher
         }
         catch (Exception ex)
         {
-            _notesProblem = $"Could not reach the relay about shout-outs: {ex.Message}";
+            NotesTrouble($"Could not reach the relay about shout-outs: {ex.Message}");
             return false;
         }
     }
@@ -312,7 +358,7 @@ public sealed partial class RelayPublisher
                 return true;
             }
 
-            _notesProblem = $"Collected shout-outs but could not clear them: the relay answered HTTP {(int)response.StatusCode}.";
+            NotesTrouble($"Collected shout-outs but could not clear them: the relay answered HTTP {(int)response.StatusCode}.");
 
             return false;
         }
@@ -322,7 +368,7 @@ public sealed partial class RelayPublisher
         }
         catch (Exception ex)
         {
-            _notesProblem = $"Collected shout-outs but could not clear them: {ex.Message}";
+            NotesTrouble($"Collected shout-outs but could not clear them: {ex.Message}");
             return false;
         }
     }

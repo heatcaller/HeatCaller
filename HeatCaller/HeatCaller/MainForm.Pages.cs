@@ -454,7 +454,9 @@ public partial class MainForm
             checkIn.RefreshAll();
         };
 
-        var handicaps = new HandicapControl(_handicaps, _profiles, _raceClasses, _sessionHistory, _undo) { Dock = DockStyle.Fill };
+        // 17 Oct 2026, Bug Hunt 8, A26-1: the programme lets suggested
+        // handicaps and "Recent best lap" use only the selected class's races.
+        var handicaps = new HandicapControl(_handicaps, _profiles, _raceClasses, _sessionHistory, _undo, _rounds) { Dock = DockStyle.Fill };
         pageHandicaps.Controls.Add(handicaps);
         _navRefreshHooks["Handicaps"] = handicaps.RefreshAll;
 
@@ -510,7 +512,9 @@ public partial class MainForm
         // question on the wall of every club - what is the record here, and
         // who holds it.
         var subPageOverview = new TabPage("Overview");
-        var overview = new AnalyticsOverviewControl(_sessionHistory);
+        // 17 Oct 2026, Bug Hunt 8, A30-2: the profiles, so the overview leaves
+        // out the drivers the club has hidden, not only ghosts.
+        var overview = new AnalyticsOverviewControl(_sessionHistory, _profiles);
         subPageOverview.Controls.Add(overview);
 
         var subPagePersonalBests = new TabPage("Personal Bests");
@@ -1376,32 +1380,46 @@ public partial class MainForm
         // and per-driver rivalry lines. Announcer and Commentary were each
         // a top-level nav item, which scattered one concern across three
         // places in the sidebar.
+        //
+        // THE VOICE REGROUP (17 Oct 2026): who speaks and what they say, in
+        // four tabs - the voice itself, the cast (everyone else with a name
+        // and a voice), the race calls (the announcement rows, how often,
+        // and the rivalries, which were a tab of their own), and what the
+        // AI writes. The names are the tabs' captions; NavSearchTabAliases
+        // matches them exactly.
         _tabVoiceSubNav = new TabControl { Dock = DockStyle.Fill };
-        var subPageVoiceSettings = new TabPage("Voice Settings");
+        var subPageVoiceSettings = new TabPage("Voice");
+        var subPageCast = new TabPage("Cast");
 
-        // Second, right after the voice that speaks them. The thirty
-        // announcement rows used to be the last group at the bottom of Voice
-        // Settings - below the engine, the connection, the tuning and the
-        // line library - so the longest thing on the page was also the
-        // furthest below the fold.
-        var subPageAnnouncements = new TabPage("Announcements");
-        var subPageCommentary = new TabPage("Commentary");
-        var subPageRivalries = new TabPage("Rivalries");
+        // The thirty announcement rows used to be the last group at the
+        // bottom of Voice Settings - below the engine, the connection, the
+        // tuning and the line library - so the longest thing on the page was
+        // also the furthest below the fold. "Announcements" until 17 Oct 2026.
+        var subPageAnnouncements = new TabPage("Race Calls");
+        var subPageCommentary = new TabPage("AI Commentary");
         _tabVoiceSubNav.TabPages.Add(subPageVoiceSettings);
+        _tabVoiceSubNav.TabPages.Add(subPageCast);
         _tabVoiceSubNav.TabPages.Add(subPageAnnouncements);
         _tabVoiceSubNav.TabPages.Add(subPageCommentary);
-        _tabVoiceSubNav.TabPages.Add(subPageRivalries);
         AppTheme.StyleTabControl(_tabVoiceSubNav);
 
+        // Each tab as wide as its own caption, as the Sounds row is -
+        // "AI Commentary" is the longest caption the row has had.
+        AppTheme.SizeTabsToCaptions(_tabVoiceSubNav);
+
+        // The rivalries: the last section of Race Calls since 17 Oct 2026,
+        // put there below once the announcement rows exist. Built here and
+        // kept for the life of the app - the Race Calls page around them is
+        // rebuilt after a soundscape is applied, and they are moved across
+        // (RebuildVoiceAndSoundTabs).
         var rivalries = new RivalriesControl(_rivalryStore, _profiles, _undo)
         {
             Dock = DockStyle.Fill,
 
             // Rivalry lines are spoken by the announcer, so the HeatCaller
-            // voice fixes them as it fixes the ones on Voice Settings.
+            // voice fixes them as it fixes the ones on the Voice tab.
             WordingIsFixed = () => _voiceStore.Current.EffectiveEngine == VoiceEngine.HeatCaller,
         };
-        subPageRivalries.Controls.Add(rivalries);
 
         // Built once and kept for the life of the app, but NOT parented
         // anywhere yet: it lives in a window of its own now, opened from
@@ -1507,40 +1525,26 @@ public partial class MainForm
         _commentaryControl = commentary;
         subPageCommentary.Controls.Add(commentary);
 
+        // CAST (17 Oct 2026): the names and voices that were on the
+        // Commentary page - the announcer's name, the recap host, the
+        // co-host, the mechanic and the badges reader.
+        var cast = new CastControl(_settings) { Dock = DockStyle.Fill };
+        subPageCast.Controls.Add(cast);
+
         // The recap's broadcast: the Garage's record of the winning car for
-        // the mechanic's interview, and the mechanic's voice list - see
+        // the mechanic's interview, and the cast's voice lists - see
         // MainForm.Commentary.cs.
-        WireRecapBroadcast(raceControl, commentary);
+        WireRecapBroadcast(raceControl, commentary, cast);
 
-        // The show's music: the page chooses the files, the announcer
-        // screen plays them - see MainForm.Commentary.cs.
-        WireShowMusic(announcer, commentary);
+        // The show's music and the recording of the night moved to Sounds
+        // on 17 Oct 2026 (Imaging's Show treatment card, and the Recording
+        // tab); they are wired where those are built, below - WireShowMusic
+        // and WireTheDriversNight in MainForm.Commentary.cs.
 
-        // A driver's own night, and the proof of a line. Its own method
-        // because it needs the stores, which WireShowMusic cannot see - see
-        // MainForm.Commentary.cs.
-        WireTheDriversNight(announcer, commentary);
-
-        // Shout-outs from the club's web page switched OFF has to be SENT
-        // to the relay rather than inferred from the polling stopping, or
-        // the relay goes on taking strangers' messages for a club that
-        // declined them - and holding them. See
-        // RelayPublisher.CloseClubNotesOnTheRelay.
-        commentary.NotesClosedOnTheRelay += () => _relayPublisher.CloseClubNotesOnTheRelay();
-
-        // And the same for the room's vote, for the same reason.
-        commentary.VoteClosedOnTheRelay += () => _relayPublisher.CloseRoomVoteOnTheRelay();
-
-        // And listening along, which is the one of the three where leaving
-        // it to be inferred would leave the club's own voice - possibly a
-        // named member's cloned one - playing to anybody with the link.
-        // See RelayPublisher.CloseListeningOnTheRelay.
-        commentary.ListeningClosedOnTheRelay += () => _relayPublisher.CloseListeningOnTheRelay();
-
-        // And the night-before preview, which otherwise stays on the
-        // club's page after the club has unticked it. See
-        // TakeTheNightBeforeOffThePage.
-        commentary.NightBeforeClosedOnTheRelay += TakeTheNightBeforeOffThePage;
+        // Club notes, the room's vote and listening along - and the three
+        // "closed on the relay" events - are on the Club Website page's
+        // Room & Web card since 17 Oct 2026, and wired where that page is
+        // built, below.
 
         // THE ANNOUNCER'S HALF of listening along (13 Oct 2026). Two hooks
         // rather than the audio service reaching for the publisher: it is
@@ -1568,28 +1572,38 @@ public partial class MainForm
         // sends them bare; OnClientRawMessage is safe from any thread.
         commentary.ClientStatusMessage += msg => OnClientRawMessage($"{AppTime.LogStampNow()}  {msg}");
 
-        // Rivalries reads the driver list, which changes while the app runs,
-        // so it refreshes on tab entry rather than only at construction.
-        // The announcer used to be refreshed here too; it is a window now
-        // and OpenAnnouncerWindow refreshes it on the way in.
+        // The rivalries read the driver list, which changes while the app
+        // runs, so they refresh on tab entry rather than only at
+        // construction - on Race Calls, where they are now. The announcer
+        // used to be refreshed here too; it is a window now and
+        // OpenAnnouncerWindow refreshes it on the way in. (Cast and AI
+        // Commentary set themselves out again whenever they are shown.)
         _tabVoiceSubNav.SelectedIndexChanged += (_, _) =>
         {
-            if (_tabVoiceSubNav.SelectedTab == subPageRivalries)
+            if (_tabVoiceSubNav.SelectedTab == subPageAnnouncements)
             {
                 rivalries.RefreshDriverCombos();
             }
         };
 
-        var voiceSettings = new VoiceSettingsControl(_voiceStore, _settings, _undo) { Dock = DockStyle.Fill, Announcer = _announcer, HeatCallerVoice = _heatCallerVoice };
+        // The sound effects' store as well, for the two streak thresholds on
+        // Race Calls' How often card (17 Oct 2026) - they are the effects
+        // profile's, and decide the voice's streak call as well.
+        var voiceSettings = new VoiceSettingsControl(_voiceStore, _settings, _undo, _soundStore) { Dock = DockStyle.Fill, Announcer = _announcer, HeatCallerVoice = _heatCallerVoice };
         voiceSettings.StatusMessage += OnClientRawMessage;
         subPageVoiceSettings.Controls.Add(voiceSettings);
         _voiceSettingsControl = voiceSettings;
+        _voiceSettingsSubPage = subPageVoiceSettings;
 
         // The announcement rows, built by the same control so they stay part
         // of the one voice profile it saves, but parented here so they get a
-        // tab of their own. See VoiceSettingsControl.Announcements.cs.
+        // tab of their own - Race Calls. See VoiceSettingsControl.Announcements.cs.
         subPageAnnouncements.Controls.Add(voiceSettings.AnnouncementsPage);
         _voiceAnnouncementsSubPage = subPageAnnouncements;
+
+        // And the rivalries as its last section - there is no Rivalries tab
+        // any more (17 Oct 2026).
+        voiceSettings.HostRivalries(rivalries);
 
         pageVoice.Controls.Add(_tabVoiceSubNav);
 
@@ -1628,12 +1642,38 @@ public partial class MainForm
         BroadcastImaging.Status += OnClientRawMessage;
 
         // "Imaging" on the tab, and Broadcast Imaging on the page itself:
-        // the Sounds tabs are all as wide as the widest caption
-        // (AppTheme.StyleTabControl), and "Broadcast Imaging" made all
-        // seven too wide for the row at 1280 wide and at 200% text.
+        // "Broadcast Imaging" made the row too wide at 1280 wide and at 200%
+        // text. Since 17 Oct 2026 it also holds the club's own show music,
+        // as the Show treatment card moved from the Commentary page.
         var subPageImaging = new TabPage("Imaging");
-        var imagingControl = new BroadcastImagingControl(_themeStore) { Dock = DockStyle.Fill };
+        var imagingControl = new BroadcastImagingControl(_themeStore, _settings) { Dock = DockStyle.Fill };
         subPageImaging.Controls.Add(imagingControl);
+
+        // RECORDING (17 Oct 2026): the "Recording the night" card from the
+        // Commentary page, as a tab of its own - the race recordings, the
+        // drivers' clips, and the pieces written from the night.
+        var subPageRecording = new TabPage("Recording");
+        var recordingControl = new RecordingControl(_settings) { Dock = DockStyle.Fill };
+        subPageRecording.Controls.Add(recordingControl);
+
+        // Both grey with AI commentary, as they did on its page - and both
+        // are told by the host rather than reaching for it.
+        imagingControl.ShowTreatment.CommentaryOn = () => _settings.CommentaryEnabled;
+        recordingControl.CommentaryOn = () => _settings.CommentaryEnabled;
+
+        // The show's music: the card chooses the files, the announcer
+        // screen plays them - see MainForm.Commentary.cs.
+        WireShowMusic(announcer, imagingControl.ShowTreatment, recordingControl);
+
+        // A driver's own night, and the proof of a line. Its own method
+        // because it needs the stores, which WireShowMusic cannot see - see
+        // MainForm.Commentary.cs.
+        WireTheDriversNight(announcer, recordingControl);
+
+        // And the night-before preview, which otherwise stays on the
+        // club's page after the club has unticked it. See
+        // TakeTheNightBeforeOffThePage.
+        recordingControl.NightBeforeClosedOnTheRelay += TakeTheNightBeforeOffThePage;
 
         // First tab: the blend matters more often than any individual
         // setting, and it's the page someone opens mid-event.
@@ -1672,14 +1712,22 @@ public partial class MainForm
         };
         subPageSoundscapes.Controls.Add(themes);
 
+        // The Voice + Sounds regroup's order (17 Oct 2026): the blend, the
+        // soundscape that sets the rest up, its imaging, then each source,
+        // and last keeping a copy of the night.
         _tabSoundSubNav.TabPages.Add(subPageMixer);
         _tabSoundSubNav.TabPages.Add(subPageSoundscapes);
+        _tabSoundSubNav.TabPages.Add(subPageImaging);
         _tabSoundSubNav.TabPages.Add(subPageEffects);
         _tabSoundSubNav.TabPages.Add(subPageAmbience);
         _tabSoundSubNav.TabPages.Add(subPageMusic);
-        _tabSoundSubNav.TabPages.Add(subPageImaging);
         _tabSoundSubNav.TabPages.Add(subPageLapBeeps);
-        AppTheme.StyleTabControl(_tabSoundSubNav);
+        _tabSoundSubNav.TabPages.Add(subPageRecording);
+
+        // Eight tabs: each as wide as its own caption rather than all as
+        // wide as "Soundscapes", or the row is wider than the window at
+        // 1280 wide and at 200% text - see AppTheme.SizeTabsToCaptions.
+        AppTheme.SizeTabsToCaptions(_tabSoundSubNav);
 
         // Lap Beeps lists driver profiles, so it needs refreshing when the
         // tab is opened rather than only at construction.
@@ -1770,6 +1818,22 @@ public partial class MainForm
         var online = new RelaySettingsControl(_relayPublisher, _settings, _profiles, _undo) { Dock = DockStyle.Fill };
         pageOnline.Controls.Add(online);
 
+        // ROOM & WEB (17 Oct 2026), from the Commentary page. Shout-outs from
+        // the club's web page switched OFF has to be SENT to the relay rather
+        // than inferred from the polling stopping, or the relay goes on
+        // taking strangers' messages for a club that declined them - and
+        // holding them. See RelayPublisher.CloseClubNotesOnTheRelay.
+        online.RoomAndWeb.NotesClosedOnTheRelay += () => _relayPublisher.CloseClubNotesOnTheRelay();
+
+        // And the same for the room's vote, for the same reason.
+        online.RoomAndWeb.VoteClosedOnTheRelay += () => _relayPublisher.CloseRoomVoteOnTheRelay();
+
+        // And listening along, which is the one of the three where leaving
+        // it to be inferred would leave the club's own voice - possibly a
+        // named member's cloned one - playing to anybody with the link.
+        // See RelayPublisher.CloseListeningOnTheRelay.
+        online.RoomAndWeb.ListeningClosedOnTheRelay += () => _relayPublisher.CloseListeningOnTheRelay();
+
         // The club pages' colours and logo live on Themes → Looks now,
         // shared with the app and the other screens; the Club Website page links
         // there rather than keeping a second copy of the same settings.
@@ -1789,12 +1853,17 @@ public partial class MainForm
         // A new set made, or personal PINs switched on or off: straight to
         // the relay, and emailed when the club has asked for that, rather
         // than waiting up to ten minutes for the next pass.
+        //
+        // REPUBLISHED FIRST (17 Oct 2026, Bug Hunt 8, A17-1). "New PINs Now"
+        // and its Undo leave nothing for the pass to rotate or ensure, so
+        // the pass went straight to emailing while the relay still held the
+        // old hashes - the republish, which starts the hash warm the email
+        // waits for, only came after. Now the warm is running before the
+        // pass looks, so the email defers to it.
         online.RacerPinsChanged += () =>
         {
-            if (!RunRacerPinsPass())
-            {
-                RepublishCheckInNow();
-            }
+            RepublishCheckInNow();
+            RunRacerPinsPass();
         };
 
         // Reissue All Badges made a new badge key, so every driver's online
@@ -2218,8 +2287,18 @@ public partial class MainForm
             // What the windows made meanwhile cost, when it is slow - see
             // WhereTimeGoes.
             WhereTimeGoes.StartOnShownWindow("Making the pages ready");
-            WarmPages();
-            var timing = WhereTimeGoes.Take();
+            string? timing;
+            try
+            {
+                WarmPages();
+            }
+            finally
+            {
+                // 17 Oct 2026, Bug Hunt 8, A30-6: a page throwing during warm-up
+                // (caught by ThreadException) left the thread-wide hooks counting
+                // every UI-thread message.
+                timing = WhereTimeGoes.Take();
+            }
 
             OnClientRawMessage($"{AppTime.LogStampNow()}  [startup] Every page and tab made ready in {warming.Elapsed.TotalSeconds:0.0}s."
                 + (warming.Elapsed.TotalSeconds >= 1 && timing is not null ? $" {timing}" : string.Empty));

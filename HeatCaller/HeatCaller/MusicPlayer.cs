@@ -16,6 +16,10 @@ public sealed class MusicPlayer : IDisposable
     private readonly object _lock = new();
 
     private IWavePlayer? _output;
+
+    /// <summary>The last output whose stop was handed on to AdvanceTrack - see OnPlaybackStopped. Under the lock.</summary>
+    private object? _handedOffOutput;
+
     private AudioFileReader? _reader;
     private VolumeSampleProvider? _volume;
     private SmoothGainSampleProvider? _duckGain;
@@ -354,9 +358,20 @@ public sealed class MusicPlayer : IDisposable
                 return;
             }
 
-            if (_reader is not null && _reader.CurrentTime > TimeSpan.FromSeconds(3))
+            // Guarded as Seek is (17 Oct 2026, Bug Hunt 8, A12-3): a file or
+            // device can refuse the move - an m4a through Media Foundation
+            // throws - and this runs on the UI thread from the button.
+            try
             {
-                _reader.CurrentTime = TimeSpan.Zero;
+                if (_reader is not null && _reader.CurrentTime > TimeSpan.FromSeconds(3))
+                {
+                    _reader.CurrentTime = TimeSpan.Zero;
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"[music] Couldn't move within the track: {ex.Message}");
                 return;
             }
 
@@ -1157,6 +1172,18 @@ public sealed class MusicPlayer : IDisposable
             {
                 return;
             }
+
+            // Once per output (17 Oct 2026, Bug Hunt 8, A12-4). AdvanceTrack
+            // hands this a device that stopped inside its first buffer, and
+            // the device's own event can still arrive before the move it
+            // started has taken the output - two moves under one generation,
+            // and the second's claim threw the first one's track away.
+            if (ReferenceEquals(sender, _handedOffOutput))
+            {
+                return;
+            }
+
+            _handedOffOutput = sender;
 
             generation = _generation;
 

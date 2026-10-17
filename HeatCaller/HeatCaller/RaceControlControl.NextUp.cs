@@ -539,7 +539,9 @@ public sealed partial class RaceControlControl
             ? ProgramCaptions.RaceRunning
             : _barStep?.ActionCaption ?? ProgramCaptions.StartNext;
 
-        _btnStartNext.Enabled = !racing && (_barStep is not null || next is not null);
+        // 17 Oct 2026, Bug Hunt 8, A03-1: greyed while On Air is opening a
+        // race too - a second Start would start the round after it.
+        _btnStartNext.Enabled = !racing && !OnAirRunning && (_barStep is not null || next is not null);
     }
 
     /// <summary>

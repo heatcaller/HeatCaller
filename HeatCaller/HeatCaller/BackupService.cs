@@ -87,7 +87,15 @@ public static class BackupService
         // to make room for the rehearsal's.
         if (AppPaths.IsRehearsal)
         {
-            return DefaultBackupFolder;
+            // 17 Oct 2026, Bug Hunt 8, A23-2: a folder INSIDE the
+            // rehearsal's own backup folder is kept - the pre-restore
+            // safety backup asks for a subfolder, and dropping it put that
+            // zip in the ordinary list. Anywhere else still lands here.
+            return !string.IsNullOrWhiteSpace(configured)
+                && Path.IsPathFullyQualified(configured)
+                && PlainFileName.IsInside(DefaultBackupFolder, configured)
+                    ? Path.GetFullPath(configured)
+                    : DefaultBackupFolder;
         }
 
         if (string.IsNullOrWhiteSpace(configured) || PlainFileName.IsNetworkPath(configured))

@@ -104,17 +104,21 @@ internal static class LayoutAudit
         // The server, the race-day manager and the addresses to open (WebServerControl).
         "Local Screens",
 
-        // The relay and the cards for everything published through it (RelaySettingsControl).
+        // The relay and the cards for everything published through it
+        // (RelaySettingsControl), with the Room & Web card (RoomAndWebCard).
         "Club Website",
 
-        // All four tabs: Voice Settings and Announcements (VoiceSettingsControl,
-        // both files), Commentary (CommentaryControl) and Rivalries
-        // (RivalriesControl).
+        // All four tabs: Voice and Race Calls (VoiceSettingsControl, both
+        // files, with the rivalries at the foot of Race Calls -
+        // RivalriesControl), Cast (CastControl) and AI Commentary
+        // (CommentaryControl).
         "Voice",
 
-        // All six tabs: Mixer (MixerControl), Soundscapes (ThemesControl),
-        // Effects (SoundEffectsControl), Ambience (AmbienceControl), Music
-        // (MusicControl) and Lap Beeps (LapBeepControl).
+        // All eight tabs: Mixer (MixerControl), Soundscapes (ThemesControl),
+        // Imaging (BroadcastImagingControl, with ShowTreatmentCard), Effects
+        // (SoundEffectsControl), Ambience (AmbienceControl), Music
+        // (MusicControl), Lap Beeps (LapBeepControl) and Recording
+        // (RecordingControl).
         "Sounds",
 
         // Making, restoring and keeping backups, the password and getting help (BackupRestoreControl).

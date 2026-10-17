@@ -74,8 +74,8 @@ internal sealed class RoomVoteForm : Form
         {
             Text = "The room votes on who wins, and after the race the announcer says what it reckoned - "
                    + "including the one line no timing system could ever produce, which is that nobody in the "
-                   + "room picked the driver who won. Open it when the race is called to the grid and stop it "
-                   + "before the start; it stops itself when the result comes in, and the announcer stays quiet "
+                   + "room picked the driver who won. Open it when the race is called to the grid; "
+                   + "it stops itself at the start and when the result comes in, and the announcer stays quiet "
                    + "unless enough people voted to speak for the room.",
             AutoSize = true,
             MaximumSize = new Size(UiLayout.AtTextSize(640), 0),
@@ -86,7 +86,7 @@ internal sealed class RoomVoteForm : Form
         var where = new Label
         {
             Text = string.IsNullOrWhiteSpace(whereToVote)
-                ? "Voting from the room is switched off - turn it on under Club votes on the Commentary tab, and "
+                ? "Voting from the room is switched off - turn it on under The room's vote on the Club Website page, and "
                   + "the address to read out appears here."
                 : $"The room votes at {whereToVote} on the club's Wi-Fi.",
             AutoSize = true,
@@ -234,6 +234,24 @@ internal sealed class RoomVoteForm : Form
 
     private void OpenVoting()
     {
+        // 17 Oct 2026, Bug Hunt 8, A29-3: the button stays enabled (and
+        // has the focus when the window reopens) while this same race is
+        // already taking votes, and OpenFor always starts an empty poll -
+        // so a stray click, Enter or Space threw away every vote cast with
+        // no warning. Restarting is still allowed (after an accidental
+        // Stop, say), just asked first.
+        if (string.Equals(_vote.OnRaceKey, _raceKey, StringComparison.Ordinal)
+            && _vote.Votes > 0
+            && AppDialog.Show(
+                this,
+                $"Start the vote on {_raceName} again? The {Plural.Of(_vote.Votes, "vote")} already in will be thrown away.",
+                "Start again",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            return;
+        }
+
         if (_vote.OpenFor(_raceKey, _raceName, _className, _grid) is { } why)
         {
             AppDialog.Show(this, why, "Can't open the vote", MessageBoxButtons.OK, MessageBoxIcon.Information);

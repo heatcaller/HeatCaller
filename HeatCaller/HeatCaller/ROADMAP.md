@@ -2952,6 +2952,88 @@ named.
   Synthwave names are Classic now, and the built-in beeps are listed as
   Generated tones.
 
+## The Sounds regroup (17 Oct 2026)
+
+Round 1 of the Voice + Sounds regroup: every setting in exactly one place,
+and Sounds is everything you hear except the voice. Nothing a club has
+saved changes - only where it is shown. **Not yet built or run**: written
+without a compiler, so `check.cmd` (and `LayoutTests` in particular) is
+owed a run before this is trusted.
+
+- **Sounds tabs, in order:** Mixer, Soundscapes, Imaging, Effects,
+  Ambience, Music, Lap Beeps, Recording. Eight tabs are too many at one
+  width each, so the Sounds row sizes each tab to its own caption
+  (`AppTheme.SizeTabsToCaptions`).
+- **The Mixer has every level and duck**: the four faders as before, the
+  imaging pieces' level, the imaging beds' level and how far they drop
+  under the voice (from Imaging), the ambience and music duck ticks with
+  their "down to" amounts (from Ambience and Music), the voice lift over a
+  loud crowd (from Ambience), and the recap's deeper duck (from Commentary
+  - Race recap; still greyed without AI recaps). The duplicates are gone
+  from Voice Settings (Playback volume), Effects (Sound effects volume),
+  Ambience (Overall level, Ducking), Music (Volume, duck) and Imaging
+  (Level and timing keeps Post timing only). Voice Settings and Effects
+  now carry the stored volume through their saves rather than a box.
+- **Imaging - Show treatment** (`ShowTreatmentCard`): the Commentary page's
+  "The show's music" card, whole - the tick, the opener, bed and sting rows
+  folded away while the soundscape has imaging, the club piece levels,
+  Voice comes in, Shorten the opener, Play It and Which segments get it. It
+  still greys with AI commentary off. The Imaging ON/OFF tick now greys the
+  soundscape, pieces, run of show and timing cards, not only its caption.
+- **Recording** (`RecordingControl`): the Commentary page's "Recording the
+  night" card, whole - record, clips, keep last, folder, Tonight's recap, A
+  driver's night, Check a line and The night before with its web page tick.
+  The four written pieces still need AI commentary on.
+- `RebuildVoiceAndSoundTabs` finds Voice Settings by reference, not as tab
+  0; the search words for show music, opener, recording and ducking land
+  on the new tabs.
+
+## The Voice regroup (17 Oct 2026)
+
+Round 2 of the Voice + Sounds regroup: the Voice page is who speaks and
+what they say. Same rule - nothing a club has saved changes, only where it
+is shown - and the same warning: **not yet built or run**, so `check.cmd`
+(and `LayoutTests`) is owed a run before this is trusted.
+
+- **Voice tabs, in order:** Voice (was Voice Settings), Cast (new), Race
+  Calls (was Announcements) and AI Commentary (was Commentary). There is no
+  Rivalries tab any more. The row sizes each tab to its caption, as Sounds
+  does.
+- **Cast** (`CastControl`): a card each for the Announcer (his name), the
+  Recap host (name, voice + Test, and Recap voice delivery with its
+  stability and style), the Co-host (the whole card: two voices, name,
+  voice, what they're like, how much they talk, heats too), the Mechanic
+  (interview tick, name, voice + Test) and the Badges reader (tick, name,
+  voice + Test) - all moved from Commentary. ONE Load Voices at the top
+  fills every list. The greying is the old rules: commentary on, recaps on,
+  and for the co-host at least one ticked two-hander segment on AI
+  Commentary (`CommentaryControl.AnyTwoHanderSwitchedOn`, read from the
+  saved switches), worked out again whenever the tab is shown.
+  `VoiceChoice` moved with it (`CastControl.VoiceChoice`).
+- **Race Calls**: the announcement rows as before, then a **How often**
+  card - Max spoken announcements per lap (from Voice parameters; still the
+  voice profile's) and the two streak thresholds (from Sounds > Effects;
+  still the effects profile's, saved to that store, and the Effects page
+  carries them through its own saves) - then the **Rivalries** as the last
+  section: the same `RivalriesControl`, hosted in a slot at the foot of the
+  page (`VoiceSettingsControl.HostRivalries`). A soundscape rebuild takes
+  the rivalries out before disposing the old page and puts them on the new
+  one (`ReleaseRivalries`), and the How often card is rebuilt from the
+  stores.
+- **AI Commentary** keeps the intro, the master switch, the relay, Connection,
+  What it writes, Segments, Writing style, Race recap (without the voice
+  delivery) and Broadcast (commercial break, TV open, sign-off, show name).
+- **Club Website - Room & Web** (`RoomAndWebCard`): Club notes, The room's
+  vote and Listening along, moved from Commentary as one card after Share,
+  with the same status lines and the same "closed on the relay" events
+  (wired from `online.RoomAndWeb` now). The listening line follows the
+  page's own Publish box.
+- Search words follow the moves (cast, co-host, recap host, mechanic,
+  badges reader, announcer name -> Cast; rivalries, per lap, streak
+  threshold -> Race Calls; club notes, vote, listen along -> Club Website).
+- **Left for round 3:** the many sentences elsewhere that still say "Voice
+  Settings" (some are asserted by tests), and the hint text shortening.
+
 ## The season's own piece (scoped 13 Oct 2026, not started)
 
 The entry item 10 asked for before this is started. Every figure and file
@@ -4636,8 +4718,9 @@ the voice round, the name check and race audio.
   `HandOverIfItIsTimeAsync` calls `RunBlockAsync` without asking
   `treatment.Treats`, so a hand-over gets music whatever is ticked.
 - **No control for `AppSettings.ShowStingLevel`** (default 80) on any page.
-- **Race recording has a switch now** (corrected 17 Oct 2026): **Voice -
-  Commentary** has "Record each race, and cut each driver their own clip".
+- **Race recording has a switch now** (corrected 17 Oct 2026): **Sounds -
+  Recording** has "Record each race, and cut each driver their own clip"
+  (it was on Voice - Commentary until the Sounds regroup the same day).
   Old nights are pruned (`RaceAudioStore.PruneOldNights`).
 - **Two stale user-facing strings naming the retired Windows voice**:
   `RivalriesControl.cs:216` and `SoundscapeEditorForm.cs:401`. Both offer a

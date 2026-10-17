@@ -55,7 +55,8 @@ internal static class BreakTransition
     /// Which leaves a judgement about a room nobody here can hear. So it
     /// makes none: a boundary sting plays at the level the club set for
     /// its sting, the same as every other mark - see
-    /// ShowTreatment.BoundaryStingLevel. A club that wants it different
+    /// ShowTreatment.StingForABoundary, whose sting carries its level (17
+    /// Oct 2026, Bug Hunt 8, A05-3). A club that wants it different
     /// has one dial and it does what it says.
     /// </summary>
     /// <summary>

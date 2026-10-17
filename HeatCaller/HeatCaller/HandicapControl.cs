@@ -16,6 +16,13 @@ public sealed class HandicapControl : UserControl
     private readonly SessionHistoryStore _history;
     private readonly UndoService _undo;
 
+    /// <summary>
+    /// The race programme, to tell which class a saved race was - see
+    /// HandicapStore.SessionsFor. Null shows every class's laps, as before.
+    /// (17 Oct 2026, Bug Hunt 8, A26-1.)
+    /// </summary>
+    private readonly RoundDefinitionStore? _rounds;
+
     private readonly ComboBox _cmbClass = new();
     private readonly DataGridView _grid = new();
     private readonly ComboBox _cmbMode = new();
@@ -37,13 +44,14 @@ public sealed class HandicapControl : UserControl
     private const int ModePickerWidth = 250;
 
     public HandicapControl(HandicapStore store, ProfileStore profiles, RaceClassStore classes,
-        SessionHistoryStore history, UndoService undo)
+        SessionHistoryStore history, UndoService undo, RoundDefinitionStore? rounds = null)
     {
         _store = store;
         _profiles = profiles;
         _classes = classes;
         _history = history;
         _undo = undo;
+        _rounds = rounds;
 
         Dock = DockStyle.Fill;
         ForeColor = AppTheme.TextDark;
@@ -260,12 +268,14 @@ public sealed class HandicapControl : UserControl
             .OrderBy(p => p.DriverName)
             .ToList();
 
+        // This class's races only (17 Oct 2026, Bug Hunt 8, A26-1).
+        var classSessions = HandicapStore.SessionsFor(_history, _rounds, raceClass.Name).ToList();
+
         foreach (var driver in roster)
         {
             var handicap = _store.Get(driver.Transponder);
 
-            var recentBest = _history.All
-                .Where(s => !s.IsDemoSession())
+            var recentBest = classSessions
                 .SelectMany(s => s.Results.Where(r =>
                     string.Equals(r.Transponder, driver.Transponder, StringComparison.OrdinalIgnoreCase)
                     && r.FastLapMs > 0))
@@ -419,7 +429,7 @@ public sealed class HandicapControl : UserControl
             .Where(p => p.RunsClass(raceClass.Name))
             .ToList();
 
-        using var form = new HandicapSuggestForm(_store, roster, _history, raceClass.Name);
+        using var form = new HandicapSuggestForm(_store, roster, _history, raceClass.Name, _rounds);
         if (form.ShowDialog(this) != DialogResult.OK || form.Accepted.Count == 0)
         {
             return;

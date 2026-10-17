@@ -73,6 +73,46 @@ public sealed partial class RelayPublisher
     /// <summary>What went wrong sending the announcer's lines out, or null.</summary>
     public string? ListenProblem => _listenProblem;
 
+    /// <summary>The problem last said out loud, so it is said once rather than every pass.</summary>
+    private volatile string? _listenProblemAsSaid;
+
+    /// <summary>
+    /// Records what went wrong and says it once, on a change - the pattern
+    /// VoteTrouble set (17 Oct 2026, Bug Hunt 8, A17-2). The problem was
+    /// recorded in a field nothing read, so a route that silently stopped
+    /// working on a race night left no trace in the console or the log.
+    /// </summary>
+    private void ListenTrouble(string? problem)
+    {
+        _listenProblem = problem;
+
+        if (string.Equals(_listenProblemAsSaid, problem, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _listenProblemAsSaid = problem;
+
+        if (problem is { Length: > 0 })
+        {
+            Log?.Invoke($"[relay] Listening along on the club's page: {problem}");
+        }
+        else
+        {
+            Log?.Invoke("[relay] Listening along on the club's page is working again.");
+        }
+    }
+
+    /// <summary>
+    /// Clears the problem without saying anything, for the club switching
+    /// the route off - not a fault, so no "working again" on its way out.
+    /// </summary>
+    private void ForgetListenTrouble()
+    {
+        _listenProblem = null;
+        _listenProblemAsSaid = null;
+    }
+
     /// <summary>
     /// The queue of lines waiting to go, and the policy that decides what
     /// is worth sending.
@@ -138,7 +178,7 @@ public sealed partial class RelayPublisher
 
         if (!IsSafeForToken(target.Root))
         {
-            _listenProblem = UnsafeAddressMessage;
+            ListenTrouble(UnsafeAddressMessage);
             return;
         }
 
@@ -161,7 +201,7 @@ public sealed partial class RelayPublisher
 
             if (Listening.Take(DateTime.UtcNow) is not { } line)
             {
-                _listenProblem = null;
+                ListenTrouble(null);
                 return;
             }
 
@@ -169,7 +209,7 @@ public sealed partial class RelayPublisher
             {
                 case ListenSend.Sent:
                     Listening.Done(line);
-                    _listenProblem = null;
+                    ListenTrouble(null);
                     break;
 
                 case ListenSend.LetGo:
@@ -228,13 +268,13 @@ public sealed partial class RelayPublisher
         }
         catch (Exception ex)
         {
-            _listenProblem = $"Could not package a line for listeners: {ex.Message}";
+            ListenTrouble($"Could not package a line for listeners: {ex.Message}");
             return ListenSend.LetGo;
         }
 
         if (Encoding.UTF8.GetByteCount(body) > ListenAlong.MostDocumentBytes)
         {
-            _listenProblem = "A line was too large to send to listeners, and was passed over.";
+            ListenTrouble("A line was too large to send to listeners, and was passed over.");
             return ListenSend.LetGo;
         }
 
@@ -255,7 +295,7 @@ public sealed partial class RelayPublisher
 
             var code = (int)response.StatusCode;
 
-            _listenProblem = code switch
+            ListenTrouble(code switch
             {
                 404 => "The relay does not know about listening along yet - redeploy it (fly deploy --ha=false).",
 
@@ -263,14 +303,14 @@ public sealed partial class RelayPublisher
                 // laptop thinks listening is open and the relay does not.
                 // Told again next pass rather than argued with.
                 403 => "The relay says this club is not letting anybody listen along. "
-                       + "It will be told again; if this stays, untick and re-tick the box on the Commentary page.",
+                       + "It will be told again; if this stays, untick and re-tick the box on the Club Website page.",
 
                 // Bigger than one listen document. Not retried - see the
                 // summary - and let go by returning true.
                 413 => "A line was longer than the relay accepts, and was passed over.",
 
                 _ => $"Could not send a line to listeners: the relay answered HTTP {code}.",
-            };
+            });
 
             if (code is 403)
             {
@@ -290,7 +330,7 @@ public sealed partial class RelayPublisher
         }
         catch (Exception ex)
         {
-            _listenProblem = $"Could not reach the relay with a line for listeners: {ex.Message}";
+            ListenTrouble($"Could not reach the relay with a line for listeners: {ex.Message}");
             return ListenSend.TryAgain;
         }
     }
@@ -334,11 +374,20 @@ public sealed partial class RelayPublisher
 
             using var response = Send(request, token);
 
+            if (!wanted && IsGoneForAClose(response))
+            {
+                // Nothing there to close (17 Oct 2026, Bug Hunt 8, A16-1):
+                // the close is armed on every start now, and an old relay
+                // must not be asked again every thirty seconds forever.
+                _nextListenOpenTick = 0;
+                return true;
+            }
+
             if (!response.IsSuccessStatusCode)
             {
-                _listenProblem = (int)response.StatusCode == 404
+                ListenTrouble((int)response.StatusCode == 404
                     ? "The relay does not know about listening along yet - redeploy it (fly deploy --ha=false)."
-                    : $"Could not open listening on the relay: it answered HTTP {(int)response.StatusCode}.";
+                    : $"Could not open listening on the relay: it answered HTTP {(int)response.StatusCode}.");
 
                 return false;
             }
@@ -355,7 +404,7 @@ public sealed partial class RelayPublisher
         }
         catch (Exception ex)
         {
-            _listenProblem = $"Could not reach the relay about listening along: {ex.Message}";
+            ListenTrouble($"Could not reach the relay about listening along: {ex.Message}");
             return false;
         }
     }

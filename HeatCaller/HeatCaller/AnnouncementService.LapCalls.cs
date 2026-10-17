@@ -1171,9 +1171,19 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // The club's own wording is never sent through the HeatCaller voice
+        // (17 Oct 2026, Bug Hunt 8, A11-2): the relay renders on HeatCaller's
+        // account, and the Rivalries page's lock only stopped EDITING it.
+        // The standard lines are said instead; the club's are kept, not
+        // overwritten, for when the voice changes back.
+        var standardOnly = _voiceStore.Current.EffectiveEngine == VoiceEngine.HeatCaller;
+        List<string>? standard = standardOnly ? new RivalryLine().Templates : null;
+
         foreach (var rivalry in _rivalries.All)
         {
-            if (!rivalry.Enabled || rivalry.Templates.Count == 0)
+            var templates = standard ?? rivalry.Templates;
+
+            if (!rivalry.Enabled || templates is null || templates.Count == 0)
             {
                 continue;
             }
@@ -1200,7 +1210,7 @@ public sealed partial class AnnouncementService
             {
                 var overtakerName = currentlyAhead == transponderA ? rivalry.DriverA : rivalry.DriverB;
                 var overtakenName = currentlyAhead == transponderA ? rivalry.DriverB : rivalry.DriverA;
-                FireRivalryLine(overtakerName, overtakenName, currentlyAhead, rivalry.Templates);
+                FireRivalryLine(overtakerName, overtakenName, currentlyAhead, templates);
             }
 
             _rivalryLastAhead[rivalry.Id] = currentlyAhead;

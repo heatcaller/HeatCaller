@@ -208,12 +208,26 @@ public sealed class RelaySettingsControl : UserControl
     /// <summary>See PinEmailStarted. Raised exactly once for each PinEmailStarted.</summary>
     public event Action? PinEmailFinished;
 
+    /// <summary>
+    /// The Room & Web card: the club's notes, the room's vote and listening
+    /// along, moved here from the Commentary page on 17 Oct 2026 - see
+    /// RoomAndWebCard. Its three "closed on the relay" events are joined up
+    /// by the host.
+    /// </summary>
+    private readonly RoomAndWebCard _roomAndWeb;
+
+    /// <summary>The Room & Web card, for the host to wire its events.</summary>
+    internal RoomAndWebCard RoomAndWeb => _roomAndWeb;
+
     public RelaySettingsControl(RelayPublisher publisher, AppSettings settings, ProfileStore profiles, UndoService? undo = null)
     {
         _publisher = publisher;
         _settings = settings;
         _profiles = profiles;
         _undo = undo;
+
+        // Before the page is built, which puts its card on the page.
+        _roomAndWeb = new RoomAndWebCard(settings, _textSize);
 
         Dock = DockStyle.Fill;
 
@@ -254,13 +268,14 @@ public sealed class RelaySettingsControl : UserControl
     public void RefreshAll()
     {
         LoadFromSettings();
+        _roomAndWeb.RefreshAll();
         RefreshStatus();
         RefreshLastGood();
     }
 
     /// <summary>
     /// Builds the page on the layout pieces (LayoutPieces.cs): the intro,
-    /// then nine cards down the page, each as wide as the page and as tall
+    /// then ten cards down the page, each as wide as the page and as tall
     /// as what is in it -
     ///
     ///   Relay                   publishing on or off; the address, the club
@@ -278,6 +293,8 @@ public sealed class RelaySettingsControl : UserControl
     ///   Email (for racer PINs)  the club's mailbox and its test.
     ///   Race-day manager        the switch, how it is doing, its buttons.
     ///   Share                   the club page's address and what to do with it.
+    ///   Room & Web              club notes, the room's vote and listening
+    ///                           along (RoomAndWebCard, 17 Oct 2026).
     ///   Status                  whether anything is getting through, and
     ///                           Delete Everything Published.
     ///
@@ -318,6 +335,11 @@ public sealed class RelaySettingsControl : UserControl
         page.Add(BuildMailCard());
         page.Add(BuildManagerCard());
         page.Add(BuildShareCard());
+
+        // ROOM & WEB (17 Oct 2026): what the room and the people at home can
+        // send in or hear through the club's pages - from the Commentary
+        // page. After Share, which is the address they use to get there.
+        page.Add(_roomAndWeb.Card);
         page.Add(BuildStatusCard(), gapBelow: 0);
 
         Controls.Add(page);
@@ -1934,11 +1956,15 @@ public sealed class RelaySettingsControl : UserControl
             RefreshManagerState();
         };
 
+        // 17 Oct 2026, Bug Hunt 8, A17-3: it said the manager never starts a
+        // round or throws a flag on the venue's Wi-Fi either - but there its
+        // Race tab can (RaceDayService refuses race control only off Wi-Fi).
         var lblHint = HintLabel(
             "The same page as Local Screens's race-day manager - setting up the day, entries, check-in, the "
-            + "program and results - reachable from off the venue's Wi-Fi too. It never starts a round or "
-            + "throws a flag, over the relay or the venue's own Wi-Fi either one. Guarded by the Manager PIN "
-            + "set on Local Screens; nothing here works without one.");
+            + "program and results - reachable from off the venue's Wi-Fi too. Through the relay it never "
+            + "starts a round or throws a flag; on the venue's own Wi-Fi its Race tab can, so give the Manager "
+            + "PIN only to people you would let run Race Control. Guarded by the Manager PIN set on Local "
+            + "Screens; nothing here works without one.");
 
         // Two lines kept, like check-in's and personal PINs' own state lines
         // above - see KeepLines.
@@ -2560,6 +2586,10 @@ public sealed class RelaySettingsControl : UserControl
 
     private void RefreshStatus()
     {
+        // Whether anybody can listen along depends on the club website being
+        // switched on, which is the Relay card's first box.
+        _roomAndWeb.DescribeListening();
+
         RefreshShare();
         RefreshCheckInState();
         RefreshPinsState();

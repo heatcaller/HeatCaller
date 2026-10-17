@@ -205,7 +205,7 @@ public sealed class KokoroFallbackTests : IDisposable
         // Loud, and actionable. "Voice announcements unavailable" tells a
         // club nothing it can do at eight on a Saturday evening.
         Assert.Contains("NO VOICE", said, StringComparison.Ordinal);
-        Assert.Contains("Voice Settings", said, StringComparison.Ordinal);
+        Assert.Contains("Voice tab", said, StringComparison.Ordinal);
         Assert.Contains("Download", said, StringComparison.Ordinal);
         Assert.Contains(KokoroSpeech.DownloadSizeText, said, StringComparison.Ordinal);
     }

@@ -301,7 +301,7 @@ internal sealed class HeatCallerVoiceClient
         HeatCallerRefusal.Off,
         HeldAfterRestore(TargetRoot(), RelayPublisher.NormaliseBaseUrl(_settings.RelayBaseUrl))
         ?? (UsingVoiceRelay
-            ? "The voice relay on the Voice Settings page can't be used yet: it needs a club id and a token, and unless it is "
+            ? "The voice relay on the Voice tab can't be used yet: it needs a club id and a token, and unless it is "
               + "this club's own relay or a relay on this PC (localhost), the token has to be typed in rather than "
               + "left blank. A plain http address is only accepted for this PC or your own network."
             : "The Club Website page isn't set up yet, so there's no HeatCaller relay to speak through."));

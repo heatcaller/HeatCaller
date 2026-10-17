@@ -13,7 +13,12 @@ const DEFAULTS: Readonly<Record<string, unknown>> = Object.freeze({
 
 export interface ClubEntry {
   readonly club: string;
-  readonly name: string;
+  /**
+   * Left out when none was given, so a re-mint keeps the name the config
+   * already has rather than renaming the club to its id. 17 Oct 2026, Bug
+   * Hunt 8, A22-1.
+   */
+  readonly name?: string | undefined;
   readonly tokenSha256: string;
   readonly publishRoster: boolean;
 }
@@ -93,6 +98,9 @@ export function parseMintArgs(rest: readonly string[]): MintArgs {
  *   is not an occasion to rewrite anybody else's entry.
  * - A club that already exists keeps its own publishRoster. A new token is
  *   not consent to start publishing a list of names.
+ * - It keeps its own name too, unless a new one was given. Rotating a token
+ *   without retyping the name used to rename the club to its id (17 Oct
+ *   2026, Bug Hunt 8, A22-1).
  * - Entries whose hash is not a usable sha-256 are dropped, and named. The
  *   example config ships with a sentence where the hash goes, so a config
  *   copied from it and added to would refuse to start - correctly, but
@@ -127,7 +135,8 @@ export function withClub(
 
     if (club["club"] === entry.club) {
       replaced = true;
-      clubs.push({ ...club, ...entry, publishRoster: club["publishRoster"] === true });
+      const kept = typeof club["name"] === "string" && club["name"] !== "" ? club["name"] : entry.club;
+      clubs.push({ ...club, ...entry, name: entry.name ?? kept, publishRoster: club["publishRoster"] === true });
       continue;
     }
 
@@ -140,7 +149,7 @@ export function withClub(
   }
 
   if (!replaced) {
-    clubs.push({ ...entry });
+    clubs.push({ ...entry, name: entry.name ?? entry.club });
   }
 
   config["clubs"] = clubs;
@@ -191,18 +200,18 @@ export function mint(club: string | undefined, rest: readonly string[]): number 
 
   const entry: ClubEntry = {
     club,
-    name: name ?? club,
+    name,
     tokenSha256: hashToken(token),
     publishRoster: false,
   };
 
   console.log("");
-  console.log(`  Club: ${club}  (${entry.name})`);
+  console.log(`  Club: ${club}  (${entry.name ?? club})`);
 
   if (mangled) {
     console.log("");
     console.log("  Note: npm on Windows mangled the name into carets on its way here,");
-    console.log(`        so it was cleaned up to "${entry.name}". Calling node directly`);
+    console.log(`        so it was cleaned up to "${entry.name ?? club}". Calling node directly`);
     console.log("        avoids npm's escaping altogether.");
   }
 
@@ -221,7 +230,7 @@ export function mint(club: string | undefined, rest: readonly string[]): number 
     console.log('  into the "clubs" array in relay.config.json:');
     console.log("");
     console.log(
-      JSON.stringify(entry, null, 2)
+      JSON.stringify({ ...entry, name: entry.name ?? club }, null, 2)
         .split("\n")
         .map((line) => `    ${line}`)
         .join("\n"),

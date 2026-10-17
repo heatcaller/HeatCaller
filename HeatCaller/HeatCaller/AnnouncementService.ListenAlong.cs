@@ -100,6 +100,11 @@ public sealed partial class AnnouncementService
                 if (mp3 is not null)
                 {
                     SendToListeners?.Invoke(words, mp3);
+
+                    // A line got through, so a later failure is news again
+                    // (17 Oct 2026, Bug Hunt 8, A06-11): one early hiccup
+                    // used to silence every complaint for the rest of the run.
+                    Volatile.Write(ref _listenEncodeComplained, 0);
                 }
             }
             catch (Exception ex)
@@ -293,7 +298,7 @@ public sealed partial class AnnouncementService
         StatusMessage?.Invoke(
             "[listen] Nothing is being sent to anyone listening along: " + why + ". "
             + "Everything else about the night is unaffected - untick \"Let people listen along\" "
-            + "on the Commentary page to stop it trying.");
+            + "on the Club Website page to stop it trying.");
     }
 
     /// <summary>A temp file that is already gone, or locked, is not worth a word.</summary>

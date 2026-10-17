@@ -226,10 +226,10 @@ public sealed class ThemesControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "A soundscape is the whole sound of race day: a sound for every moment, and an announcer's words and delivery to match. " +
-                   "Preview one to hear a short pretend race, Apply it to use it, or Customize to mix packs and rewrite lines. " +
-                   "Applying also puts the app in the soundscape's own look (Classic's neon, Pit Lane's hazard yellow and so on) after a restart, " +
-                   "and never touches your API key, which voice speaks, or this PC's volumes. The club logo, and changing the look back, are on the Themes page.",
+            Text = "A soundscape is the whole sound of race day: a sound for every moment, with an announcer's lines and delivery to match. " +
+                   "Preview one to hear a pretend race, Apply it to use it, or Customize to mix packs and rewrite lines. " +
+                   "Applying swaps in its lines, voice tuning and look (a custom one saved with a voice brings that voice too); " +
+                   "your API key, speech engine and this PC's volumes stay. The look can be changed back on the Themes page.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -844,7 +844,7 @@ public sealed class ThemesControl : UserControl
                 ? "\n\nThe HeatCaller voice speaks the standard announcer lines in its own delivery, so this soundscape's own lines "
                   + "are NOT applied, and its stability, similarity, style and speed are saved but make no difference until another "
                   + "voice speaks. Its sounds, and its Max spoken announcements per lap, are applied. To use its lines, switch to your own "
-                  + "ElevenLabs key or the free Kokoro voice on Voice Settings."
+                  + "ElevenLabs key or the free Kokoro voice on the Voice tab."
                 : string.Empty);
 
         var background = ThemeStore.DescribeBackground(theme, _musicStore);
@@ -1110,7 +1110,7 @@ public sealed class ThemesControl : UserControl
             AppDialog.Show(this,
                 "Voice lines are recorded with ElevenLabs - your own key, or the HeatCaller voice through your relay. "
                 + "This PC speaks with the Kokoro voice, which already says these lines for free. "
-                + "Switch the voice on Voice Settings to record them, then switch back if you like: the recordings keep playing.",
+                + "Switch the voice on the Voice tab to record them, then switch back if you like: the recordings keep playing.",
                 "Voice lines", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
@@ -1215,7 +1215,11 @@ public sealed class ThemesControl : UserControl
                 var audio = await Announcer.RecordVoiceLineAsync(toRecord[i], theme.Voice.Stability, theme.Voice.Style, fresh: rerecordAll);
                 if (audio is not null && !undoneWhileRecording)
                 {
-                    StingerLibrary.Shared.Save(toRecord[i], audio, voiceName, theme.Name);
+                    // The HeatCaller voice id goes with the take, so taking
+                    // that voice's consent back stops it playing (17 Oct
+                    // 2026, Bug Hunt 8, A10-1).
+                    StingerLibrary.Shared.Save(toRecord[i], audio, voiceName, theme.Name,
+                        voice.EffectiveEngine == VoiceEngine.HeatCaller ? voice.HeatCallerVoice?.Trim() : null);
 
                     if (StingerLibrary.Shared.Has(toRecord[i]))
                     {
@@ -1241,7 +1245,7 @@ public sealed class ThemesControl : UserControl
                 ? $"Recorded {ok} voice lines for \"{theme.Name}\"."
                 : $"Recorded {ok} of {toRecord.Count} voice lines for \"{theme.Name}\" - the rest couldn't be rendered with ElevenLabs"
                     + (rerecordAll ? " and kept their previous recordings" : string.Empty)
-                    + ". Check Voice Settings, then record the missing ones.";
+                    + ". Check the Voice tab, then record the missing ones.";
         }
         catch (Exception ex)
         {

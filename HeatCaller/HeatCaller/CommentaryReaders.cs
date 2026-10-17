@@ -2606,7 +2606,10 @@ public static class CommentaryReaders
             run++;
         }
 
-        if (run == 0)
+        // A race a rental or an excluded driver won is somebody else's -
+        // it ends a run, and starts none that can be said (17 Oct 2026,
+        // Bug Hunt 8, A09-5; see WinnerIn).
+        if (run == 0 || holder == SomebodyElse)
         {
             return (string.Empty, 0);
         }
@@ -2623,10 +2626,24 @@ public static class CommentaryReaders
     {
         var cars = 0;
         var first = string.Empty;
+        var p1 = string.Empty;
 
         foreach (var entry in session.Results)
         {
             var who = Typed(entry.Transponder);
+
+            // 17 Oct 2026, Bug Hunt 8, A09-5: the race's real first place,
+            // looked at before the record filter below. A rental or an
+            // excluded driver who won was skipped as if the race had no
+            // winner, and "the last N races here have all gone to X" went
+            // straight past a race somebody else beat X in.
+            if (who.Length > 0
+                && !GhostService.IsGhost(who)
+                && entry.Position == 1
+                && Typed(entry.Outcome).Length == 0)
+            {
+                p1 = who;
+            }
 
             if (who.Length == 0 || !AchievementEvaluator.CanHoldTrackRecord(who, profiles))
             {
@@ -2643,8 +2660,28 @@ public static class CommentaryReaders
             }
         }
 
-        return cars >= LeastCarsForAWin ? first : string.Empty;
+        if (cars < LeastCarsForAWin)
+        {
+            return string.Empty;
+        }
+
+        // Won, but by somebody whose wins are not counted: not nobody, so
+        // it breaks a run - see SomebodyElse.
+        if (p1.Length > 0 && !AchievementEvaluator.CanHoldTrackRecord(p1, profiles))
+        {
+            return SomebodyElse;
+        }
+
+        return first;
     }
+
+    /// <summary>
+    /// What WinnerIn gives back for a race won by a rental or an excluded
+    /// driver: unlike every real transponder, so it breaks a run, and never
+    /// named - RunOfWinsOn and MainsOnLayout's reader treat a run held by it
+    /// as no run (17 Oct 2026, Bug Hunt 8, A09-5).
+    /// </summary>
+    private const string SomebodyElse = "\u0001other";
 
     /// <summary>
     /// How many real cars have to be out for the race to count as a win on
@@ -2864,7 +2901,8 @@ public static class CommentaryReaders
             run++;
         }
 
-        if (run == 0)
+        // Somebody else's - see SomebodyElse (17 Oct 2026, Bug Hunt 8, A09-5).
+        if (run == 0 || holder == SomebodyElse)
         {
             return null;
         }

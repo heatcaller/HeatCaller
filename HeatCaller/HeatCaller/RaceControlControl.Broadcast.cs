@@ -136,7 +136,13 @@ public sealed partial class RaceControlControl
 
             // RunAsync answers false when there was no music to put round
             // it - and in that case it has NOT spoken, so the caller must.
-            if (treatment is not null
+            //
+            // 17 Oct 2026, Bug Hunt 8, A04-5: only with the floor. Over the
+            // recap's show it opened a second opener and bed summed on top
+            // of the recap's - the 11 Oct fault ShowFloor is there to stop.
+            // Unclaimed, it is spoken plainly and queues behind what is on.
+            if (claimed
+                && treatment is not null
                 && treatment.Treats(last.Kind)
                 && await treatment.RunAsync(Speak, last.Kind).ConfigureAwait(true))
             {

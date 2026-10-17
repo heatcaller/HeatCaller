@@ -22,10 +22,14 @@ public static class CsvHelper
     /// numbers are passed as numbers (ints, or pre-formatted strings that
     /// parse as one) and are left exactly as they are.
     /// </summary>
+    /// <remarks>
+    /// Non-text fields are written invariantly (17 Oct 2026, Bug Hunt 8,
+    /// A26-2) - a negative total came out as "−5" (U+2212) on sv/nb/fi Windows.
+    /// </remarks>
     public static string BuildRow(params object?[] fields) =>
         string.Join(",", fields.Select(f => EscapeField((f is string text)
             ? NeutraliseFormula(text)
-            : f?.ToString() ?? string.Empty)));
+            : Convert.ToString(f, CultureInfo.InvariantCulture) ?? string.Empty)));
 
     /// <summary>
     /// Stops a text field being run as a spreadsheet formula.

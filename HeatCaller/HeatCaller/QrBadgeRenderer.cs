@@ -25,6 +25,11 @@ public static class QrBadgeRenderer
     private const int Rows = 4;
     public const int BadgesPerPage = Columns * Rows;
 
+    // 17 Oct 2026, Bug Hunt 8, A30-1: the resolution the saved PNG is
+    // labelled with, so it prints on Letter rather than at 13.3 x 17.2
+    // inches - as HeatSheetRenderer and RunSheetRenderer already do.
+    private const float PrintDpi = 150f;
+
     private const int MarginX = 60;
     private const int MarginY = 60;
 
@@ -83,6 +88,26 @@ public static class QrBadgeRenderer
     {
         var bitmap = new Bitmap(PageWidth, PageHeight);
 
+        try
+        {
+            DrawPage(bitmap, driversOnThisPage);
+
+            // 17 Oct 2026, Bug Hunt 8, A30-1: labelled for print AFTER the
+            // drawing (whose Graphics is disposed by then), so only the
+            // label changes and no pixels do. See PrintDpi.
+            bitmap.SetResolution(PrintDpi, PrintDpi);
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
+
+        return bitmap;
+    }
+
+    private static void DrawPage(Bitmap bitmap, IReadOnlyList<DriverProfile> driversOnThisPage)
+    {
         // 96 DPI, not the screen's: under --dpi-aware at 150% the point-size text would draw half as big again.
         bitmap.SetResolution(96, 96);
 
@@ -148,8 +173,6 @@ public static class QrBadgeRenderer
                 DrawCentered(g, "Scan with your phone camera to check in", detailFont, greyBrush, cellX, textY + 48, cellWidth);
             }
         }
-
-        return bitmap;
     }
 
     private static void DrawCentered(Graphics g, string text, Font font, Brush brush, int cellX, int y, int cellWidth)

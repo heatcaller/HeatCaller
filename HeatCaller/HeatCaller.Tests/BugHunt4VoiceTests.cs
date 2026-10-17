@@ -210,7 +210,7 @@ public sealed class BugHunt4VoiceTests : IDisposable
     public void A_Kokoro_model_that_would_not_load_is_offered_again_and_stays_unable_between_tries()
     {
         FakeDownloadedModel();
-        const string reason = "the Kokoro model wouldn't load (InvalidProtobuf: test) - downloading it again on Voice Settings usually fixes this";
+        const string reason = "the Kokoro model wouldn't load (InvalidProtobuf: test) - downloading it again on the Voice tab usually fixes this";
 
         KokoroSpeech.RecordLoadFailureForTests(reason, DateTime.UtcNow);
 

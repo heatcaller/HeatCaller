@@ -471,6 +471,32 @@ internal sealed class ClubNotes
     }
 
     /// <summary>
+    /// Whether a note picked up earlier by <see cref="ToSay"/> may still be
+    /// said: it is on tonight's list, approved, and not said yet.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A29-1: ToSay is read when the announcer
+    /// gathers its candidates, seconds before the line is written and
+    /// spoken. A note the race director removed in between (or a
+    /// NewMeeting that cleared the list) was still read out, breaking the
+    /// window's promise "The announcer will never say it". The speaking
+    /// side asks this again right before the line goes out.
+    /// </summary>
+    internal bool StillToSay(string? id)
+    {
+        lock (_gate)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                return false;
+            }
+
+            return _file.Notes.Any(one => string.Equals(one.Id, id, StringComparison.Ordinal)
+                && one.Approved
+                && one.SaidAtUtc is null);
+        }
+    }
+
+    /// <summary>
     /// A note has actually gone out.
     ///
     /// Must be called AFTER the line has reached the announcer and never

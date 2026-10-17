@@ -192,6 +192,9 @@ footer .links a:hover { text-decoration: underline; }
    so a phone does not zoom in on the one being typed in. */
 .su { display: grid; gap: 16px; max-width: 460px; margin: 0 auto; }
 .su .f { display: grid; gap: 6px; font-weight: 600; }
+/* 17 Oct 2026, Bug Hunt 8, A21-3: the display above beats the browser's own
+   [hidden] rule, so the transponder row showed whatever was picked. */
+.su .f[hidden] { display: none; }
 .su input:not([type=radio]):not([type=checkbox]), .su select {
   width: 100%; min-height: 48px; margin: 0; padding: 12px; font: inherit; font-size: 1rem; font-weight: 400;
   border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
@@ -2391,6 +2394,12 @@ const LISTEN_JS = `
   // Stop is pressed cannot queue lines into the next Listen.
   let turn = 0;
 
+  // One sweep at a time. The timer starts one every two seconds whatever
+  // happens, and a sweep marks a line heard before fetching it - so a
+  // slow fetch let the next sweep fetch and play the line after it first.
+  // 17 Oct 2026, Bug Hunt 8, A21-1.
+  let sweeping = false;
+
   function say(text) {
     note.textContent = text;
   }
@@ -2404,6 +2413,20 @@ const LISTEN_JS = `
   }
 
   async function sweep() {
+    if (sweeping) {
+      return;
+    }
+
+    sweeping = true;
+
+    try {
+      await sweepOnce();
+    } finally {
+      sweeping = false;
+    }
+  }
+
+  async function sweepOnce() {
     const mine = turn;
 
     try {
@@ -3582,7 +3605,10 @@ let classes = [];
 let eventName = '';
 // What the relay last said about this sign-up, or null before it has said anything.
 let standing = null;
-// True while the form is on screen, so a poll never redraws it under somebody typing.
+// True while the form is on screen, so a poll never redraws it under somebody
+// typing - unless the desk has answered meanwhile (see refresh). 17 Oct 2026,
+// Bug Hunt 8, A21-2: the polls now run while editing a pending sign-up, or
+// that answer could never arrive.
 let editing = false;
 
 function held() { try { return localStorage.getItem(PASS_KEY) || ''; } catch (e) { return ''; } }
@@ -3897,11 +3923,11 @@ else drawCode('');
 // Only while the desk has it: an open form, an answer or the code box has
 // nothing to wait for. Ten seconds, as check-in's page polls.
 setInterval(() => {
-  if (!document.hidden && !editing && standing && standing.state === 'pending') refresh();
+  if (!document.hidden && standing && standing.state === 'pending') refresh();
 }, 10000);
 
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && !editing && standing && standing.state === 'pending') refresh();
+  if (!document.hidden && standing && standing.state === 'pending') refresh();
 });
 `;
 
@@ -4161,7 +4187,9 @@ function picture() {
   const ctx = canvas.getContext('2d');
 
   if (!ctx || !canvas.toBlob) {
-    nothing('This browser cannot make the picture. The text file still works.');
+    // A toast, not nothing(): nothing() replaced the night and the very
+    // text-file button this points at. 17 Oct 2026, Bug Hunt 8, A21-4.
+    toast('This browser cannot make the picture. The text file still works.');
     return;
   }
 

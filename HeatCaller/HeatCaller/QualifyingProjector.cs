@@ -276,9 +276,17 @@ public sealed class QualifyingProjector
     /// by hand; the generation covers a reset; the round covers moving on
     /// to the next heat. The field size is in there too, for a transponder
     /// appearing part way through.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A26-3: the class's qualifying rules are in
+    /// it too, so changing the method, the consecutive-lap count or how
+    /// many rounds count redraws the projection now rather than at the
+    /// next crossing, which under a red can be minutes away.
     /// </summary>
     private string BuildCacheKey(RoundDefinition round, IReadOnlyList<RacerStanding> standings)
     {
+        var raceClass = _raceClasses.All
+            .FirstOrDefault(c => string.Equals(c.Name, round.ClassName, StringComparison.OrdinalIgnoreCase));
+
         long laps = 0;
         long elapsed = 0;
 
@@ -288,6 +296,10 @@ public sealed class QualifyingProjector
             elapsed += s.ElapsedMs;
         }
 
-        return $"{round.Id}|{_race.SessionGeneration}|{standings.Count}|{laps}|{elapsed}";
+        return $"{round.Id}|{_race.SessionGeneration}|{standings.Count}|{laps}|{elapsed}"
+            + $"|{raceClass?.QualifyingMethod}|{raceClass?.ConsecutiveLapCount}|{raceClass?.CountBestRounds}"
+            // 17 Oct 2026, Bug Hunt 8, A26-3: an Edit Result DQ or a Delete
+            // during a live qualifier redraws the projection at once.
+            + $"|{_history.Revision}";
     }
 }

@@ -187,11 +187,22 @@ public sealed partial class AnnouncementService
     /// not the session's first sector time, which is fastest by default.
     /// </summary>
     public void NotifyFastestSector(RaceStanding standing, int sector, long sectorMs) =>
-        EnqueueVoice(AnnouncementEventType.FastestSector, standing, null, extras: new Dictionary<string, (string, string)>
-        {
-            ["sector"] = (sector.ToString(System.Globalization.CultureInfo.InvariantCulture), sector.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-            ["sectortime"] = (FormatSecondsForSpeech(sectorMs), (sectorMs / 1000.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "s"),
-        });
+        EnqueueVoice(AnnouncementEventType.FastestSector, standing, null, extras: SectorExtras(sector, sectorMs));
+
+    /// <summary>
+    /// {sector} and {sectortime}, spoken and on screen.
+    ///
+    /// A sector is NOT a lap time, so it is said through RaceNumbers.Plainly
+    /// ("two point zero six seconds") - 17 Oct 2026, Bug Hunt 8, A06-9/A07-4:
+    /// it went through FormatSecondsForSpeech, the lap-time convention, which
+    /// the remarks on that method and on Plainly both say a sector does not
+    /// use.
+    /// </summary>
+    internal static Dictionary<string, (string, string)> SectorExtras(int sector, long sectorMs) => new()
+    {
+        ["sector"] = (sector.ToString(System.Globalization.CultureInfo.InvariantCulture), sector.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        ["sectortime"] = (RaceNumbers.Plainly(sectorMs), (sectorMs / 1000.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "s"),
+    };
 
     /// <summary>Whether this call is switched on for the session running now (races or practice) - so a caller choosing between calls picks one that will be said.</summary>
     public bool WillCall(AnnouncementEventType type) =>

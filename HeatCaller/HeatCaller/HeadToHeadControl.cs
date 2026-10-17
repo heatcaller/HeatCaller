@@ -343,8 +343,15 @@ public sealed class HeadToHeadControl : UserControl
             //
             // The same closing-up AchievementEvaluator does for the same
             // reason - see PlaceOf there.
+            //
+            // 17 Oct 2026, Bug Hunt 8, A30-3: and only cars that turned a
+            // lap. A hand-released grid saves 0-lap rows for cars that never
+            // moved, so a driver who sat on the line handed the other a
+            // "win" (and if both did, Position picked one at random). A
+            // driver with no laps is now not found, and the session is
+            // skipped below - the same as WinnerOf / PlaceOf.
             var real = session.Results
-                .Where(r => !GhostService.IsGhost(r.Transponder))
+                .Where(r => !GhostService.IsGhost(r.Transponder) && r.Laps >= 1)
                 .OrderBy(r => r.Position)
                 .ToList();
 

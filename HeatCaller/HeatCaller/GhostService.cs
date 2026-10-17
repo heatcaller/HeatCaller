@@ -28,6 +28,23 @@ public sealed class GhostService : IDisposable
     private bool _running;
 
     /// <summary>
+    /// Which run of the ghosts this is, bumped by every Start and Stop
+    /// (under _lock). A crossing carries the run it was scheduled in, and is
+    /// dropped on the UI thread if the ghosts have been stopped and started
+    /// again since.
+    /// </summary>
+    /// <remarks>
+    /// 17 Oct 2026, Bug Hunt 8, A28-2: Practice "Clear Stats" resets the race
+    /// and green-flags it again synchronously, and the ghosts are stopped and
+    /// started with the same transponders. A crossing posted just before that
+    /// still passed the "still running and racing" check and landed in the new
+    /// practice on the old run's clock - one bogus very long lap, then one
+    /// dropped lap for that ghost. SessionGeneration is not enough on its own,
+    /// as a race put back can restore it.
+    /// </remarks>
+    private int _runId;
+
+    /// <summary>
     /// The ghosts' clock: milliseconds since the green flag.
     ///
     /// It used to be anchored to the session's LastKnownDeviceTimeMs plus
@@ -211,6 +228,8 @@ public sealed class GhostService : IDisposable
 
         lock (_lock)
         {
+            // A new run: anything still queued from the last one is stale (A28-2).
+            _runId++;
 
             foreach (var ghost in Settings.Ghosts.Where(g => g.Enabled
                 && (onlyThese is null || onlyThese.Contains(g.Transponder, StringComparer.OrdinalIgnoreCase))))
@@ -364,12 +383,25 @@ public sealed class GhostService : IDisposable
             _timer = null;
             _runners.Clear();
             _running = false;
+
+            // 17 Oct 2026, Bug Hunt 8, A28-2: crossings already posted are stale.
+            _runId++;
+        }
+    }
+
+    /// <summary>The run the ghosts are on now (A28-2).</summary>
+    private int CurrentRunId()
+    {
+        lock (_lock)
+        {
+            return _runId;
         }
     }
 
     private void Tick()
     {
         List<(GhostRunner Runner, long CrossingMs)> due = new();
+        int runId;
 
         lock (_lock)
         {
@@ -377,6 +409,9 @@ public sealed class GhostService : IDisposable
             {
                 return;
             }
+
+            // The run these crossings belong to (A28-2).
+            runId = _runId;
 
             var now = NowMs;
 
@@ -418,8 +453,11 @@ public sealed class GhostService : IDisposable
                     // stopped between scheduling and delivery - or this
                     // ghost switched off while the others carry on, when its
                     // crossing would put it back on the board it has just
-                    // been taken off (MainForm.KeepRunningGhostsInStep).
-                    if (!IsStillRunning(car.Transponder) || _race.State != RaceState.Racing)
+                    // been taken off (MainForm.KeepRunningGhostsInStep) - or
+                    // the ghosts restarted since it was scheduled, as Clear
+                    // Stats does, when it is on the old run's clock (17 Oct
+                    // 2026, Bug Hunt 8, A28-2).
+                    if (!IsStillRunning(car.Transponder) || _race.State != RaceState.Racing || runId != CurrentRunId())
                     {
                         return;
                     }

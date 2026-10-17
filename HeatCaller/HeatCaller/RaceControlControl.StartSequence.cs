@@ -617,6 +617,27 @@ public sealed partial class RaceControlControl
     {
         _autoStartCts?.Cancel();
         _autoStartCts = null;
+
+        // 17 Oct 2026, Bug Hunt 8, A03-2/A03-4: On Air is called off too.
+        // Reset, a flag, Stage or a warm-up opening by hand moved the race
+        // on, and staging is theirs - before this a Reset left On Air
+        // running and it staged a freeform race at its end, and a warm-up
+        // opened during it was skipped by its hand-over. On Air's own
+        // hand-over is unaffected: _onAirCts is cleared before it runs, and
+        // its second press does not come through here.
+        if (_onAirCts is { } onAir)
+        {
+            _onAirStageNow = false;
+
+            try
+            {
+                _ = onAir.CancelAsync();
+            }
+            catch (ObjectDisposedException)
+            {
+                // On Air had already finished.
+            }
+        }
     }
 
     // ==================== Warm-up ====================

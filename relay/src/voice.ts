@@ -396,6 +396,14 @@ export class VoiceService {
    */
   private readonly samplesInFlight = new Map<string, Promise<Buffer | undefined>>();
 
+  /**
+   * Lines being rendered right now by speak, keyed by where they will be
+   * cached ("shared" or the club) and the cache key, so a second request
+   * for the same line waits for the first instead of rendering - and being
+   * charged for - it again. 17 Oct 2026, Bug Hunt 8, A22-3.
+   */
+  private readonly linesInFlight = new Map<string, Promise<Buffer | undefined>>();
+
   /** When a sample render last failed, by voice id - see SAMPLE_RETRY_AFTER_MS. */
   private readonly sampleFailedAt = new Map<string, number>();
 
@@ -510,6 +518,8 @@ export class VoiceService {
       };
     }
 
+    const render = this.render;
+
     if (!plan.enabled) {
       return {
         ok: false,
@@ -578,6 +588,70 @@ export class VoiceService {
       return { ok: true, audio: cached, cached: true, usage: await this.usageFor(club, plan) };
     }
 
+    // ONE RENDER PER LINE AT A TIME. Two requests for the same uncached
+    // line - Prepare Lines and the live announcer together, or two clubs
+    // asking for the same shared line - used to both reserve, both render
+    // and both be charged. The second now waits for the first and is
+    // given its audio, free, as a cache hit would be. If the first was
+    // refused or failed (perhaps against another club's allowance), the
+    // second goes on down its own path: it never inherits a refusal, and
+    // never skips its own reserve. 17 Oct 2026, Bug Hunt 8, A22-3.
+    const flight = `${keepFor ? "shared" : club}|${key}`;
+    const already = this.linesInFlight.get(flight);
+
+    if (already !== undefined) {
+      const theirs = await already;
+
+      if (theirs !== undefined) {
+        return { ok: true, audio: theirs, cached: true, usage: await this.usageFor(club, plan) };
+      }
+    }
+
+    let settle: (audio: Buffer | undefined) => void = () => undefined;
+    const mine = new Promise<Buffer | undefined>((resolve) => {
+      settle = resolve;
+    });
+    // Another waiter released by the same failure may have got here first;
+    // then this one just renders on its own rather than queue again.
+    const owner = !this.linesInFlight.has(flight);
+
+    if (owner) {
+      this.linesInFlight.set(flight, mine);
+    }
+
+    let made: Buffer | undefined;
+
+    try {
+      const result = await this.speakUncached(club, plan, voice, spoken, keepFor, key, render);
+
+      if (result.ok) {
+        made = result.audio;
+      }
+
+      return result;
+    } finally {
+      settle(made);
+
+      if (owner && this.linesInFlight.get(flight) === mine) {
+        this.linesInFlight.delete(flight);
+      }
+    }
+  }
+
+  /**
+   * The rest of speak, for a line that was not in the cache: reserve,
+   * render, cache. Split out so speak can register it as in flight (see
+   * linesInFlight). 17 Oct 2026, Bug Hunt 8, A22-3.
+   */
+  private async speakUncached(
+    club: string,
+    plan: VoicePlan,
+    voice: CatalogueVoice,
+    spoken: string,
+    keepFor: boolean,
+    key: string,
+    render: RenderFn,
+  ): Promise<SpeakResult> {
     // Taken BEFORE the render, under the usage lock, rather than checked
     // now and counted at the end. A render takes seconds, and a club's
     // laptop can have several in flight: checking first let every one of
@@ -625,7 +699,7 @@ export class VoiceService {
     let audio: Buffer;
 
     try {
-      audio = await this.render(voice, spoken);
+      audio = await render(voice, spoken);
     } catch (error) {
       const status = error instanceof VoiceUpstreamError ? error.status : 0;
 

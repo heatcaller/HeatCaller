@@ -211,7 +211,20 @@ public sealed partial class RaceControlControl
             // Announcements and is NOT touched. A second switch for the same
             // thing, in another place, silently rewritten from here, is
             // worse than either arrangement on its own.
-            _honours = PlanHonours(unlocks);
+            //
+            // 17 Oct 2026, Bug Hunt 8, A04-7: not while segments are held.
+            // Hold at the flag calls the whole recap sequence off, honours
+            // and all, so badges kept back for it were never heard. Held,
+            // they are called one at a time as they always were.
+            if (Commentary?.Invoke()?.Held != true)
+            {
+                _honours = PlanHonours(unlocks);
+            }
+            else
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [badge] Segments are held, so the badges are called one at a time rather than kept for the honours.");
+            }
 
             if (_honours is not null)
             {
@@ -494,7 +507,7 @@ public sealed partial class RaceControlControl
 
         // Why there will be no recap, in words, for the console line below.
         var noRecapBecause = !_settings.CommentaryRaceSummaries
-            ? "race recaps are switched off on the Commentary page"
+            ? "race recaps are switched off on the AI Commentary tab"
             : "no commentary writer is available (the AI announcer is switched off, or neither the relay nor a local model is set up)";
 
         // The honours, built by AwardAchievements a moment ago on this same
@@ -883,11 +896,16 @@ public sealed partial class RaceControlControl
             // summed together and the programme signed off before the
             // honours had been read out. See ShowFloor for the whole story.
             //
-            // Not conditional, and not failed on: nothing else can hold the
-            // floor at the moment a race finishes, and a sequence that
-            // somehow could not claim it is still the programme and still
-            // goes out. The claim is what makes the FILLER stand down.
-            ShowFloor.TryClaim(TheProgramme);
+            // Not conditional, and not failed on: a sequence that could not
+            // claim it is still the programme and still goes out. The claim
+            // is what makes the FILLER stand down.
+            //
+            // 17 Oct 2026, Bug Hunt 8, A04-3/A04-4: TAKEN, not asked for. A
+            // Play again can hold the floor at the flag, and its Release
+            // then freed it mid-recap; taken over, that Release does
+            // nothing. And with a ceiling of its own, since a long main's
+            // programme can pass ShowFloor's six minutes.
+            ShowFloor.TakeOver(TheProgramme, TheProgrammeLongest);
 
             try
             {
@@ -1039,7 +1057,11 @@ public sealed partial class RaceControlControl
                         return;
                     }
 
-                    if (ShowMusic?.Invoke() is { } onTheirOwn && onTheirOwn.Treats(SegmentKind.BadgesEarned))
+                    // 17 Oct 2026, Bug Hunt 8, A04-1: not once the next race
+                    // is called - a show opened on a cancelled token still
+                    // blipped its opener over the staging call.
+                    if (!nextRace.IsCancellationRequested
+                        && ShowMusic?.Invoke() is { } onTheirOwn && onTheirOwn.Treats(SegmentKind.BadgesEarned))
                     {
                         try
                         {
@@ -1163,9 +1185,9 @@ public sealed partial class RaceControlControl
                 else
                 {
                     StatusMessage?.Invoke(!_settings.SummaryTeaserEnabled
-                        ? $"{AppTime.LogStampNow()}  [commentary] No teaser - it's switched off on the Commentary tab."
+                        ? $"{AppTime.LogStampNow()}  [commentary] No teaser - it's switched off on the AI Commentary tab."
                         : teaserLines.Count == 0
-                            ? $"{AppTime.LogStampNow()}  [commentary] No teaser - every teaser line is empty on the Commentary tab."
+                            ? $"{AppTime.LogStampNow()}  [commentary] No teaser - every teaser line is empty on the AI Commentary tab."
                             : $"{AppTime.LogStampNow()}  [commentary] No teaser - no recap would follow it ({noRecapBecause}).");
                 }
 
@@ -1352,7 +1374,9 @@ public sealed partial class RaceControlControl
                 // It also means the "no recap" return above opens no show
                 // at all, rather than opening one and relying on the
                 // finally to take the club's music back off the air.
-                if (ShowMusic?.Invoke() is { } treatment && treatment.Treats(SegmentKind.RaceRecap))
+                // 17 Oct 2026, Bug Hunt 8, A04-1: and none once the next race
+                // has been called - see HonoursOnTheirOwnAsync.
+                if (!nextRace.IsCancellationRequested && ShowMusic?.Invoke() is { } treatment && treatment.Treats(SegmentKind.RaceRecap))
                 {
                     // SegmentKind.RaceRecap, so the show's running order
                     // knows which shape of show this is - the recap gets a
@@ -1732,6 +1756,13 @@ public sealed partial class RaceControlControl
     private const string TheProgramme = "the race recap sequence";
 
     /// <summary>
+    /// How long the sequence's floor claim is honoured (17 Oct 2026, Bug
+    /// Hunt 8, A04-3). Generous: the finally always releases it, so the
+    /// ceiling only matters when something dies without its finally.
+    /// </summary>
+    private static readonly TimeSpan TheProgrammeLongest = TimeSpan.FromMinutes(15);
+
+    /// <summary>
     /// Heat or main, the opening and sign-off, and the mechanic - what the
     /// Commentary page asks for, for this race.
     /// </summary>
@@ -1834,7 +1865,7 @@ public sealed partial class RaceControlControl
             $"{AppTime.LogStampNow()}  [commentary] After the recap: an interview with {who}"
             + (voice is not null
                 ? $" in the voice {(voices.NameFor(engine) is { Length: > 0 } picked ? $"\"{picked}\"" : "picked for it")}"
-                : $" in the announcer's own voice - no mechanic's voice is picked for {EngineName(engine)} on the Commentary page")
+                : $" in the announcer's own voice - no mechanic's voice is picked for {EngineName(engine)} on Voice > Cast")
             + (setupFacts.Count > 0
                 ? ", with the setup the Garage has for the winning car."
                 : ". No setup is logged for the winning car, so the mechanic won't talk settings."));
@@ -1962,7 +1993,7 @@ public sealed partial class RaceControlControl
                 $"{AppTime.LogStampNow()}  [badge] In the recap: over to {who}"
                 + (voice is not null
                     ? $" in the voice {(voices.NameFor(engine) is { Length: > 0 } picked ? $"\"{picked}\"" : "picked for it")}"
-                    : $" in the announcer's own voice - no honours voice is picked for {EngineName(engine)} on the Commentary page")
+                    : $" in the announcer's own voice - no honours voice is picked for {EngineName(engine)} on Voice > Cast")
                 + $" - \"{turns[1].Line}\"");
 
             return new HonoursPlan(turns, voice, RaceHonours.Read(unlocks)?.Badges ?? 0);
@@ -2289,11 +2320,16 @@ public sealed partial class RaceControlControl
     private async Task SpeakHonoursAsync(
         HonoursPlan plan, Task<List<SpokenLine>?> rendered, ShowRun? show, CancellationToken nextRace)
     {
-        const string stopped = "Honours stopped - the next race was called to the grid. The badges are on the drivers' records.";
+        // 17 Oct 2026, Bug Hunt 8, A04-8: who stopped it - Skip, Hold or On
+        // Air stop the recap show too, and this said "the next race" for all
+        // of them. Read when it is said, since that is when it is known.
+        string Stopped() =>
+            $"Honours stopped - {Volatile.Read(ref _recapShow)?.StoppedBy ?? "the next race was called to the grid"}. "
+            + "The badges are on the drivers' records.";
 
         if (!await HeardOutAsync(nextRace))
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {stopped}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {Stopped()}");
             return;
         }
 
@@ -2301,7 +2337,7 @@ public sealed partial class RaceControlControl
 
         if (nextRace.IsCancellationRequested)
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {stopped}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {Stopped()}");
             return;
         }
 
@@ -2337,13 +2373,13 @@ public sealed partial class RaceControlControl
             {
                 if (!await HeardOutAsync(nextRace))
                 {
-                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {stopped}");
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {Stopped()}");
                     return;
                 }
 
                 if (handoffs.Contains(i) && treatment is not null && !await treatment.HandOverAsync(show, nextRace))
                 {
-                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {stopped}");
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {Stopped()}");
                     return;
                 }
             }
@@ -2985,7 +3021,7 @@ public sealed partial class RaceControlControl
             // at all: no break, no refusal, no reason. Every other way out
             // of here says what happened; this one now does too.
             StatusMessage?.Invoke(
-                $"{AppTime.LogStampNow()}  [commentary] No commercial break - it is switched off on the Commentary page "
+                $"{AppTime.LogStampNow()}  [commentary] No commercial break - it is switched off on the AI Commentary tab "
                 + "(\"Play the sponsors as a commercial break while the recap is being written\").");
 
             return;
@@ -3132,8 +3168,15 @@ public sealed partial class RaceControlControl
 
                 if (ending != BreakEnding.Running)
                 {
+                    // 17 Oct 2026, Bug Hunt 8, A04-8: Skip, Hold or On Air end
+                    // the break on the same token as the next race, and it was
+                    // reported as the next race for all of them.
+                    var why = ending == BreakEnding.NextRaceCalled && Volatile.Read(ref _recapShow)?.StoppedBy is { } by
+                        ? $"abandoned - {by}."
+                        : WhyTheBreakEnded(ending);
+
                     StatusMessage?.Invoke(
-                        $"{AppTime.LogStampNow()}  [commentary] Commercial break ran {on.TotalSeconds:0.0}s - {WhyTheBreakEnded(ending)}");
+                        $"{AppTime.LogStampNow()}  [commentary] Commercial break ran {on.TotalSeconds:0.0}s - {why}");
 
                     // Marked only where nothing else marks it - see
                     // BreakTransition.ComingBack. The recap's own opener
@@ -3279,8 +3322,11 @@ public sealed partial class RaceControlControl
             // needs none of this (a cancelled task is not a faulted one),
             // and MarkOnceAsync must keep throwing it either way because
             // MarkAsync reads that throw as "the block was abandoned".
+            //
+            // 17 Oct 2026, Bug Hunt 8, A05-3/A05-5: at the level that goes
+            // with the sting picked, and faded on a soundscape piece's Out.
             _ = treatment
-                .MarkOnceAsync(sting, treatment.BoundaryStingLevel, "break sting", nextRace)
+                .MarkOnceAsync(sting.Clip, sting.Level, "break sting", nextRace, sting.Post)
                 .ContinueWith(static done => _ = done.Exception, TaskScheduler.Default);
         }
 
@@ -3330,7 +3376,8 @@ public sealed partial class RaceControlControl
 
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Into the break - the sting plays out first.");
 
-            await treatment.MarkOnceAsync(sting, treatment.BoundaryStingLevel, "break sting", nextRace);
+            // 17 Oct 2026, Bug Hunt 8, A05-3/A05-5: see MarkTheBreak.
+            await treatment.MarkOnceAsync(sting.Clip, sting.Level, "break sting", nextRace, sting.Post);
         }
         catch (OperationCanceledException)
         {
@@ -3360,14 +3407,22 @@ public sealed partial class RaceControlControl
 
             // On the UI thread, where the director's other reads are asked
             // - its rotation is not meant to be touched from two at once.
+            //
+            // 17 Oct 2026, Bug Hunt 8, A04-6: the gap and the sponsor on
+            // screen are read in Pick too. This runs on the pool thread, and
+            // both go through the director's readers into stores the UI
+            // thread changes.
             SponsorRead? read = null;
-            var gap = director.Upcoming?.Invoke().InAbout ?? SponsorCopy.NoLimit;
+            TimeSpan? gap = null;
+            SponsorOnScreen? onScreen = null;
             SponsorRead? previous = null;
 
             void Pick()
             {
+                gap ??= director.Upcoming?.Invoke().InAbout ?? SponsorCopy.NoLimit;
+
                 // The first part, or the rest of the same copy straight on.
-                read = previous is null ? director.NextBreakRead(gap) : director.MoreOfTheBreakRead(previous, gap);
+                read = previous is null ? director.NextBreakRead(gap.Value) : director.MoreOfTheBreakRead(previous, gap.Value);
 
                 if (read is not null)
                 {
@@ -3375,6 +3430,8 @@ public sealed partial class RaceControlControl
                     // AnnouncerControl.SayTheSponsorsReadIfThereIsOne gives.
                     director.SalesReadSaid(read);
                 }
+
+                onScreen = read is null ? null : director.SponsorOnScreenFor?.Invoke(read.SponsorId);
             }
 
             CommercialBreak.ReadBegins();
@@ -3404,9 +3461,9 @@ public sealed partial class RaceControlControl
                         return;
                     }
 
-                    if (director.SponsorOnScreenFor?.Invoke(read.SponsorId) is { } onScreen)
+                    if (onScreen is { } shown)
                     {
-                        SponsorOnAir.Begin(onScreen.PictureFileName, onScreen.Name, SponsorCopy.SpokenLength(read.Text));
+                        SponsorOnAir.Begin(shown.PictureFileName, shown.Name, SponsorCopy.SpokenLength(read.Text));
                     }
 
                     StatusMessage?.Invoke(previous is null

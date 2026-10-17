@@ -87,7 +87,10 @@ internal sealed class CarriedPointsForm : Form
 
         foreach (var entry in current.OrderByDescending(e => e.Points).ThenBy(e => e.DriverName, StringComparer.CurrentCultureIgnoreCase))
         {
-            _grid.Rows.Add(entry.DriverName, entry.Points.ToString());
+            // Invariant (17 Oct 2026, Bug Hunt 8, A26-2): on sv/nb/fi Windows
+            // a negative carry-in came out with a Unicode minus, which
+            // TryParsePoints then refused on Save.
+            _grid.Rows.Add(entry.DriverName, entry.Points.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
         // Names the standings know, offered while the Driver cell is typed

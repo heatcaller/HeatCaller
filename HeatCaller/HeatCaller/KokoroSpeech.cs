@@ -217,7 +217,7 @@ internal static class KokoroSpeech
         {
             if (!IsModelAvailable)
             {
-                return "the Kokoro voice isn't downloaded on this PC yet (Voice Settings has a Download button)";
+                return "the Kokoro voice isn't downloaded on this PC yet (the Voice tab has a Download button)";
             }
 
             lock (EngineLock)
@@ -581,7 +581,7 @@ internal static class KokoroSpeech
             }
             catch (Exception ex)
             {
-                var reason = $"the Kokoro model wouldn't load ({ex.GetType().Name}: {ex.Message}) - downloading it again on Voice Settings usually fixes this";
+                var reason = $"the Kokoro model wouldn't load ({ex.GetType().Name}: {ex.Message}) - downloading it again on the Voice tab usually fixes this";
 
                 lock (EngineLock)
                 {

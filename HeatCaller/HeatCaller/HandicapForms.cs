@@ -208,6 +208,11 @@ public sealed class HandicapSuggestForm : Form
     private readonly List<DriverProfile> _roster;
     private readonly SessionHistoryStore _history;
 
+    // The class and programme the suggestions are worked out for - see
+    // HandicapStore.SessionsFor (17 Oct 2026, Bug Hunt 8, A26-1).
+    private readonly string _className;
+    private readonly RoundDefinitionStore? _rounds;
+
     private readonly NumericUpDown _numSessions = new();
     private readonly NumericUpDown _numLaps = new();
     private readonly DataGridView _grid = new();
@@ -223,11 +228,13 @@ public sealed class HandicapSuggestForm : Form
     public List<HandicapStore.Suggestion> Accepted { get; private set; } = new();
 
     public HandicapSuggestForm(HandicapStore store, List<DriverProfile> roster,
-        SessionHistoryStore history, string className)
+        SessionHistoryStore history, string className, RoundDefinitionStore? rounds = null)
     {
         _store = store;
         _roster = roster;
         _history = history;
+        _className = className;
+        _rounds = rounds;
 
         Text = $"Suggest Handicaps - {className}";
         Font = AppTheme.BodyFont;
@@ -385,7 +392,7 @@ public sealed class HandicapSuggestForm : Form
 
     private void Recalculate()
     {
-        _suggestions = _store.Suggest(_roster, _history, (int)_numSessions.Value, (int)_numLaps.Value);
+        _suggestions = _store.Suggest(_roster, _history, (int)_numSessions.Value, (int)_numLaps.Value, _className, _rounds);
 
         _grid.Rows.Clear();
 

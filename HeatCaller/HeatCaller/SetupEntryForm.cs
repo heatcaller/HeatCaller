@@ -156,80 +156,93 @@ public sealed class SetupEntryForm : Form
         // while it was built did not change that.
         WhereTimeGoes.Start("Setup Sheet", this);
 
-        _templates = templates;
-        _history = history;
-
-        Result = existing ?? new SetupEntry();
-        _template = _templates.Get(Result.ChassisTemplateId) ?? _templates.Fallback;
-
-        // Old entries predate templates - fold their fixed fields into the
-        // template's matching fields so nothing is stranded.
-        if (Result.IsLegacy)
+        // 17 Oct 2026, Bug Hunt 8, A30-6: a constructor that throws never
+        // reaches Shown or Disposed, which is what takes the timing's
+        // thread-wide window hooks off - so they stayed on, counting every
+        // UI-thread message, until the next Start. Taken off here and the
+        // failure rethrown, so nothing about it is hidden.
+        try
         {
-            Result.MigrateLegacyFields(_template);
-            _legacyFoldedInto = new HashSet<string> { _template.Id };
+            _templates = templates;
+            _history = history;
+
+            Result = existing ?? new SetupEntry();
+            _template = _templates.Get(Result.ChassisTemplateId) ?? _templates.Fallback;
+
+            // Old entries predate templates - fold their fixed fields into the
+            // template's matching fields so nothing is stranded.
+            if (Result.IsLegacy)
+            {
+                Result.MigrateLegacyFields(_template);
+                _legacyFoldedInto = new HashSet<string> { _template.Id };
+            }
+
+            // Built with its layout held, and laid out once at the end - see
+            // LayoutFreeze.HoldWhileBuilding. Forty lines of fields, each laid
+            // out again for every part added after it and every face the theme
+            // pass changed, took four seconds.
+            FillPage page;
+
+            using (LayoutFreeze.HoldWhileBuilding())
+            {
+                Text = "Setup Sheet";
+                Font = AppTheme.BodyFont;
+                BackColor = AppTheme.Background;
+
+                _editorWidth = UiLayout.AtTextSize(EditorWidth);
+
+                var (who, sheet) = BuildHeader(profiles, trackLayouts, defaultCarId);
+                BuildCanvas();
+                var footer = BuildButtons();
+                WhereTimeGoes.Mark("header");
+
+                // The diagram down the left, the width it always was; the fields
+                // beside it taking the rest, and never less than they can do with -
+                // the diagram gives way first (DiagramColumnWidth). Both take the
+                // height the header and the foot leave.
+                Beside? band = null;
+
+                band = new Beside(() => DiagramColumnWidth(band?.Width ?? 0)) { SideOnLeft = true };
+
+                // A few lines of fields - a drop-down and the gap under it for each -
+                // before the window scrolls instead.
+                band.AddFill(_fieldsHost, _ => LeastFieldLines * (_cmbTemplate.Height + UiLayout.RowGap));
+                band.AddSideFill(_canvas, _ => UiLayout.AtTextSize(DiagramLeastHeight), gapBelow: 0);
+
+                page = new FillPage();
+                page.Add(who, gapBelow: UiLayout.RowGap);
+                page.Add(sheet);
+                page.AddFill(band, band.LeastHeight);
+                page.Add(footer, gapBelow: 0);
+
+                Controls.Add(page);
+
+                // Once the fields' place is in the window, so what they are measured
+                // in is the window's face.
+                LoadTemplateIntoUi();
+
+                AppTheme.ApplyRecursively(this);
+                _themed = true;
+                WhereTimeGoes.Mark("theme pass");
+            }
+
+            WhereTimeGoes.Mark("letting go");
+
+            DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
+            WhereTimeGoes.LogWhenShown(this);
+
+            // Held while its windows are made, and let go once it is sized -
+            // see HoldUntilSized.
+            HoldUntilSized(page);
+
+            // Windows made from here are the ones showing it makes.
+            WhereTimeGoes.Built();
         }
-
-        // Built with its layout held, and laid out once at the end - see
-        // LayoutFreeze.HoldWhileBuilding. Forty lines of fields, each laid
-        // out again for every part added after it and every face the theme
-        // pass changed, took four seconds.
-        FillPage page;
-
-        using (LayoutFreeze.HoldWhileBuilding())
+        catch
         {
-            Text = "Setup Sheet";
-            Font = AppTheme.BodyFont;
-            BackColor = AppTheme.Background;
-
-            _editorWidth = UiLayout.AtTextSize(EditorWidth);
-
-            var (who, sheet) = BuildHeader(profiles, trackLayouts, defaultCarId);
-            BuildCanvas();
-            var footer = BuildButtons();
-            WhereTimeGoes.Mark("header");
-
-            // The diagram down the left, the width it always was; the fields
-            // beside it taking the rest, and never less than they can do with -
-            // the diagram gives way first (DiagramColumnWidth). Both take the
-            // height the header and the foot leave.
-            Beside? band = null;
-
-            band = new Beside(() => DiagramColumnWidth(band?.Width ?? 0)) { SideOnLeft = true };
-
-            // A few lines of fields - a drop-down and the gap under it for each -
-            // before the window scrolls instead.
-            band.AddFill(_fieldsHost, _ => LeastFieldLines * (_cmbTemplate.Height + UiLayout.RowGap));
-            band.AddSideFill(_canvas, _ => UiLayout.AtTextSize(DiagramLeastHeight), gapBelow: 0);
-
-            page = new FillPage();
-            page.Add(who, gapBelow: UiLayout.RowGap);
-            page.Add(sheet);
-            page.AddFill(band, band.LeastHeight);
-            page.Add(footer, gapBelow: 0);
-
-            Controls.Add(page);
-
-            // Once the fields' place is in the window, so what they are measured
-            // in is the window's face.
-            LoadTemplateIntoUi();
-
-            AppTheme.ApplyRecursively(this);
-            _themed = true;
-            WhereTimeGoes.Mark("theme pass");
+            WhereTimeGoes.Take();
+            throw;
         }
-
-        WhereTimeGoes.Mark("letting go");
-
-        DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
-        WhereTimeGoes.LogWhenShown(this);
-
-        // Held while its windows are made, and let go once it is sized -
-        // see HoldUntilSized.
-        HoldUntilSized(page);
-
-        // Windows made from here are the ones showing it makes.
-        WhereTimeGoes.Built();
     }
 
     /// <summary>

@@ -229,16 +229,57 @@ public sealed class RaceHorizonTests
         // place four times are the single best thing happening.
         var watch = Watching();
 
+        //
+        // Still one trail - but the RATE restarts on each swap (17 Oct 2026,
+        // Bug Hunt 8, A07-2): a rate taken across a pass mixes gaps measured
+        // against different cars and means nothing.
         Tick(watch, 5, 4, Pair("carl", "dave", 0.60));
         Tick(watch, 6, 3, Pair("dave", "carl", 0.40));
 
         Assert.Equal(1, watch.Watching);
 
-        var horizon = Tick(watch, 7, 2, Pair("carl", "dave", 0.20));
+        Assert.Null(Tick(watch, 7, 2, Pair("carl", "dave", 0.20)));
+
+        Assert.Equal(1, watch.Watching);
+
+        var horizon = Tick(watch, 8, 2, Pair("carl", "dave", 0.10));
 
         Assert.NotNull(horizon);
         Assert.Equal("carl", horizon!.AheadId);
         Assert.Equal("dave", horizon.BehindId);
+        Assert.Equal(0.10, horizon.PerLap, 3);
+    }
+
+    [Fact]
+    public void A_rate_is_not_taken_across_a_pass()
+    {
+        // 17 Oct 2026, Bug Hunt 8, A07-2: carl a second up on dave, then
+        // dave half a second up on carl, read as "closing at half a second
+        // a lap" for the car that had just lost the place.
+        var watch = Watching();
+
+        Tick(watch, 5, 4, Pair("carl", "dave", 1.0));
+
+        Assert.Null(Tick(watch, 6, 3, Pair("dave", "carl", 0.5)));
+    }
+
+    [Fact]
+    public void A_rate_under_a_twentieth_is_not_said_as_nothing()
+    {
+        // 17 Oct 2026, Bug Hunt 8, A07-5: MeaningfulRate is two hundredths,
+        // and GapSpoken calls anything under a twentieth "nothing".
+        var watch = Watching();
+
+        Tick(watch, 5, 5, Pair("carl", "dave", 0.60));
+
+        var horizon = Tick(watch, 6, 4, Pair("carl", "dave", 0.57));
+
+        Assert.NotNull(horizon);
+
+        var line = RaceHorizon.Say(horizon!, "Carl", "Dave");
+
+        Assert.DoesNotContain("nothing", line);
+        Assert.Contains("three hundredths a lap", line);
     }
 
     [Fact]

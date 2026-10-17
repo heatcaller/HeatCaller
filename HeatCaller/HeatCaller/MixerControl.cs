@@ -43,6 +43,25 @@ public sealed class MixerControl : UserControl
     private readonly CheckBox _chkDuckAmbience = new ThemedCheckBox();
     private readonly CheckBox _chkDuckMusic = new ThemedCheckBox();
 
+    // --- Every duck and the imaging levels (17 Oct 2026) ---
+    //
+    // Moved here from the Ambience, Music, Imaging and Commentary pages so
+    // every level and duck has one home. The same stored settings: the
+    // ambience and music stores, BroadcastImaging, and AppSettings for the
+    // recap's deeper duck. See RefreshSettings for how they stay current.
+    private readonly NumericUpDown _numAmbienceDuckTo = new();
+    private readonly NumericUpDown _numMusicDuckTo = new();
+    private readonly CheckBox _chkBoostVoice = new ThemedCheckBox();
+    private readonly NumericUpDown _numVoiceBoost = new();
+    private readonly CheckBox _chkRecapDuck = new ThemedCheckBox();
+    private readonly NumericUpDown _numRecapDuck = new();
+    private readonly NumericUpDown _numImagingLevel = new();
+    private readonly NumericUpDown _numImagingBedLevel = new();
+    private readonly NumericUpDown _numImagingBedDuck = new();
+
+    /// <summary>Set while the boxes above are brought into line with what is saved, so that isn't taken for an edit.</summary>
+    private bool _syncing;
+
     /// <summary>Repeats the sample announcement while auditioning, so there's always something to balance against.</summary>
     private readonly System.Windows.Forms.Timer _auditionVoice = new() { Interval = 9000 };
 
@@ -249,16 +268,13 @@ public sealed class MixerControl : UserControl
     /// </summary>
     private void BuildLayout()
     {
-        // 17 Oct 2026: it said "every sound the app makes", and the
-        // soundscape's imaging (jingles, sweepers, stingers and its beds)
-        // has no strip here - so it says where those levels are instead. Not
-        // a fifth strip: StripBank only lays out rows of one length, so five
-        // would drop from two-by-two straight to one under another.
+        // 17 Oct 2026: every level and duck is set here and nowhere else
+        // now - the four strips, the imaging levels and every duck - so the
+        // intro no longer points at other tabs for them.
         var lblIntro = new Label
         {
-            Text = "Balance the app's main sounds in one place. These are the same levels as on the other tabs - "
-                 + "changing one here changes it there. Adjustments apply immediately, so you can set the blend by ear. "
-                 + "The soundscape's jingles, stingers and music beds have their own levels on the Imaging tab.",
+            Text = "Every level and duck in one place, applied as you go so you can set the blend by ear. "
+                 + "The four faders are the main sources; below them, the imaging levels and how far everything drops while the announcer talks.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -335,7 +351,8 @@ public sealed class MixerControl : UserControl
                     return;
                 }
 
-                _announcer.SpeakReminder("Announcement level check.");
+                // Not for the listen-along page (17 Oct 2026, Bug Hunt 8, A06-10).
+                _announcer.SpeakReminder("Announcement level check.", forListeners: false);
                 _lblStatus.Text = "Speaking a test line...";
                 _lblStatus.ForeColor = AppTheme.TextMuted;
             }));
@@ -415,17 +432,28 @@ public sealed class MixerControl : UserControl
         // at the same y as its drop-down and spinner, drawn straight
         // through both.
 
-        // --- Duck toggles ---
+        // --- Ducking (17 Oct 2026: every duck in one place) ---
         //
-        // Surfaced here as well as on their own tabs: this is the page
-        // you're on when the ducking is bothering you, and hunting two
-        // other tabs to switch it off is friction at exactly the wrong
-        // moment. Same stored setting, so the two stay in step.
-        _chkDuckAmbience.Text = "Ambience";
+        // The two duck ticks were here as well as on their own tabs, and how
+        // far each one drops was only on its tab. The Voice + Sounds regroup
+        // gave every level and duck one home, and this is it: the ticks and
+        // their amounts (from Ambience and Music), the voice lift over a
+        // loud crowd (from Ambience), and the recap's deeper duck (from the
+        // Commentary page's Race recap card). Same stored settings as ever -
+        // only where they are shown has changed.
+        //
+        // Each tick's caption ends the sentence its box completes ("...down
+        // to [ 35 ] %"), so the two share a line.
+        _chkDuckAmbience.Text = "Duck under announcements, down to";
         _chkDuckAmbience.AutoSize = true;
         _chkDuckAmbience.Checked = _ambienceStore.Current.DuckUnderAnnouncements;
         _chkDuckAmbience.CheckedChanged += (_, _) =>
         {
+            if (_syncing)
+            {
+                return;
+            }
+
             _ambienceStore.Current.DuckUnderAnnouncements = _chkDuckAmbience.Checked;
             _ambienceStore.Save();
             _ambience.Settings = _ambienceStore.Current;
@@ -436,13 +464,36 @@ public sealed class MixerControl : UserControl
             {
                 _ambience.SetDucked(false);
             }
+
+            UpdateDuckState();
         };
 
-        _chkDuckMusic.Text = "Music";
+        _numAmbienceDuckTo.Minimum = 5;
+        _numAmbienceDuckTo.Maximum = 100;
+        _numAmbienceDuckTo.Increment = 5;
+        _numAmbienceDuckTo.Value = ToBox(_ambienceStore.Current.DuckToFraction * 100f, 5f, 100f);
+        _numAmbienceDuckTo.ValueChanged += (_, _) =>
+        {
+            if (_syncing)
+            {
+                return;
+            }
+
+            _ambienceStore.Current.DuckToFraction = (float)_numAmbienceDuckTo.Value / 100f;
+            _ambienceStore.Save();
+            _ambience.Settings = _ambienceStore.Current;
+        };
+
+        _chkDuckMusic.Text = "Duck under announcements, down to";
         _chkDuckMusic.AutoSize = true;
         _chkDuckMusic.Checked = _musicStore.Current.DuckUnderAnnouncements;
         _chkDuckMusic.CheckedChanged += (_, _) =>
         {
+            if (_syncing)
+            {
+                return;
+            }
+
             _musicStore.Current.DuckUnderAnnouncements = _chkDuckMusic.Checked;
             _musicStore.Save();
             _music.Settings = _musicStore.Current;
@@ -451,16 +502,158 @@ public sealed class MixerControl : UserControl
             {
                 _music.SetDucked(false);
             }
+
+            UpdateDuckState();
+        };
+
+        _numMusicDuckTo.Minimum = 5;
+        _numMusicDuckTo.Maximum = 100;
+        _numMusicDuckTo.Increment = 5;
+        _numMusicDuckTo.Value = ToBox(_musicStore.Current.DuckToFraction * 100f, 5f, 100f);
+        _numMusicDuckTo.ValueChanged += (_, _) =>
+        {
+            if (_syncing)
+            {
+                return;
+            }
+
+            _musicStore.Current.DuckToFraction = (float)_numMusicDuckTo.Value / 100f;
+            _musicStore.Save();
+            _music.Settings = _musicStore.Current;
+        };
+
+        _chkBoostVoice.Text = "Lift the voice when the crowd is loud, up to x";
+        _chkBoostVoice.AutoSize = true;
+        _chkBoostVoice.Checked = _ambienceStore.Current.BoostVoiceOverAmbience;
+        _chkBoostVoice.CheckedChanged += (_, _) =>
+        {
+            if (_syncing)
+            {
+                return;
+            }
+
+            _ambienceStore.Current.BoostVoiceOverAmbience = _chkBoostVoice.Checked;
+            _ambienceStore.Save();
+            _ambience.Settings = _ambienceStore.Current;
+            UpdateDuckState();
+        };
+
+        _numVoiceBoost.DecimalPlaces = 1;
+        _numVoiceBoost.Increment = 0.1m;
+        _numVoiceBoost.Minimum = 1.0m;
+        _numVoiceBoost.Maximum = 2.0m;
+        _numVoiceBoost.Value = ToBox(_ambienceStore.Current.VoiceBoostMultiplier, 1.0f, 2.0f);
+        _numVoiceBoost.ValueChanged += (_, _) =>
+        {
+            if (_syncing)
+            {
+                return;
+            }
+
+            _ambienceStore.Current.VoiceBoostMultiplier = (float)_numVoiceBoost.Value;
+            _ambienceStore.Save();
+            _ambience.Settings = _ambienceStore.Current;
+        };
+
+        _chkRecapDuck.Text = "Duck music and crowd further, down to";
+        _chkRecapDuck.AutoSize = true;
+        _chkRecapDuck.Checked = _settings.SummaryDeepDuck;
+        _chkRecapDuck.CheckedChanged += (_, _) =>
+        {
+            if (_syncing)
+            {
+                return;
+            }
+
+            _settings.SummaryDeepDuck = _chkRecapDuck.Checked;
+            _settings.Save();
+            UpdateDuckState();
+        };
+
+        _numRecapDuck.Minimum = 2;
+        _numRecapDuck.Maximum = 100;
+        _numRecapDuck.Value = Math.Clamp(_settings.SummaryDuckPercent, 2, 100);
+        _numRecapDuck.ValueChanged += (_, _) =>
+        {
+            if (_syncing)
+            {
+                return;
+            }
+
+            _settings.SummaryDuckPercent = (int)_numRecapDuck.Value;
+            _settings.Save();
         };
 
         var duckGrid = new FieldGrid();
 
-        duckGrid.AddRow("Duck under announcements:", Choices(_chkDuckAmbience, _chkDuckMusic), stretch: true);
-        duckGrid.AddHint("off means the bed stays at full level while the announcer talks - set how far it drops on each source's own tab");
+        duckGrid.AddRow("Ambience:", FieldGrid.Inline(_chkDuckAmbience, _numAmbienceDuckTo, new Label { Text = "%" }));
+        duckGrid.AddRow("Music:", FieldGrid.Inline(_chkDuckMusic, _numMusicDuckTo, new Label { Text = "%" }));
+        duckGrid.AddHint("Pulling the bed down reads clearer than pushing the voice up. Untick one and it stays at full level while the announcer talks.");
+        duckGrid.AddRow("Voice lift:", FieldGrid.Inline(_chkBoostVoice, _numVoiceBoost));
+        duckGrid.AddHint("Scaled by how loud the crowd bed actually is - no lift over a quiet one.");
+        duckGrid.AddRow("Race recap:", FieldGrid.Inline(_chkRecapDuck, _numRecapDuck, new Label { Text = "%" }));
+        duckGrid.AddHint("An extra drop for the half-minute race recap, so music and crowd don't compete with it. "
+                       + "Needs AI commentary's race recaps on (Voice > AI Commentary).");
 
-        var duckCard = new Section();
+        var duckCard = new Section("Ducking");
 
         duckCard.Add(duckGrid, gapBelow: 0);
+
+        // --- Imaging levels (17 Oct 2026) ---
+        //
+        // The soundscape's jingles, sweepers, bumpers and stingers, and its
+        // music beds - moved here from the Imaging tab's "Level and timing"
+        // card. Not three more strips: StripBank lays out rows of one
+        // length, and these are not sources with a live state to show.
+        // Same ranges as the Imaging tab's boxes had.
+        _numImagingLevel.Minimum = 0;
+        _numImagingLevel.Maximum = 100;
+        _numImagingLevel.Increment = 5;
+        _numImagingLevel.Value = Math.Clamp(BroadcastImaging.Level, 0, 100);
+        _numImagingLevel.ValueChanged += (_, _) =>
+        {
+            if (!_syncing)
+            {
+                BroadcastImaging.Level = (int)_numImagingLevel.Value;
+            }
+        };
+
+        _numImagingBedLevel.Minimum = 2;
+        _numImagingBedLevel.Maximum = 100;
+        _numImagingBedLevel.Value = Math.Clamp(BroadcastImaging.BedLevelPercent, 2, 100);
+        _numImagingBedLevel.ValueChanged += (_, _) =>
+        {
+            if (!_syncing)
+            {
+                BroadcastImaging.BedLevelPercent = (int)_numImagingBedLevel.Value;
+            }
+        };
+
+        _numImagingBedDuck.Minimum = 5;
+        _numImagingBedDuck.Maximum = 100;
+        _numImagingBedDuck.Value = Math.Clamp(BroadcastImaging.BedDuckPercent, 5, 100);
+        _numImagingBedDuck.ValueChanged += (_, _) =>
+        {
+            if (!_syncing)
+            {
+                BroadcastImaging.BedDuckPercent = (int)_numImagingBedDuck.Value;
+            }
+        };
+
+        Label Muted(string text) => _textSize.Wear(
+            new Label { Text = text, AutoSize = true, ForeColor = AppTheme.TextMuted },
+            () => AppTheme.SmallFont);
+
+        var imagingGrid = new FieldGrid();
+
+        imagingGrid.AddRow("Imaging pieces:", FieldGrid.Inline(_numImagingLevel, Muted("%  - jingles, sweepers, bumpers and stingers")));
+        imagingGrid.AddRow("Imaging beds:", FieldGrid.Inline(_numImagingBedLevel, Muted("%  - the soundscape's music beds, low on purpose")));
+        imagingGrid.AddRow("Beds under voice:", FieldGrid.Inline(_numImagingBedDuck, Muted("% of the bed level while the announcer speaks")));
+        imagingGrid.AddHint("The pieces and run of show are on the Imaging tab, and so are the club's own show music levels (Show treatment).");
+
+        var imagingCard = new Section("Imaging levels");
+
+        imagingCard.Add(imagingGrid, gapBelow: 0);
 
         // --- When a session starts ---
         //
@@ -586,10 +779,8 @@ public sealed class MixerControl : UserControl
         endGrid.AddRow("Music after the recap:", FieldGrid.Inline(_cmbMusicEnd, lblFadeOver, _numMusicFade, lblFadeSuffix));
         // It used to promise that only what auto-start brought up is
         // stopped - but a crowd or music started by hand is ended too.
-        endGrid.AddHint("Stops whatever is playing then, even if you started it by hand. "
-                      + "Ambience waits for the finish celebration to play out first. "
-                      + "With Music ticked above, the music stops at the flag and the choice after the recap doesn't apply. "
-                      + "Music after the recap is for races only, so it needs Start for: Races.");
+        endGrid.AddHint("Stops whatever is playing, even if started by hand (ambience lets the finish celebration play out first). "
+                      + "Music after the recap is for races only and needs Start for: Races; ticking Music above overrides it.");
 
         var endCard = new Section("When it ends");
 
@@ -699,6 +890,7 @@ public sealed class MixerControl : UserControl
         page.Add(lblIntro, gapBelow: UiLayout.HintGap);
         page.Add(warningLine, gapBelow: UiLayout.RowGap);
         page.Add(strips);
+        page.Add(imagingCard);
         page.Add(duckCard);
         page.Add(startCard);
         page.Add(endCard);
@@ -711,7 +903,7 @@ public sealed class MixerControl : UserControl
         // WinForms default. Then again whenever the text size changes.
         //
         // The four cards' captions in one column.
-        _textSize.Keep(() => FieldGrid.LineUp(new[] { duckGrid, startGrid, endGrid, auditionGrid }));
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { imagingGrid, duckGrid, startGrid, endGrid, auditionGrid }));
 
         // The drop-downs and the number boxes at the text size in use - see
         // SizeFields.
@@ -719,6 +911,101 @@ public sealed class MixerControl : UserControl
 
         RefreshMeters();
         UpdateAutoStartState();
+        UpdateDuckState();
+    }
+
+    /// <summary>
+    /// Greys the duck amounts whose tick is off, and the recap's deeper duck
+    /// while there are no recaps: it was on the Commentary page's Race recap
+    /// card, which went dark with recaps, and it does nothing without one.
+    /// </summary>
+    private void UpdateDuckState()
+    {
+        _numAmbienceDuckTo.Enabled = _chkDuckAmbience.Checked;
+        _numMusicDuckTo.Enabled = _chkDuckMusic.Checked;
+        _numVoiceBoost.Enabled = _chkBoostVoice.Checked;
+
+        var recapsOn = _settings.CommentaryEnabled && _settings.CommentaryRaceSummaries;
+
+        _chkRecapDuck.Enabled = recapsOn;
+        _numRecapDuck.Enabled = recapsOn && _chkRecapDuck.Checked;
+    }
+
+    /// <summary>
+    /// Brings the ducks and the imaging levels into line with what is saved.
+    ///
+    /// The faders follow their stores on the meter timer (RefreshMeters);
+    /// these are read when the page is shown and when the host asks
+    /// (RefreshAll) - an undo on the Ambience or Music tab, a soundscape
+    /// applied, or recaps switched off on the Commentary page can all change
+    /// them while this page is hidden. Only a box that differs is set, and
+    /// none of it counts as an edit.
+    /// </summary>
+    private void RefreshSettings()
+    {
+        _syncing = true;
+
+        try
+        {
+            SetIfDifferent(_chkDuckAmbience, _ambienceStore.Current.DuckUnderAnnouncements);
+            // Clamped as a float BEFORE the decimal cast (17 Oct 2026, Bug
+            // Hunt 8, A13-2): a huge, infinite or NaN value from a hand-edited
+            // file threw OverflowException here and took the page down.
+            SetNumber(_numAmbienceDuckTo, ToBox(_ambienceStore.Current.DuckToFraction * 100f, 5f, 100f));
+            SetIfDifferent(_chkDuckMusic, _musicStore.Current.DuckUnderAnnouncements);
+            SetNumber(_numMusicDuckTo, ToBox(_musicStore.Current.DuckToFraction * 100f, 5f, 100f));
+            SetIfDifferent(_chkBoostVoice, _ambienceStore.Current.BoostVoiceOverAmbience);
+            SetNumber(_numVoiceBoost, ToBox(_ambienceStore.Current.VoiceBoostMultiplier, 1.0f, 2.0f));
+            SetIfDifferent(_chkRecapDuck, _settings.SummaryDeepDuck);
+            SetNumber(_numRecapDuck, _settings.SummaryDuckPercent);
+            SetNumber(_numImagingLevel, BroadcastImaging.Level);
+            SetNumber(_numImagingBedLevel, BroadcastImaging.BedLevelPercent);
+            SetNumber(_numImagingBedDuck, BroadcastImaging.BedDuckPercent);
+        }
+        finally
+        {
+            _syncing = false;
+        }
+
+        UpdateDuckState();
+
+        static void SetIfDifferent(CheckBox box, bool value)
+        {
+            if (box.Checked != value)
+            {
+                box.Checked = value;
+            }
+        }
+
+        static void SetNumber(NumericUpDown box, decimal value)
+        {
+            var clamped = Math.Clamp(Math.Round(value, box.DecimalPlaces), box.Minimum, box.Maximum);
+
+            if (box.Value != clamped)
+            {
+                box.Value = clamped;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A stored float level as a box value, clamped in FLOAT space first -
+    /// a float above about 7.9e28, an infinity or NaN throws on the cast to
+    /// decimal. NaN (which Math.Clamp passes through) reads as the minimum.
+    /// 17 Oct 2026, Bug Hunt 8, A13-2.
+    /// </summary>
+    internal static decimal ToBox(float value, float min, float max) =>
+        (decimal)Math.Clamp(float.IsNaN(value) ? min : value, min, max);
+
+    /// <summary>Shown again: the ducks and imaging levels are read afresh - see RefreshSettings.</summary>
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+
+        if (Visible)
+        {
+            RefreshSettings();
+        }
     }
 
     /// <summary>
@@ -751,6 +1038,11 @@ public sealed class MixerControl : UserControl
         Fit(_cmbMusicEnd, Math.Max(UiLayout.AtTextSize(MusicEndPickerWidth), Pieces.PickerWidth(_cmbMusicEnd, ref _musicEndWidth)));
         Fit(_numMusicFade, NumberWidth(_numMusicFade));
         Fit(_numAnnounceEvery, NumberWidth(_numAnnounceEvery));
+
+        foreach (var box in new[] { _numAmbienceDuckTo, _numMusicDuckTo, _numVoiceBoost, _numRecapDuck, _numImagingLevel, _numImagingBedLevel, _numImagingBedDuck })
+        {
+            Fit(box, NumberWidth(box));
+        }
 
         foreach (var box in _levelBoxes)
         {
@@ -984,8 +1276,9 @@ public sealed class MixerControl : UserControl
     /// </summary>
     private void SpeakAuditionLine()
     {
+        // Not for the listen-along page (17 Oct 2026, Bug Hunt 8, A06-10).
         _announcer.SpeakReminder(
-            "Level check. This is how an announcement sounds over the music and the crowd.");
+            "Level check. This is how an announcement sounds over the music and the crowd.", forListeners: false);
 
         // A sound effect alongside it, since that's a fourth level to set
         // and it's the one most easily lost under everything else.
@@ -1436,7 +1729,11 @@ public sealed class MixerControl : UserControl
         }
     }
 
-    public void RefreshAll() => RefreshMeters();
+    public void RefreshAll()
+    {
+        RefreshMeters();
+        RefreshSettings();
+    }
 
     /// <summary>
     /// "Bring up:" as settings now have it - changed from outside this page

@@ -303,6 +303,22 @@ public sealed partial class RaceControlControl
 
                 // Practice and quick starts skip staging - same reset.
                 _announcer.ResetSession();
+
+                // 17 Oct 2026, Bug Hunt 8, A29-2: the room's vote closes at
+                // the green - a prediction gathered after the flag is not a
+                // prediction. A demo never touches the vote, as in
+                // SettleTheRoomsVote.
+                if (!_race.IsDemoMode)
+                {
+                    try
+                    {
+                        TonightsVote?.Invoke()?.StartedRace(_activeRound?.Invoke()?.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The room's vote could not be closed at the green: {ex.Message}");
+                    }
+                }
             }
 
             // Also covers the demo and remote paths, which don't go through

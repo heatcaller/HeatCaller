@@ -12,6 +12,14 @@ namespace HeatCaller;
 /// soundscape is in use. Where several files could play at a point, one is
 /// picked at random and none repeats until all have played - see
 /// BroadcastImaging.
+///
+/// THE SOUNDS REGROUP (17 Oct 2026): the pieces' and beds' levels moved to
+/// the Mixer, where every level and duck now lives - Post timing stays
+/// here, beside the marks it nudges. And the club's own show music moved
+/// here from the Commentary page as the Show treatment card
+/// (ShowTreatmentCard), since it is what plays where the soundscape has no
+/// imaging. The ON/OFF tick now greys the imaging part of the page, not
+/// only its own caption.
 /// </summary>
 public sealed class BroadcastImagingControl : UserControl
 {
@@ -23,13 +31,12 @@ public sealed class BroadcastImagingControl : UserControl
     private readonly DataGridView _grid = new();
     private readonly ComboBox _cmbElement = new();
     private readonly Label _lblStatus = new();
-    private readonly NumericUpDown _numLevel = new();
 
-    /// <summary>The soundscape's music beds under the voice (17 Oct 2026) - see BroadcastImaging.BedLevelPercent.</summary>
-    private readonly NumericUpDown _numBedLevel = new();
+    /// <summary>The club's own show music, the last card on the page - see ShowTreatmentCard.</summary>
+    private readonly ShowTreatmentCard _showTreatment;
 
-    /// <summary>How far those beds drop while the announcer speaks - see BroadcastImaging.BedDuckPercent.</summary>
-    private readonly NumericUpDown _numBedDuck = new();
+    /// <summary>The imaging cards the ON/OFF tick greys - the soundscape, its pieces, the run of show and the post timing.</summary>
+    private readonly List<Control> _imagingCards = new();
     /// <summary>The selected piece's OUT - the mark the app called its post until 17 Oct 2026. See TalkUp.</summary>
     private readonly NumericUpDown _numPost = new();
     private readonly Label _lblPostSource = new();
@@ -95,7 +102,7 @@ public sealed class BroadcastImagingControl : UserControl
     /// <summary>What a row of the list is.</summary>
     private sealed record PieceRow(ImagingElement Element, string Path);
 
-    public BroadcastImagingControl(ThemeStore themes)
+    public BroadcastImagingControl(ThemeStore themes, AppSettings settings)
     {
         _themes = themes;
 
@@ -103,6 +110,8 @@ public sealed class BroadcastImagingControl : UserControl
         ForeColor = AppTheme.TextDark;
 
         _textSize.Wear(this, () => AppTheme.BodyFont);
+
+        _showTreatment = new ShowTreatmentCard(settings, _textSize);
 
         BuildLayout();
         RefreshAll();
@@ -122,7 +131,17 @@ public sealed class BroadcastImagingControl : UserControl
         _textSize.Apply();
     }
 
-    /// <summary>A preview left playing when the page is put away is stopped with it.</summary>
+    /// <summary>
+    /// The Show treatment card, for the host to hook up to the announcer -
+    /// see MainForm.Commentary.cs, WireShowMusic.
+    /// </summary>
+    internal ShowTreatmentCard ShowTreatment => _showTreatment;
+
+    /// <summary>
+    /// A preview left playing when the page is put away is stopped with it.
+    /// Shown, the Show treatment card is set out again: the commentary
+    /// switch and the soundscape in use are changed on other pages.
+    /// </summary>
     protected override void OnVisibleChanged(EventArgs e)
     {
         base.OnVisibleChanged(e);
@@ -130,6 +149,10 @@ public sealed class BroadcastImagingControl : UserControl
         if (!Visible)
         {
             StopPreview();
+        }
+        else
+        {
+            _showTreatment.RefreshAll();
         }
     }
 
@@ -167,15 +190,18 @@ public sealed class BroadcastImagingControl : UserControl
 
         RefreshPieces();
         RefreshRunOfShow();
+
+        // Switching imaging on or off, or a soundscape gaining or losing
+        // its pieces, decides whether the club's own pieces are folded away.
+        _showTreatment.RefreshImagingFold();
     }
 
     private void BuildLayout()
     {
         var lblIntro = new Label
         {
-            Text = "BROADCAST IMAGING. Makes race night sound like an FM station: every soundscape has its own jingles, sweepers, bumpers, "
-                 + "stingers and music beds, and the run of show below says where each one plays. Where there is more than "
-                 + "one of a kind, one is picked at random each time and none plays twice until they all have.",
+            Text = "BROADCAST IMAGING. Jingles, sweepers, bumpers, stingers and music beds that make race night sound like a radio station. "
+                 + "Each soundscape has its own (several of a kind take turns at random); Run of show below says where each one plays.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -195,8 +221,8 @@ public sealed class BroadcastImagingControl : UserControl
 
         var lblEnabledHint = new Label
         {
-            Text = "Off and nothing on this page plays - the race night sounds exactly as it did without it. "
-                 + "On Air, in front of Stage on Race Control, plays the top of the race; the rest follows the race on its own.",
+            Text = "Off: no imaging plays, and the club's own show music below plays where it is set up. "
+                 + "On: On Air on Race Control starts the show; the rest follows the race on its own.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -222,8 +248,7 @@ public sealed class BroadcastImagingControl : UserControl
         var soundscapeGrid = new FieldGrid();
         soundscapeGrid.AddRow("Soundscape:", FieldGrid.Inline(_cmbSoundscape, _lblSoundscape));
         soundscapeGrid.AddHint(
-            "Each soundscape only ever plays its own pieces. The one in use on the Soundscapes tab is what the race "
-            + "night hears; any of them can be set up here.");
+            "Race night plays the soundscape in use on the Soundscapes tab; any of them can be set up here.");
 
         // --- The pieces --------------------------------------------------
 
@@ -322,17 +347,12 @@ public sealed class BroadcastImagingControl : UserControl
         var postGrid = new FieldGrid();
         postGrid.AddRow("Post at:", FieldGrid.Inline(_numTalkUp, new Label { Text = "s" }, btnMarkTalkUp, btnSetTalkUp, btnClearTalkUp, btnPlayToTalkUp, _lblTalkUpRoom));
         postGrid.AddHint(
-            "The POST is where the piece's own voice or singing comes in. The announcer talks over the intro in front of it "
-            + "and stops right on it - hitting the post, no gap between the two voices. Press Play and then Mark Post the "
-            + "instant you hear the piece's voice, or type it and press Set Post. Play to Post plays the intro and stops on the "
-            + "mark. Reset puts the post back at the top of the piece: no intro to talk over, so the piece starts as the last "
-            + "word ends - right for a stinger with no voice in it.");
+            "POST: where the piece's own voice comes in - the announcer talks over the intro and stops right on it. "
+            + "Press Play, then Mark Post when you hear the voice; Reset means no intro (right for a stinger).");
         postGrid.AddRow("Out at:", FieldGrid.Inline(_numPost, new Label { Text = "s" }, btnMarkOut, btnSetPost, btnAutoPost, btnPlayPost, _lblPostSource));
         postGrid.AddHint(
-            "The OUT is where the piece's own voice stops and only music is left - on a jingle, the instant the sung part "
-            + "ends. The next line starts right on it, and whatever the piece still has crossfades away underneath, so "
-            + "nothing is ever cut short. Mark Out works like Mark Post, and Set Out takes a typed time. Reset puts the out "
-            + "back on the mark the piece ships with, or one measured from the piece.");
+            "OUT: where the piece's voice ends and only music is left - the next line starts there as the music fades. "
+            + "Mark it the same way; Reset goes back to the piece's own mark.");
 
         var btnRemove = new Button { Text = "Remove" };
         btnRemove.Click += (_, _) => RemoveSelected();
@@ -348,9 +368,8 @@ public sealed class BroadcastImagingControl : UserControl
 
         var lblAddHint = new Label
         {
-            Text = "Add Files copies the files into the club's data as the element picked beside it, named for the "
-                 + "soundscape and the element - \"Classic Jingle 5\" - so moving the originals afterwards loses nothing. "
-                 + "Restore Element Defaults puts the element picked beside Add Files back to what the soundscape ships with.",
+            Text = "Add Files copies the files into the club's data as the element picked beside it, so moving the originals loses nothing. "
+                 + "Restore Element Defaults puts that element back to what the soundscape ships with.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -405,14 +424,10 @@ public sealed class BroadcastImagingControl : UserControl
 
         var lblRunHint = new Label
         {
-            Text = "The night runs: jingle or sweeper  ->  opening, in at the jingle's out over the opening bed  ->  bumper, "
-                 + "with the opening hitting its post  ->  staging call at the bumper's out  ...  race over: the teaser hits "
-                 + "the bumper's post  ->  stop set  ->  jingle or sweeper  ->  race recap open  ->  the recap host in at its "
-                 + "out, over the recap bed  ->  stinger between parts, each part hitting its post  ->  the host's last word "
-                 + "hits the closing bumper's post. The first part is On Air's, on Race Control. Hitting the post needs a line "
-                 + "rendered ahead of time - the opening, the teaser and the recap's lines are - and an intro no longer than "
-                 + "the line in front of it. Every piece plays whole: nothing is cut, and a point whose soundscape has none of "
-                 + "what it is set to simply plays nothing.",
+            Text = "Before the race (On Air on Race Control): jingle or sweeper  ->  the opening, over the opening bed  ->  bumper  ->  staging call. "
+                 + "After the flag: the teaser  ->  bumper  ->  stop set (sponsors)  ->  jingle or sweeper  ->  recap open  ->  "
+                 + "the recap host over the recap bed, a stinger between parts  ->  closing bumper. "
+                 + "A point set to something the soundscape doesn't have plays nothing.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -423,53 +438,6 @@ public sealed class BroadcastImagingControl : UserControl
         run.Add(lblRunHint);
         run.Add(runGrid);
         run.Add(new ButtonBar().With(btnRestoreRun), gapBelow: 0);
-
-        // --- Levels ------------------------------------------------------
-
-        _numLevel.Minimum = 0;
-        _numLevel.Maximum = 100;
-        _numLevel.Increment = 5;
-        _numLevel.ValueChanged += (_, _) =>
-        {
-            if (!_filling)
-            {
-                BroadcastImaging.Level = (int)_numLevel.Value;
-            }
-        };
-
-        var lblLevelSuffix = new Label { Text = "%  - the jingles, sweepers, bumpers and stingers", AutoSize = true, ForeColor = AppTheme.TextMuted };
-        _textSize.Wear(lblLevelSuffix, () => AppTheme.SmallFont);
-
-        // THE BEDS' OWN LEVEL (17 Oct 2026). The On Air opening bed and the
-        // recap bed took the Commentary page's show bed level, which greys
-        // out when the club's own show music is unticked - so a club on the
-        // soundscape alone had a bed level it could not reach. Same ranges
-        // as the Commentary page's boxes.
-        _numBedLevel.Minimum = 2;
-        _numBedLevel.Maximum = 100;
-        _numBedLevel.ValueChanged += (_, _) =>
-        {
-            if (!_filling)
-            {
-                BroadcastImaging.BedLevelPercent = (int)_numBedLevel.Value;
-            }
-        };
-
-        var lblBedLevelSuffix = new Label { Text = "%  - the soundscape's music beds; a bed sits well under the voice, so this is low on purpose", AutoSize = true, ForeColor = AppTheme.TextMuted };
-        _textSize.Wear(lblBedLevelSuffix, () => AppTheme.SmallFont);
-
-        _numBedDuck.Minimum = 5;
-        _numBedDuck.Maximum = 100;
-        _numBedDuck.ValueChanged += (_, _) =>
-        {
-            if (!_filling)
-            {
-                BroadcastImaging.BedDuckPercent = (int)_numBedDuck.Value;
-            }
-        };
-
-        var lblBedDuckSuffix = new Label { Text = "% of the bed level while the announcer is actually speaking", AutoSize = true, ForeColor = AppTheme.TextMuted };
-        _textSize.Wear(lblBedDuckSuffix, () => AppTheme.SmallFont);
 
         // THE NUDGE (17 Oct 2026) - one setting for every post, for taste:
         // some like the piece's voice right on the last word, some a hair
@@ -488,19 +456,21 @@ public sealed class BroadcastImagingControl : UserControl
 
         var lblNudgeSuffix = new Label
         {
-            Text = "s  - below zero brings the piece's voice in a touch before the announcer's last word ends, above zero a touch after",
+            Text = "s  - below zero the piece's voice comes in a touch early, above zero a touch late",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
         _textSize.Wear(lblNudgeSuffix, () => AppTheme.SmallFont);
 
+        // THE LEVELS ARE THE MIXER'S (17 Oct 2026): the pieces' level, the
+        // beds' level and how far the beds drop under the voice moved there
+        // with every other level and duck. The timing stays, beside the
+        // marks it nudges.
         var levelGrid = new FieldGrid();
-        levelGrid.AddRow("Level:", FieldGrid.Inline(_numLevel, lblLevelSuffix));
-        levelGrid.AddRow("Bed level:", FieldGrid.Inline(_numBedLevel, lblBedLevelSuffix));
-        levelGrid.AddRow("Under the voice:", FieldGrid.Inline(_numBedDuck, lblBedDuckSuffix));
         levelGrid.AddRow("Post timing:", FieldGrid.Inline(_numNudge, lblNudgeSuffix));
+        levelGrid.AddHint("The pieces' and beds' levels are on the Mixer tab.");
 
-        var levels = new Section("Level and timing");
+        var levels = new Section("Timing");
         levels.Add(levelGrid, gapBelow: 0);
 
         // --- The page ----------------------------------------------------
@@ -516,7 +486,10 @@ public sealed class BroadcastImagingControl : UserControl
         page.Add(top);
         page.AddFill(pieces, pieces.LeastHeight);
         page.Add(run);
-        page.Add(levels, gapBelow: 0);
+        page.Add(levels);
+        page.Add(_showTreatment.Card, gapBelow: 0);
+
+        _imagingCards.AddRange(new Control[] { top, pieces, run, levels });
 
         Controls.Add(page);
 
@@ -536,9 +509,6 @@ public sealed class BroadcastImagingControl : UserControl
             _cueWidths[cue] = kept;
         }
 
-        Fit(_numLevel, NumberWidth(_numLevel));
-        Fit(_numBedLevel, NumberWidth(_numBedLevel));
-        Fit(_numBedDuck, NumberWidth(_numBedDuck));
         Fit(_numPost, NumberWidth(_numPost));
         Fit(_numTalkUp, NumberWidth(_numTalkUp));
         Fit(_numNudge, NumberWidth(_numNudge));
@@ -571,9 +541,6 @@ public sealed class BroadcastImagingControl : UserControl
         try
         {
             _chkEnabled.Checked = BroadcastImaging.Enabled;
-            _numLevel.Value = Math.Clamp(BroadcastImaging.Level, (int)_numLevel.Minimum, (int)_numLevel.Maximum);
-            _numBedLevel.Value = Math.Clamp(BroadcastImaging.BedLevelPercent, (int)_numBedLevel.Minimum, (int)_numBedLevel.Maximum);
-            _numBedDuck.Value = Math.Clamp(BroadcastImaging.BedDuckPercent, (int)_numBedDuck.Minimum, (int)_numBedDuck.Maximum);
             _numNudge.Value = Math.Clamp((decimal)BroadcastImaging.PostNudge, _numNudge.Minimum, _numNudge.Maximum);
 
             var keep = (SelectedSoundscape ?? BroadcastImaging.Active)?.Id;
@@ -609,6 +576,7 @@ public sealed class BroadcastImagingControl : UserControl
         RefreshPieces();
         RefreshRunOfShow();
         SizeFields();
+        _showTreatment.RefreshAll();
     }
 
     private Theme? SelectedSoundscape => (_cmbSoundscape.SelectedItem as SoundscapeItem)?.Theme;
@@ -619,8 +587,29 @@ public sealed class BroadcastImagingControl : UserControl
 
     private void UpdateEnabledLook()
     {
-        _chkEnabled.Text = BroadcastImaging.Enabled ? "Broadcast imaging ON" : "Broadcast imaging OFF";
-        _chkEnabled.ForeColor = BroadcastImaging.Enabled ? AppTheme.Success : AppTheme.TextMuted;
+        var on = BroadcastImaging.Enabled;
+
+        _chkEnabled.Text = on ? "Broadcast imaging ON" : "Broadcast imaging OFF";
+        _chkEnabled.ForeColor = on ? AppTheme.Success : AppTheme.TextMuted;
+
+        // AND THE PAGE SAYS SO (17 Oct 2026). Only the caption used to
+        // change, and everything under it stayed live for a feature that
+        // was off. The imaging cards grey; the Show treatment card does not
+        // - it is the club's own music, and plays where imaging does not.
+        // A preview playing is stopped with them, as nothing here plays
+        // while imaging is off.
+        if (!on)
+        {
+            StopPreview();
+        }
+
+        foreach (var card in _imagingCards)
+        {
+            if (card.Enabled != on)
+            {
+                card.Enabled = on;
+            }
+        }
     }
 
     private void RefreshPieces()

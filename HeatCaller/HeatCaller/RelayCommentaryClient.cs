@@ -228,18 +228,20 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
             // and a half-written last turn is dropped there, where the
             // structure is understood. Trimming by sentence here would take
             // a whole turn off a conversation that was perfectly fine.
-            if (!trimCutOff || LlmText.AsksForTaggedTurns(userPrompt) || EndsFinished(written))
+            var finished = Finish(written, userPrompt, maxTokens, trimCutOff, out var cutOff);
+
+            if (cutOff)
             {
-                return written;
+                StatusMessage?.Invoke(finished is null
+                    ? "[brain] The relay's answer was cut off before it finished a sentence - not used."
+                    : "[brain] The relay's answer was cut off - kept it up to the last complete sentence.");
+            }
+            else if (finished is null)
+            {
+                StatusMessage?.Invoke("[brain] The relay's line was empty or too long once tidied - not used.");
             }
 
-            var whole = LlmText.UpToLastWholeSentence(written);
-
-            StatusMessage?.Invoke(whole is null
-                ? "[brain] The relay's answer was cut off before it finished a sentence - not used."
-                : "[brain] The relay's answer was cut off - kept it up to the last complete sentence.");
-
-            return whole;
+            return finished;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -336,6 +338,36 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
     /// The club's month as the relay tells it, for the console - and, on
     /// the way past, for anything listening on AllowanceSeen.
     /// </summary>
+    /// <summary>
+    /// What is done to the relay's text before it is handed on. The cut-off
+    /// rule is as described in GenerateCoreAsync. 17 Oct 2026, Bug Hunt 8,
+    /// A08-5: the relay's line now goes through LlmText.CleanLine like both
+    /// local brains' do, so a "Commentary:" label, wrapping quotes or an
+    /// over-long answer no longer reach the speech queue. Not for the Test
+    /// button (<paramref name="trimCutOff"/> false), whose bare "OK" is
+    /// returned as written.
+    /// </summary>
+    internal static string? Finish(string text, string userPrompt, int maxTokens, bool trimCutOff, out bool cutOff)
+    {
+        var written = text.Trim();
+        cutOff = false;
+
+        if (!trimCutOff)
+        {
+            return written;
+        }
+
+        var tagged = LlmText.AsksForTaggedTurns(userPrompt);
+
+        if (tagged || EndsFinished(written))
+        {
+            return LlmText.CleanLine(written, maxTokens, tagged);
+        }
+
+        cutOff = true;
+        return LlmText.CleanLine(LlmText.UpToLastWholeSentence(written), maxTokens, tagged);
+    }
+
     /// <summary>
     /// True when the text ends the way a finished line does - terminal
     /// punctuation, allowing for a closing quote or bracket after it.

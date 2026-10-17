@@ -116,8 +116,18 @@ public sealed partial class AnnouncementService
     /// counted as offered the first time - so Offered still equals
     /// Accepted + Held + Dropped (AnnouncerLoad.Balances).
     /// </param>
-    private bool RoutineCallGetsTheAir(AnnouncementEventType type, Action? holdOver = null, bool alreadyCounted = false)
+    /// <param name="kept">
+    /// True only when the call was refused for now but KEPT for the end of
+    /// the line (<see cref="_heldOver"/>) - so a caller that remembers what
+    /// it said (FirePairLine) does not take a kept call for a dropped one.
+    /// 17 Oct 2026, Bug Hunt 8, A06-2: FirePairLine read the plain false as
+    /// "dropped" and gave back the pair's once-per-race claim, so the kept
+    /// battle was said AND offered again on a later standings update.
+    /// </param>
+    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Action? holdOver = null, bool alreadyCounted = false)
     {
+        kept = false;
+
         if (!alreadyCounted)
         {
             Load.NoteOffered();
@@ -142,6 +152,7 @@ public sealed partial class AnnouncementService
 
                 StatusMessage?.Invoke($"[voice] Keeping {type} for the end of this line - it outranks what is being said.");
 
+                kept = true;
                 return false;
             }
 
@@ -389,8 +400,9 @@ public sealed partial class AnnouncementService
 
     /// <summary>
     /// The field's waiting calls go - a flag, the countdown or a new race.
-    /// Called under _batchLock by the two places that already bin the
-    /// per-lap batches, so the two can never disagree.
+    /// Called under _batchLock by every place that already bins the
+    /// per-lap batches (a flag, the countdown, Stop, a reset - 17 Oct 2026,
+    /// Bug Hunt 8, A06-5), so the two can never disagree.
     /// </summary>
     private void BinTheFieldCallsUnderLock()
     {

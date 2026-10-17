@@ -391,7 +391,7 @@ public sealed partial class AnnouncementService
             // Kokoro chosen no ElevenLabs request is made at all.
             if (_voiceStore.Current.EffectiveEngine == VoiceEngine.Kokoro)
             {
-                return new PrepareOutcome(rendered, alreadySaved, failed, "the Kokoro voice was chosen on Voice Settings");
+                return new PrepareOutcome(rendered, alreadySaved, failed, "the Kokoro voice was chosen on the Voice tab");
             }
 
             try

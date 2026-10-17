@@ -317,6 +317,11 @@ internal sealed class DriverTransponderPanel : UserControl
              ?? _profiles.DescribeSplitClash(updated, editing: updated.Transponder)) is { } clash)
         {
             AppDialog.Show(this, clash, "Transponder already in use", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+            // 17 Oct 2026, Bug Hunt 8, A27-7: put the controls back to what
+            // is saved, as the branch above does - otherwise "Fitted to" or
+            // a retire tick shows a change that was refused.
+            Fill(keep);
             return false;
         }
 

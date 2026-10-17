@@ -571,7 +571,11 @@ public sealed class SeasonsControl : UserControl
 
             foreach (var entry in season.PointsScheme.OrderBy(e => e.Position))
             {
-                _dgvPointsScheme.Rows.Add(entry.Position, entry.Points);
+                // As invariant text (17 Oct 2026, Bug Hunt 8, A26-2): a boxed
+                // int is shown in the current culture, a Unicode minus on
+                // sv/nb/fi Windows, and CellValidating's invariant parse then
+                // refused to let a penalty row's cell be left.
+                _dgvPointsScheme.Rows.Add(entry.Position, entry.Points.ToString(CultureInfo.InvariantCulture));
             }
 
             // Asked fresh, so anything recorded since this tab was last

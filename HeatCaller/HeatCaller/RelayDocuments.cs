@@ -932,6 +932,14 @@ internal static class RelayDocuments
         // key from it and the PIN - see RelayManagerDevices.VerifyPinSigned.
         var salt = publishHash ? PinKdf.EnsureSalt(settings) : string.Empty;
 
+        // NO SALT, NO HASH (17 Oct 2026, Bug Hunt 8, A16-3). EnsureSalt
+        // gives "" when settings.json could not be written, and the unsalted
+        // fallback is an instantly reversible hash of the manager PIN - for
+        // nothing, since this laptop refuses every unsalted relay request
+        // anyway. Published as "not open over the relay right now" instead,
+        // and healed on the next publish once the salt is saved.
+        publishHash &= PinKdf.IsSalt(salt);
+
         return publishHash
             ? JsonSerializer.Serialize(new
             {

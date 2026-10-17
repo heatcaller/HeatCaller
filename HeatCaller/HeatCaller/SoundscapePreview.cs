@@ -93,7 +93,8 @@ public static class SoundscapePreview
                 if (line is not null)
                 {
                     progress?.Invoke($"\"{VoiceProfile.StripAudioTags(line)}\"");
-                    announcer.SpeakReminder(line, (theme.Voice.Stability, theme.Voice.Style));
+                    // Not for the listen-along page (17 Oct 2026, Bug Hunt 8, A06-10).
+                    announcer.SpeakReminder(line, (theme.Voice.Stability, theme.Voice.Style), forListeners: false);
                     await WaitForVoiceAsync(announcer, cancellationToken);
                 }
             }

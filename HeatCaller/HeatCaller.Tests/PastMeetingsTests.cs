@@ -290,14 +290,16 @@ public sealed class PastMeetingsTests : IDisposable
     [Fact]
     public void How_long_ago_is_said_the_way_a_club_says_it()
     {
+        // In UTC so it reads the same in any zone: HowLongAgo counts club
+        // nights now (17 Oct 2026, Bug Hunt 8, A09-2).
         var now = Tonight;
 
-        Assert.Equal("earlier today", PastMeetings.HowLongAgo(now.AddHours(-3), now));
-        Assert.Equal("yesterday", PastMeetings.HowLongAgo(now.AddDays(-1), now));
-        Assert.Equal("a few days ago", PastMeetings.HowLongAgo(now.AddDays(-3), now));
-        Assert.Equal("last week", PastMeetings.HowLongAgo(now.AddDays(-9), now));
-        Assert.Equal("2 weeks ago", PastMeetings.HowLongAgo(now.AddDays(-15), now));
-        Assert.Equal("last season", PastMeetings.HowLongAgo(now.AddDays(-400), now));
+        Assert.Equal("earlier today", PastMeetings.HowLongAgo(now.AddHours(-3), now, TimeZoneInfo.Utc));
+        Assert.Equal("yesterday", PastMeetings.HowLongAgo(now.AddDays(-1), now, TimeZoneInfo.Utc));
+        Assert.Equal("a few days ago", PastMeetings.HowLongAgo(now.AddDays(-3), now, TimeZoneInfo.Utc));
+        Assert.Equal("last week", PastMeetings.HowLongAgo(now.AddDays(-9), now, TimeZoneInfo.Utc));
+        Assert.Equal("2 weeks ago", PastMeetings.HowLongAgo(now.AddDays(-15), now, TimeZoneInfo.Utc));
+        Assert.Equal("last season", PastMeetings.HowLongAgo(now.AddDays(-400), now, TimeZoneInfo.Utc));
     }
 
     [Fact]
@@ -305,8 +307,8 @@ public sealed class PastMeetingsTests : IDisposable
     {
         var now = Tonight;
 
-        Assert.DoesNotContain("1 weeks", PastMeetings.HowLongAgo(now.AddDays(-8), now));
-        Assert.DoesNotContain("1 months", PastMeetings.HowLongAgo(now.AddDays(-40), now));
+        Assert.DoesNotContain("1 weeks", PastMeetings.HowLongAgo(now.AddDays(-8), now, TimeZoneInfo.Utc));
+        Assert.DoesNotContain("1 months", PastMeetings.HowLongAgo(now.AddDays(-40), now, TimeZoneInfo.Utc));
     }
 
     [Fact]

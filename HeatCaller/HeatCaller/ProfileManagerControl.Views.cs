@@ -806,6 +806,11 @@ public sealed partial class ProfileManagerControl
             return;
         }
 
+        // 17 Oct 2026, Bug Hunt 8, A27-3: a transponder transfer or a setup
+        // change on the hub's own tabs changes what the stats are worked out
+        // from, so the cached card stats are dropped and recomputed.
+        InvalidateStats();
+
         RefreshList();
         RefreshHeader();
         UpdateCardExtent();

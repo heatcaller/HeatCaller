@@ -535,7 +535,18 @@ export class BrainService {
     }
 
     try {
-      return readUsageRecord(JSON.parse(raw), month);
+      const parsed: unknown = JSON.parse(raw);
+
+      // readUsageRecord reads anything that is not an object as zero, and
+      // the next save would then write a fresh count over the file - spent
+      // against and erased. Refused instead, as the voice's readUsageFile
+      // does. 17 Oct 2026, Bug Hunt 8, A22-2.
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        this.log(`[brain] "${club}": the count file does not hold a count; not spending against it until it is mended.`);
+        return "unreadable";
+      }
+
+      return readUsageRecord(parsed, month);
     } catch (error) {
       this.log(`[brain] "${club}": the count is not readable JSON (${String(error)}); not spending against it.`);
       return "unreadable";

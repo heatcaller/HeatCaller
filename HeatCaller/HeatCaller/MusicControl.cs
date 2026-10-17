@@ -14,11 +14,8 @@ public sealed class MusicControl : UserControl
     private readonly UndoService _undo;
 
     private readonly CheckBox _chkEnabled = new ThemedCheckBox();
-    private readonly NumericUpDown _numVolume = new();
     private readonly CheckBox _chkShuffle = new ThemedCheckBox();
     private readonly CheckBox _chkPauseDuringRaces = new ThemedCheckBox();
-    private readonly CheckBox _chkDuck = new ThemedCheckBox();
-    private readonly NumericUpDown _numDuckTo = new();
 
     private readonly Label _lblNowPlaying = new();
     private readonly Button _btnPlayStop = new();
@@ -178,13 +175,14 @@ public sealed class MusicControl : UserControl
 
     /// <summary>
     /// What the page is for, then the switches along one line - Enable
-    /// music, the volume, and Shuffle with what it does - and under them the
+    /// music, and Shuffle with what it does - and under them the
     /// choice of Theme music or My music, with the sentence saying what that
     /// choice plays. Then three cards: Player - the transport buttons with
     /// what is playing at the end of their line, and the seek bar with the
     /// clock beside it; Library - the tracks, taking the height that is
-    /// left, and their buttons; Behaviour - when the music stops, and how far
-    /// it ducks. Then what the last change did. On the layout pieces
+    /// left, and their buttons; Behaviour - when the music stops (the volume
+    /// and the duck are the Mixer's since 17 Oct 2026). Then what the last
+    /// change did. On the layout pieces
     /// (LayoutPieces.cs), so nothing is placed by hand.
     ///
     /// It used to be placed in pixels against a 980x696 page: every row from
@@ -221,21 +219,9 @@ public sealed class MusicControl : UserControl
             UpdateEnabledState();
         };
 
-        _numVolume.Minimum = 0;
-        _numVolume.Maximum = 100;
-        _numVolume.Increment = 5;
-        _numVolume.Value = (decimal)Math.Clamp(_store.Current.Volume * 100f, 0, 100);
-        _numVolume.ValueChanged += (_, _) =>
-        {
-            _store.Current.Volume = (float)_numVolume.Value / 100f;
-            _store.Save();
-            _player.Settings = _store.Current;
-
-            // Applied live so it can be set by ear while playing.
-            _player.RefreshVolume();
-        };
-
-        var lblVolumeSuffix = new Label { Text = "%", ForeColor = AppTheme.TextMuted };
+        // No volume box here any more (17 Oct 2026): the music's level is
+        // the Mixer's Music fader, the one place every level is set now -
+        // and the same stored value.
 
         _chkShuffle.Text = "Shuffle";
         _chkShuffle.AutoSize = true;
@@ -256,15 +242,12 @@ public sealed class MusicControl : UserControl
 
         _textSize.Wear(lblShuffleHint, () => AppTheme.SmallFont);
 
-        var volume = FieldGrid.Inline(_numVolume, lblVolumeSuffix);
-
         // Along one line, and onto the next when there is not room for them
         // all (FieldRow). Shuffle and what it does are one pair, so a line
         // that wraps never parts them.
         var switches = new FieldRow();
 
         switches.Add(null, _chkEnabled);
-        switches.Add(new Label { Text = "Volume:" }, volume);
         switches.Add(null, FieldGrid.Inline(_chkShuffle, lblShuffleHint));
 
         // --- What plays ---
@@ -506,51 +489,20 @@ public sealed class MusicControl : UserControl
         // in a narrow window or at a large text size.
         var lblPauseHint = new Label
         {
-            Text = "ignored if the Mixer is set to start music when a session begins - that's the more specific instruction",
+            Text = "ignored if the Mixer is set to start music when a session begins",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
 
         _textSize.Wear(lblPauseHint, () => AppTheme.SmallFont);
 
-        _chkDuck.Text = "Duck under announcements";
-        _chkDuck.AutoSize = true;
-        _chkDuck.Checked = _store.Current.DuckUnderAnnouncements;
-        _chkDuck.CheckedChanged += (_, _) =>
-        {
-            _store.Current.DuckUnderAnnouncements = _chkDuck.Checked;
-            _store.Save();
-            _player.Settings = _store.Current;
-            UpdateEnabledState();
-        };
-
-        _numDuckTo.Minimum = 5;
-        _numDuckTo.Maximum = 100;
-        _numDuckTo.Increment = 5;
-        _numDuckTo.Value = (decimal)Math.Clamp(_store.Current.DuckToFraction * 100f, 5, 100);
-        _numDuckTo.ValueChanged += (_, _) =>
-        {
-            _store.Current.DuckToFraction = (float)_numDuckTo.Value / 100f;
-            _store.Save();
-            _player.Settings = _store.Current;
-        };
-
-        var lblDuckSuffix = new Label { Text = "%", ForeColor = AppTheme.TextMuted };
-
-        var duckTo = FieldGrid.Inline(_numDuckTo, lblDuckSuffix);
-
-        // How far it ducks after the box that turns it on, and under it when
-        // the line is too narrow for both (FieldRow).
-        var duck = new FieldRow();
-
-        duck.Add(null, _chkDuck);
-        duck.Add(new Label { Text = "down to:" }, duckTo);
+        // How far the music ducks under the announcer moved to the Mixer on
+        // 17 Oct 2026, with every other duck - the same stored settings.
 
         var behaviour = new Section("Behaviour");
 
         behaviour.Add(_chkPauseDuringRaces, stretch: false, gapBelow: UiLayout.HintGap);
-        behaviour.Add(lblPauseHint);
-        behaviour.Add(duck, gapBelow: 0);
+        behaviour.Add(lblPauseHint, gapBelow: 0);
 
         // What the library comes to, and what the last change did - wrapping
         // rather than cut short. It always says something (RefreshGrid), and
@@ -583,17 +535,14 @@ public sealed class MusicControl : UserControl
     }
 
     /// <summary>
-    /// The sizes that follow the text size: the number boxes as wide as
-    /// their largest value and their arrows need (NumberWidth), and the seek
-    /// bar and the clock beside it as tall as the bar was at the normal text
-    /// size - never shorter than a line of the clock's face. Run again when
-    /// the text size changes (TextSize.Keep).
+    /// The sizes that follow the text size: the seek bar and the clock
+    /// beside it as tall as the bar was at the normal text size - never
+    /// shorter than a line of the clock's face. Run again when the text size
+    /// changes (TextSize.Keep). (The number boxes went to the Mixer on
+    /// 17 Oct 2026.)
     /// </summary>
     private void SizeFields()
     {
-        Fit(_numVolume, NumberWidth(_numVolume));
-        Fit(_numDuckTo, NumberWidth(_numDuckTo));
-
         // The clock wears the page's face.
         var seek = Math.Max(UiLayout.AtTextSize(SeekHeight), Font.Height + 4);
 
@@ -606,30 +555,6 @@ public sealed class MusicControl : UserControl
         {
             _lblTime.Height = seek;
         }
-
-        // Only when it changed: a new width lays the row out again.
-        static void Fit(Control field, int width)
-        {
-            if (field.Width != width)
-            {
-                field.Width = width;
-            }
-        }
-    }
-
-    /// <summary>
-    /// A number box as wide as its largest value and its arrows need, in the
-    /// page's face - which the box wears - and never narrower than a number
-    /// box was at the normal text size.
-    /// </summary>
-    private int NumberWidth(NumericUpDown box)
-    {
-        var digits = decimal.Truncate(box.Maximum).ToString(System.Globalization.CultureInfo.InvariantCulture).Length
-            + (box.DecimalPlaces > 0 ? box.DecimalPlaces + 1 : 0);
-
-        return Math.Max(
-            UiLayout.AtTextSize(UiLayout.NumericWidth),
-            TextRenderer.MeasureText(new string('0', digits), Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
     }
 
     /// <summary>
@@ -810,13 +735,10 @@ public sealed class MusicControl : UserControl
     {
         var on = _chkEnabled.Checked;
 
-        _numVolume.Enabled = on;
         _chkShuffle.Enabled = on;
         _btnPlayStop.Enabled = on;
         _btnSkip.Enabled = on && _player.IsPlaying;
         _chkPauseDuringRaces.Enabled = on;
-        _chkDuck.Enabled = on;
-        _numDuckTo.Enabled = on && _chkDuck.Checked;
 
         // The library stays usable when music is off - the same deadlock
         // the ambience page had, where you couldn't set up the content

@@ -412,6 +412,14 @@ public sealed class RcpTrackCanvas : Control
 
     public void Undo()
     {
+        // 17 Oct 2026, Bug Hunt 8, A31-4: ignored while a drag is held.
+        // The rest of the stroke would find _strokeRemembered set, take no
+        // snapshot and leave a stale mid-stroke Redo behind.
+        if (_strokeOpen)
+        {
+            return;
+        }
+
         if (_undo.Count == 0)
         {
             return;
@@ -430,6 +438,14 @@ public sealed class RcpTrackCanvas : Control
 
     public void Redo()
     {
+        // 17 Oct 2026, Bug Hunt 8, A31-4: ignored while a drag is held.
+        // The rest of the stroke would find _strokeRemembered set, take no
+        // snapshot and leave a stale mid-stroke Redo behind.
+        if (_strokeOpen)
+        {
+            return;
+        }
+
         if (_redo.Count == 0)
         {
             return;
@@ -1748,6 +1764,12 @@ public sealed class RcpTrackCanvas : Control
             return;
         }
 
+        // Before the copy too, so the clipboard holds the landed block.
+        // 17 Oct 2026, Bug Hunt 8, A31-1: a nudge run still waiting for its
+        // timer is landed first, or Remember snapshots the plan with the
+        // nudged pieces stacked on what they hit, and Undo brings that back.
+        FlushPendingSettle();
+
         _clipboardFrom = _selection.Bounds().Location;
         _clipboard = _selection.Copy();
 
@@ -1841,6 +1863,11 @@ public sealed class RcpTrackCanvas : Control
             return;
         }
 
+        // 17 Oct 2026, Bug Hunt 8, A31-1: a nudge run still waiting for its
+        // timer is landed first, or Remember snapshots the plan with the
+        // nudged pieces stacked on what they hit, and Undo brings that back.
+        FlushPendingSettle();
+
         var pieces = _selection.Pieces;
 
         Remember();
@@ -1908,6 +1935,14 @@ public sealed class RcpTrackCanvas : Control
     }
 
     /// <summary>
+    /// Lands a nudge run still waiting for its timer, for Save Layout -
+    /// see FlushPendingSettle. 17 Oct 2026, Bug Hunt 8, A31-1: the form
+    /// reads Result before the timer can fire. Not in the Result getter,
+    /// which the side panel reads after every nudge press.
+    /// </summary>
+    public void LandPendingNudge() => FlushPendingSettle();
+
+    /// <summary>
     /// Settles a nudge run still waiting for its timer, now.
     ///
     /// The timer settles whatever is picked when it fires, so anything that
@@ -1941,6 +1976,11 @@ public sealed class RcpTrackCanvas : Control
             return;
         }
 
+        // 17 Oct 2026, Bug Hunt 8, A31-1: a nudge run still waiting for its
+        // timer is landed first, or Remember snapshots the plan with the
+        // nudged pieces stacked on what they hit, and Undo brings that back.
+        FlushPendingSettle();
+
         Remember();
 
         for (var i = 0; i < turns; i++)
@@ -1969,6 +2009,11 @@ public sealed class RcpTrackCanvas : Control
         {
             return;
         }
+
+        // 17 Oct 2026, Bug Hunt 8, A31-1: a nudge run still waiting for its
+        // timer is landed first, or Remember snapshots the plan with the
+        // nudged pieces stacked on what they hit, and Undo brings that back.
+        FlushPendingSettle();
 
         Remember();
 

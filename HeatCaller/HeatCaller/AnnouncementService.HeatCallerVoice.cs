@@ -175,7 +175,7 @@ public sealed partial class AnnouncementService
         {
             LogStandInOnce(
                 "heatcaller-setup",
-                "[voice] No HeatCaller voice is chosen yet - the free Kokoro voice is speaking. Pick one on Voice Settings.");
+                "[voice] No HeatCaller voice is chosen yet - the free Kokoro voice is speaking. Pick one on the Voice tab.");
 
             return await RenderWithStandInAsync(profile, text);
         }
@@ -264,7 +264,7 @@ public sealed partial class AnnouncementService
         }
 
         StatusMessage?.Invoke(
-            "[voice] The HeatCaller voice is speaking through the voice relay set on Voice Settings, not the one on the Club Website page. "
+            "[voice] The HeatCaller voice is speaking through the voice relay set on the Voice tab, not the one on the Club Website page. "
             + "Results, check-in and the race-day manager are unaffected.");
     }
 

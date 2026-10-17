@@ -989,7 +989,10 @@ public sealed partial class AnnouncerControl : UserControl
             return points;
         }
 
-        var ordered = _race.GetOrderedStandings();
+        // Ghosts left out, as the director does (17 Oct 2026, Bug Hunt 8,
+        // A07-3): a PB ghost could lead, be half of a battle, or be the
+        // "lapped" last car in the talking points.
+        var ordered = RacingField(_race.GetOrderedStandings());
         if (ordered.Count == 0)
         {
             return points;
@@ -1010,7 +1013,8 @@ public sealed partial class AnnouncerControl : UserControl
         }
 
         // Who holds the race's fastest lap.
-        if (_race.RaceFastestLapMs > 0 && !string.IsNullOrWhiteSpace(_race.RaceFastestLapTransponder))
+        if (_race.RaceFastestLapMs > 0 && !string.IsNullOrWhiteSpace(_race.RaceFastestLapTransponder)
+            && !Ghosts.IsGhost(_race.RaceFastestLapTransponder))
         {
             points.Add($"Fastest lap: {NameFor(_race.RaceFastestLapTransponder)} at {_race.RaceFastestLapMs / 1000.0:0.000}s");
         }
@@ -1109,7 +1113,7 @@ public sealed partial class AnnouncerControl : UserControl
             SetSummaryCaption(SummaryCaption);
             _lblLastSummary.Text = _commentary?.IsAvailable == true
                 ? "No race summary yet - one is generated after the checkered flag."
-                : "Commentary is off. Enable it on the Commentary page.";
+                : "Commentary is off. Turn it on at Voice > AI Commentary.";
             _lblLastSummary.ForeColor = AppTheme.TextMuted;
         }
     }

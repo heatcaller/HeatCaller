@@ -61,6 +61,15 @@ public sealed class DayScheduleStore
 
                     return store;
                 }
+
+                // Present, parsed, and not the shape this store writes. Not
+                // a new install either, so the same rule applies. A file
+                // holding the literal "null" parses to nothing without
+                // throwing: it used to fall straight through to the empty
+                // store below with the flag left false, so the first
+                // schedule change replaced every day's run sheet.
+                // (17 Oct 2026, Bug Hunt 8, A25-2 - as RoundDefinitionStore.)
+                unreadable = true;
             }
         }
         catch (Exception ex)
@@ -829,8 +838,12 @@ public sealed class DayScheduleStore
     /// </summary>
     public int? MinutesLate()
     {
+        // 17 Oct 2026, Bug Hunt 8, A25-3: every started line, timed or not.
+        // Untimed ones used to be filtered out first, so a running line with
+        // no time took the drift from an older timed one instead of giving
+        // null; MinutesOff already returns null for a blank time.
         var started = All
-            .Where(e => e.ActualStartUtc is not null && !string.IsNullOrWhiteSpace(e.ScheduledTime))
+            .Where(e => e.ActualStartUtc is not null)
             .OrderByDescending(e => e.ActualStartUtc)
             .FirstOrDefault();
 

@@ -432,9 +432,16 @@ describe("the HeatCaller voice", () => {
 
       // Both are in flight before either has finished: the allowance has to
       // be taken when the line is accepted, not when it comes back.
+      //
+      // TWO DIFFERENT LINES of the same length. This sent the same line
+      // twice, which since 17 Oct 2026 (Bug Hunt 8, A22-3) is no longer
+      // two renders: the second waits for the first and is handed its
+      // audio free (see linesInFlight). Held open here, that wait never
+      // ended and the test hung until the HTTP client gave up after five
+      // minutes. Two different lines are what this test is about.
       const first = speak(where, { voice: "clubhouse", text: "123456789012345", shared: false });
       await new Promise((resolve) => setTimeout(resolve, 30));
-      const second = await speak(where, { voice: "clubhouse", text: "123456789012345", shared: false });
+      const second = await speak(where, { voice: "clubhouse", text: "abcdefghijklmno", shared: false });
 
       assert.equal(second.status, 402);
       assert.equal(second.json.refusal, "allowance");
@@ -442,6 +449,41 @@ describe("the HeatCaller voice", () => {
       release?.();
       assert.equal((await first).status, 200);
       assert.equal(asked.length, 1);
+    });
+
+    it("renders the same line once when it is asked for twice at the same time, and charges it once", async () => {
+      let release: (() => void) | undefined;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+
+      const { asked } = recorder();
+      const where = await serve({
+        acme: { enabled: true, monthlyChars: 100 },
+        render: async (voice, text) => {
+          asked.push({ voice: voice.voiceId, text });
+          await held;
+          return Buffer.from(text, "utf8");
+        },
+      });
+
+      // Prepare Lines and the live announcer asking for the same line
+      // together: the second waits for the first rather than paying for
+      // it again.
+      const first = speak(where, { voice: "clubhouse", text: "Green flag!", shared: false });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      const second = speak(where, { voice: "clubhouse", text: "Green flag!", shared: false });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      release?.();
+
+      assert.equal((await first).status, 200);
+
+      const theirs = await second;
+
+      assert.equal(theirs.status, 200);
+      assert.equal(asked.length, 1, "one render for one line");
+      assert.equal(theirs.headers.get("x-voice-used"), "11", "charged once, for the first ask");
     });
 
     it("gives the characters back when the render fails", async () => {

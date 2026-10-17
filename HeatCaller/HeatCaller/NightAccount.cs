@@ -341,24 +341,24 @@ internal sealed class NightAccount
     private static string Because(BudgetRefusal why) => why switch
     {
         BudgetRefusal.SwitchedOff =>
-            "this club has it switched off - tick it under the segments on the Commentary tab",
+            "this club has it switched off - tick it under Segments on the AI Commentary tab",
         BudgetRefusal.ItsCapForTheNight =>
             "it had already been said as often as one night allows, which is the variety rule working",
         BudgetRefusal.NothingNewToSay =>
             "there was nothing new to say about it, which is the variety rule working",
         BudgetRefusal.TooSoonAfterTheLast =>
             "it came too soon after the last line - the gap each segment keeps is its own, and a club that "
-            + "wants more of them turns the chattiness dial up on the Commentary tab",
+            + "wants more of them turns the chattiness dial up on the AI Commentary tab",
         BudgetRefusal.TheAirtimeCap =>
             "the last ten minutes were already as full as this race and the chattiness dial allow - the dial "
-            + "is on the Commentary tab, and a heat is deliberately quieter than a main",
+            + "is on the AI Commentary tab, and a heat is deliberately quieter than a main",
         BudgetRefusal.TheRelayIsBusy =>
             "the relay had as many lines in flight as it will take, and something that mattered more had them",
         BudgetRefusal.TheMonthsAllowance =>
             "the month's allowance is down to what is held back for intros and recaps - the allowance is on "
             + "the Connection tab",
         BudgetRefusal.TheNightsHeadroom =>
-            "the night's own budget had no room left for it - the budget is on the Commentary tab",
+            "the night's own budget had no room left for it - the budget is on the AI Commentary tab",
         _ => "the budget would not have it",
     };
 }

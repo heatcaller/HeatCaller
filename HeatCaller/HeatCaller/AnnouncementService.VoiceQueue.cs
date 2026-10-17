@@ -65,7 +65,10 @@ public sealed partial class AnnouncementService
         // five seconds" - but a screen should show what was actually timed.
         // This previously reused the spoken rounding, so 6.935s displayed
         // as 6.94s and the number on screen disagreed with the lap chart.
-        return $"{ms / 1000.0:0.000}s";
+        //
+        // Invariant, like the sector display beside it (17 Oct 2026, Bug
+        // Hunt 8, A06-8): the PC's culture put "6,935s" on a comma-locale PC.
+        return (ms / 1000.0).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + "s";
     }
 
     /// <param name="suffix">
@@ -374,7 +377,7 @@ public sealed partial class AnnouncementService
         {
             StatusMessage?.Invoke(
                 $"[voice] Audio tags stripped - saved model is \"{currentProfile.ModelId}\", which doesn't support them. "
-                + "Pick a v3 model on the Voice Settings tab - it saves as you change it.");
+                + "Pick a v3 model on the Voice tab - it saves as you change it.");
         }
 
         // Whether ANY voice can say it. This asked for an ElevenLabs key and
@@ -755,7 +758,7 @@ public sealed partial class AnnouncementService
     /// includes not being binned by a release call or reminder queued after
     /// them (see EnqueueVoiceWork). A flag still clears them.
     /// </summary>
-    private static bool IsWorthWaitingFor(AnnouncementEventType type) => type is
+    internal static bool IsWorthWaitingFor(AnnouncementEventType type) => type is
         AnnouncementEventType.LastLap or
         AnnouncementEventType.FinalMinute or
         AnnouncementEventType.TrackRecord or
@@ -768,6 +771,24 @@ public sealed partial class AnnouncementService
         // A newer report replaces one still waiting (see EnqueueVoiceWork),
         // so it cannot build a backlog either.
         AnnouncementEventType.PositionReport;
+
+    /// <summary>
+    /// Where a call coming back from HeldOver goes in the queue: after every
+    /// leading instruction (IsPriorityAnnouncement) or race moment
+    /// (IsWorthWaitingFor), ahead of any routine line. 17 Oct 2026, Bug Hunt
+    /// 8, A06-1.
+    /// </summary>
+    internal static int HeldOverSlot(IReadOnlyList<AnnouncementEventType> queued)
+    {
+        var i = 0;
+
+        while (i < queued.Count && (IsPriorityAnnouncement(queued[i]) || IsWorthWaitingFor(queued[i])))
+        {
+            i++;
+        }
+
+        return i;
+    }
 
     /// <summary>
     /// Whether a newer line about a driver REPLACES an older one still
@@ -814,9 +835,10 @@ public sealed partial class AnnouncementService
     /// nobody heard. Raised here, only once the line is actually accepted.
     ///
     /// Returns whether the line was accepted (queued, or spoken at once for
-    /// a flag call), for a caller that has to remember it was said - see
-    /// CheckCloseBattles. Accepted is not a promise it is heard: a flag can
-    /// still clear it from the queue, as it always could.
+    /// a flag call) or kept for the end of the line (HeldOver), for a caller
+    /// that has to remember it was said - see CheckCloseBattles. Accepted is
+    /// not a promise it is heard: a flag can still clear it from the queue,
+    /// as it always could.
     /// </summary>
     /// <param name="heldOver">
     /// True when this is a call coming back from being kept for the end of
@@ -825,6 +847,18 @@ public sealed partial class AnnouncementService
     /// </param>
     private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false)
     {
+        // 17 Oct 2026, Bug Hunt 8, A06-5: a call already past the entry
+        // points' mute check - a field flush still in its window, a call kept
+        // for the end of a line - reached here after the mute and raised its
+        // screen text (and could be queued) for a line nobody would hear.
+        // SpeakTest, the one path meant to speak while muted, does not come
+        // through here.
+        if (Muted)
+        {
+            NoteKeptCallLost(heldOver);
+            return false;
+        }
+
         // A line about a ghost - its lap, its streak, the lead it took -
         // while ghosts are not announced (AnnounceGhostsProvider).
         if (MutedGhost(transponder))
@@ -863,13 +897,18 @@ public sealed partial class AnnouncementService
         // A routine call refused only because the speaker is busy may be
         // KEPT for the end of the line (HeldOver) - and it comes back in
         // through here, so every rule above still applies to it then.
+        //
+        // A KEPT call reports true (17 Oct 2026, Bug Hunt 8, A06-2): it is
+        // going to be offered again, so FirePairLine must keep the pair's
+        // once-per-race claim rather than give it back as if dropped.
         if (!isPriority && !IsWorthWaitingFor(type)
             && !RoutineCallGetsTheAir(
                 type,
+                out var kept,
                 holdOver: heldOver ? null : () => EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true),
                 alreadyCounted: heldOver))
         {
-            return false;
+            return kept;
         }
 
         // Past every rule that drops a line, so the screens show only what
@@ -926,7 +965,12 @@ public sealed partial class AnnouncementService
             // back: it was kept because it was the most important thing to
             // say the moment the speaker was free, and behind a queue it
             // would be said long after the moment it was about.
-            var at = heldOver ? 0 : _voiceQueue.Count;
+            //
+            // Next AFTER any instruction or race moment already waiting,
+            // though (17 Oct 2026, Bug Hunt 8, A06-1): index 0 put a kept lap
+            // call ahead of a release, a grid call or "last lap" queued while
+            // the line it waited on was still speaking.
+            var at = heldOver ? HeldOverSlot(_voiceQueue.Select(waiting => waiting.Type).ToList()) : _voiceQueue.Count;
 
             _voiceQueue.Insert(at, new QueuedVoiceItem(type, transponder, OnAir: onAir, Work: async () =>
             {

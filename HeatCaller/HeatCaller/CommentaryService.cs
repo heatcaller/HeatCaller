@@ -1371,11 +1371,15 @@ public sealed class CommentaryService
             return null;
         }
 
+        // Enumerated twice now - by CalmShouting and by step 2's kept labels
+        // (17 Oct 2026, Bug Hunt 8, A08-1).
+        var keepNames = properNames.ToList();
+
         // 1. Shouting. The names are kept out of the lowering rather than
         // put back after it: put back, only the ones on the list came back,
         // and anything the model was given that wasn't on it - a team, a
         // sponsor - stayed lower-cased for good.
-        var calmed = CalmShouting(text, properNames, out var shouted, out var stretched);
+        var calmed = CalmShouting(text, keepNames, out var shouted, out var stretched);
 
         if (shouted || stretched)
         {
@@ -1399,9 +1403,33 @@ public sealed class CommentaryService
         {
             var wrong = new List<string>();
 
+            // 17 Oct 2026, Bug Hunt 8, A08-1: another race's label that the
+            // facts themselves carried ("...than in their first race tonight,
+            // Q1 Heat 1") is a true fact about an earlier race, not the model
+            // miscalling this one - it was being rewritten to the round's own
+            // label. Where those labels sit in the line is left alone.
+            var factLabels = new List<(int Start, int End)>();
+
+            foreach (var name in keepNames
+                         .Where(n => !string.IsNullOrWhiteSpace(n))
+                         .Select(n => n.Trim())
+                         .Where(n => HeatInLabel.IsMatch(n) && !string.Equals(n, roundLabel.Trim(), StringComparison.OrdinalIgnoreCase))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                for (var at = text.IndexOf(name, StringComparison.OrdinalIgnoreCase); at >= 0; at = text.IndexOf(name, at + name.Length, StringComparison.OrdinalIgnoreCase))
+                {
+                    factLabels.Add((at, at + name.Length));
+                }
+            }
+
             text = HeatInLine.Replace(text, m =>
             {
                 if (int.TryParse(m.Groups[1].Value, out var said) && said == wantedHeat)
+                {
+                    return m.Value;
+                }
+
+                if (factLabels.Any(span => m.Index < span.End && span.Start < m.Index + m.Length))
                 {
                     return m.Value;
                 }
@@ -2478,7 +2506,12 @@ public sealed class CommentaryService
         // Who finished where, as both the history and the cars want it.
         // Worked out once: two copies of the same projection is two places
         // to get the retirement rule wrong.
-        var placings = ordered.Select(r => (DriverId: r.Transponder, Position: r.Position)).ToList();
+        // 17 Oct 2026, Bug Hunt 8, A09-1: the rule was never applied - a car
+        // that never turned a lap, or was given a DNF/DQ, kept its saved
+        // place and a P3 retirement in a three-car race was called "first
+        // ever podium here". A retirement goes in as zero, which ForRecap
+        // skips, the same as CommentaryReaders.Placing reads it.
+        var placings = ordered.Select(r => (DriverId: r.Transponder, Position: (r.Laps <= 0 || ResultEditor.NormaliseOutcome(r.Outcome) is ResultEditor.Dnf or ResultEditor.Dq) ? 0 : r.Position)).ToList();
 
         var historyPack = HistoryPack(history is null
             ? Array.Empty<FactBlock>()

@@ -571,6 +571,19 @@ public partial class MainForm
                 _music.Resume();
                 OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Music started for the new session - opened when On Air was pressed, so nothing skipped.");
             }
+            else if (_music.IsPlaying && _musicReadiedForOnAir)
+            {
+                // Readied by On Air, and the session stays muted (17 Oct
+                // 2026, Bug Hunt 8, A15-1). The mute counted only music that
+                // was audible, so this paused music was never on its record,
+                // the branch below left it paused, and the unmute never
+                // resumed it - silent all night. Put on the record here, so
+                // the unmute plays it with the rest of the sound.
+                _musicReadiedForOnAir = false;
+                _music.CancelFade();
+                _musicPausedByMute = true;
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Music ready for the new session - held paused until the sound is unmuted.");
+            }
             else if (_music.IsPlaying)
             {
                 // Already going - leave it rather than restarting a track
@@ -766,7 +779,13 @@ public partial class MainForm
             // Fresh record for a new mute; added to for a repeat one, so a
             // bed started since from its own tab is silenced as well, and
             // comes back with the rest at the unmute.
-            var ambienceRunning = _ambience.IsRunning;
+            //
+            // Not a crowd held silent by On Air (17 Oct 2026, Bug Hunt 8,
+            // A12-2): it is already silent, and stopping it here cleared the
+            // hold, so the unmute opened it audible over the show's opener.
+            // Left open and off the record, staging still decides - it stops
+            // a held crowd and records it when the session stays muted.
+            var ambienceRunning = _ambience.IsRunning && !_ambience.IsHeld;
             var musicPlaying = _music.IsPlaying && !_music.IsPaused;
 
             _ambienceStoppedByMute = (wasMuted && _ambienceStoppedByMute) || ambienceRunning;
@@ -876,6 +895,10 @@ public partial class MainForm
         // those once (LapTimesOnly).
         _mixerControl?.ShowStartTicks();
         _commentaryControl?.ShowSpokenTicks();
+
+        // And every level and duck, which the Mixer alone shows now - a
+        // soundscape can bring its own crowd and music settings.
+        _mixerControl?.RefreshAll();
     }
 
     /// <summary>
@@ -932,8 +955,9 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// VoiceSettingsControl and SoundEffectsControl each read their store's
-    /// Current value once, at construction, to populate their fields - they
+    /// VoiceSettingsControl (the Voice and Race Calls tabs) and
+    /// SoundEffectsControl each read their store's Current value once, at
+    /// construction, to populate their fields - they
     /// have no mechanism to notice the underlying data changed out from
     /// under them. Applying a theme changes exactly that, so the simplest
     /// reliable fix is rebuilding both controls from scratch afterward,
@@ -942,23 +966,40 @@ public partial class MainForm
     /// </summary>
     private void RebuildVoiceAndSoundTabs()
     {
-        var voiceSubPage = _tabVoiceSubNav.TabPages[0];
+        // By reference, not by position (17 Oct 2026): the Voice and Sounds
+        // tabs were regrouped, and TabPages[0] is only the Voice tab for as
+        // long as nobody reorders them. Sound Effects below was already
+        // found this way.
+        var voiceSubPage = _voiceSettingsSubPage;
         voiceSubPage.Controls.Remove(_voiceSettingsControl);
+
+        // THE RIVALRIES FIRST (17 Oct 2026). They are the last section of
+        // the Race Calls page, which is disposed just below - and disposing
+        // a panel disposes everything still in it. They are the app's, not
+        // the page's, so they are taken out and put on the new page as they
+        // are. The How often card is the page's own, and is built again with
+        // it from the stores the soundscape has just saved.
+        var rivalries = _voiceSettingsControl.ReleaseRivalries();
 
         // The announcement rows belong to the same control but are parented
         // in a tab of their own, so UserControl.Dispose never reaches them:
         // they have to be taken out and disposed by hand. Skipping this
-        // would leave the Announcements tab showing the OLD page, still
-        // wired to a control that had just been disposed - so the rows
-        // would look fine, save nothing, and throw on the first Test.
+        // would leave the Race Calls tab showing the OLD page, still wired
+        // to a control that had just been disposed - so the rows would look
+        // fine, save nothing, and throw on the first Test.
         _voiceAnnouncementsSubPage.Controls.Remove(_voiceSettingsControl.AnnouncementsPage);
         _voiceSettingsControl.AnnouncementsPage.Dispose();
 
         _voiceSettingsControl.Dispose();
-        _voiceSettingsControl = new VoiceSettingsControl(_voiceStore, _settings, _undo) { Dock = DockStyle.Fill, Announcer = _announcer, HeatCallerVoice = _heatCallerVoice };
+        _voiceSettingsControl = new VoiceSettingsControl(_voiceStore, _settings, _undo, _soundStore) { Dock = DockStyle.Fill, Announcer = _announcer, HeatCallerVoice = _heatCallerVoice };
         _voiceSettingsControl.StatusMessage += OnClientRawMessage;
         voiceSubPage.Controls.Add(_voiceSettingsControl);
         _voiceAnnouncementsSubPage.Controls.Add(_voiceSettingsControl.AnnouncementsPage);
+
+        if (rivalries is not null)
+        {
+            _voiceSettingsControl.HostRivalries(rivalries);
+        }
 
         // Swapped inside its TAB page, not on pageSound - Sound Effects now
         // lives in a tab host, so removing/adding against the page would

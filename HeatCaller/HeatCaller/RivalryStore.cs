@@ -30,6 +30,23 @@ public sealed class RivalryStore
                 var loaded = JsonSerializer.Deserialize<List<RivalryLine>>(json);
                 if (loaded is not null)
                 {
+                    // A hand-edited or restored file can say null where the
+                    // app never writes one (17 Oct 2026, Bug Hunt 8, A11-1):
+                    // a null rivalry or "Templates": null crashed the
+                    // Rivalries page at launch and the lap calls mid-race.
+                    // Repaired as ThemeStore and VenueStore do. An empty set,
+                    // not the defaults - a null is not a request for them.
+                    loaded.RemoveAll(r => r is null);
+
+                    foreach (var rivalry in loaded)
+                    {
+                        rivalry.Id ??= Guid.NewGuid().ToString("N");
+                        rivalry.DriverA ??= string.Empty;
+                        rivalry.DriverB ??= string.Empty;
+                        rivalry.Templates ??= new List<string>();
+                        rivalry.Templates.RemoveAll(t => t is null);
+                    }
+
                     return new RivalryStore(loaded);
                 }
             }

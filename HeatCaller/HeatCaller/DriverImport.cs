@@ -237,7 +237,10 @@ internal static class DriverImport
     {
         points = 0;
 
-        var value = (text ?? string.Empty).Trim();
+        // The Unicode minus (U+2212) is what sv/nb/fi Windows and their
+        // spreadsheets write for a negative number; the parse below is
+        // invariant and only knows '-' (17 Oct 2026, Bug Hunt 8, A26-2).
+        var value = (text ?? string.Empty).Trim().Replace('\u2212', '-');
 
         // "45 pts", "45 points".
         var end = value.Length;

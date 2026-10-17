@@ -85,6 +85,59 @@ public sealed class RaceHistoryControl : UserControl
         _textSize.Apply();
     }
 
+    /// <summary>
+    /// The form whose closing flushes the notes box - see
+    /// <see cref="HookClosingForm"/>.
+    /// </summary>
+    private Form? _closingHooked;
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        HookClosingForm();
+    }
+
+    protected override void OnParentChanged(EventArgs e)
+    {
+        base.OnParentChanged(e);
+        HookClosingForm();
+    }
+
+    /// <summary>
+    /// 17 Oct 2026, Bug Hunt 8, A30-4: closing the main window while
+    /// typing a note lost it, because notes were saved only when focus left
+    /// the box. Saved as the form closes instead - before any control is
+    /// destroyed, while the history is still there to write to.
+    /// </summary>
+    private void HookClosingForm()
+    {
+        if (FindForm() is not { } form || ReferenceEquals(form, _closingHooked))
+        {
+            return;
+        }
+
+        if (_closingHooked is not null)
+        {
+            _closingHooked.FormClosing -= FlushNotesOnClosing;
+        }
+
+        _closingHooked = form;
+        form.FormClosing += FlushNotesOnClosing;
+    }
+
+    private void FlushNotesOnClosing(object? sender, FormClosingEventArgs e)
+    {
+        try
+        {
+            SaveNotes();
+        }
+        catch
+        {
+            // Never the reason the app cannot close. SaveChanges reports
+            // its own failures; anything else here is not worth a hang.
+        }
+    }
+
     private void BuildLayout()
     {
         // --- The sessions ---
@@ -241,6 +294,12 @@ public sealed class RaceHistoryControl : UserControl
 
     private void RefreshList()
     {
+        // 17 Oct 2026, Bug Hunt 8, A30-4: what is in the notes box is
+        // saved before the list (and the box) is cleared. Notes were saved
+        // only on Leave, and the Leave this clearing raises found nothing
+        // to save it against. Safe for a just-deleted session: Get is null.
+        SaveNotes();
+
         _sessionList.Items.Clear();
         foreach (var s in _history.All)
         {

@@ -453,6 +453,32 @@ public sealed class HandicapStore
         double AverageBestLapSeconds);
 
     /// <summary>
+    /// The saved sessions a class's handicaps are worked out from, newest
+    /// first as the history keeps them. Demo races never count.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A26-1: with a class and the race programme,
+    /// only races whose round belongs to that class. Every class, every
+    /// session type was used, so a driver who also ran a faster class had
+    /// those laps averaged in and was handed the wrong credit. A session
+    /// carries no class of its own, so it is found through its round. With
+    /// either left out, every non-demo session is used, as it always was.
+    /// </summary>
+    internal static IEnumerable<SessionRecord> SessionsFor(SessionHistoryStore history, RoundDefinitionStore? rounds, string? className)
+    {
+        var sessions = history.All.Where(s => !s.IsDemoSession());
+
+        if (rounds is null || string.IsNullOrWhiteSpace(className))
+        {
+            return sessions;
+        }
+
+        return sessions.Where(s =>
+            s.SessionType == RaceSessionType.Race
+            && s.RoundId is { } id
+            && string.Equals(rounds.Get(id)?.ClassName, className, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Suggests time credits from recent pace.
     ///
     /// The reference is the FASTEST driver in the group, and everyone else
@@ -463,13 +489,20 @@ public sealed class HandicapStore
     /// Suggestions only - never applied automatically. A handicap decides
     /// who wins, so it should be a person's decision, and locked drivers are
     /// left alone entirely.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A26-1: given the class and the race
+    /// programme, only that class's races are used - see SessionsFor.
     /// </summary>
     public List<Suggestion> Suggest(
         IEnumerable<DriverProfile> drivers,
         SessionHistoryStore history,
         int recentSessions,
-        int typicalLaps)
+        int typicalLaps,
+        string? className = null,
+        RoundDefinitionStore? rounds = null)
     {
+        var sessions = SessionsFor(history, rounds, className).ToList();
+
         var pace = new Dictionary<string, (string Name, double AvgBest, int Count)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var driver in drivers)
@@ -479,8 +512,7 @@ public sealed class HandicapStore
             // the season, and one bad race shouldn't either. Saved demo
             // races are skipped - invented lap times must never decide a
             // real driver's handicap.
-            var bests = history.All
-                .Where(s => !s.IsDemoSession())
+            var bests = sessions
                 .SelectMany(s => s.Results.Where(r =>
                     string.Equals(r.Transponder, driver.Transponder, StringComparison.OrdinalIgnoreCase)
                     && r.FastLapMs > 0))

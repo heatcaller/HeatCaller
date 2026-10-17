@@ -98,7 +98,7 @@ public sealed partial class WebServerService
 
         var device = ClientKey(context);
 
-        if (!_notesFromOnePhone.TryReserve(device, out _))
+        if (!_notesFromOnePhone.TryReserve(device, out var phoneTicket))
         {
             context.Response.StatusCode = 429;
             WriteJson(context, "{\"ok\":false,\"error\":\"You have sent a few already - give the announcer a chance.\"}");
@@ -107,6 +107,9 @@ public sealed partial class WebServerService
 
         if (!_notesFromTheHall.TryReserve("all", out _))
         {
+            // Not this phone's doing (17 Oct 2026, Bug Hunt 8, A18-2), so
+            // its own allowance is given back - as ReserveCheckInWrite does.
+            _notesFromOnePhone.Release(device, phoneTicket);
             context.Response.StatusCode = 429;
             WriteJson(context, "{\"ok\":false,\"error\":\"Lots of messages coming in right now. Try again in a few minutes.\"}");
             return;
@@ -119,6 +122,8 @@ public sealed partial class WebServerService
 
         if (TonightsNotes?.Invoke() is not { } notes)
         {
+            // Not this phone's doing either (A18-2).
+            _notesFromOnePhone.Release(device, phoneTicket);
             context.Response.StatusCode = 404;
             WriteJson(context, "{\"ok\":false,\"error\":\"Not found\"}");
             return;

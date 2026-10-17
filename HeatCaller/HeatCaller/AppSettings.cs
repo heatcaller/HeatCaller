@@ -2264,6 +2264,26 @@ public sealed class AppSettings
     private const string NewRelayHost = "heatcaller-relay.fly.dev";
 
     /// <summary>
+    /// An address with any of the relay's old hosts moved onto the current
+    /// one - the rule <see cref="MoveToRenamedRelay"/> applies to the live
+    /// settings on every Load.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A23-4: lifted out so RestoredSettings can
+    /// compare a pre-rename backup's relay address the way it will read
+    /// once loaded. Without it the club's own old backup counted as a NEW
+    /// relay address and held publishing until somebody pressed Save.
+    /// </summary>
+    internal static string MovedOffLegacyRelay(string address)
+    {
+        foreach (var oldHost in LegacyNames.RelayHosts)
+        {
+            address = address.Replace(oldHost, NewRelayHost, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return address;
+    }
+
+    /// <summary>
     /// The hosted relay has moved to a new Fly app each time the app was
     /// renamed. Its config - clubs and tokens - goes with it unchanged, so
     /// only the host in the address changes; an old address forwards to the
@@ -2273,15 +2293,7 @@ public sealed class AppSettings
     /// </summary>
     private bool MoveToRenamedRelay()
     {
-        static string Moved(string address)
-        {
-            foreach (var oldHost in LegacyNames.RelayHosts)
-            {
-                address = address.Replace(oldHost, NewRelayHost, StringComparison.OrdinalIgnoreCase);
-            }
-
-            return address;
-        }
+        static string Moved(string address) => MovedOffLegacyRelay(address);
 
         var before = RelayBaseUrl + "|" + RelayLastGoodBaseUrl + "|" + VoiceRelayBaseUrl;
 

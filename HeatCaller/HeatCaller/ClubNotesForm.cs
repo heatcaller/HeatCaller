@@ -54,6 +54,14 @@ internal sealed class ClubNotesForm : Form
     private readonly Button _btnApprove = new();
     private readonly Button _btnRemove = new();
 
+    // 17 Oct 2026, Bug Hunt 8, A29-4: notes from the room arrive on other
+    // threads while this modal window sits open waiting for approvals, and
+    // nothing redrew it. Polled like RoomVoteForm's tick, and redrawn only
+    // when the list actually changed, so rows are not rebuilt under the
+    // race director's mouse.
+    private readonly System.Windows.Forms.Timer _tick = new() { Interval = 2000 };
+    private string _drawn = "";
+
     public ClubNotesForm(ClubNotes notes)
     {
         _notes = notes;
@@ -87,6 +95,12 @@ internal sealed class ClubNotesForm : Form
             new DataGridViewTextBoxColumn { Name = "state", HeaderText = "State", FillWeight = 34 },
             new DataGridViewTextBoxColumn { Name = "from", HeaderText = "From", FillWeight = 42 },
             new DataGridViewTextBoxColumn { Name = "note", HeaderText = "Note", FillWeight = 190 });
+
+        // 17 Oct 2026, Bug Hunt 8, A29-5: a note longer than the column
+        // was cut off with an ellipsis, so the race director approved text
+        // they had not seen all of. Wrapped, and the row grows to show it.
+        _grid.Columns["note"]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
 
         _grid.SelectionChanged += (_, _) => UpdateButtons();
 
@@ -154,6 +168,21 @@ internal sealed class ClubNotesForm : Form
         Pieces.KeepHeadingsWhole(_grid);
 
         Fill();
+
+        // See _tick (Bug Hunt 8, A29-4).
+        _tick.Tick += (_, _) =>
+        {
+            if (Signature() != _drawn)
+            {
+                Fill();
+            }
+        };
+        _tick.Start();
+        FormClosed += (_, _) =>
+        {
+            _tick.Stop();
+            _tick.Dispose();
+        };
 
         // Wider than it is tall: a note is a sentence, and a column of
         // sentences wants the width more than it wants the rows.
@@ -245,8 +274,18 @@ internal sealed class ClubNotesForm : Form
             ? "Nothing for tonight yet."
             : $"{Plural.Of(toApprove, "note")} waiting for you, {toSay} ready to be said, {said} already said.";
 
+        _drawn = Signature();
+
         UpdateButtons();
     }
+
+    /// <summary>
+    /// What the list holds, by id and state, so the tick can tell a change
+    /// (a note added, approved, said or removed) from nothing happening.
+    /// See _tick.
+    /// </summary>
+    private string Signature() =>
+        string.Join("|", _notes.All.Select(one => $"{one.Id}:{one.Approved}:{one.SaidAtUtc is null}"));
 
     private ClubNote? Selected()
     {

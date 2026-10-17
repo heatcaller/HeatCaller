@@ -2,8 +2,9 @@ namespace HeatCaller;
 
 /// <summary>
 /// Settings dialog for all sound effects: one row per SoundEffectKind, each
-/// toggleable with an optional custom audio file, plus the streak threshold
-/// and an overall volume. Mimics Next Level Timing's own audio feedback for
+/// toggleable with an optional custom audio file, plus the most sounds per
+/// lap (the streak thresholds are on Voice > Race Calls and the volume on the
+/// Mixer, since 17 Oct 2026). Mimics Next Level Timing's own audio feedback for
 /// laps and race lifecycle moments; see AnnouncementService/ToneGenerator
 /// for how these get triggered and played.
 /// </summary>
@@ -103,10 +104,11 @@ public sealed class SoundEffectsControl : UserControl
         public bool Updating { get; set; }
     }
 
-    // Streak threshold per context - a single box on screen, two values.
-    private readonly Label _lblThreshold = new();
+    // The streak thresholds moved to Voice > Race Calls' How often card on
+    // 17 Oct 2026: they decide the voice's streak call as much as this
+    // page's streak sound. Same store fields (StreakThreshold,
+    // StreakThresholdInPractice); BuildProfile carries them through.
     private readonly Dictionary<SoundEffectKind, NumericUpDown> _weights = new();
-    private readonly NumericUpDown _numThreshold = new();
 
     /// <summary>"Set every sound to:" - shows the pack every row shares, or "Mixed".</summary>
     private readonly ComboBox _cmbSetAll = NewSoundCombo(null);
@@ -118,9 +120,6 @@ public sealed class SoundEffectsControl : UserControl
 
     private readonly System.Windows.Forms.Timer _saveDebounce = new() { Interval = 400 };
 
-    private readonly Label _lblPracticeThreshold = new();
-    private readonly NumericUpDown _numPracticeThreshold = new();
-    private readonly NumericUpDown _numVolumePercent = new();
     private readonly NumericUpDown _numMaxPerLap = new();
     private readonly Label _lblStatus = new();
 
@@ -291,9 +290,6 @@ public sealed class SoundEffectsControl : UserControl
 
         BuildLayout(current);
 
-        _numThreshold.ValueChanged += (_, _) => QueueSave();
-        _numPracticeThreshold.ValueChanged += (_, _) => QueueSave();
-        _numVolumePercent.ValueChanged += (_, _) => QueueSave();
         _numMaxPerLap.ValueChanged += (_, _) => QueueSave();
 
         _saveDebounce.Tick += (_, _) => SaveNow();
@@ -330,8 +326,8 @@ public sealed class SoundEffectsControl : UserControl
     /// them when the line is too narrow) and their note; the list of sounds,
     /// taking the height that is left, in a frame with its column headings
     /// held above the rows (StickyHeadings); then the page-level settings, a
-    /// line each - the two streak thresholds, the volume, and the most sounds
-    /// per lap - and the status line. On the layout pieces (LayoutPieces.cs),
+    /// line each - the most sounds per lap (the volume is the Mixer's, and
+    /// the streak thresholds are on Voice > Race Calls) - and the status line. On the layout pieces (LayoutPieces.cs),
     /// except the list's rows, whose columns are measured in the fonts in use
     /// and placed again at every text size (PlaceRows); the list scrolls
     /// sideways inside its frame when a row is wider than the page.
@@ -496,42 +492,13 @@ public sealed class SoundEffectsControl : UserControl
         // are the page's own parts now, under the list, each caption with its
         // box beside it (FieldRow).
 
-        _lblThreshold.Text = "Streak threshold - races:";
-        _lblThreshold.ForeColor = AppTheme.TextDark;
+        // The streak thresholds were the first line here until 17 Oct 2026.
+        // They are on Voice > Race Calls' How often card now, beside the
+        // voice's own streak call that they also decide.
 
-        // Two is the floor, not one - a run of one lap is a lap. See
-        // SoundEffectsProfile.StreakThresholdFor.
-        _numThreshold.Minimum = 2;
-        _numThreshold.Maximum = 50;
-        _numThreshold.Value = Math.Clamp(current.StreakThreshold, 2, 50);
-
-        _lblPracticeThreshold.Text = "practice:";
-        _lblPracticeThreshold.ForeColor = AppTheme.TextMuted;
-
-        _numPracticeThreshold.Minimum = 2;
-        _numPracticeThreshold.Maximum = 50;
-        _numPracticeThreshold.Value =
-            Math.Clamp(current.StreakThresholdInPractice ?? current.StreakThreshold, 2, 50);
-
-        var thresholds = new FieldRow();
-
-        thresholds.Add(_lblThreshold, _numThreshold, NumberBoxWidth);
-        thresholds.Add(_lblPracticeThreshold, _numPracticeThreshold, NumberBoxWidth);
-
-        // Volume gets its own line rather than being crammed on the end of
-        // the thresholds - three caption-and-box pairs on one row is how
-        // that line came out unreadable.
-        var lblVolume = new Label { Text = "Sound effects volume (%):", ForeColor = AppTheme.TextDark };
-
-        _numVolumePercent.Minimum = 0;
-        _numVolumePercent.Maximum = 100;
-        _numVolumePercent.Increment = 5;
-        _numVolumePercent.Value = (decimal)Math.Clamp(current.Volume * 100.0, 0, 100);
-        _volumeShown = _numVolumePercent.Value;
-
-        var volume = new FieldRow();
-
-        volume.Add(lblVolume, _numVolumePercent, NumberBoxWidth);
+        // No volume box here any more (17 Oct 2026): the effects' level is
+        // the Mixer's Sound effects fader, the one place it is set.
+        // BuildProfile carries the stored level through.
 
         var lblMaxPerLap = new Label
         {
@@ -575,8 +542,6 @@ public sealed class SoundEffectsControl : UserControl
         page.Add(bulk, gapBelow: UiLayout.HintGap);
         page.Add(lblBulkHint, gapBelow: UiLayout.RowGap);
         _listFrame = page.AddFill(list, _ => ListLeastHeight());
-        page.Add(thresholds, gapBelow: UiLayout.RowGap);
-        page.Add(volume, gapBelow: UiLayout.RowGap);
         page.Add(maxPerLap, gapBelow: UiLayout.RowGap);
         page.Add(_lblStatus, gapBelow: 0);
 
@@ -1145,7 +1110,7 @@ public sealed class SoundEffectsControl : UserControl
         _lblStatus.ForeColor = AppTheme.TextMuted;
     }
 
-    private float CurrentVolume() => (float)(_numVolumePercent.Value / 100m);
+    private float CurrentVolume() => (float)_store.Current.Volume;
 
     /// <summary>
     /// Makes one sound's row - its controls, what they do, and the file it
@@ -1474,7 +1439,9 @@ public sealed class SoundEffectsControl : UserControl
     private Task PlayRowAsync(SoundEffectKind kind, ComboBox sound, string filePath)
     {
         var config = new SoundEffectConfig { BuiltInSound = SoundKeyOf(sound), CustomFilePath = filePath.Trim() };
-        var threshold = (int)_numThreshold.Value;
+        // The race threshold, as the store holds it - the box is on Voice >
+        // Race Calls now.
+        var threshold = _store.Current.StreakThresholdFor(practice: false);
 
         // Test plays the streak as it sounds a couple of laps past the
         // threshold, so the climb is audible on a pack sound.
@@ -1509,70 +1476,16 @@ public sealed class SoundEffectsControl : UserControl
         _saveDebounce.Start();
     }
 
-    /// <summary>
-    /// The volume box's value as last loaded from, or saved to, the store.
-    /// If the box still shows this, nobody has changed it on THIS page.
-    /// </summary>
-    private decimal _volumeShown;
-
-    /// <summary>
-    /// Brings the volume box up to date with the saved level.
-    ///
-    /// The Mixer page writes the same stored volume, but this page read it
-    /// once when it was built - so the next tick or file change here saved
-    /// the old number back and silently undid the Mixer. Only taken when
-    /// the box hasn't been changed here since it was last in step, so an
-    /// edit made on this page is never overwritten.
-    /// </summary>
-    private void SyncVolumeFromStore()
-    {
-        var stored = (decimal)Math.Clamp(_store.Current.Volume * 100.0, 0, 100);
-
-        if (_numVolumePercent.Value != _volumeShown || stored == _volumeShown)
-        {
-            return;
-        }
-
-        var wasLoading = _loading;
-        _loading = true;
-
-        try
-        {
-            _numVolumePercent.Value = stored;
-        }
-        finally
-        {
-            _loading = wasLoading;
-        }
-
-        _volumeShown = stored;
-    }
-
-    protected override void OnVisibleChanged(EventArgs e)
-    {
-        base.OnVisibleChanged(e);
-
-        // Coming back to this page after using the Mixer should show the
-        // level the Mixer set, not the one from when the page was built.
-        if (Visible)
-        {
-            SyncVolumeFromStore();
-        }
-    }
-
     private void SaveNow()
     {
         _saveDebounce.Stop();
 
-        // Before building the profile, so a save triggered by some other
-        // control carries the CURRENT stored volume rather than a stale one.
-        SyncVolumeFromStore();
-
+        // The profile carries the CURRENT stored volume (the Mixer's
+        // level) - see BuildProfile.
         var profile = BuildProfile();
 
         _store.Save(profile);
         _profileShown = _store.Current;
-        _volumeShown = _numVolumePercent.Value;
 
         var races = profile.Effects.Values.Count(c => c.Enabled);
         var practice = profile.Effects.Values.Count(c => c.EnabledInPractice ?? c.Enabled);
@@ -1632,7 +1545,6 @@ public sealed class SoundEffectsControl : UserControl
 
         if (ReferenceEquals(_store.Current, _profileShown))
         {
-            SyncVolumeFromStore();
             return;
         }
 
@@ -1677,9 +1589,6 @@ public sealed class SoundEffectsControl : UserControl
                 }
             }
 
-            _numThreshold.Value = Math.Clamp(profile.StreakThreshold, 2, 50);
-            _numPracticeThreshold.Value = Math.Clamp(profile.StreakThresholdInPractice ?? profile.StreakThreshold, 2, 50);
-            _numVolumePercent.Value = (decimal)Math.Clamp(profile.Volume * 100.0, 0, 100);
             _numMaxPerLap.Value = Math.Clamp(profile.MaxEffectsPerLap, 1, 5);
         }
         finally
@@ -1687,7 +1596,6 @@ public sealed class SoundEffectsControl : UserControl
             _loading = wasLoading;
         }
 
-        _volumeShown = _numVolumePercent.Value;
         _profileShown = profile;
         UpdateSetAll();
     }
@@ -1697,9 +1605,12 @@ public sealed class SoundEffectsControl : UserControl
     {
         var profile = new SoundEffectsProfile
         {
-            StreakThreshold = (int)_numThreshold.Value,
-            StreakThresholdInPractice = (int)_numPracticeThreshold.Value,
-            Volume = (double)(_numVolumePercent.Value / 100m),
+            // Both as the store holds them: they are set on Voice > Race
+            // Calls (17 Oct 2026), as the volume is on the Mixer, so this
+            // page carries them through rather than writing over them.
+            StreakThreshold = _store.Current.StreakThreshold,
+            StreakThresholdInPractice = _store.Current.StreakThresholdInPractice,
+            Volume = _store.Current.Volume,
             MaxEffectsPerLap = (int)_numMaxPerLap.Value,
         };
 

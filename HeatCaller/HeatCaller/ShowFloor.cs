@@ -64,6 +64,10 @@ internal static class ShowFloor
     /// follow-ons for FollowOnWait, and the tail for a minute. Six minutes
     /// is past all of that with room to spare, and still short enough that
     /// a night does not lose its filler.
+    ///
+    /// (17 Oct 2026, Bug Hunt 8, A04-3: Race Control's sequence now asks for
+    /// its own, longer ceiling - a main's break, recap, honours, interview
+    /// and sign-off can run past six minutes. See TakeOver.)
     /// </summary>
     private static readonly TimeSpan Longest = TimeSpan.FromMinutes(6);
 
@@ -170,6 +174,32 @@ internal static class ShowFloor
             _ceiling = longest < Longest ? Longest : longest;
 
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Takes the floor for <paramref name="who"/> whoever has it (17 Oct
+    /// 2026, Bug Hunt 8, A04-4). For the programme itself - Race Control's
+    /// recap sequence - which goes out whatever else is on: a Play again
+    /// that held the floor at the flag used to keep it, and its own
+    /// Release then freed the floor halfway through the recap, so the
+    /// director's tick could start a segment over the break. Taken over,
+    /// that later Release matches nothing and does nothing.
+    /// </summary>
+    internal static void TakeOver(string who, TimeSpan longest)
+    {
+        lock (Gate)
+        {
+            var name = string.IsNullOrWhiteSpace(who) ? "a show" : who.Trim();
+
+            if (_who is { } was && !string.Equals(was, name, StringComparison.Ordinal))
+            {
+                Report($"[show] The broadcast floor was taken over from {was} by {name}.");
+            }
+
+            _who = name;
+            _takenUtc = DateTime.UtcNow;
+            _ceiling = longest < Longest ? Longest : longest;
         }
     }
 

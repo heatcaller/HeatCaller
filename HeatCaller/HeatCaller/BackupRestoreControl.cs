@@ -1206,6 +1206,16 @@ public sealed class BackupRestoreControl : UserControl
         {
             var held = canHold ? UndoHoldingFolder.MoveIn(original, UndoHoldingFolder.NewFolder()) : null;
 
+            if (held is null && canHold)
+            {
+                // 17 Oct 2026, Bug Hunt 8, A23-5: the operator was just told
+                // "Undo can bring it back", so a failed move to the holding
+                // folder must not fall through to deleting it outright.
+                AppDialog.Show(this, $"Couldn't set {item.File.Name} aside for Undo, so it has not been deleted.", "Delete failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                return;
+            }
+
             if (held is null)
             {
                 item.File.Delete();

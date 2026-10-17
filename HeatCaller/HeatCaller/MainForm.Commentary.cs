@@ -3,8 +3,9 @@ namespace HeatCaller;
 /// <summary>
 /// MainForm's side of the recap's broadcast (27 Sep 2026): what the Garage
 /// has on the winning car, for the mechanic's interview, and the voices the
-/// Commentary page offers the mechanic. Here because both need stores and
-/// voice clients only MainForm holds.
+/// Cast tab offers the mechanic and the rest of the cast (the Commentary
+/// page's, until the Voice regroup of 17 Oct 2026). Here because both need
+/// stores and voice clients only MainForm holds.
 /// </summary>
 public partial class MainForm
 {
@@ -25,45 +26,49 @@ public partial class MainForm
     /// <summary>And one for the race recap host - the kind of thing the top of a recap says.</summary>
     private const string RecapHostTestLine = "And we're back! What a finish that was - let's take you through how that one unfolded.";
 
-    /// <summary>Hooks the recap's broadcast up to Race Control and the Commentary page. Called once, when both exist.</summary>
-    private void WireRecapBroadcast(RaceControlControl raceControl, CommentaryControl commentary)
+    /// <summary>Hooks the recap's broadcast up to Race Control, the AI Commentary tab and the Cast tab. Called once, when all three exist.</summary>
+    private void WireRecapBroadcast(RaceControlControl raceControl, CommentaryControl commentary, CastControl cast)
     {
         raceControl.MechanicSetupFacts = MechanicSetupFactsFor;
         raceControl.RecapCarFacts = RecapCarFactsFor;
 
-        commentary.EngineInUse = () => _voiceStore.Current.EffectiveEngine;
-
         // The club's own "Max spoken announcements per lap", so How chatty
         // describes what it does to their calls, not the default's (17 Oct 2026).
         commentary.MaxCallsPerLap = () => _voiceStore.Current.MaxAnnouncementsPerLap;
-        commentary.LoadVoices = MechanicVoiceChoicesAsync;
+
+        // The names and voices are on the Cast tab since 17 Oct 2026, and
+        // its one Load Voices fills every list from the engine in use.
+        cast.EngineInUse = () => _voiceStore.Current.EffectiveEngine;
+        cast.LoadVoices = MechanicVoiceChoicesAsync;
 
         // Heard even while the announcer is muted - it was asked for by hand.
-        commentary.SpeakAsMechanic = voice => _announcer.SpeakTest(MechanicTestLine, _voiceStore.Current.Speed, voice);
-        commentary.SpeakAsHonours = voice => _announcer.SpeakTest(HonoursTestLine, _voiceStore.Current.Speed, voice);
-        commentary.SpeakAsRecapHost = voice => _announcer.SpeakTest(RecapHostTestLine, _voiceStore.Current.Speed, voice);
+        cast.SpeakAsMechanic = voice => _announcer.SpeakTest(MechanicTestLine, _voiceStore.Current.Speed, voice);
+        cast.SpeakAsHonours = voice => _announcer.SpeakTest(HonoursTestLine, _voiceStore.Current.Speed, voice);
+        cast.SpeakAsRecapHost = voice => _announcer.SpeakTest(RecapHostTestLine, _voiceStore.Current.Speed, voice);
     }
 
     /// <summary>
-    /// Hooks the show's music up to the Commentary page.
+    /// Hooks the show's music up to Sounds > Imaging's Show treatment card,
+    /// and tonight's recap up to Sounds > Recording - both on the Commentary
+    /// page until the Sounds regroup (17 Oct 2026).
     ///
-    /// The page chooses the files; the announcer screen owns the treatment
+    /// The card chooses the files; the announcer screen owns the treatment
     /// that plays them, because that is where a segment is spoken. Neither
     /// can reach the other, so both go through here.
     /// </summary>
-    private static void WireShowMusic(AnnouncerControl announcer, CommentaryControl commentary)
+    private static void WireShowMusic(AnnouncerControl announcer, ShowTreatmentCard show, RecordingControl recording)
     {
-        commentary.TestShowMusic = announcer.TestShowMusicAsync;
+        show.TestShowMusic = announcer.TestShowMusicAsync;
 
         // The night in four minutes - written, played once and kept in
         // tonight's folder. See NightRecap.
-        commentary.PlayTonightsRecap = announcer.PlayTonightsRecapAsync;
+        recording.PlayTonightsRecap = announcer.PlayTonightsRecapAsync;
 
         // The loaded audio is shared (ShowMusic), so this is really telling
         // the announcer screen to drop it - said explicitly rather than
-        // relied on, because "the page clears a cache the announcer happens
+        // relied on, because "the card clears a cache the announcer happens
         // to share" is exactly the kind of thing that stops being true.
-        commentary.ShowMusicChanged = announcer.ReloadShowMusic;
+        show.ShowMusicChanged = announcer.ReloadShowMusic;
     }
 
     /// <summary>
@@ -79,7 +84,7 @@ public partial class MainForm
     /// rule every other reader on this page follows: a club runs races
     /// between opening the driver picker and opening it again.
     /// </summary>
-    private void WireTheDriversNight(AnnouncerControl announcer, CommentaryControl commentary)
+    private void WireTheDriversNight(AnnouncerControl announcer, RecordingControl recording)
     {
         // TONIGHT'S RACES, through TonightAtTheTrack rather than filtered
         // again here. Its night runs 6am to 6am and it is the same answer
@@ -120,7 +125,7 @@ public partial class MainForm
         // their results name them, because that is what the piece is
         // written from and a picker that says something else is a picker
         // that picks the wrong person.
-        commentary.DriversTonight = () =>
+        recording.DriversTonight = () =>
         {
             var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -157,15 +162,15 @@ public partial class MainForm
             return seen.Select(one => (one.Key, one.Value)).ToList();
         };
 
-        commentary.PlayADriversNight = announcer.PlayADriversNightAsync;
+        recording.PlayADriversNight = announcer.PlayADriversNightAsync;
 
         // And why the announcer said what it last said - see
         // NightAccount.Proof.
-        commentary.ProofOfTheLastLine = announcer.TheProofOfTheLastLine;
+        recording.ProofOfTheLastLine = announcer.TheProofOfTheLastLine;
 
         // THE NIGHT BEFORE - see NightBefore, and WriteTheNightBeforeAsync
         // below for why the fact-gathering is here rather than on the page.
-        commentary.WriteTheNightBefore = WriteTheNightBeforeAsync;
+        recording.WriteTheNightBefore = WriteTheNightBeforeAsync;
     }
 
     /// <summary>
@@ -292,7 +297,8 @@ public partial class MainForm
 
         if (string.IsNullOrWhiteSpace(script))
         {
-            return "The model did not write anything usable. Try again, or check the Connection card above.";
+            // Named, not "above" (17 Oct 2026, Bug Hunt 8, A15-2): this is shown on Sounds > Recording.
+            return "The model did not write anything usable. Try again, or check the Connection card on Voice > AI Commentary.";
         }
 
         try
@@ -555,6 +561,8 @@ public partial class MainForm
         // see CommentaryDirector._marks for why that is not the same
         // moment as being chosen.
         director.ClubAsideSaid = id => _clubNotes.Said(id);
+        // 17 Oct 2026, Bug Hunt 8, A29-1: re-checked before a written note is said.
+        director.ClubAsideStillWanted = id => _clubNotes.StillToSay(id);
 
         // WHAT THE ROOM RECKONED (12 Oct 2026) - the only segment in the
         // app that can be wrong, and the only one whose content the people
@@ -917,11 +925,11 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The voices an engine offers, for the mechanic's list on the
-    /// Commentary page. Throws with a sentence the page can show when it
+    /// The voices an engine offers, for the voice lists on the Cast tab (the
+    /// mechanic's, first). Throws with a sentence the page can show when it
     /// can't list them.
     /// </summary>
-    private async Task<IReadOnlyList<CommentaryControl.VoiceChoice>> MechanicVoiceChoicesAsync(VoiceEngine engine)
+    private async Task<IReadOnlyList<CastControl.VoiceChoice>> MechanicVoiceChoicesAsync(VoiceEngine engine)
     {
         switch (engine)
         {
@@ -930,7 +938,7 @@ public partial class MainForm
                 // Read from the names of the files beside the exe - nothing
                 // to download or ask for, so this can't fail.
                 return KokoroSpeech.InstalledVoices()
-                    .Select(v => new CommentaryControl.VoiceChoice(v.Name, v.Name, string.Empty, v.Display))
+                    .Select(v => new CastControl.VoiceChoice(v.Name, v.Name, string.Empty, v.Display))
                     .ToList();
             }
 
@@ -944,7 +952,7 @@ public partial class MainForm
                 }
 
                 return catalogue.Voices
-                    .Select(v => new CommentaryControl.VoiceChoice(v.Id, v.Name, v.Rev, v.ToString()))
+                    .Select(v => new CastControl.VoiceChoice(v.Id, v.Name, v.Rev, v.ToString()))
                     .ToList();
             }
 
@@ -954,13 +962,13 @@ public partial class MainForm
 
                 if (string.IsNullOrWhiteSpace(key))
                 {
-                    throw new InvalidOperationException("there's no ElevenLabs API key on the Voice Settings page");
+                    throw new InvalidOperationException("there's no ElevenLabs API key on the Voice tab");
                 }
 
                 var voices = await new ElevenLabsClient().GetVoicesAsync(key);
 
                 return voices
-                    .Select(v => new CommentaryControl.VoiceChoice(v.VoiceId, v.Name, string.Empty, v.Name))
+                    .Select(v => new CastControl.VoiceChoice(v.VoiceId, v.Name, string.Empty, v.Name))
                     .ToList();
             }
         }

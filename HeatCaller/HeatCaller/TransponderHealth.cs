@@ -308,9 +308,18 @@ public sealed class TransponderHealthStore
             _lastSaveUtc = DateTime.UtcNow;
         }
 
-        if (_path is not null)
+        // 17 Oct 2026, Bug Hunt 8, A02-4: a write that failed (a sync tool
+        // holding the file, a full disk) marks the store dirty again, so
+        // SaveIfDue tries again a minute later and the close-time Save does
+        // too - the flag used to be cleared before the write and the result
+        // ignored, losing those readings. Not after a restore froze the
+        // store: that freeze is for good, and retrying it is pointless.
+        if (_path is not null && !SafeFile.WriteAllText(_path, json) && !SafeFile.IsFrozen)
         {
-            SafeFile.WriteAllText(_path, json);
+            lock (_gate)
+            {
+                _dirty = true;
+            }
         }
     }
 

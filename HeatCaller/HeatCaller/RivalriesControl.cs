@@ -27,6 +27,9 @@ public sealed class RivalriesControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
+    /// <summary>The page the cards are on - held so a host can ask how tall it has to be (LeastHeight).</summary>
+    private FillPage? _page;
+
     /// <summary>The rivalries' card and its buttons, which the column's width is measured from - see ListColumnWidth.</summary>
     private Section? _listCard;
     private ButtonBar? _listButtons;
@@ -75,8 +78,41 @@ public sealed class RivalriesControl : UserControl
         var locked = WordingIsFixed?.Invoke() == true;
 
         _txtTemplates.ReadOnly = locked;
-        _btnRestoreLines.Enabled = !locked;
+
+        // Only with a rivalry to restore (17 Oct 2026, Bug Hunt 8, A11-3),
+        // as SetEditEnabled has it.
+        _btnRestoreLines.Enabled = !locked && SelectedRivalry() is not null;
         _lblHeatCallerLock.Visible = locked;
+
+        // The box shows what will be spoken, which the lock changes - see
+        // ShowTemplates. Re-shown here because the voice can change on
+        // another page while this one sits there.
+        if (SelectedRivalry() is { } rivalry)
+        {
+            _suppressEvents = true;
+            try
+            {
+                ShowTemplates(rivalry);
+            }
+            finally
+            {
+                _suppressEvents = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Puts a rivalry's lines in the box - or, while the HeatCaller voice
+    /// fixes the wording, the built-in set, because that is what the
+    /// announcer speaks then (17 Oct 2026, Bug Hunt 8, A11-2). The club's
+    /// own lines are kept in the store, untouched, for when the lock lifts:
+    /// SaveCurrentFromUi never writes the box back while it is fixed.
+    /// </summary>
+    private void ShowTemplates(RivalryLine rivalry)
+    {
+        var shown = WordingIsFixed?.Invoke() == true ? new RivalryLine().Templates : rivalry.Templates;
+
+        _txtTemplates.Text = string.Join(Environment.NewLine, shown);
     }
 
     public RivalriesControl(RivalryStore rivalries, ProfileStore profiles, UndoService undo)
@@ -207,13 +243,13 @@ public sealed class RivalriesControl : UserControl
         _txtTemplates.Leave += (_, _) => { if (!_suppressEvents) SaveCurrentFromUi(); };
 
         // These lines are spoken by the announcer, so the HeatCaller voice
-        // fixes them the same way it fixes the ones on Voice Settings: that
+        // fixes them the same way it fixes the ones on the Voice tab: that
         // account is HeatCaller's, not the club's, and words somebody typed
         // are words somebody else pays for. A club that wants its own
-        // rivalry lines uses its own ElevenLabs key or the free Windows
+        // rivalry lines uses its own ElevenLabs key or the free Kokoro
         // voice - where they are theirs to spend - and the hint says so.
         _lblHeatCallerLock.Text =
-            "Fixed while the HeatCaller voice is speaking - use your own ElevenLabs key or the Windows voice to write your own.";
+            "Fixed while the HeatCaller voice is speaking - use your own ElevenLabs key or the free Kokoro voice to write your own.";
         // Under the lines box. Hidden, it takes no room: the box has it.
         _lblHeatCallerLock.AutoSize = true;
         _lblHeatCallerLock.ForeColor = AppTheme.Warning;
@@ -247,6 +283,11 @@ public sealed class RivalriesControl : UserControl
         page.Add(lblIntro);
         page.AddFill(band, band.LeastHeight, gapBelow: 0);
 
+        // Told on, for a host that gives this page the height it needs - the
+        // Race Calls tab, which has it as its last section (17 Oct 2026).
+        page.LeastHeightChanged += () => LeastHeightChanged?.Invoke();
+        _page = page;
+
         Controls.Add(page);
 
         // Once the pickers are on the page and wear its face - what they are
@@ -254,6 +295,33 @@ public sealed class RivalriesControl : UserControl
         _textSize.Keep(SizeFields);
 
         SetEditEnabled(false);
+    }
+
+    /// <summary>
+    /// How tall this page has to be at <paramref name="width"/> to show all
+    /// of it without scrolling - for a host that puts it in a page of its
+    /// own rather than a tab (see FillPage.LeastHeight).
+    /// </summary>
+    internal int LeastHeight(int width) => _page?.LeastHeight(width) ?? 0;
+
+    /// <summary>
+    /// Raised when <see cref="LeastHeight"/> may have changed - raised from
+    /// inside this page's own layout, so a host that answers by laying
+    /// itself out again has to wait for it to finish (BeginInvoke).
+    /// </summary>
+    internal event Action? LeastHeightChanged;
+
+    /// <summary>
+    /// Takes the page's own margins off, for a host that already has them -
+    /// the Race Calls tab, where this is a section at the foot of a page
+    /// rather than a page of its own (17 Oct 2026).
+    /// </summary>
+    internal void ShowAsSection()
+    {
+        if (_page is not null)
+        {
+            _page.Padding = Padding.Empty;
+        }
     }
 
     /// <summary>
@@ -381,7 +449,7 @@ public sealed class RivalriesControl : UserControl
             _cmbDriverA.SelectedIndex = _cmbDriverA.Items.IndexOf(rivalry.DriverA);
             _cmbDriverB.SelectedIndex = _cmbDriverB.Items.IndexOf(rivalry.DriverB);
             _chkEnabled.Checked = rivalry.Enabled;
-            _txtTemplates.Text = string.Join(Environment.NewLine, rivalry.Templates);
+            ShowTemplates(rivalry);
         }
         finally
         {
@@ -395,7 +463,11 @@ public sealed class RivalriesControl : UserControl
         _cmbDriverB.Enabled = enabled;
         _chkEnabled.Enabled = enabled;
         _txtTemplates.Enabled = enabled;
-        _btnRestoreLines.Enabled = enabled;
+
+        // Not while the HeatCaller voice fixes the wording (17 Oct 2026,
+        // Bug Hunt 8, A11-3): every selection came through here and turned
+        // the button back on over ApplyWordingLock.
+        _btnRestoreLines.Enabled = enabled && WordingIsFixed?.Invoke() != true;
     }
 
     /// <summary>
@@ -479,11 +551,18 @@ public sealed class RivalriesControl : UserControl
         rivalry.DriverA = _cmbDriverA.SelectedItem as string ?? rivalry.DriverA;
         rivalry.DriverB = _cmbDriverB.SelectedItem as string ?? rivalry.DriverB;
         rivalry.Enabled = _chkEnabled.Checked;
-        rivalry.Templates = _txtTemplates.Text
-            .Split('\n')
-            .Select(l => l.Trim('\r', ' '))
-            .Where(l => l.Length > 0)
-            .ToList();
+
+        // Not while the wording is fixed (17 Oct 2026, Bug Hunt 8, A11-2):
+        // the box shows the built-in set then (ShowTemplates), and a driver
+        // or tick changed would have saved it over the club's own lines.
+        if (WordingIsFixed?.Invoke() != true)
+        {
+            rivalry.Templates = _txtTemplates.Text
+                .Split('\n')
+                .Select(l => l.Trim('\r', ' '))
+                .Where(l => l.Length > 0)
+                .ToList();
+        }
 
         _rivalries.Upsert(rivalry);
 

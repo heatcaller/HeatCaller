@@ -219,6 +219,27 @@ public sealed class SetupLogStore
                 var list = JsonSerializer.Deserialize<List<SetupEntry>>(SafeFile.ReadAllTextWithRetry(FilePath));
                 if (list is not null)
                 {
+                    // 17 Oct 2026, Bug Hunt 8, A27-2: an explicit JSON null
+                    // overrides the initialisers above, so a hand-edited or
+                    // foreign file with "Values": null or a null entry used
+                    // to crash IsLegacy, FilledCount, All and Get. Repaired
+                    // in memory only - nothing is saved on load.
+                    list.RemoveAll(e => e is null || string.IsNullOrWhiteSpace(e.Id));
+
+                    foreach (var e in list)
+                    {
+                        e.DriverName ??= string.Empty;
+                        e.TrackLayoutName ??= string.Empty;
+                        e.CarModel ??= string.Empty;
+                        e.Notes ??= string.Empty;
+                        e.Tires ??= string.Empty;
+                        e.Gearing ??= string.Empty;
+                        e.Springs ??= string.Empty;
+                        e.RideHeight ??= string.Empty;
+                        e.Motor ??= string.Empty;
+                        e.Values ??= new();
+                    }
+
                     return new SetupLogStore(list);
                 }
             }

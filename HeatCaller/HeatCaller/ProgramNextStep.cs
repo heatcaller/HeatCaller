@@ -298,7 +298,10 @@ internal static class ProgramNextStep
                 continue;
             }
 
-            var feeder = mains.FirstOrDefault(m => m.MainTier == ready.MainTier + 1);
+            // 17 Oct 2026, Bug Hunt 8, A24-1: the same feeder the bump-up uses -
+            // with no race day open, "first at the tier below" could be last
+            // week's B-Main.
+            var feeder = MainsBuilder.FeederFor(ready, mains);
 
             return new ProgramStep(
                 ProgramStage.BumpUps,

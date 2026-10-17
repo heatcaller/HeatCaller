@@ -158,7 +158,7 @@ public sealed class BugHunt7ConsentTests : IDisposable
         var log = new ConcurrentQueue<string>();
         announcer.StatusMessage += log.Enqueue;
 
-        announcer.RetryHeatCallerVoiceSoon("a voice consent was recorded on Voice Settings");
+        announcer.RetryHeatCallerVoiceSoon("a voice consent was recorded on the Voice tab");
 
         Assert.Equal(DateTime.MinValue, (DateTime)retry.GetValue(announcer)!);
         Assert.Contains(log, line => line.Contains("tried again", StringComparison.Ordinal));
@@ -171,7 +171,7 @@ public sealed class BugHunt7ConsentTests : IDisposable
         var log = new ConcurrentQueue<string>();
         announcer.StatusMessage += log.Enqueue;
 
-        announcer.RetryHeatCallerVoiceSoon("a voice consent was recorded on Voice Settings");
+        announcer.RetryHeatCallerVoiceSoon("a voice consent was recorded on the Voice tab");
 
         Assert.Empty(log);
     }

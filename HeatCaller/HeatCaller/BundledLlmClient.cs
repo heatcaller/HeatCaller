@@ -433,18 +433,32 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
             produced++;
         }
 
-        var text = built.ToString();
+        return (StripThinking(built.ToString()), produced >= maxTokens);
+    }
 
-        // A pre-filled empty think block should stop this model reasoning
-        // out loud, but a model is not a contract: if a block appears
-        // anyway, the thinking is not commentary and must not be spoken.
+    /// <summary>
+    /// A pre-filled empty think block should stop this model reasoning
+    /// out loud, but a model is not a contract: if a block appears
+    /// anyway, the thinking is not commentary and must not be spoken.
+    /// Everything up to a closing tag goes, and so does everything from a
+    /// fresh opening tag on (17 Oct 2026, Bug Hunt 8, A08-3: an unclosed
+    /// "&lt;think&gt;Okay the user wants..." went out as commentary).
+    /// </summary>
+    internal static string StripThinking(string text)
+    {
         var close = text.IndexOf("</think>", StringComparison.OrdinalIgnoreCase);
         if (close >= 0)
         {
             text = text[(close + "</think>".Length)..];
         }
 
-        return (text, produced >= maxTokens);
+        var open = text.IndexOf("<think>", StringComparison.OrdinalIgnoreCase);
+        if (open >= 0)
+        {
+            text = text[..open];
+        }
+
+        return text;
     }
 
     /// <summary>
@@ -726,7 +740,7 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
                 StatusMessage?.Invoke(
                     $"[llm] This PC took {_measured.TotalSeconds:0.#}s to write one line, past the {Timeout.TotalSeconds:0.#}s a live call is given. " +
                     "The built-in model is switched off rather than making every segment wait and then say nothing. " +
-                    "Give it longer on the Commentary page if you would rather it tried.");
+                    "Give it longer on the AI Commentary tab if you would rather it tried.");
 
                 return;
             }

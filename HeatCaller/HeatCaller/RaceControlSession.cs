@@ -670,12 +670,27 @@ public sealed partial class RaceControlSession
 
         // Only drivers who actually appear in the standings can take a
         // flag, so that - not the grid - is the set to wait on.
-        if (_standings.Keys.All(k => _tookTheFlag.Contains(k)))
+        if (EveryExpectedCarHasTakenTheFlag())
         {
             Log("Every car has taken the flag.");
             Finish(_finishingOnTime);
         }
     }
+
+    /// <summary>
+    /// Whether every car the finish is still waiting on has taken the flag.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A01-1: a black-flagged car has been told to
+    /// come in, and a hand-released car that was never let go is still on
+    /// the grid - neither is going to cross again, so waiting on them held
+    /// the finish open for the whole straggler grace. A black-flagged car
+    /// that does cross is still recorded in _tookTheFlag as before. With
+    /// every row left out, All() over nothing is true and the race ends.
+    /// </summary>
+    private bool EveryExpectedCarHasTakenTheFlag() =>
+        _standings.Values
+            .Where(s => !s.IsBlackFlagged && IsReleased(s.TransponderId))
+            .All(s => _tookTheFlag.Contains(s.TransponderId));
 
     /// <summary>A row taken off the board mid-race - a ghost switched off (RemoveGhostStanding).</summary>
     public event Action<RacerStanding>? StandingRemoved;
@@ -703,7 +718,7 @@ public sealed partial class RaceControlSession
 
         // Switched off after the checkered, it may have been the last car
         // the finish was waiting on.
-        if (IsFinishing && _standings.Keys.All(k => _tookTheFlag.Contains(k)))
+        if (IsFinishing && EveryExpectedCarHasTakenTheFlag())
         {
             Log("Every car has taken the flag.");
             Finish(_finishingOnTime);
@@ -733,10 +748,19 @@ public sealed partial class RaceControlSession
     /// How far past the time limit the LAST car's own window runs - the
     /// biggest release offset on the grid, or nothing at all when no such
     /// promise is in force.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A01-3: only cars with a row on the board
+    /// count. The schedule is built from the whole grid, which can be a
+    /// borrowed one, and a no-show's late slot kept the board frozen past
+    /// the limit for a car that never raced.
     /// </summary>
-    private TimeSpan LastWindowExtension =>
+    internal TimeSpan LastWindowExtension =>
         StaggerClockMode == StaggerClock.OwnRelease && _releaseOffsetsMs.Count > 0
-            ? TimeSpan.FromMilliseconds(Math.Max(0, _releaseOffsetsMs.Values.Max()))
+            ? TimeSpan.FromMilliseconds(Math.Max(0, _releaseOffsetsMs
+                .Where(kv => _standings.ContainsKey(kv.Key))
+                .Select(kv => kv.Value)
+                .DefaultIfEmpty(0)
+                .Max()))
             : TimeSpan.Zero;
 
     /// <summary>
@@ -1592,6 +1616,16 @@ public sealed partial class RaceControlSession
         // once this returns.
         SafeRaise(WarningIssued, h => h(standing, warning), nameof(WarningIssued));
         SafeRaise(StandingAdjusted, h => h(standing), nameof(StandingAdjusted));
+
+        // 17 Oct 2026, Bug Hunt 8, A01-1: a black flag after the checkered
+        // can take away the last car the finish was waiting on.
+        if (warning.Action == WarningAction.BlackFlag && IsFinishing && State == RaceState.Racing
+            && EveryExpectedCarHasTakenTheFlag())
+        {
+            Log("Every car has taken the flag.");
+            Finish(_finishingOnTime);
+        }
+
         return warning;
     }
 
@@ -3107,6 +3141,16 @@ public sealed partial class RaceControlSession
         // crossing into a lap as long as the gap.
         foreach (var standing in _standings.Values)
         {
+            // 17 Oct 2026, Bug Hunt 8, A01-2: a ghost's readings are on
+            // MsSinceGreen, which the moved RaceStartUtc already carries on
+            // from where it was. Shifting them too put them gapMs ahead, and
+            // the ghost's next lap came out negative ("decoder clock went
+            // backwards") or short.
+            if (Ghosts.IsGhost(standing.TransponderId))
+            {
+                continue;
+            }
+
             if (standing.LastLapDeviceTimeMs > 0)
             {
                 standing.LastLapDeviceTimeMs += gapMs;
@@ -3293,7 +3337,12 @@ public sealed partial class RaceControlSession
         if (IsFinishing && _finishingSinceUtc is { } since
             && TimeSpan.FromMilliseconds(TimingClock.NowMs - (_finishingSinceClockMs ?? ClockMsAt(since))) > grace)
         {
-            var waitingOn = _standings.Keys.Where(k => !_tookTheFlag.Contains(k)).ToList();
+            // 17 Oct 2026, Bug Hunt 8, A01-1: a black-flagged car is not
+            // being waited on, so the log does not name it.
+            var waitingOn = _standings.Values
+                .Where(st => !st.IsBlackFlagged && !_tookTheFlag.Contains(st.TransponderId))
+                .Select(st => st.TransponderId)
+                .ToList();
             Log($"Calling the race {grace.TotalSeconds:0}s after the flag - still waiting on {Plural.Of(waitingOn.Count, "car")}: {string.Join(", ", waitingOn)}");
             Finish(_finishingOnTime);
         }

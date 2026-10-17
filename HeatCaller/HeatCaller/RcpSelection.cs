@@ -714,11 +714,18 @@ public sealed class RcpSelection
             pasted._decals.Add(copy);
         }
 
-        foreach (var point in clip.Route)
+        // 17 Oct 2026, Bug Hunt 8, A31-3: the route is one ordered line,
+        // and appending copied points to its end made it jump across the
+        // plan (changing the lap length, sectors and pace car). Only put
+        // down when the plan has no line of its own yet.
+        if (design.Route.Count == 0)
         {
-            var copy = new RcpRoutePoint { X = point.X, Y = point.Y };
-            design.Route.Add(copy);
-            pasted._route.Add(copy);
+            foreach (var point in clip.Route)
+            {
+                var copy = new RcpRoutePoint { X = point.X, Y = point.Y };
+                design.Route.Add(copy);
+                pasted._route.Add(copy);
+            }
         }
 
         pasted.Move(at.X, at.Y);

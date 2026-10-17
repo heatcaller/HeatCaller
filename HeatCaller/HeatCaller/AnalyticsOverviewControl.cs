@@ -17,6 +17,11 @@ public sealed class AnalyticsOverviewControl : UserControl
 {
     private readonly SessionHistoryStore _history;
 
+    // 17 Oct 2026, Bug Hunt 8, A30-2: for the shared record rule (rentals
+    // and excluded guests hold no records). Null reads as "no profiles",
+    // which is the rule's own answer for an unknown transponder.
+    private readonly ProfileStore? _profiles;
+
     // The four figures, each a number over its caption on a tile of its
     // own - the same tiles as Next Steps' day so far (StatTile).
     private readonly StatTile _races = new();
@@ -31,9 +36,10 @@ public sealed class AnalyticsOverviewControl : UserControl
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
-    public AnalyticsOverviewControl(SessionHistoryStore history)
+    public AnalyticsOverviewControl(SessionHistoryStore history, ProfileStore? profiles = null)
     {
         _history = history;
+        _profiles = profiles;
 
         Dock = DockStyle.Fill;
 
@@ -179,11 +185,7 @@ public sealed class AnalyticsOverviewControl : UserControl
             .ToString(), "Drivers seen");
 
         // --- The outright best, and who set it ---
-        var best = everything
-            .SelectMany(s => s.Results.Select(r => (Session: s, Result: r)))
-            .Where(x => x.Result.FastLapMs > 0 && !GhostService.IsGhost(x.Result.Transponder))
-            .OrderBy(x => x.Result.FastLapMs)
-            .FirstOrDefault();
+        var best = RecordLaps(everything, _profiles).FirstOrDefault();
 
         if (best.Result is null)
         {
@@ -209,6 +211,23 @@ public sealed class AnalyticsOverviewControl : UserControl
     }
 
     /// <summary>
+    /// Every lap that could stand as a record, quickest first.
+    ///
+    /// 17 Oct 2026, Bug Hunt 8, A30-2: through
+    /// AchievementEvaluator.CanHoldTrackRecord rather than a ghost check
+    /// alone, so this page names the same holder as the badge and the live
+    /// record - a rental or an ExcludeFromRecords guest is never it. No
+    /// SessionType filter: the evaluator's own BestEverOn has none either.
+    /// Used by both the "Best lap ever" tile and the table so they agree.
+    /// </summary>
+    internal static IEnumerable<(SessionRecord Session, SessionResultEntry Result)> RecordLaps(
+        IEnumerable<SessionRecord> sessions, ProfileStore? profiles) =>
+        sessions
+            .SelectMany(s => s.Results.Select(r => (Session: s, Result: r)))
+            .Where(x => x.Result.FastLapMs > 0 && AchievementEvaluator.CanHoldTrackRecord(x.Result.Transponder, profiles))
+            .OrderBy(x => x.Result.FastLapMs);
+
+    /// <summary>
     /// One row per track layout: its record, who holds it, and how much
     /// racing has happened there.
     ///
@@ -230,10 +249,7 @@ public sealed class AnalyticsOverviewControl : UserControl
             .GroupBy(s => s.TrackLayoutName, StringComparer.CurrentCultureIgnoreCase)
             .Select(group =>
             {
-                var best = group
-                    .SelectMany(s => s.Results.Select(r => (Session: s, Result: r)))
-                    .Where(x => x.Result.FastLapMs > 0 && !GhostService.IsGhost(x.Result.Transponder))
-                    .OrderBy(x => x.Result.FastLapMs)
+                var best = RecordLaps(group, _profiles)
                     .Take(1)
                     .ToList();
 

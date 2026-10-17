@@ -150,7 +150,6 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly ComboBox _cmbTextNormalization = new();
     private readonly TextBox _txtLanguageCode = new();
     private readonly TextBox _txtOutputFormat = new();
-    private readonly NumericUpDown _numVolumePercent = new();
     private readonly CheckBox _chkWirelessSpeaker = new ThemedCheckBox();
     private readonly NumericUpDown _numMaxPerLap = new();
     private readonly NumericUpDown _numStreakEveryN = new();
@@ -242,6 +241,16 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private readonly UndoService? _undo;
 
+    /// <summary>
+    /// The sound effects' store, for the streak thresholds only - on the
+    /// Race Calls tab's How often card since 17 Oct 2026, because they decide
+    /// the voice's streak call as much as the streak sound. They are still
+    /// the effects profile's (StreakThreshold, StreakThresholdInPractice), so
+    /// they are saved there rather than in the voice profile. Null when the
+    /// host didn't pass one, and then the two boxes are not shown.
+    /// </summary>
+    private readonly SoundEffectsStore? _soundStore;
+
     /// <summary>What this page keeps in step with the text size - see TextSize. The Announcements page keeps its own (AnnouncementsHost).</summary>
     private readonly TextSize _textSize = new();
 
@@ -272,12 +281,13 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>The least room Prepare's progress keeps beside its buttons, at the normal text size, before it takes a line of its own.</summary>
     private const int PrepareProgressLeastWidth = 240;
 
-    public VoiceSettingsControl(VoiceSettingsStore store, AppSettings settings, UndoService? undo = null)
+    public VoiceSettingsControl(VoiceSettingsStore store, AppSettings settings, UndoService? undo = null, SoundEffectsStore? soundStore = null)
     {
         _loadingSettings = true;
         _store = store;
         _appSettings = settings;
         _undo = undo;
+        _soundStore = soundStore;
 
         // Which relay a HeatCaller line was rendered on is part of its saved
         // key, and these are the settings that say. Set here because this
@@ -407,7 +417,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         // OnStoreRestored.
         _store.Restored += OnStoreRestored;
 
-        Status($"Voice Settings opened - saved profile: {Describe(current)}. File: {VoiceSettingsStore.SettingsPath}");
+        Status($"Voice tab opened - saved profile: {Describe(current)}. File: {VoiceSettingsStore.SettingsPath}");
     }
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
@@ -438,9 +448,9 @@ public sealed partial class VoiceSettingsControl : UserControl
     ///     Download, its status), then which voice speaks and the hint. The
     ///     fields of all three share one caption column (LineUp).
     ///   ElevenLabs connection - API Key:, Voice:, Model:, and the hints.
-    ///   Voice parameters - the ElevenLabs tuning in one caption column,
-    ///     playback (volume, the most per lap) in another, then Test Voice
-    ///     and what it said.
+    ///   Voice parameters - the ElevenLabs tuning, then Test Voice and what
+    ///     it said. (The volume is the Mixer's, and the most calls per lap
+    ///     is on the Race Calls tab's How often card, since 17 Oct 2026.)
     ///   Saved voice lines - the count, Prepare and Stop with the progress
     ///     beside them, Recently played: with Forget Line and Forget All.
     ///
@@ -589,8 +599,8 @@ public sealed partial class VoiceSettingsControl : UserControl
             Fit(spinner, NumberBoxWidth(spinner, UnitSpinnerWidth));
         }
 
-        Fit(_numVolumePercent, NumberBoxWidth(_numVolumePercent, UiLayout.NumericWidth));
-        Fit(_numMaxPerLap, NumberBoxWidth(_numMaxPerLap, UiLayout.NumericWidth));
+        // _numMaxPerLap is sized with the Race Calls page it is on now
+        // (KeepHowOftenInStep), in that page's face.
 
         OpenTo(_cmbSavedLines, Pieces.PickerWidth(_cmbSavedLines, ref _savedLinesWidth));
 
@@ -687,7 +697,6 @@ public sealed partial class VoiceSettingsControl : UserControl
             return;
         }
 
-        SyncVolumeFromStore();
         RebuildAnnouncementRows();
     }
 
@@ -958,10 +967,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         relay.AddRow("Club:", _txtVoiceRelayClub);
         relay.AddRow("Token:", _txtVoiceRelayToken);
         relay.AddHint(
-            "Advanced - leave all three blank unless you are trying a relay out. Only the voice uses them; "
-            + "results, check-in and the race-day manager keep going to the relay on the Club Website page. "
-            + "A blank club means the Club Website page's own. A blank token borrows the Club Website page's only when this "
-            + "is that same relay or a relay on this PC (localhost); any other address needs its token typed in.");
+            "Advanced - leave all three blank unless you are trying a relay out; only the voice uses them. A blank club "
+            + "or token borrows the Club Website page's, but the token only for that same relay or one on this PC.");
 
         // These three are AppSettings, not the voice profile - so they are
         // filled from, and saved to, a different place than everything else
@@ -1038,12 +1045,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         var lblHint = _textSize.Wear(
             new Label
             {
-                Text = "The Kokoro voice uses the Speed and Playback volume below, and each announcement's own speed. "
-                     + "Audio tags like [excited] are left out for it, and what it says is never kept with the saved ElevenLabs lines. "
-                     + "Kokoro is also what speaks whenever the voice you chose can't - no key, no internet, a used-up quota or allowance - "
-                     + "so a flag call is never silent. "
-                     + "The ElevenLabs settings below are kept whichever voice is chosen. "
-                     + "With the HeatCaller voice the wording and the voice settings are fixed.",
+                Text = "Kokoro uses the Speed below and the Mixer's Announcements level, and leaves out audio tags like [excited]. "
+                     + "It also speaks whenever the chosen voice can't, so a flag call is never silent.",
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
             },
@@ -1154,10 +1157,8 @@ public sealed partial class VoiceSettingsControl : UserControl
             .With(_btnConsentTakeBack));
 
         consent.AddHint(
-            "Only needed for a voice that is a recording of a real person - your own announcer. The stock voices "
-            + "are nobody's, and need nothing. HeatCaller keeps the name and the date and nothing else: the "
-            + "recording and whatever they signed stay yours. Until a consent is recorded, the free voice reads "
-            + "every line.");
+            "Only needed for a voice recorded from a real person, such as your own announcer; HeatCaller keeps just "
+            + "the name and the date. Until a consent is recorded, the free voice reads every line.");
 
         card.Add(consent);
         card.Add(_lblConsent, gapBelow: 0);
@@ -1207,6 +1208,30 @@ public sealed partial class VoiceSettingsControl : UserControl
             return;
         }
 
+        // ANOTHER VOICE'S RECORD IS REPLACED, NOT ADDED TO (17 Oct 2026, Bug
+        // Hunt 8, A10-2). This PC keeps one consent record, so recording one
+        // for a second voice used to overwrite the first - taken-back date
+        // and all - without a word. Asked first, and the first voice is put
+        // on the clone list so it still counts as somebody's own voice once
+        // its record is gone (see VoiceConsent.KeepReplacedVoiceAsClone).
+        var replacing = VoiceConsent.ReplacesAnotherVoice(_appSettings.HeatCallerVoiceConsent(), voice);
+
+        if (replacing)
+        {
+            var whoBefore = _appSettings.HeatCallerConsentWho?.Trim() is { Length: > 0 } named ? named : "somebody";
+
+            if (AppDialog.Show(
+                    FindForm(),
+                    $"This PC holds a consent from {whoBefore} for another voice. Recording this one replaces "
+                    + "that record - HeatCaller keeps one consent at a time.\n\nContinue?",
+                    "Replace the consent",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning) != DialogResult.Yes)
+            {
+                return;
+            }
+        }
+
         // Kept to put back if the save fails. The gate reads these same
         // settings live, so left set they would let the voice speak - and
         // be written by the next save of anything - while this page said
@@ -1215,6 +1240,13 @@ public sealed partial class VoiceSettingsControl : UserControl
         var previousWho = _appSettings.HeatCallerConsentWho;
         var previousAt = _appSettings.HeatCallerConsentAtUtc;
         var previousRevoked = _appSettings.HeatCallerConsentRevokedUtc;
+        var previousClones = _appSettings.HeatCallerClonedVoices;
+
+        if (replacing)
+        {
+            _appSettings.HeatCallerClonedVoices =
+                VoiceConsent.KeepReplacedVoiceAsClone(_appSettings.HeatCallerClonedVoices, previousVoice);
+        }
 
         _appSettings.HeatCallerConsentVoiceId = voice;
         _appSettings.HeatCallerConsentWho = who;
@@ -1228,9 +1260,10 @@ public sealed partial class VoiceSettingsControl : UserControl
         if (!_appSettings.Save())
         {
             _appSettings.HeatCallerConsentVoiceId = previousVoice;
-            _appSettings.HeatCallerConsentWho = previousWho;
+            _appSettings.HeatCallerConsentWho = previousWho ?? string.Empty;
             _appSettings.HeatCallerConsentAtUtc = previousAt;
             _appSettings.HeatCallerConsentRevokedUtc = previousRevoked;
+            _appSettings.HeatCallerClonedVoices = previousClones;
 
             _lblConsent.Text = "The consent could not be saved, so it has not been recorded. Close anything that "
                 + "might have settings.json open and try again.";
@@ -1241,7 +1274,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         // A line refused for want of this consent rested the voice for half
         // an hour; without this the club's voice stayed away that long
         // after the consent it was waiting for had been recorded.
-        Announcer?.RetryHeatCallerVoiceSoon("a voice consent was recorded on Voice Settings");
+        Announcer?.RetryHeatCallerVoiceSoon("a voice consent was recorded on the Voice tab");
 
         _lblConsent.ForeColor = AppTheme.TextMuted;
         ShowConsent();
@@ -1520,8 +1553,8 @@ public sealed partial class VoiceSettingsControl : UserControl
     }
 
     /// <summary>
-    /// Speaks a sample in the Kokoro voice picked above, at the Speed and
-    /// Playback volume on screen - saved or not, like every test here. Kokoro
+    /// Speaks a sample in the Kokoro voice picked above, at the Speed on
+    /// screen and the Mixer's Announcements level - saved or not, like every test here. Kokoro
     /// itself, never a stand-in - there is none: a test shows what Kokoro says, or
     /// why it can't.
     /// </summary>
@@ -1695,7 +1728,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         // announcer went on resting over it for up to half an hour (or,
         // with the allowance, for the rest of the month) after the club had
         // put it right. The same as a new ElevenLabs key ending a rest.
-        Announcer?.ResetHeatCallerVoiceState("the voice relay was changed on Voice Settings");
+        Announcer?.ResetHeatCallerVoiceState("the voice relay was changed on the Voice tab");
 
         _ = LoadHeatCallerSamplesAsync();
         _ = LoadHeatCallerCatalogueAsync(byHand: true);
@@ -1723,7 +1756,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         if (RestoredSettings.IsHeld(RestoredSettings.Part.VoiceRelay) && VoiceRelayShown() == _voiceRelaySaved)
         {
             RestoredSettings.Confirm(RestoredSettings.Part.VoiceRelay);
-            Announcer?.ResetHeatCallerVoiceState("the voice relay from a restored backup was checked on Voice Settings");
+            Announcer?.ResetHeatCallerVoiceState("the voice relay from a restored backup was checked on the Voice tab");
             _ = LoadHeatCallerSamplesAsync();
             _ = LoadHeatCallerCatalogueAsync(byHand: true);
             return;
@@ -2729,9 +2762,9 @@ public sealed partial class VoiceSettingsControl : UserControl
             var audio = await fetch(client, voiceId);
             if (Gone) { return; }
 
-            // The volume on screen, saved or not, as every test here does -
-            // so a club trying the announcer level hears the voice at it.
-            await PlayTestAudioAsync(audio, (double)(_numVolumePercent.Value / 100m));
+            // At the announcer's level - the Mixer's Announcements fader
+            // since 17 Oct 2026 - so a club hears the voice as it will play.
+            await PlayTestAudioAsync(audio, _store.Current.Volume);
             if (Gone) { return; }
 
             _lblHeatCallerPreviewStatus.Text = done(name);
@@ -2848,9 +2881,8 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         var lblModelHint = new Label
         {
-            Text = "Pick a preset or type any ElevenLabs model id. Style exaggeration has a real ceiling on v2 - it varies "
-                 + "energy but won't give you a radio personality however far you push it, and past about 0.6 it starts "
-                 + "distorting rather than exciting. eleven_v3 is the expressive model if you want genuine performance.",
+            Text = "Pick a preset or type any ElevenLabs model id. eleven_v3 is the expressive one; on v2, Style past "
+                 + "about 0.6 distorts rather than excites.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -2867,9 +2899,10 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>
     /// Voice parameters: the ElevenLabs tuning in one caption column - the
     /// four voice settings, then the three root-level ones with the note on
-    /// output formats, then Speaker boost - and playback in another, since
-    /// it applies to every voice: the volume and the most spoken per lap.
-    /// Test Voice, and what it said, under both.
+    /// output formats, then Speaker boost - and Test Voice, and what it
+    /// said, under it. The volume is the Mixer's and the most spoken per lap
+    /// is on Race Calls' How often card (17 Oct 2026); both are still filled
+    /// and saved with this profile.
     /// </summary>
     private Section BuildParametersCard(VoiceProfile current)
     {
@@ -2908,18 +2941,19 @@ public sealed partial class VoiceSettingsControl : UserControl
         var wirelessTip = new ToolTip();
         AppTheme.StyleToolTip(wirelessTip);
         wirelessTip.SetToolTip(_chkWirelessSpeaker,
-            "A Bluetooth speaker powers down between sounds and swallows the start of whatever plays next, "
-            + "so every line gets nearly a second of silence in front of it to give the speaker time to wake. "
-            + "Turn this OFF for a wired speaker or audio going into OBS and that comes off the front of every "
-            + "announcement - about three quarters of a second quicker, every time.");
+            "A Bluetooth speaker sleeps between sounds and swallows the start of the next one, so every line gets "
+            + "nearly a second of silence first. Turn this OFF for a wired speaker or OBS and every line starts sooner.");
 
         // --- Playback ---
-        _numVolumePercent.Minimum = 0;
-        _numVolumePercent.Maximum = 100;
-        _numVolumePercent.Increment = 5;
-        _numVolumePercent.Value = (decimal)Math.Clamp(current.Volume * 100.0, 0, 100);
-        _volumeShown = _numVolumePercent.Value;
-
+        //
+        // No volume box here any more (17 Oct 2026): the announcer's level
+        // is the Mixer's Announcements fader, the one place it is set.
+        // BuildProfileFromControls carries the stored level through.
+        //
+        // And the most calls per lap is filled here, still part of this
+        // profile, but shown on the Race Calls tab's How often card
+        // (BuildHowOftenCard) - how often the voice speaks belongs with what
+        // it says.
         _numMaxPerLap.Minimum = 1;
         _numMaxPerLap.Maximum = 5;
         _numMaxPerLap.Value = Math.Clamp(current.MaxAnnouncementsPerLap, 1, 5);
@@ -2935,10 +2969,6 @@ public sealed partial class VoiceSettingsControl : UserControl
         _lblTestStatus.AutoSize = true;
         _lblTestStatus.ForeColor = AppTheme.TextMuted;
 
-        // Two caption columns, not one: "Max spoken announcements per lap:"
-        // is more than twice the width of "Stability:", and one column for
-        // the whole card left the short captions a long way from their
-        // boxes.
         var tuning = new FieldGrid();
 
         tuning.AddRow("Stability:", _numStability);
@@ -2952,21 +2982,9 @@ public sealed partial class VoiceSettingsControl : UserControl
         tuning.AddField(_chkSpeakerBoost);
         tuning.AddField(_chkWirelessSpeaker);
 
-        var playback = new FieldGrid();
-
-        playback.AddRow("Playback volume (%):", _numVolumePercent);
-        playback.AddRow("Max spoken announcements per lap:", _numMaxPerLap);
-
-        // NOT THE ONLY SAY IN IT (17 Oct 2026): the Commentary page's How
-        // chatty scales this figure and Pacing holds calls back between
-        // others, so a club hearing fewer calls than this was told nothing
-        // here about why.
-        playback.AddHint("The Commentary page's How chatty scales this up or down, and its Pacing holds calls back to leave gaps - both apply even with AI commentary off.");
-
         var card = new Section("Voice parameters");
 
         card.Add(tuning, gapBelow: UiLayout.SectionGap);
-        card.Add(playback);
         card.Add(new ButtonBar().With(_btnTestVoice), gapBelow: UiLayout.HintGap);
         card.Add(_lblTestStatus, gapBelow: 0);
 
@@ -2982,9 +3000,8 @@ public sealed partial class VoiceSettingsControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Every line ElevenLabs speaks is kept on this PC and played from here the next time the same words are "
-                 + "wanted in the same voice and settings - so each line is paid for once, and restarting the app loses "
-                 + "nothing. Change the voice, a setting or a line's words and only the lines that changed are rendered again.",
+            Text = "Every line ElevenLabs speaks is kept on this PC and replayed when the same words, voice and settings "
+                 + "come up again, so each line is paid for once. Change any of those and only the changed lines are made again.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -3020,10 +3037,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         var lblPrepareHint = _textSize.Wear(
             new Label
             {
-                Text = "Prepare renders, in one go, every line whose words are already known: each switched-on announcement's "
-                     + "lines that have no {placeholder} - the flags among them - and the release call for every driver checked in "
-                     + "for the current event. Lines built from live values (lap times, positions, streaks) can't be made in advance; "
-                     + "they're saved the first time they're spoken. It uses your ElevenLabs quota, so it asks first and says how much.",
+                Text = "Prepare renders every line whose words are already known - lines with no {placeholder}, and each "
+                     + "checked-in driver's release call. It uses your ElevenLabs quota, so it asks first and says how much.",
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
             },
@@ -3054,11 +3069,9 @@ public sealed partial class VoiceSettingsControl : UserControl
         var lblForgetHint = _textSize.Wear(
             new Label
             {
-                Text = "A line that came out wrong: forget it and it's rendered afresh the next time it's wanted. For a flag, or any "
-                     + "line with no {placeholder}, pressing Test on its announcement below does the same - a test always records a "
-                     + "new take, and the race plays the one heard last. "
-                     + $"Kept in {VoiceLibrary.Shared.Folder} (not part of backups - it can always be made again), up to "
-                     + $"{VoiceLibrary.MaxBytes / (1024 * 1024)} MB; past that, the lines played least recently make way.",
+                Text = "A line that came out wrong: forget it and it's made afresh next time (Test on a fixed line does the same). "
+                     + $"Kept in {VoiceLibrary.Shared.Folder}, up to {VoiceLibrary.MaxBytes / (1024 * 1024)} MB - not in "
+                     + "backups, as it can always be made again.",
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
             },
@@ -3759,7 +3772,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             TextNormalization = _cmbTextNormalization.SelectedItem as string ?? "auto",
             LanguageCode = _txtLanguageCode.Text.Trim(),
             OutputFormat = _txtOutputFormat.Text.Trim(),
-            Volume = (double)(_numVolumePercent.Value / 100m),
+            Volume = _store.Current.Volume,
             WirelessSpeaker = _chkWirelessSpeaker.Checked,
             MaxAnnouncementsPerLap = (int)_numMaxPerLap.Value,
 
@@ -4162,55 +4175,13 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>True while controls are being populated, so loading doesn't count as editing.</summary>
     private bool _loadingSettings;
 
-    /// <summary>
-    /// The volume box's value as last loaded from, or saved to, the store.
-    /// If the box still shows this, nobody has changed it on THIS page.
-    /// </summary>
-    private decimal _volumeShown;
-
-    /// <summary>
-    /// Brings the volume box up to date with the saved level.
-    ///
-    /// The Mixer page writes the same stored volume, but this page read it
-    /// once when it was built - so the next change to anything here saved
-    /// the old number back and silently undid the Mixer. Only taken when
-    /// the box hasn't been changed here since it was last in step, so an
-    /// edit made on this page is never overwritten.
-    /// </summary>
-    private void SyncVolumeFromStore()
-    {
-        var stored = (decimal)Math.Clamp(_store.Current.Volume * 100.0, 0, 100);
-
-        if (_numVolumePercent.Value != _volumeShown || stored == _volumeShown)
-        {
-            return;
-        }
-
-        var wasLoading = _loadingSettings;
-        _loadingSettings = true;
-
-        try
-        {
-            _numVolumePercent.Value = stored;
-        }
-        finally
-        {
-            _loadingSettings = wasLoading;
-        }
-
-        _volumeShown = stored;
-    }
-
     protected override void OnVisibleChanged(EventArgs e)
     {
         base.OnVisibleChanged(e);
 
-        // Coming back to this page after using the Mixer should show the
-        // level the Mixer set, not the one from when the page was built.
-        // And the saved-lines count, which a race moves on while it's hidden.
+        // The saved-lines count, which a race moves on while it's hidden.
         if (Visible)
         {
-            SyncVolumeFromStore();
             RequestLibraryRefresh();
         }
     }
@@ -4224,10 +4195,8 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         try
         {
-            // Before building the profile, so a save triggered by some other
-            // box carries the CURRENT stored volume rather than a stale one.
-            SyncVolumeFromStore();
-
+            // The profile carries the CURRENT stored volume (the Mixer's
+            // level) - see BuildProfileFromControls.
             var voiceBefore = _store.Current.HeatCallerVoice;
 
             var profile = BuildProfileFromControls();
@@ -4242,7 +4211,6 @@ public sealed partial class VoiceSettingsControl : UserControl
             // only find out on race night. The strip below says so instead,
             // and the next change on the page tries the write again.
             var saved = _store.Save(profile);
-            _volumeShown = _numVolumePercent.Value;
 
             // A different HeatCaller voice: whatever the relay refused the
             // old one for - "that voice isn't available any more", most
@@ -4265,12 +4233,14 @@ public sealed partial class VoiceSettingsControl : UserControl
                     : "the settings file couldn't be written (the console says why)";
                 _lblSaveStatus.Text = $"Could not save at {DateTime.Now:HH:mm:ss}: {reason}. Changes last only until the app closes.";
                 _lblSaveStatus.ForeColor = AppTheme.Danger;
+                ShowSaveFailureOnRaceCalls(failed: true);
                 Status($"Settings NOT saved - {reason}.");
                 return;
             }
 
             _lblSaveStatus.Text = $"Saved automatically at {DateTime.Now:HH:mm:ss}.";
             _lblSaveStatus.ForeColor = AppTheme.TextMuted;
+            ShowSaveFailureOnRaceCalls(failed: false);
             Status($"Settings saved - {Describe(profile)}");
         }
         catch (Exception ex)
@@ -4280,7 +4250,41 @@ public sealed partial class VoiceSettingsControl : UserControl
             // key - and the reason the key never saved would be invisible.
             _lblSaveStatus.Text = $"Could not save: {ex.Message}";
             _lblSaveStatus.ForeColor = AppTheme.Danger;
+            ShowSaveFailureOnRaceCalls(failed: true);
             Status($"Settings NOT saved - {ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    /// <summary>Whether the Race Calls page's status line is showing a failed save - see ShowSaveFailureOnRaceCalls.</summary>
+    private bool _raceCallsShowsSaveFailure;
+
+    /// <summary>
+    /// Says a failed save on the Race Calls page as well (17 Oct 2026, Bug
+    /// Hunt 8, A11-4). Its edits save through AutoSave too, but the failure
+    /// went only to the strip at the foot of the Voice Settings page - a
+    /// different sub-tab - while Race Calls kept saying "Changes save as you
+    /// make them." Only the failure is carried across, and a later good
+    /// save puts the line back, so the page does not flicker "Saved at" on
+    /// every keystroke. A line some other path set (a test, the streaks) is
+    /// left alone by the good save.
+    /// </summary>
+    private void ShowSaveFailureOnRaceCalls(bool failed)
+    {
+        if (failed)
+        {
+            _lblAnnouncementStatus.Text = _lblSaveStatus.Text;
+            _lblAnnouncementStatus.ForeColor = AppTheme.Danger;
+            _raceCallsShowsSaveFailure = true;
+            return;
+        }
+
+        if (!_raceCallsShowsSaveFailure)
+        {
+            return;
+        }
+
+        _raceCallsShowsSaveFailure = false;
+        _lblAnnouncementStatus.Text = "Changes save as you make them.";
+        _lblAnnouncementStatus.ForeColor = AppTheme.TextMuted;
     }
 }

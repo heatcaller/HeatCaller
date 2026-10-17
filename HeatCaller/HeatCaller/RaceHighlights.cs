@@ -361,7 +361,7 @@ internal static class RaceHighlights
     /// <summary>
     /// One clip plan per driver who has anything worth keeping.
     /// </summary>
-    /// <param name="greenAtMs">How far into the RECORDING the green dropped. The recording starts at the countdown, so this is usually a few seconds.</param>
+    /// <param name="greenAtMs">How far into the RECORDING the green dropped - negative when recording began after the green (a race restored after a crash). WindowFor clamps to the file. (Reworded 17 Oct 2026, Bug Hunt 8, A14-3.)</param>
     /// <param name="lengthMs">How long the recording actually is. Everything is clamped to it, so a race cut short never asks for audio that is not there.</param>
     public static List<DriverClip> ClipsFor(
         SessionRecord record,
