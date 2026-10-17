@@ -2719,17 +2719,14 @@ public sealed partial class RaceControlControl
         //
         // Before Begin() and not between it and the try, which
         // CommercialBreakTests keeps empty - see the note inside the try.
-        if (BroadcastImaging.Has(ImagingCue.AfterRaceOver))
-        {
-            try
-            {
-                await BroadcastImaging.PlayWholeAsync(ImagingCue.AfterRaceOver, nextRace);
-            }
-            catch (Exception ex)
-            {
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] {BroadcastImaging.Describe(ImagingCue.AfterRaceOver)} didn't play - {ex.Message}");
-            }
-        }
+        //
+        // AND THE SHOW'S STING THE SAME WAY (16 Oct 2026, the same night).
+        // A soundscape with no bumpers - Classic, Pit Lane before its set
+        // came in - marks the way in with the club's show sting instead,
+        // and that was still started inside the break and not awaited, so
+        // it ran straight into the first video's soundtrack: two pieces of
+        // audio train-wrecking over the top of a paid advert.
+        await PlayTheWayIntoTheBreakAsync(nextRace);
 
         var started = DateTime.UtcNow;
 
@@ -2920,12 +2917,13 @@ public sealed partial class RaceControlControl
         // the next race being called, where the grid call is the way back.
         // With nothing set for the edge, the club's show sting marks it as
         // it always did.
-        if (goingIn && BroadcastImaging.Has(ImagingCue.AfterRaceOver))
+        if (goingIn)
         {
-            // Already played out whole, BEFORE the break began - see
-            // HoldTheCommercialBreakAsync - so the first sponsor video
-            // never starts over it.
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Commercial break - the bumper played in, the sponsors have the crowd's screen.");
+            // Whatever marks the way in - the bumper or the show's sting -
+            // has already played out whole, BEFORE the break began (see
+            // PlayTheWayIntoTheBreakAsync), so the first sponsor video
+            // never starts over it. Nothing is played from here.
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Commercial break - the sponsors have the crowd's screen.");
 
             return;
         }
@@ -2980,6 +2978,49 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// Plays whatever marks the way into the stop set - the soundscape's
+    /// bumper, or with none the club's show sting - and returns when the
+    /// whole of it has played, so the break and its first video start
+    /// after it and never over it (16 Oct 2026). Never throws.
+    /// </summary>
+    private async Task PlayTheWayIntoTheBreakAsync(CancellationToken nextRace)
+    {
+        try
+        {
+            if (BroadcastImaging.Has(ImagingCue.AfterRaceOver))
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Into the break - the bumper plays out first.");
+                await BroadcastImaging.PlayWholeAsync(ImagingCue.AfterRaceOver, nextRace);
+                return;
+            }
+
+            if (!BreakTransition.StingMarks(BreakEnding.Running, goingIn: true))
+            {
+                return;
+            }
+
+            var treatment = ShowMusic?.Invoke();
+
+            if (treatment?.StingForABoundary() is not { } sting)
+            {
+                return;
+            }
+
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Into the break - the sting plays out first.");
+
+            await treatment.MarkOnceAsync(sting, treatment.BoundaryStingLevel, "break sting", nextRace);
+        }
+        catch (OperationCanceledException)
+        {
+            // The next race was called - the break's own loop says so.
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The way into the break didn't play - {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Reads the sponsor's copy inside the commercial break, with the
     /// sponsor on the crowd's screen and no video started under it, and
     /// returns once it has been heard (16 Oct 2026). Does nothing when the
@@ -2999,10 +3040,12 @@ public sealed partial class RaceControlControl
             // - its rotation is not meant to be touched from two at once.
             SponsorRead? read = null;
             var gap = director.Upcoming?.Invoke().InAbout ?? SponsorCopy.NoLimit;
+            SponsorRead? previous = null;
 
             void Pick()
             {
-                read = director.NextBreakRead(gap);
+                // The first part, or the rest of the same copy straight on.
+                read = previous is null ? director.NextBreakRead(gap) : director.MoreOfTheBreakRead(previous, gap);
 
                 if (read is not null)
                 {
@@ -3012,34 +3055,53 @@ public sealed partial class RaceControlControl
                 }
             }
 
-            if (InvokeRequired)
-            {
-                Invoke((Action)Pick);
-            }
-            else
-            {
-                Pick();
-            }
-
-            if (read is null)
-            {
-                return;
-            }
-
             CommercialBreak.ReadBegins();
 
             try
             {
-                if (director.SponsorOnScreenFor?.Invoke(read.SponsorId) is { } onScreen)
+                // THE WHOLE COPY, PART AFTER PART (16 Oct 2026). One read is
+                // capped at SponsorCopy.LongestRead, so longer copy comes in
+                // parts - and on 16 Oct the first part went out in the break
+                // and the rest was left for "the next gap", which is now the
+                // next race's break. Read through to the end here instead.
+                // Six parts at most: a club's copy is capped at
+                // SponsorCopy.MaxChars, so this is a guard and not a limit.
+                for (var part = 0; part < 6 && !nextRace.IsCancellationRequested; part++)
                 {
-                    SponsorOnAir.Begin(onScreen.PictureFileName, onScreen.Name, SponsorCopy.SpokenLength(read.Text));
+                    if (InvokeRequired)
+                    {
+                        Invoke((Action)Pick);
+                    }
+                    else
+                    {
+                        Pick();
+                    }
+
+                    if (read is null)
+                    {
+                        return;
+                    }
+
+                    if (director.SponsorOnScreenFor?.Invoke(read.SponsorId) is { } onScreen)
+                    {
+                        SponsorOnAir.Begin(onScreen.PictureFileName, onScreen.Name, SponsorCopy.SpokenLength(read.Text));
+                    }
+
+                    StatusMessage?.Invoke(previous is null
+                        ? $"{AppTime.LogStampNow()}  [commentary] Commercial break - the sponsor's copy, read after the advert."
+                        : $"{AppTime.LogStampNow()}  [commentary] Commercial break - the rest of the sponsor's copy, straight on.");
+
+                    _announcer.SpeakReminder(read.Text, showOnScreens: true);
+
+                    await _announcer.WaitForAudioAsync(SpokenWait(), nextRace);
+
+                    if (!read.MoreToCome)
+                    {
+                        return;
+                    }
+
+                    previous = read;
                 }
-
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Commercial break - the sponsor's copy, read after the advert.");
-
-                _announcer.SpeakReminder(read.Text, showOnScreens: true);
-
-                await _announcer.WaitForAudioAsync(SpokenWait(), nextRace);
             }
             finally
             {

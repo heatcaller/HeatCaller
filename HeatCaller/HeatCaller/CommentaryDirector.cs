@@ -894,6 +894,25 @@ public sealed class CommentaryDirector
                ?? SalesRead(SponsorPlacement.Segments, SponsorMoment.BetweenRaces, gap);
     }
 
+    /// <summary>
+    /// The next part of the copy the stop set has just read, straight on -
+    /// or null when that was the end of it (16 Oct 2026). A read is capped
+    /// at SponsorCopy.LongestRead and longer copy is split at a sentence;
+    /// in the break the parts follow each other at once, so the sponsor's
+    /// words are heard through to the end rather than stopping half way
+    /// for "the next gap". No quiet-after-a-read wait between the parts -
+    /// they are one advert.
+    /// </summary>
+    public SponsorRead? MoreOfTheBreakRead(SponsorRead read, TimeSpan gap)
+    {
+        if (!read.MoreToCome || _racing || Held || Plan() is not { } plan)
+        {
+            return null;
+        }
+
+        return Sponsors.MoreOf(plan.Sponsors, read.SponsorId, read.Moment, gap);
+    }
+
     /// <summary>One tick of the running order - every adjacent pair, as the race stands. See BattleWatch.</summary>
     public void Standings(IReadOnlyList<PairGap> pairs) => Standings(pairs, 0, null);
 

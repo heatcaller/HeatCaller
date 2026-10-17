@@ -1146,6 +1146,10 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[shouting] {driver} heads the clean runs now - {streak} laps!",
                 "[excited] {driver} leads the consistency charts, {streak} in a row!",
                 "[excited] The longest streak out there is {driver}'s - {streak} laps!",
+                "[excited] {driver} now has the longest clean run on track - {streak}!",
+                "[excited] {driver} takes the streak lead from {rival} - {streak} laps!",
+                "[excited] {streak} in a row - nobody has a longer run than {driver}!",
+                "[shouting] Longest run in the field - {driver}, {streak} laps!",
             },
         };
         p.Events[nameof(AnnouncementEventType.GhostPassed)] = new AnnouncementEventConfig
@@ -1349,7 +1353,11 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[shouting] {driver} is right on the record, {laptime}!",
                 "[excited] The track record is in danger - {driver} just went {laptime}!",
                 "[excited] {driver} has found the pace of the record holder - {laptime}!",
-                "[shouting] {driver} is flying! That is record pace!"
+                "[shouting] {driver} is flying! That is record pace!",
+                "[excited] {driver} is chasing the track record - {laptime}!",
+                "[excited] That's close to the record for {driver} - {laptime}!",
+                "[shouting] Record pace! {driver}, {laptime}!",
+                "[excited] {driver} is within touching distance of the record!",
             },
         };
 
@@ -1469,6 +1477,15 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[excited] {driver} goes fastest through sector {sector} - {sectortime}!",
                 "Quickest sector {sector} of the session for {driver}, {sectortime}.",
                 "[excited] {driver} - best sector {sector} so far!",
+                "[excited] Best sector {sector} yet - {driver}, {sectortime}!",
+                "{driver} is quickest through sector {sector} - {sectortime}.",
+                "[excited] Purple sector {sector} for {driver}!",
+                "Sector {sector} - {driver} goes fastest, {sectortime}.",
+                "[excited] {driver} flies through sector {sector} - {sectortime}!",
+                "Fastest sector {sector} now belongs to {driver}.",
+                "[excited] {driver} lowers the best sector {sector} - {sectortime}!",
+                "Top time in sector {sector} for {driver}, {sectortime}.",
+                "[excited] Nobody has gone through sector {sector} quicker than {driver}!",
             },
         };
 
@@ -1481,6 +1498,15 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[excited] {driver} is {gap} up on their best at the split - on for a personal best!",
                 "{driver} is {gap} up at the split. Watch this lap!",
                 "[excited] Up at the split for {driver} - this could be a best!",
+                "[excited] {driver} is {gap} up at the split!",
+                "{driver} up by {gap} at the split - a best could be on.",
+                "[excited] Green split for {driver} - {gap} up!",
+                "Watch {driver} - {gap} up on their best so far.",
+                "[excited] {driver} is on a flier - {gap} up at the split!",
+                "{gap} up at the split for {driver}. Can they hold it?",
+                "[excited] Personal best pace from {driver} at the split!",
+                "{driver} is ahead of their best at the split - {gap}.",
+                "[excited] Up at the split - {driver} could go quicker here!",
             },
         };
 
@@ -1493,6 +1519,15 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[excited] {driver} is {gap} up on the track record at the split!",
                 "[shouting] {driver} is ahead of record pace at the split - {gap} up!",
                 "[excited] Record pace at the split for {driver}!",
+                "[shouting] {driver} is up on the record at the split - {gap}!",
+                "[excited] Track record pace at the split for {driver} - {gap} up!",
+                "[excited] {driver} is ahead of the record at the split!",
+                "[shouting] The record is under threat - {driver}, {gap} up at the split!",
+                "[excited] {gap} up on the record for {driver} at the split!",
+                "[shouting] Record pace! {driver} is {gap} up at the split!",
+                "[excited] Watch this lap - {driver} is ahead of the record!",
+                "[excited] {driver} is on track for a record - {gap} up at the split!",
+                "[shouting] {driver} is up on the record - can they hold it?",
             },
         };
 

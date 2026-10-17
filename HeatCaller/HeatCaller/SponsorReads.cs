@@ -256,6 +256,50 @@ public sealed class SponsorRotation
     }
 
     /// <summary>
+    /// The rest of one sponsor's copy, picked up where their last read
+    /// stopped - or null when they have none left (16 Oct 2026). For the
+    /// stop set, which reads a sponsor's copy through to its end in one go
+    /// rather than leaving "more to come in the next gap" hanging until a
+    /// gap that, with the copy now only read in the break, is a whole race
+    /// away. Nothing else changes whose turn it is.
+    /// </summary>
+    public SponsorRead? MoreOf(IReadOnlyList<SponsorSlot> sponsors, string sponsorId, SponsorMoment moment, TimeSpan gap)
+    {
+        // SponsorSlot is a struct, so "not found" is a missing index
+        // rather than a null.
+        var at = -1;
+
+        for (var i = 0; i < sponsors.Count; i++)
+        {
+            if (string.Equals(sponsors[i].SponsorId, sponsorId, StringComparison.Ordinal))
+            {
+                at = i;
+                break;
+            }
+        }
+
+        if (at < 0 || _resume.GetValueOrDefault(sponsorId) == 0)
+        {
+            return null;
+        }
+
+        var slot = sponsors[at];
+
+        if (SalesRead(slot, moment, _reads.GetValueOrDefault(sponsorId), gap) is not { } more)
+        {
+            return null;
+        }
+
+        // Straight on from the part before, so no "More from" in front of
+        // it - in the break the two parts are one advert.
+        var lead = $"More from {SpokenName(slot.Name)}. ";
+
+        return more.Text.StartsWith(lead, StringComparison.Ordinal)
+            ? more with { Text = more.Text[lead.Length..] }
+            : more;
+    }
+
+    /// <summary>
     /// The read went out. Counted against the sponsor, which is both the
     /// rotation's memory and the number the club shows them at the end of
     /// the night - so it is called after the line is spoken, never before.
