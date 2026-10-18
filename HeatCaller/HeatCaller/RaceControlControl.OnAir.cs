@@ -375,9 +375,9 @@ public sealed partial class RaceControlControl
             // opening - "Welcome back to the track! I'm Dave Marsh. Heat
             // three..." Put in here rather than asked of the model, so it is
             // there every time and in the same place. See AnnouncerIntro.
-            if (line is { } written)
+            if (line is { Text: { } writtenText } written)
             {
-                line = written with { Text = AnnouncerIntro.IntoOpening(written.Text, _settings.RecapAnnouncerName) };
+                line = written with { Text = AnnouncerIntro.IntoOpening(writtenText, _settings.RecapAnnouncerName) };
             }
 
             // THE WHOLE RUN BEFORE STAGING, RENDERED NOW (18 Oct 2026): the
@@ -390,7 +390,11 @@ public sealed partial class RaceControlControl
 
             if (line is { } toRender)
             {
-                audio = await _announcer.PrepareReminderAsync(toRender.Text);
+                // No opening when only the pit lane is due - see WriteOpeningAsync.
+                if (toRender.Text is { } openingToRender)
+                {
+                    audio = await _announcer.PrepareReminderAsync(openingToRender);
+                }
 
                 if (toRender.Introductions is { } introductionsToRender)
                 {
@@ -441,28 +445,41 @@ public sealed partial class RaceControlControl
 
             if (line is { } said)
             {
-                if (audio is not null)
+                if (said.Text is { } openingText)
                 {
-                    _announcer.SpeakPrepared(audio);
-                }
-                else
-                {
-                    _announcer.SpeakReminder(said.Text);
-                }
+                    if (audio is not null)
+                    {
+                        _announcer.SpeakPrepared(audio);
+                    }
+                    else
+                    {
+                        _announcer.SpeakReminder(openingText);
+                    }
 
-                // As Stage's own intro does: recorded as said, and its facts
-                // spent, only once the line has been queued.
-                _commentary?.IntroSpoken(said.Text);
-                _commentary?.HistorySpoken(said.History);
-                _openingSaidByOnAir = true;
+                    // As Stage's own intro does: recorded as said, and its facts
+                    // spent, only once the line has been queued.
+                    _commentary?.IntroSpoken(openingText);
+                    _commentary?.HistorySpoken(said.History);
+                    _openingSaidByOnAir = true;
+                }
 
                 // Then pit lane: the throw to the co-host and the Team
-                // Principal - before the introductions, so the race is set
-                // up, the team heard, and then the field. Stage leaves it out.
+                // Principal - right after the show open and BEFORE STAGING
+                // (18 Oct 2026), then the introductions, so the race is set
+                // up, the team heard, and then the field.
+                //
+                // Once On Air has tried for it, Stage leaves it out even
+                // when it did not come back in time: the pit lane belongs
+                // in front of the staging call, and late it is dropped
+                // rather than heard after it.
+                if (said.PrincipalTried)
+                {
+                    _principalSaidByOnAir = true;
+                }
+
                 if (said.Principal is { } principalPart)
                 {
                     SayPrincipalLines(principalPart.Lines, principalPart.Focus);
-                    _principalSaidByOnAir = true;
                 }
 
                 // Then the driver introductions. Stage leaves them out too -
@@ -666,11 +683,22 @@ public sealed partial class RaceControlControl
     /// null when it is not due or did not come back in time - Stage then
     /// does it as before.
     /// </summary>
+    /// <param name="Text">
+    /// The opening itself, or null when no round intro is due (or none came
+    /// back) but the pit lane is (18 Oct 2026) - the pit lane still goes out
+    /// after the jingle and before staging, never after the staging call.
+    /// </param>
+    /// <param name="PrincipalTried">
+    /// A Team Principal was due and On Air asked for one - so the Stage it
+    /// hands over to does not ask again after the staging call, whether or
+    /// not it came back in time.
+    /// </param>
     private sealed record OpeningRun(
-        string Text,
+        string? Text,
         PackedFacts? History,
         (string Text, Action? Count)? Introductions,
-        (List<SpokenLine> Lines, string Focus)? Principal);
+        (List<SpokenLine> Lines, string Focus)? Principal,
+        bool PrincipalTried = false);
 
     /// <summary>
     /// The opening: the round intro for the race in the Round box, written
@@ -685,7 +713,7 @@ public sealed partial class RaceControlControl
     {
         try
         {
-            if (_commentary is null || !_commentary.IsAvailable || !_settings.CommentaryRaceIntros)
+            if (_commentary is null || !_commentary.IsAvailable)
             {
                 return null;
             }
@@ -697,6 +725,11 @@ public sealed partial class RaceControlControl
                 return null;
             }
 
+            if (!_settings.CommentaryRaceIntros)
+            {
+                return await PitLaneOnlyAsync(round, ct);
+            }
+
             if (_settings.CommentaryIntrosMainsOrRivalriesOnly
                 && round.Kind != RoundKind.Main
                 && !_commentary.HasRivalryAmong(round.AssignedTransponders))
@@ -705,7 +738,7 @@ public sealed partial class RaceControlControl
                     $"{AppTime.LogStampNow()}  [imaging] No opening for {round.RoundLabel} - intros are set to mains and rivalries only, "
                     + "and this race is neither.");
 
-                return null;
+                return await PitLaneOnlyAsync(round, ct);
             }
 
             var (clubNight, form, stake, scene) = ReadIntroFacts(round);
@@ -752,8 +785,11 @@ public sealed partial class RaceControlControl
 
             if (string.IsNullOrWhiteSpace(answer))
             {
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] No opening - no intro came back in time, so On Air goes straight to the race.");
-                return null;
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] No opening - no intro came back in time.");
+
+                // The pit lane already being written still goes out before
+                // staging (18 Oct 2026) - see OpeningRun.Text.
+                return await PitLaneFrom(principalJob, principal);
             }
 
             // Never longer than their own budget, which runs from when they
@@ -785,7 +821,8 @@ public sealed partial class RaceControlControl
                 answer,
                 history,
                 withIntroductions,
-                principalLines is { Count: > 0 } && principalJob is not null ? (principalLines, principalJob.Focus) : null);
+                principalLines is { Count: > 0 } && principalJob is not null ? (principalLines, principalJob.Focus) : null,
+                PrincipalTried: principalJob is not null);
         }
         catch (OperationCanceledException)
         {
@@ -796,6 +833,53 @@ public sealed partial class RaceControlControl
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] No opening - {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// The pit lane on its own (18 Oct 2026), for a race with no opening -
+    /// race intros off, or kept for mains and rivalries and this race is
+    /// neither. It used to be left to Stage, which put it after the staging
+    /// call; now it goes out after the jingle and before staging, like it
+    /// does after an opening. Null when no Team Principal is due. On the UI
+    /// thread up to the model call.
+    /// </summary>
+    private async Task<OpeningRun?> PitLaneOnlyAsync(RoundDefinition round, CancellationToken ct)
+    {
+        var job = PreparePrincipal(round);
+
+        if (job is null)
+        {
+            return null;
+        }
+
+        return await PitLaneFrom(job, Task.Run(() => WritePrincipalLinesAsync(job, ct)));
+    }
+
+    /// <summary>An <see cref="OpeningRun"/> carrying the pit lane alone, once its lines are written - null when none was due.</summary>
+    private async Task<OpeningRun?> PitLaneFrom(PrincipalJob? job, Task<List<SpokenLine>?> writing)
+    {
+        if (job is null)
+        {
+            return null;
+        }
+
+        List<SpokenLine>? lines = null;
+
+        try
+        {
+            lines = await writing;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Team Principal skipped - {ex.Message}");
+        }
+
+        if (lines is { Count: > 0 })
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] No opening for this race - the throw to pit lane goes out after the jingle, before staging.");
+        }
+
+        return new OpeningRun(null, null, null, lines is { Count: > 0 } ? (lines, job.Focus) : null, PrincipalTried: true);
     }
 }
 

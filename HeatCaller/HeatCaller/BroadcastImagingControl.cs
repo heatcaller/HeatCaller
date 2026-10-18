@@ -424,7 +424,8 @@ public sealed class BroadcastImagingControl : UserControl
 
         var lblRunHint = new Label
         {
-            Text = "Before the race (On Air on Race Control): jingle or sweeper  ->  the opening, over the opening bed  ->  bumper  ->  staging call. "
+            Text = "Before the race (On Air on Race Control): jingle or sweeper  ->  the opening, over the opening bed  ->  throw to pit lane  ->  "
+                 + "driver introductions  ->  bumper  ->  staging call. "
                  + "After the flag: the teaser  ->  bumper  ->  stop set (sponsors)  ->  jingle or sweeper  ->  recap open  ->  "
                  + "the recap host over the recap bed, a stinger between parts  ->  closing bumper. "
                  + "A point set to something the soundscape doesn't have plays nothing.",

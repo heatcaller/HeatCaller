@@ -763,6 +763,22 @@ public sealed class AppSettings
     /// <summary>The driver introductions for a main only - the way a broadcast saves them for the feature. Off by default.</summary>
     public bool CommentaryDriverIntrosMainsOnly { get; set; }
 
+    /// <summary>
+    /// The qualifying recap (18 Oct 2026): before a main, the driver
+    /// introductions open with what qualifying decided. Its own tick on the
+    /// AI Commentary tab's Segments, under the introductions it is part of.
+    /// On by default, as it always was.
+    /// </summary>
+    public bool CommentaryQualifyingRecap { get; set; } = true;
+
+    /// <summary>
+    /// The unofficial result at the flag (18 Oct 2026): straight after the
+    /// finish call, the race announcer says who won, who they beat and who
+    /// set the fastest lap. Fixed words, no model. On by default - the
+    /// finish call names nobody.
+    /// </summary>
+    public bool FlagResultRead { get; set; } = true;
+
     // Shared voice - applies to intros, summaries and talking points alike,
     // since a club wants one announcer personality, not a different one per
     // feature. Stored as an int (enum), so new CommentaryTone members must

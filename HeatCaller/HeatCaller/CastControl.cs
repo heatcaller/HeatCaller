@@ -193,6 +193,24 @@ public sealed class CastControl : UserControl
             FillVoices(engine);
         }
 
+        // The AI Commentary tab's "Throw to pit lane" is this switch too
+        // (18 Oct 2026), so it is read again in case it was changed there.
+        if (_chkPrincipalBefore.Checked != _settings.PrincipalBeforeRace)
+        {
+            _chkPrincipalBefore.Checked = _settings.PrincipalBeforeRace;
+        }
+
+        // And the after-the-flag interviews (18 Oct 2026), on its Segments too.
+        if (_chkInterview.Checked != _settings.RecapMechanicInterview)
+        {
+            _chkInterview.Checked = _settings.RecapMechanicInterview;
+        }
+
+        if (_chkPrincipalAfter.Checked != _settings.PrincipalAfterRace)
+        {
+            _chkPrincipalAfter.Checked = _settings.PrincipalAfterRace;
+        }
+
         RefreshEnabledState();
     }
 
@@ -507,7 +525,7 @@ public sealed class CastControl : UserControl
         // The winner's Technical Lead (called the mechanic until 17 Oct 2026)
         // ------------------------------------------------------------------
 
-        Check(_chkInterview, "After a main, a quick interview with the winner's Technical Lead");
+        Check(_chkInterview, "After a main, down to pit lane for a word with the winner's Technical Lead");
         _chkInterview.Checked = _settings.RecapMechanicInterview;
         _chkInterview.CheckedChanged += (_, _) =>
         {
@@ -539,8 +557,9 @@ public sealed class CastControl : UserControl
 
         mechanic.Add(_chkInterview, stretch: false, gapBelow: UiLayout.HintGap);
         mechanic.Add(Hint(
-            "Two questions about the race and any setup changes logged in the Garage for the winning car. Mains "
-            + "only, and part of the recap, so it needs race recaps on."));
+            "At the flag, straight after the finish call: the announcer throws down to the co-host in pit lane, who asks "
+            + "two questions about the race and any setup changes logged in the Garage for the winning car, then hands "
+            + "back before the break. Mains only, and it needs race recaps on."));
         mechanic.Add(mechanicGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
@@ -556,7 +575,7 @@ public sealed class CastControl : UserControl
             RefreshEnabledState();
         };
 
-        Check(_chkPrincipalAfter, "After a race, a word with the winner's Team Principal");
+        Check(_chkPrincipalAfter, "On the recap show, the winner's Team Principal in the booth");
         _chkPrincipalAfter.Checked = _settings.PrincipalAfterRace;
         _chkPrincipalAfter.CheckedChanged += (_, _) =>
         {
@@ -613,8 +632,8 @@ public sealed class CastControl : UserControl
             + "it is skipped when the night is running ten minutes or more behind."));
         principal.Add(_chkPrincipalAfter, stretch: false, gapBelow: UiLayout.HintGap);
         principal.Add(Hint(
-            "Two questions about what the win means to the team. After the Technical Lead when both are on, and part "
-            + "of the recap, so it needs race recaps on."));
+            "The recap host has them in the booth later that night for two questions about what the win means to the "
+            + "team. Part of the recap show, so it needs race recaps on."));
         principal.Add(_chkPrincipalHeats, stretch: false, gapBelow: UiLayout.HintGap);
         principal.Add(_chkPrincipalTeamsOnly, stretch: false, gapBelow: UiLayout.RowGap);
         principal.Add(principalGrid, gapBelow: 0);

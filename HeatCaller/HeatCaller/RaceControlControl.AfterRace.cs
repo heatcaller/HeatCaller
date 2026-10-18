@@ -525,7 +525,11 @@ public sealed partial class RaceControlControl
         // held back from the individual calls on the strength of the segment
         // running, so a club with the AI off and the teaser switched off
         // would have heard nothing about them at all.
-        if (!wantsTeaser && !commentaryAvailable && honours is null)
+        // The unofficial result at the flag (18 Oct 2026) needs no model
+        // either, so it too is reason enough to run the sequence.
+        var resultRead = _settings.FlagResultRead ? FlagResultFor(record) : null;
+
+        if (!wantsTeaser && !commentaryAvailable && honours is null && resultRead is null)
         {
             // Nothing more to say - but the broadcast is only over once the
             // finish call has been spoken. Returning without the signal left
@@ -963,6 +967,17 @@ public sealed partial class RaceControlControl
                 var recapLeads = (_announcer.Leads.Changes, _announcer.Leads.Leaders);
                 var recapSponsor = commentaryAvailable ? _announcer.TakeSponsor(SponsoredMoment.RaceResult) : null;
 
+                // THE TECHNICAL LEAD, AT THE FLAG (18 Oct 2026). Moved out of
+                // the recap show: the race announcer throws down to pit lane
+                // straight after the finish call, the co-host has a word with
+                // the winner's Technical Lead and hands back, and only then
+                // does the teaser take the room into the break. Asked for
+                // FIRST, before the recap - it is wanted in seconds, and the
+                // recap has the whole break to be written in.
+                var interviewTask = plan is { Interview: true }
+                    ? WriteFlagInterviewAsync(record, plan, followOnWork.Token)
+                    : null;
+
                 var generation = commentaryAvailable
                     ? _commentary!.BuildRaceSummaryAsync(
                         record, championship, plan?.Context, raceHistory, followOnWork.Token,
@@ -997,28 +1012,25 @@ public sealed partial class RaceControlControl
                 // request at a time, and the recap is wanted first. So the
                 // interview and the sign-off are written - and rendered -
                 // while the teaser and the recap play.
-                // THE PIT-LANE INTERVIEW (18 Oct 2026): the winner's Team
-                // Principal and Technical Lead in ONE segment, the Team
-                // Principal first - so written first, one request at a time,
-                // and the Technical Lead straight after. Asked by the co-host
-                // when the club has one, which the show host throws to.
+                // THE BOOTH INTERVIEW (18 Oct 2026): the winner's Team
+                // Principal, in the booth with the recap show's host later
+                // that night - no longer down in pit lane. Written once the
+                // recap has been, one request at a time.
                 var principalTask = generation is not null && plan is { Principal: true }
                     ? WritePrincipalAsync(generation, generation, record, plan, championship, delivery, followOnWork.Token)
                     : null;
 
-                var interviewTask = generation is not null && plan is { Interview: true }
-                    ? WriteInterviewAsync(principalTask is not null ? (Task)principalTask : generation, generation, record, plan, delivery, followOnWork.Token)
+                // The race announcer's throw to pit lane, and the co-host's
+                // hand back - rendered now, so they are ready at the flag.
+                var flagThrowTask = interviewTask is not null
+                    ? RenderFlagThrowAsync(record, followOnWork.Token)
                     : null;
 
-                // The host's throw to the co-host, rendered now so it is
-                // ready the moment the segment's stinger ends.
-                var throwTask = CoHostInterviews && (principalTask is not null || interviewTask is not null)
-                    ? RenderPitLaneThrowAsync(record, principalTask is not null, interviewTask is not null, delivery, followOnWork.Token)
+                var flagHandBackTask = interviewTask is not null && CoHostInterviews
+                    ? RenderFlagHandBackAsync(followOnWork.Token)
                     : null;
 
-                Task closingAfter = interviewTask is not null
-                    ? (Task)interviewTask
-                    : principalTask is not null ? (Task)principalTask : (Task)generation!;
+                Task closingAfter = principalTask is not null ? (Task)principalTask : (Task)generation!;
 
                 var closingTask = generation is not null && plan is { SeparateClosing: true }
                     ? WriteClosingAsync(closingAfter, generation, record, plan, delivery, followOnWork.Token)
@@ -1119,6 +1131,44 @@ public sealed partial class RaceControlControl
                 // comfortably play twenty seconds later without anything
                 // being wrong except the thing being measured.
                 await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
+
+                // 1a. AT THE FLAG (18 Oct 2026) - the race announcer, before
+                // the teaser takes the room into the break. The unofficial
+                // result first: the finish call names nobody.
+                if (resultRead is not null && !nextRace.IsCancellationRequested)
+                {
+                    var resultQueued = await QueueUnlessNextRaceCalledAsync(
+                        () => _announcer.SpeakReminder(resultRead, showOnScreens: true),
+                        nextRace.Token);
+
+                    if (resultQueued)
+                    {
+                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] At the flag: \"{resultRead}\"");
+                    }
+                }
+
+                // 1b. Then down to pit lane for the winner's Technical Lead -
+                // the throw, the questions and answers, and the co-host's
+                // hand back up to the booth.
+                if (interviewTask is not null && !nextRace.IsCancellationRequested)
+                {
+                    SpokenLine? throwLine = null;
+                    SpokenLine? handBack = null;
+
+                    try
+                    {
+                        throwLine = flagThrowTask is null ? null : await flagThrowTask;
+                        handBack = flagHandBackTask is null ? null : await flagHandBackTask;
+                    }
+                    catch
+                    {
+                        // The interview still goes out, without them.
+                    }
+
+                    await SpeakInterviewAsync(interviewTask, nextRace.Token, throwLine, handBack, "the finish call");
+
+                    await _announcer.WaitForAudioAsync(SpokenWait(), CancellationToken.None);
+                }
 
                 // 2. Render the teaser DURING the pause, not after it.
                 //
@@ -1535,55 +1585,20 @@ public sealed partial class RaceControlControl
                     await SpeakColourAsync(colourTask, show, nextRace.Token);
                 }
 
-                // 6. After a main, the word with the mechanic; then the
-                // sign-off, when it has been kept back to come last. Each
-                // only once the line before it has been heard, and neither
-                // once the next race has been called to the grid.
+                // 6. The booth interview with the winner's Team Principal;
+                // then the sign-off, when it has been kept back to come last.
+                // Each only once the line before it has been heard, and
+                // neither once the next race has been called to the grid.
                 //
-                // ONE SEGMENT FOR BOTH (18 Oct 2026): one stinger, the host's
-                // throw to the co-host, then the Team Principal's questions
-                // and answers and straight on into the Technical Lead's. The
-                // Technical Lead is written after the Team Principal, so when
-                // that was too late this is later still and goes with it.
+                // IN THE BOOTH (18 Oct 2026): the recap host has the Team
+                // Principal in with them, later that night - no throw to pit
+                // lane. The Technical Lead's pit lane word is at the flag now.
                 var interview = FollowOn.Spoken;
-                var firstPart = principalTask ?? interviewTask;
-                var secondPart = principalTask is not null ? interviewTask : null;
 
-                if (firstPart is not null)
+                if (principalTask is not null)
                 {
                     await StingBetweenRecapPartsAsync(show, nextRace.Token);
-
-                    SpokenLine? throwToCoHost = null;
-
-                    if (throwTask is not null)
-                    {
-                        try
-                        {
-                            throwToCoHost = await throwTask;
-                        }
-                        catch
-                        {
-                            // The interview still goes out, without the throw.
-                        }
-                    }
-
-                    var (outcome, said) = await SpeakInterviewAsync(firstPart, nextRace.Token, throwToCoHost);
-                    interview = outcome;
-
-                    if (secondPart is not null)
-                    {
-                        if (interview == FollowOn.Spoken)
-                        {
-                            // Straight on - no stinger, the same segment. The
-                            // throw goes in front of this part instead when
-                            // the first had nothing to say.
-                            (interview, _) = await SpeakInterviewAsync(secondPart, nextRace.Token, said ? null : throwToCoHost);
-                        }
-                        else if (interview == FollowOn.Late)
-                        {
-                            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Technical Lead skipped - it's written after the Team Principal, which was too late.");
-                        }
-                    }
+                    (interview, _) = await SpeakInterviewAsync(principalTask, nextRace.Token);
                 }
 
                 if (closingTask is not null)
@@ -1893,7 +1908,7 @@ public sealed partial class RaceControlControl
 
             // A demo leaves its round unrun, so that round is still next.
             closing ? UpNextAfter(record.IsDemo ? null : round) : null,
-            InterviewFollows: interview || principal,
+            InterviewFollows: principal,
 
             // The host's own name, for the opening to introduce himself
             // with: the recap host's own name, never the race announcer's
@@ -1940,7 +1955,7 @@ public sealed partial class RaceControlControl
         var who = mechanicName.Length > 0 ? mechanicName : "the Technical Lead";
 
         StatusMessage?.Invoke(
-            $"{AppTime.LogStampNow()}  [commentary] After the recap: an interview with {who}"
+            $"{AppTime.LogStampNow()}  [commentary] At the flag: down to pit lane for a word with {who}"
             + (voice is not null
                 ? $" in the voice {(voices.NameFor(engine) is { Length: > 0 } picked ? $"\"{picked}\"" : "picked for it")}"
                 : $" in the announcer's own voice - no Technical Lead's voice is picked for {EngineName(engine)} on Voice > Cast")
@@ -2165,7 +2180,7 @@ public sealed partial class RaceControlControl
         var voice = voices.IsSetFor(engine) ? voices : null;
 
         StatusMessage?.Invoke(
-            $"{AppTime.LogStampNow()}  [commentary] After the recap: a word with {(name.Length > 0 ? name : "the winner's Team Principal")}"
+            $"{AppTime.LogStampNow()}  [commentary] On the recap show: {(name.Length > 0 ? name : "the winner's Team Principal")} in the booth"
             + (voice is not null
                 ? $" in the voice {(voices.NameFor(engine) is { Length: > 0 } picked ? $"\"{picked}\"" : "picked for it")}."
                 : $" in the announcer's own voice - no Team Principal's voice is picked for {EngineName(engine)} on Voice > Cast."));
@@ -2207,16 +2222,16 @@ public sealed partial class RaceControlControl
                 plan.Context.Kind,
                 championship,
                 log: note => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}"),
-                ct: cancel,
-                interviewer: InterviewerName);
+                ct: cancel);
 
             if (exchanges is null)
             {
                 return null;
             }
 
-            var (askVoice, askDelivery) = Interviewer(delivery);
-            return await RenderExchangesAsync(exchanges, askVoice, askDelivery, plan.PrincipalVoice, cancel);
+            // The recap host asks, in the booth (18 Oct 2026) - not the
+            // co-host, who is down in pit lane.
+            return await RenderExchangesAsync(exchanges, RecapHostVoice, delivery, plan.PrincipalVoice, cancel);
         }
         catch (Exception ex)
         {
@@ -2238,14 +2253,6 @@ public sealed partial class RaceControlControl
     /// <summary>The co-host's name for the interview prompts (blank for none), or null when the announcer asks - see CommentaryService.AskedBy.</summary>
     private string? InterviewerName => CoHostInterviews ? (_settings.CommentaryCoHostName ?? string.Empty).Trim() : null;
 
-    /// <summary>
-    /// The voice and delivery the recap show's interview questions are asked
-    /// in: the co-host's, in the way their voice talks, or the host's with
-    /// the recap's delivery.
-    /// </summary>
-    private (SecondVoice? Voice, (double Stability, double Style)? Delivery) Interviewer((double Stability, double Style)? hostDelivery) =>
-        CoHostInterviews ? (_settings.CoHostVoice, null) : (RecapHostVoice, hostDelivery);
-
     /// <summary>A driver's name for a line the voice reads: the announcer name when set, else their name.</summary>
     private string SpokenDriverName(string transponder)
     {
@@ -2256,32 +2263,7 @@ public sealed partial class RaceControlControl
             : string.Empty;
     }
 
-    /// <summary>
-    /// The show host's throw to the co-host in pit lane, straight after the
-    /// interview segment's stinger: "Let's head down to pit lane, where Jess
-    /// is with the Team Principal and the Technical Lead from Sam's team.
-    /// Jess?" Written here rather than by the model - it is the same beat
-    /// every time, as a station's hand-over is - and rendered in the host's
-    /// voice while the recap plays.
-    /// </summary>
-    private async Task<SpokenLine?> RenderPitLaneThrowAsync(
-        SessionRecord record, bool principal, bool technicalLead, (double Stability, double Style)? delivery, CancellationToken cancel)
-    {
-        var line = PitLaneThrow(
-            (_settings.CommentaryCoHostName ?? string.Empty).Trim(),
-            principal,
-            technicalLead,
-            record.Results.OrderBy(r => r.Position).FirstOrDefault() is { } winner ? SpokenDriverName(winner.Transponder) : string.Empty);
-
-        if (cancel.IsCancellationRequested)
-        {
-            return null;
-        }
-
-        return new SpokenLine(line, RecapHostVoice, delivery, await _announcer.PrepareReminderAsync(line, delivery, RecapHostVoice));
-    }
-
-    /// <summary>The words of the throw to pit lane - see RenderPitLaneThrowAsync. Pure, for the tests.</summary>
+    /// <summary>The words of a throw to pit lane - the race announcer's at the flag, see RenderFlagThrowAsync. Pure, for the tests.</summary>
     internal static string PitLaneThrow(string coHostName, bool principal, bool technicalLead, string winner)
     {
         var guests = principal && technicalLead ? "the Team Principal and the Technical Lead"
@@ -2347,34 +2329,24 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
-    /// Writes the interview once the recap has been written, then renders
-    /// each line - the questions in the announcer's voice, the answers in
-    /// the mechanic's - one at a time, while the recap plays. Null when
-    /// there's no recap for it to follow, nothing usable came back, or it
-    /// was called off.
+    /// The Technical Lead's pit lane interview AT THE FLAG (18 Oct 2026):
+    /// written the moment the race is filed - it no longer waits for the
+    /// recap - then rendered a line at a time, the questions in the
+    /// co-host's voice (or the race announcer's own when the club has no
+    /// co-host) and the answers in the Technical Lead's. Null when nothing
+    /// usable came back or it was called off.
     /// </summary>
-    /// <param name="before">The part written just before - the Team Principal's, or the recap. The local model takes one request at a time.</param>
-    private async Task<List<SpokenLine>?> WriteInterviewAsync(
-        Task before, Task<string?> recapWritten, SessionRecord record, RecapPlan plan, (double Stability, double Style)? delivery, CancellationToken cancel)
+    private async Task<List<SpokenLine>?> WriteFlagInterviewAsync(
+        SessionRecord record, RecapPlan plan, CancellationToken cancel)
     {
         try
         {
-            try
-            {
-                await before;
-            }
-            catch
-            {
-                // Its own failure is its own to report; this still follows.
-            }
-
-            // No recap, no interview: it would follow nothing.
-            if (string.IsNullOrWhiteSpace(await recapWritten) || cancel.IsCancellationRequested)
+            if (_commentary is null || cancel.IsCancellationRequested)
             {
                 return null;
             }
 
-            var exchanges = await _commentary!.BuildMechanicInterviewAsync(
+            var exchanges = await _commentary.BuildMechanicInterviewAsync(
                 record,
                 plan.MechanicName,
                 plan.SetupFacts,
@@ -2388,38 +2360,118 @@ public sealed partial class RaceControlControl
                 return null;
             }
 
-            var (askVoice, askDelivery) = Interviewer(delivery);
-            var lines = new List<SpokenLine>();
+            // The co-host asks when the club has one; otherwise the race
+            // announcer himself, in his own voice - this is his part of the
+            // night, not the recap show's.
+            SecondVoice? askVoice = CoHostInterviews ? _settings.CoHostVoice : null;
 
-            foreach (var exchange in exchanges)
-            {
-                // Checked before each render: each one costs characters.
-                if (cancel.IsCancellationRequested)
-                {
-                    return null;
-                }
-
-                // The co-host asks when the club has one, the host otherwise -
-                // the questions are part of the recap show.
-                lines.Add(new SpokenLine(exchange.Question, askVoice, askDelivery,
-                    await _announcer.PrepareReminderAsync(exchange.Question, askDelivery, askVoice)));
-
-                if (cancel.IsCancellationRequested)
-                {
-                    return null;
-                }
-
-                lines.Add(new SpokenLine(exchange.Answer, plan.MechanicVoice, null,
-                    await _announcer.PrepareReminderAsync(exchange.Answer, null, plan.MechanicVoice)));
-            }
-
-            return lines;
+            return await RenderExchangesAsync(exchanges, askVoice, null, plan.MechanicVoice, cancel);
         }
         catch (Exception ex)
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No interview - {ex.Message}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No Technical Lead interview - {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// The race announcer's throw down to pit lane at the flag: "Let's head
+    /// down to pit lane, where Jess is with the Technical Lead from Sam's
+    /// team. Jess?" In his own voice. See PitLaneThrow.
+    /// </summary>
+    private async Task<SpokenLine?> RenderFlagThrowAsync(SessionRecord record, CancellationToken cancel)
+    {
+        var line = PitLaneThrow(
+            CoHostInterviews ? (_settings.CommentaryCoHostName ?? string.Empty).Trim() : string.Empty,
+            principal: false,
+            technicalLead: true,
+            record.Results.OrderBy(r => r.Position).FirstOrDefault() is { } winner ? SpokenDriverName(winner.Transponder) : string.Empty);
+
+        if (cancel.IsCancellationRequested)
+        {
+            return null;
+        }
+
+        return new SpokenLine(line, null, null, await _announcer.PrepareReminderAsync(line));
+    }
+
+    /// <summary>
+    /// The co-host handing back up to the booth once the Technical Lead has
+    /// spoken - in the co-host's voice. See FlagHandBack.
+    /// </summary>
+    private async Task<SpokenLine?> RenderFlagHandBackAsync(CancellationToken cancel)
+    {
+        var line = FlagHandBack(_settings.RecapAnnouncerName);
+
+        if (cancel.IsCancellationRequested)
+        {
+            return null;
+        }
+
+        var voice = _settings.CoHostVoice;
+
+        return new SpokenLine(line, voice, null, await _announcer.PrepareReminderAsync(line, null, voice));
+    }
+
+    /// <summary>The co-host's hand back to the race announcer: "Back to you, Dave." Pure, for the tests.</summary>
+    internal static string FlagHandBack(string? announcerName)
+    {
+        var who = (announcerName ?? string.Empty).Trim().TrimEnd('.', '!', '?', ',');
+
+        return who.Length > 0 ? $"That's the word from pit lane - back to you, {who}." : "That's the word from pit lane - back up to the booth.";
+    }
+
+    /// <summary>
+    /// The unofficial result at the flag (18 Oct 2026), in the race
+    /// announcer's voice straight after the finish call, which names nobody:
+    /// the winner, who they beat, and the fastest lap. Null when the winner
+    /// has no name to say.
+    /// </summary>
+    private string? FlagResultFor(SessionRecord record)
+    {
+        var ordered = record.Results.OrderBy(r => r.Position).ToList();
+
+        if (ordered.Count == 0)
+        {
+            return null;
+        }
+
+        var podium = ordered.Take(3).Select(r => SpokenDriverName(r.Transponder)).ToList();
+        var fastest = ordered.Where(r => r.FastLapMs > 0).OrderBy(r => r.FastLapMs).FirstOrDefault();
+
+        return FlagResult(podium, fastest is null ? null : SpokenDriverName(fastest.Transponder));
+    }
+
+    /// <summary>The words of the unofficial result - see FlagResultFor. Pure, for the tests.</summary>
+    /// <param name="podium">The top three's spoken names, in finishing order; a blank name is left out.</param>
+    /// <param name="fastestLap">Who set the race's fastest lap, or null/blank for nobody.</param>
+    internal static string? FlagResult(IReadOnlyList<string> podium, string? fastestLap)
+    {
+        if (podium.Count == 0 || string.IsNullOrWhiteSpace(podium[0]))
+        {
+            return null;
+        }
+
+        var winner = podium[0].Trim();
+        var beaten = podium.Skip(1).Select(n => (n ?? string.Empty).Trim()).Where(n => n.Length > 0).ToList();
+
+        var line = beaten.Count switch
+        {
+            0 => $"Unofficially, that's {winner} taking the win.",
+            1 => $"Unofficially, that's {winner} taking the win, ahead of {beaten[0]}.",
+            _ => $"Unofficially, that's {winner} taking the win, ahead of {beaten[0]} and {beaten[1]}.",
+        };
+
+        var fast = (fastestLap ?? string.Empty).Trim();
+
+        if (fast.Length > 0)
+        {
+            line += string.Equals(fast, winner, StringComparison.OrdinalIgnoreCase)
+                ? $" And {winner} had the fastest lap of the race too."
+                : $" The fastest lap of the race went to {fast}.";
+        }
+
+        return line;
     }
 
     /// <summary>
@@ -2497,8 +2549,11 @@ public sealed partial class RaceControlControl
     /// <param name="nextRace">Cancelled when the next race is called to the grid.</param>
     /// <param name="leadIn">A line said first when there is an interview to follow it - the host's throw to the co-host - or null.</param>
     /// <returns>How it went, and whether any of it was said.</returns>
+    /// <param name="handBack">A line said last when the interview was said - the co-host handing back to the booth - or null.</param>
+    /// <param name="after">What the wait is counted from, for the console.</param>
     private async Task<(FollowOn Outcome, bool Said)> SpeakInterviewAsync(
-        Task<List<SpokenLine>?> interviewTask, CancellationToken nextRace, SpokenLine? leadIn = null)
+        Task<List<SpokenLine>?> interviewTask, CancellationToken nextRace, SpokenLine? leadIn = null,
+        SpokenLine? handBack = null, string after = "the recap ending")
     {
         const string stopped = "Interview stopped - the next race was called to the grid.";
 
@@ -2519,17 +2574,29 @@ public sealed partial class RaceControlControl
         if (lines is null)
         {
             StatusMessage?.Invoke(timedOut
-                ? $"{AppTime.LogStampNow()}  [commentary] Interview skipped - it wasn't ready within {FollowOnWait.TotalSeconds:0}s of the recap ending."
+                ? $"{AppTime.LogStampNow()}  [commentary] Interview skipped - it wasn't ready within {FollowOnWait.TotalSeconds:0}s of {after}."
                 : $"{AppTime.LogStampNow()}  [commentary] No interview - nothing usable came back from the model. Any line above says why.");
 
             return (timedOut ? FollowOn.Late : FollowOn.Spoken, false);
         }
 
-        if (leadIn is not null)
+        if (leadIn is not null || handBack is not null)
         {
-            var withLeadIn = new List<SpokenLine>(lines.Count + 1) { leadIn };
-            withLeadIn.AddRange(lines);
-            lines = withLeadIn;
+            var whole = new List<SpokenLine>(lines.Count + 2);
+
+            if (leadIn is not null)
+            {
+                whole.Add(leadIn);
+            }
+
+            whole.AddRange(lines);
+
+            if (handBack is not null)
+            {
+                whole.Add(handBack);
+            }
+
+            lines = whole;
         }
 
         for (var i = 0; i < lines.Count; i++)

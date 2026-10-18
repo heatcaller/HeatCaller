@@ -159,20 +159,58 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
                 variety = temperature,
             };
 
-            using var request = new HttpRequestMessage(
-                HttpMethod.Post,
-                $"{target.Root}/api/v1/c/{Uri.EscapeDataString(target.Club)}/brain/write")
+            var json = JsonSerializer.Serialize(payload);
+
+            HttpStatusCode status;
+            bool succeeded;
+            string body;
+
+            // BUSY IS "WAIT", NOT "NO" (18 Oct 2026). The relay writes a
+            // limited number of lines for one club at a time and answers
+            // the rest 429 "busy". On Air asks for the race intro, the
+            // driver introductions and the Team Principal all at once, and
+            // on 18 Oct the Team Principal was the one turned away - so the
+            // first throw to pit lane of a demo was never heard. A busy
+            // answer spends nothing, so it is asked again shortly, inside
+            // the same timeout. Any other refusal is final, as before.
+            for (var attempt = 1; ; attempt++)
             {
-                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
-            };
+                TimeSpan? retryAfter;
 
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
+                using (var request = new HttpRequestMessage(
+                    HttpMethod.Post,
+                    $"{target.Root}/api/v1/c/{Uri.EscapeDataString(target.Club)}/brain/write")
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json"),
+                })
+                {
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
 
-            using var response = await Http.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
+                    using var response = await Http.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
 
-            // Capped: a misconfigured address pointing at some other web
-            // server can answer with a whole page, and none of it is ours.
-            var body = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
+                    // Capped: a misconfigured address pointing at some other web
+                    // server can answer with a whole page, and none of it is ours.
+                    body = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
+                    status = response.StatusCode;
+                    succeeded = response.IsSuccessStatusCode;
+                    retryAfter = response.Headers.RetryAfter?.Delta;
+                }
+
+                if (status == HttpStatusCode.TooManyRequests && attempt < BusyAttempts && IsBusy(body))
+                {
+                    var wait = retryAfter is { } asked
+                        ? TimeSpan.FromMilliseconds(Math.Clamp(asked.TotalMilliseconds, 500, 3000))
+                        : BusyWait;
+
+                    StatusMessage?.Invoke(
+                        $"[brain] The relay is busy with another line for this club - asking again in {wait.TotalSeconds:0.#}s.");
+
+                    await Task.Delay(wait, timeoutCts.Token).ConfigureAwait(false);
+                    continue;
+                }
+
+                break;
+            }
 
             if (body.Length > MaxBodyChars)
             {
@@ -183,13 +221,13 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
 
-            if (!response.IsSuccessStatusCode)
+            if (!succeeded)
             {
                 var why = root.TryGetProperty("error", out var error) ? error.GetString() : null;
                 var refusal = root.TryGetProperty("refusal", out var kind) ? kind.GetString() : null;
 
                 StatusMessage?.Invoke(
-                    $"[brain] The relay wouldn't write that one ({(int)response.StatusCode}{(refusal is null ? "" : $", {refusal}")}): "
+                    $"[brain] The relay wouldn't write that one ({(int)status}{(refusal is null ? "" : $", {refusal}")}): "
                     + (why ?? "no reason given")
                     + Allowance(root));
 
@@ -262,6 +300,30 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
         {
             StatusMessage?.Invoke($"[brain] {ex.GetType().Name}: {ex.Message} - falling back.");
             return null;
+        }
+    }
+
+    /// <summary>How many times one line is asked for while the relay says it is busy - see GenerateCoreAsync.</summary>
+    private const int BusyAttempts = 8;
+
+    /// <summary>How long to wait before asking a busy relay again, when it does not say.</summary>
+    private static readonly TimeSpan BusyWait = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>Whether a refusal is the relay's "busy" - writing another line for this club right now - and so worth asking again.</summary>
+    private static bool IsBusy(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+
+            return doc.RootElement.ValueKind == JsonValueKind.Object
+                   && doc.RootElement.TryGetProperty("refusal", out var kind)
+                   && kind.ValueKind == JsonValueKind.String
+                   && string.Equals(kind.GetString(), "busy", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 

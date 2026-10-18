@@ -3261,16 +3261,23 @@ public sealed class CommentaryService
             $"Team principal: {(name.Length > 0 ? name : "no name is given, so never make one up")}\n" +
             $"Their role, as the announcer introduces them: {PrincipalRole(team, driver)}\n" +
             FactsClose + "\n" +
-            $"\nWrite a short pit-lane interview for straight after this race: {AskedBy(interviewer)} (HOST) talks to the "
-            + "winner's team principal (TEAM PRINCIPAL). Exactly "
+            // IN THE BOOTH (18 Oct 2026), not pit lane: the recap show's host
+            // has the Team Principal in with them later that night, after
+            // the race, the way a studio show sits a guest down. The pit lane
+            // word at the flag is the Technical Lead's.
+            $"\nWrite a short studio interview in the commentary booth, on the recap show later that night: "
+            + $"{(interviewer is null ? "the recap show's host" : AskedBy(interviewer))} (HOST) has the winner's team principal "
+            + "(TEAM PRINCIPAL) sitting in the booth with them, a while after the race. Exactly "
             + MaxInterviewExchanges
             + " exchanges, every line starting with who says it, like this:\n"
             + "HOST: <question>\nTEAM PRINCIPAL: <answer>\nHOST: <question>\nTEAM PRINCIPAL: <answer>\n"
             + (name.Length > 0
-                ? "The first question introduces them by the name in the facts AND by their role as the facts give it, "
-                  + "once, the way a broadcast introduces a guest, and asks what the win means to the team; "
-                : "The first question introduces them by their role as the facts give it - no name is given, so do not "
-                  + "use one - and asks what the win means to the team; ")
+                ? "The first question welcomes them into the booth, introduces them by the name in the facts AND by their "
+                  + "role as the facts give it, once, the way a studio show introduces a guest, and asks what the win means "
+                  + "to the team now they have had time to take it in; "
+                : "The first question welcomes them into the booth and introduces them by their role as the facts give it - "
+                  + "no name is given, so do not use one - and asks what the win means to the team now they have had time "
+                  + "to take it in; ")
             + "the second asks about the bigger picture"
             + (standings.Count > 0 || rivalry.Count > 0 || teammates.Count > 0
                 ? " - whichever of these the facts give: "
@@ -3282,7 +3289,8 @@ public sealed class CommentaryService
                     }.Where(s => s is not null))
                   + ". "
                 : " - what the team is aiming for next. ")
-            + "The team principal speaks for the whole team, in the first person (\"we\"), measured and proud, in plain "
+            + "The team principal speaks for the whole team, in the first person (\"we\"), measured and reflective - "
+            + "settled in the booth, not out of breath in pit lane - in plain "
             + $"spoken words - under {MaxAnswerWords - 10} words an answer, and the host's questions shorter still. "
             + "The team principal talks about results, people and goals, and never about the car's setup, parts or "
             + "settings - that is the technical lead's subject. "

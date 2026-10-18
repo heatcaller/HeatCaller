@@ -89,6 +89,32 @@ public sealed class CommentaryControl : UserControl
     private readonly CheckBox _chkIntrosSelective = new ThemedCheckBox();
     private readonly CheckBox _chkDriverIntros = new ThemedCheckBox();
     private readonly CheckBox _chkDriverIntrosMains = new ThemedCheckBox();
+
+    /// <summary>
+    /// The pit lane visit before a race (18 Oct 2026) - the throw to the
+    /// co-host and the Team Principal's word, said after the opening and
+    /// before staging. The same switch as the Cast tab's "Before a race, a
+    /// quick word with a Team Principal" (AppSettings.PrincipalBeforeRace),
+    /// shown again here with the other segments so it can be found.
+    /// </summary>
+    private readonly CheckBox _chkPitLane = new ThemedCheckBox();
+
+    /// <summary>The qualifying recap that opens a main's driver introductions - AppSettings.CommentaryQualifyingRecap.</summary>
+    private readonly CheckBox _chkQualifyingRecap = new ThemedCheckBox();
+
+    // AFTER THE FLAG (18 Oct 2026) - the race announcer's segments between
+    // the finish call and the break, and the recap show's booth interview.
+    // The two interviews are the Cast tab's switches too, shown here with
+    // the other segments.
+
+    /// <summary>The unofficial result after the finish call - AppSettings.FlagResultRead.</summary>
+    private readonly CheckBox _chkFlagResult = new ThemedCheckBox();
+
+    /// <summary>The throw to pit lane for the winner's Technical Lead - AppSettings.RecapMechanicInterview.</summary>
+    private readonly CheckBox _chkFlagTechLead = new ThemedCheckBox();
+
+    /// <summary>The Team Principal in the booth on the recap show - AppSettings.PrincipalAfterRace.</summary>
+    private readonly CheckBox _chkBoothPrincipal = new ThemedCheckBox();
     private readonly CheckBox _chkSummaries = new ThemedCheckBox();
     private readonly CheckBox _chkTalkingPoints = new ThemedCheckBox();
     private readonly NumericUpDown _numFinishers = new();
@@ -557,6 +583,60 @@ public sealed class CommentaryControl : UserControl
             + "saved races - a milestone start, a winning run, recent wins, their average driver rating. Before a main "
             + "it opens with what qualifying decided. The automatic start waits for it before the countdown.");
 
+        // THE PIT LANE AND THE QUALIFYING RECAP (18 Oct 2026) - ticks of their
+        // own, in the Segments card's "Before the start" group with the
+        // driver introductions, in the order On Air says them.
+        Check(_chkPitLane, "Throw to pit lane - the co-host's word with a Team Principal");
+        _chkPitLane.Checked = _settings.PrincipalBeforeRace;
+        _chkPitLane.CheckedChanged += (_, _) =>
+        {
+            if (_settings.PrincipalBeforeRace != _chkPitLane.Checked)
+            {
+                _settings.PrincipalBeforeRace = _chkPitLane.Checked;
+                _settings.Save();
+            }
+
+            UpdateEnabledState();
+        };
+
+        Check(_chkFlagResult, "Unofficial result - who won, who they beat and the fastest lap");
+        _chkFlagResult.Checked = _settings.FlagResultRead;
+        _chkFlagResult.CheckedChanged += (_, _) =>
+        {
+            _settings.FlagResultRead = _chkFlagResult.Checked;
+            _settings.Save();
+        };
+
+        Check(_chkFlagTechLead, "Throw to pit lane - a word with the winner's Technical Lead");
+        _chkFlagTechLead.Checked = _settings.RecapMechanicInterview;
+        _chkFlagTechLead.CheckedChanged += (_, _) =>
+        {
+            if (_settings.RecapMechanicInterview != _chkFlagTechLead.Checked)
+            {
+                _settings.RecapMechanicInterview = _chkFlagTechLead.Checked;
+                _settings.Save();
+            }
+        };
+
+        Check(_chkBoothPrincipal, "Booth interview - the winner's Team Principal on the recap show");
+        _chkBoothPrincipal.Checked = _settings.PrincipalAfterRace;
+        _chkBoothPrincipal.CheckedChanged += (_, _) =>
+        {
+            if (_settings.PrincipalAfterRace != _chkBoothPrincipal.Checked)
+            {
+                _settings.PrincipalAfterRace = _chkBoothPrincipal.Checked;
+                _settings.Save();
+            }
+        };
+
+        Check(_chkQualifyingRecap, "Qualifying recap - before a main, what qualifying decided");
+        _chkQualifyingRecap.Checked = _settings.CommentaryQualifyingRecap;
+        _chkQualifyingRecap.CheckedChanged += (_, _) =>
+        {
+            _settings.CommentaryQualifyingRecap = _chkQualifyingRecap.Checked;
+            _settings.Save();
+        };
+
         Check(_chkSummaries, "Race recaps - a wrap-up after the checkered flag");
         _chkSummaries.Checked = _settings.CommentaryRaceSummaries;
         _chkSummaries.CheckedChanged += (_, _) => { _settings.CommentaryRaceSummaries = _chkSummaries.Checked; _settings.Save(); UpdateEnabledState(); };
@@ -619,8 +699,6 @@ public sealed class CommentaryControl : UserControl
 
         writes.Add(_chkIntros, stretch: false);
         writes.Add(introsGrid);
-        writes.Add(_chkDriverIntros, stretch: false);
-        writes.Add(driverIntrosGrid);
         writes.Add(_chkSummaries, stretch: false);
         writes.Add(summariesGrid);
         writes.Add(_chkTalkingPoints, stretch: false);
@@ -986,6 +1064,55 @@ public sealed class CommentaryControl : UserControl
             + "overall level, never that shape."));
         segments.Add(chatterGrid, gapBelow: UiLayout.SectionGap);
 
+        // BEFORE THE START (18 Oct 2026) - what On Air says between the
+        // opening and the race, in that order: the throw to pit lane, then
+        // the driver introductions with the qualifying recap that opens a
+        // main's. Not budget segments (no CommentaryBudget spec), so they
+        // have their own settings rather than CommentarySegmentsOff.
+        var beforeHeading = _textSize.Wear(
+            new Label { Text = "Before the start", AutoSize = true, ForeColor = AppTheme.TextDark },
+            () => AppTheme.BoldFont);
+
+        segments.Add(beforeHeading, stretch: false, gapBelow: 0);
+        segments.Add(Hint("After the race intro and before staging. With On Air, the show open comes first."), gapBelow: UiLayout.HintGap);
+
+        segments.Add(_chkPitLane, stretch: false, gapBelow: 0);
+        segments.Add(Hint(
+            "The announcer throws down to the co-host in pit lane for two questions with the Team Principal of the driver "
+            + "with most riding on it. Names, voices, heats and teams are set on the Cast tab."), gapBelow: UiLayout.HintGap);
+
+        segments.Add(_chkDriverIntros, stretch: false, gapBelow: 0);
+        segments.Add(driverIntrosGrid, gapBelow: UiLayout.HintGap);
+
+        segments.Add(_chkQualifyingRecap, stretch: false, gapBelow: 0);
+        segments.Add(Hint(
+            "Part of a main's driver introductions, so it needs them on. Uses tonight's qualifying, ranked as the grid sheet ranks it."),
+            gapBelow: UiLayout.SectionGap);
+
+        // AFTER THE FLAG (18 Oct 2026) - in the order the room hears them.
+        var afterHeading = _textSize.Wear(
+            new Label { Text = "After the flag", AutoSize = true, ForeColor = AppTheme.TextDark },
+            () => AppTheme.BoldFont);
+
+        segments.Add(afterHeading, stretch: false, gapBelow: 0);
+        segments.Add(Hint("The race announcer, after the finish call and before the teaser takes the room into the break - "
+            + "then, on the recap show, the booth."), gapBelow: UiLayout.HintGap);
+
+        segments.Add(_chkFlagResult, stretch: false, gapBelow: 0);
+        segments.Add(Hint("Fixed words, no AI needed - the finish call itself names nobody."), gapBelow: UiLayout.HintGap);
+
+        segments.Add(_chkFlagTechLead, stretch: false, gapBelow: 0);
+        segments.Add(Hint(
+            "After a main. The announcer throws down to the co-host in pit lane, who asks the winner's Technical Lead two "
+            + "questions about the race and the car, then hands back. Name and voice are on the Cast tab. Needs race recaps on."),
+            gapBelow: UiLayout.HintGap);
+
+        segments.Add(_chkBoothPrincipal, stretch: false, gapBelow: 0);
+        segments.Add(Hint(
+            "On the recap show, after the night's colour: the recap host has the winner's Team Principal in the booth for two "
+            + "questions on what the win means. Heats and teams are set on the Cast tab. Needs race recaps on."),
+            gapBelow: UiLayout.SectionGap);
+
         var switchedOff = new HashSet<SegmentKind>(CommentaryBudget.ParseSwitches(_settings.CommentarySegmentsOff));
 
         foreach (var tier in new[] { SegmentTier.Core, SegmentTier.Colour, SegmentTier.Flourish })
@@ -1124,6 +1251,24 @@ public sealed class CommentaryControl : UserControl
             // voice, which decides whether the excited marks can be read at
             // all (17 Oct 2026).
             DescribeChatter();
+
+            // The pit lane tick is the Cast tab's switch too, so it is read
+            // again in case it was changed there.
+            if (_chkPitLane.Checked != _settings.PrincipalBeforeRace)
+            {
+                _chkPitLane.Checked = _settings.PrincipalBeforeRace;
+            }
+
+            if (_chkFlagTechLead.Checked != _settings.RecapMechanicInterview)
+            {
+                _chkFlagTechLead.Checked = _settings.RecapMechanicInterview;
+            }
+
+            if (_chkBoothPrincipal.Checked != _settings.PrincipalAfterRace)
+            {
+                _chkBoothPrincipal.Checked = _settings.PrincipalAfterRace;
+            }
+
             UpdateEnabledState();
         };
 
@@ -1318,6 +1463,10 @@ public sealed class CommentaryControl : UserControl
         _chkIntrosSelective.Enabled = on && _chkIntros.Checked;
         _chkDriverIntros.Enabled = on;
         _chkDriverIntrosMains.Enabled = on && _chkDriverIntros.Checked;
+        _chkQualifyingRecap.Enabled = on && _chkDriverIntros.Checked;
+        _chkPitLane.Enabled = on;
+        _chkFlagTechLead.Enabled = on && _chkSummaries.Checked;
+        _chkBoothPrincipal.Enabled = on && _chkSummaries.Checked;
         _chkSummaries.Enabled = on;
         _chkTalkingPoints.Enabled = on;
 

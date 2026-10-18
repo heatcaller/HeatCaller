@@ -66,22 +66,16 @@ public sealed partial class RaceControlControl
             return null;
         }
 
-        var generation = _race.SessionGeneration;
+        // STAGING FIRES NO BROADCAST SEGMENT (18 Oct 2026), a demo's no more
+        // than the Stage button's: the race intro, the throw to pit lane and
+        // the driver introductions are On Air's, said before the demo starts.
+        // On Air's word that it said them is used up so none is left over.
+        _ = demoCars;
+        TakeOpeningSaidByOnAir();
+        TakePrincipalSaidByOnAir();
+        TakeIntroductionsSaidByOnAir();
 
-        var introComing = !TakeOpeningSaidByOnAir() && SpeakRoundIntro(generation);
-        var principalComing = SpeakPrincipalBefore(generation, introComing);
-        var introductionsFor = SpeakIntroductions(demoCars, generation);
-
-        TimeSpan? wait = principalComing ? StagingWaitWithPrincipal : introComing ? StagingWaitWithIntro : null;
-
-        if (introductionsFor is { } forIntroductions)
-        {
-            wait = principalComing ? StagingWaitWithPrincipal + forIntroductions
-                : wait is null || forIntroductions > wait ? forIntroductions
-                : wait;
-        }
-
-        return wait;
+        return null;
     }
 
     /// <summary>
@@ -365,7 +359,7 @@ public sealed partial class RaceControlControl
                     DriverIntros.Stat(history, transponder, now));
             }).ToList();
 
-            var qualifying = isMain && round is not null ? QualifyingRecapFor(round, field) : null;
+            var qualifying = isMain && round is not null && _settings.CommentaryQualifyingRecap ? QualifyingRecapFor(round, field) : null;
             var raceTitle = round?.RoundLabel is { Length: > 0 } label ? label : "the next race";
 
             return new IntroductionFacts(grid, qualifying, raceTitle);

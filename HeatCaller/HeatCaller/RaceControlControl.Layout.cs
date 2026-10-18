@@ -444,56 +444,28 @@ public sealed partial class RaceControlControl
                 stateBefore, tookOverDemo, _currentRaceIsQuick, _currentRaceIsRerun, _rerunPending);
             _rerunPending = false;
 
-            // Who was on the board, for a freeform race's introductions -
-            // read now, because staging clears it. See SpeakIntroductions.
-            var boardBeforeStaging = PreRaceRoster().Roster;
-
             _race.Stage();
             generationAfterStage = _race.SessionGeneration;
 
-            // After Stage, so it knows which race it is for - it is spoken
-            // only if this race is still staging when the model answers.
+            // STAGE FIRES NO BROADCAST SEGMENT (18 Oct 2026). It is the
+            // staging call and nothing else: the race intro, the throw to
+            // pit lane and the driver introductions belong to On Air, which
+            // says them before it hands over to this Stage. Pressed on its
+            // own, Stage just calls the cars to the grid.
             //
-            // Not when On Air has just said it as the opening - the room
-            // has heard this race's intro, and a second one would be the
-            // model asked twice for the same race.
-            var introComing = !TakeOpeningSaidByOnAir()
-                && _race.State == RaceState.Staging
-                && SpeakRoundIntro(generationAfterStage);
+            // On Air's word that it said them is used up here all the same,
+            // so none of it is left over for a later Stage.
+            TakeOpeningSaidByOnAir();
+            TakePrincipalSaidByOnAir();
+            TakeIntroductionsSaidByOnAir();
 
-            // A word with a Team Principal (17 Oct 2026), after the intro
-            // and before the countdown - which waits for it. See
-            // SpeakPrincipalBefore. Asked for BEFORE the driver
-            // introductions (18 Oct 2026), which now follow it.
-            var principalComing = SpeakPrincipalBefore(generationAfterStage, introComing);
-
-            // The driver introductions (18 Oct 2026): AI commentary on each
-            // driver on the grid, opened before a main by what qualifying
-            // decided. Spoken after the round intro and the Team Principal;
-            // the countdown waits for them below.
-            var introductionsFor = SpeakIntroductions(boardBeforeStaging, generationAfterStage);
-
-            // Chain onward once the staging call - and the round intro, when
-            // one is being written - has finished speaking. Driven by the
+            // Chain onward once the staging call - and anything On Air
+            // queued ahead of it - has finished speaking. Driven by the
             // audio rather than a timer, so the sequence always follows the
             // announcements instead of talking over them or leaving dead air.
             if (_fmt.AutoAdvance)
             {
-                TimeSpan? stagingWait = principalComing ? StagingWaitWithPrincipal : introComing ? StagingWaitWithIntro : null;
-
-                // Long enough for the introductions too, when there are any.
-                // The chain follows the audio, and this is only how long it
-                // will wait before giving up on it - so the longer of the
-                // two, except with a Team Principal, who is heard BEFORE the
-                // introductions and so adds to them.
-                if (introductionsFor is { } forIntroductions)
-                {
-                    stagingWait = principalComing ? StagingWaitWithPrincipal + forIntroductions
-                        : stagingWait is null || forIntroductions > stagingWait ? forIntroductions
-                        : stagingWait;
-                }
-
-                ChainAfterAudio(RaceState.Staging, () => _actCountdown?.Invoke(false), stagingWait, _fmt.StagingSeconds);
+                ChainAfterAudio(RaceState.Staging, () => _actCountdown?.Invoke(false), null, _fmt.StagingSeconds);
             }
         };
         _btnStage.Click += (_, _) => _actStage(false, null);
