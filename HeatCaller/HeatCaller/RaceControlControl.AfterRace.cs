@@ -147,7 +147,7 @@ public sealed partial class RaceControlControl
             // the store will not save while it is held (LoadedUnreadable).
             if (store.LoadedUnreadable)
             {
-                StatusMessage?.Invoke("[badges] achievements.json could not be read just now, so badges were not worked out for this race.");
+                StatusMessage?.Invoke("[achievements] achievements.json could not be read just now, so achievements were not worked out for this race.");
                 return;
             }
 
@@ -177,7 +177,7 @@ public sealed partial class RaceControlControl
             foreach (var unlock in unlocks)
             {
                 StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [badge] {unlock.DriverName} unlocked \"{unlock.Badge.Name}\""
+                    $"{AppTime.LogStampNow()}  [achievements] {unlock.DriverName} unlocked \"{unlock.Badge.Name}\""
                     + (string.IsNullOrWhiteSpace(unlock.Detail) ? "." : $" ({unlock.Detail})."));
             }
 
@@ -223,7 +223,7 @@ public sealed partial class RaceControlControl
             else
             {
                 StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [badge] Segments are held, so the badges are called one at a time rather than kept for the honours.");
+                    $"{AppTime.LogStampNow()}  [achievements] Segments are held, so the achievements are called one at a time rather than kept for the recap's achievements segment.");
             }
 
             if (_honours is not null)
@@ -235,10 +235,10 @@ public sealed partial class RaceControlControl
                 // only the first of them logged, a club whose honours read
                 // shorter than the log promised had nothing to go on.
                 StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [badge] {Plural.Of(unlocks.Count, "badge")} held back for the recap's honours segment "
+                    $"{AppTime.LogStampNow()}  [achievements] {Plural.Of(unlocks.Count, "achievement")} held back for the recap's achievements segment "
                     + "rather than called out one at a time"
                     + (_honours.Badges > 0 && _honours.Badges != unlocks.Count
-                        ? $" - the read names {Plural.Of(_honours.Badges, "badge")}."
+                        ? $" - the read names {Plural.Of(_honours.Badges, "achievement")}."
                         : "."));
 
                 return;
@@ -252,12 +252,12 @@ public sealed partial class RaceControlControl
             if (unlocks.Count > MaxSpokenAchievements)
             {
                 StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [badge] {unlocks.Count - MaxSpokenAchievements} more unlocked but not announced - they're on the driver's record.");
+                    $"{AppTime.LogStampNow()}  [achievements] {unlocks.Count - MaxSpokenAchievements} more unlocked but not announced - they're on the driver's record.");
             }
         }
         catch (Exception ex)
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] Couldn't work out achievements for this race: {ex.Message}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] Couldn't work out achievements for this race: {ex.Message}");
         }
     }
 
@@ -992,8 +992,19 @@ public sealed partial class RaceControlControl
                     ? WriteInterviewAsync(generation, record, plan, delivery, followOnWork.Token)
                     : null;
 
+                // The winner's Team Principal (17 Oct 2026), written after the
+                // Technical Lead for the same reason the sign-off is written
+                // after both: one request at a time.
+                var principalTask = generation is not null && plan is { Principal: true }
+                    ? WritePrincipalAsync(interviewTask is not null ? (Task)interviewTask : generation, generation, record, plan, championship, delivery, followOnWork.Token)
+                    : null;
+
+                Task closingAfter = principalTask is not null
+                    ? (Task)principalTask
+                    : interviewTask is not null ? (Task)interviewTask : (Task)generation!;
+
                 var closingTask = generation is not null && plan is { SeparateClosing: true }
-                    ? WriteClosingAsync(interviewTask is not null ? (Task)interviewTask : generation, generation, record, plan, delivery, followOnWork.Token)
+                    ? WriteClosingAsync(closingAfter, generation, record, plan, delivery, followOnWork.Token)
                     : null;
 
                 // The honours' three lines, rendered while the teaser and
@@ -1519,6 +1530,23 @@ public sealed partial class RaceControlControl
                     ? FollowOn.Spoken
                     : await SpeakInterviewAsync(interviewTask, nextRace.Token);
 
+                // 7. The winner's Team Principal (17 Oct 2026), after the
+                // Technical Lead. Written after it, so when that was too late
+                // this is later still and goes with it - and the sign-off,
+                // written after this, is judged on this one from here on.
+                if (principalTask is not null)
+                {
+                    if (interview == FollowOn.Spoken)
+                    {
+                        await StingBetweenRecapPartsAsync(show, nextRace.Token);
+                        interview = await SpeakInterviewAsync(principalTask, nextRace.Token);
+                    }
+                    else if (interview == FollowOn.Late)
+                    {
+                        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Team Principal skipped - it's written after the Technical Lead, which was too late.");
+                    }
+                }
+
                 if (closingTask is not null)
                 {
                     if (interview == FollowOn.Late)
@@ -1692,13 +1720,19 @@ public sealed partial class RaceControlControl
     /// <param name="MechanicName">What the announcer calls the mechanic; blank for "the team's mechanic".</param>
     /// <param name="SetupFacts">What the Garage has on the winning car - see MechanicBrief.</param>
     /// <param name="MechanicVoice">The mechanic's voice, or null for the announcer's own.</param>
+    /// <param name="Principal">A word with the winner's Team Principal follows - after the Technical Lead when both are on (17 Oct 2026).</param>
+    /// <param name="PrincipalName">What the announcer calls the Team Principal; blank and no name is used.</param>
+    /// <param name="PrincipalVoice">The Team Principal's voice, or null for the announcer's own.</param>
     private sealed record RecapPlan(
         CommentaryService.RecapContext Context,
         bool Interview,
         bool SeparateClosing,
         string MechanicName,
         IReadOnlyList<string> SetupFacts,
-        SecondVoice? MechanicVoice);
+        SecondVoice? MechanicVoice,
+        bool Principal = false,
+        string PrincipalName = "",
+        SecondVoice? PrincipalVoice = null);
 
     /// <summary>A line the recap sequence will speak: its words, who says them, and its audio when it rendered in advance.</summary>
     /// <param name="Voice">The mechanic's voice, or null for the announcer.</param>
@@ -1780,6 +1814,11 @@ public sealed partial class RaceControlControl
         var interview = _settings.RecapMechanicInterview && round?.Kind == RoundKind.Main;
         var closing = _settings.RecapBroadcastClosing;
 
+        // THE TEAM PRINCIPAL (17 Oct 2026): after the Technical Lead when
+        // both are on, and after heats too unless the Cast tab says mains
+        // only. See PrincipalAfter.
+        var principal = PrincipalAfter(record, round);
+
         // ANYTHING AT ALL AFTER THE RECAP MAKES THE SIGN-OFF A LINE OF ITS
         // OWN (11 Oct 2026).
         //
@@ -1815,7 +1854,7 @@ public sealed partial class RaceControlControl
 
             // A demo leaves its round unrun, so that round is still next.
             closing ? UpNextAfter(record.IsDemo ? null : round) : null,
-            InterviewFollows: interview,
+            InterviewFollows: interview || principal,
 
             // The host's own name, for the opening to introduce himself
             // with: the recap host's own name, never the race announcer's
@@ -1834,10 +1873,10 @@ public sealed partial class RaceControlControl
             if (closing && honoursFollow)
             {
                 StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [commentary] The sign-off is held back to come after the honours, so the programme ends on it.");
+                    $"{AppTime.LogStampNow()}  [commentary] The sign-off is held back to come after the achievements, so the program ends on it.");
             }
 
-            return new RecapPlan(context, false, closing, string.Empty, Array.Empty<string>(), null);
+            return WithPrincipal(new RecapPlan(context, false, closing, string.Empty, Array.Empty<string>(), null), principal);
         }
 
         var mechanicName = (_settings.RecapMechanicName ?? string.Empty).Trim();
@@ -1849,7 +1888,7 @@ public sealed partial class RaceControlControl
         }
         catch (Exception ex)
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The mechanic goes without the Garage's setup log - it could not be read: {ex.Message}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The Technical Lead goes without the Garage's setup log - it could not be read: {ex.Message}");
         }
 
         // The mechanic's voice for the engine in use. With none picked for
@@ -1859,18 +1898,18 @@ public sealed partial class RaceControlControl
         var voices = _settings.MechanicVoice;
         var voice = voices.IsSetFor(engine) ? voices : null;
 
-        var who = mechanicName.Length > 0 ? mechanicName : "the mechanic";
+        var who = mechanicName.Length > 0 ? mechanicName : "the Technical Lead";
 
         StatusMessage?.Invoke(
             $"{AppTime.LogStampNow()}  [commentary] After the recap: an interview with {who}"
             + (voice is not null
                 ? $" in the voice {(voices.NameFor(engine) is { Length: > 0 } picked ? $"\"{picked}\"" : "picked for it")}"
-                : $" in the announcer's own voice - no mechanic's voice is picked for {EngineName(engine)} on Voice > Cast")
+                : $" in the announcer's own voice - no Technical Lead's voice is picked for {EngineName(engine)} on Voice > Cast")
             + (setupFacts.Count > 0
                 ? ", with the setup the Garage has for the winning car."
-                : ". No setup is logged for the winning car, so the mechanic won't talk settings."));
+                : ". No setup is logged for the winning car, so the Technical Lead won't talk settings."));
 
-        return new RecapPlan(context, true, closing, mechanicName, setupFacts, voice);
+        return WithPrincipal(new RecapPlan(context, true, closing, mechanicName, setupFacts, voice), principal);
     }
 
     private static string EngineName(VoiceEngine engine) => engine switch
@@ -1946,8 +1985,8 @@ public sealed partial class RaceControlControl
             if (Commentary?.Invoke()?.Continuity is not { } rotation)
             {
                 StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [badge] No honours segment - there is no announcer screen to take the phrasings "
-                    + "from. The badges are called out one at a time instead.");
+                    $"{AppTime.LogStampNow()}  [achievements] No achievements segment - there is no announcer screen to take the phrasings "
+                    + "from. The achievements are called out one at a time instead.");
 
                 return null;
             }
@@ -1957,9 +1996,9 @@ public sealed partial class RaceControlControl
             if (turns.Count == 0)
             {
                 StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [badge] No honours segment for this race - either every way of throwing to the "
-                    + "honours has been heard tonight, or no badge had both a driver and a name that "
-                    + "could be read out. The badges are called out one at a time instead.");
+                    $"{AppTime.LogStampNow()}  [achievements] No achievements segment for this race - either every way of throwing to the "
+                    + "achievements has been heard tonight, or no achievement had both a driver and a name that "
+                    + "could be read out. The achievements are called out one at a time instead.");
 
                 return null;
             }
@@ -1987,13 +2026,13 @@ public sealed partial class RaceControlControl
 
             var who = CommentaryService.Field(_settings.RecapHonoursName) is { Length: > 0 } named
                 ? named
-                : "the honours";
+                : "the achievements";
 
             StatusMessage?.Invoke(
-                $"{AppTime.LogStampNow()}  [badge] In the recap: over to {who}"
+                $"{AppTime.LogStampNow()}  [achievements] In the recap: over to {who}"
                 + (voice is not null
                     ? $" in the voice {(voices.NameFor(engine) is { Length: > 0 } picked ? $"\"{picked}\"" : "picked for it")}"
-                    : $" in the announcer's own voice - no honours voice is picked for {EngineName(engine)} on Voice > Cast")
+                    : $" in the announcer's own voice - no achievements reader's voice is picked for {EngineName(engine)} on Voice > Cast")
                 + $" - \"{turns[1].Line}\"");
 
             return new HonoursPlan(turns, voice, RaceHonours.Read(unlocks)?.Badges ?? 0);
@@ -2005,8 +2044,8 @@ public sealed partial class RaceControlControl
             // result goes unsaved. The badges then go out as individual
             // calls, which is the arrangement that has always worked.
             StatusMessage?.Invoke(
-                $"{AppTime.LogStampNow()}  [badge] No honours segment - it could not be set up: {ex.Message}. "
-                + "The badges are called out one at a time instead.");
+                $"{AppTime.LogStampNow()}  [achievements] No achievements segment - it could not be set up: {ex.Message}. "
+                + "The achievements are called out one at a time instead.");
 
             return null;
         }
@@ -2037,6 +2076,149 @@ public sealed partial class RaceControlControl
 
         /// <summary>The next race was called to the grid.</summary>
         Stopped,
+    }
+
+    /// <summary>
+    /// Whether the winner's Team Principal is interviewed after this race
+    /// (17 Oct 2026): switched on, a main - or a heat unless the Cast tab
+    /// says mains only - and, when the club asked for teams only, a winner
+    /// with a team on their profile.
+    /// </summary>
+    private bool PrincipalAfter(SessionRecord record, RoundDefinition? round)
+    {
+        if (!_settings.PrincipalAfterRace || round is null || record.Results.Count == 0)
+        {
+            return false;
+        }
+
+        if (round.Kind != RoundKind.Main && !_settings.PrincipalInHeats)
+        {
+            return false;
+        }
+
+        if (_settings.PrincipalTeamsOnly)
+        {
+            var winner = record.Results.OrderBy(r => r.Position).First();
+
+            if (string.IsNullOrWhiteSpace(_profiles.Get(winner.Transponder)?.Team))
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] No Team Principal after this race - the winner has no team "
+                    + "on their profile, and the Cast tab says teams only.");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>The recap's plan with the Team Principal added when one follows, and the voice they speak in said.</summary>
+    private RecapPlan WithPrincipal(RecapPlan plan, bool principal)
+    {
+        if (!principal)
+        {
+            return plan;
+        }
+
+        var name = (_settings.PrincipalName ?? string.Empty).Trim();
+        var engine = _announcer.VoiceEngineInUse;
+        var voices = _settings.PrincipalVoice;
+        var voice = voices.IsSetFor(engine) ? voices : null;
+
+        StatusMessage?.Invoke(
+            $"{AppTime.LogStampNow()}  [commentary] After the recap: a word with {(name.Length > 0 ? name : "the winner's Team Principal")}"
+            + (voice is not null
+                ? $" in the voice {(voices.NameFor(engine) is { Length: > 0 } picked ? $"\"{picked}\"" : "picked for it")}."
+                : $" in the announcer's own voice - no Team Principal's voice is picked for {EngineName(engine)} on Voice > Cast."));
+
+        return plan with { Principal = true, PrincipalName = name, PrincipalVoice = voice };
+    }
+
+    /// <summary>
+    /// Writes the winner's Team Principal interview once the part before it
+    /// has been written - the Technical Lead's, or the recap - then renders
+    /// each line in its voice while the recap plays. Null when there is no
+    /// recap for it to follow, nothing usable came back, or it was called
+    /// off (17 Oct 2026).
+    /// </summary>
+    /// <param name="before">The part written just before - the local model takes one request at a time.</param>
+    private async Task<List<SpokenLine>?> WritePrincipalAsync(
+        Task before, Task<string?> recapWritten, SessionRecord record, RecapPlan plan, ChampionshipSwing? championship,
+        (double Stability, double Style)? delivery, CancellationToken cancel)
+    {
+        try
+        {
+            try
+            {
+                await before;
+            }
+            catch
+            {
+                // Its own failure is its own to report; this still follows.
+            }
+
+            if (string.IsNullOrWhiteSpace(await recapWritten) || cancel.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            var exchanges = await _commentary!.BuildPrincipalAfterAsync(
+                record,
+                plan.PrincipalName,
+                plan.Context.Kind,
+                championship,
+                log: note => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}"),
+                ct: cancel);
+
+            if (exchanges is null)
+            {
+                return null;
+            }
+
+            return await RenderExchangesAsync(exchanges, RecapHostVoice, delivery, plan.PrincipalVoice, cancel);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No Team Principal interview - {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// An interview's lines, rendered one at a time in the voices that say
+    /// them: each question in the host's, with the host's delivery, and each
+    /// answer in the guest's. Null once it is called off - each render costs
+    /// characters, so that is checked before every one.
+    /// </summary>
+    private async Task<List<SpokenLine>?> RenderExchangesAsync(
+        IReadOnlyList<CommentaryService.InterviewExchange> exchanges,
+        SecondVoice? hostVoice,
+        (double Stability, double Style)? delivery,
+        SecondVoice? guestVoice,
+        CancellationToken cancel)
+    {
+        var lines = new List<SpokenLine>();
+
+        foreach (var exchange in exchanges)
+        {
+            if (cancel.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            lines.Add(new SpokenLine(exchange.Question, hostVoice, delivery,
+                await _announcer.PrepareReminderAsync(exchange.Question, delivery, hostVoice)));
+
+            if (cancel.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            lines.Add(new SpokenLine(exchange.Answer, guestVoice, null,
+                await _announcer.PrepareReminderAsync(exchange.Answer, null, guestVoice)));
+        }
+
+        return lines;
     }
 
     /// <summary>
@@ -2280,8 +2462,8 @@ public sealed partial class RaceControlControl
         catch (Exception ex)
         {
             StatusMessage?.Invoke(
-                $"{AppTime.LogStampNow()}  [badge] No honours segment - its lines could not be rendered: {ex.Message}. "
-                + "The badges are on the drivers' records.");
+                $"{AppTime.LogStampNow()}  [achievements] No achievements segment - its lines could not be rendered: {ex.Message}. "
+                + "The achievements are on the drivers' records.");
 
             return null;
         }
@@ -2324,12 +2506,12 @@ public sealed partial class RaceControlControl
         // Air stop the recap show too, and this said "the next race" for all
         // of them. Read when it is said, since that is when it is known.
         string Stopped() =>
-            $"Honours stopped - {Volatile.Read(ref _recapShow)?.StoppedBy ?? "the next race was called to the grid"}. "
-            + "The badges are on the drivers' records.";
+            $"Achievements stopped - {Volatile.Read(ref _recapShow)?.StoppedBy ?? "the next race was called to the grid"}. "
+            + "The achievements are on the drivers' records.";
 
         if (!await HeardOutAsync(nextRace))
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {Stopped()}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] {Stopped()}");
             return;
         }
 
@@ -2337,7 +2519,7 @@ public sealed partial class RaceControlControl
 
         if (nextRace.IsCancellationRequested)
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {Stopped()}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] {Stopped()}");
             return;
         }
 
@@ -2351,10 +2533,10 @@ public sealed partial class RaceControlControl
             // every driver's record, on the results card, and in the
             // [badge] lines above.
             StatusMessage?.Invoke(timedOut
-                ? $"{AppTime.LogStampNow()}  [badge] Honours skipped - they were not rendered within "
-                  + $"{FollowOnWait.TotalSeconds:0}s of the recap ending. The badges are on the drivers' records."
-                : $"{AppTime.LogStampNow()}  [badge] Honours skipped - their lines could not be rendered. "
-                  + "The badges are on the drivers' records.");
+                ? $"{AppTime.LogStampNow()}  [achievements] Achievements skipped - they were not rendered within "
+                  + $"{FollowOnWait.TotalSeconds:0}s of the recap ending. The achievements are on the drivers' records."
+                : $"{AppTime.LogStampNow()}  [achievements] Achievements skipped - their lines could not be rendered. "
+                  + "The achievements are on the drivers' records.");
 
             return;
         }
@@ -2373,13 +2555,13 @@ public sealed partial class RaceControlControl
             {
                 if (!await HeardOutAsync(nextRace))
                 {
-                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {Stopped()}");
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] {Stopped()}");
                     return;
                 }
 
                 if (handoffs.Contains(i) && treatment is not null && !await treatment.HandOverAsync(show, nextRace))
                 {
-                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] {Stopped()}");
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] {Stopped()}");
                     return;
                 }
             }
@@ -2409,7 +2591,7 @@ public sealed partial class RaceControlControl
                     : AnnouncementService.SpeechLead.Normal);
         }
 
-        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] Honours spoken: \"{plan.Turns[1].Line}\"");
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] Achievements spoken: \"{plan.Turns[1].Line}\"");
     }
 
     /// <summary>
@@ -2475,7 +2657,7 @@ public sealed partial class RaceControlControl
             }
             catch (Exception ex)
             {
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The programme goes without its colour: {ex.GetType().Name}: {ex.Message}");
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The program goes without its color: {ex.GetType().Name}: {ex.Message}");
                 break;
             }
 
@@ -2497,9 +2679,9 @@ public sealed partial class RaceControlControl
         // different causes. The ladder says why it refused on its own
         // [brain] line; this says the pass happened at all.
         StatusMessage?.Invoke(found.Count > 0
-            ? $"{AppTime.LogStampNow()}  [commentary] {Plural.Of(found.Count, "colour segment")} in this programme, after the honours: "
+            ? $"{AppTime.LogStampNow()}  [commentary] {Plural.Of(found.Count, "color segment")} in this program, after the achievements: "
               + string.Join(", ", found.Select(said => ShowBlock.CaptionFor(said.Kind) ?? CommentaryBudget.Spec(said.Kind).Title)) + "."
-            : $"{AppTime.LogStampNow()}  [commentary] No colour in this programme - the segment ladder had nothing due. "
+            : $"{AppTime.LogStampNow()}  [commentary] No color in this program - the segment ladder had nothing due. "
               + "Any [brain] line above says which segment it turned down and why.");
 
         return found;
@@ -2563,7 +2745,7 @@ public sealed partial class RaceControlControl
     /// </summary>
     private async Task SpeakColourAsync(Task<List<SpokenSegment>?> written, ShowRun? show, CancellationToken nextRace)
     {
-        const string stopped = "Colour dropped - the next race was called to the grid.";
+        const string stopped = "Color dropped - the next race was called to the grid.";
 
         var (timedOut, segments) = await WithinAsync(written, FollowOnWait, nextRace);
 
@@ -2605,7 +2787,7 @@ public sealed partial class RaceControlControl
                 if (timedOut)
                 {
                     StatusMessage?.Invoke(
-                        $"{AppTime.LogStampNow()}  [commentary] The programme's colour was not written within {FollowOnWait.TotalSeconds:0}s of the honours, so it is skipped.");
+                        $"{AppTime.LogStampNow()}  [commentary] The program's color was not written within {FollowOnWait.TotalSeconds:0}s of the achievements, so it is skipped.");
                 }
 
                 return;
@@ -2843,7 +3025,7 @@ public sealed partial class RaceControlControl
             {
                 StatusMessage?.Invoke(
                     $"{AppTime.LogStampNow()}  [commentary] Still speaking after {lineLimit.TotalSeconds:0}s, so the next part "
-                    + "of the programme is queued behind it rather than waited for any longer.");
+                    + "of the program is queued behind it rather than waited for any longer.");
             }
         }
         catch (OperationCanceledException)
@@ -4130,6 +4312,11 @@ public sealed partial class RaceControlControl
         // a new one is wanted.
         var asOf = _writtenAhead.ResultsChanged();
 
+        // The Team Principal's pre-race interview, written ahead the same
+        // way and at the same moment (17 Oct 2026) - first, because the
+        // intro's own switches below must not decide it.
+        WriteThePrincipalAhead(filed, corrected);
+
         // A CORRECTION MADE WHILE A RACE IS ON is not written for. The
         // round it would pick is the one after the race on track, whose own
         // filing throws the line away again - and the write would take the
@@ -4561,7 +4748,7 @@ public sealed partial class RaceControlControl
         {
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [commentary] Round intro goes without the title's stakes - no championship "
-                + "this race counts towards has a planned number of rounds set, or too many drivers can still win it "
+                + "this race counts toward has a planned number of rounds set, or too many drivers can still win it "
                 + "for that to be worth saying. Set the rounds on the season's own rules to hear it.");
         }
 
@@ -4624,7 +4811,16 @@ public sealed partial class RaceControlControl
 
         // Released however this ends - spoken, dropped, failed - and in any
         // case after the budget plus a margin, or when a countdown starts.
-        var writing = _announcer.BeginLineBeingWritten(RoundIntroModelBudget + TimeSpan.FromSeconds(10));
+        //
+        // And settles _introQueued when it is (17 Oct 2026), which is how
+        // the Team Principal before a race knows to follow the intro rather
+        // than go out in front of it. Every way out of the job below
+        // disposes this, so it always settles.
+        var introSettled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _introQueued = introSettled.Task;
+
+        var writing = new SettlesWhenDisposed(
+            _announcer.BeginLineBeingWritten(RoundIntroModelBudget + TimeSpan.FromSeconds(10)), introSettled);
 
         // The show's music, if this club scores its intros. Opened inside
         // the job below, so the opener plays ACROSS the wait for the model
@@ -4885,6 +5081,401 @@ public sealed partial class RaceControlControl
         return true;
     }
 
+    // ==================== The Team Principal before a race (17 Oct 2026) ====================
+
+    /// <summary>Settles once this race's round intro has been queued or given up on - see SpeakRoundIntro.</summary>
+    private Task _introQueued = Task.CompletedTask;
+
+    /// <summary>The drivers whose Team Principal has been heard before a race tonight - each once a night.</summary>
+    private readonly HashSet<string> _principalHeard = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The night _principalHeard is for; a new one starts it again.</summary>
+    private string? _principalNight;
+
+    /// <summary>How long the model gets to write the Team Principal's interview before a race. The countdown waits for it.</summary>
+    private static readonly TimeSpan PrincipalModelBudget = TimeSpan.FromSeconds(25);
+
+    /// <summary>
+    /// How long the staging chain waits for audio when the Team Principal is
+    /// coming: the model's budget, the intro, and four lines of interview.
+    /// </summary>
+    private static readonly TimeSpan StagingWaitWithPrincipal = TimeSpan.FromSeconds(150);
+
+    /// <summary>How far behind its timetable the night may be running before the interview is left out.</summary>
+    private const int PrincipalLateMinutes = 10;
+
+    /// <summary>A handle that also settles a task when it is disposed - see SpeakRoundIntro.</summary>
+    private sealed class SettlesWhenDisposed : IDisposable
+    {
+        private readonly IDisposable _inner;
+        private readonly TaskCompletionSource _settled;
+
+        public SettlesWhenDisposed(IDisposable inner, TaskCompletionSource settled)
+        {
+            _inner = inner;
+            _settled = settled;
+        }
+
+        public void Dispose()
+        {
+            _inner.Dispose();
+            _settled.TrySetResult();
+        }
+    }
+
+    /// <summary>
+    /// Who the Team Principal before <paramref name="round"/> speaks for, and
+    /// what their interview is written from - shared by Stage and by the
+    /// write-ahead, so both pick the same driver. Null when the Cast tab has
+    /// it switched off for this kind of race, or there is nobody left to ask
+    /// tonight (said in the log unless <paramref name="quiet"/>).
+    ///
+    /// On the UI thread: it reads the stores, as ReadIntroFacts does.
+    /// </summary>
+    private (string Focus, string? Kind, ChampionshipAtStake? Stake)? ChoosePrincipal(RoundDefinition round, bool quiet)
+    {
+        if (_commentary is null || (round.Kind != RoundKind.Main && !_settings.PrincipalInHeats))
+        {
+            return null;
+        }
+
+        var night = _events?.Active?.Id ?? DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+        if (!string.Equals(_principalNight, night, StringComparison.Ordinal))
+        {
+            _principalHeard.Clear();
+            _principalNight = night;
+        }
+
+        var (clubNight, _, stake, _) = ReadIntroFacts(round);
+
+        var grid = round.AssignedTransponders.Where(id => !string.IsNullOrWhiteSpace(id)).ToList();
+        var commentary = _commentary;
+
+        bool HasTeam(string id) => !string.IsNullOrWhiteSpace(_profiles.Get(id)?.Team);
+
+        bool InRivalry(string id) => grid.Any(other =>
+            !string.Equals(other, id, StringComparison.OrdinalIgnoreCase)
+            && commentary.HasRivalryAmong(new[] { id, other }));
+
+        int? Standing(string id) =>
+            stake?.OnThisGrid.FirstOrDefault(r => string.Equals(r.DriverId, id, StringComparison.OrdinalIgnoreCase)) is { PositionNow: > 0 } row
+                ? row.PositionNow
+                : null;
+
+        var focus = CommentaryService.PickPrincipalFocus(
+            grid, HasTeam, InRivalry, Standing, _settings.PrincipalTeamsOnly, _principalHeard);
+
+        if (focus is null)
+        {
+            if (!quiet)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] No Team Principal before {round.RoundLabel} - "
+                    + (_settings.PrincipalTeamsOnly
+                        ? "nobody on the grid with a team on their profile is left to hear from tonight."
+                        : "every driver on the grid has had theirs heard already tonight."));
+            }
+
+            return null;
+        }
+
+        return (focus, CommentaryService.DescribeKind(round, clubNight), stake);
+    }
+
+    /// <summary>The Team Principal's pre-race interview, written ahead for one round - see WriteThePrincipalAhead.</summary>
+    private sealed record PrincipalAhead(
+        string RoundId,
+        string Grid,
+        string Focus,
+        string Name,
+        int AsOf,
+        IReadOnlyList<CommentaryService.InterviewExchange> Exchanges);
+
+    /// <summary>Guards the held interview and its version: written from a pool thread, taken on the UI thread.</summary>
+    private readonly object _principalAheadLock = new();
+
+    /// <summary>The interview written ahead for the next round, or null.</summary>
+    private PrincipalAhead? _principalAhead;
+
+    /// <summary>Moved on by every result filed or corrected, so an interview written before it is never used after.</summary>
+    private int _principalAheadVersion;
+
+    /// <summary>
+    /// Writes the NEXT round's Team Principal interview now, so its start
+    /// waits for no model - the round intro's write-ahead, for the Team
+    /// Principal (17 Oct 2026). Called from WriteTheNextIntroAhead, so at the
+    /// same moment and for the same reason: when a result is filed, which is
+    /// when the standings it states are true. A result filed or corrected
+    /// since throws it away, and so does a change of grid or driver.
+    ///
+    /// Best-effort like the intro's: never awaited, holding no start up,
+    /// and a failure costs the night nothing - Stage writes its own as before.
+    /// </summary>
+    private void WriteThePrincipalAhead(SessionRecord? filed, bool corrected)
+    {
+        int asOf;
+
+        lock (_principalAheadLock)
+        {
+            asOf = ++_principalAheadVersion;
+            _principalAhead = null;
+        }
+
+        // As the intro's: a correction during a race is written for by the
+        // filing that follows it.
+        if (corrected && _race.State is (RaceState.Staging or RaceState.Countdown or RaceState.Racing))
+        {
+            return;
+        }
+
+        if (!_settings.PrincipalBeforeRace || _commentary is null || !_commentary.IsAvailable)
+        {
+            return;
+        }
+
+        if (NextRound(filed?.RoundId) is not { } next || string.IsNullOrWhiteSpace(next.Id))
+        {
+            return;
+        }
+
+        if (ChoosePrincipal(next, quiet: true) is not { } chosen)
+        {
+            return;
+        }
+
+        var (focus, kind, stake) = chosen;
+        var grid = WrittenAhead.Fingerprint(next.AssignedTransponders);
+        var name = (_settings.PrincipalName ?? string.Empty).Trim();
+        var label = next.RoundLabel;
+        CommentaryService commentary = _commentary;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var budget = new CancellationTokenSource(WriteAheadModelBudget);
+
+                var exchanges = await commentary.BuildPrincipalBeforeAsync(
+                    next, focus, name, kind, stake, log: null, ct: budget.Token);
+
+                if (exchanges is null)
+                {
+                    // Not said: Stage asks again, so nothing was lost.
+                    return;
+                }
+
+                lock (_principalAheadLock)
+                {
+                    if (_principalAheadVersion != asOf)
+                    {
+                        return;
+                    }
+
+                    _principalAhead = new PrincipalAhead(next.Id, grid, focus, name, asOf, exchanges);
+                }
+
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] Wrote the Team Principal's interview for {label} ahead of "
+                    + "time - its start will wait for no model.");
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] Could not write the Team Principal's interview for {label} ahead: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// A word with a Team Principal before the race just staged, for the
+    /// driver on its grid with most riding on it (CommentaryService.
+    /// PickPrincipalFocus): two questions and two answers, spoken after the
+    /// round intro and before the countdown, which waits for them.
+    ///
+    /// Left out - and said in the log - when the night is running ten
+    /// minutes or more behind its timetable, when every driver's principal
+    /// has already been heard tonight, or when the model is too slow. Spoken
+    /// only if the race is still staging, and still the race it was written
+    /// for, when it is ready.
+    /// </summary>
+    /// <param name="stagedGeneration">The session the interview is for - _race.SessionGeneration straight after Stage.</param>
+    /// <param name="introComing">A round intro is being written for this race too, and goes first.</param>
+    /// <returns>True if an interview was asked for, so the caller knows to wait for it.</returns>
+    private bool SpeakPrincipalBefore(int stagedGeneration, bool introComing)
+    {
+        if (!_settings.PrincipalBeforeRace || _commentary is null || !_commentary.IsAvailable)
+        {
+            return false;
+        }
+
+        var round = _activeRound?.Invoke();
+
+        if (round is null)
+        {
+            return false;
+        }
+
+        if (_daySchedule?.MinutesLate() is { } late && late >= PrincipalLateMinutes)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] No Team Principal before {round.RoundLabel} - the night is running "
+                + $"{late} minutes behind, so the start goes on without it.");
+            return false;
+        }
+
+        if (ChoosePrincipal(round, quiet: false) is not { } chosen)
+        {
+            return false;
+        }
+
+        var (focus, kind, stake) = chosen;
+        var commentary = _commentary;
+        var name = (_settings.PrincipalName ?? string.Empty).Trim();
+
+        // WRITTEN AHEAD? Taken whatever happens - a held interview is for
+        // one staging - and used only when it is still true: the same round,
+        // the same grid, the same driver, the same name, and no result filed
+        // or corrected since it was written. See WriteThePrincipalAhead.
+        PrincipalAhead? held;
+        bool fresh;
+
+        lock (_principalAheadLock)
+        {
+            held = _principalAhead;
+            _principalAhead = null;
+            fresh = held is not null && held.AsOf == _principalAheadVersion;
+        }
+
+        var ready = held is not null
+                    && fresh
+                    && string.Equals(held.RoundId, round.Id, StringComparison.Ordinal)
+                    && string.Equals(held.Grid, WrittenAhead.Fingerprint(round.AssignedTransponders), StringComparison.Ordinal)
+                    && string.Equals(held.Focus, focus, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(held.Name, name, StringComparison.Ordinal)
+            ? held.Exchanges
+            : null;
+
+        if (ready is not null)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] The Team Principal's interview was written ahead, so the start "
+                + "waits for no model.");
+        }
+        else if (held is not null)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] The Team Principal's interview written ahead was thrown away - "
+                + "the race, its grid, the driver or the results have changed since. Writing a fresh one.");
+        }
+        var engine = _announcer.VoiceEngineInUse;
+        var voices = _settings.PrincipalVoice;
+        SecondVoice? voice = voices.IsSetFor(engine) ? voices : null;
+        var label = round.RoundLabel;
+        var driver = _profiles.Get(focus)?.DriverName is { Length: > 0 } known ? known : focus;
+        var introQueued = introComing ? _introQueued : Task.CompletedTask;
+
+        StatusMessage?.Invoke(
+            $"{AppTime.LogStampNow()}  [commentary] Before {label}: a word with {(name.Length > 0 ? name : "the Team Principal")} "
+            + $"for {driver}"
+            + (voice is not null ? "." : $", in the announcer's own voice - no Team Principal's voice is picked for {EngineName(engine)} on Voice > Cast."));
+
+        // Held from now, so the staging chain waits for the interview - and
+        // released however this ends, and in any case after the budget, the
+        // renders and the intro, or when a countdown starts.
+        var writing = _announcer.BeginLineBeingWritten(PrincipalModelBudget + TimeSpan.FromSeconds(60));
+
+        _ = Task.Run(async () =>
+        {
+            List<SpokenLine>? lines = null;
+
+            try
+            {
+                using var budget = new CancellationTokenSource(PrincipalModelBudget);
+
+                var exchanges = ready ?? await commentary!.BuildPrincipalBeforeAsync(
+                    round, focus, name, kind, stake,
+                    log: note => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}"),
+                    ct: budget.Token);
+
+                if (exchanges is null)
+                {
+                    StatusMessage?.Invoke(budget.IsCancellationRequested
+                        ? $"{AppTime.LogStampNow()}  [commentary] Team Principal skipped - the model took longer than {PrincipalModelBudget.TotalSeconds:0}s, so the start went on without it."
+                        : $"{AppTime.LogStampNow()}  [commentary] Team Principal skipped - nothing usable came back from the model. Any line above says why.");
+                }
+                else
+                {
+                    // The questions in the race announcer's own voice - this
+                    // is the start of a race, not the recap show.
+                    lines = await RenderExchangesAsync(exchanges, null, null, voice, CancellationToken.None);
+
+                    // After the round intro, so the room hears the race set
+                    // up first and then the team.
+                    await Task.WhenAny(introQueued, Task.Delay(RoundIntroModelBudget + TimeSpan.FromSeconds(10)));
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Team Principal skipped - {ex.Message}");
+                lines = null;
+            }
+
+            if (lines is null || lines.Count == 0 || IsDisposed || Disposing || !IsHandleCreated)
+            {
+                writing.Dispose();
+                return;
+            }
+
+            try
+            {
+                BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        if (IsDisposed || Disposing)
+                        {
+                            return;
+                        }
+
+                        if (_race.State != RaceState.Staging || _race.SessionGeneration != stagedGeneration)
+                        {
+                            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Team Principal dropped - the race had moved on from staging before it was ready.");
+                            return;
+                        }
+
+                        for (var i = 0; i < lines.Count; i++)
+                        {
+                            var run = CommentaryExchange.ExchangeRun.At(i, lines.Count);
+
+                            Say(
+                                lines[i],
+                                run.AnotherFollows
+                                    ? AnnouncementService.SpeechTail.BackToBack
+                                    : AnnouncementService.SpeechTail.Normal,
+                                run.FollowsAnother
+                                    ? AnnouncementService.SpeechLead.FollowsOn
+                                    : AnnouncementService.SpeechLead.Normal);
+                        }
+
+                        _principalHeard.Add(focus);
+                    }
+                    finally
+                    {
+                        writing.Dispose();
+                    }
+                }));
+            }
+            catch (InvalidOperationException)
+            {
+                // The window handle went away between the check and the post.
+                writing.Dispose();
+            }
+        });
+
+        return true;
+    }
+
     private void SaveCompletedSessionToHistory()
     {
         // Read once and let go on every way out, so whatever runs next is
@@ -4979,7 +5570,7 @@ public sealed partial class RaceControlControl
         catch (Exception ex)
         {
             _ghostsBeatenAtFlag = new Dictionary<string, IReadOnlyList<GhostCar>>(StringComparer.OrdinalIgnoreCase);
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] Couldn't work out which ghosts were beaten: {ex.Message}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] Couldn't work out which ghosts were beaten: {ex.Message}");
         }
 
         // Both of these used to return silently, which made a race that
@@ -5159,7 +5750,7 @@ public sealed partial class RaceControlControl
 
                     StatusMessage?.Invoke(
                         "[session] Demo race - kept in Race History marked [DEMO] only. It is not linked to a heat and "
-                        + "earns no points, badges, personal bests or records.");
+                        + "earns no points, achievements, personal bests or records.");
                 }
                 else
                 {
@@ -5345,7 +5936,7 @@ public sealed partial class RaceControlControl
                 _unfiledRaces.Remove(unfiled);
                 StatusMessage?.Invoke(
                     $"[session] \"{record.Label}\", which could not be saved earlier, is now in the race history. "
-                    + "Its badges and personal bests were not worked out and its summary was not spoken.");
+                    + "Its achievements and personal bests were not worked out and its summary was not spoken.");
             }
         }
     }

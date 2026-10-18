@@ -64,7 +64,7 @@ public sealed class AppTour : Form
 
         new("Voice", "Voice",
             "The announcer: which voice speaks (Kokoro, the free voice that runs on this laptop, your own ElevenLabs "
-            + "key, or the HeatCaller voice), the cast around it - recap host, co-host, mechanic - every race call "
+            + "key, or the HeatCaller voice), the cast around it - recap host, co-host, Technical Lead - every race call "
             + "it can make from the start to lead changes and rivalries, and the AI commentary."),
 
         new("Sounds", "Sounds",
@@ -82,7 +82,7 @@ public sealed class AppTour : Form
             + "check-in and driver sign-up. Set up once with an address and token."),
 
         new("Themes", "Themes",
-            "The look of the app and of everything racers see - colours, and your club logo on screens, pages and "
+            "The look of the app and of everything racers see - colors, and your club logo on screens, pages and "
             + "printed QR check-ins. Applying a soundscape on Sounds can change the app's look too."),
 
         new("Connection", "Connection",

@@ -1467,7 +1467,7 @@ public sealed class PracticeModeControl : UserControl
 
             if (store.LoadedUnreadable)
             {
-                StatusMessage?.Invoke("[badges] achievements.json could not be read just now, so badges were not worked out for this practice.");
+                StatusMessage?.Invoke("[achievements] achievements.json could not be read just now, so achievements were not worked out for this practice.");
                 return;
             }
 
@@ -1519,7 +1519,7 @@ public sealed class PracticeModeControl : UserControl
             foreach (var unlock in unlocks)
             {
                 StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [badge] {unlock.DriverName} unlocked \"{unlock.Badge.Name}\" in practice"
+                    $"{AppTime.LogStampNow()}  [achievements] {unlock.DriverName} unlocked \"{unlock.Badge.Name}\" in practice"
                     + (string.IsNullOrWhiteSpace(unlock.Detail) ? "." : $" ({unlock.Detail})."));
             }
 
@@ -1531,7 +1531,7 @@ public sealed class PracticeModeControl : UserControl
         }
         catch (Exception ex)
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [badge] Couldn't work out badges for this practice: {ex.Message}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] Couldn't work out achievements for this practice: {ex.Message}");
         }
     }
 

@@ -620,7 +620,7 @@ public sealed class FirstRunWizard : Form
 
         _lblWhereHint.AutoSize = true;
         _lblWhereHint.Font = AppTheme.SmallFont;
-        _lblWhereHint.Text = "At home, practice earns the badges you can earn on your own, and the club-sized ones "
+        _lblWhereHint.Text = "At home, practice earns the achievements you can earn on your own, and the club-sized ones "
                              + "(a full grid, fifty opponents) aren't offered. Change it any time on the Achievements page.";
 
         _trackStep.Add(new Label { Text = "Where do you race?", AutoSize = true, Font = AppTheme.BoldFont }, stretch: false, gapBelow: UiLayout.HintGap);
@@ -888,7 +888,7 @@ public sealed class FirstRunWizard : Form
                 _lblStepTitle.Text = "Name your track";
                 _lblStepBody.Text =
                     "Each track layout keeps its own lap record and average pace, so a rebuild doesn't mix up the "
-                    + "records. Give today's layout a name you'll recognise.";
+                    + "records. Give today's layout a name you'll recognize.";
                 _lblTrackHint.Text = _trackLayouts.All.Count > 0
                     ? $"Already set up: {string.Join(", ", _trackLayouts.All.Select(t => t.Name).Take(6))}. "
                       + "Add photos, marshal posts and more on the Track Layouts page."

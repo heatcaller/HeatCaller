@@ -228,7 +228,7 @@ public sealed class RacingWordsForm : Form
                     + "race, normally the drivers from the race before."),
                 new Word(
                     "Scrutineering",
-                    "The check on a car before it races - battery, tyres, body, whatever your club inspects. "
+                    "The check on a car before it races - battery, tires, body, whatever your club inspects. "
                     + "Also called tech."),
                 new Word(
                     "Decoder",

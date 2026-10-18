@@ -151,8 +151,8 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
   // what because it is big and almost never changes, while the earned
   // list is small and changes after every race: one fetch of the art per
   // visit, not one per poll.
-  badges: { name: "badges", kind: "snapshot", what: "the badge catalogue and its artwork" },
-  achievements: { name: "achievements", kind: "snapshot", what: "who has earned which badge" },
+  badges: { name: "badges", kind: "snapshot", what: "the achievement catalogue and its artwork" },
+  achievements: { name: "achievements", kind: "snapshot", what: "who has earned which achievement" },
   tracks: { name: "tracks", kind: "snapshot", what: "the club's track layouts, records and best laps" },
   // How the club's pages look: colours, a welcome line, a logo. The one
   // document the relay reads itself, because a theme applied in the
@@ -223,7 +223,7 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
     maxItemBytes: 64 * 1024,
     rollOldest: true,
   },
-  site: { name: "site", kind: "snapshot", what: "the club's colours, welcome line and logo" },
+  site: { name: "site", kind: "snapshot", what: "the club's colors, welcome line and logo" },
   // Online check-in: who can be checked in, the PIN's hash, and the
   // drivers' names and photos. Private - the relay hands out pieces of
   // it to a PIN or a badge, never the whole thing.

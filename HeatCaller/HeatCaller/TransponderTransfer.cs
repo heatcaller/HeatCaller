@@ -49,7 +49,7 @@ internal static class TransponderTransferring
 
         if (string.Equals(wanted, from.Transponder?.Trim(), StringComparison.OrdinalIgnoreCase))
         {
-            return $"{wanted} is {NameOf(from)}'s main transponder. Their results, check-ins and badges are filed under it, so it stays theirs.";
+            return $"{wanted} is {NameOf(from)}'s main transponder. Their results, check-ins and achievements are filed under it, so it stays theirs.";
         }
 
         return from.ExtraTransponders.Any(t => string.Equals(t.Id.Trim(), wanted, StringComparison.OrdinalIgnoreCase))

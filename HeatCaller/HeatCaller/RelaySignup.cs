@@ -131,7 +131,7 @@ public sealed class SignupInvite
     {
         SignupInviteState.Approved => "Signed up",
         SignupInviteState.Rejected => "Turned down",
-        SignupInviteState.Cancelled => "Cancelled",
+        SignupInviteState.Cancelled => "Canceled",
         _ when IsExpired => "Expired",
         _ => EmailedUtc is null && Email.Length > 0 ? "Not emailed yet" : "Waiting",
     };

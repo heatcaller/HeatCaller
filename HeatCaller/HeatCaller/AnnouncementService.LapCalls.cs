@@ -490,10 +490,18 @@ public sealed partial class AnnouncementService
         // two-word lap call rattles straight through it.
         var reportSpeed = config.SpeedFor(_voiceStore.Current.Speed);
 
+        // The run-through, when a sponsor presents it.
+        var (sponsorTag, countMention) = SponsorTag(AnnouncementEventType.PositionReport);
+        text = (text + sponsorTag).Trim();
+
         // The text goes up only if the report is accepted - see
         // EnqueueVoiceWork.
         EnqueueVoiceWork(AnnouncementEventType.PositionReport, leader.Transponder,
-            () => SynthesizeAndPlayAsync(text, "[voice] Position report", speedOverride: reportSpeed),
+            () =>
+            {
+                countMention?.Invoke();
+                return SynthesizeAndPlayAsync(text, "[voice] Position report", speedOverride: reportSpeed);
+            },
             displayText: text);
     }
 
@@ -571,6 +579,18 @@ public sealed partial class AnnouncementService
         var poleSaysIt = IsQualifyingMode && _qualifyingMethod == QualifyingMethod.TotalLaps
             && _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.ProvisionalPole))?.IsEnabledFor(IsPracticeMode) == true;
 
+        // Counted whatever the call does - the broadcast tower shows the
+        // count even with the voice switched off. See LeadTracker.
+        var leadChange = _leads.Observe(leader.Transponder);
+
+        // And the stream's banner, voice or no voice - but not for a lead in
+        // practice, which is nobody's, or in a qualifier, where the top of
+        // the order is provisional pole and has a call of its own.
+        if (leadChange is not null && !IsPracticeMode && !IsQualifyingMode)
+        {
+            PostLeadChangeMoment(leadChange);
+        }
+
         if (_currentLeaderTransponder is not null && leader.Transponder != _currentLeaderTransponder)
         {
             // Only offered when they could be heard - see VoiceCandidateCanSpeak.
@@ -584,8 +604,18 @@ public sealed partial class AnnouncementService
             var voiceCfg = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.LeaderChange));
             if (!poleSaysIt && VoiceCandidateCanSpeak(AnnouncementEventType.LeaderChange, voiceCfg))
             {
+                // The detail a broadcast booth gives with a lead change -
+                // who it was taken from, how long they had it, and how
+                // many times it has changed hands. Worked out now, while
+                // the order is the one the change was seen in.
+                var leadExtras = LeadChangeExtras(leadChange);
+                var leadTail = leadChange is not null && voiceCfg.IncludeLeadChangeCount
+                    ? LeadTracker.Tail(leadChange)
+                    : string.Empty;
+
                 ConsiderPerLapAction("voice", leader.Transponder, voiceCfg.Weight, MaxVoicePerLap,
-                    () => EnqueueVoice(AnnouncementEventType.LeaderChange, leader, null));
+                    () => EnqueueVoice(AnnouncementEventType.LeaderChange, leader, null, extras: leadExtras,
+                        autoTail: leadTail.Length > 0 ? ("{leadchanges}", leadTail) : null));
             }
         }
 
@@ -594,6 +624,48 @@ public sealed partial class AnnouncementService
         CheckLapped(ordered);
         CheckCloseBattles(ordered);
         CheckRivalries(ordered);
+    }
+
+    /// <summary>
+    /// The lead changes of this race - how many, among how many drivers.
+    /// Read by the broadcast graphics (WebServerService) as well as used for
+    /// the lead change call, so the two always say the same number.
+    /// </summary>
+    public LeadTracker Leads => _leads;
+
+    private readonly LeadTracker _leads = new();
+
+    /// <summary>
+    /// {leadchanges} {leaders} {previous} {previouslaps} (laps they led all race, not just this spell) {backinfront} for a
+    /// lead change call. Null when there is nothing to say beyond the name -
+    /// the first change of a race has no history to give.
+    /// </summary>
+    private IReadOnlyDictionary<string, (string Spoken, string Display)>? LeadChangeExtras(LeadChange? change)
+    {
+        if (change is null)
+        {
+            return null;
+        }
+
+        var previousLaps = _standings.TryGetValue(change.Previous, out var previous) ? previous.LapsLed : 0;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+        // A count of one is left empty so a line built round it drops the
+        // clause (TidyTemplate) rather than saying "the first lead change"
+        // about a race that has only just had one.
+        var changes = change.Number >= 2 ? LeadTracker.SpokenOrdinal(change.Number) : string.Empty;
+        var changesShown = change.Number >= 2 ? change.Number.ToString(inv) : string.Empty;
+
+        return new Dictionary<string, (string Spoken, string Display)>
+        {
+            ["leadchanges"] = (changes, changesShown),
+            ["leaders"] = (change.Leaders >= 2 ? LeadTracker.SpokenCount(change.Leaders) : string.Empty,
+                change.Leaders >= 2 ? change.Leaders.ToString(inv) : string.Empty),
+            ["previous"] = (DisplayNameFor(change.Previous), DisplayNameFor(change.Previous)),
+            ["previouslaps"] = (previousLaps > 0 ? Plural.Of(previousLaps, "lap") : string.Empty,
+                previousLaps > 0 ? Plural.Of(previousLaps, "lap") : string.Empty),
+            ["backinfront"] = (LeadTracker.BackInFront(change), LeadTracker.BackInFront(change)),
+        };
     }
 
     /// <summary>The longest current streak among everyone except this driver.</summary>
@@ -1035,7 +1107,11 @@ public sealed partial class AnnouncementService
                 offer = new BattleOffer(key, now, _battlesGeneration);
             }
 
-            if (!FirePairLine(AnnouncementEventType.CloseBattle, front.Transponder, chaser.Transponder, offer))
+            // What the fight is for - the broadcast's first question about
+            // any battle. The front car's place among the cars being called.
+            var battleFor = i == 0 ? "the lead" : Ordinal(i + 1);
+
+            if (!FirePairLine(AnnouncementEventType.CloseBattle, front.Transponder, chaser.Transponder, offer, battleFor))
             {
                 // Never reached the batch, so nothing would ever settle it.
                 lock (_battlesLock)
@@ -1044,6 +1120,19 @@ public sealed partial class AnnouncementService
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// "Battle for the lead!" in front of a battle line - after its opening
+    /// delivery tag, when it has one ("[shouting] ..."), so the tag still
+    /// opens the line and the voice says the words the way it was told to.
+    /// </summary>
+    internal static string BattleForTheLead(string line)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(line, @"^\s*(\[[^\]]+\]\s*)?");
+        var tag = match.Groups[1].Value;
+
+        return $"{tag}Battle for the lead! {line[match.Length..]}".Trim();
     }
 
     /// <summary>
@@ -1062,7 +1151,13 @@ public sealed partial class AnnouncementService
     /// line that never got heard doesn't use up the pair - see
     /// CheckCloseBattles. Null for a line that isn't once per pair.
     /// </param>
-    private bool FirePairLine(AnnouncementEventType type, string driverTransponder, string rivalTransponder, BattleOffer? battle = null)
+    /// <param name="battleFor">
+    /// For a battle: what it is for - "the lead", "third" - filling
+    /// {battle} as "for the lead". A fight for the lead the chosen line does
+    /// not mention gets "Battle for the lead!" in front of it, because that
+    /// is the one battle a broadcast always names.
+    /// </param>
+    private bool FirePairLine(AnnouncementEventType type, string driverTransponder, string rivalTransponder, BattleOffer? battle = null, string? battleFor = null)
     {
         if (Muted)
         {
@@ -1088,12 +1183,18 @@ public sealed partial class AnnouncementService
             .Replace("{driver}", DisplayNameFor(driverTransponder), StringComparison.OrdinalIgnoreCase)
             .Replace("{rival}", DisplayNameFor(rivalTransponder), StringComparison.OrdinalIgnoreCase)
             .Replace("{car}", AnnouncementText.OrMissing(_profiles.CarModelFor(driverTransponder)), StringComparison.OrdinalIgnoreCase)
+            .Replace("{battle}", AnnouncementText.OrMissing(string.IsNullOrWhiteSpace(battleFor) ? null : $"for {battleFor}"), StringComparison.OrdinalIgnoreCase)
             .WithDriverDetails(_profiles.Get(driverTransponder))
             .TidyTemplate();
 
         if (text.Length == 0)
         {
             return false;
+        }
+
+        if (battleFor == "the lead" && !template.Contains("{battle}", StringComparison.OrdinalIgnoreCase))
+        {
+            text = BattleForTheLead(text);
         }
 
         var speed = config.SpeedFor(_voiceStore.Current.Speed);
@@ -1135,9 +1236,18 @@ public sealed partial class AnnouncementService
                 }
             }
 
+            // A battle a sponsor presents carries their name - decided here,
+            // as the line is queued, so the ration is the queue's to spend.
+            var (sponsorTag, countMention) = SponsorTag(type);
+            var said = (text + sponsorTag).Trim();
+
             var accepted = EnqueueVoiceWork(type, driverTransponder,
-                () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed),
-                displayText: text);
+                () =>
+                {
+                    countMention?.Invoke();
+                    return SynthesizeAndPlayAsync(said, $"[voice] {type}", speedOverride: speed);
+                },
+                displayText: said);
 
             if (!accepted && battle is { } dropped)
             {

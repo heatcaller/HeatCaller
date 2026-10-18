@@ -451,7 +451,7 @@ internal static class NightBefore
 
         if (races.Count > 0)
         {
-            opening.Append($" The programme as it stands has {Plural.Of(races.Count, "race")} down to run");
+            opening.Append($" The program as it stands has {Plural.Of(races.Count, "race")} down to run");
 
             if (classes.Count > 0)
             {
@@ -461,7 +461,7 @@ internal static class NightBefore
             // SAID EVERY TIME THE PROGRAMME IS MENTIONED. A club reorders
             // its programme all evening and adds races on the day, so a
             // count stated as settled is a count the meeting disproves.
-            opening.Append(". That is the plan rather than a promise - a programme changes on the day.");
+            opening.Append(". That is the plan rather than a promise - a program changes on the day.");
         }
 
         blocks.Add(new FactBlock(key + ":day", opening.ToString().Trim()));

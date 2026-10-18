@@ -319,7 +319,7 @@ public partial class AnnouncerControl
     /// <summary>A line for the Commentary page's Test button - the kind of thing a cold open says.</summary>
     private const string ShowTestLine =
         "Good evening and welcome to the club, where the track is clean, the batteries are charged, "
-        + "and we have got a full programme ahead of us tonight.";
+        + "and we have got a full program ahead of us tonight.";
 
     /// <summary>
     /// Plays a show open with a test line over it, exactly as a real
@@ -1647,7 +1647,7 @@ public partial class AnnouncerControl
 
         if (ShowFloor.Busy)
         {
-            return $"{ShowFloor.HeldBy ?? "the programme"} took the floor while it was being written";
+            return $"{ShowFloor.HeldBy ?? "the program"} took the floor while it was being written";
         }
 
         if (said is not null

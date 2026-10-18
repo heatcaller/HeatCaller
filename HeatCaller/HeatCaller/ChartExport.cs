@@ -180,7 +180,7 @@ public sealed class ChartExportForm : Form
         _cmbStyle.Items.AddRange(new object[]
         {
             new StyleItem("print", "Print friendly - white background, dark ink"),
-            new StyleItem("mono", "Monochrome - white background, grey lines (mono printers)"),
+            new StyleItem("mono", "Monochrome - white background, gray lines (mono printers)"),
             new StyleItem("screen", "Match the app's look - as shown on screen"),
         });
         _cmbStyle.SelectedIndexChanged += (_, _) => _preview.Invalidate();

@@ -295,11 +295,11 @@ public static class Looks
                 "#0C0B09", "#181612", "#12110D", "#E6B422", "#0C0B09", "#C9D1DC", "#F7F4EC", "#A39C8A", "#2E2A20", "#5BD99A", "#FF6B5B"),
             Make("desert-rally", "Desert Rally", "Burnt orange and teal on warm sand.", Look.FamilyLight,
                 "#F6EFE4", "#FFFCF7", "#FBF6EE", "#B8501A", "#FFFFFF", "#1D7F86", "#2A1D12", "#7A6755", "#E6D9C6", "#2F7D32", "#B3261E"),
-            Make("paddock", "Paddock", "Fresh green and amber on light grey - a sunny club day.", Look.FamilyLight,
+            Make("paddock", "Paddock", "Fresh green and amber on light gray - a sunny club day.", Look.FamilyLight,
                 "#EEF3EF", "#FFFFFF", "#F6F9F6", "#0E7A45", "#FFFFFF", "#C76A00", "#101A14", "#5C6B61", "#D6E0D8", "#0E7A45", "#C0392B"),
             Make("stripes", "Heritage Stripes", "Navy with a red stripe on white - old-school race livery.", Look.FamilyLight,
                 "#F3F5F9", "#FFFFFF", "#F8F9FC", "#0B2A5B", "#FFFFFF", "#D0102B", "#0D1626", "#5B6679", "#DDE2EB", "#15803D", "#D0102B"),
-            Make("chequered", "Chequered", "Black and white with a red flash - as plain as a flag.", Look.FamilyLight,
+            Make("chequered", "Checkered", "Black and white with a red flash - as plain as a flag.", Look.FamilyLight,
                 "#F2F2F2", "#FFFFFF", "#F8F8F8", "#111111", "#FFFFFF", "#D0021B", "#111111", "#636363", "#E0E0E0", "#1B7F3B", "#D0021B"),
         };
     }
@@ -734,11 +734,11 @@ public static class Looks
         Check(colors.Text, colors.Bg, 7.0, "Text is hard to read on the page background");
         Check(colors.Text, colors.Surface, 7.0, "Text is hard to read on cards");
         Check(colors.Muted, colors.Surface, 4.0, "Hint text is hard to read on cards");
-        Check(colors.OnPrimary, colors.Primary, 2.5, "Button text is hard to read on the primary colour");
-        Check(colors.Primary, colors.Surface, 2.5, "The primary colour is hard to see on cards (it's used for headings)");
-        Check(colors.Accent, colors.Surface, 3.0, "The accent colour is hard to see on cards");
-        Check(colors.Good, colors.Surface, 3.0, "The \"good\" colour is hard to see on cards");
-        Check(colors.Bad, colors.Surface, 3.0, "The \"bad\" colour is hard to see on cards");
+        Check(colors.OnPrimary, colors.Primary, 2.5, "Button text is hard to read on the primary color");
+        Check(colors.Primary, colors.Surface, 2.5, "The primary color is hard to see on cards (it's used for headings)");
+        Check(colors.Accent, colors.Surface, 3.0, "The accent color is hard to see on cards");
+        Check(colors.Good, colors.Surface, 3.0, "The \"good\" color is hard to see on cards");
+        Check(colors.Bad, colors.Surface, 3.0, "The \"bad\" color is hard to see on cards");
 
         return warnings;
     }

@@ -781,7 +781,7 @@ public partial class MainForm
 
                 if (!_relayBadgeIds.TryGetValue(tap.Id, out transponder))
                 {
-                    OnClientRawMessage("[relay] A check-in arrived for a driver this laptop does not recognise - their profile may have been deleted, or the tap came from a QR check-in or list from before QR check-ins were reissued.");
+                    OnClientRawMessage("[relay] A check-in arrived for a driver this laptop does not recognize - their profile may have been deleted, or the tap came from a QR check-in or list from before QR check-ins were reissued.");
                     return true;
                 }
             }
@@ -1170,7 +1170,7 @@ public partial class MainForm
             return;
         }
 
-        SendToRelayIfChanged(RelayChannel.Achievements, "badges earned", () => RelayDocuments.Achievements(
+        SendToRelayIfChanged(RelayChannel.Achievements, "achievements earned", () => RelayDocuments.Achievements(
             RelayAchievements(), _profiles, abbreviate));
 
         // Standings and the results index otherwise only go when a session
@@ -1201,7 +1201,7 @@ public partial class MainForm
         {
             _lastRelayDocuments.Remove(RelayChannel.Badges);
             _relayBadgesSentUtc = DateTime.UtcNow;
-            SendToRelayIfChanged(RelayChannel.Badges, "the badge list", () => RelayDocuments.Badges(
+            SendToRelayIfChanged(RelayChannel.Badges, "the achievement list", () => RelayDocuments.Badges(
                 _settings.RacingAt,
                 RelayAchievements().All.SelectMany(d => d.Unlocked).Select(u => u.Id).ToHashSet(StringComparer.Ordinal)));
         }

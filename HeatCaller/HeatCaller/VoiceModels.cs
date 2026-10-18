@@ -115,6 +115,23 @@ public enum AnnouncementEventType
 
     /// <summary>A driver crossed the split loop ahead of the track record lap at that point. Appended at the END. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}.</summary>
     SplitRecordPace,
+
+    /// <summary>
+    /// One driver introduced as the grid is staged - "On pole, number 7,
+    /// Sam Smith, from Riverside - two wins from the last five." One line per
+    /// driver, in grid order. Appended at the END. Placeholders: {intro} for
+    /// the whole introduction, built from what the driver's profile and
+    /// history have; {driver} {car} {team} {sponsors} {number} {hometown}
+    /// {grid} {stat} on their own.
+    /// </summary>
+    DriverIntro,
+
+    /// <summary>
+    /// What qualifying decided, read before a main's driver intros - "From
+    /// qualifying: Sam Smith takes pole with 24 laps..." Appended at the END.
+    /// Placeholders: {recap} for the whole recap; {driver} for the polesitter.
+    /// </summary>
+    QualifyingRecap,
 }
 
 public sealed class AnnouncementEventConfig
@@ -232,6 +249,28 @@ public sealed class AnnouncementEventConfig
     // instead of just the bare number. Useful once more than one racer is
     // on track and a bare time alone doesn't say who it belongs to.
     public bool IncludeDriverNameInLapTime { get; set; }
+
+    /// <summary>
+    /// Only meaningful for AnnouncementEventType.LeaderChange. Adds the
+    /// broadcast's count to the call from the second change of a race on -
+    /// "That's the fourth lead change, among three drivers." - unless the
+    /// chosen line already says {leadchanges} itself.
+    ///
+    /// ON by default, and a settings file saved before it existed reads as
+    /// on too (the initialiser runs for a property the file does not
+    /// mention), because the count is the part of a lead change call that
+    /// only a booth watching the whole race could give.
+    /// </summary>
+    public bool IncludeLeadChangeCount { get; set; } = true;
+
+    /// <summary>
+    /// Only meaningful for AnnouncementEventType.DriverIntro. When true the
+    /// grid is introduced before a MAIN only - the way a broadcast saves
+    /// the introductions for the feature - and the heats go straight from
+    /// staging to the countdown. Off by default, so a club without a
+    /// programme (every race freeform) still hears them.
+    /// </summary>
+    public bool IntrosMainsOnly { get; set; }
 
     /// <summary>
     /// Whether this announcement is allowed while a yellow or red flag is
@@ -1121,7 +1160,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[excited] Consistency from {driver} - {streak} in a row!",
                 "[excited] {driver} keeps it clean, {streak} laps running!",
                 "[excited] {streak} clean laps on the bounce for {driver}!",
-                "[excited] {driver} is dialled in - {streak} straight!",
+                "[excited] {driver} is dialed in - {streak} straight!",
                 "[excited] No mistakes from {driver} - {streak} in a row!",
                 "[excited] Metronomic from {driver}, {streak} consecutive!",
                 "[excited] {driver} strings together {streak} good ones!",
@@ -1194,8 +1233,12 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         };
         p.Events[nameof(AnnouncementEventType.CloseBattle)] = new AnnouncementEventConfig
         {
-            // Off by default, like the ambience trigger it mirrors.
-            Enabled = false,
+            // ON by default since 18 Oct 2026 - battle detection is the
+            // broadcast's best storyline, and it was off, like the ambience
+            // trigger it mirrors, for a club to discover. Only a new setup
+            // (or Restore Default Lines) takes this; a club's saved choice
+            // stands.
+            Enabled = true,
             Weight = 65,
             Templates = new List<string>
             {
@@ -1293,7 +1336,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[cheerful] Checkered flag! That's the end of it.",
                 "[excited] That's the race, everyone.",
                 "[excited] Race over - nice driving out there.",
-                "[shouting] Chequers are out. Race complete!",
+                "[shouting] Checkered flag is out. Race complete!",
                 "[shouting] And we're done - checkered flag!",
                 "[excited] That'll do it. Race finished!",
                 "[cheerful] Bring them in - the race is over.",
@@ -1307,12 +1350,12 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             Enabled = true,
             Templates = new List<string>
             {
-                "[excited] {driver} unlocks {badge}!",
-                "[cheerful] Badge for {driver} - {badge}.",
-                "[excited] That's {badge} for {driver}!",
-                "[cheerful] {driver} has earned {badge}.",
-                "[excited] New one for {driver} - {badge}!",
-                "[shouting] {badge}! Take a bow, {driver}!"
+                "[excited] {driver} unlocks {achievement}!",
+                "[cheerful] Achievement for {driver} - {achievement}.",
+                "[excited] That's {achievement} for {driver}!",
+                "[cheerful] {driver} has earned {achievement}.",
+                "[excited] New one for {driver} - {achievement}!",
+                "[shouting] {achievement}! Take a bow, {driver}!"
             },
         };
 
@@ -1531,6 +1574,35 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             },
         };
 
+        // THE BROADCAST INTRODUCTIONS (18 Oct 2026). The words are built in
+        // code ({intro}, {recap}) because a driver's introduction is made of
+        // parts any one of which can be missing - no number, no home club,
+        // no history yet - and a template written round six optional
+        // pieces cannot stay a sentence. The lines here are the wrapper,
+        // as {positions} is for the running order.
+        p.Events[nameof(AnnouncementEventType.DriverIntro)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 90,
+            Templates = new List<string>
+            {
+                "[excited] {intro}!",
+                "[excited] {intro}.",
+                "{intro}.",
+            },
+        };
+
+        p.Events[nameof(AnnouncementEventType.QualifyingRecap)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 90,
+            Templates = new List<string>
+            {
+                "{recap}",
+                "[excited] {recap}",
+            },
+        };
+
         return p;
     }
 
@@ -1544,14 +1616,14 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.JumpStart => ("Jump start", "A car crossed the line before the green flag dropped. Placeholders: {driver} {car} {team} {sponsors}. Whether a penalty is applied automatically is set per class on the Classes page."),
         AnnouncementEventType.PersonalBestLap => ("Personal best lap", "A racer beat their OWN previous best this race, without necessarily being quickest overall. Off by default - with a full grid this fires often. Placeholders: {driver} {car} {team} {sponsors} {time}."),
         AnnouncementEventType.TrackRecord => ("Track record", "The all-time fastest lap ever recorded on the selected track layout (in Race Control) was just broken - rarer and bigger than a regular fast lap. One line below is picked at random each time. Placeholders: {driver} {car} {team} {sponsors} {time}."),
-        AnnouncementEventType.LeaderChange => ("Leader change", "P1 changed hands (worked out from the running order). One line below is picked at random each time. Placeholders: {driver} {car} {team} {sponsors}"),
+        AnnouncementEventType.LeaderChange => ("Leader change", "P1 changed hands (worked out from the running order). One line below is picked at random each time. Placeholders: {driver} {car} {team} {sponsors} for the new leader; {previous} for who they took it from and {previouslaps} for how many laps that driver has led this race (\"6 laps\"); {leadchanges} for which change this is (\"fourth\") and {leaders} for how many drivers have led (\"three\") - both empty on the first change, so a clause round them drops out; {backinfront} (\"back in front for the second time\") for a driver retaking it. Tick the box below to have the count added for you."),
         AnnouncementEventType.LapCompleted => ("Every lap completed", "Fires on every finish-line pass. One line below is picked at random each time. Placeholders: {driver} {car} {team} {sponsors} {lap} {time} {laptime}. Use the toggles below to include the lap time automatically or restrict this to only new best laps."),
         AnnouncementEventType.LapTime => ("Lap time only", "A quieter alternative to \"Every lap completed\": announces just the lap time after every lap, with no driver name or lap number. Good for fast tracks where the full announcement is more talking than the lap allows. Use the setting below to announce only every Nth lap per driver, skipping the ones in between."),
         AnnouncementEventType.Streak => ("Consistency streak", "Fires once a racer's consecutive-good-lap streak reaches the threshold set on Sounds → Effects, and again each lap it continues (or every Nth lap, using the setting below, for a quieter option on fast tracks). Use \"only the longest streak\" to hear about the leader of the clean runs and nobody else. One line below is picked at random each time. Placeholders: {driver} {car} {team} {sponsors} {streak}"),
         AnnouncementEventType.StreakLead => ("Longest streak taken over", "A driver's clean run passes every other run CURRENTLY going, so the longest streak on track changes hands. It is the longest run in progress, not the longest anyone has managed all race - a driver whose 12-lap run ended is no longer in the comparison. Fires once when it changes hands, not every lap. Placeholders: {driver} {car} {team} {sponsors} {streak} for the new leader, {rival} and {rivalstreak} for whoever they passed."),
         AnnouncementEventType.RaceTimeOver => ("Race time over", "The race time limit was reached - last lap warning."),
         AnnouncementEventType.RaceCompleted => ("Race completed", "The race has finished."),
-        AnnouncementEventType.AchievementUnlocked => ("Achievement unlocked", "A driver just earned a badge. Fires after a race, once the result is saved and the badges have been worked out - at most a few per race, so a big night doesn't turn into a list. Placeholders: {driver} {car} {team} {sponsors} {badge}."),
+        AnnouncementEventType.AchievementUnlocked => ("Achievement unlocked", "A driver just earned an achievement. Fires after a race, once the result is saved and the achievements have been worked out - at most a few per race, so a big night doesn't turn into a list. Placeholders: {driver} {car} {team} {sponsors} {achievement}."),
         AnnouncementEventType.LastLap => ("Last lap", "The leader starts the final lap of a lap-limited race. Fires once. Placeholders: {driver} {car} {team} {sponsors}."),
         AnnouncementEventType.FinalMinute => ("Final minute", "A timed race has one minute left. Fires once. No placeholders."),
         AnnouncementEventType.ProvisionalPole => ("Provisional pole (qualifying)", "The top of the qualifying order changes hands. Fires only during a qualifying session. Placeholders: {driver} {car} {team} {sponsors} {time}."),
@@ -1561,7 +1633,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.DriverRelease => ("Staggered start release", "A staggered driver's turn to go, called the moment their delay is up - and each time you release someone by hand. Only ever fires on a staggered or hand-released start. Keep the lines short: on a five-second stagger the next car's call is already coming. Placeholders: {driver} {car} {team} {sponsors}."),
         AnnouncementEventType.GhostPassed => ("Passed a ghost", "You got past one of your virtual opponents. Placeholders: {driver} for you, {rival} for the ghost."),
         AnnouncementEventType.PassedByGhost => ("Passed by a ghost", "A virtual opponent got past you - the one that actually stings. Placeholders: {driver} for you, {rival} for the ghost."),
-        AnnouncementEventType.CloseBattle => ("Close battle", "Two drivers on the same lap running within a second of each other. Fires once per race by default - a long scrap would otherwise trigger this every lap. Placeholders: {driver} {car} {team} {sponsors} for the car in front, {rival} for the one chasing."),
+        AnnouncementEventType.CloseBattle => ("Close battle", "Two drivers on the same lap running within a second of each other. Fires once per pair per race - a long scrap would otherwise trigger this every lap. Placeholders: {driver} {car} {team} {sponsors} for the car in front, {rival} for the one chasing, {battle} for what it is for (\"for the lead\", \"for third\"). A fight for the lead that the line does not mention starts \"Battle for the lead!\"."),
         AnnouncementEventType.Lapped => ("Car gets lapped", "The leader puts a full lap on another driver. Placeholders: {driver} {car} {team} {sponsors} for the leader, {rival} for the car being lapped."),
         AnnouncementEventType.PositionReport => ("Position report", "Reads out the current running order during a race - \"P1 Sam, P2 Bill, P3 Frank\". Use the settings below to choose how often it fires and how far down the order it reads. The driver names are inserted automatically, so a line here is the WRAPPER around them - use {positions} for where the list goes. Tick \"Say the gaps between them\" and put {gaps} where the times should go - \"Bill 1.5 back and Frank 2.3 back\", and \"a lap down\" for anyone who is."),
         AnnouncementEventType.YellowFlag => ("Yellow flag", "A yellow/caution flag was called during the race."),
@@ -1569,6 +1641,8 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.FastestSector => ("Fastest sector", "With a split loop: a driver goes quicker through a sector than anyone has this session - the line to the split is sector 1, the split back to the line sector 2. Not for the first sector times of a session, which are fastest by default. Placeholders: {driver} {car} {team} {sponsors} {sector} (its number) {sectortime}."),
         AnnouncementEventType.SplitPace => ("Up at the split", "With a split loop: a driver crosses the split loop at least a tenth up on their own best lap to that point - the lap that might be a personal best, called before it is done. At most once every five laps per driver. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}."),
         AnnouncementEventType.SplitRecordPace => ("Record pace at the split", "With a split loop: a driver crosses the split loop ahead of the track record lap at that point. Needs the record set with sector times (a record set before the split loop has none). At most once every five laps per driver. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}."),
+        AnnouncementEventType.DriverIntro => ("Driver introductions", "Each driver introduced as the grid is staged, in grid order - \"On pole, number 7, Sam Smith, from Riverside - two wins from the last five.\" Built from the driver's profile (Racing number, Home club or town) and their race history, leaving out whatever is not filled in. The automatic start waits for them before the countdown. Untick to turn them off; tick \"Mains only\" below to keep them for the feature races. Put {intro} where the introduction goes; {driver} {car} {team} {sponsors} {number} {hometown} {grid} {stat} are there on their own too."),
+        AnnouncementEventType.QualifyingRecap => ("Qualifying recap", "Before a main's driver introductions: who took pole and with what, who lines up behind, and how close it was - from tonight's qualifying, exactly as the grid sheet ranks it. Only for a main, only once its class has qualified. Put {recap} where the recap goes; {driver} is the polesitter."),
         AnnouncementEventType.GreenFlagResumed => ("Green flag (resumed)", "Racing resumed after a yellow or red. Separate from \"Race started\" so the restart can be worded differently from the initial start."),
         _ => (type.ToString(), string.Empty),
     };

@@ -468,7 +468,7 @@ internal sealed class WrittenAhead
     {
         Why.Used => "it was still right",
         Why.NothingHeld => "nothing had been written ahead",
-        Why.NotThatRound => "the programme moved on to another round",
+        Why.NotThatRound => "the program moved on to another round",
         Why.GridChanged => "the grid changed after it was written",
         Why.AFactWasSaid => "another segment had already said one of its facts",
         Why.TooOld => "it had been waiting too long to still be about tonight",

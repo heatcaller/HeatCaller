@@ -89,7 +89,7 @@ public sealed class AchievementDetailForm : Form
         // pictures, 30 Sep).
         var hint = new Label
         {
-            Text = _holders.Count > 0 ? "Double-click somebody to see their badges." : string.Empty,
+            Text = _holders.Count > 0 ? "Double-click somebody to see their achievements." : string.Empty,
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

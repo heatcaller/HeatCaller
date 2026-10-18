@@ -353,7 +353,7 @@ public sealed class LapBeepControl : UserControl
         if (drivers.Count > LapBeepStore.ToneNames.Length
             && AppDialog.Show(this,
                 $"There are {drivers.Count} drivers and only {LapBeepStore.ToneNames.Length} cues, so some will share.\r\n\r\n"
-                + "That's usually fine if the sharing drivers aren't on track together - assign those by hand afterwards.\r\n\r\nContinue?",
+                + "That's usually fine if the sharing drivers aren't on track together - assign those by hand afterward.\r\n\r\nContinue?",
                 "More drivers than cues", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes)
         {
             return;

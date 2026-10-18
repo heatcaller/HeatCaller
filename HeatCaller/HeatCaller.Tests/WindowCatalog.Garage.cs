@@ -470,8 +470,8 @@ internal static partial class WindowCatalog
         Fill("Pinion gear", pinions[index % pinions.Length]);
         Fill("Front spring", springs[index / 2 % springs.Length]);
         Fill("Rear spring", rearSprings[index / 3 % rearSprings.Length]);
-        Fill("Front tyre hardness", (20 + index % 3 * 5).ToString(System.Globalization.CultureInfo.InvariantCulture));
-        Fill("Rear tyre hardness", (30 + index % 4 * 5).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Fill("Front tire hardness", (20 + index % 3 * 5).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Fill("Rear tire hardness", (30 + index % 4 * 5).ToString(System.Globalization.CultureInfo.InvariantCulture));
         Fill("Wheel base", index < 12 ? "L" : "M");
 
         return values;

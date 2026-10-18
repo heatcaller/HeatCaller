@@ -86,14 +86,14 @@ public static class RaceHonours
     /// </summary>
     private static readonly string[] ThrowsByName =
     {
-        "And for tonight's honours, over to {0}.",
-        "Time for the honours - over to {0}.",
-        "{0} has tonight's honours.",
-        "Over to {0} with the honours.",
-        "And the honours from that one - over to {0}.",
-        "{0}, over to you for the honours.",
-        "Let us have the honours - over to {0}.",
-        "The honours next, with {0}.",
+        "And for tonight's achievements, over to {0}.",
+        "Time for the achievements - over to {0}.",
+        "{0} has tonight's achievements.",
+        "Over to {0} with the achievements.",
+        "And the achievements from that one - over to {0}.",
+        "{0}, over to you for the achievements.",
+        "Let us have the achievements - over to {0}.",
+        "The achievements next, with {0}.",
     };
 
     /// <summary>
@@ -107,14 +107,14 @@ public static class RaceHonours
     /// </summary>
     private static readonly string[] Throws =
     {
-        "And now for tonight's honours.",
-        "Time for the honours.",
-        "And the honours from that one.",
-        "Which brings us to tonight's honours.",
-        "And so to the honours.",
-        "That brings us to the honours.",
-        "The honours next.",
-        "Now, the honours.",
+        "And now for tonight's achievements.",
+        "Time for the achievements.",
+        "And the achievements from that one.",
+        "Which brings us to tonight's achievements.",
+        "And so to the achievements.",
+        "That brings us to the achievements.",
+        "The achievements next.",
+        "Now, the achievements.",
     };
 
     /// <summary>How many are coming, where it is one. A sentence nobody ever reads back is how "about 1 minutes away" shipped.</summary>
@@ -162,8 +162,8 @@ public static class RaceHonours
         "Well done to all of them.",
         "All well earned.",
         "Good stuff from all of them.",
-        "That is the honours, then.",
-        "And that is the honours - well done, all of you.",
+        "That's the achievements, then.",
+        "And that's the achievements - well done, all of you.",
         "Take a bow, all of you.",
         "Every one of those is earned.",
         "Well done indeed, all of them.",

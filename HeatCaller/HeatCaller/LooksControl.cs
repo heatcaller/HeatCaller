@@ -162,7 +162,7 @@ public sealed class LooksControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "A look is the set of colours HeatCaller paints with. Choose one for the app itself (it restarts to "
+            Text = "A look is the set of colors HeatCaller paints with. Choose one for the app itself (it restarts to "
                  + "apply it) and one for the crowd screens - the Big Screen, the Wi-Fi pages and the club's online "
                  + "pages - or let the screens match the app. New Look makes your own from any of them.",
             AutoSize = true,
@@ -1083,7 +1083,7 @@ public sealed class LooksControl : UserControl
             var next = savedForApp ? FamilyFallback() : Looks.ForApp(_settings);
 
             message += runningInApp
-                ? $"\n\nThe app is using it. It keeps these colours until it next starts, then uses \"{next.Name}\"."
+                ? $"\n\nThe app is using it. It keeps these colors until it next starts, then uses \"{next.Name}\"."
                 : $"\n\nThe app is set to switch to it when it next starts. It will use \"{next.Name}\" instead.";
         }
 

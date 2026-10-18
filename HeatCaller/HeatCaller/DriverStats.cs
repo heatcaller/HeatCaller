@@ -302,6 +302,19 @@ public sealed class DriverStats
     /// <summary>Finishes in the top five, the podium included.</summary>
     public int TopFives { get; private set; }
 
+    /// <summary>
+    /// Their mean driver rating over every race that could be rated (0-150,
+    /// see DriverRating). Null before their first. Races of one car are not
+    /// rated - winning a race nobody else was in says nothing.
+    /// </summary>
+    public double? AverageRating { get; private set; }
+
+    /// <summary>Their best single-race driver rating. Null before their first rated race.</summary>
+    public double? BestRating { get; private set; }
+
+    /// <summary>Laps completed while leading, across every race.</summary>
+    public long LapsLed { get; private set; }
+
     /// <summary>The day of their most recent win, or null.</summary>
     public DateTime? LastWinUtc { get; private set; }
 
@@ -498,11 +511,20 @@ public sealed class DriverStats
         races = races.OrderByDescending(r => r.Session.StartedAtUtc).ToList();
 
         var places = new List<int>();
+        var ratings = new List<double>();
 
         foreach (var (session, row, place) in races)
         {
             stats.Starts++;
             stats.RaceLaps += Math.Max(0, row.Laps);
+            stats.LapsLed += Math.Max(0, row.LapsLed);
+
+            // The race's own rating for them - the same sum the stream's
+            // podium shows at the flag, worked out from the saved result.
+            if (DriverRating.ForSession(session).TryGetValue(row.Transponder, out var rating))
+            {
+                ratings.Add(rating);
+            }
 
             if (session.StartedAtUtc != default && (stats.LastRacedUtc is null || session.StartedAtUtc > stats.LastRacedUtc))
             {
@@ -547,6 +569,8 @@ public sealed class DriverStats
         }
 
         stats.AverageFinish = places.Count == 0 ? null : places.Average();
+        stats.AverageRating = ratings.Count == 0 ? null : ratings.Average();
+        stats.BestRating = ratings.Count == 0 ? null : ratings.Max();
         stats.DaysOnTrack = daysOnTrack.Count;
 
         stats.RecentForm = races

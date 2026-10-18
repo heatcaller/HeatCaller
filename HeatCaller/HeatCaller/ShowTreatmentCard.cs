@@ -393,7 +393,7 @@ internal sealed class ShowTreatmentCard
 
         show.Add(Hint(
             "An opener in front of the voice and a music bed under it for the AI commentary's set pieces, so it sounds like "
-            + "going on air (greyed while AI commentary is off). Where each piece plays: Run of show, above."));
+            + "going on air (grayed while AI commentary is off). Where each piece plays: Run of show, above."));
 
         // THE FALLBACK (17 Oct 2026). Imaging owns the show's music now, per
         // soundscape; this card is what plays where the soundscape has no
@@ -422,7 +422,7 @@ internal sealed class ShowTreatmentCard
         // what is actually offered and why.
         show.Add(Hint(
             "Which set pieces get the show music; the cold open and the sign-off come ticked. The order after a flag is "
-            + "under Run of show, above. Badges earned plays inside the recap - tick it to give it a show on a night with no recap."),
+            + "under Run of show, above. Achievements earned plays inside the recap - tick it to give it a show on a night with no recap."),
             gapBelow: UiLayout.HintGap);
 
         // Not the hidden ones (17 Oct 2026) - see CommentaryControl.NotOffered.

@@ -32,7 +32,7 @@ internal static class AppShortcuts
 
     /// <summary>Its one-line description, which Windows shows as a tooltip.</summary>
     internal const string RehearsalDescription =
-        "Practise a race night on a copy of the club's data - nothing you do here touches the real results.";
+        "Practice a race night on a copy of the club's data - nothing you do here touches the real results.";
 
     /// <summary>Where it goes: this user's Start menu, beside the shortcut Velopack made.</summary>
     internal static string RehearsalShortcutPath => Path.Combine(

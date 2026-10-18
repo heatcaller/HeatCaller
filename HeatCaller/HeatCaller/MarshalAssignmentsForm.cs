@@ -55,7 +55,7 @@ public sealed class MarshalAssignmentsForm : Form
 
             grid.Columns.AddRange(
                 new DataGridViewTextBoxColumn { Name = "round", HeaderText = "Round", FillWeight = 60 },
-                new DataGridViewTextBoxColumn { Name = "by", HeaderText = "Marshalled By", FillWeight = 70 },
+                new DataGridViewTextBoxColumn { Name = "by", HeaderText = "Marshaled By", FillWeight = 70 },
                 new DataGridViewTextBoxColumn { Name = "post", HeaderText = "Post", FillWeight = 60 },
                 new DataGridViewTextBoxColumn { Name = "driver", HeaderText = "Marshal", FillWeight = 90 }
             );

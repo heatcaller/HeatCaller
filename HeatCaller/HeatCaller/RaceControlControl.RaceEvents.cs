@@ -474,6 +474,7 @@ public sealed partial class RaceControlControl
             ElapsedMs = standing.ElapsedMs,
             Status = isValid ? "active" : "invalid",
             Id = standing.TransponderId,
+            LapsLed = standing.LapsLed,
         };
         _announcer.OnStandingUpdated(miniZStanding);
 
@@ -551,6 +552,7 @@ public sealed partial class RaceControlControl
             ElapsedMs = standing.ElapsedMs,
             Status = "adjusted",
             Id = standing.TransponderId,
+            LapsLed = standing.LapsLed,
         });
 
         // Forced: a correction by hand is rare and is exactly the sort of
@@ -741,7 +743,7 @@ public sealed partial class RaceControlControl
             // do it again in a moment.
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [race] All-time record NOT taken from {who}'s {standing.FastLapMs / 1000.0:0.000}s - {doubt}. "
-                + "The lap still counts towards the race; only the record is left as it was.");
+                + "The lap still counts toward the race; only the record is left as it was.");
             return;
         }
 

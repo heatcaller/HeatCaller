@@ -1333,7 +1333,7 @@ public sealed partial class RelayPublisher : IDisposable
             return (int)response.StatusCode switch
             {
                 200 => new RelayProbe(true, $"Connected as {ClubNameFrom(body, club)}."),
-                401 => new RelayProbe(false, "The relay does not recognise that token."),
+                401 => new RelayProbe(false, "The relay does not recognize that token."),
                 403 => new RelayProbe(false, "That token belongs to a different club. Check the club id."),
                 404 => new RelayProbe(false, NotFound(body, club)),
                 var other => new RelayProbe(false, $"The relay answered HTTP {other}."),
@@ -3334,7 +3334,7 @@ public sealed partial class RelayPublisher : IDisposable
             {
                 _lastError = code switch
                 {
-                    401 => "The relay does not recognise this token.",
+                    401 => "The relay does not recognize this token.",
                     403 => "This token belongs to a different club.",
                     404 when unknownChannel => $"The relay has no \"{item.Channel}\" channel - it may need updating.",
                     404 when body.Contains("endpoint", StringComparison.OrdinalIgnoreCase)

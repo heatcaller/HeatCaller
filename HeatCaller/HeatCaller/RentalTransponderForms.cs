@@ -55,7 +55,7 @@ public sealed class RentalCheckOutForm : Form
             _cmbHolder.Items.Add(name);
         }
 
-        _txtDeposit.PlaceholderText = "car key, licence, £20...";
+        _txtDeposit.PlaceholderText = "car key, license, $20...";
 
         var btnOk = new Button { Text = "Check Out" };
         btnOk.Click += (_, _) =>

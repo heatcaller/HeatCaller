@@ -1998,7 +1998,7 @@ public sealed class RcpTrackCanvas : Control
         StatusChanged?.Invoke(quarters switch
         {
             1 => "Turned a quarter clockwise, where it stood.",
-            -1 => "Turned a quarter anticlockwise, where it stood.",
+            -1 => "Turned a quarter counterclockwise, where it stood.",
             _ => $"Turned {turns} quarters clockwise, where it stood.",
         });
     }
@@ -3038,7 +3038,7 @@ public static class RcpTiles
         RcpPaletteItem.FinishLine => "Finish line",
         RcpPaletteItem.GridBox => "Grid box",
         RcpPaletteItem.Post => "Rail post",
-        RcpPaletteItem.Kerb => "Apex kerb",
+        RcpPaletteItem.Kerb => "Apex curb",
         RcpPaletteItem.Split1 => "Split 1 loop",
         RcpPaletteItem.Split2 => "Split 2 loop",
         RcpPaletteItem.Split3 => "Split 3 loop",
@@ -3052,7 +3052,7 @@ public static class RcpTiles
         RcpPaletteItem.Rail => "Drag to run rail. Corners turn themselves.",
         RcpPaletteItem.Divider => "Two back to back, for racing on both sides.",
         RcpPaletteItem.Turn => "A corner by hand, at whatever radius you set.",
-        RcpPaletteItem.FinishLine => "The chequer across the track.",
+        RcpPaletteItem.FinishLine => "The checkered line across the track.",
         RcpPaletteItem.GridBox => "One staggered starting box.",
         RcpPaletteItem.Post => "The pink disc.",
         RcpPaletteItem.Kerb => "Red and white, for marking an apex.",

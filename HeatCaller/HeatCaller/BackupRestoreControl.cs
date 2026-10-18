@@ -1128,7 +1128,7 @@ public sealed class BackupRestoreControl : UserControl
             // files are going back - but if it does, restarting is still the
             // only safe thing to do.
             AppDialog.Show(this,
-                $"The restore stopped partway through: {ex.Message}\n\nThe app will now restart. If things look wrong afterwards, restore the safety backup in the \"Pre-Restore Safety Backups\" folder inside the backup folder.",
+                $"The restore stopped partway through: {ex.Message}\n\nThe app will now restart. If things look wrong afterward, restore the safety backup in the \"Pre-Restore Safety Backups\" folder inside the backup folder.",
                 "Restore incomplete", MessageBoxButtons.OK, MessageBoxIcon.Error);
             RestoreCompleted?.Invoke();
             return;

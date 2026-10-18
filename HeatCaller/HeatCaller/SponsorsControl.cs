@@ -37,6 +37,13 @@ public sealed class SponsorsControl : UserControl
     /// </summary>
     internal Func<string?>? EventName { get; set; }
 
+    /// <summary>
+    /// Tonight's "presented by" mentions per sponsor id and moment, for the
+    /// report - the announcer's own count (AnnouncementService.SponsorMentions),
+    /// wired by the host. Null leaves them out of the report.
+    /// </summary>
+    internal Func<IReadOnlyDictionary<string, IReadOnlyDictionary<SponsoredMoment, int>>>? MentionsTonight { get; set; }
+
     private readonly Button _btnReport = new();
 
     private readonly CheckBox _chkEnabled = new ThemedCheckBox();
@@ -58,6 +65,12 @@ public sealed class SponsorsControl : UserControl
     private readonly TextBox _txtSponsorCopy = new();
     private readonly NumericUpDown _numSponsorWeight = new();
     private readonly CheckBox _chkSponsorEnabled = new ThemedCheckBox();
+
+    /// <summary>The moments of the race the selected sponsor presents - one row per SponsoredMoment, in its order. See SponsoredMoments.</summary>
+    private readonly CheckedListBox _lstSponsorMoments = new ThemedCheckedListBox();
+
+    /// <summary>Says which moments are ticked for more than one sponsor, and who actually gets them. Empty when none are.</summary>
+    private readonly Label _lblMomentClashes = new();
 
     /// <summary>How long the selected sponsor's copy takes to read, under the copy box.</summary>
     private readonly Label _lblCopyLength = new();
@@ -557,10 +570,47 @@ public sealed class SponsorsControl : UserControl
             "On the Big Screen for the length of their read - the one part of the rotation that had nothing to "
             + "look at. Choose a picture the club has already uploaded, or upload one for the read; an uploaded "
             + "picture joins the slides above, so you can see it and remove it there. With none chosen the screen "
-            + "shows their name instead, spelt as in the box above.");
+            + "shows their name instead, spelled as in the box above.");
 
         grid.AddRow("Share of the reads:", _numSponsorWeight);
         grid.AddHint("Two gets twice the reads of one, however many the night has room for. Everyone ends up within one of their share.");
+
+        // SPONSORED SEGMENTS (18 Oct 2026) - "the fastest lap, presented by".
+        // See SponsoredMoments for why this is a different thing from the
+        // reads above, and SponsoredMomentGate for the ration.
+        _lstSponsorMoments.CheckOnClick = true;
+        _lstSponsorMoments.BorderStyle = BorderStyle.None;
+        _lstSponsorMoments.IntegralHeight = false;
+
+        foreach (var moment in Enum.GetValues<SponsoredMoment>())
+        {
+            _lstSponsorMoments.Items.Add(SponsoredMoments.Label(moment));
+        }
+
+        _lstSponsorMoments.ItemCheck += (_, e) =>
+        {
+            if (_fillingSponsor)
+            {
+                return;
+            }
+
+            // ItemCheck comes BEFORE the tick changes, so the new state is
+            // read from the event rather than the list.
+            var moment = (SponsoredMoment)e.Index;
+            var on = e.NewValue == CheckState.Checked;
+
+            SaveSponsorField(s => SetPresents(s, moment, on));
+            ShowMomentClashes();
+        };
+
+        grid.AddRow("Presents:", _lstSponsorMoments);
+        grid.AddHint(
+            "Their name rides on these moments of the race - \"Presented by\" and their name, as it's said above, "
+            + "on the end of the call, and on the stream's graphic for it. A moment that happens many times a race "
+            + "(fastest laps, lead changes, battles) is named at most once every three minutes so it never turns into "
+            + "noise; the introductions, the qualifying recap and the result are named every time. Each mention the "
+            + "announcer actually makes goes in tonight's report.");
+        grid.AddHint(_lblMomentClashes);
         grid.AddField(_chkSponsorEnabled);
 
         // WHAT EACH OF THEM GOT (11 Oct 2026). The counting has happened
@@ -613,7 +663,8 @@ public sealed class SponsorsControl : UserControl
                 // The race NIGHT, 6am to 6am like every other night-scoped
                 // reader - a report copied at twenty past midnight was
                 // dated the day after the club raced.
-                TonightAtTheTrack.NightOf(DateTime.Now));
+                TonightAtTheTrack.NightOf(DateTime.Now),
+                MentionsTonight?.Invoke());
 
             if (string.IsNullOrWhiteSpace(report))
             {
@@ -679,6 +730,10 @@ public sealed class SponsorsControl : UserControl
             Pieces.LineHeight(_txtSponsorCopy.Font) * SalesCopyLines + UiLayout.HintGap * 2);
 
         Fit(_lstSponsors, UiLayout.AtTextSize(SponsorListWidth), _lstSponsors.ItemHeight * SponsorRows + 4);
+
+        // Every moment on show at once - eight rows of its own font - so a
+        // club sees the whole list of what it can sell without scrolling.
+        Fit(_lstSponsorMoments, UiLayout.AtTextSize(SponsorListWidth), _lstSponsorMoments.ItemHeight * Enum.GetValues<SponsoredMoment>().Length + 4);
 
         static void Fit(Control field, int width, int? height = null)
         {
@@ -1135,6 +1190,14 @@ public sealed class SponsorsControl : UserControl
             _numSponsorWeight.Value = Math.Clamp(sponsor?.Weight ?? 1, (int)_numSponsorWeight.Minimum, (int)_numSponsorWeight.Maximum);
             _chkSponsorEnabled.Checked = sponsor?.Enabled ?? true;
 
+            var presents = sponsor?.Presents ?? new List<string>();
+
+            for (var i = 0; i < _lstSponsorMoments.Items.Count; i++)
+            {
+                var key = ((SponsoredMoment)i).ToString();
+                _lstSponsorMoments.SetItemChecked(i, presents.Any(p => string.Equals(p, key, StringComparison.OrdinalIgnoreCase)));
+            }
+
             FillPictureChoices(sponsor?.PictureFileName);
         }
         finally
@@ -1149,10 +1212,41 @@ public sealed class SponsorsControl : UserControl
         _txtSponsorCopy.Enabled = on;
         _numSponsorWeight.Enabled = on;
         _chkSponsorEnabled.Enabled = on;
+        _lstSponsorMoments.Enabled = on;
         _cmbSponsorPicture.Enabled = on;
         _btnSponsorPicture.Enabled = on;
 
         ShowCopyLength();
+        ShowMomentClashes();
+    }
+
+    /// <summary>Ticks or unticks one moment on a sponsor's booking - by name, once.</summary>
+    private static void SetPresents(SponsorBooking sponsor, SponsoredMoment moment, bool on)
+    {
+        sponsor.Presents ??= new List<string>();
+
+        var key = moment.ToString();
+        sponsor.Presents.RemoveAll(p => string.Equals(p, key, StringComparison.OrdinalIgnoreCase));
+
+        if (on)
+        {
+            sponsor.Presents.Add(key);
+        }
+    }
+
+    /// <summary>
+    /// Says plainly when one moment is ticked for two sponsors: only the one
+    /// higher in the list is named, and a club must not think both are.
+    /// </summary>
+    private void ShowMomentClashes()
+    {
+        var clashes = SponsoredMoments.Clashes(_store.Sponsors);
+
+        _lblMomentClashes.ForeColor = clashes.Count > 0 ? AppTheme.Danger : AppTheme.TextMuted;
+        _lblMomentClashes.Text = clashes.Count == 0
+            ? string.Empty
+            : string.Join(" ", clashes.Select(c =>
+                $"{SponsoredMoments.Label(c.Moment)} is ticked for {c.Winner} and {string.Join(" and ", c.Others)} - only {c.Winner}, higher in the list, is named."));
     }
 
     /// <summary>

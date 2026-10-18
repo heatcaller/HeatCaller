@@ -17,6 +17,14 @@ public sealed class RaceStanding
     public string? Status { get; init; }
     public string? Id { get; init; }
 
+    /// <summary>
+    /// Laps this car has completed while leading, as RaceControlSession
+    /// counted them at each crossing (RacerStanding.LapsLed). Zero from a
+    /// source that does not count them. Read by the lead change call for
+    /// "after six laps in front".
+    /// </summary>
+    public int LapsLed { get; init; }
+
     /// <summary>Driver-facing label: prefer Name, fall back to the transponder id.</summary>
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Transponder : Name!;
 }

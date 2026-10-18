@@ -71,6 +71,7 @@ public sealed class SponsorStore
                         sponsor.Tagline ??= string.Empty;
                         sponsor.SalesCopy ??= string.Empty;
                         sponsor.PictureFileName ??= string.Empty;
+                        sponsor.Presents ??= new List<string>();
                     }
 
                     return new SponsorStore(loaded);
@@ -620,6 +621,14 @@ public sealed class SponsorBooking
     /// SponsorCopy.Tidy, which is what every read goes through.
     /// </summary>
     public string SalesCopy { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The moments of the race this sponsor puts their name to - "the fastest
+    /// lap, presented by" - as SponsoredMoment names. Empty for a sponsor who
+    /// bought reads and nothing else, which is every booking saved before
+    /// sponsored segments existed. See SponsoredMoments.
+    /// </summary>
+    public List<string> Presents { get; set; } = new();
 
     /// <summary>
     /// How big a share of the night's reads they bought. One by default; a

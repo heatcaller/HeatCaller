@@ -398,7 +398,7 @@ public sealed class RecordingControl : UserControl
         var beforeGrid = new FieldGrid();
 
         beforeGrid.AddHint(
-            "A short preview of the next race day from the programme and entry list, saved as a text file to paste "
+            "A short preview of the next race day from the program and entry list, saved as a text file to paste "
             + "into the club's page or group. It never predicts winners or grids.");
 
         Flush(beforeGrid.AddRow("The night before:", Line(Steady(_btnNightBefore, NightBeforeCaption), _lblNightBefore)));
@@ -433,7 +433,7 @@ public sealed class RecordingControl : UserControl
         var written = new Section("Written from the night");
 
         written.Add(Hint(
-            "Written by the AI commentary, so greyed out while AI commentary is off (Voice > AI Commentary)."),
+            "Written by the AI commentary, so grayed out while AI commentary is off (Voice > AI Commentary)."),
             gapBelow: UiLayout.RowGap);
         written.Add(recapGrid, gapBelow: UiLayout.SectionGap);
         written.Add(cutGrid, gapBelow: UiLayout.SectionGap);

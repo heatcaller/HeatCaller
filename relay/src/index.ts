@@ -141,7 +141,7 @@ async function serve(): Promise<number> {
     console.log(
       voice.available
         ? `[relay] HeatCaller voice: ${config.voice.voices.length} voice(s), ${clubs} club(s) included`
-        : `[relay] HeatCaller voice: a catalogue is configured but RELAY_VOICE_KEY is not set, so it is switched off`,
+        : `[relay] HeatCaller voice: a catalog is configured but RELAY_VOICE_KEY is not set, so it is switched off`,
     );
   }
 

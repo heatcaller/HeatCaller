@@ -156,7 +156,7 @@ public sealed class DemoModeControl : UserControl
                    "Voice announcements and sound effects fire for real, so this is a genuine rehearsal of your setup before race day. " +
                    "Switch to the Race Control page to watch it play out on the actual leaderboard and clock.\n\n" +
                    "Demo races never set track records, and are only kept in Race History if you tick the box below - even then " +
-                   "they are marked [DEMO] and never count for championship points, heats, badges or personal bests.",
+                   "they are marked [DEMO] and never count for championship points, heats, achievements or personal bests.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -235,7 +235,7 @@ public sealed class DemoModeControl : UserControl
         {
             Text = "Off by default so fake results stay out of your real history. Turn it on to keep a copy of each demo "
                  + "race, marked [DEMO], to look back over or print a results card from. A saved demo is never scored - no "
-                 + "championship points, no badges, no personal bests, no track records - whatever else it is tied to.",
+                 + "championship points, no achievements, no personal bests, no track records - whatever else it is tied to.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -268,7 +268,7 @@ public sealed class DemoModeControl : UserControl
             Text = "Off by default. With this on, a demo race marks its heat as run, the program moves to the next one, "
                  + "and qualifying and the mains - bump-ups and all - are worked out from the demo results. That is how you "
                  + "rehearse a whole night: heats, qualifying, mains, bump-ups, the lot. It still scores nothing - no "
-                 + "championship points, no badges, no personal bests, no track records - because every one of those is "
+                 + "championship points, no achievements, no personal bests, no track records - because every one of those is "
                  + "worked out separately and each one ignores a demo. A demo will not replace a heat that has really been "
                  + "run. To clear a rehearsed night, delete its [DEMO] races from Race History and the heats go back to "
                  + "unrun. Needs demo races saved to history, so ticking this ticks that.",

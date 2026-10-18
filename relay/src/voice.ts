@@ -1988,7 +1988,7 @@ export function readVoicePlan(value: unknown, defaults: VoiceConfig, club: strin
 
   for (const id of voices) {
     if (!defaults.voices.some((voice) => voice.id === id)) {
-      throw new Error(`Club "${club}" in ${source} names a voice "${id}" that the catalogue does not have.`);
+      throw new Error(`Club "${club}" in ${source} names a voice "${id}" that the catalog does not have.`);
     }
   }
 

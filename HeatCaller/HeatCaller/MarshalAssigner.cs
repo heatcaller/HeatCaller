@@ -122,7 +122,7 @@ public static class MarshalAssigner
         {
             lines.Add(assignment.MarshalledBy is null
                 ? $"{assignment.Round.RoundLabel}  (marshals: not assigned)"
-                : $"{assignment.Round.RoundLabel}  (marshalled by {assignment.MarshalledBy.RoundLabel})");
+                : $"{assignment.Round.RoundLabel}  (marshaled by {assignment.MarshalledBy.RoundLabel})");
 
             foreach (var post in assignment.Posts)
             {

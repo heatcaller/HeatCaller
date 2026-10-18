@@ -34,7 +34,7 @@ public sealed class BatteryPack
     [JsonIgnore]
     public bool IsClubPack => string.IsNullOrWhiteSpace(OwnerTransponder);
 
-    public string DisplayName => string.IsNullOrWhiteSpace(Label) ? "(unlabelled)" : Label;
+    public string DisplayName => string.IsNullOrWhiteSpace(Label) ? "(unlabeled)" : Label;
 }
 
 /// <summary>A pack changing hands for good - the owner it had, and when.</summary>

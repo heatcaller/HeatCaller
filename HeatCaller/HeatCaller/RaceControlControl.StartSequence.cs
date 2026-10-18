@@ -783,7 +783,7 @@ public sealed partial class RaceControlControl
         _warmUpCts?.Cancel();
         _warmUpCts = null;
         _afterWarmUp = null;
-        _race.EndWarmUp("Warm-up cancelled.");
+        _race.EndWarmUp("Warm-up canceled.");
     }
 
     /// <summary>The warm-up length as the announcer should say it.</summary>

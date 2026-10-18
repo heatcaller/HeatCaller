@@ -438,6 +438,11 @@ public sealed partial class RaceControlControl
             (_currentRaceIsQuick, _currentRaceIsRerun) = RaceKindAfterStage(
                 stateBefore, tookOverDemo, _currentRaceIsQuick, _currentRaceIsRerun, _rerunPending);
             _rerunPending = false;
+
+            // Who was on the board, for a freeform race's introductions -
+            // read now, because staging clears it. See SpeakIntroductions.
+            var boardBeforeStaging = PreRaceRoster().Roster;
+
             _race.Stage();
             generationAfterStage = _race.SessionGeneration;
 
@@ -451,14 +456,35 @@ public sealed partial class RaceControlControl
                 && _race.State == RaceState.Staging
                 && SpeakRoundIntro(generationAfterStage);
 
+            // A word with a Team Principal (17 Oct 2026), after the intro
+            // and before the countdown - which waits for it. See
+            // SpeakPrincipalBefore.
+            var principalComing = _race.State == RaceState.Staging
+                && SpeakPrincipalBefore(generationAfterStage, introComing);
+
+            // The broadcast's introductions (18 Oct 2026): the qualifying
+            // recap before a main, then each driver on the grid. Queued
+            // behind the staging call; the countdown waits for them below.
+            var introductionsFor = SpeakIntroductions(boardBeforeStaging);
+
             // Chain onward once the staging call - and the round intro, when
             // one is being written - has finished speaking. Driven by the
             // audio rather than a timer, so the sequence always follows the
             // announcements instead of talking over them or leaving dead air.
             if (_fmt.AutoAdvance)
             {
-                ChainAfterAudio(RaceState.Staging, () => _actCountdown?.Invoke(false),
-                    introComing ? StagingWaitWithIntro : null, _fmt.StagingSeconds);
+                TimeSpan? stagingWait = principalComing ? StagingWaitWithPrincipal : introComing ? StagingWaitWithIntro : null;
+
+                // Long enough for the introductions too, when there are any -
+                // the longer of the two, never their sum: the chain follows
+                // the audio, and this is only how long it will wait before
+                // giving up on it.
+                if (introductionsFor is { } forIntroductions && (stagingWait is null || forIntroductions > stagingWait))
+                {
+                    stagingWait = forIntroductions;
+                }
+
+                ChainAfterAudio(RaceState.Staging, () => _actCountdown?.Invoke(false), stagingWait, _fmt.StagingSeconds);
             }
         };
         _btnStage.Click += (_, _) => _actStage(false, null);

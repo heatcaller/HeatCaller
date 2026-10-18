@@ -90,7 +90,7 @@ public sealed class ResultEditForm : Form
             Text = "Corrections are worked out from the race as it was actually run, not from the last correction - "
                  + "setting everything back to zero and Finished gives the original result back. Qualifying, the "
                  + "mains, the championship and the results pages all read the corrected figures from here on. "
-                 + "Badges already earned for this race are not re-evaluated.",
+                 + "Achievements already earned for this race are not re-evaluated.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,

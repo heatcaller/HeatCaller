@@ -115,7 +115,7 @@ public sealed class AchievementsControl : UserControl
         // own when it no longer fits there (FieldRow).
         var lblOpenHint = new Label
         {
-            Text = "Double-click a badge to see who else has it.",
+            Text = "Double-click an achievement to see who else has it.",
             AutoSize = false,
             AutoEllipsis = true,
             ForeColor = AppTheme.TextMuted,
@@ -210,7 +210,7 @@ public sealed class AchievementsControl : UserControl
         }
 
         var others = AchievementCatalogue.All.Count(b => !AchievementCatalogue.IsOffered(b, Where));
-        var text = Where == RacingSetting.Home ? $"Show club badges ({others})" : $"Show home badges ({others})";
+        var text = Where == RacingSetting.Home ? $"Show club achievements ({others})" : $"Show home achievements ({others})";
 
         if (!string.Equals(_chkShowOthers.Text, text, StringComparison.Ordinal))
         {
@@ -319,7 +319,7 @@ public sealed class AchievementsControl : UserControl
 
         if (_cmbDriver.Items.Count == 0)
         {
-            _progress.Apply("No drivers yet", "Badges appear once somebody has raced.", 0,
+            _progress.Apply("No drivers yet", "Achievements appear once somebody has raced.", 0,
                 AchievementCatalogue.All.Count(b => AchievementCatalogue.IsOffered(b, Where)), string.Empty);
             _wall.Apply(new List<BadgeWall.Entry>());
             LayoutWall();
@@ -448,7 +448,7 @@ public sealed class AchievementsControl : UserControl
             + $"{driver.Podiums} podium{(driver.Podiums == 1 ? string.Empty : "s")}";
 
         _progress.Apply(name, stats, held, total,
-            best is null ? string.Empty : $"Best badge: {best.Name} ({BadgeArt.TierName(best.Tier)})");
+            best is null ? string.Empty : $"Best achievement: {best.Name} ({BadgeArt.TierName(best.Tier)})");
     }
 
     /// <summary>
@@ -742,7 +742,7 @@ public sealed class AchievementsControl : UserControl
                 using var brush = new SolidBrush(AppTheme.TextMuted);
                 using var centred = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 
-                g.DrawString("Nothing earned yet - badges land at the end of a race.", AppTheme.BodyFont, brush,
+                g.DrawString("Nothing earned yet - achievements land at the end of a race.", AppTheme.BodyFont, brush,
                     new RectangleF(0, 0, Width, Px(70)), centred);
                 return;
             }

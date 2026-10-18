@@ -195,8 +195,8 @@ public sealed class QualifyingStandingsForm : Form
             Text = countBest > 1
                 ? (method == QualifyingMethod.BestConsecutiveLaps
                     ? $"Each heat is scored on its quickest unbroken run of {Plural.Of(lapCount, "lap")}. The best {countBest} heats "
-                      + "are totalled and the rest dropped - \"Heats\" shows counted/run. Double-click a row for detail."
-                    : $"Each heat is scored on laps then time. The best {countBest} heats are totalled and the rest "
+                      + "are totaled and the rest dropped - \"Heats\" shows counted/run. Double-click a row for detail."
+                    : $"Each heat is scored on laps then time. The best {countBest} heats are totaled and the rest "
                       + "dropped - \"Heats\" shows counted/run. Double-click a row for detail.")
                 : method == QualifyingMethod.BestConsecutiveLaps
                 ? $"Ranked on each driver's quickest unbroken run of {Plural.Of(lapCount, "lap")}. A driver's BEST heat counts - "

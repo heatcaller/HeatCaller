@@ -1201,6 +1201,13 @@ public sealed partial class ProfileManagerControl : UserControl
                 ("Win rate", stats.WinRatePercent is { } rate ? $"{rate:0}%" : "-"),
                 ("Avg finish", stats.AverageFinish is { } average ? $"P{average:0.0}" : "-"),
                 ("Best lap", stats.BestLap is { } best ? Lap(best.LapMs) : "-"),
+
+                // The driver rating (18 Oct 2026) - see DriverRating. Three
+                // more tiles rather than one, so the grid stays full at
+                // three across, which is how most screens draw it.
+                ("Avg rating", stats.AverageRating is { } rating ? DriverRating.Format(rating) : "-"),
+                ("Best rating", stats.BestRating is { } top ? DriverRating.Format(top) : "-"),
+                ("Laps led", stats.LapsLed.ToString("N0")),
             });
 
             if (stats.Podiums > 0)
@@ -1422,7 +1429,7 @@ public sealed partial class ProfileManagerControl : UserControl
         {
             const int listed = 12;
 
-            Heading(c, $"Badges  ·  {stats.Badges.Count}");
+            Heading(c, $"Achievements  ·  {stats.Badges.Count}");
             MedallionGrid(c, stats.Badges.Select(b => b.Badge).ToList());
 
             foreach (var line in stats.Badges.Take(listed))

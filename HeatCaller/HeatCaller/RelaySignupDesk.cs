@@ -183,7 +183,7 @@ internal sealed class RelaySignupDesk
 
             if (invite.State == SignupInviteState.Cancelled)
             {
-                Answer(item.Hash, approved: false, "That invite was cancelled. Ask at the timing desk.", checkedIn: false, driver: null);
+                Answer(item.Hash, approved: false, "That invite was canceled. Ask at the timing desk.", checkedIn: false, driver: null);
                 continue;
             }
 
@@ -558,9 +558,9 @@ internal sealed class RelaySignupDesk
 
         // Not ForText: its note is whatever the desk typed, often a name -
         // see A35-2 (17 Oct 2026, Bug Hunt 8) at Reject.
-        _log("[signup] Undid cancelling an invite."
+        _log("[signup] Undid canceling an invite."
             + (signupWasTurnedDown
-                ? " The sign-up already made with it was told it was cancelled - that can't be taken back, so they need to sign up again. "
+                ? " The sign-up already made with it was told it was canceled - that can't be taken back, so they need to sign up again. "
                 : " ")
             + NewCodeNote);
     }
@@ -732,7 +732,7 @@ internal sealed class RelaySignupDesk
 
         if (waiting is not null)
         {
-            Answer(waiting.Hash, approved: false, "That invite was cancelled. Ask at the timing desk.", checkedIn: false, driver: null);
+            Answer(waiting.Hash, approved: false, "That invite was canceled. Ask at the timing desk.", checkedIn: false, driver: null);
             _waiting.Remove(waiting);
         }
 

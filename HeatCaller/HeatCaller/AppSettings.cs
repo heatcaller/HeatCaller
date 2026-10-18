@@ -1032,6 +1032,49 @@ public sealed class AppSettings
         MechanicHeatCallerRev ?? string.Empty,
         MechanicKokoroVoiceName ?? string.Empty);
 
+    // --- The Team Principal (17 Oct 2026) ---------------------------------
+    //
+    // A second interview guest beside the Technical Lead, with a different
+    // subject: the result, the points, the championship and the rivalry,
+    // never the car. Before a race, for the driver with most riding on it;
+    // after one, for the winner, following the Technical Lead when both are
+    // on. Off by default, like the rest of the cast. See
+    // CommentaryService.BuildPrincipalBeforeAsync and BuildPrincipalAfterAsync.
+
+    /// <summary>A word with a Team Principal when a race is staged, before the countdown.</summary>
+    public bool PrincipalBeforeRace { get; set; }
+
+    /// <summary>After a race, a word with the winner's Team Principal - after the Technical Lead when both are on.</summary>
+    public bool PrincipalAfterRace { get; set; }
+
+    /// <summary>Heats as well as mains. Off, the Team Principal is heard around the mains only.</summary>
+    public bool PrincipalInHeats { get; set; } = true;
+
+    /// <summary>Only for a driver with a team set on their profile. Off, a driver with none gets "their team principal".</summary>
+    public bool PrincipalTeamsOnly { get; set; }
+
+    /// <summary>What the announcer calls the Team Principal. Blank: their role only, never a made-up name.</summary>
+    public string PrincipalName { get; set; } = string.Empty;
+
+    // The Team Principal's voice, one per engine - held exactly as the
+    // Technical Lead's is. Blank for an engine: the announcer's own voice.
+    public string PrincipalElevenLabsVoiceId { get; set; } = string.Empty;
+    public string PrincipalElevenLabsVoiceName { get; set; } = string.Empty;
+    public string PrincipalHeatCallerVoice { get; set; } = string.Empty;
+    public string PrincipalHeatCallerVoiceName { get; set; } = string.Empty;
+    public string PrincipalHeatCallerRev { get; set; } = string.Empty;
+    public string PrincipalKokoroVoiceName { get; set; } = string.Empty;
+
+    /// <summary>The Team Principal's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
+    [JsonIgnore]
+    public SecondVoice PrincipalVoice => new(
+        PrincipalElevenLabsVoiceId ?? string.Empty,
+        PrincipalElevenLabsVoiceName ?? string.Empty,
+        PrincipalHeatCallerVoice ?? string.Empty,
+        PrincipalHeatCallerVoiceName ?? string.Empty,
+        PrincipalHeatCallerRev ?? string.Empty,
+        PrincipalKokoroVoiceName ?? string.Empty);
+
     // --- The honours (10 Oct 2026) ---------------------------------------
     //
     // The badges a race unlocked, read out as a segment of the recap rather
@@ -2095,6 +2138,14 @@ public sealed class AppSettings
     /// <summary>The class auto-advance is pinned to when AutoAdvanceScope is "class".</summary>
     public string AutoAdvanceClassName { get; set; } = string.Empty;
     public int ChartExportWidth { get; set; } = 1280;
+
+    /// <summary>
+    /// How tall the list on Voice > Race Calls is, dragged by its grip, at
+    /// 96 DPI. 0 - the default, and what a double-click on the grip puts
+    /// back - is the list's own size. Never less than that, whatever is
+    /// saved here (17 Oct 2026).
+    /// </summary>
+    public int RaceCallsListHeight { get; set; }
 
     /// <summary>Animate the synthwave sidebar header (scrolling grid, twinkling stars). Off means it draws once as a still image.</summary>
     public bool AnimateHeader { get; set; } = true;

@@ -140,7 +140,7 @@ internal static class ShowChatter
         new Level(
             "measured",
             "Measured",
-            "A little under the standard pacing. Colour in the mains, almost none in the heats.",
+            "A little under the standard pacing. Color in the mains, almost none in the heats.",
             0.75,
             false,
             0.75,

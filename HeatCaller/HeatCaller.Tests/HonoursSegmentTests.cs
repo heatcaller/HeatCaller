@@ -414,12 +414,12 @@ public sealed class HonoursSegmentTests
     [Fact]
     public void The_crowd_screen_has_its_own_name_for_the_honours()
     {
-        Assert.Equal("Badges Earned", ShowBlock.CaptionFor(SegmentKind.BadgesEarned));
+        Assert.Equal("Achievements Earned", ShowBlock.CaptionFor(SegmentKind.BadgesEarned));
 
         // One table, not two - OnAirTreatment.Words comes here. The Big
         // Screen's band and anything else asking the question get the same
         // answer, which they did not when there were two tables.
-        Assert.Equal("Badges Earned", OnAirTreatment.Words(SegmentKind.BadgesEarned));
+        Assert.Equal("Achievements Earned", OnAirTreatment.Words(SegmentKind.BadgesEarned));
         Assert.NotEqual(OnAirTreatment.Unnamed, OnAirTreatment.Words(SegmentKind.BadgesEarned));
 
         // And NOT the milestones segment's name. A crowd reading "Club
@@ -451,7 +451,7 @@ public sealed class HonoursSegmentTests
 
         // And the tick box has something to say on it - the page builds its
         // caption out of the budget's own table.
-        Assert.Equal("Badges earned", CommentaryBudget.Spec(SegmentKind.BadgesEarned).Title);
+        Assert.Equal("Achievements earned", CommentaryBudget.Spec(SegmentKind.BadgesEarned).Title);
         Assert.False(string.IsNullOrWhiteSpace(CommentaryBudget.Spec(SegmentKind.BadgesEarned).What));
     }
 

@@ -252,7 +252,7 @@ public sealed partial class RaceDayService
         if (Interlocked.CompareExchange(ref call.State, PendingCall.Withdrawn, PendingCall.Waiting) == PendingCall.Waiting)
         {
             return Fail(request.Id, ct.IsCancellationRequested
-                ? "Cancelled - nothing was changed."
+                ? "Canceled - nothing was changed."
                 : "The laptop didn't answer in time - nothing was changed. Try again.");
         }
 

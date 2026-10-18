@@ -536,7 +536,7 @@ internal static class BroadcastImaging
         ImagingCue.BackFromBreak => "coming back out of the stop set, before the recap",
         ImagingCue.RecapOpen => "the recap host hits its post, and it crossfades into the recap bed",
         ImagingCue.RecapBed => "loops under the recap host for the whole recap show",
-        ImagingCue.BetweenRecapParts => "between the recap, honours, colour, interview and sign-off",
+        ImagingCue.BetweenRecapParts => "between the recap, achievements, color, interview and sign-off",
         ImagingCue.AfterRecap => "after the recap show's last word",
         _ => string.Empty,
     };

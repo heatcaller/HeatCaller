@@ -165,7 +165,7 @@ public sealed class EasyLapCaptureTests : IDisposable
         Assert.Equal(62, pass.SignalHits);
         Assert.Equal(248, pass.SignalStrength);
 
-        Assert.Contains("[framing] Skipped 1 byte(s) to resynchronise with the decoder stream.", produced);
+        Assert.Contains("[framing] Skipped 1 byte(s) to resynchronize with the decoder stream.", produced);
     }
 
     // --- The A-Main, through the race ------------------------------------------------------

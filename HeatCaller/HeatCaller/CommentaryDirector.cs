@@ -777,7 +777,7 @@ public sealed class CommentaryDirector
         {
             // A reader that throws must not stop the segments - it only
             // means the budget paces on what it last knew.
-            Status?.Invoke($"[brain] Couldn't read the programme's progress: {ex.Message}");
+            Status?.Invoke($"[brain] Couldn't read the program's progress: {ex.Message}");
         }
     }
 

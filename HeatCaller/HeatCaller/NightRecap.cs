@@ -461,5 +461,5 @@ internal static class NightRecap
         // nothing writes its own goodbye about a third of the time, and
         // Chunks then has to take it back off.
         + "Do not sign off, say goodbye, name yourself or name the show at the end - the sign-off is a "
-        + "separate line added afterwards. Finish on the night itself.";
+        + "separate line added afterward. Finish on the night itself.";
 }

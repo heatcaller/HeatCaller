@@ -372,7 +372,7 @@ public sealed class CommentaryControl : UserControl
 
         var lblIntro = new Label
         {
-            Text = "Optional colour commentary from a language model. HeatCaller can have it written by the club relay, "
+            Text = "Optional color commentary from a language model. HeatCaller can have it written by the club relay, "
                  + "or by a small model built into HeatCaller that runs on this PC. Neither needs anything installed.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
@@ -826,7 +826,7 @@ public sealed class CommentaryControl : UserControl
         // explained in ONE place, Sounds > Imaging > Run of show, and this
         // card points there - keep that one the real one.
         broadcast.Add(Hint(
-            "The running order is on Sounds > Imaging > Run of show. The interview and the honours are switched on "
+            "The running order is on Sounds > Imaging > Run of show. The interview and the achievements are switched on "
             + "from the Cast tab."));
         broadcast.Add(_chkAdBreak, stretch: false, gapBelow: UiLayout.HintGap);
         broadcast.Add(Hint(

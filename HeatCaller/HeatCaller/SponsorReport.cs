@@ -60,12 +60,18 @@ internal static class SponsorReport
     /// <param name="placement">Where the club allows a read at all. Nowhere is worth saying out loud.</param>
     /// <param name="eventName">The race day as the club named it, for the top of the report - "Club Night 14". Blank is fine, and then the report just has no heading of its own.</param>
     /// <param name="nightLocal">The race night, in local time.</param>
+    /// <param name="mentionsTonight">
+    /// The "presented by" mentions each sponsor id had on the moments they
+    /// sponsor (SponsoredMomentGate.MentionsTonight). Null or empty leaves
+    /// the report exactly as it was before sponsored segments existed.
+    /// </param>
     internal static string ForTheNight(
         IReadOnlyList<SponsorBooking>? bookings,
         IReadOnlyDictionary<string, int>? readsTonight,
         SponsorPlacement placement,
         string? eventName,
-        DateTime nightLocal)
+        DateTime nightLocal,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<SponsoredMoment, int>>? mentionsTonight = null)
     {
         var sold = (bookings ?? Array.Empty<SponsorBooking>())
             .Where(one => !string.IsNullOrWhiteSpace(one.Id) && !string.IsNullOrWhiteSpace(one.Name))
@@ -122,6 +128,14 @@ internal static class SponsorReport
         foreach (var sponsor in sold)
         {
             text.AppendLine(LineFor(sponsor, counts, given, weights, running.Contains(sponsor), placement));
+
+            // THEIR SPONSORED MOMENTS, under their reads - counted only when
+            // the "presented by" actually went to the speaker, the same
+            // standard the reads are held to.
+            if (MentionsLine(sponsor, mentionsTonight) is { Length: > 0 } mentions)
+            {
+                text.AppendLine(mentions);
+            }
         }
 
         text.AppendLine();
@@ -186,6 +200,36 @@ internal static class SponsorReport
         }
 
         return line.ToString();
+    }
+
+    /// <summary>
+    /// "    plus their name on the fastest lap 3 times and the lead changes
+    /// once" - or empty when they had no sponsored-moment mentions tonight.
+    /// </summary>
+    private static string MentionsLine(SponsorBooking sponsor, IReadOnlyDictionary<string, IReadOnlyDictionary<SponsoredMoment, int>>? mentions)
+    {
+        if (mentions is null || string.IsNullOrWhiteSpace(sponsor.Id)
+            || !mentions.TryGetValue(sponsor.Id, out var byMoment) || byMoment is null)
+        {
+            return string.Empty;
+        }
+
+        var parts = byMoment
+            .Where(pair => pair.Value > 0)
+            .OrderBy(pair => pair.Key)
+            .Select(pair => $"{SponsoredMoments.Label(pair.Key).ToLowerInvariant()} {(pair.Value == 1 ? "once" : $"{pair.Value} times")}")
+            .ToList();
+
+        if (parts.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var list = parts.Count == 1
+            ? parts[0]
+            : string.Join(", ", parts.Take(parts.Count - 1)) + " and " + parts[^1];
+
+        return $"    plus \"presented by\" on: {list}";
     }
 
     private static int Reads(IReadOnlyDictionary<string, int> counts, string? id) =>

@@ -131,7 +131,7 @@ internal static class CoHostStance
         new Stance(
             "underdog",
             "Backs the underdog",
-            "Delighted by anyone beating a faster car, and never that impressed by the favourite winning.",
+            "Delighted by anyone beating a faster car, and never that impressed by the favorite winning.",
             "B is the one in the booth who is always pulling for whoever is further down the order. B gets "
             + "genuinely excited about a driver running better than their car or their grid slot deserves, "
             + "and treats the fastest driver doing exactly what was expected as the least interesting thing "

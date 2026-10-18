@@ -3239,7 +3239,7 @@ public sealed partial class RaceControlSession
         _accumulatedRedTime = TimeSpan.Zero;
         _redFlagStartedUtc = null;
         _redFlagStartedClockMs = null;
-        EndWarmUp("Warm-up cancelled.");
+        EndWarmUp("Warm-up canceled.");
         SetState(RaceState.Idle);
         SetFlag(FlagState.None);
         Log("Session reset.");

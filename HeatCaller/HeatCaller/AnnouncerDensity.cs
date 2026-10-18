@@ -338,7 +338,7 @@ internal static class AnnouncerDensity
         return $"{level.Blurb} About {Gap(practice)} between calls in practice, {Gap(heat)} in a heat and "
              + $"{Gap(main)} in the top main."
              + " A change of lead, a flag, a countdown, a grid call, a driver's release, the finish, a "
-             + "badge, the last lap, the final minute and a track record are never held back, whatever this "
+             + "achievement, the last lap, the final minute and a track record are never held back, whatever this "
              + "says - nor is any call that clearly outweighs the one before it.";
     }
 

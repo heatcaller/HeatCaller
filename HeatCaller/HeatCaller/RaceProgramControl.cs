@@ -2657,7 +2657,7 @@ public sealed class RaceProgramControl : UserControl
                 ? "This round has already been run, so the demo will NOT be tied to it - delete its race from Race "
                   + "History first if you meant to run it again."
                 : "This round will be marked as run and the program will move on to the next one, so you can rehearse "
-                  + "the night through to the mains. It still scores nothing: no championship points, no badges, no "
+                  + "the night through to the mains. It still scores nothing: no championship points, no achievements, no "
                   + "personal bests, no track records."
             : "Nothing is recorded against this round.";
 
@@ -3580,14 +3580,14 @@ public sealed class RaceProgramControl : UserControl
         if (recorded.Count == 1)
         {
             return $"\"{recorded[0].RoundLabel}\" has already been run. Its result stays in the session history, "
-                + "but it stops counting towards this race day and towards the championship - the day's recorded "
+                + "but it stops counting toward this race day and toward the championship - the day's recorded "
                 + "count drops by one and the standings move. Delete it anyway?";
         }
 
         return $"These {recorded.Count} rounds have already been run:\r\n\r\n"
             + string.Join("\r\n", recorded.Select(r => $"   {r.RoundLabel}  ({r.ClassName})"))
-            + "\r\n\r\nTheir results stay in the session history, but they stop counting towards this race day and "
-            + "towards the championship - the day's recorded count drops by that many and the standings move. "
+            + "\r\n\r\nTheir results stay in the session history, but they stop counting toward this race day and "
+            + "toward the championship - the day's recorded count drops by that many and the standings move. "
             + "Delete them anyway?";
     }
 

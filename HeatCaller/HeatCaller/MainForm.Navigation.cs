@@ -210,7 +210,7 @@ public partial class MainForm
             "race calls", "per lap", "max per lap", "streak", "streak threshold",
 
             // The Cast tab (17 Oct 2026).
-            "cast", "co-host", "cohost", "recap host", "mechanic", "interview", "honours", "badges reader",
+            "cast", "co-host", "cohost", "recap host", "mechanic", "technical lead", "tech lead", "interview", "honours", "badges reader", "achievements reader", "achievement reader",
             "badge reader", "announcer name", "announcer's name",
         },
         ["Ghost Cars"] = new[] { "ghost", "virtual", "opponent", "rival", "solo", "practice alone", "ai car", "pace" },
@@ -302,7 +302,7 @@ public partial class MainForm
             ("Cast", new[]
             {
                 "cast", "co-host", "cohost", "co host", "two voices", "recap host", "voice delivery",
-                "mechanic", "interview", "honours", "honours reader", "badges reader", "badge reader",
+                "mechanic", "technical lead", "tech lead", "interview", "honours", "honours reader", "badges reader", "badge reader", "achievements reader", "achievement reader",
                 "announcer name", "announcer's name", "load voices",
             }),
             ("Race Calls", new[]

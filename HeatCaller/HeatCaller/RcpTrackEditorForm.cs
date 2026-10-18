@@ -288,7 +288,7 @@ public sealed class RcpTrackEditorForm : Form
         var floor = Add("Floor", "Lay the foam. Drag to fill an area. (1)", () => SetTool(RcpTool.Floor));
         var wall = Add("Rails", "Stand a rail along a seam. Click it again to double it. (2)", () => SetTool(RcpTool.Wall));
         var curve = Add("Turns", "Swing a run of rail through 90 degrees. (3)", () => SetTool(RcpTool.Curve));
-        var marker = Add("Markings", "The line, grid boxes, kerbs, posts. R turns them. (4)", () => SetTool(RcpTool.Marker));
+        var marker = Add("Markings", "The line, grid boxes, curbs, posts. R turns them. (4)", () => SetTool(RcpTool.Marker));
         var route = Add("Route", "Draw the racing line. (5)", () => SetTool(RcpTool.Route));
         var erase = Add("Erase", "Take things off. Ctrl+click or right-click does this with any tool. (6)", () => SetTool(RcpTool.Erase));
         var photo = Add("Photo", "Drag the traced photo into place; the wheel sizes it. (7)", () => SetTool(RcpTool.Backdrop));
@@ -758,7 +758,7 @@ public sealed class RcpTrackEditorForm : Form
         // know is whether it goes in the hall, which is arithmetic - see
         // RoomFit.
         _btnRoomFeet.Text = "Feet";
-        _btnRoomMetres.Text = "Metres";
+        _btnRoomMetres.Text = "Meters";
 
         _btnRoomFeet.Click += (_, _) => SetRoomUnits(feet: true);
         _btnRoomMetres.Click += (_, _) => SetRoomUnits(feet: false);
@@ -998,7 +998,7 @@ public sealed class RcpTrackEditorForm : Form
         {
             _numRoomWidth.Value = (decimal)Math.Clamp(Result.RoomWidthMm / RoomUnitMm, 0, 500);
             _numRoomDepth.Value = (decimal)Math.Clamp(Result.RoomDepthMm / RoomUnitMm, 0, 500);
-            _lblRoomUnits.Text = Result.RoomInFeet ? "feet" : "metres";
+            _lblRoomUnits.Text = Result.RoomInFeet ? "feet" : "meters";
         }
         finally
         {
@@ -1355,7 +1355,7 @@ public sealed class RcpTrackEditorForm : Form
                 _numRoomDepth.Value = depth;
             }
 
-            _lblRoomUnits.Text = Result.RoomInFeet ? "feet" : "metres";
+            _lblRoomUnits.Text = Result.RoomInFeet ? "feet" : "meters";
         }
         finally
         {

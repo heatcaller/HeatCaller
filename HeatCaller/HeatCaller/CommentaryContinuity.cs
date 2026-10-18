@@ -436,7 +436,7 @@ public static class CommentaryContinuity
         "Next up, {0}.",
         "Coming up, {0}.",
         "We go to {0} next.",
-        "Still on tonight's programme, {0}.",
+        "Still on tonight's program, {0}.",
         "Ahead of us, {0}.",
     };
 
@@ -445,7 +445,7 @@ public static class CommentaryContinuity
     {
         "First up tonight, {0}.",
         "We start with {0}.",
-        "Opening tonight's programme, {0}.",
+        "Opening tonight's program, {0}.",
         "We get under way with {0}.",
     };
 

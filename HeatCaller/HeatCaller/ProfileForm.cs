@@ -264,7 +264,7 @@ public sealed class ProfileForm : Form
         _txtSkillLevel.PlaceholderText = "e.g. Novice / Intermediate / Expert";
 
         captions.Add(AddLabeledTextBox(fields, "Contact:", _txtContact, Result.Contact));
-        _txtContact.PlaceholderText = "organiser use only - never announced";
+        _txtContact.PlaceholderText = "organizer use only - never announced";
 
         // Its own box rather than read out of Contact, which is free text
         // ("Dad, 07700 900123"). Only ever used to send this racer their
@@ -1135,7 +1135,7 @@ public sealed class ProfileForm : Form
             var shown = string.Join(", ", earned.Take(4));
             var more = earned.Count > 4 ? $" +{earned.Count - 4} more" : string.Empty;
 
-            return $"Badges ({earned.Count}):  {shown}{more}";
+            return $"Achievements ({earned.Count}):  {shown}{more}";
         }
         catch
         {

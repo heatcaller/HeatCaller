@@ -61,6 +61,15 @@ public sealed class CastControl : UserControl
     private readonly ComboBox _cmbMechanicVoice = new();
     private readonly Button _btnTestMechanic = new();
 
+    // --- The Team Principal (17 Oct 2026) ---
+    private readonly CheckBox _chkPrincipalBefore = new ThemedCheckBox();
+    private readonly CheckBox _chkPrincipalAfter = new ThemedCheckBox();
+    private readonly CheckBox _chkPrincipalHeats = new ThemedCheckBox();
+    private readonly CheckBox _chkPrincipalTeamsOnly = new ThemedCheckBox();
+    private readonly TextBox _txtPrincipalName = new();
+    private readonly ComboBox _cmbPrincipalVoice = new();
+    private readonly Button _btnTestPrincipal = new();
+
     // --- The badges reader (10 Oct 2026) - see RaceHonours ---
     private readonly CheckBox _chkBadgeHonours = new ThemedCheckBox();
     private readonly TextBox _txtHonoursName = new();
@@ -78,6 +87,7 @@ public sealed class CastControl : UserControl
 
     /// <summary>The pickers' widths as last measured - see Pieces.PickerWidth. Forgotten whenever the lists are filled.</summary>
     private (Font Font, int Count, int Width)? _mechanicVoiceWidth;
+    private (Font Font, int Count, int Width)? _principalVoiceWidth;
     private (Font Font, int Count, int Width)? _coHostVoiceWidth;
     private (Font Font, int Count, int Width)? _coHostStanceWidth;
     private (Font Font, int Count, int Width)? _exchangeTurnsWidth;
@@ -121,6 +131,9 @@ public sealed class CastControl : UserControl
 
     /// <summary>Says a test line in the mechanic's voice, even while the announcer is muted. Set by the host.</summary>
     internal Action<SecondVoice>? SpeakAsMechanic { get; set; }
+
+    /// <summary>The same for the Team Principal, with a line of the kind they say. Set by the host.</summary>
+    internal Action<SecondVoice>? SpeakAsPrincipal { get; set; }
 
     /// <summary>
     /// The same for the badges reader, with a line of the kind they
@@ -260,7 +273,7 @@ public sealed class CastControl : UserControl
         var lblIntro = new Label
         {
             Text = "Everyone on the show with a name and a voice. Apart from the announcer's race calls, they are only "
-                 + "heard in AI commentary, so most of this page greys out while it is off.",
+                 + "heard in AI commentary, so most of this page grays out while it is off.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -309,7 +322,7 @@ public sealed class CastControl : UserControl
         var announcer = new Section("Announcer");
 
         announcer.Add(Hint(
-            "The voice carrying the whole programme - the one chosen on the Voice tab. Needs AI commentary on, "
+            "The voice carrying the whole program - the one chosen on the Voice tab. Needs AI commentary on, "
             + "because it is only ever said in the lines the AI writes."));
         announcer.Add(announcerGrid, gapBelow: 0);
 
@@ -360,7 +373,7 @@ public sealed class CastControl : UserControl
         Flush(recapHostGrid.AddRow("Recap host's name:", Line(_txtRecapHostName, Suffix("said when the recap opens and at its sign-off; blank and the host is never named"))));
         Flush(recapHostGrid.AddRow("Recap host's voice:", Line(_cmbRecapHostVoice, _btnTestRecapHost)));
         recapHostGrid.AddHint(
-            "Reads the recap, the questions to the mechanic and the sign-off; the announcer keeps the race calls. "
+            "Reads the recap, the questions to the Technical Lead and the sign-off; the announcer keeps the race calls. "
             + "With none picked, the announcer hosts the recap too.");
 
         // Stability and style on lines of their own, so neither is ever
@@ -486,15 +499,15 @@ public sealed class CastControl : UserControl
 
         coHost.Add(Hint(
             "A second commentator who answers the announcer in the segments marked as a two-hander on the AI "
-            + "Commentary tab. Greyed out while every one of those segments is switched off."));
+            + "Commentary tab. Grayed out while every one of those segments is switched off."));
         coHost.Add(_chkCoHost, stretch: false);
         coHost.Add(coHostGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
-        // The winner's mechanic
+        // The winner's Technical Lead (called the mechanic until 17 Oct 2026)
         // ------------------------------------------------------------------
 
-        Check(_chkInterview, "After a main, a quick interview with the winner's mechanic");
+        Check(_chkInterview, "After a main, a quick interview with the winner's Technical Lead");
         _chkInterview.Checked = _settings.RecapMechanicInterview;
         _chkInterview.CheckedChanged += (_, _) =>
         {
@@ -519,10 +532,10 @@ public sealed class CastControl : UserControl
 
         var mechanicGrid = new FieldGrid();
 
-        Stepped(mechanicGrid.AddRow("Mechanic's name:", Line(_txtMechanicName, Suffix("blank for \"the team's mechanic\" - the model never makes a name up"))));
-        Stepped(mechanicGrid.AddRow("Mechanic's voice:", Line(_cmbMechanicVoice, _btnTestMechanic)));
+        Stepped(mechanicGrid.AddRow("Technical Lead's name:", Line(_txtMechanicName, Suffix("blank for \"the team's technical lead\" - the model never makes a name up"))));
+        Stepped(mechanicGrid.AddRow("Technical Lead's voice:", Line(_cmbMechanicVoice, _btnTestMechanic)));
 
-        var mechanic = new Section("Mechanic");
+        var mechanic = new Section("Technical Lead");
 
         mechanic.Add(_chkInterview, stretch: false, gapBelow: UiLayout.HintGap);
         mechanic.Add(Hint(
@@ -531,10 +544,86 @@ public sealed class CastControl : UserControl
         mechanic.Add(mechanicGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
+        // The Team Principal (17 Oct 2026)
+        // ------------------------------------------------------------------
+
+        Check(_chkPrincipalBefore, "Before a race, a quick word with a Team Principal");
+        _chkPrincipalBefore.Checked = _settings.PrincipalBeforeRace;
+        _chkPrincipalBefore.CheckedChanged += (_, _) =>
+        {
+            _settings.PrincipalBeforeRace = _chkPrincipalBefore.Checked;
+            _settings.Save();
+            RefreshEnabledState();
+        };
+
+        Check(_chkPrincipalAfter, "After a race, a word with the winner's Team Principal");
+        _chkPrincipalAfter.Checked = _settings.PrincipalAfterRace;
+        _chkPrincipalAfter.CheckedChanged += (_, _) =>
+        {
+            _settings.PrincipalAfterRace = _chkPrincipalAfter.Checked;
+            _settings.Save();
+            RefreshEnabledState();
+        };
+
+        Check(_chkPrincipalHeats, "Heats as well as mains");
+        _chkPrincipalHeats.Checked = _settings.PrincipalInHeats;
+        _chkPrincipalHeats.CheckedChanged += (_, _) =>
+        {
+            _settings.PrincipalInHeats = _chkPrincipalHeats.Checked;
+            _settings.Save();
+        };
+
+        Check(_chkPrincipalTeamsOnly, "Only for drivers with a team on their profile");
+        _chkPrincipalTeamsOnly.Checked = _settings.PrincipalTeamsOnly;
+        _chkPrincipalTeamsOnly.CheckedChanged += (_, _) =>
+        {
+            _settings.PrincipalTeamsOnly = _chkPrincipalTeamsOnly.Checked;
+            _settings.Save();
+        };
+
+        _txtPrincipalName.MaxLength = 40;
+        _txtPrincipalName.Text = _settings.PrincipalName ?? string.Empty;
+        _txtPrincipalName.TextChanged += (_, _) =>
+        {
+            _settings.PrincipalName = _txtPrincipalName.Text.Trim();
+            _settings.Save();
+        };
+
+        _cmbPrincipalVoice.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbPrincipalVoice.SelectedIndexChanged += (_, _) => SavePrincipalVoice();
+
+        _btnTestPrincipal.Text = "Test Voice";
+        _btnTestPrincipal.Click += (_, _) => SpeakAsPrincipal?.Invoke(_settings.PrincipalVoice);
+
+        var principalGrid = new FieldGrid();
+
+        Stepped(principalGrid.AddRow("Team Principal's name:", Line(_txtPrincipalName, Suffix("blank for \"the team principal\" - the model never makes a name up"))));
+        Stepped(principalGrid.AddRow("Team Principal's voice:", Line(_cmbPrincipalVoice, _btnTestPrincipal)));
+
+        var principal = new Section("Team Principal");
+
+        principal.Add(Hint(
+            "The big picture, where the Technical Lead has the car: the result, the points, the championship and the "
+            + "rivalry - never the setup. A driver with a team gets that team's principal; one without gets their own."),
+            gapBelow: UiLayout.RowGap);
+        principal.Add(_chkPrincipalBefore, stretch: false, gapBelow: UiLayout.HintGap);
+        principal.Add(Hint(
+            "When a race is staged: two questions about how the team is feeling and what it is hoping for, for the "
+            + "driver with the most riding on it - each driver's principal once a night. The countdown waits for it, and "
+            + "it is skipped when the night is running ten minutes or more behind."));
+        principal.Add(_chkPrincipalAfter, stretch: false, gapBelow: UiLayout.HintGap);
+        principal.Add(Hint(
+            "Two questions about what the win means to the team. After the Technical Lead when both are on, and part "
+            + "of the recap, so it needs race recaps on."));
+        principal.Add(_chkPrincipalHeats, stretch: false, gapBelow: UiLayout.HintGap);
+        principal.Add(_chkPrincipalTeamsOnly, stretch: false, gapBelow: UiLayout.RowGap);
+        principal.Add(principalGrid, gapBelow: 0);
+
+        // ------------------------------------------------------------------
         // The badges reader
         // ------------------------------------------------------------------
 
-        Check(_chkBadgeHonours, "After a race, a third voice reads out the badges it unlocked");
+        Check(_chkBadgeHonours, "After a race, a third voice reads out the achievements it unlocked");
         _chkBadgeHonours.Checked = _settings.RecapBadgeHonours;
         _chkBadgeHonours.CheckedChanged += (_, _) =>
         {
@@ -559,16 +648,16 @@ public sealed class CastControl : UserControl
 
         var honoursGrid = new FieldGrid();
 
-        Stepped(honoursGrid.AddRow("Honours reader:", Line(_txtHonoursName, Suffix("blank and they are thrown to but never named - no name is made up"))));
+        Stepped(honoursGrid.AddRow("Achievements reader:", Line(_txtHonoursName, Suffix("blank and they are thrown to but never named - no name is made up"))));
         Stepped(honoursGrid.AddRow("Reader's voice:", Line(_cmbHonoursVoice, _btnTestHonours)));
         honoursGrid.AddHint(
-            "With none picked, the announcer's own voice reads the honours.");
+            "With none picked, the announcer's own voice reads the achievements.");
 
-        var honours = new Section("Badges reader");
+        var honours = new Section("Achievements reader");
 
         honours.Add(_chkBadgeHonours, stretch: false, gapBelow: UiLayout.HintGap);
         honours.Add(Hint(
-            "Ticking this MOVES the badge calls from the flag into the recap, so nobody hears a badge twice. Untick it "
+            "Ticking this MOVES the achievement calls from the flag into the recap, so nobody hears an achievement twice. Untick it "
             + "and the calls at the flag come back, as set up on Race Calls."));
         honours.Add(honoursGrid, gapBelow: 0);
 
@@ -584,6 +673,7 @@ public sealed class CastControl : UserControl
         page.Add(recapHost);
         page.Add(coHost);
         page.Add(mechanic);
+        page.Add(principal);
         page.Add(honours, gapBelow: 0);
 
         Controls.Add(page);
@@ -592,7 +682,7 @@ public sealed class CastControl : UserControl
         // a grid left out of this still looks correct on its own.
         _textSize.Keep(() => FieldGrid.LineUp(new[]
         {
-            loadGrid, announcerGrid, recapHostGrid, deliveryGrid, coHostGrid, mechanicGrid, honoursGrid,
+            loadGrid, announcerGrid, recapHostGrid, deliveryGrid, coHostGrid, mechanicGrid, principalGrid, honoursGrid,
         }));
 
         _textSize.Keep(SizeFields);
@@ -613,12 +703,14 @@ public sealed class CastControl : UserControl
         Fit(_txtAnnouncerName, UiLayout.AtTextSize(LongNameWidth));
         Fit(_txtRecapHostName, UiLayout.AtTextSize(LongNameWidth));
         Fit(_txtMechanicName, UiLayout.AtTextSize(NameWidth));
+        Fit(_txtPrincipalName, UiLayout.AtTextSize(NameWidth));
         Fit(_txtCoHostName, UiLayout.AtTextSize(NameWidth));
         Fit(_txtHonoursName, UiLayout.AtTextSize(NameWidth));
 
         var voice = UiLayout.AtTextSize(VoicePickerWidth);
 
         Fit(_cmbMechanicVoice, Math.Max(voice, Pieces.PickerWidth(_cmbMechanicVoice, ref _mechanicVoiceWidth)));
+        Fit(_cmbPrincipalVoice, Math.Max(voice, Pieces.PickerWidth(_cmbPrincipalVoice, ref _principalVoiceWidth)));
         Fit(_cmbCoHostVoice, Math.Max(voice, Pieces.PickerWidth(_cmbCoHostVoice, ref _coHostVoiceWidth)));
         Fit(_cmbCoHostStance, Math.Max(voice, Pieces.PickerWidth(_cmbCoHostStance, ref _coHostStanceWidth)));
 
@@ -691,6 +783,18 @@ public sealed class CastControl : UserControl
         _cmbMechanicVoice.Enabled = interviewOn;
         _btnTestMechanic.Enabled = interviewOn;
 
+        // The Team Principal before a race needs only the commentary; after
+        // one, the recap it is part of (17 Oct 2026).
+        _chkPrincipalBefore.Enabled = on;
+        _chkPrincipalAfter.Enabled = summariesOn;
+
+        var principalOn = (on && _chkPrincipalBefore.Checked) || (summariesOn && _chkPrincipalAfter.Checked);
+        _chkPrincipalHeats.Enabled = principalOn;
+        _chkPrincipalTeamsOnly.Enabled = principalOn;
+        _txtPrincipalName.Enabled = principalOn;
+        _cmbPrincipalVoice.Enabled = principalOn;
+        _btnTestPrincipal.Enabled = principalOn;
+
         // The honours ride on the recap, so they go dark with recaps - but
         // their reader's rows stay live when only the interview is off,
         // because the two are separate speakers with separate switches.
@@ -720,7 +824,7 @@ public sealed class CastControl : UserControl
         // Load Voices fills every list in one pass (FillVoices), so it is
         // live while ANY of the speakers is set up. Dark only when none of
         // them is, which is when there is nothing for a voice list to be for.
-        _btnLoadVoices.Enabled = interviewOn || honoursOn || summariesOn || coHostOn;
+        _btnLoadVoices.Enabled = interviewOn || principalOn || honoursOn || summariesOn || coHostOn;
     }
 
     // ==================== The voice lists ====================
@@ -809,6 +913,7 @@ public sealed class CastControl : UserControl
             }
 
             Fill(_cmbMechanicVoice, SavedSecondVoice(_settings.MechanicVoice, shown));
+            Fill(_cmbPrincipalVoice, SavedSecondVoice(_settings.PrincipalVoice, shown));
             Fill(_cmbCoHostVoice, SavedSecondVoice(_settings.CoHostVoice, shown));
             Fill(_cmbHonoursVoice, SavedSecondVoice(_settings.HonoursVoice, shown));
             Fill(_cmbRecapHostVoice, SavedSecondVoice(_settings.RecapHostVoice, shown));
@@ -824,6 +929,7 @@ public sealed class CastControl : UserControl
 
         // The longest voice may have come or gone: the pickers measured again.
         _mechanicVoiceWidth = null;
+        _principalVoiceWidth = null;
         _coHostVoiceWidth = null;
         _coHostStanceWidth = null;
         _exchangeTurnsWidth = null;
@@ -855,6 +961,35 @@ public sealed class CastControl : UserControl
             default:
                 _settings.MechanicElevenLabsVoiceId = choice.Id;
                 _settings.MechanicElevenLabsVoiceName = choice.Name;
+                break;
+        }
+
+        _settings.Save();
+    }
+
+    /// <summary>Saves the Team Principal's picked voice against the engine the list is showing.</summary>
+    private void SavePrincipalVoice()
+    {
+        if (_fillingVoices || _cmbPrincipalVoice.SelectedItem is not VoiceChoice choice)
+        {
+            return;
+        }
+
+        switch (_voiceListEngine)
+        {
+            case VoiceEngine.Kokoro:
+                _settings.PrincipalKokoroVoiceName = choice.Id;
+                break;
+
+            case VoiceEngine.HeatCaller:
+                _settings.PrincipalHeatCallerVoice = choice.Id;
+                _settings.PrincipalHeatCallerVoiceName = choice.Name;
+                _settings.PrincipalHeatCallerRev = choice.Rev;
+                break;
+
+            default:
+                _settings.PrincipalElevenLabsVoiceId = choice.Id;
+                _settings.PrincipalElevenLabsVoiceName = choice.Name;
                 break;
         }
 

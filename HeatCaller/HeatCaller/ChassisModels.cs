@@ -229,14 +229,14 @@ public sealed class ChassisTemplate
             },
             new()
             {
-                Name = "Front Tyres & Wheels",
+                Name = "Front Tires & Wheels",
                 Fields = new List<SetupField>
                 {
-                    Pinned("Front tyre width", 0.073f, 0.095f, -0.19f, 0.02f,
+                    Pinned("Front tire width", 0.073f, 0.095f, -0.19f, 0.02f,
                         "Narrow", "Semi Wide", "Wide"),
-                    Choice("Front tyre type", "High Grip", "Flat", "Classic", "LM", "Racing Radial"),
-                    Num("Front tyre hardness", "\u00B0"),
-                    Num("Front tyre diameter", "mm"),
+                    Choice("Front tire type", "High Grip", "Flat", "Classic", "LM", "Racing Radial"),
+                    Num("Front tire hardness", "\u00B0"),
+                    Num("Front tire diameter", "mm"),
                     Txt("Front wheel part no."),
                     Num("Front wheel offset", "mm"),
                     Num("Chassis width at front wheels", "mm"),
@@ -244,14 +244,14 @@ public sealed class ChassisTemplate
             },
             new()
             {
-                Name = "Rear Tyres & Wheels",
+                Name = "Rear Tires & Wheels",
                 Fields = new List<SetupField>
                 {
-                    Pinned("Rear tyre width", 0.073f, 0.889f, -0.19f, 0.02f,
+                    Pinned("Rear tire width", 0.073f, 0.889f, -0.19f, 0.02f,
                         "Narrow", "Semi Wide", "Wide"),
-                    Choice("Rear tyre type", "High Grip", "Flat", "Classic", "LM", "Racing Radial"),
-                    Num("Rear tyre hardness", "\u00B0"),
-                    Num("Rear tyre diameter", "mm"),
+                    Choice("Rear tire type", "High Grip", "Flat", "Classic", "LM", "Racing Radial"),
+                    Num("Rear tire hardness", "\u00B0"),
+                    Num("Rear tire diameter", "mm"),
                     Txt("Rear wheel part no."),
                     Num("Rear wheel offset", "mm"),
                     Num("Chassis width at rear wheels", "mm"),

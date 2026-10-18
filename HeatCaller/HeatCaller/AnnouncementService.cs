@@ -1099,7 +1099,7 @@ public sealed partial class AnnouncementService
         catch (Exception ex)
         {
             StatusMessage?.Invoke(
-                $"[voice] Couldn't render a line in advance ({ex.Message}) - it will synthesise as it speaks instead.");
+                $"[voice] Couldn't render a line in advance ({ex.Message}) - it will synthesize as it speaks instead.");
             return null;
         }
     }
@@ -1560,6 +1560,7 @@ public sealed partial class AnnouncementService
         {
             _standings.Clear();
             _currentLeaderTransponder = null;
+            _leads.Reset();
             _provisionalPoleTransponder = null;
             _poleCalledFromGateFor = null;
 

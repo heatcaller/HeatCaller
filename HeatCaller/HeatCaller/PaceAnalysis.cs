@@ -96,7 +96,7 @@ public static class PaceAnalysis
 
                 if (fading)
                 {
-                    return "Started better than they finished - fading with the battery, the tyres, or concentration.";
+                    return "Started better than they finished - fading with the battery, the tires, or concentration.";
                 }
 
                 if (building)

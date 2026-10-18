@@ -104,7 +104,7 @@ public sealed class GhostEditForm : Form
         (GhostConsistency.Metronome, "Metronome - identical every lap, good as a pace target"),
         (GhostConsistency.Steady, "Steady - small variation, a quick driver on a good run"),
         (GhostConsistency.Human, "Human - the odd scrappy lap, the most race-like"),
-        (GhostConsistency.Erratic, "Erratic - fast laps and bad ones, good for practising recovery"),
+        (GhostConsistency.Erratic, "Erratic - fast laps and bad ones, good for practicing recovery"),
     };
 
     private static readonly (GhostPaceSource Source, string Label)[] PaceSources =

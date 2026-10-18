@@ -1297,6 +1297,16 @@ public partial class MainForm : Form
         // practice, so it can never go stale.
         _announcer.QualifyingModeProvider = () => _race.StartType == RaceStartType.Qualifier;
 
+        // THE BROADCAST FEATURES (18 Oct 2026). The sponsors who present a
+        // moment ("the fastest lap, presented by"), read fresh each time so
+        // a sponsor sold mid-evening counts from their next moment; the
+        // moments for the stream's banner; and the lead change count for
+        // the pylon, from the one tracker the voice uses so the two agree.
+        // See SponsoredMoments, BroadcastMomentFeed and LeadTracker.
+        _announcer.SponsorsProvider = () => _sponsors.Current.Sponsors.ToList();
+        _announcer.MomentHappened += moment => _webServer.Moments.Post(moment);
+        _webServer.LeadChanges = () => (_announcer.Leads.Changes, _announcer.Leads.Leaders);
+
         // The board, the lap-detail popup and the race log ask the same
         // question the announcer does - how many clean laps make a streak -
         // so they now ask the same place. Resolved on demand rather than

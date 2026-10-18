@@ -172,7 +172,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
             "Holds the announcer: no new commentary segment, hand-over or recap show starts until you press Release. "
             + "A recap show already running stops after the line being spoken.");
         tips.SetToolTip(_skip,
-            "Stops what is on air: a commentary segment block, or the post-race recap show (teaser, recap, honours, "
+            "Stops what is on air: a commentary segment block, or the post-race recap show (teaser, recap, achievements, "
             + "interview, sign-off). The line being spoken finishes; nothing after it starts, and the show music rides down.");
         tips.SetToolTip(_replay, "Plays the last commentary segment again.");
 

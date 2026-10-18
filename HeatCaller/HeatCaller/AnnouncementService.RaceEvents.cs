@@ -45,6 +45,8 @@ public sealed partial class AnnouncementService
                 _currentLeaderTransponder = null;
             }
 
+            _leads.Forget(transponder);
+
             lock (_streakLock)
             {
                 _currentStreaks.Remove(transponder);
@@ -557,7 +559,20 @@ public sealed partial class AnnouncementService
     /// </summary>
     public void NotifyAchievement(string transponderId, string badgeName)
     {
-        if (Muted || string.IsNullOrWhiteSpace(transponderId) || string.IsNullOrWhiteSpace(badgeName))
+        if (string.IsNullOrWhiteSpace(transponderId) || string.IsNullOrWhiteSpace(badgeName))
+        {
+            return;
+        }
+
+        // The stream's milestone banner goes up whether or not the voice
+        // says it - a muted announcer still has graphics. Not for a ghost:
+        // a pace car does not reach milestones.
+        if (!GhostService.IsGhost(transponderId))
+        {
+            PostMilestoneMoment(transponderId, badgeName);
+        }
+
+        if (Muted)
         {
             return;
         }
@@ -576,6 +591,9 @@ public sealed partial class AnnouncementService
         var text = _voiceStore.Current.SanitiseForModel(template
             .Replace("{driver}", DisplayNameFor(transponderId), StringComparison.OrdinalIgnoreCase)
             .Replace("{car}", AnnouncementText.OrMissing(_profiles.CarModelFor(transponderId)), StringComparison.OrdinalIgnoreCase)
+            .Replace("{achievement}", AnnouncementText.OrMissing(badgeName), StringComparison.OrdinalIgnoreCase)
+            // {badge} is the old name for {achievement} - still filled in so
+            // a line a club wrote before the rename is spoken right (17 Oct 2026).
             .Replace("{badge}", AnnouncementText.OrMissing(badgeName), StringComparison.OrdinalIgnoreCase)
             .WithDriverDetails(driverProfile)
             .TidyTemplate());
@@ -587,8 +605,17 @@ public sealed partial class AnnouncementService
 
         var speed = config.SpeedFor(_voiceStore.Current.Speed);
 
+        // A sponsor who presents the milestones gets their name on it.
+        var (sponsorTag, countMention) = SponsorTag(type);
+        text = (text + sponsorTag).Trim();
+
         // Screen text raised by EnqueueVoiceWork, once the line is accepted.
-        EnqueueVoiceWork(type, transponderId, () => SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed),
+        EnqueueVoiceWork(type, transponderId,
+            () =>
+            {
+                countMention?.Invoke();
+                return SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed);
+            },
             displayText: text);
     }
 

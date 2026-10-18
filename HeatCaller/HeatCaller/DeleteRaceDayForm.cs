@@ -187,7 +187,7 @@ public sealed class DeleteRaceDayForm : Form
             counts.Seasons == 1
                 ? "Also take them out of 1 championship that picked them by hand"
                 : $"Also take them out of {counts.Seasons} championships that picked them by hand",
-            "Deleting the day already stops these races counting towards a championship that scores by race "
+            "Deleting the day already stops these races counting toward a championship that scores by race "
             + "day. This is for a season someone named the races in individually.",
             TickBox.UnderCaption(TickIndent),
             anyRaces && counts.Seasons > 0);
@@ -196,10 +196,10 @@ public sealed class DeleteRaceDayForm : Form
         // about all four rather than about this one.
         Tick(_chkBadges,
             counts.Badges == 1
-                ? "Also take back 1 badge earned in them"
-                : $"Also take back {counts.Badges} badges earned in them",
-            "A badge names the race that produced it. Race totals on a driver's profile are left as they "
-            + "are - winding those back cannot be done reliably from here - so a milestone badge (10 races, "
+                ? "Also take back 1 achievement earned in them"
+                : $"Also take back {counts.Badges} achievements earned in them",
+            "An achievement names the race that produced it. Race totals on a driver's profile are left as they "
+            + "are - winding those back cannot be done reliably from here - so a milestone achievement (10 races, "
             + "first win) is earned again next time they race.",
             TickBox.UnderCaption(TickIndent),
             anyRaces && counts.Badges > 0,

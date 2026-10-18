@@ -243,7 +243,7 @@ public sealed class RaceClassEditForm : Form
         // The visible door to the colour. The swatch beside the name is the
         // shortcut; this is what somebody finds without knowing to click a
         // coloured square.
-        var btnColour = new Button { Text = "Colour..." };
+        var btnColour = new Button { Text = "Color..." };
         btnColour.Click += (_, _) => ShowColourMenu(btnColour, new Point(0, btnColour.Height));
 
         // What a sanctioning body says, as far as it could be read - and,
@@ -504,9 +504,9 @@ public sealed class RaceClassEditForm : Form
         {
             var menu = new ContextMenuStrip { Font = AppTheme.BodyFont, ShowImageMargin = false };
 
-            var choose = new ToolStripMenuItem("Choose a Colour...", null, (_, _) => ChooseColour());
+            var choose = new ToolStripMenuItem("Choose a Color...", null, (_, _) => ChooseColour());
 
-            var derive = new ToolStripMenuItem("Use the Colour from the Name", null, (_, _) =>
+            var derive = new ToolStripMenuItem("Use the Color from the Name", null, (_, _) =>
             {
                 _colourArgb = 0;
                 UpdateSwatch();
@@ -711,7 +711,7 @@ public sealed class RaceClassEditForm : Form
                          {
                              "Body secure and undamaged",
                              "Motor legal for class",
-                             "Tyres legal for class",
+                             "Tires legal for class",
                              "Ride height",
                              "Transponder fitted and working",
                              "No loose parts",

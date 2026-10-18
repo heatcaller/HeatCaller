@@ -12,6 +12,9 @@ public partial class MainForm
     /// <summary>A line for the Test Voice button beside the mechanic's voice - the kind of thing the mechanic says.</summary>
     private const string MechanicTestLine = "Thanks! We went up a tooth on the pinion before the main, and you could see it down the straight.";
 
+    /// <summary>The Team Principal's test line - the big picture, never the car (17 Oct 2026).</summary>
+    private const string PrincipalTestLine = "A big night for the whole team. Those are the points we came here for, and we're not done yet.";
+
     /// <summary>
     /// And one for the honours reader's button - the kind of thing THEY
     /// say, which is a different job.
@@ -43,6 +46,7 @@ public partial class MainForm
 
         // Heard even while the announcer is muted - it was asked for by hand.
         cast.SpeakAsMechanic = voice => _announcer.SpeakTest(MechanicTestLine, _voiceStore.Current.Speed, voice);
+        cast.SpeakAsPrincipal = voice => _announcer.SpeakTest(PrincipalTestLine, _voiceStore.Current.Speed, voice);
         cast.SpeakAsHonours = voice => _announcer.SpeakTest(HonoursTestLine, _voiceStore.Current.Speed, voice);
         cast.SpeakAsRecapHost = voice => _announcer.SpeakTest(RecapHostTestLine, _voiceStore.Current.Speed, voice);
     }
@@ -209,7 +213,7 @@ public partial class MainForm
 
         if (_rounds is null)
         {
-            return "There is no programme on this PC to preview.";
+            return "There is no program on this PC to preview.";
         }
 
         var day = _raceEvents.Active;
@@ -227,7 +231,7 @@ public partial class MainForm
 
         if (toRun.Count == 0)
         {
-            return "Every race on the programme has already been run, so there is nothing to preview.";
+            return "Every race on the program has already been run, so there is nothing to preview.";
         }
 
         // THE DATE IS ASKED, NOT TAKEN FROM THE DAY. StartedUtc is when the
@@ -290,7 +294,7 @@ public partial class MainForm
 
         if (facts.Empty)
         {
-            return "There was nothing in the programme worth previewing yet - add the entry lists first.";
+            return "There was nothing in the program worth previewing yet - add the entry lists first.";
         }
 
         var script = await _commentary.BuildNightBeforeAsync(facts).ConfigureAwait(true);

@@ -499,7 +499,7 @@ public sealed class MusicControl : UserControl
         // How far the music ducks under the announcer moved to the Mixer on
         // 17 Oct 2026, with every other duck - the same stored settings.
 
-        var behaviour = new Section("Behaviour");
+        var behaviour = new Section("Behavior");
 
         behaviour.Add(_chkPauseDuringRaces, stretch: false, gapBelow: UiLayout.HintGap);
         behaviour.Add(lblPauseHint, gapBelow: 0);

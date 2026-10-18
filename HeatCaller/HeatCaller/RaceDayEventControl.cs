@@ -1712,7 +1712,7 @@ public sealed class RaceDayEventControl : UserControl
         return $"Close \"{dayName}\"?\r\n\r\n"
             + left
             + "Nothing new joins a closed day: races run after this file against no round, check-in and the run "
-            + "sheet drop onto the legacy day, and tonight's heats stop counting towards the standings and Seed "
+            + "sheet drop onto the legacy day, and tonight's heats stop counting toward the standings and Seed "
             + "Mains. Recorded results stay exactly where they are.\r\n\r\n"
             + "Reopen Day puts it back.";
     }

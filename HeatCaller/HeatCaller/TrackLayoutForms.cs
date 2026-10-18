@@ -210,7 +210,7 @@ public sealed class TrackLayoutEditForm : Form
         fields.AddRow("Average lap time (sec):", _numAvgLapSeconds);
         fields.AddHint("optional - used to pace Demo Mode races on this track");
         fields.AddRow("Corner marshal posts:", _numMarshalPosts);
-        fields.AddHint("0 = don't track marshals. Each heat is marshalled by the drivers from the previous heat.");
+        fields.AddHint("0 = don't track marshals. Each heat is marshaled by the drivers from the previous heat.");
 
         // The preview's place: as big as the preview, whether or not there is
         // a picture to show in it, as it always was - the name and the

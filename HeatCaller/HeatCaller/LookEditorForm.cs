@@ -181,7 +181,7 @@ public sealed class LookEditorForm : Form
         fields.AddHint("Light or Dark sets how phones and the online pages treat the page. Synthwave effects adds the "
                        + "animated sunset header and the neon race clock.");
 
-        var lblColours = fields.AddWide(new Label { Text = "Colours", AutoSize = true, Font = AppTheme.BoldFont }, stretch: false);
+        var lblColours = fields.AddWide(new Label { Text = "Colors", AutoSize = true, Font = AppTheme.BoldFont }, stretch: false);
 
         // Nearer the colours it heads than the note above it, as it was: a
         // row's gap and a hint's above it, a hint's and two more below.
@@ -202,7 +202,7 @@ public sealed class LookEditorForm : Form
             // height (SizeFields).
             var swatch = new ColourSwatch
             {
-                AccessibleName = $"Pick the {caption.ToLowerInvariant()} colour",
+                AccessibleName = $"Pick the {caption.ToLowerInvariant()} color",
             };
 
             var row = new ColourRow { Caption = caption, Get = get, Set = set, Swatch = swatch, Box = box };
@@ -469,7 +469,7 @@ public sealed class LookEditorForm : Form
 
         foreach (var row in _rows.Where(r => Normalise(r.Box.Text) is null))
         {
-            problems.Add($"\"{row.Caption}\" isn't a colour yet - use a code like #1A2B3C.");
+            problems.Add($"\"{row.Caption}\" isn't a color yet - use a code like #1A2B3C.");
         }
 
         problems.AddRange(Looks.ReadabilityWarnings(look.Colors));
@@ -510,8 +510,8 @@ public sealed class LookEditorForm : Form
         {
             if (Normalise(row.Box.Text) is not { } hex)
             {
-                AppDialog.Show(this, $"\"{row.Caption}\" needs a colour code like #1A2B3C, or pick one with the swatch beside it.",
-                    "Colour needed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppDialog.Show(this, $"\"{row.Caption}\" needs a color code like #1A2B3C, or pick one with the swatch beside it.",
+                    "Color needed", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 row.Box.Focus();
                 row.Box.SelectAll();
                 return;

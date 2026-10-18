@@ -135,7 +135,7 @@ internal static class ThirdPartyCatalog
             "Apache-2.0",
             "Talks to an EasyLap decoder over USB.",
             new[] { "HidSharp" },
-            Note: "By James F. Bellinger, copyright 2007-2025. The package carries no licence file, only a dead link; confirmed 6 Oct 2026 from the author's own page (software.seekye.com/hidsharp, where zer7.com/software/hidsharp now redirects), which states the Apache licence without naming a version. The package's old licenseUrl pointed at Apache-2.0."),
+            Note: "By James F. Bellinger, copyright 2007-2025. The package carries no license file, only a dead link; confirmed 6 Oct 2026 from the author's own page (software.seekye.com/hidsharp, where zer7.com/software/hidsharp now redirects), which states the Apache license without naming a version. The package's old licenseUrl pointed at Apache-2.0."),
 
         new Component(
             "System.IO.Ports",
@@ -166,7 +166,7 @@ internal static class ThirdPartyCatalog
             "MIT",
             "Installs HeatCaller and brings it its updates.",
             new[] { "Velopack" },
-            Note: "Velopack Ltd, Caelan Sayler and Kevin Bost. Missing from this list until 8 Oct 2026 - it shipped from the day the installer was built and was in neither this catalogue nor the audited list in BugHunt4AboutTests, so the test that holds the two together passed by agreeing about nothing. It has no dependencies of its own on this target framework; the Newtonsoft.Json and Microsoft.Win32.Registry its package names are for .NET Framework and .NET Standard, not net10.0."),
+            Note: "Velopack Ltd, Caelan Sayler and Kevin Bost. Missing from this list until 8 Oct 2026 - it shipped from the day the installer was built and was in neither this catalog nor the audited list in BugHunt4AboutTests, so the test that holds the two together passed by agreeing about nothing. It has no dependencies of its own on this target framework; the Newtonsoft.Json and Microsoft.Win32.Registry its package names are for .NET Framework and .NET Standard, not net10.0."),
 
         new Component(
             "LibVLCSharp",
@@ -174,7 +174,7 @@ internal static class ThirdPartyCatalog
             "LGPL-2.1-or-later",
             "Plays sponsor video slides on the Big Screen.",
             new[] { "LibVLCSharp", "LibVLCSharp.WinForms" },
-            Note: "VideoLAN. The packages state the licence as an expression and carry no licence file; the text ships as Assets\\Licences\\LibVLC-LGPL-2.1.txt, shared with LibVLC below. Linked dynamically - see the LGPL note at the top of this file."),
+            Note: "VideoLAN. The packages state the license as an expression and carry no license file; the text ships as Assets\\Licences\\LibVLC-LGPL-2.1.txt, shared with LibVLC below. Linked dynamically - see the LGPL note at the top of this file."),
 
         new Component(
             "LibVLC",
@@ -182,7 +182,7 @@ internal static class ThirdPartyCatalog
             "LGPL-2.1-or-later",
             "VLC itself - the decoders a sponsor's video is actually played by.",
             new[] { "VideoLAN.LibVLC.Windows" },
-            Note: "VideoLAN. Ships unmodified in libvlc\\win-x64 beside the exe as replaceable DLLs, which is what section 6 of the LGPL asks for; only the win-x64 copy and a trimmed plugin set are distributed (see HeatCaller.csproj). Its licence text is Assets\\Licences\\LibVLC-LGPL-2.1.txt, fetched from the FSF on 8 Oct 2026 because neither package carries one."),
+            Note: "VideoLAN. Ships unmodified in libvlc\\win-x64 beside the exe as replaceable DLLs, which is what section 6 of the LGPL asks for; only the win-x64 copy and a trimmed plugin set are distributed (see HeatCaller.csproj). Its license text is Assets\\Licences\\LibVLC-LGPL-2.1.txt, fetched from the FSF on 8 Oct 2026 because neither package carries one."),
 
         new Component(
             "KokoroSharp",
@@ -229,7 +229,7 @@ internal static class ThirdPartyCatalog
             "MIT",
             "Audio playback KokoroSharp brings with it.",
             new[] { "OpenTK.Audio.OpenAL", "OpenTK.Core", "OpenTK.Mathematics" },
-            Note: "The packages state no licence at all. Confirmed 6 Oct 2026 from the project's own LICENSE.md: MIT, \"Copyright (c) 2006-2019 Stefanos Apostolopoulos for the Open Toolkit project\". MIT wants that notice passed on, so it ships as Assets\\Licences\\OpenTK-LICENSE.txt. Still a pre-release (5.0.0-pre.13), pulled in by KokoroSharp."),
+            Note: "The packages state no license at all. Confirmed 6 Oct 2026 from the project's own LICENSE.md: MIT, \"Copyright (c) 2006-2019 Stefanos Apostolopoulos for the Open Toolkit project\". MIT wants that notice passed on, so it ships as Assets\\Licences\\OpenTK-LICENSE.txt. Still a pre-release (5.0.0-pre.13), pulled in by KokoroSharp."),
 
         new Component(
             "System.Numerics.Tensors",
@@ -245,7 +245,7 @@ internal static class ThirdPartyCatalog
             "SIL Open Font License 1.1",
             "The typeface HeatCaller's headings and numbers are set in.",
             Array.Empty<string>(),
-            Note: "Its licence file travels with it, which the OFL requires: Assets\\Fonts\\OFL-Oxanium.txt."),
+            Note: "Its license file travels with it, which the OFL requires: Assets\\Fonts\\OFL-Oxanium.txt."),
 
         new Component(
             "Barlow",
@@ -253,7 +253,7 @@ internal static class ThirdPartyCatalog
             "SIL Open Font License 1.1",
             "The typeface everything else is set in.",
             Array.Empty<string>(),
-            Note: "Its licence file travels with it, which the OFL requires: Assets\\Fonts\\OFL-Barlow.txt."),
+            Note: "Its license file travels with it, which the OFL requires: Assets\\Fonts\\OFL-Barlow.txt."),
     };
 
     /// <summary>Every NuGet package id the list covers, for the test that holds it to what ships.</summary>

@@ -89,7 +89,7 @@ public static class WarningRules
         "Unsportsmanlike conduct",
         "Ignoring the marshal",
         "Jump start",
-        "Not marshalling",
+        "Not marshaling",
     };
 
     /// <summary>1st: a warning. 2nd: +5s. 3rd: +10s. 4th: black flag.</summary>

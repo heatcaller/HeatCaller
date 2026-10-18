@@ -199,7 +199,7 @@ internal sealed class EasyLapFramer
 
         if (skipped > 0)
         {
-            _log($"[framing] Skipped {skipped} byte(s) to resynchronise with the decoder stream.");
+            _log($"[framing] Skipped {skipped} byte(s) to resynchronize with the decoder stream.");
         }
     }
 

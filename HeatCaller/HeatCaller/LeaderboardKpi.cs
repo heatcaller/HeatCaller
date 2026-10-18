@@ -402,7 +402,7 @@ public static class KpiCatalog
                 ? new KpiValue(Sectors.FormatDelta(live.DeltaMs), live.DeltaMs < 0 ? KpiEmphasis.Good : live.DeltaMs > 0 ? KpiEmphasis.Bad : KpiEmphasis.None)
                 : new KpiValue("-")),
 
-        new("badges", "Badges", "How many achievement badges this driver has earned.", 60,
+        new("badges", "Achievements", "How many achievements this driver has earned.", 85,
             (s, _, ctx) =>
             {
                 if (ctx.Achievements is null)
@@ -615,6 +615,15 @@ public static class KpiCatalog
 
         new("led", "Led", "Laps completed while leading on the road.", 45,
             (s, _, _) => s.LapsLed > 0 ? new KpiValue(s.LapsLed.ToString(), KpiEmphasis.Highlight) : new KpiValue("-")),
+
+        // THE DRIVER RATING (18 Oct 2026) - 0 to 150, NASCAR's idea built
+        // only from what the timing records. See DriverRating for the
+        // weights. Worked out over the whole field for every row, which is
+        // a handful of cars a handful of times a second.
+        new("rating", "Rating", "Driver rating for this race, 0 to 150: finish, laps led, pace against the race's best lap, the fastest lap, distance and places gained, less 5 a warning. Live until the flag.", 55,
+            (s, _, ctx) => DriverRating.ForStandings(ctx.Ordered).TryGetValue(s.TransponderId, out var rating)
+                ? new KpiValue(DriverRating.Format(rating), rating >= 120 ? KpiEmphasis.Good : KpiEmphasis.None)
+                : new KpiValue("-")),
 
         new("pbs", "PBs", "How many times this driver has beaten their own best this session.", 40,
             (s, _, ctx) => new KpiValue(ctx.Tracker.PersonalBests(s.TransponderId).ToString())),

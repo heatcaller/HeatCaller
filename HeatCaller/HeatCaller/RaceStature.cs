@@ -131,11 +131,11 @@ public readonly record struct RaceStature(RaceBilling Billing, bool LastOfTheNig
     /// </summary>
     internal string Describe => Billing switch
     {
-        RaceBilling.Practice => LastOfTheNight ? "practice, and the last on the programme" : "practice",
-        RaceBilling.Heat => LastOfTheNight ? "a heat, and the last on the programme" : "a heat",
-        RaceBilling.LesserMain => LastOfTheNight ? "a main, and the last on the programme" : "a main",
-        RaceBilling.TopMain => LastOfTheNight ? "the top main, and the last on the programme" : "the top main",
-        _ => "a race with nothing on the programme to size it by",
+        RaceBilling.Practice => LastOfTheNight ? "practice, and the last on the program" : "practice",
+        RaceBilling.Heat => LastOfTheNight ? "a heat, and the last on the program" : "a heat",
+        RaceBilling.LesserMain => LastOfTheNight ? "a main, and the last on the program" : "a main",
+        RaceBilling.TopMain => LastOfTheNight ? "the top main, and the last on the program" : "the top main",
+        _ => "a race with nothing on the program to size it by",
     };
 
     /// <summary>

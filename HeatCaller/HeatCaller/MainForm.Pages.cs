@@ -1791,6 +1791,11 @@ public partial class MainForm
 
         sponsors.EventName = () => _raceEvents.Active?.Name;
 
+        // And the "presented by" mentions their sponsored moments had - the
+        // announcer counts them as each one goes to the speaker. See
+        // SponsoredMomentGate.
+        sponsors.MentionsTonight = () => _announcer.SponsorMentions.MentionsTonight();
+
         var webServer = new WebServerControl(
             _webServer,
             _settings,

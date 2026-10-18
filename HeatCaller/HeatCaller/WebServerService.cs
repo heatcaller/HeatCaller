@@ -2903,6 +2903,15 @@ public sealed partial class WebServerService
             // The board without the championship, rather than no board.
         }
 
+        try
+        {
+            AddBroadcast(node, ordered, rosterKey);
+        }
+        catch
+        {
+            // The board without the broadcast extras, rather than no board.
+        }
+
         return node.ToJsonString();
     }
 
@@ -4467,7 +4476,7 @@ public sealed partial class WebServerService
           const askedAgain = force && typeof d.raceGeneration === 'number' && d.raceGeneration !== race;
           if (!d.ok && d.confirm && (!force || askedAgain)) {
             if (confirm((d.error || 'A race is running.') + ' Carry on?')) { go(a, true, d.raceGeneration); }
-            else { show(press, name + ' cancelled.', 'Nothing was changed.', 'busy'); }
+            else { show(press, name + ' canceled.', 'Nothing was changed.', 'busy'); }
             return;
           }
           if (d.ok && d.waiting) { show(press, name + ' sent:', d.message || 'waiting on the laptop.', 'wait'); }

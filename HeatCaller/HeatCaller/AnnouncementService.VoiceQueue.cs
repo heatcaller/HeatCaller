@@ -80,7 +80,19 @@ public sealed partial class AnnouncementService
     /// {sectortime}, {split} and {gap} - each with its spoken and its
     /// on-screen form.
     /// </param>
-    private void EnqueueVoice(AnnouncementEventType type, RaceStanding? standing, GatePassEvent? gate, long? lapTimeMs = null, int? streakCount = null, string? suffix = null, string? roundLabel = null, string? className = null, string? marshals = null, IReadOnlyDictionary<string, (string Spoken, string Display)>? extras = null)
+    /// <param name="onSpoken">Run as the line goes to the speaker - for a count that must only include what was said.</param>
+    /// <param name="allowSponsor">
+    /// False for a line whose sponsor is said some other way - the driver
+    /// introductions, which name theirs once, on the first driver, rather
+    /// than on every one of them.
+    /// </param>
+    /// <param name="autoTail">
+    /// A sentence added to the end of the chosen line UNLESS that line
+    /// already uses the named placeholder - the lead change count, which a
+    /// club can either let the announcer add or write into its own lines.
+    /// The same rule "Include lap time" goes by.
+    /// </param>
+    private void EnqueueVoice(AnnouncementEventType type, RaceStanding? standing, GatePassEvent? gate, long? lapTimeMs = null, int? streakCount = null, string? suffix = null, string? roundLabel = null, string? className = null, string? marshals = null, IReadOnlyDictionary<string, (string Spoken, string Display)>? extras = null, (string Placeholder, string Tail)? autoTail = null, bool allowSponsor = true, Action? onSpoken = null)
     {
         if (Muted)
         {
@@ -121,8 +133,12 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        // A flag with a line already rendered skips synthesis entirely.
-        if (IsInterruptingAnnouncement(type) && TrySpeakPreparedFlag(type, config))
+        // A flag with a line already rendered skips synthesis entirely -
+        // unless a sponsor presents it (the race result), when the saved
+        // take would leave their name off; the live line carries it.
+        var sponsoredHere = allowSponsor && SponsoredMoments.ForEvent(type) is { } sponsoredMoment && SponsorOf(sponsoredMoment) is not null;
+
+        if (IsInterruptingAnnouncement(type) && !sponsoredHere && TrySpeakPreparedFlag(type, config))
         {
             return;
         }
@@ -275,6 +291,13 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        if (autoTail is { } tail && tail.Tail.Length > 0
+            && !chosenTemplate.Contains(tail.Placeholder, StringComparison.OrdinalIgnoreCase))
+        {
+            text = (text + tail.Tail).Trim();
+            displayText = (displayText + tail.Tail).Trim();
+        }
+
         if (!string.IsNullOrWhiteSpace(suffix))
         {
             text = (text + suffix).Trim();
@@ -289,10 +312,27 @@ public sealed partial class AnnouncementService
         // PrimeFlagLineAsync), so either one's saved copy serves both.
         var speed = config.SpeedFor(profile.Speed);
 
+        // " Presented by ..." when a sponsor has this moment, rationed and
+        // counted by SponsorMentions. Counted in the work itself, so a line
+        // the queue drops is not one the sponsor is told they got.
+        var (sponsorTag, countMention) = allowSponsor ? SponsorTag(type) : (string.Empty, null);
+
+        if (sponsorTag.Length > 0)
+        {
+            text = (text + sponsorTag).Trim();
+            displayText = (displayText + sponsorTag).Trim();
+        }
+
         // Screens get the numeral form; the voice engine gets the
         // spelled-out one. Shown only if the line is accepted - see
         // EnqueueVoiceWork.
-        EnqueueVoiceWork(type, transponder, () => SynthesizeAndPlayAsync(text, "[voice] Announcing", speedOverride: speed),
+        EnqueueVoiceWork(type, transponder,
+            () =>
+            {
+                countMention?.Invoke();
+                onSpoken?.Invoke();
+                return SynthesizeAndPlayAsync(text, "[voice] Announcing", speedOverride: speed);
+            },
             displayText: displayText.Length > 0 ? displayText : text);
     }
 
@@ -448,7 +488,7 @@ public sealed partial class AnnouncementService
             // must not then start speaking over it.
             if (IsSupersededByInterrupt())
             {
-                StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - a flag call interrupted while it was being synthesised.");
+                StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - a flag call interrupted while it was being synthesized.");
                 return;
             }
 
@@ -457,7 +497,7 @@ public sealed partial class AnnouncementService
             // sounds are what must be heard now.
             if (IsCutByCountdown())
             {
-                StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the countdown started while it was being synthesised.");
+                StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the countdown started while it was being synthesized.");
                 return;
             }
 
@@ -762,6 +802,13 @@ public sealed partial class AnnouncementService
         AnnouncementEventType.LastLap or
         AnnouncementEventType.FinalMinute or
         AnnouncementEventType.TrackRecord or
+
+        // The grid introductions and the qualifying recap before them -
+        // once a race each, queued together at staging, and the automatic
+        // start waits for them. Dropped for something else speaking, the
+        // introductions would lose every driver after the first.
+        AnnouncementEventType.DriverIntro or
+        AnnouncementEventType.QualifyingRecap or
 
         // The running order. It rations itself to once every N leader laps
         // and uses up that interval the moment it is built, so dropping it

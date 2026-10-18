@@ -737,7 +737,7 @@ ${overrides}
       ${look.checkIn || page.active === "checkin" ? tab("checkin", "Check in", "checkin") : ""}
       ${tab("results", "Results", "results")}
       ${tab("standings", "Standings", "standings")}
-      ${tab("badges", "Badges", "badges")}
+      ${tab("badges", "Achievements", "badges")}
       ${tab("tracks", "Tracks", "tracks")}
     </nav>
   </header>
@@ -2802,7 +2802,7 @@ async function load() {
     now.innerHTML = '<div class="hero">' +
       '<span class="kicker">' + (ev && ev.name ? esc(ev.name) : 'Welcome') + '</span>' +
       '<span class="big">No racing right now</span>' +
-      '<span class="when">Results, standings, badges and tracks are all below.</span></div>';
+      '<span class="when">Results, standings, achievements and tracks are all below.</span></div>';
   }
 
   // UNDER THE HERO, AND ONLY WHILE NOTHING IS RUNNING. A club racing right
@@ -2871,7 +2871,7 @@ export function homePage(club: string, clubName: string, context: PageContext = 
       (context.look.checkIn ? tile("checkin", "Check in", "Tell the desk you're here") : "") +
       tile("results", "Results", "Every session") +
       tile("standings", "Standings", "The championship") +
-      tile("badges", "Badges", "Who's earned what") +
+      tile("badges", "Achievements", "Who's earned what") +
       tile("tracks", "Tracks", "Records and best laps") +
       "</div>" +
       social,
@@ -3040,7 +3040,7 @@ function drawRecent(doc) {
   const rows = Array.isArray(doc.recent) ? doc.recent : [];
 
   recent.innerHTML = rows.length === 0
-    ? '<p class="note">Nobody has earned a badge yet. They are handed out after every race.</p>'
+    ? '<p class="note">Nobody has earned an achievement yet. They are handed out after every race.</p>'
     : rows.map((r) => {
         const b = catalogue && catalogue.get(r.id) || { name: r.id };
         return '<div class="row">' + img(b.art, 'art small', b.name) + '<div>' +
@@ -3062,7 +3062,7 @@ function drawLeaders(doc) {
     .filter((x) => catalogue && catalogue.get(x.id) && String(catalogue.get(x.id).tier).toLowerCase() === tier).length;
 
   leaders.innerHTML = '<div class="card"><table><thead><tr>' +
-    '<th class="pos">#</th><th>Driver</th><th class="n">Badges</th>' +
+    '<th class="pos">#</th><th>Driver</th><th class="n">Achievements</th>' +
     '<th class="n opt">Gold</th><th class="n opt">Legend</th></tr></thead><tbody>' +
     drivers.map((d, i) => '<tr><td class="pos">' + (i + 1) + '</td><td>' + nm(d.name) + '</td>' +
       '<td class="n">' + esc(d.count) + '</td>' +
@@ -3072,7 +3072,7 @@ function drawLeaders(doc) {
 
 function drawAll(doc) {
   if (catalogue === null || catalogue.size === 0) {
-    all.innerHTML = '<p class="note">The badge list has not been published yet.</p>';
+    all.innerHTML = '<p class="note">The achievement list has not been published yet.</p>';
     return;
   }
 
@@ -3125,12 +3125,12 @@ export function badgesPage(club: string, clubName: string, context: PageContext 
     club,
     clubName,
     active: "badges",
-    heading: "Badges",
+    heading: "Achievements",
     sub: "Earned on track, handed out after every race.",
     body:
       '<div class="day">Just earned</div><div class="feed" id="recent"><p class="note">Loading&hellip;</p></div>' +
       '<div class="day">Most collected</div><div id="leaders"></div>' +
-      '<div class="day">Every badge</div><div id="all"></div>',
+      '<div class="day">Every achievement</div><div id="all"></div>',
     script: BADGES_JS,
   }, context);
 }
@@ -3374,7 +3374,7 @@ async function loadOne() {
   if (answer.status === 429 || answer.status >= 500) { busy(answer); return; }
 
   if (answer.status !== 200) {
-    box.innerHTML = '<div class="solo"><h2>QR check-in not recognised</h2><p class="when">' + esc(answer.body.error || '') +
+    box.innerHTML = '<div class="solo"><h2>QR check-in not recognized</h2><p class="when">' + esc(answer.body.error || '') +
       '</p></div><p class="note"><a class="more" href="?">Open the full list instead</a></p>';
     return;
   }
@@ -4933,7 +4933,7 @@ function renderProgram() {
   const list = document.getElementById('programList');
   list.innerHTML = '';
   if (!programRounds.length) {
-    list.innerHTML = '<div class="empty">Nothing on the programme yet.</div>';
+    list.innerHTML = '<div class="empty">Nothing on the program yet.</div>';
     return;
   }
   programRounds.forEach((r) => {
@@ -5074,7 +5074,7 @@ function showReorderPicker(roundId) {
   const sel = document.createElement('select');
 
   const optEnd = document.createElement('option');
-  optEnd.value = ''; optEnd.textContent = 'End of the programme';
+  optEnd.value = ''; optEnd.textContent = 'End of the program';
   sel.appendChild(optEnd);
 
   others.forEach((r) => {

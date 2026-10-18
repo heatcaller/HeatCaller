@@ -524,7 +524,7 @@ public sealed class RelaySettingsControl : UserControl
         var lblAlways = new Label
         {
             Text = "The live race while one is running, each session's results as it is saved, championship "
-                 + "standings, today's schedule from the Timetable, the badges drivers have earned, and "
+                 + "standings, today's schedule from the Timetable, the achievements drivers have earned, and "
                  + "every track layout with its lap record and best laps.",
             AutoSize = true,
         };
@@ -700,7 +700,7 @@ public sealed class RelaySettingsControl : UserControl
 
         var lblLooksNote = new Label
         {
-            Text = "Colours and club logo are set in the Looks card on the Themes page (shared with the app, Big Screen and Wi-Fi pages).",
+            Text = "Colors and club logo are set in the Looks card on the Themes page (shared with the app, Big Screen and Wi-Fi pages).",
             AutoSize = true,
         };
 
@@ -1407,7 +1407,7 @@ public sealed class RelaySettingsControl : UserControl
             + "Every racer's old PIN stops working straight away."
             + (_settings.RacerPinsEmailAutomatically
                 ? " Each racer with an email address is sent their new one - Undo brings the old PINs back, but an email can't be recalled."
-                : " Nobody is told - use Email PINs afterwards, or hand them out from Show PINs."),
+                : " Nobody is told - use Email PINs afterward, or hand them out from Show PINs."),
             "New PINs",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning);
@@ -2079,7 +2079,7 @@ public sealed class RelaySettingsControl : UserControl
         _btnPoster.Click += (_, _) => ShowClubPoster();
 
         var lblShareHint = HintLabel(
-            "The club's home page: what is on now, the schedule, results, standings, badges and tracks. It "
+            "The club's home page: what is on now, the schedule, results, standings, achievements and tracks. It "
             + "works from anywhere, on any network - no need to be on the venue's Wi-Fi. The poster puts it in "
             + "a QR code for the pits wall.");
 
@@ -2205,7 +2205,7 @@ public sealed class RelaySettingsControl : UserControl
 
         var lblDeleteHint = HintLabel(
             "Removes everything this club has published - results, standings, the live race, the schedule, "
-            + "badges, tracks, the look and the online check-in list. The laptop keeps its own copy of "
+            + "achievements, tracks, the look and the online check-in list. The laptop keeps its own copy of "
             + "everything; this only clears the relay. It also turns \"Publish to the relay\" off, so nothing "
             + "goes back up until you tick it again - and ticking it sends everything again, including the "
             + "last day and a half of results.");

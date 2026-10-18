@@ -35,6 +35,73 @@ public sealed class VoiceSettingsStore
     /// </summary>
     internal const int CurrentTemplateVersion = 3;
 
+    /// <summary>
+    /// Built-in lines that have been reworded since a club's file was saved
+    /// (17 Oct 2026: achievements, not badges; American spelling), old to
+    /// new. Only an exact match is changed - a line a club wrote or edited
+    /// itself is left as they wrote it.
+    /// </summary>
+    private static readonly Dictionary<string, string> RewordedLines = new(StringComparer.Ordinal)
+    {
+        ["[cheerful] Badge for {driver} - {achievement}."] = "[cheerful] Achievement for {driver} - {achievement}.",
+        ["[excited] {driver} is dialled in - {streak} straight!"] = "[excited] {driver} is dialed in - {streak} straight!",
+        ["[shouting] Chequers are out. Race complete!"] = "[shouting] Checkered flag is out. Race complete!",
+    };
+
+    /// <summary>
+    /// Brings a loaded file's lines up to the built-in wording without a
+    /// full refresh (which would throw away a club's own lines): the
+    /// achievement announcement's old {badge} placeholder becomes
+    /// {achievement}, and the lines in RewordedLines are swapped for their
+    /// new wording. True when anything changed, so the file is saved once
+    /// and this finds nothing to do after. Both placeholders are still
+    /// filled in when a line is spoken.
+    /// </summary>
+    internal static bool UpdateOldLines(VoiceProfile profile)
+    {
+        var changed = false;
+
+        foreach (var (key, config) in profile.Events)
+        {
+            if (config is null)
+            {
+                continue;
+            }
+
+            var achievement = key == nameof(AnnouncementEventType.AchievementUnlocked);
+
+            string Update(string line)
+            {
+                var swapped = achievement
+                    ? line.Replace("{badge}", "{achievement}", StringComparison.OrdinalIgnoreCase)
+                    : line;
+
+                return RewordedLines.TryGetValue(swapped, out var reworded) ? reworded : swapped;
+            }
+
+            if (config.Templates is { } lines)
+            {
+                for (var i = 0; i < lines.Count; i++)
+                {
+                    if (lines[i] is { } line && Update(line) is var updated && !string.Equals(updated, line, StringComparison.Ordinal))
+                    {
+                        lines[i] = updated;
+                        changed = true;
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(config.Template) && Update(config.Template) is var single
+                && !string.Equals(single, config.Template, StringComparison.Ordinal))
+            {
+                config.Template = single;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
     public static VoiceSettingsStore Load()
     {
         try
@@ -93,6 +160,12 @@ public sealed class VoiceSettingsStore
                         }
                     }
 
+                    // 17 Oct 2026: achievements, not badges, and American
+                    // spelling. The saved lines are moved over here - only the
+                    // placeholder and the built-in lines that were reworded -
+                    // so a club's own wording is left as they wrote it.
+                    var renamed = UpdateOldLines(loaded);
+
                     if (loaded.TemplateVersion < CurrentTemplateVersion)
                     {
                         // Replace ONLY the spoken lines. Enabled, Weight and
@@ -119,7 +192,7 @@ public sealed class VoiceSettingsStore
                     }
 
                     var result = new VoiceSettingsStore(loaded);
-                    if (hadPlainKey || engineChosen)
+                    if (hadPlainKey || engineChosen || renamed)
                     {
                         result.Save(loaded);
                     }

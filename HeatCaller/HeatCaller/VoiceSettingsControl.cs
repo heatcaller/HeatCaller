@@ -158,6 +158,8 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly NumericUpDown _numPositionEveryLaps = new();
     private readonly NumericUpDown _numPositionDepth = new();
     private readonly CheckBox _chkPositionGaps = new ThemedCheckBox();
+    private readonly CheckBox _chkLeadChangeCount = new ThemedCheckBox();
+    private readonly CheckBox _chkIntrosMainsOnly = new ThemedCheckBox();
     private readonly NumericUpDown _numLapTimeEveryN = new();
     private readonly Dictionary<AnnouncementEventType, NumericUpDown> _eventWeights = new();
     private readonly Dictionary<AnnouncementEventType, NumericUpDown> _eventSpeeds = new();
@@ -1260,7 +1262,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         if (!_appSettings.Save())
         {
             _appSettings.HeatCallerConsentVoiceId = previousVoice;
-            _appSettings.HeatCallerConsentWho = previousWho ?? string.Empty;
+            _appSettings.HeatCallerConsentWho = previousWho;
             _appSettings.HeatCallerConsentAtUtc = previousAt;
             _appSettings.HeatCallerConsentRevokedUtc = previousRevoked;
             _appSettings.HeatCallerClonedVoices = previousClones;
@@ -3834,6 +3836,8 @@ public sealed partial class VoiceSettingsControl : UserControl
                 PositionReportEveryLaps = type == AnnouncementEventType.PositionReport ? (int)_numPositionEveryLaps.Value : 5,
                 PositionReportDepth = type == AnnouncementEventType.PositionReport ? (int)_numPositionDepth.Value : 3,
                 PositionReportSayGaps = type == AnnouncementEventType.PositionReport && _chkPositionGaps.Checked,
+                IncludeLeadChangeCount = type != AnnouncementEventType.LeaderChange || _chkLeadChangeCount.Checked,
+                IntrosMainsOnly = type == AnnouncementEventType.DriverIntro && _chkIntrosMainsOnly.Checked,
                 Weight = _eventWeights.TryGetValue(type, out var numWeight) ? (int)numWeight.Value : WeightWithoutBox(type),
             };
         }
@@ -3955,6 +3959,8 @@ public sealed partial class VoiceSettingsControl : UserControl
             .Replace("{sectortime}", "3.41 seconds", StringComparison.OrdinalIgnoreCase)
             .Replace("{split}", "Split 1", StringComparison.OrdinalIgnoreCase)
             .Replace("{gap}", "point two seconds", StringComparison.OrdinalIgnoreCase)
+            .Replace("{achievement}", "Hat-Trick", StringComparison.OrdinalIgnoreCase)
+            .Replace("{badge}", "Hat-Trick", StringComparison.OrdinalIgnoreCase)
 
             // Tidied as the race tidies every line, so a fixed line tested
             // here is word for word the one the race asks for.

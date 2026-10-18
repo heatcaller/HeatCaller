@@ -340,7 +340,7 @@ public sealed class CommentaryBudget
             // two voices, but the second is the honours reader rather than
             // the co-host, and nothing about it is written in one request
             // and split.
-            new(SegmentKind.BadgesEarned, SegmentTier.Essential, 1, true, TimeSpan.FromSeconds(60), TimeSpan.Zero, int.MaxValue, int.MaxValue, "Badges earned", "After a race, a third voice reads out the badges it unlocked."),
+            new(SegmentKind.BadgesEarned, SegmentTier.Essential, 1, true, TimeSpan.FromSeconds(60), TimeSpan.Zero, int.MaxValue, int.MaxValue, "Achievements earned", "After a race, a third voice reads out the achievements it unlocked."),
 
             // --- Core: the live feel ---
             // The battle watch is the shortest-lived thing here: a line
@@ -373,7 +373,7 @@ public sealed class CommentaryBudget
             new(SegmentKind.FormGuide,         SegmentTier.Colour, 1, true, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(30), 6, 2, "Form guide", "How the drivers in a main have been going lately.", true),
             new(SegmentKind.QualifyingReport,  SegmentTier.Colour, 1, true, TimeSpan.FromMinutes(3),  TimeSpan.FromSeconds(30), 6, 1, "Qualifying report", "What qualifying decided, before the mains go out.", true),
             new(SegmentKind.Honours,           SegmentTier.Colour, 1, true, TimeSpan.FromMinutes(2),  TimeSpan.FromSeconds(45), 5, 3, "Milestones", "A hundredth race, a first podium, a club record."),
-            new(SegmentKind.MechanicInterview, SegmentTier.Colour, 2, true, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(15), 6, 2, "Mechanic's interview", "The announcer asks the winning car's mechanic two questions.", true),
+            new(SegmentKind.MechanicInterview, SegmentTier.Colour, 2, true, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(15), 6, 2, "Technical Lead's interview", "The announcer asks the winning car's Technical Lead two questions.", true),
             // THE GRID HISTORY, RETUNED 10 Oct 2026 - from 8 a meeting and
             // 4 a class down to 3 and 1, with its gap trebled.
             //

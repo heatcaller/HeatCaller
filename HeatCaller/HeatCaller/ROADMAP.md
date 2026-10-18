@@ -3034,6 +3034,46 @@ is shown - and the same warning: **not yet built or run**, so `check.cmd`
 - **Left for round 3:** the many sentences elsewhere that still say "Voice
   Settings" (some are asserted by tests), and the hint text shortening.
 
+## The Technical Lead and the Team Principal (17 Oct 2026)
+
+**Not yet built or run** - `check.cmd` is owed a run before this is trusted.
+
+- **The mechanic is the Technical Lead** everywhere a club reads or hears it:
+  the Cast card, the AI Commentary segment name, the log and the tour. The
+  interview prompt asks for `TECH LEAD:` lines; `ParseInterview` still reads
+  `MECHANIC:` and `TECHNICAL LEAD:` (never a bare `TECH:` - "let's talk tech:"
+  in a question would be cut in two). The settings keep their old names
+  (`RecapMechanic*`, `Mechanic*Voice*`) so nothing saved is lost.
+- **The Team Principal**, a second guest with a different subject: the
+  Technical Lead has the car, the Team Principal the big picture - the
+  result, the points, the championship, the rivalry and the team's other
+  drivers - and never the setup. Settings `Principal*` (before / after /
+  heats too, default on / teams only / name / a voice per engine); a Cast
+  card under the Technical Lead's.
+  - **After a race** (`WritePrincipalAsync`, `BuildPrincipalAfterAsync`): the
+    winner's, written after the Technical Lead and spoken after it, before
+    the sign-off - both guests when both are on. Late or stopped goes the
+    way the Technical Lead's does, and the sign-off is judged on it.
+  - **Before a race** (`SpeakPrincipalBefore`, `BuildPrincipalBeforeAsync`):
+    at Stage, after the round intro (`_introQueued`, settled when the
+    intro is queued) and before the countdown, which waits up to
+    `StagingWaitWithPrincipal`. For the driver with most riding on it
+    (`PickPrincipalFocus`: a rivalry on this grid, then the best placed in
+    the championship, then a team, then grid order), each driver's
+    principal once a night. Skipped when the timetable says the night is
+    ten minutes or more behind, or the model takes over 25s. Written ahead
+    like the round intro (`WriteThePrincipalAhead`, called from
+    `WriteTheNextIntroAhead` when a result is filed): held for the next
+    round with its grid, driver and name, and used at Stage only if none of
+    those changed and no result was filed or corrected since
+    (`_principalAheadVersion`) - otherwise Stage writes a fresh one.
+    `ChoosePrincipal` is the one picker both use.
+  - A driver with a team gets "the team principal of <team>"; one without
+    gets "<driver>'s team principal", unless the club ticked teams only.
+  - Not a segment of its own: it rides inside the recap show after the race
+    and the intro's show before it, so it has no budget row, no caption and
+    no place of its own in Run of show.
+
 ## The season's own piece (scoped 13 Oct 2026, not started)
 
 The entry item 10 asked for before this is started. Every figure and file

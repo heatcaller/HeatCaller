@@ -710,7 +710,7 @@ internal sealed class SignupsForm : Form
         var pending = _desk.Waiting.Any(w => string.Equals(w.Hash, invite.Hash, StringComparison.OrdinalIgnoreCase));
 
         if (AppDialog.Show(this, $"Cancel the invite for {invite.ForText}? Its code stops working straight away."
-                + (pending ? $"{Environment.NewLine}{Environment.NewLine}They have already signed up with it: their phone is told it was cancelled, and Undo can't take that back." : string.Empty),
+                + (pending ? $"{Environment.NewLine}{Environment.NewLine}They have already signed up with it: their phone is told it was canceled, and Undo can't take that back." : string.Empty),
                 "Cancel invite", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
         {
             if (_undo is not null)

@@ -395,7 +395,7 @@ public sealed partial class VoiceSettingsControl
             ? "Audio tags like [excited] only work with ElevenLabs' eleven_v3 model - the Kokoro voice would read them out as "
               + "words, so they're taken out before anything is spoken. Your lines can keep them for ElevenLabs."
             : current.SupportsAudioTags
-            ? "Audio tags are ON for this model. Put one in a line to colour the delivery: [excited] [cheerful] [sad] "
+            ? "Audio tags are ON for this model. Put one in a line to color the delivery: [excited] [cheerful] [sad] "
               + "[angry] [whispers] [laughs] [sighs] [awe] [sarcastic] [curious] [crying] [shouting]. "
               + "One per line is usually plenty - stacked tags fight each other."
             : "Audio tags like [excited] need eleven_v3 - on this model they'd be read out literally, so they're "
@@ -437,13 +437,39 @@ public sealed partial class VoiceSettingsControl
 
         // --- The page ---
 
-        var page = new FillPage();
+        FillPage page = new();
 
         page.Add(lblLegend, gapBelow: UiLayout.HintGap);
         page.Add(lblLegend2, gapBelow: UiLayout.RowGap);
         page.Add(restore, gapBelow: UiLayout.RowGap);
         page.Add(_lblAudioTags, gapBelow: UiLayout.RowGap);
-        page.AddFill(list, _ => AnnouncementListLeastHeight(), gapBelow: UiLayout.RowGap);
+        // The grip under the list drags it taller or shorter (17 Oct 2026),
+        // so a club can see more of the ticks at once. The height asked for
+        // becomes the least the list can do with, so the page scrolls to
+        // give it the room rather than squash anything else.
+        _annListAsked = Math.Max(0, _appSettings.RaceCallsListHeight) * DeviceDpi / 96;
+
+        var grip = new ResizeGrip { CurrentHeight = () => list.Height };
+        grip.Dragged += asked =>
+        {
+            _annListAsked = Math.Max(AnnouncementListOwnLeastHeight(), asked);
+            page.PerformLayout();
+        };
+        grip.Finished += () =>
+        {
+            _appSettings.RaceCallsListHeight = _annListAsked * 96 / Math.Max(1, DeviceDpi);
+            _appSettings.Save();
+        };
+        grip.Reset += () =>
+        {
+            _annListAsked = 0;
+            _appSettings.RaceCallsListHeight = 0;
+            _appSettings.Save();
+            page.PerformLayout();
+        };
+
+        page.AddFill(list, _ => AnnouncementListLeastHeight(), gapBelow: 0);
+        page.Add(grip, gapBelow: UiLayout.RowGap);
         page.Add(_lblAnnouncementStatus, gapBelow: UiLayout.SectionGap);
         page.Add(howOften);
 
@@ -681,7 +707,16 @@ public sealed partial class VoiceSettingsControl
     /// two phrasing boxes with the room round them - past that, the page
     /// scrolls rather than squash the list to a sliver (FillPage).
     /// </summary>
-    private int AnnouncementListLeastHeight()
+    private int AnnouncementListLeastHeight() => Math.Max(AnnouncementListOwnLeastHeight(), _annListAsked);
+
+    /// <summary>
+    /// The height the list's grip asked for, in this screen's pixels; 0 for
+    /// none (see AppSettings.RaceCallsListHeight).
+    /// </summary>
+    private int _annListAsked;
+
+    /// <summary>The least the list can do with by itself, whatever its grip asks for.</summary>
+    private int AnnouncementListOwnLeastHeight()
     {
         var strip = _annHeadingsTrack?.Parent?.Height ?? 0;
         var box = Pieces.LineHeight(_announcementsPage.Font) * 3 + 8;
@@ -1114,6 +1149,31 @@ public sealed partial class VoiceSettingsControl
             rows.Controls.Add(_chkFastLapIncludeTime);
 
             lines.Add(Line(UiLayout.RowGap, (_chkFastLapIncludeTime, 0)));
+        }
+
+        if (type == AnnouncementEventType.LeaderChange)
+        {
+            // Named like the fast-lap tick names {time}: a club that writes
+            // the count into its own lines needs to know the word that
+            // stops it being said twice.
+            _chkLeadChangeCount.Text = "Add the count (\"the fourth lead change, among three drivers\") unless the line says {leadchanges}";
+            _chkLeadChangeCount.AutoSize = true;
+            _chkLeadChangeCount.Checked = config.IncludeLeadChangeCount;
+
+            rows.Controls.Add(_chkLeadChangeCount);
+
+            lines.Add(Line(UiLayout.RowGap, (_chkLeadChangeCount, 0)));
+        }
+
+        if (type == AnnouncementEventType.DriverIntro)
+        {
+            _chkIntrosMainsOnly.Text = "Mains only (heats go straight to the countdown)";
+            _chkIntrosMainsOnly.AutoSize = true;
+            _chkIntrosMainsOnly.Checked = config.IntrosMainsOnly;
+
+            rows.Controls.Add(_chkIntrosMainsOnly);
+
+            lines.Add(Line(UiLayout.RowGap, (_chkIntrosMainsOnly, 0)));
         }
 
         if (type == AnnouncementEventType.LapCompleted)
@@ -1616,6 +1676,7 @@ public sealed partial class VoiceSettingsControl
                      _numStreakEveryN, _numStreakEveryNPractice,
                      _chkOnlyLongestStreak, _chkMentionStreakChaser,
                      _numPositionEveryLaps, _numPositionDepth, _chkPositionGaps, _numLapTimeEveryN,
+                     _chkLeadChangeCount, _chkIntrosMainsOnly,
                  })
         {
             shared.Parent?.Controls.Remove(shared);
