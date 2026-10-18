@@ -213,6 +213,12 @@ public sealed partial class RaceControlControl
             if (start is not null)
             {
                 running.Cancel();
+
+                // The On Air being called off was opening another race; what
+                // it said is not this demo's (see ShowAtDemoStaging).
+                _openingSaidByOnAir = false;
+                _introductionsSaidByOnAir = false;
+                _principalSaidByOnAir = false;
                 start();
                 return;
             }
@@ -302,6 +308,8 @@ public sealed partial class RaceControlControl
         // is about to be written, and the quiet while it is is not a gap.
         BroadcastImaging.OnAirBegins();
         _openingSaidByOnAir = false;
+        _introductionsSaidByOnAir = false;
+        _principalSaidByOnAir = false;
         _btnOnAir.Lit = true;
 
         // 17 Oct 2026, Bug Hunt 8, A03-1: Start Next greys while On Air runs.
@@ -369,14 +377,25 @@ public sealed partial class RaceControlControl
             // there every time and in the same place. See AnnouncerIntro.
             if (line is { } written)
             {
-                line = (AnnouncerIntro.IntoOpening(written.Text, _settings.RecapAnnouncerName), written.History);
+                line = written with { Text = AnnouncerIntro.IntoOpening(written.Text, _settings.RecapAnnouncerName) };
             }
 
+            // THE WHOLE RUN BEFORE STAGING, RENDERED NOW (18 Oct 2026): the
+            // opening, then the throw to pit lane and the Team Principal
+            // (rendered as they were written - see WritePrincipalLinesAsync),
+            // then the driver introductions. All of it in hand before the
+            // jingle, so each part runs straight on from the last.
             AnnouncementService.PreparedSpeech? audio = null;
+            AnnouncementService.PreparedSpeech? introductionsAudio = null;
 
             if (line is { } toRender)
             {
                 audio = await _announcer.PrepareReminderAsync(toRender.Text);
+
+                if (toRender.Introductions is { } introductionsToRender)
+                {
+                    introductionsAudio = await _announcer.PrepareReminderAsync(introductionsToRender.Text);
+                }
             }
 
             cts.Token.ThrowIfCancellationRequested();
@@ -437,6 +456,36 @@ public sealed partial class RaceControlControl
                 _commentary?.HistorySpoken(said.History);
                 _openingSaidByOnAir = true;
 
+                // Then pit lane: the throw to the co-host and the Team
+                // Principal - before the introductions, so the race is set
+                // up, the team heard, and then the field. Stage leaves it out.
+                if (said.Principal is { } principalPart)
+                {
+                    SayPrincipalLines(principalPart.Lines, principalPart.Focus);
+                    _principalSaidByOnAir = true;
+                }
+
+                // Then the driver introductions. Stage leaves them out too -
+                // and their sponsor is counted, as it is heard.
+                if (said.Introductions is { } saidIntroductions)
+                {
+                    if (introductionsAudio is not null)
+                    {
+                        _announcer.SpeakPrepared(introductionsAudio);
+                    }
+                    else
+                    {
+                        _announcer.SpeakReminder(saidIntroductions.Text);
+                    }
+
+                    _introductionsSaidByOnAir = true;
+
+                    if (!_announcer.Muted)
+                    {
+                        saidIntroductions.Count?.Invoke();
+                    }
+                }
+
                 // 4. The bumper, HITTING THE POST (17 Oct 2026): fired while
                 //    the opening is still being said, so the bumper's own
                 //    voice comes in on the opening's last word - no gap
@@ -495,6 +544,8 @@ public sealed partial class RaceControlControl
         if (!stage || IsDisposed || Disposing)
         {
             _openingSaidByOnAir = false;
+            _introductionsSaidByOnAir = false;
+            _principalSaidByOnAir = false;
             jingle?.CrossfadeOut();
             bed?.Finish();
             return;
@@ -503,14 +554,27 @@ public sealed partial class RaceControlControl
         // A demo stages itself - see GoOnAirThenAsync.
         if (start is not null)
         {
-            _openingSaidByOnAir = false;
-
             // 17 Oct 2026, Bug Hunt 8, A03-5/A04-9: a second press (or a
             // failure) during the jingle left it playing to its end under
             // the start. CrossfadeOut is safe to call twice.
             jingle?.CrossfadeOut();
             HandTheBedToTheStart(bed);
-            start();
+
+            // The demo stages inside start(), and its staging reads these
+            // (ShowAtDemoStaging) so the opening and the introductions it
+            // carried are not said twice (18 Oct 2026). Cleared AFTER, so a
+            // demo that did not start leaves nothing for the next real Stage.
+            try
+            {
+                start();
+            }
+            finally
+            {
+                _openingSaidByOnAir = false;
+                _introductionsSaidByOnAir = false;
+                _principalSaidByOnAir = false;
+            }
+
             return;
         }
 
@@ -520,6 +584,8 @@ public sealed partial class RaceControlControl
         if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing || _race.IsWarmingUp)
         {
             _openingSaidByOnAir = false;
+            _introductionsSaidByOnAir = false;
+            _principalSaidByOnAir = false;
             jingle?.CrossfadeOut();
             bed?.Finish();
             return;
@@ -594,6 +660,19 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// Everything On Air says before staging (18 Oct 2026), in the order it
+    /// is said: the opening, then the Team Principal with the throw to pit
+    /// lane, then the driver introductions. Each part after the opening is
+    /// null when it is not due or did not come back in time - Stage then
+    /// does it as before.
+    /// </summary>
+    private sealed record OpeningRun(
+        string Text,
+        PackedFacts? History,
+        (string Text, Action? Count)? Introductions,
+        (List<SpokenLine> Lines, string Focus)? Principal);
+
+    /// <summary>
     /// The opening: the round intro for the race in the Round box, written
     /// exactly as Stage writes one - the written-ahead line when it is ready
     /// and still true, otherwise the model, inside the same budget. Null when
@@ -602,7 +681,7 @@ public sealed partial class RaceControlControl
     /// Read on the UI thread up to the model call, as Stage's is - see
     /// ReadIntroFacts.
     /// </summary>
-    private async Task<(string Text, PackedFacts? History)?> WriteOpeningAsync(RoundDefinition? forRound, CancellationToken ct)
+    private async Task<OpeningRun?> WriteOpeningAsync(RoundDefinition? forRound, CancellationToken ct)
     {
         try
         {
@@ -630,6 +709,20 @@ public sealed partial class RaceControlControl
             }
 
             var (clubNight, form, stake, scene) = ReadIntroFacts(round);
+
+            // THE DRIVER INTRODUCTIONS, written alongside the intro rather
+            // than after it (18 Oct 2026), so they are rendered with the
+            // opening and follow it with no wait. Started here, on the UI
+            // thread where their facts are read, and awaited below.
+            var introductions = IntroductionsForOpeningAsync(round, ct);
+
+            // And the Team Principal (18 Oct 2026), between the opening and
+            // the introductions - written alongside both, and rendered as it
+            // is written, so it costs the run no wait of its own.
+            var principalJob = PreparePrincipal(round);
+            var principal = principalJob is null
+                ? Task.FromResult<List<SpokenLine>?>(null)
+                : Task.Run(() => WritePrincipalLinesAsync(principalJob, ct));
 
             PackedFacts? history = null;
             string? answer;
@@ -663,7 +756,36 @@ public sealed partial class RaceControlControl
                 return null;
             }
 
-            return (answer, history);
+            // Never longer than their own budget, which runs from when they
+            // were started - alongside the intro, so usually no wait at all.
+            var withIntroductions = await introductions;
+
+            if (withIntroductions is not null)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] The driver introductions go out at the end of the opening run, rendered with it.");
+            }
+
+            List<SpokenLine>? principalLines = null;
+
+            try
+            {
+                principalLines = await principal;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Team Principal skipped - {ex.Message}");
+            }
+
+            if (principalLines is { Count: > 0 })
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] The Team Principal goes out after the opening, before the driver introductions.");
+            }
+
+            return new OpeningRun(
+                answer,
+                history,
+                withIntroductions,
+                principalLines is { Count: > 0 } && principalJob is not null ? (principalLines, principalJob.Focus) : null);
         }
         catch (OperationCanceledException)
         {

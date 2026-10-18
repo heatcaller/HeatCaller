@@ -293,9 +293,11 @@ public sealed partial class RaceControlControl
             _announcer.StopAllPendingAudio();
         }
 
-        // Whatever the host did, the next race is not a demo.
+        // Whatever the host did, the next race is not a demo - and is not
+        // run for the round the demo was (see DemoRound).
         _race.IsDemoMode = false;
         _currentRaceIsDemo = false;
+        DemoRound = null;
         _demoTakenOverGeneration = _race.SessionGeneration;
         return true;
     }

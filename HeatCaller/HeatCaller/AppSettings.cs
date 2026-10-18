@@ -750,6 +750,19 @@ public sealed class AppSettings
     /// </summary>
     public bool CommentaryIntrosMainsOrRivalriesOnly { get; set; }
 
+    /// <summary>
+    /// The driver introductions (18 Oct 2026): as a race is staged, the AI
+    /// introduces every driver on the grid in order - number, home club, a
+    /// line of form - with, before a main, what qualifying decided. A roll
+    /// call written by the model from exact facts; see
+    /// CommentaryService.BuildDriverIntroductionsAsync. On by default, like
+    /// the race intro it follows.
+    /// </summary>
+    public bool CommentaryDriverIntros { get; set; } = true;
+
+    /// <summary>The driver introductions for a main only - the way a broadcast saves them for the feature. Off by default.</summary>
+    public bool CommentaryDriverIntrosMainsOnly { get; set; }
+
     // Shared voice - applies to intros, summaries and talking points alike,
     // since a club wants one announcer personality, not a different one per
     // feature. Stored as an int (enum), so new CommentaryTone members must

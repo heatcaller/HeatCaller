@@ -423,6 +423,11 @@ public sealed partial class RaceControlControl
 
             CancelAutoStart();
 
+            // A race staged with this button is never a demo (a demo stages
+            // itself), so any demo's claim on a round ends here - before the
+            // format below is read from it. See DemoRound.
+            DemoRound = null;
+
             // The format for the race about to run, written now. Nothing
             // else is guaranteed to have written it since the last race or
             // practice - see ApplyEffectiveFormat.
@@ -458,14 +463,15 @@ public sealed partial class RaceControlControl
 
             // A word with a Team Principal (17 Oct 2026), after the intro
             // and before the countdown - which waits for it. See
-            // SpeakPrincipalBefore.
-            var principalComing = _race.State == RaceState.Staging
-                && SpeakPrincipalBefore(generationAfterStage, introComing);
+            // SpeakPrincipalBefore. Asked for BEFORE the driver
+            // introductions (18 Oct 2026), which now follow it.
+            var principalComing = SpeakPrincipalBefore(generationAfterStage, introComing);
 
-            // The broadcast's introductions (18 Oct 2026): the qualifying
-            // recap before a main, then each driver on the grid. Queued
-            // behind the staging call; the countdown waits for them below.
-            var introductionsFor = SpeakIntroductions(boardBeforeStaging);
+            // The driver introductions (18 Oct 2026): AI commentary on each
+            // driver on the grid, opened before a main by what qualifying
+            // decided. Spoken after the round intro and the Team Principal;
+            // the countdown waits for them below.
+            var introductionsFor = SpeakIntroductions(boardBeforeStaging, generationAfterStage);
 
             // Chain onward once the staging call - and the round intro, when
             // one is being written - has finished speaking. Driven by the
@@ -475,13 +481,16 @@ public sealed partial class RaceControlControl
             {
                 TimeSpan? stagingWait = principalComing ? StagingWaitWithPrincipal : introComing ? StagingWaitWithIntro : null;
 
-                // Long enough for the introductions too, when there are any -
-                // the longer of the two, never their sum: the chain follows
-                // the audio, and this is only how long it will wait before
-                // giving up on it.
-                if (introductionsFor is { } forIntroductions && (stagingWait is null || forIntroductions > stagingWait))
+                // Long enough for the introductions too, when there are any.
+                // The chain follows the audio, and this is only how long it
+                // will wait before giving up on it - so the longer of the
+                // two, except with a Team Principal, who is heard BEFORE the
+                // introductions and so adds to them.
+                if (introductionsFor is { } forIntroductions)
                 {
-                    stagingWait = forIntroductions;
+                    stagingWait = principalComing ? StagingWaitWithPrincipal + forIntroductions
+                        : stagingWait is null || forIntroductions > stagingWait ? forIntroductions
+                        : stagingWait;
                 }
 
                 ChainAfterAudio(RaceState.Staging, () => _actCountdown?.Invoke(false), stagingWait, _fmt.StagingSeconds);

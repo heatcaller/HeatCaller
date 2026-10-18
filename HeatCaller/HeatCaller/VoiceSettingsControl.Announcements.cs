@@ -1165,17 +1165,6 @@ public sealed partial class VoiceSettingsControl
             lines.Add(Line(UiLayout.RowGap, (_chkLeadChangeCount, 0)));
         }
 
-        if (type == AnnouncementEventType.DriverIntro)
-        {
-            _chkIntrosMainsOnly.Text = "Mains only (heats go straight to the countdown)";
-            _chkIntrosMainsOnly.AutoSize = true;
-            _chkIntrosMainsOnly.Checked = config.IntrosMainsOnly;
-
-            rows.Controls.Add(_chkIntrosMainsOnly);
-
-            lines.Add(Line(UiLayout.RowGap, (_chkIntrosMainsOnly, 0)));
-        }
-
         if (type == AnnouncementEventType.LapCompleted)
         {
             _chkIncludeLapTime.Text = "Include lap time";
@@ -1676,7 +1665,7 @@ public sealed partial class VoiceSettingsControl
                      _numStreakEveryN, _numStreakEveryNPractice,
                      _chkOnlyLongestStreak, _chkMentionStreakChaser,
                      _numPositionEveryLaps, _numPositionDepth, _chkPositionGaps, _numLapTimeEveryN,
-                     _chkLeadChangeCount, _chkIntrosMainsOnly,
+                     _chkLeadChangeCount,
                  })
         {
             shared.Parent?.Controls.Remove(shared);

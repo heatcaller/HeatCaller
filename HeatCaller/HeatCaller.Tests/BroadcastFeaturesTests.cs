@@ -138,8 +138,18 @@ public sealed class BroadcastFeaturesTests
         Assert.Equal(SponsoredMoment.FastestLap, SponsoredMoments.ForEvent(AnnouncementEventType.FastLap));
         Assert.Equal(SponsoredMoment.LeadChange, SponsoredMoments.ForEvent(AnnouncementEventType.LeaderChange));
         Assert.Equal(SponsoredMoment.Battle, SponsoredMoments.ForEvent(AnnouncementEventType.CloseBattle));
-        Assert.Equal(SponsoredMoment.DriverIntros, SponsoredMoments.ForEvent(AnnouncementEventType.DriverIntro));
+        Assert.Equal(SponsoredMoment.RaceResult, SponsoredMoments.ForEvent(AnnouncementEventType.RaceCompleted));
         Assert.Null(SponsoredMoments.ForEvent(AnnouncementEventType.LapTime));
+    }
+
+    [Fact]
+    public void Each_sponsorable_commentary_segment_belongs_to_its_moment()
+    {
+        Assert.Equal(SponsoredMoment.Battle, SponsoredMoments.ForSegment(SegmentKind.BattleWatch));
+        Assert.Equal(SponsoredMoment.FastestLap, SponsoredMoments.ForSegment(SegmentKind.PaceNote));
+        Assert.Equal(SponsoredMoment.QualifyingRecap, SponsoredMoments.ForSegment(SegmentKind.QualifyingReport));
+        Assert.Equal(SponsoredMoment.Milestones, SponsoredMoments.ForSegment(SegmentKind.Honours));
+        Assert.Null(SponsoredMoments.ForSegment(SegmentKind.ClubAside));
     }
 
     [Fact]
@@ -288,22 +298,19 @@ public sealed class BroadcastFeaturesTests
     // ------------------------------------------------------------------
 
     [Fact]
-    public void An_introduction_says_what_the_driver_has_and_nothing_they_have_not()
+    public void An_introduction_fact_line_labels_what_the_driver_has_and_leaves_out_what_they_have_not()
     {
-        var full = DriverIntros.Intro(new IntroDriver("1", 1, "Sam", "Sam Smith", "7", "Riverside", "won last time out"), 6);
+        Assert.Equal(
+            "1. grid position 1; name Sam; racing number 7; from Riverside; form: won last time out",
+            DriverIntros.FactLine(new IntroDriver("1", 1, "Sam", "Sam Smith", "#7", "Riverside", "won last time out"), 0));
 
-        Assert.Equal("On pole, number seven, Sam, from Riverside - won last time out", full.Spoken);
-        Assert.Equal("On pole, #7, Sam Smith, from Riverside - won last time out", full.Screen);
-
-        Assert.Equal("Starting third, Bill", DriverIntros.Intro(new IntroDriver("2", 3, "Bill", "Bill"), 6).Spoken);
-        Assert.Equal("Rounding out the field, Frank", DriverIntros.Intro(new IntroDriver("3", 6, "Frank", "Frank"), 6).Spoken);
+        Assert.Equal("3. grid position 3; name Bill", DriverIntros.FactLine(new IntroDriver("2", 3, "Bill", "Bill"), 2));
     }
 
     [Fact]
-    public void A_race_without_a_grid_introduces_nobody_as_on_pole()
+    public void A_race_without_a_grid_gives_nobody_a_grid_position()
     {
-        Assert.Equal(string.Empty, DriverIntros.GridPhrase(0, 4));
-        Assert.Equal("Sam, from Riverside", DriverIntros.Intro(new IntroDriver("1", 0, "Sam", "Sam", Hometown: "Riverside"), 4).Spoken);
+        Assert.Equal("1. name Sam; from Riverside", DriverIntros.FactLine(new IntroDriver("1", 0, "Sam", "Sam", Hometown: "Riverside"), 0));
     }
 
     private static readonly DateTime Tonight = new(2026, 10, 18, 20, 0, 0, DateTimeKind.Utc);
@@ -411,11 +418,40 @@ public sealed class BroadcastFeaturesTests
     }
 
     [Fact]
+    public void The_host_throws_to_the_co_host_in_pit_lane_for_both_guests_or_one()
+    {
+        Assert.Equal(
+            "Let's head down to pit lane, where Jess is with the Team Principal and the Technical Lead from Sam's team. Jess?",
+            RaceControlControl.PitLaneThrow("Jess", principal: true, technicalLead: true, "Sam"));
+
+        Assert.Equal(
+            "Let's head down to pit lane, where Jess is with the Technical Lead from Sam's team. Jess?",
+            RaceControlControl.PitLaneThrow("Jess", principal: false, technicalLead: true, "Sam"));
+
+        Assert.Equal(
+            "Let's head down to pit lane for a word with the Team Principal from the winning team.",
+            RaceControlControl.PitLaneThrow(string.Empty, principal: true, technicalLead: false, string.Empty));
+    }
+
+    [Fact]
+    public void Before_a_race_the_announcer_throws_to_the_co_host_with_the_drivers_team()
+    {
+        Assert.Equal(
+            "Before we go, let's head down to pit lane. Jess, you're with Sam's team.",
+            RaceControlControl.PitLaneThrowBefore("Jess", "Sam"));
+
+        Assert.Equal(
+            "Before we go, let's head down to pit lane for a word with the team.",
+            RaceControlControl.PitLaneThrowBefore(string.Empty, string.Empty));
+    }
+
+    [Fact]
     public void Staging_waits_for_the_introductions_but_never_forever()
     {
-        Assert.Equal(TimeSpan.FromSeconds(20), RaceControlControl.IntroWait(0, recap: false));
-        Assert.Equal(TimeSpan.FromSeconds(56), RaceControlControl.IntroWait(3, recap: true));
-        Assert.Equal(TimeSpan.FromSeconds(150), RaceControlControl.IntroWait(40, recap: true));
+        // The model's 30 seconds, then 5 a driver and 12 for the recap.
+        Assert.Equal(TimeSpan.FromSeconds(30), RaceControlControl.IntroWait(0, recap: false));
+        Assert.Equal(TimeSpan.FromSeconds(57), RaceControlControl.IntroWait(3, recap: true));
+        Assert.Equal(TimeSpan.FromSeconds(180), RaceControlControl.IntroWait(40, recap: true));
     }
 
     // ------------------------------------------------------------------
@@ -449,5 +485,159 @@ public sealed class BroadcastFeaturesTests
         Assert.Equal("[shouting] Battle for the lead! Sam is all over Bill!",
             AnnouncementService.BattleForTheLead("[shouting] Sam is all over Bill!"));
         Assert.Equal("Battle for the lead! Close one!", AnnouncementService.BattleForTheLead("Close one!"));
+    }
+}
+
+/// <summary>
+/// What the AI commentary is HANDED for the broadcast features (18 Oct 2026)
+/// - the driver introductions, and the recap's laps led, lead changes,
+/// driver ratings and sponsor - read off the prompt rather than out of a
+/// model, since the model only ever phrases what it is given.
+/// </summary>
+public sealed class BroadcastCommentaryTests : IDisposable
+{
+    /// <summary>Declared first: ProfileStore.Load reads from wherever AppPaths points.</summary>
+    private readonly TempAppData _data = new();
+
+    public void Dispose() => _data.Dispose();
+
+    private sealed class Scribe : ICommentaryBrain
+    {
+        public string Facts { get; private set; } = string.Empty;
+
+        public string? Answer { get; set; } = "Here they are!";
+
+        public event Action<string>? StatusMessage;
+
+        public string Describe => "the test";
+
+        public Task<string?> GenerateAsync(
+            string systemPrompt,
+            string userPrompt,
+            int maxTokens,
+            double temperature = 0.7,
+            CancellationToken ct = default,
+            TimeSpan? timeout = null)
+        {
+            Facts = userPrompt;
+            StatusMessage?.Invoke(string.Empty);
+            return Task.FromResult(Answer);
+        }
+
+        public Task WarmUpAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task<string?> TestAsync(CancellationToken ct = default) => Task.FromResult<string?>("ok");
+    }
+
+    private static (CommentaryService Desk, Scribe Model) Desk()
+    {
+        var model = new Scribe();
+
+        var desk = new CommentaryService(
+            ProfileStore.Load(),
+            new AppSettings { CommentaryEnabled = true, CommentaryMaxWords = 60 })
+        {
+            Client = model,
+        };
+
+        return (desk, model);
+    }
+
+    [Fact]
+    public async Task The_introductions_are_written_from_every_driver_in_grid_order_with_the_recap_and_sponsor()
+    {
+        var (desk, model) = Desk();
+
+        var line = await desk.BuildDriverIntroductionsAsync(
+            "A-Main",
+            new[]
+            {
+                new IntroDriver("1", 1, "Sam", "Sam", "7", "Riverside", "won last time out"),
+                new IntroDriver("2", 2, "Bill", "Bill"),
+            },
+            qualifying: "Sam took pole with twelve laps.",
+            presentedBy: "Joe's Hobby Shop.");
+
+        Assert.Equal("Here they are!", line);
+        Assert.Contains("1. grid position 1; name Sam; racing number 7; from Riverside; form: won last time out", model.Facts);
+        Assert.Contains("2. grid position 2; name Bill", model.Facts);
+        Assert.Contains("Qualifying, exact: Sam took pole with twelve laps.", model.Facts);
+        Assert.Contains("Driver introductions, presented by Joe's Hobby Shop", model.Facts);
+        Assert.Contains("Say each driver's grid position.", model.Facts);
+    }
+
+    [Fact]
+    public async Task Introductions_without_a_grid_tell_the_model_nobody_is_on_pole()
+    {
+        var (desk, model) = Desk();
+
+        await desk.BuildDriverIntroductionsAsync(
+            "Race 3",
+            new[] { new IntroDriver("1", 0, "Sam", "Sam"), new IntroDriver("2", 0, "Bill", "Bill") });
+
+        Assert.Contains("There is no grid for this race", model.Facts);
+        Assert.DoesNotContain("grid position", model.Facts);
+        Assert.DoesNotContain("presented by", model.Facts);
+        Assert.DoesNotContain("Qualifying, exact", model.Facts);
+    }
+
+    [Fact]
+    public async Task Nobody_to_introduce_asks_the_model_nothing()
+    {
+        var (desk, model) = Desk();
+
+        Assert.Null(await desk.BuildDriverIntroductionsAsync("A-Main", Array.Empty<IntroDriver>()));
+        Assert.Equal(string.Empty, model.Facts);
+    }
+
+    [Fact]
+    public async Task The_recap_is_handed_laps_led_lead_changes_ratings_and_its_sponsor()
+    {
+        var (desk, model) = Desk();
+
+        var race = new SessionRecord
+        {
+            Label = "A-Main",
+            SessionType = RaceSessionType.Race,
+            StartedAtUtc = new DateTime(2026, 10, 18, 19, 0, 0, DateTimeKind.Utc),
+            EndedAtUtc = new DateTime(2026, 10, 18, 19, 10, 0, DateTimeKind.Utc),
+            Results =
+            {
+                new SessionResultEntry { Transponder = "Sam", DriverName = "Sam", Position = 1, Laps = 12, ElapsedMs = 300_000, FastLapMs = 24_000, LapsLed = 8 },
+                new SessionResultEntry { Transponder = "Bill", DriverName = "Bill", Position = 2, Laps = 12, ElapsedMs = 300_450, FastLapMs = 24_200, LapsLed = 4 },
+            },
+        };
+
+        await desk.BuildRaceSummaryAsync(race, leadChanges: (3, 2), presentedBy: "Joe's Hobby Shop");
+
+        Assert.Contains("Laps led: Sam 8 laps, Bill 4 laps", model.Facts);
+        Assert.Contains("The lead changed hands 3 times, among 2 different leaders", model.Facts);
+        Assert.Contains("Driver rating for this race", model.Facts);
+        Assert.Contains("The race result is presented by: Joe's Hobby Shop", model.Facts);
+    }
+
+    [Fact]
+    public async Task A_recap_without_the_broadcast_figures_carries_none_of_them()
+    {
+        var (desk, model) = Desk();
+
+        var race = new SessionRecord
+        {
+            Label = "A-Main",
+            SessionType = RaceSessionType.Race,
+            StartedAtUtc = new DateTime(2026, 10, 18, 19, 0, 0, DateTimeKind.Utc),
+            EndedAtUtc = new DateTime(2026, 10, 18, 19, 10, 0, DateTimeKind.Utc),
+            Results =
+            {
+                new SessionResultEntry { Transponder = "Sam", DriverName = "Sam", Position = 1, Laps = 12, ElapsedMs = 300_000 },
+                new SessionResultEntry { Transponder = "Bill", DriverName = "Bill", Position = 2, Laps = 12, ElapsedMs = 300_450 },
+            },
+        };
+
+        await desk.BuildRaceSummaryAsync(race);
+
+        Assert.DoesNotContain("Laps led:", model.Facts);
+        Assert.DoesNotContain("lead changed hands", model.Facts);
+        Assert.DoesNotContain("presented by", model.Facts);
     }
 }

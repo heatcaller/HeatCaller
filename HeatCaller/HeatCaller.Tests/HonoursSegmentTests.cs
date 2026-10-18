@@ -541,7 +541,7 @@ public sealed class HonoursSegmentTests
 
         var showOpened = source.IndexOf("opening = treatment.StartAsync(SegmentKind.RaceRecap", StringComparison.Ordinal);
         var honours = source.IndexOf("await SpeakHonoursAsync(honoursSegment, honoursLines, show, nextRace.Token);", StringComparison.Ordinal);
-        var interview = source.IndexOf("await SpeakInterviewAsync(interviewTask, nextRace.Token)", StringComparison.Ordinal);
+        var interview = source.IndexOf("await SpeakInterviewAsync(firstPart, nextRace.Token", StringComparison.Ordinal);
 
         Assert.True(showOpened > 0, "The recap no longer opens its show the way this test reads it.");
         Assert.True(honours > 0, "The recap sequence no longer speaks the honours the way this test reads it.");
@@ -553,7 +553,7 @@ public sealed class HonoursSegmentTests
 
         Assert.True(
             interview > honours,
-            "The honours now follow the mechanic's interview, which can be skipped for being late - and then the badges are "
+            "The honours now follow the pit-lane interview, which can be skipped for being late - and then the badges are "
             + "lost, because they were held back from the individual calls. Put them back in front of it.");
     }
 

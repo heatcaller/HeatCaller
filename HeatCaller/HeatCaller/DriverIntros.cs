@@ -33,10 +33,10 @@ public sealed record RecapCar(
     long FastLapMs);
 
 /// <summary>
-/// The words of the broadcast's introductions - each driver on the grid, and
-/// what qualifying decided before a main - built in code rather than in a
-/// template, for the reason the DriverIntro defaults give: six optional
-/// pieces do not stay a sentence in a template.
+/// The facts behind the broadcast's introductions - each driver on the grid,
+/// and what qualifying decided before a main. Worked out here, exactly, and
+/// handed to the AI commentary to say (CommentaryService.
+/// BuildDriverIntroductionsAsync): the model words them, it never counts.
 ///
 /// Every builder returns the SPOKEN form and the SCREEN form together, as
 /// the rest of the announcer does: numbers the voice is given as words
@@ -48,80 +48,44 @@ public sealed record RecapCar(
 internal static class DriverIntros
 {
     /// <summary>
-    /// "On pole", "Starting second" ... and, for the back of a full grid,
-    /// "Rounding out the field". Empty for a slot of 0 - a freeform race with
-    /// no grid, where calling anybody "on pole" would be inventing one.
+    /// One driver's line in the facts the AI introductions are written from
+    /// (CommentaryService.BuildDriverIntroductionsAsync): every part
+    /// labelled, and only the parts the driver has - "1. grid position 1;
+    /// name Sam; racing number 7; from Riverside; form: won last time out".
+    /// Labelled so a small model cannot hand one driver's number or town to
+    /// the next.
     /// </summary>
-    public static string GridPhrase(int slot, int fieldSize)
+    /// <param name="driver">The driver.</param>
+    /// <param name="index">Their place in the list, from 0.</param>
+    public static string FactLine(IntroDriver driver, int index)
     {
-        if (slot <= 0)
+        var parts = new List<string>();
+
+        if (driver.Slot > 0)
         {
-            return string.Empty;
+            parts.Add($"grid position {driver.Slot}");
         }
 
-        if (slot == 1)
+        parts.Add($"name {CommentaryService.Field(driver.SpokenName)}");
+
+        var number = (driver.Number ?? string.Empty).Trim().TrimStart('#');
+
+        if (number.Length > 0)
         {
-            return "On pole";
+            parts.Add($"racing number {CommentaryService.Field(number)}");
         }
 
-        if (slot == fieldSize && fieldSize >= 4)
+        if (!string.IsNullOrWhiteSpace(driver.Hometown))
         {
-            return "Rounding out the field";
+            parts.Add($"from {CommentaryService.Field(driver.Hometown)}");
         }
 
-        return $"Starting {LeadTracker.SpokenOrdinal(slot)}";
-    }
-
-    /// <summary>
-    /// One driver's introduction without its closing mark - the template puts
-    /// the "!" or "." on: "On pole, number 7, Sam Smith, from Riverside - two
-    /// wins from the last five". Whatever the driver has not got is simply
-    /// not said.
-    /// </summary>
-    public static (string Spoken, string Screen) Intro(IntroDriver driver, int fieldSize)
-    {
-        string Build(string name, string number)
+        if (!string.IsNullOrWhiteSpace(driver.Stat))
         {
-            var parts = new List<string>();
-            var grid = GridPhrase(driver.Slot, fieldSize);
-
-            if (grid.Length > 0)
-            {
-                parts.Add(grid);
-            }
-
-            if (number.Length > 0)
-            {
-                parts.Add(number);
-            }
-
-            parts.Add(name);
-
-            var line = string.Join(", ", parts);
-
-            if (!string.IsNullOrWhiteSpace(driver.Hometown))
-            {
-                line += $", from {driver.Hometown.Trim()}";
-            }
-
-            if (!string.IsNullOrWhiteSpace(driver.Stat))
-            {
-                line += $" - {driver.Stat.Trim()}";
-            }
-
-            return line;
+            parts.Add($"form: {CommentaryService.Field(driver.Stat)}");
         }
 
-        var raw = (driver.Number ?? string.Empty).Trim().TrimStart('#');
-
-        // "number seven" to the voice, "#7" on a screen - a bare "7" read
-        // aloud between two commas is a number in search of a meaning.
-        var spokenNumber = raw.Length == 0 ? string.Empty
-            : long.TryParse(raw, out var n) && n is >= 0 and < 1000 ? $"number {RaceNumbers.Words(n)}"
-            : $"number {raw}";
-        var screenNumber = raw.Length == 0 ? string.Empty : $"#{raw}";
-
-        return (Build(driver.SpokenName, spokenNumber), Build(driver.ScreenName, screenNumber));
+        return $"{index + 1}. " + string.Join("; ", parts);
     }
 
     /// <summary>

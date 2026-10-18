@@ -205,7 +205,9 @@ public sealed partial class RaceControlControl
     /// <summary>Round override, else class format, else app default - and which of those it was, for the chip.</summary>
     private RaceFormat EffectiveFormat(out string source)
     {
-        var round = _activeRound?.Invoke();
+        // A demo re-running a round already run takes that round's format
+        // too (18 Oct 2026) - see ShowRound.
+        var round = ShowRound();
 
         if (round?.FormatOverride is { } overridden)
         {

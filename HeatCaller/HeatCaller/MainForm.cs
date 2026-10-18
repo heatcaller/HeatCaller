@@ -1307,6 +1307,25 @@ public partial class MainForm : Form
         _announcer.MomentHappened += moment => _webServer.Moments.Post(moment);
         _webServer.LeadChanges = () => (_announcer.Leads.Changes, _announcer.Leads.Leaders);
 
+        // A written commentary segment carries the sponsor of its moment (a
+        // battle watch, the battles' sponsor), rationed like the calls. It is
+        // counted as it is written: a segment is spoken as soon as it comes
+        // back, and the few that are dropped on the way are not worth a
+        // second path back from the director.
+        if (_commentary is not null)
+        {
+            _commentary.SegmentSponsor = kind =>
+            {
+                if (SponsoredMoments.ForSegment(kind) is not { } moment || _announcer.TakeSponsor(moment) is not { } taken)
+                {
+                    return null;
+                }
+
+                taken.Count();
+                return taken.Name;
+            };
+        }
+
         // The board, the lap-detail popup and the race log ask the same
         // question the announcer does - how many clean laps make a streak -
         // so they now ask the same place. Resolved on demand rather than

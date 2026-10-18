@@ -1247,6 +1247,11 @@ public partial class MainForm
         _navRefreshHooks["Practice"] = practice.RefreshAll;
 
         var demoMode = new DemoModeControl(_race, _announcer, _profiles, _trackLayouts, _settings, _rounds, _raceEvents, _ghostStore) { Dock = DockStyle.Fill };
+
+        // A demo stages the session itself, so Race Control's show before
+        // the start is run from here (18 Oct 2026) - see
+        // RaceControlControl.ShowAtDemoStaging.
+        demoMode.ShowAtStaging = cars => _raceControlControl.ShowAtDemoStaging(cars);
         _demoControl = demoMode;
 
         // Race Control ends a running demo through this before it stages,
@@ -1264,6 +1269,12 @@ public partial class MainForm
         // first. See RaceControlControl.GoOnAirThenAsync.
         demoMode.GoOnAirThen = (round, start) =>
         {
+            // The Demo page's own demo: its round when one is picked, or none
+            // for a demo of the checked drivers - which also lets go of any
+            // round an earlier demo left behind. See RaceControlControl.DemoRound.
+            _raceControlControl.DemoRound = round;
+            _raceControlControl.RefreshFormat();
+
             if (!_race.IsDemoMode && _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
             {
                 start();
@@ -1342,7 +1353,8 @@ public partial class MainForm
                     cmbActiveRound.SelectedIndex = 0;
 
                     OnClientRawMessage($"{AppTime.LogStampNow()}  [program] \"{round.RoundLabel}\" has already been "
-                        + "run, so this demo is not tied to it. Delete its race from Race History to run it again.");
+                        + "run, so this demo runs it again - same drivers, format and show - and keeps its earlier "
+                        + "result as it is.");
                 }
             }
 
@@ -1361,12 +1373,42 @@ public partial class MainForm
             // the race a real one gets from the On Air button. Straight to
             // the demo when Start races On Air is unticked (17 Oct 2026). See
             // RaceControlControl.GoOnAirThenAsync.
+            // THE DEMO IS THAT RACE AGAIN (18 Oct 2026), even with the Round
+            // box on freeform - a round already run, or "Demo races fill the
+            // program" unticked: its format, its grid and its show (round
+            // intro, driver introductions, Team Principal, Technical Lead)
+            // all come from the round. Only the filing stays freeform, which
+            // is what keeps a demo off a heat that really ran. See
+            // RaceControlControl.DemoRound and ShowRound.
+            _raceControlControl.DemoRound = round;
+            _raceControlControl.RefreshFormat();
+
+            if (!string.IsNullOrWhiteSpace(round.TrackLayoutName)
+                && cmbTrackLayout.Items.IndexOf(round.TrackLayoutName) is var layoutAt and >= 0
+                && cmbTrackLayout.Enabled)
+            {
+                cmbTrackLayout.SelectedIndex = layoutAt;
+            }
+
             await _raceControlControl.GoOnAirThenAsync(round, () =>
             {
+                // Again, in case anything on the way through On Air ended an
+                // earlier demo and let go of it.
+                _raceControlControl.DemoRound = round;
+                _raceControlControl.RefreshFormat();
+
                 demoMode.StartDemoForRound(round);
 
                 OnClientRawMessage($"{AppTime.LogStampNow()}  [program] Running \"{round.RoundLabel}\" as a demo.");
             });
+
+            // Called off, or refused: no demo is running for this round, so
+            // nothing after it should be run as it.
+            if (!_race.IsDemoMode)
+            {
+                _raceControlControl.DemoRound = null;
+                _raceControlControl.RefreshFormat();
+            }
         };
 
         StartupMark("Practice, Ghost Cars and Demo Mode");

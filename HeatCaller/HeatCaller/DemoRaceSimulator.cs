@@ -48,6 +48,16 @@ public sealed class DemoRaceSimulator : IDisposable
     public event Action<string>? LogMessage;
 
     /// <summary>
+    /// Called on the UI thread straight after the demo stages its race,
+    /// with the demo's cars (18 Oct 2026): Race Control's show before the
+    /// start - the round intro, the driver introductions, the Team
+    /// Principal - which a demo never got, because it stages the session
+    /// itself rather than through the Stage button. Returns how long the
+    /// countdown should be prepared to wait for it, or null for nothing.
+    /// </summary>
+    public Func<IReadOnlyList<string>, TimeSpan?>? Staged { get; set; }
+
+    /// <summary>
     /// Raised when the demo ended because something else took the session
     /// over - Race Control staging, starting or resetting a real race - as
     /// opposed to finishing on its own or being stopped from the Demo page.
@@ -364,6 +374,20 @@ public sealed class DemoRaceSimulator : IDisposable
             LogMessage?.Invoke("Staging...");
             DriveSession(_race.Stage);
             _ownedGeneration = _race.SessionGeneration;
+
+            // The show before the start, as a real race gets it from the
+            // Stage button. Never the reason a demo does not run.
+            TimeSpan? showWait = null;
+
+            try
+            {
+                showWait = Staged?.Invoke(_racers.Select(r => r.TransponderId).ToList());
+            }
+            catch (Exception ex)
+            {
+                LogMessage?.Invoke($"The show before the start was skipped: {ex.Message}");
+            }
+
             await Task.Delay(TimeSpan.FromSeconds(Math.Max(1, stagingSeconds)), ct);
 
             // AND THEN LET THE STAGING CUE FINISH (13 Oct 2026).
@@ -383,7 +407,13 @@ public sealed class DemoRaceSimulator : IDisposable
             // Bounded, for the reason Race Control's copy gives: a club may
             // point its staging sound at a long bed and the start must not
             // wait that out.
-            await _announcer.WaitForAudioAsync(LongestStagingCue, ct);
+            //
+            // Longer when the show before the start is coming (18 Oct
+            // 2026): the wait follows the audio - including lines still
+            // being written - so this is only how long it holds on before
+            // giving up, as Race Control's ChainAfterAudio does.
+            await _announcer.WaitForAudioAsync(
+                showWait is { } forTheShow && forTheShow > LongestStagingCue ? forTheShow : LongestStagingCue, ct);
 
             // Each step checks the session is still the demo's first. The
             // delays are cancelled by Stop and by a takeover, but a session

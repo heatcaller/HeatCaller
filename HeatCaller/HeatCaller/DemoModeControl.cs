@@ -517,6 +517,13 @@ public sealed class DemoModeControl : UserControl
     /// </summary>
     public IReadOnlyCollection<string> SelectedGhosts => _simulator.SelectedGhosts;
 
+    /// <summary>Race Control's show before the start, run when a demo stages - see DemoRaceSimulator.Staged.</summary>
+    public Func<IReadOnlyList<string>, TimeSpan?>? ShowAtStaging
+    {
+        get => _simulator.Staged;
+        set => _simulator.Staged = value;
+    }
+
     /// <summary>
     /// The track the demo is run on - the layout picked on this page, or
     /// null for the generic made-up pace. The host hands it to the ghost

@@ -115,23 +115,6 @@ public enum AnnouncementEventType
 
     /// <summary>A driver crossed the split loop ahead of the track record lap at that point. Appended at the END. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}.</summary>
     SplitRecordPace,
-
-    /// <summary>
-    /// One driver introduced as the grid is staged - "On pole, number 7,
-    /// Sam Smith, from Riverside - two wins from the last five." One line per
-    /// driver, in grid order. Appended at the END. Placeholders: {intro} for
-    /// the whole introduction, built from what the driver's profile and
-    /// history have; {driver} {car} {team} {sponsors} {number} {hometown}
-    /// {grid} {stat} on their own.
-    /// </summary>
-    DriverIntro,
-
-    /// <summary>
-    /// What qualifying decided, read before a main's driver intros - "From
-    /// qualifying: Sam Smith takes pole with 24 laps..." Appended at the END.
-    /// Placeholders: {recap} for the whole recap; {driver} for the polesitter.
-    /// </summary>
-    QualifyingRecap,
 }
 
 public sealed class AnnouncementEventConfig
@@ -262,15 +245,6 @@ public sealed class AnnouncementEventConfig
     /// only a booth watching the whole race could give.
     /// </summary>
     public bool IncludeLeadChangeCount { get; set; } = true;
-
-    /// <summary>
-    /// Only meaningful for AnnouncementEventType.DriverIntro. When true the
-    /// grid is introduced before a MAIN only - the way a broadcast saves
-    /// the introductions for the feature - and the heats go straight from
-    /// staging to the countdown. Off by default, so a club without a
-    /// programme (every race freeform) still hears them.
-    /// </summary>
-    public bool IntrosMainsOnly { get; set; }
 
     /// <summary>
     /// Whether this announcement is allowed while a yellow or red flag is
@@ -1574,35 +1548,6 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             },
         };
 
-        // THE BROADCAST INTRODUCTIONS (18 Oct 2026). The words are built in
-        // code ({intro}, {recap}) because a driver's introduction is made of
-        // parts any one of which can be missing - no number, no home club,
-        // no history yet - and a template written round six optional
-        // pieces cannot stay a sentence. The lines here are the wrapper,
-        // as {positions} is for the running order.
-        p.Events[nameof(AnnouncementEventType.DriverIntro)] = new AnnouncementEventConfig
-        {
-            Enabled = true,
-            Weight = 90,
-            Templates = new List<string>
-            {
-                "[excited] {intro}!",
-                "[excited] {intro}.",
-                "{intro}.",
-            },
-        };
-
-        p.Events[nameof(AnnouncementEventType.QualifyingRecap)] = new AnnouncementEventConfig
-        {
-            Enabled = true,
-            Weight = 90,
-            Templates = new List<string>
-            {
-                "{recap}",
-                "[excited] {recap}",
-            },
-        };
-
         return p;
     }
 
@@ -1641,8 +1586,6 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.FastestSector => ("Fastest sector", "With a split loop: a driver goes quicker through a sector than anyone has this session - the line to the split is sector 1, the split back to the line sector 2. Not for the first sector times of a session, which are fastest by default. Placeholders: {driver} {car} {team} {sponsors} {sector} (its number) {sectortime}."),
         AnnouncementEventType.SplitPace => ("Up at the split", "With a split loop: a driver crosses the split loop at least a tenth up on their own best lap to that point - the lap that might be a personal best, called before it is done. At most once every five laps per driver. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}."),
         AnnouncementEventType.SplitRecordPace => ("Record pace at the split", "With a split loop: a driver crosses the split loop ahead of the track record lap at that point. Needs the record set with sector times (a record set before the split loop has none). At most once every five laps per driver. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}."),
-        AnnouncementEventType.DriverIntro => ("Driver introductions", "Each driver introduced as the grid is staged, in grid order - \"On pole, number 7, Sam Smith, from Riverside - two wins from the last five.\" Built from the driver's profile (Racing number, Home club or town) and their race history, leaving out whatever is not filled in. The automatic start waits for them before the countdown. Untick to turn them off; tick \"Mains only\" below to keep them for the feature races. Put {intro} where the introduction goes; {driver} {car} {team} {sponsors} {number} {hometown} {grid} {stat} are there on their own too."),
-        AnnouncementEventType.QualifyingRecap => ("Qualifying recap", "Before a main's driver introductions: who took pole and with what, who lines up behind, and how close it was - from tonight's qualifying, exactly as the grid sheet ranks it. Only for a main, only once its class has qualified. Put {recap} where the recap goes; {driver} is the polesitter."),
         AnnouncementEventType.GreenFlagResumed => ("Green flag (resumed)", "Racing resumed after a yellow or red. Separate from \"Race started\" so the restart can be worded differently from the initial start."),
         _ => (type.ToString(), string.Empty),
     };

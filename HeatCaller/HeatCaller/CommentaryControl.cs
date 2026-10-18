@@ -87,6 +87,8 @@ public sealed class CommentaryControl : UserControl
 
     private readonly CheckBox _chkIntros = new ThemedCheckBox();
     private readonly CheckBox _chkIntrosSelective = new ThemedCheckBox();
+    private readonly CheckBox _chkDriverIntros = new ThemedCheckBox();
+    private readonly CheckBox _chkDriverIntrosMains = new ThemedCheckBox();
     private readonly CheckBox _chkSummaries = new ThemedCheckBox();
     private readonly CheckBox _chkTalkingPoints = new ThemedCheckBox();
     private readonly NumericUpDown _numFinishers = new();
@@ -533,6 +535,28 @@ public sealed class CommentaryControl : UserControl
             "Every other race starts without one - fewer words between heats, and the intro saved for the races that "
             + "matter. Rivalries are set at the bottom of the Race Calls tab.");
 
+        // THE DRIVER INTRODUCTIONS (18 Oct 2026) - a roll call of the grid,
+        // written by the model from exact facts, after the race intro.
+        Check(_chkDriverIntros, "Driver introductions - each driver on the grid, in order, before the start");
+        _chkDriverIntros.Checked = _settings.CommentaryDriverIntros;
+        _chkDriverIntros.CheckedChanged += (_, _) => { _settings.CommentaryDriverIntros = _chkDriverIntros.Checked; _settings.Save(); UpdateEnabledState(); };
+
+        Check(_chkDriverIntrosMains, "Only for a main");
+        _chkDriverIntrosMains.Checked = _settings.CommentaryDriverIntrosMainsOnly;
+        _chkDriverIntrosMains.CheckedChanged += (_, _) =>
+        {
+            _settings.CommentaryDriverIntrosMainsOnly = _chkDriverIntrosMains.Checked;
+            _settings.Save();
+        };
+
+        var driverIntrosGrid = new FieldGrid();
+
+        Stepped(driverIntrosGrid.AddRow(string.Empty, _chkDriverIntrosMains));
+        driverIntrosGrid.AddHint(
+            "Grid position, racing number and home club from each driver's profile, and a line of form from their "
+            + "saved races - a milestone start, a winning run, recent wins, their average driver rating. Before a main "
+            + "it opens with what qualifying decided. The automatic start waits for it before the countdown.");
+
         Check(_chkSummaries, "Race recaps - a wrap-up after the checkered flag");
         _chkSummaries.Checked = _settings.CommentaryRaceSummaries;
         _chkSummaries.CheckedChanged += (_, _) => { _settings.CommentaryRaceSummaries = _chkSummaries.Checked; _settings.Save(); UpdateEnabledState(); };
@@ -595,6 +619,8 @@ public sealed class CommentaryControl : UserControl
 
         writes.Add(_chkIntros, stretch: false);
         writes.Add(introsGrid);
+        writes.Add(_chkDriverIntros, stretch: false);
+        writes.Add(driverIntrosGrid);
         writes.Add(_chkSummaries, stretch: false);
         writes.Add(summariesGrid);
         writes.Add(_chkTalkingPoints, stretch: false);
@@ -1062,7 +1088,7 @@ public sealed class CommentaryControl : UserControl
         // layout audit is what would catch the next one.
         _textSize.Keep(() => FieldGrid.LineUp(new[]
         {
-            connectionGrid, introsGrid, summariesGrid, talkingGrid, styleGrid,
+            connectionGrid, introsGrid, driverIntrosGrid, summariesGrid, talkingGrid, styleGrid,
             pauseGrid, teaserGrid, showGrid, chatterGrid,
         }));
 
@@ -1290,6 +1316,8 @@ public sealed class CommentaryControl : UserControl
 
         _chkIntros.Enabled = on;
         _chkIntrosSelective.Enabled = on && _chkIntros.Checked;
+        _chkDriverIntros.Enabled = on;
+        _chkDriverIntrosMains.Enabled = on && _chkDriverIntros.Checked;
         _chkSummaries.Enabled = on;
         _chkTalkingPoints.Enabled = on;
 

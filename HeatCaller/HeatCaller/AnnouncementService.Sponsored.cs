@@ -72,6 +72,31 @@ public sealed partial class AnnouncementService
         return (tag, () => SponsorMentions.Mentioned(moment, id));
     }
 
+    /// <summary>
+    /// The sponsor presenting <paramref name="moment"/> in a line the AI
+    /// commentary writes (18 Oct 2026) - the intros, the recap, a segment -
+    /// with the ration taken, and what to run once the line is actually
+    /// going out, which is when it counts for the sponsor report. Null when
+    /// nobody presents it or the ration is holding it back.
+    /// </summary>
+    internal (string Name, Action Count)? TakeSponsor(SponsoredMoment moment)
+    {
+        if (SponsorOf(moment) is not { } sponsor || !SponsorMentions.TryReserve(moment))
+        {
+            return null;
+        }
+
+        var name = (sponsor.Name ?? string.Empty).Trim().TrimEnd('.', '!', ' ');
+
+        if (name.Length == 0)
+        {
+            return null;
+        }
+
+        var id = sponsor.Id;
+        return (name, () => SponsorMentions.Mentioned(moment, id));
+    }
+
     /// <summary>Raises <see cref="MomentHappened"/> without letting a bad handler reach the lap pipeline.</summary>
     private void RaiseMoment(BroadcastMoment moment)
     {

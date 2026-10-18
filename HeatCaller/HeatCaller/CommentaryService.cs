@@ -1302,6 +1302,86 @@ public sealed class CommentaryService
     }
 
     /// <summary>
+    /// The driver introductions (18 Oct 2026): a roll call of the grid as it
+    /// is staged, written by the model from exact facts - each driver's
+    /// grid position, racing number, home club and one line of form - and,
+    /// before a main, what qualifying decided. Spoken after the race intro.
+    ///
+    /// WHY THE MODEL AND NOT A TEMPLATE. A template round six optional
+    /// pieces reads like a form being filled in, eight times in a row. The
+    /// model varies the rhythm from one driver to the next the way an
+    /// announcer does, while every fact it is given is worked out by the app
+    /// (DriverIntros.Stat, DriverIntros.Recap) and stated exactly.
+    ///
+    /// ITS OWN WORD ALLOWANCE on top of the club's per-line limit - a few
+    /// words a driver, more for the recap - because a roll call of eight
+    /// inside a one-sentence limit is no roll call at all.
+    /// </summary>
+    /// <param name="raceTitle">The race as it is being called - "A-Main (Stock Buggy)".</param>
+    /// <param name="grid">The drivers in grid order; a slot of 0 for a race with no grid.</param>
+    /// <param name="qualifying">What qualifying decided, already worded for the voice (DriverIntros.Recap's spoken form - announcer names, figures in words). Null when this is not a main, or nothing has qualified.</param>
+    /// <param name="presentedBy">The sponsor of the introductions, as the club wrote their name. Null for none.</param>
+    public async Task<string?> BuildDriverIntroductionsAsync(
+        string raceTitle,
+        IReadOnlyList<IntroDriver> grid,
+        string? qualifying = null,
+        string? presentedBy = null,
+        CancellationToken ct = default)
+    {
+        if (Client is null || grid is null || grid.Count == 0)
+        {
+            return null;
+        }
+
+        var hasGrid = grid.Any(d => d.Slot > 0);
+
+        // One line a driver, every part labelled - see DriverIntros.FactLine.
+        var lines = grid.Select(DriverIntros.FactLine).ToList();
+
+        var sponsor = Field(presentedBy?.Trim().TrimEnd('.', '!', ' '), MaxShowNameChars);
+        var recap = Field(qualifying, 400);
+
+        var extraWords = 14 * grid.Count + (recap.Length > 0 ? 35 : 0) + (sponsor.Length > 0 ? 8 : 0);
+
+        var facts =
+            FactsOpen + "\n" +
+            $"Race: {Field(raceTitle)}\n" +
+            (recap.Length > 0 ? $"Qualifying, exact: {recap}\n" : string.Empty) +
+            (sponsor.Length > 0 ? $"The driver introductions are presented by: {sponsor}\n" : string.Empty) +
+            (hasGrid ? "The grid, in starting order:\n" : "The drivers in this race:\n") +
+            string.Join("\n", lines) + "\n" +
+            FactsClose + "\n" +
+            "\nIntroduce every driver listed, in the order listed, the way a broadcast introduces the field before "
+            + "the start - one short, punchy phrase each, and vary how each one is put so it does not sound like a list "
+            + "being read out."
+            + (hasGrid ? " Say each driver's grid position." : " There is no grid for this race, so do not give anybody a position or call anybody on pole.")
+            + " Use each driver's racing number, home and form only where they are listed, exactly as written, and only "
+            + "for that driver. Never give a driver a number, a town, a result, a nickname or a record that is not listed "
+            + "against them. The race has not started: describe no laps, battles or results in it."
+            + (recap.Length > 0
+                ? " Open with one sentence on what qualifying decided, using its names and figures exactly as written - "
+                  + "do not round them and do not add to them."
+                : string.Empty)
+            + (sponsor.Length > 0
+                ? $" Begin with the words \"Driver introductions, presented by {sponsor}\", then go into them."
+                : string.Empty);
+
+        var answer = await Client.GenerateAsync(
+            BuildSystemPrompt(extraWords), facts, maxTokens: MaxTokensForWordLimit(extraWords), temperature: Variety, ct: ct,
+            timeout: BetweenRacesTimeout);
+
+        return await RecordAndReturn(IntroKind, Task.FromResult(answer));
+    }
+
+    /// <summary>
+    /// Who presents a written segment of this kind (SponsoredMoments.ForSegment),
+    /// as the club wrote their name - asked once per segment, as it is
+    /// written. The host takes the ration and counts the mention in its
+    /// answer; null, or a null answer, writes the segment unsponsored.
+    /// </summary>
+    public Func<SegmentKind, string?>? SegmentSponsor { get; set; }
+
+    /// <summary>
     /// The fewest letters a word in capitals on its own needs to count as
     /// shouted. Shorter ones - "RC", "GP", "BMX" - are as likely to be
     /// initials as shouting, and are left alone; two or more in a row are
@@ -2429,7 +2509,9 @@ public sealed class CommentaryService
         CancellationToken ct = default,
         Action<PackedFacts>? historyPacked = null,
         RaceCars? cars = null,
-        MainsOnLayout? mains = null)
+        MainsOnLayout? mains = null,
+        (int Changes, int Leaders)? leadChanges = null,
+        string? presentedBy = null)
     {
         if (Client is null || session.Results.Count == 0)
         {
@@ -2595,6 +2677,29 @@ public sealed class CommentaryService
 
         var spokenLabel = SpokenLabel(session);
 
+        // THE BROADCAST FIGURES (18 Oct 2026): who led and for how long, how
+        // often the lead changed hands, and each named finisher's driver
+        // rating - all counted by the app (RacerStanding.LapsLed, LeadTracker,
+        // DriverRating), never worked out by the model.
+        var ledLines = session.Results
+            .Where(r => r.LapsLed > 0 && !GhostService.IsGhost(r.Transponder))
+            .OrderByDescending(r => r.LapsLed)
+            .Take(4)
+            .Select(r => $"{PromptName(r.Transponder)} {Plural.Of(r.LapsLed, "lap")}")
+            .ToList();
+
+        var leadLine = leadChanges is { Changes: > 0 } lc
+            ? $"The lead changed hands {Plural.Of(lc.Changes, "time")}" + (lc.Leaders >= 2 ? $", among {lc.Leaders} different leaders" : string.Empty)
+            : leadChanges is { Changes: 0 } && ledLines.Count == 1 ? "The lead never changed hands" : string.Empty;
+
+        var ratings = DriverRating.ForSession(session);
+        var ratingLines = ordered
+            .Where(r => ratings.ContainsKey(r.Transponder))
+            .Select(r => $"{PromptName(r.Transponder)} {DriverRating.Format(ratings[r.Transponder])}")
+            .ToList();
+
+        var resultSponsor = Field(presentedBy?.Trim().TrimEnd('.', '!', ' '), MaxShowNameChars);
+
         // The broadcast around it (27 Sep 2026). The show's name and what's
         // next were typed by somebody, so they go in the facts, cleaned, and
         // the instructions below only ever point at them.
@@ -2652,6 +2757,12 @@ public sealed class CommentaryService
                   + string.Join("\n", mainsLines) + "\n"
                 : string.Empty) +
             (championshipLines.Count > 0 ? string.Join("\n", championshipLines) + "\n" : string.Empty) +
+            (ledLines.Count > 0 ? $"Laps led: {string.Join(", ", ledLines)}\n" : string.Empty) +
+            (leadLine.Length > 0 ? $"{leadLine}\n" : string.Empty) +
+            (ratingLines.Count > 0
+                ? $"Driver rating for this race, out of 150 (finish, laps led, pace, fastest lap, distance and places gained): {string.Join(", ", ratingLines)}\n"
+                : string.Empty) +
+            (resultSponsor.Length > 0 ? $"The race result is presented by: {resultSponsor}\n" : string.Empty) +
             FactsClose + "\n" +
             // Deliberately NOT "write one sentence" - that was hardcoded
             // here as well as in the system prompt, so it capped the
@@ -2748,6 +2859,18 @@ public sealed class CommentaryService
                   + "add a year or a date, and do not turn it into a claim about a championship, a season or a record."
                 : string.Empty)
             + (kind is not null ? " Say what kind of race it was, as the Type in the facts has it." : string.Empty)
+            + (ledLines.Count > 0 || leadLine.Length > 0
+                ? " The laps led and the lead changes are exact counts - work in the one that tells the story of the "
+                  + "race (a lead fought over, or led from start to finish), with the numbers exactly as written."
+                : string.Empty)
+            + (ratingLines.Count > 0
+                ? " The driver ratings are exact. Mention one - the winner's, or a standout - as their \"driver rating\", "
+                  + "with the number exactly as written. Do not explain how it is worked out and do not rate anybody "
+                  + "who is not listed."
+                : string.Empty)
+            + (resultSponsor.Length > 0
+                ? $" Say once that the result is presented by {resultSponsor}, that name exactly as written."
+                : string.Empty)
             + (opening
                 ? showName.Length > 0
                     ? " Start the commentary itself like a flashy TV sports broadcast coming back on air - a big, polished "
@@ -2889,13 +3012,26 @@ public sealed class CommentaryService
     /// <param name="setupFacts">MechanicBrief's lines about the winning car. Typed on the setup sheet, so cleaned here like every other field.</param>
     /// <param name="kind">DescribeKind's words for the race, or null.</param>
     /// <param name="log">Told why an answer that came back wasn't used. Called on whatever thread the answer arrives on.</param>
+    /// <summary>
+    /// Who asks an interview's questions, as the prompt names them (18 Oct
+    /// 2026): the announcer, or - when the club has a co-host - the co-host,
+    /// down in pit lane, by name when one is set. Still labelled HOST, so
+    /// ParseInterview reads it the same either way.
+    /// </summary>
+    /// <param name="interviewer">Null for the announcer; the co-host's name (blank for none) when the co-host asks.</param>
+    private static string AskedBy(string? interviewer) =>
+        interviewer is null ? "the announcer"
+        : Field(interviewer) is { Length: > 0 } coHost ? $"the co-host, {coHost}, down in pit lane,"
+        : "the announcer's co-host, down in pit lane,";
+
     public async Task<IReadOnlyList<InterviewExchange>?> BuildMechanicInterviewAsync(
         SessionRecord session,
         string mechanicName,
         IReadOnlyList<string> setupFacts,
         string? kind,
         Action<string>? log = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? interviewer = null)
     {
         if (Client is null || session.Results.Count == 0)
         {
@@ -2956,7 +3092,7 @@ public sealed class CommentaryService
                 ? "The winner's car, from the Garage's setup log:\n" + string.Join("\n", setupLines) + "\n"
                 : "The winner's car: no setup is logged for it in the Garage.\n") +
             FactsClose + "\n" +
-            "\nWrite a short pit-lane interview for straight after this race: the announcer (HOST) talks to the "
+            $"\nWrite a short pit-lane interview for straight after this race: {AskedBy(interviewer)} (HOST) talks to the "
             + "winner's technical lead (TECH LEAD). Exactly "
             + MaxInterviewExchanges
             + " exchanges, every line starting with who says it, like this:\n"
@@ -3072,7 +3208,8 @@ public sealed class CommentaryService
         string? kind,
         ChampionshipSwing? championship,
         Action<string>? log = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? interviewer = null)
     {
         if (Client is null || session.Results.Count == 0)
         {
@@ -3124,7 +3261,7 @@ public sealed class CommentaryService
             $"Team principal: {(name.Length > 0 ? name : "no name is given, so never make one up")}\n" +
             $"Their role, as the announcer introduces them: {PrincipalRole(team, driver)}\n" +
             FactsClose + "\n" +
-            "\nWrite a short pit-lane interview for straight after this race: the announcer (HOST) talks to the "
+            $"\nWrite a short pit-lane interview for straight after this race: {AskedBy(interviewer)} (HOST) talks to the "
             + "winner's team principal (TEAM PRINCIPAL). Exactly "
             + MaxInterviewExchanges
             + " exchanges, every line starting with who says it, like this:\n"
@@ -3177,7 +3314,8 @@ public sealed class CommentaryService
         string? kind,
         ChampionshipAtStake? stake,
         Action<string>? log = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? interviewer = null)
     {
         if (Client is null || string.IsNullOrWhiteSpace(focus))
         {
@@ -3233,7 +3371,7 @@ public sealed class CommentaryService
             $"Team principal: {(name.Length > 0 ? name : "no name is given, so never make one up")}\n" +
             $"Their role, as the announcer introduces them: {PrincipalRole(team, driver)}\n" +
             FactsClose + "\n" +
-            $"\nWrite a short pit-lane interview for just before this race starts: the announcer (HOST) talks to "
+            $"\nWrite a short pit-lane interview for just before this race starts: {AskedBy(interviewer)} (HOST) talks to "
             + $"{driver}'s team principal (TEAM PRINCIPAL). Exactly "
             + MaxInterviewExchanges
             + " exchanges, every line starting with who says it, like this:\n"
@@ -3535,11 +3673,27 @@ public sealed class CommentaryService
             return null;
         }
 
+        // A sponsor who presents this kind of moment (18 Oct 2026) - asked
+        // as it is written, which is when the host counts it.
+        string sponsor;
+
+        try
+        {
+            sponsor = Field(SegmentSponsor?.Invoke(kind), MaxShowNameChars);
+        }
+        catch
+        {
+            sponsor = string.Empty;
+        }
+
         var body =
             FactsOpen + "\n" +
             facts.Text + "\n" +
             FactsClose +
-            "\n\n" + InstructionFor(kind) + HostBrief(kind);
+            "\n\n" + InstructionFor(kind) + HostBrief(kind)
+            + (sponsor.Length > 0
+                ? $" End by saying, once, that it is presented by {sponsor} - that name exactly as written."
+                : string.Empty);
 
         return await RecordAndReturn(LabelFor(kind), Client.GenerateAsync(
             BuildSegmentSystemPrompt(), body, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct));

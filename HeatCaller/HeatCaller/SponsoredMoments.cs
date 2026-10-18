@@ -77,11 +77,23 @@ internal static class SponsoredMoments
         AnnouncementEventType.FastLap => SponsoredMoment.FastestLap,
         AnnouncementEventType.LeaderChange => SponsoredMoment.LeadChange,
         AnnouncementEventType.CloseBattle => SponsoredMoment.Battle,
-        AnnouncementEventType.DriverIntro => SponsoredMoment.DriverIntros,
-        AnnouncementEventType.QualifyingRecap => SponsoredMoment.QualifyingRecap,
         AnnouncementEventType.PositionReport => SponsoredMoment.RunThrough,
         AnnouncementEventType.AchievementUnlocked => SponsoredMoment.Milestones,
         AnnouncementEventType.RaceCompleted => SponsoredMoment.RaceResult,
+        _ => null,
+    };
+
+    /// <summary>
+    /// The moment an AI commentary segment belongs to (18 Oct 2026), or null
+    /// for one nobody can sponsor - a battle watch carries the battles'
+    /// sponsor, a pace note the fastest lap's, and so on.
+    /// </summary>
+    public static SponsoredMoment? ForSegment(SegmentKind kind) => kind switch
+    {
+        SegmentKind.BattleWatch => SponsoredMoment.Battle,
+        SegmentKind.PaceNote => SponsoredMoment.FastestLap,
+        SegmentKind.QualifyingReport => SponsoredMoment.QualifyingRecap,
+        SegmentKind.Honours or SegmentKind.BadgesEarned => SponsoredMoment.Milestones,
         _ => null,
     };
 
