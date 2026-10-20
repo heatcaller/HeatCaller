@@ -263,6 +263,10 @@ public sealed class CommentaryBudget
     /// </summary>
     public const double EssentialReserve = 0.20;
 
+    /// <summary>What Describe says while the model on this PC is writing in place of a spent relay.</summary>
+    public const string LocalWritingSentence =
+        "This month's relay lines are used up - the model on this PC is writing tonight's commentary.";
+
     /// <summary>
     /// The share of a night's allotment released before a single round has
     /// run. Without it progress is zero at the cold open, headroom is zero,
@@ -488,6 +492,15 @@ public sealed class CommentaryBudget
     private double _spentTonight;
     private double _entitledHighWater;
 
+    // The part of _spentTonight the model on this PC wrote while the
+    // relay's month was used up (19 Oct 2026). Those lines cost the club
+    // no relay lines, so they are kept out of the night's headroom: a
+    // top-up landing mid-night must find the night's share of it still
+    // there, not already eaten by the local lines written before it came.
+    // In memory only - a restart charges them again, which is the old,
+    // cautious behaviour, never an overspend.
+    private double _freeTonight;
+
     private readonly HashSet<SegmentKind> _off = new();
     private readonly Dictionary<SegmentKind, int> _perMeeting = new();
     private readonly Dictionary<string, int> _perClass = new(StringComparer.OrdinalIgnoreCase);
@@ -511,7 +524,8 @@ public sealed class CommentaryBudget
     /// real money, and a hold has to be worth exactly what settling it
     /// will cost or the books don't balance.
     /// </summary>
-    private sealed record Reservation(SegmentKind Kind, string? ClassName, int Lines);
+    /// <param name="Free">Taken while the model on this PC was writing the spent month - see _freeTonight.</param>
+    private sealed record Reservation(SegmentKind Kind, string? ClassName, int Lines, bool Free = false);
 
     public CommentaryBudget(Func<DateTime>? clock = null) => _clock = clock ?? (() => DateTime.Now);
 
@@ -734,6 +748,67 @@ public sealed class CommentaryBudget
     public bool AllowanceKnown => _allowance > 0;
 
     /// <summary>
+    /// Asked whether the model on this PC is writing because the relay's
+    /// lines for the month are used up - FallbackCommentaryBrain.TakingOver,
+    /// handed in by the director. Null, or false, is today's budget.
+    ///
+    /// WHY THE BUDGET HAS TO KNOW (19 Oct 2026). Two of its gates exist only
+    /// to make relay lines last the month: the reserve held for intros and
+    /// recaps (TheMonthsAllowance) and the night's share of what is left
+    /// (TheNightsHeadroom). With the month spent, both are shut for good -
+    /// nothing is left and the night's share of nothing is nothing - so the
+    /// live segments the local model is there to write were refused before
+    /// it was ever asked, and the switch-over would have carried the intros
+    /// and recaps and nothing else. While the local model is writing, those
+    /// two gates step aside for the tiers it may write (Core); every other
+    /// gate - the airtime cap, the gaps, the night's caps - is untouched, so
+    /// the night is paced exactly as before. Colour and flourish stay
+    /// relay-only (BrainFallback.None) and are refused for the month here,
+    /// rather than reserved, sent and left unsaid one by one.
+    ///
+    /// Asked BEFORE _gate is taken, never under it (AskLocal): it reaches
+    /// into the relay client and the usage store, each with a lock of its
+    /// own, and a budget lock held across someone else's is how two threads
+    /// end up waiting for each other mid-race.
+    /// </summary>
+    public Func<bool>? LocalModelTakesOver { get; set; }
+
+    /// <summary>LocalModelTakesOver, asked safely. Never with _gate held - see there.</summary>
+    private bool AskLocal()
+    {
+        try
+        {
+            return LocalModelTakesOver?.Invoke() == true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The month is spent by the relay's own count and the model on this PC
+    /// is writing in its place - see LocalModelTakesOver, whose answer is
+    /// handed in as <paramref name="localNow"/>. Called with _gate held.
+    /// </summary>
+    private bool LocalWritingTheMonth(bool localNow) =>
+        localNow && _allowance > 0 && _usedThisMonth >= _allowance;
+
+    /// <summary>True while the relay's month is used up and the model on this PC is writing tonight's commentary. See LocalModelTakesOver.</summary>
+    public bool LocalModelWriting
+    {
+        get
+        {
+            var localNow = AskLocal();
+
+            lock (_gate)
+            {
+                return LocalWritingTheMonth(localNow);
+            }
+        }
+    }
+
+    /// <summary>
     /// How much of tonight's programme has run, and how much of it there
     /// is, as NightShape was last told - what the entitlement is released
     /// against. Readable so a settings page can show where the night is
@@ -768,7 +843,9 @@ public sealed class CommentaryBudget
                     return 0;
                 }
 
-                var mine = _spentTonight + HeldLines();
+                // Relay lines only: what the model on this PC wrote for a spent
+                // month never moved the relay's count - see _freeTonight.
+                var mine = ChargedLines();
                 var moved = _usedBeforeTonight is { } before ? Math.Max(0, _usedThisMonth - before) : 0;
                 var usedBeforeTonight = Math.Max(0, _usedThisMonth - Math.Min(mine, moved));
 
@@ -815,13 +892,14 @@ public sealed class CommentaryBudget
         {
             lock (_gate)
             {
-                return Entitled - _spentTonight - HeldLines();
+                return Entitled - ChargedLines();
             }
         }
     }
 
-    /// <summary>The lines held by reservations still in flight. Called with _gate held.</summary>
-    private int HeldLines() => _open.Values.Sum(r => r.Lines);
+    /// <summary>What tonight has cost in relay lines, settled and held - everything but the free local lines (see _freeTonight). Called with _gate held.</summary>
+    private double ChargedLines() =>
+        Math.Max(0, _spentTonight - _freeTonight) + _open.Values.Where(r => !r.Free).Sum(r => r.Lines);
 
     /// <summary>
     /// The relay's own count, taken from its answer to a write. The club's
@@ -844,7 +922,7 @@ public sealed class CommentaryBudget
             // stood before this laptop wrote anything - its count already
             // includes what is settled and what is in flight, including a
             // night picked back up after a restart. See NightAllotment.
-            _usedBeforeTonight ??= Math.Max(0, _usedThisMonth - (int)Math.Round(_spentTonight + HeldLines()));
+            _usedBeforeTonight ??= Math.Max(0, _usedThisMonth - (int)Math.Round(ChargedLines()));
         }
     }
 
@@ -898,6 +976,7 @@ public sealed class CommentaryBudget
         // quietly put the announcer back to Standard - see ShowChatter.
 
         _spentTonight = 0;
+        _freeTonight = 0;
         _entitledHighWater = 0;
         _lastSpoken = null;
         _usedBeforeTonight = null;
@@ -917,9 +996,11 @@ public sealed class CommentaryBudget
     /// </summary>
     public BudgetVerdict Peek(SegmentKind kind, string? className = null)
     {
+        var localNow = AskLocal();
+
         lock (_gate)
         {
-            return Judge(kind, className, take: false);
+            return Judge(kind, className, take: false, localNow);
         }
     }
 
@@ -1043,13 +1124,15 @@ public sealed class CommentaryBudget
     /// </summary>
     public BudgetVerdict ReserveForProgramme(SegmentKind kind, string? className = null)
     {
+        var localNow = AskLocal();
+
         lock (_gate)
         {
             _insideAProgramme = true;
 
             try
             {
-                return Judge(kind, className, take: true);
+                return Judge(kind, className, take: true, localNow);
             }
             finally
             {
@@ -1069,9 +1152,11 @@ public sealed class CommentaryBudget
     /// </summary>
     public BudgetVerdict Reserve(SegmentKind kind, string? className = null)
     {
+        var localNow = AskLocal();
+
         lock (_gate)
         {
-            return Judge(kind, className, take: true);
+            return Judge(kind, className, take: true, localNow);
         }
     }
 
@@ -1088,6 +1173,11 @@ public sealed class CommentaryBudget
             }
 
             _spentTonight += held.Lines;
+
+            if (held.Free)
+            {
+                _freeTonight += held.Lines;
+            }
 
             if (!spoken)
             {
@@ -1169,15 +1259,24 @@ public sealed class CommentaryBudget
     /// </summary>
     public string Describe()
     {
+        var localNow = AskLocal();
+
         lock (_gate)
         {
-            return Described();
+            return Described(localNow);
         }
     }
 
     /// <summary>Describe's body. Called with _gate held.</summary>
-    private string Described()
+    private string Described(bool localNow)
     {
+        if (LocalWritingTheMonth(localNow))
+        {
+            var written = SpentTonight == 1 ? "Tonight: 1 line written." : $"Tonight: {SpentTonight} lines written.";
+
+            return $"{written} {LocalWritingSentence}";
+        }
+
         if (!AllowanceKnown)
         {
             return SpentTonight == 1
@@ -1225,7 +1324,8 @@ public sealed class CommentaryBudget
         return SegmentTier.Essential;
     }
 
-    private BudgetVerdict Judge(SegmentKind kind, string? className, bool take)
+    /// <param name="localNow">LocalModelTakesOver's answer, asked before _gate was taken.</param>
+    private BudgetVerdict Judge(SegmentKind kind, string? className, bool take, bool localNow)
     {
         var spec = Specs[kind];
         var fallback = FallbackFor(spec.Tier);
@@ -1261,7 +1361,7 @@ public sealed class CommentaryBudget
         // else in here.
         if (spec.Tier == SegmentTier.Essential)
         {
-            return Allow(spec, className, take, fallback);
+            return Allow(spec, className, take, fallback, free: LocalWritingTheMonth(localNow));
         }
 
         if (NothingNewToSay?.Invoke(kind, className) == true)
@@ -1317,6 +1417,17 @@ public sealed class CommentaryBudget
 
         // ---- Then the one that costs money. ----
 
+        // Unless nothing is being spent: the relay's month is used up and
+        // the model on this PC is writing. The two relay-line gates below
+        // step aside for what it may write, and a relay-only tier is
+        // refused for the month here - see LocalModelTakesOver.
+        if (LocalWritingTheMonth(localNow))
+        {
+            return fallback == BrainFallback.None
+                ? No("this month's relay lines are used up, and this one is only written by the relay", BudgetRefusal.TheMonthsAllowance)
+                : Allow(spec, className, take, fallback, free: true);
+        }
+
         if (KeepEverythingRunning)
         {
             return Allow(spec, className, take, fallback);
@@ -1338,7 +1449,7 @@ public sealed class CommentaryBudget
         return Allow(spec, className, take, fallback);
     }
 
-    private BudgetVerdict Allow(SegmentSpec spec, string? className, bool take, BrainFallback fallback)
+    private BudgetVerdict Allow(SegmentSpec spec, string? className, bool take, BrainFallback fallback, bool free = false)
     {
         if (!take)
         {
@@ -1347,7 +1458,7 @@ public sealed class CommentaryBudget
 
         var ticket = _nextTicket++;
 
-        _open[ticket] = new Reservation(spec.Kind, className, spec.Lines);
+        _open[ticket] = new Reservation(spec.Kind, className, spec.Lines, free);
 
         _perMeeting[spec.Kind] = Count(_perMeeting, spec.Kind) + 1;
 

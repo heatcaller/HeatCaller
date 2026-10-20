@@ -210,6 +210,57 @@ internal static class PinMailer
     }
 
     /// <summary>
+    /// One plain email through the club's mailbox, to anybody - the usage
+    /// warnings (UsageMail) and a top-up request (TopUpRequest). The same
+    /// checks, sending and error wording as the PINs. Copies what it needs
+    /// from settings before its first await, like the other sends; waits its
+    /// turn behind a PIN send already under way rather than refusing, since
+    /// nobody is standing over this one.
+    /// </summary>
+    public static async Task<MailResult> SendOneAsync(
+        AppSettings settings,
+        string to,
+        string subject,
+        string body,
+        CancellationToken cancel)
+    {
+        if (ConfigurationProblem(settings) is { } problem)
+        {
+            return new MailResult { Ok = false, Message = problem };
+        }
+
+        var server = Server.From(settings);
+        var message = new Outgoing(string.Empty, string.Empty, to.Trim(), to.Trim(), subject, body);
+
+        try
+        {
+            await Busy.WaitAsync(cancel).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return new MailResult { Ok = false, Message = "Nothing was sent.", Cancelled = true };
+        }
+
+        try
+        {
+            var result = await Task.Run(
+                    () => SendAllAsync(server, new[] { message }, Array.Empty<string>(), null, cancel, isTest: false, _ => $"Emailed {message.To}."),
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+
+            // SendAllAsync counts a batch with one refused address as sent;
+            // for a single email that refusal is the whole answer.
+            return result.Failures.Count > 0
+                ? new MailResult { Ok = false, Message = $"The email didn't go: {result.Failures[0]}" }
+                : result;
+        }
+        finally
+        {
+            Busy.Release();
+        }
+    }
+
+    /// <summary>
     /// One email per racer who has a PIN and an email address, each with
     /// their own PIN - to everyone, or only to <paramref name="onlyTransponders"/>.
     /// A racer whose email is refused is noted and the rest carry on; a

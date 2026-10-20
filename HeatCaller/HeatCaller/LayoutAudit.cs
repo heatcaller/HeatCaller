@@ -434,6 +434,9 @@ internal static class LayoutAudit
         // The finish camera's shots: the night across the top, the list of shots beside the picture, the slider and its time under it (PhotoFinishForm).
         "Photo Finish",
 
+        // This month's allowances: a line each with its bar and Ask for More..., the requests waiting, the email tick box, Refresh and Close (ThisMonthForm).
+        "This Month",
+
         // Lining the split loop up against the line: the crossings paired so
         // far, the answer under them, and Save / Set to Zero / Cancel
         // (SplitLineUpForm). It used DialogFit from the day it was written

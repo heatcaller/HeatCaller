@@ -804,7 +804,8 @@ public sealed class CommentaryService
         ChampionshipAtStake? stake = null,
         Action<PackedFacts>? historyPacked = null,
         RaceScene? scene = null,
-        bool remember = true)
+        bool remember = true,
+        bool introductionsFollow = false)
     {
         if (Client is null)
         {
@@ -1106,6 +1107,14 @@ public sealed class CommentaryService
             // afterwards; these ask for them not to happen. The round is
             // referred to, not repeated, so the label stays inside the facts.
             + " Call the race exactly what the Round in the facts says - never renumber, shorten or reword it."
+            // THE ROLL CALL IS THE DRIVER INTRODUCTIONS' (18 Oct 2026). With
+            // them to follow, an intro that listed the field had the room
+            // hear every name twice in a row.
+            + (introductionsFollow
+                ? " Every driver is introduced one by one straight after this, so do not list the field or run through"
+                  + " the drivers' names: name a driver only where a rivalry, history or championship line makes them"
+                  + " the story, two drivers at most. Saying how many are on the grid is fine."
+                : string.Empty)
             + " It has not started yet: nothing has happened in it, so describe no laps, battles or results."
             + " Write in normal sentence case - capitals for a word or two of emphasis at most, never a whole sentence."
             + (kind is not null ? " Say what kind of race it is, as the Type in the facts has it." : string.Empty)
@@ -2987,6 +2996,32 @@ public sealed class CommentaryService
     /// <summary>How many exchanges an interview runs to - "a brief interview", as asked for.</summary>
     internal const int MaxInterviewExchanges = 2;
 
+    /// <summary>
+    /// How many exchanges the TEAM PRINCIPAL's interview runs to - three,
+    /// where every other interview runs to two.
+    ///
+    /// WHY THIS ONE IS LONGER (18 Oct 2026), and it is not because the
+    /// principal has more to say. Two exchanges can only be a question and
+    /// a question: there is no room in them for a shape. Three is the
+    /// smallest number that can carry one, and the shape is the whole
+    /// reason the segment works - the night's obvious question, one he
+    /// half-dodges, and a commitment for next time. Take any one of those
+    /// three away and what is left is an interview that could have been
+    /// about anything.
+    ///
+    /// THE THIRD BEAT IS ALSO WHAT MAKES NEXT WEEK POSSIBLE. It is the
+    /// one that ends on something checkable, which is what
+    /// <see cref="PrincipalDiary"/> keeps and what the host opens with the
+    /// next time this team is in the booth. A two-beat interview has
+    /// nothing to come back to.
+    ///
+    /// AND IT IS STILL SHORT. Three exchanges at
+    /// <see cref="MaxAnswerWords"/> is well under a minute of speech,
+    /// which is what "a brief interview" has always meant here - the
+    /// segment gets a shape rather than a longer runtime.
+    /// </summary>
+    internal const int PrincipalExchanges = 3;
+
     /// <summary>The longest a question may run, in words, before it is cut back to whole sentences.</summary>
     internal const int MaxQuestionWords = 30;
 
@@ -3202,6 +3237,28 @@ public sealed class CommentaryService
     /// <param name="principalName">What the announcer calls the Team Principal; blank and no name is used or made up.</param>
     /// <param name="kind">DescribeKind's words for the race, or null.</param>
     /// <param name="championship">What the race did to the title, as the recap has it; null for none.</param>
+    /// <param name="nightFacts">
+    /// The winner's whole EVENING and their season rivalry, as
+    /// <see cref="PrincipalFacts.ForThePrincipal"/> worked it out. Empty or
+    /// null on a thin night, and the three questions below are then asked
+    /// about the race alone rather than about a night that is not there.
+    /// </param>
+    /// <param name="stanceBrief">
+    /// The position he comes in with, as the sentences the model is told -
+    /// PrincipalStance.BriefFor. Blank or null for the plain principal,
+    /// which is what every club heard before 18 Oct 2026.
+    ///
+    /// A STRING RATHER THAN THE STANCE ITSELF, for the reason the co-host's
+    /// brief is one: PrincipalStance is internal and this method is public,
+    /// so a Stance here would not compile - and more to the point, this
+    /// method has no business knowing how a stance is chosen. It is handed
+    /// the sentences, as it is handed the facts.
+    /// </param>
+    /// <param name="lastSaid">
+    /// What this team's principal said in this booth last time, as
+    /// PrincipalDiary.FactLines words it. Empty or null the first time, and
+    /// on every night the club has no diary for.
+    /// </param>
     public async Task<IReadOnlyList<InterviewExchange>?> BuildPrincipalAfterAsync(
         SessionRecord session,
         string principalName,
@@ -3209,7 +3266,10 @@ public sealed class CommentaryService
         ChampionshipSwing? championship,
         Action<string>? log = null,
         CancellationToken ct = default,
-        string? interviewer = null)
+        string? interviewer = null,
+        IReadOnlyList<FactBlock>? nightFacts = null,
+        string? stanceBrief = null,
+        IReadOnlyList<string>? lastSaid = null)
     {
         if (Client is null || session.Results.Count == 0)
         {
@@ -3247,6 +3307,22 @@ public sealed class CommentaryService
 
         var standings = championship is null ? new List<string>() : ChampionshipLines(championship);
 
+        // THE PRINCIPAL'S OWN WELL (18 Oct 2026). Everything above this
+        // line is also in front of the announcer, the recap and - for the
+        // race itself - the Technical Lead. These are the lines that are
+        // his alone: the evening rather than the race, and the season
+        // rivalry rather than tonight's. See PrincipalFacts for why that
+        // split is the whole design.
+        var night = (nightFacts ?? Array.Empty<FactBlock>())
+            .Select(block => CommentaryFacts.Clean(block.Text))
+            .Where(text => text.Length > 0)
+            .ToList();
+
+        var said = (lastSaid ?? Array.Empty<string>())
+            .Select(line => Field(line, PrincipalDiary.MostSaidChars * 2))
+            .Where(line => line.Length > 0)
+            .ToList();
+
         var facts =
             FactsOpen + "\n" +
             $"Race: {SpokenLabel(session)}\n" +
@@ -3257,7 +3333,9 @@ public sealed class CommentaryService
             $"How close it was: {DescribeMargin(ordered)}\n" +
             (teammates.Count > 0 ? $"The team's other drivers in this race: {string.Join(", ", teammates)}\n" : string.Empty) +
             (rivalry.Count > 0 ? string.Join("\n", rivalry) + "\n" : string.Empty) +
+            (night.Count > 0 ? string.Join("\n", night) + "\n" : string.Empty) +
             (standings.Count > 0 ? string.Join("\n", standings) + "\n" : string.Empty) +
+            (said.Count > 0 ? string.Join("\n", said) + "\n" : string.Empty) +
             $"Team principal: {(name.Length > 0 ? name : "no name is given, so never make one up")}\n" +
             $"Their role, as the announcer introduces them: {PrincipalRole(team, driver)}\n" +
             FactsClose + "\n" +
@@ -3268,34 +3346,105 @@ public sealed class CommentaryService
             $"\nWrite a short studio interview in the commentary booth, on the recap show later that night: "
             + $"{(interviewer is null ? "the recap show's host" : AskedBy(interviewer))} (HOST) has the winner's team principal "
             + "(TEAM PRINCIPAL) sitting in the booth with them, a while after the race. Exactly "
-            + MaxInterviewExchanges
+            + PrincipalExchanges
             + " exchanges, every line starting with who says it, like this:\n"
             + "HOST: <question>\nTEAM PRINCIPAL: <answer>\nHOST: <question>\nTEAM PRINCIPAL: <answer>\n"
+            + "HOST: <question>\nTEAM PRINCIPAL: <answer>\n"
+
+            // ---------------------------------------------------------------
+            //  THE THREE BEATS (18 Oct 2026)
+            // ---------------------------------------------------------------
+            //
+            // The shape, spelled out, because a three-exchange interview
+            // with no shape is just a two-exchange one with an extra
+            // question on the end. See PrincipalExchanges.
+            //
+            // THE SECOND BEAT IS THE ONE THAT MATTERS and it is the one
+            // that had to be asked for explicitly. Left to itself a model
+            // writes three agreeable questions, and three agreeable
+            // questions is the corporate nothing this whole change exists
+            // to get rid of. A principal who is asked something awkward
+            // and visibly declines to answer it squarely is the moment the
+            // room looks up - and it is only available at all because the
+            // facts now contain something awkward to ask about.
+            + "\nThe FIRST question welcomes them into the booth"
             + (name.Length > 0
-                ? "The first question welcomes them into the booth, introduces them by the name in the facts AND by their "
-                  + "role as the facts give it, once, the way a studio show introduces a guest, and asks what the win means "
-                  + "to the team now they have had time to take it in; "
-                : "The first question welcomes them into the booth and introduces them by their role as the facts give it - "
-                  + "no name is given, so do not use one - and asks what the win means to the team now they have had time "
-                  + "to take it in; ")
-            + "the second asks about the bigger picture"
-            + (standings.Count > 0 || rivalry.Count > 0 || teammates.Count > 0
-                ? " - whichever of these the facts give: "
-                  + string.Join(", ", new[]
-                    {
-                        standings.Count > 0 ? "the championship" : null,
-                        rivalry.Count > 0 ? "the rivalry result" : null,
-                        teammates.Count > 0 ? "how the team's other drivers did" : null,
-                    }.Where(s => s is not null))
-                  + ". "
-                : " - what the team is aiming for next. ")
-            + "The team principal speaks for the whole team, in the first person (\"we\"), measured and reflective - "
-            + "settled in the booth, not out of breath in pit lane - in plain "
-            + $"spoken words - under {MaxAnswerWords - 10} words an answer, and the host's questions shorter still. "
-            + "The team principal talks about results, people and goals, and never about the car's setup, parts or "
-            + "settings - that is the technical lead's subject. "
+                ? ", introduces them by the name in the facts AND by their role as the facts give it, once, the way a "
+                  + "studio show introduces a guest, "
+                : " and introduces them by their role as the facts give it - no name is given, so do not use one - ")
+            + (night.Count > 0
+                ? "and asks the obvious question about how the NIGHT went for the team, now they have had time to take "
+                  + "it in - the evening as a whole, not just the race that was won. "
+                : "and asks what the win means to the team, now they have had time to take it in. ")
+
+            + "The SECOND question is the harder one, and the host asks it plainly rather than softening it"
+            + (night.Count > 0
+                ? " - about whichever of these the facts raise: time lost to untidy laps, a race that was not "
+                  + "finished, warnings from race control, or a rivalry record that is not going their way. The team "
+                  + "principal does not answer it squarely: he accounts for it as the team's responsibility and "
+                  + "moves the answer onto what the team will do, the way a principal deflects without lying. "
+                : (standings.Count > 0 || rivalry.Count > 0 || teammates.Count > 0
+                    ? " - about whichever of these the facts give: "
+                      + string.Join(", ", new[]
+                        {
+                            standings.Count > 0 ? "where this leaves them in the championship" : null,
+                            rivalry.Count > 0 ? "the rivalry result" : null,
+                            teammates.Count > 0 ? "how the team's other drivers did" : null,
+                        }.Where(s => s is not null))
+                      + ". "
+                    : " - about what the team still has to put right. "))
+
+            // THE THIRD BEAT IS WHAT MAKES NEXT WEEK POSSIBLE, and the
+            // instruction is careful about what KIND of thing it may end
+            // on. "We will fix the starts" is a commitment about the
+            // team's own work and is theirs to make. "We will win the
+            // title" is a prediction about a result, which this app does
+            // not say in any voice - see ChampionshipAtStake's note on
+            // predicted swings, which is the same refusal in a different
+            // segment.
+            + "The THIRD question asks what happens next for the team, and the team principal ends on ONE plain "
+            + "commitment about the team's OWN work - something they will do, look at or put right before the next "
+            + "meeting. He never predicts a result, a position, a win or a title, and never promises anything about "
+            + "how a race will go. "
+
+            + (said.Count > 0
+                ? // WHAT HE SAID LAST TIME, put in the host's mouth rather
+                  // than scored. See PrincipalDiary: the app does not know
+                  // whether he kept his word, and a host declaring that he
+                  // did or did not would be the timing system grading a
+                  // man on the strength of a sentence it wrote itself.
+                  "\nThe facts include what this team's principal said in this booth the last time, word for word, "
+                  + "and what has happened since. The FIRST question puts his own words back to him - quoting the "
+                  + "words in the facts exactly - and asks him about them. Do NOT say whether he kept his word, "
+                  + "delivered, failed or was proved right or wrong: read what he said and what happened, and let "
+                  + "him answer for it. "
+                : string.Empty)
+
+            // ---------------------------------------------------------------
+            //  HOW HE TALKS - which is NOT how the announcer talks
+            // ---------------------------------------------------------------
+            //
+            // The segment's other failure mode, and the quieter one: a
+            // principal who narrates. He is in a booth minutes after the
+            // room heard the race called, and a guest who starts calling
+            // it again is a guest saying something the room has already
+            // had. So the rules below are all subtractions - no times, no
+            // play-by-play, no excitement - and what is left is the only
+            // register he has.
+            + "\nThe team principal speaks for the whole team, in the first person plural (\"we\", \"us\", \"the "
+            + "team\"), and only says \"I\" where he is taking responsibility for something. He is measured and "
+            + "unhurried - settled in a booth hours into the evening, not out of breath in pit lane - and slower "
+            + $"than the rest of the broadcast. Under {MaxAnswerWords - 10} words an answer, and the host's "
+            + "questions shorter still. "
+            + "He does NOT read out lap times, gaps or split times, and does not describe the racing lap by lap: "
+            + "the room heard all of that called hours ago and he is the one voice in the show that does not repeat "
+            + "it. He talks about results, people, responsibility and what the team is aiming for. "
+            + "He never talks about the car's setup, parts or settings - that is the technical lead's subject. "
+
+            + (string.IsNullOrWhiteSpace(stanceBrief) ? string.Empty : "\n" + stanceBrief.Trim() + " ")
+
             + (standings.Count > 0
-                ? "The championship lines are the standings AFTER this race: use positions, points and gaps exactly as "
+                ? "\nThe championship lines are the standings AFTER this race: use positions, points and gaps exactly as "
                   + "written, and do not say a title is won or lost unless the lines say so. "
                 : string.Empty)
             + "Every name, time and number in the facts is exact - use them as written or not at all. "
@@ -3303,7 +3452,7 @@ public sealed class CommentaryService
 
         return await AskForInterviewAsync(
             facts, name, PrincipalLabels, new[] { driver, name, car, team, Field(session.Label) },
-            BetweenRacesTimeout, log, ct);
+            BetweenRacesTimeout, log, ct, PrincipalExchanges);
     }
 
     /// <summary>
@@ -3315,6 +3464,18 @@ public sealed class CommentaryService
     /// </summary>
     /// <param name="focus">The driver the Team Principal speaks for, by transponder.</param>
     /// <param name="stake">The championship as it stands before the race; null for none.</param>
+    /// <param name="nightFacts">
+    /// Their night SO FAR - the heats already run - as
+    /// <see cref="PrincipalFacts.ForThePrincipal"/> worked it out. Empty
+    /// before the first race of the evening, which is most of what this
+    /// gets on a club's opening heat.
+    /// </param>
+    /// <param name="stanceBrief">
+    /// The position he comes in with, read off the night so far, as the
+    /// sentences the model is told - PrincipalStance.BriefFor. Blank or
+    /// null for the plain principal; see BuildPrincipalAfterAsync for why
+    /// this is a string.
+    /// </param>
     public async Task<IReadOnlyList<InterviewExchange>?> BuildPrincipalBeforeAsync(
         RoundDefinition round,
         string focus,
@@ -3323,7 +3484,9 @@ public sealed class CommentaryService
         ChampionshipAtStake? stake,
         Action<string>? log = null,
         CancellationToken ct = default,
-        string? interviewer = null)
+        string? interviewer = null,
+        IReadOnlyList<FactBlock>? nightFacts = null,
+        string? stanceBrief = null)
     {
         if (Client is null || string.IsNullOrWhiteSpace(focus))
         {
@@ -3364,6 +3527,16 @@ public sealed class CommentaryService
 
         var standings = stake is null ? new List<string>() : StakesLines(stake);
 
+        // THE NIGHT SO FAR, which before a race is the heats already run.
+        // Empty on a club's first heat of the evening, and the questions
+        // below then ask about the race ahead alone - see the note in
+        // BuildPrincipalAfterAsync for what these lines are and why
+        // nothing else in the broadcast has them.
+        var night = (nightFacts ?? Array.Empty<FactBlock>())
+            .Select(block => CommentaryFacts.Clean(block.Text))
+            .Where(text => text.Length > 0)
+            .ToList();
+
         var facts =
             FactsOpen + "\n" +
             $"Race: {Field(round.RoundLabel)}\n" +
@@ -3375,6 +3548,7 @@ public sealed class CommentaryService
             (grid.Count > 0 ? $"On the grid: {string.Join(", ", grid)}\n" : string.Empty) +
             (teammates.Count > 0 ? $"The team's other drivers in this race: {string.Join(", ", teammates)}\n" : string.Empty) +
             (rivalries.Count > 0 ? string.Join("\n", rivalries) + "\n" : string.Empty) +
+            (night.Count > 0 ? string.Join("\n", night) + "\n" : string.Empty) +
             (standings.Count > 0 ? string.Join("\n", standings) + "\n" : string.Empty) +
             $"Team principal: {(name.Length > 0 ? name : "no name is given, so never make one up")}\n" +
             $"Their role, as the announcer introduces them: {PrincipalRole(team, driver)}\n" +
@@ -3390,14 +3564,33 @@ public sealed class CommentaryService
                 : "The first question introduces them by their role as the facts give it - no name is given, so do not "
                   + "use one - and asks how the team is feeling going into it; ")
             + "the second asks what they are hoping for from it"
-            + (standings.Count > 0 || rivalries.Count > 0 ? ", with the championship or the rivalry in the facts in mind. " : ". ")
-            + "The team principal speaks for the team, in the first person (\"we\"), confident but careful, in plain "
+            + (night.Count > 0
+                ? ", with how the team's night has gone SO FAR in mind - the facts say what has already happened "
+                  + "tonight, and that is what the question is about. "
+                : standings.Count > 0 || rivalries.Count > 0
+                    ? ", with the championship or the rivalry in the facts in mind. "
+                    : ". ")
+
+            // TWO BEATS HERE, NOT THREE, and it is a deadline rather than
+            // a judgement about the segment. This interview is written
+            // while the grid is being staged, inside PrincipalModelBudget,
+            // and the countdown waits for it - a third exchange is a third
+            // of a club's staging window spent on a model, every heat. The
+            // booth interview after the race has no clock on it, so that
+            // is where the shape lives. See PrincipalExchanges.
+            + "\nThe team principal speaks for the team, in the first person plural (\"we\", \"us\", \"the team\"), "
+            + "confident but careful, in plain "
             + $"spoken words - under {MaxAnswerWords - 10} words an answer, and the host's questions shorter still. "
+            + "He does NOT read out lap times, gaps or split times, and does not describe the racing lap by lap - "
+            + "that is the announcer's job and the room has already had it. "
             + "The race has not happened: talk about hopes, plans and respect for the rivals, and never say how it "
             + "will go, or state a result, a position or a time that has not happened. "
             + "The team principal never talks about the car's setup, parts or settings - that is the technical lead's subject. "
+
+            + (string.IsNullOrWhiteSpace(stanceBrief) ? string.Empty : "\n" + stanceBrief.Trim() + " ")
+
             + (standings.Count > 0
-                ? "The championship lines are the standings BEFORE this race: use positions, points and gaps exactly as "
+                ? "\nThe championship lines are the standings BEFORE this race: use positions, points and gaps exactly as "
                   + "written, and do not say what this race will do to them. "
                 : string.Empty)
             + "Every name and number in the facts is exact - use them as written or not at all. "
@@ -3420,23 +3613,30 @@ public sealed class CommentaryService
         IEnumerable<string> properNames,
         TimeSpan? timeout,
         Action<string>? log,
-        CancellationToken ct)
+        CancellationToken ct,
+        int? mostExchanges = null)
     {
         if (Client is null)
         {
             return null;
         }
 
+        // ROOM FOR THE EXTRA BEAT. A three-exchange interview asked for
+        // inside a two-exchange token budget comes back cut off in the
+        // middle of the third answer, which ParseInterview then drops -
+        // so the principal's longer interview would have failed silently
+        // and looked like a model that would not follow the form.
         var answer = await Client.GenerateAsync(
             BuildInterviewSystemPrompt(), facts,
-            maxTokens: 360, temperature: Variety, ct: ct, timeout: timeout);
+            maxTokens: 180 * Math.Max(2, mostExchanges ?? MaxInterviewExchanges),
+            temperature: Variety, ct: ct, timeout: timeout);
 
         if (string.IsNullOrWhiteSpace(answer))
         {
             return null;
         }
 
-        var interview = ParseInterview(answer, guestName, properNames, guestLabels);
+        var interview = ParseInterview(answer, guestName, properNames, guestLabels, mostExchanges);
 
         if (interview is null)
         {
@@ -3488,13 +3688,31 @@ public sealed class CommentaryService
     /// Exchanges are read in order until one breaks the pattern - a host
     /// line, then a mechanic line, each of at least two words and short
     /// enough for TidyIntro to keep - and at most
-    /// <see cref="MaxInterviewExchanges"/> are kept.
+    /// <paramref name="mostExchanges"/> are kept.
     /// </summary>
     /// <param name="properNames">Names TidyIntro gives back their own spelling if a shouted line is calmed.</param>
     /// <param name="guestLabels">The labels the guest's lines may start with; null for the Technical Lead's (GuestLabels).</param>
+    /// <param name="mostExchanges">
+    /// How many exchanges to keep; null for <see cref="MaxInterviewExchanges"/>,
+    /// which is every interview but the Team Principal's.
+    ///
+    /// A PARAMETER RATHER THAN A RAISED CONSTANT (18 Oct 2026). The
+    /// principal's interview wants three (see
+    /// <see cref="PrincipalExchanges"/>) and the Technical Lead's still
+    /// wants two, and raising the shared constant to three would have
+    /// lengthened the pit-lane interview as a side effect of a change
+    /// nobody made to it - with nothing in the code to say that had
+    /// happened.
+    /// </param>
     internal static IReadOnlyList<InterviewExchange>? ParseInterview(
-        string? text, string mechanicName, IEnumerable<string> properNames, IReadOnlyList<string>? guestLabels = null)
+        string? text,
+        string mechanicName,
+        IEnumerable<string> properNames,
+        IReadOnlyList<string>? guestLabels = null,
+        int? mostExchanges = null)
     {
+        var keep = Math.Max(1, mostExchanges ?? MaxInterviewExchanges);
+
         if (string.IsNullOrWhiteSpace(text))
         {
             return null;
@@ -3561,7 +3779,7 @@ public sealed class CommentaryService
 
         var exchanges = new List<InterviewExchange>();
 
-        for (var i = 0; i + 1 < turns.Count && exchanges.Count < MaxInterviewExchanges; i += 2)
+        for (var i = 0; i + 1 < turns.Count && exchanges.Count < keep; i += 2)
         {
             if (!turns[i].Host || turns[i + 1].Host)
             {

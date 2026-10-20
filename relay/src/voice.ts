@@ -162,6 +162,21 @@ export interface VoiceUsage {
   readonly resetsAt: string;
 }
 
+/**
+ * One meter as the usage route reports it - the voice's characters or the
+ * brain's lines - read without spending anything. allowance includes
+ * topUp. A meter the club's plan does not include reads enabled:false and
+ * an allowance of 0, with whatever it has used still shown: a club that
+ * was switched off mid-month still spent it.
+ */
+export interface MeterUsage {
+  readonly enabled: boolean;
+  readonly used: number;
+  readonly allowance: number;
+  readonly topUp: number;
+  readonly resetsAt: string;
+}
+
 export interface VoiceCatalogueView {
   readonly enabled: boolean;
   readonly voices: readonly { id: string; name: string; what: string; rev: string; cloned: boolean }[];
@@ -477,6 +492,27 @@ export class VoiceService {
         cloned: voice.cloned,
       })),
       usage,
+    };
+  }
+
+  /**
+   * Where this club's month stands, for the usage route and the manager's
+   * phone: the count, the plan with any top-up, and nothing spent. Read the
+   * same way the catalogue reads it - one stat for the top-up, the count
+   * from memory once it has been read.
+   */
+  async usage(club: string, plan: VoicePlan): Promise<MeterUsage> {
+    const month = monthOf(this.now());
+    const enabled = this.available && plan.enabled;
+    const topUp = enabled ? await this.topUpFor(club, month) : 0;
+    const state = await this.usageState(club, plan, month);
+
+    return {
+      enabled,
+      used: state.usage.used,
+      allowance: enabled ? plan.monthlyChars + topUp : 0,
+      topUp,
+      resetsAt: state.usage.resetsAt,
     };
   }
 

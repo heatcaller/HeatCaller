@@ -292,6 +292,13 @@ internal sealed class HeatCallerVoiceClient
     internal bool RelayConfigured => Target() is not null;
 
     /// <summary>
+    /// The relay, club and token the voice is spoken through, or null - for
+    /// UsageMeters, which asks the same relay how much of the month is used
+    /// and must ask it exactly as the voice would, safety gates and all.
+    /// </summary>
+    internal (string Root, string Club, string Token)? RelayTarget => Target();
+
+    /// <summary>
     /// Why there is nothing to ask. Two different situations wearing the
     /// same refusal: sending a club to the Club Website page when the fault is in
     /// the voice relay boxes on the page they are looking at would be a
@@ -440,10 +447,23 @@ internal sealed class HeatCallerVoiceClient
                     }
                 }
 
-                return new HeatCallerCatalogue(
+                var catalogue = new HeatCallerCatalogue(
                     root.TryGetProperty("enabled", out var enabled) && enabled.ValueKind == JsonValueKind.True,
                     voices,
                     AllowanceFrom(root));
+
+                // The month's figure, for the meters. A relay or plan with no
+                // voice has nothing to measure, so the meter goes.
+                if (catalogue.Enabled)
+                {
+                    ReportToMeters(catalogue.Allowance);
+                }
+                else
+                {
+                    UsageMeters.Shared.Forget(MeterKind.HeatCallerVoice);
+                }
+
+                return catalogue;
             }
             // InvalidOperationException too: valid JSON of the wrong shape - an
             // array, or a voice listed as a bare string - throws that rather
@@ -572,14 +592,26 @@ internal sealed class HeatCallerVoiceClient
                     throw new HeatCallerVoiceException(HeatCallerRefusal.Unknown, "The relay answered with no audio.");
                 }
 
+                var spoken = AllowanceFromHeaders(response);
+
+                if (spoken is not null)
+                {
+                    ReportToMeters(spoken);
+                }
+
                 return (
                     audio,
-                    AllowanceFromHeaders(response),
+                    spoken,
                     string.Equals(Header(response, "x-voice-cache"), "hit", StringComparison.OrdinalIgnoreCase));
             }
 
             var body = await ReadTextAsync(response, cancel).ConfigureAwait(false);
             var (refusal, message, allowance) = ReadRefusal(response, body);
+
+            if (allowance is not null)
+            {
+                ReportToMeters(allowance);
+            }
 
             throw new HeatCallerVoiceException(refusal, message, allowance);
         }
@@ -984,6 +1016,14 @@ internal sealed class HeatCallerVoiceClient
 
         return (refusal, message, allowance);
     }
+
+    /// <summary>
+    /// Tells UsageMeters where the month stands. Only from the club's own
+    /// speak and catalogue answers - never a preview's, which counts a
+    /// separate daily allowance and would make the month's meter jump about.
+    /// </summary>
+    private static void ReportToMeters(HeatCallerAllowance allowance) =>
+        UsageMeters.Shared.Report(MeterKind.HeatCallerVoice, allowance.Used, allowance.Allowance, allowance.ResetsUtc);
 
     private static HeatCallerAllowance AllowanceFrom(JsonElement root)
     {

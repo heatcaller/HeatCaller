@@ -4720,11 +4720,14 @@ function showTab(name) {
     if (page) page.style.display = (t === name) ? 'block' : 'none';
     if (nav) nav.className = 'navbtn' + (t === name ? ' on' : '');
   });
+  // Opening Today reads the allowances afresh; the poll's own reads of
+  // them (refreshActive) are held to one a minute.
+  if (name === 'today') refreshUsage(true);
   refreshActive();
 }
 function refreshActive() {
   if (fieldBusy()) return Promise.resolve();
-  if (active === 'today') return refreshToday();
+  if (active === 'today') return Promise.all([refreshToday(), refreshUsage(false)]);
   if (active === 'entries') return refreshEntries();
   if (active === 'program') return refreshProgram();
   if (active === 'results') return refreshResults();
@@ -4812,6 +4815,117 @@ document.getElementById('btnNewDay').addEventListener('click', () => {
 document.getElementById('btnBuildQualifying').addEventListener('click', () => {
   doOp('program.buildQualifying', {}, () => { refreshToday(); if (active === 'program') refreshProgram(); });
 });
+
+// ---- This month: the club's allowances ---------------------------------------
+// Straight from the relay (manage/usage), not down the tunnel: it is the
+// relay that counts commentary lines and HeatCaller voice characters, so
+// this shows even while the laptop is away. Asked when the Today tab opens
+// and, in the twenty-second poll, at most once a minute. Asking for more
+// only records the ask on the relay - which sends no email - so the
+// support address is offered beside it, prefilled.
+const USAGE_METERS = [
+  { key: 'commentary', name: 'AI commentary', unit: 'lines' },
+  { key: 'voice', name: 'HeatCaller voice', unit: 'characters' },
+];
+const SUPPORT_EMAIL = 'support@heatcaller.com';
+let usageAt = 0;
+let usageData = null;
+const usageSaid = {};
+
+function refreshUsage(force) {
+  if (!signedIn()) return Promise.resolve();
+  if (!force && Date.now() - usageAt < 60000) return Promise.resolve();
+  usageAt = Date.now();
+  return api('usage', { pass: pass() }).then((d) => {
+    if (d._status === 403) { showSignIn('Signed out - sign in again.'); return; }
+    // Anything else that is not an answer - a relay from before this, a
+    // busy minute - leaves the block as it was rather than saying so.
+    if (!d.ok) return;
+    usageData = d;
+    renderUsage();
+  });
+}
+
+function groupedNumber(n) {
+  try { return Number(n).toLocaleString('en-US'); } catch (e) { return String(n); }
+}
+
+function resetDay(iso) {
+  const when = new Date(String(iso || ''));
+  if (isNaN(when.getTime())) return '';
+  // UTC, as the relay counts: the first of the month there is still the
+  // last of the month in the evening across the Atlantic.
+  try { return when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }); }
+  catch (e) { return when.toISOString().slice(0, 10); }
+}
+
+function renderUsage() {
+  const box = document.getElementById('usageBox');
+  const body = document.getElementById('usageBody');
+  const d = usageData || {};
+  const asks = Array.isArray(d.requests) ? d.requests : [];
+  const rows = [];
+
+  USAGE_METERS.forEach((meter) => {
+    const m = d[meter.key];
+    if (!m || m.enabled !== true) return;
+    const used = Math.max(0, Number(m.used) || 0);
+    const allowance = Math.max(0, Number(m.allowance) || 0);
+    const pct = allowance > 0 ? Math.floor((used * 100) / allowance) : 0;
+    const level = allowance > 0 && used >= allowance ? ' spent' : pct >= 80 ? ' watch' : '';
+    const width = Math.min(100, pct);
+    const open = asks.some((r) => r && r.meter === meter.key && r.status === 'open');
+    const day = resetDay(m.resetsAt);
+    const subject = 'Top-up request for ' + CLUB + ': ' + meter.name;
+    const mailBody = groupedNumber(used) + ' of ' + groupedNumber(allowance) + ' ' + meter.unit + ' used this month.';
+    const mail = 'mailto:' + SUPPORT_EMAIL + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(mailBody);
+
+    rows.push('<div class="meter">'
+      + '<div class="kv"><span class="lbl">' + esc(meter.name) + '</span><b>'
+      + esc(groupedNumber(used)) + ' of ' + esc(groupedNumber(allowance)) + ' ' + esc(meter.unit) + ' (' + esc(pct) + '%)</b></div>'
+      + '<div class="bar' + level + '"><i style="width:' + esc(width) + '%"></i></div>'
+      + (day ? '<div class="note">Starts again ' + esc(day) + '</div>' : '')
+      + '<div class="rowActions">'
+      + (open
+        ? '<span class="note">' + esc(usageSaid[meter.key] || 'Already asked this month.') + '</span>'
+        : '<button class="btn small" type="button" data-ask="' + esc(meter.key) + '">Ask for More</button>')
+      + '<a class="note" href="' + esc(mail) + '">Email ' + esc(SUPPORT_EMAIL) + '</a>'
+      + '</div></div>');
+  });
+
+  box.style.display = rows.length ? 'block' : 'none';
+  body.innerHTML = rows.join('');
+}
+// One listener for every Ask for More button, however often they are drawn.
+document.getElementById('usageBody').addEventListener('click', (e) => {
+  const btn = e.target && e.target.closest ? e.target.closest('button[data-ask]') : null;
+  if (btn && !btn.disabled) askForMore(btn.getAttribute('data-ask'), btn);
+});
+
+function askForMore(meter, btn) {
+  // A request can't be taken back, so a stray tap on a phone in a pocket
+  // asks first - as the laptop's Ask for More... does.
+  const about = USAGE_METERS.find((m) => m.key === meter);
+  if (!confirm('Ask for more ' + (about ? about.name + ' ' + about.unit : 'of this allowance') + ' this month?')) return;
+  if (btn) btn.disabled = true;
+  api('topup-request', { pass: pass(), meter: meter, note: '' }).then((d) => {
+    if (d._status === 403) { showSignIn('Signed out - sign in again.'); return; }
+    if (!d.ok) {
+      if (btn) btn.disabled = false;
+      say(d.error || 'Could not ask just now - email support instead.', false);
+      return;
+    }
+    // The relay only notes the request - it sends no email - so the
+    // email link beside it is what reaches support sooner.
+    usageSaid[meter] = d.already ? 'Already asked this month.' : 'Asked - noted on the relay. Email support too if it is urgent.';
+    // Shown at once from the answer, then read again for the rest.
+    if (usageData && d.request) {
+      usageData.requests = [d.request].concat((usageData.requests || []).filter((r) => r && r.id !== d.request.id));
+    }
+    renderUsage();
+    refreshUsage(true);
+  });
+}
 
 // ---- Entries ----------------------------------------------------------------
 let entriesData = [];
@@ -5363,6 +5477,19 @@ html.light body:not(.signin) .msg { box-shadow: 0 8px 28px rgba(17, 21, 28, 0.18
 .sub { font-size: 12px; color: var(--muted); padding: 0 0 9px; border-bottom: 1px solid var(--hair); margin-bottom: 4px; }
 .banner { margin: 10px 0; padding: 12px 14px; border-radius: 10px; background: var(--on-tint); border: 1px solid var(--on-edge); }
 .empty { padding: 24px; text-align: center; color: var(--muted); }
+/* This month's allowances (renderUsage): a thin bar under each figure,
+   amber from 80% used and red once it is all used. */
+.sect { margin: 18px 0 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.meter { padding-bottom: 8px; border-bottom: 1px solid var(--hair); }
+.meter .kv { border-bottom: 0; padding-bottom: 4px; flex-wrap: wrap; }
+.bar { height: 8px; border-radius: 4px; background: var(--raised); overflow: hidden; margin: 2px 0 6px; }
+.bar i { display: block; height: 100%; background: var(--good); }
+.bar.watch i { background: #F5B83D; }
+.bar.spent i { background: var(--bad); }
+/* The dark looks' amber is too pale on a light page; the app's own light amber. */
+html.light .bar.watch i { background: #D99400; }
+.note { font-size: 13px; color: var(--muted); }
+a.note { color: var(--accent); }
 
 .btn { display: inline-block; padding: 13px 16px; margin: 4px 6px 4px 0; font-size: 15px; font-weight: 700;
        border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--raised);
@@ -5417,6 +5544,10 @@ ${overrides}
       <button class="btn wide" id="btnNewDay" type="button">New Race Day&hellip;</button>
       <button class="btn wide" id="btnBuildQualifying" type="button">Build Qualifying</button>
       <div class="sub" id="undoList">Nothing to undo.</div>
+      <div id="usageBox" style="display:none">
+        <div class="sect">This month</div>
+        <div id="usageBody"></div>
+      </div>
     </div>
 
     <div id="tab-entries" style="display:none">

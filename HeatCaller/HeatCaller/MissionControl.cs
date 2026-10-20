@@ -4,8 +4,8 @@ namespace HeatCaller;
 /// Everything that has to be right before a green flag, judged in one
 /// place: the decoder, its heartbeat, the split loop, the cars being heard,
 /// this race's grid, timing, transponders that are fading, the website, the
-/// sound and the cloud backups. MissionControlForm shows the answer as a
-/// wall of tiles.
+/// sound, the cloud backups and the month's allowances. MissionControlForm
+/// shows the answer as a wall of tiles.
 ///
 /// Rehearsal 4 staged a heat with the decoder unplugged, and lost an EasyLap
 /// off USB mid-main. Each fault was on some page somewhere - a dot on
@@ -49,6 +49,7 @@ internal static class MissionControl
     /// <param name="Relay">The website relay's status; null when the club doesn't publish.</param>
     /// <param name="VoiceMuted">The announcer is muted.</param>
     /// <param name="CloudBackup">Whether the club's backups are reaching the cloud, already judged (CloudBackupStatus); null when it wasn't asked.</param>
+    /// <param name="Allowances">This month's metered allowances (UsageMeters) and whether the model on this PC can write; null when they weren't asked.</param>
     public sealed record Inputs(
         string LineDecoder,
         DecoderConnectionState LineState,
@@ -63,7 +64,16 @@ internal static class MissionControl
         IReadOnlyList<string> Fading,
         RelayStatus? Relay,
         bool VoiceMuted,
-        CloudBackupStatus.State? CloudBackup = null);
+        CloudBackupStatus.State? CloudBackup = null,
+        AllowanceState? Allowances = null);
+
+    /// <summary>
+    /// The allowances the Allowances tile judges: every meter the store has
+    /// (UsageMeters.All) - for commentary only while commentary is on - and
+    /// whether the model on this PC is there to write when the relay's
+    /// lines run out (BundledLlmClient.IsModelAvailable).
+    /// </summary>
+    public sealed record AllowanceState(IReadOnlyList<Meter> Meters, bool LocalModelWrites);
 
     /// <summary>The heartbeat comes once a second; this long without one and the decoder or its cable has stopped.</summary>
     internal static readonly TimeSpan HeartbeatLate = TimeSpan.FromSeconds(5);
@@ -85,6 +95,7 @@ internal static class MissionControl
             Website(inputs),
             Sound(inputs),
             Cloud(inputs),
+            Allowances(inputs),
         };
 
         return tiles;
@@ -221,6 +232,83 @@ internal static class MissionControl
     private static Tile Cloud(Inputs i) => i.CloudBackup is { } cloud
         ? new("cloud", "Cloud backup", cloud.Headline, cloud.Detail, cloud.Level)
         : new("cloud", "Cloud backup", "-", "Not checked.", Level.Off);
+
+    /// <summary>
+    /// The month's allowances (UsageMeters): AI commentary through the
+    /// relay, the HeatCaller voice, a key of the club's own. Worth a look
+    /// from 80%; a problem when running out means the night sounds
+    /// different now - the HeatCaller voice gone to Kokoro, commentary
+    /// stopped with no model on this PC to take over. Commentary used up
+    /// with the model writing instead is only worth a look: the night goes
+    /// on, in plainer lines. Off when nothing on this PC is metered.
+    ///
+    /// The worst wins: a voice that is used up is said before a meter at 84%.
+    /// </summary>
+    private static Tile Allowances(Inputs i)
+    {
+        const string Key = "allowances";
+        const string Title = "Allowances";
+
+        var meters = i.Allowances?.Meters ?? Array.Empty<Meter>();
+        var measured = UsageGlance.Measured(meters);
+
+        if (measured.Count == 0)
+        {
+            // A meter we could not read says why, but is nothing to act on
+            // before the green.
+            var note = meters.Select(m => m.Note).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
+
+            // "Unknown" only for one that couldn't be read; a meter read as
+            // not on the plan is simply nothing to measure.
+            return new(Key, Title, meters.Any(m => !m.Known) ? "Unknown" : "-", note ?? "Nothing on this PC is metered.", Level.Off);
+        }
+
+        var voice = measured.FirstOrDefault(m => m.Kind == MeterKind.HeatCallerVoice && m.Spent);
+
+        if (voice is not null)
+        {
+            return new(Key, Title, "Voice used up",
+                "Kokoro is speaking - the HeatCaller voice's characters are used up for this month. Ask for more in the This Month window.", Level.Problem);
+        }
+
+        var ownKey = measured.FirstOrDefault(m => m.Kind == MeterKind.ElevenLabsKey && m.Spent);
+
+        if (ownKey is not null)
+        {
+            return new(Key, Title, "ElevenLabs used up",
+                "Your own ElevenLabs key's characters are used up - lines go to Kokoro if it stands in, or are skipped. Upgrade on elevenlabs.io.", Level.Problem);
+        }
+
+        var commentary = measured.FirstOrDefault(m => m.Kind == MeterKind.Commentary && m.Spent);
+
+        if (commentary is not null)
+        {
+            return i.Allowances!.LocalModelWrites
+                ? new(Key, Title, "AI used up", "The relay's commentary lines are gone - the model on this PC is writing instead.", Level.Watch)
+                : new(Key, Title, "AI used up",
+                    "The relay's commentary lines are gone and there is no model on this PC - commentary has stopped.", Level.Problem);
+        }
+
+        var low = measured.Where(m => m.Level == MeterLevel.Watch).ToList();
+
+        if (low.Count > 0)
+        {
+            return new(Key, Title, Most(low),
+                string.Join("; ", low.Select(m => $"{m.Name} is at {m.ShortPercent()} - {m.Remaining:N0} {m.Unit} left")) + ".",
+                Level.Watch);
+        }
+
+        return new(Key, Title, Most(measured),
+            string.Join("; ", measured.Select(m => $"{m.Name} {m.ShortPercent()} used")) + ".", Level.Good);
+    }
+
+    /// <summary>The most used of <paramref name="meters"/>, as the chip says it ("AI 84%") - one, so it fits the tile's large type.</summary>
+    private static string Most(IReadOnlyList<Meter> meters)
+    {
+        var most = meters.OrderByDescending(m => m.Fraction).First();
+
+        return $"{UsageGlance.ShortName(most.Kind)} {most.ShortPercent()}";
+    }
 
     private static Tile Sound(Inputs i) => i.VoiceMuted
         ? new("sound", "Sound", "Muted", "The announcer is muted - unmute before the green if it should be heard.", Level.Watch)

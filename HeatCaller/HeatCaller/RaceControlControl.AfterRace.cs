@@ -844,6 +844,13 @@ public sealed partial class RaceControlControl
             // the handle that gives it back.
             Task<ShowRun?>? opening = null;
 
+            // THE AFTER-THE-FLAG BED (18 Oct 2026) - under the race
+            // announcer from the finish call to the bumper into the stop
+            // set. Held here so every way out of the sequence takes it away
+            // (see the finally), and the next race being called does too.
+            ImagingBed? flagBed = null;
+            using var flagBedOff = nextRace.Token.Register(() => flagBed?.Finish());
+
             // crossfade: a bumper is being fired over the end of the show,
             // so the bed crossfades out under it rather than lifting into an
             // ending of its own (16 Oct 2026).
@@ -1132,13 +1139,20 @@ public sealed partial class RaceControlControl
                 // being wrong except the thing being measured.
                 await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
 
+                // The bed comes up under what the announcer says next - only
+                // when he has something to say before the break.
+                if ((resultRead is not null || interviewTask is not null || wantsTeaser) && !nextRace.IsCancellationRequested)
+                {
+                    flagBed = ImagingBed.Start(ImagingCue.FlagBed, _announcer, BroadcastImaging.BedLevel, BroadcastImaging.BedDuck);
+                }
+
                 // 1a. AT THE FLAG (18 Oct 2026) - the race announcer, before
                 // the teaser takes the room into the break. The unofficial
                 // result first: the finish call names nobody.
                 if (resultRead is not null && !nextRace.IsCancellationRequested)
                 {
                     var resultQueued = await QueueUnlessNextRaceCalledAsync(
-                        () => _announcer.SpeakReminder(resultRead, showOnScreens: true),
+                        () => _announcer.SpeakReminder(resultRead, showOnScreens: true, onAir: OnAirParts.Result),
                         nextRace.Token);
 
                     if (resultQueued)
@@ -1165,7 +1179,7 @@ public sealed partial class RaceControlControl
                         // The interview still goes out, without them.
                     }
 
-                    await SpeakInterviewAsync(interviewTask, nextRace.Token, throwLine, handBack, "the finish call");
+                    await SpeakInterviewAsync(interviewTask, nextRace.Token, throwLine, handBack, "the finish call", OnAirParts.TechnicalLead);
 
                     await _announcer.WaitForAudioAsync(SpokenWait(), CancellationToken.None);
                 }
@@ -1238,14 +1252,14 @@ public sealed partial class RaceControlControl
                     {
                         if (prepared is not null)
                         {
-                            _announcer.SpeakPrepared(prepared, teaserTail);
+                            _announcer.SpeakPrepared(prepared, teaserTail, onAir: OnAirParts.Teaser);
                         }
                         else
                         {
                             // Voice not configured, muted, or the render failed -
                             // the teaser still speaks, just with the round trip
                             // in front of it.
-                            _announcer.SpeakReminder(teaser, showOnScreens: true, tail: teaserTail);
+                            _announcer.SpeakReminder(teaser, showOnScreens: true, tail: teaserTail, onAir: OnAirParts.Teaser);
                         }
                     }, nextRace.Token);
 
@@ -1314,6 +1328,10 @@ public sealed partial class RaceControlControl
                 {
                     await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
                 }
+
+                // The after-the-flag bed goes as the bumper comes in - or,
+                // with no bumper, as the teaser's last word is heard.
+                flagBed?.Finish();
 
                 // Started, not awaited. Anything still outstanding on the
                 // recap runs alongside the gap rather than after it - the
@@ -1502,13 +1520,13 @@ public sealed partial class RaceControlControl
                     {
                         // Long tail: this is the longest line of the night and
                         // its last words were being clipped.
-                        _announcer.SpeakPrepared(recap.Audio, AnnouncementService.SpeechTail.Long);
+                        _announcer.SpeakPrepared(recap.Audio, AnnouncementService.SpeechTail.Long, onAir: OnAirParts.Recap);
                     }
                     else
                     {
                         // Render failed, or voice isn't configured - the recap
                         // still speaks, just with the round trip in front of it.
-                        _announcer.SpeakReminder(recap.Spoken, delivery, RecapHostVoice, showOnScreens: true);
+                        _announcer.SpeakReminder(recap.Spoken, delivery, RecapHostVoice, showOnScreens: true, onAir: OnAirParts.Recap);
                     }
                 }, nextRace.Token);
 
@@ -1598,7 +1616,7 @@ public sealed partial class RaceControlControl
                 if (principalTask is not null)
                 {
                     await StingBetweenRecapPartsAsync(show, nextRace.Token);
-                    (interview, _) = await SpeakInterviewAsync(principalTask, nextRace.Token);
+                    (interview, _) = await SpeakInterviewAsync(principalTask, nextRace.Token, onAir: OnAirParts.Booth);
                 }
 
                 if (closingTask is not null)
@@ -1701,6 +1719,10 @@ public sealed partial class RaceControlControl
             }
             finally
             {
+                // The after-the-flag bed, if a way out above skipped taking
+                // it away. Safe twice.
+                flagBed?.Finish();
+
                 // Exactly once, however the sequence above ended - recap
                 // spoken, no recap, or a failure part-way. Music set to fade
                 // after the recap has nothing else to wait for, so any path
@@ -2216,27 +2238,268 @@ public sealed partial class RaceControlControl
                 return null;
             }
 
+            var winner = record.Results.OrderBy(r => r.Position).FirstOrDefault();
+            var className = string.IsNullOrEmpty(record.RoundId) ? null : _rounds?.Get(record.RoundId)?.ClassName;
+
+            // READ BEFORE THE AWAIT, on the thread that owns the stores.
+            var (nightFacts, stance) = PrincipalNightBrief(
+                winner?.Transponder, className, PrincipalTablePosition(winner?.Transponder, championship?.Moves));
+
+            var lastSaid = PrincipalDiary.FactLines(PrincipalLastSaid(winner?.Transponder));
+
+            if (stance.Brief.Length > 0)
+            {
+                var booth = BoothTreatment.Describe(delivery);
+
+                StatusMessage?.Invoke(
+                    $"{AppTime.LogStampNow()}  [commentary] The Team Principal comes in {stance.Name.ToLowerInvariant()} - "
+                    + $"read off {_profiles.Get(winner?.Transponder ?? string.Empty)?.SpokenName ?? "the winner"}'s night"
+                    + (booth.Length > 0 ? $", {booth}." : "."));
+            }
+
             var exchanges = await _commentary!.BuildPrincipalAfterAsync(
                 record,
                 plan.PrincipalName,
                 plan.Context.Kind,
                 championship,
                 log: note => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}"),
-                ct: cancel);
+                ct: cancel,
+                nightFacts: nightFacts,
+                stanceBrief: PrincipalStance.BriefFor(stance),
+                lastSaid: lastSaid);
 
             if (exchanges is null)
             {
                 return null;
             }
 
+            KeepWhatThePrincipalSaid(record, plan, exchanges);
+
             // The recap host asks, in the booth (18 Oct 2026) - not the
             // co-host, who is down in pit lane.
-            return await RenderExchangesAsync(exchanges, RecapHostVoice, delivery, plan.PrincipalVoice, cancel);
+            //
+            // AND IN THE BOOTH'S DELIVERY, NOT THE RECAP'S. The recap's is
+            // the punchiest in the app, worked out once up front and handed
+            // to everything downstream - so a host told to settle into a
+            // chair was asking his questions in the voice he calls a photo
+            // finish in. See BoothTreatment for the one lever this app has
+            // for the difference, and for the three things it deliberately
+            // does NOT rebuild because the recap's show already has them.
+            //
+            // THE GUEST'S OWN VOICE IS LEFT ALONE, as the Technical Lead's
+            // is: his voice is the club's choice on Voice > Cast, and the
+            // words the model gives him are already measured. What was
+            // wrong here was a delivery borrowed from trackside, and that
+            // was only ever the host's.
+            return await RenderExchangesAsync(
+                exchanges, RecapHostVoice, BoothTreatment.Delivery(delivery), plan.PrincipalVoice, cancel);
         }
         catch (Exception ex)
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No Team Principal interview - {ex.Message}");
             return null;
+        }
+    }
+
+    // ==================== The Principal's own well (18 Oct 2026) ====================
+    //
+    // The facts that belong to the Team Principal and to nobody else in
+    // the show, read off the stores and turned into the position he comes
+    // in with. See PrincipalFacts for why a guest whose material the room
+    // has already heard twice is a guest the room waits out, and
+    // PrincipalStance for why the position is derived from the night
+    // rather than set by the club.
+    //
+    // READ ON THE UI THREAD BY THE CALLER, like every other store read in
+    // this file - the pass over the history, the rounds and the profiles
+    // happens here and the model gets handed finished sentences. See
+    // CommentaryService's note on RaceScene for the same arrangement.
+
+    /// <summary>
+    /// One driver's evening and the stance it puts their principal in, or
+    /// nothing at all on a night too thin to say anything about.
+    ///
+    /// Empty facts and the plain stance is a real answer and the common
+    /// one early in an evening: a club's first heat, a driver in their
+    /// only race of the night, a round with no class filed against it. The
+    /// prompts are written to ask a different set of questions when this
+    /// comes back empty rather than to fill them in.
+    /// </summary>
+    /// <param name="transponder">The driver whose principal is being interviewed.</param>
+    /// <param name="className">The class to count the season record over; blank for everything the club has run.</param>
+    /// <param name="standing">Where that driver is in the championship, or null when nothing could say - see <see cref="PrincipalTablePosition"/>.</param>
+    private (IReadOnlyList<FactBlock> Facts, PrincipalStance.Stance Stance) PrincipalNightBrief(
+        string? transponder, string? className, int? standing)
+    {
+        var nothing = ((IReadOnlyList<FactBlock>)Array.Empty<FactBlock>(), PrincipalStance.Plain);
+
+        // A LOCAL, so the null check below is the one the compiler trusts:
+        // _rounds is a field, and a field narrowed before a call is not
+        // narrowed after one.
+        var rounds = _rounds;
+
+        if (rounds is null || string.IsNullOrWhiteSpace(transponder))
+        {
+            return nothing;
+        }
+
+        try
+        {
+            if (CommentaryReaders.TheTeamNight(transponder, className, _profiles, _sessionHistory, rounds)
+                is not { } read)
+            {
+                return nothing;
+            }
+
+            var (night, rival) = read;
+
+            // KEYED ON THE NIGHT, not the race. Everything in these facts
+            // is true for the whole evening, so a race-scoped key would
+            // have a club running six heats hear the same sentence in all
+            // six - the argument CommentaryWeekFacts.OneDriver makes about
+            // its own key. The event's id when there is one, and the night
+            // itself when the club filed no race day.
+            var key = string.IsNullOrWhiteSpace(_events?.Active?.Id)
+                ? TonightAtTheTrack.NightOf(DateTime.Now).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+                : _events!.Active!.Id;
+
+            // THEIR BEST FINISH, counting only races they finished - a
+            // zero in the list is a retirement (see TeamNight.Finishes)
+            // and Min over the raw list would make every retirement the
+            // best night anybody ever had.
+            var best = night.Finishes.Where(place => place > 0).DefaultIfEmpty(0).Min();
+
+            return (PrincipalFacts.ForThePrincipal(night, rival, key), PrincipalStance.For(night, best, standing));
+        }
+        catch (Exception ex)
+        {
+            // A reader that threw costs the interview its depth and
+            // nothing else - the questions are still asked off the race
+            // itself. Said once, because a club seeing this every race has
+            // something worth reporting.
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Could not read the Team Principal's night: {ex.Message}");
+            return nothing;
+        }
+    }
+
+    /// <summary>
+    /// What this team's principal said the last time he was in the booth,
+    /// or null when there is nothing worth putting back to him - which is
+    /// the first time, and every night the club has no diary for.
+    ///
+    /// Read rather than held, so a file written by another copy of the app
+    /// or restored from a backup between races is picked up rather than
+    /// quietly ignored - the rule every reader on this page follows.
+    /// </summary>
+    private PrincipalDiary.Entry? PrincipalLastSaid(string? transponder)
+    {
+        try
+        {
+            return PrincipalDiary.Load().LastSaidBy(transponder, DateTime.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            // Costs the callback and nothing else; the interview is still
+            // asked about tonight.
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Could not read what the Team Principal said last: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Where a driver stands in the championship, for
+    /// <see cref="PrincipalStance.For"/> - or null when nothing can say so
+    /// for certain.
+    ///
+    /// MATCHED ON THE NAME, because that is the only key a
+    /// <see cref="ChampionshipMove"/> carries, and NULL UNLESS EXACTLY ONE
+    /// ROW MATCHES. Two drivers a club has named the same thing would
+    /// otherwise pick whichever row came first and hand the principal a
+    /// stance earned by somebody else's season - and a club with two Daves
+    /// is a club, not an edge case. One ambiguous name costs the segment
+    /// its two table-comparing stances and keeps the other three.
+    /// </summary>
+    private int? PrincipalTablePosition(string? transponder, IEnumerable<ChampionshipMove>? moves)
+    {
+        if (moves is null || string.IsNullOrWhiteSpace(transponder))
+        {
+            return null;
+        }
+
+        var profile = _profiles.Get(transponder);
+
+        var names = new[] { profile?.DriverName, profile?.SpokenName }
+            .Select(name => (name ?? string.Empty).Trim())
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (names.Count == 0)
+        {
+            return null;
+        }
+
+        var matched = moves
+            .Where(move => move.Position > 0)
+            .Where(move => names.Contains((move.DriverName ?? string.Empty).Trim(), StringComparer.OrdinalIgnoreCase))
+            .Select(move => move.Position)
+            .Distinct()
+            .ToList();
+
+        return matched.Count == 1 ? matched[0] : null;
+    }
+
+    /// <summary>
+    /// Keeps the one commitment the principal made, so the next time this
+    /// team is in the booth the host can put it back to him.
+    ///
+    /// THE LAST ANSWER AND ONLY THE LAST ANSWER, which is the third beat -
+    /// see CommentaryService.PrincipalExchanges. The first two are a man
+    /// being asked how his night went; the third is the only one that ends
+    /// on something he has undertaken, and it is the only one worth
+    /// quoting back.
+    ///
+    /// NOTHING IS KEPT FROM A TWO-BEAT INTERVIEW. A model that wrote only
+    /// two exchanges never reached the third question, so its last answer
+    /// is an answer about tonight rather than a commitment about next time
+    /// - and quoting that back in a fortnight would be the host inventing
+    /// a promise out of a remark. See PrincipalDiary, which refuses the
+    /// same thing one layer down.
+    /// </summary>
+    private void KeepWhatThePrincipalSaid(
+        SessionRecord record, RecapPlan plan, IReadOnlyList<CommentaryService.InterviewExchange>? exchanges)
+    {
+        if (exchanges is null || exchanges.Count < CommentaryService.PrincipalExchanges)
+        {
+            return;
+        }
+
+        var winner = record.Results.OrderBy(r => r.Position).FirstOrDefault();
+
+        if (winner is null || string.IsNullOrWhiteSpace(winner.Transponder))
+        {
+            return;
+        }
+
+        try
+        {
+            var diary = PrincipalDiary.Load();
+
+            diary.Keep(
+                winner.Transponder,
+                _profiles.Get(winner.Transponder)?.SpokenName,
+                plan.PrincipalName,
+                record.Label,
+                exchanges[^1].Answer,
+                DateTime.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            // Costs next week's callback and nothing tonight.
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] Could not keep what the Team Principal said: {ex.Message}");
         }
     }
 
@@ -2553,7 +2816,7 @@ public sealed partial class RaceControlControl
     /// <param name="after">What the wait is counted from, for the console.</param>
     private async Task<(FollowOn Outcome, bool Said)> SpeakInterviewAsync(
         Task<List<SpokenLine>?> interviewTask, CancellationToken nextRace, SpokenLine? leadIn = null,
-        SpokenLine? handBack = null, string after = "the recap ending")
+        SpokenLine? handBack = null, string after = "the recap ending", string? onAir = null)
     {
         const string stopped = "Interview stopped - the next race was called to the grid.";
 
@@ -2622,7 +2885,8 @@ public sealed partial class RaceControlControl
                     : AnnouncementService.SpeechTail.Normal,
                 run.FollowsAnother
                     ? AnnouncementService.SpeechLead.FollowsOn
-                    : AnnouncementService.SpeechLead.Normal);
+                    : AnnouncementService.SpeechLead.Normal,
+                onAir);
         }
 
         return (FollowOn.Spoken, true);
@@ -2803,7 +3067,8 @@ public sealed partial class RaceControlControl
                     : AnnouncementService.SpeechTail.Normal,
                 run.FollowsAnother
                     ? AnnouncementService.SpeechLead.FollowsOn
-                    : AnnouncementService.SpeechLead.Normal);
+                    : AnnouncementService.SpeechLead.Normal,
+                OnAirParts.Achievements);
         }
 
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] Achievements spoken: \"{plan.Turns[1].Line}\"");
@@ -3098,13 +3363,14 @@ public sealed partial class RaceControlControl
                                 : AnnouncementService.SpeechTail.Normal,
                             lead: run.FollowsAnother
                                 ? AnnouncementService.SpeechLead.FollowsOn
-                                : AnnouncementService.SpeechLead.Normal);
+                                : AnnouncementService.SpeechLead.Normal,
+                            onAir: ShowBlock.NameFor(said.Kind));
                     }
 
                     continue;
                 }
 
-                _announcer.SpeakReminder(said.Text, null, RecapHostVoice, showOnScreens: true);
+                _announcer.SpeakReminder(said.Text, null, RecapHostVoice, showOnScreens: true, onAir: ShowBlock.NameFor(said.Kind));
             }
         }
         finally
@@ -3211,7 +3477,7 @@ public sealed partial class RaceControlControl
         // room hears two seconds of nothing before it (16 Oct 2026).
         Say(closing, BroadcastImaging.Has(ImagingCue.AfterRecap)
             ? AnnouncementService.SpeechTail.BackToBack
-            : AnnouncementService.SpeechTail.Long);
+            : AnnouncementService.SpeechTail.Long, onAir: OnAirParts.SignOff);
     }
 
     /// <summary>
@@ -3517,6 +3783,10 @@ public sealed partial class RaceControlControl
             var readDone = false;
             var sawVideo = false;
 
+            // Whether the advert's own sound has been heard playing - see the
+            // video test below.
+            var heardVideo = false;
+
             while (true)
             {
                 var on = DateTime.UtcNow - started;
@@ -3526,6 +3796,15 @@ public sealed partial class RaceControlControl
                 // video ends, and the read should follow the advert at once
                 // rather than after three seconds of nothing.
                 sawVideo |= CommercialBreak.VideoOnScreen || AdBreak.Playing;
+                heardVideo |= AdBreak.Playing;
+
+                // NO DEAD AIR AFTER THE ADVERT (18 Oct 2026). The screen's
+                // report is a heartbeat good for three seconds, so the break
+                // went on holding for three and a half seconds of silence
+                // after every video, every race. Once the advert's sound has
+                // been heard, its stopping is the end of it; only a video
+                // whose sound never reached us falls back on the heartbeat.
+                var videoHolds = heardVideo ? AdBreak.Playing : CommercialBreak.VideoOnScreen;
 
                 // THE COPY GOES IN THE BREAK, AFTER THE VIDEO (16 Oct 2026).
                 // It used to wait for a quiet the director found on its own
@@ -3560,8 +3839,8 @@ public sealed partial class RaceControlControl
 
                     // An advert actually playing on the crowd's screen
                     // keeps the break, up to the ceiling - see
-                    // CommercialBreak.VideoOnScreen.
-                    CommercialBreak.VideoOnScreen);
+                    // CommercialBreak.VideoOnScreen and videoHolds above.
+                    videoHolds);
 
                 if (ending != BreakEnding.Running)
                 {
@@ -3586,7 +3865,18 @@ public sealed partial class RaceControlControl
 
                 try
                 {
-                    await Task.Delay(CommercialBreak.Look, nextRace);
+                    // Looked at more often than CommercialBreak.Look while an
+                    // advert is up (18 Oct 2026), so the way back comes in on
+                    // the video's last frame rather than up to half a second
+                    // after it.
+                    if (videoHolds)
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(100), nextRace);
+                    }
+                    else
+                    {
+                        await Task.Delay(CommercialBreak.Look, nextRace);
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -3747,8 +4037,14 @@ public sealed partial class RaceControlControl
             // heard out here, not played a second time.
             if (Interlocked.Exchange(ref _intoTheStopSet, null) is { } started)
             {
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Into the break - the bumper, off the teaser, plays out first.");
-                await started.Played.WaitAsync(nextRace);
+                // TO ITS OUT, NOT TO ITS LAST SAMPLE (18 Oct 2026): the
+                // advert comes in where the bumper's own fade begins, and the
+                // tail rides down under it over the crossfade - rather than
+                // the room hearing the whole ring-out and then a beat of
+                // nothing before the video.
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Into the break - the bumper, off the teaser, to its out.");
+                await started.AtPost.WaitAsync(nextRace);
+                started.CrossfadeOut();
                 return;
             }
 
@@ -3867,7 +4163,7 @@ public sealed partial class RaceControlControl
                         ? $"{AppTime.LogStampNow()}  [commentary] Commercial break - the sponsor's copy, read after the advert."
                         : $"{AppTime.LogStampNow()}  [commentary] Commercial break - the rest of the sponsor's copy, straight on.");
 
-                    _announcer.SpeakReminder(read.Text, showOnScreens: true);
+                    _announcer.SpeakReminder(read.Text, showOnScreens: true, onAir: OnAirParts.StopSet);
 
                     await _announcer.WaitForAudioAsync(SpokenWait(), nextRace);
 
@@ -4049,14 +4345,16 @@ public sealed partial class RaceControlControl
     private long? _stingSpeakingMark;
 
     /// <summary>Queues one line: its audio when it rendered in advance, otherwise rendered as it is spoken.</summary>
+    /// <param name="onAir">Which part of the broadcast this is, for the race director's strip - see OnAirParts.</param>
     private void Say(
         SpokenLine line,
         AnnouncementService.SpeechTail tail = AnnouncementService.SpeechTail.Normal,
-        AnnouncementService.SpeechLead lead = AnnouncementService.SpeechLead.Normal)
+        AnnouncementService.SpeechLead lead = AnnouncementService.SpeechLead.Normal,
+        string? onAir = null)
     {
         if (line.Audio is not null)
         {
-            _announcer.SpeakPrepared(line.Audio, tail, lead);
+            _announcer.SpeakPrepared(line.Audio, tail, lead, onAir);
         }
         else
         {
@@ -4065,7 +4363,7 @@ public sealed partial class RaceControlControl
             // above, but a render that failed falls through to here and a
             // hand-over that sounded different depending on whether the
             // audio arrived early would be the worse bug of the two.
-            _announcer.SpeakReminder(line.Text, line.Delivery, line.Voice, showOnScreens: true, tail: tail, lead: lead);
+            _announcer.SpeakReminder(line.Text, line.Delivery, line.Voice, showOnScreens: true, tail: tail, lead: lead, onAir: onAir);
         }
     }
 
@@ -4587,6 +4885,11 @@ public sealed partial class RaceControlControl
         var grid = next.AssignedTransponders.ToList();
         var label = next.RoundLabel;
 
+        // Whether the driver introductions will follow this intro - then it
+        // leaves the roll call to them (18 Oct 2026). Read here, on the UI
+        // thread, with the rest of the facts.
+        var introductionsFollow = ReadIntroductionFacts(next, null, quiet: true) is not null;
+
         // CAPTURED, not read from the field inside the job. The guard at
         // the top of this method proved it was there on this thread; the
         // job runs later and the field is settable, so reading it again in
@@ -4610,7 +4913,8 @@ public sealed partial class RaceControlControl
                     stake: stake,
                     historyPacked: pack => packed = pack,
                     scene: scene,
-                    remember: false);
+                    remember: false,
+                    introductionsFollow: introductionsFollow);
 
                 if (string.IsNullOrWhiteSpace(line))
                 {
@@ -5471,6 +5775,21 @@ public sealed partial class RaceControlControl
         var label = next.RoundLabel;
         CommentaryService commentary = _commentary;
 
+        // READ HERE, BEFORE THE TASK. WriteThePrincipalAhead is called on
+        // the UI thread when a result is filed, and the stores belong to
+        // it - a reader called from inside the Task.Run below would be
+        // walking the history while the next race writes to it. The same
+        // arrangement every other write-ahead on this page uses: read on
+        // the thread that owns the stores, hand the model finished
+        // sentences.
+        var standing = stake?.OnThisGrid
+            .Where(row => string.Equals(row.DriverId, focus, StringComparison.OrdinalIgnoreCase))
+            .Select(row => (int?)row.PositionNow)
+            .FirstOrDefault();
+
+        var (nightFacts, stance) = PrincipalNightBrief(focus, next.ClassName, standing);
+        var brief = PrincipalStance.BriefFor(stance);
+
         _ = Task.Run(async () =>
         {
             try
@@ -5478,7 +5797,8 @@ public sealed partial class RaceControlControl
                 using var budget = new CancellationTokenSource(WriteAheadModelBudget);
 
                 var exchanges = await commentary.BuildPrincipalBeforeAsync(
-                    next, focus, name, kind, stake, log: null, ct: budget.Token, interviewer: interviewer);
+                    next, focus, name, kind, stake, log: null, ct: budget.Token, interviewer: interviewer,
+                    nightFacts: nightFacts, stanceBrief: brief);
 
                 if (exchanges is null)
                 {
@@ -5652,7 +5972,14 @@ public sealed partial class RaceControlControl
         string? Interviewer,
         SecondVoice CoHostVoice,
         string CoHostName,
-        CommentaryService Commentary);
+        CommentaryService Commentary,
+
+        // THE PRINCIPAL'S OWN WELL (18 Oct 2026), read with the rest of
+        // the job on the UI thread - see PrincipalNightBrief. Empty facts
+        // and the plain stance is what a club's first heat of the evening
+        // gets, and the prompt copes with it.
+        IReadOnlyList<FactBlock> NightFacts,
+        PrincipalStance.Stance Stance);
 
     /// <summary>
     /// Whether a Team Principal is due before <paramref name="round"/>, and
@@ -5741,6 +6068,17 @@ public sealed partial class RaceControlControl
             + $"for {driver}"
             + (voice is not null ? "." : $", in the announcer's own voice - no Team Principal's voice is picked for {EngineName(engine)} on Voice > Cast."));
 
+        // THE TABLE POSITION BY ID HERE, not by name: a
+        // ChampionshipStanding carries the driver it is about, so the
+        // ambiguity guard PrincipalTablePosition needs for a
+        // ChampionshipMove is not needed on this path.
+        var standing = stake?.OnThisGrid
+            .Where(row => string.Equals(row.DriverId, focus, StringComparison.OrdinalIgnoreCase))
+            .Select(row => (int?)row.PositionNow)
+            .FirstOrDefault();
+
+        var (nightFacts, stance) = PrincipalNightBrief(focus, round.ClassName, standing);
+
         return new PrincipalJob(
             round,
             focus,
@@ -5754,7 +6092,9 @@ public sealed partial class RaceControlControl
             interviewer,
             _settings.CoHostVoice,
             (_settings.CommentaryCoHostName ?? string.Empty).Trim(),
-            _commentary);
+            _commentary,
+            nightFacts,
+            stance);
     }
 
     /// <summary>
@@ -5773,7 +6113,9 @@ public sealed partial class RaceControlControl
             job.Round, job.Focus, job.Name, job.Kind, job.Stake,
             log: note => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}"),
             ct: budget.Token,
-            interviewer: job.Interviewer);
+            interviewer: job.Interviewer,
+            nightFacts: job.NightFacts,
+            stanceBrief: PrincipalStance.BriefFor(job.Stance));
 
         if (exchanges is null)
         {
@@ -5812,7 +6154,8 @@ public sealed partial class RaceControlControl
                     : AnnouncementService.SpeechTail.Normal,
                 run.FollowsAnother
                     ? AnnouncementService.SpeechLead.FollowsOn
-                    : AnnouncementService.SpeechLead.Normal);
+                    : AnnouncementService.SpeechLead.Normal,
+                OnAirParts.PitLane);
         }
 
         _principalHeard.Add(focus);

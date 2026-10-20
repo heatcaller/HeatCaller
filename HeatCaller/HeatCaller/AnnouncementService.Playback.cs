@@ -59,7 +59,9 @@ public sealed partial class AnnouncementService
     /// back to back.
     /// </summary>
     public const double DefaultLeadingSilenceSeconds = 0.9;
-    public const double DefaultTrailingSilenceSeconds = 0.9;
+    // TIGHTENED BY 0.3s (18 Oct 2026, asked for from the floor: "bring
+    // everything .3 closer together") - see BroadcastImaging.Tighten.
+    public const double DefaultTrailingSilenceSeconds = 0.6;
 
     /// <summary>
     /// The leading pad for an output that doesn't sleep - a wired speaker,
@@ -97,7 +99,7 @@ public sealed partial class AnnouncementService
     /// the device has more of it still queued when the reader runs dry, so
     /// it needs more slack behind it than a one-sentence call does.
     /// </summary>
-    public const double LongLineTrailingSilenceSeconds = 1.6;
+    public const double LongLineTrailingSilenceSeconds = 1.3;
 
     /// <summary>How much tail silence a line gets.</summary>
     public enum SpeechTail

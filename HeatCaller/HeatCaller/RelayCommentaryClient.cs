@@ -34,7 +34,12 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
     /// written by a model is neither. No redirects - the publish token
     /// rides on every request and must not follow one anywhere.
     /// </summary>
-    private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = false })
+    /// <remarks>
+    /// Settable so a test can stand a fake relay behind it, exactly as
+    /// HeatCallerVoiceClient.Http lets the voice's tests do. The app never
+    /// sets it.
+    /// </remarks>
+    internal static HttpClient Http { get; set; } = new(new HttpClientHandler { AllowAutoRedirect = false })
     {
         Timeout = System.Threading.Timeout.InfiniteTimeSpan,
     };
@@ -71,6 +76,246 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
 
     /// <summary>True when the Club Website page is set up enough to ask. Not a promise the club's plan includes commentary - only the relay knows that.</summary>
     public bool RelayConfigured => Target() is not null;
+
+    // ------------------------------------------------------------------
+    // WHEN THE MONTH'S LINES ARE USED UP (19 Oct 2026)
+    //
+    // The relay refuses every line past the club's monthly allowance with
+    // 429 "allowance", and until today each one was still sent to be
+    // refused: a round trip per segment, a red console line per segment,
+    // and - with the local box unticked - an evening with no commentary at
+    // all. Now the month being spent is known (UsageMeters, which every
+    // answer here reports into, and which also hears the relay's usage
+    // figures directly), and while it is, nothing is sent: the line comes
+    // back null at once and the brain behind this one writes it (see
+    // FallbackCommentaryBrain). One probe goes through every half hour in
+    // case lines were added that the store has not heard about yet, and
+    // the relay is back in front the moment the store shows lines left -
+    // a top-up - or the month's reset time has passed.
+    // ------------------------------------------------------------------
+
+    /// <summary>How often one line is let through to a spent relay anyway, in case a top-up has landed that nothing here has heard of yet.</summary>
+    internal static readonly TimeSpan SpentProbeEvery = TimeSpan.FromMinutes(30);
+
+    private readonly object _spentGate = new();
+
+    /// <summary>When the next line may go through to a spent relay. Null while it is not spent. Under _spentGate.</summary>
+    private DateTime? _nextProbeUtc;
+
+    /// <summary>Whether the console has been told the month is spent, so it is told once - and told again when the relay is back. Under _spentGate.</summary>
+    private bool _spentSaid;
+
+    /// <summary>
+    /// Set by an "allowance" refusal that carried no figures to report -
+    /// which today's relay always sends, but an older one may not. Holds the
+    /// month spent until the store shows a real figure with lines left, or
+    /// the relay writes again. Under _spentGate.
+    /// </summary>
+    private bool _refusedWithoutFigures;
+
+    /// <summary>The clock, for the probe and the reset time. Settable so a test can move it on half an hour without waiting.</summary>
+    internal Func<DateTime> UtcNow { get; init; } = () => DateTime.UtcNow;
+
+    /// <summary>
+    /// Whether something behind this client will write when the month is
+    /// spent - the model on this PC, built and not found too slow. Asked
+    /// only for what the console says; set by whoever builds the pair.
+    /// </summary>
+    internal Func<bool>? LocalTakesOver { get; set; }
+
+    /// <summary>
+    /// True while this club's relay lines for the month are used up, as far
+    /// as anything here knows: the store's commentary meter says Spent and
+    /// its reset time has not passed, or the relay refused for the month
+    /// without saying its figures and nothing since has said otherwise.
+    /// </summary>
+    public bool MonthSpent
+    {
+        get
+        {
+            // The store is read before the gate is taken, never under it:
+            // nothing here should wait on another class's lock while
+            // holding its own.
+            var meter = UsageMeters.Shared.Get(MeterKind.Commentary);
+
+            lock (_spentGate)
+            {
+                return IsSpent(UtcNow(), meter);
+            }
+        }
+    }
+
+    /// <summary>The month's allowance in lines, as the store last heard it - for "This month's 400 relay lines are used up". Null when it hasn't.</summary>
+    public long? MonthAllowance =>
+        UsageMeters.Shared.Get(MeterKind.Commentary) is { Known: true, Allowance: > 0 } meter ? meter.Allowance : null;
+
+    /// <summary>MonthSpent's body, given the store's meter as it was just read. Called with _spentGate held.</summary>
+    private bool IsSpent(DateTime now, Meter? meter)
+    {
+        // Without a reset date (an older relay's answer), a figure heard in
+        // an earlier UTC month says nothing about this one: the relay's
+        // months turn at midnight UTC on the 1st, so it is not held spent
+        // past that - or a laptop opened on the 2nd would skip the relay
+        // until a probe, half an hour in, found the new month.
+        if (meter is { Spent: true }
+            && (meter.ResetsUtc is { } resets
+                ? now < resets
+                : meter.AsOfUtc.Year == now.Year && meter.AsOfUtc.Month == now.Month))
+        {
+            return true;
+        }
+
+        // A real figure with lines left wins over a refusal that had none.
+        if (meter is { Known: true, Allowance: > 0, Spent: false })
+        {
+            _refusedWithoutFigures = false;
+        }
+
+        return _refusedWithoutFigures;
+    }
+
+    /// <summary>
+    /// Whether this line should skip the relay because the month is spent -
+    /// false when it isn't, or when it is this half hour's probe. Says so in
+    /// the console once each way.
+    /// </summary>
+    private bool SkipWhileSpent()
+    {
+        string? say = null;
+        bool skip;
+
+        // Read before the gate - see MonthSpent - and the sentence made
+        // ready the same way, in case this is the first line skipped.
+        var meter = UsageMeters.Shared.Get(MeterKind.Commentary);
+        var sentence = SpentSentence(meter);
+
+        lock (_spentGate)
+        {
+            var now = UtcNow();
+
+            if (!IsSpent(now, meter))
+            {
+                if (_spentSaid)
+                {
+                    say = "[brain] The relay has lines again this month - it's writing the commentary.";
+                }
+
+                _spentSaid = false;
+                _nextProbeUtc = null;
+                skip = false;
+            }
+            else
+            {
+                if (!_spentSaid)
+                {
+                    _spentSaid = true;
+                    say = sentence;
+                }
+
+                _nextProbeUtc ??= now + SpentProbeEvery;
+
+                if (now >= _nextProbeUtc)
+                {
+                    // This half hour's one line through. Claimed here, under
+                    // the gate, so two lines asked at once don't both go.
+                    _nextProbeUtc = now + SpentProbeEvery;
+                    skip = false;
+                }
+                else
+                {
+                    skip = true;
+                }
+            }
+        }
+
+        if (say is not null)
+        {
+            StatusMessage?.Invoke(say);
+
+            // The night's budget hears the spent month too, the first time
+            // a line is skipped for it. Nothing else would tell it: a month
+            // the store already knew was spent - from the warm-up, or from
+            // the "This month" refresh - sends no line to the relay, so no
+            // answer ever carries the figures to AllowanceSeen, and the
+            // budget would pace (and gate the relay-only segments) as if
+            // it had never heard of the month.
+            if (skip && meter is { Known: true, Allowance: > 0 } known)
+            {
+                TellAllowance(
+                    (int)Math.Min(int.MaxValue, known.Used),
+                    (int)Math.Min(int.MaxValue, known.Allowance));
+            }
+        }
+
+        return skip;
+    }
+
+    /// <summary>
+    /// The relay has just said the month is spent: start the half-hour wait
+    /// for the next probe, and tell the console if it hasn't been told.
+    /// </summary>
+    private void MarkSpent(bool hadFigures)
+    {
+        string? say = null;
+        var sentence = SpentSentence(UsageMeters.Shared.Get(MeterKind.Commentary));
+
+        lock (_spentGate)
+        {
+            if (!hadFigures)
+            {
+                _refusedWithoutFigures = true;
+            }
+
+            _nextProbeUtc = UtcNow() + SpentProbeEvery;
+
+            if (!_spentSaid)
+            {
+                _spentSaid = true;
+                say = sentence;
+            }
+        }
+
+        if (say is not null)
+        {
+            StatusMessage?.Invoke(say);
+        }
+    }
+
+    /// <summary>The relay wrote a line, so whatever was thought about the month is out of date.</summary>
+    private void MarkWriting()
+    {
+        lock (_spentGate)
+        {
+            // _spentSaid is left for SkipWhileSpent, which says "lines
+            // again" once the store agrees - a write that took the last
+            // line of the month leaves it spent.
+            _refusedWithoutFigures = false;
+            _nextProbeUtc = null;
+        }
+    }
+
+    /// <summary>"This month's relay lines are used up - the model on this PC is writing until 1 Nov."</summary>
+    private string SpentSentence(Meter? meter)
+    {
+        var until = meter?.ResetsUtc is { } resets
+            ? $"until {resets.ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture)}"
+            : "until the relay has lines again";
+
+        bool local;
+
+        try
+        {
+            local = LocalTakesOver?.Invoke() == true;
+        }
+        catch
+        {
+            local = false;
+        }
+
+        return local
+            ? $"[brain] This month's relay lines are used up - the model on this PC is writing {until}."
+            : $"[brain] This month's relay lines are used up - normal announcements carry on {until}.";
+    }
 
     /// <summary>
     /// Where this laptop's relay is, or null when there is nothing safe to
@@ -114,7 +359,7 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
         double temperature = 0.7,
         CancellationToken ct = default,
         TimeSpan? timeout = null) =>
-        GenerateCoreAsync(systemPrompt, userPrompt, maxTokens, temperature, ct, timeout, trimCutOff: true);
+        GenerateCoreAsync(systemPrompt, userPrompt, maxTokens, temperature, ct, timeout, trimCutOff: true, askEvenIfSpent: false);
 
     /// <summary>
     /// The write itself. <paramref name="trimCutOff"/> is false only for the
@@ -122,6 +367,11 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
     /// under the twenty characters a kept sentence needs, so the cut-off
     /// check below threw away every correct answer and the button always
     /// said the relay had failed.
+    ///
+    /// <paramref name="askEvenIfSpent"/> is true only for the Test button
+    /// too: somebody pressing it wants the relay's own answer, and a refusal
+    /// for the month costs nothing - while a top-up the store has not heard
+    /// of yet is found by it at once.
     /// </summary>
     private async Task<string?> GenerateCoreAsync(
         string systemPrompt,
@@ -130,11 +380,18 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
         double temperature,
         CancellationToken ct,
         TimeSpan? timeout,
-        bool trimCutOff)
+        bool trimCutOff,
+        bool askEvenIfSpent)
     {
         if (Target() is not { } target)
         {
             StatusMessage?.Invoke("[brain] The Club Website page isn't set up, so there's no relay to write through.");
+            return null;
+        }
+
+        // The month is spent: not sent just to be refused. See MonthSpent.
+        if (!askEvenIfSpent && SkipWhileSpent())
+        {
             return null;
         }
 
@@ -223,13 +480,34 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
 
             if (!succeeded)
             {
-                var why = root.TryGetProperty("error", out var error) ? error.GetString() : null;
-                var refusal = root.TryGetProperty("refusal", out var kind) ? kind.GetString() : null;
+                var why = root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.String ? error.GetString() : null;
+                var refusal = root.TryGetProperty("refusal", out var kind) && kind.ValueKind == JsonValueKind.String ? kind.GetString() : null;
+
+                // THE MONTH IS SPENT, which is not a failure to shout about:
+                // it is the one refusal with a plan behind it. Said in one
+                // calm line (MarkSpent), not the red one below, and every
+                // line after it skips the relay until there are lines
+                // again. Only the "allowance" refusal means this - a bare
+                // 429 is the relay's rate limit, and a 429 "busy" is a wait,
+                // handled above - so the status alone is not trusted.
+                if (string.Equals(refusal, "allowance", StringComparison.OrdinalIgnoreCase))
+                {
+                    var figures = Allowance(root);
+
+                    MarkSpent(hadFigures: figures.Length > 0 && MonthSpent);
+                    return null;
+                }
+
+                // Read before the message, never inside it: ?. does not
+                // evaluate its arguments when nothing is listening, so a
+                // figures-in-the-interpolation version tells UsageMeters
+                // nothing on a PC with no console attached.
+                var said = Allowance(root);
 
                 StatusMessage?.Invoke(
                     $"[brain] The relay wouldn't write that one ({(int)status}{(refusal is null ? "" : $", {refusal}")}): "
                     + (why ?? "no reason given")
-                    + Allowance(root));
+                    + said);
 
                 return null;
             }
@@ -244,7 +522,20 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
 
             // Said once per line and only to the console: a club watching
             // its allowance should not have to ask the relay for it.
-            StatusMessage?.Invoke($"[brain] Written by the relay.{Allowance(root)}");
+            //
+            // THE FIGURES ARE READ FIRST, AND THAT IS THE WHOLE POINT (19 Oct
+            // 2026). This was written as Invoke($"...{Allowance(root)}"), and
+            // ?. does not evaluate its arguments when the event has no
+            // subscriber - so on any PC with nothing listening to
+            // StatusMessage, a successful write told UsageMeters nothing. The
+            // month therefore stayed as the last refusal left it: spent, with
+            // the relay skipped line after line, until something else
+            // happened to report a figure. The Test button could not clear it
+            // either, which is how it was found.
+            var usage = Allowance(root);
+
+            StatusMessage?.Invoke($"[brain] Written by the relay.{usage}");
+            MarkWriting();
 
             var written = text.Trim();
 
@@ -371,8 +662,13 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
 
             var on = root.TryGetProperty("enabled", out var enabled) && enabled.ValueKind == JsonValueKind.True;
 
+            // Read first, for the reason given on the write path above: the
+            // warm-up's whole job is to let the store hear a spent month
+            // before the first line is asked for, and ?. would skip it.
+            var catalogue = on ? Allowance(root, tellListeners: false) : string.Empty;
+
             StatusMessage?.Invoke(on
-                ? $"[brain] The relay will write commentary for this club.{Allowance(root)}"
+                ? $"[brain] The relay will write commentary for this club.{catalogue}"
                 : "[brain] Commentary isn't included for this club on the relay yet - Ollama or the template lines will do it.");
         }
         catch (Exception ex)
@@ -390,16 +686,12 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
             temperature: 0,
             ct: ct,
             timeout: TimeSpan.FromSeconds(20),
-            trimCutOff: false);
+            trimCutOff: false,
+            askEvenIfSpent: true);
 
     /// <summary>A relay answer is a line and a count. Anything much bigger is not this relay answering.</summary>
     private const int MaxBodyChars = 8_000;
 
-    /// <summary>" 37 of 400 lines used this month." - or nothing, when the relay didn't say.</summary>
-    /// <summary>
-    /// The club's month as the relay tells it, for the console - and, on
-    /// the way past, for anything listening on AllowanceSeen.
-    /// </summary>
     /// <summary>
     /// What is done to the relay's text before it is handed on. The cut-off
     /// rule is as described in GenerateCoreAsync. 17 Oct 2026, Bug Hunt 8,
@@ -451,19 +743,79 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
         return false;
     }
 
-    private string Allowance(JsonElement root)
+    /// <summary>
+    /// Reads the club's month off a relay answer - used, allowance and,
+    /// where it says, when it starts again - from the top of a write's
+    /// answer or from the "usage" object the catalogue carries. Hands it to
+    /// AllowanceSeen and to UsageMeters (the "This month" meter, and what
+    /// MonthSpent asks), and returns it for the console: " 37 of 400 lines
+    /// used this month." - or nothing, when the relay didn't say.
+    ///
+    /// <paramref name="tellListeners"/> is false for the warm-up's
+    /// catalogue: the store hears it (so a month already spent is known
+    /// before the first line is asked for), but the night's budget is still
+    /// paced from the first write's figures, as it always has been.
+    /// </summary>
+    private string Allowance(JsonElement root, bool tellListeners = true)
     {
-        if (!root.TryGetProperty("used", out var used)
-            || !root.TryGetProperty("allowance", out var allowance)
-            || used.ValueKind != JsonValueKind.Number
-            || allowance.ValueKind != JsonValueKind.Number)
+        if (root.ValueKind != JsonValueKind.Object)
         {
             return string.Empty;
         }
 
-        var spent = used.GetInt32();
-        var cap = allowance.GetInt32();
+        var from = root;
 
+        if (!root.TryGetProperty("used", out _)
+            && root.TryGetProperty("usage", out var usage)
+            && usage.ValueKind == JsonValueKind.Object)
+        {
+            from = usage;
+        }
+
+        if (!from.TryGetProperty("used", out var used)
+            || !from.TryGetProperty("allowance", out var allowance)
+            || used.ValueKind != JsonValueKind.Number
+            || allowance.ValueKind != JsonValueKind.Number
+            || !used.TryGetInt32(out var spent)
+            || !allowance.TryGetInt32(out var cap))
+        {
+            return string.Empty;
+        }
+
+        DateTime? resets = null;
+
+        if (from.TryGetProperty("resetsAt", out var resetsAt)
+            && resetsAt.ValueKind == JsonValueKind.String
+            && DateTime.TryParse(
+                resetsAt.GetString(),
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+                out var when))
+        {
+            resets = when;
+        }
+
+        try
+        {
+            UsageMeters.Shared.Report(MeterKind.Commentary, spent, cap, resets);
+        }
+        catch
+        {
+            // The meter is for the club to look at. Failing to keep it must
+            // never become a commentary failure.
+        }
+
+        if (tellListeners)
+        {
+            TellAllowance(spent, cap);
+        }
+
+        return $" {spent:N0} of {cap:N0} lines used this month.";
+    }
+
+    /// <summary>Raises AllowanceSeen, never letting a listener's failure out.</summary>
+    private void TellAllowance(int spent, int cap)
+    {
         try
         {
             AllowanceSeen?.Invoke(spent, cap);
@@ -473,7 +825,5 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
             // A listener's failure must not become a commentary failure -
             // the same rule the status message follows.
         }
-
-        return $" {spent:N0} of {cap:N0} lines used this month.";
     }
 }

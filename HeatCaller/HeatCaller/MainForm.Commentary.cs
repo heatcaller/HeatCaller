@@ -513,8 +513,36 @@ public partial class MainForm
     /// The director is fetched when the count arrives rather than held: it
     /// is built on first use and may not exist when this is wired.
     /// </summary>
-    private static void WireCommentaryAllowance(AnnouncerControl announcer, CommentaryControl commentary) =>
+    private void WireCommentaryAllowance(AnnouncerControl announcer, CommentaryControl commentary)
+    {
         commentary.AllowanceSeen += (spent, cap) => announcer.Director?.MonthlyUsage(spent, cap);
+
+        // AND THE MONTH AS THE USAGE STORE HEARS IT (19 Oct 2026), once the
+        // budget has had a first word from a write. A top-up made mid-night
+        // reaches the store within five minutes (the This Month refresh) -
+        // but with the month spent the budget refuses every live segment
+        // before it reaches the relay, so no write answer would tell it, and
+        // the night stayed silent but for intros until one of those found
+        // the relay writing again. Brought to the UI thread, where the
+        // director is built; the store says it changed on any thread, and
+        // for every spoken voice line, which costs one cheap post.
+        Action storeChanged = () => TryPost(() =>
+        {
+            if (UsageMeters.Shared.Get(MeterKind.Commentary) is { Known: true, Allowance: > 0 } meter
+                && announcer.Director is { Budget.AllowanceKnown: true } director)
+            {
+                director.MonthlyUsage(
+                    (int)Math.Min(int.MaxValue, meter.Used),
+                    (int)Math.Min(int.MaxValue, meter.Allowance));
+            }
+        });
+
+        // Taken off with the window, as WireUsage's is: the store is a static
+        // that outlives it, and a handler left on it keeps this window (and
+        // its director) alive and posting.
+        UsageMeters.Shared.Changed += storeChanged;
+        Disposed += (_, _) => UsageMeters.Shared.Changed -= storeChanged;
+    }
 
     /// <summary>
     /// Hands the director the readers it cannot reach on its own.

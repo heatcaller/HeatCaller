@@ -2,6 +2,8 @@ import type { Server } from "node:http";
 import { Relay } from "../src/server.js";
 import { MemoryStore, type Store } from "../src/store.js";
 import { hashToken, TenantRegistry, type Tenant } from "../src/tenancy.js";
+import type { BrainService } from "../src/brain.js";
+import type { TopUpRequests } from "../src/topuprequests.js";
 import type { VoiceService } from "../src/voice.js";
 
 export const ACME_TOKEN = "acme-token-aaaaaaaaaaaaaaaa";
@@ -31,6 +33,7 @@ export async function start(
   now: () => Date = () => new Date("2026-09-20T12:00:00.000Z"),
   log: (line: string) => void = () => {},
   voice?: VoiceService,
+  extras: { readonly brain?: BrainService | undefined; readonly topUpRequests?: TopUpRequests | undefined } = {},
 ): Promise<Harness> {
   const relay = new Relay({
     store,
@@ -38,6 +41,8 @@ export async function start(
     now,
     log,
     voice,
+    brain: extras.brain,
+    topUpRequests: extras.topUpRequests,
   });
 
   const server: Server = relay.listen(0, "127.0.0.1");

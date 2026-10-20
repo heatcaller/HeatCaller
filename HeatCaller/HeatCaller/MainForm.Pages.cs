@@ -1563,7 +1563,7 @@ public partial class MainForm
             Activate();
         };
 
-        var commentary = new CommentaryControl(_settings, _commentary) { Dock = DockStyle.Fill };
+        var commentary = new CommentaryControl(_settings, _commentary) { Dock = DockStyle.Fill, OpenThisMonth = ShowThisMonth };
         _commentaryControl = commentary;
         subPageCommentary.Controls.Add(commentary);
 

@@ -1793,6 +1793,22 @@ public sealed class AppSettings
     [JsonIgnore]
     public string SmtpPassword { get; set; } = string.Empty;
 
+    // --- The monthly allowances (UsageMeters) ---------------------------
+
+    /// <summary>
+    /// Email when a monthly allowance - AI commentary, the HeatCaller voice,
+    /// the club's own ElevenLabs key - is 80% used, and again when it runs
+    /// out. Once per allowance per month (UsageMail).
+    ///
+    /// On by default, and it does nothing until the mailbox above is set
+    /// up: finding out from an email the day after is far better than
+    /// finding out mid-race that the voice has changed.
+    /// </summary>
+    public bool UsageEmailsOn { get; set; } = true;
+
+    /// <summary>Where those emails go. Blank, as most clubs leave it, sends them to the club's own mailbox (SmtpUser).</summary>
+    public string UsageEmailTo { get; set; } = string.Empty;
+
     // --- The race-day manager's phones -----------------------------------
 
     // The phones enrolled by QR code for the race-day manager (25 Sep) are

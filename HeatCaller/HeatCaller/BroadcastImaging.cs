@@ -57,6 +57,14 @@ internal enum ImagingCue
     /// <summary>After the opening, before the race is staged.</summary>
     AfterOpening,
 
+    /// <summary>
+    /// The music under the race announcer after the flag (18 Oct 2026): in
+    /// once the finish call has been heard, under the unofficial result,
+    /// the pit lane and the teaser, and out as the bumper into the stop set
+    /// fires. Saved by name, so adding it here moves nothing.
+    /// </summary>
+    FlagBed,
+
     /// <summary>After the race is over, going into the stop set (the commercial break).</summary>
     AfterRaceOver,
 
@@ -419,6 +427,7 @@ internal static class BroadcastImaging
         ImagingCue.TopOfRace => ImagingChoice.JingleOrSweeper,
         ImagingCue.OpeningBed => ImagingChoice.Bed,
         ImagingCue.AfterOpening => ImagingChoice.Bumper,
+        ImagingCue.FlagBed => ImagingChoice.Bed,
         ImagingCue.AfterRaceOver => ImagingChoice.Bumper,
         ImagingCue.BackFromBreak => ImagingChoice.JingleOrSweeper,
         ImagingCue.RecapOpen => ImagingChoice.Jingle,
@@ -429,7 +438,7 @@ internal static class BroadcastImaging
     };
 
     /// <summary>What a point can be set to. The bed loops under a voice, so it is the only thing the bed's point can play - and nothing else can.</summary>
-    internal static IReadOnlyList<ImagingChoice> ChoicesFor(ImagingCue cue) => cue is ImagingCue.RecapBed or ImagingCue.OpeningBed
+    internal static IReadOnlyList<ImagingChoice> ChoicesFor(ImagingCue cue) => cue is ImagingCue.RecapBed or ImagingCue.OpeningBed or ImagingCue.FlagBed
         ? new[] { ImagingChoice.Off, ImagingChoice.Bed }
         : new[]
         {
@@ -517,6 +526,7 @@ internal static class BroadcastImaging
         ImagingCue.TopOfRace => "Top of the race",
         ImagingCue.OpeningBed => "Opening bed",
         ImagingCue.AfterOpening => "After the opening",
+        ImagingCue.FlagBed => "After-the-flag bed",
         ImagingCue.AfterRaceOver => "Race over",
         ImagingCue.BackFromBreak => "Back from the stop set",
         ImagingCue.RecapOpen => "Race recap open",
@@ -532,6 +542,7 @@ internal static class BroadcastImaging
         ImagingCue.TopOfRace => "the first thing On Air plays - the opening hits its post",
         ImagingCue.OpeningBed => "in at the jingle's post, under the opening and the staging call, out at the countdown",
         ImagingCue.AfterOpening => "straight off the opening's last word - the staging call hits its post",
+        ImagingCue.FlagBed => "in after the finish call, under the result, the pit lane and the teaser, out as the bumper into the stop set fires",
         ImagingCue.AfterRaceOver => "after the finish and the teaser, going into the stop set",
         ImagingCue.BackFromBreak => "coming back out of the stop set, before the recap",
         ImagingCue.RecapOpen => "the recap host hits its post, and it crossfades into the recap bed",
@@ -1112,6 +1123,25 @@ internal static class BroadcastImaging
         return TimeSpan.FromSeconds(Math.Clamp(at, Math.Min(0.3, length), Math.Max(0, length)));
     }
 
+    /// <summary>
+    /// How much closer together everything is played (18 Oct 2026, asked for
+    /// from the floor: "bring everything .3 closer together"). Whatever
+    /// follows a piece starts this much before its out, a piece fired off the
+    /// announcer comes in this much sooner, and the gaps between lines are
+    /// this much shorter (AnnouncementService's tails, ShowBlock's beats).
+    /// The marks on the page are left as they are - this is applied as the
+    /// piece is played, so a mark set by ear never drifts.
+    /// </summary>
+    internal const double Tighten = 0.3;
+
+    /// <summary>The out a piece is actually played to: its mark, less <see cref="Tighten"/>.</summary>
+    internal static TimeSpan PlayedOutOf(string path, ShowClip clip)
+    {
+        var at = PostOf(path, clip).TotalSeconds - Tighten;
+
+        return TimeSpan.FromSeconds(Math.Max(Math.Min(0.3, clip.Length.TotalSeconds), at));
+    }
+
     /// <summary>Where a piece's post came from, for the page.</summary>
     internal static string PostSource(string path) =>
         ClubPost(path) is not null ? "set" : ShippedPost(path) is not null ? "shipped" : "measured";
@@ -1233,7 +1263,7 @@ internal static class BroadcastImaging
             // The nudge moves the piece, not the voice: below zero is the
             // piece's voice in a touch early, so the piece fires a touch
             // early - a bigger post to wait off.
-            var post = TalkUpOf(chosen.Path, chosen.Clip) - TimeSpan.FromSeconds(PostNudge);
+            var post = TalkUpOf(chosen.Path, chosen.Clip) - TimeSpan.FromSeconds(PostNudge) + TimeSpan.FromSeconds(Tighten);
 
             await TalkUp.WaitToFireAsync(announcer, post, limit, ct);
 
@@ -1346,7 +1376,8 @@ internal static class BroadcastImaging
 
     /// <summary>Starts a piece already picked for a point - see <see cref="Start"/>.</summary>
     private static ImagingPlay? StartPiece(ImagingCue cue, (ShowClip Clip, string Path) piece) =>
-        Muted ? null : ImagingPlay.Start(piece.Clip, PostOf(piece.Path, piece.Clip), Level / 100f, Describe(cue), Status);
+        Muted ? null : ImagingPlay.Start(piece.Clip, PlayedOutOf(piece.Path, piece.Clip), Level / 100f, Describe(cue), Status,
+            Path.GetFileNameWithoutExtension(piece.Path));
 
     /// <summary>
     /// Plays the next piece for a point and returns at its POST, where the
@@ -1501,6 +1532,9 @@ internal sealed class ImagingPlay
     private int _fading;
     private int _released;
 
+    /// <summary>Its place in ImagingNow, so the strip stops naming it once it is gone.</summary>
+    private int _nowId;
+
     private ImagingPlay(SmoothGainSampleProvider gain, TimeSpan post, TimeSpan length)
     {
         _gain = gain;
@@ -1519,12 +1553,14 @@ internal sealed class ImagingPlay
     /// <summary>Completes when the piece has played out or been crossfaded away.</summary>
     internal Task Played { get; private set; } = Task.CompletedTask;
 
-    internal static ImagingPlay? Start(ShowClip clip, TimeSpan post, float level, string what, Action<string>? status)
+    /// <param name="name">What the race director's strip calls it while it plays - its file's name. See ImagingNow.</param>
+    internal static ImagingPlay? Start(ShowClip clip, TimeSpan post, float level, string what, Action<string>? status, string? name = null)
     {
         var gain = new SmoothGainSampleProvider(new ShowOneShot(clip), 1f, downSeconds: CrossfadeSeconds, upSeconds: 0.3);
         var play = new ImagingPlay(gain, post, clip.Length);
 
         ShowOnAir.Begin();
+        play._nowId = ImagingNow.Started(name ?? what);
 
         try
         {
@@ -1581,6 +1617,7 @@ internal sealed class ImagingPlay
     {
         if (Interlocked.Exchange(ref _released, 1) == 0)
         {
+            ImagingNow.Ended(_nowId);
             ShowOnAir.End();
         }
     }

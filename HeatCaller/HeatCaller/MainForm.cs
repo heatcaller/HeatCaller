@@ -49,6 +49,17 @@ public partial class MainForm : Form
     /// </summary>
     private readonly System.Windows.Forms.Timer _racerPinsTimer = new() { Interval = 10 * 60 * 1000 };
 
+    /// <summary>
+    /// This month's allowances (UsageMeters) asked for again every five
+    /// minutes - the relay's and ElevenLabs' figures - so the sidebar chip,
+    /// the pages and Mission Control stay near the truth through a long
+    /// night without a request per spoken line. See MainForm.Usage.
+    /// </summary>
+    private readonly System.Windows.Forms.Timer _usageRefreshTimer = new() { Interval = 5 * 60 * 1000 };
+
+    /// <summary>The allowances at the foot of the sidebar ("AI 47% · Voice 34%") - see UsageChip and MainForm.Usage.</summary>
+    private readonly UsageChip _usageChip = new();
+
     /// <summary>Stops an automatic PIN email run when the window closes.</summary>
     private readonly CancellationTokenSource _pinMailCancel = new();
 
@@ -1482,6 +1493,10 @@ public partial class MainForm : Form
         // effect without anything being rebuilt.
         _announcer.HeatCallerVoice = _heatCallerVoice;
 
+        // This month's allowances, before the pages that show them are built
+        // - see MainForm.Usage.
+        WireUsage();
+
         // Which relay a HeatCaller line was rendered on is part of its saved
         // key. Voice Settings sets this too as it is built, but only when it
         // is first opened - set it here as well so a race called before that
@@ -2081,6 +2096,7 @@ public partial class MainForm : Form
             _relayStateTimer.Stop();
             _checkInRosterCoalesce.Stop();
             _racerPinsTimer.Stop();
+            _usageRefreshTimer.Stop();
             _pinMailCancel.Cancel();
             _webServer.Stop();
 

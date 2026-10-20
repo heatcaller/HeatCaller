@@ -426,7 +426,7 @@ public sealed class BroadcastImagingControl : UserControl
         {
             Text = "Before the race (On Air on Race Control): jingle or sweeper  ->  the opening, over the opening bed  ->  throw to pit lane  ->  "
                  + "driver introductions  ->  bumper  ->  staging call. "
-                 + "After the flag: the teaser  ->  bumper  ->  stop set (sponsors)  ->  jingle or sweeper  ->  recap open  ->  "
+                 + "After the flag: the finish call  ->  over the after-the-flag bed, the result, the pit lane and the teaser  ->  bumper  ->  stop set (sponsors)  ->  jingle or sweeper  ->  recap open  ->  "
                  + "the recap host over the recap bed, a stinger between parts  ->  closing bumper. "
                  + "A point set to something the soundscape doesn't have plays nothing.",
             AutoSize = true,

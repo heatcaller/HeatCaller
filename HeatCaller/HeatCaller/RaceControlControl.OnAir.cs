@@ -449,11 +449,11 @@ public sealed partial class RaceControlControl
                 {
                     if (audio is not null)
                     {
-                        _announcer.SpeakPrepared(audio);
+                        _announcer.SpeakPrepared(audio, onAir: OnAirParts.ShowOpen);
                     }
                     else
                     {
-                        _announcer.SpeakReminder(openingText);
+                        _announcer.SpeakReminder(openingText, onAir: OnAirParts.ShowOpen);
                     }
 
                     // As Stage's own intro does: recorded as said, and its facts
@@ -488,11 +488,11 @@ public sealed partial class RaceControlControl
                 {
                     if (introductionsAudio is not null)
                     {
-                        _announcer.SpeakPrepared(introductionsAudio);
+                        _announcer.SpeakPrepared(introductionsAudio, onAir: OnAirParts.DriverIntros);
                     }
                     else
                     {
-                        _announcer.SpeakReminder(saidIntroductions.Text);
+                        _announcer.SpeakReminder(saidIntroductions.Text, onAir: OnAirParts.DriverIntros);
                     }
 
                     _introductionsSaidByOnAir = true;
@@ -760,6 +760,11 @@ public sealed partial class RaceControlControl
             PackedFacts? history = null;
             string? answer;
 
+            // Whether the driver introductions follow this opening - when they
+            // do, the opening leaves the roll call to them (18 Oct 2026). Not
+            // due is answered at once, as a finished task with nothing in it.
+            var introductionsFollow = !(introductions.IsCompletedSuccessfully && introductions.Result is null);
+
             var ready = _writtenAhead.TakeFor(round.Id, round.AssignedTransponders, _commentary.HistorySaid, DateTime.Now);
 
             if (ready.Why == WrittenAhead.Why.Used && ready.Line is { Length: > 0 } already)
@@ -780,7 +785,8 @@ public sealed partial class RaceControlControl
                     form: form,
                     stake: stake,
                     historyPacked: packed => history = packed,
-                    scene: scene);
+                    scene: scene,
+                    introductionsFollow: introductionsFollow);
             }
 
             if (string.IsNullOrWhiteSpace(answer))

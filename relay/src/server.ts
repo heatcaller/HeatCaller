@@ -25,7 +25,8 @@ import {
 } from "./pages.js";
 import { DEFAULT_LOOK, flagColours, lookFrom, type Look } from "./site.js";
 import { BRAIN_LONG_WORDS_CEILING, BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
-import { VOICE_PLAN_OFF, type VoiceService } from "./voice.js";
+import { VOICE_PLAN_OFF, type MeterUsage, type VoiceService } from "./voice.js";
+import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 
 /** The public pages under /c/<club>/, by their last path segment. */
 const PAGES: Readonly<Record<string, (club: string, clubName: string, context: PageContext) => string>> = Object.freeze({
@@ -899,6 +900,12 @@ export interface RelayOptions {
    * before this existed.
    */
   readonly brain?: BrainService | undefined;
+  /**
+   * Where a club's asks for more of an allowance are kept (see
+   * topuprequests.ts). Absent means none are taken: the usage routes still
+   * answer, with no requests, and asking is refused as unavailable.
+   */
+  readonly topUpRequests?: TopUpRequests | undefined;
 }
 
 interface Parsed {
@@ -966,6 +973,7 @@ export class Relay {
   private readonly voiceSamples: Limiter;
   private readonly voice: VoiceService | undefined;
   private readonly brain: BrainService | undefined;
+  private readonly topUpRequests: TopUpRequests | undefined;
   private readonly listings = new Map<string, Buffer>();
   /**
    * ?meta=1&limit=N cuts, keyed to the very meta listing Buffer they were
@@ -1176,6 +1184,7 @@ export class Relay {
 
     this.voice = options.voice;
     this.brain = options.brain;
+    this.topUpRequests = options.topUpRequests;
   }
 
   /**
@@ -2205,6 +2214,29 @@ export class Relay {
 
     if (method === "POST" && rest.length === 2 && rest[0] === "brain" && rest[1] === "write") {
       await this.brainWrite(request, response, club);
+      return;
+    }
+
+    // How much of each monthly allowance this club has used, and asking for
+    // more - the laptop with its token, the manager's phone with its pass.
+    // Read only: nothing here spends a line or a character.
+    if (method === "GET" && rest.length === 1 && rest[0] === "usage") {
+      await this.usageRead(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "usage" && rest[1] === "topup-request") {
+      await this.usageTopUpRequest(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "manage" && rest[1] === "usage") {
+      await this.manageUsage(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "manage" && rest[1] === "topup-request") {
+      await this.manageTopUpRequest(request, response, club);
       return;
     }
 
@@ -3875,6 +3907,185 @@ export class Relay {
       allowance: result.usage.allowance,
       resetsAt: result.usage.resetsAt,
     });
+  }
+
+  /**
+   * The usage answer itself, for the laptop and the phone alike: each meter
+   * read without spending, and this month's top-up requests.
+   */
+  private async usageView(tenant: Tenant): Promise<Record<string, unknown>> {
+    const none = (): Omit<MeterUsage, "resetsAt"> & { resetsAt: null } => ({
+      enabled: false,
+      used: 0,
+      allowance: 0,
+      topUp: 0,
+      resetsAt: null,
+    });
+
+    const club = tenant.club;
+    const commentary = this.brain === undefined ? none() : await this.brain.usage(club, tenant.brain ?? BRAIN_PLAN_OFF);
+    const voice = this.voice === undefined ? none() : await this.voice.usage(club, tenant.voice ?? VOICE_PLAN_OFF);
+    const requests = this.topUpRequests === undefined ? [] : await this.topUpRequests.list(club);
+
+    return {
+      ok: true,
+      commentary,
+      voice,
+      requests: requests.map((ask) => ({ id: ask.id, meter: ask.meter, askedAt: ask.askedAt, note: ask.note, status: ask.status })),
+    };
+  }
+
+  /** Records an ask for more, and answers it - shared by the laptop's route and the phone's. */
+  private async askForMore(response: ServerResponse, club: string, body: Record<string, unknown>): Promise<void> {
+    const meter = body["meter"];
+
+    if (!isMeterName(meter)) {
+      sendJson(response, 400, { ok: false, error: 'meter must be "commentary" or "voice".' });
+      return;
+    }
+
+    if (this.topUpRequests === undefined) {
+      sendJson(response, 503, { ok: false, error: "This relay doesn't take top-up requests. Email support instead." });
+      return;
+    }
+
+    const result = await this.topUpRequests.ask(club, meter, body["note"]);
+
+    if (!result.ok) {
+      sendJson(response, result.status, { ok: false, error: result.error });
+      return;
+    }
+
+    const ask = result.request;
+
+    sendJson(response, 200, {
+      ok: true,
+      request: { id: ask.id, meter: ask.meter, askedAt: ask.askedAt, note: ask.note, status: ask.status },
+      already: result.already,
+    });
+  }
+
+  /** The laptop asking where this club's month stands. Counted with the voice and brain catalogues - the same laptop asks all three. */
+  private async usageRead(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const asking = `${club}|${clientAddress(request)}`;
+
+    if (this.voiceTraffic.blocked(asking)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a moment and try again." });
+      return;
+    }
+
+    this.voiceTraffic.hit(asking);
+
+    sendJson(response, 200, await this.usageView(who));
+  }
+
+  /** The laptop asking for more of one meter this month. */
+  private async usageTopUpRequest(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const asking = `${club}|${clientAddress(request)}`;
+
+    if (this.voiceTraffic.blocked(asking)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a moment and try again." });
+      return;
+    }
+
+    this.voiceTraffic.hit(asking);
+
+    const body = await readBody(request, response, 8 * 1024);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That request could not be read." });
+      return;
+    }
+
+    await this.askForMore(response, club, body);
+  }
+
+  /**
+   * The manager's phone checking the pass it was given, as manage/response
+   * does. The body when it is good, undefined once an answer has been sent.
+   */
+  private async manageBodyWithPass(
+    request: IncomingMessage,
+    response: ServerResponse,
+    club: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.manageTraffic.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return undefined;
+    }
+
+    this.manageTraffic.hit(who);
+
+    const body = await readBody(request, response, MANAGE_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That request could not be read." });
+      return undefined;
+    }
+
+    const pass = typeof body["pass"] === "string" ? (body["pass"] as string) : "";
+    const manage = await this.currentManage(club);
+
+    if (manage === undefined || !manage.enabled || manage.pass === "" || !PASS.test(pass) || !sameHash(pass, manage.pass)) {
+      sendJson(response, 403, { ok: false, error: "Sign in again." });
+      return undefined;
+    }
+
+    return body;
+  }
+
+  /** The manager's phone asking where this club's month stands - the laptop's own answer, by pass rather than token. */
+  private async manageUsage(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const body = await this.manageBodyWithPass(request, response, club);
+    const tenant = this.tenants.club(club);
+
+    if (body === undefined) {
+      return;
+    }
+
+    if (tenant === undefined) {
+      sendJson(response, 404, { ok: false, error: "No such club." });
+      return;
+    }
+
+    sendJson(response, 200, await this.usageView(tenant));
+  }
+
+  /** The manager's phone asking for more of one meter this month. */
+  private async manageTopUpRequest(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const body = await this.manageBodyWithPass(request, response, club);
+
+    if (body === undefined) {
+      return;
+    }
+
+    await this.askForMore(response, club, body);
   }
 
   private async deleteClub(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {

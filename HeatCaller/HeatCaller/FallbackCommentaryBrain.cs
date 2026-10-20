@@ -16,11 +16,35 @@ namespace HeatCaller;
 /// rather than throwing, both already have their own deadline, and a line
 /// that arrives after the moment has passed is worse than no line at all -
 /// see the timeout note on LocalLlmClient.
+///
+/// TWO WAYS TO FALL BACK (19 Oct 2026). With "Let the model on this PC
+/// write when the relay can't" ticked, any line the relay doesn't write
+/// goes to the second brain, as it always has. Unticked, the second brain
+/// is still here - but it writes only while the relay's lines for the
+/// month are used up. A club that would rather a quiet segment than a
+/// plainly-written one on a night the Wi-Fi drops did not choose an
+/// evening with no commentary at all because the month ran out; that is
+/// the switch-over the club asked for, and it needs nobody to find a tick
+/// box mid-race.
 /// </summary>
 public sealed class FallbackCommentaryBrain : ICommentaryBrain
 {
     private readonly ICommentaryBrain _first;
     private readonly ICommentaryBrain _second;
+
+    /// <summary>True: any relay failure falls back (the box ticked). False: only a spent month does.</summary>
+    private readonly bool _onAnyFailure;
+
+    /// <summary>Whether the first brain's month is spent - RelayCommentaryClient.MonthSpent, unless a test hands in its own.</summary>
+    private readonly Func<bool> _monthSpent;
+
+    /// <summary>
+    /// Whether the second brain has been warmed since this pair was built.
+    /// In the spent-month-only mode it is not warmed with the first - see
+    /// WarmUpAsync - so it is warmed the first time it is actually needed.
+    /// 0 or 1, for Interlocked.
+    /// </summary>
+    private int _secondWarmed;
 
     private static readonly AsyncLocal<bool> _relayOnly = new();
 
@@ -44,10 +68,20 @@ public sealed class FallbackCommentaryBrain : ICommentaryBrain
         set => _relayOnly.Value = value;
     }
 
-    public FallbackCommentaryBrain(ICommentaryBrain first, ICommentaryBrain second)
+    /// <param name="first">The relay.</param>
+    /// <param name="second">The model on this PC.</param>
+    /// <param name="onAnyFailure">True to fall back whenever the first doesn't write; false to fall back only while its month is spent.</param>
+    /// <param name="monthSpent">Whether the first's month is spent. Defaults to asking the first, when it is the relay.</param>
+    public FallbackCommentaryBrain(
+        ICommentaryBrain first,
+        ICommentaryBrain second,
+        bool onAnyFailure = true,
+        Func<bool>? monthSpent = null)
     {
         _first = first;
         _second = second;
+        _onAnyFailure = onAnyFailure;
+        _monthSpent = monthSpent ?? (() => first is RelayCommentaryClient { MonthSpent: true });
 
         // Both brains' console lines pass through, already tagged by the
         // brain that wrote them ("[brain] ..." and "[llm] ..."), so an
@@ -61,9 +95,65 @@ public sealed class FallbackCommentaryBrain : ICommentaryBrain
     public event Action<string>? StatusMessage;
 
     /// <inheritdoc />
-    public string Describe => $"{_first.Describe}, falling back to {_second.Describe}";
+    public string Describe => _onAnyFailure
+        ? $"{_first.Describe}, falling back to {_second.Describe}"
+        : $"{_first.Describe}, with {_second.Describe} once the month's relay lines are used up";
+
+    /// <summary>
+    /// True when the second brain may write now that the month is spent -
+    /// there is one, and it is not a built-in model already found unable to
+    /// run or too slow on this PC. What CommentaryBudget asks before it
+    /// stops rationing relay lines nobody is spending.
+    /// </summary>
+    public bool CoversSpentMonth =>
+        _second is not BundledLlmClient bundled || (!bundled.TooSlow && bundled.Unavailable is null);
+
+    /// <summary>Whether the first brain's month is spent and the second is taking over - see CoversSpentMonth.</summary>
+    public bool TakingOver
+    {
+        get
+        {
+            try
+            {
+                return CoversSpentMonth && _monthSpent();
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
 
     private void Say(string message) => StatusMessage?.Invoke(message);
+
+    /// <summary>Whether this failure is one the second brain covers: any, when ticked; only a spent month, when not.</summary>
+    private bool ShouldFallBack(out bool spent)
+    {
+        try
+        {
+            spent = _monthSpent();
+        }
+        catch
+        {
+            spent = false;
+        }
+
+        return _onAnyFailure || spent;
+    }
+
+    /// <summary>
+    /// Warms the second brain the first time a spent month hands it a line,
+    /// when it was not warmed with the first. In the background, through the
+    /// model's own one-at-a-time queue, so it measures this PC (TooSlow)
+    /// rather than trying every line against a machine that cannot keep up.
+    /// </summary>
+    private void WarmSecondOnce()
+    {
+        if (Interlocked.Exchange(ref _secondWarmed, 1) == 0)
+        {
+            _ = _second.WarmUpAsync();
+        }
+    }
 
     /// <inheritdoc />
     public async Task<string?> GenerateAsync(
@@ -91,13 +181,33 @@ public sealed class FallbackCommentaryBrain : ICommentaryBrain
             return null;
         }
 
+        // Unticked and the relay simply didn't write this one - the Wi-Fi,
+        // a timeout, a club not included: quieter, as the club chose.
+        if (!ShouldFallBack(out var spent))
+        {
+            return null;
+        }
+
+        // Kept while the month is spent too: a colour or flourish segment is
+        // still better unsaid than written plainly - see BrainFallback.None
+        // and CommentaryBudget, which refuses those tiers once the month is
+        // spent rather than letting them get this far.
         if (RelayOnly)
         {
             Say($"[brain] Not falling back to {_second.Describe} - this segment is left unsaid rather than written locally.");
             return null;
         }
 
-        Say($"[brain] Falling back to {_second.Describe}.");
+        if (spent)
+        {
+            // Said once by the relay client ("This month's relay lines are
+            // used up..."), not once a line here.
+            WarmSecondOnce();
+        }
+        else
+        {
+            Say($"[brain] Falling back to {_second.Describe}.");
+        }
 
         return await _second
             .GenerateAsync(systemPrompt, userPrompt, maxTokens, temperature, ct, timeout)
@@ -109,11 +219,23 @@ public sealed class FallbackCommentaryBrain : ICommentaryBrain
     /// and the relay's is a cheap question that also tells the console
     /// whether this club is included, which is the first thing anyone
     /// wants to know when commentary is on and nothing is being said.
+    ///
+    /// Not the second in the spent-month-only mode while the month has lines:
+    /// warming the built-in model loads several hundred megabytes and writes
+    /// a timed line, and a club that unticked the box should not pay that on
+    /// every start for a model that may not write all month. It is warmed
+    /// here if the month is already spent (the relay's warm-up has just told
+    /// the store), and otherwise the first time a spent month needs it.
     /// </summary>
     public async Task WarmUpAsync(CancellationToken ct = default)
     {
         await _first.WarmUpAsync(ct).ConfigureAwait(false);
-        await _second.WarmUpAsync(ct).ConfigureAwait(false);
+
+        if (_onAnyFailure || ShouldFallBack(out _))
+        {
+            Interlocked.Exchange(ref _secondWarmed, 1);
+            await _second.WarmUpAsync(ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -129,6 +251,11 @@ public sealed class FallbackCommentaryBrain : ICommentaryBrain
             return answer;
         }
 
-        return ct.IsCancellationRequested ? null : await _second.TestAsync(ct).ConfigureAwait(false);
+        if (ct.IsCancellationRequested || !ShouldFallBack(out _))
+        {
+            return null;
+        }
+
+        return await _second.TestAsync(ct).ConfigureAwait(false);
     }
 }

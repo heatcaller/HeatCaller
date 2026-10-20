@@ -111,7 +111,14 @@ public sealed class CommentaryDirector
         _settings = settings;
         _clock = clock ?? (() => DateTime.Now);
 
-        Budget = new CommentaryBudget(_clock);
+        Budget = new CommentaryBudget(_clock)
+        {
+            // Read from whichever brain the Commentary page has handed the
+            // service at the moment of asking - it rebuilds on every
+            // settings change - so never held. See LocalModelTakesOver.
+            LocalModelTakesOver = () => commentary.Client is FallbackCommentaryBrain { TakingOver: true },
+        };
+
         Battles = new BattleWatch(_clock);
         Pace = new PaceWatch();
         Horizons = new RaceHorizon(_clock);

@@ -50,7 +50,7 @@ Kokoro is the bottom of the ladder, and nothing stands in for it. On a PC that h
 3. Press **Hear It** beside the list to listen to the voice you've highlighted, and **Preview** to hear it say words of your own. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it).
 4. Read the line underneath, which says where your allowance stands.
 
-**Refresh** asks the relay again — for the list of voices and for the allowance. The page does it by itself when you open **Voice Settings** and when you choose the HeatCaller voice, in the background, so the page is usable while it waits. It's never asked on a timer, so a page left open all evening shows the number as it stood when you opened it. Press **Refresh** for the current one.
+**Refresh** asks the relay again — for the list of voices and for the allowance. The page does it by itself when you open **Voice Settings** and when you choose the HeatCaller voice, in the background, so the page is usable while it waits. It's never asked on a timer, so a page left open all evening shows the number as it stood when you opened it. Press **Refresh** for the current one. The meter under it is different: it moves as lines are spoken. See [The meter under the voice](#the-meter-under-the-voice).
 
 The line under the list says one of:
 
@@ -177,6 +177,20 @@ Far less of it is spent than that number suggests:
 
 So the cheapest thing you can do before a race night is press **Prepare Lines**, which works on this voice just as it does on a key of your own. See [Prepare lines in advance](#prepare-lines-in-advance).
 
+#### The meter under the voice
+
+Under the line, a meter shows the same month at a glance, and keeps itself up to date while the page is open:
+
+- the name and the share used, for example "HeatCaller voice - 34% used", or "HeatCaller voice - used up";
+- a bar, green while there's plenty left, amber from 80% used and red when it's gone;
+- the figures, for example "34,120 of 100,000 characters · 2,410 tonight · starts again 1 Nov" ("tonight" runs from 6am to 6am, so a late meeting is one night);
+- once something has been spoken tonight, how long it will last, for example "About 6 more race nights like tonight.";
+- **Ask for More**, once 80% is used. It works as it does for the AI commentary: the request is noted on the relay and emailed to support@heatcaller.com from the club's mailbox, or your email program opens with it written out for you to send. See [Asking for more](commentary.md#asking-for-more).
+
+It's only there while the HeatCaller voice is chosen. The same figures are in the This Month window, the chip at the foot of the sidebar and Mission Control's **Allowances** tile, and the club gets an email at 80% and when it's used up. See [This month: every allowance in one place](commentary.md#this-month-every-allowance-in-one-place).
+
+When it's used up, the free Kokoro voice speaks every line until the month starts again or a top-up arrives; see [When the HeatCaller voice can't speak a line](#when-the-heatcaller-voice-cant-speak-a-line).
+
 The relay speaks one line at a time up to 600 characters, which is far longer than any announcement. The count is of the words that will actually be spoken, so audio tags don't count toward it. A longer line is refused and the Kokoro voice says it.
 
 ### The warning before it runs out
@@ -255,6 +269,18 @@ There's no Save button. Every change on this tab saves as you make it, and the l
 ### Where the key is kept
 
 The key is stored encrypted and locked to your Windows user account on this laptop. It's never written to a file in plain text, and it's never saved into a [soundscape](sounds-and-music.md#soundscapes). If you restore a backup onto a different laptop, you may need to enter the key again. See [Backups](../admin/backups.md) and [Security and privacy](../admin/security-and-privacy.md).
+
+### Your own key's month
+
+With ElevenLabs chosen under **Speak with** and a key in **API Key:**, a meter under the ElevenLabs choice shows how much of your ElevenLabs plan's characters this month is used, read from ElevenLabs itself: the share used and a bar, the figures (for example "1,200 of 30,000 characters · starts again 7 Nov" - the day your own plan starts again, which needn't be the 1st), and how many more race nights like tonight it will last. It's asked for when you open **Voice Settings**, when HeatCaller starts and every five minutes after.
+
+To read the plan, the key needs the **User: read** permission. A key made without it still speaks perfectly well, but the meter can't see the plan, and says instead: "This key can't read its plan - give it the User: read permission on elevenlabs.io to see it here." Give the key that permission in your ElevenLabs account and the figures appear at the next check.
+
+There's no **Ask for More** here: the characters are on your own ElevenLabs plan, so HeatCaller can't add any. Once 80% is used, **Upgrade on elevenlabs.io** appears under the bar instead, and opens your plan's page on ElevenLabs.
+
+At 100%, the **If ElevenLabs can't speak a line - no key, no internet, or the quota is used up - the free Kokoro voice says it instead** box decides: ticked (the default), the free Kokoro voice says the new lines until ElevenLabs can speak again; unticked, they're skipped. Lines already saved still play in your voice either way. See [When ElevenLabs can't speak a line](#when-elevenlabs-cant-speak-a-line).
+
+The same figures are in the This Month window, the sidebar chip (as "ElevenLabs") and Mission Control, and the club gets an email at 80% and when it's used up. See [This month: every allowance in one place](commentary.md#this-month-every-allowance-in-one-place).
 
 ## Choosing a model
 
@@ -560,7 +586,7 @@ See [Drivers and classes](../race-day/drivers-and-classes.md).
 
 ### ElevenLabs usage
 
-Each line counts against your ElevenLabs plan the first time it's spoken. After that it's saved on the laptop and costs nothing (see [Saved voice lines](#saved-voice-lines)). Lines with live values in them, such as lap times and positions, rarely repeat word for word, so those are where usage goes. To keep it down, leave the high-frequency announcements (**Every lap completed**, **Lap time only**, **Personal best lap**) off, or use **Announce every** to space them out. The Kokoro voice costs nothing, however much it says.
+Each line counts against your ElevenLabs plan the first time it's spoken. After that it's saved on the laptop and costs nothing (see [Saved voice lines](#saved-voice-lines)). Lines with live values in them, such as lap times and positions, rarely repeat word for word, so those are where usage goes. To keep it down, leave the high-frequency announcements (**Every lap completed**, **Lap time only**, **Personal best lap**) off, or use **Announce every** to space them out. The Kokoro voice costs nothing, however much it says. To see how much of your plan is left, read the meter under the ElevenLabs choice; see [Your own key's month](#your-own-keys-month).
 
 If your ElevenLabs quota runs out, the Kokoro voice says the new lines while the stand-in box is ticked (see [When ElevenLabs can't speak a line](#when-elevenlabs-cant-speak-a-line)). With it unticked, new lines pause and the console says so. Either way, lines already saved still play, and sound effects, lap beeps, ambience and music carry on. ElevenLabs comes back on its own the next time a request succeeds, for example after you top up or your monthly allowance resets. The **Sounds → Mixer** page shows "NO VOICE:" with the reason when the announcer can't speak, and a notice when the Windows voice is standing in.
 

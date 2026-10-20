@@ -378,7 +378,7 @@ internal sealed class ShowBlock
     /// Long enough to read as a deliberate mark rather than as the duck
     /// letting go, short enough that it is punctuation and not an interlude.
     /// </summary>
-    internal static readonly TimeSpan Swell = TimeSpan.FromSeconds(1.1);
+    internal static readonly TimeSpan Swell = TimeSpan.FromSeconds(0.8);
 
     /// <summary>
     /// The mark a block with NO music at all can still manage: a beat of
@@ -390,7 +390,7 @@ internal sealed class ShowBlock
     /// a run-on sentence. Slightly longer than the settle between two
     /// ordinary items, so the two are told apart.
     /// </summary>
-    internal static readonly TimeSpan DryBeat = TimeSpan.FromSeconds(0.7);
+    internal static readonly TimeSpan DryBeat = TimeSpan.FromSeconds(0.4);
 
     /// <summary>
     /// The longest a sting may hold a block up, whatever a club dropped in

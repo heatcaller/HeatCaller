@@ -947,6 +947,37 @@ All clubs: 61,200 characters this month.
   the config from `RELAY_CONFIG_JSON` and the data from `RELAY_DATA`, as the
   relay does.
 
+#### AI commentary lines, and clubs asking for more
+
+The same pattern for AI commentary, counted in lines rather than characters:
+
+```
+brain-usage.cmd                    every club with AI commentary: this month so far, and the three before
+brain-usage.cmd --json             the same with every club's whole history, as JSON
+brain-topup.cmd acme-rc 200        200 more lines for acme-rc, this month only
+brain-topup.cmd acme-rc -100       takes 100 of that back (never below no top-up)
+topup-requests.cmd                 the clubs that have asked for more this month and are still waiting
+topup-requests.cmd --json          the same, as JSON
+```
+
+- Brain top-ups are kept in `dataDir/.brain/topups/<club>.json`, written only
+  by `brain-topup` and read by the relay on the club's next line - no restart.
+  A club's commentary allowance is its plan's `brain.monthlyLines` plus this
+  month's top-up.
+- **Asking for more.** A club asks from the app (Ask for More... on the AI
+  Commentary page, Voice Settings or the This Month window) or from the
+  manager's phone page. The relay keeps the ask in `dataDir/.requests/<club>.json`
+  (the relay is its only writer); the app also emails support@heatcaller.com
+  through the club's own email settings, or opens a ready-written email when
+  those aren't set up. **The relay itself sends no email** - `topup-requests.cmd`
+  is the list to work from.
+- A positive `voice-topup` or `brain-topup` marks that club's open ask for
+  that meter done (in `dataDir/.requests/done/<club>.json`, which only the
+  commands write).
+- Any club can see its own figures: the app's This Month window and the
+  manager page's Today tab both read `GET /api/v1/c/<club>/usage` (the club's
+  own token, or its manager pass), which spends nothing.
+
 #### Trying it out on your own laptop
 
 `voice-test.cmd` runs all of the above here, on this PC, against your own
@@ -1284,6 +1315,9 @@ test/            506 tests: tenancy, publishing, isolation, persistence, minting
                  (PIN guesses, page loads, a link forwarded to twenty people) or an unreadable file
 
 voice-usage.cmd       every club's HeatCaller voice usage, read on the Fly machine
+brain-usage.cmd       every club's AI commentary lines, read on the Fly machine
+brain-topup.cmd       more AI commentary lines for one club, this month only
+topup-requests.cmd    the clubs waiting on an answer to Ask for More
 voice-topup.cmd       gives a club more voice characters for this month, on the Fly machine
 voice-test.cmd        runs a voice relay on this laptop against your own ElevenLabs key
 voice-test-setup.mjs  writes that test relay's config, once, from the account's own voices

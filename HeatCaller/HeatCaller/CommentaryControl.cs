@@ -199,6 +199,13 @@ public sealed class CommentaryControl : UserControl
     internal Func<int>? MaxCallsPerLap { get; set; }
 
     /// <summary>
+    /// Opens the This Month window (MainForm.ShowThisMonth), from the
+    /// Details... under this month's relay lines. The window is the host's,
+    /// one at a time, so the page asks for it rather than making one.
+    /// </summary>
+    internal Action? OpenThisMonth { get; set; }
+
+    /// <summary>
     /// The club's commentary count for the month, as the relay reports it
     /// on the way past - how many lines are spent, and the cap.
     ///
@@ -490,12 +497,24 @@ public sealed class CommentaryControl : UserControl
         Stepped(connectionGrid.AddRow(string.Empty, _chkLocalModel));
         connectionGrid.AddHint(
             "Built in and works with the internet down, though its lines are plainer than the relay's. Untick it and "
-            + "the races the relay can't cover are simply quieter.");
+            + "the races the relay can't cover are simply quieter - but it still takes over by itself when this "
+            + "month's relay lines run out, so the commentary carries on.");
 
         // FOR THE MODEL ON THIS PC (17 Oct 2026): this sets
         // BundledLlmClient.Timeout only - the relay keeps its own fixed wait
         // (RelayCommentaryClient.Timeout) - so it greys with the box above.
         Flush(connectionGrid.AddRow("Give up after:", Line(_numTimeout, Suffix("seconds, for the model on this PC - after this the normal announcement line is used instead"))));
+
+        // THIS MONTH'S RELAY LINES (19 Oct 2026), next to what writes when
+        // they run out: the share used, how many nights like tonight are
+        // left, and Ask for More... once it runs low (UsageLine). Only while
+        // the relay is in use - a club writing everything on this PC has no
+        // allowance to watch. Kept live from the store (UsageMeters).
+        var usage = new UsageLine(_settings) { OpenDetails = () => OpenThisMonth?.Invoke() };
+        var usageCaption = Flush(connectionGrid.AddRow("This month:", usage, stretch: true));
+        usage.ShowingChanged += shown => usageCaption.Visible = shown;
+        usage.Follow(MeterKind.Commentary, this, () => _chkUseRelay.Checked && new RelayCommentaryClient(_settings).RelayConfigured);
+        _chkUseRelay.CheckedChanged += (_, _) => usage.RefreshNow();
 
         // Right under the fields it checks. It used to be the last thing on
         // the page, a whole scroll away from the endpoint and model.
@@ -511,7 +530,7 @@ public sealed class CommentaryControl : UserControl
                 + "Commentary will be skipped and normal announcements used.",
             "Working - replied in 99.9s. That's comfortably within the gap between races.",
             "Working - replied in 99.9s. That's slow for live lines - intros and recaps get longer and should still make it.",
-        };
+        }.Concat(AllSpentTestResults()).ToArray();
 
         // The result beside the button, wrapping to the room to its right -
         // the brain's own error text can run to two lines and more. The button
@@ -1448,7 +1467,9 @@ public sealed class CommentaryControl : UserControl
         var on = _chkEnabled.Checked;
         _chkUseRelay.Enabled = on;
         _chkLocalModel.Enabled = on;
-        _numTimeout.Enabled = on && _chkLocalModel.Checked;
+        // With the relay on, the model on this PC can write even unticked -
+        // when the month's relay lines run out - and this is its wait.
+        _numTimeout.Enabled = on && (_chkLocalModel.Checked || _chkUseRelay.Checked);
 
         // The tag pass does nothing unless the tone is Enthusiastic, so the
         // box says so by going grey rather than by quietly doing nothing.
@@ -1572,7 +1593,11 @@ public sealed class CommentaryControl : UserControl
         // cheap, but pointless when the relay is switched off anyway.
         var ready = useRelay && new RelayCommentaryClient(_settings).RelayConfigured;
 
-        _lblRelayState.Text = RelayStateText(useRelay, ready, useLocal);
+        _lblRelayState.Text = RelayStateText(
+            useRelay,
+            ready,
+            useLocal,
+            modelHere: BundledLlmClient.IsModelAvailableWith(_settings.CommentaryLocalModelPath));
 
         // Amber whenever nothing would be written, which is the one state
         // worth interrupting someone over: commentary is ticked on and the
@@ -1586,7 +1611,7 @@ public sealed class CommentaryControl : UserControl
     /// What the line under the relay box says. Pure, so the sizing list and
     /// the live text cannot drift apart - see AllRelayStates.
     /// </summary>
-    private static string RelayStateText(bool useRelay, bool ready, bool useLocal)
+    private static string RelayStateText(bool useRelay, bool ready, bool useLocal, bool modelHere)
     {
         var local = useLocal ? "the built-in model" : null;
 
@@ -1604,9 +1629,18 @@ public sealed class CommentaryControl : UserControl
                 : $"The Club Website page isn't set up yet, so everything is written by {local} below.";
         }
 
-        return local is null
-            ? "The Club Website page is set up, so the relay writes - and nothing covers the races it can't."
-            : $"The Club Website page is set up, so the relay writes first and {local} below covers what it can't.";
+        if (local is not null)
+        {
+            return $"The Club Website page is set up, so the relay writes first and {local} below covers what it can't.";
+        }
+
+        // Unticked, the model on this PC still takes over when the month's
+        // relay lines run out - see FallbackCommentaryBrain - so that is
+        // said, when there is a model here to do it.
+        return modelHere
+            ? "The Club Website page is set up, so the relay writes - nothing covers the races it can't, though the "
+              + "model on this PC takes over if the month's relay lines run out."
+            : "The Club Website page is set up, so the relay writes - and nothing covers the races it can't.";
     }
 
     /// <summary>
@@ -1620,9 +1654,12 @@ public sealed class CommentaryControl : UserControl
 
         foreach (var useLocal in new[] { true, false })
         {
-            all.Add(RelayStateText(useRelay: false, ready: false, useLocal));
-            all.Add(RelayStateText(useRelay: true, ready: false, useLocal));
-            all.Add(RelayStateText(useRelay: true, ready: true, useLocal));
+            foreach (var modelHere in new[] { true, false })
+            {
+                all.Add(RelayStateText(useRelay: false, ready: false, useLocal, modelHere));
+                all.Add(RelayStateText(useRelay: true, ready: false, useLocal, modelHere));
+                all.Add(RelayStateText(useRelay: true, ready: true, useLocal, modelHere));
+            }
         }
 
         return all.Distinct().ToArray();
@@ -1648,6 +1685,13 @@ public sealed class CommentaryControl : UserControl
     /// model's weights in memory.
     /// </summary>
     private ICommentaryBrain? _localBrain;
+
+    /// <summary>
+    /// The relay client this page last built, or null with the relay off -
+    /// kept so the Test button can tell a month that is used up from a
+    /// relay that failed, and say so calmly. See RunTestAsync.
+    /// </summary>
+    private RelayCommentaryClient? _relay;
 
     /// <summary>
     /// What the client currently handed to the service was built from. Null
@@ -1679,12 +1723,20 @@ public sealed class CommentaryControl : UserControl
         // club and token are deliberately absent: RelayCommentaryClient
         // asks the settings again on every line, so a change there needs no
         // new client - only turning the relay off or on does.
+        // Whether there is a model on this PC at all is in the key too
+        // (19 Oct 2026): with the box unticked it is still built to take
+        // over when the relay's month runs out, so a model that turns up
+        // after the page was first built - downloaded, or named by hand -
+        // has to be picked up by the next rebuild rather than ignored.
+        var modelHere = BundledLlmClient.IsModelAvailableWith(_settings.CommentaryLocalModelPath);
+
         var key = string.Join(
             '\u001f',
             _settings.CommentaryUseLocalModel,
             _settings.CommentaryLocalModelPath,
             budget.Ticks,
-            _settings.CommentaryUseRelay);
+            _settings.CommentaryUseRelay,
+            modelHere);
 
         if (_clientKey == key && _commentary.Client is not null)
         {
@@ -1694,10 +1746,17 @@ public sealed class CommentaryControl : UserControl
         ReleaseClient();
 
         // The model that ships inside the installer, run in this process.
-        // It is only what writes when the relay cannot - see below - and a
-        // club that would rather a quiet segment than a plainly-written one
-        // unticks it and gets null here.
-        ICommentaryBrain? local = _settings.CommentaryUseLocalModel
+        // It is only what writes when the relay cannot - see below. A club
+        // that would rather a quiet segment than a plainly-written one
+        // unticks the box, and still gets it here whenever the relay is on
+        // and there is a model to load: unticked, it writes ONLY while the
+        // relay's lines for the month are used up (FallbackCommentaryBrain),
+        // which is the switch-over the club asked for. With the relay off
+        // and the box unticked nothing is set to write, as before.
+        var useLocal = _settings.CommentaryUseLocalModel
+                       || (_settings.CommentaryUseRelay && modelHere);
+
+        ICommentaryBrain? local = useLocal
             ? new BundledLlmClient
             {
                 ModelPathOverride = string.IsNullOrWhiteSpace(_settings.CommentaryLocalModelPath)
@@ -1718,8 +1777,17 @@ public sealed class CommentaryControl : UserControl
         // per line, not here; see FallbackCommentaryBrain.
         var relay = _settings.CommentaryUseRelay ? new RelayCommentaryClient(_settings) : null;
 
+        _relay = relay;
+
         if (relay is not null)
         {
+            // For the console's "the model on this PC is writing until
+            // 1 Nov" - asked when it is said, since the model may be found
+            // too slow, or unable to run here, after this is built.
+            relay.LocalTakesOver = () =>
+                local is not null
+                && (local is not BundledLlmClient bundled || (!bundled.TooSlow && bundled.Unavailable is null));
+
             // The club's month, as the relay counts it - passed straight
             // through to whoever is pacing the night against it. Attached
             // to each new client, since a settings change builds one.
@@ -1756,13 +1824,15 @@ public sealed class CommentaryControl : UserControl
 
         if (relay is not null && local is not null)
         {
-            client = new FallbackCommentaryBrain(relay, local);
+            // Ticked: any line the relay doesn't write falls back. Unticked:
+            // only while the month's relay lines are used up.
+            client = new FallbackCommentaryBrain(relay, local, onAnyFailure: _settings.CommentaryUseLocalModel);
         }
         else if (relay is not null)
         {
             client = relay;
         }
-        else if (local is not null)
+        else if (local is not null && _settings.CommentaryUseLocalModel)
         {
             client = local;
         }
@@ -1810,6 +1880,7 @@ public sealed class CommentaryControl : UserControl
     {
         (_localBrain as IDisposable)?.Dispose();
         _localBrain = null;
+        _relay = null;
         _clientKey = null;
     }
 
@@ -1820,6 +1891,32 @@ public sealed class CommentaryControl : UserControl
     /// settings box would be seconds of work per character typed.
     /// </summary>
     private void TriggerWarmUp() => _ = _commentary.Client?.WarmUpAsync();
+
+    /// <summary>
+    /// What Test Connection says when the relay's month is used up, and
+    /// whether that means something is still writing. Pure, so the label's
+    /// sizing list (AllSpentTestResults) is built from the same words.
+    /// </summary>
+    internal static (string Text, bool Writing) SpentTestResult(long? allowance, bool writtenHere, bool modelHere)
+    {
+        var lines = allowance is long cap && cap > 0
+            ? $"This month's {cap:N0} relay lines are used up"
+            : "This month's relay lines are used up";
+
+        if (writtenHere)
+        {
+            return ($"{lines} - the model on this PC is writing instead.", true);
+        }
+
+        return modelHere
+            ? ($"{lines}, and the model on this PC didn't answer - normal announcements carry on. Any [llm] line in the console says why.", false)
+            : ($"{lines} - no model is installed on this PC, so normal announcements carry on.", false);
+    }
+
+    /// <summary>Every SpentTestResult sentence, at a four-figure allowance, for the result label to size to.</summary>
+    private static IEnumerable<string> AllSpentTestResults() =>
+        new[] { (true, true), (false, true), (false, false) }
+            .Select(c => SpentTestResult(9999, c.Item1, c.Item2).Text);
 
     private async Task RunTestAsync(Button btnTest)
     {
@@ -1848,6 +1945,22 @@ public sealed class CommentaryControl : UserControl
             var started = DateTime.UtcNow;
             var reply = await (_commentary.Client?.TestAsync() ?? Task.FromResult<string?>(null));
             var elapsed = (DateTime.UtcNow - started).TotalSeconds;
+
+            // THE MONTH IS USED UP (19 Oct 2026). Not an error, and it used
+            // to read as one: the relay's own refusal in red, "Commentary
+            // will be skipped" - when the model on this PC now takes over
+            // whether the box below is ticked or not. Said as what it is.
+            if (_relay is { MonthSpent: true } spentRelay)
+            {
+                var (text, writing) = SpentTestResult(
+                    spentRelay.MonthAllowance,
+                    writtenHere: reply is not null,
+                    modelHere: BundledLlmClient.IsModelAvailableWith(_settings.CommentaryLocalModelPath));
+
+                _lblTestResult.Text = text;
+                _lblTestResult.ForeColor = writing ? AppTheme.Success : AppTheme.Accent;
+                return;
+            }
 
             if (reply is null)
             {

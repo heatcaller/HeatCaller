@@ -10,14 +10,52 @@ internal static partial class WindowCatalog
     /// them in trouble - the longest driver names in the grid and transponder
     /// tiles; and the Photo Finish window (PhotoFinishForm) with three shots
     /// kept tonight, one under the catalog's longest name, each a strip of
-    /// real frames.
+    /// real frames; and the This Month window (ThisMonthForm) with a meter
+    /// of each kind in each state that changes what a line shows - running
+    /// low with Ask for More..., used up, unreadable with its note, a key of
+    /// the club's own with its upgrade link - and with nothing metered.
     /// </summary>
     private static IEnumerable<(string Name, Func<Form> Build)> RaceNightScreenWindows() => new (string, Func<Form>)[]
     {
         ("Mission Control", () => new MissionControlForm(() => MissionControl.Assess(AllClear()))),
         ("Mission Control (problems)", () => new MissionControlForm(() => MissionControl.Assess(Trouble()))),
         ("Photo Finish", PhotoFinishWindow),
+        ("This Month", () => ThisMonthWindow(
+            new[] { CommentaryRunningLow(), VoiceUsedUp(), KeyUnreadable() },
+            new[]
+            {
+                new TopUpAsk("r_1", MeterKind.Commentary, DateTime.UtcNow.AddHours(-3), string.Empty, Open: true),
+                new TopUpAsk("r_2", MeterKind.HeatCallerVoice, DateTime.UtcNow.AddHours(-1), string.Empty, Open: true),
+                new TopUpAsk("r_3", MeterKind.Commentary, DateTime.UtcNow.AddDays(-9), string.Empty, Open: false),
+            },
+            new AppSettings { SmtpUser = "race-secretary.of.the.longest.club.name@example-club.org", SmtpPassword = "app-password" })),
+        ("This Month (your own key running low)", () => ThisMonthWindow(
+            new[] { KeyRunningLow() }, Array.Empty<TopUpAsk>(), new AppSettings())),
+        ("This Month (nothing metered)", () => ThisMonthWindow(Array.Empty<Meter>(), Array.Empty<TopUpAsk>(), new AppSettings())),
     };
+
+    /// <summary>The window over made-up meters, not the store's - and not refreshed as it opens, which would ask a relay.</summary>
+    private static Form ThisMonthWindow(IReadOnlyList<Meter> meters, IReadOnlyList<TopUpAsk> requests, AppSettings settings) =>
+        new ThisMonthForm(settings, () => null, () => meters, () => requests, refreshOnOpen: false);
+
+    private static DateTime NextMonth => new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1);
+
+    /// <summary>AI commentary at 83%, 38 lines tonight - amber, with Ask for More... and a forecast.</summary>
+    internal static Meter CommentaryRunningLow() =>
+        new(MeterKind.Commentary, Known: true, Used: 372, Allowance: 450, TopUp: 50, NextMonth, DateTime.UtcNow, UsedTonight: 38, Note: null);
+
+    /// <summary>The HeatCaller voice used up for the month - red, with Ask for More....</summary>
+    internal static Meter VoiceUsedUp() =>
+        new(MeterKind.HeatCallerVoice, Known: true, Used: 100_000, Allowance: 100_000, TopUp: 0, NextMonth, DateTime.UtcNow, UsedTonight: 12_480, Note: null);
+
+    /// <summary>A key of the club's own that can't read its plan - the note in place of figures.</summary>
+    internal static Meter KeyUnreadable() =>
+        new(MeterKind.ElevenLabsKey, Known: false, Used: 0, Allowance: 0, TopUp: 0, null, DateTime.UtcNow, UsedTonight: 0,
+            Note: "This key can't read its plan - give it the User: read permission on elevenlabs.io to see it here.");
+
+    /// <summary>A key of the club's own at 85% - amber, with the upgrade link rather than Ask for More....</summary>
+    internal static Meter KeyRunningLow() =>
+        new(MeterKind.ElevenLabsKey, Known: true, Used: 85_000, Allowance: 100_000, TopUp: 0, NextMonth, DateTime.UtcNow, UsedTonight: 4_200, Note: null);
 
     private static MissionControl.Inputs AllClear()
     {
@@ -39,7 +77,8 @@ internal static partial class WindowCatalog
             "EasyLap", DecoderConnectionState.Error, null, TimeSpan.FromMinutes(9),
             DecoderConnectionState.Disconnected, 3, longNames, grid, longNames,
             "The decoder stopped answering 2 minutes ago - laps are not being counted. Check its USB cable.",
-            longNames, null, VoiceMuted: true);
+            longNames, null, VoiceMuted: true,
+            Allowances: new MissionControl.AllowanceState(new[] { VoiceUsedUp(), CommentaryRunningLow() }, LocalModelWrites: false));
     }
 
     /// <summary>When the catalog's shots were taken - once a run, so each build writes over the same folders rather than adding more.</summary>

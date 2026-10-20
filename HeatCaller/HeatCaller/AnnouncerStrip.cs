@@ -221,6 +221,15 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
             sayings.Add($"On air: {VoiceProfile.Describe(call).Label}");
         }
 
+        foreach (var part in OnAirParts.All)
+        {
+            sayings.Add($"On air: {part}");
+        }
+
+        // An imaging piece is named after its file, which can be anything -
+        // so the slot is sized for a long one, and a longer one is cut.
+        sayings.Add($"On air: {new string('W', ImagingNow.LongestName)}");
+
         sayings.Add(WritingText);
         sayings.Add(MutedText);
 
@@ -395,6 +404,14 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
             _said.Text = NowOn(director, onAir);
             _said.ForeColor = AppTheme.Accent;
         }
+        else if (ImagingNow.Current is { } piece)
+        {
+            // NOTHING SPOKEN, BUT A JINGLE, SWEEPER, BUMPER OR STINGER IS
+            // GOING OUT (18 Oct 2026). The room hears it, so the strip says
+            // so - by the file's own name - rather than "Last:" over it.
+            _said.Text = $"On air: {piece}";
+            _said.ForeColor = AppTheme.Accent;
+        }
         else if (director.Writing)
         {
             // In the accent too, because it is a warning rather than a
@@ -497,17 +514,24 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// AND "On air" RATHER THAN A BARE NAME, because the slot it shares
     /// says "Last:" the rest of the time and a label that silently
     /// switched meaning would be worse than no label at all.
+    ///
+    /// THE LINE'S OWN NAME FIRST NOW (18 Oct 2026). The show's caption is
+    /// one name for everything under its music, so the booth interview and
+    /// the sign-off read "Race Recap" and the On Air run read whatever the
+    /// first piece called itself. Every broadcast line now says which part
+    /// it is (OnAirParts), and that is what is actually going out; the
+    /// show's caption is for the lines that carry no name.
     /// </summary>
     private static string NowOn(CommentaryDirector director, string? onAir)
     {
-        if (ShowOnAir.Caption is { Length: > 0 } caption)
-        {
-            return $"On air: {caption}";
-        }
-
         if (!string.IsNullOrWhiteSpace(onAir))
         {
             return $"On air: {onAir.Trim()}";
+        }
+
+        if (ShowOnAir.Caption is { Length: > 0 } caption)
+        {
+            return $"On air: {caption}";
         }
 
         // Nothing named it and nothing said what kind it was, which should
@@ -553,5 +577,87 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         // Said plainly that it was the two of them, since the strip no
         // longer shows the words and so no longer shows the two voices.
         return last.IsExchange ? $"Last: {named} (two voices)" : $"Last: {named}";
+    }
+}
+
+/// <summary>
+/// What each part of the broadcast calls itself on the race director's
+/// strip while it is going out (18 Oct 2026) - passed as onAir with every
+/// line Race Control speaks, so the strip says which part is on rather than
+/// the call kind or the name of whatever show's music is underneath.
+/// </summary>
+internal static class OnAirParts
+{
+    internal const string ShowOpen = "Show Open";
+    internal const string PitLane = "Pit Lane";
+    internal const string DriverIntros = "Driver Intros";
+    internal const string RoundIntro = "Round Intro";
+    internal const string Result = "Unofficial Result";
+    internal const string TechnicalLead = "Pit Lane: Technical Lead";
+    internal const string Teaser = "Teaser";
+    internal const string Recap = "Race Recap";
+    internal const string Achievements = "Achievements";
+    internal const string Booth = "Booth: Team Principal";
+    internal const string SignOff = "Sign-Off";
+    internal const string StopSet = "Stop Set";
+
+    internal static readonly IReadOnlyList<string> All = new[]
+    {
+        ShowOpen, PitLane, DriverIntros, RoundIntro, Result, TechnicalLead, Teaser, Recap, Achievements, Booth, SignOff, StopSet,
+    };
+}
+
+/// <summary>
+/// Which imaging pieces are playing right now (18 Oct 2026), by the name of
+/// their file - so the strip can say a jingle is on air when nobody is
+/// talking. The newest piece is the one named. Beds are not counted: they
+/// run under the voice, and the voice is what the strip names then.
+/// </summary>
+internal static class ImagingNow
+{
+    /// <summary>How many characters of a piece's name the strip shows.</summary>
+    internal const int LongestName = 28;
+
+    private static readonly object Gate = new();
+    private static readonly List<(int Id, string Name)> Playing = new();
+    private static int _next;
+
+    /// <summary>The piece most recently started that is still playing, or null.</summary>
+    internal static string? Current
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return Playing.Count == 0 ? null : Playing[^1].Name;
+            }
+        }
+    }
+
+    /// <summary>A piece has started; the number given back is handed to <see cref="Ended"/>.</summary>
+    internal static int Started(string? name)
+    {
+        var shown = string.IsNullOrWhiteSpace(name) ? "Imaging" : name.Trim();
+
+        if (shown.Length > LongestName)
+        {
+            shown = shown[..(LongestName - 1)].TrimEnd() + "\u2026";
+        }
+
+        lock (Gate)
+        {
+            var id = ++_next;
+            Playing.Add((id, shown));
+            return id;
+        }
+    }
+
+    /// <summary>A piece has played out or been crossfaded away.</summary>
+    internal static void Ended(int id)
+    {
+        lock (Gate)
+        {
+            Playing.RemoveAll(p => p.Id == id);
+        }
     }
 }

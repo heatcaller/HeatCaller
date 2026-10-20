@@ -250,6 +250,15 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
     internal static bool IsModelAvailable =>
         IsRealModel(BundledModelPath) || IsRealModel(DownloadedModelPath);
 
+    /// <summary>
+    /// IsModelAvailable, counting a model file named on the Commentary page
+    /// as well - the same three places ResolveModelPath looks. What decides
+    /// whether there is a model on this PC to take over when the relay's
+    /// month runs out.
+    /// </summary>
+    internal static bool IsModelAvailableWith(string? overridePath) =>
+        (!string.IsNullOrWhiteSpace(overridePath) && IsRealModel(overridePath)) || IsModelAvailable;
+
     private static bool IsRealModel(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))

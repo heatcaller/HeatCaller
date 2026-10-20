@@ -1741,7 +1741,7 @@ internal sealed class ShowTreatment
         var imagingBed = ImagingTreats(kind) && !BroadcastImaging.Muted ? BroadcastImaging.NextPiece(ImagingCue.RecapBed)?.Clip : null;
 
         // Where the host hits the post - see BroadcastImaging.PostOf.
-        var imagingPost = openerPiece is { } piece ? BroadcastImaging.PostOf(piece.Path, piece.Clip) : TimeSpan.Zero;
+        var imagingPost = openerPiece is { } piece ? BroadcastImaging.PlayedOutOf(piece.Path, piece.Clip) : TimeSpan.Zero;
 
         if (!_settings.ShowThemeEnabled && imagingOpener is null && imagingBed is null)
         {
@@ -2163,7 +2163,7 @@ internal sealed class ShowTreatment
 
         if (SoundscapeHasStinger && BroadcastImaging.NextPiece(ImagingCue.BetweenRecapParts) is { } piece)
         {
-            return new ShowSting(piece.Clip, BroadcastImaging.Level / 100f, BroadcastImaging.PostOf(piece.Path, piece.Clip));
+            return new ShowSting(piece.Clip, BroadcastImaging.Level / 100f, BroadcastImaging.PlayedOutOf(piece.Path, piece.Clip));
         }
 
         if (!_settings.ShowThemeEnabled)
@@ -2223,7 +2223,8 @@ internal sealed class ShowTreatment
             ? _settings.ShowVoiceEntersMs / 1000.0
             : (double)opener.Shape.LoopEnd / opener.SampleRate;
 
-        var into = billing.AirSeconds + at - from;
+        // 0.3s closer, as everything else is - see BroadcastImaging.Tighten.
+        var into = billing.AirSeconds + at - from - BroadcastImaging.Tighten;
 
         var most = Math.Max(LeastOpenerAlone, heard - LeastOpenerUnder);
 

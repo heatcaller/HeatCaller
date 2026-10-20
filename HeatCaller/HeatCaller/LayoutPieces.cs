@@ -1408,6 +1408,10 @@ internal sealed class FieldGrid : TableLayoutPanel
             case StatusLine status:
                 return status.FirstLine;
 
+            // An allowance's name over its bar and figures (UsageLine).
+            case UsageLine usage:
+                return usage.FirstLine;
+
             default:
                 return null;
         }

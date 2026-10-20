@@ -7,7 +7,8 @@ import { Relay } from "./server.js";
 import { FileStore } from "./store.js";
 import { TenantRegistry } from "./tenancy.js";
 import { elevenLabsRenderer, migrateVoiceFolder, VoiceService } from "./voice.js";
-import { voiceAdmin } from "./voiceadmin.js";
+import { TopUpRequests } from "./topuprequests.js";
+import { ADMIN_COMMANDS, voiceAdmin, type AdminCommand } from "./voiceadmin.js";
 
 /**
  * Stops running as root, once the data folder belongs to somebody else.
@@ -133,6 +134,7 @@ async function serve(): Promise<number> {
     redirectOrigin,
     voice,
     brain,
+    topUpRequests: new TopUpRequests({ dataDir: config.dataDir, log: (line) => console.log(line) }),
   });
 
   if (voice !== undefined) {
@@ -179,11 +181,11 @@ const [command, ...args] = process.argv.slice(2);
 
 if (command === "mint") {
   process.exit(mint(args[0], args.slice(1)));
-} else if (command === "voice-usage" || command === "voice-topup") {
+} else if (command !== undefined && (ADMIN_COMMANDS as readonly string[]).includes(command)) {
   // Run on the relay's machine by whoever runs it, through fly ssh console
   // - see voiceadmin.ts and voice-usage.cmd. Not a server: no privileges
   // dropped, nothing listened on.
-  voiceAdmin(command, args).then(
+  voiceAdmin(command as AdminCommand, args).then(
     (code) => process.exit(code),
     (error: unknown) => {
       console.error(`[relay] ${error instanceof Error ? error.message : String(error)}`);

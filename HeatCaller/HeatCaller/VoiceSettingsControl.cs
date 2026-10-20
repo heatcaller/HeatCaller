@@ -39,6 +39,15 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly Button _btnHeatCallerRefresh = new();
     private readonly Label _lblHeatCallerStatus = new();
 
+    // --- This month's allowance under the voice that spends it (UsageLine) ---
+    //
+    // Made in BuildEngineCard, which has the settings they need; null until then.
+    private UsageLine? _usageHeatCaller;
+    private UsageLine? _usageElevenLabs;
+
+    /// <summary>When this page last asked the store to refresh (Environment.TickCount64), or 0 - see RefreshUsage.</summary>
+    private long _usageAskedTicks;
+
     // --- Hear it before you buy it ------------------------------------------
     //
     // Two buttons that are deliberately NOT part of the HeatCaller lock
@@ -1089,6 +1098,18 @@ public sealed partial class VoiceSettingsControl : UserControl
             }
         };
 
+        // THIS MONTH'S ALLOWANCE (19 Oct 2026) under the voice that spends
+        // it: the HeatCaller voice's characters while it is chosen, a key of
+        // the club's own while ElevenLabs is chosen with one. Kept live from
+        // the store (UsageMeters), and unsubscribed with the line when this
+        // page is rebuilt (UsageLine.Follow).
+        _usageHeatCaller = new UsageLine(_appSettings);
+        _usageHeatCaller.Follow(MeterKind.HeatCallerVoice, this, () => _rdoHeatCaller.Checked);
+
+        _usageElevenLabs = new UsageLine(_appSettings);
+        _usageElevenLabs.Follow(MeterKind.ElevenLabsKey, this, () => _rdoElevenLabs.Checked && _txtApiKey.Text.Trim().Length > 0);
+        _txtApiKey.TextChanged += (_, _) => _usageElevenLabs?.RefreshNow();
+
         // The three choices a section gap apart, so each reads as one choice
         // with its own settings under it.
         var card = new Section("Speak with");
@@ -1096,10 +1117,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(_rdoHeatCaller, stretch: false, gapBelow: UiLayout.HintGap);
         Indented(card.Add(heatCaller));
         card.Add(_lblHeatCallerStatus);
+        card.Add(_usageHeatCaller);
         card.Add(_lblHeatCallerPreviewStatus);
         Indented(card.Add(relay, gapBelow: UiLayout.SectionGap));
 
         card.Add(_rdoElevenLabs, stretch: false, gapBelow: UiLayout.HintGap);
+        Indented(card.Add(_usageElevenLabs));
         Indented(card.Add(_chkKokoroStandsIn, stretch: false, gapBelow: UiLayout.SectionGap));
 
         card.Add(_rdoKokoro, stretch: false, gapBelow: UiLayout.HintGap);
@@ -2569,6 +2592,10 @@ public sealed partial class VoiceSettingsControl : UserControl
             _btnPrepareLines.Enabled = true;
             _lblPrepareProgress.Text = string.Empty;
         }
+
+        // The allowance shown is the chosen voice's.
+        _usageHeatCaller?.RefreshNow();
+        _usageElevenLabs?.RefreshNow();
     }
 
     /// <summary>
@@ -4187,7 +4214,31 @@ public sealed partial class VoiceSettingsControl : UserControl
         if (Visible)
         {
             RequestLibraryRefresh();
+            RefreshUsage();
         }
+    }
+
+    /// <summary>
+    /// Asks the store for this month's figures again (UsageMeters.RefreshAsync:
+    /// the relay's, and ElevenLabs' for a key of the club's own) - as the page
+    /// is shown, at most every half minute, so flicking between tabs does not
+    /// ask ElevenLabs each time. What it finds arrives through the store's
+    /// Changed, which the lines follow. Never throws.
+    /// </summary>
+    private void RefreshUsage()
+    {
+        var now = Environment.TickCount64;
+
+        if (_usageAskedTicks != 0 && now - _usageAskedTicks < 30_000)
+        {
+            return;
+        }
+
+        _usageAskedTicks = now;
+
+        // On the UI thread, as the store asks: it reads the settings and the
+        // voice before its first await.
+        _ = UsageMeters.Shared.RefreshAsync(_appSettings, _store.Current);
     }
 
     private void AutoSave()

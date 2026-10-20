@@ -36,9 +36,148 @@ Intros and summaries are spoken by the announcer, in the voice chosen under **Sp
 
 Nothing to install. If the Club Website page is set up and your club is included for commentary, switch commentary on under **Voice → Commentary** and it works.
 
-Whether your club is included is the relay's decision, not the laptop's - the account is HeatCaller's. When commentary is on and nothing is being said, the console says which it is: that the relay will write for this club, that it won't yet, or that it couldn't be reached. Lines are counted against a monthly allowance, generous enough that no club night comes near it, and the console shows where it stands after every line.
+Whether your club is included is the relay's decision, not the laptop's - the account is HeatCaller's. When commentary is on and nothing is being said, the console says which it is: that the relay will write for this club, that it won't yet, or that it couldn't be reached. Lines are counted against a monthly allowance, generous enough that no club night comes near it, and the console shows where it stands after every line. The Connection card shows it too; see [The month's allowance](#the-months-allowance).
 
 **Write through the relay when it can** on the Commentary tab turns this off, for a club that would rather nothing left the building. Ollama then does all of it.
+
+## The month's allowance
+
+The relay counts your club's commentary in **lines**, a calendar month at a time. The month starts again at midnight UTC on the 1st, which is still the evening of the last day for a club in the Americas.
+
+### Where to see it
+
+On the **Connection** card, a **This month:** row shows where the month stands. It's only there while **Write through the relay when it can** is ticked and the Club Website page is set up; a club writing everything on this PC has no allowance to watch.
+
+<!-- screenshot: Commentary tab, Connection card, This month row with the bar amber and Ask for More showing -->
+
+The row reads, from the top:
+
+- **The name and the share used**, for example "AI commentary - 47% used", or "AI commentary - used up" once the month is gone.
+- **A bar.** Green while there's plenty left, amber from 80% used, red when it's used up.
+- **The figures**, for example "212 of 450 lines · 38 tonight · starts again 1 Nov". "Tonight" counts from the first figure seen this race night, and a race night runs from 6am to 6am, so a meeting that goes past midnight is still one night. A top-up is included in the allowance.
+- **How long it will last**, once something has been written tonight, for example "About 6 more race nights like tonight."
+- **Ask for More**, once 80% is used. See [Asking for more](#asking-for-more).
+- **Details...**, which opens the This Month window. See [This month: every allowance in one place](#this-month-every-allowance-in-one-place).
+
+The figures are asked for when HeatCaller starts and every five minutes after, and they also move on their own as the relay reports its count with each line it writes.
+
+### When the relay's lines run out
+
+**The model on this PC takes over by itself.** When the relay says the month is used up, the commentary carries on, written on this PC instead. That happens **even with Let the model on this PC write when the relay can't unticked**. Unticked, that box still means what it says for every other kind of failure - the Wi-Fi drops, or the relay is slow, and that race is simply quieter - but a month that has run out isn't a bad night's internet, and a club that wanted commentary shouldn't lose all of it to one. Its hint on the page says so: "Untick it and the races the relay can't cover are simply quieter - but it still takes over by itself when this month's relay lines run out, so the commentary carries on."
+
+While the month is used up:
+
+- **Race intros, recaps and the During the race segments** (**Battle watch**, **Record laps**, **Coming up next** and **Championship check**) are written by the model on this PC. Its lines are plainer than the relay's.
+- **The Around the race and The show segments go quiet** - **Form guide**, **Qualifying report**, the **Mechanic's interview**, **Cold open**, **Sign-off numbers** and the rest. Those are only ever written by the relay, because a plainly-written version of them is worse than none. They come back with the relay.
+- **The night is paced exactly as before.** The gaps between segments and the night's limits don't change; only the relay's rationing of its own lines steps aside, since nothing is being spent.
+- **Lines aren't sent to the relay just to be refused.** One line is let through about every half hour, in case lines have been added that the laptop hasn't heard about yet.
+- **The normal announcement lines carry on**, as they always do. Commentary never replaces them.
+
+The console says so once, rather than for every line:
+
+```
+[brain] This month's relay lines are used up - the model on this PC is writing until 1 Nov.
+```
+
+**Give up after:** is how long the model on this PC gets for each line, so it stays available whenever the relay box is ticked, even with the box above it unticked.
+
+There's one case where nothing takes over: a PC with no model on it, or one whose model can't run here or has been found too slow. Then the console says "[brain] This month's relay lines are used up - normal announcements carry on until 1 Nov.", and the race intros and recaps aren't spoken until the relay has lines again. With **Write through the relay when it can** ticked and the box under it unticked, the line under the relay box tells you which you have: "The Club Website page is set up, so the relay writes - nothing covers the races it can't, though the model on this PC takes over if the month's relay lines run out." appears only when there's a model on this PC to do it.
+
+**Test Connection** says it calmly too, rather than as an error:
+
+| It says | What it means |
+|---|---|
+| "This month's 400 relay lines are used up - the model on this PC is writing instead." | All is well. The commentary carries on in plainer lines. |
+| "This month's 400 relay lines are used up, and the model on this PC didn't answer - normal announcements carry on. Any [llm] line in the console says why." | There's a model, but it didn't write the test line. Read the console. |
+| "This month's 400 relay lines are used up - no model is installed on this PC, so normal announcements carry on." | Nothing will write until the relay has lines again. |
+
+**Test Connection** always asks the relay itself, so pressing it is also the quickest way to find out whether a top-up has arrived.
+
+### When it comes back
+
+The relay takes over again by itself, with nothing to press:
+
+- **After a top-up.** As soon as HeatCaller hears that there are lines again - within five minutes, at the next figures check, or straight away when you press **Refresh** in the This Month window or **Test Connection** - the relay writes the next line. The console says "[brain] The relay has lines again this month - it's writing the commentary."
+- **On the 1st**, when the relay's month starts again.
+
+Lines the model on this PC wrote while the month was used up cost the club no relay lines, so a top-up that lands mid-night still has tonight's share of it left.
+
+### Asking for more
+
+Once 80% of the month is used, **Ask for More** appears under the bar, here and in the This Month window. The manager's phone page offers it at any time; see [On the manager's phone](#on-the-managers-phone).
+
+1. Press **Ask for More**.
+2. HeatCaller asks "Ask for more AI commentary lines this month?" and says what will happen:
+    - with the club's email set up (the **Email (for racer PINs)** card on the **Club Website** page), the request is noted on the relay and emailed to support@heatcaller.com from the club's mailbox, and the answer comes back to the club's address;
+    - without it, the request is noted on the relay and your email program opens with the request written out. **Press Send there** - nothing reaches anyone until you do.
+3. Press **Yes**.
+
+The line under the button says what happened, for example "Asked for more AI commentary - you'll hear back at club@example.org." A second press in the same month, while the first request is still open, says "Already asked this month - the request for more AI commentary is still open. You'll hear back by email." and sends nothing new. The request carries the club id and the figures; nothing else about the club goes with it. The rehearsal copy of HeatCaller never sends one.
+
+## This month: every allowance in one place
+
+HeatCaller can use up to three monthly allowances, and all of them are shown together:
+
+| Allowance | Counted in | Shown when |
+|---|---|---|
+| **AI commentary** | lines | Commentary is on and written through the relay. |
+| **HeatCaller voice** | characters | The HeatCaller voice is chosen. See [Your club's monthly allowance](voice.md#your-clubs-monthly-allowance). |
+| **ElevenLabs (your own key)** | characters | ElevenLabs is chosen with a key of your own. See [Your own key's month](voice.md#your-own-keys-month). |
+
+The figures come from the relay and from ElevenLabs. HeatCaller asks for them when it starts and every five minutes while it's open.
+
+### The This Month window
+
+<!-- screenshot: This Month window with AI commentary amber, HeatCaller voice red and the Emails card -->
+
+Open it from the chip at the foot of the sidebar, or from **Details...** under the allowance on the Commentary tab. It isn't in the way: it can stay open beside **Race Control**, and only one opens at a time.
+
+- **This month** has a line for each allowance, the same as the one on its own page: the share used and a bar, the figures, how many more race nights like tonight it will last, and **Ask for More** once 80% is used. A key of your own has **Upgrade on elevenlabs.io** instead, since more is bought on your own ElevenLabs plan. With nothing metered it says "Nothing on this PC is metered - the relay isn't set up and the voice is free."
+- Under the lines it says when the figures were last checked, for example "Checked at 21:04." If the relay couldn't be read, it says why instead, for example "The relay didn't answer. The figures above are the last it gave (tried at 21:04)." The last figures stay on show rather than going blank.
+- **Asked for more** lists the requests still waiting, for example "Asked for more AI commentary on 19 Oct - waiting." It's hidden when there are none.
+- **Emails** has the **Email me at 80% and 100%** tick box and **Send to:**. See [The emails](#the-emails).
+- **Refresh** asks the relay and ElevenLabs now. **Close** closes the window.
+
+The window follows the figures while it's open, so a line that moves on the Commentary tab moves here too.
+
+### The chip in the sidebar
+
+At the foot of the sidebar, above the buttons, a short line sums up the month, for example "AI 47% · Voice 34%" (a key of your own shows as "ElevenLabs"). It's in the sidebar's quiet text while there's plenty left, turns amber once any allowance is at 80%, and red once one is used up. In the narrow sidebar (<kbd>Ctrl</kbd>+<kbd>B</kbd>) it's a dot instead - green, amber or red - with the words when you point at it.
+
+Pointing at it shows each allowance in full. Clicking it opens the This Month window; you can also <kbd>Tab</kbd> to it and press <kbd>Enter</kbd>. It's hidden while nothing has a figure to show.
+
+### In Mission Control
+
+**Mission Control** (from **Connection → Mission Control**, or from the **Pre-race check**) has an **Allowances** tile. It only looks at what tonight depends on: commentary only while commentary is on, and only the voice that's chosen.
+
+| The tile shows | Color | What it means |
+|---|---|---|
+| The most-used allowance, for example "AI 47%" | Green | Plenty left of everything. |
+| The most-used allowance, with "HeatCaller voice is at 85% - 15,000 characters left." | Amber | One or more is at 80% or more. |
+| **AI used up** - "The relay's commentary lines are gone - the model on this PC is writing instead." | Amber | The night goes on, in plainer commentary. |
+| **AI used up** - "...there is no model on this PC - commentary has stopped." | Red | Nothing is writing commentary until the relay has lines again. |
+| **Voice used up** - "Kokoro is speaking - the HeatCaller voice's characters are used up for this month." | Red | The night sounds different. Ask for more in the This Month window. |
+| **ElevenLabs used up** | Red | Your own key's characters are gone; Kokoro speaks if it stands in, otherwise lines are skipped. |
+| "-" - "Nothing on this PC is metered." | Off | Nothing to watch. |
+
+The worst wins: a used-up voice is shown before a meter at 84%.
+
+### The emails
+
+HeatCaller emails the club when an allowance reaches 80%, and again when it's used up - once each, per allowance, per month. A restart doesn't send them again, an allowance that goes straight past 80% to used up sends only the used-up one, and a top-up that brings it back under 100% doesn't send the 80% one a second time.
+
+The subject says what the club will hear instead, for example "80% of this month's AI commentary is used", "This month's AI commentary is used up - the model on this PC is writing instead" or "This month's HeatCaller voice is used up - the free Kokoro voice is speaking instead". The email gives the figures, and says how to ask for more.
+
+- **They need the club's email set up**, on the **Club Website** page's **Email (for racer PINs)** card - the same mailbox the racers' PINs go from. See [Emailing racer PINs](../online/email.md). Until it is, the line under the tick box says "Set up email on the Club Website page first (its "Email (for racer PINs)" card) - nothing can be sent until then."
+- **They go to the club's own address**, from that card, unless you type another in **Send to:** - the treasurer's, say, or whoever pays for top-ups. Leave it blank for the club's own. It's saved when you leave the box or close the window. The line under it names where they really go, for example "To treasurer@example.org, once per allowance each month.", and while the address isn't finished it says "That isn't an email address yet - until it is, they go to club@example.org, once per allowance each month."
+- **Email me at 80% and 100%** in the This Month window is ticked by default. Untick it to stop them.
+- **They're never a message on screen.** A failure is a line in the console starting `[usage]`, so nothing pops up mid-race; the chip and the window say the same thing anyway. The rehearsal copy of HeatCaller doesn't send them.
+
+### On the manager's phone
+
+The race-day manager's page on the relay shows the month too, on its **Today** tab, under **This month**: each of the club's allowances as "212 of 450 lines (47%)" with a bar (amber from 80%, red when used up) and when it starts again. It reads the figures from the relay itself, so it works even while the laptop is away. See [Race-day manager](../online/setup.md#race-day-manager).
+
+Each allowance has **Ask for More** and an **Email support@heatcaller.com** link. **Ask for More** asks first, then notes the request on the relay and says "Asked - noted on the relay. Email support too if it is urgent." The relay sends no email itself, so use the link beside it when it can't wait. Once a request is open the button is replaced by "Already asked this month."
 
 ## Using Ollama instead
 
@@ -92,6 +231,7 @@ The settings are on cards down the tab, in this order: **Connection**, **What it
 | **Endpoint:** | The address of Ollama. | `http://localhost:11434` |
 | **Model:** | The Ollama model name, exactly as you pulled it. | `llama3.2:3b` |
 | **Give up after:** | 2 to 60 seconds. How long to wait for a talking point before giving up. Race intros and summaries aren't waiting on anything, so they're allowed longer: at least 60 seconds, or three times this value if that's longer. | 20 |
+| **This month:** | Not a setting: where the relay's lines for the month stand, with **Ask for More** once 80% is used. Shown only while the relay writes. See [The month's allowance](#the-months-allowance). | - |
 
 ### What it writes
 
@@ -1151,6 +1291,7 @@ See [Security and privacy](../admin/security-and-privacy.md).
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | "Enable commentary first." | **Test Connection** was pressed with commentary off. | Tick **Enable local LLM commentary**. |
+| The commentary has gone plainer, and the form guide, cold open and the like have stopped | This month's relay lines are used up, and the model on this PC is writing. | Normal. Check **This month:** on the Connection card, and press **Ask for More** if the month has a while to run. See [The month's allowance](#the-months-allowance). |
 | Test says the model isn't found | The model hasn't been pulled, or the name is typed differently. | Run `ollama pull` with the exact name in **Model:**. |
 | "No response - check Ollama is running and the model name is right." | Ollama isn't running, or **Endpoint:** is wrong. | Start Ollama; check the address. |
 | Recap never arrives after a race | Model too slow, or not reachable. | Press **Test Connection**. If replies take more than 8 seconds, use a smaller model. |

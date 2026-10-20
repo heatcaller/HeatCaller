@@ -1,6 +1,8 @@
 import { lchown, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { BRAIN_DIR, brainTopUpPath, brainUsagePath } from "./brain.js";
 import { loadConfig, type RelayConfig } from "./config.js";
+import { closeRequests, openRequests, type MeterName } from "./topuprequests.js";
 import {
   monthOf,
   readTopUps,
@@ -29,7 +31,23 @@ import {
  * files are only ever read here - the running relay is their one writer -
  * and the top-up files only ever written here, the relay reading them
  * fresh on a club's next line. So neither side can overwrite the other.
+ *
+ * The commentary brain's lines are metered the same way (brain-usage,
+ * brain-topup), in their own files under BRAIN_DIR; and a club's asks for
+ * more are listed with topup-requests - a top-up for that meter marks the
+ * club's open ask done (see topuprequests.ts).
  */
+
+/** Every command this file answers, as typed after `node dist/src/index.js`. */
+export const ADMIN_COMMANDS = ["voice-usage", "voice-topup", "brain-usage", "brain-topup", "topup-requests"] as const;
+
+export type AdminCommand = (typeof ADMIN_COMMANDS)[number];
+
+/** What one meter is called and counted in, for the report's wording. */
+const METERS = {
+  voice: { title: "HeatCaller voice", unit: "characters", column: "voice", topUp: "voice-topup", usage: "voice-usage" },
+  commentary: { title: "AI commentary", unit: "lines", column: "brain", topUp: "brain-topup", usage: "brain-usage" },
+} as const;
 
 /** One club's standing, as the report shows it. */
 export interface VoiceStanding {
@@ -47,6 +65,31 @@ export interface VoiceStanding {
   readonly used: number;
   /** Earlier months' totals, by "YYYY-MM", oldest first. */
   readonly history: Readonly<Record<string, number>>;
+}
+
+/** Every club in the config, with where it stands with the brain this month - the same shape as the voice's. */
+export async function brainStandings(config: RelayConfig, now: Date): Promise<VoiceStanding[]> {
+  const month = monthOf(now);
+  const standings: VoiceStanding[] = [];
+
+  for (const tenant of config.tenants) {
+    const plan = tenant.brain?.monthlyLines ?? config.brain.monthlyLines;
+    const usage = readUsageRecord(await readJson(brainUsagePath(config.dataDir, tenant.club)), month);
+    const topUp = readTopUps(await readJson(brainTopUpPath(config.dataDir, tenant.club)))[month] ?? 0;
+
+    standings.push({
+      club: tenant.club,
+      name: tenant.name,
+      enabled: tenant.brain?.enabled === true,
+      plan,
+      topUp,
+      allowance: plan + topUp,
+      used: usage.used,
+      history: usage.history,
+    });
+  }
+
+  return standings;
 }
 
 /** Every club in the config, with where it stands this month. */
@@ -82,7 +125,13 @@ export async function voiceStandings(config: RelayConfig, now: Date): Promise<Vo
  * spent something, now or earlier - a club switched off mid-month still
  * owes for what it said.
  */
-export function formatStandings(standings: readonly VoiceStanding[], now: Date, dataDir?: string): string {
+export function formatStandings(
+  standings: readonly VoiceStanding[],
+  now: Date,
+  dataDir?: string,
+  meter: MeterName = "voice",
+): string {
+  const words = METERS[meter];
   const month = monthOf(now);
   const earlier = previousMonths(month, 3);
   const shown = standings.filter(
@@ -93,7 +142,7 @@ export function formatStandings(standings: readonly VoiceStanding[], now: Date, 
   const reset = new Date(resetOf(now));
 
   lines.push(
-    `HeatCaller voice - ${monthName(month)}, so far. Counts go back to zero on ${reset.toUTCString().replace(" GMT", " UTC")}.`,
+    `${words.title} - ${monthName(month)}, so far. Counts go back to zero on ${reset.toUTCString().replace(" GMT", " UTC")}.`,
   );
 
   // Said, because a report read from the wrong folder is all zeros and
@@ -105,11 +154,15 @@ export function formatStandings(standings: readonly VoiceStanding[], now: Date, 
   lines.push("");
 
   if (shown.length === 0) {
-    lines.push("No club has the HeatCaller voice included, and none has spoken with it.");
+    lines.push(
+      meter === "voice"
+        ? "No club has the HeatCaller voice included, and none has spoken with it."
+        : "No club has AI commentary included, and none has used it.",
+    );
     return lines.join("\n") + "\n";
   }
 
-  const header = ["club", "voice", "plan", "top-up", "used", "left", "%", ...earlier.map(shortMonth)];
+  const header = ["club", words.column, "plan", "top-up", "used", "left", "%", ...earlier.map(shortMonth)];
   const rows = shown.map((standing) => [
     standing.club,
     standing.enabled ? "on" : "off",
@@ -136,7 +189,7 @@ export function formatStandings(standings: readonly VoiceStanding[], now: Date, 
 
   const used = shown.reduce((sum, standing) => sum + standing.used, 0);
   lines.push("");
-  lines.push(`All clubs: ${grouped(used)} characters this month.`);
+  lines.push(`All clubs: ${grouped(used)} ${words.unit} this month.`);
 
   return lines.join("\n") + "\n";
 }
@@ -148,13 +201,18 @@ export type TopUpResult =
       readonly topUp: number;
       readonly allowance: number;
       readonly used: number;
-      /** The voice is not included for this club, so the characters do nothing until it is. */
+      /** The meter is not included for this club, so the top-up does nothing until it is. */
       readonly voiceOff: boolean;
+      /** The club's open asks for more of this meter this month, now marked done. */
+      readonly closed: number;
     }
   | { readonly ok: false; readonly error: string };
 
 /** The most one top-up may add or take back - a typo with three extra zeros is refused, not billed. */
 export const TOP_UP_LIMIT = 10_000_000;
+
+/** The same for commentary lines: a plan may be at most a million a month (readBrainPlan). */
+export const BRAIN_TOP_UP_LIMIT = 1_000_000;
 
 /**
  * Adds <characters> to <club>'s allowance for this month only, or takes
@@ -174,22 +232,24 @@ export async function topUp(
   characters: number,
   now: Date,
   owner: { readonly uid: number; readonly gid: number } | undefined,
+  meter: MeterName = "voice",
 ): Promise<TopUpResult> {
   const tenant = config.tenants.find((known) => known.club === club);
+  const limit = meter === "voice" ? TOP_UP_LIMIT : BRAIN_TOP_UP_LIMIT;
 
   if (tenant === undefined) {
     return { ok: false, error: `There is no club "${club}" in this relay's config.` };
   }
 
-  if (!Number.isInteger(characters) || characters === 0 || Math.abs(characters) > TOP_UP_LIMIT) {
+  if (!Number.isInteger(characters) || characters === 0 || Math.abs(characters) > limit) {
     return {
       ok: false,
-      error: `Give a whole number of characters, other than 0, up to ${grouped(TOP_UP_LIMIT)} either way.`,
+      error: `Give a whole number of ${METERS[meter].unit}, other than 0, up to ${grouped(limit)} either way.`,
     };
   }
 
   const month = monthOf(now);
-  const path = voiceTopUpPath(config.dataDir, club);
+  const path = meter === "voice" ? voiceTopUpPath(config.dataDir, club) : brainTopUpPath(config.dataDir, club);
   const months: Record<string, number> = { ...readTopUps(await readJson(path)) };
   const given = Math.max(0, (months[month] ?? 0) + characters);
 
@@ -206,7 +266,7 @@ export async function topUp(
   // folder, and the relay could then keep no count and no line until it
   // was restarted. So every folder this may have made, and the file -
   // before it is in place - go to the relay's user.
-  const voiceRoot = join(config.dataDir, VOICE_DIR);
+  const voiceRoot = join(config.dataDir, meter === "voice" ? VOICE_DIR : BRAIN_DIR);
 
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
 
@@ -217,19 +277,27 @@ export async function topUp(
 
   await writeFileAtomically(path, Buffer.from(JSON.stringify(months), "utf8"), owner);
 
-  const plan = tenant.voice?.monthlyChars ?? config.voice.monthlyChars;
-  const usage = readUsageRecord(await readJson(voiceUsagePath(config.dataDir, club)), month);
+  const plan = meter === "voice"
+    ? (tenant.voice?.monthlyChars ?? config.voice.monthlyChars)
+    : (tenant.brain?.monthlyLines ?? config.brain.monthlyLines);
+  const usagePath = meter === "voice" ? voiceUsagePath(config.dataDir, club) : brainUsagePath(config.dataDir, club);
+  const usage = readUsageRecord(await readJson(usagePath), month);
+  const on = meter === "voice" ? tenant.voice?.enabled === true : tenant.brain?.enabled === true;
 
-  return { ok: true, month, topUp: given, allowance: plan + given, used: usage.used, voiceOff: tenant.voice?.enabled !== true };
+  // Giving more answers the club's ask for more; taking some back does not.
+  const closed = characters > 0 ? await closeRequests(config.dataDir, club, meter, now, owner) : 0;
+
+  return { ok: true, month, topUp: given, allowance: plan + given, used: usage.used, voiceOff: !on, closed };
 }
 
 /**
- * `voice-usage [--json]` and `voice-topup <club> <characters>`, as run on
- * the relay's machine. Prints to standard output, errors to standard
- * error, and returns the exit code.
+ * `voice-usage [--json]`, `voice-topup <club> <characters>`,
+ * `brain-usage [--json]`, `brain-topup <club> <lines>` and
+ * `topup-requests [--json]`, as run on the relay's machine. Prints to
+ * standard output, errors to standard error, and returns the exit code.
  */
 export async function voiceAdmin(
-  command: "voice-usage" | "voice-topup",
+  command: AdminCommand,
   args: readonly string[],
   env: NodeJS.ProcessEnv = process.env,
   now: Date = new Date(),
@@ -257,36 +325,50 @@ export async function voiceAdmin(
   }
 
   if (owner !== undefined && (env["RELAY_DATA"] ?? "").trim().length === 0) {
-    err("RELAY_DATA is not set, so this cannot tell where the relay keeps its data. Run it through voice-usage.cmd or voice-topup.cmd, or set RELAY_DATA.\n");
+    err(`RELAY_DATA is not set, so this cannot tell where the relay keeps its data. Run it through ${command}.cmd, or set RELAY_DATA.\n`);
     return 1;
   }
 
-  if (command === "voice-usage") {
+  if (command === "voice-usage" || command === "brain-usage" || command === "topup-requests") {
     const unknown = args.filter((arg) => arg !== "--json");
 
     if (unknown.length > 0) {
-      err(`voice-usage takes nothing but --json, not ${unknown.join(" ")}.\n`);
+      err(`${command} takes nothing but --json, not ${unknown.join(" ")}.\n`);
       return 1;
     }
 
-    const standings = await voiceStandings(config, now);
+    if (command === "topup-requests") {
+      const open = await openRequests(config.dataDir, config.tenants.map((tenant) => tenant.club), now);
+
+      out(args.includes("--json") ? JSON.stringify({ month: monthOf(now), dataDir: config.dataDir, open }, null, 2) + "\n" : formatRequests(open, now, config.dataDir));
+      return 0;
+    }
+
+    const meter: MeterName = command === "voice-usage" ? "voice" : "commentary";
+    const standings = meter === "voice" ? await voiceStandings(config, now) : await brainStandings(config, now);
 
     out(
       args.includes("--json")
         ? JSON.stringify({ month: monthOf(now), resetsAt: resetOf(now), dataDir: config.dataDir, clubs: standings }, null, 2) + "\n"
-        : formatStandings(standings, now, config.dataDir),
+        : formatStandings(standings, now, config.dataDir, meter),
     );
     return 0;
   }
 
+  const meter: MeterName = command === "voice-topup" ? "voice" : "commentary";
+  const words = METERS[meter];
   const [club, amount, ...extra] = args;
 
   if (club === undefined || amount === undefined || extra.length > 0 || !/^[+-]?\d{1,9}$/.test(amount.replace(/[,_]/g, ""))) {
-    err("Usage: voice-topup <club> <characters>   e.g. voice-topup acme-rc 50000   (a negative number takes some back)\n");
+    err(
+      meter === "voice"
+        ? "Usage: voice-topup <club> <characters>   e.g. voice-topup acme-rc 50000   (a negative number takes some back)\n"
+        : "Usage: brain-topup <club> <lines>   e.g. brain-topup acme-rc 100   (a negative number takes some back)\n",
+    );
     return 1;
   }
 
-  const result = await topUp(config, club, Number(amount.replace(/[,_]/g, "")), now, owner);
+  const result = await topUp(config, club, Number(amount.replace(/[,_]/g, "")), now, owner, meter);
 
   if (!result.ok) {
     err(`${result.error}\n`);
@@ -294,13 +376,46 @@ export async function voiceAdmin(
   }
 
   out(
-    `${club}: ${result.topUp > 0 ? `${grouped(result.topUp)} characters on top of its plan` : "no top-up"} for ${monthName(result.month)}. ` +
-      `It may speak ${grouped(result.allowance)} this month and has used ${grouped(result.used)}.\n` +
+    `${club}: ${result.topUp > 0 ? `${grouped(result.topUp)} ${words.unit} on top of its plan` : "no top-up"} for ${monthName(result.month)}. ` +
+      `It may ${meter === "voice" ? "speak" : "have"} ${grouped(result.allowance)} this month and has used ${grouped(result.used)}.\n` +
       (result.voiceOff
-        ? `The HeatCaller voice is not switched on for ${club}, so this does nothing until it is ("voice": { "enabled": true } in the config).\n`
-        : ""),
+        ? meter === "voice"
+          ? `The HeatCaller voice is not switched on for ${club}, so this does nothing until it is ("voice": { "enabled": true } in the config).\n`
+          : `AI commentary is not switched on for ${club}, so this does nothing until it is ("brain": { "enabled": true } in the config).\n`
+        : "") +
+      (result.closed > 0 ? `Marked ${club}'s request for more ${words.unit} done.\n` : ""),
   );
   return 0;
+}
+
+/** topup-requests as a list to read: who asked for what, when, and what they said. */
+export function formatRequests(
+  open: readonly { club: string; request: { meter: MeterName; askedAt: string; note: string } }[],
+  now: Date,
+  dataDir?: string,
+): string {
+  const lines: string[] = [`Top-up requests still open - ${monthName(monthOf(now))}.`];
+
+  if (dataDir !== undefined) {
+    lines.push(`Read from ${dataDir}.`);
+  }
+
+  lines.push("");
+
+  if (open.length === 0) {
+    lines.push("None. Nobody has asked for more this month, or every ask has had its top-up.");
+    return lines.join("\n") + "\n";
+  }
+
+  for (const { club, request } of open) {
+    const when = request.askedAt.replace("T", " ").replace(/\.\d+Z$/, " UTC");
+    lines.push(`${club}  ${request.meter}  ${when}${request.note === "" ? "" : `  "${request.note}"`}`);
+  }
+
+  lines.push("");
+  lines.push(`Answer with brain-topup <club> <lines> or voice-topup <club> <characters>; either marks the club's request done.`);
+
+  return lines.join("\n") + "\n";
 }
 
 /**

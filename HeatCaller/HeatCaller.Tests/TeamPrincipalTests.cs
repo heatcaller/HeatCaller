@@ -89,6 +89,65 @@ public sealed class TeamPrincipalTests
     }
 
     [Fact]
+    public void The_booth_interview_keeps_three_exchanges_where_every_other_one_keeps_two()
+    {
+        // THE SHAPE (18 Oct 2026): the night's obvious question, one he
+        // half-dodges, and a commitment for next time. Two exchanges can
+        // only be a question and a question - see
+        // CommentaryService.PrincipalExchanges.
+        const string text =
+            "HOST: How has the night been for the team? PRINCIPAL: Up and down, but we'll take the win. "
+            + "HOST: You lost a lot of time in the heats. PRINCIPAL: That's on us, and we know it. "
+            + "HOST: So what happens next? PRINCIPAL: We'll look at our starts before the next meeting.";
+
+        var interview = CommentaryService.ParseInterview(
+            text, "Sam", new[] { "Asher", "Sam" }, new[] { "TEAM PRINCIPAL", "PRINCIPAL" },
+            CommentaryService.PrincipalExchanges);
+
+        Assert.NotNull(interview);
+        Assert.Equal(3, interview!.Count);
+        Assert.Equal("We'll look at our starts before the next meeting.", interview[2].Answer);
+    }
+
+    [Fact]
+    public void The_technical_leads_interview_is_not_lengthened_by_the_principals_third_beat()
+    {
+        // Raising the shared constant to three would have lengthened the
+        // pit-lane interview as a side effect of a change nobody made to
+        // it, with nothing in the code to say that had happened.
+        const string text =
+            "HOST: How did it feel? TECH LEAD: It was on rails. "
+            + "HOST: What did you change? TECH LEAD: A tooth on the pinion. "
+            + "HOST: And for the main? TECH LEAD: We leave it exactly as it is.";
+
+        var interview = CommentaryService.ParseInterview(text, "Wrench", new[] { "Wrench" });
+
+        Assert.NotNull(interview);
+        Assert.Equal(CommentaryService.MaxInterviewExchanges, interview!.Count);
+        Assert.Equal(2, interview.Count);
+    }
+
+    [Fact]
+    public void A_model_that_only_wrote_two_beats_still_gives_what_it_wrote()
+    {
+        // The interview is still spoken; what is NOT kept is a diary entry,
+        // because the third question was never reached and its last answer
+        // is a remark about tonight rather than a commitment about next
+        // time. See RaceControlControl.KeepWhatThePrincipalSaid.
+        const string text =
+            "HOST: How has the night been? PRINCIPAL: Hard work, but we got there. "
+            + "HOST: And the championship? PRINCIPAL: Three points clear, and we want more.";
+
+        var interview = CommentaryService.ParseInterview(
+            text, "Sam", new[] { "Sam" }, new[] { "TEAM PRINCIPAL", "PRINCIPAL" },
+            CommentaryService.PrincipalExchanges);
+
+        Assert.NotNull(interview);
+        Assert.Equal(2, interview!.Count);
+        Assert.True(interview.Count < CommentaryService.PrincipalExchanges);
+    }
+
+    [Fact]
     public void A_club_starts_with_the_team_principal_off_and_heats_included()
     {
         var settings = new AppSettings();

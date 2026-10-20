@@ -32,7 +32,13 @@ namespace HeatCaller;
 /// be worse than silence: these lines are spoken over a PA as fact, and
 /// the first one a driver can disprove is the last one anybody believes.
 /// </summary>
-public static class CommentaryReaders
+// PARTIAL SINCE 18 Oct 2026, so the Team Principal's reader can live in
+// CommentaryReaders.Principal.cs instead of being appended to a file that
+// is already the longest in the project. Nothing else about this class
+// changed: the private helpers below - Placing, RacesIn, Typed - are what
+// that part reads the stores with, which is the point of keeping it in
+// here rather than starting a second reader somewhere else.
+public static partial class CommentaryReaders
 {
     /// <summary>
     /// How recently a win stops being a drought worth mentioning. Inside
@@ -525,48 +531,15 @@ public static class CommentaryReaders
                 var a = grid[i].DriverId;
                 var b = grid[j].DriverId;
 
-                var aAhead = 0;
-                var bAhead = 0;
-
-                // AND WHICH RACE WAS THE LAST ONE (13 Oct 2026). This loop
-                // already walked every race the pair shared and kept two
-                // integers; the long callback is that one line kept
-                // instead of discarded. The races arrive newest first (see
-                // RacesIn), so the first that qualifies IS their most
-                // recent meeting.
-                //
-                // Captured HERE rather than matched again somewhere else,
-                // because the rule for whether two drivers met at all is
-                // the three lines below it - and two implementations of
-                // that rule are two that eventually disagree about a
-                // seven-one record.
-                SessionRecord? lastMet = null;
-
-                foreach (var race in races)
-                {
-                    // Only when both actually finished: a retirement says
-                    // nothing about who is quicker, and counting it as a
-                    // win for the other one is how a seven-one record gets
-                    // built out of three races and four breakdowns.
-                    var placedA = Placing(race, a) ?? 0;
-                    var placedB = Placing(race, b) ?? 0;
-
-                    if (placedA <= 0 || placedB <= 0)
-                    {
-                        continue;
-                    }
-
-                    lastMet ??= race;
-
-                    if (placedA < placedB)
-                    {
-                        aAhead++;
-                    }
-                    else if (placedB < placedA)
-                    {
-                        bAhead++;
-                    }
-                }
+                // ONE IMPLEMENTATION OF "THESE TWO MET", and since 18 Oct
+                // 2026 it is MetAcross rather than this loop - because the
+                // Team Principal's reader needs the same count over the
+                // same races and the note that used to sit here said
+                // exactly what would happen if it got its own copy: "two
+                // implementations of that rule are two that eventually
+                // disagree about a seven-one record". See MetAcross for
+                // the rule itself and for why a retirement is not a win.
+                var (aAhead, bAhead, lastMet) = MetAcross(races, a, b);
 
                 var met = aAhead + bAhead;
 

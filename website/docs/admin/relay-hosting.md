@@ -419,6 +419,68 @@ Ask the club to click **Delete Everything Published** on its **Club Website** pa
 
 <!-- TODO: confirm whether there is a supported way to delete a removed club's files from the volume without its token -->
 
+### Monthly allowances and top-ups
+
+Each club's AI commentary is counted in lines and its HeatCaller voice in characters, a calendar month (UTC) at a time. The clubs see their own figures in HeatCaller's **This Month** window, on the pages that use them and on the manager's phone page, and can press **Ask for More** when one runs low. See [This month: every allowance in one place](../announcer/commentary.md#this-month-every-allowance-in-one-place). Those figures come from routes a relay only has once it has been deployed again; until then a laptop's This Month window says "This relay can't show the monthly allowances yet."
+
+Three commands, run from the relay folder, look after the commentary side and the requests. Like the voice's `voice-usage.cmd` and `voice-topup.cmd`, each runs the relay's own code on the Fly machine through `fly ssh console`, so all it needs is flyctl signed in to the account that runs the relay. It wakes the machine first if it has stopped itself. There's deliberately no web address for any of them: every other route names one club and answers only that club's token.
+
+```
+brain-usage.cmd                    every club with AI commentary: this month so far, and the three before
+brain-usage.cmd --json             the same with every club's whole history, as JSON
+brain-topup.cmd acme-rc 200        200 more lines for acme-rc, this month only
+brain-topup.cmd acme-rc -100       takes 100 of that back (never below no top-up)
+topup-requests.cmd                 the clubs that have asked for more this month and are still waiting
+topup-requests.cmd --json          the same, as JSON
+```
+
+`brain-usage.cmd` prints, for example:
+
+```
+AI commentary - October 2026, so far. Counts go back to zero on Sun, 01 Nov 2026 00:00:00 UTC.
+Read from /data.
+
+club     brain  plan  top-up  used  left    %  Sep 26  Aug 26  Jul 26
+acme-rc  on      400      50   212   238  47%     388     301       0
+
+All clubs: 212 lines this month.
+```
+
+It says which data folder it read, so a report from the wrong one isn't mistaken for a quiet month.
+
+`topup-requests.cmd` lists who has asked:
+
+```
+Top-up requests still open - October 2026.
+Read from /data.
+
+acme-rc  commentary  2026-10-19 20:01:00 UTC  "Big night on Friday"
+
+Answer with brain-topup <club> <lines> or voice-topup <club> <characters>; either marks the club's request done.
+```
+
+To answer a request:
+
+1. Run `topup-requests.cmd` to see who is waiting, and for what (`commentary` or `voice`).
+2. Give the top-up: `brain-topup.cmd <club> <lines>` for commentary, `voice-topup.cmd <club> <characters>` for the voice. Write the number without commas: in a Windows command a comma splits it in two, so `brain-topup.cmd acme-rc 2,000` is refused rather than giving the club 2 lines.
+3. The command says what the club may now use, and "Marked acme-rc's request for more lines done." when it has closed an open request. Only a positive top-up closes one; taking lines back doesn't.
+
+A top-up lasts the month it's given in, on top of the club's plan (`brain.monthlyLines`, or `voice.monthlyChars`), and the relay picks it up on the club's next line with no restart. A laptop that ran out is back on the relay within minutes: it checks the figures every five minutes, and sends one line through to the relay about every half hour anyway. One commentary top-up is at most 1,000,000 lines either way, so a typo with extra zeros is refused. A club that needs more every month wants a bigger `brain.monthlyLines` on its own entry in the config instead (then `fly-set-config.cmd`). If commentary isn't switched on for the club, the command says so: the lines do nothing until it is.
+
+**The relay never sends email.** A request is only noted on the relay. The person is told by the club's own HeatCaller, which emails support@heatcaller.com from the club's mailbox, or opens the club's email program with the request written out; the manager's phone page offers a ready-made email link beside its **Ask for More**. So `topup-requests.cmd` is the list to work from, and the emails are only a nudge. A club may make at most 10 requests a month, and a second request for the same allowance while one is still open is answered with the open one rather than stored again.
+
+The data, all under the relay's data folder:
+
+| Path | What it holds | Written by |
+|---|---|---|
+| `.brain/usage/<club>.json` | The club's commentary lines this month, and the months before. | The relay |
+| `.brain/topups/<club>.json` | Commentary lines given on top of the plan, by month. | `brain-topup` only. The relay only reads it. |
+| `.voice/topups/<club>.json` | Voice characters given on top of the plan, by month. | `voice-topup` only. |
+| `.requests/<club>.json` | The club's requests for more, by month (kept for a year). | The relay only. |
+| `.requests/done/<club>.json` | Which of those requests have been answered. | `brain-topup` and `voice-topup` only. |
+
+Each file has one writer, so the running relay and a command run at the same moment can never save over each other. Run through ssh, the commands run as root; they hand every file and folder they make to the relay's own user, and refuse to run without `RELAY_DATA`, which is where the relay's data really is.
+
 ### Updating the relay
 
 Get the new relay code, then from the relay folder:
@@ -629,6 +691,8 @@ The relay would rather not start than start wrong. You'll see one of these in `f
 | Check-in request body | 4 KB | Refused. |
 | Results listing | 8 MB | The listing holds the newest results that fit, and says how many older ones were left out (`omitted`). Each is still readable on its own. Old results are only forgotten after a new one has been saved. |
 | A club's voice allowance | `voice.monthlyChars` (100,000 by default) a calendar month | The relay refuses to speak, and the club's announcer uses the free Kokoro voice for every line until the month turns. Characters are reserved before each render and given back if it fails, so concurrent lines can't overshoot. |
+| A club's AI commentary | `brain.monthlyLines` plus this month's `brain-topup`, a calendar month | The relay refuses to write; the club's laptop switches to the model on that PC by itself, and stops sending lines to be refused. See [Monthly allowances and top-ups](#monthly-allowances-and-top-ups). |
+| Top-up requests from one club | 10 a month, open and answered together | Refused with 429. A second request for an allowance that already has one open is answered with that one. |
 | One spoken line | `voice.maxChars` (600 by default) | Refused. The app has a 600-character limit of its own, measured on the spoken words, and the Kokoro voice says that line. |
 | Renders at once | 6, across the whole relay | Refused as busy; the Kokoro voice says that line and the next is asked for as normal. |
 | Voice requests from one club | 300 a minute | Refused as busy. Previews are counted in the same budget. Enough for a laptop's **Prepare Lines** to work through a club's whole set of announcer lines. |

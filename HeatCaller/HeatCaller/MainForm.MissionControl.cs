@@ -167,7 +167,8 @@ public partial class MainForm
             Fading: fading,
             Relay: _relayPublisher.Status,
             VoiceMuted: _announcer.Muted,
-            CloudBackup: CloudBackupLight());
+            CloudBackup: CloudBackupLight(),
+            Allowances: UsageForMissionControl());
     }
 
     /// <summary>The cloud backup light as last worked out, and when (Environment.TickCount64). UI thread.</summary>

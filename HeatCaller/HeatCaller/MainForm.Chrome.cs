@@ -139,6 +139,10 @@ public partial class MainForm
             pnlSidebar.Width = width;
         }
 
+        // The month's allowances, over the buttons when there is anything
+        // to say - words across the open sidebar, a dot in the rail.
+        _usageChip.Rail = _navIconsOnly;
+
         var footerHeight = _navIconsOnly ? PlaceRailFooter(width) : PlaceWideFooter(width);
 
         if (pnlSidebarFooter.Height != footerHeight)
@@ -157,7 +161,18 @@ public partial class MainForm
     {
         var shift = (width - UiLayout.AtDpi(220)) / 2;
         var size = new Size(UiLayout.AtDpi(60), UiLayout.AtDpi(42));
-        var top = UiLayout.AtDpi(14);
+
+        // The chip takes a line of its own above the row, and the footer
+        // grows by just that line - the row keeps its own room round it.
+        var chip = 0;
+
+        if (_usageChipShown)
+        {
+            chip = _usageChip.WantedHeight;
+            _usageChip.Bounds = new Rectangle(UiLayout.AtDpi(12), UiLayout.AtDpi(8), Math.Max(1, width - UiLayout.AtDpi(24)), chip);
+        }
+
+        var top = UiLayout.AtDpi(14) + chip;
 
         btnManageNav.Size = size;
         btnMuteToggle.Size = size;
@@ -167,7 +182,7 @@ public partial class MainForm
         btnMuteToggle.Location = new Point(UiLayout.AtDpi(80) + shift, top);
         btnUndo.Location = new Point(UiLayout.AtDpi(148) + shift, top);
 
-        return UiLayout.AtDpi(70);
+        return UiLayout.AtDpi(70) + chip;
     }
 
     /// <summary>
@@ -184,6 +199,14 @@ public partial class MainForm
         var gap = UiLayout.AtDpi(RailFooterGap);
         var left = Math.Max(0, (width - buttonWidth) / 2);
         var top = gap;
+
+        // The chip's dot first, the width of the rail, the column under it.
+        if (_usageChipShown)
+        {
+            var chip = _usageChip.WantedHeight;
+            _usageChip.Bounds = new Rectangle(0, top, width, chip);
+            top += chip + gap;
+        }
 
         foreach (var button in new[] { btnManageNav, btnMuteToggle, btnUndo })
         {

@@ -1,11 +1,13 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   monthOf,
+  readTopUps,
   readUsageRecord,
   resetOf,
   VOICE_HISTORY_MONTHS,
   writeFileAtomically,
+  type MeterUsage,
 } from "./voice.js";
 
 /**
@@ -223,6 +225,9 @@ export class BrainService {
    */
   private readonly counting = new Map<string, Promise<unknown>>();
 
+  /** Each club's top-up file, as last read, by its modification time - see topUpFor. */
+  private readonly topUpCache = new Map<string, { mtimeMs: number; months: Readonly<Record<string, number>> }>();
+
   constructor(options: BrainServiceOptions) {
     this.config = options.config;
     this.dataDir = options.dataDir;
@@ -245,6 +250,26 @@ export class BrainService {
       enabled: on,
       model: on ? this.config.model : "",
       usage: await this.usageFor(club, plan),
+    };
+  }
+
+  /**
+   * Where this club's month stands, for the usage route and the manager's
+   * phone - read, never spent. A club whose plan does not include the
+   * brain, or a relay with no key, reads enabled:false with no allowance,
+   * and still shows what it used.
+   */
+  async usage(club: string, plan: BrainPlan): Promise<MeterUsage> {
+    const enabled = this.available && plan.enabled;
+    const read = await this.usageFor(club, plan);
+    const topUp = enabled ? await this.topUpFor(club, monthOf(this.now())) : 0;
+
+    return {
+      enabled,
+      used: read.used,
+      allowance: enabled ? plan.monthlyLines + topUp : 0,
+      topUp,
+      resetsAt: read.resetsAt,
     };
   }
 
@@ -416,7 +441,7 @@ export class BrainService {
 
     return {
       used: read === "unreadable" ? 0 : read.used,
-      allowance: plan.monthlyLines,
+      allowance: plan.monthlyLines + (await this.topUpFor(club, month)),
       resetsAt: resetOf(this.now()),
     };
   }
@@ -451,7 +476,10 @@ export class BrainService {
         return "unreadable" as const;
       }
 
-      if (read.used >= plan.monthlyLines) {
+      // The plan and whatever brain-topup gave for this month, read fresh
+      // (one stat) so a top-up given while the relay is up counts on the
+      // club's very next line.
+      if (read.used >= plan.monthlyLines + (await this.topUpFor(club, month))) {
         return "spent" as const;
       }
 
@@ -485,6 +513,41 @@ export class BrainService {
     } catch (error) {
       this.log(`[brain] "${club}": could not hand back a line (${String(error)}).`);
     }
+  }
+
+  /**
+   * Lines added to this club's allowance for <month> by whoever runs the
+   * relay (`brain-topup`, see voiceadmin.ts) - nothing when there is none.
+   *
+   * The voice's arrangement exactly (VoiceService.topUpFor): a file of its
+   * own that only the command writes and this only reads, so a top-up can
+   * never be lost to a count being saved at the same moment, and kept in
+   * memory against the file's modification time so asking costs one stat.
+   * An unreadable file is no top-up, not no commentary.
+   */
+  private async topUpFor(club: string, month: string): Promise<number> {
+    const path = brainTopUpPath(this.dataDir, club);
+    const info = await stat(path).catch(() => undefined);
+
+    if (info === undefined || !info.isFile()) {
+      this.topUpCache.delete(club);
+      return 0;
+    }
+
+    let known = this.topUpCache.get(club);
+
+    if (known === undefined || known.mtimeMs !== info.mtimeMs) {
+      try {
+        known = { mtimeMs: info.mtimeMs, months: readTopUps(JSON.parse(await readFile(path, "utf8")) as unknown) };
+      } catch {
+        this.topUpCache.delete(club);
+        return 0;
+      }
+
+      this.topUpCache.set(club, known);
+    }
+
+    return known.months[month] ?? 0;
   }
 
   /** One count operation per club at a time - see the note on `counting`. */
@@ -602,6 +665,11 @@ export class BrainService {
 /** Where a club's line count lives. */
 export function brainUsagePath(dataDir: string, club: string): string {
   return join(dataDir, BRAIN_DIR, "usage", `${club}.json`);
+}
+
+/** Where the lines given to a club on top of its plan are kept, by month - see brain-topup in voiceadmin.ts. */
+export function brainTopUpPath(dataDir: string, club: string): string {
+  return join(dataDir, BRAIN_DIR, "topups", `${club}.json`);
 }
 
 /**

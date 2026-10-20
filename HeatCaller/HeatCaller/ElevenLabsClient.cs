@@ -21,7 +21,75 @@ public sealed class ElevenLabsClient
         Timeout = TimeSpan.FromSeconds(35),
     };
 
+    /// <summary>
+    /// The client the plan is read with: ten seconds, because it is only ever
+    /// asked for a meter, never on the way to speaking a line. Settable so the
+    /// tests can answer for ElevenLabs; the app never sets it. Requests to it
+    /// are absolute, so a test's client needs no BaseAddress.
+    /// </summary>
+    internal static HttpClient SubscriptionHttp { get; set; } = new() { Timeout = TimeSpan.FromSeconds(10) };
+
     public sealed record VoiceInfo(string VoiceId, string Name);
+
+    /// <summary>Where the key's own ElevenLabs plan stands this month, in characters.</summary>
+    public sealed record Subscription(long CharacterCount, long CharacterLimit, DateTime? ResetsUtc);
+
+    /// <summary>
+    /// GET v1/user/subscription: the characters used and allowed this month
+    /// and when they start again. A key made without the "User: read"
+    /// permission is refused with 401 - thrown as an HttpRequestException
+    /// carrying that status, so the caller can say what to change rather
+    /// than call the key broken (it still speaks perfectly well).
+    /// </summary>
+    public async Task<Subscription> GetSubscriptionAsync(string apiKey, CancellationToken ct = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.elevenlabs.io/v1/user/subscription");
+        request.Headers.Add("xi-api-key", apiKey);
+
+        using var response = await SubscriptionHttp.SendAsync(request, ct).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            // The status only - not the body, which can echo the request.
+            throw new HttpRequestException(
+                $"ElevenLabs wouldn't show the plan ({(int)response.StatusCode}).",
+                null,
+                response.StatusCode);
+        }
+
+        var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidOperationException("ElevenLabs answered with something other than a plan.");
+        }
+
+        static long Whole(JsonElement parent, string name) =>
+            parent.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)
+                ? Math.Max(0, number)
+                : 0;
+
+        var resetUnix = Whole(root, "next_character_count_reset_unix");
+
+        DateTime? resets = null;
+
+        if (resetUnix > 0)
+        {
+            try
+            {
+                resets = DateTimeOffset.FromUnixTimeSeconds(resetUnix).UtcDateTime;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                // A number no date answers to: no reset date, rather than no plan.
+            }
+        }
+
+        return new Subscription(Whole(root, "character_count"), Whole(root, "character_limit"), resets);
+    }
 
     public async Task<List<VoiceInfo>> GetVoicesAsync(string apiKey, CancellationToken ct = default)
     {
