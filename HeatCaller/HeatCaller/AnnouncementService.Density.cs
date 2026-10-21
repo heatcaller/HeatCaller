@@ -133,7 +133,9 @@ public sealed partial class AnnouncementService
     /// "dropped" and gave back the pair's once-per-race claim, so the kept
     /// battle was said AND offered again on a later standings update.
     /// </param>
-    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Func<bool>? holdOver = null, bool alreadyCounted = false, Action? lost = null)
+    /// <param name="transponder">Who the call is about, for the lost-lines window (20 Oct 2026). Null for nobody in particular.</param>
+    /// <param name="words">What the call would have said, for the lost-lines window. Null when the caller has no words yet.</param>
+    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Func<bool>? holdOver = null, bool alreadyCounted = false, Action? lost = null, string? transponder = null, string? words = null)
     {
         kept = false;
 
@@ -151,11 +153,12 @@ public sealed partial class AnnouncementService
             // - and only with pacing on. Wall to wall is the announcer
             // exactly as it was, and it never kept anything.
             if (gap > 0 && holdOver is not null
-                && _heldOver.Offer(new HeldCall(type, holdOver, lost), weight, WeightBeingSpoken(), out var displaced))
+                && _heldOver.Offer(new HeldCall(type, holdOver, lost, transponder, words), weight, WeightBeingSpoken(), out var displaced))
             {
                 if (displaced is not null)
                 {
-                    Load.NoteDropped();
+                    Load.NoteDropped(Unsaid(UnsaidKind.Lost, displaced.Type, displaced.Transponder, displaced.Words,
+                        $"It was waiting for the end of a line, then a {CallName(type)} that outranked it took its place."));
                     displaced.Lost?.Invoke();
                     StatusMessage?.Invoke($"[voice] Dropped {displaced.Type} - {type} outranks it for the slot after this line.");
                 }
@@ -166,7 +169,10 @@ public sealed partial class AnnouncementService
                 return false;
             }
 
-            Load.NoteDropped();
+            Load.NoteDropped(Unsaid(UnsaidKind.Lost, type, transponder, words,
+                OnAirNow is { Length: > 0 } speaking
+                    ? $"The announcer was still on another line ({speaking}), and this call wasn't worth waiting for."
+                    : "The announcer was still saying the line before it, and this call wasn't worth waiting for."));
 
             // The wording this line has always had, kept exactly, because
             // it is what a club searching an old log will be looking for -
@@ -194,7 +200,9 @@ public sealed partial class AnnouncementService
                 && since < TimeSpan.FromSeconds(gap)
                 && !AnnouncerDensity.WorthBreakingIn(weight, _lastRoutineWeight))
             {
-                Load.NoteHeld();
+                Load.NoteHeld(Unsaid(UnsaidKind.Held, type, transponder, words,
+                    $"Held back by the pacing dial: {AnnouncerDensity.For(Density).Name} leaves {AnnouncerDensity.Gap(gap)} "
+                    + $"between calls, and the last one was only {AnnouncerDensity.Gap(since.TotalSeconds)} before."));
 
                 StatusMessage?.Invoke(
                     $"[voice] Held {type} - {AnnouncerDensity.Gap(gap)} between calls at "
@@ -250,7 +258,7 @@ public sealed partial class AnnouncementService
     /// it is lost instead (20 Oct 2026, Bug Hunt 8 - see the lost parameter
     /// of RoutineCallGetsTheAir).
     /// </summary>
-    private sealed record HeldCall(AnnouncementEventType Type, Func<bool> Reoffer, Action? Lost);
+    private sealed record HeldCall(AnnouncementEventType Type, Func<bool> Reoffer, Action? Lost, string? Transponder = null, string? Words = null);
 
     /// <summary>
     /// The one call kept back while the speaker was busy - see
@@ -270,7 +278,8 @@ public sealed partial class AnnouncementService
 
         if (stale is not null)
         {
-            Load.NoteDropped();
+            Load.NoteDropped(Unsaid(UnsaidKind.Lost, stale.Type, stale.Transponder, stale.Words,
+                "It was waiting for the end of a line, but that line ran so long the moment had passed."));
             stale.Lost?.Invoke();
             StatusMessage?.Invoke($"[voice] Dropped {stale.Type} - kept for the end of a line, but the line ran too long and the moment has gone.");
         }
@@ -290,11 +299,15 @@ public sealed partial class AnnouncementService
     /// AnnouncerLoad would carry an Offered with nothing to match it for the
     /// rest of the race.
     /// </summary>
-    private void NoteKeptCallLost(bool heldOver)
+    /// <param name="type">The call, for the lost-lines window.</param>
+    /// <param name="transponder">Who it was about.</param>
+    /// <param name="words">What it would have said.</param>
+    /// <param name="why">Why it went, finishing "It was waiting for the end of a line, then ...".</param>
+    private void NoteKeptCallLost(bool heldOver, AnnouncementEventType type, string? transponder, string? words, string why)
     {
         if (heldOver)
         {
-            Load.NoteDropped();
+            Load.NoteDropped(Unsaid(UnsaidKind.Lost, type, transponder, words, $"It was waiting for the end of a line, then {why}."));
         }
     }
 
@@ -316,9 +329,46 @@ public sealed partial class AnnouncementService
 
         if (count)
         {
-            Load.NoteDropped();
+            Load.NoteDropped(Unsaid(UnsaidKind.Lost, gone.Type, gone.Transponder, gone.Words,
+                "It was waiting for the end of a line, then a flag, the countdown or a new race cleared it."));
             StatusMessage?.Invoke($"[voice] Dropped {gone.Type} - it was waiting for the end of a line and the race moved on.");
         }
+    }
+
+    /// <summary>
+    /// One unsaid call for Race Control's lost-lines window (20 Oct 2026):
+    /// the call's name, the driver's, and its words with the delivery tags
+    /// taken off - "[excited] Sam lowers the best sector" reads as a fault
+    /// in a list somebody is reading.
+    /// </summary>
+    private UnsaidLine Unsaid(UnsaidKind kind, AnnouncementEventType type, string? transponder, string? words, string why)
+    {
+        string? driver = null;
+
+        try
+        {
+            driver = string.IsNullOrWhiteSpace(transponder) ? null : DisplayNameFor(transponder);
+        }
+        catch
+        {
+            // A name is a nicety here; the line is still listed without one.
+        }
+
+        var said = string.IsNullOrWhiteSpace(words)
+            ? null
+            : VoiceProfile.StripAudioTags(words).Trim();
+
+        return new UnsaidLine(DateTime.UtcNow, kind, CallName(type), string.IsNullOrWhiteSpace(driver) ? null : driver,
+            string.IsNullOrWhiteSpace(said) ? null : said, why);
+    }
+
+    /// <summary>A call's name as the Voice page gives it, without the settings wording in brackets - "Fast lap", not "Fast lap (race best)". The same trim OnAirNow makes.</summary>
+    internal static string CallName(AnnouncementEventType type)
+    {
+        var label = VoiceProfile.Describe(type).Label ?? type.ToString();
+        var bracket = label.IndexOf(" (", StringComparison.Ordinal);
+
+        return bracket > 0 ? label[..bracket] : label;
     }
 
     // ------------------------------------------------------------------

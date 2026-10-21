@@ -295,7 +295,47 @@ internal static class DriverIntros
             return (string.Empty, string.Empty);
         }
 
-        return ($" with {RaceNumbers.Words(car.Laps)} {Plural.Word(car.Laps, "lap")}", $" with {Plural.Of(car.Laps, "lap")}");
+        // LAPS IN A TIME (20 Oct 2026). A most-laps qualifier is scored the
+        // way the timing sheet shows it - 24/5:02.310, laps IN a time - and
+        // the facts used to hand the model the laps alone, so it read them
+        // out as "a qualifying time of thirty-four laps". The time goes with
+        // the laps now, whenever the heat has one.
+        var laps = $" with {RaceNumbers.Words(car.Laps)} {Plural.Word(car.Laps, "lap")}";
+        var lapsScreen = $" with {Plural.Of(car.Laps, "lap")}";
+
+        return car.ElapsedMs > 0
+            ? ($"{laps} in {DurationSpoken(car.ElapsedMs)}", $"{lapsScreen} in {Clock(car.ElapsedMs)}")
+            : (laps, lapsScreen);
+    }
+
+    /// <summary>
+    /// A heat's run time read out: "five minutes flat", "five minutes and
+    /// two point three one seconds", or under a minute "forty-eight point
+    /// five oh seconds". Words only, like the rest of RaceNumbers.
+    /// </summary>
+    internal static string DurationSpoken(long ms)
+    {
+        var centiseconds = (long)Math.Round(ms / 10.0);
+        var minutes = centiseconds / 6000;
+        var rest = centiseconds % 6000;
+
+        if (minutes <= 0)
+        {
+            return RaceNumbers.Plainly(ms);
+        }
+
+        var said = $"{RaceNumbers.Words(minutes)} {Plural.Word(minutes, "minute")}";
+
+        return rest == 0 ? $"{said} flat" : $"{said} and {RaceNumbers.Plainly(rest * 10)}";
+    }
+
+    /// <summary>"5:02.310" - the timing sheet's way of writing a heat's run time.</summary>
+    internal static string Clock(long ms)
+    {
+        var minutes = ms / 60_000;
+        var seconds = (ms % 60_000) / 1000.0;
+
+        return $"{minutes}:{seconds.ToString("00.000", System.Globalization.CultureInfo.InvariantCulture)}";
     }
 
     /// <summary>", two tenths back" / ", a lap down", and the screen's version - empty when it cannot be measured honestly.</summary>

@@ -126,10 +126,132 @@ public sealed class BroadcastFeaturesTests
     }
 
     [Fact]
-    public void The_tag_ends_the_sentence_once()
+    public void The_credit_is_a_bright_whole_sentence_that_ends_once()
     {
-        Assert.Equal(" Presented by Smith and Co.", SponsoredMoments.Tag("Smith and Co."));
-        Assert.Equal(string.Empty, SponsoredMoments.Tag("  "));
+        // 21 Oct 2026: " Presented by Smith and Co." on the end of a shouted
+        // call was read like a caption - flat and robotic.
+        var credit = SponsoredMoments.Tag(SponsoredMoment.FastestLap, "Smith and Co.");
+
+        Assert.StartsWith(" [cheerful] ", credit);
+        Assert.EndsWith("Smith and Co!", credit);
+        Assert.Contains("fastest lap", credit, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Co.", credit);
+        Assert.Equal(string.Empty, SponsoredMoments.Tag(SponsoredMoment.FastestLap, "  "));
+    }
+
+    [Fact]
+    public void Every_moment_has_more_than_one_way_to_credit_its_sponsor()
+    {
+        foreach (var moment in Enum.GetValues<SponsoredMoment>())
+        {
+            var lines = SponsoredMoments.CreditLines(moment);
+
+            Assert.True(lines.Count >= 2, $"{moment} has only one credit");
+
+            foreach (var line in lines)
+            {
+                // A whole sentence with the name in it once - never the bare
+                // "Presented by X." that started it.
+                Assert.Single(System.Text.RegularExpressions.Regex.Matches(line, @"\{sponsor\}"));
+                Assert.False(line.StartsWith("Presented by", StringComparison.OrdinalIgnoreCase), line);
+                Assert.True(line.EndsWith('!') || line.EndsWith('.'), line);
+                Assert.True(char.IsUpper(line[0]), line);
+            }
+        }
+    }
+
+    [Fact]
+    public void The_same_credit_is_not_heard_twice_running()
+    {
+        var first = SponsoredMoments.Tag(SponsoredMoment.LeadChange, "Joe's Hobby Shop");
+        var second = SponsoredMoments.Tag(SponsoredMoment.LeadChange, "Joe's Hobby Shop");
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void A_voice_without_audio_tags_hears_just_the_sentence()
+    {
+        var credit = SponsoredMoments.Tag(SponsoredMoment.Battle, "Joe's Hobby Shop");
+        var spoken = VoiceProfile.StripAudioTags("[shouting] Sam is all over Bill!" + credit);
+
+        Assert.DoesNotContain("[", spoken);
+        Assert.StartsWith("Sam is all over Bill! ", spoken);
+        Assert.EndsWith("Joe's Hobby Shop!", spoken);
+    }
+
+    [Fact]
+    public void A_call_with_no_ending_of_its_own_is_closed_before_the_credit()
+    {
+        Assert.Equal("Sam sets the fastest lap. [cheerful] That's on us!",
+            SponsoredMoments.WithCredit("Sam sets the fastest lap ", " [cheerful] That's on us!"));
+        Assert.Equal("Sam sets the fastest lap! [cheerful] That's on us!",
+            SponsoredMoments.WithCredit("Sam sets the fastest lap!", " [cheerful] That's on us!"));
+        Assert.Equal("Sam sets the fastest lap", SponsoredMoments.WithCredit(" Sam sets the fastest lap ", string.Empty));
+    }
+
+    [Fact]
+    public void A_credit_for_the_top_of_a_segment_looks_forward_to_it()
+    {
+        foreach (var moment in Enum.GetValues<SponsoredMoment>().Cast<SponsoredMoment?>().Append(null))
+        {
+            var lines = SponsoredMoments.LeadInLines(moment);
+
+            Assert.True(lines.Count >= 2, $"{moment} has only one lead-in");
+
+            foreach (var line in lines)
+            {
+                Assert.Single(System.Text.RegularExpressions.Regex.Matches(line, @"\{sponsor\}"));
+                Assert.True(line.EndsWith('!') || line.EndsWith('.'), line);
+
+                // "That result..." looks back at what was just said - wrong
+                // at the top of a segment that has not started yet.
+                Assert.False(line.StartsWith("That ", StringComparison.Ordinal), line);
+                Assert.False(line.StartsWith("And ", StringComparison.Ordinal), line);
+            }
+        }
+
+        var lead = SponsoredMoments.LeadIn(SponsoredMoment.RaceResult, "Joe's Hobby Shop.");
+        Assert.DoesNotContain("[", lead);
+        Assert.EndsWith("Joe's Hobby Shop!", lead);
+        Assert.Equal(string.Empty, SponsoredMoments.LeadIn(SponsoredMoment.RaceResult, " "));
+    }
+
+    [Fact]
+    public void The_credit_goes_in_front_of_the_words_and_never_on_its_own()
+    {
+        Assert.Equal("This is ours! Sam wins it.", SponsoredMoments.WithLeadIn("This is ours!", "  Sam wins it."));
+        Assert.Null(SponsoredMoments.WithLeadIn("This is ours!", (string?)null));
+        Assert.Equal(" ", SponsoredMoments.WithLeadIn("This is ours!", " "));
+        Assert.Equal("Sam wins it.", SponsoredMoments.WithLeadIn(string.Empty, "Sam wins it."));
+    }
+
+    [Fact]
+    public void A_two_handers_credit_is_read_by_the_host_never_the_co_host()
+    {
+        var hostFirst = SponsoredMoments.WithLeadIn("This is ours!",
+            new[] { new ExchangeTurn(false, "Sam's on pole."), new ExchangeTurn(true, "By a mile.") });
+
+        Assert.Equal(2, hostFirst.Count);
+        Assert.Equal("This is ours! Sam's on pole.", hostFirst[0].Line);
+        Assert.False(hostFirst[0].FromCoHost);
+
+        var coHostFirst = SponsoredMoments.WithLeadIn("This is ours!",
+            new[] { new ExchangeTurn(true, "Sam's on pole!"), new ExchangeTurn(false, "By a mile.") });
+
+        Assert.Equal(3, coHostFirst.Count);
+        Assert.Equal(new ExchangeTurn(false, "This is ours!"), coHostFirst[0]);
+        Assert.Equal("Sam's on pole!", coHostFirst[1].Line);
+    }
+
+    [Fact]
+    public void The_commentary_is_shown_two_credits_to_model_its_own_on()
+    {
+        Assert.Equal(
+            "\"This battle is brought to you by Joe's Hobby Shop!\" or \"And this fight comes to you courtesy of Joe's Hobby Shop!\"",
+            SponsoredMoments.CreditExamples(SponsoredMoment.Battle, "Joe's Hobby Shop."));
+        Assert.Equal("\"That's brought to you by Joe's Hobby Shop!\"",
+            SponsoredMoments.CreditExamples(null, "Joe's Hobby Shop"));
     }
 
     [Fact]
@@ -384,8 +506,8 @@ public sealed class BroadcastFeaturesTests
 
         var (spoken, screen) = DriverIntros.Recap(order, QualifyingMethod.TotalLaps, 3);
 
-        Assert.Equal("From qualifying: Sam Smith takes pole with 24 laps. Bill Jones lines up second, +0.214s, and Frank Lee third.", screen);
-        Assert.StartsWith("From qualifying: Sam takes pole with twenty-four laps. Bill lines up second, ", spoken);
+        Assert.Equal("From qualifying: Sam Smith takes pole with 24 laps in 5:00.000. Bill Jones lines up second, +0.214s, and Frank Lee third.", screen);
+        Assert.StartsWith("From qualifying: Sam takes pole with twenty-four laps in five minutes flat. Bill lines up second, ", spoken);
         Assert.EndsWith(" back, and Frank third.", spoken);
     }
 
@@ -398,7 +520,7 @@ public sealed class BroadcastFeaturesTests
             new RecapCar("Bill", "Bill", 23, 290_000, 0, 12_100),
         };
 
-        Assert.Equal("From qualifying: Sam takes pole with twenty-four laps. Bill lines up second, a lap down.",
+        Assert.Equal("From qualifying: Sam takes pole with twenty-four laps in five minutes flat. Bill lines up second, a lap down.",
             DriverIntros.Recap(order, QualifyingMethod.TotalLaps, 3).Spoken);
     }
 
@@ -409,6 +531,16 @@ public sealed class BroadcastFeaturesTests
 
         Assert.Equal("From qualifying: Sam takes pole averaging 10.000s over 3 laps.",
             DriverIntros.Recap(order, QualifyingMethod.BestConsecutiveLaps, 3).Screen);
+    }
+
+    [Theory]
+    [InlineData(302_310, "five minutes and two point three one seconds", "5:02.310")]
+    [InlineData(60_000, "one minute flat", "1:00.000")]
+    [InlineData(48_500, "forty-eight point five zero seconds", "0:48.500")]
+    public void A_heats_run_time_is_said_and_written_as_the_timing_sheet_has_it(long ms, string spoken, string screen)
+    {
+        Assert.Equal(spoken, DriverIntros.DurationSpoken(ms));
+        Assert.Equal(screen, DriverIntros.Clock(ms));
     }
 
     [Fact]
@@ -562,7 +694,9 @@ public sealed class BroadcastCommentaryTests : IDisposable
         Assert.Contains("1. grid position 1; name Sam; racing number 7; from Riverside; form: won last time out", model.Facts);
         Assert.Contains("2. grid position 2; name Bill", model.Facts);
         Assert.Contains("Qualifying, exact: Sam took pole with twelve laps.", model.Facts);
-        Assert.Contains("Driver introductions, presented by Joe's Hobby Shop", model.Facts);
+        Assert.Contains("\"Your driver introductions tonight are brought to you by Joe's Hobby Shop!\"", model.Facts);
+        Assert.Contains("never a bare label", model.Facts);
+        Assert.DoesNotContain("Driver introductions, presented by", model.Facts);
         Assert.Contains("Say each driver's grid position ONCE", model.Facts);
     }
 
@@ -608,12 +742,104 @@ public sealed class BroadcastCommentaryTests : IDisposable
             },
         };
 
-        await desk.BuildRaceSummaryAsync(race, leadChanges: (3, 2), presentedBy: "Joe's Hobby Shop");
+        var recap = await desk.BuildRaceSummaryAsync(race, leadChanges: (3, 2), presentedBy: "Joe's Hobby Shop");
 
         Assert.Contains("Laps led: Sam 8 laps, Bill 4 laps", model.Facts);
         Assert.Contains("The lead changed hands 3 times, among 2 different leaders", model.Facts);
         Assert.Contains("Driver rating for this race", model.Facts);
-        Assert.Contains("The race result is presented by: Joe's Hobby Shop", model.Facts);
+
+        // 21 Oct 2026: on the recap show the sponsor is credited at the TOP,
+        // by HeatCaller - the model is not handed them, so it cannot put the
+        // credit at the end.
+        Assert.DoesNotContain("Joe's Hobby Shop", model.Facts);
+        Assert.Contains("Do not mention any sponsor", model.Facts);
+        Assert.NotNull(recap);
+        Assert.Contains(SponsoredMoments.LeadInLines(SponsoredMoment.RaceResult),
+            lead => recap!.StartsWith(lead.Replace("{sponsor}", "Joe's Hobby Shop") + " Here they are!", StringComparison.Ordinal));
+        Assert.Equal(recap, desk.LastRaceSummary);
+    }
+
+    [Fact]
+    public async Task A_recap_that_never_came_back_has_no_credit_either()
+    {
+        var (desk, model) = Desk();
+        model.Answer = null;
+
+        var race = new SessionRecord
+        {
+            Label = "A-Main",
+            SessionType = RaceSessionType.Race,
+            StartedAtUtc = new DateTime(2026, 10, 18, 19, 0, 0, DateTimeKind.Utc),
+            EndedAtUtc = new DateTime(2026, 10, 18, 19, 10, 0, DateTimeKind.Utc),
+            Results =
+            {
+                new SessionResultEntry { Transponder = "Sam", DriverName = "Sam", Position = 1, Laps = 12, ElapsedMs = 300_000 },
+            },
+        };
+
+        Assert.Null(await desk.BuildRaceSummaryAsync(race, presentedBy: "Joe's Hobby Shop"));
+    }
+
+    [Fact]
+    public async Task A_recap_show_segment_opens_with_its_sponsor_and_counts_them_once_written()
+    {
+        var (desk, model) = Desk();
+        var counted = 0;
+        desk.SegmentSponsorTaken = _ => ("Joe's Hobby Shop", () => counted++);
+        model.Answer = "Sam's hundredth race tonight.";
+
+        var line = await desk.BuildSegmentAsync(SegmentKind.Honours,
+            new PackedFacts("Sam started his hundredth race.", Array.Empty<string>(), 0), creditFirst: true);
+
+        Assert.DoesNotContain("Joe's Hobby Shop", model.Facts);
+        Assert.Contains(SponsoredMoments.LeadInLines(SponsoredMoment.Milestones),
+            lead => line == lead.Replace("{sponsor}", "Joe's Hobby Shop") + " Sam's hundredth race tonight.");
+        Assert.Equal(1, counted);
+        Assert.Equal(line, desk.LastLine);
+    }
+
+    [Fact]
+    public async Task A_recap_show_segment_that_never_came_back_takes_no_sponsor()
+    {
+        var (desk, model) = Desk();
+        var asked = 0;
+        desk.SegmentSponsorTaken = _ => { asked++; return ("Joe's Hobby Shop", () => { }); };
+        model.Answer = null;
+
+        Assert.Null(await desk.BuildSegmentAsync(SegmentKind.Honours,
+            new PackedFacts("Sam started his hundredth race.", Array.Empty<string>(), 0), creditFirst: true));
+        Assert.Equal(0, asked);
+    }
+
+    [Fact]
+    public async Task A_recap_show_two_hander_opens_with_its_sponsor_in_the_hosts_voice()
+    {
+        var (desk, model) = Desk();
+        desk.SegmentSponsorTaken = _ => ("Joe's Hobby Shop", () => { });
+        model.Answer = "A: Sam took pole by a tenth.\nB: And Bill will not like that one bit.";
+
+        var turns = await desk.BuildExchangeAsync(SegmentKind.QualifyingReport,
+            new PackedFacts("Sam took pole by a tenth from Bill.", Array.Empty<string>(), 0),
+            "Rick", "Jess", creditFirst: true);
+
+        Assert.Equal(2, turns.Count);
+        Assert.False(turns[0].FromCoHost);
+        Assert.Contains(SponsoredMoments.LeadInLines(SponsoredMoment.QualifyingRecap),
+            lead => turns[0].Line == lead.Replace("{sponsor}", "Joe's Hobby Shop") + " Sam took pole by a tenth.");
+        Assert.Equal("And Bill will not like that one bit.", turns[1].Line);
+    }
+
+    [Fact]
+    public async Task A_sponsored_segment_is_asked_for_a_whole_credit_about_its_moment()
+    {
+        var (desk, model) = Desk();
+        desk.SegmentSponsorTaken = _ => ("Joe's Hobby Shop", () => { });
+
+        await desk.BuildSegmentAsync(SegmentKind.BattleWatch,
+            new PackedFacts("Sam and Bill are nose to tail for second.", Array.Empty<string>(), 0));
+
+        Assert.Contains("\"This battle is brought to you by Joe's Hobby Shop!\"", model.Facts);
+        Assert.DoesNotContain("that it is presented by", model.Facts);
     }
 
     [Fact]

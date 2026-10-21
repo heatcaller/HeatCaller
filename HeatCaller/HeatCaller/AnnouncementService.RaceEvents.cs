@@ -618,7 +618,7 @@ public sealed partial class AnnouncementService
 
         // A sponsor who presents the milestones gets their name on it.
         var (sponsorTag, countMention, releaseMention) = SponsorTag(type);
-        text = (text + sponsorTag).Trim();
+        text = SponsoredMoments.WithCredit(text, sponsorTag);
 
         // Screen text raised by EnqueueVoiceWork, once the line is accepted.
         //

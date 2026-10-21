@@ -93,6 +93,9 @@ public sealed class SponsorsControl : UserControl
     /// </summary>
     private readonly Label _lblVideoNote = new();
 
+    /// <summary>Plays the selected video in a window of its own - enabled only while a video slide is selected. See SponsorVideoPreviewForm.</summary>
+    private readonly Button _btnPreviewVideo = new() { Text = "Preview Video" };
+
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
 
@@ -263,6 +266,7 @@ public sealed class SponsorsControl : UserControl
 
         _lstSlides.IntegralHeight = false;
         _lstSlides.SelectedIndexChanged += (_, _) => RefreshPreview();
+        _lstSlides.DoubleClick += (_, _) => PreviewSelectedVideo();
 
         _picPreview.BorderStyle = BorderStyle.FixedSingle;
         _picPreview.SizeMode = PictureBoxSizeMode.Zoom;
@@ -273,6 +277,8 @@ public sealed class SponsorsControl : UserControl
         _lblVideoNote.ForeColor = AppTheme.TextMuted;
         _lblVideoNote.Visible = false;
         _picPreview.Controls.Add(_lblVideoNote);
+        _lblVideoNote.DoubleClick += (_, _) => PreviewSelectedVideo();
+        _lblVideoNote.Cursor = Cursors.Hand;
 
         // Sized to their own captions by the bar they sit in.
         var btnAdd = new Button { Text = "Add Image..." };
@@ -280,6 +286,9 @@ public sealed class SponsorsControl : UserControl
 
         var btnAddVideo = new Button { Text = "Add Video..." };
         btnAddVideo.Click += (_, _) => AddVideo();
+
+        _btnPreviewVideo.Enabled = false;
+        _btnPreviewVideo.Click += (_, _) => PreviewSelectedVideo();
 
         var btnRemove = new Button { Text = "Remove" };
         btnRemove.Click += (_, _) => RemoveSelected();
@@ -302,7 +311,7 @@ public sealed class SponsorsControl : UserControl
         var slidesCard = new Section("Slides (shown in this order)");
 
         slidesCard.AddFill(band, () => band.LeastHeight(Math.Max(1, band.Width)));
-        slidesCard.Add(new ButtonBar().With(btnAdd, btnAddVideo, btnRemove, btnMoveUp, btnMoveDown), gapBelow: 0);
+        slidesCard.Add(new ButtonBar().With(btnAdd, btnAddVideo, _btnPreviewVideo, btnRemove, btnMoveUp, btnMoveDown), gapBelow: 0);
 
         // --- Timing ---
 
@@ -605,8 +614,9 @@ public sealed class SponsorsControl : UserControl
 
         grid.AddRow("Presents:", _lstSponsorMoments);
         grid.AddHint(
-            "Their name rides on these moments of the race - \"Presented by\" and their name, as it's said above, "
-            + "on the end of the call, and on the stream's graphic for it. A moment that happens many times a race "
+            "Their name rides on these moments of the race - a short credit such as \"That fastest lap is brought to "
+            + "you by\" and their name, as it's said above, on the end of the call (at the top of their segment on "
+            + "the recap show), and on the stream's graphic for it. A moment that happens many times a race "
             + "(fastest laps, lead changes, battles) is named at most once every three minutes so it never turns into "
             + "noise; the introductions, the qualifying recap and the result are named every time. Each mention the "
             + "announcer actually makes goes in tonight's report.");
@@ -801,6 +811,7 @@ public sealed class SponsorsControl : UserControl
         _picPreview.Image?.Dispose();
         _picPreview.Image = null;
         _lblVideoNote.Visible = false;
+        _btnPreviewVideo.Enabled = false;
 
         if (_lstSlides.SelectedItem is not string fileName)
         {
@@ -824,8 +835,10 @@ public sealed class SponsorsControl : UserControl
 
             _lblVideoNote.Text = "Video\n\n" + Path.GetFileName(fileName)
                                  + (size is { } bytes ? $"\n{bytes / (1024 * 1024)} MB" : string.Empty)
-                                 + "\n\nIt plays to its own end on the Big Screen.";
+                                 + "\n\nIt plays to its own end on the Big Screen."
+                                 + "\n\nDouble-click, or press Preview Video, to watch it here.";
             _lblVideoNote.Visible = true;
+            _btnPreviewVideo.Enabled = true;
             return;
         }
 
@@ -954,6 +967,36 @@ public sealed class SponsorsControl : UserControl
         }
 
         RefreshSlides();
+    }
+
+    /// <summary>
+    /// Plays the selected video slide in a preview window, with its sound,
+    /// through the same player the Big Screen uses. Does nothing when the
+    /// selected slide is an image.
+    /// </summary>
+    private void PreviewSelectedVideo()
+    {
+        if (_lstSlides.SelectedItem is not string fileName || !SponsorMedia.IsVideoName(fileName))
+        {
+            return;
+        }
+
+        if (!SponsorVideoEngine.NativesPresent)
+        {
+            AppDialog.Show(this,
+                "This copy of HeatCaller can't play videos - the video player's files are missing from beside HeatCaller.exe. "
+                + "Reinstall HeatCaller.",
+                "Video unavailable", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (_store.ResolvePath(fileName) is not { } path)
+        {
+            return;
+        }
+
+        using var preview = new SponsorVideoPreviewForm(path);
+        preview.ShowDialog(FindForm());
     }
 
     /// <summary>A stored slide's size on disk, or null when it can't be read - the preview says nothing about size rather than failing to draw.</summary>

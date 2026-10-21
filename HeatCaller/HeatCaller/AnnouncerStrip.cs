@@ -155,6 +155,12 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         _load.Margin = new Padding(10, 2, 0, 0);
         _load.Tag = AppTheme.KeepBackColor;
 
+        // THE COUNT OPENS THE LIST (20 Oct 2026): "17 lost" says the
+        // announcer is running out of room; clicking it says which calls
+        // it lost, and to what.
+        _load.Cursor = Cursors.Hand;
+        _load.Click += (_, _) => LoadWanted?.Invoke();
+
         // Focus off after a click, for the reason the flag buttons do it:
         // a button that keeps focus keeps answering to Space and Enter, and
         // on this row that means a stray keypress puts the last segment out
@@ -175,6 +181,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
             "Stops what is on air: a commentary segment block, or the post-race recap show (teaser, recap, achievements, "
             + "interview, sign-off). The line being spoken finishes; nothing after it starts, and the show music rides down.");
         tips.SetToolTip(_replay, "Plays the last commentary segment again.");
+        tips.SetToolTip(_load, "Click to see each line the announcer didn't say this race, and why.");
 
         Controls.Add(_said);
         Controls.Add(_hold);
@@ -308,6 +315,12 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// screen the person with the microphone is looking at.
     /// </summary>
     public event Action? VotesWanted;
+
+    /// <summary>
+    /// Raised when the race director clicks the lost/held count (20 Oct
+    /// 2026) - to see each line that wasn't said, and why.
+    /// </summary>
+    public event Action? LoadWanted;
 
     /// <summary>
     /// Draws the strip for how things stand.

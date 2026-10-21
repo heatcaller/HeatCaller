@@ -1,0 +1,296 @@
+namespace HeatCaller;
+
+/// <summary>
+/// Every timing call the announcer didn't say this race, stacked newest
+/// first, each with what it was, who it was about, what it would have said
+/// and why it went (20 Oct 2026).
+///
+/// ASKED FOR FROM THE FLOOR: "a popup window when I click on the lost
+/// number of lines on race control. It should show each one stacked up
+/// with details about the line and why it was dropped." The count on the
+/// strip says the announcer is running out of room; this says which calls
+/// it is losing and to what - a lap time lost behind the race recap is a
+/// different problem from a fast lap held back by the pacing dial, and
+/// only the list can tell them apart.
+///
+/// NOT MODAL. It is opened during a race to watch the lines go, so Race
+/// Control stays usable behind it, and it refreshes itself once a second
+/// while it is open - the same reason the room vote's tally does. One
+/// window at a time: clicking the count again brings it to the front.
+///
+/// HELD LINES ARE LISTED TOO, with a tick to hide them, because a club
+/// tuning the pacing dial wants to see both side by side. Lost lines are
+/// marked in the warning colour and held ones are not, for the reason the
+/// strip gives: held is the dial working.
+/// </summary>
+internal sealed class UnsaidLinesForm : Form
+{
+    /// <summary>How often the list is checked for new lines while the window is open.</summary>
+    private static readonly TimeSpan CheckEvery = TimeSpan.FromSeconds(1);
+
+    /// <summary>Space inside each card, and between one card and the next.</summary>
+    private const int Pad = 8;
+
+    private const int CardGap = 6;
+
+    /// <summary>A ListBox row can be no taller than this - Windows' own limit for owner-drawn rows.</summary>
+    private const int TallestRow = 255;
+
+    private readonly AnnouncerLoad _load;
+
+    private readonly Label _lblReport = new();
+    private readonly CheckBox _chkHeld = new();
+    private readonly ListBox _list = new();
+    private readonly Label _lblCount = new();
+    private readonly System.Windows.Forms.Timer _tick = new();
+
+    /// <summary>What the list was last drawn from, so a tick with nothing new does nothing.</summary>
+    private int _drawnVersion = -1;
+
+    private bool _drawnWithHeld;
+
+    public UnsaidLinesForm(AnnouncerLoad load)
+    {
+        _load = load;
+
+        Text = "Lines not said this race";
+        Font = AppTheme.BodyFont;
+        BackColor = AppTheme.Background;
+        ForeColor = AppTheme.TextDark;
+
+        _lblReport.AutoSize = true;
+        _lblReport.MaximumSize = new Size(UiLayout.AtTextSize(640), 0);
+        _lblReport.ForeColor = AppTheme.TextMuted;
+        _lblReport.Font = AppTheme.SmallFont;
+
+        _chkHeld.Text = "Show lines held back by the pacing dial too";
+        _chkHeld.AutoSize = true;
+        _chkHeld.Checked = true;
+        _chkHeld.CheckedChanged += (_, _) => Fill(force: true);
+
+        _list.DrawMode = DrawMode.OwnerDrawVariable;
+        _list.IntegralHeight = false;
+        _list.BorderStyle = BorderStyle.None;
+        _list.SelectionMode = SelectionMode.None;
+        _list.MeasureItem += MeasureCard;
+        _list.DrawItem += DrawCard;
+
+        // Variable-height rows are measured when they are added, so a resize
+        // re-adds them to wrap the words at the new width.
+        _list.Resize += (_, _) => Fill(force: true);
+
+        EmptyNote.For(_list, () => _chkHeld.Checked
+            ? "Nothing has been lost or held back this race."
+            : "Nothing has been lost this race.");
+
+        _lblCount.AutoSize = true;
+        _lblCount.ForeColor = AppTheme.TextMuted;
+        _lblCount.Font = AppTheme.SmallFont;
+        _lblCount.Anchor = AnchorStyles.Left;
+
+        var btnClose = new Button { Text = "Close" };
+        btnClose.Click += (_, _) => Close();
+
+        var footer = new SplitBar(
+            new ButtonBar().With(_lblCount),
+            new ButtonBar(alignRight: true).With(btnClose));
+
+        var page = new FillPage();
+        page.Add(_lblReport, gapBelow: UiLayout.RowGap);
+        page.Add(_chkHeld, gapBelow: UiLayout.RowGap);
+        page.AddFill(_list, _ => UiLayout.AtTextSize(260), gapBelow: UiLayout.RowGap);
+        page.Add(footer, gapBelow: 0);
+
+        Controls.Add(page);
+
+        CancelButton = btnClose;
+
+        AppTheme.ApplyRecursively(this);
+
+        // After the theme pass, which would give the list the surface colour
+        // and leave the cards nothing to stand out from.
+        _list.BackColor = AppTheme.Background;
+
+        Fill(force: true);
+
+        _tick.Interval = (int)CheckEvery.TotalMilliseconds;
+        _tick.Tick += (_, _) => Fill(force: false);
+        _tick.Start();
+
+        // Stopped before the window goes, so a tick cannot land on a
+        // disposed list.
+        FormClosed += (_, _) =>
+        {
+            _tick.Stop();
+            _tick.Dispose();
+        };
+
+        DialogFit.Keep(this, page, width: 640, height: 560);
+    }
+
+    /// <summary>
+    /// Redraws the list when there is something new - a line kept, a new
+    /// race clearing it, the tick box changed, or a resize. Newest first,
+    /// and the reader's place is kept when new lines arrive above it.
+    /// </summary>
+    private void Fill(bool force)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        _lblReport.Text = _load.Report();
+
+        var version = _load.LinesVersion;
+        var withHeld = _chkHeld.Checked;
+
+        if (!force && version == _drawnVersion && withHeld == _drawnWithHeld)
+        {
+            return;
+        }
+
+        var lines = _load.Lines
+            .Where(line => withHeld || line.Kind == UnsaidKind.Lost)
+            .Reverse()
+            .ToList();
+
+        var oldCount = _list.Items.Count;
+        var top = _list.Items.Count > 0 ? _list.TopIndex : 0;
+
+        _list.BeginUpdate();
+
+        try
+        {
+            _list.Items.Clear();
+
+            foreach (var line in lines)
+            {
+                _list.Items.Add(line);
+            }
+
+            // Reading further down when new lines came in at the top: stay
+            // on the same card rather than being thrown back up.
+            if (top > 0 && !force && lines.Count > oldCount)
+            {
+                _list.TopIndex = Math.Min(lines.Count - 1, top + (lines.Count - oldCount));
+            }
+            else if (top > 0 && top < lines.Count)
+            {
+                _list.TopIndex = top;
+            }
+        }
+        finally
+        {
+            _list.EndUpdate();
+        }
+
+        _drawnVersion = version;
+        _drawnWithHeld = withHeld;
+
+        var lost = lines.Count(line => line.Kind == UnsaidKind.Lost);
+        var held = lines.Count - lost;
+
+        _lblCount.Text = withHeld
+            ? $"{lost} lost, {held} held"
+            : $"{lost} lost";
+
+        if (_load.Lines.Count >= AnnouncerLoad.MostKept)
+        {
+            _lblCount.Text += $" (the last {AnnouncerLoad.MostKept} kept)";
+        }
+    }
+
+    private int TextWidth() =>
+        Math.Max(80, _list.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - Pad * 2 - 2);
+
+    private const TextFormatFlags Wrap = TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl | TextFormatFlags.NoPrefix;
+
+    private void MeasureCard(object? sender, MeasureItemEventArgs e)
+    {
+        if (e.Index < 0 || e.Index >= _list.Items.Count || _list.Items[e.Index] is not UnsaidLine line)
+        {
+            return;
+        }
+
+        var width = TextWidth();
+
+        var head = AppTheme.SmallFont.Height;
+        var words = TextRenderer.MeasureText(e.Graphics, WordsOf(line), AppTheme.BodyFont, new Size(width, int.MaxValue), Wrap).Height;
+        var why = TextRenderer.MeasureText(e.Graphics, line.Why, AppTheme.SmallFont, new Size(width, int.MaxValue), Wrap).Height;
+
+        e.ItemHeight = Math.Min(TallestRow, Pad + head + 4 + words + 4 + why + Pad + CardGap);
+        e.ItemWidth = _list.ClientSize.Width;
+    }
+
+    private void DrawCard(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0 || e.Index >= _list.Items.Count || _list.Items[e.Index] is not UnsaidLine line)
+        {
+            return;
+        }
+
+        var g = e.Graphics;
+        var bounds = e.Bounds;
+
+        using (var back = new SolidBrush(_list.BackColor))
+        {
+            g.FillRectangle(back, bounds);
+        }
+
+        var card = new Rectangle(bounds.X, bounds.Y, bounds.Width - SystemInformation.VerticalScrollBarWidth, bounds.Height - CardGap);
+
+        using (var surface = new SolidBrush(AppTheme.Surface))
+        {
+            g.FillRectangle(surface, card);
+        }
+
+        var lost = line.Kind == UnsaidKind.Lost;
+
+        // A bar down the left edge in the warning colour for a lost line,
+        // so a scroll down the list shows where the trouble is.
+        using (var edge = new SolidBrush(lost ? AppTheme.Danger : AppTheme.Border))
+        {
+            g.FillRectangle(edge, card.X, card.Y, 3, card.Height);
+        }
+
+        using (var border = new Pen(AppTheme.Border))
+        {
+            g.DrawRectangle(border, card.X, card.Y, card.Width - 1, card.Height - 1);
+        }
+
+        var x = card.X + Pad;
+        var y = card.Y + Pad;
+        var width = TextWidth();
+
+        // The top line: the badge, then when, what and who.
+        var badge = lost ? "LOST" : "HELD";
+        var badgeSize = TextRenderer.MeasureText(g, badge, AppTheme.BoldFont, Size.Empty, TextFormatFlags.NoPadding);
+
+        TextRenderer.DrawText(g, badge, AppTheme.BoldFont, new Point(x, y), lost ? AppTheme.Danger : AppTheme.TextMuted, TextFormatFlags.NoPadding);
+
+        var head = $"{line.AtUtc.ToLocalTime():h:mm:ss tt}  ·  {line.Call}" + (line.Driver is { Length: > 0 } driver ? $"  ·  {driver}" : string.Empty);
+
+        TextRenderer.DrawText(g, head, AppTheme.SmallFont,
+            new Rectangle(x + badgeSize.Width + 10, y, width - badgeSize.Width - 10, AppTheme.SmallFont.Height),
+            AppTheme.TextMuted, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter);
+
+        y += Math.Max(AppTheme.SmallFont.Height, badgeSize.Height) + 4;
+
+        // What it would have said.
+        var words = WordsOf(line);
+        var wordsHeight = TextRenderer.MeasureText(g, words, AppTheme.BodyFont, new Size(width, int.MaxValue), Wrap).Height;
+
+        TextRenderer.DrawText(g, words, AppTheme.BodyFont, new Rectangle(x, y, width, wordsHeight),
+            line.Words is null ? AppTheme.TextMuted : AppTheme.TextDark, Wrap);
+
+        y += wordsHeight + 4;
+
+        // Why it went.
+        TextRenderer.DrawText(g, line.Why, AppTheme.SmallFont, new Rectangle(x, y, width, card.Bottom - y - Pad / 2),
+            AppTheme.TextMuted, Wrap | TextFormatFlags.EndEllipsis);
+    }
+
+    private static string WordsOf(UnsaidLine line) =>
+        line.Words is { Length: > 0 } words ? $"“{words}”" : "(the words weren't written yet when it was turned away)";
+}

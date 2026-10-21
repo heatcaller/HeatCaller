@@ -44,7 +44,7 @@ public enum SponsoredMoment
 ///
 /// A paid read (SponsorReads) is the sponsor's own copy, read in a gap the
 /// broadcast makes for it. A sponsored moment is the opposite: the race
-/// makes the moment and the sponsor's name rides on it, three words long.
+/// makes the moment and the sponsor's name rides on it, one sentence long.
 /// That is what makes it sellable at a club - it costs the night no airtime
 /// - and also why it has to be rationed: a fastest lap can fall six times in
 /// the first three minutes of a race, and "presented by" six times is the
@@ -149,16 +149,301 @@ internal static class SponsoredMoments
     }
 
     /// <summary>
-    /// The words added to a call: " Presented by Joe's Hobby Shop." The name
-    /// is said as the club wrote it on the Sponsors page - "Name, as it's
-    /// said" - and trimmed of a full stop of its own, so "Smith and Co."
-    /// does not end the line twice.
+    /// The delivery the sponsor's credit is performed with, by a voice that
+    /// can perform one (ElevenLabs v3, the HeatCaller voice). Every other
+    /// voice has it taken out before it speaks (VoiceProfile.SanitiseForModel,
+    /// Kokoro), and the screens never show it (RaiseAnnouncementText).
     /// </summary>
-    public static string Tag(string sponsorName)
-    {
-        var name = (sponsorName ?? string.Empty).Trim().TrimEnd('.', '!', ' ');
+    internal const string CreditDelivery = "[cheerful]";
 
-        return name.Length == 0 ? string.Empty : $" Presented by {name}.";
+    // A few ways to say each credit, dealt in turn by TemplateBag so the
+    // same one is not heard twice running. Every one is a whole sentence
+    // about the moment it follows, with {sponsor} in it once.
+    private static readonly string[] FastestLapCredits =
+    {
+        "That fastest lap is brought to you by {sponsor}!",
+        "And that fastest lap comes to you courtesy of {sponsor}!",
+        "The fastest lap of the race is presented by {sponsor}!",
+    };
+
+    private static readonly string[] LeadChangeCredits =
+    {
+        "That lead change is brought to you by {sponsor}!",
+        "And that change at the front comes to you courtesy of {sponsor}!",
+        "Lead changes tonight are presented by {sponsor}!",
+    };
+
+    private static readonly string[] BattleCredits =
+    {
+        "This battle is brought to you by {sponsor}!",
+        "And this fight comes to you courtesy of {sponsor}!",
+        "Tonight's battles are presented by {sponsor}!",
+    };
+
+    private static readonly string[] DriverIntroCredits =
+    {
+        "Your driver introductions tonight are brought to you by {sponsor}!",
+        "The driver introductions are presented by {sponsor}!",
+    };
+
+    private static readonly string[] QualifyingRecapCredits =
+    {
+        "This qualifying recap is brought to you by {sponsor}!",
+        "Your qualifying recap comes to you courtesy of {sponsor}!",
+    };
+
+    private static readonly string[] RunThroughCredits =
+    {
+        "That running order is brought to you by {sponsor}.",
+        "Your running order comes to you courtesy of {sponsor}.",
+        "The running order is presented by {sponsor}.",
+    };
+
+    private static readonly string[] MilestoneCredits =
+    {
+        "That milestone is brought to you by {sponsor}!",
+        "And that achievement comes to you courtesy of {sponsor}!",
+        "Milestones tonight are presented by {sponsor}!",
+    };
+
+    private static readonly string[] RaceResultCredits =
+    {
+        "That result is brought to you by {sponsor}!",
+        "And the race result comes to you courtesy of {sponsor}!",
+        "Tonight's results are presented by {sponsor}!",
+    };
+
+    private static readonly string[] OtherCredits =
+    {
+        "That's brought to you by {sponsor}!",
+    };
+
+    /// <summary>The ways the credit for <paramref name="moment"/> can be said, each with {sponsor} in it once.</summary>
+    internal static IReadOnlyList<string> CreditLines(SponsoredMoment moment) => moment switch
+    {
+        SponsoredMoment.FastestLap => FastestLapCredits,
+        SponsoredMoment.LeadChange => LeadChangeCredits,
+        SponsoredMoment.Battle => BattleCredits,
+        SponsoredMoment.DriverIntros => DriverIntroCredits,
+        SponsoredMoment.QualifyingRecap => QualifyingRecapCredits,
+        SponsoredMoment.RunThrough => RunThroughCredits,
+        SponsoredMoment.Milestones => MilestoneCredits,
+        SponsoredMoment.RaceResult => RaceResultCredits,
+        _ => OtherCredits,
+    };
+
+    /// <summary>
+    /// The name as it is said: as the club wrote it on the Sponsors page -
+    /// "Name, as it's said" - trimmed of a full stop or exclamation mark of
+    /// its own, so "Smith and Co." does not end the line twice.
+    /// </summary>
+    private static string SaidName(string? sponsorName) =>
+        (sponsorName ?? string.Empty).Trim().TrimEnd('.', '!', ' ');
+
+    /// <summary>
+    /// The sponsor's credit for a call they present, ready to go on the end
+    /// of it: " [cheerful] That fastest lap is brought to you by Joe's Hobby
+    /// Shop!" Empty for a blank name.
+    ///
+    /// WHY A WHOLE SENTENCE (21 Oct 2026). It used to be " Presented by
+    /// Joe's Hobby Shop." on the end of every call - three words with no
+    /// subject and a full stop, straight after a line the voice had just
+    /// shouted. A voice reads a fragment like that the way it reads a
+    /// caption: flat, clipped and robotic, and that is exactly how the
+    /// sponsored segments sounded on the night. A broadcaster's credit is a
+    /// sentence about the moment it follows, said brightly - so each moment
+    /// has a few of them, dealt in turn, each with its own delivery.
+    /// </summary>
+    public static string Tag(SponsoredMoment moment, string sponsorName)
+    {
+        var name = SaidName(sponsorName);
+
+        if (name.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var line = TemplateBag.Pick(CreditLines(moment)).Replace("{sponsor}", name, StringComparison.Ordinal);
+
+        return $" {CreditDelivery} {line}";
+    }
+
+    /// <summary>
+    /// <paramref name="call"/> with the sponsor's <paramref name="credit"/>
+    /// on the end. A club's own line with no ending of its own - "Sam sets
+    /// the fastest lap" - is closed with a full stop first, so the credit is
+    /// a sentence of its own rather than running on from the call's last
+    /// word. Just the call, trimmed, when there is no credit.
+    /// </summary>
+    public static string WithCredit(string call, string credit)
+    {
+        var line = (call ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(credit))
+        {
+            return line;
+        }
+
+        if (line.Length == 0)
+        {
+            return credit.Trim();
+        }
+
+        if (char.IsLetterOrDigit(line[^1]))
+        {
+            line += ".";
+        }
+
+        return (line + " " + credit.TrimStart()).Trim();
+    }
+
+    // THE CREDIT AT THE TOP (21 Oct 2026). On the recap show a sponsor is
+    // credited before the segment they present, the way a TV broadcast does
+    // it - "This race recap is brought to you by..." and then the recap -
+    // rather than tacked on at the end, which is where the model had been
+    // putting it. These look forward to what is coming, where the credits above
+    // look back at what was just said ("That result..."). Dealt in turn by
+    // TemplateBag like the others.
+    private static readonly string[] RaceResultLeadIns =
+    {
+        "This race recap is brought to you by {sponsor}!",
+        "Your race recap comes to you courtesy of {sponsor}!",
+        "The race recap is presented by {sponsor}!",
+    };
+
+    private static readonly string[] MilestoneLeadIns =
+    {
+        "This look at tonight's milestones is brought to you by {sponsor}!",
+        "Tonight's milestones come to you courtesy of {sponsor}!",
+        "Milestones tonight are presented by {sponsor}!",
+    };
+
+    private static readonly string[] QualifyingRecapLeadIns =
+    {
+        "This qualifying recap is brought to you by {sponsor}!",
+        "Your qualifying recap comes to you courtesy of {sponsor}!",
+    };
+
+    private static readonly string[] FastestLapLeadIns =
+    {
+        "This look at the pace is brought to you by {sponsor}!",
+        "Tonight's fastest laps are presented by {sponsor}!",
+    };
+
+    private static readonly string[] BattleLeadIns =
+    {
+        "This look at the battles is brought to you by {sponsor}!",
+        "Tonight's battles are presented by {sponsor}!",
+    };
+
+    private static readonly string[] RunThroughLeadIns =
+    {
+        "This running order is brought to you by {sponsor}.",
+        "Your running order comes to you courtesy of {sponsor}.",
+        "The running order is presented by {sponsor}.",
+    };
+
+    private static readonly string[] OtherLeadIns =
+    {
+        "This part of the show is brought to you by {sponsor}!",
+        "This segment is presented by {sponsor}!",
+    };
+
+    /// <summary>
+    /// The ways a credit at the TOP of a segment can be said, looking
+    /// forward to it, each with {sponsor} in it once. A null moment - a
+    /// segment no moment covers - gets ones that fit anything.
+    /// </summary>
+    internal static IReadOnlyList<string> LeadInLines(SponsoredMoment? moment) => moment switch
+    {
+        SponsoredMoment.RaceResult => RaceResultLeadIns,
+        SponsoredMoment.Milestones => MilestoneLeadIns,
+        SponsoredMoment.QualifyingRecap => QualifyingRecapLeadIns,
+        SponsoredMoment.DriverIntros => DriverIntroCredits,
+        SponsoredMoment.FastestLap => FastestLapLeadIns,
+        SponsoredMoment.Battle => BattleLeadIns,
+        SponsoredMoment.RunThrough => RunThroughLeadIns,
+        _ => OtherLeadIns,
+    };
+
+    /// <summary>
+    /// The sponsor's credit for the top of a segment on the recap show -
+    /// "This race recap is brought to you by Joe's Hobby Shop!" - with no
+    /// delivery tag: written segments are tagged sentence by sentence at
+    /// speaking time (CommentaryService.Tagged), and this is one of their
+    /// sentences. Empty for a blank name.
+    /// </summary>
+    public static string LeadIn(SponsoredMoment? moment, string sponsorName)
+    {
+        var name = SaidName(sponsorName);
+
+        return name.Length == 0
+            ? string.Empty
+            : TemplateBag.Pick(LeadInLines(moment)).Replace("{sponsor}", name, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <paramref name="written"/> with <paramref name="leadIn"/> in front of
+    /// it. Nothing written stays nothing - a credit with no segment after it
+    /// is not a segment - and a blank credit leaves the words as they were.
+    /// </summary>
+    public static string? WithLeadIn(string leadIn, string? written)
+    {
+        if (string.IsNullOrWhiteSpace(written))
+        {
+            return written;
+        }
+
+        return string.IsNullOrWhiteSpace(leadIn)
+            ? written
+            : leadIn.Trim() + " " + written.TrimStart();
+    }
+
+    /// <summary>
+    /// A two-hander with the credit at its top, in the lead voice: on the
+    /// front of the host's opening turn, or as a turn of its own in front of
+    /// the co-host when the model gave her the first word - the co-host
+    /// never reads the credit. Unchanged for a blank credit or no turns.
+    /// </summary>
+    public static IReadOnlyList<ExchangeTurn> WithLeadIn(string leadIn, IReadOnlyList<ExchangeTurn> turns)
+    {
+        if (string.IsNullOrWhiteSpace(leadIn) || turns.Count == 0)
+        {
+            return turns;
+        }
+
+        var credited = turns.ToList();
+
+        if (credited[0].FromCoHost)
+        {
+            credited.Insert(0, new ExchangeTurn(false, leadIn.Trim()));
+        }
+        else
+        {
+            credited[0] = credited[0] with { Line = WithLeadIn(leadIn, credited[0].Line) ?? credited[0].Line };
+        }
+
+        return credited;
+    }
+
+    /// <summary>
+    /// Two ways the credit for <paramref name="moment"/> could go, written
+    /// out with the name for the AI commentary to model its own on:
+    /// "\"Your driver introductions tonight are brought to you by Joe's
+    /// Hobby Shop!\" or \"The driver introductions are presented by Joe's
+    /// Hobby Shop!\"". Always the first two, so the prompt stays the same
+    /// from one race to the next; the model varies the words itself. A
+    /// null moment - a segment no moment covers - gets a credit that fits
+    /// anything.
+    /// </summary>
+    public static string CreditExamples(SponsoredMoment? moment, string sponsorName)
+    {
+        var name = SaidName(sponsorName);
+        var lines = (moment is { } known ? CreditLines(known) : OtherCredits)
+            .Take(2)
+            .Select(line => "\"" + line.Replace("{sponsor}", name, StringComparison.Ordinal) + "\"");
+
+        return string.Join(" or ", lines);
     }
 }
 

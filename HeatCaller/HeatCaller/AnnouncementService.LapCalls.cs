@@ -492,7 +492,7 @@ public sealed partial class AnnouncementService
 
         // The run-through, when a sponsor presents it.
         var (sponsorTag, countMention, releaseMention) = SponsorTag(AnnouncementEventType.PositionReport);
-        text = (text + sponsorTag).Trim();
+        text = SponsoredMoments.WithCredit(text, sponsorTag);
 
         // The text goes up only if the report is accepted - see
         // EnqueueVoiceWork. A report turned down (or kept and then lost)
@@ -1246,7 +1246,7 @@ public sealed partial class AnnouncementService
             // A battle a sponsor presents carries their name - decided here,
             // as the line is queued, so the ration is the queue's to spend.
             var (sponsorTag, countMention, releaseMention) = SponsorTag(type);
-            var said = (text + sponsorTag).Trim();
+            var said = SponsoredMoments.WithCredit(text, sponsorTag);
 
             // Never said, so it doesn't use the pair up - unless a reset
             // has already wiped the slate, when there is nothing to undo.

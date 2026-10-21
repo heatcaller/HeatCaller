@@ -5,7 +5,8 @@ namespace HeatCaller;
 /// hands the rest of the broadcast besides its voice.
 ///
 /// SPONSORED SEGMENTS: a sponsor ticked on the Sponsors page for a moment
-/// (SponsoredMoments) has " Presented by ..." added to that moment's call,
+/// (SponsoredMoments) has their credit - "That fastest lap is brought to
+/// you by ..." - added to that moment's call,
 /// rationed by <see cref="SponsorMentions"/> and counted for the sponsor
 /// report once the line is actually on its way to the speaker.
 ///
@@ -72,7 +73,10 @@ public sealed partial class AnnouncementService
             return new SponsorTagResult(string.Empty, null, null);
         }
 
-        var tag = SponsoredMoments.Tag(sponsor.Name);
+        // A whole sentence about the moment, said brightly (21 Oct 2026) -
+        // see SponsoredMoments.Tag for why the old " Presented by X." sounded
+        // robotic.
+        var tag = SponsoredMoments.Tag(moment, sponsor.Name);
 
         if (tag.Length == 0)
         {

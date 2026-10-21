@@ -90,9 +90,73 @@ internal sealed class AnnouncerLoad
 
     internal void NoteAccepted() => Interlocked.Increment(ref _accepted);
 
-    internal void NoteHeld() => Interlocked.Increment(ref _held);
+    internal void NoteHeld(UnsaidLine? line = null)
+    {
+        Interlocked.Increment(ref _held);
+        Keep(line);
+    }
 
-    internal void NoteDropped() => Interlocked.Increment(ref _dropped);
+    internal void NoteDropped(UnsaidLine? line = null)
+    {
+        Interlocked.Increment(ref _dropped);
+        Keep(line);
+    }
+
+    // ------------------------------------------------------------------
+    //  Each line, not only the count (20 Oct 2026)
+    // ------------------------------------------------------------------
+    //
+    // ASKED FOR: click the lost count on Race Control and see every line
+    // that wasn't said, stacked up, with what it was and why it went. A
+    // number says the announcer is running out of room; the list says
+    // which calls it is losing and to what - "a lap time, lost behind the
+    // race recap" is something a club can act on, and "17 lost" is not.
+    //
+    // Kept alongside the counters rather than instead of them, so the
+    // arithmetic above is untouched: a line with no detail (a caller that
+    // passes none) still counts, it just isn't listed.
+
+    /// <summary>The most lines one race keeps - a long night of a busy dial is a few hundred at most, and the window only needs the shape of it.</summary>
+    internal const int MostKept = 300;
+
+    private readonly object _linesGate = new();
+    private readonly List<UnsaidLine> _lines = new();
+    private int _linesVersion;
+
+    /// <summary>Every line not said this race that came with its details, oldest first.</summary>
+    internal IReadOnlyList<UnsaidLine> Lines
+    {
+        get
+        {
+            lock (_linesGate)
+            {
+                return _lines.ToArray();
+            }
+        }
+    }
+
+    /// <summary>Bumped on every line kept and on every reset, so a window can tell cheaply whether to redraw.</summary>
+    internal int LinesVersion => Volatile.Read(ref _linesVersion);
+
+    private void Keep(UnsaidLine? line)
+    {
+        if (line is null)
+        {
+            return;
+        }
+
+        lock (_linesGate)
+        {
+            _lines.Add(line);
+
+            if (_lines.Count > MostKept)
+            {
+                _lines.RemoveAt(0);
+            }
+
+            _linesVersion++;
+        }
+    }
 
     /// <summary>
     /// Whether the parts sum to the whole - see the arithmetic note on the
@@ -109,6 +173,12 @@ internal sealed class AnnouncerLoad
         Interlocked.Exchange(ref _accepted, 0);
         Interlocked.Exchange(ref _held, 0);
         Interlocked.Exchange(ref _dropped, 0);
+
+        lock (_linesGate)
+        {
+            _lines.Clear();
+            _linesVersion++;
+        }
     }
 
     /// <summary>
@@ -203,3 +273,25 @@ internal sealed class AnnouncerLoad
         return said;
     }
 }
+
+/// <summary>Whether a line went unsaid on purpose (the pacing dial) or was lost.</summary>
+internal enum UnsaidKind
+{
+    /// <summary>Lost: something else was being said, or the moment passed.</summary>
+    Lost,
+
+    /// <summary>Held back on purpose by the pacing dial, to leave a gap.</summary>
+    Held,
+}
+
+/// <summary>
+/// One timing call that was not said - what Race Control's lost-lines window
+/// lists (20 Oct 2026).
+/// </summary>
+/// <param name="AtUtc">When it was turned away.</param>
+/// <param name="Kind">Lost or held.</param>
+/// <param name="Call">The kind of call, as the Voice page names it - "Lap time", "Fast lap".</param>
+/// <param name="Driver">Who it was about, or null for a call about nobody in particular.</param>
+/// <param name="Words">What it would have said, delivery tags taken off, or null when the words weren't kept.</param>
+/// <param name="Why">Why it went, in a sentence.</param>
+internal sealed record UnsaidLine(DateTime AtUtc, UnsaidKind Kind, string Call, string? Driver, string? Words, string Why);

@@ -1202,6 +1202,7 @@ public sealed partial class RaceControlControl
         _announcerStrip.SkipWanted += SkipWhatIsOnAir;
         _announcerStrip.NotesWanted += ShowTonightsClubNotes;
         _announcerStrip.VotesWanted += ShowTonightsRoomVote;
+        _announcerStrip.LoadWanted += ShowUnsaidLines;
 
         _page.Add(_announcerStrip, stretch: false, gapBelow: UiLayout.RowGap);
         _page.Add(_unknownBanner, gapBelow: UiLayout.RowGap);

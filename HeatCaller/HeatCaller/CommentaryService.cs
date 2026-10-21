@@ -1382,7 +1382,7 @@ public sealed class CommentaryService
         var sponsor = Field(presentedBy?.Trim().TrimEnd('.', '!', ' '), MaxShowNameChars);
         var recap = Field(qualifying, 400);
 
-        var extraWords = 14 * grid.Count + (recap.Length > 0 ? 35 : 0) + (sponsor.Length > 0 ? 8 : 0);
+        var extraWords = 14 * grid.Count + (recap.Length > 0 ? 35 : 0) + (sponsor.Length > 0 ? 12 : 0);
 
         var facts =
             FactsOpen + "\n" +
@@ -1403,7 +1403,8 @@ public sealed class CommentaryService
             + (hasGrid
                 ? " Say each driver's grid position ONCE - \"on pole\", \"alongside\", \"rounds out the top three\" or "
                   + "\"at the back\" already says where they start, so never add \"starting from third\" or \"the top spot on "
-                  + "the grid\" after it. Do not number every driver in turn either: vary how the position is put."
+                  + "the grid\" after it. Do not number every driver in turn either: vary how the position is put. "
+                  + "Never give a row number - the grid is two by two, so first and second share the front row."
                 : " There is no grid for this race, so do not give anybody a position or call anybody on pole.")
             + " Use each driver's racing number, home and form only where they are listed, exactly as written, and only "
             + "for that driver. Never give a driver a number, a town, a result, a nickname or a record that is not listed "
@@ -1419,10 +1420,19 @@ public sealed class CommentaryService
                   + "or added to. Do not open with a sentence listing the qualifiers: every driver is named once, in their "
                   + "own introduction. The grid IS the qualifying order, so a qualifying place is the grid position - not a "
                   + "second fact to say. Each gap is said once: the pole-sitter's margin over second is not said again as "
-                  + "second place's deficit."
+                  + "second place's deficit. A most-laps result is a number of laps IN a time (\"thirty-four laps in five "
+                  + "minutes\") - never call the laps a time."
                 : string.Empty)
             + (sponsor.Length > 0
-                ? $" Begin with the words \"Driver introductions, presented by {sponsor}\", then go into them."
+                // A WHOLE SENTENCE, NOT A LABEL (21 Oct 2026). Told to begin
+                // with the exact words "Driver introductions, presented by
+                // X", the model did - and a voice reads a fragment like that
+                // flat and robotic. It now gets two sentences to model its
+                // own on (SponsoredMoments.CreditExamples).
+                ? " Open with one short, upbeat sentence saying who brings the driver introductions to you - a whole "
+                  + "sentence, the way a TV broadcaster says it, such as "
+                  + SponsoredMoments.CreditExamples(SponsoredMoment.DriverIntros, sponsor)
+                  + ", never a bare label - with that name exactly as written, then go into them."
                 : string.Empty);
 
         var answer = await Client.GenerateAsync(
@@ -2849,7 +2859,6 @@ public sealed class CommentaryService
             (ratingLines.Count > 0
                 ? $"Driver rating for this race, out of 150 (finish, laps led, pace, fastest lap, distance and places gained): {string.Join(", ", ratingLines)}\n"
                 : string.Empty) +
-            (resultSponsor.Length > 0 ? $"The race result is presented by: {resultSponsor}\n" : string.Empty) +
             FactsClose + "\n" +
             // Deliberately NOT "write one sentence" - that was hardcoded
             // here as well as in the system prompt, so it capped the
@@ -2955,8 +2964,13 @@ public sealed class CommentaryService
                   + "with the number exactly as written. Do not explain how it is worked out and do not rate anybody "
                   + "who is not listed."
                 : string.Empty)
+            // THE SPONSOR GOES AT THE TOP (21 Oct 2026), so the model is not
+            // handed one at all: left to place the credit itself it put it
+            // at the end, and on the recap show a sponsor is credited before
+            // the segment, not after it. HeatCaller puts the credit in front
+            // of what comes back - see CreditFirstAsync below.
             + (resultSponsor.Length > 0
-                ? $" Say once that the result is presented by {resultSponsor}, that name exactly as written."
+                ? " Do not mention any sponsor - the recap's sponsor is credited just before your words."
                 : string.Empty)
             + (opening
                 ? showName.Length > 0
@@ -2987,10 +3001,83 @@ public sealed class CommentaryService
                       + "any other commentator, and do not give yourself a name."
                     : string.Empty);
 
-        return await RecordAndReturn(SummaryKind, Client.GenerateAsync(
+        var writing = Client.GenerateAsync(
             BuildBroadcastSystemPrompt(extraWords), facts,
             maxTokens: MaxTokensForWordLimit(extraWords),
-            temperature: Variety, ct: ct, timeout: BetweenRacesTimeout));
+            temperature: Variety, ct: ct, timeout: BetweenRacesTimeout);
+
+        // The credit goes on BEFORE the recap is recorded, so the recap
+        // held as the last race summary - and compared by ForgetRaceSummary
+        // - is the one that is spoken, credit and all.
+        return await RecordAndReturn(SummaryKind, resultSponsor.Length > 0
+            ? CreditFirstAsync(writing, () => SponsoredMoments.LeadIn(SponsoredMoment.RaceResult, resultSponsor))
+            : writing);
+    }
+
+    /// <summary>
+    /// What <paramref name="writing"/> comes back with, with the sponsor's
+    /// credit in front of it (21 Oct 2026) - the recap show credits a
+    /// sponsor at the top of their segment. The credit is only worked out
+    /// once there are words to put it in front of; nothing written stays
+    /// nothing.
+    /// </summary>
+    private static async Task<string?> CreditFirstAsync(Task<string?> writing, Func<string?> credit)
+    {
+        var written = await writing.ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(written))
+        {
+            return written;
+        }
+
+        return SponsoredMoments.WithLeadIn(credit() ?? string.Empty, written);
+    }
+
+    /// <summary>
+    /// The sponsor's credit for the top of a written segment of this kind,
+    /// taken from the ration and counted for the report - asked only once
+    /// the segment HAS been written, so a segment that never comes back
+    /// neither uses the ration nor goes in the report. Null when nobody
+    /// presents it or the ration is holding it back.
+    /// </summary>
+    private string? TakeLeadCredit(SegmentKind kind)
+    {
+        string name;
+        Action? count = null;
+
+        try
+        {
+            if (SegmentSponsorTaken is { } takeSponsor)
+            {
+                var taken = takeSponsor(kind);
+                name = Field(taken?.Name, MaxShowNameChars);
+                count = taken?.Count;
+            }
+            else
+            {
+                name = Field(SegmentSponsor?.Invoke(kind), MaxShowNameChars);
+            }
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (name.Length == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            count?.Invoke();
+        }
+        catch
+        {
+            // The report is a courtesy; a failing count never costs the credit.
+        }
+
+        return SponsoredMoments.LeadIn(SponsoredMoments.ForSegment(kind), name);
     }
 
     /// <summary>
@@ -4182,7 +4269,13 @@ public sealed class CommentaryService
     /// reserve second (free), write third, and spend both only once a line
     /// has actually come back.
     /// </summary>
-    public async Task<string?> BuildSegmentAsync(SegmentKind kind, PackedFacts facts, CancellationToken ct = default)
+    /// <param name="creditFirst">
+    /// True for a segment on the recap show (21 Oct 2026): its sponsor is
+    /// credited at the TOP, by HeatCaller, in front of what the model
+    /// writes - the model is not told about them. False for everywhere else,
+    /// where the model ends the segment with the credit.
+    /// </param>
+    public async Task<string?> BuildSegmentAsync(SegmentKind kind, PackedFacts facts, CancellationToken ct = default, bool creditFirst = false)
     {
         if (Client is null || facts.Empty)
         {
@@ -4193,24 +4286,30 @@ public sealed class CommentaryService
         // as it is written. WHY (20 Oct 2026): through SegmentSponsorTaken
         // it is counted below, only once the model has written the line;
         // the older SegmentSponsor hook still counts as it is asked.
-        string sponsor;
+        //
+        // Not asked here for a segment whose credit goes at the top: that
+        // is taken once the words are back - see TakeLeadCredit.
+        string sponsor = string.Empty;
         (string Name, Action Count)? taken = null;
 
-        try
+        if (!creditFirst)
         {
-            if (SegmentSponsorTaken is { } takeSponsor)
+            try
             {
-                taken = takeSponsor(kind);
-                sponsor = Field(taken?.Name, MaxShowNameChars);
+                if (SegmentSponsorTaken is { } takeSponsor)
+                {
+                    taken = takeSponsor(kind);
+                    sponsor = Field(taken?.Name, MaxShowNameChars);
+                }
+                else
+                {
+                    sponsor = Field(SegmentSponsor?.Invoke(kind), MaxShowNameChars);
+                }
             }
-            else
+            catch
             {
-                sponsor = Field(SegmentSponsor?.Invoke(kind), MaxShowNameChars);
+                sponsor = string.Empty;
             }
-        }
-        catch
-        {
-            sponsor = string.Empty;
         }
 
         var body =
@@ -4219,11 +4318,22 @@ public sealed class CommentaryService
             FactsClose +
             "\n\n" + InstructionFor(kind) + HostBrief(kind)
             + (sponsor.Length > 0
-                ? $" End by saying, once, that it is presented by {sponsor} - that name exactly as written."
+                // A whole sentence crediting them, said brightly (21 Oct 2026)
+                // - "presented by X." on its own came out flat and robotic.
+                ? " End with one short, upbeat sentence crediting the sponsor, the way a TV broadcaster would - such as "
+                  + SponsoredMoments.CreditExamples(SponsoredMoments.ForSegment(kind), sponsor)
+                  + " - said once, with that name exactly as written."
                 : string.Empty);
 
-        var line = await RecordAndReturn(LabelFor(kind), Client.GenerateAsync(
-            BuildSegmentSystemPrompt(), body, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct));
+        var writing = Client.GenerateAsync(
+            BuildSegmentSystemPrompt(), body, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct);
+
+        // On the recap show the credit goes in front, before the line is
+        // recorded, so the line held (and compared by ForgetLine) is the one
+        // spoken.
+        var line = await RecordAndReturn(LabelFor(kind), creditFirst
+            ? CreditFirstAsync(writing, () => TakeLeadCredit(kind))
+            : writing);
 
         if (taken is { } t && sponsor.Length > 0 && !string.IsNullOrWhiteSpace(line))
         {
@@ -4453,7 +4563,8 @@ public sealed class CommentaryService
         string? announcer,
         string? coHost,
         int turns = 2,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool creditFirst = false)
     {
         if (Client is null || facts.Empty || !CommentaryBudget.Spec(kind).CanBeExchange)
         {
@@ -4490,6 +4601,15 @@ public sealed class CommentaryService
         if (split.Count == 0)
         {
             return Array.Empty<ExchangeTurn>();
+        }
+
+        // ON THE RECAP SHOW, THE SPONSOR AT THE TOP (21 Oct 2026), in the
+        // lead voice, as a one-voice segment there has it. Before this a
+        // two-hander carried no sponsor at all, so a club with a co-host
+        // lost the credit on every segment that went to two voices.
+        if (creditFirst && TakeLeadCredit(kind) is { } credit)
+        {
+            split = SponsoredMoments.WithLeadIn(credit, split);
         }
 
         // Recorded flat, because the Announcer screen and "repeat that"

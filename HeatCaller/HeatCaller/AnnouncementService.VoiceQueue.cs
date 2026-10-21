@@ -306,15 +306,15 @@ public sealed partial class AnnouncementService
         // PrimeFlagLineAsync), so either one's saved copy serves both.
         var speed = config.SpeedFor(profile.Speed);
 
-        // " Presented by ..." when a sponsor has this moment, rationed and
+        // The sponsor's credit when a sponsor has this moment, rationed and
         // counted by SponsorMentions. Counted in the work itself, so a line
         // the queue drops is not one the sponsor is told they got.
         var (sponsorTag, countMention, releaseMention) = SponsorTag(type);
 
         if (sponsorTag.Length > 0)
         {
-            text = (text + sponsorTag).Trim();
-            displayText = (displayText + sponsorTag).Trim();
+            text = SponsoredMoments.WithCredit(text, sponsorTag);
+            displayText = SponsoredMoments.WithCredit(displayText, sponsorTag);
         }
 
         // Screens get the numeral form; the voice engine gets the
@@ -925,7 +925,7 @@ public sealed partial class AnnouncementService
         // through here.
         if (Muted)
         {
-            NoteKeptCallLost(heldOver);
+            NoteKeptCallLost(heldOver, type, transponder, displayText, "the announcer was muted");
             return false;
         }
 
@@ -933,7 +933,7 @@ public sealed partial class AnnouncementService
         // while ghosts are not announced (AnnounceGhostsProvider).
         if (MutedGhost(transponder))
         {
-            NoteKeptCallLost(heldOver);
+            NoteKeptCallLost(heldOver, type, transponder, displayText, "ghost cars were switched off the announcer");
             return false;
         }
 
@@ -944,7 +944,7 @@ public sealed partial class AnnouncementService
         if (_postRaceQuiet && !IsAllowedAfterRaceOver(type))
         {
             StatusMessage?.Invoke($"[voice] Dropped {type} - the race is over; only the wrap-up speaks now.");
-            NoteKeptCallLost(heldOver);
+            NoteKeptCallLost(heldOver, type, transponder, displayText, "the race finished - only the wrap-up speaks after the flag");
             return false;
         }
 
@@ -977,7 +977,9 @@ public sealed partial class AnnouncementService
                 out var kept,
                 holdOver: heldOver ? null : () => EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true, lost: lost),
                 alreadyCounted: heldOver,
-                lost: lost))
+                lost: lost,
+                transponder: transponder,
+                words: displayText))
         {
             return kept;
         }

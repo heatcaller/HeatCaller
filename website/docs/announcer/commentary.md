@@ -1258,6 +1258,8 @@ It reads: a lamp, what the announcer is doing (**off / ready / writing... / held
 
 Both buttons drop focus the moment they're clicked, for the same reason the flag buttons do: a button that keeps focus keeps answering to Space and Enter, and on this row a stray keypress would put the last segment out over a live PA. Both report what they did to the console on a line starting `[show]`.
 
+**The count at the end of the row** says how many timing calls weren't said this race: "17 lost" (in the warning color) when calls were lost because the announcer was already speaking, or "6 held" when the pacing dial held them back on purpose. **Click it** to open **Lines not said this race**: every one of those calls stacked up, newest first, each card showing when it was, what kind of call it was, who it was about, the words it would have said, and why it went - lost behind another line (named), pushed out by a call that outranked it, waiting too long, cleared by a flag, or held back by the pacing dial. Lost cards have a red edge; untick **Show lines held back by the pacing dial too** to see only those. The window stays open beside Race Control and updates as the race runs, and starts empty again with each new race. It keeps the last 300.
+
 ## The gap when the voice changes hands
 
 A two-hander only works if the second voice comes in like a person, not like the next announcement. Three things decide that gap, and two of them are silence you never asked for.

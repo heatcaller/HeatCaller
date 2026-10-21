@@ -374,6 +374,31 @@ internal sealed class SponsorVideoSurface : IDisposable
     }
 
     /// <summary>
+    /// Pauses a playing video, or carries on with a paused one. Used by the
+    /// Sponsors page's preview window - the Big Screen never pauses an ad.
+    /// Returns true when the video is now paused. Called from the UI thread
+    /// only, never from inside a LibVLC event (see the note on Finished).
+    /// </summary>
+    internal bool TogglePause()
+    {
+        if (_player is null || _disposed)
+        {
+            return false;
+        }
+
+        try
+        {
+            var pausing = _player.IsPlaying;
+            _player.SetPause(pausing);
+            return pausing;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Stops whatever is playing. Safe to call when nothing is, and safe to
     /// call twice - the rotation stops the video both when it ends on its
     /// own and when the window closes under it.

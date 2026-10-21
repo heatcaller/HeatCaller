@@ -2066,6 +2066,12 @@ public sealed class CommentaryDirector
     /// </summary>
     private async Task<SpokenSegment?> WriteAsync(SegmentKind kind, SegmentSpec spec, PackedFacts pack, CancellationToken ct)
     {
+        // ON THE RECAP SHOW THE SPONSOR IS CREDITED AT THE TOP of the
+        // segment (21 Oct 2026), not at its end - see
+        // CommentaryService.BuildSegmentAsync. Read once, here, before any
+        // await: the programme's flag is only true for the length of its pass.
+        var creditFirst = _forTheProgramme;
+
         // TWO VOICES ARE SAVED FOR THE RACES THAT EARN THEM (11 Oct 2026).
         //
         // The second voice is the loudest signal this broadcast has, and
@@ -2128,7 +2134,7 @@ public sealed class CommentaryDirector
             var turns = await _commentary
                 .BuildExchangeAsync(
                     kind, pack, host, _settings.CommentaryCoHostName,
-                    _settings.CommentaryExchangeTurns, ct)
+                    _settings.CommentaryExchangeTurns, ct, creditFirst)
                 .ConfigureAwait(false);
 
             if (turns.Count > 0)
@@ -2151,7 +2157,7 @@ public sealed class CommentaryDirector
             Say($"[brain] {spec.Title} came back in one piece rather than two - saying it in one voice.");
         }
 
-        var line = await _commentary.BuildSegmentAsync(kind, pack, ct).ConfigureAwait(false);
+        var line = await _commentary.BuildSegmentAsync(kind, pack, ct, creditFirst).ConfigureAwait(false);
 
         return string.IsNullOrWhiteSpace(line)
             ? null

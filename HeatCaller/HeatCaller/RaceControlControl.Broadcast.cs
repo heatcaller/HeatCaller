@@ -231,6 +231,50 @@ public sealed partial class RaceControlControl
     /// opened before anybody has crossed the loop, and for one opened
     /// between races, when the session still holds the last race's cars.
     /// </summary>
+    /// <summary>The lost-lines window while it is open - one at a time (20 Oct 2026).</summary>
+    private UnsaidLinesForm? _unsaidLines;
+
+    /// <summary>
+    /// Opens the list of every line the announcer didn't say this race, and
+    /// why - from the lost/held count on the announcer strip (20 Oct 2026).
+    /// Not modal, so Race Control works behind it during a race; clicking
+    /// the count again brings the open one to the front.
+    /// </summary>
+    private void ShowUnsaidLines()
+    {
+        try
+        {
+            if (_unsaidLines is { IsDisposed: false } open)
+            {
+                if (open.WindowState == FormWindowState.Minimized)
+                {
+                    open.WindowState = FormWindowState.Normal;
+                }
+
+                open.Activate();
+                return;
+            }
+
+            var form = new UnsaidLinesForm(_announcer.Load);
+            form.FormClosed += (_, _) =>
+            {
+                // A window shown without ShowDialog is disposed by its own
+                // Close, so only the reference is let go here.
+                if (ReferenceEquals(_unsaidLines, form))
+                {
+                    _unsaidLines = null;
+                }
+            };
+
+            _unsaidLines = form;
+            form.Show(FindForm());
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [voice] Couldn't open the list of lines not said: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
     private void ShowTonightsRoomVote()
     {
         if (TonightsVote?.Invoke() is not { } vote)
