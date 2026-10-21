@@ -117,6 +117,13 @@ public sealed partial class RaceControlControl
                 cell.Style.SelectionForeColor = emphasisColor;
             }
 
+            // The corrections drawer goes straight under its driver, above
+            // any lap strip, so it travels with them when they change place.
+            if (string.Equals(_drawerTransponder, s.TransponderId, StringComparison.OrdinalIgnoreCase))
+            {
+                AddDrawerRow(s);
+            }
+
             if (_expandedTransponders.Contains(s.TransponderId))
             {
                 AddLapDetailRow(s);
@@ -165,6 +172,7 @@ public sealed partial class RaceControlControl
                 // that one carries the same id behind a prefix.
                 if (row.Tag is string tag
                     && !tag.StartsWith(DetailRowPrefix, StringComparison.Ordinal)
+                    && !tag.StartsWith(DrawerRowPrefix, StringComparison.Ordinal)
                     && string.Equals(tag, transponder, StringComparison.OrdinalIgnoreCase)
                     && row.Cells.Count > 0)
                 {
@@ -332,8 +340,26 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        if (_dgvLeaderboard.Rows[e.RowIndex].Tag is not string tag
-            || !tag.StartsWith(DetailRowPrefix, StringComparison.Ordinal))
+        if (_dgvLeaderboard.Rows[e.RowIndex].Tag is not string tag)
+        {
+            return;
+        }
+
+        // The drawer's cells are only its background here; its buttons are
+        // drawn across the whole row once every cell is done - see
+        // LeaderboardDrawerPaint.
+        if (tag.StartsWith(DrawerRowPrefix, StringComparison.Ordinal))
+        {
+            using (var drawerBack = new SolidBrush(AppTheme.PrimaryTint))
+            {
+                g.FillRectangle(drawerBack, e.CellBounds);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        if (!tag.StartsWith(DetailRowPrefix, StringComparison.Ordinal))
         {
             return;
         }
@@ -590,10 +616,22 @@ public sealed partial class RaceControlControl
     /// Double-click opens the driver's lap breakdown rather than the profile
     /// editor - during a race the laps are what you want, and editing a
     /// profile mid-race is the rarer job. That's on the right-click menu.
+    ///
+    /// A double-click is two clicks first, and a single click opens or
+    /// closes the corrections drawer - so the drawer is put back as it was
+    /// before the first of them. Wanting the laps does not also mean
+    /// wanting the drawer.
     /// </summary>
     private void DgvLeaderboard_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _dgvLeaderboard.Rows.Count)
+        {
+            return;
+        }
+
+        // A double-click on the drawer is two quick presses of its buttons,
+        // not a request for the laps.
+        if (IsDrawerRow(e.RowIndex))
         {
             return;
         }
@@ -605,7 +643,425 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        ShowLapPopup(transponder, e.RowIndex);
+        var drawerChanged = false;
+
+        if (string.Equals(_lastClickTransponder, transponder, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(_drawerTransponder, _drawerBeforeClick, StringComparison.OrdinalIgnoreCase))
+        {
+            _drawerTransponder = _drawerBeforeClick;
+            drawerChanged = true;
+        }
+
+        // Clicks after this one start afresh.
+        _lastClickTransponder = null;
+
+        if (!drawerChanged)
+        {
+            ShowLapPopup(transponder, e.RowIndex);
+            return;
+        }
+
+        // Rebuilt after the grid has finished with the click - clearing its
+        // rows from inside its own mouse handling is a re-entrant call it
+        // refuses - and the popup placed under the driver's row as it stands
+        // after the rebuild.
+        BeginInvoke(() =>
+        {
+            if (IsDisposed || Disposing)
+            {
+                return;
+            }
+
+            RenderLeaderboard();
+            ShowLapPopup(transponder, DriverRowIndex(transponder));
+        });
+    }
+
+    // --- The corrections drawer ---------------------------------------------
+    //
+    // CLICK TO CORRECT (21 Oct 2026). A single click on a driver opens a strip
+    // of buttons right under their row: +1 Lap, -1 Lap, +5s, +10s, Warning,
+    // Clear Penalties, and Lap breakdown at the far end. Clicking the same
+    // driver again closes it; clicking another driver moves it to them.
+    //
+    // It replaced the row of the same buttons under the board, which acted on
+    // "the selected racer" a screen away from the name - and took a row of
+    // the board's height to do it.
+    //
+    // One drawer at a time. It is a row of the grid like the lap strips, so
+    // it is rebuilt with the board on every crossing and stays under its
+    // driver when they change place. The buttons are drawn, not controls:
+    // a grid row cannot hold real ones, and controls laid over the grid
+    // would have to chase its scrolling and its rebuilds.
+
+    /// <summary>The driver whose drawer is open, or null for none. Survives the board being rebuilt.</summary>
+    private string? _drawerTransponder;
+
+    /// <summary>The drawer as it was before the last single click, so a double-click can put it back.</summary>
+    private string? _drawerBeforeClick;
+
+    /// <summary>The driver and the time of the last single click on a driver row - see DgvLeaderboard_CellMouseClick.</summary>
+    private string? _lastClickTransponder;
+    private long _lastClickTicks;
+
+    /// <summary>Which of the drawer's buttons the pointer is over, or -1.</summary>
+    private int _drawerHover = -1;
+
+    private const string DrawerRowPrefix = "drawer:";
+
+    private enum DrawerAction
+    {
+        AddLap,
+        RemoveLap,
+        Penalty5,
+        Penalty10,
+        Warning,
+        ClearPenalties,
+        LapBreakdown,
+    }
+
+    /// <summary>The drawer's buttons, left to right. Lap breakdown is drawn at the far end, apart from the rest.</summary>
+    private static readonly (DrawerAction Action, string Caption)[] DrawerButtons =
+    {
+        (DrawerAction.AddLap, "+1 Lap"),
+        (DrawerAction.RemoveLap, "−1 Lap"),
+        (DrawerAction.Penalty5, "+5s"),
+        (DrawerAction.Penalty10, "+10s"),
+        (DrawerAction.Warning, "⚠ Warning"),
+        (DrawerAction.ClearPenalties, "Clear Penalties"),
+        (DrawerAction.LapBreakdown, "Lap breakdown"),
+    };
+
+    private const int DrawerButtonGap = 8;
+    private const int DrawerPadding = 8;
+
+    /// <summary>How tall a drawer button is - the text size sets it.</summary>
+    private static int DrawerButtonHeight => Math.Max(32, AppTheme.BoldFont.Height + 14);
+
+    private void AddDrawerRow(RacerStanding standing)
+    {
+        var columns = _dgvLeaderboard.Columns.Count;
+
+        if (columns < 1)
+        {
+            return;
+        }
+
+        var index = _dgvLeaderboard.Rows.Add(new object[columns]);
+        var row = _dgvLeaderboard.Rows[index];
+
+        row.Tag = DrawerRowPrefix + standing.TransponderId;
+        row.Height = DrawerButtonHeight + DrawerPadding * 2;
+    }
+
+    private bool IsDrawerRow(int rowIndex) =>
+        rowIndex >= 0 && rowIndex < _dgvLeaderboard.Rows.Count
+        && _dgvLeaderboard.Rows[rowIndex].Tag is string tag
+        && tag.StartsWith(DrawerRowPrefix, StringComparison.Ordinal);
+
+    /// <summary>The index of a driver's own row on the board, or -1.</summary>
+    private int DriverRowIndex(string transponder)
+    {
+        for (var i = 0; i < _dgvLeaderboard.Rows.Count; i++)
+        {
+            if (_dgvLeaderboard.Rows[i].Tag is string tag
+                && string.Equals(tag, transponder, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Where each button sits in a drawer row whose bounds are given - the
+    /// one answer both the painting and the clicking use, so what is drawn
+    /// is what is hit. Lined up under the driver's name, Lap breakdown at
+    /// the far right when there is room for it there.
+    /// </summary>
+    private List<(Rectangle Bounds, DrawerAction Action, string Caption)> DrawerLayout(Rectangle row)
+    {
+        var height = DrawerButtonHeight;
+        var top = row.Top + Math.Max(0, (row.Height - height) / 2);
+
+        // In from the left by the position column, so the buttons start
+        // under the name rather than under the position number.
+        var indent = _dgvLeaderboard.Columns.Count > 1 && _dgvLeaderboard.Columns[0].Visible
+            ? Math.Min(_dgvLeaderboard.Columns[0].Width, 90)
+            : LapDetailPadding;
+
+        var x = row.Left + indent;
+        var layout = new List<(Rectangle, DrawerAction, string)>(DrawerButtons.Length);
+
+        foreach (var (action, caption) in DrawerButtons)
+        {
+            var width = TextRenderer.MeasureText(caption, AppTheme.BoldFont).Width + 28;
+
+            if (action == DrawerAction.LapBreakdown)
+            {
+                var right = row.Right - LapDetailPadding;
+
+                if (right - width >= x + DrawerButtonGap * 2)
+                {
+                    x = right - width;
+                }
+            }
+
+            layout.Add((new Rectangle(x, top, width, height), action, caption));
+            x += width + DrawerButtonGap;
+        }
+
+        return layout;
+    }
+
+    /// <summary>The row's bounds across every visible column, in the grid's coordinates.</summary>
+    private Rectangle DrawerRowBounds(int rowIndex)
+    {
+        var rect = _dgvLeaderboard.GetRowDisplayRectangle(rowIndex, cutOverflow: false);
+        var width = _dgvLeaderboard.Columns.GetColumnsWidth(DataGridViewElementStates.Visible);
+
+        return new Rectangle(rect.Left, rect.Top, Math.Min(Math.Max(width, 1), Math.Max(rect.Width, 1)), rect.Height);
+    }
+
+    /// <summary>Draws the drawer's buttons across its row, after its cells have painted the background.</summary>
+    private void LeaderboardDrawerPaint(object? sender, DataGridViewRowPostPaintEventArgs e)
+    {
+        if (!IsDrawerRow(e.RowIndex))
+        {
+            return;
+        }
+
+        var g = e.Graphics;
+        var width = _dgvLeaderboard.Columns.GetColumnsWidth(DataGridViewElementStates.Visible);
+        var row = new Rectangle(e.RowBounds.Left, e.RowBounds.Top, Math.Min(Math.Max(width, 1), e.RowBounds.Width), e.RowBounds.Height);
+
+        // An accent edge down the left and a rule along the bottom, so the
+        // drawer reads as belonging to the driver above it.
+        using (var edge = new SolidBrush(AppTheme.Accent))
+        {
+            g.FillRectangle(edge, row.Left, row.Top, 3, row.Height);
+        }
+
+        using (var rule = new Pen(AppTheme.Border))
+        {
+            g.DrawLine(rule, row.Left, row.Bottom - 1, row.Right, row.Bottom - 1);
+        }
+
+        var oldSmoothing = g.SmoothingMode;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        var buttons = DrawerLayout(row);
+
+        for (var i = 0; i < buttons.Count; i++)
+        {
+            var (bounds, action, caption) = buttons[i];
+            var hover = i == _drawerHover;
+            var danger = action == DrawerAction.ClearPenalties;
+
+            var fill = hover ? AppTheme.SecondaryButtonHover : AppTheme.SecondaryButton;
+            var border = danger ? AppTheme.Danger : AppTheme.Border;
+            var ink = danger ? AppTheme.Danger : AppTheme.TextDark;
+
+            using (var path = RoundedRect(bounds, 6))
+            {
+                using (var brush = new SolidBrush(fill))
+                {
+                    g.FillPath(brush, path);
+                }
+
+                using (var pen = new Pen(border))
+                {
+                    g.DrawPath(pen, path);
+                }
+            }
+
+            TextRenderer.DrawText(g, caption, AppTheme.BoldFont, bounds, ink,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+        }
+
+        g.SmoothingMode = oldSmoothing;
+    }
+
+    private static System.Drawing.Drawing2D.GraphicsPath RoundedRect(Rectangle r, int radius)
+    {
+        var path = new System.Drawing.Drawing2D.GraphicsPath();
+        var d = radius * 2;
+
+        path.AddArc(r.Left, r.Top, d, d, 180, 90);
+        path.AddArc(r.Right - d - 1, r.Top, d, d, 270, 90);
+        path.AddArc(r.Right - d - 1, r.Bottom - d - 1, d, d, 0, 90);
+        path.AddArc(r.Left, r.Bottom - d - 1, d, d, 90, 90);
+        path.CloseFigure();
+
+        return path;
+    }
+
+    /// <summary>Which drawer button is at a point in the grid, if any, and the row it is on.</summary>
+    private (int RowIndex, int Button) DrawerButtonAt(Point point)
+    {
+        var hit = _dgvLeaderboard.HitTest(point.X, point.Y);
+
+        if (!IsDrawerRow(hit.RowIndex))
+        {
+            return (-1, -1);
+        }
+
+        var buttons = DrawerLayout(DrawerRowBounds(hit.RowIndex));
+
+        for (var i = 0; i < buttons.Count; i++)
+        {
+            if (buttons[i].Bounds.Contains(point))
+            {
+                return (hit.RowIndex, i);
+            }
+        }
+
+        return (hit.RowIndex, -1);
+    }
+
+    private void LeaderboardDrawerHover(object? sender, MouseEventArgs e) =>
+        SetDrawerHover(DrawerButtonAt(e.Location).Button);
+
+    private void SetDrawerHover(int button)
+    {
+        _dgvLeaderboard.Cursor = button >= 0 ? Cursors.Hand : Cursors.Default;
+
+        if (button == _drawerHover)
+        {
+            return;
+        }
+
+        _drawerHover = button;
+
+        for (var i = 0; i < _dgvLeaderboard.Rows.Count; i++)
+        {
+            if (IsDrawerRow(i))
+            {
+                _dgvLeaderboard.InvalidateRow(i);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A left click on the board: on a driver, opens or closes their drawer;
+    /// on the drawer, presses the button under the pointer.
+    /// </summary>
+    private void DgvLeaderboard_CellMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left || e.RowIndex < 0 || e.RowIndex >= _dgvLeaderboard.Rows.Count)
+        {
+            return;
+        }
+
+        if (IsDrawerRow(e.RowIndex))
+        {
+            // The click's point is the cell's; the buttons are laid out
+            // across the grid.
+            var cell = _dgvLeaderboard.GetCellDisplayRectangle(Math.Max(0, e.ColumnIndex), e.RowIndex, cutOverflow: false);
+            var point = new Point(cell.Left + e.X, cell.Top + e.Y);
+            var (rowIndex, button) = DrawerButtonAt(point);
+
+            if (button < 0 || TransponderForRow(rowIndex) is not { Length: > 0 } driver)
+            {
+                return;
+            }
+
+            var bounds = DrawerLayout(DrawerRowBounds(rowIndex))[button].Bounds;
+            var action = DrawerButtons[button].Action;
+
+            // After the grid has finished with the click: a correction
+            // rebuilds the board, and the grid refuses to have its rows
+            // cleared from inside its own mouse handling.
+            BeginInvoke(() => RunDrawerAction(driver, action, bounds));
+            return;
+        }
+
+        // A lap strip is not a driver - nothing to open.
+        if (_dgvLeaderboard.Rows[e.RowIndex].Tag is not string tag
+            || tag.StartsWith(DetailRowPrefix, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var now = Environment.TickCount64;
+
+        // The second click of a double-click on the same driver: the double
+        // click is coming, and it decides what happens.
+        if (string.Equals(_lastClickTransponder, tag, StringComparison.OrdinalIgnoreCase)
+            && now - _lastClickTicks <= SystemInformation.DoubleClickTime)
+        {
+            return;
+        }
+
+        _lastClickTransponder = tag;
+        _lastClickTicks = now;
+        _drawerBeforeClick = _drawerTransponder;
+
+        _drawerTransponder = string.Equals(_drawerTransponder, tag, StringComparison.OrdinalIgnoreCase) ? null : tag;
+
+        BeginInvoke(() =>
+        {
+            if (!IsDisposed && !Disposing)
+            {
+                RenderLeaderboard();
+            }
+        });
+    }
+
+    /// <summary>
+    /// What a drawer button does - the same corrections the keys and the
+    /// right-click menu make, with the same undo, on the drawer's driver.
+    /// </summary>
+    private void RunDrawerAction(string transponder, DrawerAction action, Rectangle buttonBounds)
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        // The corrections act on the selected driver, so the drawer's driver
+        // is made the selected one - the board may have been rebuilt since
+        // the click.
+        var rowIndex = DriverRowIndex(transponder);
+
+        if (rowIndex < 0)
+        {
+            return;
+        }
+
+        _dgvLeaderboard.CurrentCell = _dgvLeaderboard.Rows[rowIndex].Cells[0];
+
+        switch (action)
+        {
+            case DrawerAction.AddLap:
+                AdjustSelected(laps: 1, penaltyMs: 0);
+                break;
+
+            case DrawerAction.RemoveLap:
+                AdjustSelected(laps: -1, penaltyMs: 0);
+                break;
+
+            case DrawerAction.Penalty5:
+                AdjustSelected(laps: 0, penaltyMs: 5000);
+                break;
+
+            case DrawerAction.Penalty10:
+                AdjustSelected(laps: 0, penaltyMs: 10000);
+                break;
+
+            case DrawerAction.ClearPenalties:
+                ClearSelectedPenalty();
+                break;
+
+            case DrawerAction.Warning:
+                ShowWarningMenu(_dgvLeaderboard, new Point(buttonBounds.Left, buttonBounds.Bottom));
+                break;
+
+            case DrawerAction.LapBreakdown:
+                ShowLapPopup(transponder, rowIndex);
+                break;
+        }
     }
 
     /// <summary>
@@ -778,6 +1234,7 @@ public sealed partial class RaceControlControl
         return _dgvLeaderboard.Rows[rowIndex].Tag switch
         {
             string tag when tag.StartsWith(DetailRowPrefix, StringComparison.Ordinal) => tag[DetailRowPrefix.Length..],
+            string tag when tag.StartsWith(DrawerRowPrefix, StringComparison.Ordinal) => tag[DrawerRowPrefix.Length..],
             string tag => tag,
             _ => null,
         };

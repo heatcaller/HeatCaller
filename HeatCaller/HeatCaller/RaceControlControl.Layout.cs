@@ -872,6 +872,9 @@ public sealed partial class RaceControlControl
             // begun when the abandoned race did.
             _sessionStartedAtUtc = null;
             _announcer.StopAllPendingAudio();
+
+            // A new race starts with no driver's corrections open.
+            _drawerTransponder = null;
             _dgvLeaderboard.Rows.Clear();
             UpdateClockDisplay(force: true);
         };
@@ -993,6 +996,15 @@ public sealed partial class RaceControlControl
         _dgvLeaderboard.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _dgvLeaderboard.CellDoubleClick += DgvLeaderboard_CellDoubleClick;
 
+        // CLICK TO CORRECT (21 Oct 2026). A single click on a driver opens
+        // their corrections in a drawer right under their row; a double
+        // click opens the lap breakdown, drawer or not. See
+        // RaceControlControl.Leaderboard.cs, the drawer.
+        _dgvLeaderboard.CellMouseClick += DgvLeaderboard_CellMouseClick;
+        _dgvLeaderboard.RowPostPaint += LeaderboardDrawerPaint;
+        _dgvLeaderboard.MouseMove += LeaderboardDrawerHover;
+        _dgvLeaderboard.MouseLeave += (_, _) => SetDrawerHover(-1);
+
         // Right-click acts on the row under the pointer, not on whatever
         // happened to be selected before - clicking a row and getting the
         // previous driver's menu is how the wrong car gets a penalty.
@@ -1015,49 +1027,16 @@ public sealed partial class RaceControlControl
         _dgvLeaderboard.ContextMenuStrip = BuildLeaderboardMenu();
         RebuildLeaderboardColumns();
 
-        // --- Manual corrections toolbar ---
+        // --- Manual corrections ---
         //
-        // Under the board, in its card: what the buttons are for, then who
-        // they act on, then the buttons, which wrap onto a second row when
-        // the board is narrow - and the board gives up exactly that row's
-        // height, no more. "Selected racer:" sits ABOVE the buttons rather
-        // than in front of the first one, so both rows of buttons start at
-        // the same left edge.
-        var lblFix = Wear(new Label { Text = "Selected racer:", AutoSize = true }, () => AppTheme.BoldFont);
-
-        var btnLapPlus = new Button { Text = "+1 Lap" };
-        btnLapPlus.Click += (_, _) => AdjustSelected(laps: 1, penaltyMs: 0);
-
-        var btnLapMinus = new Button { Text = "-1 Lap" };
-        btnLapMinus.Click += (_, _) => AdjustSelected(laps: -1, penaltyMs: 0);
-
-        var btnPenalty5 = new Button { Text = "+5s Penalty" };
-        btnPenalty5.Click += (_, _) => AdjustSelected(laps: 0, penaltyMs: 5000);
-
-        var btnPenalty10 = new Button { Text = "+10s Penalty" };
-        btnPenalty10.Click += (_, _) => AdjustSelected(laps: 0, penaltyMs: 10000);
-
-        var btnClearPenalty = new Button { Text = "Clear Penalties" };
-        btnClearPenalty.Click += (_, _) => ClearSelectedPenalty();
-
-        // Opens the reasons list under the button - see RaceControlWarnings.
-        // W does the same from the keyboard, and the tooltip below says so,
-        // as it does for every other key on this page. This was the one
-        // button carrying its key in its caption as well - "(W)" - which
-        // no other did, and which said less than the tooltip already does.
-        var btnWarning = new Button { Text = "\u26A0 Warning" };
-        btnWarning.Click += (_, _) => ShowWarningMenu(btnWarning, new Point(0, btnWarning.Height));
-
-        // The keys for the selected driver - see ShortcutCatalog.
-        var driverKeyTips = new ToolTip();
-        AppTheme.StyleToolTip(driverKeyTips, keep: true);
-        driverKeyTips.SetToolTip(btnLapPlus, "Shortcut: +");
-        driverKeyTips.SetToolTip(btnLapMinus, "Shortcut: -");
-        driverKeyTips.SetToolTip(btnPenalty5, "Shortcut: P");
-        driverKeyTips.SetToolTip(btnPenalty10, "Shortcut: Shift+P");
-        driverKeyTips.SetToolTip(btnClearPenalty, "Shortcut: C");
-        driverKeyTips.SetToolTip(btnWarning, "Shortcut: W, then 1-7 for the reason.  Shift+W takes the last one back.");
-
+        // CLICK TO CORRECT (21 Oct 2026). The row of buttons that sat under
+        // the board - +1 Lap, -1 Lap, +5s, +10s, Clear Penalties, Warning -
+        // is gone. The same corrections open in a drawer under the driver
+        // you click (see the drawer in RaceControlControl.Leaderboard.cs),
+        // so they sit beside the name they act on rather than a screen away
+        // from it, and the board gets the room the buttons took: more rows
+        // of drivers. The keys (+, -, P, Shift+P, C, W) and the right-click
+        // menu are unchanged.
         var btnColumns = new Button { Text = "Columns..." };
         btnColumns.Click += (_, _) =>
         {
@@ -1100,9 +1079,9 @@ public sealed partial class RaceControlControl
         flags.Add(new ButtonBar(tight: true).With(
             _btnOnAir, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset));
 
-        // Under the flags, beside On Air's end of the row: whether a start
-        // goes through On Air. See BuildOnAirButton.
-        flags.Add(_chkStartWithOnAir, stretch: false);
+        // Start races On Air, the format line and its button moved to the
+        // foot of the board (21 Oct 2026) - set once a night, not pressed
+        // during a race, so they gave up their place beside the flags.
 
         var status = new FlowLayoutPanel
         {
@@ -1117,9 +1096,7 @@ public sealed partial class RaceControlControl
         status.Controls.Add(StatusPair(lblStateCaption, _lblRaceState));
         status.Controls.Add(StatusPair(lblFlagCaption, _lblFlag));
 
-        flags.Add(status);
-        flags.Add(_lblFormat);
-        flags.Add(new ButtonBar().With(_btnFormat));
+        flags.Add(status, gapBelow: 0);
 
         // The board's instructions used to be its group box's caption, all
         // hundred-odd characters of it; a card's caption is a heading, and
@@ -1127,23 +1104,33 @@ public sealed partial class RaceControlControl
         var board = new Section("Leaderboard");
 
         board.Add(
-            Hint("Double-click a driver for their lap breakdown. Right-click for names, penalties and corrections."),
+            Hint("Click a driver for laps, penalties and warnings. Double-click for their lap breakdown. "
+                 + "Right-click for names and everything else. Press ? for keyboard shortcuts."),
             gapBelow: UiLayout.HintGap);
 
         board.AddFill(_dgvLeaderboard, LeastBoardHeight);
 
-        board.Add(
-            Hint("For missed or double-counted passes, on-track penalties and warnings. Press ? for keyboard shortcuts."),
-            gapBelow: UiLayout.HintGap);
+        // The foot of the board: the things set once a night rather than
+        // pressed during a race - whether a start goes through On Air, the
+        // race format in force, and which columns the board shows.
+        board.Add(_lblFormat, gapBelow: UiLayout.HintGap);
 
-        board.Add(lblFix, stretch: false, gapBelow: UiLayout.HintGap);
+        var footer = new ButtonBar().With(_chkStartWithOnAir, _btnFormat, btnColumns);
 
-        // One width for all of them - the widest caption sets it - so the
-        // two rows read as columns instead of ragging out to the length of
-        // each caption.
-        board.Add(
-            new ButtonBar(sameWidth: true).With(btnLapPlus, btnLapMinus, btnPenalty5, btnPenalty10, btnClearPenalty, btnWarning, btnColumns),
-            gapBelow: 0);
+        // The tick box is shorter than the buttons beside it; the bar lines
+        // everything up along the top, so it is brought down to their middle.
+        footer.Layout += (_, _) =>
+        {
+            var drop = Math.Max(0, (_btnFormat.Height - _chkStartWithOnAir.Height) / 2);
+            var margin = _chkStartWithOnAir.Margin;
+
+            if (margin.Top != drop)
+            {
+                _chkStartWithOnAir.Margin = new Padding(margin.Left, drop, margin.Right, margin.Bottom);
+            }
+        };
+
+        board.Add(footer, gapBelow: 0);
 
         var body = new Beside(sideLeastWidth: ClockWidth);
 
