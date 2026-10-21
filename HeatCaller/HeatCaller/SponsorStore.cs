@@ -731,7 +731,14 @@ public sealed class SponsorSettings
 
     /// <summary>
     /// Whether a paid read goes out in the gap between races, where the
-    /// commentary segments live. On by default, for the reason above.
+    /// commentary segments live, as well as in the commercial break.
+    ///
+    /// OFF BY DEFAULT (21 Oct 2026). A read heard straight after a race,
+    /// with no break around it, sounded like the announcer had wandered into
+    /// an advert - the commercial break is where a club expects its sponsors
+    /// to be heard. Ticked, the reads also rotate through the gaps between
+    /// races. A club that already chose is not changed: the saved choice
+    /// stands.
     /// </summary>
-    public bool ReadDuringSegments { get; set; } = true;
+    public bool ReadDuringSegments { get; set; }
 }

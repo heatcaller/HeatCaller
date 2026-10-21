@@ -112,6 +112,381 @@ public sealed partial class RaceControlControl
         tip.SetToolTip(_chkStartWithOnAir,
             "Ticked, Start Next, the program's Start, F1, the phone and the day schedule all go through On Air first. "
             + "Unticked, they stage straight away. The Stage button always stages straight away.");
+
+        // The progress fill and countdown while the opening is got ready.
+        _onAirProgressTimer.Interval = 150;
+        _onAirProgressTimer.Tick += (_, _) => PaintOnAirProgress();
+
+        // The next opening voiced ahead, between races. See VoiceAheadTick.
+        _voiceAheadTimer.Interval = 2000;
+        _voiceAheadTimer.Tick += (_, _) => VoiceAheadTick();
+        _voiceAheadTimer.Start();
+
+        Disposed += (_, _) =>
+        {
+            _onAirProgressTimer.Dispose();
+            _voiceAheadTimer.Dispose();
+        };
+    }
+
+    // --- Getting ready, shown on the button (21 Oct 2026) -------------------
+    //
+    // Pressing On Air used to put "Waiting..." on the button for as long as
+    // the opening took to write and voice - twenty seconds on a slow night,
+    // with nothing to say anything was happening. Now the button fills with
+    // its red from the left as the work gets done, and its caption counts
+    // down to the jingle and names the step it is on: "8s · Voicing".
+    //
+    // The countdown is learned, not guessed: every open is timed from the
+    // press to the jingle and the last few are kept (AppSettings.
+    // OnAirReadyHistoryMs), so it is this club's model, voice and connection
+    // being timed. Until there is a first open to go on - or when one runs
+    // past its estimate - the caption just names the step ("Voicing...").
+    //
+    // The steps are the real ones, in order. The fill never runs ahead of
+    // the step that is actually under way: an estimate that says 90% while
+    // the model has not answered yet would be a lie the room could see.
+
+    /// <summary>What On Air is doing while the race director waits for the jingle.</summary>
+    private enum OnAirStep
+    {
+        Writing,
+        VoicingOpening,
+        VoicingIntros,
+        Finishing,
+    }
+
+    /// <summary>The share of the fill each step takes up, from and to.</summary>
+    private static (float From, float To) StepSpan(OnAirStep step) => step switch
+    {
+        OnAirStep.Writing => (0f, 0.5f),
+        OnAirStep.VoicingOpening => (0.5f, 0.8f),
+        OnAirStep.VoicingIntros => (0.8f, 0.95f),
+        _ => (0.95f, 0.99f),
+    };
+
+    /// <summary>The step's word on the button - short, so the flag row does not jump about.</summary>
+    private static string StepWord(OnAirStep step) => step switch
+    {
+        OnAirStep.Writing => "Writing",
+        OnAirStep.VoicingOpening => "Voicing",
+        OnAirStep.VoicingIntros => "Intros",
+        _ => "Finishing",
+    };
+
+    /// <summary>The caption while the show is on air, before the race is staged.</summary>
+    private const string OnAirLiveCaption = "Live \u00B7 Skip";
+
+    /// <summary>On Air is opening a demo, which starts itself at the end rather than being staged.</summary>
+    private bool _onAirForDemo;
+
+    /// <summary>
+    /// A flag pressed while On Air is opening a DEMO (21 Oct 2026): skips the
+    /// rest of the opening and starts the demo, exactly as pressing On Air
+    /// again does. True when it did, and the flag should do nothing more.
+    ///
+    /// It used to call On Air off - any start counts as the race being moved
+    /// on - so the demo never started, and the Green that did it started a
+    /// REAL race in its place: no simulator, no cars, and the decoder (not
+    /// connected for a demo) counting nothing. A demo stages, counts down
+    /// and goes green by itself, so the flag's own job is done by starting it.
+    ///
+    /// Only for a demo. For a real race a flag pressed during On Air still
+    /// does what it says, as it always has.
+    /// </summary>
+    private bool SkipOnAirToTheDemo(string flag)
+    {
+        if (_onAirCts is not { } running || !_onAirForDemo)
+        {
+            return false;
+        }
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] {flag} pressed while On Air was opening the demo - "
+            + "skipping the rest of the opening and starting the demo, which stages and goes green by itself.");
+
+        _onAirStageNow = true;
+        running.Cancel();
+        return true;
+    }
+
+    /// <summary>The widest the caption gets while counting down, so the button can be held at that width.</summary>
+    private const string WidestProgressCaption = "88s · Finishing";
+
+    /// <summary>How many past opens the countdown averages.</summary>
+    private const int OnAirReadyHistoryKept = 5;
+
+    private readonly System.Windows.Forms.Timer _onAirProgressTimer = new();
+
+    private bool _onAirProgressShowing;
+    private long _onAirPressTicks;
+    private long _onAirStepTicks;
+    private OnAirStep _onAirStep;
+    private long? _onAirEstimateMs;
+    private Size _onAirMinimumBefore;
+
+    /// <summary>The press: the fill starts empty and the countdown from the average of the last few opens.</summary>
+    private void BeginOnAirProgress()
+    {
+        var history = _settings.OnAirReadyHistoryMs;
+        _onAirEstimateMs = history is { Count: > 0 } ? (long)history.Average() : null;
+
+        _onAirPressTicks = Environment.TickCount64;
+        _onAirStepTicks = _onAirPressTicks;
+        _onAirStep = OnAirStep.Writing;
+        _onAirProgressShowing = true;
+
+        // Held at its widest countdown caption while it counts, so the flags
+        // beside it do not shuffle along every second as the digits change.
+        _onAirMinimumBefore = _btnOnAir.MinimumSize;
+        var widest = TextRenderer.MeasureText(WidestProgressCaption, _btnOnAir.Font).Width + _btnOnAir.Padding.Horizontal + 24;
+        _btnOnAir.MinimumSize = new Size(Math.Max(_onAirMinimumBefore.Width, widest), _onAirMinimumBefore.Height);
+
+        PaintOnAirProgress();
+        _onAirProgressTimer.Start();
+    }
+
+    /// <summary>On to the next step - the fill moves up to where that step starts.</summary>
+    private void SetOnAirStep(OnAirStep step)
+    {
+        if (!_onAirProgressShowing || step <= _onAirStep && step != OnAirStep.Writing)
+        {
+            return;
+        }
+
+        _onAirStep = step;
+        _onAirStepTicks = Environment.TickCount64;
+        PaintOnAirProgress();
+    }
+
+    /// <summary>The fill and the caption, from the step under way and the time gone.</summary>
+    private void PaintOnAirProgress()
+    {
+        if (!_onAirProgressShowing || IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        var now = Environment.TickCount64;
+        var elapsed = now - _onAirPressTicks;
+        var (from, to) = StepSpan(_onAirStep);
+
+        float fill;
+
+        if (_onAirEstimateMs is { } estimate && estimate > 0)
+        {
+            // The clock's share of the estimate, kept inside the step under way.
+            fill = Math.Clamp((float)elapsed / estimate, from, to - 0.01f);
+        }
+        else
+        {
+            // No estimate yet: creep across the step, slowing as it goes, so
+            // it always moves but never claims the step is done.
+            var inStep = (now - _onAirStepTicks) / 4000.0;
+            fill = from + (to - from) * 0.9f * (float)(1 - Math.Exp(-inStep));
+        }
+
+        _btnOnAir.Progress = fill;
+
+        var word = StepWord(_onAirStep);
+        var left = _onAirEstimateMs is { } est ? (int)Math.Ceiling((est - elapsed) / 1000.0) : 0;
+
+        var caption = left >= 1 && left <= 88 ? $"{left}s · {word}" : $"{word}…";
+
+        // Only when it changes: a new caption makes the flag row measure
+        // the button again.
+        if (!string.Equals(_btnOnAir.Text, caption, StringComparison.Ordinal))
+        {
+            _btnOnAir.Text = caption;
+        }
+    }
+
+    /// <summary>
+    /// The jingle is going out, or On Air was called off: the button goes
+    /// back to itself. Timed only when it reached the jingle - a call-off
+    /// says nothing about how long an open takes.
+    /// </summary>
+    private void EndOnAirProgress(bool reachedTheJingle)
+    {
+        if (!_onAirProgressShowing)
+        {
+            return;
+        }
+
+        _onAirProgressShowing = false;
+        _onAirProgressTimer.Stop();
+        _btnOnAir.Progress = null;
+        _btnOnAir.MinimumSize = _onAirMinimumBefore;
+        _btnOnAir.Text = OnAirCaption;
+
+        if (!reachedTheJingle)
+        {
+            return;
+        }
+
+        var took = Environment.TickCount64 - _onAirPressTicks;
+
+        try
+        {
+            var history = _settings.OnAirReadyHistoryMs ??= new List<long>();
+            history.Add(took);
+
+            while (history.Count > OnAirReadyHistoryKept)
+            {
+                history.RemoveAt(0);
+            }
+
+            _settings.Save();
+        }
+        catch (Exception ex)
+        {
+            // Only the countdown's memory - never worth stopping the show.
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - couldn't remember how long that open took ({ex.Message}).");
+        }
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air was ready in {took / 1000.0:0.0}s.");
+    }
+
+    // --- The next opening, voiced ahead (21 Oct 2026) -----------------------
+    //
+    // The words of the next race's opening and its driver introductions are
+    // already written ahead when a result is filed (WrittenAhead and the
+    // introductions held in RaceControlControl.Intros). What was left for On
+    // Air to wait on was turning them into the announcer's voice - a render
+    // each, seconds apiece on a club's connection.
+    //
+    // So between races, once the broadcast floor is free (the recap and the
+    // post-race show are done), those same words are rendered into the voice
+    // and kept. At the press, a line On Air is about to voice that matches
+    // one already rendered - word for word - is played from what was kept,
+    // and On Air goes to the jingle with nothing to wait for.
+    //
+    // Matched on the exact words, so it can never play the wrong line: a
+    // different round, a regrid, a correction that rewrote the intro - any of
+    // them gives different words, which miss, and On Air voices them itself
+    // as it always did. A render nobody uses costs a render and nothing more.
+    // Nothing is taken from the written-ahead store here; it is only looked
+    // at (WrittenAhead.PeekLine).
+
+    private readonly System.Windows.Forms.Timer _voiceAheadTimer = new();
+
+    /// <summary>Lines already in the announcer's voice, by their exact words.</summary>
+    private readonly Dictionary<string, AnnouncementService.PreparedSpeech> _voicedAhead = new(StringComparer.Ordinal);
+
+    /// <summary>Lines a render has been tried for, so a failed one is not tried every two seconds.</summary>
+    private readonly HashSet<string> _voiceAheadTried = new(StringComparer.Ordinal);
+
+    /// <summary>The render under way, if any - one at a time, so it never crowds the voice.</summary>
+    private (string Text, Task<AnnouncementService.PreparedSpeech?> Render)? _voicingAhead;
+
+    /// <summary>Every two seconds: renders the next line On Air will want, when nothing else needs the voice.</summary>
+    private void VoiceAheadTick()
+    {
+        if (IsDisposed || Disposing || _onAirCts is not null || _voicingAhead is not null)
+        {
+            return;
+        }
+
+        // Only between races, with the floor free and the voice on. A
+        // render during a race or under the recap would compete with the
+        // lines actually being said.
+        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing
+            || _race.IsWarmingUp
+            || _race.IsPracticeMode
+            || ShowFloor.Busy
+            || _announcer.Muted
+            || _commentary is not { IsAvailable: true })
+        {
+            return;
+        }
+
+        var wanted = new List<string>(2);
+
+        if (_writtenAhead.PeekLine() is { Length: > 0 } opening)
+        {
+            wanted.Add(AnnouncerIntro.IntoOpening(opening, _settings.RecapAnnouncerName));
+        }
+
+        lock (_introductionsAheadLock)
+        {
+            if (_introductionsAhead is { } held && held.AsOf == _introductionsAheadVersion && held.Text.Length > 0)
+            {
+                wanted.Add(held.Text);
+            }
+        }
+
+        // What is no longer wanted goes - its words have been replaced or used.
+        foreach (var old in _voicedAhead.Keys.Where(k => !wanted.Contains(k)).ToList())
+        {
+            _voicedAhead.Remove(old);
+        }
+
+        _voiceAheadTried.RemoveWhere(k => !wanted.Contains(k));
+
+        var next = wanted.FirstOrDefault(t => !_voicedAhead.ContainsKey(t) && !_voiceAheadTried.Contains(t));
+
+        if (next is null)
+        {
+            return;
+        }
+
+        _voiceAheadTried.Add(next);
+
+        var render = _announcer.PrepareReminderAsync(next);
+        _voicingAhead = (next, render);
+        _ = KeepVoicedAheadAsync(next, render);
+    }
+
+    private async Task KeepVoicedAheadAsync(string text, Task<AnnouncementService.PreparedSpeech?> render)
+    {
+        try
+        {
+            if (await render is { } ready)
+            {
+                _voicedAhead[text] = ready;
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] Voiced part of the next opening ahead - On Air will have less to wait for.");
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] Couldn't voice the next opening ahead ({ex.Message}). On Air will voice it when pressed.");
+        }
+        finally
+        {
+            _voicingAhead = null;
+        }
+    }
+
+    /// <summary>
+    /// A line On Air is about to say, in the announcer's voice: the one
+    /// voiced ahead when the words match exactly, the render already under
+    /// way for those words when there is one, otherwise rendered now as it
+    /// always was.
+    /// </summary>
+    private async Task<AnnouncementService.PreparedSpeech?> VoiceForOnAirAsync(string text)
+    {
+        if (_voicedAhead.Remove(text, out var ready))
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - that line was voiced ahead.");
+            return ready;
+        }
+
+        if (_voicingAhead is { } inFlight && string.Equals(inFlight.Text, text, StringComparison.Ordinal))
+        {
+            try
+            {
+                if (await inFlight.Render is { } finished)
+                {
+                    _voicedAhead.Remove(text);
+                    return finished;
+                }
+            }
+            catch (Exception)
+            {
+                // Rendered again below.
+            }
+        }
+
+        return await _announcer.PrepareReminderAsync(text);
     }
 
     /// <summary>The On Air button, pressed - by a click or the O key.</summary>
@@ -307,6 +682,7 @@ public sealed partial class RaceControlControl
         // No sponsor read from here until this race's flag - the opening
         // is about to be written, and the quiet while it is is not a gap.
         BroadcastImaging.OnAirBegins();
+        _onAirForDemo = start is not null;
         _openingSaidByOnAir = false;
         _introductionsSaidByOnAir = false;
         _principalSaidByOnAir = false;
@@ -366,7 +742,11 @@ public sealed partial class RaceControlControl
             // the opening is written and rendered, so the button reads
             // "Waiting..." until the show actually starts - the race
             // director can see it was pressed and is on its way.
+            //
+            // AND SHOWS HOW FAR ALONG IT IS (21 Oct 2026) - the button fills
+            // and counts down to the jingle. See BeginOnAirProgress.
             _btnOnAir.Text = OnAirWaitingCaption;
+            BeginOnAirProgress();
 
             // A demo with no round has no race to open - see GoOnAirThenAsync.
             var line = start is not null && round is null ? null : await WriteOpeningAsync(round, cts.Token);
@@ -394,16 +774,21 @@ public sealed partial class RaceControlControl
                 // No opening when only the pit lane is due - see WriteOpeningAsync.
                 if (toRender.Text is { } openingToRender)
                 {
-                    audio = await _announcer.PrepareReminderAsync(openingToRender);
+                    SetOnAirStep(OnAirStep.VoicingOpening);
+                    audio = await VoiceForOnAirAsync(openingToRender);
                 }
 
                 if (toRender.Introductions is { } introductionsToRender)
                 {
-                    introductionsAudio = await _announcer.PrepareReminderAsync(introductionsToRender.Text);
+                    SetOnAirStep(OnAirStep.VoicingIntros);
+                    introductionsAudio = await VoiceForOnAirAsync(introductionsToRender.Text);
                 }
             }
 
             cts.Token.ThrowIfCancellationRequested();
+
+            // Whatever is left is the announcer finishing what he is saying.
+            SetOnAirStep(OnAirStep.Finishing);
 
             // 17 Oct 2026, Bug Hunt 8, A04-2/A03-3: what the announcer is
             // still saying finishes before the jingle - the recap's last
@@ -427,7 +812,14 @@ public sealed partial class RaceControlControl
 
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - the top of the race.");
 
-            _btnOnAir.Text = OnAirCaption;
+            EndOnAirProgress(reachedTheJingle: true);
+
+            // LIVE, AND SAYS SO (21 Oct 2026). The button used to read plain
+            // "On Air" for the whole show - the jingle, the opening, the
+            // introductions and the Team Principal, a minute or more - so it
+            // looked finished while the race was still to be staged. Pressing
+            // it again skips the rest, which the caption now says too.
+            _btnOnAir.Text = OnAirLiveCaption;
 
             // 2. The jingle, to its post.
             jingle = BroadcastImaging.Start(ImagingCue.TopOfRace);
@@ -563,6 +955,8 @@ public sealed partial class RaceControlControl
             _race.StateChanged -= onRaceMoved;
             _onAirCts = null;
             _onAirStageNow = false;
+            _onAirForDemo = false;
+            EndOnAirProgress(reachedTheJingle: false);
             _btnOnAir.Lit = false;
             _btnOnAir.Text = OnAirCaption;
             cts.Dispose();

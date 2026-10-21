@@ -489,18 +489,38 @@ public sealed partial class RaceControlControl
         // ClearPenalties drops it - but this used to return first whenever
         // PenaltyMs was zero, so a jumper credited with the start lap could
         // not be let off, and the penalty landed a lap later regardless.
-        if (standing is null || (standing.PenaltyMs == 0 && _race.OwedJumpStartPenaltyMs(transponder) <= 0))
+        //
+        // AND THE WARNINGS (21 Oct 2026). Clearing used to leave every
+        // warning on the record, so the warning badge stayed on the driver's
+        // name and the button looked as if it had done nothing - it had
+        // taken the time off, which the board does not show unless the
+        // Penalty column is on. Clear means clear: the time, any jump-start
+        // penalty still owed, and the warnings (a black flag among them).
+        // One undo puts all of it back. Shift+W still takes back just the
+        // last warning.
+        if (standing is null
+            || (standing.PenaltyMs == 0 && _race.OwedJumpStartPenaltyMs(transponder) <= 0 && standing.Warnings.Count == 0))
         {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] {DriverNameFor(transponder)} has no penalties or warnings to clear.");
             return;
         }
 
+        var seconds = standing.PenaltyMs / 1000.0;
+        var warnings = standing.Warnings.Count;
+
         // Through the session's own clear rather than a matching credit, so
-        // the time noted on each warning goes too - see ClearPenalties. Undo
-        // gives back the time, the warnings' notes and any jump-start
-        // penalty still owed.
+        // the time noted on each warning goes too - see ClearPenalties - and
+        // then the warnings, which by then carry no time to refund twice.
+        // Undo gives back the time, the warnings and any jump-start penalty
+        // still owed.
         var edit = _race.EditStanding(transponder, () =>
         {
             _race.ClearPenalties(transponder);
+
+            while (_race.RemoveLastWarning(transponder) is not null)
+            {
+            }
+
             return true;
         });
 
@@ -508,6 +528,21 @@ public sealed partial class RaceControlControl
         {
             CaptureStandingEditUndo($"Clear penalties for {DriverNameFor(transponder)}", edit);
         }
+
+        var cleared = new List<string>();
+
+        if (seconds > 0)
+        {
+            cleared.Add($"{seconds:0.#}s of penalties");
+        }
+
+        if (warnings > 0)
+        {
+            cleared.Add(Plural.Of(warnings, "warning"));
+        }
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Cleared {DriverNameFor(transponder)}'s "
+            + (cleared.Count > 0 ? string.Join(" and ", cleared) : "jump-start penalty still to come") + ".");
 
         RenderLeaderboard();
     }
@@ -657,7 +692,7 @@ public sealed partial class RaceControlControl
 
         if (!drawerChanged)
         {
-            ShowLapPopup(transponder, e.RowIndex);
+            ToggleLapPopup(transponder, e.RowIndex);
             return;
         }
 
@@ -673,9 +708,42 @@ public sealed partial class RaceControlControl
             }
 
             RenderLeaderboard();
-            ShowLapPopup(transponder, DriverRowIndex(transponder));
+            ToggleLapPopup(transponder, DriverRowIndex(transponder));
         });
     }
+
+    /// <summary>
+    /// The lap breakdown as a toggle (21 Oct 2026): open for this driver
+    /// already, it closes; otherwise it opens.
+    ///
+    /// The popup closes itself on any click outside it - and that click is
+    /// the very one on Lap breakdown or the driver's name. So a press that
+    /// meant "close it" first closed it and then, arriving a moment later,
+    /// opened it again: the button seemed to work every other time. A
+    /// popup for this driver that closed itself within a double-click's
+    /// time of this press was closed BY this press, and is left closed.
+    /// </summary>
+    private void ToggleLapPopup(string transponder, int rowIndex)
+    {
+        if (_lapPopup is { } open && string.Equals(open.Transponder, transponder, StringComparison.OrdinalIgnoreCase))
+        {
+            CloseLapPopup();
+            return;
+        }
+
+        if (string.Equals(_lapPopupClosedFor, transponder, StringComparison.OrdinalIgnoreCase)
+            && Environment.TickCount64 - _lapPopupClosedTicks <= SystemInformation.DoubleClickTime + 100)
+        {
+            _lapPopupClosedFor = null;
+            return;
+        }
+
+        ShowLapPopup(transponder, rowIndex);
+    }
+
+    /// <summary>Whose lap breakdown last closed itself, and when - see ToggleLapPopup.</summary>
+    private string? _lapPopupClosedFor;
+    private long _lapPopupClosedTicks;
 
     // --- The corrections drawer ---------------------------------------------
     //
@@ -1059,7 +1127,7 @@ public sealed partial class RaceControlControl
                 break;
 
             case DrawerAction.LapBreakdown:
-                ShowLapPopup(transponder, rowIndex);
+                ToggleLapPopup(transponder, rowIndex);
                 break;
         }
     }
@@ -1137,6 +1205,11 @@ public sealed partial class RaceControlControl
 
             _lapPopup = null;
 
+            // Noted, so the click that closed it is not taken as asking for
+            // it again - see ToggleLapPopup.
+            _lapPopupClosedFor = popup.Transponder;
+            _lapPopupClosedTicks = Environment.TickCount64;
+
             // A drop-down is a window of its own, and an auto-closed one was
             // never disposed - one leaked per double-click all evening.
             // Posted rather than disposed here, because this handler runs
@@ -1166,6 +1239,16 @@ public sealed partial class RaceControlControl
         {
             if (rowIndex >= 0 && rowIndex < _dgvLeaderboard.Rows.Count)
             {
+                // Under the driver's corrections drawer when it is open, not
+                // over it (21 Oct 2026) - laid over the drawer, the popup
+                // covered the very buttons that open and close it.
+                if (rowIndex + 1 < _dgvLeaderboard.Rows.Count
+                    && IsDrawerRow(rowIndex + 1)
+                    && string.Equals(TransponderForRow(rowIndex + 1), transponder, StringComparison.OrdinalIgnoreCase))
+                {
+                    rowIndex++;
+                }
+
                 var rect = _dgvLeaderboard.GetRowDisplayRectangle(rowIndex, false);
                 y = rect.Bottom;
             }
@@ -1424,7 +1507,7 @@ public sealed partial class RaceControlControl
             // ClearSelectedPenalty.
             var owedJumpStartMs = standing is null ? 0 : _race.OwedJumpStartPenaltyMs(standing.TransponderId);
 
-            clearPenalty.Enabled = standing is { PenaltyMs: not 0 } || owedJumpStartMs > 0;
+            clearPenalty.Enabled = standing is { PenaltyMs: not 0 } || owedJumpStartMs > 0 || standing is { Warnings.Count: > 0 };
             clearPenalty.Text = standing is { PenaltyMs: not 0 }
                 ? $"Clear penalty ({standing.PenaltyMs / 1000.0:0.0}s)"
                 : owedJumpStartMs > 0

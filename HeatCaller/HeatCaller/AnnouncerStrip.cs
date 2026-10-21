@@ -126,7 +126,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         _hold.Click += (_, _) =>
         {
             _holding = !_holding;
-            _hold.Text = _holding ? ReleaseCaption : HoldCaption;
+            ShowHold();
             HoldChanged?.Invoke(_holding);
         };
 
@@ -280,7 +280,21 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     private const string MutedText = "Muted";
 
     private const string HoldCaption = "Hold";
-    private const string ReleaseCaption = "Release";
+    private const string ReleaseCaption = "HELD \u00B7 Release";
+
+    /// <summary>
+    /// The Hold button as the hold stands (21 Oct 2026). While held it is
+    /// amber and says HELD: a hold lasts until it is released, and it stops
+    /// the throw to pit lane, the teaser and the recap after every race -
+    /// so one pressed by accident during an opening silently took the whole
+    /// post-race show with it, and the only sign was the word on the button
+    /// changing to "Release". Not now.
+    /// </summary>
+    private void ShowHold()
+    {
+        _hold.Text = _holding ? ReleaseCaption : HoldCaption;
+        AppTheme.StyleButton(_hold, _holding ? AppTheme.ButtonKind.Warning : AppTheme.ButtonKind.Auto);
+    }
     private const string ReplayCaption = "Play again";
     private const string SkipCaption = "Skip";
     private const string NotesCaption = "Notes";
@@ -388,7 +402,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
             if (_holding)
             {
                 _holding = false;
-                _hold.Text = HoldCaption;
+                ShowHold();
                 HoldChanged?.Invoke(false);
             }
 

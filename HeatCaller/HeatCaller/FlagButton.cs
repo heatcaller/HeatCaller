@@ -62,6 +62,26 @@ internal sealed class FlagButton : Button
         }
     }
 
+    private float? _progress;
+
+    /// <summary>
+    /// How far along a job the button is standing for, 0 to 1, or null for
+    /// none - drawn as a fill from the left. Only On Air uses it, while its
+    /// opening is being got ready.
+    /// </summary>
+    public float? Progress
+    {
+        get => _progress;
+        set
+        {
+            if (_progress != value)
+            {
+                _progress = value;
+                Invalidate();
+            }
+        }
+    }
+
     protected override void OnMouseEnter(EventArgs e)
     {
         base.OnMouseEnter(e);
@@ -130,6 +150,36 @@ internal sealed class FlagButton : Button
             g.SmoothingMode = SmoothingMode.AntiAlias;
             using var outline = SmoothOutline(bounds);
             g.FillPath(shade, outline);
+        }
+
+        // ON AIR'S PROGRESS (21 Oct 2026): while the opening is being got
+        // ready, the button fills with its flag colour from the left as the
+        // work gets done - see RaceControlControl.OnAir. The caption is drawn
+        // twice, in the flag's ink over the filled part and the resting ink
+        // over the rest, so it reads the whole way across.
+        if (Progress is { } done && Enabled)
+        {
+            PaintResting(g, bounds);
+
+            var filled = new Rectangle(bounds.Left, bounds.Top, (int)Math.Round(bounds.Width * Math.Clamp(done, 0f, 1f)), bounds.Height);
+
+            if (filled.Width > 0)
+            {
+                using var fill = new SolidBrush(FlagColour);
+                g.FillRectangle(fill, filled);
+            }
+
+            var saved = g.Save();
+            g.SetClip(filled);
+            PaintCaption(g, bounds, coloured: true);
+            g.Restore(saved);
+
+            saved = g.Save();
+            g.SetClip(new Rectangle(filled.Right, bounds.Top, Math.Max(0, bounds.Right - filled.Right), bounds.Height));
+            PaintCaption(g, bounds, coloured: false);
+            g.Restore(saved);
+
+            return;
         }
 
         PaintCaption(g, bounds, coloured);

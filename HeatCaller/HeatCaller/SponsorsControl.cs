@@ -479,7 +479,10 @@ public sealed class SponsorsControl : UserControl
             _store.Save();
         };
 
-        _chkReadInSegments.Text = "Read in the gap between races, when the commentary has nothing to say";
+        // Worded as the extra it is (21 Oct 2026): the commercial break is
+        // where reads belong, and this puts them on rotation between races
+        // as well. See SponsorSettings.ReadDuringSegments.
+        _chkReadInSegments.Text = "Also put reads on rotation between races, outside the commercial break";
         _chkReadInSegments.AutoSize = true;
         _chkReadInSegments.Checked = _store.Current.ReadDuringSegments;
         _chkReadInSegments.CheckedChanged += (_, _) =>

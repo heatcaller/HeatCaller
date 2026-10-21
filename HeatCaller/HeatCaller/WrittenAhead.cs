@@ -310,6 +310,23 @@ internal sealed class WrittenAhead
     }
 
     /// <summary>
+    /// The held line, LOOKED AT AND LEFT WHERE IT IS, or null when nothing
+    /// is held (21 Oct 2026). For On Air's voice made ready ahead - see
+    /// RaceControlControl.OnAir - which renders these exact words into the
+    /// announcer's voice before On Air is pressed. Nothing is decided here:
+    /// whether the line is used is still TakeFor's answer at the press, and
+    /// rendered audio is only ever matched to the words On Air ends up
+    /// with, so a line that is not used costs a render and nothing more.
+    /// </summary>
+    internal string? PeekLine()
+    {
+        lock (_gate)
+        {
+            return _line.Length > 0 ? _line : null;
+        }
+    }
+
+    /// <summary>
     /// The held line if it is still true, and otherwise why not.
     ///
     /// TAKES IT. A line is used once: on any answer at all the slot is

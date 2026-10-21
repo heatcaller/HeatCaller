@@ -498,6 +498,16 @@ public sealed class AppSettings
     public bool RaceStartWithOnAir { get; set; } = true;
 
     /// <summary>
+    /// How long On Air's last few openings took to get ready, in
+    /// milliseconds, newest last (21 Oct 2026) - from the press to the
+    /// jingle. On Air's button counts down from their average ("On Air in
+    /// about 8s"), so it is learned from this club's own model, voice and
+    /// connection rather than guessed. Kept to the last few - see
+    /// RaceControlControl.OnAir, OnAirReadyHistoryKept.
+    /// </summary>
+    public List<long> OnAirReadyHistoryMs { get; set; } = new();
+
+    /// <summary>
     /// The club's old voice-ID line. Retired 17 Oct 2026 - the On Air
     /// opening and the announcer's own name do that job now - and kept only
     /// so settings saved before then still load. Nothing reads it.

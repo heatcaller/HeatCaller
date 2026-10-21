@@ -386,6 +386,12 @@ public sealed partial class RaceControlControl
                 return;
             }
 
+            // During a demo's On Air: on to the demo, not a real race. See SkipOnAirToTheDemo.
+            if (SkipOnAirToTheDemo("Stage"))
+            {
+                return;
+            }
+
             // Stage during a warm-up skips the rest of it - the warm-up's
             // own continuation then stages (or runs Quick Race's sequence).
             if (SkipWarmUpIfRunning())
@@ -488,6 +494,11 @@ public sealed partial class RaceControlControl
                 return;
             }
 
+            if (SkipOnAirToTheDemo("Countdown"))
+            {
+                return;
+            }
+
             // A countdown over a running race used to go straight ahead:
             // every car crossing the line was then booked as a jump start,
             // and the green that followed wiped the race. Asked about, and
@@ -546,6 +557,11 @@ public sealed partial class RaceControlControl
         _actGreen = () =>
         {
             if (RefuseIfPracticeRunning("start a race"))
+            {
+                return;
+            }
+
+            if (SkipOnAirToTheDemo("Green"))
             {
                 return;
             }
@@ -1143,7 +1159,18 @@ public sealed partial class RaceControlControl
         body.AddSide(_btnAnnouncer);
         body.AddSide(_btnProjection);
         body.AddSide(_btnReadiness);
-        body.AddSide(_statStrip);
+
+        // Mission Control under the pre-race check (21 Oct 2026) - it used
+        // to be reached only from inside that check or the Connection page.
+        //
+        // THE STAT TILES ARE GONE from the foot of this column (21 Oct 2026):
+        // the leader's laps and the session best are both on the board
+        // itself (Laps, Best), and the column reads cleaner without a second
+        // copy of them. _statStrip is still built, and repainted with the
+        // clock, so nothing else that reaches for it has to change.
+        var btnMissionControl = new Button { Text = "Mission Control" };
+        btnMissionControl.Click += (_, _) => MissionControlRequested?.Invoke();
+        body.AddSide(btnMissionControl);
 
         _page.Add(_nextUpBar, gapBelow: UiLayout.RowGap);
 
