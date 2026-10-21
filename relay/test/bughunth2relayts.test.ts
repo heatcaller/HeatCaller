@@ -52,8 +52,13 @@ describe("a voice usage file that cannot be read", () => {
       await mkdir(join(dir, VOICE_DIR, "usage"), { recursive: true });
       await writeFile(usageFile, truncated);
 
-      // Voice Settings still opens.
-      assert.equal((await voice.catalogue("acme-rc", PLAN)).usage.used, 0);
+      // Voice Settings still opens. The figure is marked unknown - 0 of 0,
+      // known:false - so the app does not take it for the club's count
+      // (20 Oct 2026, Bug Hunt 8, #101).
+      const unknown = (await voice.catalogue("acme-rc", PLAN)).usage;
+      assert.equal(unknown.used, 0);
+      assert.equal(unknown.allowance, 0);
+      assert.equal(unknown.known, false);
 
       const refused = await voice.speak("acme-rc", PLAN, "clubhouse", "abc", false);
       assert.equal(refused.ok, false);

@@ -997,6 +997,18 @@ public sealed class CheckInControl : UserControl
                     row.Cells[0].Value = isIn;
                 }
             }
+
+            // WHY (20 Oct 2026, Bug Hunt 8, #45): the current tick cell is in
+            // edit mode and paints from its editing flags, not Value (see
+            // Grid_CellClick, A28-X). Writing Value above left those flags
+            // stale, so a phone check-in, or the closed-day put-back, kept
+            // showing the old tick on that row and the next glyph click wrote
+            // the store twice. RefreshEdit re-reads the flags from the new
+            // Value without leaving edit mode or raising CellValueChanged.
+            if (_grid.IsCurrentCellInEditMode && _grid.CurrentCell is DataGridViewCheckBoxCell)
+            {
+                _grid.RefreshEdit();
+            }
         }
         finally
         {

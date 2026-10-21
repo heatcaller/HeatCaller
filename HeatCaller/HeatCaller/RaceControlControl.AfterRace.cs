@@ -484,6 +484,12 @@ public sealed partial class RaceControlControl
         // So it goes where nothing can skip it.
         SettleTheRoomsVote(record, round);
 
+        // The gate the next race's write-aheads are waiting at (20 Oct
+        // 2026), taken here on the UI thread - opened on every way out of
+        // this method, and by the job once the flag lines have been asked
+        // for. See _flagLinesAsked.
+        var flagLinesAsked = _flagLinesAsked;
+
         // The teaser is fixed text and needs nothing from the LLM, so it is
         // NOT behind the commentary guard. It used to be, which meant an
         // unreachable Ollama silently killed the teaser too - the actual
@@ -536,6 +542,9 @@ public sealed partial class RaceControlControl
             // music set to fade or stop "after the recap" playing for the
             // rest of the night whenever both teaser and recap were off.
             SignalSessionAudioFinishedAfterFinishCall();
+
+            // No flag lines to wait for (20 Oct 2026) - see _flagLinesAsked.
+            flagLinesAsked.TrySetResult();
             return;
         }
 
@@ -737,6 +746,36 @@ public sealed partial class RaceControlControl
             }
         }
 
+        // WHY (20 Oct 2026): the booth Team Principal's night - the pass
+        // over the history, the rounds, the race day and the profiles - is
+        // read HERE, on the UI thread that owns those stores. It used to be
+        // read inside WritePrincipalAsync, which runs on the thread pool
+        // once the recap is written, so an Edit Result or a session saved in
+        // that minute could change the history under it ("Collection was
+        // modified") and the principal lost his night or was briefed off a
+        // torn read. Guarded like everything else here: this is the save path.
+        var boothBrief = BoothBrief.Nothing;
+
+        if (plan is { Principal: true })
+        {
+            var boothWinner = record.Results.OrderBy(r => r.Position).FirstOrDefault()?.Transponder;
+            boothBrief = BoothBrief.Nothing with { WinnerTransponder = boothWinner };
+
+            try
+            {
+                var className = string.IsNullOrEmpty(record.RoundId) ? null : _rounds?.Get(record.RoundId)?.ClassName;
+                var (nightFacts, stance) = PrincipalNightBrief(
+                    boothWinner, className, PrincipalTablePosition(boothWinner, championship?.Moves));
+
+                boothBrief = new BoothBrief(
+                    nightFacts, stance, boothWinner, _profiles.Get(boothWinner ?? string.Empty)?.SpokenName);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Could not read the Team Principal's night: {ex.Message}");
+            }
+        }
+
         // Cancelled the moment the next race is called to the grid - staged,
         // counting down or started. What follows the recap stops there,
         // whether it is being written, rendered or waiting to be spoken: it
@@ -775,6 +814,14 @@ public sealed partial class RaceControlControl
         // The race this recap is about, for OnAirFollowsTheRecap. Read here
         // on the UI thread, before anything can stage the next one.
         var recapGeneration = _race.SessionGeneration;
+
+        // WHY (20 Oct 2026): this sequence's own name on the broadcast
+        // floor. Every sequence used to take and release the floor as the
+        // same TheProgramme, so an earlier one coming out of an uncancelled
+        // wait after the next race's recap had started released THAT
+        // sequence's claim, and the announcer screen's director opened a
+        // segment over it. Numbered, a late Release matches nothing.
+        var floorOwner = $"{TheProgramme} #{Interlocked.Increment(ref _recapSequences)}";
 
         // HOLD ON AT THE FLAG (17 Oct 2026): the race director has the mic,
         // and Hold is the button that says nothing new starts - the recap
@@ -916,7 +963,20 @@ public sealed partial class RaceControlControl
             // then freed it mid-recap; taken over, that Release does
             // nothing. And with a ceiling of its own, since a long main's
             // programme can pass ShowFloor's six minutes.
-            ShowFloor.TakeOver(TheProgramme, TheProgrammeLongest);
+            ShowFloor.TakeOver(floorOwner, TheProgrammeLongest);
+
+            // WHY (20 Oct 2026): declared out here rather than where it is
+            // started, so the finally can give back colour segments that were
+            // written but never reached - see the finally.
+            Task<List<SpokenSegment>?>? colourTask = null;
+
+            // WHY (20 Oct 2026): the principal's words, once the model has
+            // written them. Kept in the diary only after every line has been
+            // queued to air (see the booth interview below) - they used to be
+            // kept the moment they were written, so a dropped recap or a
+            // failed render left the host quoting back a sentence the room
+            // never heard.
+            IReadOnlyList<CommentaryService.InterviewExchange>? principalWords = null;
 
             try
             {
@@ -985,6 +1045,25 @@ public sealed partial class RaceControlControl
                     ? WriteFlagInterviewAsync(record, plan, followOnWork.Token)
                     : null;
 
+                // THE THROW INTO THE STOP SET, WRITTEN (19 Oct 2026): the
+                // teaser that takes the room into the break plugs the show
+                // and says the recap, with its host, is up after the break -
+                // written by the model and different every race. Asked for
+                // here, after the interview and before the recap, for the
+                // reason the interview is asked for first: it is wanted in
+                // seconds. With no stop set tonight it is the same line with
+                // the recap "coming up next" instead (see StopSetThrow).
+                // Its own token, so a line that is not in by the time it is
+                // wanted can be given up on and stop holding up the recap on
+                // the model on this PC.
+                var throwWriting = CancellationTokenSource.CreateLinkedTokenSource(followOnWork.Token);
+                var stopSetNames = StopSetNames();
+                var throwTask = wantsTeaser
+                    ? _commentary!.BuildStopSetThrowAsync(
+                        record, stopSetNames, StopSetThrow.Recent, teaserLines,
+                        breakFollows: _settings.RecapAdBreak && CommercialBreak.SponsorScreenUp, ct: throwWriting.Token)
+                    : null;
+
                 var generation = commentaryAvailable
                     ? _commentary!.BuildRaceSummaryAsync(
                         record, championship, plan?.Context, raceHistory, followOnWork.Token,
@@ -1014,6 +1093,12 @@ public sealed partial class RaceControlControl
                     StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Asking the model for a recap...");
                 }
 
+                // WHY (20 Oct 2026): the next race's write-aheads wait until
+                // the interview, the throw and the recap are done with the
+                // model, so the lines wanted in seconds are asked first.
+                // Never awaited here - it only opens the gate. See _flagLinesAsked.
+                _ = OpenWhenAskedAsync(flagLinesAsked, interviewTask, throwTask, generation);
+
                 // What follows the recap is written after it, each part as
                 // soon as the one before is done: the local model answers one
                 // request at a time, and the recap is wanted first. So the
@@ -1024,7 +1109,9 @@ public sealed partial class RaceControlControl
                 // that night - no longer down in pit lane. Written once the
                 // recap has been, one request at a time.
                 var principalTask = generation is not null && plan is { Principal: true }
-                    ? WritePrincipalAsync(generation, generation, record, plan, championship, delivery, followOnWork.Token)
+                    ? WritePrincipalAsync(
+                        generation, generation, record, plan, championship, delivery, boothBrief,
+                        written => Volatile.Write(ref principalWords, written), followOnWork.Token)
                     : null;
 
                 // The race announcer's throw to pit lane, and the co-host's
@@ -1071,7 +1158,7 @@ public sealed partial class RaceControlControl
                 // the programme is open; a battle call over a running race
                 // and a round intro before one are staged exactly where
                 // they always were.
-                var colourTask = commentaryAvailable
+                colourTask = commentaryAvailable
                     ? WriteColourAsync(followOnWork.Token)
                     : null;
 
@@ -1146,6 +1233,34 @@ public sealed partial class RaceControlControl
                     flagBed = ImagingBed.Start(ImagingCue.FlagBed, _announcer, BroadcastImaging.BedLevel, BroadcastImaging.BedDuck);
                 }
 
+                // INTO THE STOP SET (19 Oct 2026): the model's throw - the
+                // show, the recap and its host, his name - and the line
+                // written in StopSetThrow when it is late or will not do.
+                // Asked the same question 4a below asks about whether a
+                // break runs, so "after the break" is only said when one
+                // does; with none, the recap is "coming up next". The
+                // club's teaser lines are the model's feel for it, and
+                // with the teaser off nothing is said here at all.
+                //
+                // MADE READY UNDER THE INTERVIEW, NOT AFTER IT (19 Oct
+                // 2026). It used to be settled and turned into speech only
+                // once the co-host had handed back, and the room sat
+                // through three seconds of the voice service between "back
+                // to you" and the throw. It is started here, so its audio
+                // is made while the pit lane plays; the model's line is
+                // still waited for until the hand back has been heard and
+                // the pause after the flag has run, plus a few seconds.
+                var teaser = wantsTeaser ? teaserLines[Random.Shared.Next(teaserLines.Count)] : null;
+                var flagPause = Math.Clamp(_settings.SummaryDelaySeconds, 0, 120);
+                var breakFollows = _settings.RecapAdBreak && CommercialBreak.SponsorScreenUp;
+                var pitLaneHeard = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                var teaserRender = teaser is null
+                    ? null
+                    : RenderTeaserAsync(ThrowToBreakAsync(
+                        throwTask, throwWriting, stopSetNames, breakFollows,
+                        pitLaneHeard.Task, TimeSpan.FromSeconds(flagPause + ThrowGraceSeconds), nextRace.Token));
+
                 // 1a. AT THE FLAG (18 Oct 2026) - the race announcer, before
                 // the teaser takes the room into the break. The unofficial
                 // result first: the finish call names nobody.
@@ -1179,30 +1294,20 @@ public sealed partial class RaceControlControl
                         // The interview still goes out, without them.
                     }
 
-                    await SpeakInterviewAsync(interviewTask, nextRace.Token, throwLine, handBack, "the finish call", OnAirParts.TechnicalLead);
+                    await SpeakInterviewAsync(
+                        interviewTask, nextRace.Token, throwLine, handBack, "the finish call", OnAirParts.TechnicalLead,
+                        anotherFollows: teaser is not null && flagPause == 0);
 
                     await _announcer.WaitForAudioAsync(SpokenWait(), CancellationToken.None);
                 }
 
-                // 2. Render the teaser DURING the pause, not after it.
-                //
-                // Synthesis is a network round trip, and it used to land on
-                // top of the configured pause rather than inside it. Starting
-                // it here means the pause is the only thing being waited for.
-                var teaser = wantsTeaser ? teaserLines[Random.Shared.Next(teaserLines.Count)] : null;
+                // The pit lane is done (or there was none): the throw's
+                // wait for the model starts counting from here.
+                pitLaneHeard.TrySetResult();
 
-                // THE ANNOUNCER SIGNS OFF INTO THE STOP SET (16 Oct 2026):
-                // the teaser is the line into the break, so his name goes
-                // on the end of it - "This is Dave Marsh - back after the
-                // break." Asked the same question 4a below asks about
-                // whether a break runs, so the words match what follows.
-                if (teaser is not null)
-                {
-                    var breakFollows = _settings.RecapAdBreak && CommercialBreak.SponsorScreenUp;
-                    teaser = AnnouncerIntro.IntoStopSet(teaser, _settings.RecapAnnouncerName, breakFollows);
-                }
-
-                var teaserRender = teaser is null ? null : _announcer.PrepareReminderAsync(teaser);
+                // 2. The teaser's audio has been in the making since before
+                // the pit lane (see INTO THE STOP SET above), so the pause
+                // is the only thing waited for here.
 
                 // THE BUMPER HITS ON HIS LAST WORD (16 Oct 2026). With no
                 // stop set to go into, the bumper below follows the teaser
@@ -1216,7 +1321,6 @@ public sealed partial class RaceControlControl
                     ? AnnouncementService.SpeechTail.BackToBack
                     : AnnouncementService.SpeechTail.Normal;
 
-                var flagPause = Math.Clamp(_settings.SummaryDelaySeconds, 0, 120);
                 if (flagPause > 0)
                 {
                     await Task.Delay(TimeSpan.FromSeconds(flagPause));
@@ -1240,7 +1344,12 @@ public sealed partial class RaceControlControl
                 // there to cover in the first place.
                 if (teaser is not null)
                 {
-                    var prepared = teaserRender is null ? null : await teaserRender;
+                    AnnouncementService.PreparedSpeech? prepared = null;
+
+                    if (teaserRender is not null)
+                    {
+                        (teaser, prepared) = await teaserRender;
+                    }
 
                     // Not once the next race has been called to the grid -
                     // see QueueUnlessNextRaceCalledAsync. A slow render, or
@@ -1286,6 +1395,14 @@ public sealed partial class RaceControlControl
                 if (!commentaryAvailable)
                 {
                     StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No recap - {noRecapBecause}.");
+
+                    // WHY (20 Oct 2026): the after-the-flag bed goes once the
+                    // result read is heard out. This way out returned before
+                    // the line that takes it away, so the honours below
+                    // opened their own show and bed on top of it - two
+                    // pieces of music at once until the finally.
+                    await _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(30), CancellationToken.None);
+                    flagBed?.Finish();
 
                     // The honours do not need one. This is the evening the
                     // segment is written the way it is for - see
@@ -1616,7 +1733,17 @@ public sealed partial class RaceControlControl
                 if (principalTask is not null)
                 {
                     await StingBetweenRecapPartsAsync(show, nextRace.Token);
-                    (interview, _) = await SpeakInterviewAsync(principalTask, nextRace.Token, onAir: OnAirParts.Booth);
+                    (interview, var principalSaid) = await SpeakInterviewAsync(principalTask, nextRace.Token, onAir: OnAirParts.Booth);
+
+                    // WHY (20 Oct 2026): into the diary only now, once every
+                    // line has been queued to air - see principalWords.
+                    // Late, stopped, a failed render or a cut-off partway
+                    // through keep nothing.
+                    if (interview == FollowOn.Spoken && principalSaid
+                        && Volatile.Read(ref principalWords) is { } heard && plan is not null)
+                    {
+                        KeepWhatThePrincipalSaid(record, plan, heard, boothBrief.WinnerSpokenName);
+                    }
                 }
 
                 if (closingTask is not null)
@@ -1723,6 +1850,10 @@ public sealed partial class RaceControlControl
                 // it away. Safe twice.
                 flagBed?.Finish();
 
+                // And the write-aheads' gate, for a way out that never got as
+                // far as asking (20 Oct 2026). Safe twice - see _flagLinesAsked.
+                flagLinesAsked.TrySetResult();
+
                 // Exactly once, however the sequence above ended - recap
                 // spoken, no recap, or a failure part-way. Music set to fade
                 // after the recap has nothing else to wait for, so any path
@@ -1760,13 +1891,42 @@ public sealed partial class RaceControlControl
                 // instant the floor came free would play its own opener
                 // across it, which is the same two-pieces-of-music fault
                 // the claim was added to stop. See ShowFloor.
-                ShowFloor.Release(TheProgramme);
+                ShowFloor.Release(floorOwner);
 
                 _race.StateChanged -= onNextRace;
 
                 // No longer the recap show Skip and Hold would stop - unless
                 // a newer one has already taken its place.
                 Interlocked.CompareExchange(ref _recapShow, null, recapShow);
+
+                // WHY (20 Oct 2026): colour segments written but never
+                // reached - the teaser or recap dropped, no recap, a failure
+                // part-way - are given back to the director as Dropped once
+                // they land. They used to sit as awaiting for its 15-minute
+                // ceiling, holding their kinds and facts off the next gap.
+                // Dropped does nothing for one already Spoken or Dropped by
+                // SpeakColourAsync, so this is safe on every way out.
+                try
+                {
+                    if (colourTask is not null && Commentary?.Invoke() is { } colourDirector)
+                    {
+                        _ = colourTask.ContinueWith(
+                            written =>
+                            {
+                                foreach (var unsaid in written.Result ?? new List<SpokenSegment>())
+                                {
+                                    colourDirector.Dropped(unsaid);
+                                }
+                            },
+                            CancellationToken.None,
+                            TaskContinuationOptions.OnlyOnRanToCompletion,
+                            TaskScheduler.Default);
+                    }
+                }
+                catch
+                {
+                    // A failing handler must not stop the clean-up below.
+                }
 
                 // However the sequence ended, nothing it started carries on
                 // writing or rendering. Before the using disposes it.
@@ -1871,6 +2031,30 @@ public sealed partial class RaceControlControl
     /// ceiling only matters when something dies without its finally.
     /// </summary>
     private static readonly TimeSpan TheProgrammeLongest = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// How many recap sequences have started, for each one's own name on
+    /// the broadcast floor (20 Oct 2026) - see floorOwner in
+    /// SpeakRaceSummary. No initializer: this is a part file.
+    /// </summary>
+    private int _recapSequences;
+
+    /// <summary>
+    /// The booth Team Principal's night, read on the UI thread by
+    /// SpeakRaceSummary before the sequence goes to the background (20 Oct
+    /// 2026), and handed to WritePrincipalAsync and KeepWhatThePrincipalSaid
+    /// so neither reads the stores from the thread pool.
+    /// </summary>
+    /// <param name="Facts">The night's facts - see PrincipalNightBrief.</param>
+    /// <param name="Stance">The position he comes in with.</param>
+    /// <param name="WinnerTransponder">The winner's transponder, for the diary.</param>
+    /// <param name="WinnerSpokenName">The winner's spoken name, or null.</param>
+    private sealed record BoothBrief(
+        IReadOnlyList<FactBlock> Facts, PrincipalStance.Stance Stance, string? WinnerTransponder, string? WinnerSpokenName)
+    {
+        /// <summary>Nothing to say - empty facts, the plain stance, no winner.</summary>
+        internal static BoothBrief Nothing => new(Array.Empty<FactBlock>(), PrincipalStance.Plain, null, null);
+    }
 
     /// <summary>
     /// Heat or main, the opening and sign-off, and the mechanic - what the
@@ -2218,9 +2402,12 @@ public sealed partial class RaceControlControl
     /// off (17 Oct 2026).
     /// </summary>
     /// <param name="before">The part written just before - the local model takes one request at a time.</param>
+    /// <param name="brief">The principal's night, read by the caller on the UI thread - see BoothBrief.</param>
+    /// <param name="written">Handed the exchanges once written, so the caller can keep them in the diary once they have been aired.</param>
     private async Task<List<SpokenLine>?> WritePrincipalAsync(
         Task before, Task<string?> recapWritten, SessionRecord record, RecapPlan plan, ChampionshipSwing? championship,
-        (double Stability, double Style)? delivery, CancellationToken cancel)
+        (double Stability, double Style)? delivery, BoothBrief brief,
+        Action<IReadOnlyList<CommentaryService.InterviewExchange>> written, CancellationToken cancel)
     {
         try
         {
@@ -2238,14 +2425,17 @@ public sealed partial class RaceControlControl
                 return null;
             }
 
-            var winner = record.Results.OrderBy(r => r.Position).FirstOrDefault();
-            var className = string.IsNullOrEmpty(record.RoundId) ? null : _rounds?.Get(record.RoundId)?.ClassName;
+            // WHY (20 Oct 2026): READ BY THE CALLER, on the UI thread that
+            // owns the stores, before the sequence went to the background.
+            // This runs on the thread pool, and used to walk the history,
+            // the rounds and the profiles itself while the UI could be
+            // writing to them. Only the diary is read here - its own file.
+            var (nightFacts, stance) = (brief.Facts, brief.Stance);
 
-            // READ BEFORE THE AWAIT, on the thread that owns the stores.
-            var (nightFacts, stance) = PrincipalNightBrief(
-                winner?.Transponder, className, PrincipalTablePosition(winner?.Transponder, championship?.Moves));
-
-            var lastSaid = PrincipalDiary.FactLines(PrincipalLastSaid(winner?.Transponder));
+            // WHY (20 Oct 2026): with the principal's name as it is now, so a
+            // sentence the club's previous principal said is not quoted back
+            // to the new one as his own (the diary keeps plan.PrincipalName).
+            var lastSaid = PrincipalDiary.FactLines(PrincipalLastSaid(brief.WinnerTransponder, plan.PrincipalName));
 
             if (stance.Brief.Length > 0)
             {
@@ -2253,7 +2443,7 @@ public sealed partial class RaceControlControl
 
                 StatusMessage?.Invoke(
                     $"{AppTime.LogStampNow()}  [commentary] The Team Principal comes in {stance.Name.ToLowerInvariant()} - "
-                    + $"read off {_profiles.Get(winner?.Transponder ?? string.Empty)?.SpokenName ?? "the winner"}'s night"
+                    + $"read off {brief.WinnerSpokenName ?? "the winner"}'s night"
                     + (booth.Length > 0 ? $", {booth}." : "."));
             }
 
@@ -2273,7 +2463,8 @@ public sealed partial class RaceControlControl
                 return null;
             }
 
-            KeepWhatThePrincipalSaid(record, plan, exchanges);
+            // Not kept here - only once aired. See principalWords in the caller.
+            written(exchanges);
 
             // The recap host asks, in the booth (18 Oct 2026) - not the
             // co-host, who is down in pit lane.
@@ -2392,11 +2583,11 @@ public sealed partial class RaceControlControl
     /// or restored from a backup between races is picked up rather than
     /// quietly ignored - the rule every reader on this page follows.
     /// </summary>
-    private PrincipalDiary.Entry? PrincipalLastSaid(string? transponder)
+    private PrincipalDiary.Entry? PrincipalLastSaid(string? transponder, string? principalName)
     {
         try
         {
-            return PrincipalDiary.Load().LastSaidBy(transponder, DateTime.UtcNow);
+            return PrincipalDiary.Load().LastSaidBy(transponder, principalName, DateTime.UtcNow);
         }
         catch (Exception ex)
         {
@@ -2468,9 +2659,21 @@ public sealed partial class RaceControlControl
     /// a promise out of a remark. See PrincipalDiary, which refuses the
     /// same thing one layer down.
     /// </summary>
+    /// <param name="spokenName">The winner's spoken name, read by the caller on the UI thread - see BoothBrief.</param>
     private void KeepWhatThePrincipalSaid(
-        SessionRecord record, RecapPlan plan, IReadOnlyList<CommentaryService.InterviewExchange>? exchanges)
+        SessionRecord record, RecapPlan plan, IReadOnlyList<CommentaryService.InterviewExchange>? exchanges, string? spokenName)
     {
+        // WHY (20 Oct 2026): never from a demo. A demo races the round's
+        // real transponders, so its invented commitment replaced the real
+        // team's last one and was quoted back at the next race night as a
+        // promise made after a race that never happened. IsDemoSession, not
+        // IsDemo, to catch older demo saves too - as SettleTheRoomsVote does.
+        // The demo interview still airs; only the diary is left alone.
+        if (record.IsDemoSession())
+        {
+            return;
+        }
+
         if (exchanges is null || exchanges.Count < CommentaryService.PrincipalExchanges)
         {
             return;
@@ -2489,7 +2692,7 @@ public sealed partial class RaceControlControl
 
             diary.Keep(
                 winner.Transponder,
-                _profiles.Get(winner.Transponder)?.SpokenName,
+                spokenName,
                 plan.PrincipalName,
                 record.Label,
                 exchanges[^1].Answer,
@@ -2524,6 +2727,112 @@ public sealed partial class RaceControlControl
         return !string.IsNullOrWhiteSpace(profile?.AnnouncerName) ? profile!.AnnouncerName.Trim()
             : !string.IsNullOrWhiteSpace(profile?.DriverName) ? profile!.DriverName.Trim()
             : string.Empty;
+    }
+
+    /// <summary>
+    /// How long past the pause after the flag the throw into the stop set
+    /// is waited for before the line written in StopSetThrow goes instead.
+    /// The pause is usually long enough on its own; this is the margin for
+    /// a slow night, short enough that the room never hears it as a stall.
+    /// </summary>
+    private const int ThrowGraceSeconds = 4;
+
+    /// <summary>The names the throw into the stop set says, cleaned once for both the prompt and the check.</summary>
+    private StopSetThrow.Names StopSetNames() => StopSetThrow.Names.Of(
+        CommentaryService.Field(_settings.RecapShowName, CommentaryService.MaxShowNameChars),
+        CommentaryService.Field(_settings.HostNameForRecapShow, CommentaryService.MaxShowNameChars),
+        CommentaryService.Field(_settings.RecapAnnouncerName, CommentaryService.MaxShowNameChars));
+
+    /// <summary>
+    /// The throw into the stop set (19 Oct 2026): the model's line once it
+    /// has passed StopSetThrow.Checked, or StopSetThrow.Fallback when it is
+    /// not in within <paramref name="wait"/>, failed, or will not do. Never
+    /// throws and never returns nothing - the break always gets its way in.
+    /// A line given up on is cancelled, so it stops holding up the recap
+    /// on the model on this PC.
+    /// </summary>
+    private async Task<string> ThrowToBreakAsync(
+        Task<string?>? written, CancellationTokenSource writing, StopSetThrow.Names names, bool breakFollows,
+        Task notBefore, TimeSpan wait, CancellationToken ct)
+    {
+        string? line = null;
+        var why = "the AI wasn't asked for one";
+
+        if (written is not null)
+        {
+            try
+            {
+                var first = await Task.WhenAny(written, DeadlineAsync(notBefore, wait, ct));
+
+                if (first == written)
+                {
+                    line = await written;
+                    why = "nothing came back";
+                }
+                else
+                {
+                    writing.Cancel();
+                    why = $"it wasn't written in time ({wait.TotalSeconds:0}s)";
+                }
+            }
+            catch (Exception ex)
+            {
+                why = ex is OperationCanceledException ? "the writing was stopped" : ex.Message;
+            }
+        }
+
+        var notes = new List<string>();
+        var checkedLine = line is null ? null : StopSetThrow.Checked(line, names, StopSetThrow.Recent, notes, breakFollows);
+
+        if (line is not null && checkedLine is null)
+        {
+            why = $"the AI's line wasn't used - {string.Join("; ", notes)}: \"{line}\"";
+        }
+
+        var said = checkedLine ?? StopSetThrow.Fallback(names, breakFollows: breakFollows);
+        StopSetThrow.Said(said);
+
+        StatusMessage?.Invoke(checkedLine is not null
+            ? $"{AppTime.LogStampNow()}  [commentary] Throw to the {(breakFollows ? "break" : "recap (no break tonight)")} written by the AI."
+            : $"{AppTime.LogStampNow()}  [commentary] Throw to the {(breakFollows ? "break" : "recap (no break tonight)")}: the built-in line, because {why}.");
+
+        return said;
+    }
+
+    /// <summary>
+    /// <paramref name="wait"/> after <paramref name="notBefore"/> has
+    /// finished - the pit lane heard out - or straight away once
+    /// <paramref name="ct"/> is cancelled. Never throws.
+    /// </summary>
+    private static async Task DeadlineAsync(Task notBefore, TimeSpan wait, CancellationToken ct)
+    {
+        try
+        {
+            await Task.WhenAny(notBefore, Task.Delay(Timeout.Infinite, ct));
+            await Task.Delay(wait, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // The next race is called - the throw is not waited for.
+        }
+    }
+
+    /// <summary>The teaser's words, once they are settled, and its audio made ready - null audio when the voice is muted or the render failed.</summary>
+    private async Task<(string Text, AnnouncementService.PreparedSpeech? Audio)> RenderTeaserAsync(Task<string> words)
+    {
+        var text = await words;
+        AnnouncementService.PreparedSpeech? audio = null;
+
+        try
+        {
+            audio = await _announcer.PrepareReminderAsync(text);
+        }
+        catch
+        {
+            // Spoken live instead - see the teaser below.
+        }
+
+        return (text, audio);
     }
 
     /// <summary>The words of a throw to pit lane - the race announcer's at the flag, see RenderFlagThrowAsync. Pure, for the tests.</summary>
@@ -2648,7 +2957,7 @@ public sealed partial class RaceControlControl
             CoHostInterviews ? (_settings.CommentaryCoHostName ?? string.Empty).Trim() : string.Empty,
             principal: false,
             technicalLead: true,
-            record.Results.OrderBy(r => r.Position).FirstOrDefault() is { } winner ? SpokenDriverName(winner.Transponder) : string.Empty);
+            record.Results.OrderBy(r => r.Position).FirstOrDefault() is { } winner ? WinnerName(winner) : string.Empty);
 
         if (cancel.IsCancellationRequested)
         {
@@ -2657,6 +2966,17 @@ public sealed partial class RaceControlControl
 
         return new SpokenLine(line, null, null, await _announcer.PrepareReminderAsync(line));
     }
+
+    /// <summary>
+    /// The winner as the throw says them: the spoken name, or - for a car
+    /// with no profile - the name the race recorded (19 Oct 2026), so the
+    /// throw names the team the recap is about to name instead of "the
+    /// winning team".
+    /// </summary>
+    private string WinnerName(SessionResultEntry winner) =>
+        SpokenDriverName(winner.Transponder) is { Length: > 0 } spoken ? spoken
+        : DriverIntros.LooksLikeAName(winner.DriverName) ? winner.DriverName.Trim()
+        : string.Empty;
 
     /// <summary>
     /// The co-host handing back up to the booth once the Technical Lead has
@@ -2676,10 +2996,16 @@ public sealed partial class RaceControlControl
         return new SpokenLine(line, voice, null, await _announcer.PrepareReminderAsync(line, null, voice));
     }
 
-    /// <summary>The co-host's hand back to the race announcer: "Back to you, Dave." Pure, for the tests.</summary>
+    /// <summary>
+    /// The co-host's hand back to the race announcer: "Back to you, Dave."
+    /// His FIRST name (19 Oct 2026) - "back to you, Rick Marshal" was a
+    /// colleague reading his name off a card, and it landed right in front
+    /// of his own "I'm Rick Marshal" in the throw to the break. Pure, for
+    /// the tests.
+    /// </summary>
     internal static string FlagHandBack(string? announcerName)
     {
-        var who = (announcerName ?? string.Empty).Trim().TrimEnd('.', '!', '?', ',');
+        var who = CommentaryService.FirstName(announcerName);
 
         return who.Length > 0 ? $"That's the word from pit lane - back to you, {who}." : "That's the word from pit lane - back up to the booth.";
     }
@@ -2816,7 +3142,7 @@ public sealed partial class RaceControlControl
     /// <param name="after">What the wait is counted from, for the console.</param>
     private async Task<(FollowOn Outcome, bool Said)> SpeakInterviewAsync(
         Task<List<SpokenLine>?> interviewTask, CancellationToken nextRace, SpokenLine? leadIn = null,
-        SpokenLine? handBack = null, string after = "the recap ending", string? onAir = null)
+        SpokenLine? handBack = null, string after = "the recap ending", string? onAir = null, bool anotherFollows = false)
     {
         const string stopped = "Interview stopped - the next race was called to the grid.";
 
@@ -2880,7 +3206,11 @@ public sealed partial class RaceControlControl
 
             Say(
                 lines[i],
-                run.AnotherFollows
+                // The last line hard up against what follows it too, when
+                // the caller has something straight after (19 Oct 2026):
+                // the hand back at the flag, with the throw to the break
+                // behind it.
+                run.AnotherFollows || (anotherFollows && i == lines.Count - 1)
                     ? AnnouncementService.SpeechTail.BackToBack
                     : AnnouncementService.SpeechTail.Normal,
                 run.FollowsAnother
@@ -3285,8 +3615,22 @@ public sealed partial class RaceControlControl
             var imagingStinger = BroadcastImaging.Has(ImagingCue.BetweenRecapParts);
             var index = 0;
 
+            // THE TWO-HANDERS RENDERED AHEAD (19 Oct 2026). Each turn used to
+            // be synthesised only once the turn before it had been heard out,
+            // so every change of voice carried a whole render's round trip -
+            // a second or two of dead air between the announcer and the
+            // co-host, on top of the pads - and the back and forth sounded
+            // like what it was: one line asked for after another. Now every
+            // exchange's turns are rendered in order the moment the colour
+            // is in hand, while the stinger, the punctuation and the segments
+            // in front of them play, the way the honours and the interviews
+            // already were. A turn whose render failed or never arrived is
+            // spoken as before, rendered as it is said.
+            var renders = RenderColourExchangesAhead(segments, nextRace);
+
             foreach (var said in segments)
             {
+                var position = index;
                 var firstSegment = index++ == 0;
 
                 if (!await HeardOutAsync(nextRace))
@@ -3326,11 +3670,31 @@ public sealed partial class RaceControlControl
                     return;
                 }
 
-                // Going out now - see the director note above.
-                director?.Spoken(said);
-
                 if (said.IsExchange)
                 {
+                    // The turns' audio, rendered while what came before this
+                    // segment played - usually long finished by now.
+                    IReadOnlyList<AnnouncementService.PreparedSpeech?>? audio = null;
+
+                    if (renders[position] is { } rendering)
+                    {
+                        (_, audio) = await WithinAsync(rendering, FollowOnWait, nextRace);
+
+                        if (nextRace.IsCancellationRequested)
+                        {
+                            SayUnlessTheNextRaceStopped(stopped, nextRace);
+
+                            return;
+                        }
+                    }
+
+                    // WHY (20 Oct 2026): going out now - see the director
+                    // note above. Told Spoken here, after the wait for the
+                    // turns' render, rather than before it: a call-off in
+                    // that wait used to leave a two-hander nobody heard
+                    // marked as said. Turn 0 is queued with no await between.
+                    director?.Spoken(said);
+
                     for (var at = 0; at < said.Turns.Count; at++)
                     {
                         if (at > 0 && !await HeardOutAsync(nextRace))
@@ -3352,23 +3716,35 @@ public sealed partial class RaceControlControl
 
                         var turn = said.Turns[at];
                         var run = CommentaryExchange.ExchangeRun.At(at, said.Turns.Count);
+                        var tail = run.AnotherFollows
+                            ? AnnouncementService.SpeechTail.BackToBack
+                            : AnnouncementService.SpeechTail.Normal;
+                        var lead = run.FollowsAnother
+                            ? AnnouncementService.SpeechLead.FollowsOn
+                            : AnnouncementService.SpeechLead.Normal;
 
-                        _announcer.SpeakReminder(
-                            turn.Line,
-                            null,
-                            turn.FromCoHost ? _settings.CoHostVoice : RecapHostVoice,
-                            showOnScreens: true,
-                            tail: run.AnotherFollows
-                                ? AnnouncementService.SpeechTail.BackToBack
-                                : AnnouncementService.SpeechTail.Normal,
-                            lead: run.FollowsAnother
-                                ? AnnouncementService.SpeechLead.FollowsOn
-                                : AnnouncementService.SpeechLead.Normal,
-                            onAir: ShowBlock.NameFor(said.Kind));
+                        if (audio is not null && at < audio.Count && audio[at] is { } prepared)
+                        {
+                            _announcer.SpeakPrepared(prepared, tail, lead, ShowBlock.NameFor(said.Kind));
+                        }
+                        else
+                        {
+                            _announcer.SpeakReminder(
+                                turn.Line,
+                                null,
+                                turn.FromCoHost ? _settings.CoHostVoice : RecapHostVoice,
+                                showOnScreens: true,
+                                tail: tail,
+                                lead: lead,
+                                onAir: ShowBlock.NameFor(said.Kind));
+                        }
                     }
 
                     continue;
                 }
+
+                // Going out now - see the director note above.
+                director?.Spoken(said);
 
                 _announcer.SpeakReminder(said.Text, null, RecapHostVoice, showOnScreens: true, onAir: ShowBlock.NameFor(said.Kind));
             }
@@ -3381,6 +3757,76 @@ public sealed partial class RaceControlControl
                 director?.Dropped(unsaid);
             }
         }
+    }
+
+    /// <summary>
+    /// Every two-voice colour segment's turns, rendered one after another in
+    /// the voices that say them, starting now - index for index with
+    /// <paramref name="segments"/>, null for a segment in one voice. Each
+    /// segment's renders wait for the one before it, so the first exchange
+    /// to be spoken is the first one ready, and the relay is never asked for
+    /// a whole programme's lines at once.
+    ///
+    /// The voices are read HERE, on the calling thread, where the settings
+    /// belong; only the rendering runs off it. Each render costs characters,
+    /// so the next race being called stops the rest - see
+    /// RenderExchangesAsync, which does the same for the interviews.
+    /// </summary>
+    private Task<IReadOnlyList<AnnouncementService.PreparedSpeech?>?>?[] RenderColourExchangesAhead(
+        IReadOnlyList<SpokenSegment> segments, CancellationToken nextRace)
+    {
+        var renders = new Task<IReadOnlyList<AnnouncementService.PreparedSpeech?>?>?[segments.Count];
+        Task previous = Task.CompletedTask;
+
+        var hostVoice = RecapHostVoice;
+        var coHostVoice = _settings.CoHostVoice;
+
+        for (var i = 0; i < segments.Count; i++)
+        {
+            if (!segments[i].IsExchange)
+            {
+                continue;
+            }
+
+            var turns = segments[i].Turns
+                .Select(turn => (turn.Line, Voice: turn.FromCoHost ? coHostVoice : hostVoice))
+                .ToList();
+            var after = previous;
+
+            var rendering = Task.Run<IReadOnlyList<AnnouncementService.PreparedSpeech?>?>(async () =>
+            {
+                try
+                {
+                    await after.ConfigureAwait(false);
+                }
+                catch
+                {
+                    // The segment before failing to render is no reason for
+                    // this one not to.
+                }
+
+                var audio = new List<AnnouncementService.PreparedSpeech?>(turns.Count);
+
+                foreach (var (line, voice) in turns)
+                {
+                    if (nextRace.IsCancellationRequested)
+                    {
+                        return null;
+                    }
+
+                    // Null when it could not be rendered - spoken as it is
+                    // said instead, as before.
+                    audio.Add(await _announcer.PrepareReminderAsync(line, null, voice).ConfigureAwait(false));
+                }
+
+                return audio;
+            });
+
+            renders[i] = rendering;
+            previous = rendering;
+        }
+
+        return renders;
     }
 
     /// <summary>Says a line unless the next race is what stopped things, which already has its own line.</summary>
@@ -4825,14 +5271,27 @@ public sealed partial class RaceControlControl
         // a new one is wanted.
         var asOf = _writtenAhead.ResultsChanged();
 
+        // WHY (20 Oct 2026): a new filing is followed by SpeakRaceSummary
+        // asking for the flag lines, so the write-aheads below wait for
+        // those to be asked first (at most 45s). The facts are still read
+        // now, on this thread - that timing is what makes them true. A
+        // correction has no flag lines behind it, so it shares whatever
+        // gate is current. See _flagLinesAsked.
+        if (!corrected)
+        {
+            _flagLinesAsked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        var gate = _flagLinesAsked.Task;
+
         // The Team Principal's pre-race interview, written ahead the same
         // way and at the same moment (17 Oct 2026) - first, because the
         // intro's own switches below must not decide it.
-        WriteThePrincipalAhead(filed, corrected);
+        WriteThePrincipalAhead(filed, corrected, gate);
 
         // And the driver introductions (18 Oct 2026), for the same reason
         // and under their own switch - see WriteTheIntroductionsAhead.
-        WriteTheIntroductionsAhead(filed, corrected);
+        WriteTheIntroductionsAhead(filed, corrected, gate);
 
         // A CORRECTION MADE WHILE A RACE IS ON is not written for. The
         // round it would pick is the one after the race on track, whose own
@@ -4898,6 +5357,10 @@ public sealed partial class RaceControlControl
 
         _ = Task.Run(async () =>
         {
+            // Behind the flag lines, and only then the budget starts - the
+            // wait is not the model's time (20 Oct 2026, see _flagLinesAsked).
+            await WaitForFlagLinesAsync(gate);
+
             try
             {
                 using var budget = new CancellationTokenSource(WriteAheadModelBudget);
@@ -5736,7 +6199,8 @@ public sealed partial class RaceControlControl
     /// Best-effort like the intro's: never awaited, holding no start up,
     /// and a failure costs the night nothing - Stage writes its own as before.
     /// </summary>
-    private void WriteThePrincipalAhead(SessionRecord? filed, bool corrected)
+    /// <param name="gate">Waited for before the model is asked - see _flagLinesAsked.</param>
+    private void WriteThePrincipalAhead(SessionRecord? filed, bool corrected, Task gate)
     {
         int asOf;
 
@@ -5792,6 +6256,9 @@ public sealed partial class RaceControlControl
 
         _ = Task.Run(async () =>
         {
+            // Behind the flag lines, before the budget (20 Oct 2026) - see _flagLinesAsked.
+            await WaitForFlagLinesAsync(gate);
+
             try
             {
                 using var budget = new CancellationTokenSource(WriteAheadModelBudget);

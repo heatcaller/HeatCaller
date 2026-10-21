@@ -230,6 +230,49 @@ export class TopUpRequests {
     });
   }
 
+  /**
+   * Blanks the notes on every one of a club's requests, for "delete
+   * everything".
+   *
+   * WHY (20 Oct 2026, Bug Hunt 8, #100): a note is free text that can name
+   * a driver, and it lives outside the club folder, so the delete's wipe
+   * never reached it. The requests themselves stay, so the monthly cap and
+   * the operator's queue still hold. The done file is the operator's and
+   * is left alone. A file that will not read is not written over, as in
+   * ask(); nothing is written when no note needs blanking, so pressing
+   * Delete again costs nothing.
+   */
+  async forgetNotes(club: string): Promise<void> {
+    return this.serialise(club, async (): Promise<void> => {
+      const path = topUpRequestsPath(this.dataDir, club);
+      const raw = await readJsonFile(path);
+
+      if (raw === undefined || raw === UNREADABLE || typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+        return;
+      }
+
+      const months = readRequestFile(raw);
+      const blanked: Record<string, StoredAsk[]> = {};
+      let changed = false;
+
+      for (const [month, asks] of Object.entries(months)) {
+        blanked[month] = asks.map((ask) => {
+          if (ask.note !== "") {
+            changed = true;
+          }
+
+          return { ...ask, note: "" };
+        });
+      }
+
+      if (!changed) {
+        return;
+      }
+
+      await writeFileAtomically(path, Buffer.from(JSON.stringify(blanked), "utf8"));
+    });
+  }
+
   private async serialise<T>(club: string, work: () => Promise<T>): Promise<T> {
     const before = this.locks.get(club) ?? Promise.resolve();
     const run = before.then(work, work);

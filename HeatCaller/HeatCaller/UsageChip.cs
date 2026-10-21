@@ -24,9 +24,22 @@ internal static class UsageGlance
     internal static IReadOnlyList<Meter> Measured(IEnumerable<Meter> meters) =>
         meters.Where(m => m.Level != MeterLevel.Unknown).ToList();
 
-    /// <summary>"AI 47% · Voice 34%" - or empty when nothing is measured, and the chip is hidden.</summary>
+    /// <summary>
+    /// "AI 47% · Voice 34%" - or empty when nothing is measured, and the chip
+    /// is hidden. A meter that could not be READ is there too, as
+    /// "ElevenLabs ?" (19 Oct 2026): left out, a key that can't read its
+    /// own plan looked like a meter that had never been built, and the
+    /// reason was a click away in a window nobody had a cue to open. One
+    /// that is simply not on the plan is still left out - there is nothing
+    /// to read.
+    /// </summary>
     internal static string ChipText(IEnumerable<Meter> meters) =>
-        string.Join(" · ", Measured(meters).Select(m => $"{ShortName(m.Kind)} {m.ShortPercent()}"));
+        string.Join(" · ", meters
+            .Where(m => m.Level != MeterLevel.Unknown || Unread(m))
+            .Select(m => Unread(m) ? $"{ShortName(m.Kind)} ?" : $"{ShortName(m.Kind)} {m.ShortPercent()}"));
+
+    /// <summary>A meter there is a reason for not having a figure for - ElevenLabs refusing to show the plan, say.</summary>
+    private static bool Unread(Meter meter) => !meter.Known && !string.IsNullOrWhiteSpace(meter.Note);
 
     /// <summary>The worst level among the measured meters; Unknown when there are none.</summary>
     internal static MeterLevel Worst(IEnumerable<Meter> meters) =>
@@ -35,7 +48,10 @@ internal static class UsageGlance
     /// <summary>What the chip says on hover: each meter in full, and what a click does.</summary>
     internal static string Tooltip(IEnumerable<Meter> meters)
     {
-        var lines = Measured(meters).Select(m => $"{UsageLine.TitleFor(m)} - {m.Summary()}").ToList();
+        var all = meters.ToList();
+        var lines = Measured(all).Select(m => $"{UsageLine.TitleFor(m)} - {m.Summary()}").ToList();
+
+        lines.AddRange(all.Where(Unread).Select(m => $"{m.Name} - {m.Note}"));
 
         lines.Add("Click for this month's allowances.");
 

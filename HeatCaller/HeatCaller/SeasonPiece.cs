@@ -339,8 +339,13 @@ internal static class SeasonPiece
 
             if (DriverCut.Describe(moment, who) is { Length: > 0 } sentence)
             {
+                // WHY (20 Oct 2026): the key was only race + kind, but one race
+                // can hold several lead changes and several charges. FactPack
+                // drops a repeated key, so a second driver's charge vanished
+                // and still used up one of the twelve slots. The transponder
+                // and lap now make each moment's key its own.
                 blocks.Add(new FactBlock(
-                    $"season:moment:{moment.SessionId}:{moment.What}",
+                    $"season:moment:{moment.SessionId}:{moment.What}:{moment.Transponder}:{moment.Lap}",
                     WhenIt(moment.AtUtc) is { Length: > 0 } when ? $"{sentence} ({when})" : sentence));
             }
         }

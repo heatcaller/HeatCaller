@@ -322,6 +322,23 @@ public sealed class WebServerControl : UserControl
         _numPort.Maximum = 65535;
         _numPort.Value = Math.Clamp(_settings.WebServerPort, 1024, 65535);
 
+        // WHY (20 Oct 2026): the port used to be saved only when Start was
+        // pressed. 'Set up phone pages' sets Windows up for the port in this
+        // box, but auto-start reads the saved one - so a club that changed
+        // the port, set it up and closed the app came back to a server on
+        // the old port, with no permission or firewall rule for it. Now it is
+        // saved as it changes, the same way the auto-start box is. Hooked up
+        // after the saved value is loaded above, so loading it saves nothing;
+        // never while the server runs (the box is disabled then anyway).
+        _numPort.ValueChanged += (_, _) =>
+        {
+            if (!_server.IsRunning && _settings.WebServerPort != (int)_numPort.Value)
+            {
+                _settings.WebServerPort = (int)_numPort.Value;
+                _settings.Save();
+            }
+        };
+
         _txtPin.Text = _settings.WebServerPin;
         _txtPin.PlaceholderText = "4+ digits";
         _txtPin.UseSystemPasswordChar = true;

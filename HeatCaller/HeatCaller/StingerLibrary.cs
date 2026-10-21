@@ -527,7 +527,15 @@ public sealed class StingerLibrary
         try
         {
             Directory.CreateDirectory(_folder);
-            File.WriteAllBytes(Path.Combine(_folder, file), audio);
+
+            // Written beside it and then moved into place (20 Oct 2026, Bug
+            // Hunt 8): a crash part-way through a straight write left a
+            // recording cut short under the line's name, which then failed
+            // to play every time the line came round.
+            var path = Path.Combine(_folder, file);
+            var tmp = path + ".tmp";
+            File.WriteAllBytes(tmp, audio);
+            File.Move(tmp, path, overwrite: true);
         }
         catch
         {

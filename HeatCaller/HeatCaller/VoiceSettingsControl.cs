@@ -155,6 +155,9 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly NumericUpDown _numSimilarity = new();
     private readonly NumericUpDown _numStyle = new();
     private readonly NumericUpDown _numSpeed = new();
+
+    /// <summary>Under Speed, while ElevenLabs speaks with eleven_v3 - which takes no speed at all. See ShowSpeedNote.</summary>
+    private readonly Label _lblSpeedNote = new();
     private readonly CheckBox _chkSpeakerBoost = new ThemedCheckBox();
     private readonly ComboBox _cmbTextNormalization = new();
     private readonly TextBox _txtLanguageCode = new();
@@ -1576,6 +1579,26 @@ public sealed partial class VoiceSettingsControl : UserControl
         _lblKokoroStatus.ForeColor = outcomeColour;
     }
 
+    /// <summary>What the Speed box says under it while ElevenLabs speaks with eleven_v3.</summary>
+    internal const string SpeedNoteForV3 =
+        "eleven_v3 doesn't take a speed - ElevenLabs ignores this box on that model. Pick eleven_multilingual_v2, "
+        + "turbo or flash above to change how fast the voice talks (Kokoro uses it too).";
+
+    /// <summary>Whether the Speed box does nothing for this engine and model: ElevenLabs on any v3 model.</summary>
+    internal static bool SpeedIgnored(bool elevenLabs, string? modelId) =>
+        elevenLabs && (modelId ?? string.Empty).Contains("v3", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The note under Speed shown while the box does nothing. UI thread.</summary>
+    private void ShowSpeedNote()
+    {
+        var show = SpeedIgnored(_rdoElevenLabs.Checked, _cmbModel.Text);
+
+        if (_lblSpeedNote.Visible != show)
+        {
+            _lblSpeedNote.Visible = show;
+        }
+    }
+
     /// <summary>
     /// Speaks a sample in the Kokoro voice picked above, at the Speed on
     /// screen and the Mixer's Announcements level - saved or not, like every test here. Kokoro
@@ -2066,6 +2089,9 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>True while the free sample list is being read, so two asks don't race. Its own flag - the catalogue's read is a different question.</summary>
     private bool _heatCallerSamplesLoading;
 
+    /// <summary>A sample read was asked for while one was running - run it again when that one ends, as the catalogue's _heatCallerLoadAgain does.</summary>
+    private bool _heatCallerSamplesLoadAgain;
+
     /// <summary>
     /// Reads the relay's free sample list - no token, no club, nothing
     /// charged - and lets the Hear It button work.
@@ -2082,6 +2108,12 @@ public sealed partial class VoiceSettingsControl : UserControl
     {
         if (_heatCallerSamplesLoading)
         {
+            // WHY (20 Oct 2026): this ask used to be dropped, so a relay
+            // address fixed while the read for the old (wrong) one was still
+            // waiting never got its samples - the page kept the old relay's
+            // list or "Couldn't fetch". It is now noted and run once the
+            // running read ends, the way the catalogue read does it.
+            _heatCallerSamplesLoadAgain = true;
             return;
         }
 
@@ -2103,7 +2135,10 @@ public sealed partial class VoiceSettingsControl : UserControl
         {
             var samples = await client.SamplesAsync();
 
-            if (Gone)
+            // A newer ask is waiting (see _heatCallerSamplesLoadAgain): this
+            // answer may be from the old relay address, so it is not shown -
+            // the re-run in finally replaces it.
+            if (Gone || _heatCallerSamplesLoadAgain)
             {
                 return;
             }
@@ -2126,7 +2161,9 @@ public sealed partial class VoiceSettingsControl : UserControl
         {
             _heatCallerSamples = Array.Empty<HeatCallerVoiceSample>();
 
-            if (!Gone)
+            // Not shown when a newer ask is waiting - it may be the old
+            // address failing, and the re-run answers for the new one.
+            if (!Gone && !_heatCallerSamplesLoadAgain)
             {
                 _lblHeatCallerPreviewStatus.Text = $"Couldn't fetch the voice samples: {ex.Message}";
                 _lblHeatCallerPreviewStatus.ForeColor = AppTheme.TextMuted;
@@ -2147,6 +2184,12 @@ public sealed partial class VoiceSettingsControl : UserControl
             if (!Gone)
             {
                 UpdateEngineControls();
+            }
+
+            if (!Gone && _heatCallerSamplesLoadAgain)
+            {
+                _heatCallerSamplesLoadAgain = false;
+                _ = LoadHeatCallerSamplesAsync();
             }
         }
     }
@@ -2312,7 +2355,12 @@ public sealed partial class VoiceSettingsControl : UserControl
             && (!string.Equals(chosen.Id, saved, StringComparison.Ordinal)
                 || (chosen.Rev.Length > 0 && !string.Equals(chosen.Rev, _store.Current.HeatCallerRev, StringComparison.Ordinal))))
         {
-            AutoSave();
+            // WHY (20 Oct 2026): this runs whenever the relay answers, which
+            // can be mid-word in the ElevenLabs boxes that are kept out of
+            // auto-save (see the constructor) - a plain save made "eleven_tur"
+            // the live model. Those four are saved as they were; the box
+            // being typed in is still taken into use when left or on Enter.
+            AutoSave(keepTypedElevenLabsBoxes: true);
         }
 
         return missing;
@@ -3003,6 +3051,20 @@ public sealed partial class VoiceSettingsControl : UserControl
         tuning.AddRow("Similarity boost:", _numSimilarity);
         tuning.AddRow("Style:", _numStyle);
         tuning.AddRow("Speed:", _numSpeed);
+
+        // ELEVEN V3 HAS NO SPEED (19 Oct 2026). ElevenLabs' own settings say
+        // "Speed is not available for the Eleven v3 model": the setting is
+        // sent and quietly ignored, so a club moving it from one end to the
+        // other on v3 heard no difference and reasonably took the box to be
+        // broken. Said here, under the box, while it is so.
+        _lblSpeedNote.AutoSize = true;
+        _lblSpeedNote.ForeColor = AppTheme.TextMuted;
+        _lblSpeedNote.Text = SpeedNoteForV3;
+        tuning.AddHint(_lblSpeedNote);
+        _cmbModel.TextChanged += (_, _) => ShowSpeedNote();
+        _cmbModel.SelectedIndexChanged += (_, _) => ShowSpeedNote();
+        _rdoElevenLabs.CheckedChanged += (_, _) => ShowSpeedNote();
+        ShowSpeedNote();
         tuning.AddRow("Text normalize:", _cmbTextNormalization);
         tuning.AddRow("Language:", _txtLanguageCode);
         tuning.AddRow("Output format:", _txtOutputFormat);
@@ -4241,7 +4303,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         _ = UsageMeters.Shared.RefreshAsync(_appSettings, _store.Current);
     }
 
-    private void AutoSave()
+    private void AutoSave(bool keepTypedElevenLabsBoxes = false)
     {
         if (_loadingSettings)
         {
@@ -4255,6 +4317,19 @@ public sealed partial class VoiceSettingsControl : UserControl
             var voiceBefore = _store.Current.HeatCallerVoice;
 
             var profile = BuildProfileFromControls();
+
+            // WHY (20 Oct 2026): a save the page makes on its own (the relay's
+            // catalogue answering) keeps the API key, model, language and
+            // output format as saved, not as half-typed on screen - see
+            // FillHeatCallerVoices. ElevenLabsBoxLeft commits them later.
+            if (keepTypedElevenLabsBoxes)
+            {
+                var current = _store.Current;
+                profile.ApiKey = current.ApiKey;
+                profile.ModelId = current.ModelId;
+                profile.LanguageCode = current.LanguageCode;
+                profile.OutputFormat = current.OutputFormat;
+            }
 
             // Save never throws. SafeFile reports a locked or unwritable file
             // (antivirus, OneDrive, a full disk) by returning false, and it

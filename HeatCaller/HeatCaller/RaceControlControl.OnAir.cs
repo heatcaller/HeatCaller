@@ -381,9 +381,10 @@ public sealed partial class RaceControlControl
             }
 
             // THE WHOLE RUN BEFORE STAGING, RENDERED NOW (18 Oct 2026): the
-            // opening, then the throw to pit lane and the Team Principal
-            // (rendered as they were written - see WritePrincipalLinesAsync),
-            // then the driver introductions. All of it in hand before the
+            // opening, then the driver introductions, then the throw to pit
+            // lane and the Team Principal (rendered as they were written -
+            // see WritePrincipalLinesAsync; after the introductions since
+            // 20 Oct 2026). All of it in hand before the
             // jingle, so each part runs straight on from the last.
             AnnouncementService.PreparedSpeech? audio = null;
             AnnouncementService.PreparedSpeech? introductionsAudio = null;
@@ -463,10 +464,46 @@ public sealed partial class RaceControlControl
                     _openingSaidByOnAir = true;
                 }
 
+                // Then the driver introductions - straight after the opening,
+                // which ends by handing to them ("Let's meet the field").
+                // Stage leaves them out - and their sponsor is counted, as
+                // it is heard.
+                if (said.Introductions is { } saidIntroductions)
+                {
+                    if (introductionsAudio is not null)
+                    {
+                        _announcer.SpeakPrepared(introductionsAudio, onAir: OnAirParts.DriverIntros);
+                    }
+                    else
+                    {
+                        _announcer.SpeakReminder(saidIntroductions.Text, onAir: OnAirParts.DriverIntros);
+                    }
+
+                    // WHY (20 Oct 2026): introductions written ahead are not
+                    // recorded as written (remember: false), so they become the
+                    // Announcer page's last line, and their wording is marked
+                    // as used, only now they are actually said.
+                    _commentary?.IntroSpoken(saidIntroductions.Text);
+
+                    _introductionsSaidByOnAir = true;
+
+                    if (!_announcer.Muted)
+                    {
+                        saidIntroductions.Count?.Invoke();
+                    }
+                }
+
                 // Then pit lane: the throw to the co-host and the Team
-                // Principal - right after the show open and BEFORE STAGING
-                // (18 Oct 2026), then the introductions, so the race is set
-                // up, the team heard, and then the field.
+                // Principal, LAST before staging.
+                //
+                // AFTER THE INTRODUCTIONS, NOT BEFORE THEM (20 Oct 2026). It
+                // was opening, pit lane, introductions - so the opening said
+                // "Let's meet the field" and the announcer threw to pit lane
+                // instead, and "Before we go, let's head down to pit lane"
+                // came before anything had been introduced. A broadcast sets
+                // the race up, meets the field, and then goes to pit lane for
+                // the last word before the start - which is what the throw
+                // already says.
                 //
                 // Once On Air has tried for it, Stage leaves it out even
                 // when it did not come back in time: the pit lane belongs
@@ -480,27 +517,6 @@ public sealed partial class RaceControlControl
                 if (said.Principal is { } principalPart)
                 {
                     SayPrincipalLines(principalPart.Lines, principalPart.Focus);
-                }
-
-                // Then the driver introductions. Stage leaves them out too -
-                // and their sponsor is counted, as it is heard.
-                if (said.Introductions is { } saidIntroductions)
-                {
-                    if (introductionsAudio is not null)
-                    {
-                        _announcer.SpeakPrepared(introductionsAudio, onAir: OnAirParts.DriverIntros);
-                    }
-                    else
-                    {
-                        _announcer.SpeakReminder(saidIntroductions.Text, onAir: OnAirParts.DriverIntros);
-                    }
-
-                    _introductionsSaidByOnAir = true;
-
-                    if (!_announcer.Muted)
-                    {
-                        saidIntroductions.Count?.Invoke();
-                    }
                 }
 
                 // 4. The bumper, HITTING THE POST (17 Oct 2026): fired while
@@ -678,8 +694,9 @@ public sealed partial class RaceControlControl
 
     /// <summary>
     /// Everything On Air says before staging (18 Oct 2026), in the order it
-    /// is said: the opening, then the Team Principal with the throw to pit
-    /// lane, then the driver introductions. Each part after the opening is
+    /// is said: the opening, then the driver introductions, then the Team
+    /// Principal with the throw to pit lane (20 Oct 2026 - the pit lane used
+    /// to come before the introductions). Each part after the opening is
     /// null when it is not due or did not come back in time - Stage then
     /// does it as before.
     /// </summary>
@@ -749,8 +766,8 @@ public sealed partial class RaceControlControl
             // thread where their facts are read, and awaited below.
             var introductions = IntroductionsForOpeningAsync(round, ct);
 
-            // And the Team Principal (18 Oct 2026), between the opening and
-            // the introductions - written alongside both, and rendered as it
+            // And the Team Principal (18 Oct 2026), after the introductions
+            // (20 Oct 2026) - written alongside both, and rendered as it
             // is written, so it costs the run no wait of its own.
             var principalJob = PreparePrincipal(round);
             var principal = principalJob is null
@@ -820,7 +837,7 @@ public sealed partial class RaceControlControl
 
             if (principalLines is { Count: > 0 })
             {
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] The Team Principal goes out after the opening, before the driver introductions.");
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] The Team Principal goes out after the driver introductions, last before staging.");
             }
 
             return new OpeningRun(

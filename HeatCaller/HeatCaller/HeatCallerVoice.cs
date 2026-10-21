@@ -51,14 +51,26 @@ internal sealed record HeatCallerVoiceSample(string Id, string Name, string Url)
     public override string ToString() => string.IsNullOrWhiteSpace(Name) ? Id : Name;
 }
 
-/// <summary>Where a club stands with its HeatCaller voice this month. Characters, because that is what ElevenLabs counts.</summary>
-internal sealed record HeatCallerAllowance(int Used, int Allowance, DateTime? ResetsUtc)
+/// <summary>
+/// Where a club stands with its HeatCaller voice this month. Characters,
+/// because that is what ElevenLabs counts.
+///
+/// Known (20 Oct 2026, Bug Hunt 8): false when the relay says it could not
+/// read the club's usage file and the figures are only a stand-in. It used
+/// to send "0 used", which emptied the This Month meter and could end a
+/// spent month early. An unknown figure is never fed to the meters or kept
+/// as where the month stands. A relay that does not send the flag is taken
+/// as known, as before.
+/// </summary>
+internal sealed record HeatCallerAllowance(int Used, int Allowance, DateTime? ResetsUtc, bool Known = true)
 {
-    public bool Spent => Allowance > 0 && Used >= Allowance;
+    public bool Spent => Known && Allowance > 0 && Used >= Allowance;
 
     /// <summary>"34,120 of 100,000 characters this month" - for the Voice Settings page.</summary>
     public string Describe() =>
-        Allowance <= 0
+        !Known
+            ? "This month's usage can't be read right now."
+            : Allowance <= 0
             ? "No allowance on this plan."
             : $"{Used:N0} of {Allowance:N0} characters this month"
               + (ResetsUtc is { } resets ? $" - starts again {resets.ToLocalTime():d MMM}." : ".");
@@ -1021,19 +1033,32 @@ internal sealed class HeatCallerVoiceClient
     /// Tells UsageMeters where the month stands. Only from the club's own
     /// speak and catalogue answers - never a preview's, which counts a
     /// separate daily allowance and would make the month's meter jump about.
+    ///
+    /// An unknown figure (20 Oct 2026) is not reported at all, so the meter
+    /// keeps what it last knew rather than dropping to nothing spent.
     /// </summary>
-    private static void ReportToMeters(HeatCallerAllowance allowance) =>
+    private static void ReportToMeters(HeatCallerAllowance allowance)
+    {
+        if (!allowance.Known)
+        {
+            return;
+        }
+
         UsageMeters.Shared.Report(MeterKind.HeatCallerVoice, allowance.Used, allowance.Allowance, allowance.ResetsUtc);
+    }
 
     private static HeatCallerAllowance AllowanceFrom(JsonElement root)
     {
         // Two shapes, because the catalogue nests it and a refusal does not.
         var holder = root.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object ? usage : root;
 
+        // "known": false is the relay saying the figures are a stand-in
+        // (20 Oct 2026); absent, or anything else, means known.
         return new HeatCallerAllowance(
             Whole(holder, "used"),
             Whole(holder, "allowance"),
-            When(holder, "resetsAt"));
+            When(holder, "resetsAt"),
+            Known: !(holder.TryGetProperty("known", out var known) && known.ValueKind == JsonValueKind.False));
     }
 
     private static HeatCallerAllowance? AllowanceFromHeaders(HttpResponseMessage response)
@@ -1046,16 +1071,27 @@ internal sealed class HeatCallerVoiceClient
             return null;
         }
 
+        var usedCount = int.TryParse(used, out var u) ? u : 0;
+        var allowanceCount = int.TryParse(allowance, out var a) ? a : 0;
+
+        // Unknown (20 Oct 2026) when the relay says so in x-voice-known, or
+        // when it sends 0 of 0 - the stand-in a relay that cannot read its
+        // usage file puts in the headers, and never a real month for a club
+        // whose line was just spoken.
+        var known = !string.Equals(Header(response, "x-voice-known")?.Trim(), "false", StringComparison.OrdinalIgnoreCase)
+                    && !(usedCount == 0 && allowanceCount == 0);
+
         return new HeatCallerAllowance(
-            int.TryParse(used, out var u) ? u : 0,
-            int.TryParse(allowance, out var a) ? a : 0,
+            usedCount,
+            allowanceCount,
             DateTime.TryParse(
                 Header(response, "x-voice-resets"),
                 System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
                 out var resets)
                 ? resets
-                : null);
+                : null,
+            known);
     }
 
     private static string? Header(HttpResponseMessage response, string name) =>

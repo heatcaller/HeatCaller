@@ -131,6 +131,17 @@ public sealed class RcpTrackEditorForm : Form
 
     private readonly string _trackName;
 
+    // WHY (20 Oct 2026): what the plan and its name were when the window
+    // opened, so closing it without saving can ask first - see OnFormClosing.
+    private readonly string _openedDesign;
+    private readonly string _openedName;
+    private readonly bool _openedUseAsPhoto;
+
+    // WHY (20 Oct 2026): true when the window opens on drawing that was never
+    // saved - Track Layouts opens it again that way after "Name already
+    // used" - so closing it without saving asks even if nothing changed since.
+    private readonly bool _unsavedOnOpen;
+
     private bool _loading = true;
 
     /// <summary>
@@ -150,8 +161,10 @@ public sealed class RcpTrackEditorForm : Form
     /// <summary>The name typed on the side panel.</summary>
     public string TrackName => _txtName.Text.Trim();
 
-    public RcpTrackEditorForm(RcpTrackDesign? existing, string trackName, double? averageLapSeconds)
+    public RcpTrackEditorForm(RcpTrackDesign? existing, string trackName, double? averageLapSeconds, bool unsavedOnOpen = false)
     {
+        _unsavedOnOpen = unsavedOnOpen;
+
         _trackName = string.IsNullOrWhiteSpace(trackName) ? string.Empty : trackName;
 
         Text = string.IsNullOrEmpty(_trackName) ? "Track Designer" : $"Track Designer - {_trackName}";
@@ -177,6 +190,12 @@ public sealed class RcpTrackEditorForm : Form
         AppTheme.StyleButton(_btnPng, AppTheme.ButtonKind.Secondary);
 
         _loading = false;
+
+        // WHY (20 Oct 2026): taken once the side panel has been filled in, so
+        // what it set while loading is part of the "as opened" picture.
+        _openedDesign = DesignSnapshot(_canvas.Design);
+        _openedName = TrackName;
+        _openedUseAsPhoto = _chkUseAsPhoto.Checked;
 
         HighlightTileSize();
         HighlightRadius();
@@ -1597,6 +1616,80 @@ public sealed class RcpTrackEditorForm : Form
 
         return base.ProcessCmdKey(ref msg, keyData);
     }
+
+    /// <summary>
+    /// WHY (20 Oct 2026): Escape in any box on the side panel (it reaches
+    /// the Cancel button from everywhere but the board) or the title bar's X
+    /// used to close the designer at once and throw away everything drawn,
+    /// with no question and no undo - while Clear and Start from a kit both
+    /// ask. Now a close that is not Save Layout asks first when the plan,
+    /// its name or the main-picture box is not as it was when the window
+    /// opened, and No keeps the window open. Windows shutting down, the app
+    /// exiting or the owner closing are never held up.
+    /// </summary>
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (ShouldAskBeforeClosing(DialogResult, e.CloseReason, e.Cancel, HasUnsavedChanges()))
+        {
+            var answer = AppDialog.Show(this,
+                "Close the designer and lose the changes to this layout?",
+                "Discard changes",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (answer != DialogResult.Yes)
+            {
+                e.Cancel = true;
+                DialogResult = DialogResult.None;
+            }
+        }
+
+        base.OnFormClosing(e);
+    }
+
+    /// <summary>
+    /// Whether closing should ask before losing changes. Save Layout (OK)
+    /// never asks. The Cancel button and Escape close a modal dialog with
+    /// CloseReason.None, and the X with UserClosing - both ask; every other
+    /// reason (shutdown, Task Manager, the owner or the app closing) does not.
+    /// </summary>
+    internal static bool ShouldAskBeforeClosing(DialogResult result, CloseReason reason, bool alreadyCancelled, bool changed) =>
+        changed
+        && !alreadyCancelled
+        && result != DialogResult.OK
+        && reason is CloseReason.UserClosing or CloseReason.None;
+
+    private bool HasUnsavedChanges()
+    {
+        // A nudge still settling is part of what would be lost.
+        _canvas.LandPendingNudge();
+
+        return _unsavedOnOpen
+            || !string.Equals(TrackName, _openedName, StringComparison.Ordinal)
+            || _chkUseAsPhoto.Checked != _openedUseAsPhoto
+            || !string.Equals(DesignSnapshot(_canvas.Design), _openedDesign, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The plan as text, to tell whether it changed. Compared rather than
+    /// going by CanUndo, so drawing something and undoing it back to the
+    /// start does not count as a change.
+    /// </summary>
+    internal static string DesignSnapshot(RcpTrackDesign design) =>
+        System.Text.Json.JsonSerializer.Serialize(design, SnapshotOptions);
+
+    /// <summary>
+    /// WHY (20 Oct 2026): the default options throw on a NaN or infinite
+    /// float, and a snapshot is taken in the constructor and on every close -
+    /// so one bad photo position would stop the designer opening, or
+    /// closing. Only ever compared, never read back, so any spelling of it
+    /// will do.
+    /// </summary>
+    private static readonly System.Text.Json.JsonSerializerOptions SnapshotOptions = new()
+    {
+        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals,
+    };
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {

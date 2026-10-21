@@ -421,3 +421,17 @@ describe("too many votes too fast", () => {
     assert.equal((await inbox()).body.items.length, 1);
   });
 });
+
+// 20 Oct 2026, Bug Hunt 8, #22: each held vote carries when the relay took
+// it, so the laptop can count a vote cast just before the close by when it
+// was cast rather than when it was read.
+describe("a held vote's stamp", () => {
+  it("says when the relay took it, in milliseconds on the relay's clock", async () => {
+    await openOn();
+    await vote(BILL.id);
+
+    const [item] = (await inbox()).body.items as { v: string; d: string; at: number }[];
+
+    assert.equal(item?.at, Date.parse("2026-09-20T12:00:00.000Z"));
+  });
+});

@@ -111,6 +111,15 @@ public sealed partial class AnnouncementService
     /// call that may not be kept - one that is itself coming back from
     /// being kept, which gets one more chance and not a second wait.
     /// </param>
+    /// <param name="lost">
+    /// What to run if this call is KEPT and then lost before it is said -
+    /// pushed out by a bigger call, gone stale, cleared by a flag, or turned
+    /// down when its turn comes. 20 Oct 2026, Bug Hunt 8: FirePairLine gives
+    /// back the pair's once-per-race battle claim (and a sponsor's ration)
+    /// for a line that was dropped at once, but nothing did it for a kept
+    /// line lost later, so those two cars never got a battle call again
+    /// that race. Must be safe to run more than once.
+    /// </param>
     /// <param name="alreadyCounted">
     /// True for a call coming back from <see cref="_heldOver"/>, which was
     /// counted as offered the first time - so Offered still equals
@@ -124,7 +133,7 @@ public sealed partial class AnnouncementService
     /// "dropped" and gave back the pair's once-per-race claim, so the kept
     /// battle was said AND offered again on a later standings update.
     /// </param>
-    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Action? holdOver = null, bool alreadyCounted = false)
+    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Func<bool>? holdOver = null, bool alreadyCounted = false, Action? lost = null)
     {
         kept = false;
 
@@ -142,11 +151,12 @@ public sealed partial class AnnouncementService
             // - and only with pacing on. Wall to wall is the announcer
             // exactly as it was, and it never kept anything.
             if (gap > 0 && holdOver is not null
-                && _heldOver.Offer(new HeldCall(type, holdOver), weight, WeightBeingSpoken(), out var displaced))
+                && _heldOver.Offer(new HeldCall(type, holdOver, lost), weight, WeightBeingSpoken(), out var displaced))
             {
                 if (displaced is not null)
                 {
                     Load.NoteDropped();
+                    displaced.Lost?.Invoke();
                     StatusMessage?.Invoke($"[voice] Dropped {displaced.Type} - {type} outranks it for the slot after this line.");
                 }
 
@@ -234,8 +244,13 @@ public sealed partial class AnnouncementService
         return WeightOf(type);
     }
 
-    /// <summary>A call kept for the end of the current line: what it was, and how to offer it again.</summary>
-    private sealed record HeldCall(AnnouncementEventType Type, Action Reoffer);
+    /// <summary>
+    /// A call kept for the end of the current line: what it was, how to
+    /// offer it again (true when that offer was taken), and what to run if
+    /// it is lost instead (20 Oct 2026, Bug Hunt 8 - see the lost parameter
+    /// of RoutineCallGetsTheAir).
+    /// </summary>
+    private sealed record HeldCall(AnnouncementEventType Type, Func<bool> Reoffer, Action? Lost);
 
     /// <summary>
     /// The one call kept back while the speaker was busy - see
@@ -256,10 +271,17 @@ public sealed partial class AnnouncementService
         if (stale is not null)
         {
             Load.NoteDropped();
+            stale.Lost?.Invoke();
             StatusMessage?.Invoke($"[voice] Dropped {stale.Type} - kept for the end of a line, but the line ran too long and the moment has gone.");
         }
 
-        call?.Reoffer();
+        // A kept call turned down on its second chance (speaker busy again,
+        // the gap, a muted ghost, the race over) is lost too, and gives back
+        // what it was holding (20 Oct 2026, Bug Hunt 8).
+        if (call is not null && !call.Reoffer())
+        {
+            call.Lost?.Invoke();
+        }
     }
 
     /// <summary>
@@ -282,7 +304,17 @@ public sealed partial class AnnouncementService
     /// </summary>
     private void ForgetTheHeldOverCall(bool count)
     {
-        if (_heldOver.Clear() is { } gone && count)
+        if (_heldOver.Clear() is not { } gone)
+        {
+            return;
+        }
+
+        // Whatever count says - a kept call that will never be said gives
+        // back what it was holding (20 Oct 2026, Bug Hunt 8). After a reset
+        // the hand-backs themselves do nothing, so this is safe then too.
+        gone.Lost?.Invoke();
+
+        if (count)
         {
             Load.NoteDropped();
             StatusMessage?.Invoke($"[voice] Dropped {gone.Type} - it was waiting for the end of a line and the race moved on.");

@@ -61,6 +61,18 @@ public sealed class RacerStanding
     public int ConsecutiveValidLaps { get; set; }
 
     /// <summary>
+    /// Whether the clean run was broken AFTER the last counted lap - by a
+    /// rejected pass, which zeroes ConsecutiveValidLaps but adds nothing to
+    /// StreakAtLap. Set by a rejected pass, cleared by the next counted lap.
+    ///
+    /// WHY (20 Oct 2026): working the run out again after a lap was removed
+    /// by hand read it off StreakAtLap's last entry, which still held the
+    /// run from before the rejection, so -1 Lap (or undoing a correction)
+    /// brought a broken streak back to life on the board and in the calls.
+    /// </summary>
+    public bool RunBrokenSinceLastLap { get; set; }
+
+    /// <summary>
     /// Every counted lap's duration, in order. Kept so pace across a race
     /// can be charted afterward - FastestLapMs alone only says how good a
     /// driver's single best lap was, not whether they were consistent,
@@ -1426,7 +1438,12 @@ public sealed partial class RaceControlSession
             .DefaultIfEmpty(0)
             .Min();
 
-        standing.ConsecutiveValidLaps = standing.StreakAtLap.Count > 0 ? standing.StreakAtLap[^1] : 0;
+        // WHY (20 Oct 2026): a pass rejected since the last counted lap
+        // broke the run without leaving a StreakAtLap entry, so the last
+        // entry is the run from BEFORE the rejection. It stays broken.
+        standing.ConsecutiveValidLaps = !standing.RunBrokenSinceLastLap && standing.StreakAtLap.Count > 0
+            ? standing.StreakAtLap[^1]
+            : 0;
 
         // A recovery lap is never the yardstick for the next one - the same
         // as ProcessLapEvent leaves it, where it zeroes the baseline.
@@ -1887,6 +1904,14 @@ public sealed partial class RaceControlSession
                 standing.StreakBaselineLapMs = baseline;
                 standing.StreakLapTimeSumMs = streakSum;
                 standing.StreakLapCount = streakCount;
+
+                // WHY (20 Oct 2026): the run saved with the edit is how it
+                // stood before it; a pass rejected since has broken it, and
+                // putting the saved count back revived it.
+                if (standing.RunBrokenSinceLastLap)
+                {
+                    standing.ConsecutiveValidLaps = 0;
+                }
             }
         }
 
@@ -2553,6 +2578,7 @@ public sealed partial class RaceControlSession
                 jumper.SectorsAtLap.Add(null);
                 jumper.ClearSplitReads();
                 jumper.ConsecutiveValidLaps = 1;
+                jumper.RunBrokenSinceLastLap = false;
                 jumper.StreakLapTimeSumMs = 0;
                 jumper.StreakLapCount = 0;
                 jumper.StreakBaselineLapMs = 0;
@@ -2809,6 +2835,11 @@ public sealed partial class RaceControlSession
                 // jump-starter back without it, and their grid dash then
                 // competed for best lap - see RacerStanding.StartLapCredited.
                 StartLapCredited = s.StartLapCredited,
+
+                // Copied too (20 Oct 2026), or after an undone Reset or
+                // Stage, removing a lap by hand brought back a run a
+                // rejected pass had broken - see RunBrokenSinceLastLap.
+                RunBrokenSinceLastLap = s.RunBrokenSinceLastLap,
             };
             copy.LapTimesMs.AddRange(s.LapTimesMs);
             copy.StreakAtLap.AddRange(s.StreakAtLap);

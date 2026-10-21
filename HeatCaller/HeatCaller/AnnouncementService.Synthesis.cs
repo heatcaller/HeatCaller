@@ -122,6 +122,13 @@ public sealed partial class AnnouncementService
         }
 
         using var timeout = new CancellationTokenSource(SynthesisTimeout);
+        // WHY (20 Oct 2026): the gate wait and the request share the one
+        // 30 s limit, so a line that got its slot at 28 s had 2 s to be
+        // answered and was then reported as ElevenLabs not responding -
+        // which rested ElevenLabs for a minute though only this laptop's own
+        // queue was slow. How long the wait took is kept so a timeout can be
+        // blamed on the right thing (see RequestTimedOut).
+        var gateClock = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             await SynthesisGate.WaitAsync(timeout.Token);
@@ -131,6 +138,8 @@ public sealed partial class AnnouncementService
             throw new SynthesisSlotTimeoutException($"No synthesis slot came free within {SynthesisTimeout.TotalSeconds:0} s.");
         }
 
+        var waitedForSlot = gateClock.Elapsed;
+
         byte[] audio;
         try
         {
@@ -138,7 +147,7 @@ public sealed partial class AnnouncementService
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
-            throw new TimeoutException($"ElevenLabs didn't respond within {SynthesisTimeout.TotalSeconds:0} s.");
+            throw RequestTimedOut(waitedForSlot);
         }
         finally
         {
@@ -156,6 +165,10 @@ public sealed partial class AnnouncementService
     private async Task<ElevenLabsClient.TimedSpeech?> SynthesizeTimedGatedAsync(VoiceProfile profile, string text)
     {
         using var timeout = new CancellationTokenSource(SynthesisTimeout);
+        // WHY (20 Oct 2026): timed the same way as SynthesizeOrReuseAsync,
+        // so a request starved by a long wait for its slot is not blamed on
+        // the network.
+        var gateClock = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             await SynthesisGate.WaitAsync(timeout.Token);
@@ -164,6 +177,8 @@ public sealed partial class AnnouncementService
         {
             throw new SynthesisSlotTimeoutException($"No synthesis slot came free within {SynthesisTimeout.TotalSeconds:0} s.");
         }
+
+        var waitedForSlot = gateClock.Elapsed;
 
         try
         {
@@ -178,7 +193,7 @@ public sealed partial class AnnouncementService
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
-            throw new TimeoutException($"ElevenLabs didn't respond within {SynthesisTimeout.TotalSeconds:0} s.");
+            throw RequestTimedOut(waitedForSlot);
         }
         finally
         {
@@ -196,11 +211,32 @@ public sealed partial class AnnouncementService
     private static readonly TimeSpan SynthesisTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
+    /// True when more than half of SynthesisTimeout went on waiting for a
+    /// synthesis slot, leaving the request itself too little of the limit
+    /// for its running out to say anything about the network.
+    /// </summary>
+    internal static bool SlotWaitTookMostOfLimit(TimeSpan waitedForSlot) => waitedForSlot > SynthesisTimeout / 2;
+
+    /// <summary>
+    /// The exception for a request cut off by SynthesisTimeout. Added 20 Oct
+    /// 2026: if most of the limit was spent queued for a slot, it is a
+    /// SynthesisSlotTimeoutException - this laptop's own queue, so
+    /// ElevenLabs is not rested - and only otherwise "ElevenLabs didn't
+    /// respond". The single 30 s upper bound is kept either way.
+    /// </summary>
+    private static TimeoutException RequestTimedOut(TimeSpan waitedForSlot) =>
+        SlotWaitTookMostOfLimit(waitedForSlot)
+            ? new SynthesisSlotTimeoutException(
+                $"Waited {waitedForSlot.TotalSeconds:0} s for a synthesis slot, which left the request too little of the {SynthesisTimeout.TotalSeconds:0} s limit.")
+            : new TimeoutException($"ElevenLabs didn't respond within {SynthesisTimeout.TotalSeconds:0} s.");
+
+    /// <summary>
     /// Waited the whole SynthesisTimeout for one of the ElevenLabs slots and
-    /// never got one: this laptop's own requests were queued up (a long recap
-    /// on a slow model, say), not the network being down - so the stand-in
-    /// says the line, but ElevenLabs is not rested for it (see
-    /// IsConnectionFailure).
+    /// never got one - or (since 20 Oct 2026) got one so late that the
+    /// request was cut off for want of time: this laptop's own requests
+    /// were queued up (a long recap on a slow model, say), not the network
+    /// being down - so the stand-in says the line, but ElevenLabs is not
+    /// rested for it (see IsConnectionFailure).
     /// </summary>
     private sealed class SynthesisSlotTimeoutException : TimeoutException
     {

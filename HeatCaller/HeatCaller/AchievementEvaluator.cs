@@ -27,6 +27,24 @@ public static partial class AchievementEvaluator
     /// <summary>The same test, five times stricter - the Swiss Watch band.</summary>
     private const double TightConsistencyTolerance = 0.05;
 
+    /// <summary>
+    /// Where a driver started, counted among the real cars that turned a lap
+    /// and lined up ahead of them - zero when the grid was never known. The
+    /// Charge badge (GridOf) and NightMoments' Charge moment both use it.
+    /// </summary>
+    // WHY (20 Oct 2026): NightMoments worked out its own grid place from the
+    // raw slot and drifted away from the badge's, so the moment said "four
+    // places" where the badge saw two. One rule, in one place, stops that
+    // happening again.
+    internal static int GridPlace(IEnumerable<SessionResultEntry> real, SessionResultEntry entry) =>
+        entry.StartPosition <= 0
+            ? 0
+            : 1 + real.Count(o => o.StartPosition > 0 && o.StartPosition < entry.StartPosition
+                // A car that never turned a lap held a slot, not a place:
+                // five no-shows on the front rows made a win from slot 6
+                // "from P6", the same rule `field` follows.
+                && o.Laps >= MinimumLapsToCount);
+
     public static List<AchievementUnlock> EvaluateFinishedRace(
         SessionRecord record,
         IReadOnlyList<SessionRecord> history,
@@ -99,14 +117,7 @@ public static partial class AchievementEvaluator
         // from the front of the real field lost Pole Converted and Grand
         // Slam, and a driver who started fourth was credited with a place
         // made up that was really the ghost's (25 Sep audit).
-        int GridOf(SessionResultEntry entry) =>
-            entry.StartPosition <= 0
-                ? 0
-                : 1 + results.Count(o => o.StartPosition > 0 && o.StartPosition < entry.StartPosition
-                    // A car that never turned a lap held a slot, not a place:
-                    // five no-shows on the front rows made a win from slot 6
-                    // "from P6", the same rule `field` follows.
-                    && o.Laps >= MinimumLapsToCount);
+        int GridOf(SessionResultEntry entry) => GridPlace(results, entry);
 
         // Every race this driver has run BEFORE this one - the history is
         // the source for anything historical, and this record may or may not

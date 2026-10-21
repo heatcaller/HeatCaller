@@ -2476,6 +2476,19 @@ public sealed partial class ProfileManagerControl : UserControl
                 // filled in changes anything.
                 var existing = batch.TryGetValue(transponder, out var pending) ? pending : _store.Get(transponder);
 
+                // WHY (20 Oct 2026): an alternate that two drivers both list is
+                // left out of the timing index, so PrimaryForAlternate and Get
+                // both missed it and the row made a brand-new driver with it as
+                // his main transponder - who then took every lap that car did.
+                // OwnerOf finds any driver who lists the id, contested or not,
+                // so the row is skipped and reported like any other clash.
+                if (existing is null && _store.OwnerOf(transponder) is { } claimant)
+                {
+                    skipped++;
+                    skippedDetails.Add($"Row {line}: {transponder} is already one of {OwnerName(claimant, claimant.Transponder)}'s transponders");
+                    continue;
+                }
+
                 // ...but only when it is the SAME driver. A row naming somebody
                 // else on a transponder already in use is a mistake on the
                 // sheet (or a transponder that changed hands), and merging it

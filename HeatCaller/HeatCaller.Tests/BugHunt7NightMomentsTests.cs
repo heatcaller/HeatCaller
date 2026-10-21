@@ -142,6 +142,15 @@ public sealed class BugHunt7NightMomentsTests : IDisposable
 
         rows.Add(Row("Bill", 14, new long[] { 8000, 8100 }));
 
+        // WHY (20 Oct 2026): a charge now counts only the real cars that
+        // lined up ahead, so with slots 1 to 4 empty the D drivers made up
+        // nothing and the night's cap was never reached. Four cars on those
+        // slots, finishing behind, give each D driver a real four places.
+        for (var slot = 1; slot <= 4; slot++)
+        {
+            rows.Add(Row($"F{slot}", 14 + slot, new long[] { 9500, 9500 }, startPosition: slot));
+        }
+
         var facts = DriverCut.FactsFor("bill", "Bill", new List<SessionRecord> { Race("heat-1", "Heat 1", rows.ToArray()) });
 
         Assert.Contains("Bill set the fastest lap in Heat 1", facts.Text, StringComparison.Ordinal);

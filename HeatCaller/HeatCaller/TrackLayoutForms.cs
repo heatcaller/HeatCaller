@@ -902,12 +902,19 @@ public sealed class TrackLayoutManagerControl : UserControl
         RcpTrackDesign chosenDesign;
         string chosenName;
         bool useAsPhoto;
+
+        // WHY (20 Oct 2026, Bug Hunt 8 #84): once a taken name reopens the
+        // designer, the drawing in it has not been saved anywhere, so the
+        // designer must ask before Escape, Cancel or the X throws it away -
+        // even though nothing changed since it reopened.
+        var reopened = false;
         while (true)
         {
             using var form = new RcpTrackEditorForm(
                 designToOpen,
                 nameToOpen,
-                existing?.AverageLapSeconds);
+                existing?.AverageLapSeconds,
+                unsavedOnOpen: reopened);
 
             if (form.ShowDialog(this) != DialogResult.OK)
             {
@@ -923,6 +930,7 @@ public sealed class TrackLayoutManagerControl : UserControl
 
                 designToOpen = form.Result;
                 nameToOpen = form.TrackName;
+                reopened = true;
                 continue;
             }
 

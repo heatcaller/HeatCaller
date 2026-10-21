@@ -30,6 +30,66 @@ public sealed partial class RaceControlControl : UserControl
     private readonly Func<RoundDefinition?>? _activeRound;
     private readonly CommentaryService? _commentary;
     private readonly KpiTracker _kpiTracker = new();
+
+    /// <summary>
+    /// Completed once the flag lines (the Technical Lead interview, the
+    /// throw into the stop set and the recap) have been asked of the model,
+    /// so the next race's write-aheads queue behind them, not ahead.
+    ///
+    /// WHY (20 Oct 2026): a filing starts the write-aheads (WriteTheNextIntroAhead)
+    /// a moment BEFORE SpeakRaceSummary asks for the flag lines, and the
+    /// built-in model answers one request at a time - so the interview and
+    /// the throw, wanted in seconds, waited behind three write-aheads and
+    /// were skipped as not ready. Reset by each new filing, released by
+    /// SpeakRaceSummary; starts completed so nothing waits before the first.
+    /// </summary>
+    private TaskCompletionSource _flagLinesAsked = CompletedGate();
+
+    /// <summary>A gate already open - see _flagLinesAsked.</summary>
+    private static TaskCompletionSource CompletedGate()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        gate.SetResult();
+        return gate;
+    }
+
+    /// <summary>
+    /// Waits, from a write-ahead's background job, for <paramref name="gate"/>
+    /// (see _flagLinesAsked) - at most 45 seconds, so a filing that never
+    /// reaches SpeakRaceSummary (a restored or unfiled race) cannot hold a
+    /// write-ahead back for good.
+    /// </summary>
+    private static async Task WaitForFlagLinesAsync(Task gate)
+    {
+        try
+        {
+            await gate.WaitAsync(TimeSpan.FromSeconds(45));
+        }
+        catch (TimeoutException)
+        {
+            // Asked anyway - the gate is only about order.
+        }
+    }
+
+    /// <summary>
+    /// Opens <paramref name="gate"/> once every one of <paramref name="asked"/>
+    /// has finished, however it finished - see _flagLinesAsked.
+    /// </summary>
+    private static async Task OpenWhenAskedAsync(TaskCompletionSource gate, params Task?[] asked)
+    {
+        try
+        {
+            await Task.WhenAll(asked.Where(t => t is not null).Select(t => t!));
+        }
+        catch
+        {
+            // A failed or cancelled line is still finished with the model.
+        }
+        finally
+        {
+            gate.TrySetResult();
+        }
+    }
     private List<KpiDefinition> _kpiColumns = new();
 
     /// <summary>Transponders already prompted about this session - so declining the "name this driver?" prompt doesn't make it reappear on every subsequent lap.</summary>

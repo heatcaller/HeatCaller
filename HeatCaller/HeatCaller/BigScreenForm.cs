@@ -623,7 +623,13 @@ public sealed class BigScreenForm : Form
         _pnlLeaderboardArea.BackColor = CanvasColor;
         _picSponsor.BackColor = CanvasColor;
         _lblSponsorRead.BackColor = CanvasColor;
-        _lblSponsorRead.ForeColor = AppTheme.Accent;
+
+        // WHY (20 Oct 2026): this was AppTheme.Accent - the director's app
+        // theme, never checked against this look's background and not
+        // following a look change. A pale app accent on a white crowd-screen
+        // look made a sponsor's name unreadable during their paid read. It
+        // is the look's own highlight now, like the countdown and on-deck.
+        _lblSponsorRead.ForeColor = HighlightColor;
 
         _pnlOnDeck.BackColor = PanelColor;
         _lblOnDeck.ForeColor = HighlightColor;
@@ -1789,6 +1795,33 @@ public sealed class BigScreenForm : Form
 
         _showingRead = false;
         _lblSponsorRead.Visible = false;
+
+        // WHY (20 Oct 2026): a read that ends INSIDE a commercial break used
+        // to put the standings back for the rest of it - UpdateCommercialBreak
+        // sees the break already has the screen and does not take it back, so
+        // the board sat there until the rotation timer next fired (up to a
+        // minute) and the remaining sponsors' slides were never counted. Now
+        // the slot goes to the break's rotation instead; SponsorSlotEnded
+        // still falls back to the standings when it has nothing to show.
+        // CommercialBreak.Running is asked as well because _breakHasTheScreen
+        // is only brought up to date later in this tick - the same reasoning
+        // ShowSponsorVideo gives.
+        if (_breakHasTheScreen && CommercialBreak.Running)
+        {
+            // WHY (20 Oct 2026): the read's own picture, where it is still
+            // up, counts as a sponsor slide from here. If the break's first
+            // slot showed nothing, _showingSponsor is false, and a picture
+            // SponsorSlotEnded holds (or leaves up when the next slide will
+            // not load) would then be skipped by the break's hand-back and
+            // stay on the wall into the recap.
+            if (_picSponsor.Visible)
+            {
+                _showingSponsor = true;
+            }
+
+            SponsorSlotEnded();
+            return;
+        }
 
         ShowLeaderboardAgain();
     }

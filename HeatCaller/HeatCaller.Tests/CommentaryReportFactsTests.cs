@@ -37,25 +37,31 @@ public sealed class CommentaryReportFactsTests
     // ------------------------------------------------------------------
 
     [Fact]
-    public void Pole_is_reported_with_the_margin_and_who_it_was_over()
+    public void Pole_is_reported_with_the_best_lap_and_not_a_fast_lap_margin()
     {
         var blocks = CommentaryReportFacts.QualifyingReport(
             new[] { Q("Sam", 1, 12.100), Q("Bill", 2, 12.280) },
             "Box Stock",
             "q-1");
 
-        Assert.Contains("Sam takes pole in Box Stock by 0.18s from Bill", All(blocks));
+        // WHY (20 Oct 2026): pole is decided by laps then time, not by fast
+        // laps, so the fast-lap gap is no longer read out as its margin -
+        // the pole sitter's best lap is said as a plain fact instead.
+        Assert.Contains("Sam takes pole in Box Stock, with a best lap of 12.100s.", All(blocks));
+        Assert.DoesNotContain("from Bill", All(blocks));
     }
 
     [Fact]
-    public void A_big_margin_is_called_a_big_margin_rather_than_just_a_number()
+    public void A_big_fast_lap_gap_is_not_called_a_long_way_for_pole()
     {
         var blocks = CommentaryReportFacts.QualifyingReport(
             new[] { Q("Sam", 1, 12.000), Q("Bill", 2, 12.900) },
             "Box Stock",
             "q-1");
 
-        Assert.Contains("a long way", All(blocks));
+        // WHY (20 Oct 2026): the fast-lap gap is no longer a pole margin, so
+        // a big one is not called "a long way" either.
+        Assert.DoesNotContain("a long way", All(blocks));
     }
 
     [Fact]
@@ -66,7 +72,7 @@ public sealed class CommentaryReportFactsTests
             "Box Stock",
             "q-1");
 
-        Assert.Contains("Sam takes pole in Box Stock.", All(blocks));
+        Assert.Contains("Sam takes pole in Box Stock, with a best lap of 12.000s.", All(blocks));
         Assert.DoesNotContain("by", All(blocks));
     }
 

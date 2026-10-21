@@ -731,6 +731,24 @@ public sealed class PracticeModeControl : UserControl
     /// </summary>
     private bool ConfirmRaceControlCanBeCleared()
     {
+        // WHY (20 Oct 2026): a warm-up is not a RaceState - the session stays
+        // Idle (or Finished) through it - so the switch below let Start Practice
+        // straight through, and the Reset that follows cancelled the warm-up
+        // and the Stage queued behind it with no warning. Refused here the
+        // same way TryAutoStartPractice refuses it, and ahead of the switch so
+        // a warm-up open over a finished race is caught too. The advice is
+        // Reset, not skip: skipping a warm-up stages the race straight away,
+        // which this page refuses as well.
+        if (_race.IsWarmingUp)
+        {
+            AppDialog.Show(this,
+                "A warm-up is open on Race Control, and the race is staged automatically when it ends.\r\n\r\n"
+                + "Practice uses the same timing session, so starting it now would cancel the warm-up and that race start. "
+                + "Press Reset on Race Control to cancel the warm-up first, then start practice.",
+                "Warm-up in progress", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+
         switch (_race.State)
         {
             case RaceState.Staging:
@@ -1121,6 +1139,12 @@ public sealed class PracticeModeControl : UserControl
         }
 
         var previouslySelected = _grid.CurrentRow?.Tag as string;
+
+        // WHY (20 Oct 2026): Rows.Clear threw the scroll position away, so a
+        // list longer than the card snapped back to the top on every refresh.
+        // Kept here and put back once the rows are refilled.
+        var scroll = _grid.FirstDisplayedScrollingRowIndex;
+        var reselected = false;
         var window = (int)_numRollingWindow.Value;
 
         _grid.Rows.Clear();
@@ -1178,7 +1202,44 @@ public sealed class PracticeModeControl : UserControl
 
             if (s.TransponderId == previouslySelected)
             {
+                // WHY (20 Oct 2026): setting Selected alone left CurrentRow on
+                // row 0 (where refilling the grid puts it), so the next refresh
+                // read row 0's driver as the selection and the highlight jumped
+                // to the top. The current cell is moved first, then selected.
+                // Cells[0] always exists: RebuildColumns adds a visible column
+                // for every KPI, and Rows.Add would have thrown without one.
+                _grid.CurrentCell = _grid.Rows[rowIndex].Cells[0];
                 _grid.Rows[rowIndex].Selected = true;
+                reselected = true;
+            }
+        }
+
+        // Nobody's row to put back (none picked, or that driver left the
+        // board): the grid's own row-0 pick is cleared, so it is not taken for
+        // a choice at the next refresh.
+        if (!reselected)
+        {
+            _grid.CurrentCell = null;
+            _grid.ClearSelection();
+        }
+
+        // After CurrentCell, which can scroll the grid on its own.
+        //
+        // Guarded (20 Oct 2026): this runs on every counted lap, and the
+        // grid refuses a scroll it cannot show (a row it has no room for
+        // while the page is hidden or being resized). Keeping the place in
+        // the list is a nicety - it must never cost the lap its refresh.
+        if (scroll >= 0 && scroll < _grid.Rows.Count)
+        {
+            try
+            {
+                _grid.FirstDisplayedScrollingRowIndex = scroll;
+            }
+            catch (InvalidOperationException)
+            {
+            }
+            catch (ArgumentOutOfRangeException)
+            {
             }
         }
 

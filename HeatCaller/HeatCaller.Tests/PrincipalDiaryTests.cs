@@ -19,6 +19,10 @@ namespace HeatCaller.Tests;
 /// </summary>
 public sealed class PrincipalDiaryTests : IDisposable
 {
+    // 20 Oct 2026: every lookup passes the principal name the test saved,
+    // as the booth now does, so these exercise the name-checking LastSaidBy
+    // rather than the old one that ignored the name.
+
     private readonly TempAppData _data = new();
 
     public void Dispose() => _data.Dispose();
@@ -32,7 +36,7 @@ public sealed class PrincipalDiaryTests : IDisposable
 
         diary.Keep("sam", "Sam", "Alex Hart", "A-Main", "We will look at our starts before the next one.", Night(4));
 
-        var found = PrincipalDiary.Load().LastSaidBy("sam", Night(18));
+        var found = PrincipalDiary.Load().LastSaidBy("sam", "Alex Hart", Night(18));
 
         Assert.NotNull(found);
         Assert.Equal("We will look at our starts before the next one.", found!.Said);
@@ -50,7 +54,7 @@ public sealed class PrincipalDiaryTests : IDisposable
 
         PrincipalDiary.Load().Keep("sam", "Sam", "Alex", "Heat 2", exact, Night(4));
 
-        Assert.Equal(exact, PrincipalDiary.Load().LastSaidBy("sam", Night(18))!.Said);
+        Assert.Equal(exact, PrincipalDiary.Load().LastSaidBy("sam", "Alex", Night(18))!.Said);
     }
 
     [Fact]
@@ -62,7 +66,7 @@ public sealed class PrincipalDiaryTests : IDisposable
         // an argument.
         PrincipalDiary.Load().Keep("sam", "Sam", "Alex", "Heat 1", "We will tidy up the second sector.", Night(18));
 
-        Assert.Null(PrincipalDiary.Load().LastSaidBy("sam", Night(18).AddHours(1)));
+        Assert.Null(PrincipalDiary.Load().LastSaidBy("sam", "Alex", Night(18).AddHours(1)));
     }
 
     [Fact]
@@ -70,7 +74,7 @@ public sealed class PrincipalDiaryTests : IDisposable
     {
         PrincipalDiary.Load().Keep("sam", "Sam", "Alex", "A-Main", "We will be back.", Night(4).AddDays(-200));
 
-        Assert.Null(PrincipalDiary.Load().LastSaidBy("sam", Night(18)));
+        Assert.Null(PrincipalDiary.Load().LastSaidBy("sam", "Alex", Night(18)));
     }
 
     [Fact]
@@ -86,7 +90,7 @@ public sealed class PrincipalDiaryTests : IDisposable
         var reloaded = PrincipalDiary.Load();
 
         Assert.Single(reloaded.All, e => e.DriverId == "sam");
-        Assert.Equal("The new one.", reloaded.LastSaidBy("sam", Night(18))!.Said);
+        Assert.Equal("The new one.", reloaded.LastSaidBy("sam", "Alex", Night(18))!.Said);
     }
 
     [Fact]
@@ -99,8 +103,8 @@ public sealed class PrincipalDiaryTests : IDisposable
 
         var reloaded = PrincipalDiary.Load();
 
-        Assert.Equal("Sam's principal said this.", reloaded.LastSaidBy("sam", Night(18))!.Said);
-        Assert.Equal("Dave's principal said this.", reloaded.LastSaidBy("dave", Night(18))!.Said);
+        Assert.Equal("Sam's principal said this.", reloaded.LastSaidBy("sam", "Alex", Night(18))!.Said);
+        Assert.Equal("Dave's principal said this.", reloaded.LastSaidBy("dave", "Jo", Night(18))!.Said);
     }
 
     [Fact]
@@ -124,7 +128,7 @@ public sealed class PrincipalDiaryTests : IDisposable
         diary.Keep("sam", "Sam", "Alex", "A-Main", "We will look at our starts.", Night(4));
         diary.Forget("sam");
 
-        Assert.Null(PrincipalDiary.Load().LastSaidBy("sam", Night(18)));
+        Assert.Null(PrincipalDiary.Load().LastSaidBy("sam", "Alex", Night(18)));
     }
 
     // ------------------------------------------------------------------
@@ -192,7 +196,7 @@ public sealed class PrincipalDiaryTests : IDisposable
         PrincipalDiary.Load().Keep(
             "sam", "Sam", "Alex", "A-Main", new string('x', PrincipalDiary.MostSaidChars * 4), Night(4));
 
-        var found = PrincipalDiary.Load().LastSaidBy("sam", Night(18));
+        var found = PrincipalDiary.Load().LastSaidBy("sam", "Alex", Night(18));
 
         Assert.NotNull(found);
         Assert.True(found!.Said.Length <= PrincipalDiary.MostSaidChars);

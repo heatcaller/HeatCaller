@@ -32,7 +32,14 @@ public static class QualifyingCalculator
         int Laps,
         long ElapsedMs,
         long FastLapMs,
-        IReadOnlyList<long> LapTimesMs);
+        IReadOnlyList<long> LapTimesMs,
+        // WHY (20 Oct 2026): the penalty race control has given this driver
+        // so far (jump start, penalty buttons, warning time) - the standing's
+        // PenaltyMs, already inside ElapsedMs. The lap times never carry it,
+        // so without this the best-consecutive-laps projection ranked a
+        // penalised driver as if nothing had been given. Optional so a
+        // caller that has no penalty to hand still compiles and means zero.
+        long PenaltyMs = 0);
 
     /// <summary>
     /// The running heat, folded in as though it had just been recorded.
@@ -278,10 +285,18 @@ public static class QualifyingCalculator
                 // penalised - the time the driver would have needed to make
                 // up each lap they lost. Only a heat with a window is
                 // touched: one without has nothing to add to.
+                //
+                // WHY (20 Oct 2026): penalties given DURING the race (jump
+                // start, penalty buttons, warning time) count too. They used
+                // to live only inside ElapsedMs, so a driver penalized at the
+                // track still took pole. RaceFiling now saves them as
+                // RacePenaltyMs; a result saved before that reads zero, which
+                // is how it behaved before. The average lap is taken from the
+                // clean window, before any penalty is added.
                 if (windowMs > 0)
                 {
                     var averageLapMs = windowMs / lapCount;
-                    windowMs += Math.Max(0, result.TimePenaltyMs) + Math.Max(0, result.LapPenalty) * averageLapMs;
+                    windowMs += Math.Max(0, result.RacePenaltyMs) + Math.Max(0, result.TimePenaltyMs) + Math.Max(0, result.LapPenalty) * averageLapMs;
                 }
 
                 var driverKey = DriverKey(result.Transponder, profiles);
@@ -306,6 +321,17 @@ public static class QualifyingCalculator
                 }
 
                 var (windowMs, startLap) = BestFlyingWindow(result.LapTimesMs, lapCount);
+
+                // WHY (20 Oct 2026): penalties given during the running heat
+                // count on the window too, as they do on a saved heat. They
+                // were left off, so the projection and the provisional pole
+                // call put a penalised driver ahead of a clean one. As above,
+                // only a heat with a window has anything to add to.
+                if (windowMs > 0)
+                {
+                    windowMs += Math.Max(0, result.PenaltyMs);
+                }
+
                 var driverKey = DriverKey(result.Transponder, profiles);
 
                 AddHeat(byDriver, driverKey, method, new HeatScore(live.RoundId, live.RoundLabel, null, live.StartedAtUtc,

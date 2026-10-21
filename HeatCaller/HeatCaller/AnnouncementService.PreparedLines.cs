@@ -584,9 +584,27 @@ public sealed partial class AnnouncementService
                 // An ElevenLabs take only. A Kokoro take was never saved,
                 // and forgetting under its words would throw away the good
                 // ElevenLabs line saved for the same flag.
+                //
+                // WHY (20 Oct 2026, Bug Hunt 8): a prepared line is built by
+                // RenderLineAsync, so it can be a soundscape recording, which
+                // also comes back as LineSource.Library. A recording cut
+                // short used to land here and delete the good ElevenLabs
+                // take saved under the same words, while the broken
+                // recording stayed first in line. A take that is exactly
+                // the recording is left alone, and the console says which
+                // file to re-record - the same rule as the queued lines in
+                // SynthesizeAndPlayAsync.
                 if (IsUndecodable(ex) && prepared.Source is LineSource.ElevenLabs or LineSource.Library or LineSource.HeatCaller)
                 {
-                    VoiceLibrary.Shared.Forget(DeliveryProfileFor(profile, config), prepared.Text);
+                    if (StingerLibrary.Shared.TryLoad(prepared.Text) is { } recorded
+                        && recorded.AsSpan().SequenceEqual(prepared.Audio))
+                    {
+                        StatusMessage?.Invoke($"[voice] The recorded soundscape line \"{prepared.Text}\" won't play - re-record or delete it on the soundscape page.");
+                    }
+                    else
+                    {
+                        VoiceLibrary.Shared.Forget(DeliveryProfileFor(profile, config), prepared.Text);
+                    }
                 }
 
                 StatusMessage?.Invoke($"[voice] {type} playback failed: {ex.Message}");

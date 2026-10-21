@@ -858,6 +858,8 @@ public sealed partial class RelayPublisher : IDisposable
             // this line exists rather than being left to heal.
             _listenOpenTold = false;
             _nightsOpenTold = false;
+            // No backoff carried over to the new settings (20 Oct 2026, #85).
+            _nextNightsOpenTick = 0;
 
             // And the shout-outs switch and the vote's ballot, which never
             // healed at all: the notes inbox answers 200 and empty for a
@@ -1416,6 +1418,8 @@ public sealed partial class RelayPublisher : IDisposable
         _ballotAsPublished = null;
         _listenOpenTold = false;
         _nightsOpenTold = false;
+        // No backoff carried over from before the delete (20 Oct 2026, #85).
+        _nextNightsOpenTick = 0;
 
         // And the results the index was describing. Left set, the
         // next index published would name a season of sessions
@@ -1817,6 +1821,16 @@ public sealed partial class RelayPublisher : IDisposable
 
                 try
                 {
+                    // WHY (20 Oct 2026, Bug Hunt 8, #85): nights queued
+                    // before the relay was told the club offers them were
+                    // sent first, refused with a 403 and dropped for good.
+                    // The relay is now told first. The call further down
+                    // stays; once told, it is just a check of a flag.
+                    if (_settings.PublishDriverNightsToTheRelay)
+                    {
+                        SendNightsOpen(pass.Token);
+                    }
+
                     Drain(pass.Token);
 
                     if (_settings.RelayCheckInEnabled && Environment.TickCount64 >= _nextPollTick)
@@ -3381,6 +3395,12 @@ public sealed partial class RelayPublisher : IDisposable
             if (nightRefused)
             {
                 _nightsOpenTold = false;
+
+                // And told again on the very next pass, not after a
+                // thirty-second backoff left from an earlier failure -
+                // otherwise every night in that window is refused too
+                // (20 Oct 2026, Bug Hunt 8, #85).
+                _nextNightsOpenTick = 0;
             }
 
             var outcome = code is 400 or 413 || unknownChannel || indexRefused || nightRefused

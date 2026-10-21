@@ -1049,9 +1049,9 @@ path of a flag call.
 **What it costs and what stops it.** Counted in **lines, not characters**:
 a request costs about the same whatever comes back, because the facts sent
 up dominate it. At Haiku prices a whole race night is a few cents, so
-`brain.monthlyLines` is a runaway guard rather than a budget - 400 a month
-by default, which is roughly twenty race nights and more than any club
-runs. Counts live in `dataDir/.brain/usage/<club>.json`, beside the
+`brain.monthlyLines` is a runaway guard rather than a budget - 1,000 a
+month by default (400 until 19 Oct 2026, which a busy month of race nights
+with every segment on could run through). Counts live in `dataDir/.brain/usage/<club>.json`, beside the
 voice's rather than inside it: different money, different file. A line is
 taken off the month **before** the model is asked and handed back if
 nothing came of it, so a failure costs a club nothing. A count file that

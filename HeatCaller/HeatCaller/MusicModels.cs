@@ -814,8 +814,26 @@ public sealed class MusicStore
     }
 
     /// <summary>
+    /// True when a track already points at this file. The same test the
+    /// start-up sync and PutBack make (FilePath, ignoring case).
+    ///
+    /// WHY (20 Oct 2026): a file picked from the music folder itself is
+    /// listed under that same path (AddTrack makes no copy there), and
+    /// AddTrack listed it again with a new Id - so with Shuffle on it came
+    /// up twice as often, and removing one copy left the other. The caller
+    /// asks this first and skips the pick, so it counts neither as added
+    /// nor as failed. Kept out of AddTrack on purpose: returning the
+    /// existing track would let Undo remove the original entry, and
+    /// returning null would be reported as a copy that failed.
+    /// </summary>
+    public bool IsListed(string path) =>
+        !string.IsNullOrEmpty(path)
+        && Current.Tracks.Any(t => string.Equals(t.FilePath, path, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
     /// Copies a track into the app's music folder and lists it. Returns the
-    /// new track, or null if the copy failed.
+    /// new track, or null if the copy failed. Callers check IsListed first
+    /// so a file already in the library isn't listed a second time.
     /// </summary>
     public MusicTrack? AddTrack(string sourcePath)
     {

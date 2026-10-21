@@ -367,6 +367,18 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
 
             _said.Text = string.Empty;
 
+            // WHY (20 Oct 2026): hiding the strip used to leave a standing
+            // Hold on, with its Release button gone from the screen - so
+            // turning commentary off mid-hold silenced the unofficial result
+            // at the flag every race after. Hiding the strip now releases
+            // the hold through the usual HoldChanged handler.
+            if (_holding)
+            {
+                _holding = false;
+                _hold.Text = HoldCaption;
+                HoldChanged?.Invoke(false);
+            }
+
             return;
         }
 

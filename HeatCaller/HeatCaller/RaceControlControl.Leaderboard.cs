@@ -34,6 +34,12 @@ public sealed partial class RaceControlControl
         // is what keeps it visible.
         var selectedTransponder = SelectedTransponder();
 
+        // WHY (20 Oct 2026): Rows.Clear threw the scroll position away, so on
+        // a board taller than the panel (lap strips open, a big heat) the view
+        // snapped back to the top on every crossing and the lower rows could
+        // not be read mid-race. Kept here and put back once the rows are refilled.
+        var firstVisibleRow = _dgvLeaderboard.FirstDisplayedScrollingRowIndex;
+
         _dgvLeaderboard.Rows.Clear();
 
         if (ordered.Count == 0)
@@ -118,6 +124,27 @@ public sealed partial class RaceControlControl
         }
 
         RestoreLeaderboardSelection(selectedTransponder);
+
+        // After the selection, because setting CurrentCell scrolls the grid
+        // on its own. -1 means nothing was showing before, so leave it be.
+        if (firstVisibleRow >= 0 && _dgvLeaderboard.Rows.Count > 0)
+        {
+            try
+            {
+                _dgvLeaderboard.FirstDisplayedScrollingRowIndex =
+                    Math.Min(firstVisibleRow, _dgvLeaderboard.Rows.Count - 1);
+            }
+            catch (InvalidOperationException)
+            {
+                // The grid has no room to show a row yet (minimized or zero
+                // height), or that row is hidden or frozen. Leave it where it is.
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                // Index outside the rows. The Math.Min above should rule
+                // this out; kept so a redraw can never crash the board.
+            }
+        }
     }
 
     /// <summary>

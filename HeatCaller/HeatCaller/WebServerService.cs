@@ -2672,6 +2672,9 @@ public sealed partial class WebServerService
 
     private AchievementStore? _achievements;
     private DateTime _achievementsReadUtc = DateTime.MinValue;
+    private (string Path, DateTime WriteUtc, long Length) _achievementsStamp;
+    private bool _achievementsLoadFailed;
+    private DateTime _achievementsLoadUtc;
 
     /// <summary>
     /// Earned badges, re-read from disk at most every few seconds.
@@ -2686,7 +2689,54 @@ public sealed partial class WebServerService
     {
         if (_achievements is null || DateTime.UtcNow - _achievementsReadUtc > TimeSpan.FromSeconds(5))
         {
-            _achievements = AchievementStore.Load();
+            // WHY (20 Oct 2026): this used to reload every 5 s regardless.
+            // A damaged achievements.json does not throw - Load() keeps a
+            // full copy of it aside and puts a storage warning on the
+            // console, then hands back an empty store - so a truncated file
+            // made a new "achievements.json.unreadable-*" copy and a new
+            // console line every 5 s all night, on the UI thread. Now the
+            // file is only re-read when it has actually changed (its path,
+            // write time or length differ), and a load that failed is
+            // retried at most every 5 minutes (for a file a backup tool had
+            // locked). A healthy file is still picked up within 5 s of a write.
+            var path = Path.Combine(AppPaths.Root, "achievements.json");
+            (string Path, DateTime WriteUtc, long Length) stamp = (path, DateTime.MinValue, 0);
+
+            try
+            {
+                var fi = new FileInfo(path);
+
+                if (fi.Exists)
+                {
+                    stamp = (path, fi.LastWriteTimeUtc, fi.Length);
+                }
+            }
+            catch
+            {
+                // Couldn't look at it: treat it as missing; Load() decides.
+            }
+
+            // The 5-minute retry is timed from the last real load
+            // (_achievementsLoadUtc), not from the last look at the file, so
+            // the look itself still happens at most every 5 s even while a
+            // load is failing.
+            var retryFailed = _achievementsLoadFailed
+                && DateTime.UtcNow - _achievementsLoadUtc > TimeSpan.FromMinutes(5);
+
+            if (_achievements is null || stamp != _achievementsStamp || retryFailed)
+            {
+                _achievements = AchievementStore.Load();
+                _achievementsStamp = stamp;
+                // Only a file that could not be read at all (LoadedUnreadable:
+                // locked or refused) is retried on the 5-minute clock. A file
+                // that read but would not parse is left until it changes:
+                // retrying it would only keep another copy of it every 5
+                // minutes, and any rewrite moves the stamp anyway. Nor is a
+                // healthy "[]" a failure (20 Oct 2026).
+                _achievementsLoadFailed = _achievements.LoadedUnreadable;
+                _achievementsLoadUtc = DateTime.UtcNow;
+            }
+
             _achievementsReadUtc = DateTime.UtcNow;
         }
 

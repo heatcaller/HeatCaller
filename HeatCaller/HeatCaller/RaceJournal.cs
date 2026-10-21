@@ -148,6 +148,9 @@ public sealed class RaceJournal
         public long LastSeenDeviceTimeMs { get; set; }
         public long ElapsedMs { get; set; }
         public int ConsecutiveValidLaps { get; set; }
+
+        /// <summary>20 Oct 2026: see RacerStanding.RunBrokenSinceLastLap. False on a journal written before it existed, which is how a restored standing behaved before.</summary>
+        public bool RunBrokenSinceLastLap { get; set; }
         public long PenaltyMs { get; set; }
         public long StreakLapTimeSumMs { get; set; }
         public int StreakLapCount { get; set; }
@@ -443,6 +446,7 @@ public sealed class RaceJournal
                     LastSeenDeviceTimeMs = s.LastSeenDeviceTimeMs,
                     ElapsedMs = s.ElapsedMs,
                     ConsecutiveValidLaps = s.ConsecutiveValidLaps,
+                    RunBrokenSinceLastLap = s.RunBrokenSinceLastLap,
                     PenaltyMs = s.PenaltyMs,
                     StreakLapTimeSumMs = s.StreakLapTimeSumMs,
                     StreakLapCount = s.StreakLapCount,
@@ -995,6 +999,7 @@ public sealed class RaceJournal
 
                 ElapsedMs = s.ElapsedMs,
                 ConsecutiveValidLaps = s.ConsecutiveValidLaps,
+                RunBrokenSinceLastLap = s.RunBrokenSinceLastLap,
                 PenaltyMs = s.PenaltyMs,
                 StreakLapTimeSumMs = s.StreakLapTimeSumMs,
                 StreakLapCount = s.StreakLapCount,

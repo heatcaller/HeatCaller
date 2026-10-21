@@ -25,6 +25,16 @@ public sealed class RaceStanding
     /// </summary>
     public int LapsLed { get; init; }
 
+    /// <summary>
+    /// Penalty race control has given this car so far (jump start, penalty
+    /// buttons, warning time) - RacerStanding.PenaltyMs, already inside
+    /// ElapsedMs. Zero from a source that does not carry it.
+    ///
+    /// 20 Oct 2026: read by the provisional pole call under best-consecutive
+    /// laps, which works from lap times and so never saw a penalty.
+    /// </summary>
+    public long PenaltyMs { get; init; }
+
     /// <summary>Driver-facing label: prefer Name, fall back to the transponder id.</summary>
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Transponder : Name!;
 }

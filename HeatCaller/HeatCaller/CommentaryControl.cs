@@ -863,8 +863,8 @@ public sealed class CommentaryControl : UserControl
 
         teaserGrid.AddField(_txtTeaser);
         teaserGrid.AddHint(
-            "One line per teaser, picked at random each race. Fixed text, so it plays even with no writer available - "
-            + "but only when a recap follows it.");
+            "Only when a recap follows. The AI writes the line itself each race - naming the show, the recap host and the "
+            + "announcer - and uses these for the feel.");
         Stepped(teaserGrid.AddRow("then wait:", Line(_numTeaserGap, Suffix("seconds"))));
 
         var recap = new Section("Race recap");

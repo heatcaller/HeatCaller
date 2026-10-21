@@ -267,14 +267,19 @@ internal static class DriverCut
         // could leave this driver's own piece with none of theirs.
         var mine = NightMoments.Over(theirs, layouts, int.MaxValue)
             .Where(moment => string.Equals(moment.Transponder, who, StringComparison.OrdinalIgnoreCase))
+            .Where(moment => moment.What != NightMoments.Kind.Charge || ChargeFromARealSlot(moment, theirs, who))
             .Take(NightMoments.MostForTheNight);
 
         foreach (var moment in mine)
         {
             if (Describe(moment, named) is { Length: > 0 } sentence)
             {
+                // WHY (20 Oct 2026): the key was only the race and the kind
+                // of moment, so a driver who took the lead twice in one race
+                // lost the second lead change as a duplicate. The lap makes
+                // each one its own, as SeasonPiece now does.
                 blocks.Add(new FactBlock(
-                    $"cut:{who}:moment:{moment.SessionId}:{moment.What}",
+                    $"cut:{who}:moment:{moment.SessionId}:{moment.What}:{moment.Lap}",
                     sentence,
                     theme));
             }
@@ -366,6 +371,36 @@ internal static class DriverCut
                 $"The outright lap record for this track layout fell to {named}{inThat}: {Seconds(moment.FigureMs)}s.",
             _ => string.Empty,
         };
+    }
+
+    /// <summary>
+    /// Whether a charge moment for this driver rests on a grid slot that
+    /// could exist in that race.
+    ///
+    /// WHY (20 Oct 2026): the per-race sentence above already refuses a
+    /// StartPosition bigger than the race's field (a freeform race used to
+    /// take its grid from the previous race's whole field), but the moments
+    /// came straight from NightMoments, which never checks the slot against
+    /// the field - so a five-car heat could still say "made up 7 places from
+    /// the grid" (or, with the grid ranked over the real cars, 4 places
+    /// from a slot nobody can say they really started in).
+    /// This applies the same field count and the same test to the charge,
+    /// so the two halves of the piece agree.
+    /// </summary>
+    internal static bool ChargeFromARealSlot(
+        NightMoments.Moment moment, IEnumerable<SessionRecord> races, string transponder)
+    {
+        var race = races.FirstOrDefault(one => string.Equals(one.Id, moment.SessionId, StringComparison.Ordinal));
+
+        if (race is null || Rowed(race, transponder) is not { } row)
+        {
+            return false;
+        }
+
+        var field = race.Results.Count(one =>
+            !string.IsNullOrWhiteSpace(one.Transponder) && !GhostService.IsGhost(one.Transponder));
+
+        return row.StartPosition > 0 && row.StartPosition <= field;
     }
 
     /// <summary>This driver's row in a race, or null when they were not in it.</summary>

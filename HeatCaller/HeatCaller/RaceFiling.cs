@@ -236,6 +236,9 @@ internal static class RaceFiling
                 RejectedLaps = s.RejectedLaps,
                 LapsLed = s.LapsLed,
                 StartPosition = s.StartPosition,
+                // 20 Oct 2026: the in-race penalty, so qualifying by best
+                // consecutive laps can charge it (see SessionResultEntry).
+                RacePenaltyMs = Math.Max(0, s.PenaltyMs),
 
                 // Copies, not the live warnings. The board keeps its
                 // standings after the flag, and Clear Penalty there zeroes

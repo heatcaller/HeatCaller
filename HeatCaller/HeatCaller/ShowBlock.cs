@@ -536,7 +536,16 @@ internal sealed class ShowBlock
             // the remarks, and Overrun for how far "not quite" goes. A
             // bridge never gets that, and nor does anything once a segment
             // has gone out.
-            var exempt = !anySegment && !item.IsContinuity && ask <= room + Overrun;
+            //
+            // WHY (20 Oct 2026): this was judged on `ask`, which already
+            // carries the settle and the mark the bridge in front of it
+            // added. A segment that fitted within Overrun on its own but not
+            // with those on top was then not exempt, closed the block, and
+            // the bridge came off at the end - so nothing was said at all.
+            // It is now judged on what the segment costs as the FIRST item,
+            // its own estimate; the branch below takes the bridge off when
+            // keeping it would break the bound.
+            var exempt = !anySegment && !item.IsContinuity && item.Estimate <= room + Overrun;
 
             // An exempt segment skips the running total below, so whatever
             // went out in front of it - a look-back bridge, the voice-ID -

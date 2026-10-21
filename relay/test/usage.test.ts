@@ -393,6 +393,30 @@ describe("usage meters", () => {
       assert.equal(await readFile(topUpRequestsPath(folder, "acme-rc"), "utf8"), "{ broken");
     });
 
+    // 20 Oct 2026, Bug Hunt 8, #100: "delete everything" blanks the notes
+    // but keeps the asks, so the monthly cap and the operator's queue hold.
+    it("has its notes blanked, and its asks kept, by forgetNotes", async () => {
+      const kept = requests();
+      const asked = await kept.ask("acme-rc", "voice", "For Bill Smith's birthday race");
+      assert.equal(asked.ok, true);
+
+      await kept.forgetNotes("acme-rc");
+
+      const after = await kept.list("acme-rc");
+      assert.equal(after.length, 1);
+      assert.equal(after[0]?.id, asked.ok ? asked.request.id : "");
+      assert.equal(after[0]?.note, "");
+      assert.doesNotMatch(await readFile(topUpRequestsPath(folder, "acme-rc"), "utf8"), /Bill/);
+
+      // And a file that will not read is left as it is.
+      await writeFile(topUpRequestsPath(folder, "brookside"), "{ broken", "utf8");
+      await kept.forgetNotes("brookside");
+      assert.equal(await readFile(topUpRequestsPath(folder, "brookside"), "utf8"), "{ broken");
+
+      // And a club with no file at all is fine.
+      await kept.forgetNotes("nobody");
+    });
+
     it("says asking is unavailable on a relay that keeps no requests", async () => {
       const relay = await serve({ brain: brain(), voice: voice() });
       const answer = await call(relay, "POST", "/api/v1/c/acme-rc/usage/topup-request", { token: ACME_TOKEN, json: { meter: "voice" } });

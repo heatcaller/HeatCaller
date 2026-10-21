@@ -2341,6 +2341,29 @@ public sealed class AppSettings
         HeatCallerConsentVoiceId ??= string.Empty;
         HeatCallerConsentWho ??= string.Empty;
 
+        // WHY (20 Oct 2026, Bug Hunt 8 #39): Load moves these three off the
+        // relay's old hosts straight after this, and a null in the file
+        // (a club clearing its relay by hand, or a restored backup) threw
+        // there - which Load took for a corrupt file, so the app started on
+        // defaults and the first-run wizard saved them over every setting
+        // and sealed key. A null now means blank, as it does on restore.
+        RelayBaseUrl ??= string.Empty;
+        RelayLastGoodBaseUrl ??= string.Empty;
+        VoiceRelayBaseUrl ??= string.Empty;
+
+        // WHY (20 Oct 2026, Bug Hunt 8 #60): the same goes for these, read
+        // at startup and on the race, track and relay screens - an empty
+        // entry (null) in settings.json crashed them rather than meaning
+        // "none".
+        UpdateWaitingForNextStart ??= string.Empty;
+        LastRaceControlTrackName ??= string.Empty;
+        LastTrackLayoutName ??= string.Empty;
+        LastDemoTrackName ??= string.Empty;
+        RelayLastGoodClub ??= string.Empty;
+        RelayLastGoodToken ??= string.Empty;
+        RelayClub ??= string.Empty;
+        SmtpUser ??= string.Empty;
+
         // Rebuilt rather than copied straight across: two keys differing
         // only in case would make the copy constructor throw, so the later
         // one wins, as it would on screen.
@@ -2369,8 +2392,12 @@ public sealed class AppSettings
     /// once loaded. Without it the club's own old backup counted as a NEW
     /// relay address and held publishing until somebody pressed Save.
     /// </summary>
-    internal static string MovedOffLegacyRelay(string address)
+    internal static string MovedOffLegacyRelay(string? address)
     {
+        // WHY (20 Oct 2026, Bug Hunt 8 #39): a null address threw from
+        // Replace below; it now reads as blank, whoever calls this.
+        address ??= string.Empty;
+
         foreach (var oldHost in LegacyNames.RelayHosts)
         {
             address = address.Replace(oldHost, NewRelayHost, StringComparison.OrdinalIgnoreCase);

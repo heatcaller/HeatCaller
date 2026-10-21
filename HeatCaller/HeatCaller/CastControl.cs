@@ -44,6 +44,7 @@ public sealed class CastControl : UserControl
     private readonly CheckBox _chkCoHost = new ThemedCheckBox();
     private readonly TextBox _txtCoHostName = new();
     private readonly ComboBox _cmbCoHostVoice = new();
+    private readonly Button _btnTestCoHost = new();
 
     // What the co-host is LIKE (11 Oct 2026) - see CoHostStance. The line
     // under the picker says what the club has just chosen in its
@@ -144,6 +145,9 @@ public sealed class CastControl : UserControl
 
     /// <summary>The same for the race recap host, with a line of the kind a recap opens on. Set by the host.</summary>
     internal Action<SecondVoice>? SpeakAsRecapHost { get; set; }
+
+    /// <summary>The same for the co-host, with a line of the kind they answer the announcer with. Set by the host.</summary>
+    internal Action<SecondVoice>? SpeakAsCoHost { get; set; }
 
     public CastControl(AppSettings settings)
     {
@@ -437,6 +441,10 @@ public sealed class CastControl : UserControl
         _cmbCoHostVoice.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbCoHostVoice.SelectedIndexChanged += (_, _) => SaveCoHostVoice();
 
+        // Read as it is saved, so the test is the voice the list now shows.
+        _btnTestCoHost.Text = "Test Voice";
+        _btnTestCoHost.Click += (_, _) => SpeakAsCoHost?.Invoke(_settings.CoHostVoice);
+
         // THE STANCE. Filled from CoHostStance.All, and the handler attached
         // AFTER the list is filled and the club's own choice selected, for
         // the reason ShowTreatmentCard.FillLibrary gives - filling a box
@@ -496,7 +504,7 @@ public sealed class CastControl : UserControl
         var coHostGrid = new FieldGrid();
 
         Stepped(coHostGrid.AddRow("Co-host's name:", Line(_txtCoHostName, Suffix("blank and they are talked to but never named - the model never makes one up"))));
-        Stepped(coHostGrid.AddRow("Co-host's voice:", Line(_cmbCoHostVoice)));
+        Stepped(coHostGrid.AddRow("Co-host's voice:", Line(_cmbCoHostVoice, _btnTestCoHost)));
         Stepped(coHostGrid.AddRow("What they're like:", Line(_cmbCoHostStance)));
         coHostGrid.AddHint(_lblCoHostStance);
 
@@ -838,6 +846,7 @@ public sealed class CastControl : UserControl
         _chkTwoVoicesInHeats.Enabled = coHostOn;
         _txtCoHostName.Enabled = coHostOn && anyExchange;
         _cmbCoHostVoice.Enabled = coHostOn && anyExchange;
+        _btnTestCoHost.Enabled = coHostOn && anyExchange;
         _cmbCoHostStance.Enabled = coHostOn && anyExchange;
 
         // Load Voices fills every list in one pass (FillVoices), so it is

@@ -44,6 +44,15 @@ public sealed class PhotoFinish
     internal static readonly TimeSpan CameraQuietAfter = TimeSpan.FromSeconds(3);
 
     /// <summary>
+    /// How many race nights of frames are kept on disk - tonight's always
+    /// among them. See PruneOldNights.
+    /// </summary>
+    internal const int KeepNights = 6;
+
+    /// <summary>One prune at a time, across every PhotoFinish there is - <c>_diskGate</c> is only this one's.</summary>
+    private static readonly object PruneGate = new();
+
+    /// <summary>
     /// One moment worth a picture.
     /// </summary>
     /// <param name="AtUnixMs">When the crossing was counted, in Unix milliseconds - the clock the camera page stamps its frames with.</param>
@@ -55,6 +64,9 @@ public sealed class PhotoFinish
     private readonly List<Shot> _shots = new();
     private readonly Dictionary<int, string> _folders = new();
     private int _nextId = 1;
+
+    /// <summary>1 once this run has started pruning the old nights - see SaveFrame.</summary>
+    private int _pruneStarted;
 
     /// <summary>This run of the app, for the camera page: a new one means the shots are numbered from 1 again.</summary>
     private readonly string _run = Guid.NewGuid().ToString("N")[..8];
@@ -262,9 +274,93 @@ public sealed class PhotoFinish
         if (said is not null)
         {
             Saved?.Invoke(said);
+
+            // WHY (20 Oct 2026, Bug Hunt 8, #16): frames were written here
+            // every race night and nothing ever deleted them - a season of
+            // finishes (gigabytes a night with "Keep every crossing") filled
+            // the laptop's disk, and then race history and settings stopped
+            // saving. Now the first shot this run kept also clears out the
+            // nights older than the last KeepNights, once, in the background
+            // so the web server thread isn't held up by it. Started from
+            // here rather than at startup so it only runs when the camera is
+            // in use, which is the only time this folder grows.
+            if (Interlocked.Exchange(ref _pruneStarted, 1) == 0)
+            {
+                _ = Task.Run(() => PruneOldNights(line => Saved?.Invoke(line)));
+            }
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Deletes the nights of frames older than the newest
+    /// <see cref="KeepNights"/> under <see cref="Root"/>. Never throws. Any thread.
+    /// </summary>
+    public static void PruneOldNights(Action<string>? log = null) =>
+        PruneOldNights(Root, DateTime.Now, KeepNights, log);
+
+    /// <summary>
+    /// Deletes the night folders under <paramref name="root"/> after the
+    /// newest <paramref name="keepNights"/>. Only folders named as a night
+    /// ("2026-10-03") are counted or touched, so a folder someone put there
+    /// by hand is left alone, and tonight's night (by
+    /// <paramref name="nowLocal"/>) or anything newer is never deleted - the
+    /// camera may be writing into it. A night that can't be deleted (a frame
+    /// open in the Photo Finish window) is said and skipped, and tried again
+    /// next run. Returns how many nights went. Never throws.
+    /// </summary>
+    internal static int PruneOldNights(string root, DateTime nowLocal, int keepNights, Action<string>? log = null)
+    {
+        lock (PruneGate)
+        {
+            try
+            {
+                if (!Directory.Exists(root))
+                {
+                    return 0;
+                }
+
+                var tonight = TonightAtTheTrack.NightOf(nowLocal).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+                var old = Directory.GetDirectories(root)
+                    .Select(folder => (Folder: folder, Name: Path.GetFileName(folder)))
+                    .Where(one => DateTime.TryParseExact(one.Name, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+                    .OrderByDescending(one => one.Name, StringComparer.Ordinal)
+                    .Skip(Math.Max(1, keepNights))
+                    .Where(one => string.CompareOrdinal(one.Name, tonight) < 0)
+                    .ToList();
+
+                var gone = 0;
+
+                foreach (var (folder, name) in old)
+                {
+                    try
+                    {
+                        Directory.Delete(folder, recursive: true);
+                        gone++;
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        log?.Invoke($"[camera] Couldn't clear out the photo finish frames from {name} ({ex.Message}) - tried again next time.");
+                    }
+                }
+
+                if (gone > 0)
+                {
+                    log?.Invoke($"[camera] Cleared out {gone} old night{(gone == 1 ? string.Empty : "s")} of photo finish frames - the last {Math.Max(1, keepNights)} are kept.");
+                }
+
+                return gone;
+            }
+            catch (Exception ex)
+            {
+                // Listing the folder failed: nothing deleted, and nothing
+                // here is worth stopping the camera for.
+                log?.Invoke($"[camera] Couldn't check for old photo finish frames ({ex.Message}).");
+                return 0;
+            }
+        }
     }
 
     /// <summary>Written aside and moved into place, so the Photo Finish window never reads a file half-written.</summary>

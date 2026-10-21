@@ -298,6 +298,13 @@ public sealed partial class AnnouncementService
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
         timeout.CancelAfter(SynthesisTimeout);
 
+        // WHY (20 Oct 2026, Bug Hunt 8): the wait for a slot and the relay
+        // request share the one 30 s limit, so a line that got its slot late
+        // was cut off and reported as the relay not answering - which rests
+        // the relay though only this laptop's own queue was slow. Timed the
+        // same way as the ElevenLabs paths (see SlotWaitTookMostOfLimit).
+        var gateClock = System.Diagnostics.Stopwatch.StartNew();
+
         try
         {
             await SynthesisGate.WaitAsync(timeout.Token);
@@ -306,6 +313,8 @@ public sealed partial class AnnouncementService
         {
             throw new SynthesisSlotTimeoutException($"No synthesis slot came free within {SynthesisTimeout.TotalSeconds:0} s.");
         }
+
+        var waitedForSlot = gateClock.Elapsed;
 
         try
         {
@@ -337,6 +346,12 @@ public sealed partial class AnnouncementService
         }
         catch (OperationCanceledException) when (!cancel.IsCancellationRequested)
         {
+            if (SlotWaitTookMostOfLimit(waitedForSlot))
+            {
+                throw new SynthesisSlotTimeoutException(
+                    $"Waited {waitedForSlot.TotalSeconds:0} s for a synthesis slot, which left the request too little of the {SynthesisTimeout.TotalSeconds:0} s limit.");
+            }
+
             throw new HeatCallerVoiceException(
                 HeatCallerRefusal.Unreachable,
                 $"The relay didn't answer within {SynthesisTimeout.TotalSeconds:0} s.")
@@ -683,7 +698,10 @@ public sealed partial class AnnouncementService
         }
 
         var allowance = catalogue.Allowance;
+        // An unknown figure (20 Oct 2026) is no proof of room: the relay
+        // could not read the club's usage, so the month stays spent.
         var room = catalogue.Enabled
+                   && allowance.Known
                    && allowance.Allowance > 0
                    && allowance.Allowance - allowance.Used >= HeatCallerVoiceClient.MaxCharacters;
 
@@ -691,7 +709,10 @@ public sealed partial class AnnouncementService
 
         lock (_heatCallerLock)
         {
-            _heatCallerAllowance = allowance;
+            if (allowance.Known)
+            {
+                _heatCallerAllowance = allowance;
+            }
 
             if (!room)
             {
@@ -937,7 +958,9 @@ public sealed partial class AnnouncementService
                 }
             }
 
-            if (allowance is not null)
+            // Not an unknown figure (20 Oct 2026): a stand-in "0 used" must
+            // not reset the month or stand as where the month is.
+            if (allowance is { Known: true })
             {
                 // The month the relay says it is counting, which changes
                 // exactly once a month - unlike the count itself, which also
@@ -1070,7 +1093,7 @@ public sealed partial class AnnouncementService
             // may no longer end the rest - see _heatCallerRefusalGeneration.
             _heatCallerRefusalGeneration++;
 
-            if (ex.Allowance is not null)
+            if (ex.Allowance is { Known: true })
             {
                 _heatCallerAllowance = ex.Allowance;
             }

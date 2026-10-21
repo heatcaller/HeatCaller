@@ -62,15 +62,21 @@ public sealed class PaceWatchTests
     {
         var watch = new PaceWatch { NightBest = () => (12.500, "Dave") };
 
-        // Warmed up quick, so neither lap below is the fastest of the
-        // race - this is about the night's record and nothing else.
-        WarmUp(watch, 12.0);
+        // Warmed up at the night's own mark, so neither lap below is the
+        // fastest of the race - this is about the night's record and nothing
+        // else.
+        //
+        // WHY (20 Oct 2026): this warmed up at 12.0, but the night's best is
+        // now judged against this race's best too, so 12.460 came back as a
+        // personal best and the test no longer tested the margin. Not 13.0:
+        // then 12.497 would be the fastest lap of the race.
+        WarmUp(watch, 12.5);
 
         // Three thousandths. Inside the loop's own timing, not a drive.
         Assert.Null(Lap(watch, "Sam", 12.497));
 
         // Four hundredths is a real improvement.
-        Assert.NotNull(Lap(watch, "Sam", 12.460));
+        Assert.Equal(PaceNoteKind.NightBest, Lap(watch, "Sam", 12.460)!.Kind);
     }
 
     [Fact]

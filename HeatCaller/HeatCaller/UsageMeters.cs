@@ -638,9 +638,35 @@ internal sealed class UsageMeters
                 // Unreachable, or an answer of another shape: the last figure
                 // stands, as for the relay.
                 Log($"[usage] Couldn't read the ElevenLabs plan ({ex.Message}).");
+
+                // ...but with NO figure yet there is nothing to stand, and the
+                // meter used to be simply missing - Voice Settings, This Month
+                // and the chip all silent, with the reason only in the
+                // console (19 Oct 2026). Said where the meter would be
+                // instead, until a figure comes back.
+                if (Get(MeterKind.ElevenLabsKey) is not { Known: true })
+                {
+                    Unavailable(MeterKind.ElevenLabsKey, CouldNotReadPlan(ex));
+                }
             }
         }
     }
+
+    /// <summary>
+    /// What the meter says when ElevenLabs could not be asked or answered
+    /// oddly, and there is no earlier figure to show: why, in a sentence,
+    /// and that it is asked again.
+    /// </summary>
+    internal static string CouldNotReadPlan(Exception ex) => ex switch
+    {
+        TaskCanceledException or TimeoutException =>
+            "ElevenLabs didn't answer in time - this month's figure is asked for again every few minutes.",
+        HttpRequestException { StatusCode: { } status } =>
+            $"ElevenLabs wouldn't show this key's plan ({(int)status}) - it is asked again every few minutes.",
+        HttpRequestException =>
+            "Couldn't reach ElevenLabs to read this key's plan - it is asked again every few minutes.",
+        _ => "ElevenLabs answered with something that isn't a plan - it is asked again every few minutes.",
+    };
 
     /// <summary>What a key without the User: read permission gets instead of its figures.</summary>
     internal const string ElevenLabsCantReadPlan =

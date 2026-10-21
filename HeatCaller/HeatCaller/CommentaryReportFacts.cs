@@ -87,6 +87,9 @@ public static class CommentaryReportFacts
     public const double NarrowMissSeconds = 0.5;
 
     /// <summary>A gap this far inside a second makes pole a statement rather than a result.</summary>
+    // WHY (20 Oct 2026): no longer read by QualifyingReport - the pole
+    // "margin" it judged came from fast laps, which do not decide pole.
+    // Kept because it is public.
     public const double DominantPoleSeconds = 0.4;
 
     /// <summary>
@@ -123,7 +126,8 @@ public static class CommentaryReportFacts
     /// What qualifying decided, for the gap before the mains.
     ///
     /// Three things at most, in the order a commentator would reach for
-    /// them: who is on pole and by how much, who out-drove their own form,
+    /// them: who is on pole (with their best lap, never a "margin" - see
+    /// below), who out-drove their own form,
     /// and who just missed out. The last is the one nobody else in the
     /// room will have worked out, and it is the one the driver it happened
     /// to will remember.
@@ -148,31 +152,28 @@ public static class CommentaryReportFacts
         var pole = ranked[0];
         var poleName = CommentaryFacts.Clean(pole.Name);
 
-        if (poleName.Length > 0)
+        // WHY (20 Oct 2026): the reader skips a line with no driver name but
+        // keeps everyone else's real position, so the first line here can be
+        // P2. Only the P1 line is pole - otherwise P2 was announced as taking it.
+        if (poleName.Length > 0 && pole.Position == 1)
         {
             var text = $"{poleName} takes pole in {cls}.";
 
-            // The margin only when both actually set a lap - a pole taken
-            // because nobody else got round is not a margin.
-            if (ranked.Count > 1)
+            // WHY (20 Oct 2026): this used to say "takes pole by 0.21s from
+            // Bill", working the gap out from each driver's single quickest
+            // lap. No qualifying method ranks on that - the default is most
+            // laps, then time - so a pole won by a whole lap was read out as
+            // won by the fast-lap gap. Now the pole sitter's best lap is said
+            // as a plain fact and NOT as the margin, the same way
+            // MidMeetingStandings says the leader's quickest lap.
+            if (pole.BestLapSeconds > 0)
             {
-                var second = ranked[1];
-                var gap = second.BestLapSeconds - pole.BestLapSeconds;
-
-                if (pole.BestLapSeconds > 0 && second.BestLapSeconds > 0 && gap > 0)
-                {
-                    var runnerUp = CommentaryFacts.Clean(second.Name);
-
-                    // Every margin in this file goes in with a decimal
-                    // POINT whatever the PC's region: on a comma-decimal
-                    // laptop "0,21s" was read out over the PA as "nought,
-                    // twenty one". See CommentaryFacts.Invariant.
-                    text = gap > DominantPoleSeconds
-                        ? $"{poleName} takes pole in {cls} by {CommentaryFacts.Invariant(gap, "0.00")}s - a long way, for this class."
-                        : runnerUp.Length > 0
-                            ? $"{poleName} takes pole in {cls} by {CommentaryFacts.Invariant(gap, "0.00")}s from {runnerUp}."
-                            : $"{poleName} takes pole in {cls} by {CommentaryFacts.Invariant(gap, "0.00")}s.";
-                }
+                // A decimal POINT whatever the PC's region: on a
+                // comma-decimal laptop "12,345s" was read out over the PA
+                // as "twelve, three four five". See CommentaryFacts.Invariant.
+                text = cls.Length > 0
+                    ? $"{poleName} takes pole in {cls}, with a best lap of {CommentaryFacts.Invariant(pole.BestLapSeconds, "0.000")}s."
+                    : $"{poleName} takes pole, with a best lap of {CommentaryFacts.Invariant(pole.BestLapSeconds, "0.000")}s.";
             }
 
             found.Add(new FactBlock($"pole:{raceKey}", text));

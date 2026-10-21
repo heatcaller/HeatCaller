@@ -1386,7 +1386,7 @@ public static partial class CommentaryReaders
             // HOW MANY ROUNDS THOSE RACES COME TO, which is not how many
             // races they are - see RoundsCountedSoFar, which is also the
             // only refusal in this method that was a bug first.
-            if (RoundsCountedSoFar(counted, events) is not { } roundsCounted
+            if (RoundsCountedSoFar(counted, events, round) is not { } roundsCounted
                 || roundsCounted < CommentaryStakesFacts.LeastRoundsCounted)
             {
                 continue;
@@ -1726,7 +1726,8 @@ public static partial class CommentaryReaders
     /// </summary>
     private static int? RoundsCountedSoFar(
         IReadOnlyList<SessionRecord> counted,
-        RaceEventStore? events)
+        RaceEventStore? events,
+        RoundDefinition? round)
     {
         if (events is null || counted.Count == 0)
         {
@@ -1746,6 +1747,23 @@ public static partial class CommentaryReaders
             {
                 return null;
             }
+        }
+
+        // WHY (20 Oct 2026): only the races already counted were checked
+        // for one-race-per-day, never the race about to run. A B-main filed
+        // earlier tonight makes tonight a counted day, so the A-main being
+        // staged was left out of the rounds remaining and every rival was
+        // priced one race short - a false "nobody can catch him" over the
+        // PA. When the staged race shares a day with a counted one, that
+        // day holds two counting races, so this refuses the same way as
+        // two counted races on one day. A rerun of the same round is
+        // already left out of counted by ChampionshipLive.Candidates, so it
+        // does not trip this.
+        if (round is not null
+            && events.EventForRound(round.Id) is { } today
+            && days.Contains(today.Id))
+        {
+            return null;
         }
 
         return days.Count;

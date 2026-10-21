@@ -1286,7 +1286,17 @@ public sealed class HeatBalanceForm : Form
     {
         var racing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var column in _columns.Where(c => !c.IsSpares))
+        // WHY (20 Oct 2026): with no race day open the form is given every
+        // round the class has ever had, and this used to count last week's
+        // run heats too - so a driver who ran last week's Q1 and Q2 but is
+        // in no heat tonight never showed up here, and could not be dragged
+        // out of the locked old heats either. Now a run heat counts only
+        // when it is tonight's, the same rule DescribeMoveBlocker uses for
+        // drops (see RunHeatCounts).
+        bool Counts(Column c) =>
+            !c.IsSpares && (!c.Locked || RunHeatCounts(c.Round!, _roundsAreOneRaceDay));
+
+        foreach (var column in _columns.Where(Counts))
         {
             foreach (var transponder in column.Current)
             {
@@ -1299,7 +1309,7 @@ public sealed class HeatBalanceForm : Form
         // still sitting out Q2, and used to vanish from this column the
         // moment they were put in Q1 - leaving no way to add them to Q2.
         var qualifyingRounds = _columns
-            .Where(c => !c.IsSpares && RoundKeyOf(c) is not null)
+            .Where(c => Counts(c) && RoundKeyOf(c) is not null)
             .GroupBy(c => RoundKeyOf(c)!, StringComparer.Ordinal)
             .OrderBy(g => RoundKeyOrder(g.Key))
             .Select(g => (Name: RoundNameFor(g.Key, g.First().Round),

@@ -55,19 +55,47 @@ internal static class AudioBus
     private static MixingSampleProvider? _mixer;
     private static readonly List<Clip> Playing = new();
 
+    // WHY (20 Oct 2026): opening the output (waveOutOpen) is the slow call -
+    // a Bluetooth speaker reconfiguring, or one that has wandered off, takes
+    // seconds. It used to run inside PlayAsync, under Gate, on whatever
+    // thread asked for the sound - and after a speaker dropped out that was
+    // the UI thread, so the first chime after it froze Race Control and the
+    // Big Screen. Now the open runs on the pool, outside Gate, and every
+    // caller that arrives while it is going on shares this one open.
+    // Guarded by Gate; cleared when the open finishes, either way, so a
+    // failed open is tried again on the next sound, as before.
+    private static Task<MixingSampleProvider>? _opening;
+
+    // The output being opened, not yet published - so that if it stops
+    // before it is published (its PlaybackStopped would otherwise be thrown
+    // away as "not ours"), the open is treated as failed rather than
+    // publishing an output that is already dead. Both guarded by Gate.
+    private static WaveOutEvent? _pending;
+    private static bool _pendingDied;
+
     /// <summary>
     /// Opens the output now rather than on the first sound, so that first
     /// sound doesn't pay for the wake-up - and nor does the music. Never
-    /// throws: a PC with no sound device just stays quiet.
+    /// throws: a PC with no sound device just stays quiet. Blocks until the
+    /// open is done, so call it off the UI thread (MainForm uses Task.Run).
     /// </summary>
     public static void Warm()
     {
         try
         {
+            Task<MixingSampleProvider> opening;
+
             lock (Gate)
             {
-                EnsureRunningLocked();
+                if (_output is not null && _mixer is not null)
+                {
+                    return;
+                }
+
+                opening = OpenLocked();
             }
+
+            opening.Wait();
         }
         catch
         {
@@ -97,7 +125,9 @@ internal static class AudioBus
     /// <summary>
     /// Plays a sound and completes when it has been handed to the device -
     /// cut short, and completed straight away, if the token is cancelled.
-    /// Throws InvalidOperationException when there is no usable output.
+    /// When there is no usable output the returned task faults with
+    /// InvalidOperationException (since 20 Oct 2026 - it used to be thrown
+    /// from this call, but the open now happens off the caller's thread).
     /// </summary>
     ///
     /// With <paramref name="allowBoost"/> the gain may go above unity, up to
@@ -124,22 +154,81 @@ internal static class AudioBus
 
         var clip = new Clip(gained);
 
-        MixingSampleProvider mixer;
+        MixingSampleProvider? mixer = null;
+        Task<MixingSampleProvider>? opening = null;
 
         lock (Gate)
         {
-            try
+            if (_output is not null && _mixer is not null)
             {
-                mixer = EnsureRunningLocked();
+                mixer = _mixer;
+                Playing.Add(clip);
             }
-            catch (Exception ex)
+            else
             {
-                throw new InvalidOperationException($"No usable audio output device: {ex.Message}", ex);
+                opening = OpenLocked();
+            }
+        }
+
+        // WHY (20 Oct 2026): with the output running - nearly always - this
+        // is exactly as before. With it closed (first sound, or after the
+        // speaker dropped out) the open happens on the pool and the sound
+        // starts when it is done, so the caller's thread never waits on
+        // the device. "No usable output" now arrives as a faulted task
+        // rather than a throw from this call; every caller already handles
+        // a faulted task, since a speaker can go away mid-sound.
+        if (mixer is null)
+        {
+            return PlayWhenOpenAsync(opening!, clip, cancellationToken);
+        }
+
+        return Start(mixer, clip, cancellationToken);
+    }
+
+    /// <summary>The rest of PlayAsync for a sound that had to wait for the output to open.</summary>
+    private static async Task PlayWhenOpenAsync(Task<MixingSampleProvider> opening, Clip clip, CancellationToken cancellationToken)
+    {
+        MixingSampleProvider mixer;
+
+        try
+        {
+            mixer = await opening.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Cut short before it started: completed straight away, as
+            // PlayAsync promises. The open carries on for the next sound.
+            return;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"No usable audio output device: {ex.Message}", ex);
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        lock (Gate)
+        {
+            // The output could have stopped between being published and
+            // here. Adding to a dead mixer would leave the sound waiting
+            // forever, since nothing would ever read or orphan it.
+            if (!ReferenceEquals(mixer, _mixer))
+            {
+                throw new InvalidOperationException("The audio output stopped.");
             }
 
             Playing.Add(clip);
         }
 
+        await Start(mixer, clip, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Hands a clip, already in <see cref="Playing"/>, to the running mixer.</summary>
+    private static Task Start(MixingSampleProvider mixer, Clip clip, CancellationToken cancellationToken)
+    {
         mixer.AddMixerInput(clip);
 
         if (cancellationToken.CanBeCanceled)
@@ -156,21 +245,101 @@ internal static class AudioBus
         return clip.Task;
     }
 
-    private static MixingSampleProvider EnsureRunningLocked()
+    /// <summary>
+    /// The open in progress, or a new one started on the pool. Call under
+    /// Gate, and only when the output is not running.
+    /// </summary>
+    private static Task<MixingSampleProvider> OpenLocked()
     {
-        if (_output is not null && _mixer is not null)
+        if (_opening is null)
         {
-            return _mixer;
+            _opening = Task.Run(OpenAndPublish);
+
+            // WHY (20 Oct 2026): a failed open is always observed here. Its
+            // only waiter can be a sound that was cut short before the open
+            // finished, which returns without looking - and an unobserved
+            // fault is written to the crash log as an "Unobserved background
+            // error" (Program.cs) for what is only a missing speaker.
+            _ = _opening.ContinueWith(
+                done => _ = done.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
         }
 
-        // ReadFully: the mixer never runs dry, so the device plays silence
-        // between sounds instead of stopping.
-        var mixer = new MixingSampleProvider(MixFormat) { ReadFully = true };
+        return _opening;
+    }
 
+    /// <summary>
+    /// Opens the output - outside Gate, on the pool - and publishes it under
+    /// Gate. Runs as the one shared <see cref="_opening"/>.
+    /// </summary>
+    private static MixingSampleProvider OpenAndPublish()
+    {
+        try
+        {
+            // ReadFully: the mixer never runs dry, so the device plays silence
+            // between sounds instead of stopping.
+            var mixer = new MixingSampleProvider(MixFormat) { ReadFully = true };
+            var output = OpenOutput(mixer);
+
+            lock (Gate)
+            {
+                var died = _pendingDied;
+                _pending = null;
+                _pendingDied = false;
+
+                if (died || (_output is not null && _mixer is not null))
+                {
+                    // Not from inside anything of its own, and never under Gate.
+                    _ = Task.Run(() =>
+                    {
+                        try
+                        {
+                            output.Dispose();
+                        }
+                        catch
+                        {
+                        }
+                    });
+
+                    if (died)
+                    {
+                        throw new InvalidOperationException("The audio output stopped as soon as it opened.");
+                    }
+
+                    return _mixer!;
+                }
+
+                _output = output;
+                _mixer = mixer;
+                return mixer;
+            }
+        }
+        finally
+        {
+            lock (Gate)
+            {
+                _opening = null;
+                _pending = null;
+                _pendingDied = false;
+            }
+        }
+    }
+
+    /// <summary>The slow part: opens the device and starts it playing the mixer. Touches no shared state but <see cref="_pending"/>.</summary>
+    private static WaveOutEvent OpenOutput(MixingSampleProvider mixer)
+    {
         // Not the shortest buffer possible: some drivers play nothing at
         // all from a very short one (see ToneGenerator), and a continuous
         // stream that runs dry glitches. About a third of a second.
         var output = new WaveOutEvent { DesiredLatency = 300, NumberOfBuffers = 3 };
+
+        lock (Gate)
+        {
+            _pending = output;
+            _pendingDied = false;
+        }
 
         try
         {
@@ -190,9 +359,7 @@ internal static class AudioBus
             throw;
         }
 
-        _output = output;
-        _mixer = mixer;
-        return mixer;
+        return output;
     }
 
     /// <summary>
@@ -208,6 +375,13 @@ internal static class AudioBus
         {
             if (!ReferenceEquals(sender, _output))
             {
+                // Stopped while still being opened, before it was published:
+                // OpenAndPublish sees this and fails the open instead.
+                if (sender is not null && ReferenceEquals(sender, _pending))
+                {
+                    _pendingDied = true;
+                }
+
                 return;
             }
 

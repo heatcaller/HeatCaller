@@ -502,7 +502,17 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
                 // evaluate its arguments when nothing is listening, so a
                 // figures-in-the-interpolation version tells UsageMeters
                 // nothing on a PC with no console attached.
-                var said = Allowance(root);
+                //
+                // WHY (20 Oct 2026): a relay deployed before today put a
+                // made-up allowance of 1,000 lines on its "not-included"
+                // (and "off") refusal, so the app showed a usage meter the
+                // club never had, and it came and went. The relay no longer
+                // sends those figures; this ignores them on a relay that
+                // still does.
+                var said = string.Equals(refusal, "not-included", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(refusal, "off", StringComparison.OrdinalIgnoreCase)
+                    ? string.Empty
+                    : Allowance(root);
 
                 StatusMessage?.Invoke(
                     $"[brain] The relay wouldn't write that one ({(int)status}{(refusal is null ? "" : $", {refusal}")}): "

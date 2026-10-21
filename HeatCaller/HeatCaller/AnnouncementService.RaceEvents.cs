@@ -529,6 +529,17 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // WHY (20 Oct 2026): this call goes straight to EnqueueVoiceWork,
+        // not through EnqueueVoice, so it skipped the club's chattiness
+        // dial - a quiet announcer still called every ghost pass. It now
+        // asks the dial first and logs the hold in the same words.
+        if (!DialLetsItSpeak(type, config))
+        {
+            StatusMessage?.Invoke(
+                $"[voice] {type} held - the announcer is set to {ShowChatter.For(Chatter).Name}.");
+            return;
+        }
+
         var template = TemplateBag.Pick(config.EffectiveTemplates);
 
         var text = template
@@ -606,17 +617,27 @@ public sealed partial class AnnouncementService
         var speed = config.SpeedFor(_voiceStore.Current.Speed);
 
         // A sponsor who presents the milestones gets their name on it.
-        var (sponsorTag, countMention) = SponsorTag(type);
+        var (sponsorTag, countMention, releaseMention) = SponsorTag(type);
         text = (text + sponsorTag).Trim();
 
         // Screen text raised by EnqueueVoiceWork, once the line is accepted.
-        EnqueueVoiceWork(type, transponderId,
+        //
+        // 20 Oct 2026: a line the queue turns down - or keeps and then
+        // loses - gives the sponsor's allowance back, or the sponsor went
+        // unnamed on milestones for three minutes over a line nobody heard.
+        var accepted = EnqueueVoiceWork(type, transponderId,
             () =>
             {
                 countMention?.Invoke();
                 return SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed);
             },
-            displayText: text);
+            displayText: text,
+            lost: releaseMention);
+
+        if (!accepted)
+        {
+            releaseMention?.Invoke();
+        }
     }
 
     /// <summary>
@@ -1206,10 +1227,18 @@ public sealed partial class AnnouncementService
         if (method == QualifyingMethod.BestConsecutiveLaps)
         {
             var n = Math.Max(1, consecutiveLaps);
+            // 20 Oct 2026: a penalty given during the race is added to the
+            // driver's run, as QualifyingCalculator does, so a penalized
+            // driver is no longer called on provisional pole. Only a driver
+            // with a run is charged; a negative penalty is ignored.
             var bestRun = standings
-                .Select(s => (Standing: s, RunMs: flyingLaps.TryGetValue(s.Transponder, out var laps)
-                    ? QualifyingCalculator.BestConsecutiveWindow(laps, n).TotalMs
-                    : 0))
+                .Select(s =>
+                {
+                    var run = flyingLaps.TryGetValue(s.Transponder, out var laps)
+                        ? QualifyingCalculator.BestConsecutiveWindow(laps, n).TotalMs
+                        : 0L;
+                    return (Standing: s, RunMs: run > 0 ? run + Math.Max(0, s.PenaltyMs) : 0L);
+                })
                 .Where(x => x.RunMs > 0)
                 .OrderBy(x => x.RunMs)
                 .Select(x => x.Standing)

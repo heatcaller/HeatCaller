@@ -125,9 +125,17 @@ internal static class SponsorReport
         var running = sold.Where(one => one.Enabled).ToList();
         var weights = running.Sum(one => Math.Max(1, one.Weight));
 
+        // WHY (20 Oct 2026): the share GOT was worked out over every
+        // sponsor's reads, switched-off ones included, while the share
+        // BOUGHT left them out - so a sponsor read early and switched off
+        // later made everybody still running look short-changed. Both sides
+        // now count the same sponsors: the ones in tonight's rotation.
+        // `given` stays the headline total above.
+        var runningReads = running.Sum(one => Reads(counts, one.Id));
+
         foreach (var sponsor in sold)
         {
-            text.AppendLine(LineFor(sponsor, counts, given, weights, running.Contains(sponsor), placement));
+            text.AppendLine(LineFor(sponsor, counts, runningReads, runningReads < given, weights, running.Contains(sponsor), placement));
 
             // THEIR SPONSORED MOMENTS, under their reads - counted only when
             // the "presented by" actually went to the speaker, the same
@@ -154,7 +162,8 @@ internal static class SponsorReport
     private static string LineFor(
         SponsorBooking sponsor,
         IReadOnlyDictionary<string, int> counts,
-        int given,
+        int runningReads,
+        bool someReadsWentToSwitchedOff,
         int weights,
         bool inTheRotation,
         SponsorPlacement placement)
@@ -180,12 +189,19 @@ internal static class SponsorReport
         // sponsor on the books "a hundred per cent of the reads" is a
         // sentence about nothing, and with no reads at all there is no
         // share either.
-        if (given > 0 && weights > 0 && weight < weights)
+        if (runningReads > 0 && weights > 0 && weight < weights)
         {
             var bought = weight * 100.0 / weights;
-            var got = reads * 100.0 / given;
+            var got = reads * 100.0 / runningReads;
 
-            line.Append($" ({got:0}% of the evening's reads; they bought {bought:0}%)");
+            // WHY (20 Oct 2026): once a switched-off sponsor's reads are
+            // left out of the share, "of the evening's reads" would no
+            // longer be true - 3 of the 10 reads in the headline is not
+            // 50% of the evening. So on those nights the line says which
+            // reads it is a share of; every other night reads as before.
+            line.Append(someReadsWentToSwitchedOff
+                ? $" ({got:0}% of the reads to sponsors in tonight's rotation; they bought {bought:0}%)"
+                : $" ({got:0}% of the evening's reads; they bought {bought:0}%)");
         }
 
         // ONE REASON for a zero, and not "nothing was typed for them": a

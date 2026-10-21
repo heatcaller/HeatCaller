@@ -173,7 +173,10 @@ public sealed class QualifyingProjector
                 s.Laps,
                 s.ElapsedMs,
                 s.FastestLapMs,
-                s.LapTimesMs)).ToList());
+                s.LapTimesMs,
+                // 20 Oct 2026: the in-race penalty, so best-consecutive-laps
+                // qualifying charges it on the running heat too.
+                s.PenaltyMs)).ToList());
 
         // Without the running heat: where qualifying stood when this one
         // went out. This is the baseline every arrow is measured from.
@@ -289,14 +292,19 @@ public sealed class QualifyingProjector
 
         long laps = 0;
         long elapsed = 0;
+        // 20 Oct 2026: penalties as well. ElapsedMs only picks a penalty up
+        // when the next lap is counted, so without this a penalty given
+        // between laps would not redraw the projection until that lap.
+        long penalty = 0;
 
         foreach (var s in standings)
         {
             laps += s.Laps;
             elapsed += s.ElapsedMs;
+            penalty += s.PenaltyMs;
         }
 
-        return $"{round.Id}|{_race.SessionGeneration}|{standings.Count}|{laps}|{elapsed}"
+        return $"{round.Id}|{_race.SessionGeneration}|{standings.Count}|{laps}|{elapsed}|{penalty}"
             + $"|{raceClass?.QualifyingMethod}|{raceClass?.ConsecutiveLapCount}|{raceClass?.CountBestRounds}"
             // 17 Oct 2026, Bug Hunt 8, A26-3: an Edit Result DQ or a Delete
             // during a live qualifier redraws the projection at once.

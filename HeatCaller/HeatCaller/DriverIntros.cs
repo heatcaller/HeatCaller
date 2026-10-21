@@ -89,6 +89,31 @@ internal static class DriverIntros
     }
 
     /// <summary>
+    /// The name the timing last recorded for a car - for a driver with no
+    /// profile, who would otherwise be introduced as nobody. Null when no
+    /// race has a name for it, or only one with no letters in it.
+    /// </summary>
+    public static string? NameFromHistory(IEnumerable<SessionRecord> history, string transponder) =>
+        (history ?? Enumerable.Empty<SessionRecord>())
+            .Where(s => s?.Results is not null)
+            .OrderByDescending(s => s.EndedAtUtc)
+            .SelectMany(s => s.Results)
+            .Where(r => r is not null
+                        && string.Equals(r.Transponder, transponder, StringComparison.OrdinalIgnoreCase)
+                        && LooksLikeAName(r.DriverName))
+            .Select(r => r.DriverName.Trim())
+            .FirstOrDefault();
+
+    /// <summary>
+    /// Something a voice can read as a name: has a letter in it. A name
+    /// that is the transponder's digits would be read out as a number; one
+    /// that is a demo car's "transponder" written as a name ("Terry Byte")
+    /// is fine.
+    /// </summary>
+    public static bool LooksLikeAName(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && name.Any(char.IsLetter);
+
+    /// <summary>
     /// One line of a driver's form, for their introduction - the most
     /// interesting true thing their saved races say, or empty:
     ///

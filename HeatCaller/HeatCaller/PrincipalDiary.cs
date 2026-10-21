@@ -207,8 +207,36 @@ internal sealed class PrincipalDiary
     /// which is not a callback but an argument. The line wants a gap the
     /// room can feel, and a night is the smallest one there is.
     /// </summary>
+    /// <param name="principalName">What the club calls the principal NOW (Voice > Cast), or blank. Only a sentence said under the same name comes back.</param>
     /// <param name="nowUtc">Now, so a lapsed sentence is not quoted. Passed in rather than read so this is testable.</param>
-    internal Entry? LastSaidBy(string? driverId, DateTime nowUtc)
+    internal Entry? LastSaidBy(string? driverId, string? principalName, DateTime nowUtc)
+    {
+        // WHY (20 Oct 2026): Entry.PrincipalName was stored "so a club that
+        // has since named him does not have last month's words put into a
+        // stranger's mouth", but nothing ever compared it - rename the
+        // principal from Alex to Morgan and the host quoted Alex's sentence
+        // back to Morgan as his own. Now a sentence said under a different
+        // name (blank and a name count as different, which is exactly the
+        // "has since named him" case) is not a callback. The ?? covers a
+        // hand-edited file with a null name, which Load does not repair.
+        var principal = (principalName ?? string.Empty).Trim();
+
+        return LastSaidBy(driverId, nowUtc, e =>
+            string.Equals((e.PrincipalName ?? string.Empty).Trim(), principal, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The same, without the principal's name - kept for callers written
+    /// before the name was checked.
+    /// </summary>
+    /// <remarks>
+    /// WHY (20 Oct 2026): DOES NOT CHECK THE NAME, so it can still quote one
+    /// principal's words to another. Kept only so existing callers keep
+    /// building; the booth should call the overload that takes the name.
+    /// </remarks>
+    internal Entry? LastSaidBy(string? driverId, DateTime nowUtc) => LastSaidBy(driverId, nowUtc, _ => true);
+
+    private Entry? LastSaidBy(string? driverId, DateTime nowUtc, Func<Entry, bool> sameVoice)
     {
         if (string.IsNullOrWhiteSpace(driverId))
         {
@@ -219,6 +247,7 @@ internal sealed class PrincipalDiary
 
         return _entries
             .Where(e => string.Equals(e.DriverId, driverId, StringComparison.OrdinalIgnoreCase))
+            .Where(sameVoice)
             .Where(e => nowUtc - e.AtUtc <= StaysWorthQuoting)
             .Where(e => TonightAtTheTrack.NightOf(e.AtUtc.ToLocalTime()) < tonight)
             .OrderByDescending(e => e.AtUtc)
@@ -281,8 +310,13 @@ internal sealed class PrincipalDiary
     ///
     /// Here because a club that renames a driver, hands a transponder to
     /// somebody else, or deletes a race day should not have last month's
-    /// words put to whoever holds that transponder now. See
-    /// RaceDayDeleter and TransponderTransfer for the other half of that.
+    /// words put to whoever holds that transponder now.
+    ///
+    /// WHY (20 Oct 2026): this used to say "see RaceDayDeleter and
+    /// TransponderTransfer for the other half of that", but neither calls
+    /// it - nothing in the app does yet. The principal-name check in
+    /// LastSaidBy covers a renamed principal; a handed-over transponder
+    /// still needs those callers wired in.
     /// </summary>
     internal void Forget(string? driverId)
     {

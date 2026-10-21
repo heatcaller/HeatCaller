@@ -393,6 +393,21 @@ internal sealed class ShowMusic
 
                 File.Move(staging, into, overwrite: true);
             }
+            else
+            {
+                // WHY (20 Oct 2026): a file picked out of the show music
+                // folder itself skipped the copy AND the clear-out above, so
+                // an older opener.mp3 beside the chosen opener.wav stayed put
+                // and, coming first in Extensions, kept playing instead.
+                // Nothing to copy here, but every other take still goes -
+                // keeping the chosen file itself.
+                foreach (var old in Extensions
+                             .Select(e => Path.Combine(Folder, name + e))
+                             .Where(path => File.Exists(path) && !Same(into, path)))
+                {
+                    File.Delete(old);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -1856,7 +1871,9 @@ internal sealed class ShowTreatment
 
                 // Discarded on purpose: the opener plays itself out while
                 // the show carries on over the top of it. Nothing waits
-                // for it, and Play has already swallowed any failure.
+                // for it, and Play reports any failure to the console
+                // itself (20 Oct 2026: a fault from the task is logged by
+                // Play too, and observed there, so nothing goes unseen).
                 _ = Play(openerGain, openerLevel, "opener");
             }
 
@@ -2180,7 +2197,19 @@ internal sealed class ShowTreatment
     {
         try
         {
-            return AudioBus.PlayAsync(source, level);
+            // WHY (20 Oct 2026, Bug Hunt 8 #40): with no sound device the bus
+            // now reopens it in the background and fails the returned task
+            // instead of throwing here, so the "couldn't play" line is
+            // written when that task faults. The catch below still covers
+            // anything thrown on the way in. The console line is safe from
+            // any thread.
+            var played = AudioBus.PlayAsync(source, level);
+            _ = played.ContinueWith(
+                done => Status?.Invoke($"[show] The {what} couldn't play: {done.Exception?.GetBaseException().Message}"),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
+            return played;
         }
         catch (Exception ex)
         {

@@ -225,6 +225,13 @@ internal static class BroadcastImaging
     /// <summary>The file the settings above came from - Root can move to a rehearsal copy.</summary>
     private static string? _loadedFrom;
 
+    /// <summary>
+    /// True when imaging.json was there but could not be read - see
+    /// SafeFile.HoldWritesAfterUnreadable. Changes then apply for this run
+    /// only and nothing is saved over the file.
+    /// </summary>
+    private static bool _holdWrites;
+
     /// <summary>What is left in each point's shuffled bag, by soundscape and cue.</summary>
     private static readonly Dictionary<string, Queue<string>> Bags = new(StringComparer.OrdinalIgnoreCase);
 
@@ -277,6 +284,9 @@ internal static class BroadcastImaging
 
         var loaded = new ImagingSettings();
 
+        // A new path starts clean: the hold belongs to the file it was set for.
+        _holdWrites = false;
+
         try
         {
             if (File.Exists(path))
@@ -287,8 +297,18 @@ internal static class BroadcastImaging
         catch (Exception ex)
         {
             // Unreadable: start from the defaults rather than refusing to
-            // open, and say so. The file is left where it is.
-            Status?.Invoke($"[imaging] Couldn't read {path} ({ex.Message}) - using the defaults.");
+            // open, and say so.
+            // WHY (20 Oct 2026): this used to only say so, and the next
+            // change on the Imaging page (a slider nudge, a run-of-show
+            // pick) saved the defaults over the file - a file a backup or
+            // sync tool held open for a moment at launch lost the club's run
+            // of show, every custom piece list and every post and talk-up
+            // mark, with no copy kept. Now it holds its writes like every
+            // other store: nothing is saved over a file that could not be
+            // read, and damaged content is copied aside first.
+            _holdWrites = SafeFile.HoldWritesAfterUnreadable(path, ex);
+            Status?.Invoke($"[imaging] Couldn't read {path} ({ex.Message}) - using the defaults"
+                + (_holdWrites ? "; changes won't be saved over it this run." : "."));
         }
 
         // A hand-edited file can say null for either.
@@ -296,6 +316,17 @@ internal static class BroadcastImaging
         loaded.Soundscapes ??= new Dictionary<string, Dictionary<string, List<string>>>();
         loaded.Posts ??= new Dictionary<string, double>();
         loaded.TalkUps ??= new Dictionary<string, double>();
+
+        // ...and null for a soundscape's own entry: drop it, so it follows the shipped files.
+        // WHY (20 Oct 2026): {"Soundscapes":{"<id>":null}} used to load as a
+        // null entry, and IsCustom, FilesFor and RestoreDefaults then threw
+        // NullReferenceException - out of On Air's jingle, which is meant
+        // never to throw. Dropped, it reads as "not customised", the same as
+        // SetFiles already treated it.
+        foreach (var id in loaded.Soundscapes.Where(p => p.Value is null).Select(p => p.Key).ToList())
+        {
+            loaded.Soundscapes.Remove(id);
+        }
 
         _settings = loaded;
         _loadedFrom = path;
@@ -306,6 +337,13 @@ internal static class BroadcastImaging
 
     private static void SaveLocked()
     {
+        // The file could not be read at load - see _holdWrites. Changes
+        // stay in memory for this run; the unread file is never written over.
+        if (_holdWrites)
+        {
+            return;
+        }
+
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
@@ -671,11 +709,63 @@ internal static class BroadcastImaging
                 // with anything, and merely checking a \\server\share path
                 // exists hands that server this account's password hash -
                 // see ShowMusic.Trustworthy, which this follows.
-                return (chosen ?? new List<string>()).Where(Trustworthy).ToList();
+                // WHY (20 Oct 2026): each path is also moved to this PC's
+                // folders if it was written on another - see Relocated.
+                return (chosen ?? new List<string>()).Where(Trustworthy).Select(Relocated).ToList();
             }
         }
 
         return DefaultFiles(theme, element);
+    }
+
+    /// <summary>
+    /// A stored piece's path, moved to this PC and Windows account when it
+    /// was written on another.
+    ///
+    /// WHY (20 Oct 2026): the lists hold full paths, and a club piece's path
+    /// names the Windows account ("C:\Users\Sam\AppData\Roaming\HeatCaller\Imaging\...").
+    /// A backup restored on another laptop or account put the files back in
+    /// the new Imaging folder but left every path pointing at the old one,
+    /// so every customised cue played nothing - not even the shipped pieces,
+    /// because the element still counted as custom. MusicStore had the same
+    /// fault. Now a path that isn't there is looked for under this run's
+    /// ClubRoot (or DefaultsRoot, for a shipped piece under Assets\Imaging)
+    /// by its soundscape folder and file name. The corrected path is written
+    /// back the next time that element's list is saved. Anything else is
+    /// returned unchanged, and Candidates skips it as before.
+    /// </summary>
+    internal static string Relocated(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                return path;
+            }
+
+            var fileName = Path.GetFileName(path);
+            var soundscapeFolder = Path.GetDirectoryName(path);
+            var imagingFolder = Path.GetDirectoryName(soundscapeFolder);
+
+            if (string.IsNullOrEmpty(fileName)
+                || string.IsNullOrEmpty(soundscapeFolder)
+                || string.IsNullOrEmpty(imagingFolder)
+                || !string.Equals(Path.GetFileName(imagingFolder), "Imaging", StringComparison.OrdinalIgnoreCase))
+            {
+                return path;
+            }
+
+            var shipped = string.Equals(
+                Path.GetFileName(Path.GetDirectoryName(imagingFolder)), "Assets", StringComparison.OrdinalIgnoreCase);
+            var root = shipped ? DefaultsRoot : ClubRoot;
+            var candidate = Path.GetFullPath(Path.Combine(root, Path.GetFileName(soundscapeFolder), fileName));
+
+            return PlainFileName.IsInside(root, candidate) && File.Exists(candidate) ? candidate : path;
+        }
+        catch
+        {
+            return path;
+        }
     }
 
     private static bool Trustworthy(string? path)
@@ -1475,8 +1565,18 @@ internal static class BroadcastImaging
         {
             var from = (int)(Math.Max(0, fromSeconds) * clip.SampleRate);
 
+            // WHY (20 Oct 2026, Bug Hunt 8 #40): with no sound device the bus
+            // now fails the task rather than throwing here, so the page's
+            // "It couldn't play" no longer shows - the console says it instead.
+            var name = Path.GetFileName(path);
             _ = AudioBus.PlayAsync(new ShowOneShot(clip, from), Level / 100f, stop.Token)
-                .ContinueWith(done => _ = done.Exception, TaskScheduler.Default);
+                .ContinueWith(done =>
+                {
+                    if (done.IsFaulted)
+                    {
+                        Status?.Invoke($"[imaging] The preview of {name} couldn't play: {done.Exception!.GetBaseException().Message}");
+                    }
+                }, TaskScheduler.Default);
         }
         catch (Exception ex)
         {
@@ -1577,7 +1677,14 @@ internal sealed class ImagingPlay
 
         _ = play.Played.ContinueWith(done =>
         {
-            _ = done.Exception;
+            // WHY (20 Oct 2026, Bug Hunt 8 #40): with no sound device the bus
+            // now fails this task rather than throwing above, so the
+            // "couldn't play" line the catch used to write is written here.
+            if (done.IsFaulted)
+            {
+                status?.Invoke($"[imaging] The {what} couldn't play: {done.Exception!.GetBaseException().Message}");
+            }
+
             play.Release();
         }, TaskScheduler.Default);
 

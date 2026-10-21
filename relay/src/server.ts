@@ -4142,6 +4142,14 @@ export class Relay {
       this.forgetCheckin(club);
       this.forgetSite(club);
       this.forgetPreviews(club);
+
+      // WHY (20 Oct 2026, Bug Hunt 8): the top-up asks stay too, so the
+      // monthly cap and the operator's queue still hold, but their notes -
+      // free text that can name a driver - are blanked. They live outside
+      // the club folder, so the wipe above never reached them. Last, after
+      // the in-memory forgets: a disk error here then fails only this
+      // step, and pressing Delete again is safe.
+      await this.topUpRequests?.forgetNotes(club);
     });
     this.log(`[relay] "${club}" deleted everything it had published.`);
 
@@ -4564,8 +4572,9 @@ export class Relay {
 
   /**
    * One of the relay's own queue documents - INBOX, MANAGE_QUEUE or
-   * SIGNUP_BOX - as getSnapshot reads it, except that one which will never
-   * parse reads as empty.
+   * SIGNUP_BOX, and since 20 Oct 2026 VOTE_BALLOT_DOC too - as
+   * getSnapshot reads it, except that one which will never parse reads as
+   * empty.
    *
    * WHY. Every route that writes these documents reads them first, under
    * the lock, and a corrupt file (left short by a power cut before it
@@ -5704,7 +5713,11 @@ export class Relay {
 
     if (!open) {
       await this.withLock(club, async () => {
-        for (const item of await this.store.listItems(club, NIGHTS_CHANNEL)) {
+        // WHY (20 Oct 2026, Bug Hunt 8): ids from the directory listing.
+        // listItems read and parsed every file and quietly skipped one that
+        // would not read (corrupt, EIO), so that file was never deleted and
+        // came back when the switch went on again. itemSizes needs no parse.
+        for (const item of await this.store.itemSizes(club, NIGHTS_CHANNEL)) {
           await this.store.deleteItem(club, NIGHTS_CHANNEL, item.id);
         }
 
@@ -5868,7 +5881,11 @@ export class Relay {
     // them in its folder would be keeping exactly what it just declined.
     if (!open) {
       await this.withLock(club, async () => {
-        for (const item of await this.store.listItems(club, NOTES_CHANNEL)) {
+        // WHY (20 Oct 2026, Bug Hunt 8): ids from the directory listing.
+        // listItems read and parsed every file and quietly skipped one that
+        // would not read (corrupt, EIO), so that file was never deleted and
+        // came back when the switch went on again. itemSizes needs no parse.
+        for (const item of await this.store.itemSizes(club, NOTES_CHANNEL)) {
           await this.store.deleteItem(club, NOTES_CHANNEL, item.id);
         }
       });
@@ -5936,7 +5953,11 @@ export class Relay {
     // minutes of it there would be keeping exactly what it just declined.
     if (!open) {
       await this.withLock(club, async () => {
-        for (const item of await this.store.listItems(club, LISTEN_CHANNEL)) {
+        // WHY (20 Oct 2026, Bug Hunt 8): ids from the directory listing.
+        // listItems read and parsed every file and quietly skipped one that
+        // would not read (corrupt, EIO), so that file was never deleted and
+        // came back when the switch went on again. itemSizes needs no parse.
+        for (const item of await this.store.itemSizes(club, LISTEN_CHANNEL)) {
           await this.store.deleteItem(club, LISTEN_CHANNEL, item.id);
         }
 
@@ -6158,7 +6179,10 @@ export class Relay {
   private async roomBallotFor(club: string): Promise<
     { open: boolean; race: string; drivers: { id: string; name: string }[]; salt: string } | undefined
   > {
-    const body = (await this.store.getSnapshot(club, VOTE_BALLOT_DOC))?.body;
+    // WHY (20 Oct 2026, Bug Hunt 8): a corrupt ballot file reads as "not
+    // enabled" (404) instead of a 503 on every phone, until the laptop's
+    // next vote/open writes a good one over it.
+    const body = (await this.queueSnapshotOf(club, VOTE_BALLOT_DOC))?.body;
 
     if (!isPlainObject(body) || body["enabled"] !== true) {
       return undefined;
@@ -6273,7 +6297,11 @@ export class Relay {
     // BY THE POLL'S ID when both ballots carry one. The label alone took a
     // vote reopened on the same race for the same vote, kept the relay's
     // votes, and handed them back into the laptop's new, empty poll.
-    const previous = (await this.store.getSnapshot(club, VOTE_BALLOT_DOC))?.body;
+    // WHY (20 Oct 2026, Bug Hunt 8): through queueSnapshotOf. A corrupt
+    // ballot file threw here, answered 503, and this route is the only
+    // writer of it, so the room vote stayed dead for good. Read as none,
+    // it is a different race: a new salt, a good file, the votes cleared.
+    const previous = (await this.queueSnapshotOf(club, VOTE_BALLOT_DOC))?.body;
     const previousId = isPlainObject(previous) && typeof previous["ballot"] === "string" ? previous["ballot"] : "";
 
     // THE ID WHERE THERE IS ONE, THE LABEL WHERE THERE IS NOT, and that
@@ -6322,7 +6350,11 @@ export class Relay {
     // throwing them away at the flag would be throwing away the answer.
     if (!enabled || !sameRace) {
       await this.withLock(club, async () => {
-        for (const item of await this.store.listItems(club, VOTE_CHANNEL)) {
+        // WHY (20 Oct 2026, Bug Hunt 8): ids from the directory listing.
+        // listItems read and parsed every file and quietly skipped one that
+        // would not read (corrupt, EIO), so that file was never deleted and
+        // came back when the switch went on again. itemSizes needs no parse.
+        for (const item of await this.store.itemSizes(club, VOTE_CHANNEL)) {
           await this.store.deleteItem(club, VOTE_CHANNEL, item.id);
         }
       });
@@ -6515,6 +6547,12 @@ export class Relay {
         d: typeof (item.doc.body as Record<string, unknown>)["d"] === "string"
           ? ((item.doc.body as Record<string, unknown>)["d"] as string)
           : "",
+        // WHY (20 Oct 2026, Bug Hunt 8, #22): when the relay took this vote,
+        // in milliseconds on its own clock (sendRoomVote stamps seq with
+        // it). The laptop reads the inbox every fifteen seconds, and
+        // without this a vote cast just before the close was judged by
+        // when it was read and refused as "closed".
+        at: item.doc.seq,
       }))
       .filter((item) => item.d.length > 0)
       .slice(0, VOTES_HELD_MOST);

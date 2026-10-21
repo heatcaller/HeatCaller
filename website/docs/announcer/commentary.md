@@ -87,9 +87,9 @@ There's one case where nothing takes over: a PC with no model on it, or one whos
 
 | It says | What it means |
 |---|---|
-| "This month's 400 relay lines are used up - the model on this PC is writing instead." | All is well. The commentary carries on in plainer lines. |
-| "This month's 400 relay lines are used up, and the model on this PC didn't answer - normal announcements carry on. Any [llm] line in the console says why." | There's a model, but it didn't write the test line. Read the console. |
-| "This month's 400 relay lines are used up - no model is installed on this PC, so normal announcements carry on." | Nothing will write until the relay has lines again. |
+| "This month's 1,000 relay lines are used up - the model on this PC is writing instead." | All is well. The commentary carries on in plainer lines. |
+| "This month's 1,000 relay lines are used up, and the model on this PC didn't answer - normal announcements carry on. Any [llm] line in the console says why." | There's a model, but it didn't write the test line. Read the console. |
+| "This month's 1,000 relay lines are used up - no model is installed on this PC, so normal announcements carry on." | Nothing will write until the relay has lines again. |
 
 **Test Connection** always asks the relay itself, so pressing it is also the quickest way to find out whether a top-up has arrived.
 
@@ -299,7 +299,7 @@ A second commentator, for the segments that suit one. The announcer makes a rema
 |---|---|---|
 | **Two voices in the booth** | Turns the co-host on. Only the segments marked as a two-hander in the table above use them. | Off |
 | **Co-host's name:** | What the announcer calls them. Leave it blank and they are spoken *to* but never named — the model is told not to invent one. | Blank |
-| **Co-host's voice:** | Which voice reads their half. With nothing picked for the engine you're using, the announcer's own voice reads both halves — still a conversation, and better than silence. | Blank |
+| **Co-host's voice:** | Which voice reads their half. With nothing picked for the engine you're using, the announcer's own voice reads both halves — still a conversation, and better than silence. **Test Voice** beside it says a line in the voice picked. | Blank |
 | **What they're like:** | Their point of view — see below. | Even-handed |
 
 Anything that can't be split cleanly into two voices is simply said in one instead. That costs a second request to the model, so it's worth knowing it happens — but it only happens when the model ignores the format, and a silence would cost more.
@@ -348,7 +348,7 @@ The recap is a short segment rather than a one-line call, so it has its own timi
 | Setting | What it does | Default |
 |---|---|---|
 | **Pause after the flag:** | 0 to 120 seconds, counted from when the finish call has finished speaking. Lets the finish call and the cheering land. | 6 |
-| **Teasers before the recap:** | A list of short lines, one per line. One is picked at random each race and spoken after the pause, so people know a recap is coming. Twelve are filled in for you. | On |
+| **Teasers before the recap:** | A list of short lines, one per line. Spoken after the pause, so people know a recap is coming. The AI writes the line each race, using these as the feel your club likes - see [The throw to the break](#the-throw-to-the-break). Twelve are filled in for you. | On |
 | **then wait:** | 0 to 60 seconds between the teaser finishing and the recap starting. | 4 |
 | **Recap voice delivery - give the recap its own stability and style** | Uses the **Stability:** and **Style:** below for the recap only, instead of the values on **Voice Settings**. Leave it off to use your Voice Settings values for everything. If you tuned Voice Settings and heard no change in the recap, this was why. Stability and Style belong to your own ElevenLabs account, so this makes no difference to the Kokoro voice or to the HeatCaller voice, where the relay sets them. | Off |
 | **Stability:** | Lower means more emotional range. | 0.60 |
@@ -445,6 +445,22 @@ The console says how each break ended, on a line starting `[commentary]`: that t
 - that the player turned a particular file away, naming the file, so a club with one bad advert among four good ones knows which.
 
 If the first of those says video cannot play here, the usual cause is the video player's files missing from beside `HeatCaller.exe` - reinstall HeatCaller.
+
+#### The throw to the break
+
+The announcer's line into the break - the teaser - is written by the AI each race instead of picked from your list, so it's a little different every time. It always:
+
+- plugs the show by the name in **Show name:** on this page
+- says the race recap with its host, the name in **Recap host's name:** on **Cast**, is coming up after the break
+- signs off with the announcer's own name, from **Announcer's name:** on **Cast**
+
+A name you leave blank is left out, never made up. Your teaser lines are given to the AI as the feel your club likes, not copied.
+
+HeatCaller checks the line before it's spoken. If one of the names is missing, it never says a break is coming, it runs long, or it repeats one of the last few throws, HeatCaller says a line of its own instead - still naming all three, and not the same one twice running. It does the same if the AI hasn't answered by the end of **Pause after the flag:** plus a few seconds. The console says which was used.
+
+Each throw is one AI line, so it counts toward your monthly AI commentary lines.
+
+With no break to go to - **Play the sponsors as a commercial break** off, or no Big Screen up with the sponsor slides - it's the same line, but the recap is "coming up next" instead of "after the break". A line that promises a break when there isn't one isn't used.
 
 ### The show's music
 
@@ -1216,7 +1232,7 @@ Commentary is best-effort. If Ollama isn't running, the model name is wrong, or 
 
 - The normal announcement lines from **Voice → Announcements** play as usual. Commentary never replaces them.
 - No race intro is spoken.
-- After a race, the teaser is still spoken (it's fixed text, not written by the model), but no recap follows.
+- After a race, the teaser is still spoken, but no recap follows. The line into the commercial break falls back to one HeatCaller writes itself.
 - No suggested line appears on the Announcer screen; the other talking points still do.
 - The continuity lines are unaffected. HeatCaller writes those itself, so "That was the B-Main. Still to come, the A-Main." still hands one race over to the next.
 

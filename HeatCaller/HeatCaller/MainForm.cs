@@ -677,7 +677,12 @@ public partial class MainForm : Form
         // counts as a day being open - it cannot be told that one is not.
         // Only when something is held, so an ordinary start does not read
         // the journal here as well as where it is offered back.
-        if (_settings.UpdateWaitingForNextStart.Length > 0
+        //
+        // WHY (20 Oct 2026): "UpdateWaitingForNextStart": null in a
+        // hand-edited settings.json threw here and the app would not open.
+        // A null now reads as nothing held. (AppSettings.NormaliseCollections
+        // is where the other null strings get repaired.)
+        if (_settings.UpdateWaitingForNextStart is { Length: > 0 }
             && AppUpdates.ApplyWhatWasHeldForNextStart(
                 _settings,
                 raceDayOpen: _raceEvents.LoadedUnreadable || _raceEvents.Active is { IsLegacy: false, IsOpen: true },
@@ -882,6 +887,12 @@ public partial class MainForm : Form
         // in the list the announcer reads its verdict from.
         _relayPublisher.TonightsVote = () => _roomVote;
 
+        // WHY (20 Oct 2026): when the vote closes (the green flag, or by
+        // hand) the closed ballot goes up at once rather than on the next
+        // fifteen-second tick, so a late phone is told "closed". Safe from
+        // any thread - WakeRoomVote only sets a number and a wake-up.
+        _roomVote.Closed += _relayPublisher.WakeRoomVote;
+
         // Said once, at the start: why the relay, the voice relay or the PIN
         // emails are quiet after a restore, in the log as well as on the
         // pages that switch them back on. See RestoredSettings.
@@ -1046,7 +1057,11 @@ public partial class MainForm : Form
             // programme can be built and abandoned; a filed session
             // happened. Idempotent after the first - see
             // WithdrawTheNightBefore.
-            WithdrawTheNightBefore();
+            //
+            // WHY (20 Oct 2026): with the record, so only a race from one of
+            // the open day's own rounds takes the preview down - a midweek
+            // practice or a test run saved while Saturday is open used to.
+            WithdrawTheNightBefore(record);
         };
 
         // A saved result corrected after the flag - the laptop's Edit
@@ -1319,22 +1334,16 @@ public partial class MainForm : Form
         _webServer.LeadChanges = () => (_announcer.Leads.Changes, _announcer.Leads.Leaders);
 
         // A written commentary segment carries the sponsor of its moment (a
-        // battle watch, the battles' sponsor), rationed like the calls. It is
-        // counted as it is written: a segment is spoken as soon as it comes
-        // back, and the few that are dropped on the way are not worth a
-        // second path back from the director.
+        // battle watch, the battles' sponsor), rationed like the calls.
+        // WHY (20 Oct 2026): the mention is no longer counted here, as it is
+        // asked - CommentaryService runs the Count once the model has
+        // actually written a line, so a segment that came back empty no
+        // longer goes in the sponsor report. (A segment the director writes
+        // and then drops is still counted - not worth a second path back.)
         if (_commentary is not null)
         {
-            _commentary.SegmentSponsor = kind =>
-            {
-                if (SponsoredMoments.ForSegment(kind) is not { } moment || _announcer.TakeSponsor(moment) is not { } taken)
-                {
-                    return null;
-                }
-
-                taken.Count();
-                return taken.Name;
-            };
+            _commentary.SegmentSponsorTaken = kind =>
+                SponsoredMoments.ForSegment(kind) is { } moment ? _announcer.TakeSponsor(moment) : null;
         }
 
         // The board, the lap-detail popup and the race log ask the same
@@ -1959,6 +1968,24 @@ public partial class MainForm : Form
         // the session in progress was never saved at all.
         FormClosing += (_, e) =>
         {
+            // WHY (20 Oct 2026): WinForms arrives here with e.Cancel already
+            // true when a control fails validation (a bad Points cell on
+            // Championship, say). The close is then refused and the window
+            // stays open - but this handler used to carry on and stop the
+            // timing, the decoders, the web server and the relay anyway,
+            // leaving an app that looked alive and timed nothing. Now a
+            // person closing it is left to fix the cell and nothing is torn
+            // down; Windows shutting down is not held up by a typo.
+            if (e.Cancel)
+            {
+                if (e.CloseReason == CloseReason.UserClosing)
+                {
+                    return;
+                }
+
+                e.Cancel = false;
+            }
+
             // The X, Alt+F4 or the taskbar mid-race used to close the app
             // without a word. Only a person closing it is asked - Windows
             // shutting down or a restart after a restore must not hang on a

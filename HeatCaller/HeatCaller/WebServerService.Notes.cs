@@ -159,6 +159,20 @@ public sealed partial class WebServerService
     {
         var look = CurrentPageLook();
 
+        // WHY (20 Oct 2026, Bug Hunt 8): the route comment promised that a
+        // club with this switched off still serves the page "with the page
+        // saying so", but the page never looked - it always showed the box
+        // and the button, and somebody who typed a birthday message lost it
+        // to a bare "Not found". It now asks NotesOpen when it is built (the
+        // same listener thread HandleClubNote asks it on) and, when the
+        // route is closed, shows one neutral sentence in place of the form.
+        // The wording never says "switched off", for the same reason
+        // HandleClubNote answers 404 rather than 403.
+        var content = NotesOpen ? NoteForm() : """
+          <p class="small">Messages to the announcer aren't being taken right now.</p>
+        </div>
+        """;
+
         return $$"""
         <!DOCTYPE html><html class="{{look.Scheme}}"><head>
         <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -178,6 +192,18 @@ public sealed partial class WebServerService
         </style></head><body data-look="{{look.Fingerprint}}">
         <div class="bar"><h1>{{look.Logo}}MESSAGE THE ANNOUNCER</h1></div>
         <div class="wrap">
+        {{content}}
+        <script>{{LookWatchScript}}</script>
+        </body></html>
+        """;
+    }
+
+    /// <summary>
+    /// The box, the name, the button and the script that sends them -
+    /// BuildNotePage's body when the route is open. Ends by closing the
+    /// .wrap div, as the closed sentence does.
+    /// </summary>
+    private static string NoteForm() => $$"""
           <p class="small">A birthday, a dedication, somebody's first race, the raffle closing - whatever the
           announcer would not otherwise know. Keep it short and it may get read out between races.</p>
           <textarea class="note" id="note" maxlength="{{ClubNotes.MostChars}}"
@@ -209,7 +235,10 @@ public sealed partial class WebServerService
           // than half-working.
           fetch('/api/note?m=' + encodeURIComponent(text) + '&n=' + encodeURIComponent(who.value.trim()),
                 { method:'POST', headers:{ 'X-HeatCaller':'1' } })
-            .then(function(r){ return r.json().catch(function(){ return { ok:false, error:'No answer from the laptop.' }; }); })
+            .then(function(r){
+              if (r.status === 404) { return { ok:false, closed:true }; }
+              return r.json().catch(function(){ return { ok:false, error:'No answer from the laptop.' }; });
+            })
             .then(function(d){
               if (d && d.ok) {
                 msg.textContent = 'Sent to the race director. Thanks!';
@@ -219,14 +248,15 @@ public sealed partial class WebServerService
                 // a button that goes live again invites a second.
                 return;
               }
-              msg.textContent = (d && d.error) || 'Could not send that.';
+              // A 404 is a page left open from before the club stopped
+              // taking messages (20 Oct 2026, Bug Hunt 8) - said in the
+              // same words the page itself now uses, not as "Not found".
+              msg.textContent = (d && d.closed) ? 'Messages to the announcer aren\'t being taken right now.'
+                              : (d && d.error) || 'Could not send that.';
               send.disabled = false;
             })
             .catch(function(){ msg.textContent = 'Could not reach the laptop.'; send.disabled = false; });
         });
         </script>
-        <script>{{LookWatchScript}}</script>
-        </body></html>
         """;
-    }
 }

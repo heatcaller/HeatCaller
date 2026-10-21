@@ -614,10 +614,17 @@ public sealed partial class WebServerService
 
           // The podium, at the end - with each driver's rating for the race.
           const podium = document.getElementById('podium');
-          if (want('podium') && finished && rows.length){
+          // WHY (20 Oct 2026): the podium was the top three of the whole
+          // board, ghosts included, so a ghost that beat the field went out
+          // on the stream as the winner and the real winner showed as P2
+          // with P1's rating. Only real cars now, numbered by their place
+          // among real cars - the same places the ratings are worked out
+          // for. A field of nothing but ghosts shows no podium.
+          const podiumRows = rows.filter(s => !s.ghost);
+          if (want('podium') && finished && podiumRows.length){
             const ratings = d.ratings || {};
             const by = presentedBy(d, 'RaceResult');
-            podium.innerHTML = '<h2>' + esc(d.race || 'Result') + (by ? '<span class="by">' + esc(by) + '</span>' : '') + '</h2>' + rows.slice(0, 3).map((s, i) =>
+            podium.innerHTML = '<h2>' + esc(d.race || 'Result') + (by ? '<span class="by">' + esc(by) + '</span>' : '') + '</h2>' + podiumRows.slice(0, 3).map((s, i) =>
               '<div class="line"><b>' + (i + 1) + '</b>' + esc(s.name) + '<span class="t">' + ((cards[s.id] || {}).laps || 0) + ' laps &nbsp; best ' + fmt(s.best) + '</span>' +
               (ratings[s.id] !== undefined ? '<span class="r">RTG ' + Number(ratings[s.id]).toFixed(1) + '</span>' : '') + '</div>').join('');
             podium.classList.add('show');

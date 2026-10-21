@@ -309,7 +309,7 @@ public sealed partial class AnnouncementService
         // " Presented by ..." when a sponsor has this moment, rationed and
         // counted by SponsorMentions. Counted in the work itself, so a line
         // the queue drops is not one the sponsor is told they got.
-        var (sponsorTag, countMention) = SponsorTag(type);
+        var (sponsorTag, countMention, releaseMention) = SponsorTag(type);
 
         if (sponsorTag.Length > 0)
         {
@@ -320,13 +320,23 @@ public sealed partial class AnnouncementService
         // Screens get the numeral form; the voice engine gets the
         // spelled-out one. Shown only if the line is accepted - see
         // EnqueueVoiceWork.
-        EnqueueVoiceWork(type, transponder,
+        //
+        // A line the queue turns down - or keeps and then loses - gives the
+        // sponsor's ration back (20 Oct 2026, Bug Hunt 8), or the sponsor
+        // went unnamed for three minutes over a line nobody heard.
+        var accepted = EnqueueVoiceWork(type, transponder,
             () =>
             {
                 countMention?.Invoke();
                 return SynthesizeAndPlayAsync(text, "[voice] Announcing", speedOverride: speed);
             },
-            displayText: displayText.Length > 0 ? displayText : text);
+            displayText: displayText.Length > 0 ? displayText : text,
+            lost: releaseMention);
+
+        if (!accepted)
+        {
+            releaseMention?.Invoke();
+        }
     }
 
     /// <summary>
@@ -532,6 +542,26 @@ public sealed partial class AnnouncementService
             }
             catch (Exception ex) when (synthesis.FromLibrary && IsUndecodable(ex))
             {
+                // WHY (20 Oct 2026, Bug Hunt 8): a line recorded for a
+                // soundscape also comes back as LineSource.Library (see
+                // RenderLineAsync), so a recording cut short by a crash
+                // used to land here and delete the ElevenLabs take saved
+                // under the same words - the good file - while the broken
+                // recording stayed first in line and failed every time.
+                // Now a recording is recognized by being byte-for-byte what
+                // the soundscape library holds for these words (this path
+                // only runs on a failure, so the extra read costs nothing on
+                // a race night), the saved take is left alone, and the
+                // console says which file needs re-recording. The
+                // recording itself is not deleted: throwing away a club's
+                // recording is theirs to decide, on the soundscape page.
+                if (StingerLibrary.Shared.TryLoad(text) is { } recorded
+                    && recorded.AsSpan().SequenceEqual(audio))
+                {
+                    StatusMessage?.Invoke($"[voice] The recorded soundscape line \"{text}\" won't play - re-record or delete it on the soundscape page.");
+                    throw;
+                }
+
                 // A saved line that won't decode would fail like this every
                 // time it came round. Forgotten, so the next time it is
                 // wanted it is rendered afresh.
@@ -879,7 +909,13 @@ public sealed partial class AnnouncementService
     /// a line (see HeldOver) - already counted as offered, and not to be
     /// kept a second time.
     /// </param>
-    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false)
+    /// <param name="lost">
+    /// What to run if the call is KEPT for the end of a line and then lost
+    /// before it is said (20 Oct 2026, Bug Hunt 8) - see
+    /// RoutineCallGetsTheAir. A call turned down at once is the caller's to
+    /// undo, from the false this returns.
+    /// </param>
+    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false, Action? lost = null)
     {
         // 17 Oct 2026, Bug Hunt 8, A06-5: a call already past the entry
         // points' mute check - a field flush still in its window, a call kept
@@ -939,8 +975,9 @@ public sealed partial class AnnouncementService
             && !RoutineCallGetsTheAir(
                 type,
                 out var kept,
-                holdOver: heldOver ? null : () => EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true),
-                alreadyCounted: heldOver))
+                holdOver: heldOver ? null : () => EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true, lost: lost),
+                alreadyCounted: heldOver,
+                lost: lost))
         {
             return kept;
         }

@@ -882,7 +882,41 @@ public static class CommentaryFacts
 
         if (note.Beaten is { } beaten && beaten > note.LapSeconds)
         {
-            var holder = Clean(note.PreviousHolder);
+            // WHY (20 Oct 2026): when the mark being beaten was set in THIS
+            // race, PaceWatch hands over the holder's driver ID - a
+            // transponder number - not a name, and that now happens for the
+            // night's best and the layout record too, not just the race's
+            // fastest lap. Read raw, the announcer said "takes 0.2s off
+            // 1234567's 10.5s". The holder goes through the same name lookup
+            // as the driver; a saved holder is already a name and the lookup
+            // hands it back as it is.
+            //
+            // KEPT AS WRITTEN WHEN THE LOOKUP SAYS IT IS THIS DRIVER (20 Oct
+            // 2026, final review). A lookup that turns somebody ELSE's holder
+            // into the driver's own name did not know the holder at all - a
+            // stand-in that names everyone the same, as the facts tests use -
+            // and taking its word lost "off Jen's" for "better than the
+            // previous". A holder that is all digits is a transponder, never
+            // a name, so it is not kept: two profiles sharing a name fall to
+            // "better than the previous" rather than reading a number out.
+            var holder = Clean(note.PreviousHolder is { Length: > 0 } h ? HolderName(h) : null);
+
+            string HolderName(string raw)
+            {
+                var looked = nameFor(raw);
+
+                if (string.IsNullOrWhiteSpace(looked))
+                {
+                    return raw;
+                }
+
+                return string.Equals(Clean(looked), who, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(raw, note.DriverId, StringComparison.OrdinalIgnoreCase)
+                    && !raw.All(char.IsDigit)
+                        ? raw
+                        : looked;
+            }
+
             var by = beaten - note.LapSeconds;
 
             text.Append(holder.Length > 0 && !string.Equals(holder, who, StringComparison.OrdinalIgnoreCase)

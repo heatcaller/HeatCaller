@@ -162,7 +162,13 @@ public sealed partial class RaceDayService
             throw new OpRefused("That race day isn't on the laptop any more - reload the list.");
         }
 
-        if (string.Equals(_host.Events.Active?.Id, day.Id, StringComparison.Ordinal))
+        // WHY (20 Oct 2026): this used to answer "nothing changed" for the
+        // current day even when it was closed - and a closed day can be
+        // current, picked on the desk to be looked at. The phone has no other
+        // way to reopen a day, so it was stuck. Now only a current day that
+        // is also open is "nothing changed"; a closed one goes on to the
+        // question and the reopen below like any other closed day.
+        if (string.Equals(_host.Events.Active?.Id, day.Id, StringComparison.Ordinal) && day.IsOpen)
         {
             return OpResult.Read(new { dayId = day.Id, changed = false });
         }
@@ -182,6 +188,7 @@ public sealed partial class RaceDayService
         // and settings changed since went back to what they had been.
         var dayId = day.Id;
         var previousId = _host.Events.Active?.Id;
+        var wasCurrent = string.Equals(previousId, dayId, StringComparison.Ordinal);
 
         // Whether that day was still open then. A closed day can be current
         // (being looked at), and going back to it is putting it back as it
@@ -214,6 +221,15 @@ public sealed partial class RaceDayService
             if (reopening)
             {
                 _host.Events.Close(dayId, closedAtUtc);
+
+                // WHY (20 Oct 2026): closing the current day clears "current",
+                // so undoing the reopen of a day that was already current (and
+                // closed) left no day current at all. Put it back as current,
+                // the way it was, as the Calendar tab's close/reopen undo does.
+                if (wasCurrent && _host.Events.Active is null && _host.Events.Get(dayId) is not null)
+                {
+                    _host.Events.SetActive(dayId);
+                }
             }
 
             _host.RefreshDesk();

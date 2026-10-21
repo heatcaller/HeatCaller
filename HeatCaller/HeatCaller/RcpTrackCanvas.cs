@@ -94,6 +94,11 @@ public sealed class RcpTrackCanvas : Control
     private PointF _panOrigin;
     private PointF _backdropFrom;
 
+    // WHY (20 Oct 2026, Bug Hunt 8, #82): true only for a drag that STARTED
+    // with the Photo tool, the one press that sets _backdropFrom/_panFrom.
+    // A 7 key mid-drag used to make the photo leap to a stale anchor.
+    private bool _draggingBackdrop;
+
     // --- One drag, one stroke ------------------------------------------------
     // A drag across forty tiles is one thing the user did, not forty, so it
     // takes one undo step and one clone of the plan rather than forty of
@@ -402,6 +407,7 @@ public sealed class RcpTrackCanvas : Control
         _railStraightRun = 0;
         _railLaid = false;
         _ctrlErasing = false;
+        _draggingBackdrop = false;
 
         if (wasOpen)
         {
@@ -1727,6 +1733,15 @@ public sealed class RcpTrackCanvas : Control
 
     public void SelectEverything()
     {
+        // WHY (20 Oct 2026, Bug Hunt 8, #81): ignored while a move-drag is
+        // held. EndStroke settles whatever is picked at mouse-up, so swapping
+        // the selection mid-drag left the moved block stacked, unsettled, on
+        // what it was dropped over - and saved that way.
+        if (_movingSelection)
+        {
+            return;
+        }
+
         FlushPendingSettle();
 
         _selection = RcpSelection.Everything(_design);
@@ -1789,6 +1804,15 @@ public sealed class RcpTrackCanvas : Control
     /// </summary>
     public void PasteClipboard()
     {
+        // WHY (20 Oct 2026, Bug Hunt 8, #81): ignored while a move-drag is
+        // held. EndStroke settles whatever is picked at mouse-up, so swapping
+        // the selection mid-drag left the moved block stacked, unsettled, on
+        // what it was dropped over - and saved that way.
+        if (_movingSelection)
+        {
+            return;
+        }
+
         if (_clipboard is null)
         {
             StatusChanged?.Invoke("Nothing copied yet. Pick something and press Ctrl+C.");
@@ -1816,6 +1840,15 @@ public sealed class RcpTrackCanvas : Control
     /// <summary>A second copy, one tile down and across, picked up ready to be dragged where it belongs.</summary>
     public void DuplicateSelection()
     {
+        // WHY (20 Oct 2026, Bug Hunt 8, #81): ignored while a move-drag is
+        // held. EndStroke settles whatever is picked at mouse-up, so swapping
+        // the selection mid-drag left the moved block stacked, unsettled, on
+        // what it was dropped over - and saved that way.
+        if (_movingSelection)
+        {
+            return;
+        }
+
         if (_selection.IsEmpty)
         {
             StatusChanged?.Invoke("Nothing picked. Drag a box round something first.");
@@ -2235,6 +2268,7 @@ public sealed class RcpTrackCanvas : Control
                 BeginStroke();
                 _panFrom = e.Location;
                 _backdropFrom = new PointF(_design.BackdropX, _design.BackdropY);
+                _draggingBackdrop = true;
                 break;
 
             case RcpTool.Select:
@@ -2304,7 +2338,10 @@ public sealed class RcpTrackCanvas : Control
         // the photo from was whatever an earlier drag or pan left behind.
         // The photo used to leap there and follow the mouse, and nothing
         // past the first point was erased.
-        if (_painting && !_ctrlErasing && Tool == RcpTool.Backdrop && e.Button == MouseButtons.Left)
+        // 20 Oct 2026, #82: the same leap came from the 7 key switching to
+        // the Photo tool mid-drag, so the drag must also have started with
+        // the Photo tool (_draggingBackdrop).
+        if (_painting && _draggingBackdrop && !_ctrlErasing && Tool == RcpTool.Backdrop && e.Button == MouseButtons.Left)
         {
             var x = _backdropFrom.X + (e.X - _panFrom.X) / _scale;
             var y = _backdropFrom.Y + (e.Y - _panFrom.Y) / _scale;
@@ -2465,7 +2502,8 @@ public sealed class RcpTrackCanvas : Control
     {
         base.OnMouseUp(e);
 
-        if (_painting && Tool == RcpTool.Backdrop)
+        // 20 Oct 2026, #82: keyed on how the drag started, to match OnMouseMove.
+        if (_painting && _draggingBackdrop && Tool == RcpTool.Backdrop)
         {
             RaiseChanged();
         }
@@ -2583,7 +2621,11 @@ public sealed class RcpTrackCanvas : Control
 
         // A route point being dragged counts too: that drag opens a stroke
         // of its own for its undo step, without setting _painting.
-        if (Capture || (!_painting && _draggingRoutePoint < 0))
+        // WHY (20 Oct 2026, Bug Hunt 8, #83): a pure pan sets only _panning,
+        // so it returned here and stayed on after Alt-Tab or a dialog took
+        // the mouse - the view then followed every plain mouse move. A pan
+        // now reaches the reset below too.
+        if (Capture || (!_painting && !_panning && _draggingRoutePoint < 0))
         {
             return;
         }

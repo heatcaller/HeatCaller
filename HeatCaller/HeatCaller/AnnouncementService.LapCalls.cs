@@ -491,18 +491,25 @@ public sealed partial class AnnouncementService
         var reportSpeed = config.SpeedFor(_voiceStore.Current.Speed);
 
         // The run-through, when a sponsor presents it.
-        var (sponsorTag, countMention) = SponsorTag(AnnouncementEventType.PositionReport);
+        var (sponsorTag, countMention, releaseMention) = SponsorTag(AnnouncementEventType.PositionReport);
         text = (text + sponsorTag).Trim();
 
         // The text goes up only if the report is accepted - see
-        // EnqueueVoiceWork.
-        EnqueueVoiceWork(AnnouncementEventType.PositionReport, leader.Transponder,
+        // EnqueueVoiceWork. A report turned down (or kept and then lost)
+        // gives the sponsor's ration back (20 Oct 2026, Bug Hunt 8).
+        var accepted = EnqueueVoiceWork(AnnouncementEventType.PositionReport, leader.Transponder,
             () =>
             {
                 countMention?.Invoke();
                 return SynthesizeAndPlayAsync(text, "[voice] Position report", speedOverride: reportSpeed);
             },
-            displayText: text);
+            displayText: text,
+            lost: releaseMention);
+
+        if (!accepted)
+        {
+            releaseMention?.Invoke();
+        }
     }
 
     /// <summary>Leader lap the last report was read on, so it fires once per interval rather than once per car.</summary>
@@ -1238,21 +1245,32 @@ public sealed partial class AnnouncementService
 
             // A battle a sponsor presents carries their name - decided here,
             // as the line is queued, so the ration is the queue's to spend.
-            var (sponsorTag, countMention) = SponsorTag(type);
+            var (sponsorTag, countMention, releaseMention) = SponsorTag(type);
             var said = (text + sponsorTag).Trim();
 
-            var accepted = EnqueueVoiceWork(type, driverTransponder,
-                () =>
-                {
-                    countMention?.Invoke();
-                    return SynthesizeAndPlayAsync(said, $"[voice] {type}", speedOverride: speed);
-                },
-                displayText: said);
-
-            if (!accepted && battle is { } dropped)
+            // Never said, so it doesn't use the pair up - unless a reset
+            // has already wiped the slate, when there is nothing to undo.
+            //
+            // WHY (20 Oct 2026, Bug Hunt 8): pulled out into one place so it
+            // can also run when a call KEPT for the end of the current line
+            // is lost later (pushed out of the held slot, binned by a flag,
+            // or turned down when offered again) - EnqueueVoiceWork returns
+            // true for a kept call, so before, a battle nobody heard still
+            // used the pair up for the rest of the race. Running it twice,
+            // or after the pair was re-claimed by a later race, is harmless:
+            // the generation check stops a stale give-back.
+            void GiveBack()
             {
-                // Never said, so it doesn't use the pair up - unless a reset
-                // has already wiped the slate, when there is nothing to undo.
+                // The sponsor's ration too (20 Oct 2026, Bug Hunt 8): only
+                // this line's own reservation, so running it twice, or after
+                // a later line took the ration, undoes nothing.
+                releaseMention?.Invoke();
+
+                if (battle is not { } dropped)
+                {
+                    return;
+                }
+
                 lock (_battlesLock)
                 {
                     if (dropped.Generation == _battlesGeneration)
@@ -1260,6 +1278,20 @@ public sealed partial class AnnouncementService
                         _battlesAnnounced.Remove(dropped.Key);
                     }
                 }
+            }
+
+            var accepted = EnqueueVoiceWork(type, driverTransponder,
+                () =>
+                {
+                    countMention?.Invoke();
+                    return SynthesizeAndPlayAsync(said, $"[voice] {type}", speedOverride: speed);
+                },
+                displayText: said,
+                lost: GiveBack);
+
+            if (!accepted)
+            {
+                GiveBack();
             }
         });
 
@@ -1298,8 +1330,14 @@ public sealed partial class AnnouncementService
                 continue;
             }
 
-            var transponderA = _profiles.All.FirstOrDefault(p => string.Equals(p.DriverName, rivalry.DriverA, StringComparison.OrdinalIgnoreCase))?.Transponder;
-            var transponderB = _profiles.All.FirstOrDefault(p => string.Equals(p.DriverName, rivalry.DriverB, StringComparison.OrdinalIgnoreCase))?.Transponder;
+            // WHY (20 Oct 2026, Bug Hunt 8): the drivers were looked up in
+            // _profiles.All, which leaves ghost cars out - but the Rivalries
+            // page offers ghosts (it lists AllRaceable), so a rivalry with a
+            // ghost was saved and then never said a word. AllRaceable puts
+            // real drivers first, so a real driver still wins a shared name;
+            // a muted ghost is already gone from 'ordered'.
+            var transponderA = _profiles.AllRaceable.FirstOrDefault(p => string.Equals(p.DriverName, rivalry.DriverA, StringComparison.OrdinalIgnoreCase))?.Transponder;
+            var transponderB = _profiles.AllRaceable.FirstOrDefault(p => string.Equals(p.DriverName, rivalry.DriverB, StringComparison.OrdinalIgnoreCase))?.Transponder;
 
             if (transponderA is null || transponderB is null)
             {

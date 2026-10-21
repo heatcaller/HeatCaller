@@ -563,7 +563,7 @@ public sealed class BroadcastCommentaryTests : IDisposable
         Assert.Contains("2. grid position 2; name Bill", model.Facts);
         Assert.Contains("Qualifying, exact: Sam took pole with twelve laps.", model.Facts);
         Assert.Contains("Driver introductions, presented by Joe's Hobby Shop", model.Facts);
-        Assert.Contains("Say each driver's grid position.", model.Facts);
+        Assert.Contains("Say each driver's grid position ONCE", model.Facts);
     }
 
     [Fact]

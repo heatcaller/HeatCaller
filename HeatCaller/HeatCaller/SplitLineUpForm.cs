@@ -167,7 +167,6 @@ public sealed class SplitLineUpForm : Form
         {
             _lblAnswer.Text = $"{Plural.Of(count, "crossing")} so far. The split loop reads {answer} ms "
                               + $"{(answer >= 0 ? "late" : "early")} - click Save to keep it.";
-            _btnSave.Enabled = true;
         }
         else if (count >= LineUpPairing.Least)
         {
@@ -179,6 +178,12 @@ public sealed class SplitLineUpForm : Form
         {
             _lblAnswer.Text = $"{Plural.Of(count, "crossing")} so far - {LineUpPairing.Least} are needed.";
         }
+
+        // WHY (20 Oct 2026): Save used to be switched on with the first answer and
+        // never switched off. New stray gaps can move the middle so the answer goes
+        // away again, and Save then stayed lit but did nothing when clicked. It now
+        // follows the answer on every crossing.
+        _btnSave.Enabled = _pairing.Answer is not null;
     }
 
     private void FitColumns()

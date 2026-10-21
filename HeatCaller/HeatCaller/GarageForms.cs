@@ -579,7 +579,7 @@ internal sealed class LendCarForm : Form
         public override string ToString() => Caption;
     }
 
-    public LendCarForm(Car car, ProfileStore profiles, string dayName, string ownerName)
+    public LendCarForm(Car car, ProfileStore profiles, string dayName, string ownerName, string? eventId = null)
     {
         Text = "Lend a Car";
         Font = AppTheme.BodyFont;
@@ -610,9 +610,20 @@ internal sealed class LendCarForm : Form
             _cmbTo.Items.Add(new DriverChoice(profile.Transponder, name));
         }
 
+        // WHY (20 Oct 2026): this used to pick whoever the car was last lent
+        // to, on any day. Loans are never cleared - a loan simply stops
+        // counting once its race day is not the open one (Car.DriverFor) - so
+        // the dialog opened on last week's borrower and Save lent the car to
+        // them again tonight. Now a loan only counts if it is for the day being
+        // lent for; otherwise it starts on "Nobody".
+        var lentTo = !string.IsNullOrWhiteSpace(eventId)
+                     && string.Equals(car.LoanedForEventId, eventId, StringComparison.Ordinal)
+            ? car.LoanedToTransponder
+            : string.Empty;
+
         _cmbTo.SelectedItem = _cmbTo.Items
             .Cast<DriverChoice>()
-            .FirstOrDefault(d => string.Equals(d.Transponder, car.LoanedToTransponder, StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault(d => string.Equals(d.Transponder, lentTo, StringComparison.OrdinalIgnoreCase))
             ?? _cmbTo.Items[0];
 
         var btnOk = new Button { Text = "Save", DialogResult = DialogResult.OK };
@@ -1486,7 +1497,7 @@ internal sealed class CarDetailForm : Form
 
         var dayName = _events?.Get(eventId)?.DisplayName ?? "tonight";
 
-        using var form = new LendCarForm(_car, _profiles, dayName, NameOf(_car.OwnerTransponder));
+        using var form = new LendCarForm(_car, _profiles, dayName, NameOf(_car.OwnerTransponder), eventId);
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {

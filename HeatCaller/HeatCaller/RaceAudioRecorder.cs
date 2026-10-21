@@ -135,6 +135,18 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     /// <summary>Written by the writer thread, read by anyone - so the length is read through Interlocked, never torn.</summary>
     private long _samplesWritten;
 
+    /// <summary>
+    /// Every sample the file has taken on: queued for the writer, written,
+    /// or put in as padding. Read through Interlocked like _samplesWritten.
+    /// </summary>
+    // WHY (20 Oct 2026): the drift check used to compare the clock with
+    // _samplesWritten alone, so audio still waiting in _pending during a
+    // disk or CPU stall looked missing. Silence went in, the queued audio
+    // came after it, and every highlight after that was out of step. The
+    // drift check now counts this instead, so only audio that never reached
+    // the queue (the device gone, a dropped buffer) gets padded.
+    private long _samplesAccepted;
+
     private long _paddedMs;
     private int _dropped;
 
@@ -355,7 +367,29 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 bytes[at++] = (byte)((sample >> 8) & 0xFF);
             }
 
-            if (!_pending.TryAdd(bytes))
+            // WHY (20 Oct 2026): counted before TryAdd, so the writer can
+            // never write this chunk before it is counted, and taken back off
+            // if the queue refuses it - a dropped chunk is a real gap and the
+            // drift padding must still fill it. The finally also takes it
+            // back off when TryAdd throws (the queue closed by Latch or
+            // BeginStop a moment after the _closed check above), so a chunk
+            // that never reached the queue can never hide a real gap.
+            Interlocked.Add(ref _samplesAccepted, frames);
+            var queued = false;
+
+            try
+            {
+                queued = _pending.TryAdd(bytes);
+            }
+            finally
+            {
+                if (!queued)
+                {
+                    Interlocked.Add(ref _samplesAccepted, -frames);
+                }
+            }
+
+            if (!queued)
             {
                 // The writer is behind - see MaxQueued. A gap in the file is
                 // the price; a stalled race night is not.
@@ -437,8 +471,12 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             return;
         }
 
+        // WHY (20 Oct 2026): measured against what the file has accepted
+        // (queued as well as written), not only what is written - a writer
+        // backlog is late audio, not missing audio. See _samplesAccepted.
+        var accepted = Math.Max(written, Interlocked.Read(ref _samplesAccepted));
         var elapsedMs = (long)(DateTime.UtcNow - StartedUtc).TotalMilliseconds;
-        var gap = SilenceSamplesNeeded(elapsedMs, written, SampleRate, DriftSlackMs);
+        var gap = SilenceSamplesNeeded(elapsedMs, accepted, SampleRate, DriftSlackMs);
 
         if (gap <= 0)
         {
@@ -455,6 +493,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             var now = (int)Math.Min(gap, silence.Length / BytesPerSample);
             _wav.Write(silence, 0, now * BytesPerSample);
             Interlocked.Add(ref _samplesWritten, now);
+            Interlocked.Add(ref _samplesAccepted, now);
             gap -= now;
             _paddedMs += now * 1000L / SampleRate;
         }

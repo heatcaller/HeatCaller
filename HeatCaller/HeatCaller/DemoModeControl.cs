@@ -46,6 +46,14 @@ public sealed class DemoModeControl : UserControl
     /// </summary>
     private readonly GhostStore? _ghostStore;
 
+    /// <summary>
+    /// Raised on the UI thread when the demo is stopped by hand with Stop.
+    /// WHY (20 Oct 2026): a hand-stopped demo left Race Control holding the
+    /// demo's round, so its format chip and Next Up kept showing that round
+    /// until the next Quick Race or Stage. The host clears it on this.
+    /// </summary>
+    public event Action? DemoStopped;
+
     public DemoModeControl(RaceControlSession race, AnnouncementService announcer, ProfileStore profiles, TrackLayoutStore trackLayouts, AppSettings settings,
         RoundDefinitionStore? rounds = null, RaceEventStore? events = null, GhostStore? ghostStore = null)
     {
@@ -605,7 +613,14 @@ public sealed class DemoModeControl : UserControl
     {
         var round = ChosenRound();
 
-        _clbDrivers.Enabled = round is null;
+        // WHY (20 Oct 2026): showing this page again (its nav-refresh hook
+        // ends here) or picking free-form in the round box mid-demo turned
+        // the tick list back on while the demo was still running - and ticks
+        // made then are saved but don't change the running demo. It stays
+        // locked while a demo runs; OnDemoEnded calls this again once the
+        // simulator has stopped. The placeholder spinner is left alone: a
+        // running demo locks it with ReadOnly, not Enabled.
+        _clbDrivers.Enabled = round is null && !_simulator.IsRunning;
         _numPlaceholderCount.Enabled = round is null;
 
         if (round is null)
@@ -895,6 +910,7 @@ public sealed class DemoModeControl : UserControl
     private void BtnStop_Click(object? sender, EventArgs e)
     {
         _simulator.Stop();
+        DemoStopped?.Invoke();
         OnDemoEnded("Stopped.");
     }
 

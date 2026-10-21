@@ -27,6 +27,12 @@ public sealed class RoundDefinitionStore
                 var list = JsonSerializer.Deserialize<List<RoundDefinition>>(SafeFile.ReadAllTextWithRetry(FilePath));
                 if (list is not null)
                 {
+                    // WHY (20 Oct 2026): a hand-edited or restored file can
+                    // hold a null entry. It loaded without complaint and then
+                    // every reader of the programme (All, Get, Add, the Round
+                    // box, auto-advance) threw on it all night. Dropped here,
+                    // the same as SeasonStore.Load does.
+                    list.RemoveAll(r => r is null);
                     return new RoundDefinitionStore(list);
                 }
 

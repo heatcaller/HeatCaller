@@ -231,13 +231,20 @@ public sealed class NightMomentsTests : IDisposable
     public void Four_places_made_up_is_a_charge_and_three_is_not()
     {
         var found = NightMoments.ForRace(Race(
+            // WHY (20 Oct 2026): this was a three-car race with Bill and Sam
+            // both on slot 5. The grid is now counted over the real cars that
+            // lined up ahead, as the Charge badge counts it, so in a field of
+            // three nobody can make up four. The field is now six, a slot each.
             Row("Bill", 1, new long[] { 10000, 9000, 9000 }, startPosition: 5, lapsLed: 3),
-            Row("Sam", 2, new long[] { 10200, 9100, 9100 }, startPosition: 5),
-            Row("Dot", 3, new long[] { 10400, 9200, 9200 }, startPosition: 1)));
+            Row("Dot", 2, new long[] { 10100, 9100, 9100 }, startPosition: 1),
+            Row("Sam", 3, new long[] { 10200, 9200, 9200 }, startPosition: 6),
+            Row("Ann", 4, new long[] { 10300, 9300, 9300 }, startPosition: 2),
+            Row("Kit", 5, new long[] { 10400, 9400, 9400 }, startPosition: 3),
+            Row("Lou", 6, new long[] { 10500, 9500, 9500 }, startPosition: 4)));
 
         var charges = found.Where(one => one.What is NightMoments.Kind.Charge).ToList();
 
-        // Bill P5 to P1 is four. Sam P5 to P2 is three. Dot went backwards.
+        // Bill P5 to P1 is four. Sam P6 to P3 is three. Dot went backwards.
         var charge = Assert.Single(charges);
 
         Assert.Equal("bill", charge.Transponder);

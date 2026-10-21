@@ -71,6 +71,16 @@ public sealed class MixerControl : UserControl
     private bool _ambienceWasRunning;
     private AmbienceService.Intensity _ambienceMoodBefore;
     private bool _musicWasPlaying;
+
+    /// <summary>
+    /// WHY (20 Oct 2026, Bug Hunt 8, #12): set only when the audition itself
+    /// started that source. Stopping used to stop anything that wasn't playing
+    /// when the audition began - including music or a crowd a race's auto-start
+    /// had brought up since (say, after the audition's own start had failed).
+    /// Now Stop Everything only stops what Play Everything started.
+    /// </summary>
+    private bool _auditionStartedAmbience;
+    private bool _auditionStartedMusic;
     private readonly System.Windows.Forms.Timer _meterTimer = new() { Interval = 120 };
 
     /// <summary>
@@ -1006,6 +1016,14 @@ public sealed class MixerControl : UserControl
         {
             RefreshSettings();
         }
+        else if (_auditioning)
+        {
+            // WHY (20 Oct 2026, Bug Hunt 8, #12): the page is never disposed
+            // during a session, so leaving it mid-audition kept the "Level
+            // check" line and its chime going every interval right through a
+            // race. Leaving the page now ends the audition.
+            StopAudition();
+        }
     }
 
     /// <summary>
@@ -1177,6 +1195,8 @@ public sealed class MixerControl : UserControl
         _ambienceWasRunning = _ambience.IsRunning;
         _ambienceMoodBefore = _ambience.CurrentIntensity;
         _musicWasPlaying = _music.IsPlaying;
+        _auditionStartedAmbience = false;
+        _auditionStartedMusic = false;
 
         _auditioning = true;
         _btnAuditionAll.Text = "Stop Everything";
@@ -1188,6 +1208,7 @@ public sealed class MixerControl : UserControl
         if (!_ambience.IsRunning)
         {
             _ambience.Start(ignoreEnabledSetting: true);
+            _auditionStartedAmbience = _ambience.IsRunning;
         }
 
         if (_ambience.IsRunning)
@@ -1203,6 +1224,7 @@ public sealed class MixerControl : UserControl
         if (!_music.IsPlaying)
         {
             _music.Play();
+            _auditionStartedMusic = _music.IsPlaying;
         }
 
         if (_music.IsPlaying)
@@ -1254,15 +1276,20 @@ public sealed class MixerControl : UserControl
             _ambience.SetIntensity(_ambienceMoodBefore);
         }
 
-        if (!_ambienceWasRunning)
+        // Only what the audition itself started (Bug Hunt 8, #12 - see
+        // _auditionStartedAmbience).
+        if (_auditionStartedAmbience && !_ambienceWasRunning)
         {
             _ambience.Stop();
         }
 
-        if (!_musicWasPlaying)
+        if (_auditionStartedMusic && !_musicWasPlaying)
         {
             _music.Stop();
         }
+
+        _auditionStartedAmbience = false;
+        _auditionStartedMusic = false;
 
         _lblStatus.Text = "Audition stopped.";
         _lblStatus.ForeColor = AppTheme.TextMuted;
@@ -1276,6 +1303,15 @@ public sealed class MixerControl : UserControl
     /// </summary>
     private void SpeakAuditionLine()
     {
+        // WHY (20 Oct 2026, Bug Hunt 8, #12): the voice already stays quiet
+        // while muted, but the chime below has no mute check of its own, so the
+        // sidebar's mute left it sounding every interval. Muted now skips both.
+        // Announce Now unmutes before calling this, so it still speaks.
+        if (_announcer.Muted)
+        {
+            return;
+        }
+
         // Not for the listen-along page (17 Oct 2026, Bug Hunt 8, A06-10).
         _announcer.SpeakReminder(
             "Level check. This is how an announcement sounds over the music and the crowd.", forListeners: false);

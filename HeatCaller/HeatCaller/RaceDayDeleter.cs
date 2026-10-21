@@ -106,20 +106,50 @@ internal static class RaceDayDeleter
 
         using var ask = new DeleteRaceDayForm($"{real.Count} race days", counts);
 
-        // Asked again once the answer is in: a heat can be put on track -
-        // from the phone, say - while the dialog is up.
-        if (ask.ShowDialog(owner) != DialogResult.OK || RefuseIfOnTrack(owner, real))
+        if (ask.ShowDialog(owner) != DialogResult.OK)
         {
             return 0;
         }
 
-        foreach (var one in gathered)
+        // WHY (20 Oct 2026): the delete used to carry out what was gathered
+        // BEFORE the dialog went up. A heat of one of these days could be
+        // staged from the phone, run and saved while it was open - no longer
+        // on track, so the second check passed - and its new session was then
+        // left behind: not deleted, still in its season, still holding any
+        // record it set, and (with its round gone) scored by championships.
+        // Now each day is read fresh from the store and gathered again just
+        // before it is removed, so whatever was added meanwhile goes with it.
+        // Gathered inside the loop, each day is read after the one before it
+        // has gone - the same reasoning Remove already uses for badges.
+        var fresh = real
+            .Select(d => events.Get(d.Id))
+            .Where(d => d is not null)
+            .Select(d => d!)
+            .ToList();
+
+        // Asked again once the answer is in: a heat can be put on track -
+        // from the phone, say - while the dialog is up. Asked of the days as
+        // they are now, so a round added to one meanwhile is seen too.
+        if (RefuseIfOnTrack(owner, fresh))
         {
-            Remove(one, events, roundStore, history, seasonStore, layouts, undo,
-                ask.DeleteHistory, ask.ClearRecords, ask.ClearSeasons, ask.ClearBadges, onChanged);
+            return 0;
         }
 
-        return gathered.Count;
+        int removed = 0;
+
+        foreach (var d in fresh)
+        {
+            if (events.Get(d.Id) is not { } now)
+            {
+                continue;
+            }
+
+            Remove(Gather(now, roundStore, history, seasonStore, layouts), events, roundStore, history, seasonStore, layouts, undo,
+                ask.DeleteHistory, ask.ClearRecords, ask.ClearSeasons, ask.ClearBadges, onChanged);
+            removed++;
+        }
+
+        return removed;
     }
 
     public static bool Ask(
@@ -156,13 +186,27 @@ internal static class RaceDayDeleter
                 gathered.Seasons.Count,
                 gathered.BadgeCount));
 
-        // Asked again once the answer is in - see AskMany.
-        if (ask.ShowDialog(owner) != DialogResult.OK || RefuseIfOnTrack(owner, new[] { day }))
+        if (ask.ShowDialog(owner) != DialogResult.OK)
         {
             return false;
         }
 
-        Remove(gathered, events, roundStore, history, seasonStore, layouts, undo,
+        // WHY (20 Oct 2026): read fresh and gathered again now, not carried
+        // over from before the dialog - a heat of this day saved while it was
+        // open used to be left behind. See AskMany. Gone already (deleted from
+        // the other page meanwhile) means there is nothing left to do.
+        if (events.Get(day.Id) is not { } now)
+        {
+            return false;
+        }
+
+        // Asked again once the answer is in - see AskMany.
+        if (RefuseIfOnTrack(owner, new[] { now }))
+        {
+            return false;
+        }
+
+        Remove(Gather(now, roundStore, history, seasonStore, layouts), events, roundStore, history, seasonStore, layouts, undo,
             ask.DeleteHistory, ask.ClearRecords, ask.ClearSeasons, ask.ClearBadges, onChanged);
 
         return true;
@@ -301,11 +345,13 @@ internal static class RaceDayDeleter
         var sessions = gathered.Sessions;
         var seasons = gathered.Seasons;
 
-        // Worked out again now, not taken from Gather. Gather runs before the
-        // dialog, and a heat of tonight's day can take the record on the same
-        // layout while it is up - Race Control writes it the moment the lap
-        // is seen. Clearing the layouts gathered then blanked that new record
-        // along with the old one, although nothing being deleted had set it.
+        // Worked out again now, not taken from Gather. A heat can take the
+        // record on the same layout while the dialog is up - Race Control
+        // writes it the moment the lap is seen. Clearing the layouts gathered
+        // before the dialog blanked that new record along with the old one.
+        // (20 Oct 2026: Ask and AskMany now gather again after the dialog, so
+        // a record set by a heat of the deleted day is cleared with that
+        // heat's session, while one set by another day's heat is left alone.)
         // The sector records below were always worked out again here.
         var recordTracks = TracksWithRecordsFrom(layouts, sessions);
 

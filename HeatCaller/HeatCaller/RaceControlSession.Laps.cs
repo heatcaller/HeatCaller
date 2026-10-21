@@ -436,6 +436,9 @@ public sealed partial class RaceControlSession
             standing.SectorsAtLap.Clear();
             standing.ClearSplitReads();
             standing.ConsecutiveValidLaps = 0;
+            // 20 Oct 2026: the credit is withdrawn with nothing broken after
+            // it (the counted lap that follows clears this anyway).
+            standing.RunBrokenSinceLastLap = false;
             standing.StreakLapTimeSumMs = 0;
             standing.StreakLapCount = 0;
             standing.StreakBaselineLapMs = 0;
@@ -756,6 +759,9 @@ public sealed partial class RaceControlSession
             }
 
             standing.ConsecutiveValidLaps++;
+            // 20 Oct 2026: a counted lap closes any break since the last one
+            // - its StreakAtLap entry below now says where the run stands.
+            standing.RunBrokenSinceLastLap = false;
             standing.LapTimesMs.Add(lapTimeMs);
             standing.StreakAtLap.Add(standing.ConsecutiveValidLaps);
 
@@ -810,6 +816,10 @@ public sealed partial class RaceControlSession
         else
         {
             standing.ConsecutiveValidLaps = 0;
+            // 20 Oct 2026: remembered, because a rejected pass leaves no
+            // StreakAtLap entry - without this, taking a lap off by hand
+            // read the run back from before the rejection and revived it.
+            standing.RunBrokenSinceLastLap = true;
             standing.StreakLapTimeSumMs = 0;
             standing.StreakLapCount = 0;
             standing.RejectedLaps++;

@@ -668,6 +668,14 @@ public sealed class CommentaryDirector
         Budget.NightsLeftThisMonth = CommentaryBudget.NightsLeft(_settings.CommentaryNightsPerMonth, _clock());
         Budget.KeepEverythingRunning = _settings.CommentaryKeepEverything;
 
+        // WHY (20 Oct 2026): the club's lowest tier was stored in settings
+        // and never handed to the budget, so Budget.LowestTier stayed at
+        // Flourish and a club that turned the flourishes off still heard
+        // them. Clamped so a hand-edited value cannot become an undefined
+        // tier; Essential is never silenced by this gate either way.
+        Budget.LowestTier = (SegmentTier)Math.Clamp(
+            _settings.CommentaryLowestTier, (int)SegmentTier.Essential, (int)SegmentTier.Flourish);
+
         // RESTORED, NOT RESET (13 Oct 2026). This was NewMeeting, and
         // SaidTonight.Restore - which calls NewMeeting itself, and only
         // picks facts back up when the day matches - was written at the
@@ -1071,9 +1079,21 @@ public sealed class CommentaryDirector
         // never a candidate at all, and the segment the programme wanted
         // went unasked for and then played by itself after the sign-off.
         //
-        // Idempotent: it sets a bool false. The tick calling it again a
-        // moment later costs nothing.
-        RaceFinished();
+        // GUARDED, NOT EVERY TIME (20 Oct 2026). This used to say the call
+        // was idempotent because it sets a bool false - but RaceFinished
+        // also stamps the flag-time counters (_onAirsAtFlag, _breaksAtFlag).
+        // The colour loop asks here up to twice, and the second ask can land
+        // after the commercial break has opened, which moved _breaksAtFlag up
+        // to the new count. StopSetHasRun then read false, and the sponsor's
+        // copy - already read inside the break - was read again in the gap
+        // before the next race. Now the race-over transition runs only when
+        // it has not already happened for this flag: _racing is the 11 Oct
+        // case above (asked before the tick's transition), and !_afterARace
+        // is a flag the director never heard about, which still opens the gap.
+        if (_racing || !_afterARace)
+        {
+            RaceFinished();
+        }
 
         // AFTER THE TICK'S PASS, NOT BESIDE IT (bug hunt 7). The flag can
         // fall while the announcer's tick is half way through writing a

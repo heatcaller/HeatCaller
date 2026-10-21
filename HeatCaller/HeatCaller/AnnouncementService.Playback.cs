@@ -377,6 +377,18 @@ public sealed partial class AnnouncementService
         //
         // The bus reports a line done when the last of it has been MIXED,
         // which is still a buffer or so ahead of what is being heard.
-        await Task.Delay(350);
+        //
+        // NOT FOR A LINE WITH ANOTHER HARD BEHIND IT (19 Oct 2026). The
+        // next line goes through the same bus, which is still running, so
+        // its first sample is mixed straight after this one's last - it
+        // cannot cut this one off, and it cannot overlap it. Waiting here
+        // only held the speaker for a third of a second more, which was a
+        // third of a second of dead air at every change of voice in a
+        // two-hander, on top of the trimmed tail that already gives the
+        // hand-over its breath.
+        if (trailingSilenceSeconds > BackToBackTrailingSilenceSeconds)
+        {
+            await Task.Delay(350);
+        }
     }
 }

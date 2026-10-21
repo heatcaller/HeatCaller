@@ -329,17 +329,51 @@ internal static class NightMoments
             }
         }
 
+        // WHY (20 Oct 2026): this used to be StartPosition - Position, and
+        // those two are not counted the same way. Position is closed up over
+        // the real cars; StartPosition is the raw grid slot, which counts
+        // ghosts dragged to the front and no-shows on a stated roster. So a
+        // driver from slot 6 (really 4th of the real cars) to P2 was "four
+        // places" here while the Charge badge said P4 to P2 and gave nothing
+        // - the two answers the summary above says must never happen. The
+        // grid and the finish are now worked out exactly as
+        // AchievementEvaluator's GridOf and PlaceOf do it: the grid counts
+        // only real cars that turned a lap and lined up ahead, and the
+        // finish is the place in the closed-up order. `scored` already has
+        // no ghosts and no DQs (a DQ's laps are taken to nought, so GridOf
+        // never counts one either, and it sorts to the bottom, so the
+        // finishing place matches PlaceOf for everyone who raced).
+        var finishOrder = scored.OrderBy(row => row.Position).ToList();
+
+        // WHY (20 Oct 2026): a saved race can carry a starting slot left
+        // over from a bigger race - slot 8 in a five-car heat. The count
+        // above ranks it among the real cars, so it still came out as a
+        // charge from a slot nobody really started in, and the season piece
+        // and the other readers of these moments repeated it. A slot past
+        // the field is not a grid position at all. The field here is every
+        // car that held a slot - ghosts and no-shows included, because they
+        // do hold one - so a real car lined up behind a ghost on pole keeps
+        // its charge. DriverCut.ChargeFromARealSlot counts real cars only and
+        // so is the stricter of the two; a driver's own piece never says
+        // more than this does.
+        var field = record.Results.Count(one => !string.IsNullOrWhiteSpace(one.Transponder));
+
         foreach (var row in scored)
         {
             // StartPosition of nought means the app was never told where
             // they started - a race run without a grid - and "up from
-            // nowhere" is not a fact.
-            if (row.StartPosition <= 0 || row.Position <= 0)
+            // nowhere" is not a fact. A car that never turned a lap made up
+            // nothing, and the badge does not look at it either.
+            if (row.StartPosition <= 0 || row.StartPosition > field || row.Position <= 0 || row.Laps < 1)
             {
                 continue;
             }
 
-            var places = row.StartPosition - row.Position;
+            var grid = AchievementEvaluator.GridPlace(scored, row);
+
+            var place = finishOrder.IndexOf(row) + 1;
+
+            var places = grid - place;
 
             if (places >= LeastPlacesForACharge)
             {

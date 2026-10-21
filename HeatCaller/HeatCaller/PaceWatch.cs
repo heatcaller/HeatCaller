@@ -148,14 +148,33 @@ public sealed class PaceWatch
         // only one that stands on its own from the very first lap of a
         // race - it is a record for the whole track, not a position in
         // this one.
-        if (LayoutRecord?.Invoke() is { } layout && Beats(lap.LapSeconds, layout.Seconds))
+        //
+        // WHY (20 Oct 2026): the night's best and the layout record are read
+        // from SAVED races only (PaceHistory.NightBestFor, LayoutRecordFor),
+        // so they never include the race being run. Once one car had beaten
+        // the old mark, every later lap under the OLD mark - but slower than
+        // the new one - was still called "the fastest lap of the night",
+        // taken from the old holder. Each is now judged against whichever is
+        // faster, the stored figure or this race's own best so far; a lap
+        // that beats only the old mark falls through to the checks below.
+        if (LayoutRecord?.Invoke() is { } layout)
         {
-            return new PaceNote(lap.DriverId, lap.LapSeconds, PaceNoteKind.LayoutRecord, layout.Seconds, layout.Holder);
+            var (mark, holder) = Standing(layout.Seconds, layout.Holder, sessionBest, sessionHolder);
+
+            if (Beats(lap.LapSeconds, mark))
+            {
+                return new PaceNote(lap.DriverId, lap.LapSeconds, PaceNoteKind.LayoutRecord, mark, holder);
+            }
         }
 
-        if (NightBest?.Invoke() is { } night && Beats(lap.LapSeconds, night.Seconds))
+        if (NightBest?.Invoke() is { } night)
         {
-            return new PaceNote(lap.DriverId, lap.LapSeconds, PaceNoteKind.NightBest, night.Seconds, night.Holder);
+            var (mark, holder) = Standing(night.Seconds, night.Holder, sessionBest, sessionHolder);
+
+            if (Beats(lap.LapSeconds, mark))
+            {
+                return new PaceNote(lap.DriverId, lap.LapSeconds, PaceNoteKind.NightBest, mark, holder);
+            }
         }
 
         // "Fastest of the race so far" needs a race to be faster than.
@@ -197,6 +216,20 @@ public sealed class PaceWatch
     }
 
     private bool Beats(double lap, double mark) => mark > 0 && lap < mark - MeaningfulMargin;
+
+    /// <summary>
+    /// The figure a stored record really stands at now: the stored one, or
+    /// this race's own best where that is already faster. A stored figure
+    /// of zero or less means "none" (Beats ignores it), so this race's best
+    /// takes over only when there is a real stored mark it has beaten.
+    /// sessionBest is double.MaxValue before the race's first lap, which
+    /// leaves the stored figure as it is.
+    /// </summary>
+    private static (double Seconds, string Holder) Standing(
+        double storedSeconds, string storedHolder, double sessionBest, string? sessionHolder) =>
+        storedSeconds > 0 && sessionBest < storedSeconds
+            ? (sessionBest, sessionHolder ?? string.Empty)
+            : (storedSeconds, storedHolder);
 
     /// <summary>
     /// A new race. The session's own bests go; what the night and the

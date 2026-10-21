@@ -239,6 +239,15 @@ public sealed partial class RaceControlControl
 
                         _announcer.SpeakReminder(line!);
 
+                        // WHY (20 Oct 2026): held introductions were written
+                        // ahead with remember: false, so they are recorded as
+                        // the last line (and their wording as used) only now
+                        // that they are said.
+                        if (held is not null)
+                        {
+                            _commentary?.IntroSpoken(line);
+                        }
+
                         // Counted only when the room actually hears it.
                         if (!_announcer.Muted)
                         {
@@ -346,7 +355,13 @@ public sealed partial class RaceControlControl
                 var profile = _profiles.Get(transponder);
 
                 // Never the transponder: it would be read out as a number.
-                var screen = !string.IsNullOrWhiteSpace(profile?.DriverName) ? profile!.DriverName : RelayDocuments.UnnamedDriver;
+                // A car with no profile takes the name the timing last
+                // recorded for it (19 Oct 2026), as the qualifying recap
+                // already did - the room heard "Terry Byte third" in the
+                // qualifying line and then "the third spot belongs to an
+                // unnamed driver".
+                var screen = !string.IsNullOrWhiteSpace(profile?.DriverName) ? profile!.DriverName
+                    : DriverIntros.NameFromHistory(history, transponder) ?? RelayDocuments.UnnamedDriver;
                 var spoken = !string.IsNullOrWhiteSpace(profile?.AnnouncerName) ? profile!.AnnouncerName : screen;
 
                 return new IntroDriver(
@@ -420,7 +435,8 @@ public sealed partial class RaceControlControl
     /// Best-effort: never awaited, holding no start up, and a failure costs
     /// nothing - Stage, or On Air, writes its own as before.
     /// </summary>
-    private void WriteTheIntroductionsAhead(SessionRecord? filed, bool corrected)
+    /// <param name="gate">Waited for before the model is asked - see _flagLinesAsked.</param>
+    private void WriteTheIntroductionsAhead(SessionRecord? filed, bool corrected, Task gate)
     {
         int asOf;
 
@@ -456,12 +472,18 @@ public sealed partial class RaceControlControl
 
         _ = Task.Run(async () =>
         {
+            // Behind the flag lines, before the budget (20 Oct 2026) - see _flagLinesAsked.
+            await WaitForFlagLinesAsync(gate);
+
             try
             {
                 using var budget = new CancellationTokenSource(WriteAheadModelBudget);
 
+                // WHY (20 Oct 2026): remember: false - written ahead, not yet
+                // heard, so not the Announcer page's last line until it is
+                // said (IntroSpoken, in SpeakIntroductions and On Air).
                 var text = await commentary.BuildDriverIntroductionsAsync(
-                    facts.RaceTitle, facts.Grid, facts.Qualifying, sponsor?.Name, budget.Token);
+                    facts.RaceTitle, facts.Grid, facts.Qualifying, sponsor?.Name, budget.Token, remember: false);
 
                 if (string.IsNullOrWhiteSpace(text))
                 {

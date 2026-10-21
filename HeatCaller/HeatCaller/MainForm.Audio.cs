@@ -637,6 +637,13 @@ public partial class MainForm
             }
         }
 
+        // WHY (20 Oct 2026): a crowd already playing (a Preview left on) becomes the session's own - the Ambience page must stop owning it,
+        // or its "Stop Preview" mid-race drops the mood to Idle and stops the crowd dead.
+        if (_settings.AudioStartAmbience && _ambience.IsRunning && !_ambience.IsHeld)
+        {
+            _ambienceControl?.SessionAdoptedAmbience();
+        }
+
         if (_settings.AudioStartAmbience && !_ambience.IsRunning && staysMuted)
         {
             // Not started: the unmute starts whatever the mute's record

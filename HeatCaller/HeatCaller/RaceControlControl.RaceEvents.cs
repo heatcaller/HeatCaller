@@ -475,6 +475,9 @@ public sealed partial class RaceControlControl
             Status = isValid ? "active" : "invalid",
             Id = standing.TransponderId,
             LapsLed = standing.LapsLed,
+            // The race penalty (20 Oct 2026, bug hunt 8): the provisional
+            // pole call adds it to a driver's best run, as qualifying does.
+            PenaltyMs = standing.PenaltyMs,
         };
         _announcer.OnStandingUpdated(miniZStanding);
 
@@ -553,6 +556,9 @@ public sealed partial class RaceControlControl
             Status = "adjusted",
             Id = standing.TransponderId,
             LapsLed = standing.LapsLed,
+            // The race penalty (20 Oct 2026, bug hunt 8): the provisional
+            // pole call adds it to a driver's best run, as qualifying does.
+            PenaltyMs = standing.PenaltyMs,
         });
 
         // Forced: a correction by hand is rare and is exactly the sort of
@@ -622,7 +628,11 @@ public sealed partial class RaceControlControl
             _toldAboutRecordPaceGeneration = _race.SessionGeneration;
         }
 
-        if (!isValid || lapMs <= 0 || _race.IsPracticeMode)
+        // WHY (20 Oct 2026): demos were left out of this check, so a demo's
+        // made-up laps could call a real driver "on record pace" for a record
+        // CheckAndAnnounceTrackRecord will never let a demo lap take. Demos
+        // are now refused here too, the same as every other record path.
+        if (!isValid || lapMs <= 0 || _race.IsDemoMode || _race.IsPracticeMode)
         {
             return;
         }

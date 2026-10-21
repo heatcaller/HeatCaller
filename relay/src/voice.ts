@@ -160,6 +160,16 @@ export interface VoiceUsage {
   readonly allowance: number;
   /** When the count goes back to zero: the first moment of next month, UTC, ISO 8601. */
   readonly resetsAt: string;
+  /**
+   * False when the usage file is there but could not be read, so used is a
+   * stand-in rather than the club's count. Absent means known.
+   *
+   * WHY (20 Oct 2026, Bug Hunt 8, n101): an unreadable file used to come
+   * back as plain "0 used", and the app took that as the club's real
+   * figure - its meter dropped to nothing spent and a spent month ended
+   * early, mixing voices on the night. Now the stand-in says it is one.
+   */
+  readonly known?: boolean;
 }
 
 /**
@@ -473,6 +483,9 @@ export class VoiceService {
    * match.
    */
   async catalogue(club: string, plan: VoicePlan): Promise<VoiceCatalogueView> {
+    // While the usage file can't be read this is 0 of 0, known:false -
+    // not the stand-in "0 used" it once was. See usageFor (20 Oct 2026,
+    // Bug Hunt 8, n101).
     const usage = await this.usageFor(club, plan);
 
     return {
@@ -701,7 +714,11 @@ export class VoiceService {
         refusal: "busy",
         status: 503,
         message: "The HeatCaller voice can't check this club's allowance just now. The free Kokoro voice speaks this one.",
-        usage: reserved.usage,
+        // WHY (20 Oct 2026, Bug Hunt 8, n101): no usage here. The figures
+        // reserve has are a stand-in of 0 used, and sending them reset the
+        // app's This Month meter and its stored allowance to "nothing
+        // spent". With none, the refusal carries no figures and the app
+        // keeps what it last knew.
       };
     }
 
@@ -1272,7 +1289,27 @@ export class VoiceService {
    * falls between them).
    */
   private async usageFor(club: string, plan: VoicePlan, month: string = monthOf(this.now())): Promise<VoiceUsage> {
-    return (await this.usageState(club, plan, month)).usage;
+    const state = await this.usageState(club, plan, month);
+
+    // WHY (20 Oct 2026, Bug Hunt 8, n101): this is the figure the app is
+    // given - in the catalogue, and in the headers of a line the relay had
+    // saved. While the usage file can't be read it used to be the stand-in
+    // "0 used of the plan", and the app took it as the club's count: its
+    // This Month meter dropped to nothing spent, and the half-hourly probe
+    // read the catalogue as room, ending a spent month and putting saved
+    // lines back on the HeatCaller voice while new ones went to Kokoro.
+    //
+    // Now it is known:false with no allowance (0 of 0), so an app that does
+    // not yet look at known still does no harm: its probe needs an
+    // allowance above zero to call it room, so the spent state holds, and
+    // its meter reads 0 of 0 as "unknown" and sends nothing. Not "used up"
+    // (used = allowance), which was tried first: the meter takes that as
+    // the month running out - it emails the club "HeatCaller voice used
+    // up", uses up that month's one used-up notice, and Mission Control
+    // says Kokoro is speaking - for a club that still has room. Voice
+    // Settings still opens; it says "No allowance on this plan" until the
+    // file reads again.
+    return state.known ? state.usage : { used: 0, allowance: 0, resetsAt: state.usage.resetsAt, known: false };
   }
 
   /**
@@ -1316,8 +1353,10 @@ export class VoiceService {
 
     if (read === undefined) {
       // Shown as nothing spent, so Voice Settings still opens - but not
-      // kept, and not spent against. See above.
-      return { usage: { used: 0, allowance, resetsAt: resetOf(this.now()) }, known: false };
+      // kept, and not spent against. See above. Marked known:false so
+      // nothing downstream takes the 0 for the club's count (20 Oct 2026,
+      // Bug Hunt 8, n101).
+      return { usage: { used: 0, allowance, resetsAt: resetOf(this.now()), known: false }, known: false };
     }
 
     this.usageCache.set(club, { month, used: read.used, history: read.history });

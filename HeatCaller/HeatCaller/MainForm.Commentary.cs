@@ -29,6 +29,9 @@ public partial class MainForm
     /// <summary>And one for the race recap host - the kind of thing the top of a recap says.</summary>
     private const string RecapHostTestLine = "And we're back! What a finish that was - let's take you through how that one unfolded.";
 
+    /// <summary>What the co-host's Test Voice says - a reply to the announcer, the way the co-host talks in a two-hander.</summary>
+    private const string CoHostTestLine = "You're not wrong - he was half a second quicker through the back section every single lap.";
+
     /// <summary>Hooks the recap's broadcast up to Race Control, the AI Commentary tab and the Cast tab. Called once, when all three exist.</summary>
     private void WireRecapBroadcast(RaceControlControl raceControl, CommentaryControl commentary, CastControl cast)
     {
@@ -49,6 +52,7 @@ public partial class MainForm
         cast.SpeakAsPrincipal = voice => _announcer.SpeakTest(PrincipalTestLine, _voiceStore.Current.Speed, voice);
         cast.SpeakAsHonours = voice => _announcer.SpeakTest(HonoursTestLine, _voiceStore.Current.Speed, voice);
         cast.SpeakAsRecapHost = voice => _announcer.SpeakTest(RecapHostTestLine, _voiceStore.Current.Speed, voice);
+        cast.SpeakAsCoHost = voice => _announcer.SpeakTest(CoHostTestLine, _voiceStore.Current.Speed, voice);
     }
 
     /// <summary>
@@ -411,6 +415,39 @@ public partial class MainForm
     /// Idempotent: it fires on every result and does nothing after the
     /// first, so the relay is not sent a withdrawal per heat.
     /// </summary>
+    private void WithdrawTheNightBefore(SessionRecord record)
+    {
+        // WHY (20 Oct 2026): the day check below was the only guard, and
+        // Saturday's race day usually stays open through the week - so the
+        // first PRACTICE filed on Wednesday (practice is saved to the same
+        // history) took Saturday's preview down days early. Now only a race
+        // from one of that day's own rounds counts; a practice, a freeform
+        // race or a test session leaves the preview up.
+        if (!StartsTheMeeting(record, _raceEvents.ActiveRoundScope()))
+        {
+            return;
+        }
+
+        WithdrawTheNightBefore();
+    }
+
+    /// <summary>
+    /// Whether a filed session is a race of the open day's own programme -
+    /// the only kind that means the meeting has started. Practice never is,
+    /// nor a race run for no round (freeform, test). A null scope is the
+    /// legacy holder's "every round is tonight's", so any round counts.
+    /// </summary>
+    internal static bool StartsTheMeeting(SessionRecord record, IReadOnlySet<string>? scope) =>
+        record.SessionType != RaceSessionType.Practice
+        && record.RoundId is { Length: > 0 } roundId
+        && (scope is null || scope.Contains(roundId));
+
+    /// <summary>
+    /// The withdrawal itself, without the session check. Only the overload
+    /// above calls it (20 Oct 2026): the SessionAdded hook in MainForm.cs
+    /// passes its record there. Called directly it would still withdraw on
+    /// a practice, which is the bug that overload fixes.
+    /// </summary>
     private void WithdrawTheNightBefore()
     {
         if (_nightBeforeOnThePage is not { } forDay)
@@ -419,7 +456,8 @@ public partial class MainForm
         }
 
         // Only for the day it was written for. A preview for Saturday
-        // stands through Wednesday's practice.
+        // stands through Wednesday's practice - with the session check in
+        // the overload above.
         if (!string.Equals(forDay, _raceEvents.Active?.Id ?? string.Empty, StringComparison.Ordinal))
         {
             return;

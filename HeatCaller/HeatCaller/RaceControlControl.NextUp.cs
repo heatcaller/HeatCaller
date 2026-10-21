@@ -837,7 +837,13 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void EditFormat()
     {
-        var round = _activeRound?.Invoke();
+        // WHY (20 Oct 2026): this read the Round box only, while
+        // EffectiveFormat reads ShowRound (the Round box, else DemoRound). A
+        // demo of a round already run, Round box on freeform, showed that
+        // round's override or class format on the chip, but Edit Format
+        // opened the App Default - and saving changed the club-wide default.
+        // It now picks its round the same way the chip does.
+        var round = ShowRound();
 
         if (round?.FormatOverride is not null && _rounds is not null)
         {

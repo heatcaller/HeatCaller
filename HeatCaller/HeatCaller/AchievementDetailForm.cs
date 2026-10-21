@@ -435,8 +435,26 @@ public sealed class AchievementDetailForm : Form
 
         private int RowAt(Point point)
         {
-            var index = (point.Y - FirstRowTop + _scroll) / RowHeight;
-            return index >= 0 && index < _holders.Count ? index : -1;
+            // WHY (20 Oct 2026): C# integer division rounds toward zero, so a
+            // point on the "WHO HAS IT" heading (a little above the first row)
+            // came out as row 0 - the first holder lit up and a double-click
+            // there picked them. Now anything above the rows' band (OnPaint's
+            // clip, so a row scrolled up under the heading can't be picked
+            // through it) or above the first row is no row at all.
+            if (point.Y < Px(30))
+            {
+                return -1;
+            }
+
+            var offset = point.Y - FirstRowTop + _scroll;
+
+            if (offset < 0)
+            {
+                return -1;
+            }
+
+            var index = offset / RowHeight;
+            return index < _holders.Count ? index : -1;
         }
 
         protected override void OnMouseMove(MouseEventArgs e)

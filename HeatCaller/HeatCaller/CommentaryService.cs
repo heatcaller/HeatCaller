@@ -255,10 +255,10 @@ public sealed class CommentaryService
     private const string IntroKind = "Intro";
 
     /// <summary>
-    /// A round intro has been queued to the announcer, so it is the last
-    /// line - for an intro written ahead with remember: false, which was
-    /// not recorded when it was written. Saying it again for one that was
-    /// is harmless.
+    /// A round intro (or, since 20 Oct 2026, the driver introductions) has
+    /// been queued to the announcer, so it is the last line - for one
+    /// written ahead with remember: false, which was not recorded when it
+    /// was written. Saying it again for one that was is harmless.
     /// </summary>
     public void IntroSpoken(string? line)
     {
@@ -269,6 +269,13 @@ public sealed class CommentaryService
 
         LastLine = StripAudioTags(line);
         LastLineKind = IntroKind;
+
+        // WHY (20 Oct 2026): an intro written ahead with remember: false
+        // never had its stock phrases noted, so tonight's worn-phrase list
+        // missed wording the room did hear. Noted now it is spoken; noting
+        // one already recorded again is harmless (WornPhrases keeps each
+        // phrase once).
+        WornPhrases.Note(LastLine);
     }
 
     /// <summary>
@@ -1296,6 +1303,18 @@ public sealed class CommentaryService
             var notes = new List<string>();
             answer = TidyIntro(StripAudioTags(answer), Field(round.RoundLabel), properNames, Math.Max(8, _settings.CommentaryMaxWords), notes);
 
+            // THE ROLL CALL IS THE INTRODUCTIONS', held to after the model
+            // has written it (19 Oct 2026): asked not to list the field, an
+            // opening still did, and the room heard every name twice before
+            // the start. A sentence naming three or more drivers goes; an
+            // opening that was nothing else is replaced by a plain line, so
+            // the introductions still have an opening to follow.
+            if (introductionsFollow && answer is not null)
+            {
+                answer = IntroRepeats.WithoutRollCall(answer, names, notes)
+                         ?? $"Up next, {Field(round.RoundLabel)}: {Plural.Of(names.Count, "driver")} on the grid.";
+            }
+
             if (notes.Count > 0)
             {
                 log?.Invoke("Round intro " + string.Join("; ", notes) + ".");
@@ -1330,12 +1349,25 @@ public sealed class CommentaryService
     /// <param name="grid">The drivers in grid order; a slot of 0 for a race with no grid.</param>
     /// <param name="qualifying">What qualifying decided, already worded for the voice (DriverIntros.Recap's spoken form - announcer names, figures in words). Null when this is not a main, or nothing has qualified.</param>
     /// <param name="presentedBy">The sponsor of the introductions, as the club wrote their name. Null for none.</param>
+    /// <param name="remember">
+    /// False for introductions written AHEAD, which are held rather than
+    /// spoken - the caller records them with <see cref="IntroSpoken"/> once
+    /// they are queued, as for the round intro.
+    ///
+    /// WHY (20 Oct 2026): these were always recorded as written, so the
+    /// introductions written ahead for the NEXT race became the Announcer
+    /// page's last line (grid and all) before that race was called, stayed
+    /// there when a corrected result threw them away, and had their
+    /// phrasing noted as worn tonight. Last, after ct, so the callers that
+    /// pass the token by position still compile.
+    /// </param>
     public async Task<string?> BuildDriverIntroductionsAsync(
         string raceTitle,
         IReadOnlyList<IntroDriver> grid,
         string? qualifying = null,
         string? presentedBy = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool remember = true)
     {
         if (Client is null || grid is null || grid.Count == 0)
         {
@@ -1363,13 +1395,31 @@ public sealed class CommentaryService
             "\nIntroduce every driver listed, in the order listed, the way a broadcast introduces the field before "
             + "the start - one short, punchy phrase each, and vary how each one is put so it does not sound like a list "
             + "being read out."
-            + (hasGrid ? " Say each driver's grid position." : " There is no grid for this race, so do not give anybody a position or call anybody on pole.")
+            // ONCE EACH (19 Oct 2026). Told to say each position and to
+            // work qualifying in, a model said both, and they are the same
+            // fact: "Terry Byte rounds out the top three, starting from
+            // third on the grid", "takes pole... taking the top spot on the
+            // grid", and the pole margin again as second place's deficit.
+            + (hasGrid
+                ? " Say each driver's grid position ONCE - \"on pole\", \"alongside\", \"rounds out the top three\" or "
+                  + "\"at the back\" already says where they start, so never add \"starting from third\" or \"the top spot on "
+                  + "the grid\" after it. Do not number every driver in turn either: vary how the position is put."
+                : " There is no grid for this race, so do not give anybody a position or call anybody on pole.")
             + " Use each driver's racing number, home and form only where they are listed, exactly as written, and only "
             + "for that driver. Never give a driver a number, a town, a result, a nickname or a record that is not listed "
             + "against them. The race has not started: describe no laps, battles or results in it."
+            // QUALIFYING INSIDE THE INTRODUCTIONS (19 Oct 2026). It used to
+            // be "open with one sentence on what qualifying decided", and
+            // that sentence named the top three - so the room heard the
+            // front of the field, and then the whole field one by one.
+            // Each fact now goes with the driver it is about.
             + (recap.Length > 0
-                ? " Open with one sentence on what qualifying decided, using its names and figures exactly as written - "
-                  + "do not round them and do not add to them."
+                ? " Work what qualifying decided into the introductions themselves - the pole-sitter's margin in the "
+                  + "pole-sitter's introduction, and so on - using its names and figures exactly as written, never rounded "
+                  + "or added to. Do not open with a sentence listing the qualifiers: every driver is named once, in their "
+                  + "own introduction. The grid IS the qualifying order, so a qualifying place is the grid position - not a "
+                  + "second fact to say. Each gap is said once: the pole-sitter's margin over second is not said again as "
+                  + "second place's deficit."
                 : string.Empty)
             + (sponsor.Length > 0
                 ? $" Begin with the words \"Driver introductions, presented by {sponsor}\", then go into them."
@@ -1378,6 +1428,20 @@ public sealed class CommentaryService
         var answer = await Client.GenerateAsync(
             BuildSystemPrompt(extraWords), facts, maxTokens: MaxTokensForWordLimit(extraWords), temperature: Variety, ct: ct,
             timeout: BetweenRacesTimeout);
+
+        // ONCE THROUGH THE GRID (19 Oct 2026). Given room for a few words a
+        // driver, a model that reached the back row could go round again -
+        // "so that's Sam on pole, Bill alongside..." - and the room heard
+        // the field twice. Cut where the second pass starts.
+        if (!string.IsNullOrWhiteSpace(answer))
+        {
+            answer = IntroRepeats.WithoutSecondPass(answer, grid.Select(d => d.SpokenName).ToList());
+        }
+
+        if (!remember)
+        {
+            return string.IsNullOrWhiteSpace(answer) ? null : StripAudioTags(answer);
+        }
 
         return await RecordAndReturn(IntroKind, Task.FromResult(answer));
     }
@@ -1389,6 +1453,20 @@ public sealed class CommentaryService
     /// answer; null, or a null answer, writes the segment unsponsored.
     /// </summary>
     public Func<SegmentKind, string?>? SegmentSponsor { get; set; }
+
+    /// <summary>
+    /// Who presents a written segment of this kind, with what to run once
+    /// the segment has actually been written - the shape TakeSponsor hands
+    /// back. Used in preference to <see cref="SegmentSponsor"/> when set.
+    ///
+    /// WHY (20 Oct 2026): SegmentSponsor's host counted the mention for the
+    /// sponsor report the moment it was ASKED, before the model had been
+    /// called - so a segment that came back empty (the local model timing
+    /// out, the relay refusing it) went in the report clubs show sponsors
+    /// as a "presented by" that never went over the PA. This one is
+    /// counted here, and only when a line came back.
+    /// </summary>
+    public Func<SegmentKind, (string Name, Action Count)?>? SegmentSponsorTaken { get; set; }
 
     /// <summary>
     /// The fewest letters a word in capitals on its own needs to count as
@@ -2971,6 +3049,84 @@ public sealed class CommentaryService
             temperature: Variety, ct: ct, timeout: BetweenRacesTimeout));
     }
 
+    /// <summary>
+    /// The announcer's throw into the stop set (19 Oct 2026): one short
+    /// line that plugs the show by name and says the race recap, with its
+    /// host, is coming up after the break - different every race. See
+    /// <see cref="StopSetThrow"/>, which checks what comes back and has the
+    /// line to say when it will not do.
+    ///
+    /// Asked for at the flag, ahead of the recap: it is wanted within
+    /// seconds, and on the model on this PC, which answers one request at a
+    /// time, a short line in front of the recap costs the recap a moment
+    /// where the recap in front of it would cost the throw its place.
+    /// </summary>
+    /// <param name="names">Already cleaned (Field), so what the model is told and what is checked are the same words.</param>
+    /// <param name="recent">The last few throws, so the model can steer clear of them.</param>
+    /// <param name="clubLines">The club's own teaser lines, for the feel it likes. Not to be copied.</param>
+    internal async Task<string?> BuildStopSetThrowAsync(
+        SessionRecord session,
+        StopSetThrow.Names names,
+        IReadOnlyList<string> recent,
+        IReadOnlyList<string> clubLines,
+        bool breakFollows,
+        CancellationToken ct = default)
+    {
+        if (Client is null)
+        {
+            return null;
+        }
+
+        // With no stop set tonight the recap is "coming up next", and the
+        // line must not promise a break - see StopSetThrow.
+        // WHY (20 Oct 2026): "straight after this" tripped StopSetThrow's own
+        // break check, so every no-break line was thrown away and the stock
+        // fallback ran all night; the wording now comes from StopSetThrow.
+        var when = StopSetThrow.When(breakFollows);
+
+        var said = recent
+            .Select(line => Field(line, MaxObservationChars))
+            .Where(line => line.Length > 0)
+            .ToList();
+
+        var feel = clubLines
+            .Select(line => Field(line, MaxObservationChars))
+            .Where(line => line.Length > 0)
+            .Take(4)
+            .ToList();
+
+        var facts =
+            FactsOpen + "\n" +
+            (names.Show.Length > 0 ? $"Show: {names.Show}\n" : string.Empty) +
+            (names.Host.Length > 0 ? $"Recap host: {names.Host}\n" : string.Empty) +
+            (names.Announcer.Length > 0 ? $"You, the race announcer: {names.Announcer}\n" : string.Empty) +
+            $"Race just finished: {SpokenLabel(session)}\n" +
+            (said.Count > 0 ? "Throws already used tonight:\n" + string.Join("\n", said.Select(l => "- " + l)) + "\n" : string.Empty) +
+            (feel.Count > 0 ? "The club's own lines, for the feel it likes:\n" + string.Join("\n", feel.Select(l => "- " + l)) + "\n" : string.Empty) +
+            FactsClose + "\n" +
+            (breakFollows
+                ? "\nWrite the line you, the race announcer, say to throw to a commercial break, in the style of a TV sports broadcast. In it:"
+                : "\nWrite the line you, the race announcer, say to hand over to the race recap, in the style of a TV sports broadcast. "
+                  + "There is no commercial break tonight, so don't mention a break, sponsors or messages. Don't say 'after this' or 'right back'. In it:")
+            + (names.Show.Length > 0
+                ? $"\n- plug the show by name - say \"{names.Show}\" word for word"
+                : "\n- no show name is given, so don't make one up")
+            + (names.Host.Length > 0
+                ? $"\n- say the race recap with {names.Host} is {when} - {names.Host} hosts the recap, not you"
+                : $"\n- say the race recap is {when} (no host is named, so don't name one)")
+            + (names.Announcer.Length > 0
+                ? $"\n- sign off with your own name, {names.Announcer}, but not as the very last words"
+                : "\n- you are not named, so don't give yourself a name")
+            + "\nDon't name the winner or say anything else about the race - the recap will. "
+            + (said.Count > 0 ? "Make it sound fresh: don't reuse the wording or the shape of the throws already used tonight. " : "Make it sound fresh, not stock. ")
+            + "One or two short sentences, under 30 words. Only the words to say.";
+
+        return await RecordAndReturn("Throw to break", Client.GenerateAsync(
+            BuildBroadcastSystemPrompt(0), facts,
+            maxTokens: MaxTokensForWordLimit(),
+            temperature: Math.Max(Variety, 0.9), ct: ct, timeout: BetweenRacesTimeout));
+    }
+
     // ==================== The mechanic's interview ====================
 
     /// <summary>
@@ -3054,6 +3210,50 @@ public sealed class CommentaryService
     /// ParseInterview reads it the same either way.
     /// </summary>
     /// <param name="interviewer">Null for the announcer; the co-host's name (blank for none) when the co-host asks.</param>
+    /// <summary>
+    /// For an interview the co-host asks straight after the announcer's
+    /// throw down to pit lane (19 Oct 2026). The two used to sound as if
+    /// they couldn't hear each other: "...where Amanda is with the
+    /// Technical Lead. Amanda?" and then "Amanda here with Guisepie, the
+    /// team's technical lead" - her own name, and the role, said straight
+    /// back. The co-host is told what the throw has already said, so she
+    /// picks up from it instead.
+    /// </summary>
+    /// <param name="throwSaid">What the throw said besides the co-host's name - not to be said again.</param>
+    private string ThrownDownTo(string throwSaid)
+    {
+        var booth = FirstName(_settings.RecapAnnouncerName);
+
+        return "The race announcer has just thrown down to pit lane on air, naming the co-host and " + throwSaid
+               + ", and the co-host heard every word: so the co-host never says their own name, never says who they are "
+               + "\"here with\", and does not repeat " + throwSaid + ". "
+               + (booth.Length > 0
+                   ? $"The co-host's first line may open with a quick \"Thanks, {booth}\" - his first name only - then "
+                   : "The co-host's first line picks straight up from the throw, then ")
+               + "goes to the guest, the way a reporter does who can hear the booth. ";
+    }
+
+    /// <summary>"Rick" for "Rick Marshal"; a name starting with a title ("Sir", "Dr") is kept whole.</summary>
+    internal static string FirstName(string? name)
+    {
+        var full = Field(name, MaxShowNameChars).TrimEnd('.', '!', '?', ',');
+        var space = full.IndexOf(' ');
+
+        if (space < 0)
+        {
+            return full;
+        }
+
+        var first = full[..space].TrimEnd('.');
+
+        return first.Length < 2 || Titles.Contains(first) ? full : first;
+    }
+
+    private static readonly HashSet<string> Titles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Sir", "Dame", "Lord", "Lady", "Mr", "Mrs", "Ms", "Miss", "Dr", "Captain", "Big", "Little", "The",
+    };
+
     private static string AskedBy(string? interviewer) =>
         interviewer is null ? "the announcer"
         : Field(interviewer) is { Length: > 0 } coHost ? $"the co-host, {coHost}, down in pit lane,"
@@ -3132,11 +3332,18 @@ public sealed class CommentaryService
             + MaxInterviewExchanges
             + " exchanges, every line starting with who says it, like this:\n"
             + "HOST: <question>\nTECH LEAD: <answer>\nHOST: <question>\nTECH LEAD: <answer>\n"
-            + (name.Length > 0
-                ? "The first question introduces them by the name in the facts AND by their role as the facts give it, "
-                  + "once, the way a broadcast introduces a guest, and asks about the race; "
-                : "The first question introduces them by their role as the facts give it - no name is given, so do not "
-                  + "use one - and asks about the race; ")
+            + (interviewer is not null
+                ? ThrownDownTo("the guest's role and whose team it is")
+                  + (name.Length > 0
+                      ? "The first question goes to the technical lead by the name in the facts - just the name, since the role "
+                        + "has just been said - and asks about the race; "
+                      : "The first question goes straight to the technical lead, with no name (none is given) and no role "
+                        + "(it has just been said), and asks about the race; ")
+                : name.Length > 0
+                    ? "The first question introduces them by the name in the facts AND by their role as the facts give it, "
+                      + "once, the way a broadcast introduces a guest, and asks about the race; "
+                    : "The first question introduces them by their role as the facts give it - no name is given, so do not "
+                      + "use one - and asks about the race; ")
             + "the second asks about the car. "
             + "The technical lead speaks for the team, in the first person (\"we\"), relaxed and proud, in plain spoken "
             + $"words - under {MaxAnswerWords - 10} words an answer, and the host's questions shorter still. "
@@ -3161,7 +3368,10 @@ public sealed class CommentaryService
         // shouted and had to be calmed.
         var properNames = new[] { PromptName(winner.Transponder), name, car, team, Field(session.Label) };
 
-        var interview = ParseInterview(answer, name, properNames);
+        // WHY (20 Oct 2026): the co-host the prompt named is a host label
+        // too - see ParseInterview's interviewerName.
+        var interview = ParseInterview(
+            answer, name, properNames, interviewerName: interviewer is null ? null : Field(interviewer));
 
         if (interview is null)
         {
@@ -3452,7 +3662,7 @@ public sealed class CommentaryService
 
         return await AskForInterviewAsync(
             facts, name, PrincipalLabels, new[] { driver, name, car, team, Field(session.Label) },
-            BetweenRacesTimeout, log, ct, PrincipalExchanges);
+            BetweenRacesTimeout, log, ct, PrincipalExchanges, interviewer);
     }
 
     /// <summary>
@@ -3558,11 +3768,18 @@ public sealed class CommentaryService
             + MaxInterviewExchanges
             + " exchanges, every line starting with who says it, like this:\n"
             + "HOST: <question>\nTEAM PRINCIPAL: <answer>\nHOST: <question>\nTEAM PRINCIPAL: <answer>\n"
-            + (name.Length > 0
-                ? "The first question introduces them by the name in the facts AND by their role as the facts give it, "
-                  + "once, the way a broadcast introduces a guest, and asks how the team is feeling going into it; "
-                : "The first question introduces them by their role as the facts give it - no name is given, so do not "
-                  + "use one - and asks how the team is feeling going into it; ")
+            + (interviewer is not null
+                ? ThrownDownTo("whose team the co-host is with")
+                  + (name.Length > 0
+                      ? "The first question greets the team principal by the name in the facts and their role, once - but "
+                        + "not whose team it is again - and asks how the team is feeling going into it; "
+                      : "The first question greets the team principal by their role - no name is given, so do not use one - "
+                        + "and asks how the team is feeling going into it; ")
+                : name.Length > 0
+                    ? "The first question introduces them by the name in the facts AND by their role as the facts give it, "
+                      + "once, the way a broadcast introduces a guest, and asks how the team is feeling going into it; "
+                    : "The first question introduces them by their role as the facts give it - no name is given, so do not "
+                      + "use one - and asks how the team is feeling going into it; ")
             + "the second asks what they are hoping for from it"
             + (night.Count > 0
                 ? ", with how the team's night has gone SO FAR in mind - the facts say what has already happened "
@@ -3586,6 +3803,7 @@ public sealed class CommentaryService
             + "The race has not happened: talk about hopes, plans and respect for the rivals, and never say how it "
             + "will go, or state a result, a position or a time that has not happened. "
             + "The team principal never talks about the car's setup, parts or settings - that is the technical lead's subject. "
+            + "Nobody reads out the grid: name one rival at most - the driver introductions name the field. "
 
             + (string.IsNullOrWhiteSpace(stanceBrief) ? string.Empty : "\n" + stanceBrief.Trim() + " ")
 
@@ -3596,9 +3814,33 @@ public sealed class CommentaryService
             + "Every name and number in the facts is exact - use them as written or not at all. "
             + "No quotes, no stage directions, no square-bracket tags, and nothing before the first HOST line.";
 
-        return await AskForInterviewAsync(
+        var exchanges = await AskForInterviewAsync(
             facts, name, PrincipalLabels, new[] { driver, name, car, team, Field(round.RoundLabel) },
-            timeout: null, log, ct);
+            timeout: null, log, ct, interviewer: interviewer);
+
+        // HELD TO IT (19 Oct 2026): asked for hopes and respect for the
+        // rivals, a principal answered "with Al, Terry, Ela and Dee all
+        // bringing their A-game" - and the introductions then read the same
+        // field out one by one. A sentence naming three or more of the grid
+        // goes from an answer, unless it was the whole answer.
+        return exchanges is null ? null : WithoutGridRollCalls(exchanges, grid, log);
+    }
+
+    /// <summary>The interview with any sentence that reads out the grid taken out of its answers - see IntroRepeats.WithoutRollCall.</summary>
+    internal static IReadOnlyList<InterviewExchange> WithoutGridRollCalls(
+        IReadOnlyList<InterviewExchange> exchanges, IReadOnlyList<string> grid, Action<string>? log = null)
+    {
+        var notes = new List<string>();
+        var kept = exchanges
+            .Select(e => e with { Answer = IntroRepeats.WithoutRollCall(e.Answer, grid, notes) ?? e.Answer })
+            .ToList();
+
+        if (notes.Count > 0)
+        {
+            log?.Invoke("Team Principal: " + string.Join("; ", notes.Distinct()).Replace("the driver introductions follow", "the driver introductions name the field") + ".");
+        }
+
+        return kept;
     }
 
     /// <summary>
@@ -3614,7 +3856,8 @@ public sealed class CommentaryService
         TimeSpan? timeout,
         Action<string>? log,
         CancellationToken ct,
-        int? mostExchanges = null)
+        int? mostExchanges = null,
+        string? interviewer = null)
     {
         if (Client is null)
         {
@@ -3636,7 +3879,11 @@ public sealed class CommentaryService
             return null;
         }
 
-        var interview = ParseInterview(answer, guestName, properNames, guestLabels, mostExchanges);
+        // WHY (20 Oct 2026): the co-host the prompt named, so her own name
+        // is read as a host label - see ParseInterview's interviewerName.
+        var interview = ParseInterview(
+            answer, guestName, properNames, guestLabels, mostExchanges,
+            interviewerName: interviewer is null ? null : Field(interviewer));
 
         if (interview is null)
         {
@@ -3704,12 +3951,27 @@ public sealed class CommentaryService
     /// nobody made to it - with nothing in the code to say that had
     /// happened.
     /// </param>
+    /// <param name="interviewerName">
+    /// The co-host asking the questions, when the prompt named one; null or
+    /// blank for none.
+    ///
+    /// WHY (20 Oct 2026): since 18 Oct the prompt names the interviewer
+    /// ("the co-host, Amanda, down in pit lane, (HOST)"), and a model that
+    /// labels her turns "AMANDA:" is following instructions - the same
+    /// reason CommentaryExchange.Split accepts a speaker's own name. This
+    /// only knew HOST and the guest's name, so "AMANDA:" was not a label at
+    /// all: her name was read out in the host's voice and her next question
+    /// was folded into the guest's answer, in the guest's voice. Her name
+    /// (and first name) now counts as a host label, at a line start only,
+    /// like the guest's.
+    /// </param>
     internal static IReadOnlyList<InterviewExchange>? ParseInterview(
         string? text,
         string mechanicName,
         IEnumerable<string> properNames,
         IReadOnlyList<string>? guestLabels = null,
-        int? mostExchanges = null)
+        int? mostExchanges = null,
+        string? interviewerName = null)
     {
         var keep = Math.Max(1, mostExchanges ?? MaxInterviewExchanges);
 
@@ -3748,6 +4010,33 @@ public sealed class CommentaryService
             pattern += $@"|(?<=(?:^|[.!?""'\u201D\u2019)])\s*)[*_]*(?<who>{nameAlternatives})[*_]*\s*:[*_]*";
         }
 
+        // The co-host's own name, the same way and at the same places. A
+        // name the guest shares is left to the guest - there is no telling
+        // the two apart, and the guest's reading is the one this had before.
+        var hostNames = new List<string>();
+        var trimmedHost = interviewerName?.Trim() ?? string.Empty;
+
+        if (trimmedHost.Length > 0)
+        {
+            hostNames.Add(trimmedHost);
+
+            var hostFirst = trimmedHost.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+
+            if (!string.Equals(hostFirst, trimmedHost, StringComparison.OrdinalIgnoreCase))
+            {
+                hostNames.Add(hostFirst);
+            }
+
+            hostNames.RemoveAll(n => nameLabels.Contains(n, StringComparer.OrdinalIgnoreCase));
+
+            if (hostNames.Count > 0)
+            {
+                var hostAlternatives = string.Join("|", hostNames.OrderByDescending(label => label.Length).Select(Regex.Escape));
+
+                pattern += $@"|(?<=(?:^|[.!?""'\u201D\u2019)])\s*)[*_]*(?<who>{hostAlternatives})[*_]*\s*:[*_]*";
+            }
+        }
+
         var labelPattern = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         var labels = labelPattern.Matches(text);
@@ -3758,7 +4047,8 @@ public sealed class CommentaryService
         }
 
         bool IsHost(Match label) =>
-            HostLabels.Contains(label.Groups["who"].Value, StringComparer.OrdinalIgnoreCase);
+            HostLabels.Contains(label.Groups["who"].Value, StringComparer.OrdinalIgnoreCase)
+            || hostNames.Contains(label.Groups["who"].Value, StringComparer.OrdinalIgnoreCase);
 
         var turns = new List<(bool Host, string Text)>();
 
@@ -3900,12 +4190,23 @@ public sealed class CommentaryService
         }
 
         // A sponsor who presents this kind of moment (18 Oct 2026) - asked
-        // as it is written, which is when the host counts it.
+        // as it is written. WHY (20 Oct 2026): through SegmentSponsorTaken
+        // it is counted below, only once the model has written the line;
+        // the older SegmentSponsor hook still counts as it is asked.
         string sponsor;
+        (string Name, Action Count)? taken = null;
 
         try
         {
-            sponsor = Field(SegmentSponsor?.Invoke(kind), MaxShowNameChars);
+            if (SegmentSponsorTaken is { } takeSponsor)
+            {
+                taken = takeSponsor(kind);
+                sponsor = Field(taken?.Name, MaxShowNameChars);
+            }
+            else
+            {
+                sponsor = Field(SegmentSponsor?.Invoke(kind), MaxShowNameChars);
+            }
         }
         catch
         {
@@ -3921,8 +4222,22 @@ public sealed class CommentaryService
                 ? $" End by saying, once, that it is presented by {sponsor} - that name exactly as written."
                 : string.Empty);
 
-        return await RecordAndReturn(LabelFor(kind), Client.GenerateAsync(
+        var line = await RecordAndReturn(LabelFor(kind), Client.GenerateAsync(
             BuildSegmentSystemPrompt(), body, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct));
+
+        if (taken is { } t && sponsor.Length > 0 && !string.IsNullOrWhiteSpace(line))
+        {
+            try
+            {
+                t.Count();
+            }
+            catch
+            {
+                // The report is a courtesy; a failing count never costs the segment.
+            }
+        }
+
+        return line;
     }
 
     /// <summary>

@@ -23,7 +23,7 @@
   },
   "brain": {
     "model": "claude-haiku-4-5-20251001",
-    "monthlyLines": 400,
+    "monthlyLines": 1000,
     "maxWords": 120,
     "maxLongWords": 450
   },
@@ -40,7 +40,7 @@
       },
       "brain": {
         "enabled": true,
-        "monthlyLines": 400
+        "monthlyLines": 1000
       }
     }
   ]

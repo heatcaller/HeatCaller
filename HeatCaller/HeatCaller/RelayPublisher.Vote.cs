@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -144,6 +145,177 @@ public sealed partial class RelayPublisher
     private const string RelayVoterMark = "relay:";
 
     /// <summary>
+    /// The stand-in key for <see cref="RelayVoteKey"/> while the club has no
+    /// check-in key yet - made once per run. No initializer: this is a part
+    /// file (see the house rule in RelayPublisher.cs).
+    /// </summary>
+    private static string? _runVoteKey;
+
+    /// <summary>
+    /// The key the relay's ballot ids are made with (20 Oct 2026, Bug Hunt 8).
+    ///
+    /// WHY: the ballot used to go to the relay as each driver's transponder
+    /// beside their full name, and the relay hands that ballot to anyone
+    /// who asks for /vote/ballot - no token, no PIN. That is the exact
+    /// transponder-to-person map /api/state stopped giving out on 9 Oct.
+    /// Now each driver goes up under an id made from this key, which the
+    /// relay never sees, so it cannot be turned back into a transponder.
+    ///
+    /// The club's check-in key when there is one: it is kept on disk, so
+    /// the ids for an open vote are the same after a restart and the votes
+    /// the relay is holding still match. It is only READ here - minting it
+    /// saves settings, which is not this worker thread's job. Until a club
+    /// has one, a key made for this run stands in; the only cost is that a
+    /// restart in the middle of an open vote drops the relay votes cast
+    /// before it.
+    /// </summary>
+    private string RelayVoteKey()
+    {
+        var secret = _settings.RelayCheckInSecret;
+
+        if (!string.IsNullOrWhiteSpace(secret))
+        {
+            return secret;
+        }
+
+        if (_runVoteKey is null)
+        {
+            Interlocked.CompareExchange(
+                ref _runVoteKey,
+                Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant(),
+                null);
+        }
+
+        return _runVoteKey!;
+    }
+
+    /// <summary>
+    /// A driver's id on the relay's ballot: twenty hex characters, the same
+    /// for the whole of one poll and different in the next, so ids cannot
+    /// be followed from one race to another either. Case and spacing in the
+    /// transponder do not change it.
+    /// </summary>
+    internal static string RelayVoteId(string pollId, string optionId, string key)
+    {
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
+        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(
+            (pollId ?? string.Empty) + "|" + (optionId ?? string.Empty).Trim().ToUpperInvariant()));
+
+        return Convert.ToHexString(hash, 0, 10).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// The drivers as the relay's ballot carries them: the relay's id for
+    /// each and a name fit for a public page - "Unnamed driver" where the
+    /// name was only the transponder standing in for one. Ghosts left out,
+    /// as from every document bound for the relay.
+    /// </summary>
+    internal static List<object> RelayBallotDrivers(IEnumerable<VoteOption> options, string pollId, string key)
+    {
+        var drivers = new List<object>();
+
+        foreach (var one in options)
+        {
+            if (Ghosts.IsGhost(one.Id))
+            {
+                continue;
+            }
+
+            drivers.Add(new
+            {
+                id = RelayVoteId(pollId, one.Id, key),
+                name = RelayDocuments.PublicNameOrUnnamed(one.Name, one.Id),
+            });
+        }
+
+        return drivers;
+    }
+
+    /// <summary>
+    /// The way back: the relay's id for each driver on the ballot, to the
+    /// option it stands for. An id that is not here was never on this
+    /// poll's ballot and is refused.
+    /// </summary>
+    internal static Dictionary<string, string> RelayVoteOptions(IEnumerable<VoteOption> options, string pollId, string key)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var one in options)
+        {
+            if (!Ghosts.IsGhost(one.Id))
+            {
+                map[RelayVoteId(pollId, one.Id, key)] = one.Id;
+            }
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// When the relay took a vote, on this laptop's clock, or null when it
+    /// did not say (a relay from before it sent "at").
+    ///
+    /// WHY (20 Oct 2026, Bug Hunt 8): the inbox is read every fifteen
+    /// seconds, and a vote the relay took in the last few seconds before
+    /// the race director closed the vote - or before the green flag closed
+    /// it - was refused here as "closed" and lost for good, though the
+    /// voter's phone had been told it counted. With the relay's own stamp,
+    /// RoomVote.Cast can count a vote by when it was cast rather than when
+    /// it was read. "at" is the relay's clock in milliseconds.
+    ///
+    /// The relay sends "at" from readRoomVotes, and RoomVote.Cast judges
+    /// "still open" by it (20 Oct 2026).
+    /// </summary>
+    internal static DateTime? RelayVoteCastAt(JsonElement item, TimeSpan relayAhead)
+    {
+        if (!item.TryGetProperty("at", out var at)
+            || at.ValueKind != JsonValueKind.Number
+            || !at.TryGetInt64(out var millis))
+        {
+            return null;
+        }
+
+        // Out of DateTimeOffset's range is as good as no stamp at all.
+        if (millis < -62135596800000L || millis > 253402300799999L)
+        {
+            return null;
+        }
+
+        return ToLaptopClock(DateTimeOffset.FromUnixTimeMilliseconds(millis).UtcDateTime, relayAhead);
+    }
+
+    /// <summary>
+    /// Has the next pass deal with the vote now rather than at its
+    /// fifteen-second tick - for a vote that has just closed.
+    ///
+    /// WHY (20 Oct 2026, Bug Hunt 8): the relay goes on taking votes, and
+    /// telling each phone it counted, until it is sent the closed ballot -
+    /// which used to wait for the next tick, up to fifteen seconds after
+    /// the close. Meant to be called when a vote closes, so the closed
+    /// ballot goes up at once and a late phone is told "closed" instead.
+    /// MainForm hooks this to RoomVote.Closed (20 Oct 2026). Safe from any
+    /// thread - it only sets a number and the worker's wake-up, as
+    /// CloseRoomVoteOnTheRelay does.
+    /// </summary>
+    internal void WakeRoomVote()
+    {
+        _nextVotePollTick = 0;
+
+        // WHY (20 Oct 2026): raised from inside RoomVote.Close and
+        // StartedRace, so a throw here would land in the Close button or the
+        // green flag. Dispose frees the wake-up once the worker has gone, and
+        // a vote closed after that (the vote window left open at exit) has
+        // no worker to wake anyway.
+        try
+        {
+            _wake.Set();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    /// <summary>
     /// Keeps the relay's ballot in step with tonight's vote, and reads
     /// whatever has been voted.
     ///
@@ -177,6 +349,10 @@ public sealed partial class RelayPublisher
         // RoomVote.Cast, and gets its own on the next pass, once its own
         // ballot has been published.
         var polledFor = _pollAsPublished;
+
+        // The relay's ids for the drivers on that poll's ballot, back to
+        // the drivers themselves - see RelayVoteKey (20 Oct 2026).
+        var onTheBallot = RelayVoteOptions(vote.Options, polledFor ?? string.Empty, RelayVoteKey());
 
         // NOTHING TO READ WHILE NO VOTE IS OPEN. The relay would answer
         // with an empty set anyway, and a club that has the switch on but
@@ -216,6 +392,11 @@ public sealed partial class RelayPublisher
             {
                 if (doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
                 {
+                    // Relay time to laptop time - see RelayClockOffset. Read
+                    // once, so every vote in this set is turned by the same
+                    // offset (20 Oct 2026, Bug Hunt 8, #22).
+                    var relayAhead = RelayClockOffset;
+
                     foreach (var item in items.EnumerateArray())
                     {
                         if (!item.TryGetProperty("v", out var voter) || voter.ValueKind != JsonValueKind.String
@@ -225,7 +406,14 @@ public sealed partial class RelayPublisher
                         }
 
                         var who = $"{RelayVoterMark}{voter.GetString()}";
-                        var driver = picked.GetString();
+                        // WHY (20 Oct 2026): the relay holds the opaque id,
+                        // not the transponder - turned back here. One that
+                        // is not on this poll's ballot is refused.
+                        if (!onTheBallot.TryGetValue(picked.GetString() ?? string.Empty, out var driver))
+                        {
+                            refused++;
+                            continue;
+                        }
 
                         // ALREADY HELD, so nothing to do. This is why
                         // re-reading the whole set every fifteen seconds
@@ -240,10 +428,16 @@ public sealed partial class RelayPublisher
                         var hadOne = vote.PickOf(who) is not null;
 
                         // Refused by the store - voting closed, or a
-                        // driver no longer on the grid. Left on the relay,
-                        // which is right: it is refused again next pass
-                        // for the same reason, and it costs nothing.
-                        if (vote.Cast(who, driver, polledFor ?? string.Empty) is not null)
+                        // driver no longer on the grid. Left on the relay:
+                        // it is refused again next pass for the same
+                        // reason, and it costs nothing.
+                        //
+                        // COUNTED BY WHEN THE RELAY TOOK IT (20 Oct 2026, Bug
+                        // Hunt 8, #22): one the relay took in the seconds
+                        // before the close, but read here after it, used to
+                        // be lost. A relay too old to send "at" gives null,
+                        // and Cast falls back to "is it open now".
+                        if (vote.Cast(who, driver, polledFor ?? string.Empty, RelayVoteCastAt(item, relayAhead)) is not null)
                         {
                             refused++;
                         }
@@ -329,12 +523,15 @@ public sealed partial class RelayPublisher
         // that works until somebody edits it.
         var drivers = new List<object>();
 
+        // WHY (20 Oct 2026, Bug Hunt 8): not the transponders. This list is
+        // on a public relay route, and it went up as each driver's
+        // transponder beside their full name. Opaque ids now, and a name fit
+        // for a public page - see RelayVoteKey.
+        var key = RelayVoteKey();
+
         if (open)
         {
-            foreach (var one in vote.Options)
-            {
-                drivers.Add(new { id = one.Id, name = one.Name });
-            }
+            drivers = RelayBallotDrivers(vote.Options, ballot, key);
         }
 
         // THE RACE IS IN THE FINGERPRINT, so moving to the next race is
@@ -349,8 +546,13 @@ public sealed partial class RelayPublisher
         // republished at all and the relay was never told the race had
         // moved. The label stays in it because a round renamed mid-evening
         // has to reach the page.
+        //
+        // AND THE KEY'S MARK (20 Oct 2026): a key that changes - the club's
+        // check-in key minted or reissued - changes every relay id, and the
+        // ballot has to go up again with the new ones or no vote from the
+        // relay would match. A mark made from the key, not the key itself.
         var fingerprint =
-            $"{enabled}|{open}|{raceKey}|{race}|{ballot}|{string.Join(",", vote.Options.Select(one => one.Id))}";
+            $"{enabled}|{open}|{raceKey}|{race}|{ballot}|{RelayVoteId(string.Empty, string.Empty, key)}|{string.Join(",", vote.Options.Select(one => one.Id))}";
 
         if (string.Equals(_ballotAsPublished, fingerprint, StringComparison.Ordinal))
         {

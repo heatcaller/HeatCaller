@@ -59,8 +59,17 @@ public sealed class HandicapEditForm : Form
         _numTime.DecimalPlaces = 1;
         _numTime.Increment = 0.5m;
         _numTime.Minimum = 0;
-        _numTime.Maximum = 600;
-        _numTime.Value = (decimal)Math.Clamp(handicap.TimeCreditSeconds, 0, 600);
+        // WHY (20 Oct 2026): Suggest from History can give a credit over 600s
+        // (a slow driver over a long race), and this box used to cut the shown
+        // value to 600 - so pressing Save, even just to tick Locked or add a
+        // note, quietly wrote 600 over the real credit. The ceiling now grows
+        // to fit the stored value (600 is still the ceiling for new entries),
+        // and the box's width below is worked out after this, so it still fits.
+        var storedTime = double.IsFinite(handicap.TimeCreditSeconds)
+            ? Math.Clamp(handicap.TimeCreditSeconds, 0, 1_000_000)
+            : 0;
+        _numTime.Maximum = Math.Max(600m, Math.Ceiling((decimal)storedTime));
+        _numTime.Value = (decimal)storedTime;
 
         var lblTimeUnit = new Label
         {

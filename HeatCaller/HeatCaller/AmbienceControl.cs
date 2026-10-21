@@ -1035,7 +1035,22 @@ public sealed class AmbienceControl : UserControl
         // The dialog works on a copy (see AmbienceLayerForm), so Cancel
         // leaves the stored layer exactly as it was.
         using var form = new AmbienceLayerForm(existing, _ambience, _store);
-        if (form.ShowDialog(this) != DialogResult.OK)
+
+        // WHY (20 Oct 2026): remembered while it is open so a session that
+        // starts meanwhile (from a phone or the remote) can tell it the crowd
+        // is now the session's - see SessionAdoptedAmbience.
+        _openLayerForm = form;
+        DialogResult dialogResult;
+        try
+        {
+            dialogResult = form.ShowDialog(this);
+        }
+        finally
+        {
+            _openLayerForm = null;
+        }
+
+        if (dialogResult != DialogResult.OK)
         {
             return;
         }
@@ -1243,6 +1258,29 @@ public sealed class AmbienceControl : UserControl
     /// <summary>The crowd's mood before the preview set it to Racing, put back when the preview stops.</summary>
     private AmbienceService.Intensity _pagePreviewMoodBefore;
 
+    /// <summary>True when a race session took over the crowd this page's Preview started - see SessionAdoptedAmbience.</summary>
+    private bool _pagePreviewAdoptedBySession;
+
+    /// <summary>The Add/Edit layer dialog while it is open, so a session start can hand it the news too.</summary>
+    private AmbienceLayerForm? _openLayerForm;
+
+    /// <summary>
+    /// Called by the session start when it finds the crowd already playing
+    /// and keeps it as the session's own instead of starting one.
+    ///
+    /// WHY (20 Oct 2026): a Preview pressed between races and left on became
+    /// the race's crowd, and "Stop Preview" mid-race then dropped the mood
+    /// to Idle and stopped it dead for the rest of the race. Now the preview
+    /// gives up ownership: stopping it leaves the crowd and its mood to the
+    /// session. The open layer dialog, if any, is told the same.
+    /// </summary>
+    public void SessionAdoptedAmbience()
+    {
+        _pagePreviewStartedAmbience = false;
+        _pagePreviewAdoptedBySession = _pagePreviewing;
+        _openLayerForm?.SessionAdoptedAmbience();
+    }
+
     /// <summary>
     /// Plays the ambience so it can be tuned by ear. Deliberately runs at
     /// "Racing" level - the middle of the range, and what you'll hear for
@@ -1264,7 +1302,9 @@ public sealed class AmbienceControl : UserControl
             // next start between races came up at race level. Left alone if
             // something has since moved the mood off Racing (a finish, a
             // caution).
-            if (_ambience.CurrentIntensity == AmbienceService.Intensity.Racing)
+            // WHY (20 Oct 2026): not when a session has since taken the crowd
+            // over - the race owns the mood now.
+            if (!_pagePreviewAdoptedBySession && _ambience.CurrentIntensity == AmbienceService.Intensity.Racing)
             {
                 _ambience.SetIntensity(_pagePreviewMoodBefore);
             }
@@ -1276,6 +1316,7 @@ public sealed class AmbienceControl : UserControl
             }
 
             _pagePreviewStartedAmbience = false;
+            _pagePreviewAdoptedBySession = false;
             return;
         }
 
@@ -1415,6 +1456,26 @@ public sealed class AmbienceLayerForm : Form
 
     /// <summary>True once a preview has soloed this layer - the other layers are muted until the mix is restored.</summary>
     private bool _previewTouched;
+
+    /// <summary>True when a race session took over the crowd while this dialog was open - see SessionAdoptedAmbience.</summary>
+    private bool _previewAdoptedBySession;
+
+    /// <summary>
+    /// WHY (20 Oct 2026): a session staged while this dialog was open (from a
+    /// phone or the remote) kept the preview's crowd as its own, and closing
+    /// the dialog then stopped it for the rest of the race. Now the dialog
+    /// stops owning it, and on close puts the full mix back instead of
+    /// stopping it, as it does for a crowd that was playing when it opened.
+    /// </summary>
+    internal void SessionAdoptedAmbience()
+    {
+        if (_previewStartedAmbience)
+        {
+            _previewAdoptedBySession = true;
+        }
+
+        _previewStartedAmbience = false;
+    }
 
     public AmbienceLayerForm(AmbienceLayer? existing, AmbienceService? ambience = null, AmbienceStore? store = null)
     {
@@ -1842,7 +1903,7 @@ public sealed class AmbienceLayerForm : Form
         {
             _ambience.Stop();
         }
-        else if (_previewTouched && _ambienceWasRunning && _ambience.IsRunning)
+        else if (_previewTouched && (_ambienceWasRunning || _previewAdoptedBySession) && _ambience.IsRunning)
         {
             // A restart rather than a level refresh: the preview may have
             // loaded a layer (or a file) that isn't in the saved settings,
@@ -1863,6 +1924,7 @@ public sealed class AmbienceLayerForm : Form
 
         _previewStartedAmbience = false;
         _previewTouched = false;
+        _previewAdoptedBySession = false;
     }
 
     private void BtnSave_Click(object? sender, EventArgs e)

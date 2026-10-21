@@ -549,6 +549,27 @@ public sealed class UsageMetersTests : IDisposable
         Assert.Contains("User: read", meter.Summary());
     }
 
+    [Fact]
+    public async Task A_plan_elevenlabs_would_not_show_is_said_where_the_meter_goes_until_a_figure_comes()
+    {
+        ElevenLabsClient.SubscriptionHttp = new HttpClient(new FakeServer(HttpStatusCode.InternalServerError, string.Empty));
+
+        var meters = NewMeters();
+        await meters.RefreshAsync(new AppSettings(), Voice(VoiceEngine.ElevenLabs, "sk-test"));
+
+        // No figure yet: the line says why rather than being missing.
+        var meter = meters.Get(MeterKind.ElevenLabsKey)!;
+        Assert.False(meter.Known);
+        Assert.Contains("(500)", meter.Note);
+
+        // With a figure in hand, a failure leaves the figure standing.
+        meters.Report(MeterKind.ElevenLabsKey, 1200, 30000, null, 0);
+        await meters.RefreshAsync(new AppSettings(), Voice(VoiceEngine.ElevenLabs, "sk-test"));
+
+        Assert.True(meters.Get(MeterKind.ElevenLabsKey)!.Known);
+        Assert.Equal(1200, meters.Get(MeterKind.ElevenLabsKey)!.Used);
+    }
+
     // --- Asking for more ----------------------------------------------------
 
     [Fact]

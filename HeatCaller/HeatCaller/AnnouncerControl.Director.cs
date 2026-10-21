@@ -567,6 +567,11 @@ public partial class AnnouncerControl
 
             // RunLongAsync answers false when there was no music to put
             // round it - and in that case it has NOT spoken, so this must.
+            // WHY (20 Oct 2026, Bug Hunt 8): it also answers false when the
+            // next race was called and it gave up at once, and that was read
+            // as "no music" - so the whole recap was queued over the staging
+            // call. A cancelled run now goes to the cut-off answer below.
+            nextRace.Token.ThrowIfCancellationRequested();
             SayTheRecap(chunks);
 
             // AND THEN WAITED FOR, which this path did not do and the one
@@ -769,7 +774,14 @@ public partial class AnnouncerControl
             // AFTER THE RECORDER STARTS, so the clip is in the saved file.
             // That is the whole reason it goes through AudioBus rather than
             // being stitched on - see DriversOwnClip.
-            await PlayTheirOwnClipAsync(treatment, named, transponder!, tonight).ConfigureAwait(true);
+            // WHY (20 Oct 2026, Bug Hunt 8): the clip took up to half a
+            // minute and nothing in it watched the next race, so a race
+            // staged during it went on to queue the whole piece over the
+            // grid. The clip now stops when the race is called, and the
+            // piece is cut off right here rather than started.
+            await PlayTheirOwnClipAsync(treatment, named, transponder!, tonight, nextRace.Token).ConfigureAwait(true);
+
+            nextRace.Token.ThrowIfCancellationRequested();
 
             // THE SIGN-OFF'S TREATMENT, like the night's recap: this is the
             // same shape of thing, an opener in front and a playout at the
@@ -791,6 +803,9 @@ public partial class AnnouncerControl
                 return null;
             }
 
+            // WHY (20 Oct 2026, Bug Hunt 8): false from a cancelled run is
+            // not "no music" - see the recap's path - so it is not read out.
+            nextRace.Token.ThrowIfCancellationRequested();
             SayTheRecap(chunks);
 
             // AND WAITED FOR, for the reason the recap's own path states at
@@ -945,7 +960,8 @@ public partial class AnnouncerControl
     /// the clip would start over the top of the line introducing it.
     /// </summary>
     private async Task PlayTheirOwnClipAsync(
-        ShowTreatment treatment, string named, string transponder, IReadOnlyList<SessionRecord>? tonight)
+        ShowTreatment treatment, string named, string transponder, IReadOnlyList<SessionRecord>? tonight,
+        CancellationToken ct)
     {
         try
         {
@@ -993,9 +1009,18 @@ public partial class AnnouncerControl
                 $"First, a few seconds of {named}'s night as it sounded trackside.",
                 showOnScreens: true);
 
-            await treatment.WaitForTheReadAsync().ConfigureAwait(true);
+            // WHY (20 Oct 2026, Bug Hunt 8): both waits take the next race's
+            // token, so the clip is stopped when the race is called instead
+            // of playing on over the staging call.
+            await treatment.WaitForTheReadAsync(ct: ct).ConfigureAwait(true);
 
-            await AudioBus.PlayAsync(new DriversOwnClip.Excerpt(clip), DriversOwnClip.Level).ConfigureAwait(true);
+            await AudioBus.PlayAsync(new DriversOwnClip.Excerpt(clip), DriversOwnClip.Level, ct).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The next race was called - not a fault with the clip. The
+            // caller reports the piece as cut off.
+            throw;
         }
         catch (Exception ex)
         {
@@ -1813,6 +1838,21 @@ public partial class AnnouncerControl
         async Task SpeakRenderedAsync(SpokenSegment one)
         {
             _renderedTurns = await RenderTurnsAsync(one).ConfigureAwait(true);
+
+            // WHY (20 Oct 2026, Bug Hunt 8): rendering takes seconds, and a
+            // mute or a staged race inside them still had the turns spoken
+            // (or silently dropped) and the segment settled as heard. Asked
+            // again, and given back unspent - Dropped here, because the
+            // caller calls Spoken as soon as this returns.
+            var notNow = IsDisposed ? "the screen went away" : WhyNotNow(one);
+
+            if (notNow is not null)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] Rendered, then dropped - {notNow}.");
+                director.Dropped(one);
+                return;
+            }
+
             SpeakPlainly(one);
         }
     }
@@ -1865,6 +1905,19 @@ public partial class AnnouncerControl
                 + (ready == said.Turns.Count
                     ? string.Empty
                     : " The rest are rendered as they are reached, which leaves a gap where the voice changes."));
+
+            // WHY (20 Oct 2026, Bug Hunt 8): asked again after the render, as
+            // the plain path does - a mute or a staged race inside it gives
+            // the segment back unspent rather than settling it as heard.
+            // Before any recorder is started, so none is left open.
+            var notNow = IsDisposed ? "the screen went away" : WhyNotNow(said);
+
+            if (notNow is not null)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] Rendered, then dropped - {notNow}.");
+                director.Dropped(said);
+                return;
+            }
         }
 
         // Whether the staging got as far as queueing the words. See the

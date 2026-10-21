@@ -226,6 +226,16 @@ public sealed partial class RaceControlControl
             // records itself against that round.
             QuickRaceSetupRequested?.Invoke();
 
+            // A Quick Race is never a demo, so any demo's claim on a round
+            // ends here - before the format below is read from it. See
+            // DemoRound.
+            // WHY (20 Oct 2026): the Demo page's Stop button resets the race
+            // but left DemoRound set, so with the Round box freeform a Quick
+            // Race pressed afterwards ran (and was saved) under the demo
+            // round's format instead of the app default. Cleared here, as
+            // Stage does, so the warm-up continuation reads the default too.
+            DemoRound = null;
+
             // Never filed against a heat by auto-advance - see the filing
             // in AfterRace. Cleared by any other start and by Reset.
             _currentRaceIsQuick = true;

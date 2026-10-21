@@ -51,17 +51,29 @@ public sealed class UsageUiTests
     }
 
     [Fact]
-    public void The_chip_leaves_out_what_has_no_figure_and_says_nothing_with_none()
+    public void The_chip_leaves_out_what_is_not_on_the_plan_and_says_nothing_with_none()
     {
-        var meters = new[]
-        {
-            Unreadable(MeterKind.ElevenLabsKey, "This key can't read its plan."),
-            Measured(MeterKind.Commentary, 12, 0),
-        };
+        var meters = new[] { Measured(MeterKind.Commentary, 12, 0) };
 
         Assert.Equal(string.Empty, UsageGlance.ChipText(meters));
         Assert.Equal(MeterLevel.Unknown, UsageGlance.Worst(meters));
         Assert.Equal(string.Empty, UsageGlance.ChipText(Array.Empty<Meter>()));
+    }
+
+    [Fact]
+    public void A_meter_that_could_not_be_read_is_on_the_chip_as_a_question_mark_with_the_reason_on_hover()
+    {
+        var meters = new[]
+        {
+            Measured(MeterKind.Commentary, 42, 100),
+            Unreadable(MeterKind.ElevenLabsKey, "This key can't read its plan."),
+        };
+
+        Assert.Equal("AI 42% · ElevenLabs ?", UsageGlance.ChipText(meters));
+
+        // Its colour is the measured ones' - a question mark is not a warning.
+        Assert.Equal(MeterLevel.Ok, UsageGlance.Worst(meters));
+        Assert.Contains("This key can't read its plan.", UsageGlance.Tooltip(meters));
     }
 
     [Fact]

@@ -184,6 +184,7 @@ public sealed class GhostStore
                 var loaded = System.Text.Json.JsonSerializer.Deserialize<GhostSettings>(SafeFile.ReadAllTextWithRetry(FilePath));
                 if (loaded is not null)
                 {
+                    Normalize(loaded);
                     store.Current = loaded;
                 }
             }
@@ -234,6 +235,29 @@ public sealed class GhostStore
         Saved?.Invoke(Current);
     }
 
+    /// <summary>
+    /// Repairs a hand-edited or restored file before anything reads it.
+    /// </summary>
+    // WHY (20 Oct 2026): a ghosts.json holding "Ghosts": null, a null entry in
+    // the list, or a ghost with a null Name or Transponder parsed fine, so
+    // nothing flagged it - then the Ghosts page, the driver pickers and the
+    // race start all threw on it. Now a missing list becomes empty, null
+    // entries are dropped and null strings get the same defaults a new ghost
+    // has, as the other stores already do for their files.
+    internal static void Normalize(GhostSettings s)
+    {
+        s.Ghosts = (s.Ghosts ?? new()).Where(g => g is not null).ToList();
+        foreach (var g in s.Ghosts)
+        {
+            var d = new GhostCar();
+            g.Id ??= d.Id;
+            g.Transponder ??= d.Transponder;
+            g.Name ??= d.Name;
+            g.SourceTransponder ??= string.Empty;
+            g.CarModel ??= string.Empty;
+        }
+    }
+
     public string Snapshot() => System.Text.Json.JsonSerializer.Serialize(Current);
 
     public void Restore(string snapshot)
@@ -243,6 +267,7 @@ public sealed class GhostStore
             var restored = System.Text.Json.JsonSerializer.Deserialize<GhostSettings>(snapshot);
             if (restored is not null)
             {
+                Normalize(restored);
                 Current = restored;
                 Save();
             }

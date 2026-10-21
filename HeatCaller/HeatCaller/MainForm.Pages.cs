@@ -1258,6 +1258,15 @@ public partial class MainForm
         // starts or resets over it, so the simulator lets go of the session
         // and its queued lap calls instead of carrying on inside the real race.
         _raceControlControl.StopRunningDemo = demoMode.StopForTakeover;
+
+        // A demo stopped by hand gives up its claim on the round at once
+        // (20 Oct 2026), so the format chip and Next Up go back to what Race
+        // Control would really run - see DemoModeControl.DemoStopped.
+        demoMode.DemoStopped += () =>
+        {
+            _raceControlControl.DemoRound = null;
+            _raceControlControl.RefreshFormat();
+        };
         pageDemoMode.Controls.Add(demoMode);
         _navRefreshHooks["Demo Mode"] = demoMode.RefreshAvailableData;
 

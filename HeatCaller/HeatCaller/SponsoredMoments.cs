@@ -230,22 +230,61 @@ internal sealed class SponsoredMomentGate
     /// Nothing is counted here; <see cref="Mentioned"/> counts, as the line
     /// is spoken.
     /// </summary>
-    public bool TryReserve(SponsoredMoment moment)
+    public bool TryReserve(SponsoredMoment moment) => TryReserve(moment, out _, out _);
+
+    /// <summary>
+    /// <see cref="TryReserve(SponsoredMoment)"/>, also handing back what
+    /// <see cref="Release"/> needs to give the reservation back: the time it
+    /// was taken (stamp) and what the ration said before (previous).
+    ///
+    /// WHY (20 Oct 2026, Bug Hunt 8): a routine call reserved the ration as
+    /// its line was written, and when the queue then dropped the line
+    /// nothing gave it back - the sponsor lost "Presented by" for three
+    /// minutes over a line nobody heard.
+    /// </summary>
+    public bool TryReserve(SponsoredMoment moment, out DateTime stamp, out DateTime? previous)
     {
         lock (_gate)
         {
             var now = _clock();
             RollNight(now);
 
+            stamp = now;
+            previous = _lastSaid.TryGetValue(moment, out var last) ? last : null;
+
             if (!OncePerRace(moment)
-                && _lastSaid.TryGetValue(moment, out var last)
-                && now - last < RepeatGap)
+                && previous is { } p
+                && now - p < RepeatGap)
             {
                 return false;
             }
 
             _lastSaid[moment] = now;
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Gives back a reservation from TryReserve for a line that never went
+    /// out. Undoes nothing if a later reservation, a Mentioned or a new race
+    /// night has replaced it (20 Oct 2026) - so it can never hand back a
+    /// ration a line that WAS said is using.
+    /// </summary>
+    public void Release(SponsoredMoment moment, DateTime stamp, DateTime? previous)
+    {
+        lock (_gate)
+        {
+            if (_lastSaid.TryGetValue(moment, out var current) && current == stamp)
+            {
+                if (previous is { } p)
+                {
+                    _lastSaid[moment] = p;
+                }
+                else
+                {
+                    _lastSaid.Remove(moment);
+                }
+            }
         }
     }
 

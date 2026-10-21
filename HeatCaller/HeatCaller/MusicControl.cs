@@ -419,6 +419,17 @@ public sealed class MusicControl : UserControl
                 return;
             }
 
+            // WHY (20 Oct 2026): double-click used to start the track (and the
+            // playlist after it) with Enable music off, while every transport
+            // button stayed greyed out - music the club had switched off,
+            // playing nonstop with nothing to stop it. Now it says so instead.
+            if (!_chkEnabled.Checked)
+            {
+                _lblStatus.Text = "Music is switched off - tick Enable music to play a track.";
+                _lblStatus.ForeColor = AppTheme.TextMuted;
+                return;
+            }
+
             if (!File.Exists(track.FilePath))
             {
                 AppDialog.Show(this, $"That file is missing:\r\n\r\n{track.FilePath}",
@@ -736,7 +747,11 @@ public sealed class MusicControl : UserControl
         var on = _chkEnabled.Checked;
 
         _chkShuffle.Enabled = on;
-        _btnPlayStop.Enabled = on;
+        // WHY (20 Oct 2026): music can still be started with the switch off
+        // (auto-start, the Mixer audition), so Pause/Resume stays usable
+        // while anything is playing or paused - the same test as
+        // RefreshNowPlaying, so the two never disagree.
+        _btnPlayStop.Enabled = on || _player.IsPlaying || _player.IsPaused;
         _btnSkip.Enabled = on && _player.IsPlaying;
         _chkPauseDuringRaces.Enabled = on;
 
@@ -766,8 +781,13 @@ public sealed class MusicControl : UserControl
             // follows.
             _player.Pause();
         }
-        else
+        else if (_chkEnabled.Checked)
         {
+            // WHY (20 Oct 2026, final review): with Enable music off this
+            // button now stays usable while something plays, so a click
+            // landing just as that music ended would have started the
+            // playlist the club had switched off. Starting music still needs
+            // the switch on; pausing and resuming do not.
             _player.Settings = _store.Current;
             _player.Play();
         }
@@ -817,7 +837,13 @@ public sealed class MusicControl : UserControl
         // Whenever the player is on, track or no track: after a file that
         // would not play, with the next one still being tried, Stop is the
         // one button that has to work - it used to be greyed out then.
-        _btnStop.Enabled = _chkEnabled.Checked && _player.IsPlaying;
+        //
+        // WHY (20 Oct 2026): no longer tied to Enable music either - music
+        // started with the switch off (auto-start, the Mixer audition) used
+        // to leave Stop and Pause greyed out, so whatever plays can always
+        // be stopped from here.
+        _btnStop.Enabled = _player.IsPlaying;
+        _btnPlayStop.Enabled = _chkEnabled.Checked || _player.IsPlaying || _player.IsPaused;
         _seek.Enabled = active;
 
         // Says where the music comes from when it is the soundscape's, so
@@ -963,6 +989,12 @@ public sealed class MusicControl : UserControl
 
         foreach (var path in dialog.FileNames)
         {
+            // WHY (20 Oct 2026): a file picked from the music folder that is already listed was listed a second time - skip it, counted neither as added nor as failed.
+            if (_store.IsListed(path))
+            {
+                continue;
+            }
+
             if (_store.AddTrack(path) is { } track)
             {
                 addedIds.Add(track.Id);
@@ -1104,7 +1136,18 @@ public sealed class MusicControl : UserControl
         // finish playing from a library it's no longer in.
         if (isPlaying)
         {
-            _player.Skip();
+            // WHY (20 Oct 2026): removing the paused track used to Skip, which
+            // opens and plays the next one - the pause was lost and music
+            // came back over the PA. A paused player now stays quiet: the
+            // removed track is dropped and nothing starts until Play.
+            if (_player.IsPaused)
+            {
+                _player.Stop();
+            }
+            else
+            {
+                _player.Skip();
+            }
         }
 
         RefreshGrid();

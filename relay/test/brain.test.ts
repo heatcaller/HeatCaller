@@ -80,6 +80,9 @@ describe("the commentary brain", () => {
 
     assert.equal(!result.ok && result.refusal, "not-included");
     assert.equal(model.calls(), 0);
+    // WHY (20 Oct 2026): the refusal used to carry a default 1,000-line
+    // allowance the club doesn't have; it must carry no figures at all.
+    assert.equal(result.usage, undefined);
   });
 
   it("stops at the allowance, and keeps saying so", async () => {

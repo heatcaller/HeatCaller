@@ -86,11 +86,14 @@ export interface BrainConfig {
 export const BRAIN_DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
 /**
- * 400 lines a month. A busy club night generates perhaps twenty - an
- * intro and a recap per round, with talking points between - so this is
- * roughly twenty race nights, which no club runs. It is a runaway guard.
+ * 1,000 lines a month (raised from 400 on 19 Oct 2026). The commentary
+ * now writes far more than an intro and a recap per round - driver
+ * introductions, battles, the night's bookends, the show - so a full club
+ * night can take well over a hundred lines, and 400 ran out within a
+ * month of race nights. At Haiku prices 1,000 lines is still a few
+ * dollars a month; this is a runaway guard, not a budget.
  */
-export const BRAIN_DEFAULT_MONTHLY_LINES = 400;
+export const BRAIN_DEFAULT_MONTHLY_LINES = 1000;
 
 /** Long enough for a broadcast recap, short enough that nothing blocks the announcer's queue behind it. */
 export const BRAIN_DEFAULT_MAX_WORDS = 120;
@@ -111,7 +114,7 @@ export const BRAIN_PLAN_OFF: BrainPlan = Object.freeze({ enabled: false, monthly
 /** Where the brain keeps its counts. Beside the voice's folder, not inside it: different money, different file. */
 export const BRAIN_DIR = ".brain";
 
-/** A club's standing with the brain, as the app shows it: "37 of 400 lines this month". */
+/** A club's standing with the brain, as the app shows it: "37 of 1,000 lines this month". */
 export interface BrainUsage {
   readonly used: number;
   readonly allowance: number;
@@ -306,7 +309,11 @@ export class BrainService {
         refusal: "not-included",
         status: 403,
         message: "Commentary isn't included for this club yet.",
-        usage: await this.usageFor(club, plan),
+        // WHY (20 Oct 2026): this used to carry usageFor's figures, whose
+        // allowance is the default 1,000 lines even for a plan without the
+        // brain - and the app showed it as a real meter, contradicting the
+        // usage route's allowance of 0. Like voice's not-included refusals,
+        // it now carries no figures at all.
       };
     }
 

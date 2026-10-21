@@ -161,7 +161,12 @@ internal static partial class WindowCatalog
         var car = GarageLongCar();
         car.LoanedToTransponder = Drivers(40)[23].Transponder;
 
-        return new LendCarForm(car, profiles, GarageDayName(), Drivers(40)[11].DriverName);
+        // 20 Oct 2026: the dialog now opens on a loan only when it is for the
+        // day being lent for, so the shot names that day to keep showing the
+        // borrower rather than "Nobody".
+        car.LoanedForEventId = "catalog-day";
+
+        return new LendCarForm(car, profiles, GarageDayName(), Drivers(40)[11].DriverName, "catalog-day");
     }
 
     /// <summary>

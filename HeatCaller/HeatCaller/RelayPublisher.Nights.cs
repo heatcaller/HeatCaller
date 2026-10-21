@@ -48,6 +48,18 @@ public sealed partial class RelayPublisher
     /// <summary>When the open flag may be tried again, after a failure.</summary>
     private long _nextNightsOpenTick;
 
+    /// <summary>
+    /// The relay, club and token the backoff above was earned against.
+    /// WHY (20 Oct 2026, Bug Hunt 8, #85): the thirty seconds outlived the
+    /// settings it was about. A club that typed its id wrong got a 404,
+    /// fixed it and pressed Save - and the new club was not asked for up to
+    /// thirty seconds, while every driver's night for tonight was queued,
+    /// sent to a club with no nights flag, refused with a 403 and dropped
+    /// for good. Now a backoff only holds back the target that failed; a
+    /// different relay, club or token is asked on the very next pass.
+    /// </summary>
+    private RelayTarget? _nightsOpenBackoffFor;
+
     /// <summary>What went wrong offering drivers their night, for the page to show. Null while it is working.</summary>
     private volatile string? _nightsProblem;
 
@@ -167,12 +179,13 @@ public sealed partial class RelayPublisher
 
         // Backing off a flag that has already failed. Not applied to the
         // first attempt of a session, which is why the tick starts at zero.
-        if (Environment.TickCount64 < _nextNightsOpenTick)
+        if (Environment.TickCount64 < _nextNightsOpenTick && target == _nightsOpenBackoffFor)
         {
             return false;
         }
 
         _nextNightsOpenTick = Environment.TickCount64 + (long)NightsOpenRetryEvery.TotalMilliseconds;
+        _nightsOpenBackoffFor = target;
 
         try
         {

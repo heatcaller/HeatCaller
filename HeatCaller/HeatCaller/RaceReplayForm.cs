@@ -62,6 +62,9 @@ public sealed class RaceReplayForm : Form
     private double _speed = 4;
     private bool _scrubbing;
 
+    // Whether the clock was playing when the scrub began, so release can restart it.
+    private bool _resumeAfterScrub;
+
     /// <summary>One driver, as a sequence of moments they crossed the line.</summary>
     private sealed class Runner
     {
@@ -243,8 +246,32 @@ public sealed class RaceReplayForm : Form
         // Scrubbing has to stop the clock, or the timer keeps writing the
         // position back underneath the drag and the handle fights the hand
         // holding it.
-        _scrub.MouseDown += (_, _) => _scrubbing = true;
-        _scrub.MouseUp += (_, _) => _scrubbing = false;
+        // WHY (20 Oct 2026): this used to set a flag and nothing else, so the
+        // timer kept running under a still hand - the lanes and clock moved
+        // on at 4x and the replay could even reach the end mid-drag. Now the
+        // clock really stops for the length of the scrub and starts again on
+        // release if it was playing. Capture lost without a mouse-up (a
+        // dialog opening mid-drag) ends the scrub too, so it can never stay
+        // stuck on.
+        _scrub.MouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Left || !_scrub.Enabled || _scrubbing)
+            {
+                return;
+            }
+
+            _scrubbing = true;
+            _resumeAfterScrub = _timer.Enabled;
+            _timer.Stop();
+        };
+        _scrub.MouseUp += (_, _) => EndScrub();
+        _scrub.MouseCaptureChanged += (_, _) =>
+        {
+            if (!_scrub.Capture)
+            {
+                EndScrub();
+            }
+        };
         _scrub.ValueChanged += (_, _) =>
         {
             if (!_scrubbing)
@@ -353,6 +380,29 @@ public sealed class RaceReplayForm : Form
         _btnPlay.Text = "Pause";
     }
 
+    /// <summary>Ends a scrub; safe to call twice (MouseUp and the capture change both fire on a normal release).</summary>
+    private void EndScrub()
+    {
+        if (!_scrubbing)
+        {
+            return;
+        }
+
+        _scrubbing = false;
+
+        if (_resumeAfterScrub && _positionMs < _raceLengthMs)
+        {
+            _timer.Start();
+        }
+        else if (_resumeAfterScrub)
+        {
+            // Dragged to the end while playing: nothing left to play.
+            _btnPlay.Text = "Replay";
+        }
+
+        _resumeAfterScrub = false;
+    }
+
     private void Advance()
     {
         _positionMs += (long)(_timer.Interval * _speed);
@@ -394,6 +444,12 @@ public sealed class RaceReplayForm : Form
     {
         if (disposing)
         {
+            // WHY (20 Oct 2026): closing the window mid-drag takes the
+            // slider's capture away as its handle is destroyed, after the
+            // timer below is gone, and EndScrub would start that disposed
+            // timer again. Ending the scrub here first means it can't.
+            _scrubbing = false;
+            _resumeAfterScrub = false;
             _timer.Stop();
             _timer.Dispose();
         }

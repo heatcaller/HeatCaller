@@ -393,7 +393,24 @@ internal sealed class RoomVote
 
             Save();
         }
+
+        // Outside the lock, so a handler can read the vote back - see Closed.
+        Closed?.Invoke();
     }
+
+    /// <summary>
+    /// Raised once when a vote stops taking votes by being closed - by the
+    /// race director (Close) or at its green flag (StartedRace). Not raised
+    /// when nothing was open or it was already closed. Raised on whichever
+    /// thread closed it, outside the lock.
+    ///
+    /// WHY (20 Oct 2026, Bug Hunt 8, #22): the relay goes on taking votes,
+    /// and telling each phone it counted, until the laptop sends it the
+    /// closed ballot - which waited for the next fifteen-second tick.
+    /// MainForm hooks RelayPublisher.WakeRoomVote to this so the closed
+    /// ballot goes up at once.
+    /// </summary>
+    internal event Action? Closed;
 
     /// <summary>
     /// Stops the vote at the green flag of the race it is about.
@@ -424,6 +441,9 @@ internal sealed class RoomVote
 
             Save();
         }
+
+        // Outside the lock, as in Close - see Closed.
+        Closed?.Invoke();
     }
 
     /// <summary>
@@ -553,7 +573,18 @@ internal sealed class RoomVote
     /// Checked here, under the same lock as the cast, so the poll cannot
     /// change between the check and the vote.
     /// </param>
-    internal string? Cast(string? voterId, string? optionId, string? expectedPollId = null)
+    /// <param name="castAtUtc">
+    /// When the vote was actually cast, on this laptop's clock, or null for
+    /// "now". The relay's collector passes when the relay took it.
+    ///
+    /// WHY (20 Oct 2026, Bug Hunt 8, #22): the relay's inbox is read every
+    /// fifteen seconds, so a vote cast in the last seconds before the close
+    /// (often the green flag) was read after it and refused as "closed",
+    /// though the voter's phone had been told it counted. With a stamp the
+    /// vote is judged by whether the poll was open when it was cast: at or
+    /// after it opened, before it closed, and inside LongestOpen.
+    /// </param>
+    internal string? Cast(string? voterId, string? optionId, string? expectedPollId = null, DateTime? castAtUtc = null)
     {
         lock (_gate)
         {
@@ -575,7 +606,11 @@ internal sealed class RoomVote
                 return "That vote was for a race that has gone.";
             }
 
-            if (!Taking)
+            // A stamped vote is never counted once the race has been run:
+            // the verdict may already have been read out.
+            if (castAtUtc is { } at
+                    ? poll.Finished || !(at >= poll.OpenedUtc && (poll.ClosedUtc is null || at < poll.ClosedUtc) && at - poll.OpenedUtc < LongestOpen)
+                    : !Taking)
             {
                 return "Voting on this one has closed.";
             }

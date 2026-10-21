@@ -51,25 +51,57 @@ public sealed partial class AnnouncementService
     /// the call is actually going to the speaker - which is when it counts.
     /// Empty, with nothing to run, for a type nobody can sponsor, a moment
     /// nobody presents, or one the ration is holding back.
+    ///
+    /// WHY (20 Oct 2026, Bug Hunt 8): the ration is reserved here, as the
+    /// line is built, but a routine call (fast lap, lead change, battle) is
+    /// often then dropped or refused by the queue - speaker busy, gap not
+    /// run, muted ghost, post-race quiet. Nothing gave the reservation back,
+    /// so the sponsor lost "Presented by" on every such call for the next
+    /// three minutes over a line nobody heard. It now also hands back a
+    /// Release to run when EnqueueVoiceWork turns the line down; Release
+    /// only undoes this reservation, never a later one or a real mention.
+    /// The result still deconstructs into (Tag, Count) for callers that
+    /// have not picked Release up yet.
     /// </summary>
-    private (string Tag, Action? Count) SponsorTag(AnnouncementEventType type)
+    private SponsorTagResult SponsorTag(AnnouncementEventType type)
     {
         if (SponsoredMoments.ForEvent(type) is not { } moment
             || SponsorOf(moment) is not { } sponsor
-            || !SponsorMentions.TryReserve(moment))
+            || !SponsorMentions.TryReserve(moment, out var stamp, out var previous))
         {
-            return (string.Empty, null);
+            return new SponsorTagResult(string.Empty, null, null);
         }
 
         var tag = SponsoredMoments.Tag(sponsor.Name);
 
         if (tag.Length == 0)
         {
-            return (string.Empty, null);
+            // WHY (20 Oct 2026, Bug Hunt 8): a blank sponsor name says
+            // nothing, so it must not use up the ration either.
+            SponsorMentions.Release(moment, stamp, previous);
+            return new SponsorTagResult(string.Empty, null, null);
         }
 
         var id = sponsor.Id;
-        return (tag, () => SponsorMentions.Mentioned(moment, id));
+        return new SponsorTagResult(tag,
+            () => SponsorMentions.Mentioned(moment, id),
+            () => SponsorMentions.Release(moment, stamp, previous));
+    }
+
+    /// <summary>
+    /// What <see cref="SponsorTag"/> hands back: the tag, what to run once
+    /// the line goes to the speaker (Count), and what to run if the queue
+    /// turns the line down or loses it (Release) so the ration is not spent
+    /// on a line nobody heard. Deconstructs as (Tag, Count) or
+    /// (Tag, Count, Release).
+    /// </summary>
+    private readonly record struct SponsorTagResult(string Tag, Action? Count, Action? Release)
+    {
+        public void Deconstruct(out string tag, out Action? count)
+        {
+            tag = Tag;
+            count = Count;
+        }
     }
 
     /// <summary>
@@ -81,7 +113,8 @@ public sealed partial class AnnouncementService
     /// </summary>
     internal (string Name, Action Count)? TakeSponsor(SponsoredMoment moment)
     {
-        if (SponsorOf(moment) is not { } sponsor || !SponsorMentions.TryReserve(moment))
+        if (SponsorOf(moment) is not { } sponsor
+            || !SponsorMentions.TryReserve(moment, out var stamp, out var previous))
         {
             return null;
         }
@@ -90,6 +123,9 @@ public sealed partial class AnnouncementService
 
         if (name.Length == 0)
         {
+            // WHY (20 Oct 2026, Bug Hunt 8): no name, no mention - give the
+            // ration back rather than spend it on nothing.
+            SponsorMentions.Release(moment, stamp, previous);
             return null;
         }
 

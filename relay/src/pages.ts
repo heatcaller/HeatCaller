@@ -857,6 +857,11 @@ let booting = false;
 // True only while the thirty-second refresh is working, so that a draw
 // nobody asked for can fail without saying so. See fail().
 let quiet = false;
+// WHY (20 Oct 2026): the turn that was current when the refresh began.
+// Only draws the refresh itself starts (a later turn) are hushed; a draw
+// the reader started just before the refresh fired still says when it
+// fails. See fail().
+let quietFrom = 0;
 let typing = 0;
 let lastHtml = '';
 let lastIndex = '';
@@ -1378,7 +1383,7 @@ function paint(mine, html, controls) {
 // stamp in the footer no longer moving is the honest way to say the relay
 // has gone quiet.
 function fail(mine, text) {
-  if (mine !== turn || quiet) return false;
+  if (mine !== turn || (quiet && mine > quietFrom)) return false;
 
   if (lastHtml === '') {
     feed.innerHTML = '<p class="note bad">' + esc(text) + '</p>';
@@ -1945,6 +1950,7 @@ async function boot() {
 // would be worse than one that quietly leaves the stamp where it is.
 async function refresh() {
   quiet = true;
+  quietFrom = turn;
 
   try {
     const meta = await grab('/collection/resultsindex?meta=1').catch(() => null);
@@ -1961,11 +1967,18 @@ async function refresh() {
       return;
     }
 
-    const answer = await grab('/collection/resultsindex/' + encodeURIComponent(year)).catch(() => null);
+    // WHY (20 Oct 2026): the year is kept from before the fetch. A reader
+    // who picked another year while it was on its way used to have this
+    // year's index filed under the one they picked, so that year showed
+    // the wrong racing until the page was reloaded. An answer for a year
+    // no longer on screen is now dropped.
+    const was = year;
+    const answer = await grab('/collection/resultsindex/' + encodeURIComponent(was)).catch(() => null);
 
+    if (year !== was) return;
     if (answer === null || answer.missing || !usable(answer.body.body)) return;
 
-    install(year, answer.body.body);
+    install(was, answer.body.body);
     await draw();
   } finally {
     quiet = false;
@@ -2134,7 +2147,13 @@ window.addEventListener('hashchange', () => {
 
   // Nothing read yet: the boot already under way picks the fragment up
   // when it lands.
-  if (idx !== null) jump();
+  //
+  // WHY (20 Oct 2026): a pasted link is the reader asking too, so it ends
+  // the refresh's silence - see the pager.
+  if (idx !== null) {
+    quiet = false;
+    jump();
+  }
 });
 
 pager.addEventListener('click', (e) => {
@@ -2149,6 +2168,12 @@ pager.addEventListener('click', (e) => {
   else if (button.id === 'older') pageAt += 1;
   else if (button.id === 'newer') pageAt -= 1;
   else return;
+
+  // WHY (20 Oct 2026): a tap is the reader asking, so it ends the
+  // refresh's silence. A tap that failed while a refresh happened to be
+  // running used to say nothing at all. The refresh's own draws are still
+  // discarded once this one bumps turn, so they stay quiet either way.
+  quiet = false;
 
   // Back to the controls, not to the top of the window: the new day
   // starts under the picker that chose it, and the club's logo does not
@@ -2166,15 +2191,22 @@ pager.addEventListener('click', (e) => {
   });
 });
 
-yearPick.addEventListener('change', () => { openYear(yearPick.value); });
+// WHY (20 Oct 2026): each of these is the reader asking, so each ends the
+// refresh's silence - see the pager above.
+yearPick.addEventListener('change', () => {
+  quiet = false;
+  openYear(yearPick.value);
+});
 
 seasonPick.addEventListener('change', () => {
+  quiet = false;
   pageAt = 0;
   shown = STEP;
   draw();
 });
 
 driverPick.addEventListener('change', () => {
+  quiet = false;
   pageAt = 0;
   shown = STEP;
   draw();
@@ -2185,7 +2217,10 @@ driverPick.addEventListener('change', () => {
 find.addEventListener('input', () => {
   clearTimeout(typing);
   shown = STEP;
-  typing = setTimeout(draw, 250);
+  typing = setTimeout(() => {
+    quiet = false;
+    draw();
+  }, 250);
 });
 
 // What the link somebody followed is asking for, read before the first
@@ -2590,6 +2625,7 @@ const STANDINGS_JS = `
 const picker = document.getElementById('season');
 const table = document.getElementById('table');
 let seasons = [];
+let seasonSig = '';
 
 function draw() {
   const season = seasons.find((s) => s.id === picker.value) || seasons[0];
@@ -2637,10 +2673,21 @@ async function load() {
   // One season needs no picker. More than one and the club decides what
   // to look at, because nothing in the app says which is "current".
   picker.style.display = seasons.length > 1 ? '' : 'none';
-  picker.innerHTML = seasons.map((s) => '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>').join('');
 
-  if (seasons.some((s) => s.id === chosen)) {
-    picker.value = chosen;
+  // WHY (20 Oct 2026): the list is only rewritten when the seasons in it
+  // have changed. It used to be rewritten on every poll, and a select
+  // rewritten every thirty seconds closes itself in the hand of whoever
+  // was choosing from it. Unchanged, the options and the choice stay put
+  // and draw() below still picks up the new points.
+  const sig = JSON.stringify(seasons.map((s) => [s.id, s.name]));
+
+  if (sig !== seasonSig) {
+    seasonSig = sig;
+    picker.innerHTML = seasons.map((s) => '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>').join('');
+
+    if (seasons.some((s) => s.id === chosen)) {
+      picker.value = chosen;
+    }
   }
 
   draw();

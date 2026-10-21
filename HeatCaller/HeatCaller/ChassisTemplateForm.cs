@@ -46,8 +46,11 @@ public sealed class ChassisTemplateForm : Form
     private const int ExtrasLeastRows = 3;
 
     /// <summary>What the selected point's card says when no point is selected - the longest thing it says, so the card is made that tall.</summary>
+    // WHY (20 Oct 2026): it used to say "double-click empty space to add one",
+    // but nothing does that - the canvas only acts on a double-click that lands
+    // on a point. It now names the Add Point button, the way that really works.
     private const string NothingSelectedHint =
-        "Nothing selected. Click a dot on the diagram, or double-click empty space to add one.";
+        "Nothing selected. Click a dot on the diagram, or press Add Point to add one.";
 
     private readonly ChassisTemplateStore _store;
     private readonly ChassisTemplate _template;
@@ -172,6 +175,17 @@ public sealed class ChassisTemplateForm : Form
                 // what its buttons act on: left as it was, every row past the
                 // moved field pointed at the field after it, and Remove,
                 // Rename and Edit Field... there hit the wrong one.
+                if (!field.OnDiagram)
+                {
+                    // WHY (20 Oct 2026): unpinned, the field has no dot left,
+                    // but the canvas still held its id - so the card went on
+                    // showing it, typing in Label renamed the extra behind the
+                    // list's back, and Delete Point deleted an extra the user
+                    // could not see. Let go of it the way Add Point does; the
+                    // image path is unchanged, so nothing reloads.
+                    _canvas.SetTemplate(_template, _store.ResolveImagePath(_template));
+                }
+
                 RefreshExtras();
                 SyncSelection();
                 _canvas.Invalidate();

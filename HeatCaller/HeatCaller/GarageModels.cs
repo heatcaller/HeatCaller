@@ -352,7 +352,11 @@ public sealed class ChassisTypeStore
             return;
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+        // WHY (20 Oct 2026): no Directory.CreateDirectory of its own any more.
+        // SafeFile makes the folder and never throws; the unguarded call here
+        // threw out of Save on a PC where the folder can't be made - at
+        // startup too, since Load seeds and saves the default list from the
+        // MainForm field initializer - so HeatCaller couldn't start.
         SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(_types, new JsonSerializerOptions { WriteIndented = true }));
     }
 }
@@ -755,7 +759,10 @@ public sealed class CarStore
             json = JsonSerializer.Serialize(_cars, new JsonSerializerOptions { WriteIndented = true });
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+        // WHY (20 Oct 2026): no Directory.CreateDirectory of its own any more.
+        // SafeFile makes the folder and never throws; the unguarded call here
+        // threw out of a garage edit's UI handler on a PC where the folder
+        // can't be made.
         SafeFile.WriteAllText(FilePath, json);
     }
 }

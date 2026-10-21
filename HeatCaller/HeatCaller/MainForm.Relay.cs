@@ -410,9 +410,16 @@ public partial class MainForm
             return;
         }
 
+        // WHY (20 Oct 2026): this used to check only PinMailer.IsSending. That
+        // goes false before the send that just ended has recorded who it
+        // reached (see _pinMailsUnrecorded), so in that gap every racer it
+        // emailed still looked unemailed and got a second, identical PIN
+        // email. Now it also waits for that result to be recorded; whoever
+        // is still waiting is picked up by the next RunRacerPinsPass.
         if (!_settings.RacerPinsEmailAutomatically
             || !PinMailer.IsConfigured(_settings)
             || PinMailer.IsSending
+            || Volatile.Read(ref _pinMailsUnrecorded) > 0
             || RelayCheckIn.CheckInPageUrl(_settings) is null)
         {
             return;

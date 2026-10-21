@@ -75,6 +75,18 @@ public sealed class SessionResultEntry
     /// <summary>Warnings race control gave this driver during the race, oldest first. Empty on results saved before warnings existed.</summary>
     public List<RaceWarning> Warnings { get; set; } = new();
 
+    /// <summary>
+    /// Penalty race control gave during the race (jump start, penalty
+    /// buttons, warning time), already included in ElapsedMs. Zero on
+    /// results saved before this existed. The result editor never changes it.
+    /// </summary>
+    /// <remarks>
+    /// 20 Oct 2026: kept on its own so best-consecutive-laps qualifying,
+    /// which works from lap times rather than ElapsedMs, can still charge
+    /// the penalty - before this a penalized driver could take pole.
+    /// </remarks>
+    public long RacePenaltyMs { get; set; }
+
     // --- Corrections made after the race was saved ---
     //
     // All four are what the result editor has decided for this driver, as

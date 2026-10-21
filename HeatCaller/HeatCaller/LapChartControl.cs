@@ -339,7 +339,13 @@ public sealed class LapChartControl : UserControl
     private void ChartPanel_Paint(object? sender, PaintEventArgs e) =>
         DrawChart(e.Graphics, _chartPanel.ClientRectangle, ChartPalette.Screen());
 
-    private void DrawChart(Graphics g, Rectangle bounds, ChartPalette palette)
+    // WHY (20 Oct 2026): onScreen says whether this draw is the panel's own
+    // paint. The export preview and the exported bitmap draw through here
+    // too, at their own sizes, and they used to clear and refill _plotted -
+    // so after an export the hover hit-tested the panel's cursor against
+    // the bitmap's coordinates and showed the wrong lap over empty space.
+    // Only the on-screen draw now touches the hover data.
+    private void DrawChart(Graphics g, Rectangle bounds, ChartPalette palette, bool onScreen = true)
     {
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         using (var bg = new SolidBrush(palette.Background))
@@ -375,7 +381,10 @@ public sealed class LapChartControl : UserControl
             // Nothing is plotted, so nothing is left to hover over - the
             // points of the chart that was showing before would otherwise
             // still turn the cursor into a hand over empty space.
-            _plotted.Clear();
+            if (onScreen)
+            {
+                _plotted.Clear();
+            }
             return;
         }
 
@@ -451,7 +460,10 @@ public sealed class LapChartControl : UserControl
 
         // Rebuilt every paint so hover data can never describe a stale
         // chart - only the on-screen render is hit-tested.
-        _plotted.Clear();
+        if (onScreen)
+        {
+            _plotted.Clear();
+        }
 
         // A lap's dot, and the legend's rows, at the text size in use: the
         // legend's names are in the small face, so rows a fixed 18px apart
@@ -487,7 +499,10 @@ public sealed class LapChartControl : UserControl
                 var x = LapX(lap);
                 var y = (float)(plot.Bottom - (driver.LapTimesMs[lap] - lowMs) / range * plot.Height);
                 points.Add(new PointF(x, y));
-                _plotted.Add((new PointF(x, y), driver.DriverName, lap + 1, driver.LapTimesMs[lap], color));
+                if (onScreen)
+                {
+                    _plotted.Add((new PointF(x, y), driver.DriverName, lap + 1, driver.LapTimesMs[lap], color));
+                }
             }
 
             if (points.Count > 1)
@@ -507,7 +522,13 @@ public sealed class LapChartControl : UserControl
             g.DrawString(driver.DriverName, AppTheme.SmallFont, legendBrush, plot.Left + legendTextLeft, legendY);
         }
 
-        DrawHoverReadout(g, bounds, palette);
+        // WHY (20 Oct 2026): the hover point is in the panel's coordinates,
+        // so on the export preview it ringed a spot that had nothing to do
+        // with the smaller chart there. It is an on-screen aid only.
+        if (onScreen)
+        {
+            DrawHoverReadout(g, bounds, palette);
+        }
     }
 
     /// <summary>
@@ -651,7 +672,7 @@ public sealed class LapChartControl : UserControl
             return;
         }
 
-        using var optionsForm = new ChartExportForm(_settings, DrawChart);
+        using var optionsForm = new ChartExportForm(_settings, (g, b, p) => DrawChart(g, b, p, onScreen: false));
         if (optionsForm.ShowDialog(this) != DialogResult.OK)
         {
             return;
@@ -686,12 +707,18 @@ public sealed class LapChartControl : UserControl
             // what a DPI-unaware run always sees, this changes nothing.
             bitmap.SetResolution(96, 96);
 
-            using (var g = Graphics.FromImage(bitmap))
+            // WHY (20 Oct 2026): the hover is put back in a finally, so a
+            // draw that throws no longer leaves the on-screen readout lost.
+            try
             {
-                DrawChart(g, new Rectangle(0, 0, size.Width, size.Height), palette);
+                using var g = Graphics.FromImage(bitmap);
+                DrawChart(g, new Rectangle(0, 0, size.Width, size.Height), palette, onScreen: false);
+            }
+            finally
+            {
+                _hover = savedHover;
             }
 
-            _hover = savedHover;
             bitmap.Save(dialog.FileName, System.Drawing.Imaging.ImageFormat.Png);
 
             AppDialog.Show(this, $"Saved to:\n{dialog.FileName}", "Chart saved", MessageBoxButtons.OK, MessageBoxIcon.Information);

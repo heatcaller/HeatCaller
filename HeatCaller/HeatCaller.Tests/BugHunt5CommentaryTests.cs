@@ -212,10 +212,12 @@ public sealed class BugHunt5CommentaryTests : IDisposable
 
             var text = string.Join(" ", blocks.Select(b => b.Text));
 
-            Assert.Contains("by 0.21s from Bill", text);
+            // WHY (20 Oct 2026): pole is no longer given a fast-lap "margin";
+            // the pole sitter's best lap is the figure that must keep its point.
+            Assert.Contains("best lap of 12.345s", text);
             Assert.Contains("about 5 places", text);
             Assert.Contains("by 0.10s", text);
-            Assert.DoesNotContain("0,21", text);
+            Assert.DoesNotContain("12,345", text);
             Assert.DoesNotContain("0,10", text);
         });
     }

@@ -673,6 +673,15 @@ public static class CommentaryShowFacts
             closed =
                 $"{won} won the race, and not one of the {call.Votes} people who voted had picked them.";
         }
+        else if (call.WinnerShare == 0)
+        {
+            // WHY (20 Oct 2026): NOT ON THE BALLOT, or a share that rounds to
+            // nothing. RoomVote.CallFor will not claim "nobody had them" for a
+            // winner the room was never offered, but the line below used to
+            // say "with 0 per cent of the room's vote" - the same claim in
+            // other words. Now it names the winner and says no more.
+            closed = $"{won} won the race instead.";
+        }
         else
         {
             closed =

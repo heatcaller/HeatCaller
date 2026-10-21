@@ -64,7 +64,16 @@ public sealed class DriverCutTests : IDisposable
             "Heat 1",
             0,
             Row("Bill", 1, new long[] { 10000, 9000, 9000 }, startPosition: 5, lapsLed: 3),
-            Row("Sam", 2, new long[] { 10200, 9100, 9100 }, startPosition: 1)),
+            Row("Sam", 2, new long[] { 10200, 9100, 9100 }, startPosition: 1),
+            // WHY (20 Oct 2026): this heat used to be Bill and Sam alone with
+            // Bill on grid slot 5 - a slot that cannot exist in a two-car
+            // race, which is exactly the stale grid DriverCut now refuses to
+            // build a charge on. Three slower cars on slots 2 to 4 make
+            // "fifth to first, four places" a real one. Not "Zed", whom
+            // A_driver_who_raced_nowhere_tonight_has_no_piece needs absent.
+            Row("Carl", 3, new long[] { 10400, 9300, 9300 }, startPosition: 2),
+            Row("Eve", 4, new long[] { 10500, 9400, 9400 }, startPosition: 3),
+            Row("Hal", 5, new long[] { 10600, 9500, 9500 }, startPosition: 4)),
         Race(
             "a-main",
             "A-Main",

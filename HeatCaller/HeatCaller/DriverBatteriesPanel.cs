@@ -45,6 +45,14 @@ internal sealed class DriverBatteriesPanel : UserControl
     /// <summary>Set while this panel itself is changing the store, so its own Changed does not fill it twice.</summary>
     private bool _changing;
 
+    /// <summary>
+    /// Set when the store changed from somewhere else while this panel's own change was running.
+    /// WHY (20 Oct 2026): a change here can open a dialog, and a pack changed elsewhere meanwhile
+    /// (the phone, check-in, Race Control) was skipped because of _changing - and never shown if
+    /// the dialog was then cancelled. Volatile because Changed can be raised off the UI thread.
+    /// </summary>
+    private volatile bool _missedChange;
+
     /// <summary>Raised after a pack was changed here.</summary>
     public event Action? Changed;
 
@@ -119,8 +127,16 @@ internal sealed class DriverBatteriesPanel : UserControl
 
     private void OnStoreChanged()
     {
-        if (_changing || IsDisposed || !IsHandleCreated)
+        if (IsDisposed || !IsHandleCreated)
         {
+            return;
+        }
+
+        // WHY (20 Oct 2026): remembered rather than dropped, so Change() fills
+        // the panel afterwards even when its own change was cancelled.
+        if (_changing)
+        {
+            _missedChange = true;
             return;
         }
 
@@ -418,6 +434,7 @@ internal sealed class DriverBatteriesPanel : UserControl
     private void Change(Func<bool> change)
     {
         bool changed;
+        _missedChange = false;
         _changing = true;
 
         try
@@ -429,9 +446,17 @@ internal sealed class DriverBatteriesPanel : UserControl
             _changing = false;
         }
 
+        // WHY (20 Oct 2026): filled too when something else changed the store while this
+        // change ran (say, while its dialog was open), even if this change was cancelled.
+        // Changed is still raised only for this panel's own change.
+        if (changed || _missedChange)
+        {
+            _missedChange = false;
+            Fill();
+        }
+
         if (changed)
         {
-            Fill();
             Changed?.Invoke();
         }
     }

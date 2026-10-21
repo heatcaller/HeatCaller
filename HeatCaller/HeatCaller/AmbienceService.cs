@@ -830,15 +830,28 @@ public sealed class AmbienceService : IDisposable
         {
         }
 
+        // WHY (20 Oct 2026, Bug Hunt 8, #31): this used to check the
+        // generation, let go of the lock, then call Stop(). A SetIntensity or
+        // Start on the UI thread in that gap called the fade off and brought
+        // the crowd back, and the Stop() that followed tore it down anyway -
+        // silent ambience for the next race. Now the check and the take are
+        // one step under the lock; the slow device close still runs outside
+        // it, as Stop() does.
+        IWavePlayer? retiredOutput;
+        List<LoopingSampleProvider> retiredLoops;
+
         lock (_lock)
         {
-            if (!_fadingOut || _fadeOutGeneration != generation)
+            if (!_running || !_fadingOut || _fadeOutGeneration != generation)
             {
                 return;
             }
+
+            TakeAudioLocked(out retiredOutput, out retiredLoops);
+            StatusMessage?.Invoke("[ambience] Stopped.");
         }
 
-        Stop();
+        DisposeRetired(retiredOutput, retiredLoops);
     }
 
     /// <summary>Calls off a fade-out in progress, so the crowd comes back up. True if there was one.</summary>
