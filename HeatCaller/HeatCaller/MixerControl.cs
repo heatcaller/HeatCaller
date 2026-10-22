@@ -1203,8 +1203,18 @@ public sealed class MixerControl : UserControl
 
         var started = new List<string>();
 
-        // Ambience, forced past its enabled setting.
+        // Ambience, forced past its enabled setting. A crowd On Air opened and
+        // is holding silent is let go first (22 Oct 2026, bug hunt) - it is
+        // running, so nothing below started it, and it played nothing.
         _ambience.Settings = _ambienceStore.Current;
+        // Closed rather than released, so the preview opens its own and
+        // closes it again when done - released, it was never put back and
+        // played at full level until staging. Staging opens a fresh one.
+        if (_ambience.IsHeld)
+        {
+            _ambience.Stop();
+        }
+
         if (!_ambience.IsRunning)
         {
             _ambience.Start(ignoreEnabledSetting: true);
@@ -1227,7 +1237,9 @@ public sealed class MixerControl : UserControl
             _auditionStartedMusic = _music.IsPlaying;
         }
 
-        if (_music.IsPlaying)
+        // Not listed while paused - music On Air readied and holds paused is
+        // "on" but plays nothing (22 Oct 2026, bug hunt).
+        if (_music.IsPlaying && !_music.IsPaused)
         {
             started.Add("music");
         }

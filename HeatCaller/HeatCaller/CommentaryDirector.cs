@@ -908,8 +908,11 @@ public sealed class CommentaryDirector
         _adBreaksSeen = AdBreak.BreaksEnded;
         _adBreakOwed = false;
 
-        return SalesRead(SponsorPlacement.AdBreaks, SponsorMoment.AfterTheAdvert, gap)
-               ?? SalesRead(SponsorPlacement.Segments, SponsorMoment.BetweenRaces, gap);
+        // Only when the club has reads at the end of an ad break switched on
+        // (22 Oct 2026, bug hunt). Falling back to the between-races
+        // placement read in the break even with that box unticked - the
+        // other box says "outside the commercial break".
+        return SalesRead(SponsorPlacement.AdBreaks, SponsorMoment.AfterTheAdvert, gap);
     }
 
     /// <summary>

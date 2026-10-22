@@ -807,6 +807,11 @@ public partial class MainForm
             {
                 _music.Pause();
             }
+
+            // And the imaging already playing - a jingle, a bumper, a bed
+            // (22 Oct 2026, bug hunt). Not brought back at the unmute: the
+            // moment it was for has gone.
+            BroadcastImaging.StopAll();
         }
         else
         {

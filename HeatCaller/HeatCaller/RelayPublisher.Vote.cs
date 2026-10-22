@@ -210,21 +210,26 @@ public sealed partial class RelayPublisher
     /// name was only the transponder standing in for one. Ghosts left out,
     /// as from every document bound for the relay.
     /// </summary>
-    internal static List<object> RelayBallotDrivers(IEnumerable<VoteOption> options, string pollId, string key)
+    /// <param name="abbreviate">
+    /// The club's "abbreviate names" setting (22 Oct 2026, bug hunt): the
+    /// ballot is a public route like the roster, so it shortens names the
+    /// same way - full names went out on it whatever the club had chosen.
+    /// </param>
+    internal static List<object> RelayBallotDrivers(IEnumerable<VoteOption> options, string pollId, string key, bool abbreviate = false)
     {
+        var real = options.Where(one => !Ghosts.IsGhost(one.Id)).ToList();
+        var names = RelayPublisher.DisplayNames(
+            real.Select(one => RelayDocuments.PublicNameOrUnnamed(one.Name, one.Id)).ToList(),
+            abbreviate);
+
         var drivers = new List<object>();
 
-        foreach (var one in options)
+        for (var i = 0; i < real.Count; i++)
         {
-            if (Ghosts.IsGhost(one.Id))
-            {
-                continue;
-            }
-
             drivers.Add(new
             {
-                id = RelayVoteId(pollId, one.Id, key),
-                name = RelayDocuments.PublicNameOrUnnamed(one.Name, one.Id),
+                id = RelayVoteId(pollId, real[i].Id, key),
+                name = names[i],
             });
         }
 
@@ -531,7 +536,7 @@ public sealed partial class RelayPublisher
 
         if (open)
         {
-            drivers = RelayBallotDrivers(vote.Options, ballot, key);
+            drivers = RelayBallotDrivers(vote.Options, ballot, key, _settings.RelayAbbreviateNames);
         }
 
         // THE RACE IS IN THE FINGERPRINT, so moving to the next race is
@@ -552,7 +557,10 @@ public sealed partial class RelayPublisher
         // ballot has to go up again with the new ones or no vote from the
         // relay would match. A mark made from the key, not the key itself.
         var fingerprint =
-            $"{enabled}|{open}|{raceKey}|{race}|{ballot}|{RelayVoteId(string.Empty, string.Empty, key)}|{string.Join(",", vote.Options.Select(one => one.Id))}";
+            $"{enabled}|{open}|{raceKey}|{race}|{ballot}|{RelayVoteId(string.Empty, string.Empty, key)}|{string.Join(",", vote.Options.Select(one => one.Id))}"
+            // The name setting too (22 Oct 2026, bug hunt), so changing it
+            // puts the ballot up again with the names it asks for.
+            + $"|{_settings.RelayAbbreviateNames}";
 
         if (string.Equals(_ballotAsPublished, fingerprint, StringComparison.Ordinal))
         {

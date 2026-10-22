@@ -185,6 +185,12 @@ export interface MeterUsage {
   readonly allowance: number;
   readonly topUp: number;
   readonly resetsAt: string;
+  /**
+   * False when the club's count could not be read and `used` is a stand-in
+   * 0 (22 Oct 2026, bug hunt) - the app keeps its last real figure rather
+   * than showing a spent month as empty.
+   */
+  readonly known: boolean;
 }
 
 export interface VoiceCatalogueView {
@@ -526,6 +532,7 @@ export class VoiceService {
       allowance: enabled ? plan.monthlyChars + topUp : 0,
       topUp,
       resetsAt: state.usage.resetsAt,
+      known: state.known,
     };
   }
 

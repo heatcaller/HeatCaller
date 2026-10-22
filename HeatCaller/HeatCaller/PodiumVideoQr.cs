@@ -213,7 +213,9 @@ internal sealed class PodiumVideoQr : Control
         }
 
         y += Line(g, "Scan with your phone camera", footFont, muted, inner, y, centre);
-        Line(g, "1st, 2nd & 3rd · kept for a week", footFont, muted, inner, y, centre);
+        // "Up to" (22 Oct 2026, bug hunt): with videos made for the winner
+        // only, only 1st is ever online.
+        Line(g, "Up to 1st, 2nd & 3rd · kept for a week", footFont, muted, inner, y, centre);
     }
 
     private static int Line(Graphics g, string text, Font font, Brush brush, Rectangle inner, int y, StringFormat format)

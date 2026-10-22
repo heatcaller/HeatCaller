@@ -568,7 +568,8 @@ public sealed class SponsorsControl : UserControl
         grid.AddRow("Name, as it's said:", _txtSponsorName);
         grid.AddHint("Spell it the way it should sound - \"and co\" rather than the ampersand on their banner. A voice reads what it is given.");
         grid.AddRow("One-line tagline:", _txtSponsorTagline);
-        grid.AddHint("Heard once, on their first read of the night. Leave it empty if they only bought the full read.");
+        grid.AddHint("Said after every credit for a moment they present (below), and once on their first read of the night. "
+                     + "Leave it empty if they only bought the full read.");
         grid.AddRow("Their read:", _txtSponsorCopy);
         grid.AddHint(_lblCopyLength);
         _cmbSponsorPicture.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -618,8 +619,8 @@ public sealed class SponsorsControl : UserControl
         grid.AddRow("Presents:", _lstSponsorMoments);
         grid.AddHint(
             "Their name rides on these moments of the race - a short credit such as \"That fastest lap is brought to "
-            + "you by\" and their name, as it's said above, on the end of the call (at the top of their segment on "
-            + "the recap show), and on the stream's graphic for it. A moment that happens many times a race "
+            + "you by\" and their name, as it's said above, then their tagline if they have one, on the end of the call "
+            + "(at the top of their segment on the recap show), and on the stream's graphic for it. A moment that happens many times a race "
             + "(fastest laps, lead changes, battles) is named at most once every three minutes so it never turns into "
             + "noise; the introductions, the qualifying recap and the result are named every time. Each mention the "
             + "announcer actually makes goes in tonight's report.");

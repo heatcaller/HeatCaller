@@ -203,7 +203,12 @@ internal sealed class ClubNotesForm : Form
 
         _grid.Rows.Clear();
 
-        var ordered = _notes.All
+        // One read of the list for the rows AND the signature (22 Oct 2026,
+        // bug hunt): two reads let a note that arrived between them into the
+        // signature but not the grid, and the tick then never redrew it.
+        var all = _notes.All.ToList();
+
+        var ordered = all
             .OrderBy(one => one.Approved ? (one.SaidAtUtc is null ? 1 : 2) : 0)
             .ThenBy(one => one.AddedAtUtc)
             .ToList();
@@ -274,7 +279,7 @@ internal sealed class ClubNotesForm : Form
             ? "Nothing for tonight yet."
             : $"{Plural.Of(toApprove, "note")} waiting for you, {toSay} ready to be said, {said} already said.";
 
-        _drawn = Signature();
+        _drawn = Signature(all);
 
         UpdateButtons();
     }
@@ -284,8 +289,10 @@ internal sealed class ClubNotesForm : Form
     /// (a note added, approved, said or removed) from nothing happening.
     /// See _tick.
     /// </summary>
-    private string Signature() =>
-        string.Join("|", _notes.All.Select(one => $"{one.Id}:{one.Approved}:{one.SaidAtUtc is null}"));
+    private string Signature() => Signature(_notes.All);
+
+    private static string Signature(IEnumerable<ClubNote> notes) =>
+        string.Join("|", notes.Select(one => $"{one.Id}:{one.Approved}:{one.SaidAtUtc is null}"));
 
     private ClubNote? Selected()
     {

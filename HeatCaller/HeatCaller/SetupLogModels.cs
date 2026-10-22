@@ -224,10 +224,18 @@ public sealed class SetupLogStore
                     // foreign file with "Values": null or a null entry used
                     // to crash IsLegacy, FilledCount, All and Get. Repaired
                     // in memory only - nothing is saved on load.
-                    list.RemoveAll(e => e is null || string.IsNullOrWhiteSpace(e.Id));
+                    // An entry with no id is given one, not dropped (22 Oct 2026,
+                    // bug hunt): dropped, the next save deleted that setup for
+                    // good. Only a null entry is nothing to keep.
+                    list.RemoveAll(e => e is null);
 
                     foreach (var e in list)
                     {
+                        if (string.IsNullOrWhiteSpace(e.Id))
+                        {
+                            e.Id = Guid.NewGuid().ToString("N");
+                        }
+
                         e.DriverName ??= string.Empty;
                         e.TrackLayoutName ??= string.Empty;
                         e.CarModel ??= string.Empty;

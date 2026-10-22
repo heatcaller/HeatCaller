@@ -120,6 +120,8 @@ export interface BrainUsage {
   readonly allowance: number;
   /** When the count goes back to nothing, ISO-8601. */
   readonly resetsAt: string;
+  /** False when the count could not be read and `used` is a stand-in 0. Absent means known. */
+  readonly known?: boolean;
 }
 
 export interface BrainCatalogueView {
@@ -273,6 +275,7 @@ export class BrainService {
       allowance: enabled ? plan.monthlyLines + topUp : 0,
       topUp,
       resetsAt: read.resetsAt,
+      known: read.known !== false,
     };
   }
 
@@ -450,6 +453,7 @@ export class BrainService {
       used: read === "unreadable" ? 0 : read.used,
       allowance: plan.monthlyLines + (await this.topUpFor(club, month)),
       resetsAt: resetOf(this.now()),
+      ...(read === "unreadable" ? { known: false } : {}),
     };
   }
 

@@ -315,7 +315,12 @@ internal static class RaceDayDeleter
             .ToList();
 
         var badgeCount = achievements.All
-            .Sum(d => d.Unlocked.Count(u => u.SessionId is { } id && sessionIds.Contains(id, StringComparer.Ordinal)));
+            // Only what RemoveForSessions really takes back (22 Oct 2026, bug
+            // hunt): the badges kept with the profile totals were counted,
+            // so the box offered to take back achievements it then kept.
+            .Sum(d => d.Unlocked.Count(u => u.SessionId is { } id
+                && sessionIds.Contains(id, StringComparer.Ordinal)
+                && !AchievementStore.KeptWithTheTotals.Contains(u.Id)));
 
         return new Gathered(day, rounds, sessionIds, sessions, recordTracks, sectorRecordTracks, seasons, badgeCount);
     }

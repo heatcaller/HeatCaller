@@ -1122,7 +1122,8 @@ public sealed class CommentaryControl : UserControl
 
         segments.Add(_chkFlagTechLead, stretch: false, gapBelow: 0);
         segments.Add(Hint(
-            "After a main. The announcer throws down to the co-host in pit lane, who asks the winner's Technical Lead two "
+            // Heats too since 21 Oct (22 Oct 2026, bug hunt).
+            "After a main, and after heats too when \"After heats too\" is ticked on the Cast tab. The announcer throws down to the co-host in pit lane, who asks the winner's Technical Lead two "
             + "questions about the race and the car, then hands back. Name and voice are on the Cast tab. Needs race recaps on."),
             gapBelow: UiLayout.HintGap);
 

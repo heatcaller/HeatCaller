@@ -198,12 +198,6 @@ internal static class StopSetThrow
             return null;
         }
 
-        if (recent is not null && recent.Any(r => Same(r, text)))
-        {
-            notes?.Add("it repeated a recent throw word for word");
-            return null;
-        }
-
         // Never his bare name as the last words (16 Oct 2026, see
         // AnnouncerIntro.IntoStopSet): the last word is the one a voice
         // clips, and a line that stops dead on a name sounds cut off.
@@ -215,6 +209,15 @@ internal static class StopSetThrow
         if (text[^1] is not ('.' or '!' or '?'))
         {
             text += ".";
+        }
+
+        // Compared as it will be said (22 Oct 2026, bug hunt): a throw kept
+        // with " - stay with us." added was never matched by the same line
+        // from the model again, which has not had it added yet.
+        if (recent is not null && recent.Any(r => Same(r, text)))
+        {
+            notes?.Add("it repeated a recent throw word for word");
+            return null;
         }
 
         return text;

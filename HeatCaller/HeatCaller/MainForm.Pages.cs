@@ -1276,7 +1276,7 @@ public partial class MainForm
         // over a real race staged or running, which refuses it in its own
         // words; On Air would otherwise play its jingle over that race
         // first. See RaceControlControl.GoOnAirThenAsync.
-        demoMode.GoOnAirThen = (round, start) =>
+        demoMode.GoOnAirThen = async (round, start) =>
         {
             // The Demo page's own demo: its round when one is picked, or none
             // for a demo of the checked drivers - which also lets go of any
@@ -1287,10 +1287,21 @@ public partial class MainForm
             if (!_race.IsDemoMode && _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
             {
                 start();
-                return Task.CompletedTask;
+            }
+            else
+            {
+                await _raceControlControl.GoOnAirThenAsync(round, start);
             }
 
-            return _raceControlControl.GoOnAirThenAsync(round, start);
+            // A demo that never started lets its round go (22 Oct 2026, bug
+            // hunt), as Run as Demo does below: refused, called off or
+            // refused over a real race, it left the demo's format on Race
+            // Control's chip, Next Up and Edit Format until the next Stage.
+            if (!_race.IsDemoMode)
+            {
+                _raceControlControl.DemoRound = null;
+                _raceControlControl.RefreshFormat();
+            }
         };
 
         // Wired here rather than beside RoundStartRequested above, because

@@ -96,6 +96,13 @@ public sealed class ElevenLabsClient
 
     public async Task<List<VoiceInfo>> GetVoicesAsync(string apiKey, CancellationToken ct = default)
     {
+        // Thirty seconds of its own (22 Oct 2026, bug hunt): the client's
+        // ceiling is now 160 s for long lines, and "Loading voices..." on a
+        // stalled network sat that long with its button off.
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limit.CancelAfter(TimeSpan.FromSeconds(30));
+        ct = limit.Token;
+
         using var request = new HttpRequestMessage(HttpMethod.Get, "v1/voices");
         request.Headers.Add("xi-api-key", apiKey);
 

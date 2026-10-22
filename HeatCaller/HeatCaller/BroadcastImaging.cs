@@ -1530,6 +1530,39 @@ internal static class BroadcastImaging
         return true;
     }
 
+    /// <summary>
+    /// Imaging playing right now, each with how to take it away - see
+    /// StopAll (22 Oct 2026, bug hunt).
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<object, Action> Live = new();
+
+    /// <summary>A piece or bed now playing, and how StopAll takes it away.</summary>
+    internal static void Playing(object piece, Action stop) => Live[piece] = stop;
+
+    /// <summary>A piece or bed that has gone.</summary>
+    internal static void Gone(object piece) => Live.TryRemove(piece, out _);
+
+    /// <summary>
+    /// Takes away every piece and bed still playing - for the mute button
+    /// (22 Oct 2026, bug hunt). Muted was only looked at before a piece
+    /// started, so a jingle or bed already going played on through a mute
+    /// that said everything had stopped.
+    /// </summary>
+    internal static void StopAll()
+    {
+        foreach (var stop in Live.Values.ToList())
+        {
+            try
+            {
+                stop();
+            }
+            catch
+            {
+                // One piece that will not stop must not keep the rest playing.
+            }
+        }
+    }
+
     /// <summary>Whether everything is muted - nothing plays then.</summary>
     internal static bool Muted
     {
@@ -1661,6 +1694,7 @@ internal sealed class ImagingPlay
 
         ShowOnAir.Begin();
         play._nowId = ImagingNow.Started(name ?? what);
+        BroadcastImaging.Playing(play, play.CrossfadeOut);
 
         try
         {
@@ -1724,6 +1758,7 @@ internal sealed class ImagingPlay
     {
         if (Interlocked.Exchange(ref _released, 1) == 0)
         {
+            BroadcastImaging.Gone(this);
             ImagingNow.Ended(_nowId);
             ShowOnAir.End();
         }
@@ -1790,7 +1825,13 @@ internal sealed class ImagingBed
 
         announcer.SpeakingChanged += run._onSpeaking;
 
+        // Already talking when the bed starts (22 Oct 2026, bug hunt):
+        // SpeakingChanged only fires on a change, so a bed started mid-line
+        // came up at full level and stayed there until the voice next stopped.
+        run._speaking = announcer.IsTalking;
+
         ShowOnAir.Begin();
+        BroadcastImaging.Playing(run, run.Finish);
 
         Task playing;
 
@@ -1862,6 +1903,7 @@ internal sealed class ImagingBed
     {
         if (Interlocked.Exchange(ref _released, 1) == 0)
         {
+            BroadcastImaging.Gone(this);
             ShowOnAir.End();
         }
     }

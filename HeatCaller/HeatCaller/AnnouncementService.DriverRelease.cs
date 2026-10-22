@@ -67,9 +67,15 @@ public sealed partial class AnnouncementService
                     // Listeners at home hear the release call too. Held as
                     // raw PCM, so wrapped as a wav first - and only when
                     // something is listening, as that is a copy of the clip.
+                    //
+                    // The caption is raised whatever (22 Oct 2026, bug hunt):
+                    // with listening along off, release calls never reached
+                    // the highlight videos' captions.
+                    NoteHeard(prepared.Text);
+
                     if (SendToListeners is not null && ListenersWanted?.Invoke() == true)
                     {
-                        OfferLineToListeners(prepared.Text, EncodeWav(prepared.Pcm, prepared.Format));
+                        OfferToListenersOnly(prepared.Text, EncodeWav(prepared.Pcm, prepared.Format));
                     }
 
                     await PlayPcmAsync(prepared.Pcm, prepared.Format, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence);

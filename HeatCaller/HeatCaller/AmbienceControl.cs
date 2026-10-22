@@ -1321,6 +1321,17 @@ public sealed class AmbienceControl : UserControl
         }
 
         _pagePreviewMoodBefore = _ambience.CurrentIntensity;
+
+        // A crowd On Air opened and is holding silent: let go, or the preview
+        // plays nothing (22 Oct 2026, bug hunt).
+        // Closed rather than released, so the preview opens its own and
+        // closes it again when done - released, it was never put back and
+        // played at full level until staging. Staging opens a fresh one.
+        if (_ambience.IsHeld)
+        {
+            _ambience.Stop();
+        }
+
         _pagePreviewStartedAmbience = !_ambience.IsRunning;
 
         if (_pagePreviewStartedAmbience)
@@ -1818,6 +1829,16 @@ public sealed class AmbienceLayerForm : Form
             _lblPreviewState.Text = "Set a file above to hear these.";
             _lblPreviewState.ForeColor = AppTheme.TextMuted;
             return;
+        }
+
+        // Held silent by On Air: let go, or this layer's preview is silent
+        // (22 Oct 2026, bug hunt).
+        // Closed rather than released, so the preview opens its own and
+        // closes it again when done - released, it was never put back and
+        // played at full level until staging. Staging opens a fresh one.
+        if (_ambience.IsHeld)
+        {
+            _ambience.Stop();
         }
 
         if (!_ambience.IsRunning)

@@ -1325,7 +1325,48 @@ public partial class AnnouncerControl
     {
         var day = RaceDayId?.Invoke() ?? string.Empty;
 
-        if (day.Length == 0 || _segmentInFlight || ShowFloor.Busy)
+        if (day.Length == 0)
+        {
+            return;
+        }
+
+        director.NewMeeting(day);
+
+        // THE RACE TRACKED HERE TOO (22 Oct 2026, bug hunt), the way the AI
+        // branch tracks it. Paid reads only go out in the gap after a flag
+        // (CommentaryDirector.ReadsBelongHere), and that gap is opened by
+        // RaceFinished - which, with the AI off, was never called, because
+        // nothing here ever told the director a race had started. Not one
+        // read all night, in the gaps or in the commercial break. Before the
+        // busy check below, so a busy floor at the flag cannot skip it.
+        if (_race.State == RaceState.Racing)
+        {
+            if (_race.SessionGeneration != _directorGeneration)
+            {
+                _directorGeneration = _race.SessionGeneration;
+                director.RaceStarted($"{_race.SessionGeneration}@{DateTime.Now.Ticks}", RaceClassName?.Invoke());
+            }
+
+            return;
+        }
+
+        if (_race.State is RaceState.Staging or RaceState.Countdown)
+        {
+            director.RaceComing();
+            return;
+        }
+
+        // The flag - or switched off mid-race, when the director was told
+        // the green and never the flag and would refuse every read for the
+        // rest of the night.
+        if (_directorGeneration >= 0)
+        {
+            _directorGeneration = -1;
+
+            director.RaceFinished();
+        }
+
+        if (_segmentInFlight || ShowFloor.Busy)
         {
             return;
         }
@@ -1333,17 +1374,6 @@ public partial class AnnouncerControl
         if (_race.State is not (RaceState.Idle or RaceState.Finished))
         {
             return;
-        }
-
-        director.NewMeeting(day);
-
-        // Switched off mid-race, the director was told the green and never
-        // the flag, and would refuse every read for the rest of the night.
-        if (_directorGeneration >= 0)
-        {
-            _directorGeneration = -1;
-
-            director.RaceFinished();
         }
 
         // Caught as SpeakNextSegmentAsync catches it: this runs on the

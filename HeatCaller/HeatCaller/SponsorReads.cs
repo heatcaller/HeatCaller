@@ -79,7 +79,8 @@ public sealed record SponsorRead(
     bool IsSalesCopy = false,
     int ResumeAt = 0,
     bool MoreToCome = false,
-    SponsorMoment Moment = SponsorMoment.BetweenRaces);
+    SponsorMoment Moment = SponsorMoment.BetweenRaces,
+    bool Continuation = false);
 
 /// <summary>
 /// Where in the night a read is going, which is all that changes about
@@ -294,9 +295,12 @@ public sealed class SponsorRotation
         // it - in the break the two parts are one advert.
         var lead = $"More from {SpokenName(slot.Name)}. ";
 
+        // Marked as the rest of the same advert (22 Oct 2026, bug hunt): one
+        // advert read in three parts counted as three reads, inflating the
+        // sponsor's report and passing them over for the next breaks.
         return more.Text.StartsWith(lead, StringComparison.Ordinal)
-            ? more with { Text = more.Text[lead.Length..] }
-            : more;
+            ? more with { Text = more.Text[lead.Length..], Continuation = true }
+            : more with { Continuation = true };
     }
 
     /// <summary>
@@ -332,7 +336,12 @@ public sealed class SponsorRotation
             return;
         }
 
-        Said(read.SponsorId);
+        // The rest of an advert already counted moves the copy along, and
+        // counts nothing more.
+        if (!read.Continuation)
+        {
+            Said(read.SponsorId);
+        }
 
         if (!read.IsSalesCopy || string.IsNullOrWhiteSpace(read.SponsorId))
         {

@@ -144,7 +144,12 @@ public sealed partial class AnnouncementService
             Load.NoteOffered();
         }
 
-        var weight = WeightOf(type);
+        // A change of lead is never held for pacing, whatever weight the
+        // Voice page has it at - the pacing dial's own description promises
+        // so (22 Oct 2026, bug hunt). It was only true at the shipped 100.
+        var weight = type == AnnouncementEventType.LeaderChange
+            ? Math.Max(AnnouncerDensity.Commanding, WeightOf(type))
+            : WeightOf(type);
         var gap = AnnouncerDensity.GapSeconds(Stature, Density);
 
         if (_isVoiceSpeaking)

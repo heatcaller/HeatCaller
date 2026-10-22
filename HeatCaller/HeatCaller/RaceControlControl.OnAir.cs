@@ -426,6 +426,33 @@ public sealed partial class RaceControlControl
     /// <summary>Lines a render has been tried for, so a failed one is not tried every two seconds.</summary>
     private readonly HashSet<string> _voiceAheadTried = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The voice the lines in _voicedAhead were rendered in (22 Oct 2026, bug
+    /// hunt). They were matched on their words alone, so a voice or engine
+    /// changed on the Voice tab between races still had the opening go out in
+    /// the old voice. Any change to the voice settings drops them.
+    /// </summary>
+    private string _voicedAheadIn = string.Empty;
+
+    /// <summary>Which voice a render now would be in - see AnnouncementService.CurrentVoiceSignature.</summary>
+    private string VoiceSignature() => _announcer.CurrentVoiceSignature;
+
+    /// <summary>Forgets what was voiced ahead when the voice has changed since. True when it had.</summary>
+    private bool ForgetVoicedAheadIfTheVoiceChanged()
+    {
+        var now = VoiceSignature();
+
+        if (string.Equals(now, _voicedAheadIn, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        _voicedAhead.Clear();
+        _voiceAheadTried.Clear();
+        _voicedAheadIn = now;
+        return true;
+    }
+
     /// <summary>The render under way, if any - one at a time, so it never crowds the voice.</summary>
     private (string Text, Task<AnnouncementService.PreparedSpeech?> Render)? _voicingAhead;
 
@@ -465,6 +492,8 @@ public sealed partial class RaceControlControl
             }
         }
 
+        ForgetVoicedAheadIfTheVoiceChanged();
+
         // What is no longer wanted goes - its words have been replaced or used.
         foreach (var old in _voicedAhead.Keys.Where(k => !wanted.Contains(k)).ToList())
         {
@@ -484,14 +513,14 @@ public sealed partial class RaceControlControl
 
         var render = _announcer.PrepareReminderAsync(next);
         _voicingAhead = (next, render);
-        _ = KeepVoicedAheadAsync(next, render);
+        _ = KeepVoicedAheadAsync(next, render, _voicedAheadIn);
     }
 
-    private async Task KeepVoicedAheadAsync(string text, Task<AnnouncementService.PreparedSpeech?> render)
+    private async Task KeepVoicedAheadAsync(string text, Task<AnnouncementService.PreparedSpeech?> render, string voice)
     {
         try
         {
-            if (await render is { } ready)
+            if (await render is { } ready && string.Equals(voice, VoiceSignature(), StringComparison.Ordinal))
             {
                 _voicedAhead[text] = ready;
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] Voiced part of the next opening ahead - On Air will have less to wait for.");
@@ -515,13 +544,16 @@ public sealed partial class RaceControlControl
     /// </summary>
     private async Task<AnnouncementService.PreparedSpeech?> VoiceForOnAirAsync(string text)
     {
+        // Never a take in a voice that has since been changed.
+        var voiceChanged = ForgetVoicedAheadIfTheVoiceChanged();
+
         if (_voicedAhead.Remove(text, out var ready))
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - that line was voiced ahead.");
             return ready;
         }
 
-        if (_voicingAhead is { } inFlight && string.Equals(inFlight.Text, text, StringComparison.Ordinal))
+        if (!voiceChanged && _voicingAhead is { } inFlight && string.Equals(inFlight.Text, text, StringComparison.Ordinal))
         {
             try
             {
@@ -758,6 +790,16 @@ public sealed partial class RaceControlControl
         // the token on the thread that is changing the race.
         Action<RaceState> onRaceMoved = state =>
         {
+            // A demo already running, moving itself on, is not a reason to
+            // call off the demo this run is opening (22 Oct 2026, bug hunt):
+            // its simulator stages and goes green by itself, and the new demo
+            // was silently dropped. A real Stage, Countdown or Green is caught
+            // by SkipOnAirToTheDemo, and Reset by CancelAutoStart.
+            if (_onAirForDemo && _race.IsDemoMode)
+            {
+                return;
+            }
+
             if (state is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
             {
                 try
@@ -995,6 +1037,13 @@ public sealed partial class RaceControlControl
             // Pressed again stages now; anything else moved the race on
             // itself and staging is not ours to do.
             stage = _onAirStageNow;
+
+            // Said (22 Oct 2026, bug hunt): a call-off used to be silent, so
+            // a jingle fading into nothing left nothing in the log to say why.
+            if (!stage)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air called off - the race was moved on (Reset, a flag or Stage) before the opening finished.");
+            }
         }
         catch (Exception ex)
         {
@@ -1189,9 +1238,21 @@ public sealed partial class RaceControlControl
                 return null;
             }
 
+            // THE DRIVER INTRODUCTIONS, written alongside the intro rather
+            // than after it (18 Oct 2026), so they are rendered with the
+            // opening and follow it with no wait. Started here, on the UI
+            // thread where their facts are read, and awaited below.
+            //
+            // BEFORE THE RACE-INTRO SWITCHES (22 Oct 2026, bug hunt): Stage
+            // no longer says them, so On Air is the only place they go out -
+            // and with race intros off, kept for mains, or no intro back in
+            // time, they were never started or were thrown away. They have
+            // a switch of their own.
+            var introductions = IntroductionsForOpeningAsync(round, ct);
+
             if (!_settings.CommentaryRaceIntros)
             {
-                return await PitLaneOnlyAsync(round, ct);
+                return await PitLaneOnlyAsync(round, introductions, ct);
             }
 
             if (_settings.CommentaryIntrosMainsOrRivalriesOnly
@@ -1202,16 +1263,10 @@ public sealed partial class RaceControlControl
                     $"{AppTime.LogStampNow()}  [imaging] No opening for {round.RoundLabel} - intros are set to mains and rivalries only, "
                     + "and this race is neither.");
 
-                return await PitLaneOnlyAsync(round, ct);
+                return await PitLaneOnlyAsync(round, introductions, ct);
             }
 
             var (clubNight, form, stake, scene) = ReadIntroFacts(round);
-
-            // THE DRIVER INTRODUCTIONS, written alongside the intro rather
-            // than after it (18 Oct 2026), so they are rendered with the
-            // opening and follow it with no wait. Started here, on the UI
-            // thread where their facts are read, and awaited below.
-            var introductions = IntroductionsForOpeningAsync(round, ct);
 
             // And the Team Principal (18 Oct 2026), after the introductions
             // (20 Oct 2026) - written alongside both, and rendered as it
@@ -1259,7 +1314,7 @@ public sealed partial class RaceControlControl
 
                 // The pit lane already being written still goes out before
                 // staging (18 Oct 2026) - see OpeningRun.Text.
-                return await PitLaneFrom(principalJob, principal);
+                return await PitLaneFrom(principalJob, principal, introductions);
             }
 
             // Never longer than their own budget, which runs from when they
@@ -1313,24 +1368,43 @@ public sealed partial class RaceControlControl
     /// does after an opening. Null when no Team Principal is due. On the UI
     /// thread up to the model call.
     /// </summary>
-    private async Task<OpeningRun?> PitLaneOnlyAsync(RoundDefinition round, CancellationToken ct)
+    private async Task<OpeningRun?> PitLaneOnlyAsync(
+        RoundDefinition round, Task<(string Text, Action? Count)?> introductions, CancellationToken ct)
     {
         var job = PreparePrincipal(round);
 
-        if (job is null)
-        {
-            return null;
-        }
-
-        return await PitLaneFrom(job, Task.Run(() => WritePrincipalLinesAsync(job, ct)));
+        return await PitLaneFrom(
+            job,
+            job is null ? Task.FromResult<List<SpokenLine>?>(null) : Task.Run(() => WritePrincipalLinesAsync(job, ct)),
+            introductions);
     }
 
     /// <summary>An <see cref="OpeningRun"/> carrying the pit lane alone, once its lines are written - null when none was due.</summary>
-    private async Task<OpeningRun?> PitLaneFrom(PrincipalJob? job, Task<List<SpokenLine>?> writing)
+    private async Task<OpeningRun?> PitLaneFrom(
+        PrincipalJob? job, Task<List<SpokenLine>?> writing, Task<(string Text, Action? Count)?>? introductions = null)
     {
+        // The introductions, with no opening in front of them (22 Oct 2026,
+        // bug hunt) - see WriteOpeningAsync.
+        (string Text, Action? Count)? withIntroductions = null;
+
+        try
+        {
+            withIntroductions = introductions is null ? null : await introductions;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Driver introductions skipped - {ex.Message}");
+        }
+
         if (job is null)
         {
-            return null;
+            if (withIntroductions is null)
+            {
+                return null;
+            }
+
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] No opening for this race - the driver introductions go out after the jingle, before staging.");
+            return new OpeningRun(null, null, withIntroductions, null);
         }
 
         List<SpokenLine>? lines = null;
@@ -1349,7 +1423,7 @@ public sealed partial class RaceControlControl
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] No opening for this race - the throw to pit lane goes out after the jingle, before staging.");
         }
 
-        return new OpeningRun(null, null, null, lines is { Count: > 0 } ? (lines, job.Focus) : null, PrincipalTried: true);
+        return new OpeningRun(null, null, withIntroductions, lines is { Count: > 0 } ? (lines, job.Focus) : null, PrincipalTried: true);
     }
 }
 

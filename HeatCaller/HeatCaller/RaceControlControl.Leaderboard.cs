@@ -666,14 +666,22 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        // A double-click on the drawer is two quick presses of its buttons,
-        // not a request for the laps.
-        if (IsDrawerRow(e.RowIndex))
+        // The driver the double-click is for (22 Oct 2026, bug hunt). The
+        // first click slides drawers open and shut, which moves the rows -
+        // a driver below an open drawer moves up under the pointer, and
+        // the second click lands on their own new drawer. So the driver of
+        // the first click, when it was just now, is the one asked for.
+        var recent = _lastClickTransponder is { Length: > 0 }
+            && Environment.TickCount64 - _lastClickTicks <= SystemInformation.DoubleClickTime * 2L;
+
+        // Otherwise a double-click on the drawer is two quick presses of its
+        // buttons, not a request for the laps.
+        if (IsDrawerRow(e.RowIndex) && !recent)
         {
             return;
         }
 
-        var transponder = TransponderForRow(e.RowIndex);
+        var transponder = recent ? _lastClickTransponder : TransponderForRow(e.RowIndex);
 
         if (string.IsNullOrEmpty(transponder))
         {
@@ -696,7 +704,8 @@ public sealed partial class RaceControlControl
 
         if (!drawerChanged)
         {
-            ToggleLapPopup(transponder, e.RowIndex);
+            // Under the driver's own row, which may not be the row clicked.
+            ToggleLapPopup(transponder, DriverRowIndex(transponder));
             return;
         }
 
@@ -758,7 +767,7 @@ public sealed partial class RaceControlControl
         if (HighlightVideo.LatestFor(transponder) is not { } path)
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [video] No highlight video for {name} yet. They are made a minute "
-                + "or so after the race, for the drivers chosen on Sounds > Recording (the winner, unless that was changed).");
+                + "or so after the race, for the drivers chosen on Sounds > Recording (every driver, unless that was changed).");
             return;
         }
 
@@ -1212,8 +1221,17 @@ public sealed partial class RaceControlControl
                 }
             }
 
-            TextRenderer.DrawText(g, caption, AppTheme.BoldFont, bounds, ink,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+            // Only once the button is all the way inside the row (22 Oct
+            // 2026). TextRenderer draws through GDI and does not keep to the
+            // clip set above, so mid-slide the captions of a half-open drawer
+            // were drawn over the driver's own row - "+1 Lap", "Warning",
+            // "Clear Penalties" printed across the name and the lap times -
+            // and stayed there until something repainted that row.
+            if (row.Contains(bounds))
+            {
+                TextRenderer.DrawText(g, caption, AppTheme.BoldFont, bounds, ink,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+            }
         }
 
         // The clip and the smoothing both back as they were.
@@ -1299,6 +1317,15 @@ public sealed partial class RaceControlControl
 
         if (IsDrawerRow(e.RowIndex))
         {
+            // The second click of a double-click on a driver, landed on a
+            // drawer that slid under the pointer (22 Oct 2026, bug hunt): not
+            // a press of whatever correction button is there now.
+            if (_lastClickTransponder is { Length: > 0 }
+                && Environment.TickCount64 - _lastClickTicks <= SystemInformation.DoubleClickTime)
+            {
+                return;
+            }
+
             // The click's point is the cell's; the buttons are laid out
             // across the grid.
             var cell = _dgvLeaderboard.GetCellDisplayRectangle(Math.Max(0, e.ColumnIndex), e.RowIndex, cutOverflow: false);

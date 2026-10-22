@@ -80,6 +80,19 @@ public sealed partial class AnnouncementService
         // listening from home: this is the one point where a line is
         // definitely about to be heard, which is exactly when a highlight
         // video's caption should start. See RaceAudioRecorder.NoteLine.
+        NoteHeard(text);
+
+        OfferToListenersOnly(text, audio);
+    }
+
+    /// <summary>
+    /// Raises <see cref="LineHeard"/> for a line about to be heard - on its
+    /// own (22 Oct 2026, bug hunt), so a path that only offers a line to
+    /// listeners when someone is listening (the driver release calls) still
+    /// gives the videos their caption.
+    /// </summary>
+    private void NoteHeard(string text)
+    {
         if (LineHeard is { } heard)
         {
             try
@@ -96,7 +109,11 @@ public sealed partial class AnnouncementService
                 // A caption is never worth a line of the broadcast.
             }
         }
+    }
 
+    /// <summary>The listeners' half of <see cref="OfferLineToListeners"/>, without the caption.</summary>
+    private void OfferToListenersOnly(string text, byte[]? audio)
+    {
         if (SendToListeners is null || audio is null || audio.Length == 0)
         {
             return;

@@ -488,8 +488,11 @@ internal sealed class RaceAudioStore
             {
                 var extension = System.IO.Path.GetExtension(file);
 
+                // .mp4 too (22 Oct 2026, bug hunt): the highlight videos
+                // live here as well, and were left behind for good.
                 if (string.Equals(extension, ".mp3", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(extension, ".wav", StringComparison.OrdinalIgnoreCase))
+                    || string.Equals(extension, ".wav", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(extension, ".mp4", StringComparison.OrdinalIgnoreCase))
                 {
                     File.Delete(file);
                 }
@@ -512,7 +515,10 @@ internal sealed class RaceAudioStore
 
         var marker = System.IO.Path.Combine(nightFolder, NightMarkerFileName);
 
-        if (File.Exists(marker))
+        // Only once the Highlights folder has gone (22 Oct 2026, bug hunt):
+        // with the marker taken while anything of ours was left there, the
+        // folder stopped counting as a night and was never tried again.
+        if (File.Exists(marker) && !Directory.Exists(highlights))
         {
             File.Delete(marker);
         }

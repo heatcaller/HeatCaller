@@ -296,7 +296,14 @@ internal sealed class SponsorVideoSurface : IDisposable
             // deadlocks. So the only thing either does is hand the fact
             // over, and the Big Screen marshals it (see Finished).
             _player.EndReached += (_, _) => Finished?.Invoke();
-            _player.EncounteredError += (_, _) => Finished?.Invoke();
+            // Failed first, then Finished (22 Oct 2026, bug hunt): the Big
+            // Screen only needs to know it is over; the preview needs to
+            // know it broke, rather than telling the club it played fine.
+            _player.EncounteredError += (_, _) =>
+            {
+                Failed?.Invoke();
+                Finished?.Invoke();
+            };
         }
         catch (Exception ex)
         {
@@ -320,6 +327,12 @@ internal sealed class SponsorVideoSurface : IDisposable
     /// LibVLC thread - a handler that touches a form must marshal.
     /// </summary>
     internal event Action? Finished;
+
+    /// <summary>
+    /// The video failed part way through - raised just before Finished, on
+    /// a LibVLC thread (22 Oct 2026, bug hunt).
+    /// </summary>
+    internal event Action? Failed;
 
     /// <summary>
     /// Starts a video, with or without its own sound. False when it

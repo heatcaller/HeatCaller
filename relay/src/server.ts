@@ -984,6 +984,8 @@ export class Relay {
   private readonly videoReads: Limiter;
   /** One laptop sending the podium's videos: three a race. */
   private readonly videoUploads: Limiter;
+  /** Uploads being read right now, across every club. */
+  private videoUploadsInFlight = 0;
   private readonly brain: BrainService | undefined;
   private readonly topUpRequests: TopUpRequests | undefined;
   private readonly listings = new Map<string, Buffer>();
@@ -3955,6 +3957,7 @@ export class Relay {
       allowance: 0,
       topUp: 0,
       resetsAt: null,
+      known: true,
     });
 
     const club = tenant.club;
@@ -5738,6 +5741,15 @@ export class Relay {
       return;
     }
 
+    // Never more than two uploads held in memory at once, across every
+    // club (22 Oct 2026, bug hunt): each can be 48 MB, and the limiter
+    // below counts starts, not uploads still arriving.
+    if (this.videoUploadsInFlight >= 2) {
+      await discardRest(request, response);
+      sendJson(response, 429, { ok: false, error: "Busy with other videos. Try again in a minute." });
+      return;
+    }
+
     if (this.videoUploads.blocked(club)) {
       await discardRest(request, response);
       sendJson(response, 429, { ok: false, error: "Too many videos at once. Try again in a minute." });
@@ -5772,7 +5784,14 @@ export class Relay {
       return;
     }
 
-    const bytes = await readRawBody(request, response, VIDEO_MAX_BYTES);
+    this.videoUploadsInFlight += 1;
+    let bytes: Buffer | "too-big" | "unreadable";
+
+    try {
+      bytes = await readRawBody(request, response, VIDEO_MAX_BYTES);
+    } finally {
+      this.videoUploadsInFlight -= 1;
+    }
 
     if (bytes === "too-big") {
       sendJson(response, 413, { ok: false, error: "That video is too big." });
@@ -5947,12 +5966,28 @@ export class Relay {
         break;
       }
 
-      if (!response.write(piece)) {
-        await new Promise<void>((resolve) => response.once("drain", () => resolve()));
-      }
-
       if (response.destroyed) {
         return;
+      }
+
+      // Woken by "close" as well as "drain" (22 Oct 2026, bug hunt): a
+      // phone that drops the connection never drains, and the handler -
+      // with its megabyte - waited for ever.
+      if (!response.write(piece)) {
+        await new Promise<void>((resolve) => {
+          const done = (): void => {
+            response.off("drain", done);
+            response.off("close", done);
+            resolve();
+          };
+
+          response.on("drain", done);
+          response.on("close", done);
+        });
+
+        if (response.destroyed) {
+          return;
+        }
       }
     }
 

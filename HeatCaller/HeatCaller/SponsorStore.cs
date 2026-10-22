@@ -74,7 +74,25 @@ public sealed class SponsorStore
                         sponsor.Presents ??= new List<string>();
                     }
 
-                    return new SponsorStore(loaded);
+                    var store = new SponsorStore(loaded);
+
+                    // Once (22 Oct 2026, bug hunt) - see SegmentsDefaultReviewed.
+                    if (!loaded.SegmentsDefaultReviewed)
+                    {
+                        loaded.ReadDuringSegments = false;
+                        loaded.SegmentsDefaultReviewed = true;
+
+                        try
+                        {
+                            store.Save();
+                        }
+                        catch
+                        {
+                            // Applied in memory either way; the next save keeps it.
+                        }
+                    }
+
+                    return store;
                 }
             }
         }
@@ -86,7 +104,8 @@ public sealed class SponsorStore
             unreadable = SafeFile.HoldWritesAfterUnreadable(FilePath, ex);
         }
 
-        return new SponsorStore(new SponsorSettings()) { LoadedUnreadable = unreadable };
+        // A new file starts on the new default and needs no review.
+        return new SponsorStore(new SponsorSettings { SegmentsDefaultReviewed = true }) { LoadedUnreadable = unreadable };
     }
 
     /// <summary>
@@ -612,7 +631,13 @@ public sealed class SponsorBooking
     /// </summary>
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>One short line, where they gave one. Heard on their first read of the night only.</summary>
+    /// <summary>
+    /// One short line, where they gave one. Heard on their first read of
+    /// the night, and - since 21 Oct 2026 - after every credit for a moment
+    /// they present (SponsoredMoments.Tag, .Credit and .LeadIn), which is
+    /// rationed already and is the sponsor's name riding on the race rather
+    /// than an advert.
+    /// </summary>
     public string Tagline { get; set; } = string.Empty;
 
     /// <summary>
@@ -741,4 +766,14 @@ public sealed class SponsorSettings
     /// stands.
     /// </summary>
     public bool ReadDuringSegments { get; set; }
+
+    /// <summary>
+    /// Set once the switch to "off by default" above has been applied to
+    /// this file (22 Oct 2026, bug hunt). Every file saved before then holds
+    /// ReadDuringSegments = true - the old default, written by every save,
+    /// not a choice anybody made - so the change never reached a club that
+    /// already had a sponsors file. Absent (false) on those files: Load
+    /// turns the reads between races off once, then sets this.
+    /// </summary>
+    public bool SegmentsDefaultReviewed { get; set; }
 }

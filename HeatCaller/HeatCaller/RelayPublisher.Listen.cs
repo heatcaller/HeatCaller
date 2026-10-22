@@ -199,9 +199,12 @@ public sealed partial class RelayPublisher
                 return;
             }
 
+            // Nothing to send is not the relay working again (22 Oct 2026,
+            // bug hunt): stale lines leave the queue empty while the relay
+            // is still down, and this logged "working again" between every
+            // failure. Cleared only by a line that is actually sent.
             if (Listening.Take(DateTime.UtcNow) is not { } line)
             {
-                ListenTrouble(null);
                 return;
             }
 

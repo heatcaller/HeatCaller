@@ -528,7 +528,8 @@ public sealed class CastControl : UserControl
 
         coHost.Add(Hint(
             "A second commentator who answers the announcer in the segments marked as a two-hander on the AI "
-            + "Commentary tab. Grayed out while every one of those segments is switched off."));
+            + "Commentary tab, and asks the questions in the Technical Lead's and the Team Principal's interviews. "
+            + "Grayed out while every one of those is switched off."));
         coHost.Add(_chkCoHost, stretch: false);
         coHost.Add(coHostGrid, gapBelow: 0);
 
@@ -850,7 +851,14 @@ public sealed class CastControl : UserControl
         // switched off on AI Commentary as well as when commentary is. Read
         // from the saved switches, which that page writes as each box is
         // ticked - see CommentaryControl.AnyTwoHanderSwitchedOn.
-        var anyExchange = CommentaryControl.AnyTwoHanderSwitchedOn(_settings);
+        //
+        // And the interviews (22 Oct 2026, bug hunt): since 18 Oct the
+        // co-host asks the Technical Lead's questions at the flag and the
+        // Team Principal's before a race and in the booth, so with any of
+        // those on the co-host is in use even with no two-hander ticked.
+        var anyExchange = CommentaryControl.AnyTwoHanderSwitchedOn(_settings)
+            || (on && _chkPrincipalBefore.Checked)
+            || (summariesOn && (_chkInterview.Checked || _chkPrincipalAfter.Checked));
 
         _chkCoHost.Enabled = on && anyExchange;
 

@@ -190,7 +190,8 @@ public static partial class CommentaryReaders
             warnings,
             pace.Count > 0,
             pace.Count > 0 ? pace.Average(row => row.ConsistencyPercent) : 0,
-            pace.Sum(row => row.PotentialGainMs));
+            pace.Sum(row => row.PotentialGainMs),
+            profiles.Get(who)?.Pronouns ?? string.Empty);
 
         return (night, TheRival(who, name, theirs, wanted, profiles, history, rounds));
     }

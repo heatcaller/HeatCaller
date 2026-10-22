@@ -487,13 +487,23 @@ public static class UiLayout
     {
         button.Text = AppTheme.Caption(button.Text);
 
+        return new Size(TightButtonWidthFor(button.Text), HeightFor(button.Text));
+    }
+
+    /// <summary>
+    /// How wide <see cref="TightButtonSizeFor(Button)"/> makes a button for
+    /// <paramref name="caption"/> - for a button that has to be held at the
+    /// width of a caption it is not showing yet (On Air, 21 Oct 2026).
+    /// </summary>
+    public static int TightButtonWidthFor(string caption)
+    {
         var text = TextRenderer.MeasureText(
-            button.Text,
+            AppTheme.Caption(caption),
             ButtonFont,
             new Size(int.MaxValue, int.MaxValue),
             TextFormatFlags.SingleLine);
 
-        return new Size(text.Width + TightButtonPaddingX * 2, HeightFor(button.Text));
+        return text.Width + TightButtonPaddingX * 2;
     }
 
     /// <summary>

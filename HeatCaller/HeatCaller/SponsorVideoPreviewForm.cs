@@ -155,6 +155,7 @@ internal sealed class SponsorVideoPreviewForm : Form
             _surface.View.BringToFront();
 
             // Arrives on a LibVLC thread - only hand the fact over here.
+            _surface.Failed += () => _failed = true;
             _surface.Finished += () => SafeInvoke(OnFinished);
         }
 
@@ -175,6 +176,7 @@ internal sealed class SponsorVideoPreviewForm : Form
         }
 
         _surface.Stop();
+        _failed = false;
 
         if (!_surface.Play(_path, withSound: true))
         {
@@ -201,6 +203,9 @@ internal sealed class SponsorVideoPreviewForm : Form
         _btnPause.Text = _surface.TogglePause() ? "Resume" : "Pause";
     }
 
+    /// <summary>Set from the player's own thread when the video failed part way through.</summary>
+    private volatile bool _failed;
+
     private void OnFinished()
     {
         _btnPause.Text = "Pause";
@@ -212,7 +217,12 @@ internal sealed class SponsorVideoPreviewForm : Form
             _surface.View.Visible = false;
         }
 
-        ShowStatus("End of video.\n\nThat is how it will look on the Big Screen. Press Play From Start to watch it again.");
+        // A video that broke part way through says so (22 Oct 2026, bug
+        // hunt) - it used to say it had played fine.
+        ShowStatus(_failed
+            ? "The video player hit an error part way through this file. It may be damaged, or in a format the player "
+              + "doesn't read. Try exporting it again as an MP4 (H.264)."
+            : "End of video.\n\nThat is how it will look on the Big Screen. Press Play From Start to watch it again.");
         _btnReplay.Focus();
     }
 

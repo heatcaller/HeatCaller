@@ -253,8 +253,30 @@ internal static class SponsoredMoments
     /// sponsored segments sounded on the night. A broadcaster's credit is a
     /// sentence about the moment it follows, said brightly - so each moment
     /// has a few of them, dealt in turn, each with its own delivery.
+    ///
+    /// AND THEIR TAGLINE AFTER IT (21 Oct 2026), where they gave one - see
+    /// <see cref="SaidTagline"/>.
     /// </summary>
-    public static string Tag(SponsoredMoment moment, string sponsorName)
+    public static string Tag(SponsoredMoment moment, string sponsorName, string? tagline = null)
+    {
+        var credit = Credit(moment, sponsorName, tagline);
+
+        return credit.Length == 0 ? string.Empty : $" {CreditDelivery} {credit}";
+    }
+
+    /// <summary>
+    /// The sponsor's credit for the END of what was just said, with no
+    /// delivery tag - "That battle is brought to you by Joe's Hobby Shop!
+    /// Everything you need to go faster." - and their tagline after it
+    /// where they gave one. Empty for a blank name. A null moment - a
+    /// segment no moment covers - gets a credit that fits anything.
+    ///
+    /// Written by HeatCaller, never by the model (21 Oct 2026): the model
+    /// used to be asked to end a segment with the credit, and a model asked
+    /// to say a sponsor's tagline says something LIKE it. A tagline is the
+    /// sponsor's own words and is only worth anything said exactly.
+    /// </summary>
+    public static string Credit(SponsoredMoment? moment, string? sponsorName, string? tagline = null)
     {
         var name = SaidName(sponsorName);
 
@@ -263,9 +285,65 @@ internal static class SponsoredMoments
             return string.Empty;
         }
 
-        var line = TemplateBag.Pick(CreditLines(moment)).Replace("{sponsor}", name, StringComparison.Ordinal);
+        var line = TemplateBag.Pick(moment is { } known ? CreditLines(known) : OtherCredits)
+            .Replace("{sponsor}", name, StringComparison.Ordinal);
 
-        return $" {CreditDelivery} {line}";
+        return WithTagline(line, tagline);
+    }
+
+    /// <summary>
+    /// A sponsor's tagline as it is said after their credit (21 Oct 2026):
+    /// the one line the club typed for them on the Sponsors page, cleaned
+    /// the way every typed field is - one line, no brackets, so a tagline
+    /// can never pass for a delivery tag - and held to the length the box
+    /// is (SponsorRotation.MaxTaglineChars). A tagline with no ending of
+    /// its own gets a full stop, so the next sentence does not run on from
+    /// it. Empty for none.
+    /// </summary>
+    public static string SaidTagline(string? tagline)
+    {
+        var line = CommentaryService.Field(tagline, SponsorRotation.MaxTaglineChars);
+
+        if (line.Length > 0 && char.IsLetterOrDigit(line[^1]))
+        {
+            line += ".";
+        }
+
+        return line;
+    }
+
+    /// <summary><paramref name="credit"/> with the tagline after it, or the credit alone when there is none.</summary>
+    private static string WithTagline(string credit, string? tagline)
+    {
+        var said = SaidTagline(tagline);
+
+        return said.Length == 0 ? credit : credit + " " + said;
+    }
+
+    /// <summary>
+    /// The tagline of the sponsor credited by <paramref name="sponsorName"/>:
+    /// the first sponsor in tonight's rotation with that name, as
+    /// <see cref="SponsorFor"/> finds who presents a moment, compared the
+    /// way the name is said. Null for none, or for a sponsor who gave no
+    /// tagline.
+    ///
+    /// By NAME because a line the AI commentary writes is handed the name
+    /// and nothing else (CommentaryService.SponsorTagline).
+    /// </summary>
+    public static string? TaglineOf(IEnumerable<SponsorBooking>? sponsors, string? sponsorName)
+    {
+        var name = SaidName(sponsorName);
+
+        if (sponsors is null || name.Length == 0)
+        {
+            return null;
+        }
+
+        var sponsor = sponsors.FirstOrDefault(s =>
+            s is { Enabled: true }
+            && string.Equals(SaidName(s.Name), name, StringComparison.OrdinalIgnoreCase));
+
+        return string.IsNullOrWhiteSpace(sponsor?.Tagline) ? null : sponsor!.Tagline;
     }
 
     /// <summary>
@@ -371,15 +449,16 @@ internal static class SponsoredMoments
     /// "This race recap is brought to you by Joe's Hobby Shop!" - with no
     /// delivery tag: written segments are tagged sentence by sentence at
     /// speaking time (CommentaryService.Tagged), and this is one of their
-    /// sentences. Empty for a blank name.
+    /// sentences. Their tagline after it, where they gave one (21 Oct
+    /// 2026). Empty for a blank name.
     /// </summary>
-    public static string LeadIn(SponsoredMoment? moment, string sponsorName)
+    public static string LeadIn(SponsoredMoment? moment, string sponsorName, string? tagline = null)
     {
         var name = SaidName(sponsorName);
 
         return name.Length == 0
             ? string.Empty
-            : TemplateBag.Pick(LeadInLines(moment)).Replace("{sponsor}", name, StringComparison.Ordinal);
+            : WithTagline(TemplateBag.Pick(LeadInLines(moment)).Replace("{sponsor}", name, StringComparison.Ordinal), tagline);
     }
 
     /// <summary>
@@ -424,26 +503,6 @@ internal static class SponsoredMoments
         }
 
         return credited;
-    }
-
-    /// <summary>
-    /// Two ways the credit for <paramref name="moment"/> could go, written
-    /// out with the name for the AI commentary to model its own on:
-    /// "\"Your driver introductions tonight are brought to you by Joe's
-    /// Hobby Shop!\" or \"The driver introductions are presented by Joe's
-    /// Hobby Shop!\"". Always the first two, so the prompt stays the same
-    /// from one race to the next; the model varies the words itself. A
-    /// null moment - a segment no moment covers - gets a credit that fits
-    /// anything.
-    /// </summary>
-    public static string CreditExamples(SponsoredMoment? moment, string sponsorName)
-    {
-        var name = SaidName(sponsorName);
-        var lines = (moment is { } known ? CreditLines(known) : OtherCredits)
-            .Take(2)
-            .Select(line => "\"" + line.Replace("{sponsor}", name, StringComparison.Ordinal) + "\"");
-
-        return string.Join(" or ", lines);
     }
 }
 

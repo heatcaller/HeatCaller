@@ -648,6 +648,24 @@ internal sealed class UsageMeters
                 {
                     Unavailable(MeterKind.ElevenLabsKey, CouldNotReadPlan(ex));
                 }
+                else
+                {
+                    // The old figure is kept, but This Month must not say
+                    // "Checked at" over it as if it were fresh (22 Oct 2026,
+                    // bug hunt) - the failure only reached the console.
+                    bool changed;
+
+                    lock (_gate)
+                    {
+                        changed = LastProblem is null;
+                        LastProblem ??= "ElevenLabs didn't answer - the figure shown is the last one it gave.";
+                    }
+
+                    if (changed)
+                    {
+                        RaiseChanged();
+                    }
+                }
             }
         }
     }
@@ -713,6 +731,15 @@ internal sealed class UsageMeters
             // Not on this club's plan, or not offered by this relay at all:
             // nothing to measure, so nothing to show.
             Forget(kind);
+            return;
+        }
+
+        // A relay that could not read its own count (22 Oct 2026, bug hunt)
+        // says so with known:false and a used of 0. Taken as a figure, that
+        // showed a spent month as empty and lifted the commentary's spent
+        // hold - so the last real figure stays instead.
+        if (!block.Known)
+        {
             return;
         }
 
@@ -799,7 +826,7 @@ internal sealed class UsageMeters
     }
 
     /// <summary>One meter's block in the relay's usage answer.</summary>
-    internal sealed record Block(bool Enabled, long Used, long Allowance, long TopUp, DateTime? ResetsUtc);
+    internal sealed record Block(bool Enabled, long Used, long Allowance, long TopUp, DateTime? ResetsUtc, bool Known = true);
 
     /// <summary>The relay's whole usage answer.</summary>
     internal sealed record UsageAnswer(Block? Commentary, Block? Voice, IReadOnlyList<TopUpAsk> Requests);
@@ -878,7 +905,9 @@ internal sealed class UsageMeters
             Whole(block, "used"),
             Whole(block, "allowance"),
             Whole(block, "topUp"),
-            When(block, "resetsAt"));
+            When(block, "resetsAt"),
+            // Absent from an older relay, which never said: taken as known.
+            !(block.TryGetProperty("known", out var known) && known.ValueKind == JsonValueKind.False));
     }
 
     private static string Text(JsonElement element, string name) =>
@@ -961,6 +990,21 @@ internal sealed class UsageMeters
             && _nightStart.TryGetValue(kind, out var start)
                 ? Math.Max(0, entry.Used - start)
                 : 0;
+
+        // LAST MONTH'S FIGURE IS NOT THIS MONTH'S (22 Oct 2026, bug hunt). A
+        // figure kept on disk past its reset - a used-up October read on 3
+        // November with the relay not answering - showed "used up" on the
+        // chip and Mission Control all night, though the commentary and the
+        // voice had already moved on. Shown as unknown until the relay says.
+        var now = _utcNow();
+        var expired = entry.Known
+            && (entry.ResetsUtc is { } resets ? resets <= now : entry.Period.Length > 0 && entry.Period != PeriodOf(null, now));
+
+        if (expired)
+        {
+            return new Meter(kind, false, 0, entry.Allowance, entry.TopUp, entry.ResetsUtc, entry.AsOfUtc, 0,
+                "Last month's figure - waiting for this month's from the relay.");
+        }
 
         return new Meter(kind, entry.Known, entry.Used, entry.Allowance, entry.TopUp, entry.ResetsUtc, entry.AsOfUtc, tonight, entry.Note);
     }

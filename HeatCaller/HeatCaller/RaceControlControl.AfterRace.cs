@@ -15,11 +15,14 @@ public sealed partial class RaceControlControl
     /// synthesise. Returns nulls when the model gave nothing back.
     /// </summary>
     private async Task<(string? Spoken, AnnouncementService.PreparedSpeech? Audio)> BuildRecapAsync(
-        Task<string?> generation, (double, double)? delivery)
+        Task<string?> generation, (double, double)? delivery, CancellationToken nextRace = default)
     {
         var line = await generation;
 
-        if (string.IsNullOrWhiteSpace(line))
+        // Not rendered once the next race is called (22 Oct 2026, bug hunt):
+        // nobody will hear it, and a long recap's render held one of the two
+        // synthesis slots - and spent the characters - well into that race.
+        if (string.IsNullOrWhiteSpace(line) || nextRace.IsCancellationRequested)
         {
             return (null, null);
         }
@@ -533,7 +536,9 @@ public sealed partial class RaceControlControl
         // would have heard nothing about them at all.
         // The unofficial result at the flag (18 Oct 2026) needs no model
         // either, so it too is reason enough to run the sequence.
-        var resultRead = _settings.FlagResultRead ? FlagResultFor(record) : null;
+        // Not under "Lap times only" (22 Oct 2026, bug hunt): that mode is
+        // the lap times and the calls a race cannot do without, nothing more.
+        var resultRead = _settings.FlagResultRead && !LapTimesOnly.IsOn(_settings) ? FlagResultFor(record) : null;
 
         if (!wantsTeaser && !commentaryAvailable && honours is null && resultRead is null)
         {
@@ -1301,6 +1306,15 @@ public sealed partial class RaceControlControl
                     await _announcer.WaitForAudioAsync(SpokenWait(), CancellationToken.None);
                 }
 
+                // The result read heard out when nothing followed it at the
+                // flag (22 Oct 2026, bug hunt): it was queued and not waited
+                // for, so the "pause after the flag" ran under it and the
+                // teaser followed the result with no gap at all.
+                if (resultRead is not null && interviewTask is null && !nextRace.IsCancellationRequested)
+                {
+                    await _announcer.WaitForAudioAsync(SpokenWait(), CancellationToken.None);
+                }
+
                 // The pit lane is done (or there was none): the throw's
                 // wait for the model starts counting from here.
                 pitLaneHeard.TrySetResult();
@@ -1330,7 +1344,7 @@ public sealed partial class RaceControlControl
                 // means there is audio in hand, not just text.
                 var recapTask = generation is null
                     ? null
-                    : BuildRecapAsync(generation, delivery);
+                    : BuildRecapAsync(generation, delivery, nextRace.Token);
 
                 // 3. The teaser, straight after the finish call.
                 //
@@ -1895,6 +1909,31 @@ public sealed partial class RaceControlControl
 
                 _race.StateChanged -= onNextRace;
 
+                // BADGES KEPT FOR A SEGMENT THAT NEVER CAME (22 Oct 2026, bug
+                // hunt): Skip or Hold anywhere after the flag - the pit lane,
+                // the teaser, the break - stopped the sequence before the
+                // achievements segment, and the badges held back for it were
+                // never heard at all. Called one at a time instead, as they
+                // would have been with the segment off. Not when the next race
+                // stopped it: that race must not hear the last one's badges.
+                try
+                {
+                    if (honours is { Started: false, Unlocks: { Count: > 0 } held } && recapShow.StoppedBy is not null)
+                    {
+                        foreach (var unlock in held.Take(MaxSpokenAchievements))
+                        {
+                            _announcer.NotifyAchievement(unlock.Transponder, unlock.Badge.Name);
+                        }
+
+                        StatusMessage?.Invoke(
+                            $"{AppTime.LogStampNow()}  [achievements] The recap was stopped ({recapShow.StoppedBy}) before its achievements segment, so they are called one at a time.");
+                    }
+                }
+                catch
+                {
+                    // A failing handler must not stop the clean-up below.
+                }
+
                 // No longer the recap show Skip and Hold would stop - unless
                 // a newer one has already taken its place.
                 Interlocked.CompareExchange(ref _recapShow, null, recapShow);
@@ -2199,7 +2238,12 @@ public sealed partial class RaceControlControl
     /// differs from the number held back, which is the only way a club
     /// can tell a capped read from a short one.
     /// </param>
-    private sealed record HonoursPlan(IReadOnlyList<ExchangeTurn> Turns, SecondVoice? Voice, int Badges);
+    private sealed record HonoursPlan(
+        IReadOnlyList<ExchangeTurn> Turns, SecondVoice? Voice, int Badges, IReadOnlyList<AchievementUnlock>? Unlocks = null)
+    {
+        /// <summary>Set once the achievements segment has begun to go out - see the sequence's finally (22 Oct 2026).</summary>
+        public volatile bool Started;
+    }
 
     /// <summary>
     /// Builds the honours segment for a race's badges - the throw, the read
@@ -2298,7 +2342,7 @@ public sealed partial class RaceControlControl
                     : $" in the announcer's own voice - no achievements reader's voice is picked for {EngineName(engine)} on Voice > Cast")
                 + $" - \"{turns[1].Line}\"");
 
-            return new HonoursPlan(turns, voice, RaceHonours.Read(unlocks)?.Badges ?? 0);
+            return new HonoursPlan(turns, voice, RaceHonours.Read(unlocks)?.Badges ?? 0, unlocks.ToList());
         }
         catch (Exception ex)
         {
@@ -3147,11 +3191,13 @@ public sealed partial class RaceControlControl
         Task<List<SpokenLine>?> interviewTask, CancellationToken nextRace, SpokenLine? leadIn = null,
         SpokenLine? handBack = null, string after = "the recap ending", string? onAir = null, bool anotherFollows = false)
     {
-        const string stopped = "Interview stopped - the next race was called to the grid.";
+        // Why it stopped, read when it is said (22 Oct 2026, bug hunt): a Skip or a
+        // Hold stops it too, and the log blamed the next race for those.
+        string stopped() => $"Interview stopped - {Volatile.Read(ref _recapShow)?.StoppedBy ?? "the next race was called to the grid"}.";
 
         if (!await HeardOutAsync(nextRace))
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped()}");
             return (FollowOn.Stopped, false);
         }
 
@@ -3159,7 +3205,7 @@ public sealed partial class RaceControlControl
 
         if (nextRace.IsCancellationRequested)
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped()}");
             return (FollowOn.Stopped, false);
         }
 
@@ -3195,7 +3241,7 @@ public sealed partial class RaceControlControl
         {
             if (i > 0 && !await HeardOutAsync(nextRace))
             {
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped()}");
                 return (FollowOn.Stopped, i > 0);
             }
 
@@ -3326,6 +3372,8 @@ public sealed partial class RaceControlControl
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] {Stopped()}");
             return;
         }
+
+        plan.Started = true;
 
         var (timedOut, lines) = await WithinAsync(rendered, FollowOnWait, nextRace);
 
@@ -3558,7 +3606,9 @@ public sealed partial class RaceControlControl
     /// </summary>
     private async Task SpeakColourAsync(Task<List<SpokenSegment>?> written, ShowRun? show, CancellationToken nextRace)
     {
-        const string stopped = "Color dropped - the next race was called to the grid.";
+        // Why it stopped, read when it is said (22 Oct 2026, bug hunt): a Skip or a
+        // Hold stops it too, and the log blamed the next race for those.
+        string stopped() => $"Color dropped - {Volatile.Read(ref _recapShow)?.StoppedBy ?? "the next race was called to the grid"}.";
 
         var (timedOut, segments) = await WithinAsync(written, FollowOnWait, nextRace);
 
@@ -3590,7 +3640,7 @@ public sealed partial class RaceControlControl
         {
             if (nextRace.IsCancellationRequested)
             {
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped()}");
 
                 return;
             }
@@ -3638,7 +3688,7 @@ public sealed partial class RaceControlControl
 
                 if (!await HeardOutAsync(nextRace))
                 {
-                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped()}");
 
                     return;
                 }
@@ -3652,7 +3702,7 @@ public sealed partial class RaceControlControl
 
                     if (nextRace.IsCancellationRequested)
                     {
-                        SayUnlessTheNextRaceStopped(stopped, nextRace);
+                        SayUnlessTheNextRaceStopped(stopped(), nextRace);
 
                         return;
                     }
@@ -3668,7 +3718,7 @@ public sealed partial class RaceControlControl
                     && !await treatment.PunctuateAsync(nextRace)
                     && nextRace.IsCancellationRequested)
                 {
-                    SayUnlessTheNextRaceStopped(stopped, nextRace);
+                    SayUnlessTheNextRaceStopped(stopped(), nextRace);
 
                     return;
                 }
@@ -3685,7 +3735,7 @@ public sealed partial class RaceControlControl
 
                         if (nextRace.IsCancellationRequested)
                         {
-                            SayUnlessTheNextRaceStopped(stopped, nextRace);
+                            SayUnlessTheNextRaceStopped(stopped(), nextRace);
 
                             return;
                         }
@@ -3702,7 +3752,7 @@ public sealed partial class RaceControlControl
                     {
                         if (at > 0 && !await HeardOutAsync(nextRace))
                         {
-                            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped}");
+                            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped()}");
 
                             return;
                         }
@@ -3712,7 +3762,7 @@ public sealed partial class RaceControlControl
                         // the honours do it. See CommentaryExchange.ExchangeRun.
                         if (at > 0 && treatment is not null && !await treatment.HandOverAsync(show, nextRace))
                         {
-                            SayUnlessTheNextRaceStopped(stopped, nextRace);
+                            SayUnlessTheNextRaceStopped(stopped(), nextRace);
 
                             return;
                         }
@@ -3896,11 +3946,13 @@ public sealed partial class RaceControlControl
     /// <param name="nextRace">Cancelled when the next race is called to the grid.</param>
     private async Task SpeakClosingAsync(Task<SpokenLine?> closingTask, CancellationToken nextRace)
     {
-        const string dropped = "Sign-off dropped - the next race was called to the grid.";
+        // Why it stopped, read when it is said (22 Oct 2026, bug hunt): a Skip or a
+        // Hold stops it too, and the log blamed the next race for those.
+        string dropped() => $"Sign-off dropped - {Volatile.Read(ref _recapShow)?.StoppedBy ?? "the next race was called to the grid"}.";
 
         if (!await HeardOutAsync(nextRace))
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {dropped}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {dropped()}");
             return;
         }
 
@@ -3908,7 +3960,7 @@ public sealed partial class RaceControlControl
 
         if (nextRace.IsCancellationRequested)
         {
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {dropped}");
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {dropped()}");
             return;
         }
 
@@ -5226,6 +5278,11 @@ public sealed partial class RaceControlControl
 
         var label = string.IsNullOrWhiteSpace(record.Label) ? "Race" : record.Label.Trim();
 
+        // Which race these are (22 Oct 2026, bug hunt): uploads run long
+        // after the flag, and a late one from an earlier race put its code
+        // over a later race's results.
+        var generation = _race.SessionGeneration;
+
         return new HighlightShare(
             RelayPublisher.NewVideoKey(),
             label,
@@ -5240,7 +5297,13 @@ public sealed partial class RaceControlControl
                         return;
                     }
 
-                    BeginInvoke(() => _bigScreen?.ShowPodiumVideos(page, race));
+                    BeginInvoke(() =>
+                    {
+                        if (_race.SessionGeneration == generation)
+                        {
+                            _bigScreen?.ShowPodiumVideos(page, race);
+                        }
+                    });
                 }
                 catch (InvalidOperationException)
                 {
@@ -5248,6 +5311,9 @@ public sealed partial class RaceControlControl
                 }
             });
     }
+
+    /// <summary>The race being filed by SaveCompletedSessionToHistory right now, whose recap follows - or null.</summary>
+    private string? _filingForSummary;
 
     /// <summary>The highlight videos' captions are hooked to the announcer - once.</summary>
     private bool _captionsHooked;
@@ -5408,7 +5474,12 @@ public sealed partial class RaceControlControl
         // now, on this thread - that timing is what makes them true. A
         // correction has no flag lines behind it, so it shares whatever
         // gate is current. See _flagLinesAsked.
-        if (!corrected)
+        //
+        // ONLY A FILING THAT REACHES SpeakRaceSummary (22 Oct 2026, bug
+        // hunt): every history add arrives here - a practice save, a race
+        // re-filed late - and each one closed the gate, which nothing then
+        // opened, so the write-aheads sat out the whole 45 seconds.
+        if (!corrected && filed is not null && string.Equals(filed.Id, _filingForSummary, StringComparison.Ordinal))
         {
             _flagLinesAsked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         }
@@ -6996,7 +7067,15 @@ public sealed partial class RaceControlControl
         // journal let go - in RaceFiling, where the order is tested. What
         // this page does around it runs through the two callbacks, at the
         // points it always ran.
-        var filed = RaceFiling.Commit(
+        // The filing whose recap is coming - see WriteTheNextIntroAhead,
+        // which the history store calls back in the middle of this.
+        _filingForSummary = record.Id;
+
+        RaceFiling.Outcome filed;
+
+        try
+        {
+        filed = RaceFiling.Commit(
             record,
             round,
             autoAdvanced,
@@ -7062,6 +7141,11 @@ public sealed partial class RaceControlControl
             log: message => StatusMessage?.Invoke(message),
             raceDayOpen: RoundPicker.RaceDayOpen(_events),
             demoMayFillTheProgramme: _settings.DemoFillsTheProgramme);
+        }
+        finally
+        {
+            _filingForSummary = null;
+        }
 
         if (filed == RaceFiling.Outcome.NotSaved)
         {

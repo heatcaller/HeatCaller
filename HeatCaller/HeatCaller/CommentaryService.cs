@@ -202,6 +202,154 @@ public sealed class CommentaryService
     public bool IsAvailable => Client is not null;
 
     /// <summary>
+    /// Every request to the model goes through here, so that every prompt
+    /// carries the pronouns of the drivers it names - see
+    /// <see cref="WithPronouns"/>. Thirteen kinds of line are written by
+    /// the model, and one place that adds them is the only way a fourteenth
+    /// cannot forget to.
+    /// </summary>
+    private Task<string?> Ask(
+        ICommentaryBrain brain,
+        string systemPrompt,
+        string userPrompt,
+        int maxTokens,
+        double temperature = 0.7,
+        CancellationToken ct = default,
+        TimeSpan? timeout = null)
+    {
+        var (system, user) = WithPronouns(systemPrompt, userPrompt);
+        return brain.GenerateAsync(system, user, maxTokens, temperature, ct, timeout);
+    }
+
+    /// <summary>The sentence the system prompt gains when the facts give anybody's pronouns.</summary>
+    internal const string PronounsRule =
+        " When the facts give a driver's pronouns, always use those pronouns for that driver, "
+        + "even where other facts word it differently.";
+
+    /// <summary>The start of the line the facts gain - see <see cref="WithPronouns"/>.</summary>
+    internal const string PronounsLead = "Pronouns of drivers named above, as they gave them: ";
+
+    /// <summary>
+    /// A prompt with the pronouns of every driver it names (21 Oct 2026),
+    /// or exactly the prompt it was given when it names nobody who has
+    /// them set.
+    ///
+    /// WHY THE MODEL IS TOLD. Handed a name and nothing else, a model
+    /// guesses "he" or "she" from the name - and says the guess over the PA
+    /// about somebody standing in the room. The driver's profile now has
+    /// their pronouns (DriverProfile.Pronouns), and this puts them in the
+    /// facts beside the names, on one line, inside the facts markers like
+    /// everything else a club typed: they are data the system prompt has
+    /// already said is never an instruction, cleaned the same way every
+    /// name is (<see cref="Field"/>). The one instruction - use them - goes
+    /// in the SYSTEM prompt (<see cref="PronounsRule"/>), which a club
+    /// cannot type into.
+    ///
+    /// WHO IS NAMED is read off the facts themselves rather than passed in
+    /// by thirteen callers: a driver whose spoken name (or real name)
+    /// appears in the facts as a whole word, with the case it was typed in.
+    /// The facts only, not the instructions after them - a driver called
+    /// Will is not "named" by "the host will ask". And never a line for a
+    /// name two drivers share with different pronouns: a guess is what
+    /// this is here to stop.
+    /// </summary>
+    internal (string System, string User) WithPronouns(string systemPrompt, string userPrompt)
+    {
+        var lines = PronounLinesFor(userPrompt);
+
+        if (lines.Count == 0)
+        {
+            return (systemPrompt, userPrompt);
+        }
+
+        var line = PronounsLead + string.Join("; ", lines) + ".";
+        var close = userPrompt.IndexOf(FactsClose, StringComparison.Ordinal);
+
+        var user = close >= 0
+            ? userPrompt[..close].TrimEnd('\n') + "\n" + line + "\n" + userPrompt[close..]
+            : FactsOpen + "\n" + line + "\n" + FactsClose + "\n\n" + userPrompt;
+
+        return (systemPrompt + PronounsRule, user);
+    }
+
+    /// <summary>"Sam: she/her" for each driver the facts in <paramref name="prompt"/> name who has pronouns set - in the order the facts name them. See <see cref="WithPronouns"/>.</summary>
+    private List<string> PronounLinesFor(string prompt)
+    {
+        var open = prompt.IndexOf(FactsOpen, StringComparison.Ordinal);
+        var close = open >= 0 ? prompt.IndexOf(FactsClose, open, StringComparison.Ordinal) : -1;
+        var facts = open >= 0 && close > open ? prompt[(open + FactsOpen.Length)..close] : prompt;
+
+        IReadOnlyList<DriverProfile> drivers;
+
+        try
+        {
+            drivers = _profiles.All;
+        }
+        catch (InvalidOperationException)
+        {
+            // The roster changed under us mid-read. A line without the
+            // pronouns is the line every club had before this; no line at
+            // all is worse.
+            return new List<string>();
+        }
+
+        // Every name the facts use, with each pronoun set given for it -
+        // blank included, so a name shared by a driver with pronouns and
+        // one without is a name this cannot answer for.
+        var named = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
+        foreach (var driver in drivers)
+        {
+            if (driver is null)
+            {
+                continue;
+            }
+
+            var pronouns = Field(Pronouns.Clean(driver.Pronouns), Pronouns.MaxChars);
+
+            foreach (var name in new[] { Field(driver.SpokenName), Field(driver.DriverName) }.Distinct(StringComparer.Ordinal))
+            {
+                if (name.Length == 0 || !Names(facts, name))
+                {
+                    continue;
+                }
+
+                if (!named.TryGetValue(name, out var sets))
+                {
+                    named[name] = sets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                }
+
+                sets.Add(pronouns);
+            }
+        }
+
+        return named
+            .Where(n => n.Value.Count == 1 && n.Value.First().Length > 0)
+            .OrderBy(n => facts.IndexOf(n.Key, StringComparison.Ordinal))
+            .Take(12)
+            .Select(n => $"{n.Key}: {n.Value.First()}")
+            .ToList();
+    }
+
+    /// <summary>Whether <paramref name="text"/> has <paramref name="name"/> in it as a whole word or words, in the case it was typed - "Sam" in "Sam leads", not in "Samantha" or "same".</summary>
+    private static bool Names(string text, string name)
+    {
+        for (var at = text.IndexOf(name, StringComparison.Ordinal); at >= 0; at = text.IndexOf(name, at + 1, StringComparison.Ordinal))
+        {
+            var end = at + name.Length;
+            var openBefore = at == 0 || !char.IsLetterOrDigit(text[at - 1]);
+            var openAfter = end >= text.Length || !char.IsLetterOrDigit(text[end]);
+
+            if (openBefore && openAfter)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// The most recent line generated, and what kind it was ("Intro",
     /// "Summary", "Talking point") - lets a "repeat that" control on the
     /// Announcer page say the line again without regenerating it, since
@@ -1261,7 +1409,7 @@ public sealed class CommentaryService
                   + "shortening it."
                 : string.Empty);
 
-        var answer = await Client.GenerateAsync(
+        var answer = await Ask(Client,
             BuildSystemPrompt(), facts, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct,
             timeout: BetweenRacesTimeout);
 
@@ -1382,13 +1530,14 @@ public sealed class CommentaryService
         var sponsor = Field(presentedBy?.Trim().TrimEnd('.', '!', ' '), MaxShowNameChars);
         var recap = Field(qualifying, 400);
 
-        var extraWords = 14 * grid.Count + (recap.Length > 0 ? 35 : 0) + (sponsor.Length > 0 ? 12 : 0);
+        // No words for the sponsor: HeatCaller says their credit itself,
+        // in front of what comes back - see below.
+        var extraWords = 14 * grid.Count + (recap.Length > 0 ? 35 : 0);
 
         var facts =
             FactsOpen + "\n" +
             $"Race: {Field(raceTitle)}\n" +
             (recap.Length > 0 ? $"Qualifying, exact: {recap}\n" : string.Empty) +
-            (sponsor.Length > 0 ? $"The driver introductions are presented by: {sponsor}\n" : string.Empty) +
             (hasGrid ? "The grid, in starting order:\n" : "The drivers in this race:\n") +
             string.Join("\n", lines) + "\n" +
             FactsClose + "\n" +
@@ -1423,19 +1572,17 @@ public sealed class CommentaryService
                   + "second place's deficit. A most-laps result is a number of laps IN a time (\"thirty-four laps in five "
                   + "minutes\") - never call the laps a time."
                 : string.Empty)
+            // THE SPONSOR IS CREDITED BY HEATCALLER, AT THE TOP (21 Oct
+            // 2026), so the model is not handed them. It used to be asked
+            // to open with the credit, and it did - but asked to say the
+            // sponsor's tagline too, a model says something LIKE it, and a
+            // tagline is the sponsor's own words. The credit, tagline and
+            // all, goes in front of what comes back, as the recap's does.
             + (sponsor.Length > 0
-                // A WHOLE SENTENCE, NOT A LABEL (21 Oct 2026). Told to begin
-                // with the exact words "Driver introductions, presented by
-                // X", the model did - and a voice reads a fragment like that
-                // flat and robotic. It now gets two sentences to model its
-                // own on (SponsoredMoments.CreditExamples).
-                ? " Open with one short, upbeat sentence saying who brings the driver introductions to you - a whole "
-                  + "sentence, the way a TV broadcaster says it, such as "
-                  + SponsoredMoments.CreditExamples(SponsoredMoment.DriverIntros, sponsor)
-                  + ", never a bare label - with that name exactly as written, then go into them."
+                ? " Do not mention any sponsor - the introductions' sponsor is credited just before your words."
                 : string.Empty);
 
-        var answer = await Client.GenerateAsync(
+        var answer = await Ask(Client,
             BuildSystemPrompt(extraWords), facts, maxTokens: MaxTokensForWordLimit(extraWords), temperature: Variety, ct: ct,
             timeout: BetweenRacesTimeout);
 
@@ -1446,6 +1593,15 @@ public sealed class CommentaryService
         if (!string.IsNullOrWhiteSpace(answer))
         {
             answer = IntroRepeats.WithoutSecondPass(answer, grid.Select(d => d.SpokenName).ToList());
+        }
+
+        // The credit last of all, so nothing above can cut into it - and
+        // only in front of words: introductions that never came back are
+        // not a credit on its own.
+        if (sponsor.Length > 0)
+        {
+            answer = SponsoredMoments.WithLeadIn(
+                SponsoredMoments.LeadIn(SponsoredMoment.DriverIntros, sponsor, TaglineFor(presentedBy)), answer);
         }
 
         if (!remember)
@@ -1477,6 +1633,48 @@ public sealed class CommentaryService
     /// counted here, and only when a line came back.
     /// </summary>
     public Func<SegmentKind, (string Name, Action Count)?>? SegmentSponsorTaken { get; set; }
+
+    /// <summary>
+    /// The same, with how to give the ration back for a segment that never
+    /// went out (22 Oct 2026, bug hunt). Used in preference to both hooks
+    /// above when set.
+    /// </summary>
+    public Func<SegmentKind, (string Name, Action Count, Action Release)?>? SegmentSponsorTakenWithRelease { get; set; }
+
+    /// <summary>
+    /// A segment's sponsor through whichever hook is set - true when one was
+    /// asked (so a null answer means nobody, not "ask the older hook").
+    /// </summary>
+    private bool TryTakeSegmentSponsor(SegmentKind kind, out (string Name, Action Count, Action? Release)? taken)
+    {
+        if (SegmentSponsorTakenWithRelease is { } withRelease)
+        {
+            taken = withRelease(kind) is { } t ? (t.Name, t.Count, t.Release) : null;
+            return true;
+        }
+
+        if (SegmentSponsorTaken is { } plain)
+        {
+            taken = plain(kind) is { } t ? (t.Name, t.Count, null) : null;
+            return true;
+        }
+
+        taken = null;
+        return false;
+    }
+
+    /// <summary>Gives a segment sponsor's ration back - for a line that never went out.</summary>
+    private static void GiveBack(Action? release)
+    {
+        try
+        {
+            release?.Invoke();
+        }
+        catch
+        {
+            // A ration that can't be given back costs a credit, nothing more.
+        }
+    }
 
     /// <summary>
     /// The fewest letters a word in capitals on its own needs to count as
@@ -3001,7 +3199,7 @@ public sealed class CommentaryService
                       + "any other commentator, and do not give yourself a name."
                     : string.Empty);
 
-        var writing = Client.GenerateAsync(
+        var writing = Ask(Client,
             BuildBroadcastSystemPrompt(extraWords), facts,
             maxTokens: MaxTokensForWordLimit(extraWords),
             temperature: Variety, ct: ct, timeout: BetweenRacesTimeout);
@@ -3010,7 +3208,7 @@ public sealed class CommentaryService
         // held as the last race summary - and compared by ForgetRaceSummary
         // - is the one that is spoken, credit and all.
         return await RecordAndReturn(SummaryKind, resultSponsor.Length > 0
-            ? CreditFirstAsync(writing, () => SponsoredMoments.LeadIn(SponsoredMoment.RaceResult, resultSponsor))
+            ? CreditFirstAsync(writing, () => SponsoredMoments.LeadIn(SponsoredMoment.RaceResult, resultSponsor, TaglineFor(presentedBy)))
             : writing);
     }
 
@@ -3034,6 +3232,18 @@ public sealed class CommentaryService
     }
 
     /// <summary>
+    /// What <paramref name="writing"/> comes back with, with the sponsor's
+    /// <paramref name="credit"/> on the end (21 Oct 2026) - a segment
+    /// anywhere but the recap show. Nothing written stays nothing.
+    /// </summary>
+    private static async Task<string?> CreditLastAsync(Task<string?> writing, string credit)
+    {
+        var written = await writing.ConfigureAwait(false);
+
+        return string.IsNullOrWhiteSpace(written) ? written : SponsoredMoments.WithCredit(written, credit);
+    }
+
+    /// <summary>
     /// The sponsor's credit for the top of a written segment of this kind,
     /// taken from the ration and counted for the report - asked only once
     /// the segment HAS been written, so a segment that never comes back
@@ -3042,20 +3252,21 @@ public sealed class CommentaryService
     /// </summary>
     private string? TakeLeadCredit(SegmentKind kind)
     {
-        string name;
+        string? asWritten;
         Action? count = null;
+        Action? release = null;
 
         try
         {
-            if (SegmentSponsorTaken is { } takeSponsor)
+            if (TryTakeSegmentSponsor(kind, out var taken))
             {
-                var taken = takeSponsor(kind);
-                name = Field(taken?.Name, MaxShowNameChars);
+                asWritten = taken?.Name;
                 count = taken?.Count;
+                release = taken?.Release;
             }
             else
             {
-                name = Field(SegmentSponsor?.Invoke(kind), MaxShowNameChars);
+                asWritten = SegmentSponsor?.Invoke(kind);
             }
         }
         catch
@@ -3063,8 +3274,11 @@ public sealed class CommentaryService
             return null;
         }
 
+        var name = Field(asWritten, MaxShowNameChars);
+
         if (name.Length == 0)
         {
+            GiveBack(release);
             return null;
         }
 
@@ -3077,7 +3291,38 @@ public sealed class CommentaryService
             // The report is a courtesy; a failing count never costs the credit.
         }
 
-        return SponsoredMoments.LeadIn(SponsoredMoments.ForSegment(kind), name);
+        return SponsoredMoments.LeadIn(SponsoredMoments.ForSegment(kind), name, TaglineFor(asWritten));
+    }
+
+    /// <summary>
+    /// The tagline of the sponsor credited by this name - one line of their
+    /// own, said after the credit HeatCaller puts on a written line (21 Oct
+    /// 2026). Set by MainForm to AnnouncementService.TaglineOf; null, or a
+    /// null answer, credits them without one.
+    /// </summary>
+    public Func<string, string?>? SponsorTagline { get; set; }
+
+    /// <summary>
+    /// <see cref="SponsorTagline"/>'s answer for the name as the club wrote
+    /// it - never the cleaned, possibly shortened one that is said, which
+    /// may no longer match. Null for no name, no hook or a hook that threw:
+    /// a credit without its tagline beats a line that never comes.
+    /// </summary>
+    private string? TaglineFor(string? sponsorAsWritten)
+    {
+        if (string.IsNullOrWhiteSpace(sponsorAsWritten) || SponsorTagline is not { } lookup)
+        {
+            return null;
+        }
+
+        try
+        {
+            return lookup(sponsorAsWritten);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -3130,7 +3375,7 @@ public sealed class CommentaryService
             + ". The result has already been told: name the winner once at most and add nothing else about the race. "
             + $"One or two short sentences, under {ClosingWords + 10} words.";
 
-        return await RecordAndReturn("Closing", Client.GenerateAsync(
+        return await RecordAndReturn("Closing", Ask(Client,
             BuildBroadcastSystemPrompt(0), facts,
             maxTokens: MaxTokensForWordLimit(),
             temperature: Variety, ct: ct, timeout: BetweenRacesTimeout));
@@ -3208,7 +3453,7 @@ public sealed class CommentaryService
             + (said.Count > 0 ? "Make it sound fresh: don't reuse the wording or the shape of the throws already used tonight. " : "Make it sound fresh, not stock. ")
             + "One or two short sentences, under 30 words. Only the words to say.";
 
-        return await RecordAndReturn("Throw to break", Client.GenerateAsync(
+        return await RecordAndReturn("Throw to break", Ask(Client,
             BuildBroadcastSystemPrompt(0), facts,
             maxTokens: MaxTokensForWordLimit(),
             temperature: Math.Max(Variety, 0.9), ct: ct, timeout: BetweenRacesTimeout));
@@ -3442,7 +3687,7 @@ public sealed class CommentaryService
             + "Every name, time and number in the facts is exact - use them as written or not at all. "
             + "No quotes, no stage directions, no square-bracket tags, and nothing before the first HOST line.";
 
-        var answer = await Client.GenerateAsync(
+        var answer = await Ask(Client,
             BuildInterviewSystemPrompt(), facts,
             maxTokens: 360, temperature: Variety, ct: ct, timeout: BetweenRacesTimeout);
 
@@ -3956,7 +4201,7 @@ public sealed class CommentaryService
         // middle of the third answer, which ParseInterview then drops -
         // so the principal's longer interview would have failed silently
         // and looked like a model that would not follow the form.
-        var answer = await Client.GenerateAsync(
+        var answer = await Ask(Client,
             BuildInterviewSystemPrompt(), facts,
             maxTokens: 180 * Math.Max(2, mostExchanges ?? MaxInterviewExchanges),
             temperature: Variety, ct: ct, timeout: timeout);
@@ -4164,7 +4409,9 @@ public sealed class CommentaryService
             }
 
             var notes = new List<string>();
-            var question = TidyIntro(CleanTurn(turns[i].Text), string.Empty, names, MaxQuestionWords, notes);
+            var question = KeepTheQuestion(
+                TidyIntro(CleanTurn(turns[i].Text), string.Empty, names, int.MaxValue / 2, notes),
+                MaxQuestionWords);
             var answer = TidyIntro(CleanTurn(turns[i + 1].Text), string.Empty, names, MaxAnswerWords, notes);
 
             if (question is null || answer is null
@@ -4178,6 +4425,78 @@ public sealed class CommentaryService
         }
 
         return exchanges.Count > 0 ? exchanges : null;
+    }
+
+    /// <summary>
+    /// A host's turn cut to length WITHOUT losing the question (22 Oct 2026).
+    ///
+    /// WHY: the booth interview's first turn is the longest the host has -
+    /// a welcome, the guest's name and role, his own words from last time
+    /// read back to him - and the question comes last. The length trim
+    /// keeps whole sentences from the front, so on 21 Oct it kept the
+    /// welcome and the quote and dropped "what does that mean now?", and
+    /// the Team Principal answered a question the room never heard. Now
+    /// the last question is always kept, and the sentences in front of it
+    /// fill what room is left.
+    /// </summary>
+    internal static string? KeepTheQuestion(string? turn, int maxWords)
+    {
+        if (string.IsNullOrWhiteSpace(turn))
+        {
+            return turn;
+        }
+
+        var limit = (int)Math.Ceiling(maxWords * IntroWordSlack);
+
+        if (SpokenWord.Matches(turn).Count <= limit)
+        {
+            return turn;
+        }
+
+        var sentences = SentenceBreak.Split(turn).Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
+        var asked = sentences.FindLastIndex(x => x.EndsWith('?'));
+
+        if (asked < 0)
+        {
+            // No question in it at all: the old trim, from the front.
+            var front = new List<string>();
+            var words = 0;
+
+            foreach (var sentence in sentences)
+            {
+                var n = SpokenWord.Matches(sentence).Count;
+
+                if (words + n > limit)
+                {
+                    break;
+                }
+
+                front.Add(sentence);
+                words += n;
+            }
+
+            return front.Count > 0 ? string.Join(" ", front) : null;
+        }
+
+        var question = sentences[asked];
+        var room = limit - SpokenWord.Matches(question).Count;
+        var lead = new List<string>();
+
+        for (var i = 0; i < asked && room > 0; i++)
+        {
+            var n = SpokenWord.Matches(sentences[i]).Count;
+
+            if (n > room)
+            {
+                break;
+            }
+
+            lead.Add(sentences[i]);
+            room -= n;
+        }
+
+        lead.Add(question);
+        return string.Join(" ", lead);
     }
 
     /// <summary>One speaker's words, without tags, quotes or markdown round them.</summary>
@@ -4247,7 +4566,7 @@ public sealed class CommentaryService
             "\n" + FactsClose +
             "\n\nWrite what a commentator could say right now about the most interesting of these.";
 
-        return await RecordAndReturn("Talking point", Client.GenerateAsync(
+        return await RecordAndReturn("Talking point", Ask(Client,
             BuildSystemPrompt(), facts, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct));
     }
 
@@ -4290,25 +4609,34 @@ public sealed class CommentaryService
         // Not asked here for a segment whose credit goes at the top: that
         // is taken once the words are back - see TakeLeadCredit.
         string sponsor = string.Empty;
-        (string Name, Action Count)? taken = null;
+        string? sponsorAsWritten = null;
+        (string Name, Action Count, Action? Release)? taken = null;
 
         if (!creditFirst)
         {
             try
             {
-                if (SegmentSponsorTaken is { } takeSponsor)
+                if (TryTakeSegmentSponsor(kind, out var asked))
                 {
-                    taken = takeSponsor(kind);
-                    sponsor = Field(taken?.Name, MaxShowNameChars);
+                    taken = asked;
+                    sponsorAsWritten = taken?.Name;
                 }
                 else
                 {
-                    sponsor = Field(SegmentSponsor?.Invoke(kind), MaxShowNameChars);
+                    sponsorAsWritten = SegmentSponsor?.Invoke(kind);
                 }
+
+                sponsor = Field(sponsorAsWritten, MaxShowNameChars);
             }
             catch
             {
                 sponsor = string.Empty;
+            }
+
+            // Taken but nothing to credit: the ration goes back.
+            if (sponsor.Length == 0)
+            {
+                GiveBack(taken?.Release);
             }
         }
 
@@ -4317,15 +4645,17 @@ public sealed class CommentaryService
             facts.Text + "\n" +
             FactsClose +
             "\n\n" + InstructionFor(kind) + HostBrief(kind)
+            // THE CREDIT IS HEATCALLER'S, ON THE END (21 Oct 2026). The model
+            // used to be asked to end with it - but the sponsor's tagline
+            // goes after the credit now, and a model asked to say a tagline
+            // says something like it. So the model is not handed the
+            // sponsor, and the credit, tagline and all, goes on the end of
+            // what comes back.
             + (sponsor.Length > 0
-                // A whole sentence crediting them, said brightly (21 Oct 2026)
-                // - "presented by X." on its own came out flat and robotic.
-                ? " End with one short, upbeat sentence crediting the sponsor, the way a TV broadcaster would - such as "
-                  + SponsoredMoments.CreditExamples(SponsoredMoments.ForSegment(kind), sponsor)
-                  + " - said once, with that name exactly as written."
+                ? " Do not mention any sponsor - this segment's sponsor is credited just after your words."
                 : string.Empty);
 
-        var writing = Client.GenerateAsync(
+        var writing = Ask(Client,
             BuildSegmentSystemPrompt(), body, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct);
 
         // On the recap show the credit goes in front, before the line is
@@ -4333,7 +4663,9 @@ public sealed class CommentaryService
         // spoken.
         var line = await RecordAndReturn(LabelFor(kind), creditFirst
             ? CreditFirstAsync(writing, () => TakeLeadCredit(kind))
-            : writing);
+            : sponsor.Length > 0
+                ? CreditLastAsync(writing, SponsoredMoments.Credit(SponsoredMoments.ForSegment(kind), sponsor, TaglineFor(sponsorAsWritten)))
+                : writing);
 
         if (taken is { } t && sponsor.Length > 0 && !string.IsNullOrWhiteSpace(line))
         {
@@ -4345,6 +4677,12 @@ public sealed class CommentaryService
             {
                 // The report is a courtesy; a failing count never costs the segment.
             }
+        }
+        else if (taken is { } unsaid && sponsor.Length > 0)
+        {
+            // Nothing came back, so nothing was credited: the ration goes
+            // back to the announcer's own calls (22 Oct 2026, bug hunt).
+            GiveBack(unsaid.Release);
         }
 
         return line;
@@ -4383,7 +4721,7 @@ public sealed class CommentaryService
         // see NightRecap.ExtraWordsOver.
         var extra = NightRecap.ExtraWordsOver(_settings.CommentaryMaxWords);
 
-        return await RecordAndReturn("Night recap", Client.GenerateAsync(
+        return await RecordAndReturn("Night recap", Ask(Client,
             BuildSystemPrompt(extra),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
@@ -4442,7 +4780,7 @@ public sealed class CommentaryService
 
         var extra = DriverCut.ExtraWordsOver(_settings.CommentaryMaxWords);
 
-        return await RecordAndReturn("Driver's night", Client.GenerateAsync(
+        return await RecordAndReturn("Driver's night", Ask(Client,
             BuildSystemPrompt(extra),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
@@ -4491,7 +4829,7 @@ public sealed class CommentaryService
 
         var extra = NightBefore.ExtraWordsOver(_settings.CommentaryMaxWords);
 
-        return await RecordAndReturn("Night before", Client.GenerateAsync(
+        return await RecordAndReturn("Night before", Ask(Client,
             BuildSystemPrompt(extra),
             body,
             maxTokens: MaxTokensForWordLimit(extra),
@@ -4589,7 +4927,7 @@ public sealed class CommentaryService
         var extra = Math.Max(0, _settings.CommentaryMaxWords)
             * Math.Clamp(turns - 1, 1, CommentaryExchange.MostTurns - 1) * 2 / 3;
 
-        var written = await Client.GenerateAsync(
+        var written = await Ask(Client,
             BuildSegmentSystemPrompt(extra, forExchange: true), body,
             maxTokens: MaxTokensForWordLimit(extra), temperature: Variety, ct: ct);
 

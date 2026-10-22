@@ -73,6 +73,9 @@ public sealed class ProfileForm : Form
     private readonly TextBox _txtDriverName = new();
     private readonly ComboBox _cmbCars = new();
     private readonly TextBox _txtAnnouncerName = new();
+
+    /// <summary>Their pronouns - one of Pronouns.Common or their own, typed. See DriverProfile.Pronouns.</summary>
+    private readonly ComboBox _cmbPronouns = new();
     private readonly TextBox _txtRaceNumber = new();
     private readonly TextBox _txtHomeTrack = new();
     private readonly TextBox _txtSkillLevel = new();
@@ -216,6 +219,24 @@ public sealed class ProfileForm : Form
         }
 
         fields.AddHint(announcerHint);
+
+        // Their pronouns, under the name they are announced by (21 Oct
+        // 2026) - the other half of the announcer getting a driver right.
+        // A drop-down that can be typed in: the usual three to pick from,
+        // and nobody's own refused. Blank is allowed and changes nothing.
+        _cmbPronouns.DropDownStyle = ComboBoxStyle.DropDown;
+        _cmbPronouns.MaxLength = Pronouns.MaxChars;
+
+        foreach (var set in Pronouns.Common)
+        {
+            _cmbPronouns.Items.Add(set);
+        }
+
+        _cmbPronouns.Text = Pronouns.Clean(Result.Pronouns);
+
+        captions.Add(fields.AddRow("Pronouns:", _cmbPronouns));
+        fields.AddHint("Optional. The AI commentary uses these whenever it talks about them, instead of guessing from "
+                       + "their name. Pick one, or type their own (like \"she/they\"). Leave it blank if you don't know.");
 
         // Their garage's cars, the active one showing - what they are
         // announced and recorded in. A name typed and Added is a new car,
@@ -501,6 +522,7 @@ public sealed class ProfileForm : Form
 
         var carsWidth = FitPicker(_cmbCars, keepToRow: false);
         var classWidth = FitPicker(_cmbClass, keepToRow: false);
+        var pronounsWidth = FitPicker(_cmbPronouns, keepToRow: false);
         FitPicker(_cmbTransponders, keepToRow: false);
 
         // The fields' column: never narrower than the text boxes were, wide
@@ -519,6 +541,7 @@ public sealed class ProfileForm : Form
             carsOnOneLine,
             carsWidth + UiLayout.TightButtonGap,
             classWidth + UiLayout.TightButtonGap,
+            pronounsWidth + _cmbPronouns.Margin.Horizontal,
             _chkRental.GetPreferredSize(Size.Empty).Width,
             _chkExcludeRecords.GetPreferredSize(Size.Empty).Width,
 
@@ -1057,6 +1080,7 @@ public sealed class ProfileForm : Form
             Notes = _txtNotes.Text,
 
             AnnouncerName = _txtAnnouncerName.Text.Trim(),
+            Pronouns = Pronouns.Clean(_cmbPronouns.Text),
             RaceNumber = _txtRaceNumber.Text.Trim(),
             HomeTrack = _txtHomeTrack.Text.Trim(),
             SkillLevel = _txtSkillLevel.Text.Trim(),

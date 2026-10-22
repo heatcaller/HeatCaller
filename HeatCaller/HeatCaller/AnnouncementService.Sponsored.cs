@@ -75,8 +75,8 @@ public sealed partial class AnnouncementService
 
         // A whole sentence about the moment, said brightly (21 Oct 2026) -
         // see SponsoredMoments.Tag for why the old " Presented by X." sounded
-        // robotic.
-        var tag = SponsoredMoments.Tag(moment, sponsor.Name);
+        // robotic - and the sponsor's tagline after it, where they gave one.
+        var tag = SponsoredMoments.Tag(moment, sponsor.Name, sponsor.Tagline);
 
         if (tag.Length == 0)
         {
@@ -115,7 +115,16 @@ public sealed partial class AnnouncementService
     /// going out, which is when it counts for the sponsor report. Null when
     /// nobody presents it or the ration is holding it back.
     /// </summary>
-    internal (string Name, Action Count)? TakeSponsor(SponsoredMoment moment)
+    internal (string Name, Action Count)? TakeSponsor(SponsoredMoment moment) =>
+        TakeSponsorWithRelease(moment) is { } taken ? (taken.Name, taken.Count) : null;
+
+    /// <summary>
+    /// The same, with how to give the ration back for a line that never went
+    /// out (22 Oct 2026, bug hunt) - a written segment that came back empty
+    /// used to hold the sponsor's credit off the announcer's own calls for
+    /// three minutes. TakeSponsor is this without the give-back.
+    /// </summary>
+    internal (string Name, Action Count, Action Release)? TakeSponsorWithRelease(SponsoredMoment moment)
     {
         if (SponsorOf(moment) is not { } sponsor
             || !SponsorMentions.TryReserve(moment, out var stamp, out var previous))
@@ -134,7 +143,27 @@ public sealed partial class AnnouncementService
         }
 
         var id = sponsor.Id;
-        return (name, () => SponsorMentions.Mentioned(moment, id));
+        return (name, () => SponsorMentions.Mentioned(moment, id), () => SponsorMentions.Release(moment, stamp, previous));
+    }
+
+    /// <summary>
+    /// The tagline of the sponsor credited by <paramref name="sponsorName"/>
+    /// in tonight's rotation, or null - what CommentaryService.SponsorTagline
+    /// is wired to, for the credits on the lines the AI commentary writes
+    /// (21 Oct 2026). See SponsoredMoments.TaglineOf.
+    /// </summary>
+    internal string? TaglineOf(string? sponsorName)
+    {
+        try
+        {
+            return SponsoredMoments.TaglineOf(SponsorsProvider?.Invoke(), sponsorName);
+        }
+        catch
+        {
+            // Read off the UI thread while the Sponsors page may be editing
+            // the list - the credit without its tagline, for once.
+            return null;
+        }
     }
 
     /// <summary>Raises <see cref="MomentHappened"/> without letting a bad handler reach the lap pipeline.</summary>

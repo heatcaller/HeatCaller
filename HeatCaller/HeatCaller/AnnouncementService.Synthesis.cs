@@ -78,6 +78,8 @@ public sealed partial class AnnouncementService
                 "The HeatCaller voice can't be tested from here. Choose \"My own ElevenLabs account\" on the Voice tab to test a voice you pay for.");
         }
 
+        // A Test press waits on its own button, not in the voice queue.
+        RenderingAhead.Value = true;
         return (await SynthesizeOrReuseAsync(client, profile, text, reuseSaved)).Audio;
     }
 
@@ -121,7 +123,7 @@ public sealed partial class AnnouncementService
             return new SynthesisResult(saved, LineSource.Library);
         }
 
-        var limit = SynthesisTimeoutFor(text);
+        var limit = LimitFor(text);
         using var timeout = new CancellationTokenSource(limit);
         // WHY (20 Oct 2026): the gate wait and the request share the one
         // 30 s limit, so a line that got its slot at 28 s had 2 s to be
@@ -165,7 +167,7 @@ public sealed partial class AnnouncementService
 
     private async Task<ElevenLabsClient.TimedSpeech?> SynthesizeTimedGatedAsync(VoiceProfile profile, string text)
     {
-        var limit = SynthesisTimeoutFor(text);
+        var limit = LimitFor(text);
         using var timeout = new CancellationTokenSource(limit);
         // WHY (20 Oct 2026): timed the same way as SynthesizeOrReuseAsync,
         // so a request starved by a long wait for its slot is not blamed on
@@ -210,6 +212,21 @@ public sealed partial class AnnouncementService
     /// clearer message, is the one that fires.
     /// </summary>
     private static readonly TimeSpan SynthesisTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Set while a line is rendered AHEAD of being said - a recap prepared
+    /// during the teaser, a recorded voice line, a Test press - and only
+    /// then does a long line get the long limit (22 Oct 2026, bug hunt). A
+    /// line rendered inside the voice queue holds the one voice loop while
+    /// it renders, and a 150 s wait there froze every call behind it, so
+    /// those keep the flat 30 s. An AsyncLocal, so it reaches the render
+    /// through the awaits without every method in between carrying it.
+    /// </summary>
+    private static readonly AsyncLocal<bool> RenderingAhead = new();
+
+    /// <summary>The limit for one line, by where it is being rendered - see RenderingAhead.</summary>
+    private static TimeSpan LimitFor(string? text) =>
+        RenderingAhead.Value ? SynthesisTimeoutFor(text) : SynthesisTimeout;
 
     /// <summary>The most a single line is ever given, however long it is.</summary>
     private static readonly TimeSpan LongestSynthesisTimeout = TimeSpan.FromSeconds(150);

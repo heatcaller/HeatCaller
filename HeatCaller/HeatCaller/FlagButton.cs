@@ -39,11 +39,39 @@ internal sealed class FlagButton : Button
             true);
     }
 
-    /// <summary>The colour this button shows when hovered or lit.</summary>
-    public Color FlagColour { get; init; } = Color.FromArgb(47, 111, 237);
+    private Color _flagColour = Color.FromArgb(47, 111, 237);
+    private Color _flagText = Color.White;
+
+    /// <summary>
+    /// The colour this button shows when hovered or lit. Settable after it
+    /// is built (21 Oct 2026) - On Air turns cyan while the show is live.
+    /// </summary>
+    public Color FlagColour
+    {
+        get => _flagColour;
+        set
+        {
+            if (_flagColour != value)
+            {
+                _flagColour = value;
+                Invalidate();
+            }
+        }
+    }
 
     /// <summary>The caption's colour on top of <see cref="FlagColour"/>.</summary>
-    public Color FlagText { get; init; } = Color.White;
+    public Color FlagText
+    {
+        get => _flagText;
+        set
+        {
+            if (_flagText != value)
+            {
+                _flagText = value;
+                Invalidate();
+            }
+        }
+    }
 
     /// <summary>Paints black-and-white chequers instead of a flat colour.</summary>
     public bool Chequered { get; init; }

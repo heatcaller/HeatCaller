@@ -81,6 +81,11 @@ namespace HeatCaller;
 /// one voice in this broadcast that does not read times out, so the
 /// figure comes in as a number of milliseconds and leaves as plain words.
 /// </param>
+/// <param name="Pronouns">
+/// The driver's pronouns as their profile has them (21 Oct 2026), for the
+/// sentences below that say "his" - see HeatCaller.Pronouns.For. Blank
+/// reads as those sentences always did.
+/// </param>
 public sealed record TeamNight(
     string DriverId,
     string Name,
@@ -93,7 +98,8 @@ public sealed record TeamNight(
     int Warnings,
     bool PaceIsReadable,
     double ConsistencyPercent,
-    long PotentialGainMs);
+    long PotentialGainMs,
+    string Pronouns = "");
 
 /// <summary>
 /// How one driver got on against ONE named rival tonight - the
@@ -321,15 +327,20 @@ public static class PrincipalFacts
 
         string text;
 
+        // Their own pronouns when their profile has them (21 Oct 2026) -
+        // the model follows what the facts say, so a fact that says "his"
+        // about a driver who is "she" is a fact that misgenders her.
+        var them = Pronouns.For(night.Pronouns);
+
         if (night.PotentialGainMs >= LeastCostWorthSaying)
         {
-            text = $"{who} had more pace tonight than the results show: his untidy laps cost him about "
-                   + $"{Spent(night.PotentialGainMs)} across his races tonight, measured against his own best lap. "
+            text = $"{who} had more pace tonight than the results show: {them.Possessive} untidy laps cost {them.Object} about "
+                   + $"{Spent(night.PotentialGainMs)} across {them.Possessive} races tonight, measured against {them.Possessive} own best lap. "
                    + "The pace was there; the repetition was not.";
         }
         else if (night.ConsistencyPercent is > 0 and <= TightConsistency)
         {
-            text = $"{who} ran within himself all night - lap after lap at his own limit, with very little left on "
+            text = $"{who} ran within {them.Reflexive} all night - lap after lap at {them.Possessive} own limit, with very little left on "
                    + "the table. Any more speed has to come from the car or the line, not from tidying up.";
         }
         else
@@ -379,7 +390,7 @@ public static class PrincipalFacts
         if (night.Retirements > 0)
         {
             parts.Add(night.Retirements >= night.RacesRun && night.RacesRun > 0
-                ? $"did not finish any of his {Plural.Of(night.RacesRun, "race")} tonight"
+                ? $"did not finish any of {Pronouns.For(night.Pronouns).Possessive} {Plural.Of(night.RacesRun, "race")} tonight"
                 : $"did not finish {OfTonights(night.Retirements)}");
         }
 
@@ -464,8 +475,10 @@ public static class PrincipalFacts
         var evening = tonight.Ahead == tonight.Behind
             ? $"they split tonight's {Plural.Of(tonight.Ahead + tonight.Behind, "meeting")}"
             : tonight.Ahead > tonight.Behind
-                ? $"{who} finished ahead of him in {OfTonights(tonight.Ahead)}"
-                : $"{rival} finished ahead of him in {OfTonights(tonight.Behind)}";
+                // No "him" (22 Oct 2026, bug hunt): our driver by their own
+                // pronouns, the rival by name - theirs are not carried.
+                ? $"{who} finished ahead of {rival} in {OfTonights(tonight.Ahead)}"
+                : $"{rival} finished ahead of {Pronouns.For(night.Pronouns).Object} in {OfTonights(tonight.Behind)}";
 
         var text = $"{who} against {rival}, across everything the two of them have raced: {record}. And tonight, "
                    + $"{evening}.";

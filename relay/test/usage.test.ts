@@ -108,8 +108,8 @@ describe("usage meters", () => {
       assert.equal(answer.status, 200);
       assert.deepEqual(answer.body, {
         ok: true,
-        commentary: { enabled: false, used: 0, allowance: 0, topUp: 0, resetsAt: null },
-        voice: { enabled: false, used: 0, allowance: 0, topUp: 0, resetsAt: null },
+        commentary: { enabled: false, used: 0, allowance: 0, topUp: 0, resetsAt: null, known: true },
+        voice: { enabled: false, used: 0, allowance: 0, topUp: 0, resetsAt: null, known: true },
         requests: [],
       });
     });
@@ -125,8 +125,8 @@ describe("usage meters", () => {
       const answer = await call(relay, "GET", "/api/v1/c/acme-rc/usage", { token: ACME_TOKEN });
 
       assert.equal(answer.status, 200);
-      assert.deepEqual(answer.body.commentary, { enabled: true, used: 2, allowance: 5, topUp: 0, resetsAt: "2026-10-01T00:00:00.000Z" });
-      assert.deepEqual(answer.body.voice, { enabled: true, used: 10, allowance: 1_000, topUp: 0, resetsAt: "2026-10-01T00:00:00.000Z" });
+      assert.deepEqual(answer.body.commentary, { enabled: true, used: 2, allowance: 5, topUp: 0, resetsAt: "2026-10-01T00:00:00.000Z", known: true });
+      assert.deepEqual(answer.body.voice, { enabled: true, used: 10, allowance: 1_000, topUp: 0, resetsAt: "2026-10-01T00:00:00.000Z", known: true });
       assert.deepEqual(answer.body.requests, []);
     });
 
@@ -215,7 +215,7 @@ describe("usage meters", () => {
       assert.equal(catalogue.usage.allowance, 3);
 
       const usage = await lines.usage("acme-rc", plan);
-      assert.deepEqual(usage, { enabled: true, used: 2, allowance: 3, topUp: 2, resetsAt: "2026-10-01T00:00:00.000Z" });
+      assert.deepEqual(usage, { enabled: true, used: 2, allowance: 3, topUp: 2, resetsAt: "2026-10-01T00:00:00.000Z", known: true });
     });
 
     it("is this month's only", async () => {

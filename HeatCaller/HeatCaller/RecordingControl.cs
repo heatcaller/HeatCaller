@@ -305,7 +305,13 @@ public sealed class RecordingControl : UserControl
 
         Check(_chkClips, "A clip for each driver as well as the race's own recording");
         _chkClips.Checked = _audio.DriverHighlights;
-        _chkClips.CheckedChanged += (_, _) => _audio.DriverHighlights = _chkClips.Checked;
+        _chkClips.CheckedChanged += (_, _) =>
+        {
+            _audio.DriverHighlights = _chkClips.Checked;
+
+            // The videos come from the clips (22 Oct 2026, bug hunt).
+            UpdateEnabledState();
+        };
 
         // THE SHAREABLE VIDEO (21 Oct 2026): an upright mp4 for a driver's
         // phone, made from their clip after the race - see HighlightVideo.
@@ -360,7 +366,7 @@ public sealed class RecordingControl : UserControl
         audio.Add(audioGrid);
         audio.Add(_chkShareVideos, stretch: false, gapBelow: UiLayout.HintGap);
         audio.Add(Hint(
-            "Only 1st, 2nd and 3rd are ever put online, and only while the club's page is switched on (Club Website). "
+            "Up to 1st, 2nd and 3rd are put online (only the ones videos are made for), never anyone else, and only while the club's page is switched on (Club Website). "
             + "They are kept there for a week."), gapBelow: 0);
 
         // ------------------------------------------------------------------
@@ -539,9 +545,12 @@ public sealed class RecordingControl : UserControl
         var recording = _chkRecord.Checked;
 
         _chkClips.Enabled = recording;
-        _cmbVideos.Enabled = recording;
-        _txtVideoHandle.Enabled = recording;
-        _chkShareVideos.Enabled = recording;
+        // The videos are made from the drivers' clips, so with clips off
+        // these do nothing (22 Oct 2026, bug hunt).
+        var clips = recording && _chkClips.Checked;
+        _cmbVideos.Enabled = clips;
+        _txtVideoHandle.Enabled = clips;
+        _chkShareVideos.Enabled = clips;
         _txtAudioFolder.Enabled = recording;
         _btnAudioFolder.Enabled = recording;
         _numKeepNights.Enabled = recording;

@@ -1939,15 +1939,22 @@ public sealed partial class RelayPublisher : IDisposable
                     }
                     else
                     {
-                        ForgetNightsTrouble();
-
                         // Until the relay takes it - see
                         // CloseDriverNightsOnTheRelay. This is what takes
                         // a club's drivers' evenings back DOWN rather than
                         // merely stopping new ones.
+                        //
+                        // The trouble forgotten only once nothing is
+                        // pending (22 Oct 2026, bug hunt), as notes and the
+                        // vote do: forgotten every pass, a close that kept
+                        // failing was logged again every 30 seconds all night.
                         if (_nightsClosePending)
                         {
                             SendNightsClose(pass.Token);
+                        }
+                        else
+                        {
+                            ForgetNightsTrouble();
                         }
                     }
 

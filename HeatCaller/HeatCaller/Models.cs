@@ -207,6 +207,18 @@ public sealed class DriverProfile
     /// </summary>
     public string AnnouncerName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The driver's pronouns - "he/him", "she/her", "they/them", or their
+    /// own - set under the Announcer name on their profile (21 Oct 2026).
+    ///
+    /// Handed to the AI commentary with their name in every prompt that
+    /// names them, so it stops guessing from the name (see
+    /// CommentaryService.WithPronouns), and used by the few sentences the
+    /// app writes about a driver itself (see Pronouns.For). Blank, as every
+    /// profile saved before this date is, changes nothing.
+    /// </summary>
+    public string Pronouns { get; set; } = string.Empty;
+
     /// <summary>Racing number, for callouts and results sheets.</summary>
     public string RaceNumber { get; set; } = string.Empty;
 

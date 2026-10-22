@@ -162,8 +162,13 @@ internal sealed class ShowTreatmentCard
         Card = new Section("Show treatment");
 
         _lblImagingCovers = Hint(
-            "This soundscape's imaging supplies the opener, bed and stings (Pieces card above; levels on the Mixer). "
-            + "The club's own pieces below only play on a soundscape with no imaging.");
+            // Said truly (22 Oct 2026, bug hunt): the imaging only covers the
+            // race recap's open and bed, and the stings - the club's own
+            // pieces still play on the cold open, the sign-off and every
+            // other set piece ticked below.
+            "This soundscape's imaging supplies the race recap's opener and bed, and the stings between items "
+            + "(Pieces card above; levels on the Mixer). The club's own pieces below still play on the cold open, "
+            + "the sign-off and the other set pieces ticked below.");
 
         _clubPiecesBar = new ButtonBar().With(Steady(_btnShowClubPieces, HideClubPiecesCaption));
 
@@ -693,10 +698,13 @@ internal sealed class ShowTreatmentCard
 
         try
         {
+            // The club's rows stay on show (22 Oct 2026, bug hunt): they are
+            // still heard outside the recap, so folding them away hid the
+            // controls for music that plays.
             _lblImagingCovers.Visible = covered;
-            _clubPiecesBar.Visible = covered;
+            _clubPiecesBar.Visible = false;
             _btnShowClubPieces.Text = _clubPiecesOpened ? HideClubPiecesCaption : ShowClubPiecesCaption;
-            _clubPiecesGrid.Visible = !covered || _clubPiecesOpened;
+            _clubPiecesGrid.Visible = true;
         }
         finally
         {

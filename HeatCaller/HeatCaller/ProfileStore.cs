@@ -177,6 +177,7 @@ public sealed class ProfileStore
         profile.SetupConfiguration ??= string.Empty;
         profile.Notes ??= string.Empty;
         profile.AnnouncerName ??= string.Empty;
+        profile.Pronouns ??= string.Empty;
         profile.RaceNumber ??= string.Empty;
         profile.HomeTrack ??= string.Empty;
         profile.SkillLevel ??= string.Empty;

@@ -638,7 +638,28 @@ public sealed partial class RaceControlControl
                 return;
             }
 
-            CancelAutoStart();
+            // During a demo's On Air, the flag starts the demo, as Stage,
+            // Countdown and Green do (22 Oct 2026, bug hunt) - it used to
+            // call On Air off, and the demo never ran.
+            if (SkipOnAirToTheDemo("Yellow"))
+            {
+                return;
+            }
+
+            // Between races this flag moves no race on, so it does not call
+            // On Air off either (22 Oct 2026, bug hunt): the opening was
+            // killed and the race never staged, with nothing said.
+            if (_onAirCts is not null && _race.State is RaceState.Idle or RaceState.Finished)
+            {
+                _autoStartCts?.Cancel();
+                _autoStartCts = null;
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] Yellow flag thrown during On Air - On Air carries on, the race is not on track.");
+            }
+            else
+            {
+                CancelAutoStart();
+            }
+
             _race.YellowFlag();
         };
         _btnYellow.Click += (_, _) => _actYellow();
@@ -656,7 +677,28 @@ public sealed partial class RaceControlControl
                 return;
             }
 
-            CancelAutoStart();
+            // During a demo's On Air, the flag starts the demo, as Stage,
+            // Countdown and Green do (22 Oct 2026, bug hunt) - it used to
+            // call On Air off, and the demo never ran.
+            if (SkipOnAirToTheDemo("Red"))
+            {
+                return;
+            }
+
+            // Between races this flag moves no race on, so it does not call
+            // On Air off either (22 Oct 2026, bug hunt): the opening was
+            // killed and the race never staged, with nothing said.
+            if (_onAirCts is not null && _race.State is RaceState.Idle or RaceState.Finished)
+            {
+                _autoStartCts?.Cancel();
+                _autoStartCts = null;
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] Red flag thrown during On Air - On Air carries on, the race is not on track.");
+            }
+            else
+            {
+                CancelAutoStart();
+            }
+
             _race.RedFlag();
         };
         _btnRed.Click += (_, _) => _actRed();
@@ -919,11 +961,9 @@ public sealed partial class RaceControlControl
         // The state and the flag, each caption beside what it names. They
         // sat at fixed x positions, and "Flag:" at 200 ran into "None" at
         // 246 at every text size - by five pixels at the normal one.
-        var lblStateCaption = Wear(new Label { Text = "State:", AutoSize = true }, () => AppTheme.BoldFont);
         _lblRaceState.Text = "Idle";
         _lblRaceState.AutoSize = true;
 
-        var lblFlagCaption = Wear(new Label { Text = "Flag:", AutoSize = true }, () => AppTheme.BoldFont);
         _lblFlag.Text = "None";
         _lblFlag.ForeColor = AppTheme.TextMuted;
         _lblFlag.AutoSize = true;
@@ -1097,26 +1137,16 @@ public sealed partial class RaceControlControl
         // measured for On Air's widest caption as well as what it says now -
         // see OnAirLeastWidth.
         flags.Add(new ButtonBar(tight: true, sameWidth: true) { LeastWidth = OnAirLeastWidth }.With(
-            _btnOnAir, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset));
+            _btnOnAir, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset), gapBelow: 0);
 
         // Start races On Air, the format line and its button moved to the
         // foot of the board (21 Oct 2026) - set once a night, not pressed
         // during a race, so they gave up their place beside the flags.
-
-        var status = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            WrapContents = true,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty,
-            Tag = AppTheme.KeepBackColor,
-        };
-
-        status.Controls.Add(StatusPair(lblStateCaption, _lblRaceState));
-        status.Controls.Add(StatusPair(lblFlagCaption, _lblFlag));
-
-        flags.Add(status, gapBelow: 0);
+        //
+        // The State and Flag line under the flags is gone (22 Oct 2026, as
+        // asked): the lit flag button and the board already say both. The
+        // two labels are still kept up to date, so nothing that reads them
+        // changes - they are just not on the page.
 
         // The board's instructions used to be its group box's caption, all
         // hundred-odd characters of it; a card's caption is a heading, and
@@ -1232,33 +1262,6 @@ public sealed partial class RaceControlControl
         // method. Off the page: nothing is laid out round them.
         Controls.Add(_cmbTrackLayout);
         Controls.Add(_txtSessionLabel);
-    }
-
-    /// <summary>
-    /// A caption and what it names, kept together on one line - "State:
-    /// Racing" - so a row of them that wraps never leaves a caption at the
-    /// end of one line and its value at the start of the next. A section
-    /// gap after it, before the next pair.
-    /// </summary>
-    private static FlowLayoutPanel StatusPair(Label caption, Label value)
-    {
-        caption.Margin = Padding.Empty;
-        value.Margin = Padding.Empty;
-
-        var pair = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            WrapContents = false,
-            Margin = new Padding(0, 0, UiLayout.SectionGap, 0),
-            Padding = Padding.Empty,
-            Tag = AppTheme.KeepBackColor,
-        };
-
-        pair.Controls.Add(caption);
-        pair.Controls.Add(value);
-
-        return pair;
     }
 
     /// <summary>

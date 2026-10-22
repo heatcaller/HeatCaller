@@ -674,6 +674,23 @@ public sealed partial class AnnouncementService
     private AnnouncementEventType? _onAirCall;
 
     /// <summary>
+    /// Whether anything is being said this moment - the state SpeakingChanged
+    /// reports the edges of, for something that starts mid-line (an imaging
+    /// bed) and so missed the edge (22 Oct 2026, bug hunt). OnAirNow can be
+    /// null while talking when the line has no name.
+    /// </summary>
+    internal bool IsTalking
+    {
+        get
+        {
+            lock (_speakingLock)
+            {
+                return _speakingCount > 0;
+            }
+        }
+    }
+
+    /// <summary>
     /// What is going out of the speakers RIGHT NOW, in words a race
     /// director can read in the second they have for it - "Race Recap",
     /// "Yellow flag", "Lap time". Null when nothing is being spoken.
@@ -981,6 +998,23 @@ public sealed partial class AnnouncementService
     /// </summary>
     public VoiceEngine VoiceEngineInUse => _voiceStore.Current.EffectiveEngine;
 
+    /// <summary>
+    /// What a line rendered now would sound like - engine, voice, model and
+    /// delivery - as one string, for Race Control to tell whether the lines
+    /// it voiced ahead are still in the voice in use (22 Oct 2026, bug hunt).
+    /// Only the fields that change the sound: a fader or theme saving the
+    /// same file must not throw the takes away.
+    /// </summary>
+    public string CurrentVoiceSignature
+    {
+        get
+        {
+            var p = _voiceStore.Current;
+            return string.Join("|", p.EffectiveEngine, p.VoiceId, p.ModelId, p.HeatCallerVoice, p.KokoroVoiceName,
+                p.Stability, p.SimilarityBoost, p.Style, p.Speed, p.KokoroStandsIn);
+        }
+    }
+
     /// <param name="voice">
     /// Another speaker's voice for this line alone - the mechanic in the
     /// recap's interview. Null for the announcer. Only the part picked for
@@ -1093,6 +1127,9 @@ public sealed partial class AnnouncementService
 
         try
         {
+            // Rendered ahead, so a long line gets the long limit - see
+            // RenderingAhead (22 Oct 2026, bug hunt).
+            RenderingAhead.Value = true;
             var audio = (await RenderLineAsync(profile, spoken)).Audio;
             return new PreparedSpeech(spoken, audio, text);
         }
@@ -1138,6 +1175,7 @@ public sealed partial class AnnouncementService
 
         try
         {
+            RenderingAhead.Value = true;
             var result = await RenderLineAsync(profile, spoken, fresh);
             return result.Source is LineSource.ElevenLabs or LineSource.HeatCaller or LineSource.Library
                 ? result.Audio
@@ -1277,7 +1315,7 @@ public sealed partial class AnnouncementService
             // either side is only LOOKED at - the lookbehind and lookahead
             // capture it without consuming it, so it is left exactly as
             // written.
-            @"(?<=\b(?<pre>[A-Za-z]+)\s+)?\b(?<whole>[0-9]{1,9})\.(?<frac>[0-9]{1,3})\s*(?:seconds?|secs?|s)\b(?=(?:\s+(?<post>[A-Za-z]+))?)",
+            @"(?<=\b(?<pre>[A-Za-z]+)\s+)?(?<![0-9]:)\b(?<whole>[0-9]{1,9})\.(?<frac>[0-9]{1,3})\s*(?:seconds?|secs?|s)\b(?=(?:\s+(?<post>[A-Za-z]+))?)",
             match =>
             {
                 // InvariantCulture: this is digit text pulled out of a

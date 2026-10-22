@@ -198,9 +198,10 @@ public sealed class DeleteRaceDayForm : Form
             counts.Badges == 1
                 ? "Also take back 1 achievement earned in them"
                 : $"Also take back {counts.Badges} achievements earned in them",
+            // Says what really happens (22 Oct 2026, bug hunt): milestones are kept.
             "An achievement names the race that produced it. Race totals on a driver's profile are left as they "
-            + "are - winding those back cannot be done reliably from here - so a milestone achievement (10 races, "
-            + "first win) is earned again next time they race.",
+            + "are - winding those back cannot be done reliably from here - so milestone achievements (race, lap, "
+            + "win and podium counts) are kept, since the totals that earned them are kept too.",
             TickBox.UnderCaption(TickIndent),
             anyRaces && counts.Badges > 0,
             gapBelow: UiLayout.SectionGap);

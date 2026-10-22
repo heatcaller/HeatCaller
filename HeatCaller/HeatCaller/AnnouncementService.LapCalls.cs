@@ -440,7 +440,11 @@ public sealed partial class AnnouncementService
 
             if (gapMs is > 0 and < 1500)
             {
-                parts.Add($"{name} right on his tail");
+                // On the tail of the car in front - "her tail" when that
+                // driver's profile says she/her (21 Oct 2026); "his", as it
+                // always was, when it says nothing.
+                var ahead = Pronouns.For(_profiles.Get(named[i - 1].Transponder)?.Pronouns);
+                parts.Add($"{name} right on {ahead.Possessive} tail");
             }
             else if (gapMs is > 0)
             {
@@ -492,7 +496,7 @@ public sealed partial class AnnouncementService
 
         // The run-through, when a sponsor presents it.
         var (sponsorTag, countMention, releaseMention) = SponsorTag(AnnouncementEventType.PositionReport);
-        text = SponsoredMoments.WithCredit(text, sponsorTag);
+        text = (text + sponsorTag).Trim();
 
         // The text goes up only if the report is accepted - see
         // EnqueueVoiceWork. A report turned down (or kept and then lost)
@@ -1246,7 +1250,7 @@ public sealed partial class AnnouncementService
             // A battle a sponsor presents carries their name - decided here,
             // as the line is queued, so the ration is the queue's to spend.
             var (sponsorTag, countMention, releaseMention) = SponsorTag(type);
-            var said = SponsoredMoments.WithCredit(text, sponsorTag);
+            var said = (text + sponsorTag).Trim();
 
             // Never said, so it doesn't use the pair up - unless a reset
             // has already wiped the slate, when there is nothing to undo.

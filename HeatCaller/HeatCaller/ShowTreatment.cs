@@ -1758,7 +1758,16 @@ internal sealed class ShowTreatment
         // Where the host hits the post - see BroadcastImaging.PostOf.
         var imagingPost = openerPiece is { } piece ? BroadcastImaging.PlayedOutOf(piece.Path, piece.Clip) : TimeSpan.Zero;
 
-        if (!_settings.ShowThemeEnabled && imagingOpener is null && imagingBed is null)
+        // The club's own pieces only where the club ticked this segment
+        // (22 Oct 2026, bug hunt): a recap the imaging alone treats used to
+        // get the club's opener or bed for the missing half, though "Race
+        // recaps" had been unticked. Only where the imaging is what treats
+        // the kind: every other show (the hand-over's Coming Up included,
+        // which is not a tickable segment) keeps the club's music as before.
+        var clubTreats = _settings.ShowThemeEnabled
+            && (!ImagingTreats(kind) || ShowSegments.Parse(_settings.ShowSegments).Contains(SegmentKind.RaceRecap));
+
+        if (!clubTreats && imagingOpener is null && imagingBed is null)
         {
             return null;
         }
@@ -1766,8 +1775,8 @@ internal sealed class ShowTreatment
         string? openerProblem = null;
         string? bedProblem = null;
 
-        var opener = imagingOpener ?? (_settings.ShowThemeEnabled ? Music.Opener(out openerProblem) : null);
-        var bed = imagingBed ?? (_settings.ShowThemeEnabled ? Music.Bed(out bedProblem) : null);
+        var opener = imagingOpener ?? (clubTreats ? Music.Opener(out openerProblem) : null);
+        var bed = imagingBed ?? (clubTreats ? Music.Bed(out bedProblem) : null);
 
         foreach (var problem in new[] { openerProblem, bedProblem })
         {

@@ -152,11 +152,38 @@ internal static class HighlightVideo
     /// the podium's long tail cut down and the whole kept under
     /// <see cref="MaxLengthMs"/> by dropping from the front.
     /// </summary>
-    public static List<RaceHighlights.Window> VideoWindows(IReadOnlyList<RaceHighlights.Window> clip)
+    /// <param name="flagFileMs">
+    /// Where the flag falls in the recording, in the file's own ms (green
+    /// plus RaceHighlights.FlagAtMsFrom), or null when not known. A long
+    /// window is cut round it (22 Oct 2026, bug hunt): cut from its start,
+    /// a window that began well before the flag - marks merge into the
+    /// podium's - lost the finish call entirely.
+    /// </param>
+    public static List<RaceHighlights.Window> VideoWindows(IReadOnlyList<RaceHighlights.Window> clip, long? flagFileMs = null)
     {
-        var windows = clip.Select(w => w.LengthMs > PodiumKeepMs + RaceHighlights.LeadInMs + RaceHighlights.TailMs
-                ? new RaceHighlights.Window(w.StartMs, w.StartMs + PodiumKeepMs + RaceHighlights.LeadInMs)
-                : w)
+        const long Longest = PodiumKeepMs + RaceHighlights.LeadInMs + RaceHighlights.TailMs;
+        const long Kept = PodiumKeepMs + RaceHighlights.LeadInMs;
+
+        RaceHighlights.Window Cut(RaceHighlights.Window w)
+        {
+            if (w.LengthMs <= Longest)
+            {
+                return w;
+            }
+
+            // The flag inside it: the lead-in before it and the finish after.
+            if (flagFileMs is { } flag && flag >= w.StartMs && flag <= w.EndMs)
+            {
+                return new RaceHighlights.Window(
+                    Math.Max(w.StartMs, flag - RaceHighlights.LeadInMs),
+                    Math.Min(w.EndMs, flag + PodiumKeepMs));
+            }
+
+            // Any other long stretch: its last part, where it comes to a head.
+            return new RaceHighlights.Window(w.EndMs - Kept, w.EndMs);
+        }
+
+        var windows = clip.Select(Cut)
             .Where(w => w.LengthMs > 0)
             .ToList();
 

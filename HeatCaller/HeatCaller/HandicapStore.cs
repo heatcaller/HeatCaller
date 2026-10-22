@@ -472,10 +472,15 @@ public sealed class HandicapStore
             return sessions;
         }
 
+        // A race with no round - a Quick Race - is kept (22 Oct 2026, bug
+        // hunt): it carries no class to rule it out, and dropping every one
+        // left a club that runs its handicap class without the programme
+        // with no recent pace and no suggestions at all. Only a round that
+        // belongs to ANOTHER class is left out.
         return sessions.Where(s =>
             s.SessionType == RaceSessionType.Race
-            && s.RoundId is { } id
-            && string.Equals(rounds.Get(id)?.ClassName, className, StringComparison.OrdinalIgnoreCase));
+            && (s.RoundId is not { } id
+                || string.Equals(rounds.Get(id)?.ClassName, className, StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>

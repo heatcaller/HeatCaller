@@ -862,15 +862,6 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         {
             var name = RaceHighlights.ClipNameFor(baseName, clip.Position, clip.DriverName);
 
-            // THE SHAREABLE VIDEO (21 Oct 2026), for the drivers the club
-            // chose on Sounds > Recording - see HighlightVideo. From the
-            // same recording and the same moments as the clip, cut to a
-            // length a phone wants; a failure here costs only the video.
-            if (video is not null && video.Wants(clip.Position))
-            {
-                videos += MakeVideo(recording, record, releaseOffsetsMs, clip, folder, name, video, log) ? 1 : 0;
-            }
-
             // A plain ".wav", NOT the in-progress name: a clip the encoder
             // refused is left where it is and plays as a wav, and the sweep
             // must not pick it up every race night afterwards and try the
@@ -907,6 +898,23 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         if (written > 0)
         {
             log($"{AppTime.LogStampNow()}  [audio] {Plural.Of(written, "driver clip")} saved in {folder}.");
+        }
+
+        // THE SHAREABLE VIDEO (21 Oct 2026), for the drivers the club chose
+        // on Sounds > Recording - see HighlightVideo. From the same
+        // recording and the same moments as the clip, cut to a length a
+        // phone wants; a failure here costs only the video.
+        //
+        // AFTER every clip, not between them (22 Oct 2026, bug hunt): a
+        // video's render and its podium upload take minutes, and the last
+        // driver's mp3 used to wait behind every one of them.
+        if (video is not null)
+        {
+            foreach (var clip in clips.Where(c => video.Wants(c.Position)))
+            {
+                var name = RaceHighlights.ClipNameFor(baseName, clip.Position, clip.DriverName);
+                videos += MakeVideo(recording, record, releaseOffsetsMs, clip, folder, name, video, log) ? 1 : 0;
+            }
         }
 
         if (videos > 0)
@@ -994,7 +1002,10 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         HighlightVideoOptions video,
         Action<string> log)
     {
-        var windows = HighlightVideo.VideoWindows(clip.Windows);
+        // Where the flag is in this file, so a long window is cut round the
+        // finish rather than from its start (22 Oct 2026, bug hunt).
+        var flagAt = RaceHighlights.FlagAtMsFrom(record, releaseOffsetsMs);
+        var windows = HighlightVideo.VideoWindows(clip.Windows, flagAt > 0 ? (long?)(recording.GreenAtMs + flagAt) : null);
 
         if (windows.Count == 0)
         {

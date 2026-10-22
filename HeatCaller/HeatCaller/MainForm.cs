@@ -1345,8 +1345,10 @@ public partial class MainForm : Form
         // and then drops is still counted - not worth a second path back.)
         if (_commentary is not null)
         {
-            _commentary.SegmentSponsorTaken = kind =>
-                SponsoredMoments.ForSegment(kind) is { } moment ? _announcer.TakeSponsor(moment) : null;
+            // With the give-back (22 Oct 2026, bug hunt): a segment that comes
+            // back empty returns the ration to the announcer's own calls.
+            _commentary.SegmentSponsorTakenWithRelease = kind =>
+                SponsoredMoments.ForSegment(kind) is { } moment ? _announcer.TakeSponsorWithRelease(moment) : null;
 
             // The sponsor's tagline, said after every credit HeatCaller puts
             // on a written line - the intros, the recap, a segment (21 Oct
