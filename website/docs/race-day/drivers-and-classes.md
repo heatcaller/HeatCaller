@@ -167,6 +167,7 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 | **Transponder:** | Required. The transponder number the decoder reports. Locked after the profile is saved. |
 | **Driver name:** | The driver's name, as shown on screens, results and heat sheets. |
 | **Announcer name:** | What the announcer reads instead of their real name: a nickname the crowd knows, or the name spelled the way it sounds, which is how you fix a name the voice says wrong. Leave it blank to use the driver name. It takes effect straight away, and **Hear It** under the box reads it back to you. See [The name the announcer says](#the-name-the-announcer-says). |
+| **Pronouns:** | How the AI commentary refers to them — pick he/him, she/her or they/them, or type their own (like she/they). It's handed to the AI beside their name whenever it writes about them, so it uses these instead of guessing from the name. Leave it blank if you don't know; blank changes nothing. |
 | **Active car:** | The car they race in now — the one that's announced and recorded. Pick one of their cars from the list. To add a new car, type its name and click **Add**; it's added to their garage when you save (a name you type but don't add is saved too). To retire a car or give it to someone else, use their [garage](#a-drivers-garage). |
 | **Race number:** | Racing number. Shown as a chip on the driver card, on Race Control, and on the online check-in list. |
 | **Home track:** | Home club or town. |
@@ -344,7 +345,7 @@ From then on:
 - **Heats:** building the program deals them into every class they race. With **Only include drivers who have checked in** on, one check-in covers them all.
 - **Their main class** is still the one their card, the check-in sheet, results headings, badges and the announcer give as their class.
 - **Driver Hub** shows a chip for each class they race, the main one first, and **Find** finds them by any of them.
-- **Tech:** **Who's Racing** and the phone look at every class they race that runs tech, and show them cleared only once they're cleared in each, so they agree with the tech warning on Race Control. See [Who still needs inspecting](events-and-entries.md#whos-outstanding).
+- **Tech:** **Who's Racing** and the phone look at every class they race that runs tech, and show them cleared only once they're cleared in each, so they agree with the tech warning on Race Control. See [Who still needs inspecting](events-and-entries.md#who-still-needs-inspecting).
 - **The phone race manager** lists them under each class they race. Setting a driver's class there changes their main class only, and keeps the others.
 - **Import from CSV:** a second row for the same driver with a different class adds that class to their others. See [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet).
 
@@ -378,7 +379,7 @@ The **Add Class** / **Edit Class** dialog has these settings:
 | **A jump start also costs the lap** | When on, a car that jumps the start loses the lap it jumped on as well as any time penalty. When off, it's credited with the start lap at the green like everyone else. | Off |
 | **Warn when a driver in a heat hasn't passed tech today** | When a heat is staged, Race Control warns about drivers in it who haven't been cleared by scrutineering today. It never stops the race. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control). | On |
 
-The row of buttons under the settings opens the class's sub-editors: **Tech Checklist**, **Race Format**, **Qualifier Format**, **Colour** and **Sanctioning Preset**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change.
+The row of buttons under the settings opens the class's sub-editors: **Tech Checklist**, **Race Format**, **Qualifier Format**, **Color...**, **Sanctioning Preset** and **Warnings**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change.
 
 !!! note
     Classes don't have a points scale. Points are set per championship — see [Results and championships](../race-control/results-and-championships.md).
@@ -428,11 +429,24 @@ Use **Add**, **Rename**, **Remove**, **Move Up** and **Move Down** to build the 
 
 If you do run tech for the class, **Warn when a driver in a heat hasn't passed tech today** in the class settings makes Race Control point out drivers who haven't been through tech yet. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control).
 
+### Warnings
+
+Click **Warnings...** to set the class's warning ladder: what a driver's first, second, third (and so on) warning in a race costs them. There are five rows, **1st warning:** to **5th warning:**. For each one, pick:
+
+- **Warning only**: logged, announced and shown, nothing more.
+- **Time penalty**, with the number of **seconds** (1 to 600) added to the driver's time.
+- **Black flag (DQ)**: announced as a black flag, and the saved result is marked DQ.
+- **(end)**: the ladder stops here. Rows after it are greyed out.
+
+After the last step, that step repeats for any further warning. The first row must have an action. **Use Default** puts the class back on the default ladder (warning, +5s, +10s, black flag), and **Save** keeps your ladder. Like the other sub-editors, it's saved when you click **Save** on the class.
+
+Giving and taking back warnings on the night is covered in [Driver warnings](../race-control/corrections-and-recovery.md#driver-warnings).
+
 ### Class color
 
 Every class has a color, used on its name in lists and as a band on its printed heat sheets, so you can tell class sheets apart on the pit table. By default the color is worked out from the class name, so the same class is the same color on every computer at the club.
 
-Click **Colour** (or the square next to the name) and choose **Choose a Colour...** to pick your own, or **Use the Colour from the Name** to go back to the automatic color.
+Click **Color...** (or the square next to the name) and choose **Choose a Color...** to pick your own, or **Use the Color from the Name** to go back to the automatic color.
 
 ### Sanctioning presets
 
@@ -613,7 +627,7 @@ The list shows the car's setups newest first, with the columns **Date**, **Drive
 
 **Changed Since Last** shows what's different from the setup logged before it, so a run of tuning sessions reads as a run of changes at a glance: for example "Pinion 22T → 23T, Front springs Soft → Medium". A value that was set for the first time shows as "Front springs → Hard", and one that was cleared as "Pinion 22T → (none)". Up to three changes are shown, then "and 2 more"; point at the cell to see them all. A setup identical to the one before it says **no changes**, and the oldest says **(first setup)**. Notes aren't counted, and neither are differences in capitals or spaces, or the same options ticked in a different order. A setup filled in on a chassis sheet isn't compared with one from before chassis sheets, since they share no fields: the first sheet setup after an older one says **(first on a setup sheet)**.
 
-The same changes are what the winner's mechanic talks about in the recap's interview after a main. See [Commentary](../announcer/commentary.md#broadcast).
+The same changes are what the winner's Technical Lead talks about in pit lane at the flag, after a main (and after heats, if that's ticked). See [Technical Lead and Team Principal](../announcer/commentary.md#technical-lead-and-team-principal).
 
 ### Log a setup
 

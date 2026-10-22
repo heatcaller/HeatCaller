@@ -202,6 +202,47 @@ public static partial class CommentaryReaders
     }
 
     /// <summary>
+    /// Roughly how long until the next race, from the club's own timetable
+    /// (22 Oct 2026, known issues: nothing ever told a show how long it
+    /// had). The next line's slot, moved by however late the night is
+    /// running - DayScheduleStore.MinutesLate, the number Today shows - and
+    /// measured from now.
+    ///
+    /// NULL MORE OFTEN THAN NOT, and that is the honest answer: no time
+    /// typed against the line, a line that is not a race (lunch, a
+    /// briefing), a race already under way, or an answer outside what a
+    /// host could sensibly say. Under <see cref="LeastNextRaceMinutes"/>
+    /// the grid is forming and the room can see it; over
+    /// <see cref="MostNextRaceMinutes"/> it is a break, and "about fifty
+    /// minutes away" read off a timetable is a promise a club breaks by
+    /// having tea.
+    /// </summary>
+    /// <param name="scheduledTime">The next line's slot, as typed ("19:40"), or null.</param>
+    /// <param name="isARace">Whether that line runs a round - a typed line does not.</param>
+    /// <param name="started">Whether that line has already started.</param>
+    /// <param name="minutesLate">How late the night is running, positive late; null when nothing has started.</param>
+    /// <param name="nowLocal">Now, in local time - the timetable's own.</param>
+    public static TimeSpan? NextRaceIn(string? scheduledTime, bool isARace, bool started, int? minutesLate, DateTime nowLocal)
+    {
+        if (!isARace || started || ScheduleDrift.MinutesOff(scheduledTime, nowLocal) is not { } pastSlot)
+        {
+            return null;
+        }
+
+        var minutes = (minutesLate ?? 0) - pastSlot;
+
+        return minutes is >= LeastNextRaceMinutes and <= MostNextRaceMinutes
+            ? TimeSpan.FromMinutes(minutes)
+            : null;
+    }
+
+    /// <summary>The nearest a timetable estimate is worth handing over, in minutes - see NextRaceIn.</summary>
+    internal const int LeastNextRaceMinutes = 2;
+
+    /// <summary>The furthest, in minutes - see NextRaceIn.</summary>
+    internal const int MostNextRaceMinutes = 30;
+
+    /// <summary>
     /// The round whose race has just been run, for the look-back half of a
     /// continuity line - or null when there is nothing recent enough to
     /// look back on.

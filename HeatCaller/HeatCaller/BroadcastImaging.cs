@@ -1692,13 +1692,17 @@ internal sealed class ImagingPlay
         var gain = new SmoothGainSampleProvider(new ShowOneShot(clip), 1f, downSeconds: CrossfadeSeconds, upSeconds: 0.3);
         var play = new ImagingPlay(gain, post, clip.Length);
 
+        // The post is timed from when the piece is first HEARD, not queued
+        // (22 Oct 2026, known issues) - see FirstReadSampleProvider.
+        var heard = new FirstReadSampleProvider(gain);
+
         ShowOnAir.Begin();
         play._nowId = ImagingNow.Started(name ?? what);
         BroadcastImaging.Playing(play, play.CrossfadeOut);
 
         try
         {
-            play.Played = AudioBus.PlayAsync(gain, level, play._stop.Token);
+            play.Played = AudioBus.PlayAsync(heard, level, play._stop.Token);
         }
         catch (Exception ex)
         {
@@ -1707,7 +1711,9 @@ internal sealed class ImagingPlay
             return null;
         }
 
-        play.AtPost = Task.Delay(post);
+        // From the first read, or the end of the piece if it never got one -
+        // a device that never came back must not hold the next thing for ever.
+        play.AtPost = FirstReadSampleProvider.AfterFirstRead(heard.FirstRead, post, play.Played);
 
         _ = play.Played.ContinueWith(done =>
         {

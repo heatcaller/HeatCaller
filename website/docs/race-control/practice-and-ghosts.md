@@ -25,7 +25,7 @@ The **Practice** page is for open lapping with no staging, flags or finish. Ever
     Practice and races use the same timing session, so HeatCaller keeps them apart:
 
     - **Start Practice** is refused while a race is staged, counting down or running: "Finish the race or reset it on Race Control first". If a finished race is still showing on the **Race Control** board, it asks before clearing it.
-    - While practice is running, **Stage**, **Countdown**, **Green (Start)**, **Yellow**, **Red**, **Checkered**, **Reset**, starting a round from the program or the Next Up bar, **Start as Demo...** and Demo Mode's start are all refused: "Stop practice first on the Practice page".
+    - While practice is running, **Stage**, **Countdown**, **Green**, **Yellow**, **Red**, **Checkered**, **Reset**, starting a round from the program or the Next Up bar, **Start as Demo...** and Demo Mode's start are all refused: "Stop practice first on the Practice page".
     - **Start automatically when a car crosses the gate** only starts practice when nothing else is going on.
     - When practice stops, the next race goes back to its own lap or time limit and start type.
 
@@ -163,7 +163,7 @@ You can also right-click a round in the program on **Race Day → Next Steps** a
 
 Press **Stop** on the Demo Mode page. It stops the simulation at whatever step it's at, resets the timing session and clears any queued announcements, so you don't hear a backlog after it ends. A demo that finishes on its own clears the queue too.
 
-**Stage**, **Countdown**, **Reset** or a first **Green (Start)** on **Race Control**, or starting a round from the program or the Next Up bar, also ends the demo, so a real race can take over. The Demo Mode page goes back to idle and says "Stopped - Race Control took over the session." A demo ended this way isn't saved to **Race History**, even with the save box ticked, and **Undo** doesn't bring it back. Once the demo is racing, **Green (Start)** after a caution and **Checkered** act on the demo as usual.
+**Stage**, **Countdown**, **Reset** or a first **Green** on **Race Control**, or starting a round from the program or the Next Up bar, also ends the demo, so a real race can take over. The Demo Mode page goes back to idle and says "Stopped - Race Control took over the session." A demo ended this way isn't saved to **Race History**, even with the save box ticked, and **Undo** doesn't bring it back. Once the demo is racing, **Green** after a caution and **Checkered** act on the demo as usual.
 
 **Stop** on the Demo Mode page only ever stops the demo. It never resets a real race.
 

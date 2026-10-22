@@ -50,6 +50,26 @@ public partial class AnnouncerControl
     /// <summary>Laps already handed over, per transponder, so each is fed once.</summary>
     private readonly Dictionary<string, int> _lapsFed = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The index behind PersonalBestBeforeTonight, and what it was built for -
+    /// the layout, the race night and the history's revision. Under its own
+    /// lock: laps are fed from the tick, but nothing promises that.
+    /// </summary>
+    private Dictionary<string, double>? _bestsBeforeTonight;
+    private (string Layout, DateTime Night, int Revision) _bestsBeforeTonightFor;
+    private readonly object _bestsBeforeTonightLock = new();
+
+    /// <summary>
+    /// The rolling record watch (22 Oct 2026, known issues) - RecordWatch,
+    /// built and tested and fed by nothing until now. Fed the same laps as
+    /// the director's PaceWatch and against the same layout record, and
+    /// heard in the CONSOLE only: the ROADMAP is plain that it must not be
+    /// wired to NotifyRecordPace or NotifyTrackRecord, which have callers of
+    /// their own, and that a spoken line wants a segment of its own. Reset
+    /// with each race, as the laps fed are.
+    /// </summary>
+    private RecordWatch? _recordWatch;
+
     private int _directorGeneration = -1;
     private bool _segmentInFlight;
     private string _directorDay = string.Empty;
@@ -190,22 +210,17 @@ public partial class AnnouncerControl
             _director.Pace.NightBest = () =>
                 PaceHistory.NightBestFor(RacesTonight?.Invoke(), _settings.LastRaceControlTrackName);
 
-            // PersonalBestBefore IS DELIBERATELY LEFT UNSET, and that is a
-            // known gap rather than an oversight - see the ROADMAP's open
-            // issues.
-            //
-            // It wants a driver's best lap on this layout before tonight,
-            // and the only thing that knows is the whole session history
-            // (DriverStats walks it to build PersonalBests per layout).
-            // This callback is asked once per driver per lap, so on a
-            // ten-car track that is ten walks of every race ever run,
-            // every lap, on a page a club has already reported as slow.
-            //
-            // Unset, PaceWatch falls back to the driver's own best EARLIER
-            // IN THIS RACE, which its own comment allows for a driver with
-            // no history and which overclaims slightly for one with. That
-            // is the behaviour the app has always had; making it right
-            // needs a cheap per-driver index, not a callback.
+            // AND A DRIVER'S OWN BEST BEFORE TONIGHT (22 Oct 2026, known
+            // issues). Left unset for a week because the only thing that
+            // knows is the whole session history, and this is asked once
+            // per driver per lap. It now reads a per-layout index built once
+            // a night (and again only when the history changes) - see
+            // PersonalBestBeforeTonight. Unset, PaceWatch fell back to the
+            // driver's best earlier in THIS race, which overclaimed for a
+            // driver with history: "a personal best" for a lap slower than
+            // the one they turned last week.
+            _director.Pace.PersonalBestBefore = PersonalBestBeforeTonight;
+
             _director.Status += line => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  {line}");
 
             // A SEGMENT IS SETTLED WHEN IT IS SAID, NOT WHEN IT IS WRITTEN
@@ -1144,6 +1159,7 @@ public partial class AnnouncerControl
             _directorDay = day;
             _directorGeneration = -1;
             _lapsFed.Clear();
+            _recordWatch?.Reset();
             _handedOver = string.Empty;
 
             // A fresh evening for the show's running order too, so the first
@@ -1191,6 +1207,7 @@ public partial class AnnouncerControl
         {
             _directorGeneration = _race.SessionGeneration;
             _lapsFed.Clear();
+            _recordWatch?.Reset();
 
             // The session number alone repeats after a restart - it starts
             // at 0 in every launch - and tonight's spent facts are restored
@@ -1511,6 +1528,35 @@ public partial class AnnouncerControl
         && !standing.IsRecoveryLap(index);
 
     /// <summary>
+    /// A driver's best lap on the selected layout from races before tonight,
+    /// in seconds, or null when there is none - for PaceWatch's
+    /// PersonalBestBefore. A look-up in an index rebuilt only when the
+    /// layout, the night or the history changes (PaceHistory.PersonalBestsBefore).
+    /// </summary>
+    private double? PersonalBestBeforeTonight(string transponder)
+    {
+        if (string.IsNullOrWhiteSpace(transponder) || _settings is null)
+        {
+            return null;
+        }
+
+        var layout = _settings.LastRaceControlTrackName?.Trim() ?? string.Empty;
+        var night = TonightAtTheTrack.NightOf(DateTime.Now);
+        var revision = _history.Revision;
+
+        lock (_bestsBeforeTonightLock)
+        {
+            if (_bestsBeforeTonight is null || _bestsBeforeTonightFor != (layout, night, revision))
+            {
+                _bestsBeforeTonight = PaceHistory.PersonalBestsBefore(_history.All, layout, night);
+                _bestsBeforeTonightFor = (layout, night, revision);
+            }
+
+            return _bestsBeforeTonight.TryGetValue(transponder.Trim(), out var best) ? best : null;
+        }
+    }
+
+    /// <summary>
     /// Hands over the laps that have come in since the last tick.
     ///
     /// Counted per transponder rather than read from an event, so a lap
@@ -1524,6 +1570,11 @@ public partial class AnnouncerControl
         {
             return;
         }
+
+        var watch = _recordWatch ??= new RecordWatch
+        {
+            LayoutRecord = () => PaceHistory.LayoutRecordFor(Layouts?.Invoke()?.All, _settings?.LastRaceControlTrackName),
+        };
 
         foreach (var standing in ordered)
         {
@@ -1547,6 +1598,13 @@ public partial class AnnouncerControl
                 }
 
                 director.Lap(standing.TransponderId, laps[i] / 1000.0);
+
+                // The console only - see _recordWatch.
+                if (watch.Saw(new LapSeen(standing.TransponderId, laps[i] / 1000.0)) is { } threat)
+                {
+                    StatusMessage?.Invoke(
+                        $"{AppTime.LogStampNow()}  [pace] {RecordWatch.Say(threat, NameFor(standing.TransponderId))}");
+                }
             }
 
             _lapsFed[standing.TransponderId] = now;

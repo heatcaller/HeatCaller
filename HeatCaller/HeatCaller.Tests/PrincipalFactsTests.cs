@@ -30,9 +30,10 @@ public sealed class PrincipalFactsTests
         int warnings = 0,
         bool paceReadable = true,
         double consistency = 2.5,
-        long cost = 0) =>
+        long cost = 0,
+        string pronouns = "") =>
         new(id, name, races, finishes ?? new[] { 4, 2, 5 }, field, wins, podiums, retirements, warnings,
-            paceReadable, consistency, cost);
+            paceReadable, consistency, cost, pronouns);
 
     // ------------------------------------------------------------------
     // The night
@@ -181,6 +182,37 @@ public sealed class PrincipalFactsTests
 
         Assert.NotNull(block);
         Assert.Contains("did not finish any of his 2 races", block!.Text);
+    }
+
+    // ------------------------------------------------------------------
+    // Their own pronouns (21 Oct 2026)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void A_driver_whose_profile_says_she_her_is_never_his_in_the_facts()
+    {
+        var pace = PrincipalFacts.WhereThePaceWent(Night(cost: 4200, consistency: 5.0, pronouns: "she/her"), "night-1");
+        var limit = PrincipalFacts.WhereThePaceWent(Night(cost: 200, consistency: 1.1, pronouns: "she/her"), "night-1");
+        var cost = PrincipalFacts.WhatItCost(Night(races: 2, retirements: 2, pronouns: "she/her"), "night-1");
+
+        Assert.Contains("her untidy laps cost her", pace!.Text);
+        Assert.Contains("within herself", limit!.Text);
+        Assert.Contains("did not finish any of her 2 races", cost!.Text);
+
+        foreach (var text in new[] { pace.Text, limit.Text, cost.Text })
+        {
+            Assert.DoesNotMatch(@"\b(his|him|himself)\b", text);
+        }
+    }
+
+    [Fact]
+    public void They_them_reads_as_they_them_and_blank_reads_as_it_always_did()
+    {
+        var them = PrincipalFacts.WhereThePaceWent(Night(cost: 200, consistency: 1.1, pronouns: "they/them"), "night-1");
+        var blank = PrincipalFacts.WhereThePaceWent(Night(cost: 200, consistency: 1.1), "night-1");
+
+        Assert.Contains("within themselves all night - lap after lap at their own limit", them!.Text);
+        Assert.Contains("within himself all night - lap after lap at his own limit", blank!.Text);
     }
 
     [Fact]

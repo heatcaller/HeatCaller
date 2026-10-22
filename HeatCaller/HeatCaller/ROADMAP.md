@@ -8,7 +8,8 @@ Rewritten on 26 Sep 2026. The previous version said 118 source files, an
 I-Lap "on order" and store saves with no error handling - all long untrue.
 Brought up to date on 28 Sep 2026, after a reassessment
 (`claude/project-review-2026-09-28.md` in the project notes), when its
-figures had drifted again in two days. Its own warning still stands: a
+figures had drifted again in two days. Brought up to date again on 22 Oct
+2026, after the 18-22 Oct work and that week's bug hunt. Its own warning still stands: a
 stale roadmap is worse than none, because it gets trusted. **Update this
 file in the same commit as anything that makes it wrong.**
 
@@ -48,8 +49,8 @@ What follows from that:
 |---|---|
 | Version | 0.59.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.59.0 was cut on 28 Sep 2026 from everything since 0.52.0; its notes are in `website\docs\release-notes.md`, where "Unreleased" has grown again and is owed a 0.60.0 cut |
 | App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 362 source files, ~259k lines with the tests, 25 pages |
-| Tests | `HeatCaller.Tests`: **2,180 tests, measured** (`check.cmd`, 11 Oct 2026 - 2,180 passed, 0 failed, 0 warnings, 15.3 minutes; the relay's 507 are counted separately below), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes (`LayoutTests`, `WindowLayoutTests`). This run is the commentary depth round complete - the 166 tests it added over the 2,014 measured earlier the same day are the bookends, the night's thread, the championship conditional and the four new kinds of material. **Only ever write a figure `check.cmd` has actually measured, with its date**: the row carried 1,921 for a day after the suite had grown, and a number nobody measured is worse than an old one, because it reads as current |
-| Relay | TypeScript on Fly.io (`relay\`), **46 test files and 710 tests, measured 13 Oct 2026** (710 passed, 0 failed, 45 seconds, `tsc --noEmit` clean). The "47" written here an hour earlier counted `helpers.ts`, which is not a test file - the rule at the top of the Tests row applies to this one too. **Deployed 5 Oct 2026** with the heat line-up privacy fix and the check-in PIN fix. **UNDEPLOYED CHANGES since 10 Oct:** the voice-sample and Preview routes and the refusal messages renamed off the retired Windows voice; the night-before preview channel and its slot on the club page; the vote's per-race identity and the notes-full flag; **the private-collection fix** (see below - the one on this list that is a security fix rather than a feature); the `nights` channel, its switch and its read route; the publish gate widened to refuse a night to a club that has not said yes; and the night page itself, the link to it from check-in, and the shareable picture. `Hear It`, `Preview`, the night-before preview and drivers' own nights all do nothing until `fly deploy --ha=false` has run |
+| Tests | `HeatCaller.Tests`: **3,710 tests, measured** (`check.cmd`, 22 Oct 2026 - 3,710 passed, 0 failed, 0 warnings; 12 to 23 minutes on the dev laptop, the layout sweep being most of it), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes and once with the text size changed while the window is up (`LayoutTests`, `WindowLayoutTests`). **Only ever write a figure `check.cmd` has actually measured, with its date**: the row carried 1,921 for a day after the suite had grown, and a number nobody measured is worse than an old one, because it reads as current |
+| Relay | TypeScript on Fly.io (`relay\`), **770 tests, measured 22 Oct 2026** (770 passed, 0 failed). **Deployed 22 Oct 2026** (`fly deploy --ha=false`) with everything to date - the nights, the night-before preview, the voice samples and Preview, the usage and top-up routes, the podium videos and the 22 Oct bug-hunt fixes. **No undeployed changes.** The rule still stands: a relay change does nothing for a club until it is deployed, and the laptop's console says "redeploy it" when it meets a route the relay doesn't have |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
 | Real use | Four solo rehearsal nights at home; rehearsal 4 (4-5 Oct) called clean. The I-Lap is proven on real hardware, split times and all. No club has run a night on it yet |
@@ -579,8 +580,9 @@ rounds of testing above would have been one.
 - **Broadcast furniture beyond the break** (Tier 2, and step 6 of the order
   of work). No time checks and no "if you have just joined us". The time
   check is blocked by the same hole as everything else that wants a clock:
-  `director.Upcoming` is wired with `inAbout: null` because the app has no
-  "minutes until the next race" to hand over - see "Known open issues".
+  `director.Upcoming` was wired with `inAbout: null`. **Unblocked 22 Oct
+  2026**: `CommentaryReaders.NextRaceIn` gives the minutes from the run
+  sheet (2-30 min, else null) - see "The known-issues round (22 Oct)".
 
 **Two of the plan's three open questions are now ANSWERED (12 Oct 2026):**
 
@@ -2710,8 +2712,8 @@ and that set has to be counted before the claim is made.
 
 **The one real finding in the area survives** and is unrelated to the
 above: see the `PaceWatch` history entry under "Known open issues". Those
-three callbacks genuinely were assigned only in tests, and two of them are
-now wired through `PaceHistory`.
+three callbacks genuinely were assigned only in tests; all three are wired
+through `PaceHistory` as of 22 Oct 2026.
 
 **`RecordWatch` and `RecordWatchTests` are kept, unwired.** The rolling,
 escalating pace watch is a genuinely different detector from the shipped
@@ -3036,7 +3038,23 @@ is shown - and the same warning: **not yet built or run**, so `check.cmd`
 
 ## The Technical Lead and the Team Principal (17 Oct 2026)
 
-**Not yet built or run** - `check.cmd` is owed a run before this is trusted.
+**Built and run since** (green on 22 Oct 2026). **Superseded on 18 Oct in
+where they are heard** - read the 18-22 Oct section below before trusting
+the "when" in this one:
+
+- **Stage no longer speaks any segment.** Every pre-race segment belongs to
+  **On Air** now (jingle, opening, pit lane, driver introductions, bumper,
+  then it presses Stage itself). The pre-race Team Principal described here
+  "at Stage, after the round intro" is in On Air's opening, after the
+  driver introductions and last before staging, behind its own tick box
+  ("Throw to pit lane").
+- **The Technical Lead's interview is at the flag**, not after the recap:
+  the race announcer throws down to pit lane straight after the finish
+  call, the co-host asks, and hands back before the stop set. Mains only,
+  unless Cast - Technical Lead - "After heats too" is ticked
+  (`RecapMechanicInterviewHeats`, 21 Oct).
+- **The Team Principal after a race is in the booth on the recap show**,
+  with the recap host, not in pit lane.
 
 - **The mechanic is the Technical Lead** everywhere a club reads or hears it:
   the Cast card, the AI Commentary segment name, the log and the tour. The
@@ -3073,6 +3091,162 @@ is shown - and the same warning: **not yet built or run**, so `check.cmd`
   - Not a segment of its own: it rides inside the recap show after the race
     and the intro's show before it, so it has no budget row, no caption and
     no place of its own in Run of show.
+
+## Race Control, the show and the podium videos (18-22 Oct 2026)
+
+Five commits and a bug hunt: `fcc6ad8e` (18 Oct), `16837686`/`ea245d36`
+(19-20 Oct), `2e3184e1`, `34dcc21c`, `521ae688`, `3458c861` (21 Oct) and
+`fc22c7a` (22 Oct). All green on 22 Oct (3,710 app tests, 770 relay), the
+relay deployed the same day.
+
+### The broadcast (18 Oct)
+
+- **Stage stages, and nothing else.** Pre-race segments are On Air's; a
+  club that presses Stage without On Air gets the staging call only.
+- **After the flag:** the finish call, an unofficial result read
+  (`FlagResultRead`, on by default; skipped under Lap times only - 22 Oct),
+  the throw to pit lane for the Technical Lead, the stop-set throw, then the
+  recap show with the Team Principal in the booth. A music bed sits under
+  what the announcer says between the flag and the stop set.
+- **Relay busy retry** for the commentary brain.
+
+### Usage figures (19-20 Oct)
+
+The This Month window, the sidebar chip and Mission Control's Allowances
+tile read the relay's `GET /usage` (AI commentary lines, HeatCaller voice
+characters) and ElevenLabs' own figure for a club's own key, with 80% and
+100% emails and Ask for More. 22 Oct fixes: a relay that can't read its own
+count says `known:false` and the app keeps its last real figure; a figure
+past its reset shows as unknown, not "used up"; an ElevenLabs failure no
+longer reads "Checked at".
+
+### Race Control (21 Oct)
+
+- **Click a driver for corrections, double-click for the lap breakdown.**
+  The corrections (+1 Lap, -1 Lap, +5s, +10s, Warning, Clear Penalties,
+  Share video, Lap breakdown) are a drawer painted into the leaderboard
+  under the driver (`RaceControlControl.Leaderboard.cs`), sliding open and
+  shut. The bottom correction buttons are gone, which gave the board rows.
+  Clear Penalties clears warnings too.
+- **The foot of the board** holds Start races On Air, the race format line
+  and its button, and Columns. **Mission Control** has a button under
+  Pre-race check; the Laps/Fastest tiles are gone.
+- **On Air shows its progress:** the button fills, counts down from the
+  average of the last five opens (`OnAirReadyHistoryMs`), and says what it
+  is doing ("12s · Voicing"). The next opening and introductions are voiced
+  ahead between races (`VoiceAheadTick`), keyed on the exact words and the
+  voice in use. Live, it is cyan and reads **"On Air · Skip"**.
+- **Hold is loud:** amber, "HELD · Release".
+- **One flag row, every button the same width:** a `ButtonBar` with
+  `sameWidth` and a `LeastWidth` for On Air's longer captions, so the row
+  never shuffles as On Air counts down. The countdown drops its word when
+  it would not fit.
+- **The State/Flag line under the flags is gone** (22 Oct, asked for). The
+  labels are still kept up to date, just not shown.
+- A flag pressed while On Air opens a **demo** starts the demo (it used to
+  call On Air off and start a real race with no cars).
+
+### Sponsors (21 Oct)
+
+Reads go out **in the commercial break**; rotating them between races is
+**opt-in** (`ReadDuringSegments`, "Also put reads on rotation between races,
+outside the commercial break"). Existing installs had the old default saved
+in `sponsors.json`, so a one-time migration (`SegmentsDefaultReviewed`, 22
+Oct) turns it off once. Credits read naturally with the sponsor's tagline.
+
+### Highlight videos and the podium online (21 Oct)
+
+- **`HighlightVideo`**: an upright 1080x1920 H.264/AAC mp4 per driver, made
+  after the race from their clip of the race recording - title card, the
+  race drawn in the club's Look, captions of every line heard
+  (`AnnouncementService.LineHeard`), end card. Media Foundation sink
+  writer, at most 55 s, the podium's long tail cut to the finish call and
+  the start of the result.
+- **Every driver by default, on this PC** (Sounds - Recording - Highlight
+  videos: Off / The winner / The podium / Every driver). Share video in a
+  driver's drawer opens Explorer at theirs.
+- **Only the podium goes online**, and only while the club's page is on:
+  `RelayPublisher.Videos` uploads 1st to 3rd to the relay, the relay refuses
+  anything else, and the **Big Screen** shows a QR code to the race's page
+  once the first lands, taken down when the next race stages. The driver's
+  own night lists theirs. Kept a week. See the relay README's Podium videos.
+
+### The voice (21 Oct)
+
+- **A long line gets longer with ElevenLabs.** The per-line limit was a flat
+  30 s, and a whole recap on eleven_v3 can take longer: it was taken for
+  "can't reach ElevenLabs", Kokoro read the recap, and ElevenLabs came back
+  for the booth and sign-off - two voices in one programme. Now 30 s plus a
+  second per 25 characters past 300, up to 150 s (`SynthesisTimeoutFor`) -
+  **for lines rendered ahead only** (22 Oct); a line rendered inside the
+  voice queue keeps the flat 30 s, so a slow render can't freeze the queue.
+
+### The bug hunt (22 Oct)
+
+Fourteen reviewers over the week's 45k changed lines (288 files), every
+finding traced before it was fixed, then an independent read of the fixes.
+About 70 fixes in 51 files. The ones a club would notice:
+
+- **Sponsor reads never went out with AI commentary off** - the director
+  was never told a race had started or finished on that path.
+- **The booth interview's first question was cut off**, so the Team
+  Principal answered a question nobody heard: the length trim kept
+  sentences from the front and the question comes last. `KeepTheQuestion`
+  always keeps it.
+- The highlight cut could lose the finish; pruning never deleted the mp4s;
+  a late upload could put an old race's QR over the next race; every
+  driver's mp3 waited for all the videos.
+- Driver introductions were skipped when race intros were off or the
+  intro failed; Yellow/Red during a demo's On Air; the double-click under
+  an open drawer; the drawer's labels painting over the row above while it
+  slid (`TextRenderer` ignores the Graphics clip).
+- The result read swallowed the pause after the flag; Skip/Hold lost the
+  achievements held for the recap; the write-ahead gate closed by a
+  practice save.
+- Relay: an aborted video download hung its handler for good; uploads are
+  capped two in flight.
+
+Notes on how the hunt was run, and the full list of what was left open:
+`claude/bug-hunt-2026-10-22.md`.
+
+### The known-issues round (22 Oct)
+
+Asked for: "fix all of these" - every open item in `website\KNOWN-ISSUES.md`
+and the bug hunt's left-open list. Three decisions taken first, by Asher:
+
+- **Negative points: clamp at zero.** The Points cell refuses a negative,
+  `SaveCurrentSeasonFromUi` clamps, `Season.PointsForPosition` never
+  scores below 0. Rows already on disk are left alone, so
+  `PenalisesAnyone` and its tests are unchanged.
+- **The drama-shaped show: wire it up.** `ShowDrama.Of(record, layout)`
+  (margin read as `DescribeMargin` does; a track record only if set in
+  this race), a `StartAsync(kind, drama, ct)` overload, the recap fed from
+  `SpeakRaceSummary` and the sign-off from `NightDone`.
+- **The relay's club-less voice routes: keep as an exception.** Only the
+  `previewDailyChars` comment was fixed (the 1,000,000 bound is a sanity
+  ceiling).
+
+Fixed: the battle-call cooldown after a pacing hold; a recap render
+cancelled by the next race (token through `PrepareReminderAsync`,
+`RenderLineAsync`, `SynthesizeOrReuseAsync`); "presented by" counts saved
+with the night; post and last-word timing from the device's first read
+(`FirstReadSampleProvider`); the built-in model's cold load honours the
+timeout; the break decided once at the flag (`breakFollows`) - so a Big
+Screen opened during the finish call no longer adds a late break;
+`PersonalBestBefore` wired from a per-driver per-layout index, and
+`RecordWatch` fed (console only); "shorten published names" applied to
+lines for the cloud voices (Kokoro untouched); **Segments run:** on the
+Commentary page for `CommentaryLowestTier`; `NextRaceIn` from the run
+sheet (2-30 min) and "Stay with us." after a freeform race; the hand-over
+gated on the ticks; **Re-roll Line...** (relay `"fresh": true`, kept in the
+club's own cache), the allowance on a 2-minute timer, characters per saved
+line, Preview capped at 200; vote ids kept to the key each ballot went out
+with; achievements retried after 15 s; a partial racing-line cut keeps the
+line; the fastest-sector banner's text picked for contrast; no warning
+banner for ghosts. The Program-tab undo item was stale (already refused,
+and pinned). Docs: install.md around the installer, driver warnings.
+
+Still open: `RecordWatch` speaks nothing yet, and the releases repo.
 
 ## The season's own piece (scoped 13 Oct 2026, not started)
 
@@ -4687,6 +4861,16 @@ fits.
   any soundscape is applied (Soundscapes page, venue, wizard). It adds no
   new lines on air, so the "Nothing new on air" rule is not touched. Keep what's
   set now is the default, so a club that ignores the row changes nothing.
+- **Only the podium's videos go online** (21 Oct 2026); every driver's is
+  made on the PC. Enforced in three places: the share (`HighlightShare.Wants`),
+  the upload, and the relay.
+- **Stage stages; On Air does the show** (18 Oct 2026).
+- **Sponsor reads belong in the commercial break**; between races is opt-in
+  (21 Oct 2026).
+- **A DNF anywhere on the night leaves the Team Principal defending it**,
+  even on a win, and **a lap of a minute or more is read plainly** -
+  both are pinned by tests (`PrincipalStanceTests`, `RaceNumbersTests`), and
+  the 22 Oct bug hunt changed both and had to put them back.
 - **The laptop is the source of truth.** The relay never calls the laptop,
   nothing in a race waits on the network, and race control is refused
   online by design.
@@ -4695,99 +4879,22 @@ fits.
 
 ## Known open issues
 
-- **`PaceWatch`'s `PersonalBestBefore` callback is still not assigned**
-  (found 14 Oct 2026; two of the three now wired). `LayoutRecord` and
-  `NightBest` are wired through `PaceHistory` as of 15 Oct. The third wants
-  a driver's best lap on this layout BEFORE tonight, and the only thing
-  that knows is the whole session history - so a callback asked once per
-  driver per lap would walk every race ever run, every lap. It needs a
-  cheap index. Unset, `PaceWatch` falls back to the driver's own best
-  earlier in the same race, which overclaims slightly for a driver with
-  history.
+**All but two closed on 22 Oct 2026** - see "The known-issues round
+(22 Oct)" in the 18-22 Oct section. What is left:
 
-  NOTE: the "sibling fault" this entry used to claim - two record
-  announcements with no caller - was not a fault at all. See the withdrawn
-  section under "Sounding like a broadcast". `LayoutRecord`, `NightBest` and
-  `PersonalBestBefore` are set **only in `PaceWatchTests`**; a grep of
-  every `.cs` in the app finds no assignment to any of them. So in the
-  field the detector can only ever report `SessionBest`, plus a
-  `PersonalBest` measured against the driver's own earlier laps **in the
-  same race** rather than their real personal best - which is a different
-  and weaker claim than the one the line makes.
+- **The releases repo doesn't exist yet**, so the installer has nowhere
+  public to download from and the update feed points at nothing.
+  `getting-started\install.md` was rewritten around the installer the same
+  day and says to get it from the HeatCaller team for now.
+- **`RecordWatch` only writes to the console.** It is fed every lap and
+  reset each race since 22 Oct, but by design it must not drive
+  `NotifyRecordPace`/`NotifyTrackRecord`; it needs a segment of its own
+  before anything is spoken.
 
-  That means the record-pace commentary has never once been able to say
-  what a lap beat or who held it, which is the thing `PaceWatch`'s own
-  class comment calls the entire point: *"a record is only a story if you
-  can say what it beat and who held it"*. It is the same fault this file
-  already recorded once for the close-battle and record-pace calls - dead
-  in the field while passing their own tests.
-
-  The fix is small and is wired where `NameFor` is
-  (`AnnouncerControl.Director.cs`, the `Director` getter):
-  `TrackLayout.RecordLapMs` and `RecordHolderName` give the layout record
-  directly. It needs the current layout, which that control reaches through
-  `Layouts`. `RecordWatch` needs exactly the same callback, so wire both at
-  once.
-
-
-From `website\KNOWN-ISSUES.md`, where the full wording lives. Rewritten
-10 Oct 2026, after five writers went through the code for the show round,
-the voice round, the name check and race audio.
-
-- No installer yet (see "Beta readiness", section 3).
-- Low: a move-driver or bump-up undo on the Program tab restores the whole
-  heat roster, even onto a heat that has since been run.
-- The HeatCaller voice: a bad take still can't be re-rolled (**Preview** is
-  a listen, not a replacement); "shorten published names" doesn't reach
-  spoken lines; the allowance figure goes stale on an open page; no
-  per-line cost breakdown. **Hearing a voice before choosing it is fixed**
-  (`Hear It` and `Preview`), and the Windows-voice items are gone with the
-  voice.
-- **Nothing ever tells a show how long it has.** `director.Upcoming` is
-  wired with `inAbout: null` in `MainForm.Commentary.cs`, because the app
-  has no "minutes to the next race" to give, so `ContinuityShow.Block`
-  always asks for `ShowBlock.NoLimit`. Most of `ShowBlock.Fit` is
-  therefore unreachable in this build (only the 90 s cap and the
-  race-state abandon bound a block), `CommentaryContinuity.Soons` can
-  never be said, and **`ContinuityShow.Tail`'s "Back in a moment." branch
-  is dead code** - so a club running a freeform race, or with no program
-  entered, gets no bridge at all. That is the club the hand-over was
-  written for, so this is the first thing to fix in the show round.
-- **The hand-over block ignores the segment tick list.**
-  `SegmentKind.ComingUpNext` isn't in `ShowSegments.Candidates`, and
-  `HandOverIfItIsTimeAsync` calls `RunBlockAsync` without asking
-  `treatment.Treats`, so a hand-over gets music whatever is ticked.
-- **No control for `AppSettings.ShowStingLevel`** (default 80) on any page.
-- **Race recording has a switch now** (corrected 17 Oct 2026): **Sounds -
-  Recording** has "Record each race, and cut each driver their own clip"
-  (it was on Voice - Commentary until the Sounds regroup the same day).
-  Old nights are pruned (`RaceAudioStore.PruneOldNights`).
-- **Two stale user-facing strings naming the retired Windows voice**:
-  `RivalriesControl.cs:216` and `SoundscapeEditorForm.cs:401`. Both offer a
-  club a voice that no longer exists as the way to write its own lines. Two
-  one-line changes, and two doc workarounds come out with them.
-- **The app's preview cap (300) is bigger than the relay's (200)**, so a
-  250-character preview costs a round trip and comes back refused.
-- ~~Nine docs pages and `website\STYLE.md`'s site map still name the
-  Windows voice~~ - **done 10 Oct 2026.** Every page on the site now reads
-  Kokoro, and the only remaining mentions are the three deliberate ones:
-  the two migration sections, and `voice.md`'s quote of the stale Rivalries
-  string above. `screens\big-screen.md`'s false claim that warnings aren't
-  shown is fixed too, and the warning / black-flag / fastest-sector banner
-  is documented for the first time.
-- **Driver warnings themselves are undocumented**, which the Big Screen's
-  new banner section had nothing to link to: no page covers the Race
-  Control warning menu, the preset reasons, taking the last warning back,
-  the per-class ladder (`WarningLadderForm`) or the black flag marking a
-  saved result DQ, and `race-control\running-a-race.md` is missing the
-  **Warnings** column. The one feature-sized hole left in the docs.
-- **The relay's three new voice routes name no club**, which is the first
-  exception to "no request reads or writes anything without naming a
-  club". Deliberate, and the security page now states the exception
-  precisely, but worth deciding whether it stays an exception.
-- **The fastest-sector banner paints white on the look's accent**
-  (`BigScreenForm.cs:1389-1390`), so it disappears in a light look. The
-  warning banner beside it is deliberately look-independent for contrast.
+Decided and closed rather than fixed: the relay's three voice routes that
+name no club stay a deliberate exception (the security page states it);
+a PC with no Kokoro file is a loud, documented state with a one-button
+fix. The full history of each item is in `website\KNOWN-ISSUES.md`.
 
 ### Built but not reachable (10 Oct 2026)
 
@@ -4798,10 +4905,10 @@ a page describing something a club can't reach is worse than no page.
 | What | Where | What's missing |
 |---|---|---|
 | ~~The club's voice ID / station ident~~ | - | Removed 17 Oct 2026; each soundscape's jingles do that job now |
-| The drama-shaped show | `ShowDrama`, `ShowBilling.BiggerAir` (0.25 s), `LongerLift` (0.35 s) | `ShowTreatment.NextShowDrama` is never set, so every show is `ShowDrama.None` |
-| The ad-break bumper | `ShowTreatment.PunctuateAsync` | Nothing calls it |
-| The sting level | `AppSettings.ShowStingLevel` | No control (above) |
-| ~~Turning race recording off~~ | `RaceAudioStore` | Done: "Record each race" on **Voice - Commentary** (above) |
+| ~~The drama-shaped show~~ | `ShowDrama`, `ShowBilling.BiggerAir` (0.25 s), `LongerLift` (0.35 s) | Done 22 Oct 2026: `ShowDrama.Of` feeds the recap (`SpeakRaceSummary`) and the sign-off (`NightDone`) |
+| ~~The ad-break bumper~~ | `ShowTreatment.PunctuateAsync` | Done: called from the after-race sequence (checked 22 Oct 2026) |
+| ~~The sting level~~ | `AppSettings.ShowStingLevel` | Done: **Sting level:** on the Show treatment card |
+| ~~Turning race recording off~~ | `RaceAudioStore` | Done: "Record each race" on **Sounds - Recording** (above) |
 
 ## Parked
 
@@ -4875,6 +4982,31 @@ before assuming a code bug. `git status` shows them now.
 
 **Assert every string replacement.** A no-op replace looks identical to a
 successful one.
+
+**Read a file back after writing it to the PC.** On 21 Oct a write through
+the remote bridge reported success and left the old file in place - twice,
+for two different files - and a whole evening's test run was of the
+previous code. Compare what landed with what was meant before asking for a
+build.
+
+**A partial class shares one namespace of members across every file.**
+`AnnouncementService` already had a `VoiceSignature` in
+`AnnouncementService.PreparedLines.cs`; a second one in
+`AnnouncementService.cs` was CS0102 (22 Oct). Grep every part before
+naming a new member.
+
+**`TextRenderer` does not keep to `Graphics.SetClip`.** It draws through GDI.
+Anything clipped by the Graphics (shapes, fills) stays inside; its text
+does not. The leaderboard drawer's captions smeared over the row above
+mid-slide until they were drawn only when wholly inside the row.
+
+**A test can be the only record of a decision.** Before changing what the
+announcer says or how a stance is chosen, grep the tests for it: two of the
+22 Oct "fixes" were deliberate rules that tests pinned.
+
+**Don't pin a flag button's width by hand.** Min/MaxSize on buttons inside
+a `ButtonBar` broke the text-size-change layout check; the bar's own
+`sameWidth` (with `LeastWidth`) is what keeps a row even.
 
 **Check brace DEPTH, not totals.** Totals balance while structure is
 broken - an extra `}` in one place masks a missing one elsewhere.

@@ -314,7 +314,8 @@ public sealed partial class AnnouncementService
         WaveFormat format,
         double volume,
         double trailingSilenceSeconds = DefaultTrailingSilenceSeconds,
-        double leadingSilenceSeconds = DefaultLeadingSilenceSeconds)
+        double leadingSilenceSeconds = DefaultLeadingSilenceSeconds,
+        Action? started = null)
     {
         byte[] paddedPcm;
 
@@ -358,7 +359,15 @@ public sealed partial class AnnouncementService
             // "boost voice over loud ambience" gain (AnnouncementGain), which
             // a 0..1 clamp here used to cancel. The bus soft-limits a boosted
             // line so it bends rather than clips.
-            await AudioBus.PlayAsync(rawReader.ToSampleProvider(), (float)Math.Clamp(volume, 0.0, AudioBus.MaxBoost), stop.Token, allowBoost: true);
+            //
+            // started: run when the output first pulls the line - the moment
+            // it is heard, which after a speaker dropout is later than now
+            // (22 Oct 2026, known issues; see FirstReadSampleProvider).
+            ISampleProvider source = started is null
+                ? rawReader.ToSampleProvider()
+                : new FirstReadSampleProvider(rawReader.ToSampleProvider(), started);
+
+            await AudioBus.PlayAsync(source, (float)Math.Clamp(volume, 0.0, AudioBus.MaxBoost), stop.Token, allowBoost: true);
         }
         finally
         {

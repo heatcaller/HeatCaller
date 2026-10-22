@@ -145,6 +145,8 @@ public sealed partial class AnnouncerControl : UserControl
         _schedule = schedule;
         _announcer = announcer;
 
+        ConnectTheVoiceToSettings();
+
         Dock = DockStyle.Fill;
 
         // The body face, worn rather than set once, so it follows the text
@@ -176,6 +178,50 @@ public sealed partial class AnnouncerControl : UserControl
         _refresh.Start();
 
         RefreshAll();
+    }
+
+    /// <summary>
+    /// What the voice takes from the club's settings (22 Oct 2026, known
+    /// issues). Here because this control is built once at start-up
+    /// (MainForm.Pages) with both the voice and the settings to hand.
+    ///
+    /// Tonight's "presented by" credits are kept across a restart the way
+    /// the paid reads are: laid back from settings now, and saved after
+    /// every credit. The save is moved to the UI thread - a credit is
+    /// counted on the voice's own, and settings.json is written from here.
+    /// </summary>
+    private void ConnectTheVoiceToSettings()
+    {
+        if (_settings is not { } settings)
+        {
+            return;
+        }
+
+        // And the club's "shorten published names" box, carried to the voices
+        // that send a line off this PC (22 Oct 2026, known issues) - see
+        // AnnouncementService.ShortNames. Read live, like the rest.
+        _announcer.ShortenNamesForCloudVoices = () => settings.RelayAbbreviateNames;
+
+        var gate = _announcer.SponsorMentions;
+        gate.Restore(settings.SponsorMentionsNight);
+
+        gate.Changed = saved =>
+        {
+            void Keep()
+            {
+                settings.SponsorMentionsNight = saved;
+                settings.Save();
+            }
+
+            if (_uiContext is { } ui && Environment.CurrentManagedThreadId != _uiThreadId)
+            {
+                ui.Post(_ => Keep(), null);
+            }
+            else
+            {
+                Keep();
+            }
+        };
     }
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>

@@ -294,7 +294,7 @@ public sealed class MixerControl : UserControl
         // when it comes and goes. It used to sit at a fixed y=38, which is
         // the middle of the intro's second line - so NO VOICE was printed
         // across the intro whenever it showed. It shows more often now (the
-        // Windows voice standing in has a notice here too), so it gets the
+        // Kokoro voice standing in has a notice here too), so it gets the
         // room. One line, cut short rather than wrapped, so it can never
         // reach down into the strips - see RefreshMeters for what it says.
         _lblVoiceWarning.AutoSize = false;
@@ -1742,8 +1742,8 @@ public sealed class MixerControl : UserControl
         }
         else if (_announcer.DescribeStandIn() is { } standIn)
         {
-            // Not red: the announcer CAN speak - in the free Windows voice,
-            // until ElevenLabs can again. Worth saying all the same, since
+            // Not red: the announcer CAN speak - in the free Kokoro voice,
+            // until the chosen voice can again. Worth saying all the same, since
             // the voice people hear has changed.
             _lblVoiceWarning.Text = standIn.Length == 0
                 ? standIn

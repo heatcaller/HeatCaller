@@ -704,6 +704,16 @@ public sealed class AppSettings
     public string SponsorRotationNight { get; set; } = string.Empty;
 
     /// <summary>
+    /// Tonight's "presented by" credits per sponsor and moment
+    /// (SponsoredMomentGate), for SponsorRotationNight's reason: the paid
+    /// reads survived a restart and these did not, so a club's sponsor
+    /// report after a mid-evening restart had every read but only the
+    /// credits since (22 Oct 2026, known issues). Keyed to the race night
+    /// inside - see SponsoredMomentGate.Restore.
+    /// </summary>
+    public string SponsorMentionsNight { get; set; } = string.Empty;
+
+    /// <summary>
     /// The continuity and honours lines the room has heard tonight, for
     /// CommentaryFactsNight's reason - without it a restart offered "That
     /// was Q2 Heat 1 for Stock." and every honours hand-over again. Keyed to

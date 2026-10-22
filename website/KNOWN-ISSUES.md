@@ -4,56 +4,26 @@ Reviewed at 0.52.0, and again on 10 Oct 2026 after the show round, the voice rou
 
 ## Still open
 
-| Issue | Where it's documented |
-|---|---|
-| **The installer exists now, and the docs still say it doesn't.** The Velopack installer is built and signed as of 10 Oct 2026 (Azure Artifact Signing, as "Asher Kent"), so getting-started/install.md's "No installer yet" note and its whole build-from-source procedure are wrong, as is its **Updating to a new version** section, which tells a club to rebuild. The page needs rewriting around the installer: download, SmartScreen on the first releases, where it installs (`%LocalAppData%\HeatCallerApp`, no admin prompt), the **HeatCaller Rehearsal** shortcut, in-app updates (never mid-meeting, backed up first, **Update now / After tonight / Not now**), and what uninstalling keeps. **Still genuinely open before the page can be finished:** the releases repo has to exist with the signed assets on it, since that is where the download link and the update feed both point. | getting-started/install.md - wrong as it stands. Knock-ons in reference/faq.md, getting-started/index.md and first-race-night.md, and admin/troubleshooting.md |
-| Low: **a move-driver or bump-up undo on the Program tab restores the whole heat roster**, even onto a heat that has since been run (the desk deliberately allows editing a run heat's roster). | Not documented (race-day/program-and-mains.md if it is) |
-
-## Still open: the HeatCaller voice (new at 0.52.0)
+Checked again on 22 Oct 2026, after the known-issues round fixed everything else that was on this list (see "Fixed, not yet released (22 Oct, known issues)").
 
 | Issue | Where it's documented |
 |---|---|
-| **A bad take still can't be re-rolled.** With a club's own key, pressing **Test** on a row asks for a fresh take and replaces the saved one. On the HeatCaller voice there is no **Test**, and **Forget Line** brings back the relay's own cached copy, so the same take comes back. **Preview** (new 10 Oct) lets a club hear its own words in the voice beforehand, but it is a listen, not a replacement: it writes nothing and does not touch the saved line. The fixes are still the driver's **Announcer name:** - now worth more, since it takes a phonetic spelling - a different announcer voice, or a key of your own. | announcer/voice.md (Fix a line that came out wrong) |
-| **"Shorten published names to a first name and an initial" doesn't reach the announcer.** It shortens names on the published pages, but a spoken line carries the driver's full **Announcer name:** (or driver name) to the relay and on to ElevenLabs, and the rendered audio is cached there for that club. A club that turned the option on for children's names may not expect that. Worth either extending the setting or saying it plainly in the app. | admin/security-and-privacy.md (Privacy table) |
-| **The allowance number goes stale on a page left open.** It is asked for when **Voice Settings** opens, when the HeatCaller voice is chosen and when **Refresh** is pressed — never on a timer, which is the right call for a page nobody is looking at, but it does mean a page left open through a race shows the number from when it opened. | announcer/voice.md (Pick a HeatCaller voice) — the docs say so |
-| **A club can't see which of its lines are costing the allowance.** **Saved Voice Lines** counts lines and megabytes, and **Recently played:** lists the last few, but there is nothing that says "the position report cost you 12,000 characters last month". The docs have to give general advice instead. | announcer/voice.md (Keeping the HeatCaller voice's allowance down) |
-| **A PC with no Kokoro voice file has nothing underneath it.** Kokoro replaced the Windows voice as the floor on 10 Oct, so the old "no stand-in at all" hole is closed for every club that has the 310 MB voice file - which the installer ships. A club that has somehow lost it, or that declined the download on an older build, now has no voice below the one it chose. This is said loudly rather than silently skipped (the console's `[voice] NO VOICE - ...`, the Mixer's red **NO VOICE:**, and a red line on Voice Settings), with one button that fixes it, so it is a documented state rather than a silent failure. | announcer/voice.md (When nothing can speak) |
+| **The installer has nowhere public to download from yet.** getting-started/install.md was rewritten around the installer on 22 Oct 2026 and says to get it from the HeatCaller team for now. The releases repo has to exist with the signed assets on it before the page can give a download link - the update feed points there too. | getting-started/install.md. Knock-ons still to check in reference/faq.md, getting-started/index.md, first-race-night.md and admin/troubleshooting.md |
+| **The rolling record watch only writes to the console.** Since 22 Oct `RecordWatch` is fed every lap and reset each race, but it only writes `[pace]` lines. By design it must not drive `NotifyRecordPace`/`NotifyTrackRecord`; it needs a segment of its own before anything is spoken. | Not documented |
+| Low: **a saved take from before "Shorten published names" was ticked still holds the full names.** The race no longer asks for it (it looks the shortened text up), so it is never played, but **Re-roll Line...** on it would send the full names to the relay once more and make a take the race won't use. **Forget Line** clears it. A fix is for Re-roll to refuse a line whose text the shortening would change. | Not documented |
 | Wording only: the internal guard in the app refuses a test with `Choose "My own ElevenLabs account" on Voice Settings`, but the radio button reads **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)**. The message shouldn't be reachable, so it isn't documented. | Not documented |
+| screens/phone-and-web.md still describes only the manual `netsh` commands and never mentions the **Set up phone pages** button. | screens/phone-and-web.md |
 
-## Still open: found while writing the 10 Oct docs
+## Documented states, not bugs
 
-Five writers went through the code for the show round, the voice round, the name
-check and race audio. These are what they found that the pages could not simply
-describe, listed worst first.
-
-| Issue | Where it's documented |
+| State | Where it's documented |
 |---|---|
-| **Nothing ever tells a show how long it has.** `MainForm.Commentary.cs` wires `director.Upcoming` with `inAbout: null`, because the app has no "minutes until the next race" to give it, so `ContinuityShow.Block` always asks for `ShowBlock.NoLimit`. Three consequences, none of them visible to a club: most of `ShowBlock.Fit` is unreachable in this build (the 12 s floor, the 3 s headroom and the 8 s overrun never apply - only the 90 s cap and the race-state abandon bound a block); `CommentaryContinuity.Soons` ("About 4 minutes away.") can never be said; and **`ContinuityShow.Tail`'s "Back in a moment." branch is dead code**, so a club running a freeform race, or with no program entered, gets **no bridge at all** - which is the exact club the hand-over was written for. Either work out the minutes and hand them over, or give `Tail` a no-gap phrasing. | announcer/commentary.md says plainly that HeatCaller doesn't work out the minutes yet; the minutes phrasings aren't documented |
-| **The hand-over block ignores the segment tick list.** A segment's show is gated on `treatment.Treats(said.Kind)`, but `HandOverIfItIsTimeAsync` calls `RunBlockAsync` directly, and `SegmentKind.ComingUpNext` isn't in `ShowSegments.Candidates`, so it can be neither ticked nor unticked. A pure hand-over therefore gets the opener, bed and sting whenever **Play an opener and a music bed under the show** is on, whatever is ticked under "Which segments get it" - so "untick them all and nothing gets music" is no longer quite true. | announcer/commentary.md documents the behavior as it is (The hand-over) |
-| **A club can't set how loud its sting is.** `AppSettings.ShowStingLevel` exists and defaults to 80, `ShowTreatment.MarkAsync` uses it, and no page has a control for it. Either add the slider beside **Opener level:** and **Bed level:**, or drop the setting. | Not documented - deliberately left off announcer/commentary.md |
-| **Race recording has no switch.** It is on, and the only way to turn it off is to *create* `%AppData%\HeatCaller\race-audio.json` by hand - `RaceAudioStore.Save()` is only called from property setters and nothing calls a setter, so the file doesn't exist on a normal install. (The XML comment on `RaceAudioStore.Enabled` claims "off is one tick box", which isn't true yet.) Nothing prunes the folder either: a season of nights accumulates until a club deletes them. | announcer/sounds-and-music.md (Race recordings) says both plainly; admin/data-files.md lists the folder as safe to delete |
-| **The app's preview cap is bigger than the relay's.** `HeatCallerVoiceClient.MaxPreviewCharacters` is 300; the relay's `VOICE_DEFAULT_PREVIEW_MAX_CHARS` is 200. A 250-character preview passes the laptop's own check, costs a round trip, and comes back refused. The app's cap should be at or below the relay's default, or it should read the cap out of the catalog. | announcer/voice.md avoids printing either number |
-| **Two user-facing strings still name the retired Windows voice.** `RivalriesControl.cs:216`: "Fixed while the HeatCaller voice is speaking - use your own ElevenLabs key or the Windows voice to write your own." And `SoundscapeEditorForm.cs:401`: "This PC speaks with the HeatCaller voice, which always uses the standard lines - these lines are saved, and apply once you use your own ElevenLabs key or the Windows voice." (This entry said "one" until the second was found. Whoever fixes the first should fix both.) Every other mention in the app is a comment. | announcer/voice.md quotes the Rivalries one as it stands and adds a clause explaining the free voice is now Kokoro; announcer/sounds-and-music.md describes the soundscape note rather than quoting it, with a TODO. Both doc workarounds come out when the strings are changed |
-| **The relay's new voice routes are the first that name no club**, which made a claim on the security page false: `/voice/samples`, `/voice/sample/<id>` and `/voice/preview` all sit outside `/api/v1/c/<club>/`. The relay's own comment (`server.ts:1715-1721`) says so. Deliberate - a club has to be able to hear a voice before it has signed up - and the two sample routes read nothing a club published and write nothing, while `/voice/preview` carries the publish token, so the token is the club. Worth a decision on whether it stays an exception or gets its own shape. | admin/security-and-privacy.md's "Every club is separate" bullet was rewritten to state the exception precisely |
-| **`voice.previewDailyChars` accepts up to 1,000,000**, but the comment above it (`relay/src/voice.ts:1793-1796`) justifies the range as "capped far below the month's allowance". The month's default is 100,000, so the ceiling is ten times the month rather than far below it. Either the comment or the bound is wrong. | admin/relay-hosting.md documents the bound, which is what the code does |
-| **The fastest-sector banner paints white type on the look's accent** (`BigScreenForm.cs:1389-1390`), while the warning banner is deliberately look-independent for contrast. In a light crowd-screen look with a pale accent - which the Big Screen page recommends for a bright room - "FASTEST SECTOR" is white on near-white. Needs a contrast pick like the warning banner's. | screens/big-screen.md documents the banner but not this |
-| Low: **the warning banner has no ghost guard.** `ShowFastestSector` skips a ghost car; `ShowWarningBanner` does not, so a warning issued against a ghost's standing goes full-width across the wall. The asymmetry looks unintended. | Not documented |
-| **Driver warnings are undocumented anywhere on the site.** Nothing covers the Race Control warning menu, `WarningRules.PresetReasons`, taking the last warning back, the per-class warning ladder (`WarningLadderForm`), or that a black flag marks the saved result DQ. The Big Screen's new banner section has to say "that warning's rung on the class's ladder" with nothing to link to. `race-control/running-a-race.md` is also missing the **Warnings** leaderboard column. | Nowhere - the one real feature-sized hole left in the docs |
-| Comments only, but they contradict the shipped build: `KokoroSpeech.cs:42-43` still says the Windows voice stands in for Kokoro, and `MixerControl.cs:1353` says the announcer can speak "in the free Windows voice". | Not documented |
+| **A PC with no Kokoro voice file has nothing underneath it.** The installer ships the 310 MB file, so this only happens to a club that lost it or declined the download on an older build. It is said loudly - the console's `[voice] NO VOICE - ...`, the Mixer's red **NO VOICE:** and a red line on Voice Settings - with one button that fixes it. Re-checked 22 Oct 2026; the old code comments that still said the Windows voice stands in were corrected the same day. | announcer/voice.md (When nothing can speak) |
+| **The relay's voice routes name no club** (`/voice/samples`, `/voice/sample/<id>`, `/voice/preview`). Decided 22 Oct 2026: they stay a deliberate exception - a club has to hear a voice before it signs up, the two sample routes read and write nothing a club published, and `/voice/preview` carries the publish token. The `previewDailyChars` comment now says the 1,000,000 bound is only a sanity ceiling. | admin/security-and-privacy.md ("Every club is separate"), admin/relay-hosting.md |
 
 ## Still open: found on 11 Oct 2026, wiring the commentary depth
 
-The two bookends of the evening were given readers, the race intro was
-given the venue's lap record, the strength of the field, what the evening
-has done to a driver's pace, the car and a proved championship conditional. Proving
-the conditional is what turned up the bug below - it is in the scoring, not
-in the announcer, and nobody had been looking at it. The four silences under
-it are not bugs, and they are written down because each one looks exactly
-like one from the floor.
-
-| Issue | Where it's documented |
-|---|---|
-| **A club can type a negative points value into a championship's scoring scheme, and nothing clamps it.** Found 11 Oct 2026, while proving the championship conditional. `SeasonsControl`'s **Points** column validates what was typed with `int.TryParse(typed, NumberStyles.Integer, CultureInfo.InvariantCulture, out int _)`, and `NumberStyles.Integer` includes `AllowLeadingSign` - so `-5` passes the cell's own validation with no complaint, `SaveCurrentSeasonFromUi` parses it exactly the same way into `Season.PointsScheme`, and `Season.PointsForPosition` is a plain lookup that hands it straight back. The only floor anywhere near it is in `Season.DefaultPointsScheme` (`Math.Max(0, 11 - position)`), and that shapes the default table and nothing a club types over it. **The consequence is that a driver can be worse off for having raced a round.** `SeasonStore.ComputeStandings` sums a driver's scored rounds, and under the "best N of M" drop rule a driver still UNDER the cap takes `TotalPoints = entry.RawPoints` - every round counted, the negative one included - so a round paying minus five leaves them five points behind where they stood before they turned up. (At or over the cap the drop rule happens to save them: `scored.OrderByDescending(p => p).Take(best)` throws the worst rounds away first.) That breaks the assumption the rest of the app quietly runs on: **that adding a round can only ever help.** The championship conditional's proof is the one piece of code that already accounts for it - `CommentaryReaders.ChampionshipConditional` starts every other entrant's ceiling at the total they came in with and prices retiring as one of the outcomes open to them, because on a negative scheme not finishing can be the best a driver can do, and its remarks say so at length. Nothing else necessarily does; `Championship.SwingFor`, `ChampionshipLive` and the Big Screen's "if it ended now" were all written against schemes that pay nothing worse than zero. **Deliberately left open, because the fix is a decision rather than a defect report:** clamping the cell at zero is one line and closes it, and a club may legitimately want a penalty row in a scheme of its own - at which point the rest of the app has to be made safe for negatives instead of kept away from them. Asher's call. | Not documented, and should not be until it is decided. race-control/results-and-championships.md step 3 describes **Points scheme** as the 10-9-8-...-1 default with a **Points** value you click to change, and says nothing about a sign |
+The four silences below are not bugs, and they are written down because each one looks exactly like one from the floor. The scoring bug found the same day (negative points) was fixed on 22 Oct 2026 - see below.
 
 ### Not bugs - four silences at the ends of the night
 
@@ -182,6 +152,39 @@ faults rather than add material.
   race-scoped key let the same debut go out from the intro and then again
   from the segment. (10-11 Oct 2026)
 
+## Fixed, not yet released (22 Oct, known issues)
+
+Every open issue on this list on the morning of 22 Oct 2026, fixed in one round. The pages named need checking against the build.
+
+- **Championship points can't go below zero** (decided: clamp). The **Points** cell refuses a negative with a message, saving clamps to 0, and `Season.PointsForPosition` never scores below 0 - so racing a round can only ever help. A negative row in an old file scores 0. (race-control/results-and-championships.md)
+- **The drama-shaped show is wired up.** A photo finish or a track record set in the race gives the recap's show a beat more air at each end; a night with a photo finish does the same for the sign-off. (announcer/commentary.md)
+- **Shows know how long they have.** The minutes to the next race come from the day's timetable, allowing for how late the night is running, so "about N minutes away" can be said and a show is fitted to the gap. After a freeform race, or with no programme, a show hands back with "Stay with us." instead of nothing. (announcer/commentary.md)
+- **The hand-over follows the segment ticks**: with nothing ticked it is read plainly, without music. (announcer/commentary.md, The hand-over)
+- **Segments run:** on the Commentary page sets how far down the segment list the night goes (the old hidden `CommentaryLowestTier`). (announcer/commentary.md)
+- **Battle calls held by the pacing dial** wait out the gap instead of being offered and held again on every crossing.
+- **Calling the next race stops a recap still being rendered**, so it no longer holds a synthesis slot or spends characters.
+- **The sponsor report keeps tonight's "presented by" credits across a restart.**
+- **After a speaker dropout** the voice no longer comes in early over a jingle.
+- **The built-in AI model's first load** respects the line's time limit.
+- **Whether a commercial break follows is decided once at the flag**, so the throw never promises a break that doesn't run. A Big Screen opened during the finish call no longer adds a late break.
+- **AI personal-best calls** compare against the driver's best on this layout before tonight.
+- **"Shorten published names" now reaches the cloud voices**: with it on, lines sent to the HeatCaller voice or ElevenLabs carry the short form, so the speakers say "Billy S". Kokoro, which never leaves the PC, still says names in full. (admin/security-and-privacy.md, Privacy table)
+- **Re-roll Line...** on Saved voice lines makes a new take of a line, plays it and keeps it; on the HeatCaller voice the new take is the club's own (relay redeploy needed). The allowance refreshes every two minutes while Voice Settings is open, and each saved line shows its character count. (announcer/voice.md)
+- **Preview is capped at 200 characters**, the same as the relay.
+- **Room votes** are no longer lost when the check-in key is created or reissued while a vote is open.
+- **LAN achievements** no longer vanish for five minutes after a locked read; the last good badges stay up and the file is read again within seconds.
+- **Track Designer**: cutting part of the racing line leaves the line where it is.
+- **Big Screen**: the fastest-sector banner picks white or dark text for the club's colour, and ghost cars never get a warning banner. (screens/big-screen.md)
+- **Program tab undo**: re-checked - a move or bump-up undo already refuses a heat run since the change, and that is pinned by tests. The old entry was stale.
+- **Docs**: getting-started/install.md is rewritten around the installer, and driver warnings are documented (race-control/corrections-and-recovery.md, race-day/drivers-and-classes.md).
+
+## Fixed, not yet released (22 Oct)
+
+- **Race recording has a switch, and a ceiling.** **Sounds → Recording** has *Record each race, and cut each driver their own clip* and **Keep the last:** *N* race nights, older nights' folders removed - including, since 22 Oct, the highlight videos in them. (announcer/sounds-and-music.md)
+- **The sting has a level.** **Sting level:** is on the **Show treatment** card beside the opener and bed levels. (announcer/commentary.md)
+- **The two strings that named the retired Windows voice** (Rivalries and the soundscape editor) no longer do.
+- **The station ident, the drama-shaped show and the ad-break bumper** are no longer built-but-unreachable - see that section.
+
 ## Built but not reachable (10 Oct)
 
 Written, tested and shipped with no way for a club to get at it. Recorded here
@@ -204,9 +207,13 @@ fixed on 10 Oct 2026 are there too. A segment with a box and no reader belongs
 in this section, and the test that now pins it (`CommentaryDepthTests`) is
 there so the question never has to be asked by hand again.
 
-- **The club's voice ID / station ident.** `ShowIdent`, `ShowRunningOrder.IdentDue` (a 40-minute floor) and `AppSettings.ShowIdentLine` are all there, and `ShowTreatment.IdentItem` returns the item, but no block builder calls it and no page has the text box. Needs one field on **Voice → Commentary**.
-- **The drama-shaped show.** `ShowDrama`, `ShowBilling.BiggerAir` (0.25 s) and `LongerLift` (0.35 s) give a show a bigger open when the race it is talking about earned one. `ShowTreatment.NextShowDrama` is never set, so every show is `ShowDrama.None`.
-- **The ad-break bumper.** `ShowTreatment.PunctuateAsync` reuses the club's sting either side of an ad break; nothing calls it.
+**Re-checked 22 Oct 2026: the list is empty.** The station ident
+(`ShowIdent`, `IdentDue`, `IdentItem`) was removed in the week of 15 Oct,
+the ad-break bumper is called (`ShowTreatment.PunctuateAsync` runs either
+side of the commercial break from `RaceControlControl.AfterRace`), and the
+drama-shaped show (`ShowDrama`) is fed by the recap and the sign-off as of
+22 Oct. `AppSettings.ShowIdentLine` is still in the settings file with no
+reader, on purpose, so an old file keeps loading.
 
 ## Fixed, not yet released (10 Oct)
 

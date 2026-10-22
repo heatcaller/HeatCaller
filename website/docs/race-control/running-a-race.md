@@ -13,9 +13,9 @@ From top to bottom, the page has:
 
 - **The Session row.** Choose the round, the track and the session name.
 - **The Next Up bar.** Shows what's running now, what's next, and how the day is going.
-- **The Race Control card.** Holds the flag buttons, the current **State:** and **Flag:**, the format chip and the **Race Format** button.
-- **The Leaderboard card.** Takes up the rest of the page. The correction toolbar, under **Selected racer:**, sits along its bottom edge.
-- **The clock column** on the right. It holds the race clock, then **Quick Race**, **Open Big Screen**, **Open Announcer Screen**, **Qualifying Projection** and **Pre-race check**, then two stat tiles: **Laps** (the leader's lap count) and **Fastest** (the fastest lap of the race so far).
+- **The Race Control card.** Holds one row of flag buttons, all the same width: **On Air**, **Stage**, **Countdown**, **Green**, **Yellow**, **Red**, **Checkered** and **Reset**. The lit button shows the flag in effect, so there's no separate state line.
+- **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, the **Start races On Air** tick box, **Race Format...** and **Columns...**.
+- **The clock column** on the right. It holds the race clock, then **Quick Race**, **Open Big Screen**, **Open Announcer Screen**, **Qualifying Projection**, **Pre-race check...** and **Mission Control**.
 
 ## Before you start
 
@@ -39,7 +39,7 @@ If you don't choose a round and **Start the next race automatically** is ticked 
 
 ### The race format
 
-The format chip under the flag buttons shows which rules apply to the next race and where they come from. For example: `Format (Stock class):  5 min · all away together · auto 15+5s`.
+The format chip at the foot of the leaderboard shows which rules apply to the next race and where they come from. For example: `Format (Stock class):  5 min · all away together · auto 15+5s`.
 
 HeatCaller uses the first of these that exists:
 
@@ -68,18 +68,34 @@ For a class or a round, untick **Use a custom format (untick to follow the app d
 ## Start the race
 
 1. Pick the round (or leave the session freeform).
-2. Press **Stage** (<kbd>F1</kbd>). The board clears, the announcer calls the cars to the grid, and the state changes to **Staging**.
-3. Press **Countdown** (<kbd>F2</kbd>). The state changes to **Countdown**. From now on, a car that crosses the line counts as a [jump start](#jump-starts).
-4. Press **Green (Start)** (<kbd>F3</kbd>). The race starts and the clock begins counting.
+2. Press **On Air** (<kbd>O</kbd>), or <kbd>F1</kbd>. The show opens the race like a radio station: the soundscape's jingle or sweeper, the opening (the race intro), the throw down to pit lane and the driver introductions when they're switched on, a bumper, and then the race is staged. See [On Air](#on-air).
+3. When staging starts, the board clears, the announcer calls the cars to the grid and **Stage** lights up.
+4. Press **Countdown** (<kbd>F2</kbd>). **Countdown** lights up. From now on, a car that crosses the line counts as a [jump start](#jump-starts).
+5. Press **Green** (<kbd>F3</kbd>). The race starts and the clock begins counting.
+
+**Stage** on its own skips On Air: it stages straight away with just the call to the grid. The race intro, the pit lane throw and the driver introductions all belong to On Air, so a race started with **Stage** has none of them.
+
+### On Air
+
+On Air is the normal start. With **Start races On Air** ticked at the foot of the leaderboard (it is by default), <kbd>F1</kbd>, **Start Next**, the program's **Start**, the phone and the day schedule all go through On Air first. Unticked, they stage straight away. The **Stage** button always stages straight away, whatever the tick box says.
+
+While On Air gets the opening ready, the button fills from left to right and counts down the seconds it expects to need, learned from your last few openings, with the step it's on: for example "12s · Voicing". The first few times there's no countdown yet, just the step. Once the show is live the button turns cyan and reads **On Air · Skip**.
+
+- **Press On Air again** while it runs to skip the rest and stage straight away.
+- **Anything else that moves the race on** (Stage, Countdown, Green or Reset) calls On Air off, and your press wins.
+- **Yellow or Red between races** doesn't call On Air off; it only stops the automatic start.
+- **During a demo's On Air**, a flag press skips the rest of the opening and starts the demo, which stages and goes green by itself.
+
+Between races, HeatCaller writes the next opening and voices it ahead, so pressing On Air usually starts the jingle at once. If you change the voice in between, the lines voiced ahead are dropped and voiced again.
 
 With **Run the start sequence automatically (Stage → Countdown → Green)** ticked (the default), you only need to press **Stage**. HeatCaller moves on to the countdown when the staging announcement finishes, and drops the green when the countdown announcement finishes. It follows the audio rather than a fixed timer, so the start never talks over itself or leaves a silence. With the announcer muted there's no audio to follow, so staging lasts **Stage (s):** and the countdown **Countdown (s):** from the race format instead.
 
-The chain stops if anything else happens first. Pressing **Stage**, **Countdown**, **Green (Start)**, **Yellow**, **Red** or **Reset** stops the automatic sequence, and your button press wins. **Checkered** doesn't: before the green it's refused and changes nothing, so the start carries on, automatic green included (see [Flags](#flags)).
+The chain stops if anything else happens first. Pressing **Stage**, **Countdown**, **Green**, **Yellow**, **Red** or **Reset** stops the automatic sequence, and your button press wins. **Checkered** doesn't: before the green it's refused and changes nothing, so the start carries on, automatic green included (see [Flags](#flags)).
 
 A yellow or red thrown during staging or the countdown also stops the automatic start (and **Quick Race**). The log says the start stopped because the flag is out: "Press Green when the track is ready, or Stage again to restart the sequence." The race still hasn't started, so the green you press next is a start, not a restart: the start horn and the **Race started** call play when it drops.
 
 !!! warning
-    **Green (Start)** starts a race straight away even if you haven't staged. A green with no countdown gives the jump-start check nothing to watch. Use **Stage** for a proper start.
+    **Green** starts a race straight away even if you haven't staged. A green with no countdown gives the jump-start check nothing to watch. Use **Stage** for a proper start.
 
 The green always waits for the countdown announcement to finish, however the start was triggered. If you press **Reset**, **Stage** or **Red** during that wait (or a demo is stopped), the green is canceled and your later decision stands. The log says "Green flag not dropped - " and what happened. **Checkered** pressed during the wait is refused and leaves the green alone.
 
@@ -93,17 +109,17 @@ The green always waits for the countdown announcement to finish, however the sta
 
 **Stage** and **Countdown** pressed while a race is running ask first, because they would abandon the running race without saving it. Starting a round from **Race Day → Next Steps** asks too, before anything is announced. To end a race and keep its result, use **Checkered**. Once you confirm, the abandoned race's flag goes with it, so a new start made over a race under yellow or red runs on to its automatic green like any other. See [Staging over a running race](corrections-and-recovery.md#staging-over-a-running-race).
 
-While practice is running, **Stage**, **Countdown**, **Green (Start)**, **Yellow**, **Red**, **Checkered**, **Reset** and starting a round from the program or the Next Up bar are refused with "Stop practice first on the Practice page". See [Practice](practice-and-ghosts.md#practice).
+While practice is running, **Stage**, **Countdown**, **Green**, **Yellow**, **Red**, **Checkered**, **Reset** and starting a round from the program or the Next Up bar are refused with "Stop practice first on the Practice page". See [Practice](practice-and-ghosts.md#practice).
 
-During a demo, **Stage**, **Countdown**, **Reset** or a first **Green (Start)** on Race Control ends the demo so a real race can take its place. Starting a round from the program or the Next Up bar ends a demo too. Once the demo is racing, **Green (Start)** after a caution and **Checkered** still act on the demo. See [Demo Mode](practice-and-ghosts.md#demo-mode).
+During a demo, **Stage**, **Countdown**, **Reset** or a first **Green** on Race Control ends the demo so a real race can take its place. Starting a round from the program or the Next Up bar ends a demo too. Once the demo is racing, **Green** after a caution and **Checkered** still act on the demo. See [Demo Mode](practice-and-ghosts.md#demo-mode).
 
-If the round's class runs tech, staging it (or pressing **Green (Start)** from idle) also checks that everyone in it has passed tech today. Anyone who hasn't is listed in a "[tech] WARNING" line in the log. It's only a reminder; the race starts as normal. See [Tech warnings on Race Control](../race-day/events-and-entries.md#tech-warnings-on-race-control).
+If the round's class runs tech, staging it (or pressing **Green** from idle) also checks that everyone in it has passed tech today. Anyone who hasn't is listed in a "[tech] WARNING" line in the log. It's only a reminder; the race starts as normal. See [Tech warnings on Race Control](../race-day/events-and-entries.md#tech-warnings-on-race-control).
 
 ### Warm-up
 
 A race format can give the cars some free laps before the race: set **Warm-up (s, 0 = none):** in the format. It's off (0) unless you set it.
 
-With a warm-up set, pressing **Stage** (or **Quick Race**) between races opens the warm-up first. The state shows **Warm-up**, the announcer says the warm-up is open and how long it lasts, and laps aren't counted. On a warm-up longer than a minute, it calls "Thirty seconds left in warm-up." When the time runs out, the race is staged as usual. To cut it short, press **Stage** (or **Quick Race**) again: the rest of the warm-up is skipped and the race is staged straight away.
+With a warm-up set, pressing **Stage** (or **Quick Race**) between races opens the warm-up first. The race clock shows **WARM-UP**, the announcer says the warm-up is open and how long it lasts, and laps aren't counted. On a warm-up longer than a minute, it calls "Thirty seconds left in warm-up." When the time runs out, the race is staged as usual. To cut it short, press **Stage** (or **Quick Race**) again: the rest of the warm-up is skipped and the race is staged straight away.
 
 **Reset** cancels a warm-up. A warm-up never opens during practice, or over a race that's staged, counting down or running.
 
@@ -155,7 +171,7 @@ The hint in the format dialog explains the two qualifying conventions. **All awa
 
 HeatCaller checks for jump starts only during the **Countdown**. While cars are being staged, they're carried out and rolled over the loop to their grid slots, so passes during **Staging** are ignored.
 
-A **Countdown** or **Green (Start)** pressed without **Stage** first still starts a fresh jump-start check with the class's own rules. Nothing carries over from the previous race.
+A **Countdown** or **Green** pressed without **Stage** first still starts a fresh jump-start check with the class's own rules. Nothing carries over from the previous race.
 
 A car that crosses the line during the countdown is flagged as a jump starter. In a staggered start, a car that crosses before its own release time is flagged too. Each car is flagged at most once per race.
 
@@ -181,7 +197,7 @@ You set the jump-start rules on the class:
 |---|---|---|
 | **Yellow** | <kbd>F4</kbd> | Caution. Laps still count and the clock keeps running. |
 | **Red** | <kbd>F5</kbd> | Stops the race. The clock pauses and shows **PAUSED**, laps are not counted, and cars waiting to be released stay held. A timed race can't run out while the red flag is out. |
-| **Green (Start)** | <kbd>F3</kbd> | During a race, this resumes racing after a yellow or red. Laps and times are kept. If a lap added by hand under the red brought a driver to the lap limit, the checkered flag comes out instead. |
+| **Green** | <kbd>F3</kbd> | During a race, this resumes racing after a yellow or red. Laps and times are kept. If a lap added by hand under the red brought a driver to the lap limit, the checkered flag comes out instead. |
 | **Checkered** | <kbd>F6</kbd> | Ends the race now, for everyone, and saves the result. Only works while a race is running. |
 | **Reset** | <kbd>F7</kbd> | Clears the race, and the round and name on the **Session** row. The key asks first if a race is under way. See [Corrections and recovery](corrections-and-recovery.md#reset-and-undo). |
 
@@ -194,11 +210,11 @@ The presses below are refused and change nothing. No box appears: the log gives 
 | **Checkered** | During staging or the countdown. The start carries on, automatic green included. | "The race hasn't gone green yet. To call off this start, press Reset." |
 | **Checkered** | After the race has finished. | "The race has already finished." |
 | **Checkered** | With nothing staged. | "No race is running." |
-| **Green (Start)** | On the last lap, with the checkered flag out. | "The checkered flag is out - the race is finishing." |
+| **Green** | On the last lap, with the checkered flag out. | "The checkered flag is out - the race is finishing." |
 
-**Green (Start)** pressed while the race is already green does nothing at all: no horn and no call. The log says "Green pressed - the race is already green, so nothing changed.", and the phone remote shows "Already green."
+**Green** pressed while the race is already green does nothing at all: no horn and no call. The log says "Green pressed - the race is already green, so nothing changed.", and the phone remote shows "Already green."
 
-The lit flag button always shows the flag in effect, however it was thrown: a button, a function key, the phone remote or the automatic start. **Stage** and **Countdown** light up while the start is at that step.
+The lit flag button always shows the flag in effect, however it was thrown: a button, a function key, the phone remote or the automatic start. **Stage** and **Countdown** light up while the start is at that step. There's no separate State or Flag line: the lit button is it.
 
 The function keys work only while the **Race Control** page is showing, and only on their own. Alt+F4, or an F-key with Ctrl or Shift, never throws a flag. See [Keyboard shortcuts](../reference/keyboard-shortcuts.md).
 
@@ -253,14 +269,15 @@ Set the minimum a little under the quickest real lap anyone could do on your tra
 
 The board orders drivers by most laps, then by lowest total time. Total time includes penalties.
 
-- **Double-click** a driver to open their lap breakdown. The breakdown shows every lap with a pace bar, how far off their best it was, and their clean run. With a [split loop](../timing/decoders.md#a-split-loop), each lap's sector times replace the pace bar, the driver's best in each sector is in green, and the line at the foot gives their **Ideal lap**. It updates live, so you can leave it open for a whole race. Click anywhere else to close it.
+- **Click** a driver to open their drawer under their row: **+1 Lap**, **−1 Lap**, **+5s**, **+10s**, **⚠ Warning**, **Clear Penalties**, **Share video** and **Lap breakdown**. Click the same driver again to close it, or another driver to move it. See [Corrections and recovery](corrections-and-recovery.md).
+- **Double-click** a driver to open their lap breakdown, drawer or not. The breakdown shows every lap with a pace bar, how far off their best it was, and their clean run. With a [split loop](../timing/decoders.md#a-split-loop), each lap's sector times replace the pace bar, the driver's best in each sector is in green, and the line at the foot gives their **Ideal lap**. It updates live, so you can leave it open for a whole race. Click anywhere else to close it.
 - **Right-click** a driver for more options: edit or assign a driver, the lap breakdown, show or hide their recent laps on the board, lap and penalty corrections, their battery pack, **Exclude from records**, and **Copy transponder ID**. The pack item lists the driver's packs and the club's, with the one in use ticked. During a race it reads ***name*'s pack in the car**: picking one puts it in their car, so the race is recorded on it. Once the race is saved it reads ***name*'s pack for this race**: picking one records it for the race just run, or **No pack recorded**, and a pack also goes in their car. See [A driver's batteries](../race-day/drivers-and-classes.md#a-drivers-batteries).
 - **Show {name}'s laps on the board** opens a strip of recent lap times under the driver's row. You can open strips for several drivers at once to compare them. In the strip, a star (★) marks a lap inside a clean run, and a broken circle (◌) marks the lap where a run ended.
 - The driver with the fastest lap of the race has their **Best Lap** highlighted.
 
 ### Columns
 
-Press **Columns** to choose the columns and their order. In the dialog, click the left edge of a row to show or hide that column, and use **Move Up** and **Move Down** to reorder them. **Restore Defaults** puts back **Pos**, **Driver**, **Car**, **Laps**, **Best Lap**, **Gap to P1** and **Streak**.
+Press **Columns...**, at the foot of the leaderboard, to choose the columns and their order. In the dialog, click the left edge of a row to show or hide that column, and use **Move Up** and **Move Down** to reorder them. **Restore Defaults** puts back **Pos**, **Driver**, **Car**, **Laps**, **Best Lap**, **Gap to P1** and **Streak**.
 
 | Column | Shows |
 |---|---|
@@ -356,7 +373,7 @@ A car whose transponder was flat before the race never crosses at all, so it can
 
 Mission Control puts every check that matters before a green flag in one window, as a wall of tiles that are green when all is well, amber when something is worth a look, and red when laps or results are at risk. A red tile glows and pulses so it's seen from across the room. A tile for something you're not using tonight, such as a split loop, is dimmed.
 
-Open it from **Connection → Mission Control**, or from **Mission Control** in the **Pre-race check** window. It isn't a dialog: it can stay open beside Race Control, or on a second screen, all night. It checks everything again once a second. Opening it again brings the open one to the front.
+Open it with the **Mission Control** button at the bottom of the clock column, from **Connection → Mission Control**, or from **Mission Control** in the **Pre-race check** window. It isn't a dialog: it can stay open beside Race Control, or on a second screen, all night. It checks everything again once a second. Opening it again brings the open one to the front.
 
 <!-- screenshot: Mission Control with all tiles green except an amber "Next race 7 of 8" tile -->
 
@@ -403,10 +420,11 @@ Practice and Demo Mode don't keep shots.
 - **Open Big Screen** (<kbd>B</kbd>) opens the audience display. See [Big Screen](../screens/big-screen.md).
 - **Open Announcer Screen** (<kbd>A</kbd>) opens the Announcer screen in a window of its own, beside this one or on a second monitor. Its **Race Control** button brings the main window back to the front. See [Announcer screen](../announcer/voice.md#announcer-screen).
 - **Qualifying Projection** opens or closes a window that shows where the class would qualify if the running heat ended now. See [Program and mains](../race-day/program-and-mains.md#qualifying-projection).
-- **Pre-race check** (<kbd>R</kbd>) checks which cars in the round (or on the board) the decoder has heard. Its **Mission Control** button opens [Mission Control](#mission-control). See [Pre-race check](../race-day/events-and-entries.md#pre-race-check) and [Transponders](../timing/transponders.md).
+- **Pre-race check...** (<kbd>R</kbd>) checks which cars in the round (or on the board) the decoder has heard. Its **Mission Control** button opens [Mission Control](#mission-control). See [Pre-race check](../race-day/events-and-entries.md#pre-race-check) and [Transponders](../timing/transponders.md).
+- **Mission Control** opens [Mission Control](#mission-control).
 
 ## Tips
 
 - You can leave the **Race Control** page during a race. Timing, time limits and the finish keep running in the background.
-- You can't undo a lap correction, but you can reverse it with the opposite correction. See [Corrections and recovery](corrections-and-recovery.md).
+- A lap or penalty correction can be undone with **Undo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd>), or reversed with the opposite correction. See [Corrections and recovery](corrections-and-recovery.md).
 - To rehearse the whole flow without cars, use [Demo Mode](practice-and-ghosts.md#demo-mode).

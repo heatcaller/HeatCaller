@@ -3616,7 +3616,11 @@ export class Relay {
     // name arrives false and is kept for this club alone.
     const shared = body["shared"] === true;
 
-    const result = await this.voice.speak(club, who.voice ?? VOICE_PLAN_OFF, voiceId, text, shared);
+    // A fresh take, past the caches: the Re-roll button on Voice Settings
+    // (22 Oct 2026). Charged like any line that was not saved.
+    const fresh = body["fresh"] === true;
+
+    const result = await this.voice.speak(club, who.voice ?? VOICE_PLAN_OFF, voiceId, text, shared, fresh);
 
     if (!result.ok) {
       sendJson(response, result.status, {

@@ -608,8 +608,21 @@ public sealed class RcpSelection
         }
     }
 
-    /// <summary>Takes everything picked off the plan.</summary>
-    public void DeleteFrom(RcpTrackDesign design)
+    /// <summary>
+    /// Whether some of the racing line is picked but not all of it (22 Oct
+    /// 2026, known issues). The line is one ordered route, and Paste only
+    /// puts route points down on a plan with no line of its own - so a cut
+    /// that took part of it left the plan with a line and the clipboard
+    /// with points that could never go back. A cut like that leaves the
+    /// line where it is.
+    /// </summary>
+    public bool HoldsPartOfTheLine(RcpTrackDesign design) =>
+        design is not null
+        && _route.Count > 0
+        && design.Route.Any(point => !_route.Contains(point));
+
+    /// <summary>Takes everything picked off the plan - all but the racing line, when <paramref name="keepTheLine"/>.</summary>
+    public void DeleteFrom(RcpTrackDesign design, bool keepTheLine = false)
     {
         if (design is null)
         {
@@ -620,7 +633,11 @@ public sealed class RcpSelection
         design.Walls.RemoveAll(_walls.Contains);
         design.Curves.RemoveAll(_curves.Contains);
         design.Decals.RemoveAll(_decals.Contains);
-        design.Route.RemoveAll(_route.Contains);
+
+        if (!keepTheLine)
+        {
+            design.Route.RemoveAll(_route.Contains);
+        }
     }
 
     // --- Copying it ----------------------------------------------------------

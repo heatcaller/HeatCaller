@@ -632,9 +632,19 @@ internal sealed class SponsoredMomentGate
         }
     }
 
+    /// <summary>
+    /// Told tonight's count, as <see cref="Save"/> writes it, after every
+    /// mention - for whatever keeps the night across a restart (22 Oct 2026,
+    /// known issues). Run outside the lock, on whichever thread counted the
+    /// mention; the host moves it to its own.
+    /// </summary>
+    public Action<string>? Changed { get; set; }
+
     /// <summary>A "presented by" for <paramref name="sponsorId"/> on <paramref name="moment"/> has gone to the speaker: counted, and the ration starts again from now.</summary>
     public void Mentioned(SponsoredMoment moment, string sponsorId)
     {
+        string saved;
+
         lock (_gate)
         {
             var now = _clock();
@@ -651,6 +661,113 @@ internal sealed class SponsoredMomentGate
             }
 
             bySponsor[moment] = bySponsor.GetValueOrDefault(moment) + 1;
+
+            saved = SaveLocked();
+        }
+
+        // Kept at once, as the paid reads are (CommentaryDirector.SalesReadSaid):
+        // the restart this is for is usually a force-closed window.
+        try
+        {
+            Changed?.Invoke(saved);
+        }
+        catch
+        {
+            // A save that failed is not a reason to lose the line.
+        }
+    }
+
+    /// <summary>
+    /// How tonight's count is kept across a restart (22 Oct 2026, known
+    /// issues). The paid reads were saved after every read, but these lived
+    /// in memory only, so a club that reopened HeatCaller mid-evening had a
+    /// sponsor report with every read and only the credits since the
+    /// restart. Keyed to the race night inside, so last week's count can
+    /// never come back - see Restore. Moments by name, as a booking keeps them.
+    /// </summary>
+    private sealed record SavedNight(string Night, Dictionary<string, Dictionary<string, int>>? Mentions);
+
+    /// <summary>Tonight's count, for whatever holds the night across a restart.</summary>
+    public string Save()
+    {
+        lock (_gate)
+        {
+            RollNight(_clock());
+            return SaveLocked();
+        }
+    }
+
+    private string SaveLocked() => System.Text.Json.JsonSerializer.Serialize(new SavedNight(
+        NightKey(_night),
+        _mentions.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.ToDictionary(count => count.Key.ToString(), count => count.Value),
+            StringComparer.OrdinalIgnoreCase)));
+
+    private static string NightKey(DateTime night) => night.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Picks tonight's count back up after a restart - only when it was
+    /// saved on this same race night; anything else, or a file that will not
+    /// read, is passed over and the count starts from nought as before.
+    /// Counts already made since the restart are kept: the larger of the two
+    /// is taken for each, so laying it back twice changes nothing.
+    /// </summary>
+    public void Restore(string? saved)
+    {
+        if (string.IsNullOrWhiteSpace(saved))
+        {
+            return;
+        }
+
+        SavedNight? night;
+
+        try
+        {
+            night = System.Text.Json.JsonSerializer.Deserialize<SavedNight>(saved);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return;
+        }
+
+        if (night?.Mentions is null)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            RollNight(_clock());
+
+            if (!string.Equals(night.Night, NightKey(_night), StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            foreach (var (sponsor, counts) in night.Mentions)
+            {
+                if (counts is null)
+                {
+                    continue;
+                }
+
+                var key = sponsor ?? string.Empty;
+
+                if (!_mentions.TryGetValue(key, out var bySponsor))
+                {
+                    bySponsor = new Dictionary<SponsoredMoment, int>();
+                    _mentions[key] = bySponsor;
+                }
+
+                foreach (var (name, count) in counts)
+                {
+                    if (count > 0 && Enum.TryParse<SponsoredMoment>(name, out var moment) && Enum.IsDefined(moment))
+                    {
+                        bySponsor[moment] = Math.Max(bySponsor.GetValueOrDefault(moment), count);
+                    }
+                }
+            }
         }
     }
 

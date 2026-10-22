@@ -560,7 +560,14 @@ export class VoiceService {
    * club: true only for a line rendered straight from a template with no
    * values filled in. Anything with a driver's name in it arrives false.
    */
-  async speak(club: string, plan: VoicePlan, voiceId: string, text: string, shared: boolean): Promise<SpeakResult> {
+  async speak(
+    club: string,
+    plan: VoicePlan,
+    voiceId: string,
+    text: string,
+    shared: boolean,
+    fresh = false,
+  ): Promise<SpeakResult> {
     if (!isValidClubId(club)) {
       return { ok: false, refusal: "unknown-voice", status: 404, message: "No such club." };
     }
@@ -633,10 +640,21 @@ export class VoiceService {
     // It costs this club a little more - its own cache still works, so
     // only the cross-club saving is lost - and it is the club whose voice
     // it is, so it is the right club to pay.
-    const keepFor = shared && !voice.cloned;
+    const sharedLine = shared && !voice.cloned;
+
+    // A FRESH TAKE (22 Oct 2026, known issues: "a bad take can't be
+    // re-rolled"). The Re-roll button on Voice Settings asks for the line
+    // again, past every cache, charged like any line that was not saved.
+    // The new take is kept in the CLUB'S OWN cache even for a line every
+    // club shares: one club not liking how "Green flag!" came out is no
+    // reason to change it for every other club, and that club pays for it.
+    // A shared line therefore looks in the club's own cache first.
+    const keepFor = fresh ? false : sharedLine;
 
     const key = cacheKey(voice, spoken);
-    const cached = await this.readCache(club, keepFor, key);
+    const cached = fresh
+      ? undefined
+      : (sharedLine ? await this.readCache(club, false, key) : undefined) ?? (await this.readCache(club, keepFor, key));
 
     if (cached !== undefined) {
       // Free: nothing reached ElevenLabs, so nothing is counted. This is
@@ -652,7 +670,7 @@ export class VoiceService {
     // refused or failed (perhaps against another club's allowance), the
     // second goes on down its own path: it never inherits a refusal, and
     // never skips its own reserve. 17 Oct 2026, Bug Hunt 8, A22-3.
-    const flight = `${keepFor ? "shared" : club}|${key}`;
+    const flight = `${keepFor ? "shared" : club}|${key}${fresh ? "|fresh" : ""}`;
     const already = this.linesInFlight.get(flight);
 
     if (already !== undefined) {
@@ -2034,9 +2052,13 @@ export function readVoiceConfig(value: unknown, source: string): VoiceConfig {
     monthlyChars: whole(raw["monthlyChars"], VOICE_DEFAULT_MONTHLY_CHARS, 0, 100_000_000, "voice.monthlyChars", source),
     maxChars: whole(raw["maxChars"], VOICE_DEFAULT_MAX_CHARS, 40, 5_000, "voice.maxChars", source),
     // Zero is allowed and means something: previews off, samples still
-    // served. Capped far below the month's allowance because this one is
+    // served. It is the DEFAULT that is kept far below the month's
+    // allowance (VOICE_DEFAULT_PREVIEW_DAILY_CHARS), because this one is
     // not metered per club or billed - it is there so somebody can make
-    // their mind up, and a day of it should never be worth stealing.
+    // their mind up, and a day of it should never be worth stealing. The
+    // million here is only a sanity ceiling against a mistyped config, not
+    // a size anyone should set (22 Oct 2026: this comment used to say the
+    // bound itself was below the month's, which it never was).
     previewDailyChars: whole(
       raw["previewDailyChars"],
       VOICE_DEFAULT_PREVIEW_DAILY_CHARS,

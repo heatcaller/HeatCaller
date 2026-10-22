@@ -184,6 +184,23 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
     private static LLamaWeights? _loadedWeights;
 
     /// <summary>
+    /// The load under way, if one is, and the key it is loading - shared by
+    /// every caller who wants that model (22 Oct 2026, known issues). Only
+    /// touched under LoadGate.
+    ///
+    /// WHY: the load used to run INSIDE LoadGate, awaited by whoever got
+    /// there first, and Task.Run's token only stops a load that has not
+    /// begun. A cold load can take a minute on a slow PC, and the caller's
+    /// timeout - a segment that must be written before the next race - was
+    /// simply not heard until it had finished. Now the load runs on its own
+    /// and each caller waits on it with its own token (WaitAsync), so a
+    /// caller that gives up stops waiting at once, and the load carries on
+    /// for the next one rather than being started again.
+    /// </summary>
+    private static Task<LLamaWeights>? _loading;
+    private static string? _loadingKey;
+
+    /// <summary>
     /// Set when loading failed in a way that will not get better by trying
     /// again: no model file, not enough RAM, or the native library refusing
     /// to load on this CPU. Checked before every call so a machine that
@@ -602,6 +619,8 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
             return _loadedWeights;
         }
 
+        Task<LLamaWeights> load;
+
         await LoadGate.WaitAsync(ct).ConfigureAwait(false);
 
         try
@@ -611,11 +630,83 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
                 return _loadedWeights;
             }
 
+            // One load per model, however many callers want it - see _loading.
+            if (_loading is null || _loadingKey != key)
+            {
+                _loadingKey = key;
+                _loading = LoadSharedAsync(path, parameters, key);
+            }
+
+            load = _loading;
+        }
+        finally
+        {
+            LoadGate.Release();
+        }
+
+        // This caller's own token: given up on, it stops waiting now, and
+        // the load goes on for whoever asks next.
+        return await load.WaitAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads one model's weights off disk and makes them the process's set -
+    /// on its own, not inside any caller's wait (see _loading).
+    /// </summary>
+    private async Task<LLamaWeights> LoadSharedAsync(string path, ModelParams parameters, string key)
+    {
+        LLamaWeights weights;
+
+        try
+        {
             // Synchronous load on a worker thread rather than the async
             // overload: this must not block the UI thread, and the
             // synchronous call is the one that has been in LLamaSharp
-            // unchanged across versions.
-            var weights = await Task.Run(() => LLamaWeights.LoadFromFile(parameters), ct).ConfigureAwait(false);
+            // unchanged across versions. No token: nobody's timeout is a
+            // reason to throw away a load half done.
+            weights = await Task.Run(() => LLamaWeights.LoadFromFile(parameters)).ConfigureAwait(false);
+        }
+        catch
+        {
+            await LoadGate.WaitAsync().ConfigureAwait(false);
+
+            try
+            {
+                // Tried again by the next caller, not handed the same failure for ever.
+                if (_loadingKey == key)
+                {
+                    _loading = null;
+                    _loadingKey = null;
+                }
+            }
+            finally
+            {
+                LoadGate.Release();
+            }
+
+            throw;
+        }
+
+        await LoadGate.WaitAsync().ConfigureAwait(false);
+
+        try
+        {
+            // OVERTAKEN: a different model was asked for while this one was
+            // loading (22 Oct 2026, review). Only the LATEST request becomes
+            // the process's set - so two loads finishing out of order can
+            // never have the one that lands second dispose the other's
+            // weights under a caller still using them. These go to the
+            // callers that asked for them and are not installed, and nothing
+            // disposes them here: a rare model swap mid-load costs a copy of
+            // the weights until the app closes, not a crash mid-line.
+            if (_loadingKey != key)
+            {
+                StatusMessage?.Invoke($"[llm] Loaded {Path.GetFileName(path)}, but another model was chosen meanwhile - that one is the one kept.");
+                return weights;
+            }
+
+            _loading = null;
+            _loadingKey = null;
 
             // A different model than the one held - swapped on the
             // Commentary page. Let the old one go; nothing else can be
@@ -625,7 +716,7 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
             _loadedWeights = weights;
             _loadedKey = key;
 
-            if (previous is not null)
+            if (previous is not null && !ReferenceEquals(previous, weights))
             {
                 try
                 {
@@ -636,15 +727,15 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
                     // Nothing useful to do if the native side objects.
                 }
             }
-
-            StatusMessage?.Invoke($"[llm] Loaded {Path.GetFileName(path)} on {Threads} thread(s).");
-
-            return weights;
         }
         finally
         {
             LoadGate.Release();
         }
+
+        StatusMessage?.Invoke($"[llm] Loaded {Path.GetFileName(path)} on {Threads} thread(s).");
+
+        return weights;
     }
 
     /// <summary>True when a file is sitting in one of the model places but failed the size floor.</summary>

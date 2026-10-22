@@ -1,10 +1,10 @@
 # Sounds and music
 
-Besides the spoken announcer, HeatCaller can play short sound effects for laps and race moments, a crowd and track atmosphere that reacts to the race, a between-race soundtrack, and a personal lap cue for each driver. All of it lives on the **Sounds** page, on six tabs: **Mixer**, **Soundscapes**, **Effects**, **Ambience**, **Music** and **Lap Beeps**. A soundscape (the **Announcer Style** tab on the **Themes** page before 0.56) sets up the sound effects and the announcer's words and delivery in one go, and can bring its own crowd and music; see [Soundscapes](#soundscapes).
+Besides the spoken announcer, HeatCaller can play short sound effects for laps and race moments, a crowd and track atmosphere that reacts to the race, a between-race soundtrack, and a personal lap cue for each driver. All of it lives on the **Sounds** page, on its tabs: **Mixer**, **Soundscapes**, **Imaging**, **Effects**, **Ambience**, **Music**, **Lap Beeps** and **Recording**. A soundscape (the **Announcer Style** tab on the **Themes** page before 0.56) sets up the sound effects and the announcer's words and delivery in one go, and can bring its own crowd and music; see [Soundscapes](#soundscapes).
 
 None of these sounds use the internet. They play on the laptop, through whatever speaker it's connected to.
 
-HeatCaller also records each race as it goes out and saves it as an mp3, with a clip for each driver. That has no tab of its own; see [Race recordings](#race-recordings).
+HeatCaller also records each race as it goes out and saves it as an mp3, with a clip and a highlight video for each driver. That's on the **Recording** tab; see [Race recordings](#race-recordings).
 
 ## Effects
 
@@ -287,8 +287,9 @@ The choice is applied when you move off the step, and stays until you change it,
 - **Voice → Announcements:** the lap time, the start, time up, the checkered flag and the yellow, red and green flags are switched on, for races and practice. Staging, the countdown, jump starts, staggered starts, the grid call, last lap and final minute are left as you have them. Everything else, such as fast laps, records, leader changes, battles and streaks, is switched off. Only the ticks change, so this works the same on every voice, the HeatCaller voice included.
 - **Sounds → Effects:** the sounds that play on a lap (**Good lap**, **Invalid lap**, **Personal best**, **Fast lap**, **Track record**, **Consistency streak** and **Leader change**) are switched off. The start, countdown, flag and finish sounds are left as they are, and so are **Lap Beeps**.
 - **Mixer:** **Bring up:** **Music** and **Ambience** are unticked, so a race doesn't bring them up. Music or ambience playing now is stopped.
-- **Voice → Commentary:** **Race intros - a "coming up" line before a round starts**, **Race recaps - a wrap-up after the checkered flag** and **Teasers before the recap:** are switched off.
+- **Voice → AI Commentary:** **Race intros - a "coming up" line before a round starts**, **Race recaps - a wrap-up after the checkered flag** and **Teasers before the recap:** are switched off.
 - No soundscape card is marked **LAST APPLIED**.
+- The **Unofficial result** at the flag isn't said while lap times only is on, whatever its tick box says. That tick box itself isn't changed, so it's back when lap times only ends.
 
 Whether the lap time includes the driver's name, and how often it's read, stay as you set them on the **Lap time only** row of **Voice → Announcements**.
 
@@ -491,9 +492,9 @@ Lap beeps play the instant the car crosses, ahead of any spoken line, at the **S
 
 ## Race recordings
 
-HeatCaller records every race as it goes out and, once the broadcast has finished, saves the whole thing as an mp3 - with a short clip for each driver beside it, covering just the moments they were named. You don't set anything up: it's on, and the race log says where each file went. A club can keep the broadcast of a title race, or hand a driver the part of the night where they were called.
+HeatCaller records every race as it goes out and, once the broadcast has finished, saves the whole thing as an mp3 - with a short clip for each driver beside it, covering just the moments they were named. You don't set anything up: it's on, and the race log says where each file went. A club can keep the broadcast of a title race, or hand a driver the part of the night where they were called - as an mp3, or as a [highlight video](#highlight-videos) for their phone.
 
-This has no tab of its own on the **Sounds** page. See [Turning it off](#turning-it-off) if you don't want it.
+The settings are on **Sounds → Recording**, on the **Recording the night** card. See [Turning it off](#turning-it-off) if you don't want it.
 
 ### What's in the recording
 
@@ -516,10 +517,11 @@ It's also most of the answer to "can we post this": no track from the club's mus
 | A folder per night, named for the date | `2026-10-10` |
 | The race | `2026-10-10 1942 - A Main - 2wd Stock.mp3` |
 | Each driver's clip, in a `Highlights` subfolder | `2026-10-10 1942 - A Main - 2wd Stock - P1 Dave Smith.mp3` |
+| Each driver's highlight video, beside their clip | `2026-10-10 1942 - A Main - 2wd Stock - P1 Dave Smith.mp4` |
 
 The date and the time of day come first in every name, so a night's folder sorts in the order it ran and a file dragged out on its own still says when it's from without being opened. The race's name is the one it was finally filed under in **Race History**. A character Windows won't have in a file name - the slash in a class called `2wd/4wd`, for instance - becomes `_`. If two races share a name and a minute, the second gets ` (2)` on the end rather than writing over the first.
 
-Nothing ever clears this folder out, so it grows for as long as the club races. Delete old nights when you want the space back.
+Only the last **6** nights are kept: after a race, the oldest night folders beyond that are removed, videos and all. Change the count with **Keep the last:** on **Sounds → Recording** (1 to 104), and copy a night's folder somewhere else to keep it for good. In a folder of your own choosing, only HeatCaller's own files are removed; anything else you keep there is left alone.
 
 ### What's in a driver's clip
 
@@ -536,6 +538,32 @@ Each stretch starts 7 seconds before the moment and runs 11 seconds past it, whi
 Nothing extra is recorded or saved to make these clips: the lap times are the ones already in the result, so a race recovered after a crash gives exactly the same clips as one that finished cleanly. Penalties don't shift a driver's moments, because the lap times they're worked out from are penalty-free. A staggered or qualifying start is allowed for, so a driver let go a minute after the green still has their moments in the right place.
 
 Clips are only cut for a race that was saved to **Race History**: they're named after the drivers' finishing positions, so a race with no saved result still gets its own mp3 but no clips.
+
+### Highlight videos
+
+After a race HeatCaller can turn a driver's clip into a short upright video for their phone: the announcer calling them, the race drawn underneath in your club's look, and the words on screen as captions, since most videos on a phone are watched with the sound off. It opens on a title card (the club, the race, the driver) and ends on the result, the top five and your club's handle.
+
+| Setting (on **Sounds → Recording**) | What it does | Default |
+|---|---|---|
+| **Highlight videos:** | Who gets one: **Off**, **The winner**, **The podium** or **Every driver**. | Every driver |
+| **Club handle:** | Your club's social handle, for example `@yourclub`, shown at the end of each video. | Blank |
+| **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** | Puts 1st, 2nd and 3rd's videos online for a week, with a QR code on the Big Screen after the race. See [Podium videos](../online/index.md#podium-videos). | On |
+
+- A video is made from the driver's clip, so it needs **A clip for each driver as well as the race's own recording** ticked too.
+- Videos are made a minute or so after the race, on a background thread, after every driver's mp3 clip is saved. A video that fails costs the night nothing: the clip and the race are untouched.
+- Each runs for 55 seconds at most. When a clip is longer, the earliest stretches go first, because the finish is the part worth keeping.
+- **Share video** in a driver's drawer on **Race Control** opens their video in File Explorer, ready to send. See [The drawer](../race-control/corrections-and-recovery.md).
+- Only 1st to 3rd are ever put online, and only the ones a video was made for: with **The winner** chosen, only the winner's. Every other video stays on this PC.
+- Windows makes the video itself, with nothing extra installed. An "N" edition of Windows without the Media Feature Pack can't, and the race log says so; the clips are unaffected.
+
+The race log says what happened:
+
+```text
+[video] 3 highlight videos saved in C:\Users\...\2026-10-10\Highlights - press Share video in a driver's drawer on Race Control to find theirs.
+[video] Dave Smith's video is on the club's page: https://your-relay.fly.dev/c/your-club/videos/...
+```
+
+If it says `[video] The relay does not take highlight videos yet - redeploy it (fly deploy --ha=false).`, whoever runs your relay needs to update it; see [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
 
 ### What isn't recorded
 
@@ -583,25 +611,16 @@ Other lines you may see:
 
 ### Turning it off
 
-There's no tick box for this yet. To change it, close HeatCaller and edit `race-audio.json` in the data folder, `%AppData%\HeatCaller`. No page in HeatCaller writes that file, so on most installs it isn't there and you create it yourself. To switch recording off altogether, this is the whole file:
+Untick **Record each race, and cut each driver their own clip** on **Sounds → Recording**. A recording already running is still finished off and written out, because half a race on disk with no mp3 beside it is worse than one more file. Untick **A clip for each driver as well as the race's own recording** to keep the race's own mp3 but no clips or videos.
 
-```json
-{
-  "Enabled": false
-}
-```
-
-The settings it holds:
+The settings are saved in `race-audio.json` in the data folder, `%AppData%\HeatCaller`. Two of them have no tick box and can only be changed there, with HeatCaller closed:
 
 | Setting | What it does | Default |
 |---|---|---|
-| `Enabled` | Whether races are recorded at all. `false` stops the next race being recorded; a recording already running is still finished off and written out, because half a race on disk with no mp3 beside it is worse than one more file. | `true` |
-| `DriverHighlights` | Whether a clip is cut for each driver as well as the race's own mp3. | `true` |
-| `Folder` | Where the recordings go. Blank means `Documents\HeatCaller Race Audio`. It must be a full path on this PC: a network path such as `\\server\share`, or a path relative to anything, is ignored and the default used instead. | blank |
 | `MaxMinutes` | The longest one recording may run before it stops itself. Held between 1 and 180, whatever the file says. | `40` |
 | `MinFreeMb` | How much free space the drive must have for a recording to start, and to carry on. Never less than 100, whatever the file says. | `750` |
 
-HeatCaller reads this file once per run, so close and reopen it for a change to take effect. If the file is there but can't be read, HeatCaller carries on with the defaults for that run and doesn't write over it.
+**Folder:** on the tab must be a full path on this PC: a network path such as `\\server\share` is ignored and the default used instead. If the file is there but can't be read, HeatCaller carries on with the defaults and doesn't write over it.
 
 ### Keeping the recordings
 

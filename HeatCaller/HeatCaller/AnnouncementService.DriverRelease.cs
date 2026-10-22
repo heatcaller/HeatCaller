@@ -174,7 +174,12 @@ public sealed partial class AnnouncementService
             return false;
         }
 
-        var combined = string.Join(ReleaseBatchSeparator, lines.Select(l => l.Text));
+        // Each line as a cloud voice is sent it - names shortened when the
+        // club has asked for that (22 Oct 2026, see AnnouncementService.
+        // ShortNames) - and each clip saved under that same text, which is
+        // what a live release call looks up.
+        var sent = lines.Select(l => ForCloudVoice(l.Text)).ToList();
+        var combined = string.Join(ReleaseBatchSeparator, sent);
         var timed = await SynthesizeTimedGatedAsync(renderProfile, combined);
 
         if (timed is null)
@@ -263,7 +268,7 @@ public sealed partial class AnnouncementService
             // request, and Kokoro's renders never come near it.
             try
             {
-                VoiceLibrary.Shared.Save(renderProfile, lines[i].Text, EncodeWav(clip, format));
+                VoiceLibrary.Shared.Save(renderProfile, sent[i], EncodeWav(clip, format));
             }
             catch (Exception ex)
             {
@@ -388,7 +393,8 @@ public sealed partial class AnnouncementService
 
             foreach (var (key, line) in lines)
             {
-                var saved = passOverSaved ? null : await VoiceLibrary.Shared.TryLoadAsync(renderProfile, line);
+                // Under the text a cloud voice is sent - see TryRenderReleaseBatchAsync.
+                var saved = passOverSaved ? null : await VoiceLibrary.Shared.TryLoadAsync(renderProfile, ForCloudVoice(line));
 
                 if (saved is null)
                 {
@@ -409,7 +415,7 @@ public sealed partial class AnnouncementService
                 {
                     // A saved file that will not decode would fail the same
                     // way every week - forgotten, and rendered afresh below.
-                    VoiceLibrary.Shared.Forget(renderProfile, line);
+                    VoiceLibrary.Shared.Forget(renderProfile, ForCloudVoice(line));
                     StatusMessage?.Invoke($"[voice] A saved release call for {key} wouldn't play ({ex.Message}) - rendering it again.");
                     missing.Add((key, line));
                 }

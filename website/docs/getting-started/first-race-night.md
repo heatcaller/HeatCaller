@@ -108,9 +108,9 @@ If no round is picked, the check uses whoever is already on the leaderboard.
 ## Step 8: Run the first heat
 
 1. On **Race Day → Next Steps**, the card now reads "Next up: ..." (for example, the first qualifying heat) with a **Start** button for it, such as **Start Q1 Heat 1**. Click it. Or select a round in the program and click **Start Selected**.
-2. HeatCaller switches to **Race Control** and runs the start sequence: **Stage**, then **Countdown**, then **Green (Start)**. By default each step follows on from the last once the announcer has finished speaking.
+2. HeatCaller switches to **Race Control** and runs the start sequence: **Stage**, then **Countdown**, then **Green**. By default each step follows on from the last once the announcer has finished speaking.
 3. Race. Laps appear on the leaderboard as cars cross the line.
-4. Use the flag buttons if you need them: **Yellow**, **Red**, and **Green (Start)** to resume. You can also use <kbd>F1</kbd> to <kbd>F6</kbd> (see [Keyboard shortcuts](../reference/keyboard-shortcuts.md)).
+4. Use the flag buttons if you need them: **Yellow**, **Red**, and **Green** to resume. You can also use <kbd>F1</kbd> to <kbd>F6</kbd> (see [Keyboard shortcuts](../reference/keyboard-shortcuts.md)).
 5. The race ends by itself at its lap or time limit. With no limit, click **Checkered**.
 
 After the first heat, the **Next Up** bar on **Race Control** shows what's next. Its **Start Next** button starts the next heat without leaving the page.

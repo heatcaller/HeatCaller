@@ -56,17 +56,30 @@ public sealed partial class AnnouncementService
     {
         var (pcm, format) = DecodeAudio(audio);
 
-        var due = DateTime.UtcNow
-            + TimeSpan.FromSeconds(Math.Clamp(leading, 0.0, DefaultLeadingSilenceSeconds))
+        var toLastWord = TimeSpan.FromSeconds(Math.Clamp(leading, 0.0, DefaultLeadingSilenceSeconds))
             + TalkUp.VoicedLength(pcm, format);
 
-        var mine = due.Ticks;
+        var mine = (DateTime.UtcNow + toLastWord).Ticks;
 
         Interlocked.Exchange(ref _lastWordDueTicks, mine);
 
+        // Noted again from the moment the line is first HEARD (22 Oct 2026,
+        // known issues): after a speaker dropout the device takes a while to
+        // open, and the note made above was early by that much - see
+        // FirstReadSampleProvider. Only if the note is still this line's.
+        void Heard()
+        {
+            var heard = (DateTime.UtcNow + toLastWord).Ticks;
+
+            if (Interlocked.CompareExchange(ref _lastWordDueTicks, heard, mine) == mine)
+            {
+                mine = heard;
+            }
+        }
+
         try
         {
-            await PlayPcmAsync(pcm, format, volume, trailing, leading);
+            await PlayPcmAsync(pcm, format, volume, trailing, leading, started: Heard);
         }
         finally
         {

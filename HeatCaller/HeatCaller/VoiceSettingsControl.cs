@@ -31,6 +31,14 @@ public sealed partial class VoiceSettingsControl : UserControl
         Announcer is { } announcer
             ? announcer.PlayExclusiveAsync(audio, volume)
             : AnnouncementService.PlayAsync(audio, volume);
+
+    /// <summary>
+    /// The words a prepared line is saved under - shortened names, when
+    /// "Shorten published names" is on, as the race looks them up (22 Oct
+    /// 2026). Without the announcer wired in, the line as written.
+    /// </summary>
+    private string SavedTextFor(string text) =>
+        Announcer is { } announcer ? announcer.TextForCloudVoice(text) : text;
     private readonly Label _lblSaveStatus = new();
 
     // --- Speak With (see BuildEngineCard) ---
@@ -47,6 +55,14 @@ public sealed partial class VoiceSettingsControl : UserControl
 
     /// <summary>When this page last asked the store to refresh (Environment.TickCount64), or 0 - see RefreshUsage.</summary>
     private long _usageAskedTicks;
+
+    /// <summary>
+    /// Reads the allowance again while the page stays open (22 Oct 2026,
+    /// known issues): it was only read as the page was shown, so a page
+    /// left open through a race night showed the figure from when it was
+    /// opened. Every two minutes, and only while the page is on screen.
+    /// </summary>
+    private readonly System.Windows.Forms.Timer _usageRefreshTimer = new() { Interval = 120_000 };
 
     // --- Hear it before you buy it ------------------------------------------
     //
@@ -425,6 +441,13 @@ public sealed partial class VoiceSettingsControl : UserControl
         _loadingSettings = false;
 
         _libraryRefreshTimer.Tick += (_, _) => RefreshLibraryNow();
+        _usageRefreshTimer.Tick += (_, _) =>
+        {
+            if (!Gone && Visible)
+            {
+                RefreshUsage();
+            }
+        };
 
         // An undo puts lines back in the store, not on this page - see
         // OnStoreRestored.
@@ -3141,6 +3164,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         _btnForgetLine.Enabled = false;
         _btnForgetLine.Click += BtnForgetLine_Click;
 
+        WireRerollButton();
+
         _btnForgetAll.Text = "Forget All...";
         _btnForgetAll.Enabled = false;
         _btnForgetAll.Click += BtnForgetAll_Click;
@@ -3154,12 +3179,13 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         recent.AddRow("Recently played:", _cmbSavedLines, stretch: true);
 
-        var forget = new ButtonBar().With(_btnForgetLine, _btnForgetAll);
+        var forget = new ButtonBar().With(_btnRerollLine, _btnForgetLine, _btnForgetAll);
 
         var lblForgetHint = _textSize.Wear(
             new Label
             {
-                Text = "A line that came out wrong: forget it and it's made afresh next time (Test on a fixed line does the same). "
+                Text = "A line that came out wrong: Re-roll makes a new take now and plays it (it costs what the list shows), "
+                     + "or forget it and it's made afresh next time (Test on a fixed line does the same). "
                      + $"Kept in {VoiceLibrary.Shared.Folder}, up to {VoiceLibrary.MaxBytes / (1024 * 1024)} MB - not in "
                      + "backups, as it can always be made again.",
                 AutoSize = true,
@@ -3175,6 +3201,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(lblPrepareHint);
         card.Add(recent);
         card.Add(forget, gapBelow: UiLayout.HintGap);
+        card.Add(_lblRerollStatus, gapBelow: UiLayout.HintGap);
         card.Add(lblForgetHint, gapBelow: 0);
 
         return card;
@@ -3186,7 +3213,15 @@ public sealed partial class VoiceSettingsControl : UserControl
         public override string ToString()
         {
             var words = Line.Text.Length <= 90 ? Line.Text : Line.Text[..87] + "...";
-            return $"{words}   ({Line.LastUsedUtc.ToLocalTime():g})";
+
+            // What it costs to make again (22 Oct 2026, known issues: no
+            // per-line cost breakdown) - characters, the unit both the
+            // HeatCaller allowance and ElevenLabs count in.
+            var cost = CharactersCharged(Line.Text);
+
+            return cost > 0
+                ? $"{words}   ({Plural.Of(cost, "char")} \u00B7 {Line.LastUsedUtc.ToLocalTime():g})"
+                : $"{words}   ({Line.LastUsedUtc.ToLocalTime():g})";
         }
     }
 
@@ -3270,6 +3305,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             RefitPickers();
 
             _btnForgetLine.Enabled = _cmbSavedLines.Items.Count > 0;
+            _btnRerollLine.Enabled = _cmbSavedLines.Items.Count > 0 && !_heatCallerHearingRunning;
             _btnForgetAll.Enabled = stats.Lines > 0;
         }
         catch (Exception ex)
@@ -3360,6 +3396,8 @@ public sealed partial class VoiceSettingsControl : UserControl
 
             _libraryRefreshTimer.Stop();
             _libraryRefreshTimer.Dispose();
+            _usageRefreshTimer.Stop();
+            _usageRefreshTimer.Dispose();
         }
 
         base.Dispose(disposing);
@@ -3439,7 +3477,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         List<AnnouncementService.PlannedLine> toRender;
         try
         {
-            toRender = await Task.Run(() => plan.Where(line => !VoiceLibrary.Shared.Contains(line.Profile, line.Text)).ToList());
+            toRender = await Task.Run(() => plan.Where(line => !VoiceLibrary.Shared.Contains(line.Profile, SavedTextFor(line.Text))).ToList());
         }
         catch (Exception ex)
         {
@@ -3468,7 +3506,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             return;
         }
 
-        var characters = toRender.Sum(line => (long)line.Text.Length);
+        var characters = toRender.Sum(line => (long)SavedTextFor(line.Text).Length);
 
         var release = saved.Events.GetValueOrDefault(nameof(AnnouncementEventType.DriverRelease));
         var releaseOn = release is not null
@@ -4277,6 +4315,11 @@ public sealed partial class VoiceSettingsControl : UserControl
         {
             RequestLibraryRefresh();
             RefreshUsage();
+            _usageRefreshTimer.Start();
+        }
+        else
+        {
+            _usageRefreshTimer.Stop();
         }
     }
 

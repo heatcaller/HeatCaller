@@ -503,11 +503,17 @@ internal sealed class HeatCallerVoiceClient
     /// from its own cache. A cached line costs nothing and proves nothing
     /// about the allowance, which is why the announcer is told.
     /// </returns>
+    /// <param name="fresh">
+    /// A new take past the relay's caches - the Re-roll button on Voice
+    /// Settings (22 Oct 2026). Charged like any line the relay had not
+    /// saved; the relay keeps the new take for this club only.
+    /// </param>
     internal async Task<(byte[] Audio, HeatCallerAllowance? Allowance, bool Cached)> SpeakAsync(
         string voiceId,
         string text,
         bool shared,
-        CancellationToken cancel = default)
+        CancellationToken cancel = default,
+        bool fresh = false)
     {
         if (Target() is not { } target)
         {
@@ -565,7 +571,11 @@ internal sealed class HeatCallerVoiceClient
                 $"That line is longer than the {MaxCharacters} characters the HeatCaller voice speaks at once.");
         }
 
-        var payload = JsonSerializer.Serialize(new { voice = voiceId, text, shared });
+        // "fresh" only when asked for, so every ordinary line goes up
+        // exactly as it always has.
+        var payload = fresh
+            ? JsonSerializer.Serialize(new { voice = voiceId, text, shared, fresh = true })
+            : JsonSerializer.Serialize(new { voice = voiceId, text, shared });
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
@@ -648,8 +658,14 @@ internal sealed class HeatCallerVoiceClient
     /// <summary>A preview of the club's own words, on the preview allowance. WITH the club's voice token.</summary>
     private const string PreviewPath = "/voice/preview";
 
-    /// <summary>The longest line a preview will carry. The relay caps it too; this saves a pointless round trip and a refusal a club has to read.</summary>
-    internal const int MaxPreviewCharacters = 300;
+    /// <summary>
+    /// The longest line a preview will carry. The relay caps it too; this
+    /// saves a pointless round trip and a refusal a club has to read.
+    /// 200, the relay's own default (VOICE_DEFAULT_PREVIEW_MAX_CHARS) - it
+    /// was 300 here, so a line of 201 to 300 characters passed this check
+    /// and was refused by the relay anyway (22 Oct 2026, known issues).
+    /// </summary>
+    internal const int MaxPreviewCharacters = 200;
 
     /// <summary>
     /// The relay root the SAMPLES are asked of: the voice relay's own when

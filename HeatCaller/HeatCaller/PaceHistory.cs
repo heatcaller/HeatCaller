@@ -137,4 +137,71 @@ internal static class PaceHistory
 
         return bestMs > 0 ? (bestMs / 1000.0, holder) : null;
     }
+
+    /// <summary>
+    /// Every driver's best lap on a named layout from races BEFORE tonight,
+    /// in seconds, keyed by transponder - the index PaceWatch.PersonalBestBefore
+    /// reads (22 Oct 2026, known issues).
+    ///
+    /// WHY AN INDEX: the callback is asked once per driver per lap, and the
+    /// only thing that knows a driver's history is the whole session store.
+    /// Walking it every lap was the reason the callback was left unset for
+    /// a week. This is built ONCE - per layout, per night, per change to the
+    /// history - and each lap is then a dictionary look-up.
+    ///
+    /// The same exclusions as NightBestFor, for the same reasons: another
+    /// layout's laps are not a figure to beat, a ghost is not a driver and a
+    /// demo race's laps are invented. "Before tonight" by the race night
+    /// (TonightAtTheTrack.NightOf), so a heat run earlier this evening is
+    /// not "before" - PaceWatch already counts the driver's laps tonight on
+    /// its own terms. By transponder, as AchievementEvaluator counts a
+    /// driver's personal bests.
+    /// </summary>
+    internal static Dictionary<string, double> PersonalBestsBefore(
+        IEnumerable<SessionRecord>? sessions,
+        string? layoutName,
+        DateTime tonight)
+    {
+        var bests = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
+        if (sessions is null || string.IsNullOrWhiteSpace(layoutName))
+        {
+            return bests;
+        }
+
+        var wanted = layoutName.Trim();
+        var night = tonight.Date;
+
+        foreach (var race in sessions)
+        {
+            if (race is null
+                || race.IsDemoSession()
+                || !string.Equals(race.TrackLayoutName?.Trim(), wanted, StringComparison.OrdinalIgnoreCase)
+                || TonightAtTheTrack.NightOf(race.StartedAtUtc.ToLocalTime()) >= night)
+            {
+                continue;
+            }
+
+            foreach (var entry in race.Results)
+            {
+                if (entry is null
+                    || entry.FastLapMs <= 0
+                    || string.IsNullOrWhiteSpace(entry.Transponder)
+                    || Ghosts.IsGhost(entry.Transponder))
+                {
+                    continue;
+                }
+
+                var seconds = entry.FastLapMs / 1000.0;
+                var key = entry.Transponder.Trim();
+
+                if (!bests.TryGetValue(key, out var held) || seconds < held)
+                {
+                    bests[key] = seconds;
+                }
+            }
+        }
+
+        return bests;
+    }
 }

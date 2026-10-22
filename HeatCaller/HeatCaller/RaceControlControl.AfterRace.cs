@@ -35,7 +35,9 @@ public sealed partial class RaceControlControl
         // Null when voice isn't configured or the render failed - the
         // caller falls back to speaking it live.
         // In the recap host's voice - the recap is the host's (16 Oct 2026).
-        var audio = await _announcer.PrepareReminderAsync(spoken, delivery, RecapHostVoice);
+        // The token too (22 Oct 2026, known issues): a render already under
+        // way when the next race is called is stopped, not run to the end.
+        var audio = await _announcer.PrepareReminderAsync(spoken, delivery, RecapHostVoice, nextRace);
 
         return (spoken, audio);
     }
@@ -1063,10 +1065,19 @@ public sealed partial class RaceControlControl
                 // the model on this PC.
                 var throwWriting = CancellationTokenSource.CreateLinkedTokenSource(followOnWork.Token);
                 var stopSetNames = StopSetNames();
+
+                // IS THERE A BREAK? Decided ONCE, here, for everything after
+                // the flag (22 Oct 2026, known issues): the throw's words,
+                // the bumper, the teaser's tail and the break itself. It was
+                // asked afresh at each of the four, so a Big Screen opened or
+                // closed during the finish call could have the throw promise
+                // "back after the break" and then no break run - or the
+                // bumper play here AND again as the break opened.
+                var breakFollows = _settings.RecapAdBreak && CommercialBreak.SponsorScreenUp;
                 var throwTask = wantsTeaser
                     ? _commentary!.BuildStopSetThrowAsync(
                         record, stopSetNames, StopSetThrow.Recent, teaserLines,
-                        breakFollows: _settings.RecapAdBreak && CommercialBreak.SponsorScreenUp, ct: throwWriting.Token)
+                        breakFollows: breakFollows, ct: throwWriting.Token)
                     : null;
 
                 var generation = commentaryAvailable
@@ -1257,7 +1268,6 @@ public sealed partial class RaceControlControl
                 // the pause after the flag has run, plus a few seconds.
                 var teaser = wantsTeaser ? teaserLines[Random.Shared.Next(teaserLines.Count)] : null;
                 var flagPause = Math.Clamp(_settings.SummaryDelaySeconds, 0, 120);
-                var breakFollows = _settings.RecapAdBreak && CommercialBreak.SponsorScreenUp;
                 var pitLaneHeard = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
                 var teaserRender = teaser is null
@@ -1329,7 +1339,7 @@ public sealed partial class RaceControlControl
                 // short back-to-back tail rather than the usual 0.9s of
                 // silence, which the room heard as dead air waiting for the
                 // bumper. The same question the bumper asks below.
-                var bumperAfterTeaser = !(_settings.RecapAdBreak && CommercialBreak.SponsorScreenUp)
+                var bumperAfterTeaser = !breakFollows
                     && BroadcastImaging.Has(ImagingCue.AfterRaceOver);
                 var teaserTail = bumperAfterTeaser
                     ? AnnouncementService.SpeechTail.BackToBack
@@ -1498,7 +1508,10 @@ public sealed partial class RaceControlControl
                 // go into, so the bumper plays here, after the teaser, and
                 // nothing comes back from a break that never ran. See
                 // BroadcastImaging for the run of show.
-                if (!(_settings.RecapAdBreak && !nextRace.IsCancellationRequested && CommercialBreak.SponsorScreenUp))
+                // Asked again here as well as at the flag: a Big Screen
+                // closed since then means no break, so the bumper plays here
+                // rather than nowhere.
+                if (!(breakFollows && CommercialBreak.SponsorScreenUp && !nextRace.IsCancellationRequested))
                 {
                     if (intoTheStopSet is not null)
                     {
@@ -1526,7 +1539,7 @@ public sealed partial class RaceControlControl
                     _intoTheStopSet = intoTheStopSet;
                 }
 
-                await HoldTheCommercialBreakAsync(recapTask!, nextRace.Token);
+                await HoldTheCommercialBreakAsync(recapTask!, nextRace.Token, breakFollows);
 
                 // Never carried into the next race's break: a break that did
                 // not open leaves the bumper playing out on its own, and the
@@ -1609,7 +1622,12 @@ public sealed partial class RaceControlControl
                     // knows which shape of show this is - the recap gets a
                     // rejoin on a busy night rather than the full opener for
                     // the eleventh time. See ShowRunningOrder.
-                    opening = treatment.StartAsync(SegmentKind.RaceRecap, nextRace.Token);
+                    //
+                    // 22 Oct 2026: with the race's drama - a photo finish or a
+                    // track record set in this race earns the recap a beat
+                    // more air (ShowDrama, ShowTreatment.BiggerAir).
+                    var recapDrama = ShowDrama.Of(record, _trackLayouts.All.FirstOrDefault(t => !string.IsNullOrEmpty(record.TrackLayoutName) && t.Name == record.TrackLayoutName));
+                    opening = treatment.StartAsync(SegmentKind.RaceRecap, recapDrama, nextRace.Token);
                 }
 
                 await gap;
@@ -4170,8 +4188,24 @@ public sealed partial class RaceControlControl
     /// </summary>
     /// <param name="recapReady">The recap being written AND rendered - see BuildRecapAsync.</param>
     /// <param name="nextRace">Cancelled when the next race is called to the grid.</param>
-    private async Task HoldTheCommercialBreakAsync(Task recapReady, CancellationToken nextRace)
+    /// <param name="breakFollows">
+    /// What was decided at the flag (22 Oct 2026, known issues) - and what
+    /// the throw has already told the room. False runs no break even if a
+    /// Big Screen has come up since: the room was told "coming up next".
+    /// Null for the old way, asking the settings and the screen here.
+    /// </param>
+    private async Task HoldTheCommercialBreakAsync(Task recapReady, CancellationToken nextRace, bool? breakFollows = null)
     {
+        // Decided already, and no: said as it always was, by the reason it was no.
+        if (breakFollows == false && _settings.RecapAdBreak && CommercialBreak.SponsorScreenUp)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [commentary] No commercial break - there was no Big Screen with the sponsor slides up at the flag, "
+                + "so the throw had already said the recap was coming up next.");
+
+            return;
+        }
+
         // Off by default, like every other part of the broadcast: a club
         // that never opens the Commentary page hears the recap it always
         // has. See AppSettings.RecapAdBreak.

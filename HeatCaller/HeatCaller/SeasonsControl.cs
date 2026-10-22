@@ -161,7 +161,11 @@ public sealed class SeasonsControl : UserControl
 
             var typed = e.FormattedValue?.ToString()?.Trim() ?? string.Empty;
 
-            if (int.TryParse(typed, NumberStyles.Integer, CultureInfo.InvariantCulture, out int _))
+            var whole = int.TryParse(typed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value);
+
+            // Nor below zero (22 Oct 2026, known issues): points are never
+            // taken away for a finishing place - see Season.PointsForPosition.
+            if (whole && value >= 0)
             {
                 return;
             }
@@ -169,7 +173,9 @@ public sealed class SeasonsControl : UserControl
             e.Cancel = true;
             var problem = typed.Length == 0
                 ? "Points can't be blank - type 0 for none, or press Esc to put back what was there."
-                : $"Points must be a whole number - \"{typed}\" isn't one. Fix it, or press Esc to put back what was there.";
+                : whole
+                    ? "Points can't be below 0 - a place scores 0 at the least. Fix it, or press Esc to put back what was there."
+                    : $"Points must be a whole number - \"{typed}\" isn't one. Fix it, or press Esc to put back what was there.";
             _dgvPointsScheme.Rows[e.RowIndex].Cells[e.ColumnIndex].ErrorText = problem;
             schemeHint.Text = problem;
             schemeHint.ForeColor = AppTheme.Danger;
@@ -637,7 +643,9 @@ public sealed class SeasonsControl : UserControl
             var points = int.TryParse(row.Cells["points"].Value?.ToString()?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var p)
                 ? p
                 : season.PointsScheme.FirstOrDefault(e => e.Position == position)?.Points ?? 0;
-            scheme.Add(new PointsSchemeEntry { Position = position, Points = points });
+            // Clamped as it is saved too, should a negative reach here past
+            // the cell's check (a paste, an old file's row): 0 at the least.
+            scheme.Add(new PointsSchemeEntry { Position = position, Points = Math.Max(0, points) });
         }
 
         var rows = new List<(SessionRecord Session, bool Ticked)>();

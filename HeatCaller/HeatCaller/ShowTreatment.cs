@@ -850,7 +850,7 @@ internal sealed class ShowTreatment
     /// club has ticked.
     /// </summary>
     public bool Treats(SegmentKind kind) =>
-        (_settings.ShowThemeEnabled && ShowSegments.Parse(_settings.ShowSegments).Contains(kind))
+        (_settings.ShowThemeEnabled && ShowSegments.Treats(ShowSegments.Parse(_settings.ShowSegments), kind))
         || ImagingTreats(kind);
 
     /// <summary>
@@ -1029,6 +1029,47 @@ internal sealed class ShowTreatment
         OpenShowAsync(kind, ShowBlock.CaptionFor(kind), ct);
 
     /// <summary>
+    /// The same, with what the race just did - the recap's show, from Race
+    /// Control, which has the filed race in hand (22 Oct 2026). A photo
+    /// finish or a track record gets the beat more at each end; see
+    /// ShowDrama and ShowBilling.BiggerAir / LongerLift.
+    /// </summary>
+    internal Task<ShowRun?> StartAsync(SegmentKind kind, ShowDrama drama, CancellationToken ct = default) =>
+        OpenShowAsync(kind, ShowBlock.CaptionFor(kind), ct, drama);
+
+    /// <summary>
+    /// What the night did, for a show nobody handed any drama to - the
+    /// sign-off, which reads the closest finish of the evening (22 Oct 2026,
+    /// known issues: the drama-shaped show was built and never fed). Set by
+    /// MainForm, which has the stores; null - and anything it throws - is
+    /// ShowDrama.None, the show every show was before.
+    /// </summary>
+    internal Func<SegmentKind, ShowDrama>? DramaFor { get; set; }
+
+    /// <summary>The drama a show is billed with: the caller's if it gave one, else DramaFor's, else none.</summary>
+    private ShowDrama DramaOf(SegmentKind? kind, ShowDrama? given)
+    {
+        if (given is { } handed)
+        {
+            return handed;
+        }
+
+        if (kind is not { } known || DramaFor is not { } read)
+        {
+            return ShowDrama.None;
+        }
+
+        try
+        {
+            return read(known);
+        }
+        catch
+        {
+            return ShowDrama.None;
+        }
+    }
+
+    /// <summary>
     /// A fresh evening, so the next show is the top of the night again -
     /// see ShowRunningOrder.NewNight for why nothing calls this yet and
     /// why it is here anyway.
@@ -1088,6 +1129,17 @@ internal sealed class ShowTreatment
 
         var started = DateTime.UtcNow;
 
+        // THE HAND-OVER ONLY WHERE THE CLUB'S TICKS SAY (22 Oct 2026, known
+        // issues). A segment's block is only ever run once its own tick has
+        // been asked (AnnouncerControl.RunAsShowAsync), but the hand-over is
+        // run straight from the director with nothing asked - so it got the
+        // opener, bed and sting whatever was ticked. Asked here, where no
+        // caller can forget it. Only for the hand-over: a segment's block is
+        // its caller's to gate, as it always was. Undressed is still SAID,
+        // item by item and paced, exactly as with no music files in. See
+        // ShowSegments.Treats for what its tick is.
+        var dressed = block.Kind != SegmentKind.ComingUpNext || Treats(SegmentKind.ComingUpNext);
+
         // The sting, once for the whole block rather than once per mark: a
         // file that will not load would otherwise put the same line in the
         // console between every pair of items.
@@ -1100,7 +1152,7 @@ internal sealed class ShowTreatment
         ShowSting? sting = null;
         string? stingProblem = null;
 
-        if (!SoundscapeHasStinger)
+        if (dressed && !SoundscapeHasStinger)
         {
             sting = StingNow(out stingProblem);
         }
@@ -1116,9 +1168,9 @@ internal sealed class ShowTreatment
         // would do. A soundscape stinger is not picked yet, so it is costed
         // at the longest a mark holds - conservative.
         var cost = new ShowBlockCost(
-            MusicSeconds(block.Kind),
+            dressed ? MusicSeconds(block.Kind) : TimeSpan.Zero,
             Pacing.Settle,
-            SoundscapeHasStinger ? ShowBlock.LongestSting : MarkSeconds(sting?.Clip));
+            !dressed ? TimeSpan.Zero : SoundscapeHasStinger ? ShowBlock.LongestSting : MarkSeconds(sting?.Clip));
 
         var fit = ShowBlock.Fit(block.Items, block.Gap, cost);
 
@@ -1143,10 +1195,12 @@ internal sealed class ShowTreatment
 
         try
         {
-            var run = await OpenShowAsync(
-                block.Kind,
-                block.Caption ?? ShowBlock.CaptionFor(block.Kind),
-                abandoning.Token).ConfigureAwait(true);
+            var run = dressed
+                ? await OpenShowAsync(
+                    block.Kind,
+                    block.Caption ?? ShowBlock.CaptionFor(block.Kind),
+                    abandoning.Token).ConfigureAwait(true)
+                : null;
 
             if (run is null && abandoning.IsCancellationRequested)
             {
@@ -1667,12 +1721,10 @@ internal sealed class ShowTreatment
             return TimeSpan.Zero;
         }
 
-        // No drama passed, the same as OpenShowAsync, so the estimate and the
-        // staging reckon the same music. 17 Oct 2026: the held "next show's
-        // drama" (NextShowDrama, PeekDrama, TakeDrama) went - nothing ever
-        // set it, so every show was billed with ShowDrama.None anyway. The
-        // parameter on ShowRunningOrder.Billing stays for whoever wires it.
-        var billing = _order.Billing(kind, DateTime.UtcNow, _settings.ShowRejoinEnabled);
+        // The same drama OpenShowAsync will bill a block with (DramaOf, with
+        // nothing handed in - a block never is), so the estimate and the
+        // staging reckon the same music. 22 Oct 2026: wired - see DramaFor.
+        var billing = _order.Billing(kind, DateTime.UtcNow, _settings.ShowRejoinEnabled, DramaOf(kind, null));
 
         var front = opener is not null
             ? VoiceEntersAfter(opener, billing)
@@ -1731,7 +1783,7 @@ internal sealed class ShowTreatment
             + $"{fit.Spent.TotalSeconds:0}s; the other {fit.Dropped.Count} are dropped.";
     }
 
-    private async Task<ShowRun?> OpenShowAsync(SegmentKind? kind, string? caption, CancellationToken ct)
+    private async Task<ShowRun?> OpenShowAsync(SegmentKind? kind, string? caption, CancellationToken ct, ShowDrama? drama = null)
     {
         // 17 Oct 2026, Bug Hunt 8, A04-1/A05-2: nothing for a show called
         // off before it began, or for a muted announcer. A cancelled start
@@ -1841,11 +1893,11 @@ internal sealed class ShowTreatment
         // see ShowRunningOrder.Went for why that waits until the run is
         // actually handed back.
         //
-        // No drama passed - see MusicSeconds, which bills the same way so
-        // the two agree.
+        // The night's drama, as MusicSeconds bills it so the two agree - the
+        // caller's when it handed one in (the recap), else DramaFor's.
         // A station's jingle is played whole every time - it is never cut
         // in at its ring-out the way a rejoin plays the club's own opener.
-        var billing = _order.Billing(kind, DateTime.UtcNow, _settings.ShowRejoinEnabled && imagingOpener is null);
+        var billing = _order.Billing(kind, DateTime.UtcNow, _settings.ShowRejoinEnabled && imagingOpener is null, DramaOf(kind, drama));
 
         LastBillingForTests = billing;
 
@@ -2301,6 +2353,12 @@ internal sealed class ShowTreatment
             ShowCue.Playout => "Sign-off",
             _ => "Top of the night",
         };
+
+        // Why this one was a shade longer than the last - see ShowDrama.
+        if (billing.BiggerOpen)
+        {
+            cue += ", a beat bigger (the race earned it)";
+        }
 
         if (opener is null)
         {
@@ -2900,6 +2958,20 @@ internal static class ShowSegments
 
     /// <summary>What a blank setting cannot say: no music on anything at all.</summary>
     public const string Nothing = "none";
+
+    /// <summary>
+    /// Whether a segment gets the music, given what is ticked.
+    ///
+    /// THE HAND-OVER HAS NO TICK OF ITS OWN (22 Oct 2026, known issues), and
+    /// is deliberately not offered one - it is not a segment a club chooses,
+    /// it is the join between two of them (see Candidates). So it follows
+    /// the list as a whole: dressed while anything at all is ticked, which
+    /// is what it did on every night with the default pair, and plain the
+    /// moment a club unticks the lot - which is what "untick them all and
+    /// nothing gets music" has always promised.
+    /// </summary>
+    public static bool Treats(IReadOnlyCollection<SegmentKind> ticked, SegmentKind kind) =>
+        kind == SegmentKind.ComingUpNext ? ticked.Count > 0 : ticked.Contains(kind);
 
     public static string Save(IEnumerable<SegmentKind> on)
     {

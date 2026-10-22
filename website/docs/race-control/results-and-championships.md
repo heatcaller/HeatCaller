@@ -117,7 +117,7 @@ The **Championship** page has two tabs, **Standings** and **Calendar**. The **St
 
 1. Under **Championships**, press **New** and enter a **Season name:**.
 2. Press **Scoring Rules** and set what counts (see below).
-3. Check the points table under **Points scheme**. The default is 10-9-8-...-1 for positions 1 to 10, and positions below 10 score nothing. Click a **Points** value to change it. **Reset to Default** puts the default table back.
+3. Check the points table under **Points scheme**. The default is 10-9-8-...-1 for positions 1 to 10, and positions below 10 score nothing. Click a **Points** value to change it. A value can't be below 0: a negative one is refused with "Points can't be below 0 - a place scores 0 at the least.", so racing a round can only ever add to a driver's total. (A negative value in a file from an older version scores 0.) **Reset to Default** puts the default table back.
 4. Check the races ticked under **Races counted**.
 
 **Rename** and **Delete** work on the selected championship. Deleting a championship doesn't delete any races, and you can undo it.

@@ -152,7 +152,21 @@ public sealed partial class AnnouncementService
     private readonly Dictionary<string, DateTime> _battlesPending = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Guards _battlesAnnounced, _battlesPending and _battlesGeneration.
+    /// Pairs whose battle line the pacing dial HELD (not dropped), with
+    /// when they may be offered again. Only touched under _battlesLock.
+    ///
+    /// WHY (22 Oct 2026, known issues): a held line used to give the pair
+    /// straight back, as a dropped one does, so the very next standings
+    /// update offered the same battle again - inside the same gap - and it
+    /// was held again, crossing after crossing. Nothing wrong was said, but
+    /// the "held" count and the lost-lines window filled with copies of one
+    /// call. A held pair now waits out the gap before it is offered again;
+    /// a dropped one is still free at once.
+    /// </summary>
+    private readonly Dictionary<string, DateTime> _battlesCooling = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Guards _battlesAnnounced, _battlesPending, _battlesCooling and _battlesGeneration.
     ///
     /// Needed because the pairs are checked on the decoder thread (from
     /// CheckCloseBattles), settled from inside the per-lap action - which
@@ -1085,8 +1099,13 @@ public sealed partial class AnnouncementService
     /// back to <see cref="SpeakReminder"/>, which synthesises at speak time.
     /// </summary>
     /// <param name="voice">Another speaker's voice for this line alone, as for SpeakReminder. Null for the announcer.</param>
+    /// <param name="cancel">
+    /// Stops the render once nobody will hear it - the next race called
+    /// over a recap (22 Oct 2026, known issues). Null comes back then, and
+    /// nothing is said about it: it is not a fault.
+    /// </param>
     public async Task<PreparedSpeech?> PrepareReminderAsync(
-        string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null)
+        string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null, CancellationToken cancel = default)
     {
         if (Muted || string.IsNullOrWhiteSpace(text))
         {
@@ -1130,8 +1149,13 @@ public sealed partial class AnnouncementService
             // Rendered ahead, so a long line gets the long limit - see
             // RenderingAhead (22 Oct 2026, bug hunt).
             RenderingAhead.Value = true;
-            var audio = (await RenderLineAsync(profile, spoken)).Audio;
+            var audio = (await RenderLineAsync(profile, spoken, cancel: cancel)).Audio;
             return new PreparedSpeech(spoken, audio, text);
+        }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke("[voice] Stopped making a line in advance - the next race was called, so nobody would hear it.");
+            return null;
         }
         catch (Exception ex)
         {
@@ -1622,6 +1646,7 @@ public sealed partial class AnnouncementService
             {
                 _battlesAnnounced.Clear();
                 _battlesPending.Clear();
+                _battlesCooling.Clear();
                 _battlesGeneration++;
             }
 

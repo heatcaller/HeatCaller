@@ -62,11 +62,11 @@ A warning whose rung is a black flag gets the other mark, and no cost:
 ⚑ BLACK FLAG — SAM — ROUGH DRIVING
 ```
 
-A warning is yellow with black type; a black flag is black with white type. Those are the flag colors a driver already knows, so they're the same whatever look the screen is wearing — they don't follow the crowd-screen look the way the rest of the screen does.
+A ghost car never gets a warning banner. A warning is yellow with black type; a black flag is black with white type. Those are the flag colors a driver already knows, so they're the same whatever look the screen is wearing — they don't follow the crowd-screen look the way the rest of the screen does.
 
 ### A fastest sector
 
-With a split loop on the layout's plan, a lap that goes through a sector quicker than anyone has gone through it this session puts the same strip up in the crowd-screen look's accent color, with white type:
+With a split loop on the layout's plan, a lap that goes through a sector quicker than anyone has gone through it this session puts the same strip up in the crowd-screen look's accent color, with white or near-black type - whichever reads more clearly on that color, so a pale accent in a light look still gets dark lettering:
 
 ```text
 ◆ FASTEST SECTOR 1 — MAYA  12.31
@@ -128,6 +128,14 @@ A card with nothing to say is left out. With no card at all, the board stays up.
 
 "Tonight" runs from 6 a.m. to 6 a.m., so a club night that goes past midnight is one night. A race counts for its class through the round it was run for, so a freeform race with no round isn't on the cards.
 
+### The podium's videos
+
+When the podium's [highlight videos](../announcer/sounds-and-music.md#highlight-videos) go on the club's page, a strip down the right of the board shows a QR code to them, headed **PODIUM VIDEOS** with the race's name and "watch & download", and underneath "Scan with your phone camera" and "Up to 1st, 2nd & 3rd · kept for a week". Scanning it opens the race's [podium videos page](../online/index.md#podium-videos) on a phone.
+
+- It appears once the first of the race's videos is up, a minute or so after the race, and takes about a third of the screen's width.
+- It comes down the moment the next race stages, and a video finishing late never puts it back over a race in progress.
+- It needs **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** ticked on **Sounds → Recording**, and the club's page switched on (**Club Website**). Only 1st to 3rd are ever on that page.
+
 ### Track evolution
 
 To see how the track is changing, HeatCaller compares each driver with themselves. For every driver in the class who has raced more than once tonight, it takes their middle lap (their laps after the first, put in order, and the one in the middle) in their first race and in their latest, and sees how much it changed. The middle of those changes is the figure. One flyer or one crash lap doesn't move a middle lap, and comparing drivers with themselves means a heat of quicker drivers doesn't look like a quicker track. It needs at least two drivers who have raced twice, each with 3 or more laps after the first in both races.
@@ -160,7 +168,7 @@ The band covers nothing and delays nothing. It takes a band of its own at the fo
 
 The caption is the crowd's name for the segment, in capitals. Which segments get the music is up to you:
 
-| Ticked on **Voice → Commentary** | The band says |
+| Ticked on **Voice → AI Commentary** | The band says |
 |---|---|
 | **Cold open** | COLD OPEN |
 | **Race intros** | ROUND INTRO |
@@ -175,7 +183,7 @@ The caption is the crowd's name for the segment, in capitals. Which segments get
 | **Grid history** | THE GRID |
 | **This day at the club** | THIS DAY AT THE TRACK |
 
-See [Which segments get it](../announcer/commentary.md#which-segments-get-it). A show that doesn't name itself reads "THE SHOW". **Play It** on **Voice → Commentary** does exactly that: it runs a real show rather than one of the segments, so it's the quickest way to see the band without waiting for a race.
+See [Which segments get it](../announcer/commentary.md#which-segments-get-it). A show that doesn't name itself reads "THE SHOW". **Play It** on **Voice → AI Commentary** does exactly that: it runs a real show rather than one of the segments, so it's the quickest way to see the band without waiting for a race.
 
 ### Who it's about
 
@@ -203,7 +211,7 @@ Press <kbd>O</kbd> on the Big Screen to turn the band off, and <kbd>O</kbd> agai
 
 The band also reads **COMMERCIAL BREAK** for the length of a [commercial break](#the-commercial-break-after-a-race) after a race. That one isn't a segment - there's no opener, no bed and nobody talking over it - but it is what's on air, and a band that went dark for the forty seconds of adverts between the teaser and the recap would read as the broadcast having stopped rather than gone to a break. Where a show and a break are somehow both on, the show wins.
 
-Otherwise the band is only up while the show's own music is playing, so it needs **Play an opener and a music bed under the show** ticked on **Voice → Commentary**, with an opener or a bed chosen. See [The show's music](../announcer/commentary.md#the-shows-music).
+Otherwise the band is only up while the show's own music is playing, so it needs **Play an opener and a music bed under the show** ticked on **Voice → AI Commentary**, with an opener or a bed chosen. See [The show's music](../announcer/commentary.md#the-shows-music).
 
 It works in every look, including a club's own, and with or without a club logo. Every open Big Screen shows it. If a show ends early or stops partway, the band comes down by itself within half a second, because the Big Screen keeps asking whether a show is on rather than waiting to be told.
 
@@ -362,7 +370,7 @@ Leave **Never interrupt the leaderboard while a race is actually running (recomm
 
 After the checkered flag the announcer says "stand by for the recap" and then has to wait while the model writes it - half a minute is normal, and a slow night is longer. Your slides can fill that wait as a commercial break: they take the crowd's screen, one slide straight into the next, instead of taking a turn each with the standings.
 
-Tick **Play the sponsors as a commercial break while the recap is being written** under **Broadcast** on **Voice → Commentary**. It's off until you do, and it needs this page's **Show sponsor slides on the Big Screen** ticked with at least one slide to show, and a Big Screen open. Without those, nothing changes.
+Tick **Play the sponsors as a commercial break while the recap is being written** under **Broadcast** on **Voice → AI Commentary**. It's off until you do, and it needs this page's **Show sponsor slides on the Big Screen** ticked with at least one slide to show, and a Big Screen open. Without those, nothing changes.
 
 What the Big Screen does:
 
@@ -421,7 +429,9 @@ It holds the screen for about as long as the words take and then the standings c
 | Setting | What it does | Default |
 |---|---|---|
 | **Read at the end of an ad break, once the sponsor's video has finished** | A read goes out on the tail of an ad break, once the sponsor's own video has stopped and before the screen goes back to the standings. Never over the video. | On |
-| **Read in the gap between races, when the commentary has nothing to say** | A read goes out in the gap between races, where the commentary segments live. | On |
+| **Also put reads on rotation between races, outside the commercial break** | Reads also go out in the gaps between races, where the commentary segments live. Off, the commercial break is the only place a sponsor is heard: a read straight after a race with no break round it sounds like the announcer has wandered into an advert. | Off |
+
+Since 22 Oct 2026 the second tick box is off for every club, including one that had it ticked before - it used to be on for everyone without anybody choosing it. Tick it again if you want reads between races as well.
 
 Untick both and nothing is read out. The slides and videos carry on as before.
 
@@ -434,7 +444,7 @@ Club Night 14 - sponsor reads
 Sunday 11 October 2026
 
 7 reads went out across the evening.
-Reads go out both in the gaps between races and on the tail of a commercial break.
+Reads go out on the tail of a commercial break only.
 
 Ralph's Tavern: 4 reads (57% of the evening's reads; they bought 50%)
 Quickway Diner: 3 reads (43% of the evening's reads; they bought 50%)
@@ -492,18 +502,18 @@ Having copy doesn't move a sponsor up the queue. Whose turn it is comes first, a
 | One slide never shows, and its preview on the **Sponsors** page is blank | The image is missing, unreadable, or over the size limits (50 MB, 20000 pixels across or down, 40 million pixels in all). | Remove it, save a smaller copy of the picture, and add that. |
 | **Add Video** says video is unavailable | The video player's files are missing from beside `HeatCaller.exe`. | Reinstall HeatCaller. Sponsor images keep working in the meantime. |
 | A video slide is skipped, pictures are fine | VLC couldn't open that particular file. | Re-export it as an MP4 (H.264) from whatever made it, and add that. |
-| The sponsors never take over after a race | **Play the sponsors as a commercial break while the recap is being written** is off on **Voice → Commentary**, or this page's slides are off, or there are no slides, or a grid roll call is up. | Check both pages. The console says "No commercial break - no Big Screen is up with the club's sponsor slides switched on." |
+| The sponsors never take over after a race | **Play the sponsors as a commercial break while the recap is being written** is off on **Voice → AI Commentary**, or this page's slides are off, or there are no slides, or a grid roll call is up. | Check both pages. The console says "No commercial break - no Big Screen is up with the club's sponsor slides switched on." |
 | The sponsors come back to the board before the recap arrives | The break hit its 90-second ceiling, or it has been round every slide the club has. | Nothing to fix. The recap still goes out when it's ready. Add more slides if you want the break to fill a longer wait. |
 | A sponsor slide is still up while the recap is talking | A video keeps its slot rather than being cut off part way. | Deliberate. Pictures are taken down the moment the break ends. |
 | The music keeps playing over a sponsor video | **Play a sponsor video's own sound** is off, so there's nothing to silence, or **Silence the music and the crowd while it plays** is off. | Check both on the **Sponsors** page. |
 | A sponsor video is silent on a phone but has sound on the Big Screen | Deliberate. Phone browsers won't autoplay sound. | Nothing to fix. |
-| A sponsor is never read out | No copy in **Their read:**, both **Read at the end of an ad break...** and **Read in the gap between races...** unticked, **In tonight's rotation** unticked, or **Commentary** isn't on. | Check the **Sponsor reads** card on the **Sponsors** page, and see [Commentary](../announcer/commentary.md). |
+| A sponsor is never read out | No copy in **Their read:**, **Read at the end of an ad break...** unticked (and **Also put reads on rotation between races...** with it), **In tonight's rotation** unticked, or **Commentary** isn't on. | Check the **Sponsor reads** card on the **Sponsors** page, and see [Commentary](../announcer/commentary.md). |
 | A read stops partway and finishes later | One read runs for at most 25 seconds, and longer copy is split at the end of a sentence. | Nothing to fix. Shorten the copy if you want it in one go. |
 | No **FASTEST SECTOR** banner, however quick the lap | It only calls a sector quicker than anyone has gone through that one this session, never the session's first sector times, and sectors need a split loop on the layout's plan. | Nothing to fix. See [A fastest sector](#a-fastest-sector). |
 | A fastest sector was set but the banner showed a warning | A warning on screen is never covered by a fastest sector. | Nothing to fix. |
 | A warned driver's name isn't red on the Big Screen | Deliberate: only the good highlights are colored on this screen. The mark after the name is still there. | Nothing to fix. Add the **Warnings** column if you want the count in a column of its own. |
-| The ON AIR band never appears | The show has no opener or bed chosen, no segment is ticked for the music, or the band is turned off on the Big Screen. | Set the music up on **Voice → Commentary**; press <kbd>O</kbd> on the Big Screen. |
-| The ON AIR band says "THE SHOW" | The show didn't name itself. **Play It** on **Voice → Commentary** always does this. | Nothing to fix. |
+| The ON AIR band never appears | The show has no opener or bed chosen, no segment is ticked for the music, or the band is turned off on the Big Screen. | Set the music up on **Voice → AI Commentary**; press <kbd>O</kbd> on the Big Screen. |
+| The ON AIR band says "THE SHOW" | The show didn't name itself. **Play It** on **Voice → AI Commentary** always does this. | Nothing to fix. |
 | ON DECK bar is empty | Everything on the timetable is done, or there's nothing on it. | Build tonight's program on **Race Day → Next Steps** (the timetable fills itself from it), or add lines in the **Timetable** window. |
 | Countdown is blank | The race has no lap or time limit. | Set a limit on **Race Control**. See [Running a race](../race-control/running-a-race.md). |
 | Qual column shows dashes | The current session isn't a qualifier. | Nothing to fix. |

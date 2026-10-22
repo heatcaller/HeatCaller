@@ -4,21 +4,21 @@ No decoder is perfect, and no laptop is either. This page covers fixing the coun
 
 ## Correcting laps and penalties
 
-All corrections apply to the driver selected on the **Race Control** leaderboard. There are three ways to reach them:
+All corrections apply to one driver on the **Race Control** leaderboard. There are three ways to reach them:
 
-- **The toolbar** under the leaderboard: **+1 Lap**, **-1 Lap**, **+5s Penalty**, **+10s Penalty**, **Clear Penalties**. Click a driver's row first. If nobody is selected you'll see "Select a racer in the leaderboard first."
-- **Right-click** a driver's row: **Add a lap (+1)**, **Remove a lap (-1)**, **Penalty +5s**, **Penalty +10s**, **Penalty...**, **Clear penalty**. The menu always applies to the row you right-clicked, not the row that was selected before.
-- **The keyboard**, with a driver selected: <kbd>+</kbd> and <kbd>-</kbd> for laps, <kbd>P</kbd> and <kbd>Shift</kbd>+<kbd>P</kbd> for 5 and 10-second penalties, <kbd>C</kbd> to clear penalties. See [Keyboard shortcuts](../reference/keyboard-shortcuts.md#the-selected-driver).
+- **The drawer.** Click a driver's row and a drawer slides open under it: **+1 Lap**, **−1 Lap**, **+5s**, **+10s**, **⚠ Warning**, **Clear Penalties**, **Share video** and **Lap breakdown**. The buttons work once the drawer is fully open. Click the same driver again to close it, or another driver to move it to them. Double-clicking a driver opens their lap breakdown instead.
+- **Right-click** a driver's row: **Add a lap (+1)**, **Remove a lap (-1)**, **Penalty +5s**, **Penalty +10s**, **Penalty...**, **Clear penalty** and **Warn** *name* (see [Driver warnings](#driver-warnings)). The menu always applies to the row you right-clicked, not the row that was selected before.
+- **The keyboard**, with a driver selected: <kbd>+</kbd> and <kbd>-</kbd> for laps, <kbd>P</kbd> and <kbd>Shift</kbd>+<kbd>P</kbd> for 5 and 10-second penalties, <kbd>C</kbd> to clear penalties, <kbd>W</kbd> to give a warning and <kbd>Shift</kbd>+<kbd>W</kbd> to take the last one back. See [Keyboard shortcuts](../reference/keyboard-shortcuts.md#the-selected-driver).
 
 A correction updates the board and the announcer's running order straight away. The announcer doesn't treat it as a car crossing the line, so there's no lap call or buzzer.
 
-<!-- screenshot: leaderboard right-click menu with lap and penalty items -->
+<!-- screenshot: a driver's drawer open under their row on the leaderboard -->
 
 ### Adding a lap
 
 Use **+1 Lap** when the decoder missed a pass. The lap count goes up by one. A lap added by hand has no lap time, so it doesn't change best laps, averages or the lap chart.
 
-If the lap you add brings the driver to the race's lap limit, the checkered flag comes out just as if they had crossed the line. With **Leader takes the flag, others finish their lap** ticked, that driver has finished and everyone else finishes the next time they cross. With it unticked, the race ends. A lap added under a red flag doesn't bring the checkered flag out while the field is stopped. It comes out when you press **Green (Start)** to restart, in place of the green, and that driver has finished. With the box unticked, the race ends there.
+If the lap you add brings the driver to the race's lap limit, the checkered flag comes out just as if they had crossed the line. With **Leader takes the flag, others finish their lap** ticked, that driver has finished and everyone else finishes the next time they cross. With it unticked, the race ends. A lap added under a red flag doesn't bring the checkered flag out while the field is stopped. It comes out when you press **Green** to restart, in place of the green, and that driver has finished. With the box unticked, the race ends there.
 
 ### Removing a lap
 
@@ -34,10 +34,68 @@ The lap count never goes below zero.
 
 ### Time penalties
 
-- **+5s Penalty** and **+10s Penalty** add that much to the driver's total time. The board orders drivers on the same lap by total time, so a penalty drops the driver behind anyone they're now slower than.
+- **+5s** and **+10s** add that much to the driver's total time. The board orders drivers on the same lap by total time, so a penalty drops the driver behind anyone they're now slower than.
 - **Penalty...** opens the **Time penalty** dialog. Enter any amount in **Seconds to add:** (in half-second steps, from −600 to 600) and press **Apply**. A negative number takes time off.
 - The **Penalty** column shows each driver's total penalty. It stays applied for the rest of the race.
-- **Clear Penalties** (toolbar) or **Clear penalty** (menu, which shows the current total, for example "Clear penalty (10.0s)") removes all of that driver's penalty time, including any automatic jump-start penalty.
+- **Clear Penalties** (drawer) or **Clear penalty** (menu, which shows the current total, for example "Clear penalty (10.0s)") removes all of that driver's penalty time, including any automatic jump-start penalty, and takes back their warnings too. With nothing to clear, the log says the driver "has no penalties or warnings to clear."
+
+### Driver warnings
+
+A warning is race control telling a driver off for something on track: rough driving, cutting the track, blocking. Each class has a **warning ladder** that decides what a driver's first, second, third warning of the race costs them, so you don't have to work out the penalty in the heat of the moment.
+
+**Giving a warning.** Select the driver, then use any of these. They all open the same list:
+
+- **⚠ Warning** in the driver's drawer.
+- **Warn** *name* on the right-click menu. Once the driver has warnings, it shows how many, for example "Warn Sam (2 warnings so far)".
+- <kbd>W</kbd> on the keyboard. The list opens at the driver's row. If no driver is selected, the log says "W pressed with no driver selected - click a driver on the board first."
+
+The top line of the list says what this warning will cost, for example "2nd warning for Sam: +5s penalty". Then pick a reason. Each one has a number, so after <kbd>W</kbd> you can press the number instead of clicking:
+
+| Key | Reason |
+|---|---|
+| <kbd>1</kbd> | Rough driving |
+| <kbd>2</kbd> | Track cutting |
+| <kbd>3</kbd> | Blocking |
+| <kbd>4</kbd> | Unsportsmanlike conduct |
+| <kbd>5</kbd> | Ignoring the marshal |
+| <kbd>6</kbd> | Jump start |
+| <kbd>7</kbd> | Not marshaling |
+| <kbd>0</kbd> | **Other reason...** opens a small **Warning for** *name* window. Type a reason of up to 80 characters and press **Warn**. |
+
+When a warning is given:
+
+- The **Warning or black flag** sound plays (see [Sounds and music](../announcer/sounds-and-music.md)), then the announcer says it: "Warning, Sam. Blocking." For a time penalty it adds "That's a 5 second penalty." For a black flag: "Black flag, Sam. Please bring your car in and report to race control."
+- A line goes in the log, for example "Sam: Warning 2 - Blocking (+5s) at 3:12."
+- The driver's name on the board gets a mark after it: ⚠ and the count, or **⚑ BLACK FLAG** once they've been black-flagged.
+- A time penalty is added exactly as the **+5s** and **+10s** buttons add one, so it shows in the **Penalty** column.
+
+**The warning ladder.** Set it per class: open the class on the **Classes** page and click **Warnings...** (see [Classes](../race-day/drivers-and-classes.md#warnings)). Unless you change it, every class uses the default:
+
+| Warning | What it costs |
+|---|---|
+| 1st | Warning only |
+| 2nd | +5 seconds |
+| 3rd | +10 seconds |
+| 4th | Black flag (DQ) |
+
+After the last step, that step repeats: a fifth warning on the default ladder is another black flag, and on a ladder that ends at +10s, every warning after it is another +10s. Warnings are counted per race, so every driver starts each race clean.
+
+**Black flag = disqualified.** A black-flagged driver is called in. The race doesn't wait for them at the finish, and the timing watch stops expecting them to cross. When the race is saved, the driver's result is marked **DQ** and the log says so. The DQ goes into the result's correction log as "Black flag from race control (warning limit reached)", so if it was wrong, open the race in **Race History** and use **Edit Result** to put it back (see [Correcting a saved result](#correcting-a-saved-result)). Demo races are never marked.
+
+**Taking a warning back.** Gave the wrong driver a warning, or picked the wrong reason? Any of these takes back the driver's most recent warning, along with any penalty time it added:
+
+- **Remove last warning** at the bottom of the warnings list. It names the warning it will remove, for example "Remove last warning (Warning 2 - Blocking (+5s) at 3:12)".
+- <kbd>Shift</kbd>+<kbd>W</kbd>.
+- **Undo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd>) straight after giving it. Undo only takes it back if it's still the driver's newest warning.
+
+Taking a black flag back before the race is saved means the driver isn't marked DQ. **Clear Penalties** takes back all of a driver's warnings at once, along with their penalty time.
+
+**Where warnings show.**
+
+- **The Warnings column.** Add it to any leaderboard with **Columns...** (see [Columns](running-a-race.md#columns)). It shows "-" for a clean driver, ⚠ and the count, or the count and **⚑ BLACK** after a black flag. On Race Control it's in red.
+- **Race History** has a **Warnings** column for every saved race. Hover over it to see each warning. See [Results and championships](results-and-championships.md).
+- **The Big Screen** shows a warning as a banner across the screen rather than in red on the board. See [The Big Screen](../screens/big-screen.md#the-banner-across-the-screen).
+- **Driver rating** takes 5 off for each warning.
 
 ### After the checkered flag
 
@@ -48,7 +106,7 @@ The result is saved to **Race History** the moment the race finishes. If you cor
 The saved result, the championship points and the qualifying figures keep the figures from the flag. Make corrections on the board while the race is still running, or correct the saved result afterwards with **Edit Result** (below).
 
 !!! tip
-    The lap-correction buttons aren't on the **Undo** list. To reverse a correction, use its opposite: **-1 Lap** after an extra **+1 Lap**, or **Clear Penalties** for a penalty given in error.
+    Each correction is on the **Undo** list (the button at the bottom of the sidebar, or <kbd>Ctrl</kbd>+<kbd>Z</kbd>), and Undo takes back just that correction, leaving any laps counted since. You can also use its opposite: **−1 Lap** after an extra **+1 Lap**.
 
 ### Correcting a saved result
 
@@ -81,7 +139,7 @@ Undoing a reset puts everything back as it was:
 
 The flag calls aren't made again, and neither are "last lap" and "one minute to go" if they had already been called. Ghost cars in the race carry on mid-lap, as though they had kept lapping; see [Ghost Cars](practice-and-ghosts.md#ghost-cars).
 
-**Reset** during a demo ends the demo instead, and that can't be undone. Once **Countdown** or a first **Green (Start)** has taken over from a demo, the start on the board is a real race's, so a **Reset** pressed straight after can be undone as usual. While practice is running, **Reset** and **Checkered** are refused: use **Stop** or **Clear Stats** on the **Practice** page. See [Practice](practice-and-ghosts.md#practice).
+**Reset** during a demo ends the demo instead, and that can't be undone. Once **Countdown** or a first **Green** has taken over from a demo, the start on the board is a real race's, so a **Reset** pressed straight after can be undone as usual. While practice is running, **Reset** and **Checkered** are refused: use **Stop** or **Clear Stats** on the **Practice** page. See [Practice](practice-and-ghosts.md#practice).
 
 ### Why an undo can be refused
 
@@ -133,7 +191,7 @@ The next time HeatCaller opens after a crash, power cut or forced close, it asks
 A restored race comes back **stopped, under a red flag**, so nothing counts while the cars are put back on the track. Then:
 
 1. Put the cars back on the track.
-2. Press **Green (Start)** to resume. If you'd rather keep the race as it stands, press **Checkered** to save it.
+2. Press **Green** to resume. If you'd rather keep the race as it stands, press **Checkered** to save it.
 
 !!! note
     Each car's first lap after the green is timed from its last crossing before the app closed, so it includes the stoppage and looks long. It counts as a lap, but never as a best lap, never toward a clean run or streak pace, and never in the average or consistency columns, even if you later remove laps. You don't need to remove it.

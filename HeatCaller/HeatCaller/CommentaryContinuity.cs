@@ -463,6 +463,20 @@ public static class CommentaryContinuity
         "Stay with us.",
     };
 
+    /// <summary>
+    /// The hand-back with no gap to name (22 Oct 2026, known issues): after
+    /// a freeform race, with no programme and no timetable to say when the
+    /// next one is. Promises nothing about when - not even "a moment" -
+    /// only that the room should not go anywhere.
+    /// </summary>
+    private static readonly string[] StayWithUses =
+    {
+        "Stay with us.",
+        "Keep it right here.",
+        "Do not go anywhere.",
+        "Stay right where you are.",
+    };
+
     /// <summary>The way out. Only where the app has already decided the night is over - see ContinuityShow.Tail.</summary>
     private static readonly string[] TheLots =
     {
@@ -543,6 +557,9 @@ public static class CommentaryContinuity
 
     /// <summary>"That is the lot for tonight."</summary>
     public static string? ThatIsTheLot(ContinuityVoice voice) => voice.Pick("thatisthelot", TheLots);
+
+    /// <summary>A hand-back that names no gap - see StayWithUses. Null only when every phrasing has been heard too recently.</summary>
+    public static string? StayWithUs(ContinuityVoice voice) => voice.Pick("staywithus", StayWithUses);
 
     /// <summary>
     /// One of the forward-looking lines, with every tail the facts allow.
@@ -690,10 +707,17 @@ public static class CommentaryContinuity
 /// <param name="JustRan">The round just filed, or null when nothing has been.</param>
 /// <param name="Upcoming">What is left on the programme, in running order. Empty when nothing is.</param>
 /// <param name="InAbout">Roughly how long until the next one, or null when the host does not know. THE GAP a block is fitted to.</param>
+/// <param name="Freeform">
+/// Whether the race just run was off the programme - a freeform race, or a
+/// club with no programme at all (22 Oct 2026). The one case where nothing
+/// can be named AND a race is plausibly coming, so the show can hand back
+/// with "stay with us" rather than nothing - see ContinuityShow.Tail.
+/// </param>
 internal readonly record struct ContinuityFacts(
     RoundJustRun? JustRan,
     IReadOnlyList<UpcomingRound> Upcoming,
-    TimeSpan? InAbout)
+    TimeSpan? InAbout,
+    bool Freeform = false)
 {
     /// <summary>A night nothing is known about - what an unwired host gives, and what a preview pass gives.</summary>
     internal static readonly ContinuityFacts Unknown =
@@ -908,8 +932,20 @@ internal static class ContinuityShow
         // Bounded at the far end as well, by SoonEnough: "back in a moment"
         // with the next race half an hour away is a promise too, and one the
         // club breaks by having tea.
-        return facts.InAbout is { } until && until > TimeSpan.Zero && until < SoonEnough
-            ? CommentaryContinuity.BackShortly(voice)
+        if (facts.InAbout is { } until && until > TimeSpan.Zero && until < SoonEnough)
+        {
+            return CommentaryContinuity.BackShortly(voice);
+        }
+
+        // NO GAP TO NAME (22 Oct 2026, known issues): a freeform race, with
+        // no programme and no timetable, was the exact club this hand-back
+        // was written for - and it got nothing, because the line above
+        // needs an estimate nobody can give it. Only after a race run off
+        // the programme: a programmed night with nothing left unrun is the
+        // sign-off's call to make, and a night nothing is known about says
+        // nothing. A phrasing that promises no time at all.
+        return facts.Freeform && facts.InAbout is null
+            ? CommentaryContinuity.StayWithUs(voice)
             : null;
     }
 

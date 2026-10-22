@@ -363,7 +363,14 @@ public sealed partial class AnnouncementService
 
             var line = plan[i];
 
-            if (VoiceLibrary.Shared.Contains(line.Profile, line.Text))
+            // The words as a cloud voice is sent them (22 Oct 2026) - names
+            // shortened when the club has asked for that, exactly as a live
+            // line is (see AnnouncementService.ShortNames), so the take is
+            // saved under the text the race looks up and no full name
+            // leaves the PC from here either.
+            var sent = ForCloudVoice(line.Text);
+
+            if (VoiceLibrary.Shared.Contains(line.Profile, sent))
             {
                 alreadySaved++;
                 continue;
@@ -409,12 +416,12 @@ public sealed partial class AnnouncementService
                     // Split into pieces when it is over the relay's length
                     // limit, the same as a live line - or a long line could
                     // never be prepared here at all.
-                    var audio = await SpeakWholeLineThroughRelayAsync(client, line.Profile, line.Text, cancel);
-                    VoiceLibrary.Shared.Save(line.Profile, line.Text, audio);
+                    var audio = await SpeakWholeLineThroughRelayAsync(client, line.Profile, sent, cancel);
+                    VoiceLibrary.Shared.Save(line.Profile, sent, audio);
                 }
                 else
                 {
-                    await SynthesizeGatedAsync(line.Profile, line.Text);
+                    await SynthesizeGatedAsync(line.Profile, sent);
                 }
 
                 rendered++;
@@ -603,7 +610,7 @@ public sealed partial class AnnouncementService
                     }
                     else
                     {
-                        VoiceLibrary.Shared.Forget(DeliveryProfileFor(profile, config), prepared.Text);
+                        VoiceLibrary.Shared.Forget(DeliveryProfileFor(profile, config), ForCloudVoice(prepared.Text));
                     }
                 }
 

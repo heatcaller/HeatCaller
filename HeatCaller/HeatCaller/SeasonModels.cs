@@ -256,8 +256,17 @@ public sealed class Season
         return entries;
     }
 
+    /// <summary>
+    /// What a place scores. NEVER BELOW ZERO (22 Oct 2026, known issues -
+    /// the club chose "clamp at zero"): a negative row could only have come
+    /// from a hand-edited file or an old build, which let one be typed, and
+    /// it took points off a driver for turning up. The Championship page
+    /// refuses one now; a row already on file scores nothing. Rows are left
+    /// as they are on disk, so <see cref="PenalisesAnyone"/> still sees one
+    /// and the commentary stays as careful as it was.
+    /// </summary>
     public int PointsForPosition(int position) =>
-        PointsScheme.FirstOrDefault(e => e.Position == position)?.Points ?? 0;
+        Math.Max(0, PointsScheme.FirstOrDefault(e => e.Position == position)?.Points ?? 0);
 }
 
 /// <summary>

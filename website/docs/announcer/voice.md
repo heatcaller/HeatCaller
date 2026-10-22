@@ -50,7 +50,7 @@ Kokoro is the bottom of the ladder, and nothing stands in for it. On a PC that h
 3. Press **Hear It** beside the list to listen to the voice you've highlighted, and **Preview** to hear it say words of your own. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it).
 4. Read the line underneath, which says where your allowance stands.
 
-**Refresh** asks the relay again — for the list of voices and for the allowance. The page does it by itself when you open **Voice Settings** and when you choose the HeatCaller voice, in the background, so the page is usable while it waits. It's never asked on a timer, so a page left open all evening shows the number as it stood when you opened it. Press **Refresh** for the current one. The meter under it is different: it moves as lines are spoken. See [The meter under the voice](#the-meter-under-the-voice).
+**Refresh** asks the relay again — for the list of voices and for the allowance. The page does it by itself when you open **Voice Settings** and when you choose the HeatCaller voice, in the background, so the page is usable while it waits. While the page is on screen it asks again every two minutes, so a page left open through a race keeps a current number; press **Refresh** if you want it this second. The meter under it is different: it moves as lines are spoken. See [The meter under the voice](#the-meter-under-the-voice).
 
 The line under the list says one of:
 
@@ -73,7 +73,7 @@ A voice the relay has since dropped from its catalog stays in the list, chosen, 
 Two buttons on **Voice Settings** let you listen to a HeatCaller voice before you commit to it. Neither one spends your race-night allowance.
 
 - **Hear It**, beside **Announcer voice:**, plays a short sample of the voice you've highlighted. It's free, and it works before your club has signed up for anything at all: the sample needs no token, so a laptop with nothing but a relay address on the **Club Website** page can still listen to every voice. The first person anywhere to ask for a given voice has it rendered once; everyone after that hears the saved copy, for nothing. The sample is the same fixed line for every voice, so you're comparing like with like.
-- **Preview**, beside **Your own words:**, has the voice say whatever is in that box. This is the one that settles it: a stock sample can't tell you whether a voice gets "Stock Buggy A-Main" right, or your drivers' names. A starting line is filled in for you, so the button does something the first time you press it; replace it with your own class names and driver names. Keep it to a sentence — a long line is refused, and the message says the limit.
+- **Preview**, beside **Your own words:**, has the voice say whatever is in that box. This is the one that settles it: a stock sample can't tell you whether a voice gets "Stock Buggy A-Main" right, or your drivers' names. A starting line is filled in for you, so the button does something the first time you press it; replace it with your own class names and driver names. Keep it to a sentence — a preview can be up to 200 characters, and a longer one is refused straight away with a message saying so.
 
 Previews come out of **a small daily allowance of their own, kept completely separate from the race-night voice allowance**. An afternoon of auditioning can't leave you short on Saturday. When the day's previews are used up the relay says so in words, for example "That is this club's previews for today - 3,000 characters a day of trying voices out. Its race-night voice allowance has not been touched, and previews start again tomorrow." Nothing falls through to the race-night budget. **Hear It** still works, because it costs nothing.
 
@@ -100,7 +100,7 @@ If the file isn't there, a **Download (about 310 MB)** button appears beside **K
 
 The downloaded copy is kept in `%LocalAppData%\HeatCaller\Kokoro`, on that PC only, and isn't part of a backup. Nothing Kokoro says is kept with the [saved voice lines](#saved-voice-lines).
 
-The mechanic in the recap's interview can have a Kokoro voice of their own: with Kokoro chosen, pick one in **Mechanic's voice:** on the **Commentary** page. See [Commentary](commentary.md).
+The Technical Lead and the Team Principal can have a Kokoro voice of their own: with Kokoro chosen, pick one in **Technical Lead's voice:** or **Team Principal's voice:** on **Voice → Cast**. See [Technical Lead and Team Principal](commentary.md#technical-lead-and-team-principal).
 
 ### What the Kokoro voice uses
 
@@ -126,7 +126,7 @@ The free voice built into Windows is gone. It used to be both a choice under **S
 
 - A club whose voice was set to the Windows voice comes up on **Kokoro voice**, with nothing to do.
 - A club that pays ElevenLabs by the character **stays on ElevenLabs**, and its key is untouched. That's deliberate: a club that had a key *and* had deliberately chosen the free voice isn't moved onto the one that charges it.
-- An old saved choice of which Windows voice to use for the co-host or the mechanic is simply forgotten. Pick a Kokoro voice for the mechanic on the **Commentary** page if you want one.
+- An old saved choice of which Windows voice to use for the co-host or the Technical Lead (then called the mechanic) is simply forgotten. Pick a Kokoro voice for the Technical Lead on **Voice → Cast** if you want one.
 
 ### After updating from 0.50 or earlier
 
@@ -382,11 +382,16 @@ Prepare only ever asks the chosen voice, never the Kokoro voice standing in: a l
 Now and then a take comes out odd: a strange pause, or a word stressed wrongly. Because the take is saved, it would sound the same way every time. There are two ways to fix it:
 
 - **For a flag call, or any line without a placeholder:** with ElevenLabs chosen under **Speak with**, press **Test** on its row on the **Announcements** tab until it sounds right. A test always asks ElevenLabs for a fresh take and saves it in place of the old one, so the race plays the take you heard last.
-- **For any line:** choose it in **Recently played:** (the lines played or saved most recently, newest first) and click **Forget Line**. It's rendered afresh the next time it's spoken.
+- **For any saved line, on either paid voice:** choose it in **Recently played:** (the lines played or saved most recently, newest first) and click **Re-roll Line...**. It says what the new take will cost and asks first; press **Yes** and it makes a new take, plays it, and keeps it as the one the race plays: "New take kept - 84 characters. The race plays this one now." If it fails, the old take is kept. Each entry in the list shows what the line costs to make again, in characters, beside when it was last used.
+- **Forget Line** throws the saved take away instead, and the line is rendered afresh the next time it's spoken.
 
-On the HeatCaller voice only the second one is available — the **Test** buttons are hidden, so there's no way to keep asking for a take until you like it. **Forget Line** still works, but it usually brings back the same take: the relay keeps its own copy of each line and hands that out again, which costs your allowance nothing but also doesn't reroll it. **Preview** isn't a way to reroll it either: press it twice on the same words in the same voice and the relay plays the copy it made the first time. If a line reads badly on your announcer voice, the practical fixes are the driver's **Announcer name:**, a different announcer voice, or your own ElevenLabs key.
+On the HeatCaller voice the **Test** buttons are hidden, so **Re-roll Line...** is the way to get a new take. The new take is your club's own: the relay keeps it for your club only, other clubs keep hearing the shared take, and it costs your allowance like any line that wasn't saved. (**Forget Line** on its own usually brings back the relay's shared copy, which costs nothing but sounds the same.) The relay must be up to date for this — on an older relay a re-roll hands back the same take; see [Relay hosting](../admin/relay-hosting.md).
+
+**Re-roll Line...** refuses, with the reason, for a Kokoro line (Kokoro makes every line fresh on this laptop anyway), for a line whose words weren't recorded with it, for a line spoken in pieces, and for a line saved with a different voice or different settings — an event's own speed, say. **Forget Line** is the answer for those.
 
 A name the voice says wrongly is best fixed with the driver's **Announcer name:** on **Driver Hub**. Changing the words makes a new line, so it's rendered the new way from then on. That works on every voice.
+
+**Shortened names on the paid voices.** With **Shorten published names to a first name and an initial** ticked (it's on unless your club turned it off), a line sent to the HeatCaller voice or your own ElevenLabs account carries each driver's name in the same short form the club's pages use — "Billy S" rather than "Billy Smith" — so a full name never leaves the laptop. That applies to the **Announcer name:** too, and to AI-written recaps. The Kokoro voice speaks on the laptop and sends nothing anywhere, so it still says names in full. Untick the box if you'd rather the speakers said full names on a paid voice.
 
 **Forget All** clears every saved line, after asking first. Everything is then rendered, and paid for, again as it's spoken. It's worth doing after changing something HeatCaller can't see, such as editing a cloned voice in your ElevenLabs account.
 
@@ -599,7 +604,7 @@ The same advice applies, with one difference in your favor: on the HeatCaller vo
 - Press **Prepare Lines** before the night. It's the cheapest thing you can do.
 - Leave **Every lap completed**, **Lap time only** and **Personal best lap** off, or use **Announce every** _n_ **lap(s)** to space them out. These are far and away the biggest spenders, because each one is a new sentence.
 - **Max spoken announcements per lap:** caps how many routine calls a single lap can trigger.
-- Sample the allowance now and then with **Refresh** next to **Announcer voice:**, or just read the line under it when you open the page. The console warns you once when nine tenths of it is gone; see [The warning before it runs out](#the-warning-before-it-runs-out).
+- Read the allowance on the line under **Announcer voice:**; it's kept current every two minutes while the page is open. **Recently played:** shows what each saved line costs in characters, so you can see which ones are worth trimming. The console warns you once when nine tenths of it is gone; see [The warning before it runs out](#the-warning-before-it-runs-out).
 
 The same two-at-once limit and the same 30-second give-up apply to the relay.
 

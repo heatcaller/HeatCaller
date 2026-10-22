@@ -424,6 +424,14 @@ public sealed class CommentaryDirector
     public Func<RoundJustRun?>? JustRan { get; set; }
 
     /// <summary>
+    /// Whether the race just run was off the programme - a freeform race, or
+    /// a club with no programme entered (22 Oct 2026). Lets a show after it
+    /// hand back with "stay with us" rather than nothing; see
+    /// ContinuityFacts.Freeform. Null until wired, and then it is false.
+    /// </summary>
+    public Func<bool>? Freeform { get; set; }
+
+    /// <summary>
     /// The club's sponsors and the share each bought - the older reader,
     /// which says nothing about where a read is allowed. Still what
     /// <see cref="NextSponsorRead"/> asks, and what the paid reads fall
@@ -653,6 +661,21 @@ public sealed class CommentaryDirector
     // ------------------------------------------------------------------
 
     /// <summary>
+    /// The club's lowest tier as the budget takes it - clamped, so a
+    /// hand-edited value cannot become an undefined tier. One answer for the
+    /// budget and for the Commentary page's "Segments run" picker.
+    /// </summary>
+    internal static SegmentTier LowestTierOf(int saved) =>
+        (SegmentTier)Math.Clamp(saved, (int)SegmentTier.Essential, (int)SegmentTier.Flourish);
+
+    /// <summary>
+    /// The club changed "Segments run" on the Commentary page: taken
+    /// tonight, not at the next race day (22 Oct 2026). Only the gate - the
+    /// night's spend and switches are NewMeeting's.
+    /// </summary>
+    internal void ClubTierChanged() => Budget.LowestTier = LowestTierOf(_settings.CommentaryLowestTier);
+
+    /// <summary>
     /// A race day has been opened. Picks tonight's spend and tonight's
     /// facts back up when it is the same day as before - a laptop gets
     /// closed between the heats and the mains - and starts fresh when it
@@ -673,8 +696,7 @@ public sealed class CommentaryDirector
         // Flourish and a club that turned the flourishes off still heard
         // them. Clamped so a hand-edited value cannot become an undefined
         // tier; Essential is never silenced by this gate either way.
-        Budget.LowestTier = (SegmentTier)Math.Clamp(
-            _settings.CommentaryLowestTier, (int)SegmentTier.Essential, (int)SegmentTier.Flourish);
+        Budget.LowestTier = LowestTierOf(_settings.CommentaryLowestTier);
 
         // RESTORED, NOT RESET (13 Oct 2026). This was NewMeeting, and
         // SaidTonight.Restore - which calls NewMeeting itself, and only
@@ -1480,7 +1502,18 @@ public sealed class CommentaryDirector
             Say($"[brain] Couldn't read what is still to come: {ex.Message}");
         }
 
-        return new ContinuityFacts(ran, rounds, inAbout);
+        var freeform = false;
+
+        try
+        {
+            freeform = Freeform?.Invoke() ?? false;
+        }
+        catch (Exception ex)
+        {
+            Say($"[brain] Couldn't tell whether that race was off the programme: {ex.Message}");
+        }
+
+        return new ContinuityFacts(ran, rounds, inAbout, freeform);
     }
 
     /// <summary>

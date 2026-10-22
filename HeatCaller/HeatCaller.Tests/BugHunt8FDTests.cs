@@ -178,9 +178,17 @@ public sealed class BugHunt8FDTests : IDisposable
         // Needs an encoder that refuses while CutWav still reads the file,
         // which a dev machine with Media Foundation cannot produce - so the
         // shape is pinned by reading the source.
+        //
+        // Deliberately stops at the kept wav rather than matching the whole
+        // argument list. The bug was this branch returning before any clips
+        // were cut, so the call existing AND being handed the kept wav is
+        // the whole of what must stay true. Matching the trailing arguments
+        // as well broke the test the first time WriteClips gained a
+        // parameter (the highlight videos, 20 Oct 2026) while the behaviour
+        // it pins was perfectly intact.
         var source = SourceOf("RaceAudioRecorder.cs");
 
-        Assert.Contains("WriteClips(recording with { WavPath = kept }, record, releaseOffsetsMs, baseName, log);", source, StringComparison.Ordinal);
+        Assert.Contains("WriteClips(recording with { WavPath = kept }", source, StringComparison.Ordinal);
     }
 
     // --- A11-1: nulls in rivalries.json ------------------------------------

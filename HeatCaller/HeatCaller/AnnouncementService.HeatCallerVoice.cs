@@ -138,8 +138,11 @@ public sealed partial class AnnouncementService
     /// The audio for one line with the HeatCaller voice: the saved copy, the
     /// relay, or the Kokoro voice standing in.
     /// </summary>
-    private async Task<SynthesisResult> RenderWithHeatCallerAsync(VoiceProfile profile, string text)
+    /// <param name="standInText">What Kokoro says if it stands in - the line as written, before names were shortened for the relay (22 Oct 2026). Null: the same text.</param>
+    private async Task<SynthesisResult> RenderWithHeatCallerAsync(VoiceProfile profile, string text, string? standInText = null)
     {
+        var onThisPc = standInText ?? text;
+
         NoteVoiceRelayOnce();
 
         bool allowanceSpent;
@@ -177,7 +180,7 @@ public sealed partial class AnnouncementService
                 "heatcaller-setup",
                 "[voice] No HeatCaller voice is chosen yet - the free Kokoro voice is speaking. Pick one on the Voice tab.");
 
-            return await RenderWithStandInAsync(profile, text);
+            return await RenderWithStandInAsync(profile, onThisPc);
         }
 
         if (resting)
@@ -210,12 +213,14 @@ public sealed partial class AnnouncementService
                 StartHeatCallerProbe(client, profile, text);
             }
 
-            return await RenderWithStandInAsync(profile, text);
+            return await RenderWithStandInAsync(profile, onThisPc);
         }
 
         try
         {
-            var audio = await SpeakWholeLineThroughRelayAsync(client, profile, text, CancellationToken.None);
+            // RenderCancel: a line rendered ahead that nobody will now hear
+            // (22 Oct 2026) - None everywhere else, as it always was.
+            var audio = await SpeakWholeLineThroughRelayAsync(client, profile, text, RenderCancel.Value);
 
             VoiceLibrary.Shared.Save(profile, text, audio);
 
@@ -224,7 +229,7 @@ public sealed partial class AnnouncementService
         catch (HeatCallerVoiceException ex)
         {
             NoteHeatCallerRefusal(ex);
-            return await RenderWithStandInAsync(profile, text);
+            return await RenderWithStandInAsync(profile, onThisPc);
         }
         catch (SynthesisSlotTimeoutException)
         {
@@ -233,7 +238,7 @@ public sealed partial class AnnouncementService
                 "heatcaller-slot",
                 "[voice] The voice queue was full, so the free Kokoro voice said a line. Said once, not for every line.");
 
-            return await RenderWithStandInAsync(profile, text);
+            return await RenderWithStandInAsync(profile, onThisPc);
         }
     }
 
@@ -604,6 +609,9 @@ public sealed partial class AnnouncementService
     {
         _ = Task.Run(async () =>
         {
+            // Its own life: not stopped with the line that happened to start it (see RenderCancel).
+            RenderCancel.Value = default;
+
             try
             {
                 // Not once the club has chosen another voice: this would be

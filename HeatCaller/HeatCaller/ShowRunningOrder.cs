@@ -136,6 +136,60 @@ internal readonly record struct ShowDrama(double? WinningMarginSeconds, int Laps
         new(night.ClosestFinishSeconds > 0 ? night.ClosestFinishSeconds : null, 0, false);
 
     /// <summary>
+    /// What a filed race's finish was worth, read off its own results - the
+    /// recap's show (22 Oct 2026, known issues: the drama-shaped show was
+    /// built and never fed).
+    ///
+    /// THE SAME MEASURE AS THE WORDS. The margin is CommentaryService.
+    /// DescribeMargin's at-the-line gap, with its rule that a count
+    /// difference of two or more IS the margin - so the music never takes a
+    /// breath for a race the recap is about to call comfortable.
+    ///
+    /// The track record counts only when it is this race's: the layout's
+    /// record set no earlier than the race started, and one of tonight's
+    /// fast laps IS that record. A record from last month is not drama.
+    /// </summary>
+    /// <param name="record">The race the recap is about.</param>
+    /// <param name="layout">The layout it was run on, or null when nobody knows.</param>
+    internal static ShowDrama Of(SessionRecord? record, TrackLayout? layout)
+    {
+        if (record is null || record.Results.Count == 0)
+        {
+            return None;
+        }
+
+        var ordered = record.Results.OrderBy(r => r.Position).ToList();
+
+        double? margin = null;
+        var lapsDown = 0;
+
+        if (ordered.Count >= 2)
+        {
+            var winner = ordered[0];
+            var second = ordered[1];
+
+            var gap = RaceGaps.Compute(
+                second.Laps, second.ElapsedMs, winner.Laps, winner.ElapsedMs,
+                lap => RaceGaps.CrossingMs(winner.LapTimesMs, winner.Laps, winner.ElapsedMs, lap));
+
+            var countDifference = Math.Max(0, winner.Laps - second.Laps);
+
+            lapsDown = countDifference >= 2 ? countDifference : gap.LapsDown;
+
+            if (lapsDown == 0 && gap.GapMs is long ms && ms > 0)
+            {
+                margin = ms / 1000.0;
+            }
+        }
+
+        var trackRecord = layout is { RecordLapMs: > 0, RecordSetUtc: { } setUtc }
+            && (record.StartedAtUtc == default || setUtc >= record.StartedAtUtc.AddMinutes(-1))
+            && ordered.Any(r => r.FastLapMs > 0 && r.FastLapMs == layout.RecordLapMs);
+
+        return new ShowDrama(margin, lapsDown, trackRecord);
+    }
+
+    /// <summary>
     /// Whether this one gets the bigger open.
     ///
     /// ONE STEP, NOT A SCALE. A dial from nothing to everything would give a

@@ -116,7 +116,7 @@ public sealed class BugHunt8_CommentaryService_csTests : IDisposable
         Assert.Equal(1, model.Asked);
         Assert.Equal(0, counted);
 
-        model.Answer = "Sam and Bill are nose to tail, presented by Joe's Hobby Shop.";
+        model.Answer = "Sam and Bill are nose to tail.";
 
         Assert.NotNull(await desk.BuildSegmentAsync(SegmentKind.BattleWatch, facts));
         Assert.Equal(1, counted);

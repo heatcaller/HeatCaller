@@ -1,0 +1,148 @@
+using System.Text.RegularExpressions;
+
+namespace HeatCaller;
+
+/// <summary>
+/// "Shorten published names to a first name and an initial", carried to the
+/// voices that send a line OFF this PC (22 Oct 2026, known issues).
+///
+/// WHY: the setting shortened names on the club's pages, but every spoken
+/// line still carried the driver's full Announcer name - or driver name - to
+/// the relay and on to ElevenLabs, where the rendered audio is kept for that
+/// club. A club that ticked the box for its children's names would not
+/// expect that. So with the box ticked, a line for the HeatCaller voice or
+/// the club's own ElevenLabs account has each driver's full name swapped
+/// for the same short form the pages use (RelayPublisher.DisplayNames, so
+/// two drivers who would share one are told apart the same way).
+///
+/// NOT FOR KOKORO. It speaks on this PC and sends nothing anywhere, so the
+/// announcer there keeps saying names in full, as it always has.
+///
+/// The swap is of whole names only, longest first, so "Sam Smith-Jones" is
+/// never cut into "Sam S-Jones" by a shorter "Sam Smith".
+/// </summary>
+public sealed partial class AnnouncementService
+{
+    /// <summary>
+    /// Whether to shorten names on a line for a cloud voice - read live, so
+    /// ticking the box takes effect on the next line. Null (the default, and
+    /// every test) leaves every line exactly as written.
+    /// </summary>
+    public Func<bool>? ShortenNamesForCloudVoices { get; set; }
+
+    private readonly object _shortNamesLock = new();
+    private string? _shortNamesKey;
+    private (Regex Pattern, Dictionary<string, string> Map)? _shortNames;
+
+    /// <summary>
+    /// The words a cloud voice's take of this line is saved under - for
+    /// Voice Settings' Prepare Lines, so "already saved" and the cost it
+    /// quotes go by the same text the race looks up.
+    /// </summary>
+    internal string TextForCloudVoice(string text) => ForCloudVoice(text);
+
+    /// <summary>The line as a cloud voice should be sent it - see the class note.</summary>
+    private string ForCloudVoice(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || ShortenNamesForCloudVoices?.Invoke() != true)
+        {
+            return text;
+        }
+
+        List<string> names;
+
+        try
+        {
+            names = NamesToShorten();
+        }
+        catch (InvalidOperationException)
+        {
+            // The roster changed under the read - read it once more.
+            names = NamesToShorten();
+        }
+
+        var key = string.Join('\n', names);
+        (Regex Pattern, Dictionary<string, string> Map)? built;
+
+        lock (_shortNamesLock)
+        {
+            if (!string.Equals(key, _shortNamesKey, StringComparison.Ordinal))
+            {
+                _shortNamesKey = key;
+                _shortNames = ShortNamePattern(ShortNameMap(names));
+            }
+
+            built = _shortNames;
+        }
+
+        return built is { } shortNames ? ShortenNames(text, shortNames.Pattern, shortNames.Map) : text;
+    }
+
+    private List<string> NamesToShorten() =>
+        _profiles.All.ToList()
+            .SelectMany(profile => new[] { profile.SpokenName, profile.DriverName })
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!.Trim())
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+    /// <summary>
+    /// Each full name (two words or more) and the short form the club's
+    /// pages give it. A one-word name is already as short as it goes.
+    /// </summary>
+    internal static Dictionary<string, string> ShortNameMap(IReadOnlyList<string> names)
+    {
+        var full = names
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        var shortened = RelayPublisher.DisplayNames(full, abbreviate: true);
+        var map = new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
+
+        for (var i = 0; i < full.Count && i < shortened.Count; i++)
+        {
+            if (full[i].Contains(' ') && !string.Equals(full[i], shortened[i], StringComparison.Ordinal))
+            {
+                map[full[i]] = shortened[i];
+            }
+        }
+
+        return map;
+    }
+
+    /// <summary>One pattern for every name in the map, longest first, whole names only. Null for an empty map.</summary>
+    private static (Regex Pattern, Dictionary<string, string> Map)? ShortNamePattern(Dictionary<string, string> map)
+    {
+        if (map.Count == 0)
+        {
+            return null;
+        }
+
+        var alternatives = map.Keys
+            .OrderByDescending(name => name.Length)
+            .Select(Regex.Escape);
+
+        var pattern = new Regex(
+            $@"(?<![\w])(?:{string.Join('|', alternatives)})(?![\w])",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        return (pattern, map);
+    }
+
+    /// <summary>The text with every full name in the map replaced by its short form.</summary>
+    internal static string ShortenNames(string text, Dictionary<string, string> map)
+    {
+        if (string.IsNullOrEmpty(text) || ShortNamePattern(map) is not { } built)
+        {
+            return text;
+        }
+
+        return ShortenNames(text, built.Pattern, built.Map);
+    }
+
+    private static string ShortenNames(string text, Regex pattern, Dictionary<string, string> map) =>
+        pattern.Replace(text, match => map.TryGetValue(match.Value, out var shortName) ? shortName : match.Value);
+}

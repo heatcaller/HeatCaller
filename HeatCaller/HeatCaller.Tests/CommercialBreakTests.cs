@@ -603,11 +603,11 @@ public sealed class CommercialBreakTests : IDisposable
         // whole of what follows a flag rather than most of it.
         var source = Source("RaceControlControl.AfterRace.cs");
 
-        Assert.Contains("await HoldTheCommercialBreakAsync(recapTask!, nextRace.Token);", source, StringComparison.Ordinal);
+        Assert.Contains("await HoldTheCommercialBreakAsync(recapTask!, nextRace.Token, breakFollows);", source, StringComparison.Ordinal);
 
         var body = MethodBody(
             source,
-            "private async Task HoldTheCommercialBreakAsync(Task recapReady, CancellationToken nextRace)",
+            "private async Task HoldTheCommercialBreakAsync(Task recapReady, CancellationToken nextRace, bool? breakFollows = null)",
             "private static string WhyTheBreakEnded(BreakEnding ending)");
 
         // The wait itself is on the token, so a race called to the grid is

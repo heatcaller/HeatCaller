@@ -1788,12 +1788,19 @@ public sealed class RcpTrackCanvas : Control
         _clipboardFrom = _selection.Bounds().Location;
         _clipboard = _selection.Copy();
 
+        // PART OF THE RACING LINE STAYS PUT (22 Oct 2026, known issues):
+        // a paste only lays route points on a plan with no line, so cutting
+        // a stretch of it lost those points for good. See HoldsPartOfTheLine.
+        var keepTheLine = _selection.HoldsPartOfTheLine(_design);
+
         Remember();
-        _selection.DeleteFrom(_design);
+        _selection.DeleteFrom(_design, keepTheLine);
         _selection = new RcpSelection();
 
         SelectionChanged?.Invoke();
-        StatusChanged?.Invoke("Cut. Ctrl+V puts it down where the pointer is.");
+        StatusChanged?.Invoke(keepTheLine
+            ? "Cut. The racing line stays where it is - only part of it was picked. Ctrl+V puts the rest down where the pointer is."
+            : "Cut. Ctrl+V puts it down where the pointer is.");
         RaiseChanged();
     }
 

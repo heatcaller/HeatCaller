@@ -79,6 +79,52 @@ public sealed partial class RelayPublisher
     /// </summary>
     private volatile string? _pollAsPublished;
 
+    /// <summary>
+    /// The key the relay's ballot was last published with (22 Oct 2026,
+    /// known issues). The votes read back are matched with THIS key, not
+    /// whatever <see cref="RelayVoteKey"/> says by the time they are read:
+    /// a check-in key minted or reissued between the publish and the read
+    /// changed every id, and that pass's votes matched nobody. The next
+    /// pass puts the ballot up again with the new key - the fingerprint
+    /// carries its mark - and reads with that.
+    /// </summary>
+    private volatile string? _ballotKeyAsPublished;
+
+    /// <summary>
+    /// The key before that, when a reissue moved it on: phones that voted
+    /// on the old ballot before it was replaced are still in the relay's
+    /// inbox under the old ids, and are still counted - for that poll
+    /// only: a new poll or a close lets it go (see NextKeyBefore).
+    /// </summary>
+    private volatile string? _ballotKeyBefore;
+
+    /// <summary>
+    /// What <see cref="_ballotKeyBefore"/> becomes when a ballot is
+    /// published: the key the same open poll went up under before, when the
+    /// key has just changed; that key again when nothing has changed since;
+    /// otherwise nothing - a new poll, or a vote closed, lets it go.
+    /// </summary>
+    internal static string? NextKeyBefore(
+        string? keyBefore,
+        string? keyPublished,
+        string key,
+        string? pollBefore,
+        string poll,
+        bool open)
+    {
+        if (!open || !string.Equals(pollBefore ?? string.Empty, poll, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (keyPublished is { } published && !string.Equals(published, key, StringComparison.Ordinal))
+        {
+            return published;
+        }
+
+        return keyBefore;
+    }
+
     /// <summary>What went wrong taking the room's vote from the relay, or null.</summary>
     public string? VoteProblem => _votePollProblem;
 
@@ -357,7 +403,16 @@ public sealed partial class RelayPublisher
 
         // The relay's ids for the drivers on that poll's ballot, back to
         // the drivers themselves - see RelayVoteKey (20 Oct 2026).
-        var onTheBallot = RelayVoteOptions(vote.Options, polledFor ?? string.Empty, RelayVoteKey());
+        // With the key that ballot went up with - see _ballotKeyAsPublished.
+        var onTheBallot = RelayVoteOptions(vote.Options, polledFor ?? string.Empty, _ballotKeyAsPublished ?? RelayVoteKey());
+
+        if (_ballotKeyBefore is { } oldKey)
+        {
+            foreach (var (id, driver) in RelayVoteOptions(vote.Options, polledFor ?? string.Empty, oldKey))
+            {
+                onTheBallot.TryAdd(id, driver);
+            }
+        }
 
         // NOTHING TO READ WHILE NO VOTE IS OPEN. The relay would answer
         // with an empty set anyway, and a club that has the switch on but
@@ -565,6 +620,7 @@ public sealed partial class RelayPublisher
         if (string.Equals(_ballotAsPublished, fingerprint, StringComparison.Ordinal))
         {
             _pollAsPublished = ballot;
+            _ballotKeyAsPublished = key;
             return true;
         }
 
@@ -596,8 +652,18 @@ public sealed partial class RelayPublisher
                 return false;
             }
 
+            var pollBefore = _pollAsPublished;
+
             _ballotAsPublished = fingerprint;
             _pollAsPublished = ballot;
+
+            // The old key is kept only for the SAME poll, still open, that
+            // went up under it: a new poll, or a closed one, has no votes
+            // cast against the old ids worth reading, and keeping it would
+            // go on counting them for the rest of the run.
+            _ballotKeyBefore = NextKeyBefore(_ballotKeyBefore, _ballotKeyAsPublished, key, pollBefore, ballot, open);
+
+            _ballotKeyAsPublished = key;
 
             return true;
         }

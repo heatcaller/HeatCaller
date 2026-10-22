@@ -10,9 +10,10 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 
 | Key | Does the same as |
 |---|---|
-| <kbd>F1</kbd> | **Stage** |
+| <kbd>O</kbd> | **On Air**. Pressed again while On Air runs, skips straight to staging. |
+| <kbd>F1</kbd> | Starts the race the normal way: through **On Air** when **Start races On Air** is ticked (press it again to skip to staging), otherwise **Stage**. The **Stage** button itself always stages straight away. |
 | <kbd>F2</kbd> | **Countdown** |
-| <kbd>F3</kbd> | **Green (Start)**. It also resumes the race after a yellow or red. |
+| <kbd>F3</kbd> | **Green**. It also resumes the race after a yellow or red. |
 | <kbd>F4</kbd> | **Yellow** |
 | <kbd>F5</kbd> | **Red** |
 | <kbd>F6</kbd> | **Checkered** |
@@ -22,7 +23,7 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 | <kbd>R</kbd> | **Pre-race check** |
 | <kbd>A</kbd> | **Open Announcer Screen** |
 
-Each key does what clicking its button does (except that <kbd>F7</kbd> asks first while a race is under way; the button doesn't), including the automatic follow-on from Stage to Countdown to Green when the race format has that turned on. See [Running a race](../race-control/running-a-race.md).
+Each key does what clicking its button does (except <kbd>F1</kbd>, described above, and <kbd>F7</kbd>, which asks first while a race is under way; the button doesn't), including the automatic follow-on from Stage to Countdown to Green when the race format has that turned on. See [Running a race](../race-control/running-a-race.md).
 
 **Only the bare key counts.** If you hold <kbd>Alt</kbd>, <kbd>Ctrl</kbd> or <kbd>Shift</kbd>, the F-keys do nothing. For example, <kbd>Alt</kbd>+<kbd>F4</kbd> closes the window as usual and never throws a yellow flag on its way out.
 

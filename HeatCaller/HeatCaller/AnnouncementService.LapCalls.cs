@@ -1006,6 +1006,49 @@ public sealed partial class AnnouncementService
     private readonly record struct BattleOffer(string Key, DateTime OfferedAt, int Generation);
 
     /// <summary>
+    /// Keeps a pair the pacing dial held from being offered again until what
+    /// is LEFT of the gap has run - see _battlesCooling. The gap is measured
+    /// from the last call the dial let through, as the dial measures it, so a
+    /// battle held a second before the gap closes waits that second (well,
+    /// the offer window), not a whole gap more.
+    /// </summary>
+    private void CoolBattle(BattleOffer offer)
+    {
+        double since;
+
+        lock (_pacingLock)
+        {
+            since = _lastRoutineAcceptedUtc == DateTime.MinValue
+                ? 0
+                : (DateTime.UtcNow - _lastRoutineAcceptedUtc).TotalSeconds;
+        }
+
+        var until = DateTime.UtcNow + BattleCooldown(AnnouncerDensity.GapSeconds(Stature, Density), since);
+
+        lock (_battlesLock)
+        {
+            if (offer.Generation == _battlesGeneration)
+            {
+                _battlesCooling[offer.Key] = until;
+            }
+        }
+    }
+
+    /// <summary>
+    /// How long a held battle waits before it is offered again: what is left
+    /// of the pacing gap since the last call let through, never under the
+    /// offer window and never over a minute.
+    /// </summary>
+    internal static TimeSpan BattleCooldown(double gapSeconds, double sinceLastCallSeconds = 0)
+    {
+        var left = gapSeconds - (double.IsFinite(sinceLastCallSeconds) ? Math.Max(0, sinceLastCallSeconds) : 0);
+
+        return double.IsFinite(left) && left > BattleOfferExpiresAfter.TotalSeconds
+            ? TimeSpan.FromSeconds(Math.Min(left, 60))
+            : BattleOfferExpiresAfter;
+    }
+
+    /// <summary>
     /// Takes this offer's pending mark away, if it is still this offer's.
     /// A newer offer of the same pair - after this one expired - keeps its
     /// own. Call only while holding _battlesLock.
@@ -1112,6 +1155,18 @@ public sealed partial class AnnouncementService
                     || (_battlesPending.TryGetValue(key, out var offeredAt) && now - offeredAt < BattleOfferExpiresAfter))
                 {
                     continue;
+                }
+
+                // Held by the pacing dial a moment ago - waiting out the gap
+                // (see _battlesCooling) rather than being held again.
+                if (_battlesCooling.TryGetValue(key, out var coolUntil))
+                {
+                    if (now < coolUntil)
+                    {
+                        continue;
+                    }
+
+                    _battlesCooling.Remove(key);
                 }
 
                 _battlesPending[key] = now;
@@ -1284,6 +1339,7 @@ public sealed partial class AnnouncementService
                 }
             }
 
+            var paced = false;
             var accepted = EnqueueVoiceWork(type, driverTransponder,
                 () =>
                 {
@@ -1291,11 +1347,20 @@ public sealed partial class AnnouncementService
                     return SynthesizeAndPlayAsync(said, $"[voice] {type}", speedOverride: speed);
                 },
                 displayText: said,
-                lost: GiveBack);
+                lost: GiveBack,
+                paced: () => paced = true);
 
             if (!accepted)
             {
                 GiveBack();
+
+                // Held by the pacing dial rather than dropped: free again,
+                // but not offered until the gap has run (22 Oct 2026) - see
+                // _battlesCooling.
+                if (paced && battle is { } held)
+                {
+                    CoolBattle(held);
+                }
             }
         });
 

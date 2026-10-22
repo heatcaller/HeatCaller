@@ -1,41 +1,51 @@
 # Installing and running
 
-This page covers getting HeatCaller running on a Windows PC: what happens the first time it starts, where it keeps your data, and how to update or remove it.
+This page covers getting HeatCaller onto a Windows PC with its installer: what it puts where, what happens the first time it starts, where it keeps your data, and how it updates and comes off again.
 
-<!-- TODO: installer download link -->
-
-!!! note "No installer yet"
-    During the beta, HeatCaller is built and run from its source code with the free .NET SDK. An installer is planned. Until then, follow the steps below. They take a few minutes the first time.
+!!! note "Getting the installer during the beta"
+    HeatCaller's installer is a single file, **Setup.exe**. The public download page for it isn't open yet, so during the beta the installer comes to your club directly from the HeatCaller team. Ask them for the latest one. Once the download page is up, this page will link to it. Updates already know where to look (see [Updates](#updates)).
 
 ## Before you start
 
 You need:
 
-- A Windows 10 or Windows 11 PC (see [What you need](index.md#what-you-need)).
-- The **.NET 10 SDK** from Microsoft. The SDK is what builds the app. The smaller ".NET Runtime" download on its own isn't enough to build from source.
-- An internet connection for the first build. It downloads the libraries HeatCaller uses (NuGet packages). After that, you don't need internet to build or run.
-- A copy of the HeatCaller source folder. It's the folder that contains `HeatCaller.csproj`.
-  <!-- TODO: confirm where clubs get the source folder from (download/zip/repository link) -->
+- A Windows 10 or Windows 11 PC, 64-bit (see [What you need](index.md#what-you-need)). That covers almost every laptop.
+- About 1 GB of free disk space. Most of the installer is the built-in natural voice (Kokoro), which comes with it so the announcer works at a track with no internet.
+- Nothing else. The installer carries everything HeatCaller needs, including .NET, so you don't install anything from Microsoft first.
+- No administrator password. HeatCaller installs for the Windows user who runs the installer.
 
-## Install and run
+## Install
 
-1. Install the .NET 10 SDK from Microsoft's .NET download page. Choose the **SDK** for Windows (x64 on most laptops).
-2. Copy the HeatCaller source folder somewhere permanent, for example `C:\HeatCaller`.
-3. Open **Command Prompt** or **PowerShell**.
-4. Run this command, with your folder's path in place of `<path>`:
+1. Copy **Setup.exe** to the race laptop and double-click it.
+2. **If Windows SmartScreen says "Windows protected your PC"**, click **More info**, check that the publisher is HeatCaller's, then click **Run anyway**. The installer is signed, but SmartScreen warns about any program it hasn't seen downloaded many times yet. This goes away as more clubs install it.
+3. Wait while it installs. There are no questions to answer. It takes a minute or so.
+4. HeatCaller starts on its own when it's done. On the very first start, the **Welcome to HeatCaller** wizard opens (see below).
 
-    ```
-    dotnet run --project <path>\HeatCaller.csproj
-    ```
+What the installer sets up:
 
-    For example: `dotnet run --project C:\HeatCaller\HeatCaller.csproj`
+| What | Where |
+|---|---|
+| The program | `%LocalAppData%\HeatCallerApp`. Paste that into the File Explorer address bar to open it. You never need to go in there. |
+| A **HeatCaller** shortcut | The Start menu and the desktop. |
+| A **HeatCaller Rehearsal** shortcut | The Start menu. It opens HeatCaller on a copy of your club's data, so you can practise a race night without touching the real results. The copy lives in `%LocalAppData%\HeatCaller Rehearsal`. |
+| The natural voice (Kokoro) | Inside the program folder. It's ready the first time you choose it on **Voice Settings**, with no download. |
 
-5. Wait for the first build. It downloads packages and compiles the app, which can take a minute or two. Later starts are much quicker.
-6. The startup screen appears, and then the main window. On the very first start, the **Welcome to HeatCaller** wizard opens too (see below).
+Windows shows the program as **HeatCaller** in Task Manager and in **Settings → Apps**.
 
-!!! tip "A desktop shortcut"
-    After the first build, the program itself is in the project's build output folder, normally `bin\Debug\net10.0-windows\HeatCaller.exe` inside the source folder. You can make a desktop shortcut to that file. Windows shows the program as **HeatCaller** in Task Manager and in the file's properties.
-    <!-- TODO: confirm the recommended way for clubs to launch day-to-day (dotnet run vs. shortcut to the built exe, Debug vs. Release) -->
+!!! tip "Phones on the club Wi-Fi"
+    The installer can't open the network port that phones use for the local pages, because that needs an administrator. If you want racers to follow along on the club Wi-Fi, press **Set up phone pages** on the **Local Screens** page once, and approve the Windows prompt. See [Local Screens](../screens/phone-and-web.md).
+
+## Running from the source code
+
+For developers and testers only. Clubs should use the installer. Running from source needs the **.NET 10 SDK** from Microsoft (the SDK, not just the runtime) and a copy of the HeatCaller source folder from the HeatCaller team. A copy run this way never checks for updates.
+
+If the source folder is at `C:\HeatCaller`, open **PowerShell** and run:
+
+```
+dotnet run --project "C:\HeatCaller\HeatCaller\HeatCaller\HeatCaller.csproj"
+```
+
+If you put it somewhere else, use the full path to the `HeatCaller.csproj` in its `HeatCaller\HeatCaller` folder in place of the one above. The first build downloads packages and takes a minute or two. Later starts are much quicker. A source build looks for the natural voice in `%LocalAppData%\HeatCaller\Kokoro`, and **Voice Settings** offers to download it there.
 
 ## The startup screen
 
@@ -129,35 +139,30 @@ Two more folders are in your **Documents** folder:
 !!! warning "Your keys are tied to your Windows account"
     API keys, the relay token and PINs are encrypted for the Windows user account that saved them. If you copy the data folder to another PC, or to another user, those keys can't be read there. Use **Backup & Restore** to move to a new laptop. It carries a password-protected copy of the keys. See [Backups](../admin/backups.md).
 
-## Updating to a new version
+## Updates
 
-Your data isn't stored in the source folder, so replacing the app doesn't touch your drivers, results or settings.
+HeatCaller looks for a new version on its own: two minutes after it starts, then every six hours. It downloads a new version quietly in the background, and only then asks you. It never asks while anything is going on: not while a race day is open, a race is staged, running or waiting to be saved, or an unfinished race is waiting to be restored. The console says what's holding it, for example "it won't be offered while a race day is open or a race is on."
 
-1. Close HeatCaller.
-2. Back up first. On the **Backup & Restore** page, press **Back Up Now**. It only takes a moment and gives you a way back.
-3. Replace the source folder with the new version. You can delete the old folder first or copy the new one over it.
-4. Run the same `dotnet run` command as before. The first build of a new version may download packages again.
-5. Check the version on the startup screen or in the title bar.
+When it asks, the window names both versions and gives three answers:
 
-<!-- TODO: confirm whether updating requires deleting the old bin/obj folders -->
+- **Update now** backs up your data, then installs the update and restarts HeatCaller. It takes a few seconds.
+- **After tonight** keeps the download and installs it the next time HeatCaller is opened (again, only if nothing is in progress). Nothing changes in the meantime. Choose this if there's any chance of racing tonight.
+- **Not now** does nothing. You'll be asked again the next time HeatCaller starts.
+
+Closing the window or pressing <kbd>Esc</kbd> counts as **Not now**.
+
+A few things to know:
+
+- **A backup is always made first.** It's saved as a manual backup in `Documents\HeatCaller Backups`, so automatic pruning never deletes it. If the backup fails, the update isn't installed and the console says so.
+- **Your data isn't touched by an update.** Drivers, results and settings live in `%AppData%\HeatCaller` (below), not in the program folder.
+- **Checks are silent.** With no internet, or if a check fails, nothing is shown. A failed download is tried again later.
+- **Rehearsal never updates.** The **HeatCaller Rehearsal** copy doesn't check.
+- **To turn update checks off**, close HeatCaller, open `settings.json` in `%AppData%\HeatCaller`, change `"UpdateChecksOn": true` to `"UpdateChecksOn": false` and save it. There's no switch for it on screen yet.
 
 ## Uninstalling
 
 1. Close HeatCaller.
-2. Delete the HeatCaller source folder (including its `bin` and `obj` folders).
-3. If you want to remove your data too, delete `%AppData%\HeatCaller`. **This deletes all your drivers, results and settings for good.** Make a backup first if there's any chance you'll want it.
-4. Optionally, delete `Documents\HeatCaller Backups` and `Documents\HeatCaller Results`.
-5. If you set up the phone web server with the one-time `netsh` commands, you can remove that reservation and firewall rule from an admin Command Prompt. See [Local Screens](../screens/phone-and-web.md).
-6. If you don't use .NET for anything else, you can uninstall the .NET 10 SDK from Windows **Settings → Apps**.
-
-If your club runs an online relay, uninstalling the app doesn't stop it. See [Hosting the relay](../admin/relay-hosting.md).
-
-## Troubleshooting
-
-**Nothing happens, or the command says `dotnet` isn't recognized.** The .NET SDK isn't installed, or the Command Prompt was opened before it was installed. Install the SDK, then open a new Command Prompt.
-
-**The build fails while restoring packages.** The first build needs internet access to download packages. Connect and try again.
-
-**The app starts with plain fonts, or with no built-in music.** The app's fonts and bundled music are copied in from the source folder's `Assets` folder when it builds. If they're missing from your copy of the source, the app still builds and runs, but with standard Windows fonts and an empty music library.
-
-**An error box appears.** The full details are written to `%AppData%\HeatCaller\crash.log`. Include that file and the version number when you report a problem. See [Troubleshooting](../admin/troubleshooting.md).
+2. Open Windows **Settings → Apps**, find **HeatCaller** and choose **Uninstall**. This removes the program and its shortcuts, including **HeatCaller Rehearsal**.
+3. Your data stays where it is: `%AppData%\HeatCaller`, the saved voice lines in `%LocalAppData%\HeatCaller` (lines you may have paid ElevenLabs for), `Documents\HeatCaller Backups` and `Documents\HeatCaller Results`. Installing HeatCaller again picks it all up.
+4. To remove your data too, delete those folders yourself, and `%LocalAppData%\HeatCaller Rehearsal` if you used rehearsal. **Deleting `%AppData%\HeatCaller` removes all your drivers, results and settings for good.** Make a backup first if there's any chance you'll want them.
+5. If you set up phone pages, you can remove the network reservation and firewall rule from an administrator Command Prompt. See [Local Screens](../screens/phone-and-web.md).

@@ -242,6 +242,9 @@ finished last.
 /c/:club/manifest.webmanifest   makes "Add to Home Screen" install the pages as an app
 /c/:club/icon.png            the club's logo, or a chequered flag in its colours
 /c/:club/logo.png            the club's logo (404 if it has none)
+/c/:club/videos/:race        a race's podium highlight videos - what the Big Screen's
+                             QR code opens (see Podium videos below)
+/c/:club/video/:id.mp4       one podium video, in ranges; ?download=1 to keep it
 ```
 
 The logo sits in a block of its own at the top of every page, beside the
@@ -801,6 +804,13 @@ is all it can decide.
 driver's name - so the rendered audio may be kept for every club. A line
 with a name arrives `shared:false` and is cached for that club alone.
 
+`"fresh": true` (22 Oct 2026) asks for a new take past every cache - the
+**Re-roll** button on Voice Settings, for a line that came out badly. It is
+charged like any line that was not saved, and the new take is kept in the
+club's own cache even for a shared line, so one club re-rolling "Green
+flag!" never changes it for the others. A shared line is looked for in the
+club's own cache first, so the re-rolled take is the one that club hears.
+
 The answer carries `x-voice-cache` (`hit` or `miss`), `x-voice-used`,
 `x-voice-allowance` and `x-voice-resets`. A refusal is JSON with a
 `refusal` field: `off` (no key on this relay), `not-included` (not on this
@@ -977,6 +987,11 @@ topup-requests.cmd --json          the same, as JSON
 - Any club can see its own figures: the app's This Month window and the
   manager page's Today tab both read `GET /api/v1/c/<club>/usage` (the club's
   own token, or its manager pass), which spends nothing.
+- Each meter in that answer carries `known` (22 Oct 2026). It is `false` when
+  the club's count could not be read (a damaged usage file), and `used` is
+  then a stand-in 0, not a figure: the app keeps the last real one rather than
+  showing a spent month as empty. An older relay never sends it, and the app
+  reads its absence as known.
 
 #### Trying it out on your own laptop
 
@@ -1068,6 +1083,47 @@ the config, exactly like the voice, and for the same reason - it spends
 money, so it is opted into rather than out of. A relay configured with no
 `brain.model` does not offer it at all.
 
+### Podium videos (token required to send; the pages are public)
+
+After a race the laptop makes a short upright highlight video for each
+driver it was asked to (Sounds - Recording), and sends the **top three's**
+here, so a driver can watch and keep theirs on a phone: from the QR code the
+Big Screen shows after the race, or from their own night. Added 21 Oct 2026;
+`src/videos.ts`.
+
+```
+POST /api/v1/c/:club/video/:id?race=&position=&driver=&name=&label=
+                             one mp4 (the body, video/mp4), with the club's token
+GET  /c/:club/videos/:race   the race's page: 1st to 3rd, a player and a
+                             Download button each
+GET  /c/:club/video/:id.mp4  the video, honouring Range (206/416); HEAD works;
+                             ?download=1 adds Content-Disposition: attachment
+```
+
+- **Only the podium.** `position` must be 1, 2 or 3; anything else is a 400
+  before a byte is kept, whatever sends it. The laptop sends nothing else
+  either.
+- **The link is the credential**, as a badge id is for a night. The video id
+  and the race key are 128 random bits each (32 hex), chosen on the laptop;
+  nothing lists a club's videos. `driver`, when sent, is the driver's badge
+  id (20 hex) and puts the video on their own night: `POST .../night`
+  answers with a `videos` list (url, download, label, position) beside the
+  night.
+- **Limits:** 48 MB a video (Content-Length checked first, then the body);
+  the body must start with an mp4 `ftyp` box; 30 uploads a minute a club,
+  and never more than two being read at once across every club (a third
+  gets a 429). Reads are limited to 900 a minute an address - a player asks
+  in many small ranges.
+- **Kept for a week, and never more than a club's share:** 7 days, 120
+  videos and 1 GB a club. The oldest go first on every upload
+  (`videosToDrop`); a stale one is left out of every answer even before it
+  is swept.
+- A download the phone drops part-way ends the handler at once (the write
+  loop wakes on `close` as well as `drain`, 22 Oct 2026 - before that an
+  aborted download hung for good, holding its buffer).
+- A relay deployed without this answers the upload with a 404 and the
+  laptop's console says to redeploy.
+
 ### Race control
 
 ```
@@ -1123,6 +1179,13 @@ against a club's 50 MB publishing quota. A club that deletes everything it
 has published loses its own recorded lines; its usage file, its history and
 its top-ups stay, because those are what it is billed by and a delete must
 not hand it a fresh month's allowance.
+
+Podium videos live in `dataDir/.videos/<club>/` - `<id>.mp4` beside its
+`<id>.json` (race, position, driver, name, label, when, bytes), the video
+written before its meta, both atomically, so a crash leaves no half a video
+listed (`DiskVideoVault`, `src/videos.ts`). Outside the club's tree for the
+same reasons as the voice cache, and none of it counts against the 50 MB
+publishing quota. Deleting a club removes its videos too.
 
 Two more folders there belong to hearing a voice before choosing it:
 `samples/` holds one pre-rendered sample per voice, named `<id>-<rev>.mp3`
@@ -1304,15 +1367,18 @@ src/index.ts     serve, and the argv dispatch
 src/mint.ts      the `mint` subcommand, and the name the shell hands over
 src/voiceadmin.ts the `voice-usage` and `voice-topup` subcommands: every club's voice
                  usage, its history, and characters given on top of a plan
+src/videos.ts    the podium's highlight videos: the vault on disk and in memory, the
+                 week's keep and each club's share
 tools/build-font.py   rasterises Poppins into src/font-data.ts. Build-time only; needs Pillow
 
-test/            506 tests: tenancy, publishing, isolation, persistence, minting, pages,
+test/            770 tests (measured 22 Oct 2026): tenancy, publishing, isolation, persistence, minting, pages,
                  check-in, the race-day manager's tunnel and its budget, locking on disk, PIN limits and
                  lockouts, listing limits, theming, the voice's catalogue, caching, refusals and
                  allowance and its metering, the open voice samples (rendered once, ever) and the
                  Preview button's separate daily allowance, the results archive's meta and by-id reads, the preview reader and
                  its route, the drawn card and the type it is set in, and a relay woken by a burst
-                 (PIN guesses, page loads, a link forwarded to twenty people) or an unreadable file
+                 (PIN guesses, page loads, a link forwarded to twenty people) or an unreadable file,
+                 and the podium videos (podium only, auth, ranges, the night's list, the keep)
 
 voice-usage.cmd       every club's HeatCaller voice usage, read on the Fly machine
 brain-usage.cmd       every club's AI commentary lines, read on the Fly machine

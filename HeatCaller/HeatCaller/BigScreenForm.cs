@@ -2377,7 +2377,10 @@ public sealed class BigScreenForm : Form
     /// <summary>Puts the warning up across the screen - see _lblWarning. Hidden again by the refresh tick.</summary>
     private void ShowWarningBanner(RacerStanding standing, RaceWarning warning)
     {
-        if (IsDisposed || Disposing)
+        // Never for a ghost car (22 Oct 2026, known issues), as the fastest
+        // sector already was not: a ghost has nobody to warn, and its id
+        // would go up across the screen in place of a name.
+        if (IsDisposed || Disposing || GhostService.IsGhost(standing.TransponderId))
         {
             return;
         }
@@ -2455,7 +2458,11 @@ public sealed class BigScreenForm : Form
 
         _lblWarning.Text = $"\u25C6 FASTEST SECTOR {sector + 1} \u2014 {name.ToUpperInvariant()}  {Sectors.Format(sectors[sector])}";
         _lblWarning.BackColor = HighlightColor;
-        _lblWarning.ForeColor = Color.White;
+
+        // White or near-black, whichever reads on the club's accent (22 Oct
+        // 2026, known issues): always white, it vanished on a pale accent -
+        // a yellow or a light green look.
+        _lblWarning.ForeColor = Looks.ClearestTextOn(HighlightColor);
         _lblWarning.Visible = true;
         _warningShownUtc = DateTime.UtcNow;
         _bannerIsWarning = false;

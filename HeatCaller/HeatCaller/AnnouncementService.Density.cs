@@ -135,7 +135,8 @@ public sealed partial class AnnouncementService
     /// </param>
     /// <param name="transponder">Who the call is about, for the lost-lines window (20 Oct 2026). Null for nobody in particular.</param>
     /// <param name="words">What the call would have said, for the lost-lines window. Null when the caller has no words yet.</param>
-    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Func<bool>? holdOver = null, bool alreadyCounted = false, Action? lost = null, string? transponder = null, string? words = null)
+    /// <param name="paced">Run when the call is HELD by the pacing gap, as against dropped or kept (22 Oct 2026) - see EnqueueVoiceWork.</param>
+    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Func<bool>? holdOver = null, bool alreadyCounted = false, Action? lost = null, string? transponder = null, string? words = null, Action? paced = null)
     {
         kept = false;
 
@@ -213,6 +214,8 @@ public sealed partial class AnnouncementService
                     $"[voice] Held {type} - {AnnouncerDensity.Gap(gap)} between calls at "
                     + $"{AnnouncerDensity.For(Density).Name}, and the last one was "
                     + $"{AnnouncerDensity.Gap(since.TotalSeconds)} ago.");
+
+                paced?.Invoke();
 
                 return false;
             }

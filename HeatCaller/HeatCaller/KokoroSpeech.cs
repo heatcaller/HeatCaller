@@ -40,8 +40,11 @@ internal sealed record KokoroVoiceChoice(string Name, string Display)
 /// simply wins the lookup afterwards. LocalRoot is machine-only, so neither
 /// copy goes into a backup.
 ///
-/// Until one of them is there this voice is unavailable, and the Windows
-/// voice says what it would have.
+/// Until one of them is there this voice is unavailable - and, since the
+/// Windows voice was retired (10 Oct 2026), nothing stands in under it:
+/// that is said out loud (the console's "[voice] NO VOICE", the Mixer's
+/// red NO VOICE banner, a red line on Voice Settings) with the one button
+/// that fixes it.
 ///
 /// The voices themselves (small .npy files) come with the KokoroSharp package
 /// and are copied next to the exe on build, under voices\.

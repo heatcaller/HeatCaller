@@ -2675,6 +2675,25 @@ public sealed partial class WebServerService
     private (string Path, DateTime WriteUtc, long Length) _achievementsStamp;
     private bool _achievementsLoadFailed;
     private DateTime _achievementsLoadUtc;
+    private int _achievementsFailedLoads;
+
+    /// <summary>
+    /// How long to wait before reading an unreadable achievements file
+    /// again (22 Oct 2026, known issues): 15 seconds after the first
+    /// failure, doubling to the old 5 minutes. A backup tool's lock is
+    /// usually gone in seconds, and the pages showed no badges at all for
+    /// the whole 5 minutes after one locked read.
+    /// </summary>
+    internal static TimeSpan AchievementRetryAfter(int failedLoads)
+    {
+        if (failedLoads <= 1)
+        {
+            return TimeSpan.FromSeconds(15);
+        }
+
+        var seconds = 15.0 * Math.Pow(2, Math.Min(failedLoads - 1, 10));
+        return TimeSpan.FromSeconds(Math.Min(seconds, 300));
+    }
 
     /// <summary>
     /// Earned badges, re-read from disk at most every few seconds.
@@ -2697,8 +2716,8 @@ public sealed partial class WebServerService
             // console line every 5 s all night, on the UI thread. Now the
             // file is only re-read when it has actually changed (its path,
             // write time or length differ), and a load that failed is
-            // retried at most every 5 minutes (for a file a backup tool had
-            // locked). A healthy file is still picked up within 5 s of a write.
+            // retried on a short clock that backs off to 5 minutes (for a
+            // file a backup tool had locked - AchievementRetryAfter). A healthy file is still picked up within 5 s of a write.
             var path = Path.Combine(AppPaths.Root, "achievements.json");
             (string Path, DateTime WriteUtc, long Length) stamp = (path, DateTime.MinValue, 0);
 
@@ -2716,24 +2735,32 @@ public sealed partial class WebServerService
                 // Couldn't look at it: treat it as missing; Load() decides.
             }
 
-            // The 5-minute retry is timed from the last real load
+            // The retry is timed from the last real load
             // (_achievementsLoadUtc), not from the last look at the file, so
             // the look itself still happens at most every 5 s even while a
             // load is failing.
             var retryFailed = _achievementsLoadFailed
-                && DateTime.UtcNow - _achievementsLoadUtc > TimeSpan.FromMinutes(5);
+                && DateTime.UtcNow - _achievementsLoadUtc > AchievementRetryAfter(_achievementsFailedLoads);
 
             if (_achievements is null || stamp != _achievementsStamp || retryFailed)
             {
-                _achievements = AchievementStore.Load();
+                var loaded = AchievementStore.Load();
+
+                // A LOCKED READ KEEPS THE LAST GOOD COPY (22 Oct 2026): the
+                // badges did not go anywhere because a backup tool held the
+                // file for a moment, so the pages go on showing them.
+                _achievements = loaded.LoadedUnreadable && _achievements is { LoadedUnreadable: false } lastGood
+                    ? lastGood
+                    : loaded;
                 _achievementsStamp = stamp;
                 // Only a file that could not be read at all (LoadedUnreadable:
-                // locked or refused) is retried on the 5-minute clock. A file
+                // locked or refused) is retried on the backing-off clock. A file
                 // that read but would not parse is left until it changes:
                 // retrying it would only keep another copy of it every 5
                 // minutes, and any rewrite moves the stamp anyway. Nor is a
                 // healthy "[]" a failure (20 Oct 2026).
-                _achievementsLoadFailed = _achievements.LoadedUnreadable;
+                _achievementsLoadFailed = loaded.LoadedUnreadable;
+                _achievementsFailedLoads = _achievementsLoadFailed ? _achievementsFailedLoads + 1 : 0;
                 _achievementsLoadUtc = DateTime.UtcNow;
             }
 

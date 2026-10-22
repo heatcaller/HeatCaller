@@ -40,6 +40,17 @@ Pages only refresh while someone is looking at them. A phone left in a pocket wi
 - **Standings** go up after each session is saved, and again whenever the Online settings change.
 - **Tracks** follow the same rules as the **Personal Bests** page: rental transponders, drivers marked to be left out of records, ghost cars and demo sessions don't count, and a personal best reset hides laps from before it.
 
+### Podium videos
+
+After a race, the top three's [highlight videos](../announcer/sounds-and-music.md#highlight-videos) can go on a page of their own, `/c/<club>/videos/<race>`, headed with the race's name ("A-Main podium") and "The announcer's call of the top three, to watch and keep. Kept for a week." Each video has its place and the driver's name, a player, and **Download video**, which saves it to the phone as a file named for the race and the driver.
+
+- Nobody types that address: it's the QR code the Big Screen shows after the race (see [The podium's videos](../screens/big-screen.md#the-podiums-videos)). It isn't in the row of tabs, and the address can't be guessed.
+- Only 1st, 2nd and 3rd are ever put there, and only the ones a video was made for. The relay refuses anything else, whatever sends it.
+- A driver on the podium also finds their video on their own night page (the link with the code from their check-in badge), under **Your podium videos**, with the same **Download video**.
+- If the page is opened before the videos are up, or after the week, it says "These videos have gone - they are kept for a week - or they are still on their way. Try again in a minute."
+
+It's switched on with **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** on **Sounds → Recording**, and only works while the club's page is switched on (see [Setting up the Club Website page](setup.md)).
+
 ### Following a driver
 
 Tap any driver's name on any page to follow them. Their name is highlighted on every page (live board, schedule, results, standings, badges and tracks), and a "Following" chip appears at the bottom of the screen. Tap the name again, or the **×** on the chip, to stop.
@@ -119,6 +130,8 @@ The relay keeps every result you publish, so drivers can look back through past 
 Each club can hold 50 MB on the relay in total. If results would take the club past that, the oldest results are dropped to make room.
 
 The race-day manager's traffic over the relay doesn't count toward those 50 MB. It has an allowance of its own: about 1 MB of requests waiting for the laptop, and 4 MB of answers waiting for phones to collect them. So however busy the manager is, it can't make results fail to publish or push old results off. When too many requests are waiting for the laptop, the manager's page says "The race-day manager is busy - the laptop has not caught up with recent requests yet. Try again shortly."
+
+Podium videos are kept apart from results and don't count toward the 50 MB. Each one is removed after a week, and the relay holds at most 120 videos and 1 GB per club, dropping the oldest first. One video can be at most 48 MB.
 
 ## Children and privacy
 

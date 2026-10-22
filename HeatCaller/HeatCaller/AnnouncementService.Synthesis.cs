@@ -114,7 +114,8 @@ public sealed partial class AnnouncementService
         public bool FromLibrary => Source == LineSource.Library;
     }
 
-    private static async Task<SynthesisResult> SynthesizeOrReuseAsync(ElevenLabsClient client, VoiceProfile profile, string text, bool reuseSaved)
+    /// <param name="cancelRender">Stops the render once nobody will hear it; when not given, RenderCancel's is used.</param>
+    private static async Task<SynthesisResult> SynthesizeOrReuseAsync(ElevenLabsClient client, VoiceProfile profile, string text, bool reuseSaved, CancellationToken cancelRender = default)
     {
         // Before the gate: a saved line needs no slot, and must not wait
         // behind a render for one.
@@ -124,7 +125,10 @@ public sealed partial class AnnouncementService
         }
 
         var limit = LimitFor(text);
-        using var timeout = new CancellationTokenSource(limit);
+        // Cut short by the caller too, once nobody will hear it - see RenderCancel.
+        var cancel = cancelRender.CanBeCanceled ? cancelRender : RenderCancel.Value;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        timeout.CancelAfter(limit);
         // WHY (20 Oct 2026): the gate wait and the request share the one
         // 30 s limit, so a line that got its slot at 28 s had 2 s to be
         // answered and was then reported as ElevenLabs not responding -
@@ -136,7 +140,7 @@ public sealed partial class AnnouncementService
         {
             await SynthesisGate.WaitAsync(timeout.Token);
         }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancel.IsCancellationRequested)
         {
             throw new SynthesisSlotTimeoutException($"No synthesis slot came free within {limit.TotalSeconds:0} s.");
         }
@@ -148,7 +152,7 @@ public sealed partial class AnnouncementService
         {
             audio = await client.SynthesizeAsync(profile, text, timeout.Token);
         }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancel.IsCancellationRequested)
         {
             throw RequestTimedOut(waitedForSlot, limit);
         }
@@ -165,10 +169,14 @@ public sealed partial class AnnouncementService
         return new SynthesisResult(audio, LineSource.ElevenLabs);
     }
 
+    /// <remarks>Sent as given: the caller (the release batch) has already shortened names - see AnnouncementService.ShortNames.</remarks>
     private async Task<ElevenLabsClient.TimedSpeech?> SynthesizeTimedGatedAsync(VoiceProfile profile, string text)
     {
+
         var limit = LimitFor(text);
-        using var timeout = new CancellationTokenSource(limit);
+        var cancel = RenderCancel.Value;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        timeout.CancelAfter(limit);
         // WHY (20 Oct 2026): timed the same way as SynthesizeOrReuseAsync,
         // so a request starved by a long wait for its slot is not blamed on
         // the network.
@@ -177,7 +185,7 @@ public sealed partial class AnnouncementService
         {
             await SynthesisGate.WaitAsync(timeout.Token);
         }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancel.IsCancellationRequested)
         {
             throw new SynthesisSlotTimeoutException($"No synthesis slot came free within {limit.TotalSeconds:0} s.");
         }
@@ -195,7 +203,7 @@ public sealed partial class AnnouncementService
 
             return timed;
         }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancel.IsCancellationRequested)
         {
             throw RequestTimedOut(waitedForSlot, limit);
         }
@@ -223,6 +231,19 @@ public sealed partial class AnnouncementService
     /// through the awaits without every method in between carrying it.
     /// </summary>
     private static readonly AsyncLocal<bool> RenderingAhead = new();
+
+    /// <summary>
+    /// What stops a line rendered ahead once nobody will hear it - the next
+    /// race being called over a recap still being made (22 Oct 2026, known
+    /// issues). Set by PrepareReminderAsync and RenderLineAsync from the
+    /// token they are given, and read where the slot is waited for and the
+    /// request made, so a recap's render no longer runs to the end - up to
+    /// two and a half minutes, holding one of the two synthesis slots and
+    /// spending its characters - while the new race starts. An AsyncLocal
+    /// for the same reason as RenderingAhead: it reaches the render through
+    /// every voice's path without each method in between carrying it.
+    /// </summary>
+    private static readonly AsyncLocal<CancellationToken> RenderCancel = new();
 
     /// <summary>The limit for one line, by where it is being rendered - see RenderingAhead.</summary>
     private static TimeSpan LimitFor(string? text) =>
@@ -331,8 +352,20 @@ public sealed partial class AnnouncementService
     /// take, which replaces the saved one only once it has come back (see
     /// SynthesizeOrReuseAsync). For Re-record all - see RecordVoiceLineAsync.
     /// </param>
-    private async Task<SynthesisResult> RenderLineAsync(VoiceProfile profile, string text, bool fresh = false)
+    /// <param name="cancel">
+    /// Stops a line rendered ahead once nobody will hear it (22 Oct 2026) -
+    /// the next race called over a recap, say. Throws
+    /// OperationCanceledException then; nothing is rested or stood in for.
+    /// </param>
+    private async Task<SynthesisResult> RenderLineAsync(VoiceProfile profile, string text, bool fresh = false, CancellationToken cancel = default)
     {
+        if (cancel.CanBeCanceled)
+        {
+            RenderCancel.Value = cancel;
+        }
+
+        RenderCancel.Value.ThrowIfCancellationRequested();
+
         // A line recorded for a soundscape plays as recorded, whichever
         // voice is chosen - that is the point of recording it (see
         // StingerLibrary). Checked first, so it needs no key, no relay and
@@ -359,9 +392,16 @@ public sealed partial class AnnouncementService
             return await RenderWithKokoroAsync(profile, text);
         }
 
+        // Off this PC from here on: names shortened when the club has asked
+        // for that on its pages (22 Oct 2026) - see AnnouncementService.ShortNames.
+        // Kokoro standing in is ON this PC, so it is given the line as written,
+        // full names and all - the same words it says when it is the voice chosen.
+        var asWritten = text;
+        text = ForCloudVoice(text);
+
         if (profile.EffectiveEngine == VoiceEngine.HeatCaller)
         {
-            return await RenderWithHeatCallerAsync(profile, text);
+            return await RenderWithHeatCallerAsync(profile, text, asWritten);
         }
 
         if (!StandInAllowed(profile))
@@ -377,7 +417,7 @@ public sealed partial class AnnouncementService
         if (!ElevenLabsReady(profile))
         {
             LogStandInOnce("setup", $"[voice] {Capitalised(NotConfiguredReason(profile))} - the free Kokoro voice is speaking instead.");
-            return await RenderWithStandInAsync(profile, text);
+            return await RenderWithStandInAsync(profile, asWritten);
         }
 
         // Resting after a lost connection, or a key ElevenLabs turned down:
@@ -391,7 +431,7 @@ public sealed partial class AnnouncementService
                 StartElevenLabsProbe(profile, text);
             }
 
-            return await RenderWithStandInAsync(profile, text);
+            return await RenderWithStandInAsync(profile, asWritten);
         }
 
         try
@@ -399,17 +439,23 @@ public sealed partial class AnnouncementService
             // The library was asked a moment ago.
             return await SynthesizeGatedResultAsync(profile, text, reuseSaved: false);
         }
+        catch (OperationCanceledException) when (RenderCancel.Value.IsCancellationRequested)
+        {
+            // Nobody will hear it (RenderCancel): not a lost connection, so
+            // ElevenLabs is not rested and nothing stands in.
+            throw;
+        }
         catch (Exception ex) when (IsConnectionFailure(ex))
         {
             BeginElevenLabsRest(ex);
-            return await RenderWithStandInAsync(profile, text);
+            return await RenderWithStandInAsync(profile, asWritten);
         }
         catch (Exception ex) when (IsQuotaExceeded(ex))
         {
             // ElevenLabs is still asked first on every line - the refusal is
             // quick - so the quota coming back is noticed straight away.
             NoteQuotaExceeded(standingIn: true);
-            return await RenderWithStandInAsync(profile, text);
+            return await RenderWithStandInAsync(profile, asWritten);
         }
         catch (Exception ex) when (IsKeyRefusal(ex))
         {
@@ -419,14 +465,14 @@ public sealed partial class AnnouncementService
             // first - until a background try gets through, or the
             // key is changed on Voice Settings.
             BeginElevenLabsRest(ex, refusedKey: profile.ApiKey);
-            return await RenderWithStandInAsync(profile, text);
+            return await RenderWithStandInAsync(profile, asWritten);
         }
         catch (Exception ex)
         {
             // A bad key, too many requests, a server error: Kokoro takes
             // this line, and the reason is said once, not every line.
             LogStandInOnce(ReasonKey(ex), StandInRefusalMessage(ex));
-            return await RenderWithStandInAsync(profile, text);
+            return await RenderWithStandInAsync(profile, asWritten);
         }
     }
 
@@ -922,6 +968,9 @@ public sealed partial class AnnouncementService
     {
         _ = Task.Run(async () =>
         {
+            // Its own life: not stopped with the line that happened to start it (see RenderCancel).
+            RenderCancel.Value = default;
+
             try
             {
                 // Only while the club's own ElevenLabs key is the voice:

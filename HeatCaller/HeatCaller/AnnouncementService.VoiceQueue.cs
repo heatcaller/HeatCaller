@@ -565,7 +565,7 @@ public sealed partial class AnnouncementService
                 // A saved line that won't decode would fail like this every
                 // time it came round. Forgotten, so the next time it is
                 // wanted it is rendered afresh.
-                VoiceLibrary.Shared.Forget(currentProfile, text);
+                VoiceLibrary.Shared.Forget(currentProfile, ForCloudVoice(text));
                 throw;
             }
         }
@@ -915,7 +915,13 @@ public sealed partial class AnnouncementService
     /// RoutineCallGetsTheAir. A call turned down at once is the caller's to
     /// undo, from the false this returns.
     /// </param>
-    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false, Action? lost = null)
+    /// <param name="paced">
+    /// Run when the false this returns is a HOLD by the pacing dial rather
+    /// than a drop (22 Oct 2026, known issues) - so a caller that would offer
+    /// the same call again on the next crossing (CheckCloseBattles) can wait
+    /// out the gap instead of being held again and again.
+    /// </param>
+    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false, Action? lost = null, Action? paced = null)
     {
         // 17 Oct 2026, Bug Hunt 8, A06-5: a call already past the entry
         // points' mute check - a field flush still in its window, a call kept
@@ -979,7 +985,8 @@ public sealed partial class AnnouncementService
                 alreadyCounted: heldOver,
                 lost: lost,
                 transponder: transponder,
-                words: displayText))
+                words: displayText,
+                paced: paced))
         {
             return kept;
         }

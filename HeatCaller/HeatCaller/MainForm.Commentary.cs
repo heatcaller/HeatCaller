@@ -109,6 +109,19 @@ public partial class MainForm
         // five to midnight.
         announcer.RacesTonight = RacesTonight;
 
+        // THE SIGN-OFF'S DRAMA (22 Oct 2026, known issues): the closest
+        // finish of the night, the same fact the sign-off is about to read
+        // out, so a night with a photo finish in it gets the beat more at
+        // each end of its last show - see ShowDrama. Read fresh each time,
+        // like everything here. The recap's own show is handed its race by
+        // Race Control, which has it in hand; every other show is None.
+        if (announcer.ShowMusicTreatment is { } show)
+        {
+            show.DramaFor = kind => kind == SegmentKind.SignOffNumbers
+                ? ShowDrama.Night(CommentaryReaders.NightDone(_sessionHistory, _profiles))
+                : ShowDrama.None;
+        }
+
         // The layouts, for a record falling. Null would mean no record is
         // claimed rather than a guess at one - see NightMoments.ForRace.
         announcer.Layouts = () => _trackLayouts;
@@ -555,6 +568,11 @@ public partial class MainForm
     {
         commentary.AllowanceSeen += (spent, cap) => announcer.Director?.MonthlyUsage(spent, cap);
 
+        // "Segments run" on the same page, taken tonight (22 Oct 2026). The
+        // director is fetched when it changes, for the reason above; one
+        // built later reads the setting in NewMeeting.
+        commentary.LowestTierChanged += () => announcer.Director?.ClubTierChanged();
+
         // AND THE MONTH AS THE USAGE STORE HEARS IT (19 Oct 2026), once the
         // budget has had a first word from a write. A top-up made mid-night
         // reaches the store within five minutes (the This Month refresh) -
@@ -850,12 +868,12 @@ public partial class MainForm
             _rounds,
             _raceEvents.ActiveRoundScope(),
 
-            // No estimate yet: there is no "minutes until the next race" in
-            // this app to hand over, and CommentaryFacts.ComingUpNext's rule
-            // is that the estimate is given, never worked out here. The
-            // lines simply drop their "about four minutes away" tail, and a
-            // block fits against no limit rather than a wrong one.
-            inAbout: null,
+            // THE MINUTES, off the club's own timetable (22 Oct 2026, known
+            // issues): the next line's slot moved by however late the night
+            // is running. Null - and the lines drop their "about four
+            // minutes away", and a block fits against no limit - wherever
+            // the timetable cannot say: see CommentaryReaders.NextRaceIn.
+            inAbout: NextRaceInAbout(),
 
             // The round in hand, once its race has finished, is skipped:
             // between the flag and the result being filed it is still
@@ -867,6 +885,10 @@ public partial class MainForm
             _rounds,
             _sessionHistory,
             _raceEvents.ActiveRoundScope());
+
+        // A freeform race, so a show after it can hand back without naming
+        // a next race nobody entered - see ContinuityShow.Tail.
+        director.Freeform = FreeformJustRan;
 
         // Scored under the filed race's OWN round, not the active one (14
         // Oct 2026). Candidates leaves out the race filed under the round it
@@ -899,6 +921,53 @@ public partial class MainForm
         return string.IsNullOrWhiteSpace(name)
             ? null
             : _raceClasses.All.FirstOrDefault(c => string.Equals(c.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Roughly how long until the next race, from the day's timetable, or
+    /// null - see CommentaryReaders.NextRaceIn. Never throws: a timetable
+    /// caught mid-save is no estimate, not a silent announcer.
+    /// </summary>
+    private TimeSpan? NextRaceInAbout()
+    {
+        try
+        {
+            var next = _daySchedule.NextUp;
+
+            return CommentaryReaders.NextRaceIn(
+                next?.ScheduledTime,
+                isARace: !string.IsNullOrWhiteSpace(next?.RoundId),
+                started: next?.ActualStartUtc is not null,
+                _daySchedule.MinutesLate(),
+                DateTime.Now);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether the race the room has just watched was run off the programme
+    /// - a freeform race, or a club with no programme at all - and filed in
+    /// the last half hour. What lets a show after it say "stay with us"
+    /// rather than nothing (22 Oct 2026) - see ContinuityFacts.Freeform.
+    /// </summary>
+    private bool FreeformJustRan()
+    {
+        var newest = _sessionHistory.All
+            .Where(record => record.SessionType != RaceSessionType.Practice && record.Results.Count > 0)
+            .OrderByDescending(record => record.EndedAtUtc)
+            .FirstOrDefault();
+
+        if (newest is null || !string.IsNullOrWhiteSpace(newest.RoundId))
+        {
+            return false;
+        }
+
+        var since = DateTime.UtcNow - newest.EndedAtUtc;
+
+        return since >= TimeSpan.Zero && since <= TimeSpan.FromMinutes(30);
     }
 
     /// <summary>
