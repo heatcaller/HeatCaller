@@ -33,7 +33,7 @@ namespace HeatCaller;
 /// </summary>
 public sealed partial class RaceControlControl
 {
-    private readonly FlagButton _btnOnAir = new() { FlagColour = Color.FromArgb(200, 32, 44), FlagText = Color.White };
+    private readonly FlagButton _btnOnAir = new() { FlagColour = OnAirRed, FlagText = Color.White };
 
     /// <summary>The sequence On Air is running, or null when it is not running.</summary>
     private CancellationTokenSource? _onAirCts;
@@ -98,6 +98,8 @@ public sealed partial class RaceControlControl
     {
         _btnOnAir.Text = OnAirCaption;
         _btnOnAir.Click += (_, _) => PressOnAir();
+
+        // ONE WIDTH FOR THE WHOLE ROW (21 Oct 2026) - see OnAirLeastWidth.
 
         _chkStartWithOnAir.Text = "Start races On Air";
         _chkStartWithOnAir.AutoSize = true;
@@ -175,7 +177,7 @@ public sealed partial class RaceControlControl
     };
 
     /// <summary>The caption while the show is on air, before the race is staged.</summary>
-    private const string OnAirLiveCaption = "Live \u00B7 Skip";
+    private const string OnAirLiveCaption = "On Air \u00B7 Skip";
 
     /// <summary>On Air is opening a demo, which starts itself at the end rather than being staged.</summary>
     private bool _onAirForDemo;
@@ -209,8 +211,62 @@ public sealed partial class RaceControlControl
         return true;
     }
 
-    /// <summary>The widest the caption gets while counting down, so the button can be held at that width.</summary>
-    private const string WidestProgressCaption = "88s · Finishing";
+
+    /// <summary>On Air's own red, at rest and while the opening is got ready.</summary>
+    private static readonly Color OnAirRed = Color.FromArgb(200, 32, 44);
+
+    /// <summary>The cyan On Air turns while the show is live (21 Oct 2026), and the dark ink that reads on it.</summary>
+    private static readonly Color OnAirLiveCyan = Color.FromArgb(0x2E, 0xE6, 0xFF);
+    private static readonly Color OnAirLiveInk = Color.FromArgb(0x0A, 0x04, 0x18);
+
+    /// <summary>
+    /// EVERY FLAG THE SAME SIZE (21 Oct 2026). On Air and the seven flags
+    /// sit in a ButtonBar of one width, which sizes them all to the widest
+    /// caption and does it again whenever the text size changes. This is
+    /// On Air's part of that: the widest of the captions it shows as it
+    /// works ("On Air · Skip", "Waiting…", "Finishing…"), so the row is
+    /// measured for those too and never grows or shrinks under the button.
+    /// Its countdown is fitted to the width rather than widening it - see
+    /// OnAirProgressCaption.
+    /// </summary>
+    private int OnAirLeastWidth(Button button)
+    {
+        if (!ReferenceEquals(button, _btnOnAir))
+        {
+            return 0;
+        }
+
+        var captions = new List<string> { OnAirCaption, OnAirWaitingCaption, OnAirLiveCaption };
+
+        foreach (var step in Enum.GetValues<OnAirStep>())
+        {
+            captions.Add($"{StepWord(step)}…");
+        }
+
+        return captions.Max(UiLayout.TightButtonWidthFor);
+    }
+
+    /// <summary>
+    /// On Air's countdown, fitted to the row's one width: "12s · Voicing"
+    /// when that fits, and just "12s" when it would not.
+    /// </summary>
+    private string OnAirProgressCaption(int secondsLeft, string word)
+    {
+        var full = $"{secondsLeft}s · {word}";
+
+        return UiLayout.TightButtonWidthFor(full) <= _btnOnAir.Width ? full : $"{secondsLeft}s";
+    }
+
+    /// <summary>
+    /// Cyan while the show is live (21 Oct 2026) - from the jingle until the
+    /// race is staged - so a glance at the flag row says the room is on air.
+    /// Red again the moment it is over, for the next press.
+    /// </summary>
+    private void ShowOnAirLive(bool live)
+    {
+        _btnOnAir.FlagColour = live ? OnAirLiveCyan : OnAirRed;
+        _btnOnAir.FlagText = live ? OnAirLiveInk : Color.White;
+    }
 
     /// <summary>How many past opens the countdown averages.</summary>
     private const int OnAirReadyHistoryKept = 5;
@@ -222,7 +278,6 @@ public sealed partial class RaceControlControl
     private long _onAirStepTicks;
     private OnAirStep _onAirStep;
     private long? _onAirEstimateMs;
-    private Size _onAirMinimumBefore;
 
     /// <summary>The press: the fill starts empty and the countdown from the average of the last few opens.</summary>
     private void BeginOnAirProgress()
@@ -235,11 +290,8 @@ public sealed partial class RaceControlControl
         _onAirStep = OnAirStep.Writing;
         _onAirProgressShowing = true;
 
-        // Held at its widest countdown caption while it counts, so the flags
-        // beside it do not shuffle along every second as the digits change.
-        _onAirMinimumBefore = _btnOnAir.MinimumSize;
-        var widest = TextRenderer.MeasureText(WidestProgressCaption, _btnOnAir.Font).Width + _btnOnAir.Padding.Horizontal + 24;
-        _btnOnAir.MinimumSize = new Size(Math.Max(_onAirMinimumBefore.Width, widest), _onAirMinimumBefore.Height);
+        // The width is not touched here: it is held at the widest caption
+        // the button ever shows, all the time - see OnAirLeastWidth.
 
         PaintOnAirProgress();
         _onAirProgressTimer.Start();
@@ -290,7 +342,7 @@ public sealed partial class RaceControlControl
         var word = StepWord(_onAirStep);
         var left = _onAirEstimateMs is { } est ? (int)Math.Ceiling((est - elapsed) / 1000.0) : 0;
 
-        var caption = left >= 1 && left <= 88 ? $"{left}s · {word}" : $"{word}…";
+        var caption = left >= 1 && left <= 88 ? OnAirProgressCaption(left, word) : $"{word}…";
 
         // Only when it changes: a new caption makes the flag row measure
         // the button again.
@@ -315,7 +367,6 @@ public sealed partial class RaceControlControl
         _onAirProgressShowing = false;
         _onAirProgressTimer.Stop();
         _btnOnAir.Progress = null;
-        _btnOnAir.MinimumSize = _onAirMinimumBefore;
         _btnOnAir.Text = OnAirCaption;
 
         if (!reachedTheJingle)
@@ -820,6 +871,7 @@ public sealed partial class RaceControlControl
             // looked finished while the race was still to be staged. Pressing
             // it again skips the rest, which the caption now says too.
             _btnOnAir.Text = OnAirLiveCaption;
+            ShowOnAirLive(true);
 
             // 2. The jingle, to its post.
             jingle = BroadcastImaging.Start(ImagingCue.TopOfRace);
@@ -957,6 +1009,7 @@ public sealed partial class RaceControlControl
             _onAirStageNow = false;
             _onAirForDemo = false;
             EndOnAirProgress(reachedTheJingle: false);
+            ShowOnAirLive(false);
             _btnOnAir.Lit = false;
             _btnOnAir.Text = OnAirCaption;
             cts.Dispose();

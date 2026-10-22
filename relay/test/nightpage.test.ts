@@ -273,16 +273,32 @@ describe("what it draws", () => {
   async function drawing() {
     const box = { innerHTML: "" };
 
-    const run = lifted((await page()).text, ["lines", "nothing", "draw"], {
+    const run = lifted((await page()).text, ["lines", "nothing", "ownPath", "videoList", "draw"], {
       box,
       document: { getElementById: () => null },
     });
 
-    return (night: unknown) => {
-      run("draw()", { night });
+    return (night: unknown, videos: unknown[] = []) => {
+      run("draw()", { night, videos });
       return box.innerHTML;
     };
   }
+
+  it("draws their podium videos, and only the relay's own", async () => {
+    const draw = await drawing();
+    const id = "11111111111111111111111111111111";
+
+    const html = draw({ driver: "Bill", lines: ["A win."] }, [
+      { url: `/c/acme-rc/video/${id}.mp4`, download: `/c/acme-rc/video/${id}.mp4?download=1`, label: "A-Main", position: 1 },
+      { url: "https://evil.example/x.mp4", download: "https://evil.example/x.mp4", label: "Bad", position: 2 },
+    ]);
+
+    assert.match(html, /Your podium videos/);
+    assert.match(html, /A-Main · 1st/);
+    assert.match(html, /download=1/);
+    assert.doesNotMatch(html, /evil/);
+    assert.doesNotMatch(draw({ driver: "Bill", lines: ["A win."] }), /podium videos/);
+  });
 
   it("shows the name, the day and every line of it", async () => {
     const draw = await drawing();

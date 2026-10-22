@@ -57,6 +57,14 @@ public sealed partial class AnnouncementService
     /// </summary>
     public Action<string, byte[]>? SendToListeners { get; set; }
 
+    /// <summary>
+    /// Raised with a line's words (no [audio tags]) the moment it is about to
+    /// be heard - every voice, every kind of line. For the highlight videos'
+    /// captions. On whatever thread the line plays from: a handler must be
+    /// quick and must not block.
+    /// </summary>
+    public event Action<string>? LineHeard;
+
     /// <summary>Said once per reason rather than per line, the way the voice stand-in notices are.</summary>
     private int _listenEncodeComplained;
 
@@ -68,6 +76,27 @@ public sealed partial class AnnouncementService
     /// </summary>
     private void OfferLineToListeners(string text, byte[]? audio)
     {
+        // THE CAPTIONS FIRST (21 Oct 2026), and whether or not anyone is
+        // listening from home: this is the one point where a line is
+        // definitely about to be heard, which is exactly when a highlight
+        // video's caption should start. See RaceAudioRecorder.NoteLine.
+        if (LineHeard is { } heard)
+        {
+            try
+            {
+                var shown = VoiceProfile.StripAudioTags(text);
+
+                if (!string.IsNullOrWhiteSpace(shown))
+                {
+                    heard(shown);
+                }
+            }
+            catch
+            {
+                // A caption is never worth a line of the broadcast.
+            }
+        }
+
         if (SendToListeners is null || audio is null || audio.Length == 0)
         {
             return;

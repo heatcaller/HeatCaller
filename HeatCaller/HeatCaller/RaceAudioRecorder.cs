@@ -19,7 +19,8 @@ internal sealed record RaceAudioRecording(
     long GreenAtMs,
     long LengthMs,
     int DroppedChunks,
-    string? Problem);
+    string? Problem,
+    IReadOnlyList<HeardLine>? Heard = null);
 
 /// <summary>
 /// Records the night as it goes out, and afterwards writes it as an mp3 with
@@ -149,6 +150,15 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
     private long _paddedMs;
     private int _dropped;
+
+    /// <summary>
+    /// What the announcer said during this recording and when - for the
+    /// highlight videos' captions (21 Oct 2026). See NoteLine.
+    /// </summary>
+    private readonly ConcurrentQueue<HeardLine> _heard = new();
+
+    /// <summary>The most lines one race keeps for captions - a long main says a few hundred.</summary>
+    private const int MaxHeardLines = 3000;
 
     /// <summary>1 once nothing more is to be taken in: the cap reached, the disk low, or the race over.</summary>
     private int _closed;
@@ -319,6 +329,23 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         // zero here put every clip of a race recorded late by however long
         // it had already run.
         GreenAtMs = (long)(greenUtc - StartedUtc).TotalMilliseconds;
+    }
+
+    /// <summary>
+    /// A line the announcer is about to say, noted with where it falls in
+    /// this recording (21 Oct 2026) - what a highlight video's captions are
+    /// made from. Called from the point where a line is definitely about to
+    /// be heard (AnnouncementService.LineHeard), on whatever thread that is.
+    /// A queue add and nothing else, so it can never hold a line up.
+    /// </summary>
+    public void NoteLine(string text)
+    {
+        if (Volatile.Read(ref _closed) == 1 || string.IsNullOrWhiteSpace(text) || _heard.Count >= MaxHeardLines)
+        {
+            return;
+        }
+
+        _heard.Enqueue(new HeardLine((long)(DateTime.UtcNow - StartedUtc).TotalMilliseconds, text.Trim()));
     }
 
     /// <summary>
@@ -676,7 +703,8 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             GreenAtMs ?? 0,
             LengthMs,
             dropped,
-            _problem);
+            _problem,
+            _heard.ToArray());
     }
 
     public void Dispose() => Stop();
@@ -693,7 +721,8 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         RaceAudioStore store,
         SessionRecord? record,
         IReadOnlyDictionary<string, long>? releaseOffsetsMs,
-        Action<string> log)
+        Action<string> log,
+        HighlightVideoOptions? video = null)
     {
         try
         {
@@ -763,7 +792,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 // rename failed; either reads the same.
                 if (store.DriverHighlights && record is not null)
                 {
-                    WriteClips(recording with { WavPath = kept }, record, releaseOffsetsMs, baseName, log);
+                    WriteClips(recording with { WavPath = kept }, record, releaseOffsetsMs, baseName, log, video);
                 }
 
                 // The ceiling matters most here: a PC with no mp3 encoder
@@ -774,7 +803,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
             if (store.DriverHighlights && record is not null)
             {
-                WriteClips(recording, record, releaseOffsetsMs, baseName, log);
+                WriteClips(recording, record, releaseOffsetsMs, baseName, log, video);
             }
 
             // Only now, and only because the mp3 landed.
@@ -805,7 +834,8 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         SessionRecord record,
         IReadOnlyDictionary<string, long>? releaseOffsetsMs,
         string baseName,
-        Action<string> log)
+        Action<string> log,
+        HighlightVideoOptions? video = null)
     {
         var marks = RaceHighlights.MarksFrom(record, releaseOffsetsMs);
         var clips = RaceHighlights.ClipsFor(record, marks, recording.GreenAtMs, recording.LengthMs);
@@ -826,9 +856,20 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         var keptAsWav = new List<string>();
         string? refusedWhy = null;
 
+        var videos = 0;
+
         foreach (var clip in clips)
         {
             var name = RaceHighlights.ClipNameFor(baseName, clip.Position, clip.DriverName);
+
+            // THE SHAREABLE VIDEO (21 Oct 2026), for the drivers the club
+            // chose on Sounds > Recording - see HighlightVideo. From the
+            // same recording and the same moments as the clip, cut to a
+            // length a phone wants; a failure here costs only the video.
+            if (video is not null && video.Wants(clip.Position))
+            {
+                videos += MakeVideo(recording, record, releaseOffsetsMs, clip, folder, name, video, log) ? 1 : 0;
+            }
 
             // A plain ".wav", NOT the in-progress name: a clip the encoder
             // refused is left where it is and plays as a wav, and the sweep
@@ -868,10 +909,126 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             log($"{AppTime.LogStampNow()}  [audio] {Plural.Of(written, "driver clip")} saved in {folder}.");
         }
 
+        if (videos > 0)
+        {
+            log($"{AppTime.LogStampNow()}  [video] {Plural.Of(videos, "highlight video")} saved in {folder} - "
+                + "press Share video in a driver's drawer on Race Control to find theirs.");
+        }
+
         if (keptAsWav.Count > 0)
         {
             log($"{AppTime.LogStampNow()}  [audio] Could not make {Plural.Of(keptAsWav.Count, "driver clip")} an mp3 "
                 + $"({refusedWhy}) - kept as wavs in {folder}: {string.Join(", ", keptAsWav)}.");
+        }
+    }
+
+    /// <summary>One driver's highlight video, from its own cut of the recording. True when it landed.</summary>
+    private static bool MakeVideo(
+        RaceAudioRecording recording,
+        SessionRecord record,
+        IReadOnlyDictionary<string, long>? releaseOffsetsMs,
+        RaceHighlights.DriverClip clip,
+        string folder,
+        string name,
+        HighlightVideoOptions video,
+        Action<string> log)
+    {
+        var mp4 = MakeVideoFile(recording, record, releaseOffsetsMs, clip, folder, name, video, log);
+
+        if (mp4 is null)
+        {
+            return false;
+        }
+
+        ShareOnline(mp4, clip, video, log);
+        return true;
+    }
+
+    /// <summary>
+    /// Puts a podium video on the club's page (21 Oct 2026) - 1st to 3rd
+    /// and nobody else (HighlightShare.Wants). On this background thread,
+    /// one at a time, so three uploads never fight the next race's results
+    /// for a track's Wi-Fi. A failure costs only the online copy; the file
+    /// is still in the Highlights folder.
+    /// </summary>
+    private static void ShareOnline(string mp4, RaceHighlights.DriverClip clip, HighlightVideoOptions video, Action<string> log)
+    {
+        var share = video.Share;
+
+        if (share is null || !HighlightShare.Wants(clip.Position))
+        {
+            return;
+        }
+
+        try
+        {
+            share.DriverIds.TryGetValue(clip.Transponder, out var driverId);
+
+            var page = share.Publisher
+                .UploadPodiumVideoAsync(mp4, share.RaceKey, clip.Position, driverId, clip.DriverName, share.RaceLabel)
+                .GetAwaiter()
+                .GetResult();
+
+            if (page is null)
+            {
+                return;
+            }
+
+            log($"{AppTime.LogStampNow()}  [video] {clip.DriverName}'s video is on the club's page: {page}");
+            share.Shared?.Invoke(page, share.RaceLabel);
+        }
+        catch (Exception ex)
+        {
+            log($"{AppTime.LogStampNow()}  [video] Could not put {clip.DriverName}'s video online ({ex.Message}). It is still in the Highlights folder.");
+        }
+    }
+
+    /// <summary>One driver's highlight video file, or null when it did not land.</summary>
+    private static string? MakeVideoFile(
+        RaceAudioRecording recording,
+        SessionRecord record,
+        IReadOnlyDictionary<string, long>? releaseOffsetsMs,
+        RaceHighlights.DriverClip clip,
+        string folder,
+        string name,
+        HighlightVideoOptions video,
+        Action<string> log)
+    {
+        var windows = HighlightVideo.VideoWindows(clip.Windows);
+
+        if (windows.Count == 0)
+        {
+            return null;
+        }
+
+        var wav = RaceHighlights.UnusedPath(folder, name + " video", ".wav");
+
+        try
+        {
+            CutWav(recording.WavPath, wav, windows);
+
+            var mp4 = RaceHighlights.UnusedPath(folder, name, ".mp4");
+
+            return HighlightVideo.Make(
+                wav,
+                mp4,
+                windows,
+                recording.GreenAtMs,
+                record,
+                clip.Transponder,
+                releaseOffsetsMs,
+                recording.Heard ?? Array.Empty<HeardLine>(),
+                video,
+                log);
+        }
+        catch (Exception ex)
+        {
+            log($"{AppTime.LogStampNow()}  [video] Could not make {clip.DriverName}'s video ({ex.Message}). Their clip is unaffected.");
+            return null;
+        }
+        finally
+        {
+            TryDelete(wav, log);
         }
     }
 

@@ -118,8 +118,10 @@ public sealed partial class RaceControlControl
             }
 
             // The corrections drawer goes straight under its driver, above
-            // any lap strip, so it travels with them when they change place.
-            if (string.Equals(_drawerTransponder, s.TransponderId, StringComparison.OrdinalIgnoreCase))
+            // any lap strip, so it travels with them when they change place
+            // - at the height it has slid to, when it is opening or closing.
+            if (string.Equals(_drawerTransponder, s.TransponderId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(_drawerClosing, s.TransponderId, StringComparison.OrdinalIgnoreCase))
             {
                 AddDrawerRow(s);
             }
@@ -683,7 +685,9 @@ public sealed partial class RaceControlControl
         if (string.Equals(_lastClickTransponder, transponder, StringComparison.OrdinalIgnoreCase)
             && !string.Equals(_drawerTransponder, _drawerBeforeClick, StringComparison.OrdinalIgnoreCase))
         {
-            _drawerTransponder = _drawerBeforeClick;
+            // Put straight back, not slid: the first click's slide was not
+            // something anybody asked for.
+            SetDrawerNow(_drawerBeforeClick);
             drawerChanged = true;
         }
 
@@ -741,6 +745,36 @@ public sealed partial class RaceControlControl
         ShowLapPopup(transponder, rowIndex);
     }
 
+    /// <summary>
+    /// The driver's highlight video from the last race, selected in its
+    /// folder so it can be dragged into a message or a post (21 Oct 2026).
+    /// See HighlightVideo. Says why when there is none yet: videos are made
+    /// in the background after the race, a minute or so each.
+    /// </summary>
+    private void ShareVideo(string transponder)
+    {
+        var name = DriverNameFor(transponder);
+
+        if (HighlightVideo.LatestFor(transponder) is not { } path)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [video] No highlight video for {name} yet. They are made a minute "
+                + "or so after the race, for the drivers chosen on Sounds > Recording (the winner, unless that was changed).");
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [video] Couldn't open the folder for {name}'s video ({ex.Message}). It is at {path}");
+        }
+    }
+
     /// <summary>Whose lap breakdown last closed itself, and when - see ToggleLapPopup.</summary>
     private string? _lapPopupClosedFor;
     private long _lapPopupClosedTicks;
@@ -785,6 +819,7 @@ public sealed partial class RaceControlControl
         Penalty10,
         Warning,
         ClearPenalties,
+        ShareVideo,
         LapBreakdown,
     }
 
@@ -797,6 +832,7 @@ public sealed partial class RaceControlControl
         (DrawerAction.Penalty10, "+10s"),
         (DrawerAction.Warning, "⚠ Warning"),
         (DrawerAction.ClearPenalties, "Clear Penalties"),
+        (DrawerAction.ShareVideo, "Share video"),
         (DrawerAction.LapBreakdown, "Lap breakdown"),
     };
 
@@ -805,6 +841,216 @@ public sealed partial class RaceControlControl
 
     /// <summary>How tall a drawer button is - the text size sets it.</summary>
     private static int DrawerButtonHeight => Math.Max(32, AppTheme.BoldFont.Height + 14);
+
+    /// <summary>A drawer row's height when it is all the way open.</summary>
+    private static int DrawerFullHeight => DrawerButtonHeight + DrawerPadding * 2;
+
+    // --- The drawer sliding open and shut (21 Oct 2026) ----------------------
+    //
+    // It used to appear and vanish in one frame: the row was simply there on
+    // the next rebuild, at full height, and the whole board below it jumped
+    // down a row's worth in one go - which read as the board glitching, not
+    // as a drawer opening. It now slides: the row grows from nothing to its
+    // full height (and shrinks back) over DrawerSlideMs, easing out, with its
+    // buttons riding down from under the driver's row as it opens.
+    //
+    // The height is worked out from the CLOCK, not counted in frames, so a
+    // board rebuilt mid-slide by a car crossing the line puts the row back
+    // at exactly the height the slide has reached rather than starting it
+    // again - the board is rebuilt on every crossing, and a slide that
+    // restarted on each one would never finish during a race.
+    //
+    // Opening another driver's drawer slides theirs open while the old one
+    // slides shut, at the same time - one movement, not two in a row. A
+    // drawer clicked again on its way out turns round where it is.
+
+    /// <summary>How long a drawer takes to slide open or shut.</summary>
+    private const int DrawerSlideMs = 180;
+
+    /// <summary>
+    /// The thinnest a drawer row is - where it slides open from and shut to.
+    /// Two pixels is the least a grid row can be (DataGridViewRow.MinimumHeight).
+    /// </summary>
+    private const int DrawerShutHeight = 2;
+
+    /// <summary>One drawer's slide: from a height, to a height, starting at a moment on Environment.TickCount64.</summary>
+    private readonly record struct DrawerSlide(int From, int To, long Started)
+    {
+        /// <summary>How far through it is at <paramref name="now"/>, 0 to 1.</summary>
+        private double Progress(long now) => Math.Clamp((now - Started) / (double)DrawerSlideMs, 0, 1);
+
+        /// <summary>
+        /// The height at <paramref name="now"/>, eased out: quick to start and
+        /// settling gently into place, the way a drawer moves when pulled.
+        /// </summary>
+        public int HeightAt(long now)
+        {
+            var eased = 1 - Math.Pow(1 - Progress(now), 3);
+            return (int)Math.Round(From + (To - From) * eased);
+        }
+
+        public bool DoneAt(long now) => Progress(now) >= 1;
+    }
+
+    /// <summary>The open drawer's slide while it is still opening; null once it is all the way open.</summary>
+    private DrawerSlide? _drawerOpening;
+
+    /// <summary>A drawer on its way shut, or null - see <see cref="_drawerClosingSlide"/>.</summary>
+    private string? _drawerClosing;
+
+    private DrawerSlide _drawerClosingSlide;
+
+    /// <summary>Moves the slides along. Runs only while one is moving.</summary>
+    private System.Windows.Forms.Timer? _drawerTimer;
+
+    /// <summary>
+    /// Opens <paramref name="transponder"/>'s drawer - or, for null, shuts
+    /// the open one - sliding. The caller rebuilds the board afterwards, as
+    /// it always has.
+    /// </summary>
+    private void SetDrawer(string? transponder)
+    {
+        if (string.Equals(_drawerTransponder, transponder, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var now = Environment.TickCount64;
+        var full = DrawerFullHeight;
+
+        // The one on its way shut, as it is now - in case it is the one
+        // being opened again.
+        var wasClosing = _drawerClosing;
+        var wasClosingHeight = wasClosing is null ? DrawerShutHeight : _drawerClosingSlide.HeightAt(now);
+
+        // The open one slides shut from wherever it had got to. Only one
+        // goes out at a time: one still on its way out goes now.
+        if (_drawerTransponder is { } open)
+        {
+            _drawerClosing = open;
+            _drawerClosingSlide = new DrawerSlide(_drawerOpening?.HeightAt(now) ?? full, DrawerShutHeight, now);
+        }
+
+        _drawerTransponder = transponder;
+        _drawerOpening = null;
+
+        // A button lit under the pointer belongs to the drawer that was
+        // open - the next mouse move lights one on this one.
+        _drawerHover = -1;
+
+        if (transponder is not null)
+        {
+            var reopened = string.Equals(transponder, wasClosing, StringComparison.OrdinalIgnoreCase);
+
+            if (string.Equals(transponder, _drawerClosing, StringComparison.OrdinalIgnoreCase))
+            {
+                _drawerClosing = null;
+            }
+
+            _drawerOpening = new DrawerSlide(reopened ? wasClosingHeight : DrawerShutHeight, full, now);
+        }
+
+        if (_drawerTimer is null)
+        {
+            _drawerTimer = new System.Windows.Forms.Timer { Interval = 15 };
+            _drawerTimer.Tick += DrawerTick;
+            Disposed += (_, _) => _drawerTimer?.Dispose();
+        }
+
+        _drawerTimer.Start();
+    }
+
+    /// <summary>
+    /// Opens <paramref name="transponder"/>'s drawer, or shuts it, at once -
+    /// no slide, nothing left moving. For a reset race, and a double-click
+    /// putting the drawer back as it was before its first click.
+    /// </summary>
+    private void SetDrawerNow(string? transponder)
+    {
+        _drawerTransponder = transponder;
+        _drawerOpening = null;
+        _drawerClosing = null;
+        _drawerTimer?.Stop();
+    }
+
+    /// <summary>
+    /// A frame of the slide: each drawer row set to the height its slide has
+    /// reached, and the board rebuilt once a drawer has finished shutting, to
+    /// take its row away and put the selection back as it was.
+    /// </summary>
+    private void DrawerTick(object? sender, EventArgs e)
+    {
+        if (IsDisposed || Disposing)
+        {
+            _drawerTimer?.Stop();
+            return;
+        }
+
+        var now = Environment.TickCount64;
+
+        if (_drawerOpening is { } opening && opening.DoneAt(now))
+        {
+            _drawerOpening = null;
+        }
+
+        var shut = _drawerClosing is not null && _drawerClosingSlide.DoneAt(now);
+
+        if (shut)
+        {
+            _drawerClosing = null;
+        }
+
+        if (_drawerOpening is null && _drawerClosing is null)
+        {
+            _drawerTimer?.Stop();
+        }
+
+        if (shut)
+        {
+            RenderLeaderboard();
+            return;
+        }
+
+        for (var i = 0; i < _dgvLeaderboard.Rows.Count; i++)
+        {
+            if (IsDrawerRow(i) && TransponderForRow(i) is { } driver)
+            {
+                var height = DrawerHeightFor(driver, now);
+                var row = _dgvLeaderboard.Rows[i];
+
+                if (row.Height != height)
+                {
+                    row.Height = height;
+                }
+            }
+        }
+    }
+
+    /// <summary>The height a driver's drawer row is at <paramref name="now"/>: its slide's, or all the way open.</summary>
+    private int DrawerHeightFor(string transponder, long now)
+    {
+        if (string.Equals(transponder, _drawerTransponder, StringComparison.OrdinalIgnoreCase))
+        {
+            return Math.Max(DrawerShutHeight, _drawerOpening?.HeightAt(now) ?? DrawerFullHeight);
+        }
+
+        if (string.Equals(transponder, _drawerClosing, StringComparison.OrdinalIgnoreCase))
+        {
+            return Math.Max(DrawerShutHeight, _drawerClosingSlide.HeightAt(now));
+        }
+
+        return DrawerFullHeight;
+    }
+
+    /// <summary>
+    /// Whether the drawer on this row is all the way open - the only time its
+    /// buttons can be pressed. Half-open, a button is half under the row
+    /// above; on its way shut, it is a drawer somebody has just closed.
+    /// </summary>
+    private bool DrawerIsOpen(int rowIndex) =>
+        IsDrawerRow(rowIndex)
+        && _drawerOpening is null
+        && string.Equals(TransponderForRow(rowIndex), _drawerTransponder, StringComparison.OrdinalIgnoreCase);
 
     private void AddDrawerRow(RacerStanding standing)
     {
@@ -819,7 +1065,8 @@ public sealed partial class RaceControlControl
         var row = _dgvLeaderboard.Rows[index];
 
         row.Tag = DrawerRowPrefix + standing.TransponderId;
-        row.Height = DrawerButtonHeight + DrawerPadding * 2;
+        row.MinimumHeight = DrawerShutHeight;
+        row.Height = DrawerHeightFor(standing.TransponderId, Environment.TickCount64);
     }
 
     private bool IsDrawerRow(int rowIndex) =>
@@ -883,13 +1130,30 @@ public sealed partial class RaceControlControl
         return layout;
     }
 
-    /// <summary>The row's bounds across every visible column, in the grid's coordinates.</summary>
+    /// <summary>
+    /// The drawer's face for this row across every visible column, in the
+    /// grid's coordinates - see <see cref="DrawerFace"/>.
+    /// </summary>
     private Rectangle DrawerRowBounds(int rowIndex)
     {
         var rect = _dgvLeaderboard.GetRowDisplayRectangle(rowIndex, cutOverflow: false);
         var width = _dgvLeaderboard.Columns.GetColumnsWidth(DataGridViewElementStates.Visible);
 
-        return new Rectangle(rect.Left, rect.Top, Math.Min(Math.Max(width, 1), Math.Max(rect.Width, 1)), rect.Height);
+        return DrawerFace(new Rectangle(rect.Left, rect.Top, Math.Min(Math.Max(width, 1), Math.Max(rect.Width, 1)), rect.Height));
+    }
+
+    /// <summary>
+    /// The drawer at its full height, with its bottom on the bottom of
+    /// <paramref name="row"/> - which is the row itself once it is open.
+    /// Part-way through a slide the row is shorter than this and shows only
+    /// the bottom of it, so the buttons ride down out from under the driver
+    /// as the drawer opens, and back up under them as it shuts.
+    /// </summary>
+    private static Rectangle DrawerFace(Rectangle row)
+    {
+        var full = DrawerFullHeight;
+
+        return new Rectangle(row.Left, row.Bottom - full, row.Width, full);
     }
 
     /// <summary>Draws the drawer's buttons across its row, after its cells have painted the background.</summary>
@@ -904,6 +1168,11 @@ public sealed partial class RaceControlControl
         var width = _dgvLeaderboard.Columns.GetColumnsWidth(DataGridViewElementStates.Visible);
         var row = new Rectangle(e.RowBounds.Left, e.RowBounds.Top, Math.Min(Math.Max(width, 1), e.RowBounds.Width), e.RowBounds.Height);
 
+        // Kept inside the row: mid-slide the buttons are taller than it, and
+        // anything drawn past its edges would land on the drivers either side.
+        var saved = g.Save();
+        g.SetClip(row, System.Drawing.Drawing2D.CombineMode.Intersect);
+
         // An accent edge down the left and a rule along the bottom, so the
         // drawer reads as belonging to the driver above it.
         using (var edge = new SolidBrush(AppTheme.Accent))
@@ -916,10 +1185,9 @@ public sealed partial class RaceControlControl
             g.DrawLine(rule, row.Left, row.Bottom - 1, row.Right, row.Bottom - 1);
         }
 
-        var oldSmoothing = g.SmoothingMode;
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
-        var buttons = DrawerLayout(row);
+        var buttons = DrawerLayout(DrawerFace(row));
 
         for (var i = 0; i < buttons.Count; i++)
         {
@@ -948,7 +1216,8 @@ public sealed partial class RaceControlControl
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
         }
 
-        g.SmoothingMode = oldSmoothing;
+        // The clip and the smoothing both back as they were.
+        g.Restore(saved);
     }
 
     private static System.Drawing.Drawing2D.GraphicsPath RoundedRect(Rectangle r, int radius)
@@ -973,6 +1242,12 @@ public sealed partial class RaceControlControl
         if (!IsDrawerRow(hit.RowIndex))
         {
             return (-1, -1);
+        }
+
+        // Mid-slide, nothing in it can be pressed - see DrawerIsOpen.
+        if (!DrawerIsOpen(hit.RowIndex))
+        {
+            return (hit.RowIndex, -1);
         }
 
         var buttons = DrawerLayout(DrawerRowBounds(hit.RowIndex));
@@ -1066,7 +1341,8 @@ public sealed partial class RaceControlControl
         _lastClickTicks = now;
         _drawerBeforeClick = _drawerTransponder;
 
-        _drawerTransponder = string.Equals(_drawerTransponder, tag, StringComparison.OrdinalIgnoreCase) ? null : tag;
+        // Slid open, or shut - see SetDrawer.
+        SetDrawer(string.Equals(_drawerTransponder, tag, StringComparison.OrdinalIgnoreCase) ? null : tag);
 
         BeginInvoke(() =>
         {
@@ -1124,6 +1400,10 @@ public sealed partial class RaceControlControl
 
             case DrawerAction.Warning:
                 ShowWarningMenu(_dgvLeaderboard, new Point(buttonBounds.Left, buttonBounds.Bottom));
+                break;
+
+            case DrawerAction.ShareVideo:
+                ShareVideo(transponder);
                 break;
 
             case DrawerAction.LapBreakdown:

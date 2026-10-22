@@ -1047,6 +1047,14 @@ public sealed class AppSettings
     /// </summary>
     public bool RecapMechanicInterview { get; set; }
 
+    /// <summary>
+    /// The Technical Lead's word at the flag after heats as well as mains
+    /// (21 Oct 2026). Off by default: the interview was made mains-only on
+    /// 27 Sep so it stays an occasion - this is for a club that wants it
+    /// every race.
+    /// </summary>
+    public bool RecapMechanicInterviewHeats { get; set; }
+
     /// <summary>What the announcer calls the mechanic. Blank: "the team's mechanic", never a made-up name.</summary>
     public string RecapMechanicName { get; set; } = string.Empty;
 

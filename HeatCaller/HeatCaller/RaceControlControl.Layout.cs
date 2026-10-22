@@ -889,8 +889,9 @@ public sealed partial class RaceControlControl
             _sessionStartedAtUtc = null;
             _announcer.StopAllPendingAudio();
 
-            // A new race starts with no driver's corrections open.
-            _drawerTransponder = null;
+            // A new race starts with no driver's corrections open - and
+            // nothing left sliding.
+            SetDrawerNow(null);
             _dgvLeaderboard.Rows.Clear();
             UpdateClockDisplay(force: true);
         };
@@ -1092,7 +1093,10 @@ public sealed partial class RaceControlControl
         // scrolls the page rather than squashing the board below its least.
         var flags = new Section("Race Control");
 
-        flags.Add(new ButtonBar(tight: true).With(
+        // Every flag the same width (21 Oct 2026): a bar of one width,
+        // measured for On Air's widest caption as well as what it says now -
+        // see OnAirLeastWidth.
+        flags.Add(new ButtonBar(tight: true, sameWidth: true) { LeastWidth = OnAirLeastWidth }.With(
             _btnOnAir, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset));
 
         // Start races On Air, the format line and its button moved to the

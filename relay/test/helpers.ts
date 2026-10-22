@@ -5,6 +5,7 @@ import { hashToken, TenantRegistry, type Tenant } from "../src/tenancy.js";
 import type { BrainService } from "../src/brain.js";
 import type { TopUpRequests } from "../src/topuprequests.js";
 import type { VoiceService } from "../src/voice.js";
+import type { VideoVault } from "../src/videos.js";
 
 export const ACME_TOKEN = "acme-token-aaaaaaaaaaaaaaaa";
 export const BROOK_TOKEN = "brook-token-bbbbbbbbbbbbbb";
@@ -33,7 +34,7 @@ export async function start(
   now: () => Date = () => new Date("2026-09-20T12:00:00.000Z"),
   log: (line: string) => void = () => {},
   voice?: VoiceService,
-  extras: { readonly brain?: BrainService | undefined; readonly topUpRequests?: TopUpRequests | undefined } = {},
+  extras: { readonly brain?: BrainService | undefined; readonly topUpRequests?: TopUpRequests | undefined; readonly videos?: VideoVault | undefined } = {},
 ): Promise<Harness> {
   const relay = new Relay({
     store,
@@ -43,6 +44,7 @@ export async function start(
     voice,
     brain: extras.brain,
     topUpRequests: extras.topUpRequests,
+    videos: extras.videos,
   });
 
   const server: Server = relay.listen(0, "127.0.0.1");

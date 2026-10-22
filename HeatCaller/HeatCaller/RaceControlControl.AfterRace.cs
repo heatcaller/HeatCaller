@@ -2071,7 +2071,10 @@ public sealed partial class RaceControlControl
 
         // Mains only, as asked for on 27 Sep 2026: a word with the mechanic
         // is an occasion, and after every heat it would be a routine.
-        var interview = _settings.RecapMechanicInterview && round?.Kind == RoundKind.Main;
+        // Unless the club has asked for it after heats too (21 Oct 2026,
+        // Cast > Technical Lead).
+        var interview = _settings.RecapMechanicInterview
+            && (round?.Kind == RoundKind.Main || _settings.RecapMechanicInterviewHeats);
         var closing = _settings.RecapBroadcastClosing;
 
         // THE TEAM PRINCIPAL (17 Oct 2026): after the Technical Lead when
@@ -5048,6 +5051,16 @@ public sealed partial class RaceControlControl
                     _txtSessionLabel.Text,
                     DateTime.UtcNow,
                     message => StatusMessage?.Invoke(message));
+
+                // The highlight videos' captions (21 Oct 2026): every line
+                // the announcer is about to say, noted against whichever
+                // recording is running. Hooked once; a race with no
+                // recording simply has nothing to note it on.
+                if (!_captionsHooked)
+                {
+                    _captionsHooked = true;
+                    _announcer.LineHeard += text => _raceAudioRecorder?.NoteLine(text);
+                }
             }
 
             if (_raceAudioRecorder is not { } recorder)
@@ -5154,6 +5167,11 @@ public sealed partial class RaceControlControl
 
         var log = StatusMessage;
 
+        // Read here, on the UI thread, for the highlight videos made on the
+        // background one: the Look, the logo, and each driver's photo and
+        // number. See HighlightVideo.
+        var video = VideoOptionsFor(store, record);
+
         _ = Task.Run(() => RaceAudioRecorder.Publish(
             recorder.Stop(),
             store,
@@ -5170,7 +5188,120 @@ public sealed partial class RaceControlControl
                     // A console that has gone. Saying where the file went is
                     // not worth an unobserved exception on a pool thread.
                 }
-            }));
+            },
+            video));
+    }
+
+    /// <summary>
+    /// Where the podium's videos go online (21 Oct 2026): a new race page on
+    /// the club's website, the drivers' badge ids so their own night offers
+    /// theirs, and the Big Screen's QR code as each one lands. Null when the
+    /// club has not asked for it or the club's page is not set up. Only 1st
+    /// to 3rd are ever sent - see HighlightShare.Wants.
+    /// </summary>
+    private HighlightShare? PodiumShareFor(RaceAudioStore store, SessionRecord record)
+    {
+        var publisher = RelayPublisher.ForVideos;
+
+        if (!store.SharePodiumVideos || publisher is null || !publisher.CanSharePodiumVideos)
+        {
+            return null;
+        }
+
+        // Badge ids for the podium only, and only from a key that already
+        // exists: minting one here would write settings from a race's end.
+        var ids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var secret = _settings.RelayCheckInSecret;
+
+        if (!string.IsNullOrWhiteSpace(secret))
+        {
+            foreach (var row in record.Results)
+            {
+                if (HighlightShare.Wants(row.Position) && !string.IsNullOrWhiteSpace(row.Transponder))
+                {
+                    ids[row.Transponder] = RelayCheckIn.IdFor(row.Transponder, secret);
+                }
+            }
+        }
+
+        var label = string.IsNullOrWhiteSpace(record.Label) ? "Race" : record.Label.Trim();
+
+        return new HighlightShare(
+            RelayPublisher.NewVideoKey(),
+            label,
+            ids,
+            publisher,
+            (page, race) =>
+            {
+                try
+                {
+                    if (IsDisposed || !IsHandleCreated)
+                    {
+                        return;
+                    }
+
+                    BeginInvoke(() => _bigScreen?.ShowPodiumVideos(page, race));
+                }
+                catch (InvalidOperationException)
+                {
+                    // Race Control is closing. The video is still online.
+                }
+            });
+    }
+
+    /// <summary>The highlight videos' captions are hooked to the announcer - once.</summary>
+    private bool _captionsHooked;
+
+    /// <summary>
+    /// What the highlight videos need from this side (21 Oct 2026): which
+    /// drivers get one, the club's handle and logo, the Look's colours, and
+    /// each driver's photo and number. Null when no video is wanted. On the
+    /// UI thread, because the theme and the profiles live there.
+    /// </summary>
+    private HighlightVideoOptions? VideoOptionsFor(RaceAudioStore store, SessionRecord? record)
+    {
+        if (record is null || !store.DriverHighlights || store.HighlightVideos == HighlightVideo.Who.Off)
+        {
+            return null;
+        }
+
+        try
+        {
+            var drivers = new Dictionary<string, HighlightDriver>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var row in record.Results)
+            {
+                if (string.IsNullOrWhiteSpace(row.Transponder) || drivers.ContainsKey(row.Transponder))
+                {
+                    continue;
+                }
+
+                var profile = _profiles.Get(row.Transponder);
+                drivers[row.Transponder] = new HighlightDriver(profile?.PhotoFileName ?? string.Empty, profile?.RaceNumber ?? string.Empty);
+            }
+
+            var palette = new HighlightPalette(
+                AppTheme.Background,
+                AppTheme.Surface,
+                AppTheme.Accent,
+                AppTheme.Primary,
+                AppTheme.TextDark,
+                AppTheme.TextMuted,
+                AppTheme.Success);
+
+            return new HighlightVideoOptions(
+                store.HighlightVideos,
+                store.VideoHandle,
+                _settings.RelayLogoFile ?? string.Empty,
+                palette,
+                drivers,
+                PodiumShareFor(store, record));
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [video] No highlight videos this race ({ex.Message}).");
+            return null;
+        }
     }
 
     /// <summary>

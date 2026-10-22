@@ -58,6 +58,9 @@ public sealed class CastControl : UserControl
 
     // --- The winner's mechanic (27 Sep 2026) ---
     private readonly CheckBox _chkInterview = new ThemedCheckBox();
+
+    /// <summary>The Technical Lead after heats too, not only mains (21 Oct 2026).</summary>
+    private readonly CheckBox _chkInterviewHeats = new ThemedCheckBox();
     private readonly TextBox _txtMechanicName = new();
     private readonly ComboBox _cmbMechanicVoice = new();
     private readonly Button _btnTestMechanic = new();
@@ -542,6 +545,14 @@ public sealed class CastControl : UserControl
             RefreshEnabledState();
         };
 
+        Check(_chkInterviewHeats, "After heats too, not only mains");
+        _chkInterviewHeats.Checked = _settings.RecapMechanicInterviewHeats;
+        _chkInterviewHeats.CheckedChanged += (_, _) =>
+        {
+            _settings.RecapMechanicInterviewHeats = _chkInterviewHeats.Checked;
+            _settings.Save();
+        };
+
         _txtMechanicName.MaxLength = 40;
         _txtMechanicName.Text = _settings.RecapMechanicName ?? string.Empty;
         _txtMechanicName.TextChanged += (_, _) =>
@@ -564,10 +575,11 @@ public sealed class CastControl : UserControl
         var mechanic = new Section("Technical Lead");
 
         mechanic.Add(_chkInterview, stretch: false, gapBelow: UiLayout.HintGap);
+        mechanic.Add(_chkInterviewHeats, stretch: false, gapBelow: UiLayout.HintGap);
         mechanic.Add(Hint(
             "At the flag, straight after the finish call: the announcer throws down to the co-host in pit lane, who asks "
             + "two questions about the race and any setup changes logged in the Garage for the winning car, then hands "
-            + "back before the break. Mains only, and it needs race recaps on."));
+            + "back before the break. Mains only unless \"After heats too\" is ticked, and it needs race recaps on."));
         mechanic.Add(mechanicGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
@@ -806,6 +818,7 @@ public sealed class CastControl : UserControl
         _chkInterview.Enabled = summariesOn;
 
         var interviewOn = summariesOn && _chkInterview.Checked;
+        _chkInterviewHeats.Enabled = interviewOn;
         _txtMechanicName.Enabled = interviewOn;
         _cmbMechanicVoice.Enabled = interviewOn;
         _btnTestMechanic.Enabled = interviewOn;

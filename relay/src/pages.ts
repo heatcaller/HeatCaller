@@ -37,6 +37,9 @@ export interface PageContext {
 export const DEFAULT_CONTEXT: PageContext = Object.freeze({ look: DEFAULT_LOOK, origin: "", nonce: "" });
 
 const STYLE = `
+.vid{margin:0 0 28px}
+.vid video{display:block;width:100%;max-width:420px;aspect-ratio:9/16;background:#000;border-radius:12px;margin:8px 0}
+
 :root {
   --bg: #0F0722;
   --surface: #1A0F3A;
@@ -568,7 +571,7 @@ function poll(load, everyMs) {
 interface Shell {
   readonly club: string;
   readonly clubName: string;
-  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night";
+  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "videos";
   readonly heading: string;
   readonly sub: string;
   readonly body: string;
@@ -4064,6 +4067,26 @@ function lines(list) {
   return Array.isArray(list) ? list.filter((l) => typeof l === 'string' && l.trim() !== '') : [];
 }
 
+// Their podium videos, when they have any (21 Oct 2026): only the
+// relay's own paths are played, so nothing in a night can point a player
+// anywhere else.
+let videos = [];
+
+function ownPath(v) {
+  return typeof v === 'string' && /^\\/c\\/[a-z0-9-]+\\/video\\/[0-9a-f]{32}\\.mp4(\\?download=1)?$/.test(v);
+}
+
+function videoList(list) {
+  const good = list.filter((v) => v && ownPath(v.url) && ownPath(v.download));
+  if (good.length === 0) return '';
+  const place = (p) => (p === 1 ? '1st' : p === 2 ? '2nd' : p === 3 ? '3rd' : '');
+  return '<h3>Your podium videos</h3>' + good.map((v) => '<div class="vid">'
+    + '<div class="sub">' + esc([v.label, place(v.position)].filter(Boolean).join(' · ')) + '</div>'
+    + '<video controls playsinline preload="metadata" src="' + esc(v.url) + '"></video>'
+    + '<a class="go" href="' + esc(v.download) + '" download>Download video</a>'
+    + '</div>').join('');
+}
+
 function nothing(message) {
   box.innerHTML = '<p class="note">' + esc(message) + '</p>';
 }
@@ -4086,7 +4109,7 @@ function draw() {
 
   const body = '<ul class="night">' + said.map((l) => '<li>' + esc(l) + '</li>').join('') + '</ul>';
 
-  box.innerHTML = head + body
+  box.innerHTML = head + body + videoList(videos)
     + '<button id="pic" class="go" type="button">Make a picture to share</button>'
     + '<button id="dl" class="go quiet" type="button">Save this as a text file</button>';
 
@@ -4338,6 +4361,7 @@ async function load() {
   try { body = await answer.json(); } catch (e) { /* an empty answer is still an answer */ }
 
   night = body && typeof body.night === 'object' && body.night !== null ? body.night : null;
+  videos = Array.isArray(body && body.videos) ? body.videos : [];
 
   // A 200 whose body is not a night. The same answer as every other kind
   // of nothing, for the same reason - and it should not be reachable at
@@ -4368,6 +4392,52 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     sub: "Your own races, from the timing desk's own record - opened with the code on your check-in badge.",
     body: '<div id="nt"><p class="note">Loading&hellip;</p></div>',
     script: NIGHT_JS,
+    noindex: true,
+  }, context);
+}
+
+// ------------------------------------------------------------------ videos
+
+/** One podium video, as the race's page needs it - the relay's VideoMeta, narrowed. */
+export interface PodiumVideo {
+  readonly id: string;
+  readonly position: number;
+  readonly name: string;
+  readonly label: string;
+}
+
+/**
+ * A race's podium videos (21 Oct 2026) - the page the Big Screen's QR code
+ * opens after a race. Drawn on the relay, not fetched by a script: there
+ * is nothing live about it, and a phone in a noisy pit lane should get
+ * the player in one request. Only 1st to 3rd ever reach here (videos.ts).
+ */
+export function videosPage(
+  club: string,
+  clubName: string,
+  context: PageContext = DEFAULT_CONTEXT,
+  videos: readonly PodiumVideo[] = [],
+): string {
+  const place = (p: number) => (p === 1 ? "1st" : p === 2 ? "2nd" : "3rd");
+  const label = videos[0]?.label ?? "";
+  const c = escapeHtml(club);
+
+  const body = videos.length === 0
+    ? '<p class="note">These videos have gone - they are kept for a week - or they are still on their way. Try again in a minute.</p>'
+    : videos.map((v) => `<div class="vid">
+    <h2>${escapeHtml(place(v.position))} &middot; ${escapeHtml(v.name || "Driver")}</h2>
+    <video controls playsinline preload="metadata" src="/c/${c}/video/${escapeHtml(v.id)}.mp4"></video>
+    <a class="go" href="/c/${c}/video/${escapeHtml(v.id)}.mp4?download=1" download>Download video</a>
+    </div>`).join("\n");
+
+  return shell({
+    club,
+    clubName,
+    active: "videos",
+    heading: label === "" ? "Podium videos" : `${label} podium`,
+    sub: "The announcer's call of the top three, to watch and keep. Kept for a week.",
+    body,
+    script: "",
     noindex: true,
   }, context);
 }

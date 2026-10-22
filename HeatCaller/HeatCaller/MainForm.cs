@@ -874,6 +874,9 @@ public partial class MainForm : Form
         // from any thread, and holds them until the window is up.
         _relayPublisher.Log = OnClientRawMessage;
 
+        // The podium's highlight videos go up through it (21 Oct 2026).
+        RelayPublisher.ForVideos = _relayPublisher;
+
         // Where a shout-out collected from the club's page is filed - the
         // same single ClubNotes instance the announcer reads from and the
         // Wi-Fi route writes to, so all three agree. The publisher files
@@ -1344,6 +1347,11 @@ public partial class MainForm : Form
         {
             _commentary.SegmentSponsorTaken = kind =>
                 SponsoredMoments.ForSegment(kind) is { } moment ? _announcer.TakeSponsor(moment) : null;
+
+            // The sponsor's tagline, said after every credit HeatCaller puts
+            // on a written line - the intros, the recap, a segment (21 Oct
+            // 2026). Looked up by the name the credit carries.
+            _commentary.SponsorTagline = _announcer.TaglineOf;
         }
 
         // The board, the lap-detail popup and the race log ask the same

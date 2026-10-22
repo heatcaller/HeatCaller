@@ -11,14 +11,17 @@ namespace HeatCaller;
 /// </summary>
 public sealed class ElevenLabsClient
 {
-    // 35 s rather than HttpClient's 100 s default: a spoken race call that
-    // arrives more than a few seconds late is worthless, and a hung request
-    // would otherwise hold one of AnnouncementService's two synthesis slots
-    // (and anything queued behind it) for well over a minute.
+    // Each line's own limit is set per request by AnnouncementService
+    // (30 s for a race call, more for a long recap - SynthesisTimeoutFor),
+    // so a hung request still lets its synthesis slot go in good time.
     private static readonly HttpClient Http = new()
     {
         BaseAddress = new Uri("https://api.elevenlabs.io/"),
-        Timeout = TimeSpan.FromSeconds(35),
+        // A backstop only (21 Oct 2026): the real limit is per line, and
+        // grows with the line - see AnnouncementService.SynthesisTimeoutFor.
+        // HttpClient.Timeout is a hard ceiling no per-request token can
+        // lift, so it has to sit above the longest of those.
+        Timeout = TimeSpan.FromSeconds(160),
     };
 
     /// <summary>

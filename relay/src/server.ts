@@ -21,8 +21,10 @@ import {
   signupPage,
   standingsPage,
   tracksPage,
+  videosPage,
   type PageContext,
 } from "./pages.js";
+import { VIDEO_ID, VIDEO_MAX_BYTES, videosToDrop, type VideoMeta, type VideoVault } from "./videos.js";
 import { DEFAULT_LOOK, flagColours, lookFrom, type Look } from "./site.js";
 import { BRAIN_LONG_WORDS_CEILING, BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
 import { VOICE_PLAN_OFF, type MeterUsage, type VoiceService } from "./voice.js";
@@ -895,6 +897,11 @@ export interface RelayOptions {
    */
   readonly voice?: VoiceService | undefined;
   /**
+   * Where the podium's highlight videos are kept (21 Oct 2026) - see
+   * videos.ts. Absent, the relay does not take them, and says so.
+   */
+  readonly videos?: VideoVault | undefined;
+  /**
    * The commentary brain. Absent means this relay writes no commentary:
    * clubs use Ollama on the race laptop, or go without, exactly as
    * before this existed.
@@ -972,6 +979,11 @@ export class Relay {
   /** The two open voice-sample routes, per address - nobody is signed in, so that is all there is. See VOICE_SAMPLES_PER_ADDRESS. */
   private readonly voiceSamples: Limiter;
   private readonly voice: VoiceService | undefined;
+  private readonly videos: VideoVault | undefined;
+  /** Phones fetching a video, per address: a player asks in many small ranges, so this is generous. */
+  private readonly videoReads: Limiter;
+  /** One laptop sending the podium's videos: three a race. */
+  private readonly videoUploads: Limiter;
   private readonly brain: BrainService | undefined;
   private readonly topUpRequests: TopUpRequests | undefined;
   private readonly listings = new Map<string, Buffer>();
@@ -1183,6 +1195,9 @@ export class Relay {
     this.collectionReads = new Limiter(COLLECTION_READS_PER_ADDRESS, 60 * 1000, () => this.now().getTime());
 
     this.voice = options.voice;
+    this.videos = options.videos;
+    this.videoReads = new Limiter(900, 60 * 1000, () => this.now().getTime());
+    this.videoUploads = new Limiter(30, 60 * 1000, () => this.now().getTime());
     this.brain = options.brain;
     this.topUpRequests = options.topUpRequests;
   }
@@ -1971,6 +1986,20 @@ export class Relay {
         // (see cardVersionOf) and is deliberately ignored here - the
         // answer is always the current card, whatever version was asked
         // for, so a stale link is never a stale picture.
+        // THE PODIUM'S VIDEOS (21 Oct 2026). A race's page - what the Big
+        // Screen's QR code opens - and the video itself. Both are named
+        // by 128 random bits from the laptop, so the link is the
+        // credential; nothing lists them. See videos.ts.
+        if (tenant !== undefined && segments.length === 4 && segments[2] === "videos") {
+          await this.videosForRace(request, response, tenant, segments[3] as string);
+          return;
+        }
+
+        if (tenant !== undefined && segments.length === 4 && segments[2] === "video") {
+          await this.videoFile(request, response, tenant.club, segments[3] as string, parsed.query);
+          return;
+        }
+
         if (tenant !== undefined && segments.length === 5 && segments[2] === "results" && segments[4] === "card.png") {
           await this.cardPng(request, response, tenant, segments[3] as string);
           return;
@@ -2152,6 +2181,12 @@ export class Relay {
     // this id is the whole credential.
     if (method === "POST" && rest.length === 1 && rest[0] === "night") {
       await this.readOneNight(request, response, club);
+      return;
+    }
+
+    // A podium video from the laptop - see videos.ts and receiveVideo.
+    if (method === "POST" && rest.length === 2 && rest[0] === "video") {
+      await this.receiveVideo(request, response, club, rest[1] as string, parsed.query);
       return;
     }
 
@@ -4129,6 +4164,8 @@ export class Relay {
       // 17 Oct 2026, Bug Hunt 8, A19-3: a club set up again starts fresh.
       this.lastStaffPin.delete(club);
       this.lastManagePin.delete(club);
+      // Its podium videos, kept outside the club's folder (videos.ts).
+      await this.videos?.removeClub(club).catch(() => {});
 
       // And the voice's lines for this club - drivers' names, spoken -
       // which the voice keeps in a folder of its own rather than the
@@ -5668,6 +5705,260 @@ export class Relay {
     return !(await this.nightsOpenFor(club));
   }
 
+  /**
+   * A podium video from the laptop (21 Oct 2026). The bytes are the body
+   * (video/mp4); what it is comes in the query: race, position, driver,
+   * name, label. ONLY 1ST TO 3RD - anything else is refused before a byte
+   * is kept. See videos.ts.
+   */
+  private async receiveVideo(
+    request: IncomingMessage,
+    response: ServerResponse,
+    club: string,
+    id: string,
+    query: URLSearchParams,
+  ): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      await discardRest(request, response);
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      await discardRest(request, response);
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    if (this.videos === undefined) {
+      await discardRest(request, response);
+      sendJson(response, 404, { ok: false, error: "This relay does not keep highlight videos." });
+      return;
+    }
+
+    if (this.videoUploads.blocked(club)) {
+      await discardRest(request, response);
+      sendJson(response, 429, { ok: false, error: "Too many videos at once. Try again in a minute." });
+      return;
+    }
+
+    this.videoUploads.hit(club);
+
+    const position = Number(query.get("position"));
+    const race = (query.get("race") ?? "").toLowerCase();
+    const driver = (query.get("driver") ?? "").toLowerCase();
+    const name = (query.get("name") ?? "").trim().slice(0, 80);
+    const label = (query.get("label") ?? "").trim().slice(0, 80);
+
+    if (!Number.isInteger(position) || position < 1 || position > 3) {
+      await discardRest(request, response);
+      sendJson(response, 400, { ok: false, error: "Only the podium's videos are taken - 1st, 2nd and 3rd." });
+      return;
+    }
+
+    if (!VIDEO_ID.test(id) || !VIDEO_ID.test(race) || (driver.length > 0 && !DRIVER_ID.test(driver))) {
+      await discardRest(request, response);
+      sendJson(response, 400, { ok: false, error: "That video's details could not be read." });
+      return;
+    }
+
+    const declared = Number(request.headers["content-length"] ?? "0");
+
+    if (Number.isFinite(declared) && declared > VIDEO_MAX_BYTES) {
+      await discardRest(request, response);
+      sendJson(response, 413, { ok: false, error: "That video is too big." });
+      return;
+    }
+
+    const bytes = await readRawBody(request, response, VIDEO_MAX_BYTES);
+
+    if (bytes === "too-big") {
+      sendJson(response, 413, { ok: false, error: "That video is too big." });
+      return;
+    }
+
+    // An mp4 opens with its "ftyp" box. Anything else is not a video this
+    // relay will hand to a phone as one.
+    if (bytes === "unreadable" || bytes.length < 12 || bytes.toString("latin1", 4, 8) !== "ftyp") {
+      sendJson(response, 400, { ok: false, error: "That is not an mp4 video." });
+      return;
+    }
+
+    const meta: VideoMeta = {
+      id,
+      race,
+      position,
+      name,
+      label,
+      at: this.now().toISOString(),
+      bytes: bytes.length,
+      ...(driver.length > 0 ? { driver } : {}),
+    };
+
+    const vault = this.videos;
+
+    await this.withLock(`${club}|videos`, async () => {
+      // Room first: the oldest go, never the newest. See videosToDrop.
+      for (const old of videosToDrop(await vault.list(club), this.now().getTime(), bytes.length)) {
+        await vault.remove(club, old.id);
+      }
+
+      await vault.put(club, meta, bytes);
+    });
+
+    sendJson(response, 200, { ok: true, page: `/c/${club}/videos/${race}`, video: `/c/${club}/video/${id}.mp4` });
+  }
+
+  /** A club's videos still held - anything past its week dropped from the answer, whether or not it has been swept yet. */
+  private async videosHeld(club: string): Promise<VideoMeta[]> {
+    if (this.videos === undefined) {
+      return [];
+    }
+
+    const now = this.now().getTime();
+    const held = await this.videos.list(club).catch(() => [] as VideoMeta[]);
+    const stale = new Set(videosToDrop(held, now).map((v) => v.id));
+
+    return held.filter((v) => !stale.has(v.id));
+  }
+
+  /** One driver's podium videos, newest first, as the night page shows them. */
+  private async videosOfDriver(club: string, driver: string): Promise<{ url: string; download: string; label: string; position: number }[]> {
+    return (await this.videosHeld(club))
+      .filter((v) => v.driver === driver)
+      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+      .slice(0, 12)
+      .map((v) => ({
+        url: `/c/${club}/video/${v.id}.mp4`,
+        download: `/c/${club}/video/${v.id}.mp4?download=1`,
+        label: v.label,
+        position: v.position,
+      }));
+  }
+
+  /** The page a race's QR code opens: its podium videos, to watch and to keep. */
+  private async videosForRace(request: IncomingMessage, response: ServerResponse, tenant: Tenant, race: string): Promise<void> {
+    const context = await this.contextFor(request, tenant.club);
+    const wanted = race.toLowerCase();
+
+    const videos = VIDEO_ID.test(wanted)
+      ? (await this.videosHeld(tenant.club))
+        .filter((v) => v.race === wanted)
+        .sort((a, b) => a.position - b.position)
+      : [];
+
+    sendHtml(response, 200, videosPage(tenant.club, tenant.name, context, videos), context.nonce);
+  }
+
+  /**
+   * One video's bytes - in ranges, because a phone's player asks for them
+   * that way and will not play (or seek) a video served whole without
+   * them. ?download=1 hands it over as a file to keep.
+   */
+  private async videoFile(
+    request: IncomingMessage,
+    response: ServerResponse,
+    club: string,
+    file: string,
+    query: URLSearchParams,
+  ): Promise<void> {
+    const address = `${club}|${clientAddress(request)}`;
+
+    if (this.videoReads.blocked(address)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.videoReads.hit(address);
+
+    const id = file.endsWith(".mp4") ? file.slice(0, -4).toLowerCase() : "";
+    const meta = VIDEO_ID.test(id) ? (await this.videosHeld(club)).find((v) => v.id === id) : undefined;
+
+    if (this.videos === undefined || meta === undefined || meta.bytes === 0) {
+      sendJson(response, 404, { ok: false, error: "That video has gone - they are kept for a week." });
+      return;
+    }
+
+    const total = meta.bytes;
+    let start = 0;
+    let end = total - 1;
+    let partial = false;
+
+    const range = request.headers.range;
+
+    if (typeof range === "string" && range.length > 0) {
+      const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+
+      if (m === null || (m[1] === "" && m[2] === "")) {
+        response.writeHead(416, { ...BASE_HEADERS, "content-range": `bytes */${total}`, "content-length": 0 });
+        response.end();
+        return;
+      }
+
+      if (m[1] === "") {
+        // The last N bytes.
+        const suffix = Number(m[2]);
+        start = Math.max(0, total - suffix);
+      } else {
+        start = Number(m[1]);
+        end = m[2] === "" ? total - 1 : Math.min(Number(m[2]), total - 1);
+      }
+
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= total) {
+        response.writeHead(416, { ...BASE_HEADERS, "content-range": `bytes */${total}`, "content-length": 0 });
+        response.end();
+        return;
+      }
+
+      partial = true;
+    }
+
+    const download = query.get("download") === "1";
+    const fileName = `${[meta.label, meta.name].filter((s) => s.length > 0).join(" - ") || "Highlight"}`
+      .replace(/[^A-Za-z0-9 ._-]/g, "")
+      .trim()
+      .slice(0, 80) || "Highlight";
+
+    response.writeHead(partial ? 206 : 200, {
+      ...BASE_HEADERS,
+      "content-type": "video/mp4",
+      "accept-ranges": "bytes",
+      "content-length": end - start + 1,
+      "cache-control": "private, max-age=3600",
+      ...(partial ? { "content-range": `bytes ${start}-${end}/${total}` } : {}),
+      ...(download ? { "content-disposition": `attachment; filename="${fileName}.mp4"` } : {}),
+    });
+
+    if (request.method === "HEAD") {
+      response.end();
+      return;
+    }
+
+    // A megabyte at a time, so a whole video is never in memory at once.
+    const vault = this.videos;
+    const chunk = 1024 * 1024;
+
+    for (let at = start; at <= end; at += chunk) {
+      const piece = await vault.read(club, id, at, Math.min(end, at + chunk - 1)).catch(() => undefined);
+
+      if (piece === undefined || piece.length === 0) {
+        break;
+      }
+
+      if (!response.write(piece)) {
+        await new Promise<void>((resolve) => response.once("drain", () => resolve()));
+      }
+
+      if (response.destroyed) {
+        return;
+      }
+    }
+
+    response.end();
+  }
+
   private async nightsOpenFor(club: string): Promise<boolean> {
     const body = (await this.store.getSnapshot(club, NIGHTS_OPEN_DOC))?.body;
 
@@ -5790,7 +6081,11 @@ export class Relay {
       return;
     }
 
-    sendJson(response, 200, { ok: true, night: doc.body });
+    // And their podium videos, when they have any (21 Oct 2026) - matched
+    // on the same badge id, which is already the credential for this.
+    const videos = await this.videosOfDriver(club, id);
+
+    sendJson(response, 200, { ok: true, night: doc.body, ...(videos.length > 0 ? { videos } : {}) });
   }
 
   /**
@@ -7615,6 +7910,54 @@ const DRAIN_MAX_MS = 2_000;
  * with unread data in it sends a reset that throws away the answer the
  * client had not yet read.
  */
+/**
+ * A request's body as bytes, up to <paramref name="limit"/> - for the one
+ * route that takes something that is not JSON, a podium video. Same
+ * shape as readBody: "too-big" once past the limit (the rest discarded),
+ * "unreadable" for nothing at all.
+ */
+function readRawBody(
+  request: IncomingMessage,
+  response: ServerResponse,
+  limit: number,
+): Promise<Buffer | "too-big" | "unreadable"> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const chunks: Buffer[] = [];
+    let total = 0;
+
+    const finish = (value: Buffer | "too-big" | "unreadable"): void => {
+      if (!settled) {
+        settled = true;
+        resolve(value);
+      }
+    };
+
+    const onData = (chunk: Buffer): void => {
+      total += chunk.length;
+
+      if (total > limit) {
+        chunks.length = 0;
+        request.off("data", onData);
+        request.off("end", onEnd);
+        void discardRest(request, response).then(() => finish("too-big"));
+        return;
+      }
+
+      chunks.push(chunk);
+    };
+
+    const onEnd = (): void => {
+      finish(total === 0 ? "unreadable" : Buffer.concat(chunks));
+    };
+
+    request.on("data", onData);
+    request.on("end", onEnd);
+    request.on("error", () => finish("unreadable"));
+    request.on("aborted", () => finish("unreadable"));
+  });
+}
+
 function readBody(
   request: IncomingMessage,
   response: ServerResponse,

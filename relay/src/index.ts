@@ -6,6 +6,7 @@ import { mint } from "./mint.js";
 import { Relay } from "./server.js";
 import { FileStore } from "./store.js";
 import { TenantRegistry } from "./tenancy.js";
+import { DiskVideoVault } from "./videos.js";
 import { elevenLabsRenderer, migrateVoiceFolder, VoiceService } from "./voice.js";
 import { TopUpRequests } from "./topuprequests.js";
 import { ADMIN_COMMANDS, voiceAdmin, type AdminCommand } from "./voiceadmin.js";
@@ -133,6 +134,8 @@ async function serve(): Promise<number> {
     maxBodyBytes: config.maxBodyBytes,
     redirectOrigin,
     voice,
+    // The podium's highlight videos - see videos.ts.
+    videos: new DiskVideoVault(config.dataDir),
     brain,
     topUpRequests: new TopUpRequests({ dataDir: config.dataDir, log: (line) => console.log(line) }),
   });

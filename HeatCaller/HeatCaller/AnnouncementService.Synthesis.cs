@@ -121,7 +121,8 @@ public sealed partial class AnnouncementService
             return new SynthesisResult(saved, LineSource.Library);
         }
 
-        using var timeout = new CancellationTokenSource(SynthesisTimeout);
+        var limit = SynthesisTimeoutFor(text);
+        using var timeout = new CancellationTokenSource(limit);
         // WHY (20 Oct 2026): the gate wait and the request share the one
         // 30 s limit, so a line that got its slot at 28 s had 2 s to be
         // answered and was then reported as ElevenLabs not responding -
@@ -135,7 +136,7 @@ public sealed partial class AnnouncementService
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
-            throw new SynthesisSlotTimeoutException($"No synthesis slot came free within {SynthesisTimeout.TotalSeconds:0} s.");
+            throw new SynthesisSlotTimeoutException($"No synthesis slot came free within {limit.TotalSeconds:0} s.");
         }
 
         var waitedForSlot = gateClock.Elapsed;
@@ -147,7 +148,7 @@ public sealed partial class AnnouncementService
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
-            throw RequestTimedOut(waitedForSlot);
+            throw RequestTimedOut(waitedForSlot, limit);
         }
         finally
         {
@@ -164,7 +165,8 @@ public sealed partial class AnnouncementService
 
     private async Task<ElevenLabsClient.TimedSpeech?> SynthesizeTimedGatedAsync(VoiceProfile profile, string text)
     {
-        using var timeout = new CancellationTokenSource(SynthesisTimeout);
+        var limit = SynthesisTimeoutFor(text);
+        using var timeout = new CancellationTokenSource(limit);
         // WHY (20 Oct 2026): timed the same way as SynthesizeOrReuseAsync,
         // so a request starved by a long wait for its slot is not blamed on
         // the network.
@@ -175,7 +177,7 @@ public sealed partial class AnnouncementService
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
-            throw new SynthesisSlotTimeoutException($"No synthesis slot came free within {SynthesisTimeout.TotalSeconds:0} s.");
+            throw new SynthesisSlotTimeoutException($"No synthesis slot came free within {limit.TotalSeconds:0} s.");
         }
 
         var waitedForSlot = gateClock.Elapsed;
@@ -193,7 +195,7 @@ public sealed partial class AnnouncementService
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
-            throw RequestTimedOut(waitedForSlot);
+            throw RequestTimedOut(waitedForSlot, limit);
         }
         finally
         {
@@ -202,20 +204,49 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
-    /// Upper bound on one gated synthesis, gate wait included. Shorter than
-    /// ElevenLabsClient's own 35 s HttpClient timeout so this, with its
-    /// clearer message, is normally the one that fires. Long enough for a
-    /// full race recap on the slower v3 model; short enough that a stalled
-    /// connection no longer holds a synthesis slot for the old 100 s.
+    /// Upper bound on one gated synthesis of a SHORT line, gate wait
+    /// included - a long one gets more, see SynthesisTimeoutFor. Shorter
+    /// than ElevenLabsClient's own HttpClient timeout so this, with its
+    /// clearer message, is the one that fires.
     /// </summary>
     private static readonly TimeSpan SynthesisTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>The most a single line is ever given, however long it is.</summary>
+    private static readonly TimeSpan LongestSynthesisTimeout = TimeSpan.FromSeconds(150);
+
+    /// <summary>
+    /// How long ONE line is given, gate wait included (21 Oct 2026).
+    ///
+    /// WHY: the limit was a flat 30 s, and a race recap is one line - a
+    /// minute or more of speech, which eleven_v3 can take longer than 30 s
+    /// to make on a good connection. On 21 Oct the recap ran out of time,
+    /// was reported as "Can't reach ElevenLabs", ElevenLabs was rested, and
+    /// Kokoro read the recap - then ElevenLabs was tried again a minute
+    /// later, answered at once, and the booth interview and the sign-off
+    /// went out in the ElevenLabs voices. One programme, two voices, and
+    /// nothing wrong with the network at all.
+    ///
+    /// So a short line keeps the 30 s it had - a race call that late is
+    /// worthless anyway - and a long one gets a second more for every 25
+    /// characters past the first 300, up to two and a half minutes.
+    /// </summary>
+    internal static TimeSpan SynthesisTimeoutFor(string? text)
+    {
+        var extra = Math.Max(0, (text?.Length ?? 0) - 300) / 25;
+        var limit = SynthesisTimeout + TimeSpan.FromSeconds(extra);
+
+        return limit < LongestSynthesisTimeout ? limit : LongestSynthesisTimeout;
+    }
 
     /// <summary>
     /// True when more than half of SynthesisTimeout went on waiting for a
     /// synthesis slot, leaving the request itself too little of the limit
     /// for its running out to say anything about the network.
     /// </summary>
-    internal static bool SlotWaitTookMostOfLimit(TimeSpan waitedForSlot) => waitedForSlot > SynthesisTimeout / 2;
+    internal static bool SlotWaitTookMostOfLimit(TimeSpan waitedForSlot) => SlotWaitTookMostOfLimit(waitedForSlot, SynthesisTimeout);
+
+    /// <summary>The same, against the limit one line was actually given - see SynthesisTimeoutFor.</summary>
+    internal static bool SlotWaitTookMostOfLimit(TimeSpan waitedForSlot, TimeSpan limit) => waitedForSlot > limit / 2;
 
     /// <summary>
     /// The exception for a request cut off by SynthesisTimeout. Added 20 Oct
@@ -224,11 +255,11 @@ public sealed partial class AnnouncementService
     /// ElevenLabs is not rested - and only otherwise "ElevenLabs didn't
     /// respond". The single 30 s upper bound is kept either way.
     /// </summary>
-    private static TimeoutException RequestTimedOut(TimeSpan waitedForSlot) =>
-        SlotWaitTookMostOfLimit(waitedForSlot)
+    private static TimeoutException RequestTimedOut(TimeSpan waitedForSlot, TimeSpan limit) =>
+        SlotWaitTookMostOfLimit(waitedForSlot, limit)
             ? new SynthesisSlotTimeoutException(
-                $"Waited {waitedForSlot.TotalSeconds:0} s for a synthesis slot, which left the request too little of the {SynthesisTimeout.TotalSeconds:0} s limit.")
-            : new TimeoutException($"ElevenLabs didn't respond within {SynthesisTimeout.TotalSeconds:0} s.");
+                $"Waited {waitedForSlot.TotalSeconds:0} s for a synthesis slot, which left the request too little of the {limit.TotalSeconds:0} s limit.")
+            : new TimeoutException($"ElevenLabs didn't respond within {limit.TotalSeconds:0} s.");
 
     /// <summary>
     /// Waited the whole SynthesisTimeout for one of the ElevenLabs slots and

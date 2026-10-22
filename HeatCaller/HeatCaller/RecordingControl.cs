@@ -33,6 +33,15 @@ public sealed class RecordingControl : UserControl
     private readonly RaceAudioStore _audio = RaceAudioStore.Load();
     private readonly CheckBox _chkRecord = new ThemedCheckBox();
     private readonly CheckBox _chkClips = new ThemedCheckBox();
+
+    /// <summary>Which drivers get a highlight video (21 Oct 2026) - see HighlightVideo.</summary>
+    private readonly ComboBox _cmbVideos = new();
+
+    /// <summary>The club's handle for the end of each video.</summary>
+    private readonly TextBox _txtVideoHandle = new();
+
+    /// <summary>The podium's videos on the club's page, with a QR code on the Big Screen (21 Oct 2026).</summary>
+    private readonly CheckBox _chkShareVideos = new ThemedCheckBox();
     private readonly TextBox _txtAudioFolder = new();
     private readonly Button _btnAudioFolder = new();
     private readonly Button _btnAudioOpen = new();
@@ -298,6 +307,21 @@ public sealed class RecordingControl : UserControl
         _chkClips.Checked = _audio.DriverHighlights;
         _chkClips.CheckedChanged += (_, _) => _audio.DriverHighlights = _chkClips.Checked;
 
+        // THE SHAREABLE VIDEO (21 Oct 2026): an upright mp4 for a driver's
+        // phone, made from their clip after the race - see HighlightVideo.
+        _cmbVideos.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbVideos.Items.AddRange(new object[] { "Off", "The winner", "The podium", "Every driver" });
+        _cmbVideos.SelectedIndex = Math.Clamp((int)_audio.HighlightVideos, 0, 3);
+        _cmbVideos.SelectedIndexChanged += (_, _) => _audio.HighlightVideos = (HighlightVideo.Who)Math.Max(0, _cmbVideos.SelectedIndex);
+
+        _txtVideoHandle.PlaceholderText = "@yourclub";
+        _txtVideoHandle.Text = _audio.VideoHandle;
+        _txtVideoHandle.TextChanged += (_, _) => _audio.VideoHandle = _txtVideoHandle.Text;
+
+        Check(_chkShareVideos, "Put the podium's videos on the club's page, with a QR code on the Big Screen to download them");
+        _chkShareVideos.Checked = _audio.SharePodiumVideos;
+        _chkShareVideos.CheckedChanged += (_, _) => _audio.SharePodiumVideos = _chkShareVideos.Checked;
+
         _txtAudioFolder.ReadOnly = true;
         _txtAudioFolder.Text = _audio.Folder;
 
@@ -318,6 +342,8 @@ public sealed class RecordingControl : UserControl
 
         var audioGrid = new FieldGrid();
 
+        Stepped(audioGrid.AddRow("Highlight videos:", Line(_cmbVideos, Suffix("an upright video with captions, for a driver's phone"))));
+        Stepped(audioGrid.AddRow("Club handle:", Line(_txtVideoHandle, Suffix("shown at the end of each video"))));
         Stepped(audioGrid.AddRow("Keep the last:", Line(_numKeepNights, Suffix("race nights - older nights' folders are removed"))));
         Stepped(audioGrid.AddRow("Folder:", Line(_txtAudioFolder, _btnAudioFolder, _btnAudioOpen)));
         audioGrid.AddHint(_lblOnDisk);
@@ -331,7 +357,11 @@ public sealed class RecordingControl : UserControl
         audio.Add(_chkClips, stretch: false, gapBelow: UiLayout.HintGap);
         audio.Add(Hint(
             "Recordings are NOT in backups (a night is a few hundred MB). Copy a night's folder elsewhere to keep it."));
-        audio.Add(audioGrid, gapBelow: 0);
+        audio.Add(audioGrid);
+        audio.Add(_chkShareVideos, stretch: false, gapBelow: UiLayout.HintGap);
+        audio.Add(Hint(
+            "Only 1st, 2nd and 3rd are ever put online, and only while the club's page is switched on (Club Website). "
+            + "They are kept there for a week."), gapBelow: 0);
 
         // ------------------------------------------------------------------
         // Written from the night - each needs the announcer's model, so
@@ -468,6 +498,8 @@ public sealed class RecordingControl : UserControl
     private void SizeFields()
     {
         Fit(_cmbDriverCut, UiLayout.AtTextSize(DriverPickerWidth));
+        Fit(_cmbVideos, UiLayout.AtTextSize(DriverPickerWidth));
+        Fit(_txtVideoHandle, UiLayout.AtTextSize(DriverPickerWidth));
         Fit(_numKeepNights, NumberWidth(_numKeepNights));
 
         // Only when it changed: a new size lays the grid or the line out again.
@@ -507,6 +539,9 @@ public sealed class RecordingControl : UserControl
         var recording = _chkRecord.Checked;
 
         _chkClips.Enabled = recording;
+        _cmbVideos.Enabled = recording;
+        _txtVideoHandle.Enabled = recording;
+        _chkShareVideos.Enabled = recording;
         _txtAudioFolder.Enabled = recording;
         _btnAudioFolder.Enabled = recording;
         _numKeepNights.Enabled = recording;

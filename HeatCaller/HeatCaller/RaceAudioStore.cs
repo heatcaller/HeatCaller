@@ -85,6 +85,16 @@ internal sealed class RaceAudioStore
     {
         public bool Enabled { get; set; } = true;
         public bool DriverHighlights { get; set; } = true;
+
+        /// <summary>Which drivers get a highlight video - see HighlightVideo.Who. Every driver by default; only the podium ever goes online.</summary>
+        public int HighlightVideos { get; set; } = (int)HighlightVideo.Who.Everyone;
+
+        /// <summary>The club's social handle for the end of each video, or empty.</summary>
+        public string VideoHandle { get; set; } = string.Empty;
+
+        /// <summary>Whether the podium's videos go on the club's page, with a QR code on the Big Screen. On by default.</summary>
+        public bool SharePodiumVideos { get; set; } = true;
+
         public string Folder { get; set; } = string.Empty;
         public int MaxMinutes { get; set; } = DefaultMaxMinutes;
         public int MinFreeMb { get; set; } = DefaultMinFreeMb;
@@ -198,6 +208,66 @@ internal sealed class RaceAudioStore
             }
 
             _file.DriverHighlights = value;
+            Save();
+        }
+    }
+
+    /// <summary>
+    /// Which drivers get a shareable highlight video after each race
+    /// (21 Oct 2026) - see HighlightVideo. Made from their clip, so only when
+    /// <see cref="DriverHighlights"/> is on as well.
+    /// </summary>
+    public HighlightVideo.Who HighlightVideos
+    {
+        get => Enum.IsDefined(typeof(HighlightVideo.Who), _file.HighlightVideos)
+            ? (HighlightVideo.Who)_file.HighlightVideos
+            : HighlightVideo.Who.Winner;
+        set
+        {
+            if (_file.HighlightVideos == (int)value)
+            {
+                return;
+            }
+
+            _file.HighlightVideos = (int)value;
+            Save();
+        }
+    }
+
+    /// <summary>
+    /// Whether the top three's videos are put on the club's page for the
+    /// drivers to download, with a QR code on the Big Screen after the race
+    /// (21 Oct 2026). Only ever the podium - see RelayPublisher.Videos.
+    /// </summary>
+    public bool SharePodiumVideos
+    {
+        get => _file.SharePodiumVideos;
+        set
+        {
+            if (_file.SharePodiumVideos == value)
+            {
+                return;
+            }
+
+            _file.SharePodiumVideos = value;
+            Save();
+        }
+    }
+
+    /// <summary>The club's social handle, shown at the end of each highlight video - "@yourclub". Empty for none.</summary>
+    public string VideoHandle
+    {
+        get => (_file.VideoHandle ?? string.Empty).Trim();
+        set
+        {
+            var handle = (value ?? string.Empty).Trim();
+
+            if (string.Equals(_file.VideoHandle, handle, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _file.VideoHandle = handle;
             Save();
         }
     }

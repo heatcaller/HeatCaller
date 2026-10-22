@@ -1536,6 +1536,15 @@ internal sealed class ButtonBar : FlowLayoutPanel
     private int Gap => _tight ? UiLayout.TightButtonGap : UiLayout.ButtonGap;
 
     /// <summary>
+    /// In a bar of one width: the least a button needs whatever it says
+    /// right now - for a button whose caption changes as it works (Race
+    /// Control's On Air counts down), so the row is measured for its widest
+    /// caption and does not grow and shrink under it (21 Oct 2026). Null,
+    /// or 0 for a button, for just its caption.
+    /// </summary>
+    public Func<Button, int>? LeastWidth { get; set; }
+
+    /// <summary>
     /// How wide the bar is with everything in it on one line - for a column
     /// made wide enough that its bar does not wrap (Batteries' packs).
     /// Known before the bar is laid out: each
@@ -1683,7 +1692,8 @@ internal sealed class ButtonBar : FlowLayoutPanel
             // far would ratchet, so the bar could grow with the text but
             // never shrink again.
             var sizes = buttons.Select(SizeFor).ToList();
-            var size = new Size(sizes.Max(s => s.Width), sizes.Max(s => s.Height));
+            var least = LeastWidth is { } floor ? buttons.Max(b => floor(b)) : 0;
+            var size = new Size(Math.Max(least, sizes.Max(s => s.Width)), sizes.Max(s => s.Height));
 
             foreach (var button in buttons)
             {
