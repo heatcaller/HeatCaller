@@ -116,6 +116,7 @@ The **Your ghosts** list shows **On**, **Name**, **Car**, **Pace from**, **Adjus
 | **The track record for this layout** | The all-time record on the track layout in **Track:** on the Race Control **Session** row. |
 | **Live: a driver's pace in this session** | The driver's pace in the session that's running, re-read every lap. **Follows:** picks their best lap so far or their recent average. The ghost gets faster as the driver does. |
 | **Live: whatever the leader is running** | The pace of the leading real car, re-read every lap. |
+| **A driver's best tonight (or ever, before tonight's)** | That driver's best lap tonight on this layout, from the session running and anything saved tonight, or their best ever on it before they've set one tonight. Fixed for the run: unlike the live pace, it doesn't speed up the moment they beat it. It respects personal-best resets. This is what **Chase a Best Lap...** sets up (below). |
 
 During practice, ghosts take their track from the Practice page's own **Track:** instead, and in a demo from the Demo Mode page's **Track layout:**. The speed columns and the live track map use the same track.
 
@@ -135,6 +136,18 @@ Ghosts don't slow down for a yellow or stop for a red. Their laps aren't counted
 Switching a ghost off during a session (with **On / Off**, **Enable ghost cars** or **Race ghost cars**) takes it off the track and off the board at once. Switching one on during practice puts it on track straight away. During a race, a ghost you switch on joins straight away if other ghosts are already racing; otherwise it waits for the next race. A ghost that joins a race part-way through doesn't count for **Ghost Buster** or **Shadow Boxer**.
 
 Ghosts from the previous race stop as soon as you stage the next race. If you undo that **Stage** (or a **Countdown** over a running race, or a **Reset**), the old race comes back with its ghosts carrying on mid-lap, on their own rhythm, as though they had kept lapping. The crossings they would have made in the gap aren't counted, the same as for real cars, so each ghost's lap across the gap comes out long. The console says, for example, "[ghost] *name* back on track at 6.500s, carrying on from 12 laps - ...".
+
+### Chase your own best
+
+**Chase a Best Lap...**, on the Practice page's ghost cars card, puts a ghost of a driver's own best lap into practice, so they can see on every lap whether they're gaining on it. It's also on Race Control's right-click: **Coach *name*** → **Chase *name*'s best (ghost)**.
+
+In practice, the ghost's row sits just under its driver on the board, wherever it is in the order, so the two are read side by side, and the ghost's gap column shows its gap to them. In a race nothing is moved: the board is the running order. **Coach *name*** → **Gap to their ghost** has the announcer say where the ghost is on the track each time the driver crosses the line.
+
+1. Click **Chase a Best Lap...** and pick the driver from **Whose best lap should the ghost run at?** Drivers on the board are listed first.
+2. Click **Chase**. A ghost called, for example, "Sam's best" joins the practice at their best tonight on this layout, or their best ever on it before they've set one tonight. Ghost racing is switched on with it, and in a running practice it goes straight on track.
+3. When they beat it, pick the same driver again: the ghost is brought up to their new best from its next lap, rather than a second ghost being added.
+
+It's a ghost like any other: it's on the board and the Big Screen, it can be edited or switched off in the ghost list, and it's kept out of records, results, points and badges. One **Undo** puts the ghosts back as they were. A driver with no lap on the layout at all has nothing to chase, so the ghost sits out and the console says why. "Nobody to chase" means there are no driver profiles yet.
 
 ## Demo Mode
 
@@ -174,8 +187,8 @@ Demo races are never offered back after a crash. By default they aren't saved ei
 A saved demo is marked as a demo and is never scored:
 
 - In **Race History** its type is **Demo**, and its detail title reads "Demo race (not scored)".
-- It's never linked to a heat and never auto-advances the program, even if a round is selected on **Race Control**. Running a round with **Start as Demo...** leaves that round unrun.
-- It never counts toward championship points (even if you tick it into a championship by hand), badges and achievements, personal bests, track records, ghost pace, handicap suggestions, Race Analytics totals, trends and head-to-head, the event report, qualifying, or battery pack pace.
+- By default it's never linked to a heat and never moves the program on, even if a round is selected on **Race Control**, and running a round with **Start as Demo...** leaves that round unrun. To rehearse a whole night, tick **Let a demo fill in the race program (rehearse a whole night)** in the **Settings** card (it ticks **Save demo races to Race History** too): a demo race then marks its heat as run and the program moves on, with qualifying, the mains and bump-ups worked out from the demo results. A demo never replaces a heat that has really been run. To clear a rehearsed night, delete its demo races from **Race History** and the heats go back to unrun.
+- It never counts toward championship points (even if you tick it into a championship by hand), badges and achievements, personal bests, track records, ghost pace, handicap suggestions, Race Analytics totals, trends and head-to-head, the event report, or battery pack pace. It counts toward qualifying only when it's been let fill in the program, as above.
 - It isn't published to the online relay, neither in results nor in track best laps.
 - In the results JSON export it has an `"isDemo"` field.
 

@@ -202,6 +202,15 @@ public sealed class AchievementStore
     /// RemoveForSessions does not wind back - so neither are these. An
     /// explicit list rather than the whole milestone category, which also
     /// holds per-race badges (night-owl, calendar) that do go with their race.
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10): Record Collector is worked out from
+    /// DriverAchievements.TrackRecords, the list of layouts the driver has
+    /// held a record on - another running total RemoveForSessions leaves
+    /// alone. It used to go with its race while the list stayed, so the
+    /// driver's next track record anywhere announced it again as new. It is
+    /// kept now, like the race, lap, win and podium milestones. Track Record
+    /// Holder is not: it is only awarded as a new record is set, so getting
+    /// it back is earned.
     /// </summary>
     internal static readonly IReadOnlySet<string> KeptWithTheTotals = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -221,6 +230,7 @@ public sealed class AchievementStore
         AchievementCatalogue.PodiumRegular,
         AchievementCatalogue.TenPodiums,
         AchievementCatalogue.TwentyFivePodiums,
+        AchievementCatalogue.ThreeTrackRecords,
     };
 
     /// <summary>Puts back what RemoveForSessions took. Does not save; the caller does.</summary>

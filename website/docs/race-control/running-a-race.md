@@ -271,7 +271,7 @@ The board orders drivers by most laps, then by lowest total time. Total time inc
 
 - **Click** a driver to open their drawer under their row: **+1 Lap**, **−1 Lap**, **+5s**, **+10s**, **⚠ Warning**, **Clear Penalties**, **Share video** and **Lap breakdown**. Click the same driver again to close it, or another driver to move it. See [Corrections and recovery](corrections-and-recovery.md).
 - **Double-click** a driver to open their lap breakdown, drawer or not. The breakdown shows every lap with a pace bar, how far off their best it was, and their clean run. With a [split loop](../timing/decoders.md#a-split-loop), each lap's sector times replace the pace bar, the driver's best in each sector is in green, and the line at the foot gives their **Ideal lap**. It updates live, so you can leave it open for a whole race. Click anywhere else to close it.
-- **Right-click** a driver for more options: edit or assign a driver, the lap breakdown, show or hide their recent laps on the board, lap and penalty corrections, their battery pack, **Exclude from records**, and **Copy transponder ID**. The pack item lists the driver's packs and the club's, with the one in use ticked. During a race it reads ***name*'s pack in the car**: picking one puts it in their car, so the race is recorded on it. Once the race is saved it reads ***name*'s pack for this race**: picking one records it for the race just run, or **No pack recorded**, and a pack also goes in their car. See [A driver's batteries](../race-day/drivers-and-classes.md#a-drivers-batteries).
+- **Right-click** a driver for more options: edit or assign a driver, the lap breakdown, show or hide their recent laps on the board, **Coach *name*** (target lap, consistency, tones and up or down at the split, for one driver at a time; see [Coaching a driver](#coaching-a-driver)), lap and penalty corrections, their battery pack, **Exclude from records**, and **Copy transponder ID**. The pack item lists the driver's packs and the club's, with the one in use ticked. During a race it reads ***name*'s pack in the car**: picking one puts it in their car, so the race is recorded on it. Once the race is saved it reads ***name*'s pack for this race**: picking one records it for the race just run, or **No pack recorded**, and a pack also goes in their car. See [A driver's batteries](../race-day/drivers-and-classes.md#a-drivers-batteries).
 - **Show {name}'s laps on the board** opens a strip of recent lap times under the driver's row. You can open strips for several drivers at once to compare them. In the strip, a star (★) marks a lap inside a clean run, and a broken circle (◌) marks the lap where a run ended.
 - The driver with the fastest lap of the race has their **Best Lap** highlighted.
 
@@ -285,7 +285,8 @@ Press **Columns...**, at the foot of the leaderboard, to choose the columns and 
 | **Driver** | Driver name, or the transponder number if there's no profile. |
 | **Car** | Car model from the driver's profile. |
 | **Transponder** | Transponder number. |
-| **Laps** | Laps completed. |
+| **Laps** | Laps completed. A star (**12\***) means some were added by hand - see [Laps counted by hand](results-and-championships.md#laps-counted-by-hand). |
+| **By Hand** | How many laps were added by hand this race with **+1 Lap**, shown as +2. Not shown by default. |
 | **Last Lap** | Most recent counted lap. |
 | **Best Lap** | Fastest lap this session. Highlighted when it's the quickest of anyone. |
 | **S1**, **S2**, **S3**, **S4** | With a [split loop](../timing/decoders.md#a-split-loop): each sector of the last lap. S1 runs from the line to the split loop, S2 from the split loop back to the line. Highlighted when it's the quickest of anyone this session, green when it's the driver's own best. |
@@ -330,6 +331,29 @@ During a race, the announcer also calls:
 - a new track record.
 
 A lap that beats the record by an implausible margin doesn't set the record. The console explains why and the lap still counts in the race. Demo and practice laps never set records, and neither do drivers marked **Exclude from records** or rental transponders. **Exclude from records** also takes the driver out of championship points; the log says the driver is "excluded from track records and championship points". See [Voice announcements](../announcer/voice.md).
+
+## Coaching a driver
+
+Right-click a driver on the board and open **Coach *name*** to coach them while they drive. It reads **Coaching *name*** while they are the one being coached. Ghost cars can't be coached.
+
+| Item | What the driver hears |
+|---|---|
+| **At the split** | With a [split loop](../timing/decoders.md#a-split-loop): "Up a tenth at the split.", "Down two tenths at the split." or "Level at the split." against their own best lap this session, each time they cross it. Only shown with a split loop. See [Hearing the splits](../timing/decoders.md#hearing-the-splits). |
+| **Target lap...** | Asks for a lap time in seconds, for example 9.20 (it starts at their target, or their best lap). Each lap is then said against it: "On target." (within a twentieth of a second), "Two tenths off." or "A tenth under." Once set, the item reads **Target lap (9.20s)...**. |
+| **Clear target** | Takes the target away. Only shown when one is set. |
+| **Consistency** | Every five clean laps, how far apart those laps were: "Last five within a tenth - that's your rhythm.", "Last five within three tenths." or "Spread's six tenths over the last five - settle it down.", with "tighter than the five before" or "looser than the five before" when it changed by a tenth or more. |
+| **Tones instead of words** | A short, quiet tone at the line instead of the target words: a high note when the lap was quicker than the target, a middle note when it was on it, a low note when it was slower, and two rising notes for a new best lap. Without a target, the tone is against their best lap. With **At the split** ticked, the split gets a tone too. The consistency line is still spoken. |
+| **Gap to their ghost** | Once they have their own-best ghost on track: at the line, where the ghost is on the track - "Two tenths behind your ghost.", "A tenth ahead of your ghost." or "Level with your ghost." Every lap. Only shown while their ghost is running. |
+| **Chase *name*'s best (ghost)** | Puts on a ghost of their own best lap, "Sam's best" - the same as **Chase a Best Lap...** on the Practice page (see [Chase your own best](practice-and-ghosts.md#chase-your-own-best)). Pick it again once they've beaten it and the ghost comes up to their new best. One **Undo** takes it back off. |
+| **Stop coaching *name*** | Ends the coaching. Only shown while they're being coached. |
+
+- **One driver at a time.** None of these lines says whose lap it was, so coaching a second driver moves the coaching to them, and the console says so.
+- **The target stays with the driver for the night.** Coaching can move to someone else and back without typing it again. It's forgotten when HeatCaller closes, and never saved.
+- **When coaching ends:** at **Reset**, when the race they were coached in is saved, with **Stop coaching**, or when nothing is left ticked. In practice it lasts until **Reset**. The target lap is kept.
+- A lap half as long again as their best (a spin, a marshal stop) is never coached on.
+- The tones play the moment the car crosses, never queued behind the announcer, at the sound effects' volume but quieter. They stop only when the announcer is muted.
+- The words are lines on **Voice → Announcements**, **Target lap (coach)**, **Consistency (coach)** and **Gap to their ghost (coach)**, ticked for practice and not for races in a new install. When one is switched off, the console says so as you pick it. See [Every announcement](../announcer/voice.md#every-announcement).
+- A driver can also follow their own laps, their target and their report card on their phone: see [Coach](../screens/phone-and-web.md#coach).
 
 ## The Next Up bar
 

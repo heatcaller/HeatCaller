@@ -70,9 +70,8 @@ public sealed class ResultsExportForm : Form
 
         var lblNote = new Label
         {
-            Text = "There's no single file layout that RC timing software agrees on, so these are formats whose shape is "
-                 + "fully documented rather than a guess at one vendor's. If you need a specific layout, a sample file "
-                 + "is enough to match it.",
+            Text = "RC timing software has no common file layout, so these formats are fully documented rather than a "
+                 + "guess at one vendor's. If you need a specific layout, a sample file is enough to match it.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -141,7 +140,7 @@ public sealed class ResultsExportForm : Form
     {
         ResultsExporter.Format.ResultsCsv =>
             "Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Track, Position, Driver, "
-            + "Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds, Status",
+            + "Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds, Status, LapsCountedByHand",
 
         ResultsExporter.Format.LapCsv =>
             "Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Driver, Transponder, "

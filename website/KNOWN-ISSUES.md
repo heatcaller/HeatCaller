@@ -4,13 +4,14 @@ Reviewed at 0.52.0, and again on 10 Oct 2026 after the show round, the voice rou
 
 ## Still open
 
-Checked again on 22 Oct 2026, after the known-issues round fixed everything else that was on this list (see "Fixed, not yet released (22 Oct, known issues)").
+Checked again on 22 Oct 2026, after the known-issues round fixed everything else that was on this list (see "Fixed in 0.60.0 (22 Oct, known issues)").
 
 | Issue | Where it's documented |
 |---|---|
 | **The installer has nowhere public to download from yet.** getting-started/install.md was rewritten around the installer on 22 Oct 2026 and says to get it from the HeatCaller team for now. The releases repo has to exist with the signed assets on it before the page can give a download link - the update feed points there too. | getting-started/install.md. Knock-ons still to check in reference/faq.md, getting-started/index.md, first-race-night.md and admin/troubleshooting.md |
 | **The rolling record watch only writes to the console.** Since 22 Oct `RecordWatch` is fed every lap and reset each race, but it only writes `[pace]` lines. By design it must not drive `NotifyRecordPace`/`NotifyTrackRecord`; it needs a segment of its own before anything is spoken. | Not documented |
 | Low: **a saved take from before "Shorten published names" was ticked still holds the full names.** The race no longer asks for it (it looks the shortened text up), so it is never played, but **Re-roll Line...** on it would send the full names to the relay once more and make a take the race won't use. **Forget Line** clears it. A fix is for Re-roll to refuse a line whose text the shortening would change. | Not documented |
+| Low: **the club's website doesn't show which laps were counted by hand.** Since 22 Oct the laptop's own pages, printouts and exports mark a lap count that includes hand-counted laps ("12\*", with "\* includes laps counted by hand"). The relay's copy of the board is sent without the mark, because the relay draws its pages itself and has no legend; adding it needs a relay change. | race-control/results-and-championships.md (Laps counted by hand) says so |
 | Wording only: the internal guard in the app refuses a test with `Choose "My own ElevenLabs account" on Voice Settings`, but the radio button reads **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)**. The message shouldn't be reachable, so it isn't documented. | Not documented |
 | screens/phone-and-web.md still describes only the manual `netsh` commands and never mentions the **Set up phone pages** button. | screens/phone-and-web.md |
 
@@ -96,7 +97,7 @@ not go looking for the fault.
   `CommentaryReaders.Championship`'s own remarks admit: "it is still a claim
   this cannot stand behind".)
 
-## Fixed, not yet released (11 Oct)
+## Fixed in 0.60.0 (11 Oct)
 
 The commentary depth round - the request of 10 Oct 2026, planned in
 `claude\commentary-depth-2026-10-10.md` and marked off against that plan in
@@ -152,7 +153,7 @@ faults rather than add material.
   race-scoped key let the same debut go out from the intro and then again
   from the segment. (10-11 Oct 2026)
 
-## Fixed, not yet released (22 Oct, known issues)
+## Fixed in 0.60.0 (22 Oct, known issues)
 
 Every open issue on this list on the morning of 22 Oct 2026, fixed in one round. The pages named need checking against the build.
 
@@ -178,7 +179,7 @@ Every open issue on this list on the morning of 22 Oct 2026, fixed in one round.
 - **Program tab undo**: re-checked - a move or bump-up undo already refuses a heat run since the change, and that is pinned by tests. The old entry was stale.
 - **Docs**: getting-started/install.md is rewritten around the installer, and driver warnings are documented (race-control/corrections-and-recovery.md, race-day/drivers-and-classes.md).
 
-## Fixed, not yet released (22 Oct)
+## Fixed in 0.60.0 (22 Oct)
 
 - **Race recording has a switch, and a ceiling.** **Sounds → Recording** has *Record each race, and cut each driver their own clip* and **Keep the last:** *N* race nights, older nights' folders removed - including, since 22 Oct, the highlight videos in them. (announcer/sounds-and-music.md)
 - **The sting has a level.** **Sting level:** is on the **Show treatment** card beside the opener and bed levels. (announcer/commentary.md)
@@ -202,7 +203,7 @@ it is reachable for a thing that is not a show.
 box, a tier, a budget, and no reader behind either - and which were silent in
 the field for every club for as long as they existed. They were never written
 down here, which is most of why they lasted. Both have readers as of 11 Oct
-2026 and are in "Fixed, not yet released (11 Oct)" above; the three segments
+2026 and are in "Fixed in 0.60.0 (11 Oct)" above; the three segments
 fixed on 10 Oct 2026 are there too. A segment with a box and no reader belongs
 in this section, and the test that now pins it (`CommentaryDepthTests`) is
 there so the question never has to be asked by hand again.
@@ -215,7 +216,7 @@ drama-shaped show (`ShowDrama`) is fed by the recap and the sign-off as of
 22 Oct. `AppSettings.ShowIdentLine` is still in the settings file with no
 reader, on purpose, so an old file keeps loading.
 
-## Fixed, not yet released (10 Oct)
+## Fixed in 0.60.0 (10 Oct)
 
 - **Hear a voice before you choose it.** The exact fix this file proposed - "a sample the relay could serve unauthenticated, or a 'preview this voice' button with its own tiny budget" - is built, both halves. **Hear It** plays a fixed line in the highlighted voice with no token and no sign-up (the first asker anywhere pays one render; everyone after hears the saved copy), and **Preview** speaks the club's own words - its real class and driver names - out of a separate daily allowance that is never the race-night one. Neither touches the race-night allowance, which also closes this file's "all you have to go on is the catalog description" complaint. **Both need `fly deploy --ha=false` before they do anything**; an older relay answers that it doesn't offer voice samples yet. (announcer/voice.md: Hear a voice before you choose it)
 - **The Windows voice is retired entirely, and Kokoro is the floor.** Every open issue about SAPI voices, about a club with no Windows voice having no stand-in, and about the wording that offered the Windows voice as an escape, goes with it. (announcer/voice.md)

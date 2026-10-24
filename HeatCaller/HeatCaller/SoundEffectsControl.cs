@@ -344,7 +344,7 @@ public sealed class SoundEffectsControl : UserControl
         var lblIntro = new Label
         {
             Text = "Mimics Next Level Timing's audio cues: per-lap feedback plus sounds for race moments.\n" +
-                   "Pick a sound for each row - the generated tones or one of the built-in packs - or point it at your own file, which wins over both.\n" +
+                   "Pick a sound for each row - a generated tone or a built-in pack - or your own file, which wins over both.\n" +
                    "\"Weight\" decides which per-lap sounds win when several fire on the same lap - see \"Max sounds per lap\" below.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,

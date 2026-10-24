@@ -49,6 +49,12 @@ namespace HeatCaller;
 /// transponder under the club's own secret - so the relay holds a name and
 /// an evening under an id that says nothing about the car it came from and
 /// that the club can revoke for everybody at once.
+///
+/// THE EXTRAS (22 Oct 2026, driver experience) - races one by one, the
+/// lap charts, penalty reasons, progress, improvement, badges in reach,
+/// first night - come through <see cref="Document(NightParts)"/> and
+/// <see cref="DriverNightExtras"/>, each as a field of its own beside
+/// `lines` and never inside it, so the promise above still holds.
 /// </summary>
 internal static class DriverNight
 {
@@ -107,12 +113,23 @@ internal static class DriverNight
     /// <param name="dayName">What the club called the race day, if it called it anything.</param>
     /// <param name="facts">DriverCut.FactsFor for this driver. Used as it is.</param>
     /// <param name="atUtc">When this was built, so a driver can see how fresh it is.</param>
+    /// <param name="coach">
+    /// Their report card (CoachReport.Lines), or null. Sent as a list of its
+    /// own, `coach`, beside `lines` and never inside it (22 Oct 2026):
+    /// `lines` are DriverCut's facts word for word, which is the promise at
+    /// the top of this class, and the card is arithmetic over their laps
+    /// that the relay page shows under a heading of its own. Left out of the
+    /// document altogether when there is no card, so a night without one is
+    /// byte for byte what it was before the card existed - and a relay from
+    /// before it simply never shows it.
+    /// </param>
     internal static string? Document(
         string? driverName,
         DateTime nightLocal,
         string? dayName,
         PackedFacts? facts,
-        DateTime atUtc)
+        DateTime atUtc,
+        IReadOnlyList<string>? coach = null)
     {
         var named = (driverName ?? string.Empty).Trim();
 
@@ -128,15 +145,31 @@ internal static class DriverNight
             return null;
         }
 
-        var document = JsonSerializer.Serialize(new
-        {
-            driver = named,
-            when = WhenLine(nightLocal),
-            night = nightLocal.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            title = string.IsNullOrWhiteSpace(dayName) ? string.Empty : dayName.Trim(),
-            lines,
-            at = atUtc.ToString("O", CultureInfo.InvariantCulture),
-        });
+        var card = (coach ?? Array.Empty<string>())
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => line.Trim())
+            .ToArray();
+
+        var document = card.Length == 0
+            ? JsonSerializer.Serialize(new
+            {
+                driver = named,
+                when = WhenLine(nightLocal),
+                night = nightLocal.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                title = string.IsNullOrWhiteSpace(dayName) ? string.Empty : dayName.Trim(),
+                lines,
+                at = atUtc.ToString("O", CultureInfo.InvariantCulture),
+            })
+            : JsonSerializer.Serialize(new
+            {
+                driver = named,
+                when = WhenLine(nightLocal),
+                night = nightLocal.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                title = string.IsNullOrWhiteSpace(dayName) ? string.Empty : dayName.Trim(),
+                lines,
+                coach = card,
+                at = atUtc.ToString("O", CultureInfo.InvariantCulture),
+            });
 
         // A night this big cannot happen from FactsFor - it is capped at
         // DriverCut.MostChars - so this is only reachable through a name or
@@ -144,6 +177,148 @@ internal static class DriverNight
         // the relay would refuse it anyway and a 413 on the worker's thread
         // is a worse way to find out.
         return System.Text.Encoding.UTF8.GetByteCount(document) > MostDocumentBytes ? null : document;
+    }
+
+    /// <summary>
+    /// One driver's night with the driver experience extras - their races
+    /// one by one, `improve`, `progress`, `reach` and `firstNight` (see
+    /// <see cref="DriverNightExtras"/> and <see cref="NightParts"/>).
+    ///
+    /// 22 Oct 2026 (driver experience). WITHOUT AN EXTRA THIS IS THE
+    /// ORIGINAL OVERLOAD, called as it is, so a night with nothing new in
+    /// it is byte for byte what it was - and every rule about when there is
+    /// no night (no name, no facts) is the original's too. `lines` are
+    /// still DriverCut's facts word for word; the extras are fields of
+    /// their own, each left out when empty.
+    ///
+    /// OVER THE RELAY'S 64 KB, THE LAP CHARTS GO FIRST. They are by far the
+    /// biggest part (a long night of 200-lap runs), and a night without its
+    /// charts is still the whole night in words. Only if it is still too
+    /// big is it dropped, as the original does.
+    /// </summary>
+    internal static string? Document(NightParts parts)
+    {
+        if (parts is null)
+        {
+            return null;
+        }
+
+        if (!parts.HasExtras)
+        {
+            return Document(parts.DriverName, parts.NightLocal, parts.DayName, parts.Facts, parts.AtUtc, parts.Coach);
+        }
+
+        var named = (parts.DriverName ?? string.Empty).Trim();
+
+        if (named.Length == 0 || parts.Facts is null || parts.Facts.Empty)
+        {
+            return null;
+        }
+
+        var lines = Lines(parts.Facts);
+
+        if (lines.Length == 0)
+        {
+            return null;
+        }
+
+        var card = (parts.Coach ?? Array.Empty<string>())
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => line.Trim())
+            .ToArray();
+
+        var races = parts.Races is { Count: > 0 } some ? some.Where(r => r is not null).ToList() : null;
+        var reach = parts.Reach is { Count: > 0 } near ? near.Where(r => r is not null).ToList() : null;
+
+        // A second transponder raced as a car of its own (22 Oct 2026):
+        // each car's entry, its lines and card cleaned as the top-level
+        // ones are, and empty ones left out.
+        var cars = parts.Cars is { Count: > 0 } several
+            ? several.Where(c => c is not null).Select(c => c with
+            {
+                Name = string.IsNullOrWhiteSpace(c.Name) ? null : c.Name.Trim(),
+                Lines = Cleaned(c.Lines),
+                Coach = Cleaned(c.Coach),
+                Improve = string.IsNullOrWhiteSpace(c.Improve) ? null : c.Improve.Trim(),
+            }).ToList()
+            : null;
+
+        NightDocument Built(List<NightRace>? withRaces, List<NightCar>? withCars) => new()
+        {
+            Driver = named,
+            When = WhenLine(parts.NightLocal),
+            Night = parts.NightLocal.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            Title = string.IsNullOrWhiteSpace(parts.DayName) ? string.Empty : parts.DayName.Trim(),
+            Lines = lines,
+            Coach = card.Length == 0 ? null : card,
+            Races = withRaces is { Count: > 0 } ? withRaces : null,
+            Cars = withCars is { Count: > 0 } ? withCars : null,
+            Improve = string.IsNullOrWhiteSpace(parts.Improve) ? null : parts.Improve.Trim(),
+            Progress = parts.Progress,
+            Reach = reach is { Count: > 0 } ? reach : null,
+            FirstNight = parts.FirstNight ? true : null,
+            At = parts.AtUtc.ToString("O", CultureInfo.InvariantCulture),
+        };
+
+        var document = JsonSerializer.Serialize(Built(races, cars));
+
+        if (Fits(document))
+        {
+            return document;
+        }
+
+        if (races is not null && races.Any(r => r.LapsMs is not null))
+        {
+            races = races.Select(r => r with { LapsMs = null }).ToList();
+            document = JsonSerializer.Serialize(Built(races, cars));
+
+            if (Fits(document))
+            {
+                return document;
+            }
+        }
+
+        // Two cars' worth is roughly twice the night (22 Oct 2026, second
+        // transponder). After the charts, the other cars' facts go, then
+        // their report cards: their race cards, improvement and progress
+        // still say how each car did.
+        if (cars is not null && cars.Any(c => c.Lines is not null))
+        {
+            cars = cars.Select(c => c with { Lines = null }).ToList();
+            document = JsonSerializer.Serialize(Built(races, cars));
+
+            if (Fits(document))
+            {
+                return document;
+            }
+        }
+
+        if (cars is not null && cars.Any(c => c.Coach is not null))
+        {
+            cars = cars.Select(c => c with { Coach = null }).ToList();
+            document = JsonSerializer.Serialize(Built(races, cars));
+
+            if (Fits(document))
+            {
+                return document;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool Fits(string document) =>
+        System.Text.Encoding.UTF8.GetByteCount(document) <= MostDocumentBytes;
+
+    /// <summary>Lines trimmed, blanks dropped - or null when none are left, so the field is left out.</summary>
+    private static string[]? Cleaned(IEnumerable<string>? lines)
+    {
+        var kept = (lines ?? Array.Empty<string>())
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => line.Trim())
+            .ToArray();
+
+        return kept.Length == 0 ? null : kept;
     }
 
     /// <summary>

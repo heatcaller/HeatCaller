@@ -5,7 +5,7 @@ HeatCaller runs RC race nights from one Windows laptop. It times the laps from y
 <!-- screenshot: Race Control page mid-race, leaderboard and flag buttons visible -->
 
 !!! note "Beta"
-    HeatCaller is in beta (version 0.59.0). It's used at real race nights, but expect rough edges, and keep backups turned on.
+    HeatCaller is in beta (version 0.60.0). It's used at real race nights, but expect rough edges, and keep backups turned on.
 
 ## Where to start
 

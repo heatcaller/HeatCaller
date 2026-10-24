@@ -247,7 +247,7 @@ public sealed class RaceNightTests : IDisposable
 
             // Two laps each by 25.0 (Alice 10.0/20.0 ... Cara 10.4/20.8).
             laptop.Drive(AMain, after: 0, upTo: 25_000);
-            laptop.Journal.Record(laptop.Race, laptop.StartedUtc, string.Empty, force: true, roundId: aMainId, raceLabel: "Stock A-Main");
+            laptop.Journal.Record(laptop.Timing, laptop.StartedUtc, string.Empty, force: true, roundId: aMainId, raceLabel: "Stock A-Main");
             Assert.True(File.Exists(_data.PathOf("race-in-progress.json")));
 
             // Down. A new laptop, everything read back from disk.
@@ -258,7 +258,7 @@ public sealed class RaceNightTests : IDisposable
             Assert.NotNull(unfinished);
             Assert.Equal(aMainId, unfinished!.RoundId);
 
-            RaceJournal.Restore(laptop.Race, unfinished);
+            RaceJournal.Restore(laptop.Timing, unfinished);
             Assert.Equal(RaceState.Racing, laptop.Race.State);
             Assert.Equal(FlagState.Red, laptop.Race.Flag);
             Assert.All(laptop.Race.GetOrderedStandings(), s => Assert.Equal(2, s.Laps));
@@ -406,6 +406,9 @@ public sealed class RaceNightTests : IDisposable
         public readonly BatteryPackStore Batteries = BatteryPackStore.Load();
         public readonly RaceControlSession Race = new();
         public readonly RaceJournal Journal = new();
+
+        /// <summary>The race as the app holds it (P3): the one front door over Race.</summary>
+        public readonly RaceTiming Timing;
         public readonly List<string> Log = new();
 
         public readonly RaceProgramControl Program;
@@ -422,12 +425,14 @@ public sealed class RaceNightTests : IDisposable
 
             Program = new RaceProgramControl(Classes, Profiles, Rounds, Tracks, History, CheckIns, Settings, Undo, Events, Schedule);
 
+            Timing = new RaceTiming(Race);
+
             Phone = new RaceDayService(new RaceDayServiceHost
             {
                 UiThread = _window,
                 Settings = Settings,
                 Undo = Undo,
-                Race = Race,
+                Race = Timing,
                 Events = Events,
                 Classes = Classes,
                 Profiles = Profiles,

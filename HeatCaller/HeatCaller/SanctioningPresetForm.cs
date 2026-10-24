@@ -38,8 +38,8 @@ public sealed class SanctioningPresetForm : Form
 
     /// <summary>What is said under the list when applying the preset picked would end the class's following the app default - see ShowDetail.</summary>
     private const string FollowsDefaultNote =
-        "Note: this class currently follows the app's default race format. Applying a preset that sets a "
-        + "duration gives it a format of its own, so later changes to the app default will stop reaching it.";
+        "Note: this class follows the app's default race format. A preset that sets a duration gives it a "
+        + "format of its own, so later changes to the app default stop reaching it.";
 
     private readonly RaceClass _raceClass;
     private readonly ListBox _list = new();

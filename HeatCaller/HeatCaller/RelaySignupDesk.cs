@@ -377,6 +377,10 @@ internal sealed class RelaySignupDesk
             checkedIn = _checkIns.IsCheckedIn(transponder);
         }
 
+        var wasAnsweredUtc = invite.AnsweredUtc;
+        var wasTransponder = invite.Transponder;
+        var wasAnswerCheckedIn = invite.AnswerCheckedIn;
+
         invite.State = SignupInviteState.Approved;
         invite.AnsweredUtc = DateTime.UtcNow;
         invite.Transponder = transponder;
@@ -388,7 +392,30 @@ internal sealed class RelaySignupDesk
         // never came.
         // The approval is written down first, so a PIN step that throws
         // can never leave an approved invite that only lives in memory.
-        Store.Save();
+        // WHY (23 Oct 2026, bug hunt 10): the save's result used to be
+        // ignored. With signups.json held by a sync or backup tool the
+        // approval lived only in memory, yet the phone was still told it
+        // was in and the relay kept that answer - after a restart the
+        // invite was back to Open with no record of who it became, and
+        // could never be approved again. Now a failed save puts every step
+        // back here (as UndoApprove does) and nothing goes to the relay.
+        // No new code: the relay hasn't been answered for this one.
+        if (!Store.Save())
+        {
+            invite.State = SignupInviteState.Open;
+            invite.AnsweredUtc = wasAnsweredUtc;
+            invite.Transponder = wasTransponder;
+            invite.AnswerCheckedIn = wasAnswerCheckedIn;
+
+            RollBack(new ApprovalReceipt(invite.Id, name, transponder, rentalLent, rentalOutUtc,
+                eventWithClassAdded, classAdded, checkedIn, _checkIns.CurrentEventId, profileAdded));
+
+            _log("[signup] Couldn't save approving an online sign-up, so it was put back and nothing was sent.");
+            refusal = "The approval couldn't be saved, so nothing was changed or sent. "
+                + "Close anything that might have signups.json open (a backup or sync tool is the usual cause) and try again.";
+            return false;
+        }
+
         bool pinComing;
         try
         {
@@ -403,7 +430,14 @@ internal sealed class RelaySignupDesk
         }
 
         invite.AnswerMessage = pinComing ? "Your own check-in PIN is on its way by email." : string.Empty;
-        Store.Save();
+
+        // WHY (23 Oct 2026, bug hunt 10): this save adds only the message;
+        // the approval itself is on disk already. A failure is said in the
+        // console rather than ignored - the next signups.json save writes it.
+        if (!Store.Save())
+        {
+            _log("[signup] Couldn't save the message for an approved online sign-up - it is kept and saved with the next change.");
+        }
 
         SendApproved(invite);
 
@@ -469,6 +503,22 @@ internal sealed class RelaySignupDesk
             throw new InvalidOperationException($"{receipt.Name}'s sign-up has changed since, so it was left as it is.");
         }
 
+        RollBack(receipt);
+
+        Reopen(invite, newCode: true);
+
+        _log($"[signup] Undid approving an online sign-up. Their phone was already told they're in"
+            + " - that can't be taken back, so let them know in person. " + NewCodeNote);
+    }
+
+    /// <summary>
+    /// Puts back on this laptop what one approval did - check-in, rental
+    /// loan, profile, the class added to the event - but not the invite
+    /// itself. Shared by UndoApprove and by Approve when its save fails
+    /// (23 Oct 2026, bug hunt 10).
+    /// </summary>
+    private void RollBack(ApprovalReceipt receipt)
+    {
         var transponder = receipt.Transponder;
 
         // Checked out first, through the desk's own path, while the profile
@@ -513,11 +563,6 @@ internal sealed class RelaySignupDesk
                 _events.Upsert(raceEvent);
             }
         }
-
-        Reopen(invite, newCode: true);
-
-        _log($"[signup] Undid approving an online sign-up. Their phone was already told they're in"
-            + " - that can't be taken back, so let them know in person. " + NewCodeNote);
     }
 
     /// <summary>Undoes turning a sign-up down, here: the invite is open again, under a new code. The phone has been told no, and the relay keeps that answer against the old code, so they sign up again with the new one.</summary>

@@ -331,9 +331,32 @@ public sealed partial class RaceControlControl
 
         public CancellationTokenSource Stop { get; }
 
-        /// <summary>Why it was stopped, in words for the console, when Skip or Hold stopped it. Null for the next race.</summary>
+        /// <summary>
+        /// Why it was stopped, in words for the console, when Skip, Hold or
+        /// On Air stopped it. Null when the next race's own staging stopped
+        /// it. Not a test for "the next race was called" - On Air sets it
+        /// too; see <see cref="NextRaceCalled"/>.
+        /// </summary>
         public volatile string? StoppedBy;
+
+        /// <summary>
+        /// WHY (22 Oct 2026): the next race was called while this show ran -
+        /// staged, counting down, started, or On Air pressed for it. The
+        /// sequence's finally used to take "StoppedBy is set" to mean Skip or
+        /// Hold, but On Air sets StoppedBy too, so a recap stopped by On Air
+        /// read the last race's held badges over the next race's opening.
+        /// Kept apart from StoppedBy, and set even after Skip or Hold had
+        /// already stopped the show, so the badges stay unsaid either way.
+        /// </summary>
+        public volatile bool NextRaceCalled;
     }
+
+    /// <summary>
+    /// The reason On Air gives <see cref="EndRecapShow"/> (RaceControlControl.OnAir).
+    /// Recognised there as the next race being called - see
+    /// <see cref="RecapShowRun.NextRaceCalled"/>.
+    /// </summary>
+    internal const string OnAirPressedForNextRace = "On Air was pressed for the next race";
 
     /// <summary>
     /// Ends the recap show that is running, as the next race being called
@@ -342,9 +365,25 @@ public sealed partial class RaceControlControl
     /// says it must: the queue also holds the flag calls. Nothing after it
     /// starts. False when no recap show is running.
     /// </summary>
-    private bool EndRecapShow(string why)
+    private bool EndRecapShow(string why, bool nextRace = false)
     {
-        if (Volatile.Read(ref _recapShow) is not { } run || run.Stop.IsCancellationRequested)
+        if (Volatile.Read(ref _recapShow) is not { } run)
+        {
+            return false;
+        }
+
+        // WHY (22 Oct 2026): On Air calling off the recap is the next race
+        // being called (its own comment says so), and the held badges must
+        // not then be read over that race's opening. Recorded before the
+        // already-stopped check, so a Skip pressed first still leaves the
+        // flag set. On Air's reason is matched as well as the flag, so this
+        // holds whether or not its call passes nextRace.
+        if (nextRace || why == OnAirPressedForNextRace)
+        {
+            run.NextRaceCalled = true;
+        }
+
+        if (run.Stop.IsCancellationRequested)
         {
             return false;
         }
@@ -489,6 +528,10 @@ public sealed partial class RaceControlControl
         // So it goes where nothing can skip it.
         SettleTheRoomsVote(record, round);
 
+        // The race the coach was picked for is over (22 Oct 2026) - see
+        // EndSplitCoaching.
+        EndSplitCoaching("the race is over");
+
         // The gate the next race's write-aheads are waiting at (20 Oct
         // 2026), taken here on the UI thread - opened on every way out of
         // this method, and by the job once the flag lines have been asked
@@ -541,6 +584,31 @@ public sealed partial class RaceControlControl
         // Not under "Lap times only" (22 Oct 2026, bug hunt): that mode is
         // the lap times and the calls a race cannot do without, nothing more.
         var resultRead = _settings.FlagResultRead && !LapTimesOnly.IsOn(_settings) ? FlagResultFor(record) : null;
+
+        // THE SECTORS AT THE FLAG (22 Oct 2026): who was quickest through
+        // each sector, said in the same breath as the result - so it is
+        // said once, in order, and goes wherever the result goes. Its own
+        // switch (Sectors at the flag, off until a club ticks it), so it
+        // speaks with the result read off too. Not under "Lap times only",
+        // for the same reason the result is not. Not handed to the AI
+        // recap: the room has just heard it, and the recap is about the
+        // race rather than its table.
+        if (!LapTimesOnly.IsOn(_settings) && _announcer.WillCall(AnnouncementEventType.SectorsRecap))
+        {
+            // Guarded like the save-path work below: this runs before the
+            // heat is linked to its round and the journal is cleared.
+            try
+            {
+                if (SectorsAtTheFlag(record) is { } sectorsLine)
+                {
+                    resultRead = resultRead is null ? sectorsLine : $"{resultRead} {sectorsLine}";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [split] The sectors at the flag could not be worked out: {ex.Message}");
+            }
+        }
 
         if (!wantsTeaser && !commentaryAvailable && honours is null && resultRead is null)
         {
@@ -795,10 +863,20 @@ public sealed partial class RaceControlControl
         // running on the UI thread as the sequence ends.
         var nextRace = new CancellationTokenSource();
 
+        // Skip and Hold stop it too - see _recapShow. Made here, before the
+        // handler below, so the handler can mark it (22 Oct 2026); published
+        // to _recapShow just after, as before.
+        var recapShow = new RecapShowRun(nextRace);
+
         Action<RaceState> onNextRace = state =>
         {
             if (state is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
             {
+                // WHY (22 Oct 2026): recorded, so the sequence's finally
+                // knows not to read this race's held badges into the next
+                // one - even when Skip or Hold had stopped the show first.
+                recapShow.NextRaceCalled = true;
+
                 // Async: Cancel() would run whatever is waiting on the token
                 // right here, on the thread that is changing the race.
                 _ = nextRace.CancelAsync();
@@ -810,12 +888,12 @@ public sealed partial class RaceControlControl
         // Already called? Then nothing follows the recap at all.
         if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
         {
+            recapShow.NextRaceCalled = true;
             nextRace.Cancel();
         }
 
-        // Skip and Hold stop it too - see _recapShow. Taken over from any
-        // earlier sequence still finishing, which only clears its own.
-        var recapShow = new RecapShowRun(nextRace);
+        // Taken over from any earlier sequence still finishing, which only
+        // clears its own.
         Volatile.Write(ref _recapShow, recapShow);
 
         // The race this recap is about, for OnAirFollowsTheRecap. Read here
@@ -850,6 +928,24 @@ public sealed partial class RaceControlControl
         // green - and must not stop THAT race's recording seconds in, the same
         // guard SignalSessionAudioFinishedAfterFinishCall already has.
         var recapRecording = _raceAudioRecorder;
+
+        // WHY (22 Oct 2026): the race's drama for the show's opening is
+        // worked out HERE, on the UI thread, like boothBrief above. It used
+        // to be read inside the sequence below, on the thread pool, where a
+        // layout added in the Track Layouts editor at that moment could
+        // change the store under it ("Collection was modified") and the
+        // written recap was lost. ShowDrama is a value, so the sequence gets
+        // its own copy.
+        var recapDrama = ShowDrama.None;
+
+        try
+        {
+            recapDrama = ShowDrama.Of(record, _trackLayouts.All.FirstOrDefault(t => !string.IsNullOrEmpty(record.TrackLayoutName) && t.Name == record.TrackLayoutName));
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] Could not read the race's drama: {ex.Message}");
+        }
 
         _ = Task.Run(async () =>
         {
@@ -1625,8 +1721,8 @@ public sealed partial class RaceControlControl
                     //
                     // 22 Oct 2026: with the race's drama - a photo finish or a
                     // track record set in this race earns the recap a beat
-                    // more air (ShowDrama, ShowTreatment.BiggerAir).
-                    var recapDrama = ShowDrama.Of(record, _trackLayouts.All.FirstOrDefault(t => !string.IsNullOrEmpty(record.TrackLayoutName) && t.Name == record.TrackLayoutName));
+                    // more air (ShowDrama, ShowTreatment.BiggerAir). Read on
+                    // the UI thread before the sequence began - see recapDrama.
                     opening = treatment.StartAsync(SegmentKind.RaceRecap, recapDrama, nextRace.Token);
                 }
 
@@ -1934,9 +2030,12 @@ public sealed partial class RaceControlControl
                 // never heard at all. Called one at a time instead, as they
                 // would have been with the segment off. Not when the next race
                 // stopped it: that race must not hear the last one's badges.
+                // WHY (22 Oct 2026): "the next race" is NextRaceCalled, not a
+                // null StoppedBy - On Air sets StoppedBy too, and the badges
+                // were read over the next race's opening.
                 try
                 {
-                    if (honours is { Started: false, Unlocks: { Count: > 0 } held } && recapShow.StoppedBy is not null)
+                    if (honours is { Started: false, Unlocks: { Count: > 0 } held } && recapShow.StoppedBy is not null && !recapShow.NextRaceCalled)
                     {
                         foreach (var unlock in held.Take(MaxSpokenAchievements))
                         {
@@ -2615,9 +2714,7 @@ public sealed partial class RaceControlControl
             // six - the argument CommentaryWeekFacts.OneDriver makes about
             // its own key. The event's id when there is one, and the night
             // itself when the club filed no race day.
-            var key = string.IsNullOrWhiteSpace(_events?.Active?.Id)
-                ? TonightAtTheTrack.NightOf(DateTime.Now).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
-                : _events!.Active!.Id;
+            var key = PrincipalNightKey(_events?.Active?.Id, DateTime.Now);
 
             // THEIR BEST FINISH, counting only races they finished - a
             // zero in the list is a retirement (see TeamNight.Finishes)
@@ -3094,6 +3191,71 @@ public sealed partial class RaceControlControl
         var fastest = ordered.Where(r => r.FastLapMs > 0).OrderBy(r => r.FastLapMs).FirstOrDefault();
 
         return FlagResult(podium, fastest is null ? null : SpokenDriverName(fastest.Transponder));
+    }
+
+    /// <summary>
+    /// The sectors line for the flag (22 Oct 2026), or null: switched off,
+    /// no split loop in this race, or fewer than two sectors with a time.
+    /// The quickest through each sector from the saved results' own best
+    /// sectors (Sectors.Bests), cut the way most of the field's were; ghosts
+    /// and drivers kept out of records are left out, as they are of the
+    /// sector records.
+    /// </summary>
+    private string? SectorsAtTheFlag(SessionRecord record)
+    {
+        var bests = record.Results
+            .Where(r => !GhostService.IsGhost(r.Transponder)
+                        && _profiles.Get(r.Transponder) is not { ExcludeFromRecords: true })
+            .Select(r => (Result: r, Bests: Sectors.Bests(r)))
+            .Where(x => x.Bests is { Length: >= 2 })
+            .ToList();
+
+        if (bests.Count == 0)
+        {
+            return null;
+        }
+
+        var cut = bests.GroupBy(x => x.Bests!.Length).OrderByDescending(g => g.Count()).ThenByDescending(g => g.Key).First().Key;
+        var field = bests.Where(x => x.Bests!.Length == cut).ToList();
+        var names = QuickestThroughSectors(field.Select(x => (x.Result.Position, x.Bests!)).ToList(), cut)
+            .Select(i => i < 0 ? string.Empty : SpokenDriverName(field[i].Result.Transponder))
+            .ToList();
+
+        return _announcer.SectorsRecapLine(names);
+    }
+
+    /// <summary>
+    /// For each sector, which of <paramref name="field"/> was quickest
+    /// through it (its index), or -1 for none. A tie goes to the higher
+    /// finisher. Pure, for the tests.
+    /// </summary>
+    internal static List<int> QuickestThroughSectors(IReadOnlyList<(int Position, long[] Bests)> field, int sectors)
+    {
+        var quickest = new List<int>(sectors);
+
+        for (var sector = 0; sector < sectors; sector++)
+        {
+            var best = -1;
+
+            for (var i = 0; i < field.Count; i++)
+            {
+                if (sector >= field[i].Bests.Length || field[i].Bests[sector] <= 0)
+                {
+                    continue;
+                }
+
+                if (best < 0
+                    || field[i].Bests[sector] < field[best].Bests[sector]
+                    || (field[i].Bests[sector] == field[best].Bests[sector] && field[i].Position < field[best].Position))
+                {
+                    best = i;
+                }
+            }
+
+            quickest.Add(best);
+        }
+
+        return quickest;
     }
 
     /// <summary>The words of the unofficial result - see FlagResultFor. Pure, for the tests.</summary>
@@ -5076,7 +5238,8 @@ public sealed partial class RaceControlControl
     private Dictionary<string, long>? _raceAudioReleaseOffsets;
 
     /// <summary>
-    /// Keeps the recording in step with the race. Called from WriteJournal,
+    /// Keeps the recording in step with the race. Called after every crash
+    /// journal write (the journal recorder's Written - see WireRaceControl),
     /// which is already the one place every crossing, every flag and every
     /// correction meets - so this needs no hook of its own on the session,
     /// and nothing about how a lap or a flag is handled changes.
@@ -5097,6 +5260,19 @@ public sealed partial class RaceControlControl
                 && (_raceAudioGeneration != _race.SessionGeneration || _race.State is RaceState.Idle))
             {
                 FinishRaceAudio();
+            }
+
+            // After FinishRaceAudio, so a race greened straight after the
+            // last one is still marked live - see FollowRaceLive.
+            FollowRaceLive();
+
+            // Once a race at its green, for every race including the ones
+            // returned from just below - see _replayRestartGeneration
+            // (22 Oct 2026). A recorded race empties it again in StartFor.
+            if (_race.State is RaceState.Racing && _replayRestartGeneration != _race.SessionGeneration)
+            {
+                _replayRestartGeneration = _race.SessionGeneration;
+                RaceReplayBuffer.Shared.Restart();
             }
 
             // Exactly the races the crash journal leaves alone, for exactly
@@ -5185,6 +5361,34 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// Keeps <see cref="HighlightVideo.RaceLive"/> in step with the race on
+    /// track: set while a race the recorder would record is Racing, clear in
+    /// every other state.
+    /// </summary>
+    // WHY (22 Oct 2026, bug hunt 9): nothing set RaceLive, so the videos'
+    // pause during a live race never happened. Worked out from the state
+    // rather than set at the green and cleared at the end, so a reset, an
+    // abandon, a restore or a demo taking over can never leave it stuck on
+    // and hold the video queue (HighlightVideo.VideoGate) behind it. Not
+    // cleared in FinishRaceAudio: that also runs when the next race has
+    // already been greened, and that race is live. Only written when it
+    // changes, so its 30-minute stale guard runs from the green. Demo,
+    // practice and rehearsal never count - the same races FollowRaceAudio
+    // does not record. Called from OnRaceStateChanged and FollowRaceAudio.
+    private void FollowRaceLive()
+    {
+        var live = _race.State is RaceState.Racing
+            && !_race.IsDemoMode
+            && !_race.IsPracticeMode
+            && !AppPaths.IsRehearsal;
+
+        if (live != HighlightVideo.RaceLive)
+        {
+            HighlightVideo.RaceLive = live;
+        }
+    }
+
+    /// <summary>
     /// <see cref="FinishRaceAudio"/>, but only while the recording running
     /// is still <paramref name="recording"/> - see
     /// SignalSessionAudioFinishedAfterFinishCall.
@@ -5258,6 +5462,10 @@ public sealed partial class RaceControlControl
         // number. See HighlightVideo.
         var video = VideoOptionsFor(store, record);
 
+        // And where the drivers' own clips go (22 Oct 2026, driver
+        // experience) - see ClipShare. Read here for the same reason.
+        var clipShare = ClipShareFor(store, record);
+
         _ = Task.Run(() => RaceAudioRecorder.Publish(
             recorder.Stop(),
             store,
@@ -5275,7 +5483,49 @@ public sealed partial class RaceControlControl
                     // not worth an unobserved exception on a pool thread.
                 }
             },
-            video));
+            video,
+            clipShare));
+    }
+
+    /// <summary>
+    /// Where each driver's mp3 clip goes (22 Oct 2026, driver experience):
+    /// their own night on the relay, behind their badge. Null unless the
+    /// club ticked "share drivers' clips" on Sounds > Recording, offers
+    /// drivers their nights, and the club's page is set up - or when nobody
+    /// in the race has a badge id. Badge ids come only from a key that already
+    /// exists, as PodiumShareFor's do.
+    /// </summary>
+    private ClipShare? ClipShareFor(RaceAudioStore store, SessionRecord? record)
+    {
+        var publisher = RelayPublisher.ForVideos;
+
+        if (record is null || !store.DriverHighlights || !store.ShareDriverClips || publisher is null || !publisher.CanShareDriverClips)
+        {
+            return null;
+        }
+
+        try
+        {
+            var ids = ClipShare.DriverIdsFor(record.Results, _profiles.Get, _settings.RelayCheckInSecret);
+
+            if (ids.Count == 0)
+            {
+                return null;
+            }
+
+            var label = string.IsNullOrWhiteSpace(record.Label) ? "Race" : record.Label.Trim();
+
+            return new ClipShare(
+                RelayPublisher.IsAVideoKey(record.Id) ? record.Id : string.Empty,
+                label,
+                ids,
+                publisher);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [audio] Drivers' clips stay on this PC this race ({ex.Message}).");
+            return null;
+        }
     }
 
     /// <summary>
@@ -5296,19 +5546,14 @@ public sealed partial class RaceControlControl
 
         // Badge ids for the podium only, and only from a key that already
         // exists: minting one here would write settings from a race's end.
-        var ids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var secret = _settings.RelayCheckInSecret;
-
-        if (!string.IsNullOrWhiteSpace(secret))
-        {
-            foreach (var row in record.Results)
-            {
-                if (HighlightShare.Wants(row.Position) && !string.IsNullOrWhiteSpace(row.Transponder))
-                {
-                    ids[row.Transponder] = RelayCheckIn.IdFor(row.Transponder, secret);
-                }
-            }
-        }
+        // The clips' rule (22 Oct 2026, security review): the driver's MAIN
+        // transponder's badge, so a podium on a second transponder lands on
+        // the badge they check in with, and none for a ghost, a rental or a
+        // car nobody named. A video without one still goes on the race page.
+        var ids = ClipShare.DriverIdsFor(
+            record.Results.Where(row => HighlightShare.Wants(row.Position)),
+            _profiles.Get,
+            _settings.RelayCheckInSecret);
 
         var label = string.IsNullOrWhiteSpace(record.Label) ? "Race" : record.Label.Trim();
 
@@ -5317,10 +5562,19 @@ public sealed partial class RaceControlControl
         // over a later race's results.
         var generation = _race.SessionGeneration;
 
+        // The public form of every name (22 Oct 2026, bug hunt 9): the upload
+        // sent full names whatever "Shorten published names" said, and the
+        // video drew them too. Worked out over the whole field, here on the
+        // UI thread where the settings are read.
+        var names = RelayPublisher.FieldPublicNames(
+            record.Results.Select(r => ((string?)r.DriverName, (string?)r.Transponder, r.Position)).ToList(),
+            _settings.RelayAbbreviateNames);
+
         return new HighlightShare(
             RelayPublisher.NewVideoKey(),
             label,
             ids,
+            names,
             publisher,
             (page, race) =>
             {
@@ -5369,6 +5623,10 @@ public sealed partial class RaceControlControl
         {
             var drivers = new Dictionary<string, HighlightDriver>(StringComparer.OrdinalIgnoreCase);
 
+            // Worked out first (22 Oct 2026, driver experience): whether the
+            // podium's videos go online decides whose photo they may show.
+            var share = PodiumShareFor(store, record);
+
             foreach (var row in record.Results)
             {
                 if (string.IsNullOrWhiteSpace(row.Transponder) || drivers.ContainsKey(row.Transponder))
@@ -5377,7 +5635,11 @@ public sealed partial class RaceControlControl
                 }
 
                 var profile = _profiles.Get(row.Transponder);
-                drivers[row.Transponder] = new HighlightDriver(profile?.PhotoFileName ?? string.Empty, profile?.RaceNumber ?? string.Empty);
+
+                // "No photo online": a video that will go up is drawn
+                // without their photo - see HighlightShare.PhotoFor.
+                var photo = HighlightShare.PhotoFor(profile?.PhotoFileName, row.Transponder, row.Position, share is not null);
+                drivers[row.Transponder] = new HighlightDriver(photo, profile?.RaceNumber ?? string.Empty);
             }
 
             var palette = new HighlightPalette(
@@ -5395,7 +5657,7 @@ public sealed partial class RaceControlControl
                 _settings.RelayLogoFile ?? string.Empty,
                 palette,
                 drivers,
-                PodiumShareFor(store, record));
+                share);
         }
         catch (Exception ex)
         {
@@ -6346,6 +6608,18 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// The key for "tonight" in the Team Principal's memory: the race day's
+    /// id when one is filed, otherwise the race night itself - 6am to 6am
+    /// (TonightAtTheTrack.NightOf), so a night that runs past midnight is
+    /// still one night. Bug hunt 10 (23 Oct 2026): shared so the pre-race
+    /// "once a night" list and PrincipalNightBrief cannot disagree again.
+    /// </summary>
+    internal static string PrincipalNightKey(string? activeEventId, DateTime now)
+        => string.IsNullOrWhiteSpace(activeEventId)
+            ? TonightAtTheTrack.NightOf(now).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+            : activeEventId;
+
+    /// <summary>
     /// Who the Team Principal before <paramref name="round"/> speaks for, and
     /// what their interview is written from - shared by Stage and by the
     /// write-ahead, so both pick the same driver. Null when the Cast tab has
@@ -6361,7 +6635,13 @@ public sealed partial class RaceControlControl
             return null;
         }
 
-        var night = _events?.Active?.Id ?? DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        // WHY (23 Oct 2026, bug hunt 10): with no race day filed this was keyed
+        // on the calendar date, so the "each once a night" list cleared at
+        // midnight and a night racing past 12 replayed (and paid again for)
+        // Team Principal interviews already heard. It now uses the same
+        // 6am-to-6am night as PrincipalNightBrief, and a blank event id
+        // counts as no race day, as it does there.
+        var night = PrincipalNightKey(_events?.Active?.Id, DateTime.Now);
 
         if (!string.Equals(_principalNight, night, StringComparison.Ordinal))
         {
@@ -6864,268 +7144,108 @@ public sealed partial class RaceControlControl
         _principalHeard.Add(focus);
     }
 
+    /// <summary>
+    /// Files the race that has just finished, through the app's filing
+    /// service (RaceFilingService, owned by MainForm).
+    ///
+    /// WHY (23 Oct 2026, timing layer, P2): the filing itself - the order of
+    /// the history write, the round link, the journal, the unfiled-race
+    /// retries, every message - moved out of this page into RaceFilingService,
+    /// verbatim. What it needs from this page is read here, and what this page
+    /// does around the filing (the badges, the recap, the recording, the card,
+    /// the dialog) is handed over as callbacks that run at the points they
+    /// always ran. See RaceFilingInput.
+    /// </summary>
     private void SaveCompletedSessionToHistory()
     {
         // Read once and let go on every way out, so whatever runs next is
-        // filed (or auto-advanced) as usual - see the auto-advance below.
+        // filed (or auto-advanced) as usual - see the auto-advance in
+        // RaceFilingService.FileCompletedRace.
         var wasQuickRace = _currentRaceIsQuick;
         _currentRaceIsQuick = false;
         var wasRerun = _currentRaceIsRerun;
         _currentRaceIsRerun = false;
 
-        if (_race.IsPracticeMode)
+        _filing.FileCompletedRace(new RaceFilingInput
         {
-            StatusMessage?.Invoke("[session] Practice session - not auto-saved (use Save Practice Session).");
-
-            // Every way out of here clears the journal: the race is over
-            // either way, and one left behind is offered back for recovery
-            // on the next launch as if it had never finished.
-            //
-            // Unless an earlier race is still waiting to be filed: practice
-            // is never journaled, so what is in the journal is that race,
-            // and its only copy on disk. See _unfiledRaces.
-            if (_unfiledRaces.Count == 0)
-            {
-                _journal.Clear();
-            }
-
-            return;
-        }
-
-        // Every race from here has its own ending - a recap, no recap, or
-        // not saved at all - and none of them is the last race's. Cleared in
-        // this one place rather than in each, so no path can leave the race
-        // before's recap on offer (see CommentaryService.ClearRaceSummary).
-        _commentary?.ClearRaceSummary();
-
-        // Demo races are simulated, so they stay out of history unless the
-        // user opts in. Even then the saved copy is marked as a demo and
-        // scores nothing - no round marked as run, no championship points,
-        // no badges, no personal bests or records. Every lap time in it was
-        // invented, and a rehearsal quietly filling in a real heat (or
-        // handing out a real driver's win) is worse than it not being saved.
-        // A DEMO NIGHT IMPLIES SAVING. There is nothing to tie a round to
-        // otherwise, so a club that asked to rehearse a whole night and
-        // left this box unticked would watch every heat finish and the
-        // program never move - with the reason buried in a setting on
-        // another page. See AppSettings.DemoFillsTheProgramme.
-        if (_currentRaceIsDemo && !_settings.SaveDemoSessions && !_settings.DemoFillsTheProgramme)
-        {
-            StatusMessage?.Invoke(
-                "[session] Demo race finished but was NOT saved - tick \"Save demo races to Race History\" "
-                + "on the Demo Mode page to keep a copy there (marked [DEMO], never scored).");
-
-            // Never reaches the recap, which is what normally signals the end
-            // of the broadcast - so it is signalled here, or music set to
-            // fade after the recap would play on after every unsaved demo.
-            SignalSessionAudioFinishedAfterFinishCall();
-
-            // The demo is over, and no recap will read its round.
-            DemoRound = null;
-
-            // As practice above: a demo is never journaled, so with an
-            // earlier race still unfiled the journal is that race's.
-            if (_unfiledRaces.Count == 0)
-            {
-                _journal.Clear();
-            }
-
-            return;
-        }
-
-        var ordered = _race.GetOrderedStandings();
-
-        // Ghosts belong on the live board - being there is the entire point
-        // of them - but they are a pace reference, not entrants. A saved
-        // result is what feeds finishing positions into the programme, the
-        // championship and the qualifying figures, so a ghost taking third
-        // did not just score the points for third: it pushed every real
-        // driver behind it down a place and took a place off each of them.
-        var racers = ordered.Where(s => !GhostService.IsGhost(s.TransponderId)).ToList();
-
-        // Which ghosts each driver finished ahead of, for Ghost Buster and
-        // Shadow Boxer - worked out here, from the board, because the saved
-        // result below leaves the ghosts out.
-        // Badges never stop a save: anything going wrong here means no ghost
-        // badges for this race, and the race is filed as ever.
-        try
-        {
-            // Not a ghost switched on part-way through - see GhostsFromTheGreen.
-            _ghostsBeatenAtFlag = AchievementEvaluator.GhostsBeatenBy(
-                ordered.Select(s => (s.TransponderId, s.Laps, s.FastestLapMs)).ToList(),
-                AchievementEvaluator.GhostsFromTheGreen(
-                    AchievementStores?.GhostCars?.Invoke() ?? Array.Empty<GhostCar>(),
-                    AchievementStores?.GhostsJoinedLate?.Invoke() ?? Array.Empty<string>()),
-                byBestLap: false);
-        }
-        catch (Exception ex)
-        {
-            _ghostsBeatenAtFlag = new Dictionary<string, IReadOnlyList<GhostCar>>(StringComparer.OrdinalIgnoreCase);
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] Couldn't work out which ghosts were beaten: {ex.Message}");
-        }
-
-        // Both of these used to return silently, which made a race that
-        // finished but never appeared in history impossible to diagnose.
-        if (racers.Count == 0)
-        {
-            StatusMessage?.Invoke(ordered.Count == 0
-                ? "[session] Not saved - no racers had any recorded laps."
-                : "[session] Not saved - only ghost cars were on track, and a ghost is not a result.");
-
-            // Same as the unsaved demo above: no recap will follow, so the
-            // end of the broadcast is signalled here instead.
-            SignalSessionAudioFinishedAfterFinishCall();
-
-            // Finished, and nothing to save - a ghost-only race's journal
-            // was left behind and offered back on the next launch. Not while
-            // an earlier race is still unfiled, though: the journal is then
-            // that race's only copy on disk, as at the other clears here.
-            if (_unfiledRaces.Count == 0)
-            {
-                _journal.Clear();
-            }
-
-            return;
-        }
-
-        if (racers.Count != ordered.Count)
-        {
-            StatusMessage?.Invoke(
-                $"[session] {Plural.Of(ordered.Count - racers.Count, "ghost car")} left out of the saved result - "
-                + "they set the pace, they don't score.");
-        }
-
-        if (_sessionStartedAtUtc is null)
-        {
-            // The start time is stamped when the race enters the Racing
-            // state. If it's missing, this control never saw that
-            // transition - so fall back to the session's own start rather
-            // than throwing the results away.
-            _sessionStartedAtUtc = _race.RaceStartUtc ?? DateTime.UtcNow;
-            StatusMessage?.Invoke(
-                $"[session] Start time was missing - fell back to {AppTime.LogStamp(_sessionStartedAtUtc.Value.ToLocalTime())}.");
-        }
-
-        // The rows themselves - see RaceFiling.ResultsFrom, which the
-        // race-night test files races with too.
-        var results = RaceFiling.ResultsFrom(racers, _profiles);
-
-        // The Round box's choice, or the round a restored race was run for.
-        var round = RoundForThisRace();
-        _restoredRoundId = null;
-
-        // Nothing picked by hand? Take the next unrecorded round in program
-        // order, so running races simply works through the heats. Without
-        // this, a finished race quietly attached to nothing unless the user
-        // remembered to choose a round first.
-        //
-        // Never for a demo: it would mark a real heat as run with invented
-        // results, and seeding and the mains would then be built from them.
-        //
-        // Never for a Quick Race either. It drops the Round box to freeform
-        // precisely so it is not filed against a heat, and without this the
-        // fallback filed it against the next one anyway: a shakedown with
-        // the Heat 1 drivers, run under the app's default format, became
-        // Heat 1 - marked as run, gone from Next Up, and counted in
-        // qualifying and on the club's website. A round picked by hand
-        // after pressing Quick Race still counts; only the guess is skipped.
-        var autoAdvanced = false;
-
-        // Nor for a re-run of a round already recorded - see
-        // _currentRaceIsRerun.
-        if (round is null && _rounds is not null && AutoAdvanceWanted && !_currentRaceIsDemo && !wasQuickRace && !wasRerun)
-        {
-            round = PickNextRound(racers);
-            autoAdvanced = round is not null;
-        }
-        else if (round is null && wasQuickRace && !_currentRaceIsDemo)
-        {
-            StatusMessage?.Invoke(
-                "[session] Quick Race - kept in Race History on its own. A Quick Race is never filed against a heat "
-                + "by itself; pick the round in the Round box first if one is meant to count.");
-        }
-        else if (round is null && wasRerun && !_currentRaceIsDemo)
-        {
-            StatusMessage?.Invoke(
-                "[session] Re-run of a round that was already recorded - kept in Race History on its own. "
-                + "The round keeps its earlier result, and no other heat was marked as run.");
-        }
-
-        var record = new SessionRecord
-        {
-            SessionType = RaceSessionType.Race,
-
-            // A demo keeps the round's name in its label (so it is clear
-            // what was being rehearsed) but is never linked to the round.
-            RoundId = _currentRaceIsDemo ? null : round?.Id,
+            WasQuickRace = wasQuickRace,
+            WasRerun = wasRerun,
             IsDemo = _currentRaceIsDemo,
             TrackLayoutName = _cmbTrackLayout.SelectedItem as string == "(none)" ? string.Empty : (string)(_cmbTrackLayout.SelectedItem ?? string.Empty),
-            Label = BuildSessionLabel(round),
-            StartedAtUtc = _sessionStartedAtUtc.Value,
-            EndedAtUtc = DateTime.UtcNow,
-            Results = results,
 
-            // Says this result carries rejected laps, laps led and grid
-            // positions. Without it an older session looks identical to a
-            // race nobody put a wheel wrong in.
-            RecordsIncidents = true,
-        };
-
-        record.SectorCut = TrackLayout.CutOfResults(
-            _trackLayouts.All.FirstOrDefault(t => !string.IsNullOrEmpty(record.TrackLayoutName) && t.Name == record.TrackLayoutName),
-            results);
-
-        // A black flag from the warning ladder becomes a DQ on the saved
-        // result, logged as a correction so it can be seen and reversed in
-        // Race History like any other.
-        ApplyBlackFlags(record);
-
-        // Handed to the recording, which needs the drivers' names, their
-        // finishing positions and their lap times to cut each one's clip -
-        // and these are the very rows that go into the race history, not a
-        // second account of the race. Before the filing rather than inside
-        // it, so a history write that fails still leaves the race with its
-        // mp3; only the clips depend on this being here.
-        _raceAudioRecord = record;
-
-        // Off the board rather than out of the record, because the saved
-        // result does not carry it - see _raceAudioReleaseOffsets. Read here,
-        // where these rows are still the ones that ran the race: by the time
-        // the recording is written out the board has moved on.
-        _raceAudioReleaseOffsets = racers.ToDictionary(
-            s => s.TransponderId,
-            s => s.ReleaseOffsetMs,
-            StringComparer.OrdinalIgnoreCase);
-
-        // The history write, and only if it landed, the round linked and the
-        // journal let go - in RaceFiling, where the order is tested. What
-        // this page does around it runs through the two callbacks, at the
-        // points it always ran.
-        // The filing whose recap is coming - see WriteTheNextIntroAhead,
-        // which the history store calls back in the middle of this.
-        _filingForSummary = record.Id;
-
-        RaceFiling.Outcome filed;
-
-        try
-        {
-        filed = RaceFiling.Commit(
-            record,
-            round,
-            autoAdvanced,
-            AutoAdvanceWanted,
-            _sessionHistory,
-            _rounds,
-            _journal,
-            afterSaved: () =>
+            // The Round box's choice, or the round a restored race was run for.
+            TakeRound = () =>
             {
-                _sessionStartedAtUtc = null;
+                var round = RoundForThisRace();
+                _restoredRoundId = null;
+                return round;
+            },
+            PickNextRound = PickNextRound,
+            BuildLabel = BuildSessionLabel,
 
+            ClearRaceSummary = () => _commentary?.ClearRaceSummary(),
+            SignalBroadcastOver = SignalSessionAudioFinishedAfterFinishCall,
+            DemoOver = () => DemoRound = null,
+
+            NoteGhostsBeaten = ordered =>
+            {
+                // Badges never stop a save: anything going wrong here means no ghost
+                // badges for this race, and the race is filed as ever.
+                try
+                {
+                    // Not a ghost switched on part-way through - see GhostsFromTheGreen.
+                    _ghostsBeatenAtFlag = AchievementEvaluator.GhostsBeatenBy(
+                        ordered.Select(s => (s.TransponderId, s.Laps, s.FastestLapMs)).ToList(),
+                        AchievementEvaluator.GhostsFromTheGreen(
+                            AchievementStores?.GhostCars?.Invoke() ?? Array.Empty<GhostCar>(),
+                            AchievementStores?.GhostsJoinedLate?.Invoke() ?? Array.Empty<string>()),
+                        byBestLap: false);
+                }
+                catch (Exception ex)
+                {
+                    _ghostsBeatenAtFlag = new Dictionary<string, IReadOnlyList<GhostCar>>(StringComparer.OrdinalIgnoreCase);
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] Couldn't work out which ghosts were beaten: {ex.Message}");
+                }
+            },
+
+            ApplyBlackFlags = ApplyBlackFlags,
+
+            BeforeCommit = (record, racers) =>
+            {
+                // Handed to the recording, which needs the drivers' names, their
+                // finishing positions and their lap times to cut each one's clip -
+                // and these are the very rows that go into the race history, not a
+                // second account of the race. Before the filing rather than inside
+                // it, so a history write that fails still leaves the race with its
+                // mp3; only the clips depend on this being here.
+                _raceAudioRecord = record;
+
+                // Off the board rather than out of the record, because the saved
+                // result does not carry it - see _raceAudioReleaseOffsets. Read here,
+                // where these rows are still the ones that ran the race: by the time
+                // the recording is written out the board has moved on.
+                _raceAudioReleaseOffsets = racers.ToDictionary(
+                    s => s.TransponderId,
+                    s => s.ReleaseOffsetMs,
+                    StringComparer.OrdinalIgnoreCase);
+
+                // The filing whose recap is coming - see WriteTheNextIntroAhead,
+                // which the history store calls back in the middle of this.
+                _filingForSummary = record.Id;
+            },
+
+            Filed = record =>
+            {
                 // What a Pack picked on a row's right-click is recorded
                 // against from now until the next race: this one. Matched
                 // by the race's start, so a later race whose save failed is
                 // never mistaken for it. Not a demo: its laps are invented.
-                _filedSession = record.IsDemo ? null : (record.Id, record.Label, _race.RaceStartUtc);
+                //
+                // The start as the race finished with it (23 Oct 2026, timing
+                // layer, P4b): threaded, the race has moved on since it did -
+                // see RaceTiming.DeliveringFinishedRace. Inline, the race's own.
+                _filedSession = record.IsDemo ? null : (record.Id, record.Label,
+                    _race.DeliveringFinishedRace is { } finished ? finished.RaceStartUtc : _race.RaceStartUtc);
 
                 // Each driver's pack in the car, recorded for them on this
                 // race or practice - one picked on a row's right-click during
@@ -7133,29 +7253,21 @@ public sealed partial class RaceControlControl
                 // than on every session added to the history: an Undo that
                 // puts back a deleted session from last month must not tag
                 // it with tonight's packs. Nor is a race saved late (see
-                // FileUnfiledRaces) - a pack swapped since would be wrong,
-                // and no pack is better than the wrong one.
+                // RaceFilingService.FileUnfiledRaces) - a pack swapped since
+                // would be wrong, and no pack is better than the wrong one.
                 BatteryPacks?.AutoTag(record, _profiles);
+            },
 
-                if (record.IsDemo)
-                {
-                    // Cleared rather than left over from the last real race, so the
-                    // results card never shows somebody else's badges. The honours
-                    // segment too, for the same reason and in the same breath: this
-                    // branch does not call AwardAchievements, so its own clearing of
-                    // the plan never runs.
-                    _lastUnlocks = new List<AchievementUnlock>();
-                    _honours = null;
+            NoBadgesForDemo = () =>
+            {
+                _lastUnlocks = new List<AchievementUnlock>();
+                _honours = null;
+            },
 
-                    StatusMessage?.Invoke(
-                        "[session] Demo race - kept in Race History marked [DEMO] only. It is not linked to a heat and "
-                        + "earns no points, achievements, personal bests or records.");
-                }
-                else
-                {
-                    AwardAchievements(record);
-                }
+            AwardAchievements = AwardAchievements,
 
+            SpeakSummary = (record, round) =>
+            {
                 // A demo is not filed against its round, but the show is
                 // still the round's - the Technical Lead after a main, the
                 // Team Principal - so the recap is told which it was. See
@@ -7163,233 +7275,65 @@ public sealed partial class RaceControlControl
                 SpeakRaceSummary(record, round ?? (record.IsDemoSession() ? DemoRoundFor(record) : null));
                 DemoRound = null;
             },
-            beforeJournalCleared: () =>
+
+            SaveResultsCard = TrySaveAutoResultsCard,
+            SessionSaved = () => SessionSaved?.Invoke(),
+
+            FilingFinished = () =>
             {
-                TrySaveAutoResultsCard(record);
+                _filingForSummary = null;
 
-                // Once, on every path that saved: a demo race and a race with
-                // no round both still need the page refreshed. After the round
-                // is linked - see RaceFiling.Commit.
-                SessionSaved?.Invoke();
+                // WHY (23 Oct 2026, bug hunt 10): the Quick Race's stamp outlived
+                // it and the next freeform race was saved under it. Let go once
+                // this race is filed (its record already carries the name),
+                // however the filing went; a name the director typed is kept.
+                if (wasQuickRace && QuickRaceStampToRelease(_txtSessionLabel.Text) is not null)
+                {
+                    _txtSessionLabel.Text = string.Empty;
+                }
             },
-            log: message => StatusMessage?.Invoke(message),
-            raceDayOpen: RoundPicker.RaceDayOpen(_events),
-            demoMayFillTheProgramme: _settings.DemoFillsTheProgramme);
-        }
-        finally
-        {
-            _filingForSummary = null;
-        }
 
-        if (filed == RaceFiling.Outcome.NotSaved)
-        {
-            StatusMessage?.Invoke(
-                $"[session] COULD NOT SAVE \"{record.Label}\" - race-history.json could not be written "
-                + "(see the [storage] line above). The race is still in the crash journal and has NOT been lost.");
-
-            // The session start is cleared either way: the race is over
-            // whatever the disk did.
-            _sessionStartedAtUtc = null;
-
-            // Kept, to be filed again - see _unfiledRaces. The store holds the
-            // record back from every other save, so without this nothing
-            // ever wrote it once the next race had taken over the journal.
-            _unfiledRaces.Add(new UnfiledRace(record, round, autoAdvanced));
-
-            // Commit stopped before afterSaved, so the recap never runs - and
-            // the recap is what normally signals the end of the broadcast.
-            // Without this, music set to fade or stop after the summary
-            // played on through the dialog and into the gap between races,
-            // as it once did after every unsaved demo (see above). Before
-            // the dialog, which holds this thread until it is closed.
-            SignalSessionAudioFinishedAfterFinishCall();
-
-            AppDialog.Show(
+            ShowNotSaved = (text, caption) => AppDialog.Show(
                 this,
-                $"\"{record.Label}\" could not be written to the race history - something else on this PC has the "
-                + "file open, the disk is full, or the history could not be read when HeatCaller started (and so "
-                + "is not being written over).\r\n\r\nThe race has NOT been lost: it is still in the crash "
-                + "journal, and HeatCaller will offer it back the next time it starts. Close anything that might be "
-                + "reading the HeatCaller folder (a backup or sync tool is the usual cause) and restart HeatCaller "
-                + "before running the next race.\r\n\r\nIf you carry on instead, HeatCaller tries to save it again "
-                + "as the next race starts and after each race - but until it is saved, closing HeatCaller or a "
-                + "crash during the next race loses it.",
-                "Race not saved",
+                text,
+                caption,
                 MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
-        }
-        else
-        {
-            // The journal has just been let go, so an earlier race that
-            // could not be filed can be tried again without touching this
-            // one's safety net - and the pages are refreshed for it.
-            FileUnfiledRaces(refreshPages: true);
-        }
+                MessageBoxIcon.Error),
+        });
     }
-
-    /// <summary>
-    /// A finished race whose history write failed (RaceFiling.Outcome.NotSaved),
-    /// with the round it was to be filed against.
-    /// </summary>
-    private sealed record UnfiledRace(SessionRecord Record, RoundDefinition? Round, bool AutoAdvanced);
-
-    /// <summary>
-    /// Races Add could not write, still waiting to be filed.
-    ///
-    /// SessionHistoryStore keeps such a record out of every later save (see
-    /// its _unsaved) so it cannot ride along on an unrelated write and come
-    /// back as a duplicate from its crash journal. That makes Add the only
-    /// way it ever reaches disk - and nothing called Add again. The dialog
-    /// says to restart before the next race, but nothing enforces it: a
-    /// director who clicked OK and staged the next heat had the journal
-    /// overwritten by that heat, which then filed fine and cleared it, and
-    /// the failed A-main was in neither the history nor the journal at the
-    /// next launch. So each one is kept here and handed to RaceFiling.Commit
-    /// again - the same object, which Add treats as a retry - as the next
-    /// race starts (before its journal replaces this one's) and after each
-    /// race that files.
-    ///
-    /// UI thread only, like everything else in the filing.
-    /// </summary>
-    private readonly List<UnfiledRace> _unfiledRaces = new();
 
     /// <summary>
     /// Whether a finished race is still waiting to get into the race
     /// history - and so its crash journal is its only copy on disk, which
-    /// nothing may clear. Asked by the Practice page before it clears the
-    /// journal on Stop (PracticeModeControl.HasUnfiledRaces).
+    /// nothing may clear. The filing service's answer (RaceFilingService.HasUnfiledRaces).
     /// </summary>
-    public bool HasUnfiledRaces => _unfiledRaces.Count > 0;
-
-    /// <summary>The session generation FileUnfiledRaces was last tried for from WriteJournal - once per race is enough.</summary>
-    private int _unfiledRetryGeneration = -1;
+    public bool HasUnfiledRaces => _filing.HasUnfiledRaces;
 
     /// <summary>
-    /// Tries again to file every race in _unfiledRaces, through the same
-    /// RaceFiling.Commit, so the round is linked and the journal let go only
-    /// once the write has landed. Only called when the crash journal holds
-    /// nothing newer than those races - before the next race's first journal
-    /// write, or just after a race has been filed and its journal cleared -
-    /// since Commit clears the journal on success.
-    ///
-    /// Quiet about the result card, the badges and the spoken summary: by now
-    /// another race is on the board, and announcing or carding the earlier
-    /// one would put it over the race the room is watching.
+    /// Writes the crash journal now, with the round and the typed race name
+    /// the race is being run under (captured from this page first), so a
+    /// restore can put those back too - for this page's own writes: a
+    /// restore, an undo, the window closing, and a write the journal's
+    /// throttle held back.
     /// </summary>
-    /// <param name="refreshPages">
-    /// False while the next race is starting: SessionSaved rebuilds the Round
-    /// box, which must not move under a race being staged. The race's own
-    /// filing raises it afterwards anyway.
-    /// </param>
-    private void FileUnfiledRaces(bool refreshPages)
-    {
-        if (_unfiledRaces.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var unfiled in _unfiledRaces.ToList())
-        {
-            var record = unfiled.Record;
-
-            // Deleted from Race History meanwhile (Delete forgets it in the
-            // store too): filing it now would bring back a race the director
-            // threw away.
-            if (!ReferenceEquals(_sessionHistory.Get(record.Id), record))
-            {
-                // Nothing will file it now, so an undo of that delete must
-                // write it itself - see SessionHistoryStore.RestoreUnfiled.
-                _sessionHistory.ForgetDeletedUnfiled(record);
-                _unfiledRaces.Remove(unfiled);
-                continue;
-            }
-
-            // The round only if it is still waiting for a result. Another
-            // race may have been filed against it since - a rerun, or
-            // auto-advance picking the same heat, since this one never marked
-            // it as run - and linking it again would take that race's result
-            // off the heat.
-            var round = unfiled.Round is { } wanted && _rounds?.Get(wanted.Id) is { IsRecorded: false } current
-                ? current
-                : null;
-
-            if (unfiled.Round is not null && round is null)
-            {
-                StatusMessage?.Invoke(
-                    $"[session] \"{record.Label}\" is being saved now, but not against \"{unfiled.Round.RoundLabel}\" - "
-                    + "that heat has been filed by another race (or removed) since. Link it in Race History if it belongs there.");
-            }
-
-            var outcome = RaceFiling.Commit(
-                record,
-                round,
-                unfiled.AutoAdvanced && round is not null,
-                AutoAdvanceWanted,
-                _sessionHistory,
-                _rounds,
-                _journal,
-                afterSaved: () => { },
-                beforeJournalCleared: () =>
-                {
-                    if (refreshPages)
-                    {
-                        SessionSaved?.Invoke();
-                    }
-                },
-                log: message => StatusMessage?.Invoke(message),
-                raceDayOpen: RoundPicker.RaceDayOpen(_events),
-                demoMayFillTheProgramme: _settings.DemoFillsTheProgramme);
-
-            if (outcome == RaceFiling.Outcome.Saved)
-            {
-                _unfiledRaces.Remove(unfiled);
-                StatusMessage?.Invoke(
-                    $"[session] \"{record.Label}\", which could not be saved earlier, is now in the race history. "
-                    + "Its achievements and personal bests were not worked out and its summary was not spoken.");
-            }
-        }
-    }
-
-    /// <summary>
-    /// Writes the crash journal, with the round and the typed race name the
-    /// race is being run under, so a restore can put those back too.
-    ///
-    /// At a new race's first write, an earlier race that could not be filed
-    /// is tried again first: the journal still holds that race, and the
-    /// write below is what replaces it. Once per race, not on every lap -
-    /// each try writes the whole history file.
-    /// </summary>
+    /// <remarks>
+    /// WHY (23 Oct 2026, timing layer, P2): the journal is written by
+    /// MainForm's RaceJournalRecorder now, which the session's events drive
+    /// whether or not this page is there - every crossing, flag and
+    /// correction. The retry of an earlier unfiled race moved with it
+    /// (RaceFilingService.RetryUnfiledBeforeJournal), and the race recording
+    /// still follows every write (see the recorder's Written, wired in
+    /// WireRaceControl).
+    /// </remarks>
     private void WriteJournal(bool force = false)
     {
-        if (_unfiledRaces.Count > 0
-            && _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing
-            && _unfiledRetryGeneration != _race.SessionGeneration)
-        {
-            _unfiledRetryGeneration = _race.SessionGeneration;
-            FileUnfiledRaces(refreshPages: false);
-
-            if (_unfiledRaces.Count > 0 && !_race.IsDemoMode && !_race.IsPracticeMode)
-            {
-                StatusMessage?.Invoke(
-                    $"{AppTime.LogStampNow()}  [session] WARNING: {Plural.Of(_unfiledRaces.Count, "earlier race")} still could "
-                    + "not be saved to race-history.json, and this race's crash journal is about to replace it. It is "
-                    + "kept in memory and tried again after this race - do not close HeatCaller until the log says it "
-                    + "is in the race history.");
-            }
-        }
-
-        _journal.Record(_race, _sessionStartedAtUtc, SelectedTrackName(), force,
-            RoundForThisRace()?.Id, _txtSessionLabel.Text, _currentRaceIsRerun);
-
-        // Here because this is already the one place every crossing, every
-        // flag and every correction passes through - the journal's own
-        // cadence. It means the recording needs no hook of its own on the
-        // session, and nothing about how a lap or a flag is handled changes.
-        // Unlike the write above it is never throttled, so the green - which
-        // is a flag change, and so a forced write - is always noted the
-        // moment it drops.
-        FollowRaceAudio();
+        _journalRecorder.UseDetails(JournalDetailsNow());
+        _journalRecorder.Write(force);
     }
+
+    /// <summary>The track, round, typed name and re-run flag the crash journal records for this race, as they are on this page now.</summary>
+    private RaceJournalDetails JournalDetailsNow() =>
+        new(SelectedTrackName(), RoundForThisRace()?.Id, _txtSessionLabel.Text, _currentRaceIsRerun);
 
     /// <summary>
     /// The round a race brought back from the crash journal was being run
@@ -7407,8 +7351,14 @@ public sealed partial class RaceControlControl
     /// for, while that race is still the one on the board - so the host can
     /// show it in its Round box. Null when there is none.
     /// </summary>
+    /// <remarks>
+    /// While a finished race is being filed (threaded mode), its generation
+    /// as it finished - see RaceTiming.DeliveringFinishedRace (23 Oct 2026,
+    /// timing layer, P4b). Otherwise, and always inline, the race's own.
+    /// </remarks>
     public string? RestoredRoundId =>
-        _restoredRoundId is { } id && _restoredRoundGeneration == _race.SessionGeneration ? id : null;
+        _restoredRoundId is { } id
+        && _restoredRoundGeneration == (_race.DeliveringFinishedRace?.SessionGeneration ?? _race.SessionGeneration) ? id : null;
 
     /// <summary>
     /// The round this race is for: the one picked in the Round box, or -
@@ -7421,7 +7371,10 @@ public sealed partial class RaceControlControl
             return picked;
         }
 
-        return _restoredRoundId is { } id && _restoredRoundGeneration == _race.SessionGeneration
+        // The finished race's generation while it is being filed, threaded -
+        // see RestoredRoundId (23 Oct 2026, timing layer, P4b).
+        return _restoredRoundId is { } id
+            && _restoredRoundGeneration == (_race.DeliveringFinishedRace?.SessionGeneration ?? _race.SessionGeneration)
             ? _rounds?.Get(id)
             : null;
     }

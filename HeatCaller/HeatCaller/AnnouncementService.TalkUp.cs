@@ -52,7 +52,8 @@ public sealed partial class AnnouncementService
     /// the shared output - having first worked out and noted when its last
     /// word lands. Identical to the room; the only difference is the note.
     /// </summary>
-    private async Task PlayNotingLastWordAsync(byte[] audio, double volume, double trailing, double leading)
+    /// <param name="stillWanted">See <see cref="PlayPcmAsync"/> (23 Oct 2026, bug hunt 10).</param>
+    private async Task PlayNotingLastWordAsync(byte[] audio, double volume, double trailing, double leading, Func<bool>? stillWanted = null)
     {
         var (pcm, format) = DecodeAudio(audio);
 
@@ -79,7 +80,7 @@ public sealed partial class AnnouncementService
 
         try
         {
-            await PlayPcmAsync(pcm, format, volume, trailing, leading, started: Heard);
+            await PlayPcmAsync(pcm, format, volume, trailing, leading, started: Heard, stillWanted: stillWanted);
         }
         finally
         {

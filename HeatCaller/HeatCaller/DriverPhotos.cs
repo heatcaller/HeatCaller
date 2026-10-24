@@ -282,20 +282,7 @@ public static class DriverPhotos
                     return null;
                 }
 
-                using var full = Image.FromStream(new MemoryStream(bytes));
-
-                // Cover-crop to a square, because every place a thumbnail
-                // goes is square-ish and letterboxing a face wastes most
-                // of an already-small box.
-                var edge = Math.Min(full.Width, full.Height);
-                var src = new Rectangle((full.Width - edge) / 2, (full.Height - edge) / 2, edge, edge);
-
-                var thumb = new Bitmap(size, size);
-                using (var g = Graphics.FromImage(thumb))
-                {
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    g.DrawImage(full, new Rectangle(0, 0, size, size), src, GraphicsUnit.Pixel);
-                }
+                var thumb = CoverCrop(bytes, size);
 
                 ThumbCache[(fileName, size)] = thumb;
                 return thumb;
@@ -318,6 +305,81 @@ public static class DriverPhotos
                 return null;
             }
         }
+    }
+
+    /// <summary>
+    /// The photo as <see cref="Thumb"/> makes it, but a bitmap of the
+    /// caller's own: never cached and never handed to anyone else, so a
+    /// background thread can draw from it, and the caller disposes it. Null
+    /// when there is no photo to show. Same name check, folder and size
+    /// limits as Thumb.
+    /// </summary>
+    // WHY (22 Oct 2026, bug hunt 9): the highlight videos used to copy from
+    // Thumb's shared cache on their own thread, which GDI+ does not allow
+    // while the UI draws the same image; they then kept a private copy of
+    // these checks (HighlightVideo's OwnPhoto). One copy now, here. Decoded
+    // outside the lock, so a video never holds up the UI's paints.
+    public static Bitmap? OwnedThumb(string? fileName, int size)
+    {
+        if (!PlainFileName.IsPlain(fileName))
+        {
+            return null;
+        }
+
+        lock (Gate)
+        {
+            if (Refused.Contains(fileName))
+            {
+                return null;
+            }
+        }
+
+        try
+        {
+            var path = Path.Combine(Folder, fileName);
+
+            if (!File.Exists(path)
+                || ImageProbe.ReadStored(path, MaxStoredBytes, MaxStoredSide) is not { } bytes)
+            {
+                return null;
+            }
+
+            return CoverCrop(bytes, size);
+        }
+        catch
+        {
+            // Locked, unreadable or not a picture: no photo. Not added to
+            // Refused here - Thumb decides that on its own read.
+            return null;
+        }
+    }
+
+    /// <summary>A stored photo's bytes, cover-cropped to a new square bitmap of <paramref name="size"/>.</summary>
+    private static Bitmap CoverCrop(byte[] bytes, int size)
+    {
+        using var full = Image.FromStream(new MemoryStream(bytes));
+
+        // Cover-crop to a square, because every place a thumbnail
+        // goes is square-ish and letterboxing a face wastes most
+        // of an already-small box.
+        var edge = Math.Min(full.Width, full.Height);
+        var src = new Rectangle((full.Width - edge) / 2, (full.Height - edge) / 2, edge, edge);
+
+        var thumb = new Bitmap(size, size);
+
+        try
+        {
+            using var g = Graphics.FromImage(thumb);
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(full, new Rectangle(0, 0, size, size), src, GraphicsUnit.Pixel);
+        }
+        catch
+        {
+            thumb.Dispose();
+            throw;
+        }
+
+        return thumb;
     }
 
     /// <summary>

@@ -848,9 +848,18 @@ internal sealed class ShowTreatment
     /// Whether this segment gets the treatment. The show segments by
     /// default - the top and the tail of the evening - and whatever else a
     /// club has ticked.
+    ///
+    /// WHY (22 Oct 2026, Bug Hunt 9): an exact tick match again. This had
+    /// been sent through ShowSegments.Treats, whose "anything ticked" rule
+    /// for ComingUpNext is meant for the hand-over only - but this public
+    /// gate is also what the director's own "Coming up next" segment and
+    /// Race Control's "play again" ask, so with the default ticks every one
+    /// of those got the opener and bed and the playlist went quiet, under a
+    /// segment the club cannot tick. The hand-over asks ShowSegments.Treats
+    /// itself, in RunBlockAsync.
     /// </summary>
     public bool Treats(SegmentKind kind) =>
-        (_settings.ShowThemeEnabled && ShowSegments.Treats(ShowSegments.Parse(_settings.ShowSegments), kind))
+        (_settings.ShowThemeEnabled && ShowSegments.Parse(_settings.ShowSegments).Contains(kind))
         || ImagingTreats(kind);
 
     /// <summary>
@@ -1138,7 +1147,14 @@ internal sealed class ShowTreatment
         // its caller's to gate, as it always was. Undressed is still SAID,
         // item by item and paced, exactly as with no music files in. See
         // ShowSegments.Treats for what its tick is.
-        var dressed = block.Kind != SegmentKind.ComingUpNext || Treats(SegmentKind.ComingUpNext);
+        //
+        // WHY (22 Oct 2026, Bug Hunt 9): asked of ShowSegments.Treats
+        // directly rather than the public Treats, which is back to an exact
+        // tick match so the director's own "Coming up next" segment is not
+        // dressed by it.
+        var dressed = block.Kind != SegmentKind.ComingUpNext
+            || (_settings.ShowThemeEnabled
+                && ShowSegments.Treats(ShowSegments.Parse(_settings.ShowSegments), SegmentKind.ComingUpNext));
 
         // The sting, once for the whole block rather than once per mark: a
         // file that will not load would otherwise put the same line in the
@@ -1170,7 +1186,11 @@ internal sealed class ShowTreatment
         var cost = new ShowBlockCost(
             dressed ? MusicSeconds(block.Kind) : TimeSpan.Zero,
             Pacing.Settle,
-            !dressed ? TimeSpan.Zero : SoundscapeHasStinger ? ShowBlock.LongestSting : MarkSeconds(sting?.Clip));
+            // WHY (22 Oct 2026, Bug Hunt 9): an undressed block's mark is the
+            // dry beat (MarkAsync no longer picks the soundscape stinger for
+            // it), and a mark is never free - costing it at zero let the
+            // fit overrun the gap.
+            !dressed ? ShowBlock.DryBeat : SoundscapeHasStinger ? ShowBlock.LongestSting : MarkSeconds(sting?.Clip));
 
         var fit = ShowBlock.Fit(block.Items, block.Gap, cost);
 
@@ -1217,7 +1237,7 @@ internal sealed class ShowTreatment
                 // No files in, music turned off, or audio that would not
                 // play. The programme is the items and their order; the
                 // music is only how it is dressed.
-                return await SayItDryAsync(block, fit, sting, started, abandoning.Token).ConfigureAwait(true);
+                return await SayItDryAsync(block, fit, sting, dressed, started, abandoning.Token).ConfigureAwait(true);
             }
 
             var said = 0;
@@ -1226,7 +1246,7 @@ internal sealed class ShowTreatment
 
             try
             {
-                var done = await SayItemsAsync(fit, run.Speaking, run, sting, abandoning.Token).ConfigureAwait(true);
+                var done = await SayItemsAsync(fit, run.Speaking, run, sting, dressed: true, abandoning.Token).ConfigureAwait(true);
 
                 said = done.Said;
                 abandoned = done.Abandoned;
@@ -1376,13 +1396,19 @@ internal sealed class ShowTreatment
         ShowSpeaking speaking,
         ShowRun? run,
         ShowSting? sting,
+        bool dressed,
         CancellationToken ct)
     {
         var said = 0;
 
         foreach (var item in fit.Items)
         {
-            if (ct.IsCancellationRequested)
+            // WHY (23 Oct 2026, bug hunt 10): a mute partway through the
+            // block did not stop it - every remaining item still waited out
+            // a voice that never came and had the club's sting fired in
+            // front of it. A mute now ends the block there, as abandoned,
+            // so the bed is cut rather than lifted into its ending.
+            if (ct.IsCancellationRequested || _announcer.Muted)
             {
                 return (said, true);
             }
@@ -1391,7 +1417,7 @@ internal sealed class ShowTreatment
             // one out: the opener is the punctuation there, and a sting on
             // top of it is two flourishes in the same second. The fitting
             // counts it the same way round.
-            if (said > 0 && item.PunctuateBefore && !await MarkAsync(sting, run, ct).ConfigureAwait(true))
+            if (said > 0 && item.PunctuateBefore && !await MarkAsync(sting, run, ct, pickSoundscape: dressed).ConfigureAwait(true))
             {
                 return (said, true);
             }
@@ -1467,12 +1493,15 @@ internal sealed class ShowTreatment
     /// A sting still plays, where a club has one and show music is on (or
     /// the soundscape has a stinger): it is the one piece whose job does not
     /// need a bed underneath it. With show music switched off the club's own
-    /// sting is not played (17 Oct 2026, Bug Hunt 8, A05-6).
+    /// sting is not played (17 Oct 2026, Bug Hunt 8, A05-6). A hand-over the
+    /// club's ticks leave undressed (dressed false) gets no stinger of either
+    /// kind, only the beat (22 Oct 2026, Bug Hunt 9).
     /// </summary>
     private async Task<ShowBlockResult> SayItDryAsync(
         ShowBlock block,
         ShowFit fit,
         ShowSting? sting,
+        bool dressed,
         DateTime started,
         CancellationToken ct)
     {
@@ -1492,7 +1521,7 @@ internal sealed class ShowTreatment
 
         try
         {
-            var done = await SayItemsAsync(fit, speaking, run: null, sting, ct).ConfigureAwait(true);
+            var done = await SayItemsAsync(fit, speaking, run: null, sting, dressed, ct).ConfigureAwait(true);
 
             return new ShowBlockResult(
                 false, done.Said, block.Items.Count - done.Said, done.Abandoned, DateTime.UtcNow - started);
@@ -1584,13 +1613,26 @@ internal sealed class ShowTreatment
     /// there - so a swell interrupted cannot leave the bed up underneath the
     /// club's music coming back.
     /// </summary>
-    private async Task<bool> MarkAsync(ShowSting? sting, ShowRun? run, CancellationToken ct)
+    private async Task<bool> MarkAsync(ShowSting? sting, ShowRun? run, CancellationToken ct, bool pickSoundscape = true)
     {
+        // WHY (23 Oct 2026, bug hunt 10): the block picks the club's sting
+        // once, before it starts, and every mark played it - after a mute
+        // too. A sting picked before a mute is never played after it.
+        if (_announcer.Muted)
+        {
+            return false;
+        }
+
         try
         {
             // 17 Oct 2026, Bug Hunt 8, A05-4: the soundscape's stinger is
             // picked here, by the mark that plays it - see RunBlockAsync.
-            if (sting is null && SoundscapeHasStinger)
+            //
+            // WHY (22 Oct 2026, Bug Hunt 9): not for an undressed hand-over
+            // (pickSoundscape false) - StingNow does not ask the club's ticks,
+            // so a hand-over meant to be plain still got the station stinger
+            // at every mark. It now takes the dry beat.
+            if (sting is null && pickSoundscape && SoundscapeHasStinger)
             {
                 sting = StingNow(out var problem);
 
@@ -1909,8 +1951,32 @@ internal sealed class ShowTreatment
         // it on the way in sees this show's name and not the last one's.
         ShowOnAir.Begin(caption);
 
+        // WHY (23 Oct 2026, bug hunt 10): the show is only on the mute
+        // button's list once it is handed back, and the opener plays alone
+        // for seconds before that - a mute pressed under the jingle left it
+        // and the bed playing, and the show then went on as if nothing had
+        // happened. The waits in here now end on a mute as they do on a
+        // cancel, and the catch below takes the music away.
+        CancellationTokenSource? muteCut = null;
+
         try
         {
+            muteCut = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+            var cutForMute = muteCut;
+
+            BroadcastImaging.Playing(cutForMute, () =>
+            {
+                try
+                {
+                    cutForMute.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Already over.
+                }
+            });
+
             if (opener is not null)
             {
                 // The beat of air and the late entry are both the billing's
@@ -1970,7 +2036,7 @@ internal sealed class ShowTreatment
                     ? imagingPost
                     : VoiceEntersAfter(opener, billing);
 
-                await Task.Delay(entersAfter, ct).ConfigureAwait(true);
+                await Task.Delay(entersAfter, muteCut.Token).ConfigureAwait(true);
 
                 openerGain!.Target = imagingOpener is not null ? 0f : OpenerUnderVoice;
             }
@@ -1993,7 +2059,7 @@ internal sealed class ShowTreatment
                 // second here is a tenth the intro lands later. It is well
                 // inside the 0.8 to 3 seconds that chain already allows for
                 // an opener.
-                await Task.Delay(TimeSpan.FromSeconds(billing.BedAloneSeconds), ct).ConfigureAwait(true);
+                await Task.Delay(TimeSpan.FromSeconds(billing.BedAloneSeconds), muteCut.Token).ConfigureAwait(true);
             }
 
             if (bedGain is not null)
@@ -2013,7 +2079,7 @@ internal sealed class ShowTreatment
             // ShowRunningOrder.Went.
             _order.Went(DateTime.UtcNow);
 
-            return new ShowRun(
+            var run = new ShowRun(
                 _announcer, onSpeaking, speaking, running, bedGain, bedPlaying,
                 bed?.Length ?? TimeSpan.Zero, bedLevel, Status, billing, openerGain)
             {
@@ -2026,6 +2092,19 @@ internal sealed class ShowTreatment
                 // distance the voice does - see ShowRun.DuckForSting.
                 UnderVoiceLevel = bedLevel * duck,
             };
+
+            // WHY (23 Oct 2026, bug hunt 10): the show's opener and looping
+            // bed (the soundscape's recap open and recap bed among them) went
+            // through AudioBus without ever being registered, so the Mute
+            // button's BroadcastImaging.StopAll could not reach them and the
+            // bed looped on, lifted and played its ending after "mute =
+            // silence". Registered now, and a mute cuts the show short - no
+            // lift, no ending. FinishAsync only ever runs once, so the later
+            // call from the block or the recap does nothing; it takes the
+            // show off the list again itself.
+            BroadcastImaging.Playing(run, () => _ = run.FinishAsync(cutShort: true));
+
+            return run;
         }
         catch (Exception ex)
         {
@@ -2070,6 +2149,16 @@ internal sealed class ShowTreatment
             }
 
             return null;
+        }
+        finally
+        {
+            // After the run itself is on the list (just above), so there is
+            // no moment a mute could find neither.
+            if (muteCut is not null)
+            {
+                BroadcastImaging.Gone(muteCut);
+                muteCut.Dispose();
+            }
         }
     }
 
@@ -2833,6 +2922,10 @@ internal sealed class ShowRun
         }
         finally
         {
+            // Off the mute button's list (23 Oct 2026, bug hunt 10) - see
+            // OpenShowAsync.
+            BroadcastImaging.Gone(this);
+
             // Last, and whatever happened above: until this runs the
             // club's music is silenced.
             ShowOnAir.End();

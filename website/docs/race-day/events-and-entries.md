@@ -170,6 +170,7 @@ The buttons under the list:
 - **Inspect Selected Car** opens a tech inspection for the selected driver. See [Inspect a car](#inspect-a-car).
 - **Scrutineering Log** opens the full list of inspections. See [The Scrutineering log](#the-scrutineering-log).
 - **Online Sign-ups** opens the drivers who have signed up online, waiting to be approved. The button shows how many are waiting, for example **Online Sign-ups (3)**. See [Driver sign-up](../online/sign-up.md).
+- **Driver Requests** opens the changes drivers have asked for from their phones, and their result queries, waiting for the desk. The button shows how many are waiting, for example **Driver Requests (2)**. It's only there while the club takes requests, or while some are still waiting. See [Driver requests](../online/driver-requests.md).
 
 ### Drivers checking themselves in
 

@@ -283,6 +283,9 @@ internal static class LayoutAudit
         // A warning's reason typed by hand, from the warnings list's "Other reason..." (RaceControlControl.WarningReasonForm, titled "Warning for <driver>").
         "Warning for",
 
+        // The lap time a driver is coached to, from the board's Coach > Target lap... (RaceControlControl.TargetLapForm, titled "Target lap for <driver>", 22 Oct 2026).
+        "Target lap for",
+
         // The garage, setup sheets and batteries (30 Sep).
 
         // A car added or edited: its fields lined up, the hint under the name, the notes (CarForm, titled "Add a Car" / "Edit Car").

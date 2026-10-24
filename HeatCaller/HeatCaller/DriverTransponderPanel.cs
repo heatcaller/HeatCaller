@@ -41,6 +41,9 @@ internal sealed class DriverTransponderPanel : UserControl
     private readonly Button _btnRemove = new() { Text = "Remove" };
     private readonly Label _lblHint = new() { AutoSize = true };
 
+    /// <summary>The fitted-to drop-down's width as last measured - see Pieces.PickerWidth. Forgotten when it is refilled.</summary>
+    private (Font Font, int Count, int Width)? _fittedWidth;
+
     /// <summary>The driver shown - their main transponder - or null.</summary>
     private string? _driver;
 
@@ -84,7 +87,7 @@ internal sealed class DriverTransponderPanel : UserControl
         _btnTransfer.Click += (_, _) => TransferTransponder();
         _btnRemove.Click += (_, _) => RemoveTransponder();
 
-        _lblHint.Text = "A retired transponder is no longer in use, but it is still theirs - and so is everything timed on it. "
+        _lblHint.Text = "A retired transponder is out of use but still theirs, with everything timed on it. "
                         + "A split transponder is read only by the split loop partway round the track: fit it to the car it's in.";
 
         var fitted = new FieldGrid();
@@ -100,7 +103,7 @@ internal sealed class DriverTransponderPanel : UserControl
 
         AppTheme.ApplyRecursively(this);
         _lblHint.ForeColor = AppTheme.TextMuted;
-        _cmbFitted.Width = UiLayout.AtTextSize(220);
+        FitFittedPicker();
 
         ShowDriver(null);
     }
@@ -113,6 +116,21 @@ internal sealed class DriverTransponderPanel : UserControl
         var same = string.Equals(driver, _driver, StringComparison.OrdinalIgnoreCase);
         _driver = driver;
         Fill(keep: same && Picked() is { } picked ? KeyOf(picked) : null);
+    }
+
+    /// <summary>
+    /// The fitted-to drop-down as wide as its longest car, never narrower
+    /// than it was made. (22 Oct 2026, page tidy): it was a fixed 220px, and
+    /// a long car name was cut short in it.
+    /// </summary>
+    private void FitFittedPicker()
+    {
+        var width = Math.Max(UiLayout.AtTextSize(220), Pieces.PickerWidth(_cmbFitted, ref _fittedWidth));
+
+        if (_cmbFitted.Width != width)
+        {
+            _cmbFitted.Width = width;
+        }
     }
 
     private DriverProfile? Driver() => _driver is null ? null : _profiles.Get(_driver);
@@ -261,6 +279,9 @@ internal sealed class DriverTransponderPanel : UserControl
 
             _cmbFitted.SelectedItem = match ?? _cmbFitted.Items[0];
             _cmbFitted.Enabled = row is not null;
+
+            _fittedWidth = null;
+            FitFittedPicker();
         }
         finally
         {

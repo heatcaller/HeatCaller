@@ -362,8 +362,8 @@ public sealed class RaceProgramControl : UserControl
 
         // Until a command says what it did: where everything that is not a
         // button is. The menu has no button of its own - see the summary.
-        _lblStatus.Text = "Right-click the list for everything else - building tonight's program, the heat sheet, "
-            + "moving and deleting rounds, and more.";
+        _lblStatus.Text = "Right-click the list for everything else: building the program, the heat sheet, "
+            + "moving and deleting rounds.";
 
         // --- The card ---
         //
@@ -513,6 +513,17 @@ public sealed class RaceProgramControl : UserControl
             new DataGridViewTextBoxColumn { Name = "drivers", HeaderText = "Drivers", FillWeight = 45 },
             new DataGridViewTextBoxColumn { Name = "track", HeaderText = "Track", FillWeight = 80 },
             new DataGridViewTextBoxColumn { Name = "status", HeaderText = "Status", FillWeight = 70 });
+
+        // WHY (23 Oct 2026, bug hunt 10): the columns kept the default
+        // Automatic sort mode, so a header click quietly re-sorted the rows
+        // (the themed header draws no arrow). Move Up/Down and drag-drop read
+        // their anchor from the rows as shown, so after a sort by Class a
+        // round could be moved in front of one far away in the real running
+        // order. This list IS the running order, so no column sorts now.
+        foreach (DataGridViewColumn column in _grid.Columns)
+        {
+            column.SortMode = DataGridViewColumnSortMode.NotSortable;
+        }
     }
 
     /// <summary>The buttons under the list, and what each does. Their bars size them to their captions - see BuildLayout.</summary>
@@ -632,6 +643,10 @@ public sealed class RaceProgramControl : UserControl
         // glossary explains it. Only the verbs were reworded.
         var miAddMain = new ToolStripMenuItem("Add a Main by Hand...", null, (_, _) => AddMainByHand());
         var miPrint = new ToolStripMenuItem("Save Heat Sheet...", null, (_, _) => PrintHeatSheet());
+
+        // 22 Oct 2026: straight to a printer, with a preview - see
+        // PagePrinting. Save stays for a club that prints elsewhere.
+        var miPrintPaper = new ToolStripMenuItem("Print Heat Sheet...", null, (_, _) => PrintHeatSheetOnPaper());
         var miDelete = new ToolStripMenuItem("Delete", null, (_, _) => DeleteSelectedRounds());
 
         menu.Items.AddRange(new ToolStripItem[]
@@ -648,6 +663,7 @@ public sealed class RaceProgramControl : UserControl
             miSeed,
             miAddMain,
             miPrint,
+            miPrintPaper,
             new ToolStripSeparator(),
             miDelete,
         });
@@ -4122,6 +4138,60 @@ public sealed class RaceProgramControl : UserControl
     /// </summary>
     private IReadOnlyCollection<string> QualifyingRoundFilter() =>
         (IReadOnlyCollection<string>?)_events?.QualifyingScope() ?? Array.Empty<string>();
+
+    /// <summary>
+    /// The heat sheet straight to a printer: pick the printer, see the
+    /// pages, print from the preview (22 Oct 2026). The same pages Save Heat
+    /// Sheet writes, so what is printed and what is saved never differ.
+    /// </summary>
+    private void PrintHeatSheetOnPaper()
+    {
+        if (TargetClass() is not { } className)
+        {
+            return;
+        }
+
+        var rounds = DayRoundsForClass(className);
+
+        if (rounds.Count == 0)
+        {
+            RefuseWithOffer("Nothing to print",
+                $"\"{className}\" has no rounds on today's program yet, so a heat sheet would be blank.",
+                "Build tonight's heats now?",
+                BuildQualifyingProgramme);
+
+            return;
+        }
+
+        IReadOnlyList<Bitmap> pages;
+
+        try
+        {
+            pages = HeatSheetRenderer.RenderPages(
+                className,
+                rounds,
+                _profiles,
+                ClassByName(className)?.Colour ?? RaceClass.DefaultColourFor(className));
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(this, $"Couldn't create the heat sheet: {ex.Message}", "Print",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        try
+        {
+            PagePrinting.PrintWithPreview(this, $"Heat sheet - {className}", pages);
+        }
+        finally
+        {
+            foreach (var page in pages)
+            {
+                page.Dispose();
+            }
+        }
+    }
 
     /// <summary>Renders a class's rounds as a printable sheet for the pit table.</summary>
     private void PrintHeatSheet()

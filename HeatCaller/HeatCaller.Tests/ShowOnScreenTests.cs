@@ -138,7 +138,7 @@ public sealed class ShowOnScreenTests : IDisposable
             // colours" case the band has to look right in.
             var announcer = new AnnouncementService(ProfileStore.Load(), VoiceSettingsStore.Load(), SoundEffectsStore.Load());
 
-            using var form = new BigScreenForm(new RaceControlSession(), announcer, ProfileStore.Load());
+            using var form = new BigScreenForm(new RaceTiming(new RaceControlSession()), announcer, ProfileStore.Load());
 
             form.Show();
             Pump();

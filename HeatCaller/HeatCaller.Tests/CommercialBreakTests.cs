@@ -376,7 +376,7 @@ public sealed class CommercialBreakTests : IDisposable
 
             var announcer = new AnnouncementService(ProfileStore.Load(), VoiceSettingsStore.Load(), SoundEffectsStore.Load());
 
-            using var form = new BigScreenForm(new RaceControlSession(), announcer, ProfileStore.Load(), null, sponsors);
+            using var form = new BigScreenForm(new RaceTiming(new RaceControlSession()), announcer, ProfileStore.Load(), null, sponsors);
 
             // Switched OFF to begin with, which is most clubs: the window
             // must not offer to carry a break it has nothing to put in.

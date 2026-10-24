@@ -49,13 +49,29 @@ internal static class RelayResultsIndex
     /// everyone who was there, whatever a UTC clock says about it - and
     /// the day headings on the page have to agree with the year buckets
     /// or a session goes missing between them.
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10): by the race NIGHT, not the calendar
+    /// date. A main that STARTED at 00:10 was filed under the next day - and
+    /// on New Year's Eve the next year's document - so one night showed as
+    /// two race days on the archive, and disagreed with the driver's own
+    /// night page. Now the same 6am turn as TonightAtTheTrack.NightOf.
     /// </summary>
     internal static string YearOf(SessionRecord session) =>
-        LocalStart(session).Year.ToString("D4", CultureInfo.InvariantCulture);
+        NightOf(session).Year.ToString("D4", CultureInfo.InvariantCulture);
 
-    /// <summary>The day a session is filed under, as yyyy-MM-dd in local time. See YearOf for why local, and Invariant for why invariant.</summary>
+    /// <summary>The night a session is filed under, as yyyy-MM-dd in local time. See YearOf for why local and why the night, and Invariant for why invariant.</summary>
     internal static string DayOf(SessionRecord session) =>
-        LocalStart(session).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        NightOf(session).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>The race night a session belongs to - see YearOf.</summary>
+    private static DateTime NightOf(SessionRecord session)
+    {
+        var local = LocalStart(session);
+
+        // A session saved with no time at all is DateTime.MinValue, and six
+        // hours before that is no date - filed under its own day, as before.
+        return local < DateTime.MinValue.AddDays(1) ? local.Date : TonightAtTheTrack.NightOf(local);
+    }
 
     /// <summary>The time of day a session started, as HH:mm.</summary>
     private static string TimeOf(SessionRecord session) =>
@@ -189,7 +205,22 @@ internal static class RelayResultsIndex
             .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
-        var shown = RelayPublisher.DisplayNames(everyName, abbreviate);
+        // WHY (23 Oct 2026, bug hunt 10): with each name's transponder, as
+        // the session results pass theirs. A saved row keeps the name the
+        // driver had on the night, so by name alone a driver renamed since
+        // and then shown by initials went out under the old full name - in
+        // the driver list, the winners and the podium the link-preview card
+        // draws - right after the privacy batch had resent this index.
+        var privacy = PublicPrivacy.Current;
+        var shown = RelayPublisher.DisplayNames(
+            everyName,
+            abbreviate,
+            privacy.TransponderForEach(
+                everyName,
+                mine.SelectMany(s => s.Results.Select(r => (
+                    (string?)RelayDocuments.PublicNameOrUnnamed(r.DriverName, r.Transponder),
+                    (string?)r.Transponder)))),
+            privacy);
 
         // Each driver gets a number that means nothing outside this
         // document. The page needs a stable handle to gather one person's

@@ -131,8 +131,8 @@ public sealed class LapBeepControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Gives each driver their own short cue when they cross the line, so they can hear their lap without "
-                 + "watching the screen. Cues differ in shape as well as pitch - pitch alone is hard to pick out over track noise.",
+            Text = "Each driver gets their own short cue at the line, so they hear their lap without watching the screen. "
+                 + "Cues differ in shape as well as pitch, which carries better over track noise.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -152,7 +152,7 @@ public sealed class LapBeepControl : UserControl
         // grow past.
         var lblEnabledHint = new Label
         {
-            Text = "Off by default - a cue per lap per driver is a lot of noise if you didn't ask for it.",
+            Text = "Off by default.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

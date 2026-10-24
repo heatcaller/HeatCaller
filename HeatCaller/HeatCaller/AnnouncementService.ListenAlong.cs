@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using NAudio.MediaFoundation;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
@@ -69,12 +71,112 @@ public sealed partial class AnnouncementService
     private int _listenEncodeComplained;
 
     /// <summary>
+    /// Every transponder the announcer has said AS a name this run - a car
+    /// with no profile, or a profile with no name (23 Oct 2026, bug hunt 10).
+    /// Made on first use rather than with an initializer, because this is a
+    /// part file. Static, like PublicPrivacy.Current, so the public captions
+    /// document and the highlight videos can ask it too. Only ever grows: a
+    /// car named later is said by its name, so its number in the set costs
+    /// nothing.
+    /// </summary>
+    private static ConcurrentDictionary<string, byte>? _carsSpokenByNumber;
+
+    /// <summary>
+    /// Notes that <paramref name="spoken"/>, the name about to be said for
+    /// <paramref name="transponder"/>, is the transponder itself.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Oct 2026, bug hunt 10): the room hears an unnamed car's
+    /// number, which helps the desk find it - but the same line went to the
+    /// public listen-along page, the public captions and the podium videos,
+    /// and a transponder number must never go online. Nothing public could
+    /// tell, because the privacy register never sees a car with no profile.
+    /// Every place that falls back to the transponder for a name calls this,
+    /// and the public gates ask <see cref="NamesACarByNumber"/>.
+    /// </remarks>
+    internal static void NoteSpokenAsNumber(string? transponder, string? spoken)
+    {
+        var id = (transponder ?? string.Empty).Trim();
+
+        if (id.Length == 0 || !string.Equals((spoken ?? string.Empty).Trim(), id, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        LazyInitializer.EnsureInitialized(
+                ref _carsSpokenByNumber,
+                () => new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase))
+            .TryAdd(id, 0);
+    }
+
+    /// <summary>
+    /// Whether these words name a car by its transponder number - one the
+    /// announcer has said as a name (<see cref="NoteSpokenAsNumber"/>). Such
+    /// a line stays in the room: see the remarks there.
+    /// </summary>
+    internal static bool NamesACarByNumber(string? words) =>
+        Volatile.Read(ref _carsSpokenByNumber) is { IsEmpty: false } cars
+        && MentionsAnyId(words, cars.Keys);
+
+    /// <summary>
+    /// Whether any of <paramref name="ids"/> is in the words as a whole token
+    /// ("4471234 sets the fastest lap", not "44712345"), whatever its case.
+    /// Its own method so the rule can be tested.
+    /// </summary>
+    internal static bool MentionsAnyId(string? words, IEnumerable<string>? ids)
+    {
+        if (string.IsNullOrWhiteSpace(words) || ids is null)
+        {
+            return false;
+        }
+
+        foreach (var raw in ids)
+        {
+            var id = (raw ?? string.Empty).Trim();
+
+            if (id.Length == 0)
+            {
+                continue;
+            }
+
+            if (Regex.IsMatch(
+                    words,
+                    @"(?<![\p{L}\p{N}])" + Regex.Escape(id) + @"(?![\p{L}\p{N}])",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether the audio a synthesis handed back was rendered from the line
+    /// with names SHORTENED (AnnouncementService.ShortNames) - the HeatCaller
+    /// voice, ElevenLabs, or a take saved under the shortened words. Not
+    /// Kokoro, not a Kokoro stand-in (both given the line as written), and not
+    /// a soundscape recording, which says what was recorded. For
+    /// <see cref="OfferLineToListeners"/>'s audioShortened (23 Oct 2026, bug
+    /// hunt 10).
+    /// </summary>
+    private static bool AudioFromShortenedText(LineSource source, string text) =>
+        source is LineSource.HeatCaller or LineSource.ElevenLabs
+        || (source == LineSource.Library && !StingerLibrary.Shared.Has(text));
+
+    /// <summary>
     /// Offers a line to listeners at home, and returns at once.
     ///
     /// Called from the audio path. See the class summary for why this does
     /// nothing but hand the work to a pool thread.
     /// </summary>
-    private void OfferLineToListeners(string text, byte[]? audio)
+    /// <param name="audioShortened">
+    /// Whether <paramref name="audio"/> says the names shortened, as
+    /// <see cref="AudioFromShortenedText"/> works out; null when the caller
+    /// cannot tell. Only matters while the club shortens published names -
+    /// see OfferToListenersOnly.
+    /// </param>
+    private void OfferLineToListeners(string text, byte[]? audio, bool? audioShortened = null)
     {
         // THE CAPTIONS FIRST (21 Oct 2026), and whether or not anyone is
         // listening from home: this is the one point where a line is
@@ -82,7 +184,7 @@ public sealed partial class AnnouncementService
         // video's caption should start. See RaceAudioRecorder.NoteLine.
         NoteHeard(text);
 
-        OfferToListenersOnly(text, audio);
+        OfferToListenersOnly(text, audio, audioShortened);
     }
 
     /// <summary>
@@ -112,7 +214,7 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>The listeners' half of <see cref="OfferLineToListeners"/>, without the caption.</summary>
-    private void OfferToListenersOnly(string text, byte[]? audio)
+    private void OfferToListenersOnly(string text, byte[]? audio, bool? audioShortened = null)
     {
         if (SendToListeners is null || audio is null || audio.Length == 0)
         {
@@ -133,6 +235,12 @@ public sealed partial class AnnouncementService
         var words = VoiceProfile.StripAudioTags(text);
         var bytes = audio;
 
+        // The privacy register as it is the moment the line is heard - read
+        // here, a volatile field read, so a register swapped while this one
+        // is encoding can't let it through half-checked (22 Oct 2026, driver
+        // experience, item 12).
+        var privacy = PublicPrivacy.Current;
+
         // Fire and forget, on purpose, with its own catch: this is a
         // courtesy to people who are not at the track, and nothing it can
         // do is allowed to reach the race. Faulted and never observed
@@ -141,11 +249,52 @@ public sealed partial class AnnouncementService
         {
             try
             {
+                // WITHHELD, NOT REDACTED (22 Oct 2026, driver experience,
+                // item 12). A driver who asked to be initials-only online
+                // can't be bleeped out of audio, so a line that mentions
+                // them - by any name, or any word of one - is not sent to
+                // listeners at home at all. The room still hears it; the
+                // public captions leave it out too. Checked on this pool
+                // thread, not before Task.Run, because it is a regex pass
+                // and nothing slow happens on the way to the speaker. It
+                // errs on the private side: another driver who shares that
+                // first name is withheld too. Race control's warning and
+                // black-flag calls are withheld as well (22 Oct 2026,
+                // security review): they say the penalty's reason aloud, and
+                // reasons stay in the room and the driver's own night.
+                if (WithheldFromListeners(words, privacy))
+                {
+                    return;
+                }
+
+                // WHY (23 Oct 2026, bug hunt 10): a line naming a car by its
+                // transponder number - a car nobody named - went to the
+                // public page as words and audio. Withheld, not rewritten,
+                // because the audio says the number. See NoteSpokenAsNumber.
+                if (NamesACarByNumber(words))
+                {
+                    return;
+                }
+
+                // WHY (23 Oct 2026, bug hunt 10): "Shorten published names"
+                // (on by default) never reached this page - the caption was
+                // the line as written, full names and all, and with Kokoro the
+                // audio said them too. The caption is now the shortened line,
+                // and a line whose names it shortens goes out only when its
+                // audio was rendered from the shortened words; otherwise it is
+                // withheld, the way an initials-only line is.
+                var caption = ForCloudVoice(words);
+
+                if (!string.Equals(caption, words, StringComparison.Ordinal) && audioShortened != true)
+                {
+                    return;
+                }
+
                 var mp3 = AsMp3(bytes);
 
                 if (mp3 is not null)
                 {
-                    SendToListeners?.Invoke(words, mp3);
+                    SendToListeners?.Invoke(caption, mp3);
 
                     // A line got through, so a later failure is news again
                     // (17 Oct 2026, Bug Hunt 8, A06-11): one early hiccup
@@ -158,6 +307,33 @@ public sealed partial class AnnouncementService
                 ComplainAboutListenAudioOnce(ex.Message);
             }
         });
+    }
+
+    /// <summary>
+    /// Whether a line must not go to listeners at home because it mentions
+    /// a driver shown online by initials only (22 Oct 2026, driver
+    /// experience, item 12), or is one of race control's warning or
+    /// black-flag calls (22 Oct 2026, security review). Its own method so
+    /// the rule can be tested without a voice.
+    /// </summary>
+    internal static bool WithheldFromListeners(string? words, PublicPrivacy? privacy) =>
+        IsRaceControlCall(words)
+        || (privacy ?? PublicPrivacy.Empty).MentionsWithheld(words);
+
+    /// <summary>
+    /// Whether a line is one of race control's warning or black-flag calls,
+    /// which say the penalty's reason aloud - "Warning, Sam. Blocking."
+    /// (RaceControlControl.OnWarningIssued, spoken through NotifyWarning).
+    /// Kept off everything public - the captions document and listen-along -
+    /// while the room still hears and sees it (22 Oct 2026, security review).
+    /// One rule, here, so the two can't drift apart.
+    /// </summary>
+    internal static bool IsRaceControlCall(string? text)
+    {
+        var line = (text ?? string.Empty).TrimStart();
+
+        return line.StartsWith("Warning,", StringComparison.OrdinalIgnoreCase)
+               || line.StartsWith("Black flag,", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

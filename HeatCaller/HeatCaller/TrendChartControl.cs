@@ -83,8 +83,8 @@ public sealed class TrendChartControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Best lap per session over time, for one driver on one track. Comparing across different layouts would " +
-                   "just show which track is faster, not whether anyone's improving - so pick a track to see a real trend.",
+            Text = "Best lap per session over time, for one driver. Pick a track to see a real trend - across layouts it only " +
+                   "shows which track is faster.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

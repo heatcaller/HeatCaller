@@ -72,11 +72,9 @@ internal sealed class RoomVoteForm : Form
 
         var blurb = new Label
         {
-            Text = "The room votes on who wins, and after the race the announcer says what it reckoned - "
-                   + "including the one line no timing system could ever produce, which is that nobody in the "
-                   + "room picked the driver who won. Open it when the race is called to the grid; "
-                   + "it stops itself at the start and when the result comes in, and the announcer stays quiet "
-                   + "unless enough people voted to speak for the room.",
+            Text = "The room votes on who wins, and after the race the announcer says how the room did - even that "
+                   + "nobody picked the winner. Open it when the race is called to the grid; it stops itself at the "
+                   + "start and when the result comes in. The announcer stays quiet unless enough people voted.",
             AutoSize = true,
             MaximumSize = new Size(UiLayout.AtTextSize(640), 0),
             ForeColor = AppTheme.TextMuted,

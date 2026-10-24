@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 
@@ -8,7 +9,7 @@ namespace HeatCaller;
 /// keyed by transponder id. Separate from AppSettings since this is racer
 /// data that should persist across seasons, not just connection settings.
 /// </summary>
-public sealed class ProfileStore
+public sealed class ProfileStore : IDriverLookup
 {
     private readonly Dictionary<string, DriverProfile> _profiles;
 
@@ -20,8 +21,70 @@ public sealed class ProfileStore
     /// Rebuilt as a whole new dictionary and swapped in by reference on
     /// every change rather than edited in place, so a lookup on another
     /// thread (the announcer's) never sees one half-built.
+    ///
+    /// WHY (23 Oct 2026, timing layer, P4): frozen, and swapped in TOGETHER
+    /// with the main transponders it was built against (one reference, one
+    /// volatile read), because with timing on its own thread the race asks
+    /// PrimaryForAlternate on every pass from the timing thread. It used to
+    /// check the live profiles dictionary as well, which the UI thread edits -
+    /// a Dictionary read while it is written can throw or hang. Every change
+    /// to the profiles is followed by RebuildAlternateIndex, so the frozen set
+    /// says what that dictionary said; the answer is the same on the UI thread
+    /// as it always was.
     /// </summary>
-    private volatile Dictionary<string, string> _alternateOwners = new(StringComparer.OrdinalIgnoreCase);
+    private volatile AlternateIndex _alternateIndex = AlternateIndex.Empty;
+
+    /// <summary>
+    /// The alternate index as one immutable whole - see _alternateIndex.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Oct 2026, timing layer, P8): it also carries the split
+    /// owners and the row lookups the split loop needs on the timing thread
+    /// (SplitOwnerForAnyThread, SplitClaimantsForAnyThread,
+    /// RowOwnerForAnyThread), built in the same rebuild and swapped in with
+    /// the same single write - so all of them, and the alternates, always
+    /// describe the same set of profiles. Init-only properties, so a later
+    /// lookup is one more property here and one more line in
+    /// RebuildAlternateIndex.
+    /// </remarks>
+    private sealed class AlternateIndex
+    {
+        public static readonly AlternateIndex Empty = new()
+        {
+            Owners = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase).ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
+            MainTransponders = new HashSet<string>(StringComparer.OrdinalIgnoreCase).ToFrozenSet(StringComparer.OrdinalIgnoreCase),
+            SplitOwners = new Dictionary<string, (DriverProfile Driver, OwnedTransponder Entry)>(StringComparer.OrdinalIgnoreCase).ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
+            SplitClaimants = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase).ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
+            RowMains = new Dictionary<string, (string Main, string? CarId)>(StringComparer.OrdinalIgnoreCase).ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
+            RowAlternates = new Dictionary<string, (string Main, string? CarId)>(StringComparer.OrdinalIgnoreCase).ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
+            Profiles = new Dictionary<string, DriverProfile>(StringComparer.OrdinalIgnoreCase).ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
+        };
+
+        /// <summary>Alternate transponder -> its owner's main transponder.</summary>
+        public required FrozenDictionary<string, string> Owners { get; init; }
+
+        /// <summary>Every profile's main transponder as of the rebuild, in the profiles' own comparer.</summary>
+        public required FrozenSet<string> MainTransponders { get; init; }
+
+        /// <summary>Split transponder (trimmed) -> its one owner; a contested one is absent. Objects as of the rebuild: only their string properties are read off the UI thread.</summary>
+        public required FrozenDictionary<string, (DriverProfile Driver, OwnedTransponder Entry)> SplitOwners { get; init; }
+
+        /// <summary>Split transponder (trimmed) -> how many drivers claim it (1 or more).</summary>
+        public required FrozenDictionary<string, int> SplitClaimants { get; init; }
+
+        /// <summary>Main transponder (the profiles' own keys and comparer) -> (that profile's Transponder, TransponderEntry(key)?.CarId).</summary>
+        public required FrozenDictionary<string, (string Main, string? CarId)> RowMains { get; init; }
+
+        /// <summary>Alternate (trimmed, as Owners) -> (owner's Transponder, owner.TransponderEntry(alt)?.CarId).</summary>
+        public required FrozenDictionary<string, (string Main, string? CarId)> RowAlternates { get; init; }
+
+        /// <summary>
+        /// The profiles themselves (the profiles' own keys and comparer), for
+        /// GetForAnyThread. The objects as of the rebuild: only their string
+        /// properties are read off the UI thread.
+        /// </summary>
+        public required FrozenDictionary<string, DriverProfile> Profiles { get; init; }
+    }
 
     /// <summary>
     /// Main transponder -> the cars that driver had as of the last time the
@@ -35,7 +98,7 @@ public sealed class ProfileStore
     /// Garage. A copy of the names taken at every save does not move when
     /// somebody edits the profile in place.
     ///
-    /// Rebuilt whole and swapped in by reference, like _alternateOwners.
+    /// Rebuilt whole and swapped in by reference, like _alternateIndex.
     /// </summary>
     private volatile Dictionary<string, string[]> _savedCars = new(StringComparer.OrdinalIgnoreCase);
 
@@ -78,6 +141,7 @@ public sealed class ProfileStore
     private ProfileStore(Dictionary<string, DriverProfile> profiles)
     {
         _profiles = profiles;
+        AnyThread = new AnyThreadLookup(this);
         RebuildAlternateIndex();
         RememberSavedCars();
     }
@@ -253,6 +317,39 @@ public sealed class ProfileStore
     }
 
     /// <summary>
+    /// Get from any thread: the same answer, from the profiles as of the last
+    /// change to them (every change rebuilds the index), never the live
+    /// dictionary the UI thread edits.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Oct 2026, timing layer, P8): with timing on its own thread the
+    /// live state for the phones and the relay is built off the UI thread
+    /// (MainForm.LiveState), and the names on it come from here. Get line
+    /// for line, on ONE read of the index, so the main transponders and the
+    /// alternates it checks are from the same rebuild.
+    /// </remarks>
+    public DriverProfile? GetForAnyThread(string transponder)
+    {
+        var index = _alternateIndex;
+
+        if (index.Profiles.TryGetValue(transponder, out var profile))
+        {
+            return profile;
+        }
+
+        return PrimaryForAlternateOn(index, transponder) is { } primary
+               && index.Profiles.TryGetValue(primary, out var owner)
+            ? owner
+            : null;
+    }
+
+    /// <summary>
+    /// GetForAnyThread as an IDriverLookup, for a board built off the UI
+    /// thread (KpiContext.Profiles). Made once, with the store.
+    /// </summary>
+    public IDriverLookup AnyThread { get; }
+
+    /// <summary>
     /// The car a row on the race board is in tonight, when the Garage knows
     /// better than the driver's active car: the car the transponder heard is
     /// fitted to. Given by MainForm, which has the race and the garage; null
@@ -288,7 +385,16 @@ public sealed class ProfileStore
     /// the same row as the first - so the driver has one set of laps, one
     /// best and one position, not two.
     /// </summary>
-    public string? PrimaryForAlternate(string transponder)
+    public string? PrimaryForAlternate(string transponder) =>
+        // One read: the owners and the main transponders they were built
+        // against, as a pair - safe from any thread (see _alternateIndex).
+        PrimaryForAlternateOn(_alternateIndex, transponder);
+
+    /// <summary>
+    /// PrimaryForAlternate's answer from one index object - for a lookup
+    /// that must read several things from the same rebuild.
+    /// </summary>
+    private static string? PrimaryForAlternateOn(AlternateIndex index, string transponder)
     {
         if (string.IsNullOrWhiteSpace(transponder))
         {
@@ -297,12 +403,51 @@ public sealed class ProfileStore
 
         var id = transponder.Trim();
 
-        if (_profiles.ContainsKey(id))
+        if (index.MainTransponders.Contains(id))
         {
             return null;
         }
 
-        return _alternateOwners.TryGetValue(id, out var primary) ? primary : null;
+        return index.Owners.TryGetValue(id, out var primary) ? primary : null;
+    }
+
+    /// <summary>
+    /// For the race row <paramref name="rowTransponder"/>: the main
+    /// transponder of the driver it belongs to and the car that transponder
+    /// is fitted to - exactly <c>Get(row)?.Transponder</c> and
+    /// <c>Get(row)?.TransponderEntry(row)?.CarId</c> - or null when it is
+    /// nobody's. Safe from any thread: one read of the index rebuilt with
+    /// every change to the profiles.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Oct 2026, timing layer, P8): the split loop finds a split
+    /// pass's row on the timing thread now (MainForm.SplitIntoRace), and Get
+    /// reads the live profiles dictionary and the profile's own transponder
+    /// list, which only the UI thread may. The same steps as Get: the main
+    /// transponder as given first; then, as PrimaryForAlternate, trimmed,
+    /// never when it is somebody's main one, and the alternate's owner.
+    /// </remarks>
+    public (string Main, string? CarId)? RowOwnerForAnyThread(string rowTransponder)
+    {
+        var index = _alternateIndex;
+
+        if (rowTransponder is null)
+        {
+            return null;
+        }
+
+        if (index.RowMains.TryGetValue(rowTransponder, out var main))
+        {
+            return main;
+        }
+
+        // PrimaryForAlternate found an owner exactly when RowAlternates has
+        // the trimmed id (both built from the same owners), so the owner's
+        // answer is looked up by that id.
+        return PrimaryForAlternateOn(index, rowTransponder) is not null
+               && index.RowAlternates.TryGetValue(rowTransponder.Trim(), out var alternate)
+            ? alternate
+            : null;
     }
 
     /// <summary>
@@ -431,6 +576,32 @@ public sealed class ProfileStore
         }
 
         return owners;
+    }
+
+    /// <summary>
+    /// SplitOwnerOf from any thread: the one driver with this split
+    /// transponder and its entry, or null when it is nobody's or contested -
+    /// as of the last change to the profiles (the index is rebuilt with every
+    /// one). Only the objects' string properties may be read off the UI.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Oct 2026, timing layer, P8): SplitOwnerOf walks the live
+    /// profiles, which only the UI thread may; with timing on its own thread
+    /// a split pass is understood on the timing thread (SplitLoop.Understand).
+    /// </remarks>
+    public (DriverProfile Driver, OwnedTransponder Entry)? SplitOwnerForAnyThread(string transponder)
+    {
+        var id = transponder?.Trim() ?? string.Empty;
+
+        return id.Length > 0 && _alternateIndex.SplitOwners.TryGetValue(id, out var owner) ? owner : null;
+    }
+
+    /// <summary>SplitOwnersOf(transponder).Count from any thread - see SplitOwnerForAnyThread.</summary>
+    public int SplitClaimantsForAnyThread(string transponder)
+    {
+        var id = transponder?.Trim() ?? string.Empty;
+
+        return id.Length > 0 && _alternateIndex.SplitClaimants.TryGetValue(id, out var count) ? count : 0;
     }
 
     /// <summary>
@@ -1077,6 +1248,97 @@ public sealed class ProfileStore
             owners.Remove(alternate);
         }
 
-        _alternateOwners = owners;
+        // WHY (24 Oct 2026, timing layer, P8): the split loop's lookups for
+        // the timing thread, decided exactly as their UI-thread versions do.
+        //
+        // Split owners as SplitOwnersOf: each profile once per id (SplitEntry
+        // gives its first matching entry), ids trimmed and compared ignoring
+        // case as SplitEntry does; one claimant owns it, two own it not.
+        var splitClaims = new Dictionary<string, List<(DriverProfile Driver, OwnedTransponder Entry)>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var profile in _profiles.Values)
+        {
+            foreach (var listed in profile.SplitTransponders ?? new List<OwnedTransponder>())
+            {
+                if (listed is null || string.IsNullOrWhiteSpace(listed.Id))
+                {
+                    continue;
+                }
+
+                var id = listed.Id.Trim();
+
+                if (!splitClaims.TryGetValue(id, out var claims))
+                {
+                    claims = new List<(DriverProfile Driver, OwnedTransponder Entry)>();
+                    splitClaims[id] = claims;
+                }
+
+                if (claims.Any(c => ReferenceEquals(c.Driver, profile)))
+                {
+                    continue;
+                }
+
+                if (profile.SplitEntry(id) is { } entry)
+                {
+                    claims.Add((profile, entry));
+                }
+            }
+        }
+
+        // Rows as Get: by the profiles' own keys first, then by an alternate
+        // that resolves (Owners) to a profile that is there.
+        var rowMains = new Dictionary<string, (string Main, string? CarId)>(_profiles.Comparer);
+
+        foreach (var (key, profile) in _profiles)
+        {
+            rowMains[key] = (profile.Transponder, profile.TransponderEntry(key)?.CarId);
+        }
+
+        var rowAlternates = new Dictionary<string, (string Main, string? CarId)>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (alternate, primary) in owners)
+        {
+            if (_profiles.TryGetValue(primary, out var owner))
+            {
+                rowAlternates[alternate] = (owner.Transponder, owner.TransponderEntry(alternate)?.CarId);
+            }
+        }
+
+        _alternateIndex = new AlternateIndex
+        {
+            Owners = owners.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
+            MainTransponders = _profiles.Keys.ToFrozenSet(_profiles.Comparer),
+            SplitOwners = splitClaims
+                .Where(c => c.Value.Count == 1)
+                .ToFrozenDictionary(c => c.Key, c => c.Value[0], StringComparer.OrdinalIgnoreCase),
+            SplitClaimants = splitClaims
+                .Where(c => c.Value.Count > 0)
+                .ToFrozenDictionary(c => c.Key, c => c.Value.Count, StringComparer.OrdinalIgnoreCase),
+            RowMains = rowMains.ToFrozenDictionary(_profiles.Comparer),
+            RowAlternates = rowAlternates.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase),
+            Profiles = _profiles.ToFrozenDictionary(_profiles.Comparer),
+        };
     }
+
+    /// <summary>GetForAnyThread as an IDriverLookup - see AnyThread.</summary>
+    private sealed class AnyThreadLookup : IDriverLookup
+    {
+        private readonly ProfileStore _store;
+
+        public AnyThreadLookup(ProfileStore store) => _store = store;
+
+        public DriverProfile? Get(string transponder) => _store.GetForAnyThread(transponder);
+    }
+}
+
+/// <summary>
+/// Who a transponder belongs to - ProfileStore.Get, or its any-thread
+/// version (ProfileStore.AnyThread) for a reader that is not on the UI
+/// thread. Added 24 Oct 2026 (timing layer, P8) for the live state, which
+/// is built off the UI thread with timing on its own thread.
+/// </summary>
+public interface IDriverLookup
+{
+    /// <summary>The driver a transponder belongs to - by their main transponder first, then by their alternate one - or null.</summary>
+    DriverProfile? Get(string transponder);
 }

@@ -226,7 +226,7 @@ public sealed class SeasonsControl : UserControl
 
         var sessionsHint = new Label
         {
-            Text = "Only sessions recorded as \"Race\" type appear below. Practice sessions never count toward points.",
+            Text = "Only sessions recorded as \"Race\" type appear below - practice never counts toward points.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

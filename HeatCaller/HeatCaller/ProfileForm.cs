@@ -81,6 +81,17 @@ public sealed class ProfileForm : Form
     private readonly TextBox _txtSkillLevel = new();
     private readonly TextBox _txtContact = new();
     private readonly TextBox _txtEmail = new();
+
+    /// <summary>A line in their own words for the AI commentary - see DriverProfile.AboutLine.</summary>
+    private readonly TextBox _txtAboutLine = new();
+
+    /// <summary>Email them their night - see DriverProfile.EmailMyNight. Only enabled while Email is filled in.</summary>
+    private readonly CheckBox _chkEmailMyNight = new ThemedCheckBox();
+
+    /// <summary>The online privacy ticks - see DriverProfile.NoPhotoOnline, NoVideoOnline and InitialsOnline.</summary>
+    private readonly CheckBox _chkNoPhotoOnline = new ThemedCheckBox();
+    private readonly CheckBox _chkNoVideoOnline = new ThemedCheckBox();
+    private readonly CheckBox _chkInitialsOnline = new ThemedCheckBox();
     /// <summary>The driver's other transponders, and the main one's Retire - see TransponderChoice.</summary>
     private readonly ComboBox _cmbTransponders = new();
 
@@ -209,13 +220,12 @@ public sealed class ProfileForm : Form
         }
 
         var announcerHint =
-            "What the announcer reads instead of their real name. Two uses: a nickname the crowd knows, or the "
-            + "name spelled the way it SOUNDS, which is how you fix one the voice gets wrong - \"Jacques\" typed as "
-            + "\"Zhock\", \"Siobhan\" as \"Shiv-awn\". They keep their real name everywhere else.";
+            "Read out instead of their real name: a nickname, or the name spelled the way it SOUNDS to fix one the "
+            + "voice gets wrong (\"Jacques\" as \"Zhock\"). Their real name is used everywhere else.";
 
         if (btnHearName is not null)
         {
-            announcerHint += " Hear It reads it out exactly as the announcer will.";
+            announcerHint += " Hear It plays it as the announcer will say it.";
         }
 
         fields.AddHint(announcerHint);
@@ -235,8 +245,19 @@ public sealed class ProfileForm : Form
         _cmbPronouns.Text = Pronouns.Clean(Result.Pronouns);
 
         captions.Add(fields.AddRow("Pronouns:", _cmbPronouns));
-        fields.AddHint("Optional. The AI commentary uses these whenever it talks about them, instead of guessing from "
-                       + "their name. Pick one, or type their own (like \"she/they\"). Leave it blank if you don't know.");
+        fields.AddHint("Optional. The AI commentary uses these instead of guessing from their name. Pick one, or type "
+                       + "their own (like \"she/they\").");
+
+        // WHY (22 Oct 2026, driver experience): a line about them in their
+        // own words, for the AI commentary - beside the pronouns, the other
+        // thing on here only the commentary reads. A driver can now ask for
+        // it from their own phone, and the desk sees and edits it here.
+        // Never shown publicly. Capped where the phone's is (AboutLineMaxChars).
+        captions.Add(AddLabeledTextBox(fields, "About them:", _txtAboutLine, Result.AboutLine ?? string.Empty));
+        _txtAboutLine.MaxLength = DriverProfile.AboutLineMaxChars;
+        _txtAboutLine.PlaceholderText = "optional - for the AI commentary, in their own words";
+        fields.AddHint($"For the AI commentary: a line in their own words, up to {DriverProfile.AboutLineMaxChars} characters "
+                       + "(like \"racing since I was eight; my dad builds the cars\"). Never shown publicly.");
 
         // Their garage's cars, the active one showing - what they are
         // announced and recorded in. A name typed and Added is a new car,
@@ -277,7 +298,7 @@ public sealed class ProfileForm : Form
         // a car is retired, deleted or transferred - a name taken off here
         // would only come back from it.
         captions.Add(fields.AddRow("Active car:", ButtonsBeside(_cmbCars, btnAddCar)));
-        fields.AddHint("The car they race in now - what gets announced and recorded. Pick one of their cars, or type a new one and press Add: it's added to their garage when you save. To retire a car or give it to someone else, use their garage.");
+        fields.AddHint("The car they race in now, announced and recorded. Pick one, or type a new one and press Add: it joins their garage when you save. Retire or transfer cars in their garage.");
 
         captions.Add(AddLabeledTextBox(fields, "Race number:", _txtRaceNumber, Result.RaceNumber));
         captions.Add(AddLabeledTextBox(fields, "Home track:", _txtHomeTrack, Result.HomeTrack));
@@ -292,6 +313,24 @@ public sealed class ProfileForm : Form
         // check-in PIN.
         captions.Add(AddLabeledTextBox(fields, "Email:", _txtEmail, Result.Email));
         _txtEmail.PlaceholderText = "for check-in PINs - never shown publicly";
+
+        // WHY (22 Oct 2026, driver experience): whether they'd like their
+        // night emailed to them, which a driver can also ask for from their
+        // phone. Under the address it goes to, and only enabled while there
+        // is one - a tick with nowhere to send to would promise an email
+        // nobody gets. Emptying the box keeps the tick as it was rather than
+        // clearing it: the night email checks for an address anyway, and a
+        // typo fixed by retyping the address should not lose their wish.
+        _chkEmailMyNight.Text = "Email them their night";
+        _chkEmailMyNight.AutoSize = true;
+        _chkEmailMyNight.Checked = Result.EmailMyNight;
+        fields.AddField(_chkEmailMyNight);
+        fields.AddHint("When the club sends night emails: their results and report card, to the address above.");
+
+        void UpdateEmailMyNight() => _chkEmailMyNight.Enabled = _txtEmail.Text.Trim().Length > 0;
+
+        _txtEmail.TextChanged += (_, _) => UpdateEmailMyNight();
+        UpdateEmailMyNight();
 
         // Every transponder the driver has besides the main one: a second
         // car's, a spare, a replacement. Type one and press Add. Retire marks
@@ -329,7 +368,7 @@ public sealed class ProfileForm : Form
         UpdateTransponderButtons();
 
         captions.Add(fields.AddRow("Transponders:", ButtonsBeside(_cmbTransponders, btnAddTransponder, btnRetireTransponder, btnRemoveTransponder)));
-        fields.AddHint("Any other transponders they run - a second car, a spare. Retire one that is no longer used: what was timed on it stays theirs.");
+        fields.AddHint("Their other transponders - a second car, a spare. A retired one keeps what was timed on it.");
 
         _cmbClass.DropDownStyle = ComboBoxStyle.DropDownList;
 
@@ -399,7 +438,7 @@ public sealed class ProfileForm : Form
         _cmbClass.SelectedIndexChanged += (_, _) => ShowOtherClasses();
         ShowOtherClasses();
         captions.Add(fields.AddRow("Also races:", new ButtonBar(tight: true).With(_lblOtherClasses, btnOtherClasses)));
-        fields.AddHint("Other classes they race besides their main one - they go into those classes' heats as well.");
+        fields.AddHint("They go into these classes' heats as well as their main class's.");
 
         _txtSetupConfiguration.Multiline = true;
         _txtSetupConfiguration.AcceptsReturn = true;
@@ -425,6 +464,43 @@ public sealed class ProfileForm : Form
         _txtNotes.Text = Result.Notes;
         captions.Add(fields.AddRow("Notes:", _txtNotes, stretch: true));
 
+        // ONLINE PRIVACY (22 Oct 2026, driver experience): the three ways a
+        // driver can ask to be kept off the internet - see the flags on
+        // DriverProfile, which PublicPrivacy enforces for the relay. A phone
+        // can only turn these on; turning one off is done here, at the desk.
+        // A grid of its own under a heading, lined up with the fields above
+        // (FieldGrid.LineUp, after the theme pass). The hint says the room
+        // is not affected, because a club will otherwise expect the Big
+        // Screen to change too.
+        var privacyHeading = new Label
+        {
+            Text = "ONLINE PRIVACY",
+            AutoSize = true,
+            Font = AppTheme.MicroFont,
+            ForeColor = AppTheme.Primary,
+        };
+
+        var privacy = new FieldGrid();
+
+        _chkNoPhotoOnline.Text = "Leave their photo out";
+        _chkNoPhotoOnline.AutoSize = true;
+        _chkNoPhotoOnline.Checked = Result.NoPhotoOnline;
+        captions.Add(privacy.AddRow("Online:", _chkNoPhotoOnline));
+
+        _chkNoVideoOnline.Text = "No podium videos of them";
+        _chkNoVideoOnline.AutoSize = true;
+        _chkNoVideoOnline.Checked = Result.NoVideoOnline;
+        privacy.AddField(_chkNoVideoOnline);
+
+        _chkInitialsOnline.Text = "Initials only (\"Sam Parker\" shows as \"S.P.\")";
+        _chkInitialsOnline.AutoSize = true;
+        _chkInitialsOnline.Checked = Result.InitialsOnline;
+        privacy.AddField(_chkInitialsOnline);
+
+        privacy.AddHint("Only what goes on the internet: the club's relay pages and podium videos. In the room nothing "
+                        + "changes - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. "
+                        + "A driver can ask for these from their phone; only the desk can turn one off.");
+
         // The fields on the left and the strip down the right, as tall as
         // the taller of the two. The strip is as wide as SizeStrip works
         // out; until the theme pass, the photo's side.
@@ -442,7 +518,9 @@ public sealed class ProfileForm : Form
         var badgeSummary = DescribeBadges(fixedTransponder ?? _txtTransponder.Text);
         var hasBadges = !string.IsNullOrWhiteSpace(badgeSummary);
 
-        band.Add(fields, gapBelow: hasBadges ? UiLayout.RowGap : 0);
+        band.Add(fields, gapBelow: UiLayout.SectionGap);
+        band.Add(privacyHeading, gapBelow: UiLayout.HeadingGap);
+        band.Add(privacy, gapBelow: hasBadges ? UiLayout.RowGap : 0);
 
         if (hasBadges)
         {
@@ -517,6 +595,13 @@ public sealed class ProfileForm : Form
         // and what is in it, the two note boxes their lines, and each
         // drop-down as wide as its longest name.
         SizeStrip(strip);
+
+        // One caption column down the fields and the privacy grid, measured
+        // in the faces the theme pass left the captions in - before the
+        // width below, which is worked out from the captions (22 Oct 2026,
+        // driver experience).
+        FieldGrid.LineUp(new[] { fields, privacy });
+
         _txtSetupConfiguration.Height = LinesHigh(_txtSetupConfiguration, NotesLines);
         _txtNotes.Height = LinesHigh(_txtNotes, NotesLines);
 
@@ -544,6 +629,10 @@ public sealed class ProfileForm : Form
             pronounsWidth + _cmbPronouns.Margin.Horizontal,
             _chkRental.GetPreferredSize(Size.Empty).Width,
             _chkExcludeRecords.GetPreferredSize(Size.Empty).Width,
+            _chkEmailMyNight.GetPreferredSize(Size.Empty).Width,
+            _chkNoPhotoOnline.GetPreferredSize(Size.Empty).Width,
+            _chkNoVideoOnline.GetPreferredSize(Size.Empty).Width,
+            _chkInitialsOnline.GetPreferredSize(Size.Empty).Width,
 
             // Hear It, measured as the bar it sits in measures it, and zero
             // when there is none. It is narrower than the boxes at every
@@ -1053,9 +1142,36 @@ public sealed class ProfileForm : Form
             return;
         }
 
+        var saved = ProfileAsShown();
+
+        // Checked here, with the dialog still open, so the fix is one edit
+        // away rather than a lost form. Saving over another driver's
+        // transponder used to replace their whole profile without a word.
+        if (_profiles?.DescribeClash(saved, _editingTransponder) is { } clash)
+        {
+            AppDialog.Show(this, clash, "Transponder already in use", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        Result = saved;
+        DialogResult = DialogResult.OK;
+        Close();
+    }
+
+    /// <summary>
+    /// The profile as the dialog shows it now - what Save keeps. A brand-new
+    /// DriverProfile, so every field the profile has must be copied here,
+    /// from its box or, for one this dialog does not show, from the profile
+    /// it was opened on: a field left out is wiped by every desk edit.
+    /// Taken out of Save on 22 Oct 2026 (driver experience) so the tests can
+    /// check exactly that.
+    /// </summary>
+    internal DriverProfile ProfileAsShown()
+    {
+        var transponder = _txtTransponder.Text.Trim();
         var mainClass = _cmbClass.SelectedItem as string == "(none)" ? string.Empty : (string)(_cmbClass.SelectedItem ?? string.Empty);
 
-        var saved = new DriverProfile
+        return new DriverProfile
         {
             Transponder = transponder,
             DriverName = _txtDriverName.Text.Trim(),
@@ -1113,20 +1229,55 @@ public sealed class ProfileForm : Form
             FirstSeenUtc = _editingTransponder is null
                 ? Result.FirstSeenUtc ?? DateTime.UtcNow
                 : Result.FirstSeenUtc,
-        };
 
-        // Checked here, with the dialog still open, so the fix is one edit
-        // away rather than a lost form. Saving over another driver's
-        // transponder used to replace their whole profile without a word.
-        if (_profiles?.DescribeClash(saved, _editingTransponder) is { } clash)
+            // WHY (22 Oct 2026, driver experience): the driver's own choices,
+            // which a phone can set too. All five are on this dialog and are
+            // saved as they stand in it - the privacy ticks included, so a
+            // desk edit can turn one off (the only place that can) and never
+            // turns one off by leaving it out. Save used to build this
+            // profile from the boxes alone, so a field it did not copy came
+            // back empty after any edit at all.
+            NoPhotoOnline = _chkNoPhotoOnline.Checked,
+            NoVideoOnline = _chkNoVideoOnline.Checked,
+            InitialsOnline = _chkInitialsOnline.Checked,
+            EmailMyNight = _chkEmailMyNight.Checked,
+            AboutLine = string.Equals(_txtAboutLine.Text, Result.AboutLine ?? string.Empty, StringComparison.Ordinal)
+                ? Result.AboutLine ?? string.Empty
+                : AboutLineFrom(_txtAboutLine.Text),
+        };
+    }
+
+    /// <summary>
+    /// The About them box as it is kept: on one line, trimmed, and no longer
+    /// than DriverProfile.AboutLineMaxChars - the box stops typing there,
+    /// but a paste can carry line breaks. An unchanged box keeps the
+    /// profile's own text exactly (ProfileAsShown), so opening a driver and
+    /// saving them unchanged is never a change (22 Oct 2026, driver
+    /// experience).
+    /// </summary>
+    internal static string AboutLineFrom(string? typed)
+    {
+        if (string.IsNullOrWhiteSpace(typed))
         {
-            AppDialog.Show(this, clash, "Transponder already in use", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
+            return string.Empty;
         }
 
-        Result = saved;
-        DialogResult = DialogResult.OK;
-        Close();
+        var text = System.Text.RegularExpressions.Regex.Replace(typed, @"\s+", " ").Trim();
+
+        if (text.Length > DriverProfile.AboutLineMaxChars)
+        {
+            var cut = DriverProfile.AboutLineMaxChars;
+
+            // Never split a surrogate pair - half an emoji is invalid text.
+            if (char.IsHighSurrogate(text[cut - 1]))
+            {
+                cut--;
+            }
+
+            text = text[..cut].TrimEnd();
+        }
+
+        return text;
     }
 
     /// <summary>

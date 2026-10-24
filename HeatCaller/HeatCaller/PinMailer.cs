@@ -83,6 +83,13 @@ internal static class PinMailer
     public static bool IsSending => Busy.CurrentCount == 0;
 
     /// <summary>
+    /// What a refusal says while Busy is held. Not "PINs": PINs, invites and
+    /// drivers' night emails all take the same one at a time, so the batch
+    /// holding it may be any of them (22 Oct 2026, driver experience).
+    /// </summary>
+    internal const string BusyWords = "Emails are being sent right now";
+
+    /// <summary>
     /// Why email cannot be sent with these settings, or null when it can -
     /// including a mail server that came from a restored backup and has not
     /// been checked yet (RestoredSettings). Every send asks this, the
@@ -195,7 +202,7 @@ internal static class PinMailer
 
         if (!await Busy.WaitAsync(0, CancellationToken.None).ConfigureAwait(false))
         {
-            return new MailResult { Ok = false, Message = "PINs are being emailed right now - try the test once that has finished." };
+            return new MailResult { Ok = false, Message = BusyWords + " - try the test once that has finished." };
         }
 
         try
@@ -342,7 +349,7 @@ internal static class PinMailer
 
         if (!await Busy.WaitAsync(0, CancellationToken.None).ConfigureAwait(false))
         {
-            return new MailResult { Ok = false, Message = "PINs are already being emailed - wait for that to finish.", NoEmail = noEmail };
+            return new MailResult { Ok = false, Message = BusyWords + " - wait for that to finish.", NoEmail = noEmail };
         }
 
         try
@@ -415,13 +422,75 @@ internal static class PinMailer
 
         if (!await Busy.WaitAsync(0, CancellationToken.None).ConfigureAwait(false))
         {
-            return new MailResult { Ok = false, Message = "PINs are being emailed right now - try again once that has finished.", NoEmail = noEmail };
+            return new MailResult { Ok = false, Message = BusyWords + " - try again once that has finished.", NoEmail = noEmail };
         }
 
         try
         {
             return await Task.Run(
                     () => SendAllAsync(server, messages, noEmail, progress, cancel, isTest: false, summaryFor: n => $"Emailed {Plural.Of(n, "invite")}."),
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            Busy.Release();
+        }
+    }
+
+    /// <summary>
+    /// Emails already written, one per person, through the club's mailbox -
+    /// the drivers' night emails (NightEmail, 22 Oct 2026, driver experience).
+    /// <see cref="MailResult.Sent"/> carries each message's
+    /// <c>Key</c> where a PIN email carries a transponder (its PIN empty),
+    /// for the caller to record who was sent theirs.
+    ///
+    /// The same checks, pacing and error wording as the PINs, over the same
+    /// SendAllAsync. Waits its turn behind a send already under way rather
+    /// than refusing, like SendOneAsync: the automatic send when the day
+    /// closes has nobody standing over it, and two sends at once would be
+    /// the burst the pause exists to avoid. Everything is copied out of
+    /// settings before the first await, so call this on the UI thread.
+    /// </summary>
+    public static async Task<MailResult> SendBatchAsync(
+        AppSettings settings,
+        IReadOnlyList<(string Key, string To, string ToName, string Subject, string Body)> messages,
+        IProgress<string>? progress,
+        CancellationToken cancel)
+    {
+        if (ConfigurationProblem(settings) is { } problem)
+        {
+            return new MailResult { Ok = false, Message = problem };
+        }
+
+        var server = Server.From(settings);
+        var outgoing = messages
+            .Select(m => new Outgoing(m.Key, string.Empty, m.To.Trim(), m.ToName, m.Subject, m.Body))
+            .ToList();
+
+        if (outgoing.Count == 0)
+        {
+            return new MailResult { Ok = true, Message = "Nobody to email." };
+        }
+
+        if (IsSending)
+        {
+            progress?.Report("Waiting for the email already being sent to finish...");
+        }
+
+        try
+        {
+            await Busy.WaitAsync(cancel).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return new MailResult { Ok = false, Message = "Nothing was sent.", Cancelled = true };
+        }
+
+        try
+        {
+            return await Task.Run(
+                    () => SendAllAsync(server, outgoing, Array.Empty<string>(), progress, cancel, isTest: false, summaryFor: n => $"Emailed {Plural.Of(n, "driver")} their night."),
                     CancellationToken.None)
                 .ConfigureAwait(false);
         }
@@ -459,6 +528,13 @@ internal static class PinMailer
         var sent = new List<PinMailed>();
         var failures = new List<string>();
         var failedTransponders = new List<string>();
+
+        // WHY (23 Oct 2026, bug hunt 10): the "first three all failed" stop
+        // below counted every entry in failures - including addresses the
+        // server refused one by one, which are the racers' fault, not the
+        // server's. Two dead mailboxes then one rejected message stopped the
+        // whole batch. Only the server-side faults are counted here now.
+        var serverFailures = 0;
 
         MailResult Finish(bool ok, string message, bool cancelled = false) => new()
         {
@@ -584,10 +660,12 @@ internal static class PinMailer
                 // not take, a sending limit, a message it would not accept -
                 // so the next automatic pass tries them again.
                 failures.Add($"{outgoing.ToName} ({outgoing.To}): {Plain(ex)}");
+                serverFailures++;
 
                 // The same fault three times running is the server, not the
                 // racers - stop rather than fail a hundred emails one by one.
-                if (failures.Count >= 3 && sent.Count == 0)
+                // Counts only this kind of failure (see serverFailures).
+                if (serverFailures >= 3 && sent.Count == 0)
                 {
                     return Finish(false, $"Stopped: the first three emails all failed ({Plain(ex)}).");
                 }

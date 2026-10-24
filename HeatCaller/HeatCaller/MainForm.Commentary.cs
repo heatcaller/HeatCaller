@@ -388,13 +388,38 @@ public partial class MainForm
 
         try
         {
+            // REDACTED FOR THE PAGE ONLY (22 Oct 2026, driver experience,
+            // item 12). The preview is AI prose naming drivers, and it never
+            // goes through RelayPublisher.DisplayNames, so a driver who asked
+            // to be initials-only online has their full and announcer names
+            // replaced here. The file in Documents keeps the full names - it
+            // is the club's own copy. Best effort: a bare first name in the
+            // prose can still slip through (PublicPrivacy.Redact).
+            var shown = script is null ? null : PublicPrivacy.Current.Redact(script);
+
             _relayPublisher.PublishSnapshot(
-                RelayChannel.Preview, NightBefore.Document(dayName, whenLocal, firstRaceLocal, script));
+                RelayChannel.Preview, NightBefore.Document(dayName, whenLocal, firstRaceLocal, shown));
 
             // THE DAY IT IS FOR, remembered now, so the withdrawal knows
             // there is something of its own to take down - see
             // WithdrawTheNightBefore for why a flag is not enough.
-            _nightBeforeOnThePage = _raceEvents.Active?.Id ?? string.Empty;
+            //
+            // WHY (23 Oct 2026, bug hunt 10): kept in settings, not memory.
+            // The preview is written the night before and the laptop shut;
+            // on race day the app started with nothing remembered, so the
+            // first heat never took it down and it stood, in the future
+            // tense, for hours after. What it was built from is kept too,
+            // so a driver who asks for initials only afterwards is redacted
+            // on the page as well (RedactTheNightBeforeAgain).
+            _settings.NightBeforeOnThePage = new NightBeforePreviewUp
+            {
+                DayId = _raceEvents.Active?.Id ?? string.Empty,
+                DayName = dayName,
+                WhenLocal = DateTime.SpecifyKind(whenLocal, DateTimeKind.Unspecified),
+                FirstRaceLocal = firstRaceLocal,
+                Script = script,
+            };
+            _settings.Save();
 
             return " and onto your club's page";
         }
@@ -407,14 +432,71 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The race day whose preview is on the club's page, or null for none.
+    /// The race day whose preview is on the club's page, or null for none -
+    /// AppSettings.NightBeforeOnThePage's day.
     ///
     /// THE DAY AND NOT A BOOLEAN, so that a preview written for next
     /// Saturday is not taken down by tonight's first heat. A club that
     /// writes the preview on Tuesday for Saturday and then runs a practice
     /// evening on Wednesday would otherwise lose it.
     /// </summary>
-    private string? _nightBeforeOnThePage;
+    private string? NightBeforeOnThePageFor => _settings.NightBeforeOnThePage?.DayId;
+
+    /// <summary>Forgets the preview on the page, saving only when there was one.</summary>
+    private void ForgetTheNightBeforeOnThePage()
+    {
+        if (_settings.NightBeforeOnThePage is null)
+        {
+            return;
+        }
+
+        _settings.NightBeforeOnThePage = null;
+        _settings.Save();
+    }
+
+    /// <summary>
+    /// The preview on the page built again against the register now in
+    /// use, when a driver's privacy has changed - or taken down if its own
+    /// expiry has passed meanwhile.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Oct 2026, bug hunt 10): it was redacted once, when it was
+    /// sent, and nothing sent it again. A driver who asked for initials only
+    /// after the preview went up stayed named in full on the club's front
+    /// page until the meeting - for days, if it was written early in the
+    /// week. Called by MainForm.Privacy's RefreshPrivacyRegister.
+    /// </remarks>
+    private void RedactTheNightBeforeAgain()
+    {
+        if (_settings.NightBeforeOnThePage is not { } up)
+        {
+            return;
+        }
+
+        if (!_settings.PublishNightBeforeToTheRelay || !_settings.RelayEnabled)
+        {
+            return;
+        }
+
+        try
+        {
+            if (NightBefore.UntilUtc(up.WhenLocal, up.FirstRaceLocal) <= DateTime.UtcNow)
+            {
+                ForgetTheNightBeforeOnThePage();
+                _relayPublisher.PublishSnapshot(RelayChannel.Preview, NightBefore.WithdrawnDocument);
+                return;
+            }
+
+            var shown = up.Script is null ? null : PublicPrivacy.Current.Redact(up.Script);
+
+            _relayPublisher.PublishSnapshot(
+                RelayChannel.Preview, NightBefore.Document(up.DayName, up.WhenLocal, up.FirstRaceLocal, shown));
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [commentary] The preview could not be brought in line with a driver's privacy choice: {ex.Message}");
+        }
+    }
 
     /// <summary>
     /// Takes the preview off the club's page, because the meeting it
@@ -463,7 +545,7 @@ public partial class MainForm
     /// </summary>
     private void WithdrawTheNightBefore()
     {
-        if (_nightBeforeOnThePage is not { } forDay)
+        if (NightBeforeOnThePageFor is not { } forDay)
         {
             return;
         }
@@ -478,8 +560,9 @@ public partial class MainForm
 
         // Cleared FIRST, so a publisher that throws does not leave this
         // trying again on every heat of the evening. The preview has an
-        // expiry of its own for exactly this case.
-        _nightBeforeOnThePage = null;
+        // expiry of its own for exactly this case. Saved, so it is not
+        // sent again after a restart either.
+        ForgetTheNightBeforeOnThePage();
 
         try
         {
@@ -497,15 +580,15 @@ public partial class MainForm
     /// Takes the preview off the club's page because the club has unticked
     /// putting it there.
     ///
-    /// SENT WHETHER OR NOT THIS RUN PUBLISHED ONE. _nightBeforeOnThePage
-    /// lives in memory, so a preview published before the app was last
-    /// restarted is not in it - and the empty document costs nothing when
-    /// there is nothing up: the page draws nothing either way, and the
-    /// publisher drops it when the club website is off.
+    /// SENT WHETHER OR NOT THIS RUN PUBLISHED ONE. A preview published by
+    /// a version that kept the day in memory only is not remembered - and
+    /// the empty document costs nothing when there is nothing up: the page
+    /// draws nothing either way, and the publisher drops it when the club
+    /// website is off.
     /// </summary>
     private void TakeTheNightBeforeOffThePage()
     {
-        _nightBeforeOnThePage = null;
+        ForgetTheNightBeforeOnThePage();
 
         try
         {
@@ -640,7 +723,10 @@ public partial class MainForm
         // there - is the one failure this feature must not have.
         director.ClubAside = () =>
         {
-            _clubNotes.NewMeeting(_raceEvents.Active?.Id);
+            // WHY (23 Oct 2026, bug hunt 10): only an open day is a meeting -
+            // a closed day current to view its results neither takes
+            // tonight's notes nor clears them.
+            _clubNotes.FollowDay(_raceEvents.Active);
 
             return _clubNotes.ToSay();
         };
@@ -663,7 +749,9 @@ public partial class MainForm
         // anything that comes back here is already worth saying.
         director.RoomsCall = () =>
         {
-            _roomVote.NewMeeting(_raceEvents.Active?.Id);
+            // WHY (23 Oct 2026, bug hunt 10): same open-day rule as the notes,
+            // so viewing a closed day never wipes tonight's open vote.
+            _roomVote.FollowDay(_raceEvents.Active);
 
             return _roomVote.CallWaiting();
         };
@@ -717,11 +805,14 @@ public partial class MainForm
         // The club's own qualifying method, not the calculator's default -
         // a report that ranks by total laps at a club that qualifies on a
         // consecutive-lap window would read out the wrong grid.
-        director.Qualifying = () => CommentaryReaders.Qualifying(
-            _activeRound?.ClassName ?? string.Empty,
+        // WHY (23 Oct 2026, bug hunt 10): gated on every heat being run, so a
+        // provisional order after heat one is never announced as pole.
+        director.Qualifying = () => CommentaryReaders.FinishedQualifying(
+            _activeRound?.ClassName,
             _rounds,
             _sessionHistory,
             _profiles,
+            _raceEvents.ActiveRoundScope(),
             ClassOnTrack(),
             // Tonight's rounds and no others, exactly as the programme tab
             // does it (RaceProgramControl.QualifyingRoundFilter). Left off,

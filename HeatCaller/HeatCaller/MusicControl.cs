@@ -195,8 +195,8 @@ public sealed class MusicControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "A soundtrack for between races. Eleven tracks are included - add your own with Add Track, "
-                 + "and they're copied into the app's music folder so they keep working if you move the original.",
+            Text = "A soundtrack for between races. Eleven tracks are included; Add Track copies your own into the "
+                 + "app's music folder, so they keep working if you move the original.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -738,9 +738,18 @@ public sealed class MusicControl : UserControl
     private bool InPlayingList(MusicTrack track, bool themeInUse) =>
         themeInUse ? IsThemeTrack(track) : track.Enabled;
 
+    // WHY (23 Oct 2026, bug hunt 10): this compared titles exactly, but the
+    // player matches them through MusicStore.CurrentTitle (ThemeMusicSource.
+    // TracksIn), so a custom soundscape still listing the old song names
+    // ("Broadcast Song 1") played its songs as theme music while this page
+    // greyed them out and said they weren't theme music. It now matches the
+    // same way TracksIn does - without TracksIn's File.Exists check, so a
+    // theme track whose file is missing still shows as part of the theme
+    // (StyleRow marks the missing file itself).
     private bool IsThemeTrack(MusicTrack track) =>
         _player.Theme is { } theme
-        && theme.Titles.Contains(track.DisplayName.Trim(), StringComparer.OrdinalIgnoreCase);
+        && theme.Titles.Any(title => string.Equals(
+               MusicStore.CurrentTitle(title), MusicStore.CurrentTitle(track.DisplayName), StringComparison.OrdinalIgnoreCase));
 
     private void UpdateEnabledState()
     {

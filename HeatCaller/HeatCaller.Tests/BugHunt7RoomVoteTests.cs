@@ -230,7 +230,7 @@ public sealed class BugHunt7RoomVoteTests : IDisposable
 
     /// <summary>A server on one of the app's own looks, for the reason BugHunt5WebPrivacyTests gives.</summary>
     private static WebServerService Server() =>
-        new(new RaceControlSession(), ProfileStore.Load(), settings: new AppSettings { DisplayLook = Looks.MidnightKey });
+        new(new RaceTiming(new RaceControlSession()), ProfileStore.Load(), settings: new AppSettings { DisplayLook = Looks.MidnightKey });
 
     /// <summary>A row as RaceFiling.ResultsFrom saves it - Status "active" on every one.</summary>
     private static SessionResultEntry Row(int position, string transponder, int laps) => new()

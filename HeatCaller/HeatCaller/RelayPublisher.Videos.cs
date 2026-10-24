@@ -43,6 +43,15 @@ public sealed partial class RelayPublisher
         MaxResponseContentBufferSize = 64 * 1024,
     };
 
+    /// <summary>
+    /// Cancelled by QuiesceAsync to stop any podium upload on its way, then
+    /// dropped so the next upload gets a fresh one. Guarded by _gate.
+    /// </summary>
+    // WHY (22 Oct 2026, bug hunt 9): "Delete everything" stopped the
+    // results queue but not a podium video mid-upload. The relay now
+    // throws such a video away (410), but the bytes still went; now they stop.
+    private CancellationTokenSource? _videoUploadStop;
+
     /// <summary>Whether podium videos can be sent at all: the relay switched on and fully set up.</summary>
     public bool CanSharePodiumVideos => _settings.RelayEnabled && IsConfigured() && IsSafeForToken(_target.Root);
 
@@ -73,6 +82,11 @@ public sealed partial class RelayPublisher
     /// <summary>
     /// Sends one podium video. Position 1 to 3 only - anything else is
     /// refused here, before a byte is read, as the relay would refuse it.
+    ///
+    /// driverName is the laptop's name for the driver and is only ever
+    /// used in this PC's log. What goes to the public page is publicName
+    /// (from <see cref="PodiumPublicNames"/>, worked out over the whole
+    /// field) - see <see cref="PodiumVideoName"/>.
     /// </summary>
     /// <returns>The race page's address once the relay has it, or null (and a line in the log) when it did not go.</returns>
     public async Task<string?> UploadPodiumVideoAsync(
@@ -82,7 +96,9 @@ public sealed partial class RelayPublisher
         string? driverId,
         string driverName,
         string raceLabel,
-        CancellationToken cancel = default)
+        CancellationToken cancel = default,
+        string? publicName = null,
+        string? transponder = null)
     {
         if (position is < 1 or > 3)
         {
@@ -95,6 +111,22 @@ public sealed partial class RelayPublisher
         {
             return null;
         }
+
+        // Stopped by QuiesceAsync as well as by the caller - see _videoUploadStop.
+        CancellationTokenSource stop;
+
+        lock (_gate)
+        {
+            if (_quiesced)
+            {
+                return null;
+            }
+
+            stop = _videoUploadStop ??= new CancellationTokenSource();
+        }
+
+        using var upload = CancellationTokenSource.CreateLinkedTokenSource(cancel, stop.Token);
+        cancel = upload.Token;
 
         try
         {
@@ -115,7 +147,12 @@ public sealed partial class RelayPublisher
             {
                 "race=" + raceKey,
                 "position=" + position,
-                "name=" + Uri.EscapeDataString(Trim(driverName, 80)),
+                // WHY (22 Oct 2026): this sent the raw result-row name - the
+                // full name, or the transponder number for a car nobody had
+                // named - to a page anyone with the Big Screen's QR code can
+                // open, ignoring "Shorten published names". It now sends the
+                // same public form every other relay page uses.
+                "name=" + Uri.EscapeDataString(Trim(PodiumVideoName(driverName, transponder, publicName, _settings.RelayAbbreviateNames), 80)),
                 "label=" + Uri.EscapeDataString(Trim(raceLabel, 80)),
             };
 
@@ -158,6 +195,87 @@ public sealed partial class RelayPublisher
             Log?.Invoke($"[video] Could not put {driverName}'s video on the club's page: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// The podium's names as the public video page should show them, by
+    /// transponder (22 Oct 2026). Shortened over the WHOLE field, as every
+    /// other relay document is, so two drivers who would shorten to the
+    /// same form are still told apart (see <see cref="DisplayNames"/>);
+    /// only the podium's entries are kept, as only they are uploaded. A car
+    /// nobody named is "Unnamed driver", never its transponder number.
+    /// Build this on the UI thread, where the settings are read.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> PodiumPublicNames(
+        IReadOnlyList<(string? Name, string? Transponder, int Position)> field,
+        bool abbreviate) =>
+        PublicNames(field, abbreviate, podiumOnly: true);
+
+    /// <summary>
+    /// <see cref="PodiumPublicNames"/> for every car in the field, not just
+    /// the podium (22 Oct 2026) - for the names drawn INTO a podium video,
+    /// which shows the whole field's running order and top five.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> FieldPublicNames(
+        IReadOnlyList<(string? Name, string? Transponder, int Position)> field,
+        bool abbreviate) =>
+        PublicNames(field, abbreviate, podiumOnly: false);
+
+    private static IReadOnlyDictionary<string, string> PublicNames(
+        IReadOnlyList<(string? Name, string? Transponder, int Position)> field,
+        bool abbreviate,
+        bool podiumOnly)
+    {
+        var full = field.Select(r => RelayDocuments.PublicNameOrUnnamed(r.Name, r.Transponder)).ToList();
+        var chosen = DisplayNames(full, abbreviate, field.Select(r => r.Transponder).ToList());
+
+        // WHY (22 Oct 2026): the placeholder for a car with no name has a
+        // space in it, so shortening turned it into "Unnamed d", which reads
+        // like a real driver. It is kept whole, as the live board does
+        // (WebServerService.ShortNames).
+        var shown = full
+            .Select((name, i) => name == RelayDocuments.UnnamedDriver ? name : chosen[i])
+            .ToList();
+
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < field.Count; i++)
+        {
+            var transponder = (field[i].Transponder ?? string.Empty).Trim();
+
+            if ((!podiumOnly || field[i].Position is >= 1 and <= 3) && transponder.Length > 0)
+            {
+                names[transponder] = shown[i];
+            }
+        }
+
+        return names;
+    }
+
+    /// <summary>
+    /// The one name a podium video carries to the relay (22 Oct 2026).
+    /// The caller's publicName, built over the whole field by
+    /// <see cref="PodiumPublicNames"/>, when it has one. Without it, the
+    /// driver's own name is still made public-safe here rather than sent
+    /// as it is: the transponder stand-in becomes "Unnamed driver", and the
+    /// name is shortened on its own when the club asked for that. Shortening
+    /// one name cannot see a clash with another, but each video's heading
+    /// also carries its place (1st, 2nd, 3rd), so the three are still told
+    /// apart - and a clash is far better than a full name the club said
+    /// should not be published.
+    /// </summary>
+    internal static string PodiumVideoName(string? driverName, string? transponder, string? publicName, bool abbreviate)
+    {
+        if (!string.IsNullOrWhiteSpace(publicName))
+        {
+            return RelayDocuments.PublicNameOrUnnamed(publicName, transponder);
+        }
+
+        var safe = RelayDocuments.PublicNameOrUnnamed(driverName, transponder);
+
+        return safe == RelayDocuments.UnnamedDriver
+            ? safe
+            : DisplayNames(new[] { safe }, abbreviate, new[] { transponder })[0];
     }
 
     private static string Trim(string? text, int max)

@@ -597,6 +597,7 @@ internal static class SupportBundle
         text.AppendLine($"  Look:                    {s.AppLook}, dark {YesNo(s.DarkMode)}, text size x{s.FontScale:0.00}");
         text.AppendLine($"  24-hour clock:           {YesNo(s.Use24HourTime)}");
         text.AppendLine($"  Race-night focus:        {YesNo(s.RaceNightFocus)}");
+        text.AppendLine($"  Hide untested pages:     {YesNo(s.HideUntestedPages)}");
 
         return text.ToString();
     }

@@ -12,7 +12,7 @@ Nobody is checked in until somebody taps. Opening a QR check-in link or typing a
 
 For the Wi-Fi-only check-in page served by the laptop itself, see [Local Screens](../screens/phone-and-web.md). For the desk side, see [Events and entries](../race-day/events-and-entries.md).
 
-New drivers who aren't on your books yet can sign themselves up with an invite; see [Driver sign-up](sign-up.md).
+New drivers who aren't on your books yet can sign themselves up with an invite; see [Driver sign-up](sign-up.md). Drivers who are can ask the desk for changes to their own details from their night page; see [Driver requests](driver-requests.md).
 
 ## Before you start
 
@@ -23,7 +23,7 @@ New drivers who aren't on your books yet can sign themselves up with an invite; 
 ## Turn on online check-in
 
 1. On the **Club Website** page, in the **Online check-in** card, tick **Let drivers check in from their own phones**.
-2. In **Staff PIN (opens the full list):**, type 6 to 8 digits (the box suggests "e.g. 246813"), then click or tab out of the box. The PIN is saved when you leave the box, not as you type. A shorter PIN isn't saved: "Not saved - a new staff PIN must be 6 to 8 digits." Nor is one that's already a racer's personal PIN: "Not saved - that PIN is already in use elsewhere in HeatCaller. Choose another."
+2. In **Staff PIN:**, type 6 to 8 digits (the box suggests "e.g. 246813"), then click or tab out of the box. The PIN is saved when you leave the box, not as you type. A shorter PIN isn't saved: "Not saved - a new staff PIN must be 6 to 8 digits." Nor is one that's already a racer's personal PIN: "Not saved - that PIN is already in use elsewhere in HeatCaller. Choose another."
 3. Decide on **Include photos (drivers can be children - off unless you're sure)**. It's off by default.
 4. Check the state line under it (see [Check-in states](#check-in-states)).
 5. Click **Open Check-in Page** to see the page as drivers will.
@@ -105,7 +105,7 @@ The same box takes both kinds of PIN. The relay tries the staff PIN first, then 
 | Length | 6 to 8 digits (4 or 5 still work if set before 0.46.0) | 6 digits |
 | Who has it | The people running the desk | One racer each, never shared |
 | What it opens | The full list: everyone on the check-in list | Only that racer's own card |
-| Where it's set | **Staff PIN (opens the full list):** on the Club Website page | Made by HeatCaller; see [Personal PINs](#personal-pins) |
+| Where it's set | **Staff PIN:** on the Club Website page | Made by HeatCaller; see [Personal PINs](#personal-pins) |
 
 A PIN stays unlocked only while that browser tab is open. Closing the tab forgets it, so a phone handed back to its owner doesn't stay unlocked.
 
@@ -163,6 +163,26 @@ Under the card:
 
 - From a QR check-in: **Not you? Open the full list**, which goes to the PIN box.
 - From a personal PIN: **Not you? Sign out**, which forgets the PIN on that phone and goes back to the PIN box.
+- When the club gives drivers their own nights, a QR check-in's card also has **See your racing from last time**, which opens that driver's night page. See [A driver's own night](index.md#a-drivers-own-night).
+
+### The first-night guide
+
+When a driver opens their card from their QR check-in on their first night at the club (HeatCaller has no result for them before tonight, demo races aside), a folded section, **Your first night - what happens**, appears under the card. Tapping it opens a short guide written for drivers, not for the desk:
+
+- **This page**: when a time like "about 7 min (19:42)" shows, that's when their race should start; turning on alerts makes the phone beep twice and buzz when their race is next, and again when it's staged.
+- **Heats and mains**: a few short heats first, which decide which main (final) they race in later, with drivers of a similar pace.
+- **Your grid slot**: where the car starts. Slot 1 is the front.
+- **Staged**: go to the driver stand with the radio, put the car on the track and wait for the start.
+- **The start**: a countdown runs before every start; going early is a jump start, and it can add time.
+- **Your transponder**: make sure it's switched on and mounted before every race, and drive past the timing line once to check it's seen.
+- **Warnings**: race control can warn for blocking or rough driving, and more warnings add time.
+- **Marshal after your race**: stand at your post beside the track and put back any car that flips or gets stuck. Everybody takes a turn.
+- **Questions**: "Ask at the timing desk. Everybody was new once."
+
+The guide only shows on a card opened from a QR check-in, not from a personal PIN, and only on their first night. The same guide is on their night page, where it also shows before they've checked in (see [Your first night](index.md#your-first-night)). It needs the relay redeployed since 22 Oct 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)).
+
+!!! tip
+    The alerts and start times the guide mentions are on the driver's night page, not the check-in card. Point new drivers at **See your racing from last time** once they've checked in.
 
 Messages a racer might see:
 

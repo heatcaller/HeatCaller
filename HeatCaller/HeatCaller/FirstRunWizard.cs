@@ -202,6 +202,12 @@ public sealed class FirstRunWizard : Form
     private readonly Label _lblRaceNight = new();
     private readonly CheckBox _chkTour = new ThemedCheckBox();
 
+    /// <summary>
+    /// The beta tier's question (22 Oct 2026) - see
+    /// AppSettings.HideUntestedPages. On the last step, under the tour.
+    /// </summary>
+    private readonly CheckBox _chkHideUntested = new ThemedCheckBox();
+
     // What each step actually did, for the summary on the last page.
     private string? _doneLook;
     private string? _doneTiming;
@@ -780,7 +786,19 @@ public sealed class FirstRunWizard : Form
 
         _doneStep.Add(ready, gapBelow: UiLayout.SectionGap);
         _doneStep.Add(_lblRaceNight, gapBelow: UiLayout.SectionGap);
-        _doneStep.Add(_chkTour, stretch: false, gapBelow: 0);
+        // Ticked for a new club, which is who this wizard is for: a beta club
+        // starts with the pages that have been run on a night and finds the
+        // rest with a search. Opened again later by a club that already has a
+        // sidebar, it shows what the club has now rather than ticking it for
+        // them.
+        _chkHideUntested.Text = "Keep pages not yet tested at a real event out of the sidebar for now ("
+            + string.Join(", ", NavTiers.Untested.OrderBy(n => n, StringComparer.CurrentCulture))
+            + "). A search still finds them, and Manage Navigation brings them back.";
+        _chkHideUntested.AutoSize = true;
+        _chkHideUntested.Checked = !_settings.HasCompletedFirstRun || _settings.HideUntestedPages;
+
+        _doneStep.Add(_chkTour, stretch: false, gapBelow: UiLayout.RowGap);
+        _doneStep.Add(_chkHideUntested, gapBelow: 0);
     }
 
     /// <summary>
@@ -1010,6 +1028,9 @@ public sealed class FirstRunWizard : Form
             return;
         }
 
+        // Only from the last step, where the question was on screen - Skip
+        // setup and the title-bar X leave the setting as it was.
+        _settings.HideUntestedPages = _chkHideUntested.Checked;
         Finish(_chkTour.Checked);
     }
 

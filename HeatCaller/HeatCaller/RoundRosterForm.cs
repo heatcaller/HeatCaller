@@ -42,8 +42,7 @@ public sealed class RoundRosterForm : Form
 
         var lblHint = new Label
         {
-            Text = "Tick a driver to include them. Use Move Up / Move Down to set the running order - "
-                 + "that's the order they'll appear on the heat sheet.",
+            Text = "Tick a driver to include them. Move Up / Move Down sets the running order on the heat sheet.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,

@@ -240,32 +240,26 @@ internal sealed class RoomAndWebCard
 
         Card.Add(Heading("Club notes"), stretch: false, gapBelow: UiLayout.HintGap);
         Card.Add(Hint(
-            "A dedication, a birthday, the raffle - typed on the Notes button on Race Control's announcer strip, and "
-            + "said once between races."));
-        Card.Add(Hint(
-            "The room can send them in too, but nothing anybody sends is said until you approve it on that screen."));
+            "A dedication, a birthday, the raffle - typed on the Notes button on Race Control's announcer strip and "
+            + "said once between races. The room can send them in too."));
         Card.Add(_chkNotesWifi, stretch: false, gapBelow: 0);
         Card.Add(_chkNotesRelay, stretch: false, gapBelow: 0);
         Card.Add(_lblNotesWhere, gapBelow: UiLayout.SectionGap);
 
         Card.Add(Heading("The room's vote"), stretch: false, gapBelow: UiLayout.HintGap);
         Card.Add(Hint(
-            "The room votes on who wins, and after the race the announcer says how it did - even that nobody picked "
-            + "the winner."));
-        Card.Add(Hint(
-            "Open it on the Votes button on Race Control's announcer strip; it closes when the result comes in. The "
-            + "announcer stays quiet if too few voted or the room split, and never says who picked whom."));
+            "The room votes on who wins, and after the race the announcer says how it did. Open a vote on the Votes "
+            + "button on Race Control's announcer strip; it closes when the result comes in. The announcer stays quiet "
+            + "if too few voted or the room split, and never says who picked whom."));
         Card.Add(_chkVoteWifi, stretch: false, gapBelow: 0);
         Card.Add(_chkVoteRelay, stretch: false, gapBelow: 0);
         Card.Add(_lblVoteWhere, gapBelow: UiLayout.SectionGap);
 
         Card.Add(Heading("Listening along"), stretch: false, gapBelow: UiLayout.HintGap);
         Card.Add(Hint(
-            "The race called on your club's web page, a few seconds behind the room. Listeners just press Listen - "
-            + "nothing to set up."));
-        Card.Add(Hint(
-            "Worth knowing first: this puts your chosen voice - even one cloned from somebody at the club - on an "
-            + "address anyone with the link can play. Switch it off and the button goes."));
+            "The race called on your club's web page, a few seconds behind the room - listeners just press Listen. "
+            + "This puts your chosen voice, even one cloned from somebody at the club, on an address anyone with the "
+            + "link can play. Switch it off and the button goes."));
         Card.Add(_chkListenAlong, stretch: false, gapBelow: 0);
         Card.Add(_lblListenAlong, gapBelow: 0);
     }

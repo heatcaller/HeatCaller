@@ -81,6 +81,7 @@ docs/online/setup.md                           Club Website page: address, club,
 docs/online/check-in.md                        Online check-in: QR check-ins/QR, staff PIN, personal PINs, rotation, photos switch, the racer's view
 docs/online/email.md                           Emailing racer PINs: Gmail/iCloud app passwords, settings, test, automatic sending, troubleshooting
 docs/online/sign-up.md                         Driver sign-up: invites, the racer's form, approving a sign-up, what it creates
+docs/online/driver-requests.md                 Driver requests: turning it on, what the driver sees, answering requests at the desk (Driver Requests window), troubleshooting
 docs/admin/relay-hosting.md                    Hosting the relay on Fly.io end to end (install flyctl, mint, config, volume, deploy, probe, day-to-day, moving/forwarder)
 docs/admin/security-and-privacy.md             Security model: secrets encryption, tokens, PINs, rate limits, what's public, children's data, LAN server hardening
 docs/admin/backups.md                          Backup & Restore page, automatic backups, backup password, restoring on a new PC, unreadable files

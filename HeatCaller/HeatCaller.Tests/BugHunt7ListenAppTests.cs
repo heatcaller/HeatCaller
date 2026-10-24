@@ -168,7 +168,7 @@ public sealed class BugHunt7ListenAppTests
 
         var queue = SourceOf("AnnouncementService.VoiceQueue.cs");
         Assert.Contains("bool forListeners = true", queue);
-        Assert.Matches(@"if \(forListeners\)\s*\{\s*OfferLineToListeners\(text, audio\);", queue);
+        Assert.Matches(@"if \(forListeners\)\s*\{\s*OfferLineToListeners\(text, audio[,)]", queue);
     }
 
     [Fact]

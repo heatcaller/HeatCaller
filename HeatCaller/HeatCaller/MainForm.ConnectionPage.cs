@@ -123,6 +123,24 @@ public partial class MainForm
         grid.AddField(chkConnectAtStartup);
 
         grid.AddField(chkAutoConnect);
+
+        // WHY (23 Oct 2026, timing layer, P4): the switch for the timing
+        // thread, beside the decoder it is about. Read once at start, so the
+        // hint says when a change counts. Set from the settings in the
+        // constructor, where it is also saved.
+        chkTimingThread.Text = "Run timing on its own thread";
+        chkTimingThread.AutoSize = true;
+        grid.AddField(chkTimingThread);
+        grid.AddHint("Takes effect the next time HeatCaller starts.");
+
+        // WHY (24 Oct 2026): pass recording was a settings-file switch only.
+        // Beside the timing thread, because both are about timing; it starts
+        // and stops at once (see MainForm's handler).
+        chkRecordPasses.Text = "Record every pass to a file";
+        chkRecordPasses.AutoSize = true;
+        grid.AddField(chkRecordPasses);
+        grid.AddHint("For checking timing afterwards. One file per run in this PC's timing-recordings folder, kept 30 days.");
+
         grid.AddRow("Status:", new StatusLine(pnlStatusDot, lblStatus), stretch: true);
 
         // Every check before a green flag at once - the decoder, the cars

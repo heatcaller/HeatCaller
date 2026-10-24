@@ -274,7 +274,16 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>For MainForm to call when the round selection changes - the format follows the round.</summary>
-    public void RefreshFormat() => ApplyEffectiveFormat();
+    public void RefreshFormat()
+    {
+        ApplyEffectiveFormat();
+
+        // WHY (23 Oct 2026, timing layer, P2): the host calls this when the
+        // Round box changes, and the crash journal records the round. Each
+        // write reads it afresh anyway; this keeps the copy that stands once
+        // this page is gone up to date.
+        _journalRecorder.CaptureDetails();
+    }
 
     // ==================== The Next Up bar ====================
 
@@ -321,6 +330,8 @@ public sealed partial class RaceControlControl
     /// order, for the phones following a driver (PhoneFollow): the round in
     /// hand first while it is staged or on track, then the program's
     /// unrecorded rounds. Each with its cars in grid order. UI thread.
+    /// Read by the Wi-Fi follow view and, per badge, by the relay's private
+    /// driverlive (MainForm.DriverLive, 22 Oct 2026, driver experience).
     /// </summary>
     internal IReadOnlyList<UpcomingRace> UpcomingRaces(int count)
     {
@@ -346,10 +357,43 @@ public sealed partial class RaceControlControl
             ? unrun
             : unrun.Where(r => !ReferenceEquals(r, onTrackRound)).Prepend(onTrackRound).ToList();
 
-        return ordered
-            .Take(Math.Max(0, count))
-            .Select(r => new UpcomingRace(RoundTitle(r), r.AssignedTransponders.ToList(), ReferenceEquals(r, onTrackRound)))
+        // 22 Oct 2026 (driver experience, item 3): each race also carries
+        // its round id (the phone's marshal duty is matched on it), whether
+        // the one on track is only staged - its drivers belong at the
+        // driver stand NOW, which "On track now" never told them - and when
+        // it is expected to start (RaceEta). "away" counts the way
+        // PhoneFollow.CallUps counts it: the race on track is not one to
+        // wait for.
+        var schedule = _daySchedule?.All ?? Array.Empty<ScheduleEntry>();
+        var late = _daySchedule?.MinutesLate();
+        var starts = schedule
+            .Where(e => e.ActualStartUtc is not null)
+            .Select(e => e.ActualStartUtc!.Value)
             .ToList();
+        var nowUtc = DateTime.UtcNow;
+        var staged = _race.State == RaceState.Staging;
+
+        var upcoming = new List<UpcomingRace>();
+        var before = 0;
+
+        foreach (var round in ordered.Take(Math.Max(0, count)))
+        {
+            var isOnTrack = ReferenceEquals(round, onTrackRound);
+
+            // Nothing to estimate for the race already on track.
+            var eta = isOnTrack ? null : RaceEta.For(round.Id, before, onTrack, schedule, late, starts, nowUtc);
+
+            upcoming.Add(new UpcomingRace(
+                RoundTitle(round), round.AssignedTransponders.ToList(), isOnTrack,
+                round.Id, isOnTrack && staged, eta));
+
+            if (!isOnTrack)
+            {
+                before++;
+            }
+        }
+
+        return upcoming;
     }
 
     private static string RoundTitle(RoundDefinition round) =>
@@ -1018,11 +1062,10 @@ public sealed partial class RaceControlControl
     /// The open race day's own answer, falling back to the club-wide
     /// setting for a day that never gave one - which is every day written
     /// before this moved onto the race day. See RaceEvent.AutoAdvanceOn.
+    /// The one answer the filing reads too (RaceFilingService.AutoAdvanceWantedFor,
+    /// 23 Oct 2026, timing layer, P2).
     /// </summary>
-    private bool AutoAdvanceWanted =>
-        _events?.Active is { IsLegacy: false } day
-            ? day.AutoAdvanceOn(_settings.AutoAdvanceRounds)
-            : _settings.AutoAdvanceRounds;
+    private bool AutoAdvanceWanted => RaceFilingService.AutoAdvanceWantedFor(_events, _settings);
 
     /// <summary>Which race to reach for - the day's, or the club's when the day never said.</summary>
     private string AutoAdvanceScope =>
@@ -1076,9 +1119,11 @@ public sealed partial class RaceControlControl
     /// round's own name.
     ///
     /// The hidden name box here is only a copy of MainForm's Name box, and
-    /// it only changes when that box raises TextChanged (plus Quick Race,
-    /// a crash-journal restore and Reset). Two things leave a stale name in
-    /// it (2 Oct 2026):
+    /// otherwise only MainForm's Name box changes it - apart from Quick Race
+    /// writing its stamp and a crash-journal restore. Reset, and filing a
+    /// Quick Race, clear only the Quick Race stamp (23 Oct 2026, bug hunt
+    /// 10); a name the director typed stays. Two things leave a stale name
+    /// in it (2 Oct 2026):
     ///
     /// - Once a heat is recorded it drops out of the Round box, but the
     ///   "Class - Heat 1" name MainForm derived for it stays in the box. The

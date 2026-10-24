@@ -59,6 +59,16 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// <summary>Plays the last segment again - see <see cref="ReplayWanted"/>.</summary>
     private readonly Button _replay = new();
 
+    /// <summary>
+    /// Plays the last twenty seconds of race audio again - see
+    /// <see cref="ReplayMomentWanted"/> (22 Oct 2026).
+    ///
+    /// SHOWN ONLY WHILE THERE IS SOMETHING TO REPLAY, which is only while
+    /// race recording is on: on a night without it the button could do
+    /// nothing but explain itself, and this row is the busiest on the page.
+    /// </summary>
+    private readonly Button _replayMoment = new();
+
     /// <summary>Stops whatever is on air now - see <see cref="SkipWanted"/>.</summary>
     private readonly Button _skip = new();
 
@@ -135,6 +145,12 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         _replay.Margin = new Padding(0, 0, 6, 0);
         _replay.Click += (_, _) => ReplayWanted?.Invoke();
 
+        _replayMoment.Text = ReplayMomentCaption;
+        _replayMoment.AutoSize = true;
+        _replayMoment.Margin = new Padding(0, 0, 6, 0);
+        _replayMoment.Visible = false;
+        _replayMoment.Click += (_, _) => ReplayMomentWanted?.Invoke();
+
         _skip.Text = SkipCaption;
         _skip.AutoSize = true;
         _skip.Margin = new Padding(0, 0, 6, 0);
@@ -166,7 +182,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         // on this row that means a stray keypress puts the last segment out
         // over a live PA, or cuts off the one being spoken. Done here
         // rather than by Race Control because the buttons are this class's.
-        AppTheme.ReleaseFocusAfterClick(_hold, _replay, _skip, _notes, _votes);
+        AppTheme.ReleaseFocusAfterClick(_hold, _replay, _replayMoment, _skip, _notes, _votes);
 
         // WHAT HOLD AND SKIP STOP, said where they are pressed (17 Oct
         // 2026), now that both reach the recap show as well as the
@@ -181,11 +197,15 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
             "Stops what is on air: a commentary segment block, or the post-race recap show (teaser, recap, achievements, "
             + "interview, sign-off). The line being spoken finishes; nothing after it starts, and the show music rides down.");
         tips.SetToolTip(_replay, "Plays the last commentary segment again.");
+        tips.SetToolTip(_replayMoment,
+            "Plays the last 20 seconds the room heard again - the call, the crowd and the music - from the race "
+            + "recording. Skip stops it.");
         tips.SetToolTip(_load, "Click to see each line the announcer didn't say this race, and why.");
 
         Controls.Add(_said);
         Controls.Add(_hold);
         Controls.Add(_replay);
+        Controls.Add(_replayMoment);
         Controls.Add(_skip);
         Controls.Add(_notes);
         Controls.Add(_votes);
@@ -296,6 +316,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         AppTheme.StyleButton(_hold, _holding ? AppTheme.ButtonKind.Warning : AppTheme.ButtonKind.Auto);
     }
     private const string ReplayCaption = "Play again";
+    private const string ReplayMomentCaption = "Replay Moment";
     private const string SkipCaption = "Skip";
     private const string NotesCaption = "Notes";
     private const string VotesCaption = "Votes";
@@ -308,6 +329,13 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// a line talked over, a PA that cut out, a room that missed it.
     /// </summary>
     public event Action? ReplayWanted;
+
+    /// <summary>
+    /// Raised when the race director wants the last twenty seconds of race
+    /// audio played again - a finish the room cheered over, a pass the
+    /// far end of the hall missed.
+    /// </summary>
+    public event Action? ReplayMomentWanted;
 
     /// <summary>
     /// Raised when the race director wants whatever is on air stopped
@@ -380,16 +408,40 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// Race Control's recap show is running (17 Oct 2026) - Skip has
     /// something to stop even in the quiet while the model writes it.
     /// </param>
-    public void Show(CommentaryDirector? director, bool enabled, bool speaking, string? onAir = null, bool muted = false, int notesWaiting = 0, int votesIn = 0, AnnouncerLoad? load = null, bool programmeRunning = false)
+    public void Show(CommentaryDirector? director, bool enabled, bool speaking, string? onAir = null, bool muted = false, int notesWaiting = 0, int votesIn = 0, AnnouncerLoad? load = null, bool programmeRunning = false, bool replaying = false)
     {
+        // Not tied to the announcer's mute: this is the room's audio, not
+        // the announcer's words. Shown once there is a moment to replay.
+        //
+        // WHY (22 Oct 2026): this used to be decided after the "commentary
+        // off" return below, so a club recording races with AI Commentary
+        // off never saw Replay Moment (the strip was hidden), and switching
+        // commentary off mid-replay took away the Skip that stops it. It is
+        // decided first now, and the strip stays up with just those two
+        // buttons while there is a moment or a replay to act on.
+        var moment = RaceReplayBuffer.Shared.HeldSeconds >= RaceControlControl.LeastMomentSeconds;
+
+        // Set every time rather than on a change: while the strip itself is
+        // hidden a child reads Visible as false whatever its own setting
+        // is, so a "has it changed" test can leave a stale true behind.
+        _replayMoment.Visible = moment;
+
         if (director is null || !enabled)
         {
             // Off the page rather than greyed out: this is the busiest
             // screen in the app, and a club that does not use commentary
-            // should not be given a row about it every race night.
-            if (Visible)
+            // should not be given a row about it every race night - unless
+            // the race recording has a moment to replay, or one is playing,
+            // when the row stays for Replay Moment and Skip alone.
+            var roomOnly = moment || replaying;
+
+            ShowCommentaryControls(false);
+            _skip.Visible = roomOnly;
+            _skip.Enabled = replaying;
+
+            if (Visible != roomOnly)
             {
-                Visible = false;
+                Visible = roomOnly;
             }
 
             _said.Text = string.Empty;
@@ -413,6 +465,10 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         {
             Visible = true;
         }
+
+        // Back from the Replay-Moment-only row (22 Oct 2026), if it was on.
+        ShowCommentaryControls(true);
+        _skip.Visible = true;
 
         // ONE LABEL, LIT WHILE SOMETHING IS BEING SPOKEN (14 Oct 2026).
         //
@@ -473,7 +529,10 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         // that was never audible. A button that can only fail is better
         // greyed. See MutedText.
         _replay.Enabled = !muted && director.LastSaid is not null;
-        _skip.Enabled = !muted && (speaking || ShowOnAir.Playing || programmeRunning);
+
+        // A replayed moment is the room's audio, not the announcer's, so
+        // Skip stops it muted or not (22 Oct 2026).
+        _skip.Enabled = (!muted && (speaking || ShowOnAir.Playing || programmeRunning)) || replaying;
 
         // ALWAYS ENABLED, unlike the two above, and the difference is the
         // point: Play again and Skip act on something that may not exist,
@@ -508,6 +567,21 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         _votes.ForeColor = votesIn > 0 ? AppTheme.Accent : AppTheme.TextDark;
 
         ShowTheLoad(load);
+    }
+
+    private void ShowCommentaryControls(bool show)
+    {
+        // The controls that belong to the announcer rather than to the
+        // room's recording (22 Oct 2026): hidden while the strip is up only
+        // for Replay Moment and Skip, with commentary off. Notes and Votes
+        // go with them - both feed the announcer, and the row's rule is
+        // that a club not using commentary is not given buttons about it.
+        // Set every time, not on a change: a child of a hidden strip reads
+        // Visible as false whatever its own setting is (see moment, above).
+        foreach (Control c in new Control[] { _said, _hold, _replay, _notes, _votes, _load })
+        {
+            c.Visible = show;
+        }
     }
 
     /// <summary>

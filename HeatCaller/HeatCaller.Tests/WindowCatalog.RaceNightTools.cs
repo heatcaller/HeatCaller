@@ -28,7 +28,7 @@ internal static partial class WindowCatalog
                 CountBestRounds = 2,
             })),
         ("Qualifying projection (nothing running)", () => new QualifyingProjectionForm(new QualifyingProjector(
-            new RaceControlSession(),
+            new RaceTiming(new RaceControlSession()),
             ProfileStore.Load(),
             RaceClassStore.Load(),
             SessionHistoryStore.FromSessions(new List<SessionRecord>()),
@@ -208,7 +208,7 @@ internal static partial class WindowCatalog
             }
 
             return new QualifyingProjectionForm(new QualifyingProjector(
-                race,
+                new RaceTiming(race),
                 profiles,
                 classes,
                 SessionHistoryStore.FromSessions(sessions),

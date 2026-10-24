@@ -63,9 +63,8 @@ public sealed class RacingWordsForm : Form
             Font = AppTheme.BodyFont,
             ForeColor = AppTheme.TextMuted,
             Text =
-                "The buttons in HeatCaller say what they do. The words below are the sport's own, "
-                + "and they are the ones you will hear in the pits and see on a printed heat sheet, "
-                + "so they are left as they are and explained here instead.",
+                "The buttons in HeatCaller say what they do. The words below are the sport's own - "
+                + "the ones you will hear in the pits and see on a printed heat sheet - so they are explained here.",
         };
 
         // The words scroll down on their own, as wide as the introduction

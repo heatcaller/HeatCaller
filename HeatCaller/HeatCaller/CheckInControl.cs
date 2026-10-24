@@ -89,6 +89,13 @@ public sealed class CheckInControl : UserControl
     public event Action? SignupsRequested;
 
     /// <summary>
+    /// Raised when the desk asks to see the requests drivers have sent from
+    /// their own phones (22 Oct 2026, driver experience). The host owns the
+    /// Driver Requests window (MainForm.DriverRequests).
+    /// </summary>
+    public event Action? DriverRequestsRequested;
+
+    /// <summary>
     /// Raised when the scrutineer asks for the full inspection log. The host
     /// owns the window.
     ///
@@ -116,6 +123,13 @@ public sealed class CheckInControl : UserControl
 
     /// <summary>The Online Sign-ups button, held so its caption can say how many are waiting.</summary>
     private readonly Button _btnSignups = new() { Text = "Online Sign-ups (00)" };
+
+    /// <summary>
+    /// The Driver Requests button, beside Online Sign-ups, held so its
+    /// caption can say how many are waiting. Hidden until the host says the
+    /// club takes requests or some are waiting (22 Oct 2026, driver experience).
+    /// </summary>
+    private readonly Button _btnDriverRequests = new() { Text = "Driver Requests (00)", Visible = false };
     private readonly UndoService _undo;
 
     private readonly ComboBox _cmbClassFilter = new();
@@ -251,10 +265,9 @@ public sealed class CheckInControl : UserControl
         // and this text is written once for both.
         var lblIntro = new Label
         {
-            Text = "Mark who's actually here today. The Setup tab can optionally build tonight's program from checked-in drivers only, " +
-                   "so a class roster that includes everyone who's ever raced doesn't get used wholesale on a day when half of " +
-                   "them are missing. Scrutineering is here too: the Tech column is the gate, the filter beside the class list " +
-                   "shows who is still to be looked at, and Scrutineering Log holds the full record.",
+            Text = "Mark who's here today. Whether tonight's program uses checked-in drivers only is set on the Setup tab. " +
+                   "Scrutineering is here too: the Tech column is the gate, the filter beside the class list shows who is " +
+                   "still to be looked at, and Scrutineering Log holds the full record.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -403,6 +416,7 @@ public sealed class CheckInControl : UserControl
         };
 
         _btnSignups.Click += (_, _) => SignupsRequested?.Invoke();
+        _btnDriverRequests.Click += (_, _) => DriverRequestsRequested?.Invoke();
 
         // Its opening caption. The bar it goes in sizes it to whatever it
         // says, and again every time the count changes.
@@ -417,7 +431,7 @@ public sealed class CheckInControl : UserControl
             actions.With(btnInspect, _btnTechLog);
         }
 
-        actions.With(_btnSignups);
+        actions.With(_btnSignups, _btnDriverRequests);
 
         var roster = new Section("Drivers");
 
@@ -435,10 +449,10 @@ public sealed class CheckInControl : UserControl
         var lblScanHelp = _textSize.Wear(
             new Label
             {
-                Text = "Click the box below, then scan a driver's QR check-in with any USB barcode scanner - they plug in and " +
-                       "type like a keyboard, so no extra setup is needed. The driver is checked in instantly.\r\n\r\n" +
+                Text = "Click the box below, then scan a driver's QR check-in with any USB barcode scanner (no setup needed). " +
+                       "They're checked in instantly.\r\n\r\n" +
                        "Or let drivers sign themselves on: start the web server and put the poster below on the wall. " +
-                       "They find their own name and tap it, and it appears here.",
+                       "They tap their own name and it appears here.",
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
             },
@@ -644,6 +658,28 @@ public sealed class CheckInControl : UserControl
         // The bar it is in re-measures it: the caption gets longer or
         // shorter with the count, and the button with it.
         _btnSignups.Text = waiting > 0 ? $"Online Sign-ups ({Math.Min(waiting, 99)})" : "Online Sign-ups";
+    }
+
+    /// <summary>
+    /// How many driver requests are waiting, on the button that opens them,
+    /// and whether the button is on the page at all - only while the club
+    /// takes requests or some are still waiting (22 Oct 2026, driver
+    /// experience). Called on every roster tick; changes nothing when
+    /// nothing changed.
+    /// </summary>
+    public void SetDriverRequestCount(int waiting, bool shown)
+    {
+        var text = waiting > 0 ? $"Driver Requests ({Math.Min(waiting, 99)})" : "Driver Requests";
+
+        if (!string.Equals(_btnDriverRequests.Text, text, StringComparison.Ordinal))
+        {
+            _btnDriverRequests.Text = text;
+        }
+
+        if (_btnDriverRequests.Visible != shown)
+        {
+            _btnDriverRequests.Visible = shown;
+        }
     }
 
     /// <summary>

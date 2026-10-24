@@ -153,6 +153,13 @@ internal sealed class ShowTreatmentCard
     /// <summary>The card itself, for the host to put on its page.</summary>
     public Section Card { get; }
 
+    /// <summary>
+    /// The card's grid, for the host's one caption column (FieldGrid.LineUp)
+    /// - (22 Oct 2026, page tidy): it was in none, so its fields started at
+    /// a different x from the rest of the Imaging page's.
+    /// </summary>
+    internal FieldGrid Grid => _clubPiecesGrid;
+
     public ShowTreatmentCard(AppSettings settings, TextSize textSize)
     {
         _settings = settings;
@@ -166,9 +173,9 @@ internal sealed class ShowTreatmentCard
             // race recap's open and bed, and the stings - the club's own
             // pieces still play on the cold open, the sign-off and every
             // other set piece ticked below.
-            "This soundscape's imaging supplies the race recap's opener and bed, and the stings between items "
-            + "(Pieces card above; levels on the Mixer). The club's own pieces below still play on the cold open, "
-            + "the sign-off and the other set pieces ticked below.");
+            "This soundscape's imaging plays the race recap's opener, bed and stings (Pieces card above; levels on "
+            + "the Mixer). The club's own pieces below still play on the cold open, the sign-off and the other set "
+            + "pieces ticked below.");
 
         _clubPiecesBar = new ButtonBar().With(Steady(_btnShowClubPieces, HideClubPiecesCaption));
 
@@ -365,8 +372,8 @@ internal sealed class ShowTreatmentCard
         Stepped(showMusicGrid.AddRow("Music bed:", Line(_cmbBedPiece, _btnBedPick, _btnBedClear, _lblBedFile)));
         Stepped(showMusicGrid.AddRow("Club's sting:", Line(_cmbStingPiece, _btnStingPick, _btnStingClear, _lblStingFile)));
         showMusicGrid.AddHint(
-            "Your own files, copied into the club's data so a backup carries them. The bed loops for as long as needed "
-            + "(half a minute is plenty); the sting is a second or two between parts - leave it out and the bed swells instead.");
+            "Your own files are copied into the club's data, so a backup carries them. The bed loops (half a minute is "
+            + "plenty); the sting is a second or two between parts - with none, the bed swells instead.");
 
         Stepped(showMusicGrid.AddRow("Opener level:", Line(_numOpenerLevel, Suffix("%", muted: false))));
         Stepped(showMusicGrid.AddRow("Sting level:", Line(_numStingLevel, Suffix("%", muted: false))));
@@ -380,7 +387,7 @@ internal sealed class ShowTreatmentCard
         showMusicGrid.AddField(_chkShowRejoin);
         showMusicGrid.AddHint(
             "The first show of the night plays the opener whole; later ones come in on its ring-out, and the sign-off "
-            + "plays out on the bed. Untick to play it whole every time.");
+            + "plays out on the bed.");
         showMusicGrid.AddHint(_lblRunningOrder);
 
         Stepped(showMusicGrid.AddRow("Hear it:", Line(Steady(_btnTestShow, TestShowCaption), _lblShowResult)));
@@ -397,8 +404,8 @@ internal sealed class ShowTreatmentCard
         var show = Card;
 
         show.Add(Hint(
-            "An opener in front of the voice and a music bed under it for the AI commentary's set pieces, so it sounds like "
-            + "going on air (grayed while AI commentary is off). Where each piece plays: Run of show, above."));
+            "For the AI commentary's set pieces, so they sound like going on air. Needs AI commentary on. Where each "
+            + "piece plays: Run of show, above."));
 
         // THE FALLBACK (17 Oct 2026). Imaging owns the show's music now, per
         // soundscape; this card is what plays where the soundscape has no
@@ -426,8 +433,8 @@ internal sealed class ShowTreatmentCard
         // since each got its own handling - see ShowSegments.Candidates for
         // what is actually offered and why.
         show.Add(Hint(
-            "Which set pieces get the show music; the cold open and the sign-off come ticked. The order after a flag is "
-            + "under Run of show, above. Achievements earned plays inside the recap - tick it to give it a show on a night with no recap."),
+            "The cold open and the sign-off come ticked. Achievements earned plays inside the recap - tick it to give it "
+            + "a show on a night with no recap."),
             gapBelow: UiLayout.HintGap);
 
         // Not the hidden ones (17 Oct 2026) - see CommentaryControl.NotOffered.

@@ -286,7 +286,7 @@ public sealed class AmbienceControl : UserControl
 
         var lblLayersHint = new Label
         {
-            Text = "Each plays continuously at a volume that follows what's happening on track.",
+            Text = "Each layer's volume follows what's happening on track.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -528,6 +528,11 @@ public sealed class AmbienceControl : UserControl
         page.Add(reactions, gapBelow: 0);
 
         Controls.Add(page);
+
+        // (22 Oct 2026, page tidy): one caption column down both cards - Play:
+        // and the timings had a column each, so their fields started at
+        // different x's.
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { play, timing }));
 
         // Measured in the fonts they are drawn in, so not until now: until
         // they were on the page, the boxes and switches had WinForms' own
@@ -1721,6 +1726,11 @@ public sealed class AmbienceLayerForm : Form
         btnCancel.TabIndex = 1;
 
         Controls.Add(page);
+
+        // (22 Oct 2026, page tidy): one caption column down both grids, in
+        // the face the captions have on the window - the name and file had
+        // their own, so their boxes started at a different x from the sliders.
+        FieldGrid.LineUp(new[] { fields, volumes });
 
         AcceptButton = btnSave;
         CancelButton = btnCancel;

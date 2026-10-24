@@ -138,6 +138,35 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly Button _btnDownloadKokoro = new();
     private readonly Label _lblKokoroStatus = new();
 
+    /// <summary>
+    /// What the last Kokoro Test Voice did, beside it on the Cast tab (22 Oct
+    /// 2026). Its own line now: _lblKokoroStatus stays here with Download,
+    /// and a test's answer written there would be a tab away from the button.
+    /// </summary>
+    private readonly Label _lblKokoroTestStatus = new();
+
+    // --- The announcer's voice, shown on the Cast tab (22 Oct 2026) ---
+    //
+    // Each engine's announcer picker and its Test, gathered into one grid
+    // that the host hands to the Cast tab (CastControl.HostAnnouncerVoice),
+    // the way the announcement rows are built here and shown on Race Calls.
+    // The controls are this page's, with all their logic - the relay's
+    // catalogue and samples, a re-tuned voice's rev, "not in this account",
+    // the saving - so moving them changed nothing they do. Only the rows for
+    // the engine chosen above are shown (ShowAnnouncerVoiceRows).
+    private readonly FieldGrid _announcerVoiceGrid = new();
+    private readonly List<Control> _heatCallerVoiceRow = new();
+    private readonly List<Control> _elevenLabsVoiceRow = new();
+    private readonly List<Control> _kokoroVoiceRow = new();
+
+    /// <summary>
+    /// The announcer's voice picker and Test Voice for the engine in use, for
+    /// the Cast tab to show at its top. Not a child of this control, so the
+    /// host disposes it when it replaces this page (MainForm.Audio's
+    /// RebuildVoiceAndSoundTabs), after the Cast tab gives it back.
+    /// </summary>
+    internal FieldGrid AnnouncerVoiceGrid => _announcerVoiceGrid;
+
     /// <summary>While the Kokoro test is speaking, so a change of engine doesn't re-enable its button part-way.</summary>
     private bool _kokoroTestRunning;
 
@@ -175,6 +204,15 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>Under Speed, while ElevenLabs speaks with eleven_v3 - which takes no speed at all. See ShowSpeedNote.</summary>
     private readonly Label _lblSpeedNote = new();
     private readonly CheckBox _chkSpeakerBoost = new ThemedCheckBox();
+
+    /// <summary>
+    /// AppSettings.VoiceEnergyFollowsRace (22 Oct 2026) - the delivery a
+    /// step steadier in the heats and livelier in the top main (see
+    /// DeliveryEnergy). Shown only while it does something: a club's own
+    /// ElevenLabs voice on a model that takes stability as a number. See
+    /// ShowEnergyBox.
+    /// </summary>
+    private readonly CheckBox _chkEnergyFollowsRace = new ThemedCheckBox();
     private readonly ComboBox _cmbTextNormalization = new();
     private readonly TextBox _txtLanguageCode = new();
     private readonly TextBox _txtOutputFormat = new();
@@ -188,6 +226,13 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly CheckBox _chkPositionGaps = new ThemedCheckBox();
     private readonly CheckBox _chkLeadChangeCount = new ThemedCheckBox();
     private readonly NumericUpDown _numLapTimeEveryN = new();
+
+    /// <summary>Split time's own "every Nth" (22 Oct 2026) - its own box, as every event's row is on the page at once.</summary>
+    private readonly NumericUpDown _numSplitTimeEveryN = new();
+
+    /// <summary>The target line's "every Nth lap", and the consistency line's block of clean laps (22 Oct 2026) - each its own box, as the split time's is.</summary>
+    private readonly NumericUpDown _numTargetPaceEveryN = new();
+    private readonly NumericUpDown _numConsistencyEveryLaps = new();
     private readonly Dictionary<AnnouncementEventType, NumericUpDown> _eventWeights = new();
     private readonly Dictionary<AnnouncementEventType, NumericUpDown> _eventSpeeds = new();
     private readonly Dictionary<AnnouncementEventType, CheckBox> _eventCaution = new();
@@ -397,6 +442,10 @@ public sealed partial class VoiceSettingsControl : UserControl
         _autoSaveWired.Add(_txtLanguageCode);
         _autoSaveWired.Add(_txtOutputFormat);
 
+        // Nor the race-energy box: it is an AppSettings switch, not part of
+        // the voice profile, and saves itself (BuildParametersCard).
+        _autoSaveWired.Add(_chkEnergyFollowsRace);
+
         _cmbModel.SelectedIndexChanged += (_, _) => AutoSave();
 
         foreach (var box in new Control[] { _txtApiKey, _cmbModel, _txtLanguageCode, _txtOutputFormat })
@@ -422,6 +471,11 @@ public sealed partial class VoiceSettingsControl : UserControl
         // rows have to be wired by name. Without this every edit on that
         // page would be silently unsaved.
         WireAutoSave(_announcementsPage);
+
+        // The announcer's voice rows too (22 Oct 2026): they are on the Cast
+        // tab, not under this control, so the walk above never reached the
+        // three voice pickers - and picking a voice there saved nothing.
+        WireAutoSave(_announcerVoiceGrid);
 
         // Its Test button reports through the status line beside the global
         // one, which is now a different tab. See MirrorTestStatus.
@@ -477,16 +531,18 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// a strip that says what the last change did.
     ///
     ///   Speak with - the three voices, each with what belongs to it
-    ///     indented under it: the HeatCaller voice (Announcer voice: with
-    ///     Refresh and Hear It, Preview text: with Preview, its status, the
-    ///     voice relay's three boxes and their hint), ElevenLabs (the Kokoro
-    ///     voice standing in), Kokoro (Kokoro voice: with its Test and
-    ///     Download, its status), then which voice speaks and the hint. The
-    ///     fields of all three share one caption column (LineUp).
-    ///   ElevenLabs connection - API Key:, Voice:, Model:, and the hints.
-    ///   Voice parameters - the ElevenLabs tuning, then Test Voice and what
-    ///     it said. (The volume is the Mixer's, and the most calls per lap
-    ///     is on the Race Calls tab's How often card, since 17 Oct 2026.)
+    ///     indented under it: the HeatCaller voice (its status, the
+    ///     allowance, the voice relay's three boxes and their hint),
+    ///     ElevenLabs (the Kokoro voice standing in), Kokoro (its Download
+    ///     and status), then which voice speaks and the hint.
+    ///   ElevenLabs connection - API Key:, Model:, and the hints.
+    ///   Voice parameters - the ElevenLabs tuning, and where to test it.
+    ///     (The volume is the Mixer's, and the most calls per lap is on the
+    ///     Race Calls tab's How often card, since 17 Oct 2026.)
+    ///
+    /// Each engine's announcer voice picker and its Test are built here too,
+    /// but shown at the top of the Cast tab since 22 Oct 2026 - see
+    /// BuildAnnouncerVoiceGrid.
     ///   Saved voice lines - the count, Prepare and Stop with the progress
     ///     beside them, Recently played: with Forget Line and Forget All.
     ///
@@ -505,11 +561,15 @@ public sealed partial class VoiceSettingsControl : UserControl
         // First, because it decides what everything below it is for.
         var (speak, speakGrids) = BuildEngineCard(current);
 
-        var connection = BuildConnectionCard(current);
-        var parameters = BuildParametersCard(current);
+        var (connection, connectionGrid) = BuildConnectionCard(current);
+        var (parameters, tuningGrid) = BuildParametersCard(current);
+
+        // After the three cards: the pickers and Tests are set up there, and
+        // only placed here, in the grid the Cast tab shows.
+        BuildAnnouncerVoiceGrid();
 
         // Between the voice and the lines it speaks: it is about both.
-        var library = BuildLibraryCard();
+        var (library, libraryGrid) = BuildLibraryCard();
 
         // The announcement rows used to be a fifth group here, below the
         // library - a long way below the fold on a page that already
@@ -552,9 +612,16 @@ public sealed partial class VoiceSettingsControl : UserControl
         // Once everything is on the page and wears its face - what it is
         // measured in.
         //
-        // One caption column for the three voices' fields, so the voice
-        // pickers and the relay's boxes line up down the card.
-        _textSize.Keep(() => FieldGrid.LineUp(speakGrids));
+        // One caption column down every card, so every field on the page
+        // starts at the same x. (22 Oct 2026, page tidy): only the relay's
+        // grid was lined up - the consent, connection, tuning and saved-lines
+        // grids each had a caption column of their own width, so no two
+        // cards' fields started at the same x. The announcer's voice rows
+        // are left out on purpose: they are on the Cast tab, which lines
+        // them up with its own cards (CastControl.LineUpGrids).
+        var grids = speakGrids.Concat(new[] { connectionGrid, tuningGrid, libraryGrid }).ToArray();
+
+        _textSize.Keep(() => FieldGrid.LineUp(grids));
         _textSize.Keep(SizeFields);
 
         // Room kept for what the status lines say, so a new message does not
@@ -567,6 +634,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         _textSize.ReserveLines(_lblSpeakingStatus, 2);
         _textSize.ReserveLines(_lblLibraryStatus, 1);
         _textSize.ReserveLines(_lblTestStatus, 1);
+        _textSize.ReserveLines(_lblKokoroTestStatus, 1);
 
         // The strip: a line of the body face, a row gap above and below it.
         _textSize.Keep(() =>
@@ -578,6 +646,126 @@ public sealed partial class VoiceSettingsControl : UserControl
                 statusBar.Height = height;
             }
         });
+    }
+
+    /// <summary>
+    /// The announcer's voice for each engine, with its Test, in one grid for
+    /// the Cast tab (22 Oct 2026). Captioned by engine, because a club that
+    /// has not signed up for the HeatCaller voice can still listen to its
+    /// free samples while another voice speaks, and then two rows show.
+    ///
+    /// The grid's caption column is lined up by the Cast tab, with its own
+    /// cards' (CastControl.HostAnnouncerVoice), not here.
+    /// </summary>
+    private void BuildAnnouncerVoiceGrid()
+    {
+        // The HeatCaller voice: the picker with Refresh and Hear It, the
+        // Preview row, and what the last of those did.
+        var heatCallerLine = FieldGrid.Inline(_cmbHeatCallerVoice, _btnHeatCallerRefresh, _btnHearVoice);
+        var heatCallerCaption = _announcerVoiceGrid.AddRow("HeatCaller voice:", heatCallerLine);
+        var wordsLine = FieldGrid.Inline(_txtHeatCallerPreviewLine, _btnHeatCallerPreview);
+        var wordsCaption = _announcerVoiceGrid.AddRow("Your own words:", wordsLine);
+        _announcerVoiceGrid.AddHint(_lblHeatCallerPreviewStatus);
+        _heatCallerVoiceRow.AddRange(new Control[] { heatCallerCaption, heatCallerLine, wordsCaption, wordsLine, _lblHeatCallerPreviewStatus });
+
+        // ElevenLabs: the voice with Load Voices and Test Voice - which tests
+        // the Voice tab's tuning as it is on screen - and what it said.
+        var elevenLabsLine = FieldGrid.Inline(_cmbVoice, _btnLoadVoices, _btnTestVoice);
+        var elevenLabsCaption = _announcerVoiceGrid.AddRow("ElevenLabs voice:", elevenLabsLine);
+        _announcerVoiceGrid.AddHint(_lblTestStatus);
+        _elevenLabsVoiceRow.AddRange(new Control[] { elevenLabsCaption, elevenLabsLine, _lblTestStatus });
+
+        // Kokoro: the voice and Test Voice, and what the test said. Its
+        // Download, and whether it is ready, stay on the Voice tab.
+        _lblKokoroTestStatus.AutoSize = true;
+        _lblKokoroTestStatus.ForeColor = AppTheme.TextMuted;
+
+        var kokoroLine = FieldGrid.Inline(_cmbKokoroVoice, _btnTestKokoroVoice);
+        var kokoroCaption = _announcerVoiceGrid.AddRow("Kokoro voice:", kokoroLine);
+        _announcerVoiceGrid.AddHint(_lblKokoroTestStatus);
+        _kokoroVoiceRow.AddRange(new Control[] { kokoroCaption, kokoroLine, _lblKokoroTestStatus });
+
+        // (22 Oct 2026, page tidy): the captions keep the Cast tab's step on
+        // their right, as its own flush captions do (CastControl's Flush) -
+        // without it these fields started a step left of every other field
+        // on the Cast tab, even with the caption column lined up.
+        foreach (var caption in new[] { heatCallerCaption, wordsCaption, elevenLabsCaption, kokoroCaption })
+        {
+            caption.Margin = new Padding(caption.Margin.Left, caption.Margin.Top, caption.Margin.Right + UiLayout.Indent, caption.Margin.Bottom);
+        }
+
+        // The ElevenLabs row also follows the key typed (ShowAnnouncerVoiceRows).
+        _txtApiKey.TextChanged += (_, _) => ShowAnnouncerVoiceRows();
+
+        // Sized in the Cast tab's face, not this page's (22 Oct 2026): the
+        // pickers' widths (SizeFields) and the status lines kept
+        // (ReserveLines) are measured in the fonts these controls wear, which
+        // they now take from the Cast tab - so once it hands them its face,
+        // on being hosted and at every text size, they are measured again.
+        // This page's own text size change can run before the Cast tab's.
+        _announcerVoiceGrid.FontChanged += (_, _) => _textSize.Apply();
+
+        foreach (var status in new[] { _lblHeatCallerPreviewStatus, _lblTestStatus, _lblKokoroTestStatus })
+        {
+            // A hint is handed the small face after the grid's FontChanged.
+            status.FontChanged += (_, _) => _textSize.Apply();
+        }
+
+        ShowAnnouncerVoiceRows();
+    }
+
+    /// <summary>
+    /// Shows the announcer's voice rows for the engine chosen above, and
+    /// the HeatCaller voice's too while its list is the free samples - the
+    /// only way a club deciding whether to sign up can hear them. Part of
+    /// UpdateEngineControls. Changes nothing that is saved.
+    ///
+    /// Set every time rather than only on a change: the Cast tab is often
+    /// not on screen, and a control's Visible reads false while its parent
+    /// is hidden whatever it was told - so "only when it differs" would skip
+    /// hiding a row that is meant to go.
+    /// </summary>
+    private void ShowAnnouncerVoiceRows()
+    {
+        var heatCaller = _rdoHeatCaller.Checked || (_heatCallerListIsSamples && _cmbHeatCallerVoice.Items.Count > 0);
+        var kokoroChosen = _rdoKokoro.Checked;
+        var elevenLabsChosen = !_rdoHeatCaller.Checked && !kokoroChosen;
+
+        // Kokoro's row whenever Kokoro can speak (22 Oct 2026): chosen, or
+        // standing in - always for the HeatCaller voice, and for ElevenLabs
+        // when ticked. Its picker is the stand-in's voice too (KokoroSpeech
+        // renders KokoroVoiceName), and on the Voice tab it was always there.
+        var kokoro = kokoroChosen || _rdoHeatCaller.Checked || (elevenLabsChosen && _chkKokoroStandsIn.Checked);
+
+        // ElevenLabs' row also while Kokoro speaks and a key is typed (22 Oct
+        // 2026): the connection card says ElevenLabs can be set up whichever
+        // voice is speaking, and its voice is part of setting it up. Locked
+        // and hidden for the HeatCaller voice, as the rest of it is locked.
+        var elevenLabs = elevenLabsChosen || (kokoroChosen && _txtApiKey.Text.Trim().Length > 0);
+
+        _announcerVoiceGrid.SuspendLayout();
+
+        try
+        {
+            foreach (var control in _heatCallerVoiceRow)
+            {
+                control.Visible = heatCaller;
+            }
+
+            foreach (var control in _elevenLabsVoiceRow)
+            {
+                control.Visible = elevenLabs;
+            }
+
+            foreach (var control in _kokoroVoiceRow)
+            {
+                control.Visible = kokoro;
+            }
+        }
+        finally
+        {
+            _announcerVoiceGrid.ResumeLayout(true);
+        }
     }
 
     /// <summary>
@@ -718,6 +906,29 @@ public sealed partial class VoiceSettingsControl : UserControl
         });
 
         return part;
+    }
+
+    /// <summary>
+    /// (22 Oct 2026, page tidy): a caption on a grid that is not indented,
+    /// with the indent kept on its right instead - so its field starts at
+    /// the same x as the voice relay's boxes, whose whole grid is indented
+    /// under the HeatCaller choice (Indented). The same TickBox.CaptionIndent,
+    /// again whenever the text size changes.
+    /// </summary>
+    private Label Flush(Label caption)
+    {
+        _textSize.Keep(() =>
+        {
+            var right = UiLayout.LabelGap + TickBox.CaptionIndent;
+
+            // Only when it changed: a new margin lays the grid out again.
+            if (caption.Margin.Right != right)
+            {
+                caption.Margin = new Padding(caption.Margin.Left, caption.Margin.Top, right, caption.Margin.Bottom);
+            }
+        });
+
+        return caption;
     }
 
     /// <summary>
@@ -955,12 +1166,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         _btnHeatCallerPreview.Text = "Preview";
         _btnHeatCallerPreview.Click += BtnHeatCallerPreview_Click;
 
-        // The picker and Refresh side by side, Refresh under it when the row
-        // is too narrow for both.
-        var heatCaller = new FieldGrid();
-
-        heatCaller.AddRow("Announcer voice:", FieldGrid.Inline(_cmbHeatCallerVoice, _btnHeatCallerRefresh, _btnHearVoice));
-        heatCaller.AddRow("Your own words:", FieldGrid.Inline(_txtHeatCallerPreviewLine, _btnHeatCallerPreview));
+        // The picker with Refresh and Hear It, and the Preview row, are on the
+        // Cast tab since 22 Oct 2026 - see BuildAnnouncerVoiceGrid.
 
         // The allowance, and why it can't be used when it can't - which can
         // run to a few lines, so the label wraps to the card rather than
@@ -1058,15 +1265,16 @@ public sealed partial class VoiceSettingsControl : UserControl
         _cmbKokoroVoice.DropDownStyle = ComboBoxStyle.DropDownList;
         FillKokoroVoices(current.KokoroVoiceName);
 
-        _btnTestKokoroVoice.Text = "Test Kokoro Voice";
+        // "Test Voice" since 22 Oct 2026, like every other Test beside a voice
+        // on the Cast tab, where it now sits with the picker.
+        _btnTestKokoroVoice.Text = "Test Voice";
         _btnTestKokoroVoice.Click += BtnTestKokoroVoice_Click;
 
+        // Download stays here, under the Kokoro choice: Kokoro is also what
+        // stands in for the other two voices, so it can be needed while
+        // another voice is chosen and the Cast tab shows that one's picker.
         _btnDownloadKokoro.Click += BtnDownloadKokoro_Click;
         ShowKokoroDownloadButton();
-
-        var kokoro = new FieldGrid();
-
-        kokoro.AddRow("Kokoro voice:", FieldGrid.Inline(_cmbKokoroVoice, _btnTestKokoroVoice, _btnDownloadKokoro));
 
         _lblKokoroStatus.AutoSize = true;
         _lblKokoroStatus.ForeColor = AppTheme.TextMuted;
@@ -1140,11 +1348,22 @@ public sealed partial class VoiceSettingsControl : UserControl
         // with its own settings under it.
         var card = new Section("Speak with");
 
+        // THE ANNOUNCER'S VOICE IS PICKED ON THE CAST TAB (22 Oct 2026), at
+        // the top, with Test Voice - beside everyone else on the show, where
+        // a club setting voices up was already looking. This card chooses
+        // WHICH ENGINE speaks; the Cast tab shows that engine's voices.
+        card.Add(_textSize.Wear(
+            new Label
+            {
+                Text = "Choose what speaks here. The announcer's voice, and Test Voice, are at the top of the Cast tab.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            () => AppTheme.SmallFont));
+
         card.Add(_rdoHeatCaller, stretch: false, gapBelow: UiLayout.HintGap);
-        Indented(card.Add(heatCaller));
         card.Add(_lblHeatCallerStatus);
         card.Add(_usageHeatCaller);
-        card.Add(_lblHeatCallerPreviewStatus);
         Indented(card.Add(relay, gapBelow: UiLayout.SectionGap));
 
         card.Add(_rdoElevenLabs, stretch: false, gapBelow: UiLayout.HintGap);
@@ -1152,7 +1371,11 @@ public sealed partial class VoiceSettingsControl : UserControl
         Indented(card.Add(_chkKokoroStandsIn, stretch: false, gapBelow: UiLayout.SectionGap));
 
         card.Add(_rdoKokoro, stretch: false, gapBelow: UiLayout.HintGap);
-        Indented(card.Add(kokoro));
+        // In a bar (22 Oct 2026): a bare Button in a card keeps the 75px it
+        // was made with, and "Download Again (310 MB)" was cut short. A bar
+        // sizes it to its caption, as it did in the Kokoro row.
+        Indented(card.Add(new ButtonBar().With(_btnDownloadKokoro), stretch: false));
+        ShowKokoroDownloadButton();
         card.Add(_lblKokoroStatus, gapBelow: UiLayout.HintGap);
         card.Add(_lblSpeakingStatus, gapBelow: UiLayout.HintGap);
         card.Add(lblHint, gapBelow: UiLayout.SectionGap);
@@ -1162,9 +1385,9 @@ public sealed partial class VoiceSettingsControl : UserControl
         // and a club that never clones a voice should not have a section
         // about likeness staring at them. The hint says so when there is
         // nothing to consent to.
-        BuildConsent(card);
+        var consent = BuildConsent(card);
 
-        return (card, new[] { heatCaller, relay, kokoro });
+        return (card, new[] { relay, consent });
     }
 
     /// <summary>
@@ -1177,7 +1400,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// the box says so. There is nothing on this card that is any use to
     /// somebody who takes a copy of it.
     /// </summary>
-    private void BuildConsent(Section card)
+    private FieldGrid BuildConsent(Section card)
     {
         _txtConsentWho.MaxLength = 60;
         _txtConsentWho.Text = _appSettings.HeatCallerConsentWho ?? string.Empty;
@@ -1201,10 +1424,10 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         var consent = new FieldGrid();
 
-        consent.AddRow("Who agreed:", new ButtonBar()
+        Flush(consent.AddRow("Who agreed:", new ButtonBar()
             .With(_txtConsentWho)
             .With(_btnConsentRecord)
-            .With(_btnConsentTakeBack));
+            .With(_btnConsentTakeBack)));
 
         consent.AddHint(
             "Only needed for a voice recorded from a real person, such as your own announcer; HeatCaller keeps just "
@@ -1214,6 +1437,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(_lblConsent, gapBelow: 0);
 
         ShowConsent();
+
+        return consent;
     }
 
     /// <summary>Where the club stands, said whether or not anything is wrong - see VoiceConsent.Describe.</summary>
@@ -1433,6 +1658,13 @@ public sealed partial class VoiceSettingsControl : UserControl
             : KokoroSpeech.IsModelDownloaded ? $"Download Again ({KokoroSpeech.DownloadSizeText})"
             : $"Download ({KokoroSpeech.DownloadSizeText})";
         _btnDownloadKokoro.Visible = downloading || KokoroSpeech.ShouldOfferDownload;
+
+        // Its bar goes with it (22 Oct 2026): it is a card part of its own
+        // now, and an empty bar would still leave its gap in the card.
+        if (_btnDownloadKokoro.Parent is ButtonBar bar)
+        {
+            bar.Visible = downloading || KokoroSpeech.ShouldOfferDownload;
+        }
     }
 
     /// <summary>
@@ -1453,8 +1685,9 @@ public sealed partial class VoiceSettingsControl : UserControl
         _btnTestKokoroVoice.Enabled = available && !downloading && !_kokoroTestRunning;
         ShowKokoroDownloadButton();
 
-        // A test or a download owns the line while it runs.
-        if (_kokoroTestRunning || downloading)
+        // A download owns the line while it runs. A test has a line of its
+        // own beside it on the Cast tab since 22 Oct 2026 (_lblKokoroTestStatus).
+        if (downloading)
         {
             return;
         }
@@ -1463,7 +1696,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         {
             _lblKokoroStatus.Text = kokoroChosen
                 ? $"Kokoro isn't on this PC - press Download ({KokoroSpeech.DownloadSizeText}, once). Until then the announcer can't say anything at all."
-                : $"Not on this PC - press Download ({KokoroSpeech.DownloadSizeText}, once). Kokoro is also what speaks when the voice above can't, so without it a line it can't say is simply lost.";
+                : $"Not on this PC - press Download ({KokoroSpeech.DownloadSizeText}, once). Kokoro is also what speaks when the chosen voice can't, so without it a line it can't say is simply lost.";
             _lblKokoroStatus.ForeColor = AppTheme.Danger;
         }
         else if (KokoroSpeech.LoadFailure is { } reason)
@@ -1478,7 +1711,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             // invites a club to go looking for a download it never made.
             _lblKokoroStatus.Text = kokoroChosen
                 ? "Speaking with Kokoro - ready on this PC. Nothing is billed, however much the announcer talks."
-                : "Ready on this PC - and standing by for any line the voice above can't say.";
+                : "Ready on this PC - and standing by for any line the chosen voice can't say.";
             _lblKokoroStatus.ForeColor = AppTheme.TextMuted;
         }
     }
@@ -1611,6 +1844,21 @@ public sealed partial class VoiceSettingsControl : UserControl
     internal static bool SpeedIgnored(bool elevenLabs, string? modelId) =>
         elevenLabs && (modelId ?? string.Empty).Contains("v3", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Whether the race-energy box does anything: ElevenLabs on a model that takes stability as a number (not v3).</summary>
+    internal static bool EnergyBoxApplies(bool elevenLabs, string? modelId) =>
+        elevenLabs && !(modelId ?? string.Empty).Contains("v3", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Shows the race-energy box only while it does something - see EnergyBoxApplies. UI thread.</summary>
+    private void ShowEnergyBox()
+    {
+        var show = EnergyBoxApplies(_rdoElevenLabs.Checked, _cmbModel.Text);
+
+        if (_chkEnergyFollowsRace.Visible != show)
+        {
+            _chkEnergyFollowsRace.Visible = show;
+        }
+    }
+
     /// <summary>The note under Speed shown while the box does nothing. UI thread.</summary>
     private void ShowSpeedNote()
     {
@@ -1635,8 +1883,8 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         _kokoroTestRunning = true;
         _btnTestKokoroVoice.Enabled = false;
-        _lblKokoroStatus.Text = "Speaking a sample with Kokoro... (the first one after starting takes a few seconds to load)";
-        _lblKokoroStatus.ForeColor = AppTheme.TextMuted;
+        _lblKokoroTestStatus.Text = "Speaking a sample with Kokoro... (the first one after starting takes a few seconds to load)";
+        _lblKokoroTestStatus.ForeColor = AppTheme.TextMuted;
 
         try
         {
@@ -1646,8 +1894,8 @@ public sealed partial class VoiceSettingsControl : UserControl
             await PlayTestAudioAsync(audio, profile.Volume);
             if (Gone) { return; }
 
-            _lblKokoroStatus.Text = $"Done - that was {voice?.Display ?? KokoroSpeech.Describe(KokoroSpeech.DefaultVoice)}.";
-            _lblKokoroStatus.ForeColor = AppTheme.Success;
+            _lblKokoroTestStatus.Text = $"Done - that was {voice?.Display ?? KokoroSpeech.Describe(KokoroSpeech.DefaultVoice)}.";
+            _lblKokoroTestStatus.ForeColor = AppTheme.Success;
         }
         catch (Exception ex)
         {
@@ -1656,8 +1904,8 @@ public sealed partial class VoiceSettingsControl : UserControl
 
             if (!Gone)
             {
-                _lblKokoroStatus.Text = $"Test failed: {ex.Message}";
-                _lblKokoroStatus.ForeColor = AppTheme.Danger;
+                _lblKokoroTestStatus.Text = $"Test failed: {ex.Message}";
+                _lblKokoroTestStatus.ForeColor = AppTheme.Danger;
             }
         }
         finally
@@ -2007,7 +2255,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             {
                 HeatCallerStatus(
                     "The HeatCaller voice isn't included for this club yet. Your own ElevenLabs key and the free Kokoro voice both work as normal. "
-                    + "The samples above are still free to listen to.",
+                    + "Its free samples are at the top of the Cast tab to listen to.",
                     AppTheme.Warning);
             }
             else if (catalogue.Voices.Count == 0)
@@ -2021,7 +2269,7 @@ public sealed partial class VoiceSettingsControl : UserControl
                 // the page says why.
                 HeatCallerStatus(
                     $"This relay doesn't offer \"{_store.Current.HeatCallerVoice}\", the voice chosen here, so the free Kokoro voice "
-                    + "would speak every line. Pick one from the list above.",
+                    + "would speak every line. Pick one at the top of the Cast tab.",
                     AppTheme.Warning);
             }
             else
@@ -2431,6 +2679,16 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private void HeatCallerChosen()
     {
+        // WHY (23 Oct 2026, bug hunt 10): the engine in use BEFORE this tick
+        // is read here, first. The catalogue read below finishes while the
+        // question is still open (the dialog pumps messages), and if the
+        // relay had re-tuned the voice it auto-saved the page - with this
+        // radio ticked, so Engine=HeatCaller. Answering No then read that
+        // back, matched no case, and left the club on the HeatCaller voice
+        // with its own lines. Going back to the engine read here undoes it:
+        // ticking that radio saves the old engine over the mid-question save.
+        var before = _store.Current.EffectiveEngine;
+
         _ = LoadHeatCallerCatalogueAsync(byHand: false);
 
         if (!HasOwnWording())
@@ -2450,7 +2708,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             // what unchecks this one - and a club that was already ON this
             // voice stays on it, rather than being moved to another by a
             // question it only reached because a save failed.
-            switch (_store.Current.EffectiveEngine)
+            switch (before)
             {
                 case VoiceEngine.ElevenLabs:
                     _rdoElevenLabs.Checked = true;
@@ -2667,6 +2925,10 @@ public sealed partial class VoiceSettingsControl : UserControl
         // The allowance shown is the chosen voice's.
         _usageHeatCaller?.RefreshNow();
         _usageElevenLabs?.RefreshNow();
+
+        // And the announcer's voice on the Cast tab is the chosen voice's
+        // (22 Oct 2026) - see ShowAnnouncerVoiceRows.
+        ShowAnnouncerVoiceRows();
     }
 
     /// <summary>
@@ -2690,7 +2952,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         foreach (var control in new Control[]
                  {
                      _txtApiKey, _chkShowApiKey, _cmbVoice, _btnLoadVoices, _cmbModel,
-                     _numStability, _numSimilarity, _numStyle, _numSpeed, _chkSpeakerBoost,
+                     _numStability, _numSimilarity, _numStyle, _numSpeed, _chkSpeakerBoost, _chkEnergyFollowsRace,
                      _cmbTextNormalization, _txtLanguageCode, _txtOutputFormat, _btnTestVoice,
                  })
         {
@@ -2843,7 +3105,7 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         if (voiceId.Length == 0)
         {
-            _lblHeatCallerPreviewStatus.Text = "Pick a voice above first.";
+            _lblHeatCallerPreviewStatus.Text = "Pick a voice first.";
             _lblHeatCallerPreviewStatus.ForeColor = AppTheme.Danger;
             return;
         }
@@ -2925,7 +3187,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// Voice: with Load Voices, and Model:, in one caption column, and what
     /// the models can do under them.
     /// </summary>
-    private Section BuildConnectionCard(VoiceProfile current)
+    private (Section Card, FieldGrid Grid) BuildConnectionCard(VoiceProfile current)
     {
         // Says when this card matters, now that ElevenLabs isn't the only
         // voice. Everything in it stays usable whichever voice is chosen, so
@@ -2974,25 +3236,25 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         var fields = new FieldGrid();
 
-        fields.AddRow("API Key:", FieldGrid.Inline(_txtApiKey, _chkShowApiKey));
-        fields.AddRow("Voice:", FieldGrid.Inline(_cmbVoice, _btnLoadVoices));
-        fields.AddRow("Model:", _cmbModel);
+        Flush(fields.AddRow("API Key:", FieldGrid.Inline(_txtApiKey, _chkShowApiKey)));
 
-        var lblModelHint = new Label
-        {
-            Text = "Pick a preset or type any ElevenLabs model id. eleven_v3 is the expressive one; on v2, Style past "
-                 + "about 0.6 distorts rather than excites.",
-            AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-        };
+        // Voice: with Load Voices is at the top of the Cast tab since 22 Oct
+        // 2026, with Test Voice - see BuildAnnouncerVoiceGrid.
+        Flush(fields.AddRow("Model:", _cmbModel));
+
+        // (22 Oct 2026, page tidy): a hint under the Model box, in the small
+        // type every other hint has. It was a body-type label under the
+        // whole card.
+        fields.AddHint(
+            "Pick a preset or type any ElevenLabs model id. eleven_v3 is the expressive one; on v2, Style past "
+            + "about 0.6 distorts rather than excites.");
 
         var card = new Section("ElevenLabs connection");
 
         card.Add(lblUsedWhen);
-        card.Add(fields);
-        card.Add(lblModelHint, gapBelow: 0);
+        card.Add(fields, gapBelow: 0);
 
-        return card;
+        return (card, fields);
     }
 
     /// <summary>
@@ -3003,7 +3265,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// is on Race Calls' How often card (17 Oct 2026); both are still filled
     /// and saved with this profile.
     /// </summary>
-    private Section BuildParametersCard(VoiceProfile current)
+    private (Section Card, FieldGrid Grid) BuildParametersCard(VoiceProfile current)
     {
         SetupUnitSlider(_numStability, current.Stability, 0, 1, 0.05m);
         SetupUnitSlider(_numSimilarity, current.SimilarityBoost, 0, 1, 0.05m);
@@ -3070,10 +3332,10 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         var tuning = new FieldGrid();
 
-        tuning.AddRow("Stability:", _numStability);
-        tuning.AddRow("Similarity boost:", _numSimilarity);
-        tuning.AddRow("Style:", _numStyle);
-        tuning.AddRow("Speed:", _numSpeed);
+        Flush(tuning.AddRow("Stability:", _numStability));
+        Flush(tuning.AddRow("Similarity boost:", _numSimilarity));
+        Flush(tuning.AddRow("Style:", _numStyle));
+        Flush(tuning.AddRow("Speed:", _numSpeed));
 
         // ELEVEN V3 HAS NO SPEED (19 Oct 2026). ElevenLabs' own settings say
         // "Speed is not available for the Eleven v3 model": the setting is
@@ -3088,20 +3350,62 @@ public sealed partial class VoiceSettingsControl : UserControl
         _cmbModel.SelectedIndexChanged += (_, _) => ShowSpeedNote();
         _rdoElevenLabs.CheckedChanged += (_, _) => ShowSpeedNote();
         ShowSpeedNote();
-        tuning.AddRow("Text normalize:", _cmbTextNormalization);
-        tuning.AddRow("Language:", _txtLanguageCode);
-        tuning.AddRow("Output format:", _txtOutputFormat);
+        Flush(tuning.AddRow("Text normalize:", _cmbTextNormalization));
+        Flush(tuning.AddRow("Language:", _txtLanguageCode));
+        Flush(tuning.AddRow("Output format:", _txtOutputFormat));
         tuning.AddHint("Higher-quality output formats need a paid ElevenLabs plan - leave blank unless you know you have one.");
         tuning.AddField(_chkSpeakerBoost);
         tuning.AddField(_chkWirelessSpeaker);
 
+        // THE RACE IN THE DELIVERY (22 Oct 2026). AppSettings, not the
+        // profile - so filled from and saved to there, the moment it is
+        // ticked, and passed over by the profile's auto-save (constructor).
+        // Hidden rather than greyed where it does nothing, like the speed
+        // note: on v3, Kokoro or the HeatCaller voice there is nothing for
+        // it to change. See DeliveryEnergy.
+        _chkEnergyFollowsRace.Text = "Livelier in the big races, steadier in the heats";
+        _chkEnergyFollowsRace.AutoSize = true;
+        _chkEnergyFollowsRace.Checked = _appSettings.VoiceEnergyFollowsRace;
+        _chkEnergyFollowsRace.CheckedChanged += (_, _) =>
+        {
+            if (_appSettings.VoiceEnergyFollowsRace == _chkEnergyFollowsRace.Checked)
+            {
+                return;
+            }
+
+            _appSettings.VoiceEnergyFollowsRace = _chkEnergyFollowsRace.Checked;
+            _appSettings.Save();
+        };
+
+        var energyTip = new ToolTip();
+        AppTheme.StyleToolTip(energyTip);
+        energyTip.SetToolTip(_chkEnergyFollowsRace,
+            "Moves Stability and Style one tenth either way for the race on track: steadier in practice and the heats, "
+            + "your settings as they are in the lesser mains, livelier in the top main and the last race of the night. "
+            + "A line you've already saved or prepared is played as it is, never bought again.");
+
+        tuning.AddField(_chkEnergyFollowsRace);
+        _cmbModel.TextChanged += (_, _) => ShowEnergyBox();
+        _cmbModel.SelectedIndexChanged += (_, _) => ShowEnergyBox();
+        _rdoElevenLabs.CheckedChanged += (_, _) => ShowEnergyBox();
+        ShowEnergyBox();
+
         var card = new Section("Voice parameters");
 
-        card.Add(tuning, gapBelow: UiLayout.SectionGap);
-        card.Add(new ButtonBar().With(_btnTestVoice), gapBelow: UiLayout.HintGap);
-        card.Add(_lblTestStatus, gapBelow: 0);
+        // Test Voice is beside the announcer's voice at the top of the Cast
+        // tab since 22 Oct 2026 (BuildAnnouncerVoiceGrid), and still tests
+        // with these values as they are on screen, saved or not.
+        card.Add(tuning, gapBelow: UiLayout.HintGap);
+        card.Add(_textSize.Wear(
+            new Label
+            {
+                Text = "To hear these, press Test Voice at the top of the Cast tab - it uses the values here.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            },
+            () => AppTheme.SmallFont), gapBelow: 0);
 
-        return card;
+        return (card, tuning);
     }
 
     /// <summary>
@@ -3109,7 +3413,7 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// line that can be known in advance, and a way to forget a line that
     /// came out wrong. See VoiceLibrary for how lines are matched.
     /// </summary>
-    private Section BuildLibraryCard()
+    private (Section Card, FieldGrid Grid) BuildLibraryCard()
     {
         var lblIntro = new Label
         {
@@ -3177,17 +3481,17 @@ public sealed partial class VoiceSettingsControl : UserControl
         // under the list with an empty gap below the caption.
         var recent = new FieldGrid();
 
-        recent.AddRow("Recently played:", _cmbSavedLines, stretch: true);
+        Flush(recent.AddRow("Recently played:", _cmbSavedLines, stretch: true));
 
         var forget = new ButtonBar().With(_btnRerollLine, _btnForgetLine, _btnForgetAll);
 
         var lblForgetHint = _textSize.Wear(
             new Label
             {
-                Text = "A line that came out wrong: Re-roll makes a new take now and plays it (it costs what the list shows), "
-                     + "or forget it and it's made afresh next time (Test on a fixed line does the same). "
-                     + $"Kept in {VoiceLibrary.Shared.Folder}, up to {VoiceLibrary.MaxBytes / (1024 * 1024)} MB - not in "
-                     + "backups, as it can always be made again.",
+                Text = "A line that came out wrong: Re-roll makes and plays a new take now, at the cost the list shows; "
+                     + "Forget has it made afresh next time, as Test on a fixed line does. "
+                     + $"Kept in {VoiceLibrary.Shared.Folder}, up to {VoiceLibrary.MaxBytes / (1024 * 1024)} MB, not "
+                     + "backed up - it can always be made again.",
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
             },
@@ -3204,7 +3508,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(_lblRerollStatus, gapBelow: UiLayout.HintGap);
         card.Add(lblForgetHint, gapBelow: 0);
 
-        return card;
+        return (card, recent);
     }
 
     /// <summary>One entry in the Recently played list.</summary>
@@ -3445,7 +3749,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
         else if (string.IsNullOrWhiteSpace(saved.ApiKey) || string.IsNullOrWhiteSpace(saved.VoiceId))
         {
-            AppDialog.Show(this, "Enter an API key and select a voice first.", "Missing settings", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            AppDialog.Show(this, "Enter an API key on the Voice tab, and pick a voice at the top of the Cast tab, first.", "Missing settings", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -3744,7 +4048,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         var apiKey = _txtApiKey.Text.Trim();
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            AppDialog.Show(this, "Enter your ElevenLabs API key first.", "Missing API key", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            // Says where (22 Oct 2026): Load Voices is on the Cast tab now, the key on the Voice tab.
+            AppDialog.Show(this, "Enter your ElevenLabs API key on the Voice tab first.", "Missing API key", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -3834,7 +4139,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         var profile = BuildProfileFromControls();
         if (string.IsNullOrWhiteSpace(profile.ApiKey) || string.IsNullOrWhiteSpace(profile.VoiceId))
         {
-            AppDialog.Show(this, "Enter an API key and select a voice first.", "Missing settings", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            // Says where (22 Oct 2026): Test Voice is on the Cast tab now, the key on the Voice tab.
+            AppDialog.Show(this, "Enter an API key on the Voice tab, and pick a voice, first.", "Missing settings", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
@@ -3959,6 +4265,9 @@ public sealed partial class VoiceSettingsControl : UserControl
                     ? (int)_numStreakEveryNPractice.Value
                     : null,
                 LapTimeEveryNLaps = type == AnnouncementEventType.LapTime ? (int)_numLapTimeEveryN.Value : 1,
+                SplitTimeEveryNLaps = type == AnnouncementEventType.SplitTime ? (int)_numSplitTimeEveryN.Value : 1,
+                TargetPaceEveryNLaps = type == AnnouncementEventType.TargetPace ? (int)_numTargetPaceEveryN.Value : 1,
+                ConsistencyEveryLaps = type == AnnouncementEventType.ConsistencyCoach ? (int)_numConsistencyEveryLaps.Value : 5,
                 PositionReportEveryLaps = type == AnnouncementEventType.PositionReport ? (int)_numPositionEveryLaps.Value : 5,
                 PositionReportDepth = type == AnnouncementEventType.PositionReport ? (int)_numPositionDepth.Value : 3,
                 PositionReportSayGaps = type == AnnouncementEventType.PositionReport && _chkPositionGaps.Checked,
@@ -4060,7 +4369,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
         else if (string.IsNullOrWhiteSpace(profile.ApiKey) || string.IsNullOrWhiteSpace(profile.VoiceId))
         {
-            _lblTestStatus.Text = "Enter an API key and select a voice first.";
+            _lblTestStatus.Text = "Enter an API key on the Voice tab, and pick a voice at the top of the Cast tab, first.";
             _lblTestStatus.ForeColor = AppTheme.Danger;
             return;
         }
@@ -4084,6 +4393,15 @@ public sealed partial class VoiceSettingsControl : UserControl
             .Replace("{sectortime}", "3.41 seconds", StringComparison.OrdinalIgnoreCase)
             .Replace("{split}", "Split 1", StringComparison.OrdinalIgnoreCase)
             .Replace("{gap}", "point two seconds", StringComparison.OrdinalIgnoreCase)
+            .Replace("{splittime}", "eight point four zero seconds", StringComparison.OrdinalIgnoreCase)
+            .Replace("{delta}", "Up a tenth", StringComparison.OrdinalIgnoreCase)
+            .Replace("{battle}", "for the lead", StringComparison.OrdinalIgnoreCase)
+            .Replace("{sectors}", "sector one was Sam, sector two Bill", StringComparison.OrdinalIgnoreCase)
+            .Replace("{pace}", "Two tenths off", StringComparison.OrdinalIgnoreCase)
+            .Replace("{target}", "nine point two zero seconds", StringComparison.OrdinalIgnoreCase)
+            .Replace("{consistency}", "Last five within a tenth - that's your rhythm", StringComparison.OrdinalIgnoreCase)
+            .Replace("{spread}", "a tenth", StringComparison.OrdinalIgnoreCase)
+            .Replace("{laps}", "five", StringComparison.OrdinalIgnoreCase)
             .Replace("{achievement}", "Hat-Trick", StringComparison.OrdinalIgnoreCase)
             .Replace("{badge}", "Hat-Trick", StringComparison.OrdinalIgnoreCase)
 

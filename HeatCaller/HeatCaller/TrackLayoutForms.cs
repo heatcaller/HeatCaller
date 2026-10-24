@@ -908,13 +908,21 @@ public sealed class TrackLayoutManagerControl : UserControl
         // designer must ask before Escape, Cancel or the X throws it away -
         // even though nothing changed since it reopened.
         var reopened = false;
+
+        // WHY (23 Oct 2026, bug hunt 10): the designer always ticked "Show
+        // this plan as the track's main picture", so saving a plan silently
+        // overrode a club's "photo is the main picture" choice. A track that
+        // already has a plan opens with its own choice; a first plan still
+        // defaults to showing it. A reopen keeps what was ticked.
+        var useAsPhotoToOpen = existing?.Design is { IsEmpty: false } ? existing.PreferPlanImage : true;
         while (true)
         {
             using var form = new RcpTrackEditorForm(
                 designToOpen,
                 nameToOpen,
                 existing?.AverageLapSeconds,
-                unsavedOnOpen: reopened);
+                unsavedOnOpen: reopened,
+                useAsPhoto: useAsPhotoToOpen);
 
             if (form.ShowDialog(this) != DialogResult.OK)
             {
@@ -930,6 +938,7 @@ public sealed class TrackLayoutManagerControl : UserControl
 
                 designToOpen = form.Result;
                 nameToOpen = form.TrackName;
+                useAsPhotoToOpen = form.UseAsPhoto;
                 reopened = true;
                 continue;
             }

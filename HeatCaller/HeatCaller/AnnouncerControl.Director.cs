@@ -52,11 +52,12 @@ public partial class AnnouncerControl
 
     /// <summary>
     /// The index behind PersonalBestBeforeTonight, and what it was built for -
-    /// the layout, the race night and the history's revision. Under its own
+    /// the layout, the race night, the history's revision and the
+    /// personal-best resets' revision. Under its own
     /// lock: laps are fed from the tick, but nothing promises that.
     /// </summary>
     private Dictionary<string, double>? _bestsBeforeTonight;
-    private (string Layout, DateTime Night, int Revision) _bestsBeforeTonightFor;
+    private (string Layout, DateTime Night, int Revision, int ResetRevision) _bestsBeforeTonightFor;
     private readonly object _bestsBeforeTonightLock = new();
 
     /// <summary>
@@ -905,6 +906,15 @@ public partial class AnnouncerControl
             return "a commentary segment went on air while it was being written. Wait for it to finish and try again.";
         }
 
+        // WHY (23 Oct 2026, bug hunt 10): the mute was only checked before
+        // the writing started, so a piece written while the room was muted
+        // still went on to play its race-audio clip over the mute. Asked
+        // again here, as the other checks are.
+        if (_announcer.Muted)
+        {
+            return "the announcer was muted while it was being written. Unmute it and try again.";
+        }
+
         return null;
     }
 
@@ -978,6 +988,14 @@ public partial class AnnouncerControl
         ShowTreatment treatment, string named, string transponder, IReadOnlyList<SessionRecord>? tonight,
         CancellationToken ct)
     {
+        // WHY (23 Oct 2026, bug hunt 10): the clip went straight onto the
+        // AudioBus with only the next race's token, so the sidebar Mute -
+        // which stops what is in BroadcastImaging's Live registry - never
+        // reached it, and up to twenty seconds of race audio played over a
+        // muted room. It is registered there now, as Race Control's replay
+        // is (22 Oct 2026), and the mute cuts it.
+        CancellationTokenSource? cut = null;
+
         try
         {
             var store = RaceAudioStore.Load();
@@ -1020,16 +1038,44 @@ public partial class AnnouncerControl
                 $"{AppTime.LogStampNow()}  [show] Opening {named}'s piece with {seconds:0} seconds of "
                 + $"{Path.GetFileName(path)}.");
 
+            var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cut = stop;
+
+            BroadcastImaging.Playing(stop, () =>
+            {
+                try
+                {
+                    stop.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Already over.
+                }
+            });
+
+            if (_announcer.Muted)
+            {
+                return;
+            }
+
             _announcer.SpeakReminder(
                 $"First, a few seconds of {named}'s night as it sounded trackside.",
                 showOnScreens: true);
 
             // WHY (20 Oct 2026, Bug Hunt 8): both waits take the next race's
             // token, so the clip is stopped when the race is called instead
-            // of playing on over the staging call.
-            await treatment.WaitForTheReadAsync(ct: ct).ConfigureAwait(true);
+            // of playing on over the staging call. (23 Oct 2026: the mute's
+            // token rides along with it - see cut above.)
+            await treatment.WaitForTheReadAsync(ct: stop.Token).ConfigureAwait(true);
 
-            await AudioBus.PlayAsync(new DriversOwnClip.Excerpt(clip), DriversOwnClip.Level, ct).ConfigureAwait(true);
+            // Muted during the line: the line was dropped, so the wait came
+            // straight back - the clip must not play into the silence.
+            if (_announcer.Muted)
+            {
+                return;
+            }
+
+            await AudioBus.PlayAsync(new DriversOwnClip.Excerpt(clip), DriversOwnClip.Level, stop.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -1037,11 +1083,24 @@ public partial class AnnouncerControl
             // caller reports the piece as cut off.
             throw;
         }
+        catch (OperationCanceledException) when (cut is { IsCancellationRequested: true })
+        {
+            // Muted - the mute's own log line says so. Not a fault with
+            // the clip, so nothing more is logged (23 Oct 2026).
+        }
         catch (Exception ex)
         {
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [show] Couldn't play {named}'s own clip ({ex.Message}) - "
                 + "the piece is being read without it.");
+        }
+        finally
+        {
+            if (cut is not null)
+            {
+                BroadcastImaging.Gone(cut);
+                cut.Dispose();
+            }
         }
     }
 
@@ -1361,6 +1420,17 @@ public partial class AnnouncerControl
             if (_race.SessionGeneration != _directorGeneration)
             {
                 _directorGeneration = _race.SessionGeneration;
+
+                // WHY (22 Oct 2026, bug hunt 9): claiming the generation here
+                // meant the AI branch, switched back on mid-race, saw "same
+                // race" and never cleared the lap bookkeeping - _lapsFed still
+                // held an earlier race's counts, so FeedLaps skipped this
+                // race's laps and RecordWatch kept the old windows. Cleared
+                // here as the AI branch clears it; FeedLaps is not called on
+                // this path, so it then feeds this race from lap one.
+                _lapsFed.Clear();
+                _recordWatch?.Reset();
+
                 director.RaceStarted($"{_race.SessionGeneration}@{DateTime.Now.Ticks}", RaceClassName?.Invoke());
             }
 
@@ -1528,8 +1598,8 @@ public partial class AnnouncerControl
         && !standing.IsRecoveryLap(index);
 
     /// <summary>
-    /// A driver's best lap on the selected layout from races before tonight,
-    /// in seconds, or null when there is none - for PaceWatch's
+    /// A driver's best lap on the selected layout from races before this race
+    /// (tonight's saved heats included), in seconds, or null when there is none - for PaceWatch's
     /// PersonalBestBefore. A look-up in an index rebuilt only when the
     /// layout, the night or the history changes (PaceHistory.PersonalBestsBefore).
     /// </summary>
@@ -1544,12 +1614,21 @@ public partial class AnnouncerControl
         var night = TonightAtTheTrack.NightOf(DateTime.Now);
         var revision = _history.Revision;
 
+        // WHY (23 Oct 2026, bug hunt 10): a best the club reset was still the
+        // bar the AI announcer's "personal best" had to beat. The resets are
+        // applied as the Personal Bests page applies them, and a reset (or
+        // its undo) rebuilds the index. The store is read here, from the
+        // announcer's timer tick on the UI thread, which is its thread rule.
+        var resets = PersonalBestResets;
+        var resetRevision = resets?.Revision ?? 0;
+
         lock (_bestsBeforeTonightLock)
         {
-            if (_bestsBeforeTonight is null || _bestsBeforeTonightFor != (layout, night, revision))
+            if (_bestsBeforeTonight is null || _bestsBeforeTonightFor != (layout, night, revision, resetRevision))
             {
-                _bestsBeforeTonight = PaceHistory.PersonalBestsBefore(_history.All, layout, night);
-                _bestsBeforeTonightFor = (layout, night, revision);
+                _bestsBeforeTonight = PaceHistory.PersonalBestsBefore(_history.All, layout, night,
+                    resets is null ? null : resets.EffectiveCutoff);
+                _bestsBeforeTonightFor = (layout, night, revision, resetRevision);
             }
 
             return _bestsBeforeTonight.TryGetValue(transponder.Trim(), out var best) ? best : null;
@@ -1585,7 +1664,33 @@ public partial class AnnouncerControl
             var now = laps.Count;
             var fed = _lapsFed.GetValueOrDefault(standing.TransponderId);
 
-            if (now <= fed)
+            // WHY (23 Oct 2026, bug hunt 10): "fed exactly once" assumed the
+            // list only grows. A lap taken off by hand (-1 lap folds a double
+            // read into the lap before) shrank it while the count stayed
+            // high, so the driver's next real lap - back at the old count -
+            // was never fed to PaceWatch or RecordWatch. The count now
+            // follows the list down, and the next lap added after it is fed.
+            if (now < fed)
+            {
+                _lapsFed[standing.TransponderId] = now;
+
+                // And the lap taken off must stop being the bar: the
+                // driver's best and the race's fastest lap are rebuilt
+                // from the laps that are left (PaceWatch.Forget).
+                var surviving = new List<double>();
+                for (var i = 0; i < now && i < laps.Count; i++)
+                {
+                    if (IsPaceLap(standing, i))
+                    {
+                        surviving.Add(laps[i] / 1000.0);
+                    }
+                }
+
+                director.Pace.Forget(standing.TransponderId, surviving);
+                continue;
+            }
+
+            if (now == fed)
             {
                 continue;
             }

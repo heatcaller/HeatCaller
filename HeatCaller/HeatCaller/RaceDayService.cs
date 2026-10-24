@@ -28,7 +28,7 @@ public sealed class RaceDayServiceHost
 
     public required AppSettings Settings { get; init; }
     public required UndoService Undo { get; init; }
-    public required RaceControlSession Race { get; init; }
+    public required RaceTiming Race { get; init; }
     public required RaceEventStore Events { get; init; }
     public required RaceClassStore Classes { get; init; }
     public required ProfileStore Profiles { get; init; }

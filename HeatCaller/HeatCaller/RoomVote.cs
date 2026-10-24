@@ -269,6 +269,14 @@ internal sealed class RoomVote
     /// verdict about a race run last Thursday read out to this week's room
     /// is worse than no verdict. Cheap and idempotent for the day it is
     /// already on, so it can be called from a tick.
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10): pass only an OPEN day here - the app
+    /// calls <see cref="FollowDay"/> and <see cref="StartUp"/>, which see to
+    /// that. Race Day's picker makes a closed day current just to look at
+    /// its results, and handing that day in wiped tonight's open vote -
+    /// with nothing to bring it back when tonight was picked again. This
+    /// method stays as it was, since it cannot tell a closed day from an
+    /// open one by its id.
     /// </summary>
     internal void NewMeeting(string? dayId)
     {
@@ -301,6 +309,57 @@ internal sealed class RoomVote
 
             Save();
         }
+    }
+
+    /// <summary>
+    /// Puts the vote on the current day when it is an open one, and does
+    /// nothing when it is closed or there is none - for the day switching
+    /// and the announcer's tick. Startup calls <see cref="StartUp"/>.
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10): the app handed NewMeeting whatever
+    /// day was current, and picking last week's closed day on Race Day to
+    /// look at a result threw away tonight's open vote and every vote cast
+    /// in it. Looking at a closed day changes nothing now, just as closing
+    /// one does. The same rule ClubNotes.FollowDay keeps for the notes.
+    /// </summary>
+    internal void FollowDay(RaceEvent? day)
+    {
+        if (ClubNotes.OpenDayId(day) is { } dayId)
+        {
+            NewMeeting(dayId);
+        }
+    }
+
+    /// <summary>
+    /// Puts the vote on the right day as the app starts: the current day
+    /// when it is open; otherwise no day, which clears last week's - unless
+    /// the vote is filed on a day that is still open.
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10): starting up with a closed day current
+    /// must clear last week's vote, but it is also what happens when the app
+    /// is restarted mid-night while last week's results are being looked at
+    /// - tonight's day still open, just not current. A plain NewMeeting
+    /// with the current day wiped tonight's vote then. A day still open is
+    /// still tonight's, so its vote is kept; <paramref name="find"/> looks a
+    /// day up by id (RaceEventStore.Get).
+    /// </summary>
+    internal void StartUp(RaceEvent? current, Func<string, RaceEvent?> find)
+    {
+        if (ClubNotes.OpenDayId(current) is { } dayId)
+        {
+            NewMeeting(dayId);
+
+            return;
+        }
+
+        var filedOn = DayId;
+
+        if (filedOn.Length > 0 && ClubNotes.OpenDayId(find(filedOn)) is not null)
+        {
+            return;
+        }
+
+        NewMeeting(null);
     }
 
     /// <summary>

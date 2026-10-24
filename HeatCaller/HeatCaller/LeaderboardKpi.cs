@@ -201,7 +201,19 @@ public static class RaceGaps
 public sealed class KpiContext
 {
     public required IReadOnlyList<RacerStanding> Ordered { get; init; }
-    public required ProfileStore Profiles { get; init; }
+
+    /// <summary>
+    /// Who each transponder belongs to. A ProfileStore on the screens; its
+    /// AnyThread view for the live state built off the UI thread.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Oct 2026, timing layer, P8): an interface rather than the
+    /// store, so the web server's board can read the frozen profiles
+    /// (ProfileStore.GetForAnyThread) when timing runs on its own thread and
+    /// the live state is built off the UI. Every surface that passes a
+    /// ProfileStore is unchanged.
+    /// </remarks>
+    public required IDriverLookup Profiles { get; init; }
     public required KpiTracker Tracker { get; init; }
 
     /// <summary>How many recent laps the rolling average covers.</summary>
@@ -357,8 +369,14 @@ public static class KpiCatalog
         new("transponder", "Transponder", "Raw transponder ID.", 80,
             (s, _, ctx) => new KpiValue(ctx.PublicCopy ? "-" : s.TransponderId)),
 
-        new("laps", "Laps", "Laps completed.", 45,
-            (s, _, _) => new KpiValue(s.Laps.ToString())),
+        // 22 Oct 2026: "12*" when race control counted any of them by hand
+        // (+1 Lap for a transponder that stopped reading) - see
+        // HandCountedLaps. The number is the same; the mark says how it
+        // was got.
+        new("laps", "Laps", "Laps completed. A * means some were counted by hand.", 45,
+            // Not on the relay's public copy, whose pages have no legend to
+            // say what the mark means.
+            (s, _, ctx) => new KpiValue(HandCountedLaps.LapsText(s.Laps, ctx.PublicCopy ? 0 : HandCountedLaps.During(s)))),
 
         new("last", "Last Lap", "Most recent counted lap.", 65,
             (s, _, _) => new KpiValue(Secs(s.LapTimesMs.Count > 0 ? s.LapTimesMs[^1] : 0))),
@@ -634,6 +652,11 @@ public static class KpiCatalog
             // director cannot check against what was given.
             (s, _, _) => s.PenaltyMs > 0
                 ? new KpiValue($"+{s.PenaltyMs / 1000.0:0.#}s", KpiEmphasis.Bad)
+                : new KpiValue("-")),
+
+        new("byhand", "By Hand", "Laps race control added by hand this race (+1 Lap), for a transponder that stopped being read.", 55,
+            (s, _, _) => HandCountedLaps.During(s) is > 0 and var byHand
+                ? new KpiValue($"+{byHand}", KpiEmphasis.Bad)
                 : new KpiValue("-")),
 
         new("warnings", "Warnings", "Warnings from race control this race - and a black flag, once the class's ladder reaches one.", 70,

@@ -37,11 +37,11 @@ internal sealed class SoundOffer
     public const string LapTimesOnlyChoice = "Lap times only";
 
     private const string KeepHint =
-        "The announcer, sounds, music and ambience stay as they are. Soundscapes can be tried and changed any time on the Soundscapes page.";
+        "The announcer, sounds, music and ambience stay as they are. Change them any time on the Soundscapes page.";
 
     private const string LapTimesOnlyHint =
-        "The announcer reads each driver's lap time and calls the start, the finish and the flags - nothing else. "
-        + "No music, no ambience, and none of the sound effects that play on a lap.";
+        "The announcer reads each driver's lap time and calls the start, the finish and the flags. No music, "
+        + "ambience or lap sound effects.";
 
     private readonly AppSettings _settings;
     private readonly SoundOfferHost _host;

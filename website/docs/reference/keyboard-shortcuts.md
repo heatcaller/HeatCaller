@@ -80,6 +80,7 @@ If no driver is selected, nothing happens and the Race Control log says why. See
 | <kbd>F11</kbd> | Turns full screen on or off. |
 | <kbd>M</kbd> | Shows or hides the track map, when the layout has a plan. See [Track map](../screens/big-screen.md#track-map). |
 | <kbd>O</kbd> | Shows or hides the ON AIR band, which is up while the announcer's show is on air. Unlike <kbd>M</kbd>, the choice is remembered between sessions. See [When the show is on air](../screens/big-screen.md#when-the-show-is-on-air). |
+| <kbd>C</kbd> | Shows or hides the captions strip, the announcer's words as text along the bottom. It starts off, and the choice is remembered between sessions. See [Captions](../screens/big-screen.md#captions). |
 | <kbd>Esc</kbd> | Closes the Big Screen window. |
 
 The Big Screen shows a reminder of these keys. Click the Big Screen window first so it has the focus. See [Big Screen](../screens/big-screen.md).

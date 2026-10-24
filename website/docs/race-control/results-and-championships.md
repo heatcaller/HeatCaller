@@ -18,7 +18,7 @@ When a race finishes (see [Running a race](running-a-race.md#finishing)), HeatCa
 3. **Works out badges** (see [Achievements](#achievements)).
 4. **Saves a results card image** to a **HeatCaller Results** folder in your Documents folder. The console shows the full path.
 
-Practice sessions are only saved when you save them from the **Practice** page. Demo races aren't saved unless you turn that on, and a saved demo is never linked to a round, never scored and never counts toward anything on this page. See [Practice, ghosts, demos and handicaps](practice-and-ghosts.md).
+Practice sessions are only saved when you save them from the **Practice** page. Demo races aren't saved unless you turn that on, and a saved demo is never scored and never counts toward anything on this page. (It only marks a heat as run when **Let a demo fill in the race program** is ticked on Demo Mode.) See [Practice, ghosts, demos and handicaps](practice-and-ghosts.md).
 
 Corrections made on the **Race Control** board after the checkered flag change the board but not the saved result. To correct a saved result, use **Edit Result** on **Race History**. See [Correcting a saved result](corrections-and-recovery.md#correcting-a-saved-result).
 
@@ -42,8 +42,15 @@ Below the results is a notes box, for the weather, the track surface, incidents 
 | **Event Report** | Builds a one-page report for a whole race day. |
 | **Export Session** | Saves the selected session as a CSV file. |
 | **Export Results** | Exports results or laps for many sessions, as CSV or JSON. |
+| **Print Results...** | Prints the selected races' results, with a preview first. See [Printing results](#printing-results). |
 | **Edit Result** | Corrects a saved race: laps, time and lap penalties, or an outcome such as DNF or DQ, with a reason. Needs **Allow corrections to saved results** ticked on **Local Screens**. You can undo this. See [Correcting a saved result](corrections-and-recovery.md#correcting-a-saved-result). |
 | **Delete Session** | Deletes the selected sessions after you confirm. You can undo this. |
+
+Right-click a driver in the results and choose **Report Card for *name*...** for that driver's report card for the night of that race: their best and ideal lap, consistency, the sector that costs them most, how they compare with last time on the layout, what a setup change logged that night did to their pace, and how far off the quickest driver they raced with they were. It's the full card, setup line included, since it's on the club's own laptop. See [The report card](../screens/phone-and-web.md#the-report-card) for each line. "Nothing to report for that night - no laps were filed for this driver." means there's nothing saved to work it out from.
+
+The card opens in its own window with **Print...** (a Letter page, with a preview), **Save Image...** (the same page as a PNG to send on) and **Copy** (the lines as text, to paste into a message).
+
+Tonight's card is also on **Driver Hub**: right-click a driver in the roster and choose **Report Card for *name*...**. With nothing filed yet tonight it says "Nothing to report yet - no laps have been filed for this driver tonight."
 
 ### Replay
 
@@ -71,14 +78,14 @@ The card saved automatically at the end of a race uses the app's own on-screen s
 
 ### Exporting results
 
-**Export Session** saves one session as a CSV file with the columns **Position**, **Driver**, **Car**, **Laps**, **Fastest Lap (s)**, **Elapsed** and **Status**.
+**Export Session** saves one session as a CSV file with the columns **Position**, **Driver**, **Car**, **Laps**, **Fastest Lap (s)**, **Elapsed**, **Status** and **Laps Counted By Hand**.
 
 **Export Results** opens the **Export Results** dialog:
 
 1. Choose a **Format:**:
-    - **Results CSV - one row per driver, per session**. Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Track, Position, Driver, Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds, Status. **Status** is the driver's result status, for example DNF or DQ after a correction.
+    - **Results CSV - one row per driver, per session**. Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Track, Position, Driver, Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds, Status, LapsCountedByHand. **Status** is the driver's result status, for example DNF or DQ after a correction. **LapsCountedByHand** is how many of the laps were added by hand (see [Laps counted by hand](#laps-counted-by-hand)).
     - **Lap CSV - one row per lap**. Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Driver, Transponder, LapNumber, LapSeconds, CumulativeSeconds. Lap 1 is the start lap, which runs from the green to the car's first crossing. When any exported lap has sector times, there's also a column for each sector, S1Seconds, S2Seconds and so on, empty for a lap without them.
-    - **JSON - complete structured data**. One object per session, each with its results, and each result with its full list of lap times. Each session has an `isDemo` field, so you can filter out demo races. Each result has a `status`, and an `outcome` of `DNF` or `DQ` when a correction set one (`null` otherwise). With a split loop, each result also has `sectorTimesSeconds`: each lap's sectors, in step with its lap times (`null` for a lap without them, or for the whole result when it has none).
+    - **JSON - complete structured data**. One object per session, each with its results, and each result with its full list of lap times. Each session has an `isDemo` field, so you can filter out demo races. Each result has a `status`, a `lapsCountedByHand` count, and an `outcome` of `DNF` or `DQ` when a correction set one (`null` otherwise). With a split loop, each result also has `sectorTimesSeconds`: each lap's sectors, in step with its lap times (`null` for a lap without them, or for the whole result when it has none).
 2. Under **Sessions**, choose **Selected only** or **All recorded sessions**.
 3. Press **Export** and choose where to save the file.
 
@@ -87,6 +94,18 @@ All CSV exports are:
 - **UTF-8 with a byte order mark**, so Excel shows accented names like "Zoë" and "Müller" correctly.
 - **Written with a decimal point**, whatever your Windows region settings are.
 - **Formula-safe.** A text field that starts with `=`, `+`, `-` or `@` (a driver name typed as a formula, for example) is saved with a leading apostrophe, so a spreadsheet treats it as text rather than running it. Numbers, including negative ones, are left as they are.
+
+### Printing results
+
+Select one race, or several with Ctrl or Shift, and press **Print Results...**. Pick the printer, check the preview, and print from the preview's toolbar. The races print oldest first on letter-size pages, black on white, with **Pos**, **Driver**, **Car**, **Laps**, **Best lap**, **Total** and **Status**. A race that would fit on a fresh page starts on one rather than being split; a race too long for any page carries on with "(continued)". With nothing selected, it says so.
+
+### Laps counted by hand
+
+When a transponder stops being read and you add laps with **+1 Lap** (or the keyboard shortcut) during the race, or with **Edit Result** afterwards, the result remembers how many laps were counted by hand. Scoring doesn't change; the count is there so a result built partly by hand can be trusted and questioned.
+
+The lap count shows with a star, for example **12\***, wherever results are shown: the leaderboard, Race History, the Event Report, printed results and the **Live Results** page on the club's Wi-Fi, each with the line "\* includes laps counted by hand". In Race History, hover over the count to see how many. On Race Control, the driver's lap strip ends "+2 by hand", and the optional **By Hand** column (see [Columns](running-a-race.md#columns)) shows the count. Taking a lap off removes a hand-counted one first.
+
+The club's website (the relay) doesn't show the mark yet: its live board and results show the plain lap count.
 
 ### Event Report
 

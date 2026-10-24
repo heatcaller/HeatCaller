@@ -19,6 +19,14 @@ public enum NavTier
 
     /// <summary>What a club running events for other people needs on top.</summary>
     Club,
+
+    /// <summary>
+    /// A page not yet tested at a real event, while the club has asked for
+    /// those to be kept out of the way (AppSettings.HideUntestedPages).
+    /// Last, so a search that turns one up shows it at the foot of the
+    /// list under its own heading. See NavTiers.UntestedPages.
+    /// </summary>
+    Untested,
 }
 
 /// <summary>
@@ -61,6 +69,55 @@ public static class NavTiers
     /// </summary>
     private static readonly string[] TonightPages = { "Race Day", "Race Control", "Championship" };
 
+    /// <summary>
+    /// THE BETA TIER (22 Oct 2026): the pages that have not yet been through
+    /// a night on the floor, kept out of a beta club's sidebar when it asks
+    /// for that (AppSettings.HideUntestedPages).
+    ///
+    /// Read from the rehearsal table in ROADMAP.md: four solo nights with
+    /// the EasyLap and the I-Lap, real cars and the phone pages, plus the
+    /// whole-night test (RaceNightTests) - a race day, check-in, qualifying,
+    /// the mains, a bump-up, the announcer, the Big Screen, the club's
+    /// website and the voice. These five were never part of any of them:
+    /// a championship has been tested only in code, and rentals, handicaps,
+    /// venues and the garage not at all on a night.
+    ///
+    /// The rest of what the roadmap names as untested - batteries, a
+    /// multi-day event, the soundscape editor - lives inside pages that
+    /// have been run (Driver Hub, Race Day, Sounds), so it cannot be hidden
+    /// here without hiding the page a night needs.
+    ///
+    /// HOW A PAGE COMES OFF THIS LIST: it is used at a rehearsal or a club
+    /// night, the night gets its row in the rehearsal table, and the page
+    /// is taken out of this set in the same commit. Nothing else.
+    /// </summary>
+    private static readonly HashSet<string> UntestedPages = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Championship",
+        "Rentals",
+        "Handicaps",
+        "Venues",
+        "Garage",
+    };
+
+    /// <summary>The heading over a page not yet tested at a real event, when a search turns one up.</summary>
+    public const string UntestedHeading = "NOT YET TESTED";
+
+    /// <summary>
+    /// Whether the sidebar is built for a club hiding untested pages - set
+    /// by MainForm from AppSettings.HideUntestedPages before each rebuild,
+    /// so SectionOf (which the sidebar list asks for each row's heading)
+    /// agrees with the order the rebuild used. Tests call the overloads that
+    /// take it as an argument and never set this.
+    /// </summary>
+    public static bool HidingUntested { get; set; }
+
+    /// <summary>Whether a page has not yet been tested at a real event. See UntestedPages.</summary>
+    public static bool IsUntested(string page) => UntestedPages.Contains(page);
+
+    /// <summary>The pages not yet tested at a real event, for a dialog to name.</summary>
+    public static IReadOnlyCollection<string> Untested => UntestedPages;
+
     public static NavTier TierOf(string page) => ClubPages.Contains(page) ? NavTier.Club : NavTier.Essentials;
 
     /// <summary>
@@ -71,10 +128,25 @@ public static class NavTiers
     /// open, and the club's own order for everything else - and for those
     /// pages once the day closes - is exactly as it was.
     /// </summary>
-    public static NavTier TierOf(string page, bool raceNight) =>
-        raceNight && TonightPages.Contains(page, StringComparer.OrdinalIgnoreCase)
+    public static NavTier TierOf(string page, bool raceNight) => TierOf(page, raceNight, HidingUntested);
+
+    /// <summary>
+    /// The same, given whether the club hides untested pages. One of those
+    /// is in the Untested group whatever else is true of it - including
+    /// Championship on a race night - since it is only in the sidebar at all
+    /// when a search turns it up.
+    /// </summary>
+    public static NavTier TierOf(string page, bool raceNight, bool hidingUntested)
+    {
+        if (hidingUntested && IsUntested(page))
+        {
+            return NavTier.Untested;
+        }
+
+        return raceNight && TonightPages.Contains(page, StringComparer.OrdinalIgnoreCase)
             ? NavTier.Tonight
             : TierOf(page);
+    }
 
     /// <summary>
     /// The order within the Tonight group, and zero for everything else.
@@ -100,6 +172,7 @@ public static class NavTiers
     {
         NavTier.Tonight => "TONIGHT",
         NavTier.Club => "CLUB TOOLS",
+        NavTier.Untested => UntestedHeading,
         _ => "ESSENTIALS",
     };
 
@@ -108,4 +181,8 @@ public static class NavTiers
 
     /// <summary>The same, given whether a race day is open.</summary>
     public static string SectionOf(string page, bool raceNight) => HeadingFor(TierOf(page, raceNight));
+
+    /// <summary>The same, given whether the club hides untested pages.</summary>
+    public static string SectionOf(string page, bool raceNight, bool hidingUntested) =>
+        HeadingFor(TierOf(page, raceNight, hidingUntested));
 }

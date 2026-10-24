@@ -42,6 +42,9 @@ public sealed class RecordingControl : UserControl
 
     /// <summary>The podium's videos on the club's page, with a QR code on the Big Screen (21 Oct 2026).</summary>
     private readonly CheckBox _chkShareVideos = new ThemedCheckBox();
+
+    /// <summary>Each driver's own mp3 clip on their private night page on the club's website (22 Oct 2026, driver experience).</summary>
+    private readonly CheckBox _chkShareClips = new ThemedCheckBox();
     private readonly TextBox _txtAudioFolder = new();
     private readonly Button _btnAudioFolder = new();
     private readonly Button _btnAudioOpen = new();
@@ -328,6 +331,13 @@ public sealed class RecordingControl : UserControl
         _chkShareVideos.Checked = _audio.SharePodiumVideos;
         _chkShareVideos.CheckedChanged += (_, _) => _audio.SharePodiumVideos = _chkShareVideos.Checked;
 
+        // A DRIVER'S OWN CLIP ON THEIR NIGHT (22 Oct 2026, driver
+        // experience): a recording of a named person, so off until the
+        // club ticks it - see ClipShare and RelayPublisher.Clips.
+        Check(_chkShareClips, "Put each driver's clip on their own night on the club's page");
+        _chkShareClips.Checked = _audio.ShareDriverClips;
+        _chkShareClips.CheckedChanged += (_, _) => _audio.ShareDriverClips = _chkShareClips.Checked;
+
         _txtAudioFolder.ReadOnly = true;
         _txtAudioFolder.Text = _audio.Folder;
 
@@ -357,8 +367,8 @@ public sealed class RecordingControl : UserControl
         var audio = new Section("Recording the night");
 
         audio.Add(Hint(
-            "Records each race's announcer and effects (not the music or crowd), and gives each driver an mp3 of the moments "
-            + "they were called - great for sharing. One folder per night, with a Highlights folder inside."));
+            "Records the announcer and effects (not the music or crowd). A driver's clip is an mp3 of the moments they were "
+            + "called. One folder per night, with a Highlights folder inside."));
         audio.Add(_chkRecord, stretch: false);
         audio.Add(_chkClips, stretch: false, gapBelow: UiLayout.HintGap);
         audio.Add(Hint(
@@ -366,8 +376,12 @@ public sealed class RecordingControl : UserControl
         audio.Add(audioGrid);
         audio.Add(_chkShareVideos, stretch: false, gapBelow: UiLayout.HintGap);
         audio.Add(Hint(
-            "Up to 1st, 2nd and 3rd are put online (only the ones videos are made for), never anyone else, and only while the club's page is switched on (Club Website). "
-            + "They are kept there for a week."), gapBelow: 0);
+            "Only 1st to 3rd, and only those with a video. Needs the club's page on (Club Website); kept online for a week."));
+        audio.Add(_chkShareClips, stretch: false, gapBelow: UiLayout.HintGap);
+        audio.Add(Hint(
+            "Only for that driver: their clip is listed on their own night, which only their badge code opens - never on a "
+            + "public page. Needs drivers' nights on (Club Website); kept online for a week."),
+            gapBelow: 0);
 
         // ------------------------------------------------------------------
         // Written from the night - each needs the announcer's model, so
@@ -383,8 +397,8 @@ public sealed class RecordingControl : UserControl
         var recapGrid = new FieldGrid();
 
         recapGrid.AddHint(
-            "After the last race: the whole evening as a short piece for people who weren't there, played once with "
-            + "your opener and bed and saved in tonight's folder as \"The Night\".");
+            "After the last race: the evening as a short piece, played once with your opener and bed and saved in "
+            + "tonight's folder as \"The Night\".");
         Flush(recapGrid.AddRow("Tonight's recap:", Line(Steady(_btnNightRecap, NightRecapCaption), _lblNightRecap)));
 
         // ONE DRIVER'S NIGHT, here for the recap's reason: what a club wants
@@ -404,8 +418,8 @@ public sealed class RecordingControl : UserControl
         var cutGrid = new FieldGrid();
 
         cutGrid.AddHint(
-            "About ninety seconds on one driver's night - their races and how their pace went - played once and "
-            + "saved in tonight's folder under their name, ready to hand to them.");
+            "About ninety seconds on one driver's races and pace, played once and saved in tonight's folder under "
+            + "their name.");
 
         Flush(cutGrid.AddRow(
             "A driver's night:",
@@ -419,8 +433,8 @@ public sealed class RecordingControl : UserControl
         var proofGrid = new FieldGrid();
 
         proofGrid.AddHint(
-            "Lists every fact the announcer's last segment was built from, all from the club's own results, in the "
-            + "developer console (under Help).");
+            "Lists the facts from the club's results that the last segment was built from, in the developer console "
+            + "(under Help).");
 
         Flush(proofGrid.AddRow("Check a line:", Line(Steady(_btnProof, ProofCaption), _lblProof)));
 
@@ -461,15 +475,15 @@ public sealed class RecordingControl : UserControl
         };
 
         beforeGrid.AddHint(
-            "The file is saved either way. Ticked, it also shows at the top of your club's page and comes down by "
-            + "itself a few hours after the first race, even if this PC is off.");
+            "The file is saved either way. On the page it shows at the top and comes down by itself a few hours "
+            + "after the first race, even with this PC off.");
 
         Flush(beforeGrid.AddRow(string.Empty, _chkNightBeforeRelay));
 
         var written = new Section("Written from the night");
 
         written.Add(Hint(
-            "Written by the AI commentary, so grayed out while AI commentary is off (Voice > AI Commentary)."),
+            "Needs AI commentary on (Voice > AI Commentary)."),
             gapBelow: UiLayout.RowGap);
         written.Add(recapGrid, gapBelow: UiLayout.SectionGap);
         written.Add(cutGrid, gapBelow: UiLayout.SectionGap);
@@ -551,6 +565,7 @@ public sealed class RecordingControl : UserControl
         _cmbVideos.Enabled = clips;
         _txtVideoHandle.Enabled = clips;
         _chkShareVideos.Enabled = clips;
+        _chkShareClips.Enabled = clips;
         _txtAudioFolder.Enabled = recording;
         _btnAudioFolder.Enabled = recording;
         _numKeepNights.Enabled = recording;

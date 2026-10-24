@@ -23,6 +23,16 @@ public sealed partial class RaceControlControl
         // board itself has nothing to draw.
         RefreshLapPopup(ordered);
 
+        // SIDE BY SIDE WITH THEIR GHOST (22 Oct 2026): in practice, each
+        // own-best ghost sits just under the driver it chases, so the two are
+        // read together on every lap, and the ghost's own gap column reads its
+        // gap to them. Practice only: a race's board is its
+        // running order, and nothing is moved in it.
+        if (_race.IsPracticeMode && OwnBestGhosts?.Invoke() is { Count: > 0 } chasedBy)
+        {
+            ordered = OwnBestGhost.BesideTheirDriver(ordered, s => s.TransponderId, chasedBy);
+        }
+
         // Remembered before the rebuild below throws the rows away.
         //
         // Clearing and refilling a DataGridView makes it set CurrentCell to
@@ -211,10 +221,14 @@ public sealed partial class RaceControlControl
 
         var lapCount = standing.LapTimesMs.Count;
 
+        // 22 Oct 2026: laps race control added by hand have no time to show,
+        // so the strip says how many there are - see HandCountedLaps.
+        var byHand = HandCountedLaps.During(standing);
+
         if (lapCount == 0)
         {
             var emptyCells = new object[columns];
-            emptyCells[0] = "No laps yet";
+            emptyCells[0] = byHand > 0 ? $"No timed laps yet  -  {HandCountedLaps.Note(byHand)}" : "No laps yet";
             FinishLapDetailRow(standing, emptyCells, 26);
             return;
         }
@@ -272,6 +286,12 @@ public sealed partial class RaceControlControl
                 : $"Lap {lapIndex + 1}: {lapMs / 1000.0:0.000}s{deltaToBest}"
                   + (streak >= 0 ? $" - clean run of {streak}{(inARun ? " (counting)" : string.Empty)}" : string.Empty)
                   + (brokeARun ? " - this lap ended the previous run" : string.Empty));
+        }
+
+        // At the recent end, which is the end that is always shown.
+        if (byHand > 0)
+        {
+            entries.Add($"+{byHand} by hand");
         }
 
         // The laps WRAP across up to three lines rather than being cut to
@@ -415,6 +435,11 @@ public sealed partial class RaceControlControl
                 Name = kpi.Key,
                 HeaderText = kpi.Label,
                 FillWeight = kpi.Weight,
+                // WHY (23 Oct 2026, bug hunt 10): columns defaulted to Automatic sort, so a header
+                // click re-sorted the rows and moved a driver's corrections drawer and lap strip
+                // under a different driver - a drawer press could then penalize the wrong car.
+                // The board's order is the running order and only RenderLeaderboard sets it.
+                SortMode = DataGridViewColumnSortMode.NotSortable,
             });
         }
     }
@@ -678,6 +703,27 @@ public sealed partial class RaceControlControl
         // buttons, not a request for the laps.
         if (IsDrawerRow(e.RowIndex) && !recent)
         {
+            // WHY (22 Oct 2026, bug hunt 9): WinForms raises DoubleClick, not
+            // CellMouseClick, for the second of two quick presses, so a
+            // double-tap on "+1 Lap" or "+5s" quietly counted once. The second
+            // press is made here. The pointer is tested again rather than
+            // reusing the first press's button: that press may already have
+            // rebuilt the board. Only the buttons that add up are pressed twice
+            // - a second Warning, Share video or Lap breakdown is not wanted.
+            var (rowIndex, button) = DrawerButtonAt(_dgvLeaderboard.PointToClient(Control.MousePosition));
+
+            if (button >= 0 && TransponderForRow(rowIndex) is { Length: > 0 } driver)
+            {
+                var action = DrawerButtons[button].Action;
+
+                if (action is DrawerAction.AddLap or DrawerAction.RemoveLap
+                    or DrawerAction.Penalty5 or DrawerAction.Penalty10)
+                {
+                    var bounds = DrawerLayout(DrawerRowBounds(rowIndex))[button].Bounds;
+                    BeginInvoke(() => RunDrawerAction(driver, action, bounds));
+                }
+            }
+
             return;
         }
 
@@ -1317,14 +1363,19 @@ public sealed partial class RaceControlControl
 
         if (IsDrawerRow(e.RowIndex))
         {
-            // The second click of a double-click on a driver, landed on a
-            // drawer that slid under the pointer (22 Oct 2026, bug hunt): not
-            // a press of whatever correction button is there now.
-            if (_lastClickTransponder is { Length: > 0 }
-                && Environment.TickCount64 - _lastClickTicks <= SystemInformation.DoubleClickTime)
-            {
-                return;
-            }
+            // WHY (22 Oct 2026, bug hunt 9): this used to drop any drawer press
+            // within DoubleClickTime of a driver click, meant for the second
+            // click of a double-click on a driver. That second click never
+            // comes here - WinForms sends it to CellDoubleClick, which handles
+            // it - so the guard only threw away real quick presses, like "+1
+            // Lap" right after opening the drawer. Presses mid-slide are still
+            // refused by DrawerIsOpen in DrawerButtonAt.
+            //
+            // A press of the drawer is a click of its own, so it ends the
+            // driver click: a double-click that follows is two presses of the
+            // buttons, not a double-click on that driver (which shut the
+            // drawer and opened their lap breakdown).
+            _lastClickTransponder = null;
 
             // The click's point is the cell's; the buttons are laid out
             // across the grid.
@@ -1351,6 +1402,12 @@ public sealed partial class RaceControlControl
         if (_dgvLeaderboard.Rows[e.RowIndex].Tag is not string tag
             || tag.StartsWith(DetailRowPrefix, StringComparison.Ordinal))
         {
+            // WHY (22 Oct 2026, bug hunt 9): a click here is a fresh click (the
+            // second half of a double-click goes to CellDoubleClick, not here),
+            // so it ends the last driver click. Before, a double-click on
+            // another driver's lap strip within about a second opened the
+            // first driver's breakdown and shut their drawer.
+            _lastClickTransponder = null;
             return;
         }
 
@@ -1682,6 +1739,15 @@ public sealed partial class RaceControlControl
             RenderLeaderboard();
         };
 
+        // Coaching (22 Oct 2026): Coach (name), with At the split, Target
+        // lap..., Consistency and Tones instead of words - one driver at a
+        // time. Filled each time the menu opens, for the driver under the
+        // pointer (FillCoachItems, RaceControlControl.Coaching); the
+        // placeholder stops WinForms treating it as a plain item with no
+        // arrow before the first fill.
+        var coach = new ToolStripMenuItem("Coach");
+        coach.DropDownItems.Add(new ToolStripMenuItem("..."));
+
         var releaseDriver = new ToolStripMenuItem("Release");
         releaseDriver.Click += (_, _) =>
         {
@@ -1750,6 +1816,7 @@ public sealed partial class RaceControlControl
             lapBreakdown,
             toggleLaps,
             hideAllLaps,
+            coach,
             releaseDriver,
             releaseAll,
             new ToolStripSeparator(),
@@ -1795,6 +1862,16 @@ public sealed partial class RaceControlControl
             // item above it.
             hideAllLaps.Visible = _expandedTransponders.Count > 1;
             hideAllLaps.Text = $"Hide all {_expandedTransponders.Count} lap strips";
+
+            // A local rather than reading Visible back: a menu item reports
+            // itself hidden until its menu is on screen.
+            var canCoach = !GhostService.IsGhost(transponder);
+            coach.Visible = canCoach;
+
+            if (canCoach)
+            {
+                FillCoachItems(coach, transponder, name);
+            }
 
             // Releasing is only ever a hand-released thing, and only while
             // the race is actually running - a scheduled stagger releases

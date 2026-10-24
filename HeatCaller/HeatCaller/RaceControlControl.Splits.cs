@@ -7,6 +7,12 @@ namespace HeatCaller;
 /// pace at the split). Each is switched on, and worded, on Voice -&gt;
 /// Announcements; all start off.
 ///
+/// And since 22 Oct 2026 the spoken split times: the split time read out,
+/// the coached driver's up-or-down (Coach at the split, on the board's
+/// right-click), and two cars' gap at the split. Those three read in
+/// practice and not in races until a club ticks them. The fourth, the
+/// sectors at the flag, is RaceControlControl.AfterRace's.
+///
 /// Here rather than in the announcer because the session and the track
 /// record are Race Control's - the same as CheckRecordPace.
 /// </summary>
@@ -28,12 +34,263 @@ public partial class RaceControlControl
         try
         {
             CallSplitPace(standing, point);
+
+            // The spoken split times (22 Oct 2026): the coached driver's
+            // up-or-down first - somebody asked for it - then a fight timed
+            // at the split, then the plain time. The coached driver hears
+            // their delta instead of their time, not both.
+            var coached = CallSplitCoach(standing, point);
+            CallSplitBattle(standing, point);
+
+            if (!coached)
+            {
+                CallSplitTime(standing, point);
+            }
         }
         catch (Exception ex)
         {
             // A call is never worth losing the board over.
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [split] Couldn't work out a split call: {ex.Message}");
         }
+    }
+
+    /// <summary>A pair's split battle line is said at most once in this many of the chasing car's laps.</summary>
+    private const int SplitBattleEveryLaps = 5;
+
+    /// <summary>Under a second apart at the split is a fight - the close battle's own line (AnnouncementService.CheckCloseBattles).</summary>
+    private const long SplitBattleCloseMs = 1000;
+
+    /// <summary>How far a pair's gap has to move before it is worth saying again: a tenth.</summary>
+    private const long SplitBattleLeastChangeMs = 100;
+
+    /// <summary>Each pair's last split battle line: the chasing car's lap and the gap that was said. Keyed "ahead|behind".</summary>
+    private readonly Dictionary<string, (int Lap, long GapMs)> _splitBattleSaid = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>This crossing's time from the line to the split loop, or null when the read can't be trusted - the same tests CallSplitPace makes.</summary>
+    private static long? ToTheSplit(RacerStanding standing, int slot)
+    {
+        var reads = standing.SplitReadsMs;
+
+        if (slot < 0 || slot >= reads.Length || reads[slot].Count != 1 || standing.LastLapDeviceTimeMs <= 0)
+        {
+            return null;
+        }
+
+        var toHere = reads[slot][0] - standing.LastLapDeviceTimeMs;
+
+        // Further round than the car's best whole lap and a half is a read
+        // from another lap, or a car that stopped - not a split to read out.
+        var longest = standing.FastestLapMs > 0 ? standing.FastestLapMs * 3 / 2 : 120_000;
+
+        return toHere > 0 && toHere <= longest ? toHere : null;
+    }
+
+    /// <summary>
+    /// Split time (22 Oct 2026): the car's time to the split, every Nth
+    /// crossing - the cadence is the announcer's, per driver.
+    /// </summary>
+    private void CallSplitTime(RacerStanding standing, TimingPoint point)
+    {
+        if (GhostService.IsGhost(standing.TransponderId) || !_announcer.WillCall(AnnouncementEventType.SplitTime))
+        {
+            return;
+        }
+
+        if (ToTheSplit(standing, (int)point - 1) is { } toHere)
+        {
+            _announcer.NotifySplitTime(ForAnnouncer(standing), SplitLoopNames.Of(point), toHere);
+        }
+    }
+
+    /// <summary>
+    /// Split coach (22 Oct 2026): the coached driver against their own best
+    /// lap at this split - Sectors.LiveDelta, the board's own At Split
+    /// figure, so the room hears what the screen shows. Their best of this
+    /// session only: a best from another night was set on another evening's
+    /// grip, and the coaching is about the laps they are doing now. Silent
+    /// until they have a best lap with a split time. True only when the
+    /// up-or-down was actually handed to the announcer - otherwise (switched
+    /// off for this session, no best yet) the driver still gets their plain
+    /// split time.
+    /// </summary>
+    private bool CallSplitCoach(RacerStanding standing, TimingPoint point)
+    {
+        ForgetSplitCallsForANewRace();
+
+        if (_coachAtSplit is not { } coached
+            || !string.Equals(coached, standing.TransponderId, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (Sectors.LiveDelta(standing) is not { } live || live.Split != (int)point)
+        {
+            return false;
+        }
+
+        // Tones instead of words (22 Oct 2026): the up-or-down as a pitch,
+        // played now rather than queued. The desk chose it for this driver
+        // on the board, so it is not one of the club's announcement
+        // switches - only the mute stops it.
+        if (_coach is { Tones: true })
+        {
+            _announcer.PlayCoachTone(CoachingWords.ToneAtSplit(live.DeltaMs));
+            return true;
+        }
+
+        if (_announcer.WillCall(AnnouncementEventType.SplitDelta))
+        {
+            _announcer.NotifySplitDelta(ForAnnouncer(standing), SplitLoopNames.Of(point), live.DeltaMs);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Ends the split coaching, with a console line (review, 22 Oct 2026):
+    /// Race Control's Reset, and the end of a race that finished after the
+    /// coach was picked - so a driver picked between races is coached
+    /// through the race they were picked for, and one picked mid-race to
+    /// the end of that race. Practice, which has no finish, keeps it until
+    /// Reset or Stop coaching.
+    ///
+    /// Since the rest of the coaching came (22 Oct 2026) this ends all of
+    /// it - the target pace, the consistency and the tones go with the
+    /// split - but not the driver's target lap, which is theirs for the
+    /// night (DriverTargets).
+    /// </summary>
+    private void EndSplitCoaching(string why)
+    {
+        if (_coach is not { } coach)
+        {
+            return;
+        }
+
+        _coach = null;
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [coach] Stopped coaching {CoachNameOf(coach.Transponder)} - {why}.");
+    }
+
+    /// <summary>
+    /// Battle gap at the split (22 Oct 2026): this car and the one directly
+    /// in front of it in the order, on the same lap, timed apart at this
+    /// split loop - said when it is under a second, at most once in five of
+    /// the chasing car's laps, and only when the gap has moved a tenth since
+    /// it was last said for that pair. Not on lap one, which is a start.
+    /// </summary>
+    private void CallSplitBattle(RacerStanding standing, TimingPoint point)
+    {
+        ForgetSplitCallsForANewRace();
+
+        if (!_announcer.WillCall(AnnouncementEventType.SplitBattle) || GhostService.IsGhost(standing.TransponderId))
+        {
+            return;
+        }
+
+        var ordered = _race.GetOrderedStandings();
+        var index = -1;
+
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            if (string.Equals(ordered[i].TransponderId, standing.TransponderId, StringComparison.OrdinalIgnoreCase))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if (index <= 0)
+        {
+            return;
+        }
+
+        var ahead = ordered[index - 1];
+        var slot = (int)point - 1;
+
+        if (GhostService.IsGhost(ahead.TransponderId)
+            || ahead.Laps != standing.Laps
+            || standing.Laps < 2
+            || ToTheSplit(standing, slot) is null
+            || ToTheSplit(ahead, slot) is null)
+        {
+            return;
+        }
+
+        var gap = SplitBattleGap(standing.SplitReadsMs[slot][0], ahead.SplitReadsMs[slot][0]);
+
+        if (gap is not { } gapMs)
+        {
+            return;
+        }
+
+        var key = $"{ahead.TransponderId}|{standing.TransponderId}";
+
+        if (_splitBattleSaid.TryGetValue(key, out var said)
+            && !SplitBattleWorthSaying(said.Lap, said.GapMs, standing.Laps, gapMs))
+        {
+            return;
+        }
+
+        _splitBattleSaid[key] = (standing.Laps, gapMs);
+
+        int? place = _race.IsPracticeMode ? null : index;
+        _announcer.NotifySplitBattle(ForAnnouncer(ahead), standing.TransponderId, SplitLoopNames.Of(point), gapMs, place);
+    }
+
+    /// <summary>
+    /// The gap at the split between the chasing car's read and the one in
+    /// front's, or null when it is not a fight - the chaser read first (the
+    /// order is out of date), or a second or more behind. Pure, for the tests.
+    /// </summary>
+    internal static long? SplitBattleGap(long chaserReadMs, long aheadReadMs)
+    {
+        var gap = chaserReadMs - aheadReadMs;
+
+        return gap > 0 && gap < SplitBattleCloseMs ? gap : null;
+    }
+
+    /// <summary>
+    /// Whether a pair already called at the split is worth calling again:
+    /// five of the chaser's laps on, and the gap moved by a tenth. Pure, for
+    /// the tests.
+    /// </summary>
+    internal static bool SplitBattleWorthSaying(int saidLap, long saidGapMs, int lapNow, long gapNowMs) =>
+        lapNow - saidLap >= SplitBattleEveryLaps
+        && Math.Abs(gapNowMs - saidGapMs) >= SplitBattleLeastChangeMs;
+
+    /// <summary>Whether this driver is the one being coached at the split.</summary>
+    private bool IsCoachedAtSplit(string transponder) =>
+        _coachAtSplit is { } coached && string.Equals(coached, transponder, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Coaches this driver at the split, or stops - one driver at a time, so
+    /// choosing another moves the coaching to them. Said in the console, the
+    /// way a club can see why the lines started or stopped.
+    ///
+    /// Since 22 Oct 2026 it is one of the coaching options on Coach (name):
+    /// unticking it leaves the driver's other options as they are, and the
+    /// coaching ends only when nothing is left ticked.
+    /// </summary>
+    private void ToggleSplitCoach(string transponder, string name)
+    {
+        ForgetSplitCallsForANewRace();
+
+        if (IsCoachedAtSplit(transponder))
+        {
+            _coach!.AtSplit = false;
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [split] Stopped coaching {name} at the split.");
+            EndCoachingIfNothingTicked();
+            return;
+        }
+
+        CoachFor(transponder).AtSplit = true;
+
+        var why = _announcer.WillCall(AnnouncementEventType.SplitDelta)
+            ? string.Empty
+            : $" \"Split coach\" is switched off for {(_race.IsPracticeMode ? "practice" : "races")} on Voice - Announcements, so nothing will be said until it is ticked.";
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [split] Coaching {name} at the split: up or down on their best each time they cross it.{why}");
     }
 
     /// <summary>A lap's sectors came in: the board, then the fastest-sector call - and the track record's sectors, when this was the record lap and its sectors came in after it.</summary>
@@ -69,6 +326,13 @@ public partial class RaceControlControl
         _splitCallsGeneration = _race.SessionGeneration;
         _sessionSectorBest = null;
         _lastSplitCallLap.Clear();
+
+        // The pairs' memory goes with the race. The coached driver does NOT
+        // (review, 22 Oct 2026): Stage and the green each start a new
+        // generation, so clearing here dropped a coach picked between races
+        // at the first split crossing of the race it was picked for. See
+        // EndSplitCoaching for what does end it.
+        _splitBattleSaid.Clear();
     }
 
     private RaceStanding ForAnnouncer(RacerStanding standing) => new()

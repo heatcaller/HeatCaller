@@ -14,7 +14,7 @@ namespace HeatCaller;
 /// </summary>
 public sealed class GhostService : IDisposable
 {
-    private readonly RaceControlSession _race;
+    private readonly RaceTiming _race;
     private readonly ProfileStore _profiles;
     private readonly SessionHistoryStore _history;
     private readonly TrackLayoutStore? _trackLayouts;
@@ -74,7 +74,7 @@ public sealed class GhostService : IDisposable
     /// </summary>
     private SynchronizationContext? _uiContext;
 
-    public GhostService(RaceControlSession race, ProfileStore profiles, SessionHistoryStore history,
+    public GhostService(RaceTiming race, ProfileStore profiles, SessionHistoryStore history,
         TrackLayoutStore? trackLayouts = null, PersonalBestResetStore? pbResets = null)
     {
         _race = race;
@@ -170,7 +170,20 @@ public sealed class GhostService : IDisposable
         public int LapsCompleted { get; set; }
 
         /// <summary>The pace worked out at the green, used when a live source has nothing to read yet.</summary>
-        public required int FallbackLapMs { get; init; }
+        /// <remarks>Settable since 22 Oct 2026: an own-best ghost brought up to a new best (RefreshChangedPaces) moves it too.</remarks>
+        public required int FallbackLapMs { get; set; }
+
+        /// <summary>The car's PaceRevision this runner's pace was worked out at - see RefreshChangedPaces.</summary>
+        public int PaceRevisionSeen { get; set; }
+
+        /// <summary>The base lap this runner ran at for each PaceRevision it has seen, so an Undo of "bring up to date" puts the old pace back.</summary>
+        /// <remarks>
+        /// WHY (22 Oct 2026): an own-best ghost's pace is a live lookup, not
+        /// something saved on the car, so undoing a refresh used to re-read
+        /// the NEW best and keep the ghost at it. This remembers what each
+        /// revision actually ran at.
+        /// </remarks>
+        public Dictionary<int, int> PaceByRevision { get; } = new();
 
         /// <summary>Last pace announced in the log, so a live ghost only reports real changes.</summary>
         public int LastLoggedLapMs { get; set; }
@@ -275,7 +288,7 @@ public sealed class GhostService : IDisposable
                     nextCrossingMs = NowMs + (long)firstLapMs;
                 }
 
-                _runners[ghost.Transponder] = new GhostRunner
+                var runner = new GhostRunner
                 {
                     Car = ghost,
                     BaseLapMs = baseLapMs.Value,
@@ -283,7 +296,13 @@ public sealed class GhostService : IDisposable
                     NextCrossingMs = nextCrossingMs,
                     LapsCompleted = carryingOn ? last.Laps : 0,
                     LastLoggedLapMs = baseLapMs.Value,
+                    PaceRevisionSeen = ghost.PaceRevision,
                 };
+
+                // The pace it starts at, so an Undo back to this revision can
+                // put it back (see RefreshChangedPaces). 22 Oct 2026.
+                runner.PaceByRevision[ghost.PaceRevision] = baseLapMs.Value;
+                _runners[ghost.Transponder] = runner;
 
                 // Says what it actually resolved to. A ghost silently running
                 // at a pace nobody chose is the thing worth catching, and
@@ -398,7 +417,41 @@ public sealed class GhostService : IDisposable
         }
     }
 
+    /// <summary>1 while a tick is running, threaded mode - see Tick.</summary>
+    private int _threadedTickBusy;
+
     private void Tick()
+    {
+        // WHY (23 Oct 2026, timing layer, P4b): threaded, a tick hands its
+        // crossings to the race from this timer thread and waits for the
+        // timing thread to count them, so a tick can outlast the 100 ms
+        // beat. A second tick running alongside it could hand a crossing in
+        // ahead of an older one; so, threaded, a tick that finds one still
+        // running is skipped - the next takes up whatever fell due, since a
+        // crossing stays due until a tick takes it. Inline, as it always was.
+        if (_race.IsThreaded)
+        {
+            if (Interlocked.Exchange(ref _threadedTickBusy, 1) == 1)
+            {
+                return;
+            }
+
+            try
+            {
+                TickOnce();
+            }
+            finally
+            {
+                Volatile.Write(ref _threadedTickBusy, 0);
+            }
+
+            return;
+        }
+
+        TickOnce();
+    }
+
+    private void TickOnce()
     {
         List<(GhostRunner Runner, long CrossingMs)> due = new();
         int runId;
@@ -441,6 +494,12 @@ public sealed class GhostService : IDisposable
                 SignalHits = 1,
                 SignalStrength = 100,
                 IsSynthetic = true,
+
+                // WHY (23 Oct 2026, timing layer, P1): stamped as it is made,
+                // on this timer thread, as a decoder's pass is stamped as it
+                // arrives - the race judges it by this, however long the post
+                // to the UI thread below takes. See ProcessLapEvent.
+                ReceivedMs = TimingClock.NowMs,
             };
             var car = runner.Car;
             var baseLapMs = runner.BaseLapMs;
@@ -471,6 +530,16 @@ public sealed class GhostService : IDisposable
                 }
             }
 
+            // WHY (23 Oct 2026, timing layer, P4b): threaded, straight to the
+            // race from here - the race is not the UI thread's any more, and a
+            // ghost's lap must not wait for a frozen window any more than a
+            // real car's does.
+            if (_race.IsThreaded)
+            {
+                DeliverFromTimerThread(lap, car, baseLapMs, runId);
+                continue;
+            }
+
             if (_uiContext is { } context)
             {
                 context.Post(_ => Deliver(), null);
@@ -479,6 +548,69 @@ public sealed class GhostService : IDisposable
             {
                 Deliver();
             }
+        }
+    }
+
+    /// <summary>
+    /// A ghost's crossing, threaded mode, handed to the race on this timer
+    /// thread: the same checks Deliver makes on the UI thread, then the pass
+    /// counted on the timing thread - only while the race is Racing, checked
+    /// and counted in one go there (RaceTiming.ProcessLapEventWhileRacing).
+    /// GhostLapCompleted, whose listener is screen code, is posted to the UI.
+    /// </summary>
+    /// <remarks>
+    /// The checks and the count are made under _lock, so a Stop or a ghost
+    /// switched off on the UI thread waits for a crossing already being
+    /// counted rather than having it land after it (as inline, where both
+    /// ran on the UI thread). That waits on the timing thread while holding
+    /// _lock, which is safe because nothing on the timing thread ever takes
+    /// _lock - keep it so: no ghost code may run there.
+    /// </remarks>
+    private void DeliverFromTimerThread(DirectLapEvent lap, GhostCar car, long baseLapMs, int runId)
+    {
+        try
+        {
+            bool counted;
+
+            lock (_lock)
+            {
+                if (!_running || !_runners.ContainsKey(car.Transponder) || runId != _runId)
+                {
+                    return;
+                }
+
+                counted = _race.ProcessLapEventWhileRacing(lap);
+            }
+
+            if (!counted || GhostLapCompleted is null)
+            {
+                return;
+            }
+
+            void Completed()
+            {
+                try
+                {
+                    GhostLapCompleted?.Invoke(car, baseLapMs);
+                }
+                catch
+                {
+                    // A ghost failing must never disturb a real race.
+                }
+            }
+
+            if (_uiContext is { } context)
+            {
+                context.Post(_ => Completed(), null);
+            }
+            else
+            {
+                Completed();
+            }
+        }
+        catch
+        {
+            // A ghost failing must never disturb a real race.
         }
     }
 
@@ -539,6 +671,7 @@ public sealed class GhostService : IDisposable
             GhostPaceSource.YourRecentAverage => RecentAverageFor(ghost.SourceTransponder),
             GhostPaceSource.TrackRecord => TrackRecordFor(trackLayoutName),
             GhostPaceSource.PersonalBestInRange => BestLapFor(ghost.SourceTransponder, trackLayoutName, ghost.RangeFromUtc, ghost.RangeToUtc),
+            GhostPaceSource.OwnBestTonight => OwnBestTonightFor(ghost.SourceTransponder, trackLayoutName),
 
             // A live ghost still needs something to run at until the session
             // has laps to read. The edit form shows the lap time for these
@@ -652,6 +785,160 @@ public sealed class GhostService : IDisposable
         return best > 0 ? (int)best : null;
     }
 
+    /// <summary>
+    /// The pace an OwnBestTonight ghost runs at (22 Oct 2026): the driver's
+    /// best lap tonight on this layout - the session running now, or any
+    /// session saved since the night began - and, when they have set none
+    /// tonight, their best ever on it (the same number a personal-best
+    /// ghost chases, resets and all).
+    ///
+    /// Tonight first because tonight's grip, tonight's tyres and tonight's
+    /// setup are what the driver is on; a best from a different evening can
+    /// be a target nobody could reach on this surface. The all-time best is
+    /// the fallback so the first run of the night still has something to
+    /// chase. UI thread only, like the rest of Start.
+    /// </summary>
+    private int? OwnBestTonightFor(string transponder, string? trackLayoutName)
+    {
+        if (string.IsNullOrWhiteSpace(transponder))
+        {
+            return null;
+        }
+
+        long? runningNow;
+
+        lock (_paceLock)
+        {
+            runningNow = _pace.TryGetValue(transponder, out var entry) && entry.BestMs > 0 ? entry.BestMs : null;
+        }
+
+        var tonight = TonightAtTheTrack.NightOf(DateTime.Now);
+        var driverName = _profiles.Get(transponder)?.DriverName ?? string.Empty;
+
+        // The Personal Bests page's resets are honoured here too, as
+        // BestLapFor does: a best retired earlier tonight is not chased.
+        var savedTonight = _history.All
+            .Where(s => !s.IsDemoSession())
+            .Where(s => CutoffAllows(driverName, s))
+            .Where(s => trackLayoutName is null
+                        || string.Equals(s.TrackLayoutName, trackLayoutName, StringComparison.OrdinalIgnoreCase))
+            .Where(s => TonightAtTheTrack.NightOf(s.StartedAtUtc.ToLocalTime()) == tonight)
+            .SelectMany(s => s.Results)
+            .Where(r => string.Equals(r.Transponder, transponder, StringComparison.OrdinalIgnoreCase) && r.FastLapMs > 0)
+            .Select(r => r.FastLapMs)
+            .DefaultIfEmpty(0)
+            .Min();
+
+        return OwnBestTonightMs(runningNow, savedTonight > 0 ? savedTonight : null, BestLapFor(transponder, trackLayoutName));
+    }
+
+    /// <summary>
+    /// OwnBestTonightFor's choice on its own, for testing: the quicker of
+    /// the running session's best and tonight's saved best, else the best
+    /// ever, else nothing.
+    /// </summary>
+    internal static int? OwnBestTonightMs(long? runningNowMs, long? savedTonightMs, int? everMs)
+    {
+        var tonight = new[] { runningNowMs, savedTonightMs }
+            .Where(ms => ms is > 0)
+            .Select(ms => ms!.Value)
+            .DefaultIfEmpty(0)
+            .Min();
+
+        if (tonight > 0)
+        {
+            return (int)Math.Min(tonight, int.MaxValue);
+        }
+
+        return everMs is > 0 ? everMs : null;
+    }
+
+    /// <summary>
+    /// Brings running own-best ghosts up to the driver's new best (22 Oct
+    /// 2026): any whose PaceRevision has moved since it was started - "Chase
+    /// a Best Lap..." picked again for the same driver - re-reads its pace
+    /// and runs at it from its next lap. Nothing restarts and nothing goes
+    /// back to the line; the lap already under way finishes at the old pace.
+    /// Called on the UI thread after a ghost save. Returns how many moved.
+    /// </summary>
+    public int RefreshChangedPaces()
+    {
+        if (!IsRunning)
+        {
+            return 0;
+        }
+
+        // Read the running session's bests first, on this (the UI) thread.
+        RefreshPaceSnapshot();
+
+        var moved = new List<(string Name, int LapMs, bool Back)>();
+
+        lock (_lock)
+        {
+            foreach (var runner in _runners.Values)
+            {
+                // The ghost as the settings hold it NOW, found by its
+                // transponder. An Undo (GhostStore.Restore) or an edit
+                // replaces the ghost objects, while a running ghost keeps
+                // the one it was started with - whose revision never moves.
+                var car = Settings.Ghosts.FirstOrDefault(g =>
+                              string.Equals(g.Transponder, runner.Car.Transponder, StringComparison.OrdinalIgnoreCase))
+                          ?? runner.Car;
+
+                if (car.PaceSource != GhostPaceSource.OwnBestTonight
+                    || runner.PaceRevisionSeen == car.PaceRevision)
+                {
+                    continue;
+                }
+
+                // WHY (22 Oct 2026): an Undo of "bring up to date" puts the
+                // revision BACK, which used to be treated like any other move
+                // - the best was looked up again, so the ghost stayed at the
+                // new pace and the log said it was brought up. Going back to a
+                // revision this runner has already run at now restores that
+                // pace; only a new revision reads the driver's best.
+                var wentBack = car.PaceRevision < runner.PaceRevisionSeen;
+                runner.PaceRevisionSeen = car.PaceRevision;
+
+                int lapMs;
+
+                // Only "put back" when it really is the old pace restored: a
+                // runner started after the refresh never ran at the earlier
+                // revision, so that one is looked up like any other. 22 Oct 2026.
+                var restored = false;
+
+                if (wentBack && runner.PaceByRevision.TryGetValue(car.PaceRevision, out var earlier))
+                {
+                    lapMs = earlier;
+                    restored = true;
+                }
+                else if (ResolveBaseLapMs(car, _trackLayoutName) is { } resolved)
+                {
+                    lapMs = resolved;
+                    runner.PaceByRevision[car.PaceRevision] = lapMs;
+                }
+                else
+                {
+                    continue;
+                }
+
+                runner.BaseLapMs = lapMs;
+                runner.FallbackLapMs = lapMs;
+                runner.LastLoggedLapMs = lapMs;
+                moved.Add((car.Name, lapMs, restored));
+            }
+        }
+
+        foreach (var (name, lapMs, back) in moved)
+        {
+            StatusMessage?.Invoke(back
+                ? $"[ghost] {name} put back to {lapMs / 1000.0:0.000}s."
+                : $"[ghost] {name} brought up to {lapMs / 1000.0:0.000}s - the new best to chase.");
+        }
+
+        return moved.Count;
+    }
+
     /// <summary>Whether a session predates the personal-best reset for this driver and track.</summary>
     private bool CutoffAllows(string driverName, SessionRecord session)
     {
@@ -742,6 +1029,7 @@ public sealed class GhostService : IDisposable
             GhostPaceSource.LiveOwnPace => $"{who}'s live pace this session{adjust}",
             GhostPaceSource.LiveLeaderPace => $"the leader's live pace{adjust}",
             GhostPaceSource.PersonalBestInRange => $"{who}'s best on {where} between {Format(ghost.RangeFromUtc)} and {Format(ghost.RangeToUtc)}{adjust}",
+            GhostPaceSource.OwnBestTonight => $"{who}'s best tonight on {where}, or their best ever there before they set one{adjust}",
             _ => $"{who}'s personal best on {where}{adjust}",
         };
 
@@ -811,6 +1099,7 @@ public sealed class GhostService : IDisposable
         GhostPaceSource.YourRecentAverage => "no completed session to average from yet",
         GhostPaceSource.TrackRecord => "no track layout selected, or no record set on it yet",
         GhostPaceSource.PersonalBestInRange => "that driver set no lap in the chosen date range",
+        GhostPaceSource.OwnBestTonight => "that driver has no lap on this track yet, tonight or before",
         GhostPaceSource.LiveOwnPace => "nothing to pace against yet - give it a personal best or a fixed lap time to start from",
         GhostPaceSource.LiveLeaderPace => "nothing to pace against yet - give it a personal best or a fixed lap time to start from",
         _ => "its pace couldn't be worked out",

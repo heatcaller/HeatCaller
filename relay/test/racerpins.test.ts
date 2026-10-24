@@ -79,7 +79,11 @@ describe("racer PINs", () => {
     assert.equal(answer.status, 200);
     assert.equal(answer.body.mode, "staff");
     assert.equal(answer.body.event, "Club Night");
-    assert.deepEqual(answer.body.drivers.map((d: { id: string }) => d.id), [SAM, BILL]);
+    assert.deepEqual(answer.body.drivers.map((d: { name: string }) => d.name), ["Sam Carter", "Bill Travers"]);
+    for (const d of answer.body.drivers) {
+      assert.match(d.id, /^[0-9a-f]{20}$/, "a handle shaped like a badge id");
+      assert.ok(d.id !== SAM && d.id !== BILL, "never the badge id itself");
+    }
 
     for (const d of answer.body.drivers) {
       assert.equal("rp" in d, false);

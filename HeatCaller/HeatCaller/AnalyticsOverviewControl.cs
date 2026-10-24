@@ -204,7 +204,7 @@ public sealed class AnalyticsOverviewControl : UserControl
                 ? "an unnamed layout"
                 : best.Session.TrackLayoutName;
 
-            _lblBestWho.Text = $"Best lap ever: {who} on {layout}, {best.Session.StartedAtUtc.ToLocalTime():d MMM yyyy}";
+            _lblBestWho.Text = $"Best lap set by {who} on {layout}, {best.Session.StartedAtUtc.ToLocalTime():d MMM yyyy}";
         }
 
         FillRecords(everything);

@@ -556,7 +556,9 @@ public static partial class CommentaryReaders
     /// race intro that is nothing but head-to-heads is a database being
     /// read aloud. The builder has its own bar for what counts as a
     /// rivalry (CommentaryHistoryFacts.Rivalry); this only decides which
-    /// few are worth offering it.
+    /// few are worth offering it. Since 23 Oct 2026 (bug hunt 10) the list
+    /// is pre-filtered to that same bar - see <see cref="IsRivalry"/> - so
+    /// every pair offered is one the builder will say.
     /// </summary>
     private static List<HeadToHead> HeadToHeads(
         IReadOnlyList<DriverForm> grid,
@@ -584,7 +586,16 @@ public static partial class CommentaryReaders
 
                 var met = aAhead + bAhead;
 
-                if (met == 0)
+                // WHY (23 Oct 2026, bug hunt 10): the builder's bar is applied
+                // HERE, before the cap. This used to keep every pair that had
+                // met once, rank by how one-sided it was and keep three - so a
+                // newcomer's 2-0s against half the grid (a perfect 1.0) filled
+                // all three slots, CommentaryHistoryFacts.Rivalry refused every
+                // one of them for being under five meetings, and the club's
+                // real 9-1 rivalry was never offered. Now only a pair the
+                // builder will accept - enough meetings, and one-sided or dead
+                // level - competes for a slot.
+                if (!IsRivalry(aAhead, bAhead))
                 {
                     continue;
                 }
@@ -627,6 +638,25 @@ public static partial class CommentaryReaders
             .Take(MostRivalries)
             .Select(p => p.Pair)
             .ToList();
+    }
+
+    /// <summary>
+    /// Whether a record clears CommentaryHistoryFacts.Rivalry's own bar:
+    /// at least RivalryMeetings meetings, and either one side ahead in at
+    /// least RivalryLopsided of them or the two dead level. The same two
+    /// constants the builder reads, so the two cannot drift apart.
+    /// </summary>
+    internal static bool IsRivalry(int aAhead, int bAhead)
+    {
+        var met = aAhead + bAhead;
+
+        if (met < CommentaryHistoryFacts.RivalryMeetings)
+        {
+            return false;
+        }
+
+        return aAhead == bAhead
+            || (double)Math.Max(aAhead, bAhead) / met >= CommentaryHistoryFacts.RivalryLopsided;
     }
 
     /// <summary>
@@ -1983,12 +2013,7 @@ public static partial class CommentaryReaders
             return null;
         }
 
-        var heats = rounds.All
-            .Where(round => !string.IsNullOrWhiteSpace(round.Id))
-            .Where(round => round.Kind == RoundKind.Qualifier)
-            .Where(round => scope is null || scope.Contains(round.Id))
-            .Where(round => string.Equals(Typed(round.ClassName), wanted, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        var heats = ClassHeats(wanted, rounds, scope);
 
         if (heats.Count == 0)
         {
@@ -2005,6 +2030,67 @@ public static partial class CommentaryReaders
         var order = Qualifying(wanted, rounds, history, profiles, raceClass, roundFilter);
 
         return order.Count == 0 ? null : new MeetingSoFar(wanted, run, heats.Count, order);
+    }
+
+    /// <summary>
+    /// A class's qualifying heats in the race day in hand - the one heat
+    /// set both <see cref="MidMeeting"/> and <see cref="QualifyingFinished"/>
+    /// judge by, so "partway through" and "finished" cannot disagree about
+    /// which heats there are.
+    /// </summary>
+    private static List<RoundDefinition> ClassHeats(string wanted, RoundDefinitionStore rounds, IReadOnlySet<string>? scope) =>
+        rounds.All
+            .Where(round => !string.IsNullOrWhiteSpace(round.Id))
+            .Where(round => round.Kind == RoundKind.Qualifier)
+            .Where(round => scope is null || scope.Contains(round.Id))
+            .Where(round => string.Equals(Typed(round.ClassName), wanted, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    /// <summary>
+    /// Whether every qualifying heat a class has in the race day in hand
+    /// is recorded. False when there are none, or no class.
+    /// </summary>
+    // WHY (23 Oct 2026, bug hunt 10): nothing checked this before the
+    // qualifying report spoke. After ONE heat the calculator already has an
+    // order, so the report said "Sam takes pole in Box Stock" three rounds
+    // early, spent the class's one allowance on it, and the real pole sitter
+    // was never named. The gate lives here rather than inside Qualifying
+    // because MidMeeting reads Qualifying for its partial order on purpose.
+    public static bool QualifyingFinished(string? className, RoundDefinitionStore rounds, IReadOnlySet<string>? scope = null)
+    {
+        var wanted = Typed(className);
+
+        if (wanted.Length == 0)
+        {
+            return false;
+        }
+
+        var heats = ClassHeats(wanted, rounds, scope);
+
+        return heats.Count > 0 && heats.All(round => round.IsRecorded);
+    }
+
+    /// <summary>
+    /// The qualifying report's reader: <see cref="Qualifying"/>, but only
+    /// once <see cref="QualifyingFinished"/> says the class's heats are all
+    /// run - nothing at all before then, so a provisional order is never
+    /// read out as pole. Pass the same scope MidMeeting is given.
+    /// </summary>
+    public static IReadOnlyList<QualifyingLine> FinishedQualifying(
+        string? className,
+        RoundDefinitionStore rounds,
+        SessionHistoryStore history,
+        ProfileStore profiles,
+        IReadOnlySet<string>? scope = null,
+        RaceClass? raceClass = null,
+        IReadOnlyCollection<string>? roundFilter = null)
+    {
+        if (!QualifyingFinished(className, rounds, scope))
+        {
+            return Array.Empty<QualifyingLine>();
+        }
+
+        return Qualifying(Typed(className), rounds, history, profiles, raceClass, roundFilter);
     }
 
     /// <summary>

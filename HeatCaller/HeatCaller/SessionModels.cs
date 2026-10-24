@@ -87,6 +87,24 @@ public sealed class SessionResultEntry
     /// </remarks>
     public long RacePenaltyMs { get; set; }
 
+    /// <summary>
+    /// Laps in this count that race control added by hand during the race
+    /// (+1 Lap) - a transponder that stopped being read, kept going by a
+    /// person. Already included in Laps. Zero on results saved before this
+    /// was recorded (22 Oct 2026). Laps added afterwards in Edit Result are
+    /// AddedLaps; HandCountedLaps.In adds the two together.
+    /// </summary>
+    public int LapsByHand { get; set; }
+
+    /// <summary>
+    /// Race control marked this driver as jumping the start (22 Oct 2026,
+    /// driver experience). Set when the result is filed, from the race's
+    /// own jump-start record, so a driver can later be told that their
+    /// added seconds were for a jump start rather than just "a penalty"
+    /// (PenaltyWords). False on every result saved before this date.
+    /// </summary>
+    public bool JumpStarted { get; set; }
+
     // --- Corrections made after the race was saved ---
     //
     // All four are what the result editor has decided for this driver, as

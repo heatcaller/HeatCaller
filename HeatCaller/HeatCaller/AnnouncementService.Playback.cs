@@ -298,24 +298,41 @@ public sealed partial class AnnouncementService
     /// that device latency, and padding both ends with a touch of silence
     /// together remove the timing dependency that caused it.
     /// </summary>
+    /// <param name="stillWanted">See <see cref="PlayPcmAsync"/>.</param>
     public static Task PlayAsync(
         byte[] mp3Bytes,
         double volume,
         double trailingSilenceSeconds = DefaultTrailingSilenceSeconds,
-        double leadingSilenceSeconds = DefaultLeadingSilenceSeconds)
+        double leadingSilenceSeconds = DefaultLeadingSilenceSeconds,
+        Func<bool>? stillWanted = null)
     {
         var (pcm, format) = DecodeAudio(mp3Bytes);
-        return PlayPcmAsync(pcm, format, volume, trailingSilenceSeconds, leadingSilenceSeconds);
+        return PlayPcmAsync(pcm, format, volume, trailingSilenceSeconds, leadingSilenceSeconds, stillWanted: stillWanted);
     }
 
+    /// <summary>
+    /// The checks every announcer line makes before it speaks - a flag since
+    /// it was taken off the queue, a countdown since then, and (when the line
+    /// honours it) the mute - as one test, for <see cref="PlayPcmAsync"/>'s
+    /// stillWanted. Reads the generations stamped at dequeue, which are
+    /// AsyncLocal and so flow into the awaited playback call.
+    /// </summary>
+    private Func<bool> StillWantedUnlessOvertaken(bool honourMute) =>
+        () => !IsSupersededByInterrupt() && !IsCutByCountdown() && !(honourMute && Muted);
+
     /// <summary>Plays already-decoded audio, padded the way every line is.</summary>
+    /// <param name="stillWanted">
+    /// Asked once more AFTER the line is registered as the one playing, and
+    /// the line is dropped unheard if it says no. See the WHY at the check.
+    /// </param>
     public static async Task PlayPcmAsync(
         byte[] pcmBytes,
         WaveFormat format,
         double volume,
         double trailingSilenceSeconds = DefaultTrailingSilenceSeconds,
         double leadingSilenceSeconds = DefaultLeadingSilenceSeconds,
-        Action? started = null)
+        Action? started = null,
+        Func<bool>? stillWanted = null)
     {
         byte[] paddedPcm;
 
@@ -355,6 +372,21 @@ public sealed partial class AnnouncementService
 
         try
         {
+            // WHY (23 Oct 2026, bug hunt 10): every caller checks for a flag,
+            // the countdown and the mute BEFORE it calls here, but the line
+            // was only registered above after it had been decoded and padded
+            // - for a 90 s recap MP3 a noticeable moment. A flag, countdown
+            // or mute landing in that gap found nothing to stop, and the line
+            // then played in full over it. Asked again now that it IS
+            // registered: the canceller sets its flag and then takes
+            // ActiveOutputLock to stop us, we registered under that same lock
+            // and read its flag after - so either it cancelled this line (and
+            // the bus returns at once) or this check sees it and drops it.
+            if (stillWanted is not null && !stillWanted())
+            {
+                return;
+            }
+
             // Up to AudioBus.MaxBoost: the announcer's level times the
             // "boost voice over loud ambience" gain (AnnouncementGain), which
             // a 0..1 clamp here used to cancel. The bus soft-limits a boosted

@@ -13,7 +13,7 @@ public sealed class BugHunt8_WebServerService_Notes_csTests : IDisposable
     public void Dispose() => _data.Dispose();
 
     private static WebServerService Server() =>
-        new(new RaceControlSession(), ProfileStore.Load(), settings: new AppSettings { DisplayLook = Looks.MidnightKey });
+        new(new RaceTiming(new RaceControlSession()), ProfileStore.Load(), settings: new AppSettings { DisplayLook = Looks.MidnightKey });
 
     [Fact]
     public void A_club_not_taking_messages_gets_a_sentence_and_no_form()

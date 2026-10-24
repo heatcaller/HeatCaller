@@ -161,7 +161,7 @@ public sealed class RcpTrackEditorForm : Form
     /// <summary>The name typed on the side panel.</summary>
     public string TrackName => _txtName.Text.Trim();
 
-    public RcpTrackEditorForm(RcpTrackDesign? existing, string trackName, double? averageLapSeconds, bool unsavedOnOpen = false)
+    public RcpTrackEditorForm(RcpTrackDesign? existing, string trackName, double? averageLapSeconds, bool unsavedOnOpen = false, bool useAsPhoto = true)
     {
         _unsavedOnOpen = unsavedOnOpen;
 
@@ -188,6 +188,14 @@ public sealed class RcpTrackEditorForm : Form
         // as PNG" has a save in it too - two orange buttons side by side,
         // neither saying which one keeps the track (layout pictures, 30 Sep).
         AppTheme.StyleButton(_btnPng, AppTheme.ButtonKind.Secondary);
+
+        // WHY (23 Oct 2026, bug hunt 10): the "main picture" box was always
+        // ticked, whatever the track was set to, so saving a plan for a track
+        // whose club had chosen its photo as the main picture quietly switched
+        // it to the drawn plan. The box now opens on what the caller passes
+        // (ticked when it says nothing, as before), and before the "as opened"
+        // snapshot below, so the box starting that way is not a change.
+        _chkUseAsPhoto.Checked = useAsPhoto;
 
         _loading = false;
 
@@ -401,7 +409,7 @@ public sealed class RcpTrackEditorForm : Form
     private static string ToolHint(RcpTool tool) => tool switch
     {
         RcpTool.Floor => "Drag to paint floor tiles - the whole track sits on these. Ctrl-drag takes them back off.",
-        RcpTool.Wall => "Drag along the grid to run rail, and a turn rail drops in wherever you round a corner. A single click on a seam still adds one, doubles it up, or takes it away.",
+        RcpTool.Wall => "Drag along the grid to run rail; a turn rail drops in wherever you round a corner. Click a seam to add, double or remove one.",
         RcpTool.Curve => "Click near a corner of the grid - the arc follows whichever way the pointer is.",
         RcpTool.Marker => "Click to drop a marking. Click it again, or press R, to turn it.",
         RcpTool.Route => "Click to drop points along the racing line. Drag one to move it, right-click to remove it.",
@@ -659,8 +667,7 @@ public sealed class RcpTrackEditorForm : Form
 
         var lblTraceHint = new Label
         {
-            Text = "Drop in a photo of the real track, line its tiles up with the grid using the Photo tool, "
-                   + "then draw over it. That's the quickest way to get a layout in exactly.",
+            Text = "Choose a photo of the real track, line its tiles up with the grid using the Photo tool, then draw over it.",
             AutoSize = true,
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
@@ -1050,7 +1057,7 @@ public sealed class RcpTrackEditorForm : Form
     {
         if (!Result.HasRoom)
         {
-            _lblRoomFit.Text = "Give the room's size and this says whether the layout goes in it.";
+            _lblRoomFit.Text = "Enter the room's size to check the layout fits in it.";
             _lblRoomFit.ForeColor = AppTheme.TextMuted;
             return;
         }
@@ -1504,7 +1511,7 @@ public sealed class RcpTrackEditorForm : Form
 
         if (kit is null)
         {
-            _lblKitCheck.Text = "Pick a kit and this will tell you whether your layout fits in the box.";
+            _lblKitCheck.Text = "Pick a kit to check the layout fits in the box.";
             _lblKitCheck.ForeColor = AppTheme.TextMuted;
             return;
         }

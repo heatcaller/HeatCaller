@@ -34,6 +34,33 @@ public static class ToneGenerator
         _ => PlayNotesAsync(new[] { (880.0, 45), (1108.0, 45), (880.0, 45) }, volume), // warble
     };
 
+    /// <summary>
+    /// How loud a coaching tone is against the sound effects' own level
+    /// (22 Oct 2026): quieter. It is for one driver, who is listening for
+    /// it, and it must not turn the whole room's head on every lap.
+    /// </summary>
+    internal const float CoachToneLevel = 0.6f;
+
+    /// <summary>
+    /// A coaching tone (22 Oct 2026, "Tones instead of words"): one short
+    /// note, high for quicker than the target, middle for on it, low for
+    /// slower - and two rising notes for a new best, a shape no other cue
+    /// has. About 120 ms, the length of the existing lap blips: long enough
+    /// to place the pitch, short enough never to overlap the next car.
+    /// Built on the caller's thread (PlayNotesAsync), never the device's.
+    /// </summary>
+    internal static Task PlayCoachToneAsync(CoachTone tone, float volume) =>
+        PlayNotesAsync(CoachNotes(tone), Math.Clamp(volume, 0f, 1f) * CoachToneLevel);
+
+    /// <summary>The notes of each coaching tone. Internal for the tests.</summary>
+    internal static (double Freq, int DurationMs)[] CoachNotes(CoachTone tone) => tone switch
+    {
+        CoachTone.Faster => new[] { (1046.0, 120) },
+        CoachTone.OnTarget => new[] { (784.0, 120) },
+        CoachTone.Slower => new[] { (523.0, 120) },
+        _ => new[] { (784.0, 70), (1318.0, 90) },
+    };
+
     /// <summary>A short ascending two-note chime for a valid ("good", no crash) lap.</summary>
     public static Task PlayGoodLapAsync(float volume) => PlayGoodLapAsync(volume, CancellationToken.None);
 

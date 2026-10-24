@@ -11,6 +11,7 @@ Everything to do with the announcer speaking is on the **Voice** page (called **
 | Tab | What's on it |
 |---|---|
 | **Voice Settings** | Which voice speaks, your own ElevenLabs connection, the voice's tuning, and the lines saved on the laptop. Covered from [Choose the voice](#choose-the-voice) down to [Saved voice lines](#saved-voice-lines). |
+| **Cast** | The announcer's voice, with **Test Voice**, at the top, and everyone else on the show below it. See [Choose the voice](#choose-the-voice) for the announcer, and [Commentary](commentary.md#technical-lead-and-team-principal) for the rest. |
 | **Announcements** | One row for each moment the announcer can call: whether it's on for races and for practice, and the lines it picks from. See [Announcements](#announcements). |
 | **Commentary** | Race intros and recaps written by a local AI model. It has [its own page](commentary.md). |
 | **Rivalries** | Lines for two particular drivers swapping places. See [Rivalries](#rivalries). |
@@ -29,14 +30,26 @@ This page also covers the [Announcer screen](#announcer-screen), a window for wh
 
 ## Choose the voice
 
-The **Speak with** card at the top of **Voice → Voice Settings** decides what speaks every announcement. Like everything on this tab, the choice saves as you make it.
+The **Speak with** card at the top of **Voice → Voice Settings** decides what speaks every announcement. Like everything on this tab, the choice saves as you make it. Its first line says where the rest is: "Choose what speaks here. The announcer's voice, and Test Voice, are at the top of the Cast tab."
+
+The announcer's voice itself is picked on **Voice → Cast**, on the **Announcer** card at the top of the tab, under its first line ("The voice carrying the whole program, from the engine chosen on the Voice tab."). The card shows the picker and the test for each voice that can speak, given the choice made here:
+
+| Row at the top of **Voice → Cast** | Shown when |
+|---|---|
+| **HeatCaller voice:** with **Refresh** and **Hear It**, then **Your own words:** with **Preview**, and a line saying what the last press did. See [Pick a HeatCaller voice](#pick-a-heatcaller-voice). | The HeatCaller voice is chosen. Also whenever its list holds only its free samples, because your club isn't signed up for it yet, so you can listen before deciding. |
+| **ElevenLabs voice:** with **Load Voices** and **Test Voice**, and a line under them. See [Set up your own ElevenLabs account](#set-up-your-own-elevenlabs-account). | ElevenLabs is chosen. Also while the Kokoro voice is chosen and a key is typed in **API Key:**, so you can set ElevenLabs up before switching to it. |
+| **Kokoro voice:** with **Test Voice**, and a line for what the test did. See [Use the Kokoro voice](#use-the-kokoro-voice). | The Kokoro voice is chosen, or it's standing in: always with the HeatCaller voice, and with ElevenLabs while the stand-in box under it is ticked. The voice picked here is the one that stands in. |
+
+The **Announcer's name:** is on the same card, under the voice.
+
+<!-- screenshot: Cast tab, Announcer card with the HeatCaller voice picker, Hear It and Preview -->
 
 <!-- screenshot: Voice Settings tab, Speak with card with the HeatCaller voice chosen and its allowance line -->
 
 | Choice | What it is |
 |---|---|
-| **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** | An announcer voice from HeatCaller's own catalog, spoken through your club's relay. Pick one in **Announcer voice:**. Everything that would spend is fixed while it's chosen, and your club has a monthly allowance of characters. See [The HeatCaller voice](#the-heatcaller-voice). |
-| **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)** | ElevenLabs' online voices, set up on the **ElevenLabs connection** card below. It needs a key, a voice and internet at the track, and uses your ElevenLabs credits. Everything on the page is yours to change. |
+| **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** | An announcer voice from HeatCaller's own catalog, spoken through your club's relay. Pick one in **HeatCaller voice:** at the top of **Voice → Cast**. Everything that would spend is fixed while it's chosen, and your club has a monthly allowance of characters. See [The HeatCaller voice](#the-heatcaller-voice). |
+| **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)** | ElevenLabs' online voices, set up on the **ElevenLabs connection** card below, with the voice picked at the top of **Voice → Cast**. It needs a key, a voice and internet at the track, and uses your ElevenLabs credits. Everything on the page is yours to change. |
 | **Kokoro voice - free, natural-sounding, runs on this PC. No account, no internet, nothing billed** | A natural-sounding voice that runs on the laptop itself. It comes with HeatCaller, so there's nothing to sign up for, no internet needed and nothing to pay, however much the announcer talks. The wording is yours to change, and it's also what speaks whenever the voice you chose can't. See [Use the Kokoro voice](#use-the-kokoro-voice). |
 
 Under the ElevenLabs choice, **If ElevenLabs can't speak a line - no key, no internet, or the quota is used up - the free Kokoro voice says it instead** is ticked by default. It makes Kokoro the stand-in, so a flag call is never silent. See [When ElevenLabs can't speak a line](#when-elevenlabs-cant-speak-a-line). The box only matters with ElevenLabs chosen: it's grayed out, keeping its tick, while the HeatCaller voice or the Kokoro voice is chosen. With the HeatCaller voice it isn't a choice at all — Kokoro always stands in, because there's no key of your own to fall back on.
@@ -45,22 +58,22 @@ Kokoro is the bottom of the ladder, and nothing stands in for it. On a PC that h
 
 ### Pick a HeatCaller voice
 
-1. Choose **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill**.
-2. Pick one of the announcer voices in **Announcer voice:**. Each is listed as its name and a short description, for example "Clubhouse - Warm and clear, easy over a PA". The first one is chosen for you if you've never picked one, so the announcer works without another decision.
+1. On **Voice → Voice Settings**, choose **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** under **Speak with**.
+2. Open **Voice → Cast** and pick one of the announcer voices in **HeatCaller voice:**, at the top of the **Announcer** card. Each is listed as its name and a short description, for example "Clubhouse - Warm and clear, easy over a PA". The first one is chosen for you if you've never picked one, so the announcer works without another decision.
 3. Press **Hear It** beside the list to listen to the voice you've highlighted, and **Preview** to hear it say words of your own. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it).
-4. Read the line underneath, which says where your allowance stands.
+4. Back on **Voice Settings**, read the line under the HeatCaller choice, which says where your allowance stands.
 
-**Refresh** asks the relay again — for the list of voices and for the allowance. The page does it by itself when you open **Voice Settings** and when you choose the HeatCaller voice, in the background, so the page is usable while it waits. While the page is on screen it asks again every two minutes, so a page left open through a race keeps a current number; press **Refresh** if you want it this second. The meter under it is different: it moves as lines are spoken. See [The meter under the voice](#the-meter-under-the-voice).
+**Refresh**, beside the list on **Cast**, asks the relay again — for the list of voices and for the allowance. The page does it by itself when you open **Voice Settings** and when you choose the HeatCaller voice, in the background, so the page is usable while it waits. While the page is on screen it asks again every two minutes, so a page left open through a race keeps a current number; press **Refresh** if you want it this second. The meter under it is different: it moves as lines are spoken. See [The meter under the voice](#the-meter-under-the-voice).
 
-The line under the list says one of:
+The line under the HeatCaller choice on **Voice Settings** says one of:
 
 | The line says, for example | What it means |
 |---|---|
 | "Included - 34,120 of 100,000 characters this month - starts again 1 Oct. Saved lines cost nothing. When the allowance is gone the free Kokoro voice speaks every line until it starts again, and your saved lines are kept." | All set. The line turns amber once the allowance is spent. See [Your club's monthly allowance](#your-clubs-monthly-allowance). |
 | "Set the club up on the Club Website page first - the HeatCaller voice speaks through the same relay, with the same token." | The **Club Website** page has no relay address, club id or token yet. See [Setting up the Club Website page](../online/setup.md). |
-| "The HeatCaller voice isn't included for this club yet. Your own ElevenLabs key and the free Kokoro voice both work as normal. The samples above are still free to listen to." | The relay knows your club, but hasn't been set up to give it the voice. Ask whoever runs your relay. You can still press **Hear It** on any voice in the list. |
+| "The HeatCaller voice isn't included for this club yet. Your own ElevenLabs key and the free Kokoro voice both work as normal. Its free samples are at the top of the Cast tab to listen to." | The relay knows your club, but hasn't been set up to give it the voice. Ask whoever runs your relay. You can still press **Hear It** on any voice in the list at the top of **Voice → Cast**. |
 | "The relay has no voices to offer yet." | The relay has no voice catalog configured. Ask whoever runs your relay. |
-| "This relay doesn't offer *the voice's name*, the voice chosen here, so the free Kokoro voice would speak every line. Pick one from the list above." | The voice saved on this laptop isn't one this relay offers. Pick another from the list. |
+| "This relay doesn't offer *the voice's name*, the voice chosen here, so the free Kokoro voice would speak every line. Pick one at the top of the Cast tab." | The voice saved on this laptop isn't one this relay offers. Pick another in **HeatCaller voice:** on **Voice → Cast**. |
 | "Couldn't ask the relay:" and a reason | The relay couldn't be reached just now. The list is left as it was, and the voice you already chose keeps working. |
 
 A voice the relay has since dropped from its catalog stays in the list, chosen, marked "not offered by the relay any more", rather than being quietly swapped for another one. Pick a different one.
@@ -70,9 +83,9 @@ A voice the relay has since dropped from its catalog stays in the list, chosen, 
 
 ### Hear a voice before you choose it
 
-Two buttons on **Voice Settings** let you listen to a HeatCaller voice before you commit to it. Neither one spends your race-night allowance.
+Two buttons at the top of **Voice → Cast**, on the **Announcer** card, let you listen to a HeatCaller voice before you commit to it. Neither one spends your race-night allowance.
 
-- **Hear It**, beside **Announcer voice:**, plays a short sample of the voice you've highlighted. It's free, and it works before your club has signed up for anything at all: the sample needs no token, so a laptop with nothing but a relay address on the **Club Website** page can still listen to every voice. The first person anywhere to ask for a given voice has it rendered once; everyone after that hears the saved copy, for nothing. The sample is the same fixed line for every voice, so you're comparing like with like.
+- **Hear It**, beside **HeatCaller voice:**, plays a short sample of the voice you've highlighted. It's free, and it works before your club has signed up for anything at all: the sample needs no token, so a laptop with nothing but a relay address on the **Club Website** page can still listen to every voice. The first person anywhere to ask for a given voice has it rendered once; everyone after that hears the saved copy, for nothing. The sample is the same fixed line for every voice, so you're comparing like with like.
 - **Preview**, beside **Your own words:**, has the voice say whatever is in that box. This is the one that settles it: a stock sample can't tell you whether a voice gets "Stock Buggy A-Main" right, or your drivers' names. A starting line is filled in for you, so the button does something the first time you press it; replace it with your own class names and driver names. Keep it to a sentence — a preview can be up to 200 characters, and a longer one is refused straight away with a message saying so.
 
 Previews come out of **a small daily allowance of their own, kept completely separate from the race-night voice allowance**. An afternoon of auditioning can't leave you short on Saturday. When the day's previews are used up the relay says so in words, for example "That is this club's previews for today - 3,000 characters a day of trying voices out. Its race-night voice allowance has not been touched, and previews start again tomorrow." Nothing falls through to the race-night budget. **Hear It** still works, because it costs nothing.
@@ -82,19 +95,19 @@ The line under the two buttons says what the last press did, and begins as a rem
 !!! note
     Both buttons need a relay that has been redeployed since they were added. An older relay answers "This relay doesn't offer voice samples yet." (**Hear It** then disappears) or refuses the preview. If you run the relay yourself, deploy it again; otherwise ask whoever does. See [Hosting the relay](../admin/relay-hosting.md#the-heatcaller-voice).
 
-**Listening before you sign up.** When the relay has nothing to offer your club — never signed up, not on the plan, or a token it won't take — the voice list fills from the free sample list instead of sitting empty, so the voices can still be heard. The page says so, for example: "Listening only for now - these are HeatCaller's own 6 voices, free to play. Press Hear It to try one. Preview, which says your own words, needs your club set up on the relay first." **Preview** is switched off in that state, and nothing you highlight in that list is saved as your club's voice — it isn't a list the relay has said you may use.
+**Listening before you sign up.** When the relay has nothing to offer your club — never signed up, not on the plan, or a token it won't take — the voice list fills from the free sample list instead of sitting empty, so the voices can still be heard. Those rows show at the top of **Voice → Cast** whichever voice is chosen under **Speak with**, so a club on Kokoro can listen without switching. The page says so, for example: "Listening only for now - these are HeatCaller's own 6 voices, free to play. Press Hear It to try one. Preview, which says your own words, needs your club set up on the relay first." **Preview** is switched off in that state, and nothing you highlight in that list is saved as your club's voice — it isn't a list the relay has said you may use.
 
 ### Use the Kokoro voice
 
 Kokoro is the free voice: natural-sounding, running on the laptop's own processor, and costing nothing however much the announcer talks. A new install speaks with it, and it's what stands in whenever the voice you chose can't.
 
-1. Choose **Kokoro voice - free, natural-sounding, runs on this PC. No account, no internet, nothing billed** in **Speak with**.
-2. Pick a voice in **Kokoro voice:**. **Michael (American, male)** is chosen to begin with. There are American and British voices, women and men.
-3. Press **Test Kokoro Voice**. You should hear "This is HeatCaller, testing the Kokoro voice. Green flag, green flag!" The first test after starting HeatCaller takes a few seconds while Kokoro loads.
+1. On **Voice → Voice Settings**, choose **Kokoro voice - free, natural-sounding, runs on this PC. No account, no internet, nothing billed** in **Speak with**.
+2. Open **Voice → Cast** and pick a voice in **Kokoro voice:**, at the top of the **Announcer** card. **Michael (American, male)** is chosen to begin with. There are American and British voices, women and men.
+3. Press **Test Voice** beside it. You should hear "This is HeatCaller, testing the Kokoro voice. Green flag, green flag!" The first test after starting HeatCaller takes a few seconds while Kokoro loads. The line under it says what the test did, for example "Done - that was Michael (American, male)."
 
-Kokoro's voice file (about 310 MB) comes with HeatCaller, so there's normally nothing to download and the line under **Kokoro voice:** reads "Speaking with Kokoro - ready on this PC. Nothing is billed, however much the announcer talks." — or, with another voice chosen, "Ready on this PC - and standing by for any line the voice above can't say."
+Kokoro's voice file (about 310 MB) comes with HeatCaller, so there's normally nothing to download and the line under the Kokoro choice on **Voice Settings** reads "Speaking with Kokoro - ready on this PC. Nothing is billed, however much the announcer talks." — or, with another voice chosen, "Ready on this PC - and standing by for any line the chosen voice can't say."
 
-If the file isn't there, a **Download (about 310 MB)** button appears beside **Kokoro voice:** and the line turns red: "Kokoro isn't on this PC - press Download (about 310 MB, once). Until then the announcer can't say anything at all." Press it, answer **Yes**, and the line counts up while it downloads; **Cancel Download** stops it and keeps nothing. You only download it once per PC. If the file is there but won't load on this PC, the line says why and the button reads **Download Again (about 310 MB)**: press it to fetch a fresh copy, which usually fixes it.
+If the file isn't there, a **Download (about 310 MB)** button appears under the Kokoro choice on **Voice Settings** and the line turns red: "Kokoro isn't on this PC - press Download (about 310 MB, once). Until then the announcer can't say anything at all." Press it, answer **Yes**, and the line counts up while it downloads; **Cancel Download** stops it and keeps nothing. You only download it once per PC. If the file is there but won't load on this PC, the line says why and the button reads **Download Again (about 310 MB)**: press it to fetch a fresh copy, which usually fixes it.
 
 **Prepare Lines** isn't needed with Kokoro: it speaks each line on the laptop as it's wanted, so the button is grayed out and the line beside it reads "Not needed with the Kokoro voice - it speaks each line on this PC as it's wanted." A line it has said once plays straight away for the rest of the session.
 
@@ -114,11 +127,11 @@ Kokoro is the last voice in the chain, so there is one state in which the announ
 
 | Where | What it says |
 |---|---|
-| The console | "[voice] NO VOICE - The Kokoro voice isn't downloaded on this PC yet (Voice Settings has a Download button). Open Voice Settings and press Download beside the Kokoro voice (about 310 MB, once) - until then the announcer can't say anything at all." Said once for that reason, not for every line. |
+| The console | "[voice] NO VOICE - The Kokoro voice isn't downloaded on this PC yet (Voice Settings has a Download button). Open the Voice tab and press Download under the Kokoro voice (about 310 MB, once) - until then the announcer can't say anything at all." Said once for that reason, not for every line. |
 | **Sounds → Mixer** | A red **NO VOICE:** notice above the channels with the reason, and the **Announcements** channel reads "Can't speak -" and the reason. See [Mixer](sounds-and-music.md#mixer). |
-| **Voice Settings** | A red line under **Kokoro voice:**, and, with Kokoro chosen, "NOTHING CAN SPEAK -" and the reason on the line below the three choices. With another voice chosen the line warns that nothing can stand in: "Speaking with the HeatCaller voice - but the Kokoro voice isn't downloaded on this PC yet (Voice Settings has a Download button), so nothing can stand in and a line it can't say is lost. ..." |
+| **Voice Settings** | A red line under the Kokoro choice, and, with Kokoro chosen, "NOTHING CAN SPEAK -" and the reason on the line below the three choices. With another voice chosen the line warns that nothing can stand in: "Speaking with the HeatCaller voice - but the Kokoro voice isn't downloaded on this PC yet (Voice Settings has a Download button), so nothing can stand in and a line it can't say is lost. ..." |
 
-The fix is one press of **Download** beside **Kokoro voice:** on **Voice Settings**. While it lasts, announcement lines are still chosen and still appear on the [Announcer screen](#announcer-screen) and the [Big Screen](../screens/big-screen.md) — they just aren't spoken. Sound effects, lap beeps, ambience and music are unaffected, and a [soundscape's recorded voice lines](sounds-and-music.md#voice-lines) still play, because they're audio files rather than something that has to be spoken.
+The fix is one press of **Download** under the Kokoro choice on **Voice Settings**. While it lasts, announcement lines are still chosen and still appear on the [Announcer screen](#announcer-screen) and the [Big Screen](../screens/big-screen.md) — they just aren't spoken. Sound effects, lap beeps, ambience and music are unaffected, and a [soundscape's recorded voice lines](sounds-and-music.md#voice-lines) still play, because they're audio files rather than something that has to be spoken.
 
 ### After the Windows voice was retired
 
@@ -154,7 +167,8 @@ That's also why it works differently from a key of your own. The account behind 
 | Each announcement's **Speed** | Switched off. The speed is the relay's, not the club's. |
 | The **Rivalries** tab's lines and its **Use Default Lines** | Read-only and switched off, with an amber line saying why. See [Rivalries](#rivalries). |
 | A [soundscape](sounds-and-music.md#soundscapes) applied on **Sounds → Soundscapes** | Its sounds apply; nothing from its **Announcements** tab does, lines included. The wording stays the standard set. |
-| **API Key:**, **Show**, **Voice:**, **Load Voices**, **Model:**, **Test Voice** | Switched off. They belong to your own ElevenLabs account. |
+| **API Key:**, **Show**, **Model:** | Switched off. They belong to your own ElevenLabs account. |
+| **ElevenLabs voice:**, **Load Voices** and **Test Voice** on **Voice → Cast** | Not shown. The **Announcer** card shows the HeatCaller voice's own picker instead. |
 | **Stability:**, **Similarity boost:**, **Style:**, **Speed:**, **Speaker boost**, **Text normalize:**, **Language:**, **Output format:** | Switched off. The relay decides all of these, per voice. |
 
 **Hear It** and **Preview** are the exceptions, and deliberately so: neither spends a character of the race-night allowance, so both stay live while the HeatCaller voice is chosen. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it).
@@ -167,7 +181,7 @@ Audio tags such as `[excited]` are left in the line and sent as written. The rel
 
 ### Your club's monthly allowance
 
-Each club gets a number of characters a month on the HeatCaller voice — 100,000 unless whoever runs your relay has set yours differently. The line under **Announcer voice:** shows where you stand, for example "34,120 of 100,000 characters this month - starts again 1 Oct." The month is a calendar month, and it survives a relay redeploy.
+Each club gets a number of characters a month on the HeatCaller voice — 100,000 unless whoever runs your relay has set yours differently. The line under the HeatCaller choice on **Voice Settings** shows where you stand, for example "34,120 of 100,000 characters this month - starts again 1 Oct." The month is a calendar month, and it survives a relay redeploy.
 
 Far less of it is spent than that number suggests:
 
@@ -211,7 +225,7 @@ The free Kokoro voice stands in, always — there's no box to untick and nothing
 |---|---|
 | **The month's allowance is used up** | Every line is spoken by the Kokoro voice until the allowance starts again, **including lines already saved**. That's deliberate: a night that's half one voice and half another sounds like a broken announcer, and one voice with the reason in the console is honest. It holds until the relay actually speaks a line again, so nothing slips through in the HeatCaller voice mid-night. Nothing is thrown away either — every saved line is still there next month, and plays again then. The relay is still asked about every half hour, so a club topped up mid-month is speaking again within half an hour. |
 | **The relay can't be reached** — no internet, or a request that times out | Lines already saved still play in the HeatCaller voice from the laptop. New lines go straight to the Kokoro voice with no wait, and the relay is tried again in the background about once a minute. |
-| **No HeatCaller voice is chosen yet** | The Kokoro voice speaks every line, and the console says to pick one on **Voice Settings**. |
+| **No HeatCaller voice is chosen yet** | The Kokoro voice speaks every line, and the console says to pick one. The picker is **HeatCaller voice:**, at the top of **Voice → Cast**. |
 | **The relay says the voice isn't included for this club, isn't switched on at all, doesn't know the token, or no longer has the voice you chose** | The Kokoro voice speaks, and the relay is tried again about every half hour — none of those mends itself in a minute, but whoever runs the relay can put it right while you race. |
 | **The relay or ElevenLabs is busy, or the line is too long** | The Kokoro voice says that line, and the next line is asked for as normal. |
 
@@ -242,7 +256,7 @@ Leave **Club:** blank and the Club Website page's club id is used. **Token:** wo
 
 While any of them is filled in:
 
-- the line under **Announcer voice:** starts with "Test relay", so the allowance you're reading is that relay's and not your club's;
+- the line under the HeatCaller choice starts with "Test relay", so the allowance you're reading is that relay's and not your club's;
 - the console says so once a night, the first time the voice speaks.
 
 A plain `http://` address is only accepted for this PC or your own network — `http://localhost:8787` is fine, an address out on the internet isn't, because the token would cross it readable. Emptying all three puts the voice back on the Club Website page's relay straight away.
@@ -251,16 +265,16 @@ If you run the relay yourself, [Hosting a relay](../admin/relay-hosting.md#tryin
 
 ## Set up your own ElevenLabs account
 
-The **ElevenLabs connection** card can be filled in whichever voice is speaking, so you can set ElevenLabs up before switching to it. Its first line says so: "Used when ElevenLabs is chosen above, and for the saved voice lines - it can be set up whichever voice is speaking." The one exception is the HeatCaller voice: the whole card is switched off while that's chosen, because the account behind that voice isn't yours. Choose ElevenLabs under **Speak with** first, then fill the box in.
+The key and the model are on the **ElevenLabs connection** card on **Voice → Voice Settings**; the voice, with **Load Voices** and **Test Voice**, is at the top of **Voice → Cast**. The connection card can be filled in whichever voice is speaking. Its first line says so: "Used when ElevenLabs is chosen above, and for the saved voice lines - it can be set up whichever voice is speaking." The one exception is the HeatCaller voice: the whole card is switched off while that's chosen, because the account behind that voice isn't yours, and the **ElevenLabs voice:** row on **Cast** isn't shown. Choose ElevenLabs or the Kokoro voice under **Speak with** first, then fill the box in.
 
 1. Get an API key from your ElevenLabs account. <!-- TODO: confirm the exact steps/menu names on the ElevenLabs website for creating an API key, and which key permissions HeatCaller needs (it lists voices and synthesizes speech). -->
 2. In HeatCaller, open **Voice → Voice Settings**.
-3. On the **ElevenLabs connection** card, paste the key into **API Key:**. Tick **Show** if you want to check what you pasted.
-4. Press **Load Voices**. HeatCaller asks ElevenLabs for the voices on your account and fills the **Voice:** list. The status under **Test Voice**, on the **Voice parameters** card, says, for example, "Loaded 24 voices."
-5. Pick a voice from **Voice:**.
-6. Pick a model from **Model:** (see [Choosing a model](#choosing-a-model)).
-7. Press **Test Voice**. You should hear "This is HeatCaller testing your announcer voice." **Test Voice** always tests ElevenLabs, whichever voice is chosen under **Speak with**.
-8. Under **Speak with**, choose **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)**.
+3. On the **ElevenLabs connection** card, paste the key into **API Key:**. Tick **Show** if you want to check what you pasted. With the Kokoro voice chosen, the **ElevenLabs voice:** row appears on **Cast** once a key is typed.
+4. Pick a model from **Model:** (see [Choosing a model](#choosing-a-model)).
+5. Open **Voice → Cast**. At the top of the **Announcer** card, press **Load Voices** beside **ElevenLabs voice:**. HeatCaller asks ElevenLabs for the voices on your account and fills the list. The line under it says, for example, "Loaded 24 voices."
+6. Pick a voice from **ElevenLabs voice:**.
+7. Press **Test Voice** beside it. You should hear "This is HeatCaller testing your announcer voice." It uses the **Voice parameters** on **Voice Settings** as they are on screen, so you can change one there and test again. **Test Voice** always tests ElevenLabs, whichever voice is chosen under **Speak with**.
+8. Back on **Voice Settings**, under **Speak with**, choose **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)**.
 
 There's no Save button. Every change on this tab saves as you make it, and the line at the bottom of the tab shows "Saved automatically at" and the time. Races use the new settings straight away.
 
@@ -316,6 +330,8 @@ With the HeatCaller voice, the line goes to the relay with its tags still in it.
 
 These sit on the **Voice parameters** card. Most of them tune ElevenLabs; the Kokoro voice uses only **Speed:**, **Playback volume (%):** and **Max spoken announcements per lap:** (see [What the Kokoro voice uses](#what-the-kokoro-voice-uses)). The HeatCaller voice uses only the last two: everything that shapes how it sounds belongs to the relay (see [What's fixed while it's chosen](#whats-fixed-while-its-chosen)).
 
+To hear them, press **Test Voice** beside **ElevenLabs voice:** at the top of **Voice → Cast**. It uses the values on this card as they are on screen, saved or not, and the card says so: "To hear these, press Test Voice at the top of the Cast tab - it uses the values here."
+
 | Setting | What it does | Default |
 |---|---|---|
 | **Stability:** | 0 to 1. Lower gives a more varied, emotional read. Higher is steadier. | 0.50 |
@@ -326,6 +342,7 @@ These sit on the **Voice parameters** card. Most of them tune ElevenLabs; the Ko
 | **Language:** | A two-letter language code such as `en` or `es`, to force a language. Leave it blank for automatic detection. | blank |
 | **Output format:** | ElevenLabs audio format, for example `mp3_44100_128`. Higher-quality formats need a paid ElevenLabs plan, so leave it blank unless you know you have one. | blank (your plan's default) |
 | **Speaker boost** | ElevenLabs speaker boost. | On |
+| **Livelier in the big races, steadier in the heats** | Steps **Stability:** and **Style:** a tenth from your own settings with the size of the race: steadier in practice and heats, your settings as they are for the lesser mains, livelier for the top main, and one step up for the last race of the night. A line already saved or prepared is played as it is and never bought again. Shown for your own ElevenLabs voice on models other than v3. | On |
 | **Playback volume (%):** | How loud the announcer plays on this laptop. The same setting as the **Announcements** fader on **Sounds → Mixer**. | 100 |
 | **Max spoken announcements per lap:** | 1 to 5. When one lap triggers several routine announcements (say a fast lap, a streak and a lead change), only this many are spoken. The ones with the highest weight win. | 2 |
 
@@ -456,8 +473,17 @@ Placeholders are words in curly brackets that are filled in when the line is spo
 | `{round}` | The round being called (**Grid call** only). |
 | `{sector}` | The sector's number, "1" (**Fastest sector** only). |
 | `{sectortime}` | The sector's time (**Fastest sector** only). |
-| `{split}` | The split loop, "Split 1" (**Up at the split** and **Record pace at the split**). |
-| `{gap}` | How far up at the split, said as "point two seconds" (**Up at the split** and **Record pace at the split**). |
+| `{split}` | The split loop, "Split 1" (**Up at the split**, **Record pace at the split**, **Split time**, **Split coach (up or down)** and **Battle gap at the split**). |
+| `{gap}` | A gap at the split, said the way a gap is called: "two tenths", "half a second" (**Up at the split**, **Record pace at the split** and **Battle gap at the split**). |
+| `{splittime}` | The time from the line to the split loop, "eight point four zero seconds" (**Split time** only). |
+| `{delta}` | "Up a tenth", "Down two tenths" or "Level", against the coached driver's best (**Split coach (up or down)** only). |
+| `{battle}` | What a fight at the split is for, "for the lead", "for third"; empty in practice (**Battle gap at the split** only). |
+| `{sectors}` | Who was quickest through each sector, "sector one was Sam, sector two Bill" (**Sectors at the flag** only). |
+| `{pace}` | "On target", "Two tenths off" or "A tenth under", against the coached driver's target (**Target lap (coach)** only). |
+| `{target}` | The coached driver's target lap, "nine point two zero seconds" (**Target lap (coach)** only). |
+| `{consistency}` | The whole consistency verdict, "Last five within a tenth - that's your rhythm" (**Consistency (coach)** only). |
+| `{spread}` | How far apart the block's laps were, "three tenths" (**Consistency (coach)** only). |
+| `{laps}` | How many laps make the block, "five" (**Consistency (coach)** only). |
 | `{marshals}` | The corner marshals for the heat being called, said as "Sam, Bill and Frank" (**Grid call** only). It's the same list as the **Marshals...** window, for the current race day. |
 
 Each row's hint says which placeholders that announcement supports.
@@ -466,7 +492,7 @@ If a placeholder has nothing to fill it, HeatCaller takes it out along with the 
 
 ### Every announcement
 
-Defaults are for a new install. The **Practice** tick starts the same as the **Race** tick. A dash in the Weight column means the row has no weight box.
+Defaults are for a new install. The **Practice** tick starts the same as the **Race** tick, except for **Split time**, **Split coach (up or down)**, **Battle gap at the split**, **Target lap (coach)** and **Consistency (coach)**, which start ticked for practice only. A dash in the Weight column means the row has no weight box.
 
 | Row | When it fires | Placeholders | On by default | Weight |
 |---|---|---|---|---|
@@ -503,6 +529,12 @@ Defaults are for a new install. The **Practice** tick starts the same as the **R
 | **Fastest sector** | With a [split loop](../timing/decoders.md#a-split-loop): a driver goes quicker through a sector than anyone has this session. Not for the session's first sector times. | `{driver}` `{car}` `{team}` `{sponsors}` `{sector}` `{sectortime}` | No | – |
 | **Up at the split** | With a split loop: a driver crosses it at least a tenth up on their own best lap to that point. At most once every five of their laps. | `{driver}` `{car}` `{team}` `{sponsors}` `{split}` `{gap}` | No | – |
 | **Record pace at the split** | With a split loop: a driver crosses it ahead of the track record lap at that point. Races only. Needs a record set with a split loop running. At most once every five of their laps. | `{driver}` `{car}` `{team}` `{sponsors}` `{split}` `{gap}` | No | – |
+| **Split time** | With a split loop: each car's time from the line to the split loop, read as it crosses: "Eight point four zero seconds at the split." The split loop's **Lap time only**. | `{driver}` `{car}` `{team}` `{sponsors}` `{split}` `{splittime}` | Practice only | 30 |
+| **Split coach (up or down)** | With a split loop: for the driver you coach with **Coach *name*** → **At the split** on Race Control's right-click, how they stand at the split against their own best lap this session: "Up a tenth at the split.", "Down two tenths at the split.", "Level at the split." Every time they cross it, until you stop coaching them, the race is reset, or the race they were picked for ends (in practice, until **Reset**). Silent until they have a best lap with a split time. | `{driver}` `{car}` `{team}` `{sponsors}` `{split}` `{delta}` | Practice only | 75 |
+| **Battle gap at the split** | With a split loop: two cars on the same lap less than a second apart, timed at the split: "At the split, Sam's two tenths up on Bill." Not on lap one. At most once every five laps per pair, and only when the gap has moved a tenth since it was last said. | `{driver}` `{car}` `{team}` `{sponsors}` (car in front), `{rival}` (chaser), `{gap}` `{split}` `{battle}` | Practice only | 55 |
+| **Sectors at the flag** | With a split loop: after a race, who was quickest through each sector, said straight after the unofficial result (or on its own when that's switched off): "Quickest through sector one was Sam, sector two Bill." When one driver was quickest through every sector it says "Sam was quickest through both sectors." whatever the line. Ghosts and drivers marked **Exclude from records** are left out. | `{sectors}` | No | 50 |
+| **Target lap (coach)** | For the driver you coach with **Coach *name*** → **Target lap...** on Race Control's right-click: each lap against their target, "On target." (within a twentieth), "Two tenths off.", "A tenth under." A lap half as long again as their best is not said. With **Tones instead of words** ticked for them, a tone plays instead. See [Coaching a driver](../race-control/running-a-race.md#coaching-a-driver). | `{driver}` `{car}` `{team}` `{sponsors}` `{pace}` `{target}` `{laptime}` | Practice only | 75 |
+| **Consistency (coach)** | For the driver you coach with **Coach *name*** → **Consistency**: every few clean laps, how far apart they were, "Last five within a tenth - that's your rhythm.", and whether that's tighter or looser than the block before. Laps half as long again as their best are left out. | `{driver}` `{car}` `{team}` `{sponsors}` `{consistency}` `{spread}` `{laps}` | Practice only | 60 |
 
 The default **Grid call** lines include "grid up! Marshals: {marshals}." so the marshals are read out with each call. If you've been using HeatCaller before, your own grid-call lines are kept as they are; add `{marshals}` to them yourself, or use **Restore Default Lines** (which replaces all your lines). Marshals come from [Corner marshals](../race-day/program-and-mains.md#corner-marshals).
 
@@ -521,6 +553,9 @@ Reminders from the race day's **Timetable** ("5 minutes to Stock Buggy A-Main") 
 | **Lap time only** | **Say "lap time" (untick to just speak the number)** | "Lap time: 5 point two three seconds." or just "5 point two three seconds." |
 | **Lap time only** | **Say the driver's name first (e.g. "Sam, 5 point 23 seconds")** | Useful once more than one car is on track. |
 | **Lap time only** | **Announce every** _n_ **lap(s) per driver (1 = every lap)** | 1 to 20. Counted per driver: 3 means each driver hears their own time every third lap, and the laps in between are skipped. |
+| **Split time** | **Read every** _n_ **split crossing(s) per driver (1 = every one)** | 1 to 20. Counted per driver, like **Announce every** on **Lap time only**, and starting again with each race. |
+| **Target lap (coach)** | **Say it every** _n_ **lap(s) (1 = every lap)** | 1 to 20, counted for the coached driver and starting again with each session. |
+| **Consistency (coach)** | **Every** _n_ **clean laps, about those laps** | 3 to 20 (default 5): how many clean laps make a block, and how often the line is said. |
 | **Consistency streak** | **Announce every** _n_ **lap(s) in races,** _n_ **in practice** | 1 to 20 each. Counted from the streak threshold on **Sounds → Effects**: with a threshold of 3 and every 3, a driver is called at 3, 6, 9 and so on. |
 | **Consistency streak** | **Only the longest streak in the field** | Only the driver on the longest clean run is called. |
 | **Consistency streak** | **Mention the runner-up** | Adds the next-best streak to the line. |
@@ -530,13 +565,13 @@ The streak threshold (how many clean laps count as a streak) is set on **Sounds 
 
 ### Testing a line
 
-There are no **Test** buttons with the HeatCaller voice chosen — not the per-row ones on **Announcements** and not **Test Voice** on **Voice Settings**. Every test would render a line on HeatCaller's ElevenLabs account, which isn't yours to spend, so they're taken off the page rather than left to fail. **Test Kokoro Voice** still works, since it costs nothing.
+There are no **Test** buttons with the HeatCaller voice chosen — not the per-row ones on **Announcements** and not **Test Voice** at the top of **Voice → Cast**. Every test would render a line on HeatCaller's ElevenLabs account, which isn't yours to spend, so they're taken off the page rather than left to fail. The Kokoro voice's **Test Voice**, which shows there too because Kokoro stands in for the HeatCaller voice, still works, since it costs nothing.
 
-To hear a HeatCaller voice, use **Hear It** and **Preview** beside **Announcer voice:** instead: both are meant for exactly this, and neither touches your race-night allowance. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it). Pressing **Test** on the **Announcements** channel of **Sounds → Mixer** also speaks a level-check line in whichever voice is chosen, and a [demo race](../race-control/practice-and-ghosts.md) gives you a fuller listen — but those two do spend a little of the allowance.
+To hear a HeatCaller voice, use **Hear It** and **Preview** beside **HeatCaller voice:** at the top of **Voice → Cast** instead: both are meant for exactly this, and neither touches your race-night allowance. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it). Pressing **Test** on the **Announcements** channel of **Sounds → Mixer** also speaks a level-check line in whichever voice is chosen, and a [demo race](../race-control/practice-and-ghosts.md) gives you a fuller listen — but those two do spend a little of the allowance.
 
 Each row's **Test** button on the **Announcements** tab speaks a random line from that row, using what's on screen rather than what was last saved, in the voice chosen under **Speak with**. It fills in sample values: Sam for `{driver}`, Bill for `{rival}`, "Mini-Z MR03" for `{car}`, lap 7, "6.92 seconds" for `{time}` and `{laptime}`, gate 1 and "P1 Sam, P2 Bill, P3 Frank" for `{positions}`. `{round}`, `{class}` and `{marshals}` are filled with sample values too, so you can hear a whole grid call. Other placeholders aren't filled in during a test.
 
-The status line at the foot of the **Announcements** tab shows what was spoken, or the reason a test failed — the error message from ElevenLabs, or, with Kokoro chosen and nothing to speak with, "Kokoro can't speak yet - ..." and the reason. The line under **Test Voice** on **Voice Settings** says the same.
+The status line at the foot of the **Announcements** tab shows what was spoken, or the reason a test failed — the error message from ElevenLabs, or, with Kokoro chosen and nothing to speak with, "Kokoro can't speak yet - ..." and the reason. While the **ElevenLabs voice:** row is showing, the line under its **Test Voice** at the top of **Voice → Cast** says the same.
 
 With ElevenLabs chosen, a test always asks ElevenLabs for a fresh take rather than playing a saved one, and it's never handed to the Kokoro voice: if ElevenLabs can't speak it, you see ElevenLabs' own error, and "Enter an API key and select a voice first." when there's no key or voice. For a line without placeholders, the test is word for word what the race says, so the new take replaces the saved one and the race plays it from then on. Lines with placeholders are tested with the sample values, so testing them doesn't change what's saved for your drivers.
 
@@ -604,7 +639,7 @@ The same advice applies, with one difference in your favor: on the HeatCaller vo
 - Press **Prepare Lines** before the night. It's the cheapest thing you can do.
 - Leave **Every lap completed**, **Lap time only** and **Personal best lap** off, or use **Announce every** _n_ **lap(s)** to space them out. These are far and away the biggest spenders, because each one is a new sentence.
 - **Max spoken announcements per lap:** caps how many routine calls a single lap can trigger.
-- Read the allowance on the line under **Announcer voice:**; it's kept current every two minutes while the page is open. **Recently played:** shows what each saved line costs in characters, so you can see which ones are worth trimming. The console warns you once when nine tenths of it is gone; see [The warning before it runs out](#the-warning-before-it-runs-out).
+- Read the allowance on the line under the HeatCaller choice on **Voice Settings**; it's kept current every two minutes while the page is open. **Recently played:** shows what each saved line costs in characters, so you can see which ones are worth trimming. The console warns you once when nine tenths of it is gone; see [The warning before it runs out](#the-warning-before-it-runs-out).
 
 The same two-at-once limit and the same 30-second give-up apply to the relay.
 
@@ -668,24 +703,25 @@ Rivalries are also given to the local model for race intros and recaps. See [Com
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** is grayed out | The relay hasn't said your club has it: the **Club Website** page isn't set up, the relay couldn't be reached, or the club isn't switched on for the voice. The line under **Announcer voice:** says which. | Set the club up on the **Club Website** page, or ask whoever runs your relay. Press **Refresh** once it's done. |
+| **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** is grayed out | The relay hasn't said your club has it: the **Club Website** page isn't set up, the relay couldn't be reached, or the club isn't switched on for the voice. The line under that choice says which. | Set the club up on the **Club Website** page, or ask whoever runs your relay. Press **Refresh** once it's done. |
 | "Set the club up on the Club Website page first - the HeatCaller voice speaks through the same relay, with the same token." | No relay address, club id or token on the **Club Website** page. | Fill them in and run **Test Connection**. See [Setting up the Club Website page](../online/setup.md). |
-| "The HeatCaller voice isn't included for this club yet. Your own ElevenLabs key and the free Kokoro voice both work as normal. The samples above are still free to listen to." | Your club is on the relay, but hasn't been given the voice. | Ask whoever runs your relay to switch it on for your club. Meanwhile you can still press **Hear It** on any voice in the list. See [Hosting the relay](../admin/relay-hosting.md#the-heatcaller-voice). |
+| "The HeatCaller voice isn't included for this club yet. Your own ElevenLabs key and the free Kokoro voice both work as normal. Its free samples are at the top of the Cast tab to listen to." | Your club is on the relay, but hasn't been given the voice. | Ask whoever runs your relay to switch it on for your club. Meanwhile you can still press **Hear It** on any voice in the list at the top of **Voice → Cast**. See [Hosting the relay](../admin/relay-hosting.md#the-heatcaller-voice). |
 | "Couldn't ask the relay:" and a reason | The relay couldn't be reached when the page asked. | Check the laptop's internet. The list and your chosen voice are left alone, so the announcer keeps working. Press **Refresh** to try again. |
 | The lines boxes on **Announcements** can't be typed in, and the row **Test** buttons are missing | The HeatCaller voice is chosen. Its wording is fixed. | Nothing is broken. To write your own lines, choose your own ElevenLabs key or the Kokoro voice under **Speak with**. See [What's fixed while it's chosen](#whats-fixed-while-its-chosen). |
 | A soundscape was applied but the announcer says the same things as before | The HeatCaller voice is chosen, so a soundscape brings its sounds but not its lines. The confirmation says so before you apply it. | Expected. For a soundscape's wording, switch to your own ElevenLabs key or the Kokoro voice first, then apply it again. See [What applying a soundscape changes](sounds-and-music.md#what-applying-a-soundscape-changes). |
 | The **Rivalries** phrasing box won't take typing and **Use Default Lines** is grayed out | The HeatCaller voice is chosen. The amber line on the tab says so. | Same answer: your own key or the Kokoro voice. Adding, enabling and deleting rivalries still work. |
-| An announcer voice in the list says "not offered by the relay any more" | The relay has dropped the voice you chose from its catalog. | Pick another one. Lines already saved in the old voice still play until the allowance or the relay says otherwise. |
+| An announcer voice in the list says "not offered by the relay any more" | The relay has dropped the voice you chose from its catalog. | Pick another one in **HeatCaller voice:** at the top of **Voice → Cast**. Lines already saved in the old voice still play until the allowance or the relay says otherwise. |
 | The whole night is in the Kokoro voice, including lines that used to be in the HeatCaller voice | The month's allowance is used up. Saved lines are passed over too, on purpose, so the night is one voice. | Wait for the allowance to start again — the console line says when. Nothing is lost. Or switch to your own ElevenLabs key. See [When the HeatCaller voice can't speak a line](#when-the-heatcaller-voice-cant-speak-a-line). |
-| "Enter your ElevenLabs API key first." when pressing **Load Voices** | The **API Key:** box is empty. | Paste your key. |
+| "Enter your ElevenLabs API key on the Voice tab first." when pressing **Load Voices** beside **ElevenLabs voice:** | The **API Key:** box on **Voice Settings** is empty. | Paste your key. |
+| "Enter an API key on the Voice tab, and pick a voice, first." when pressing **Test Voice** beside **ElevenLabs voice:** | The **API Key:** box on **Voice Settings** is empty, or no voice is picked in **ElevenLabs voice:**. | Paste your key, then press **Load Voices** and pick a voice. |
 | "Failed to load voices:" followed by a message | ElevenLabs refused the key, or there's no internet. | Check the key and the connection. |
 | "Test failed:" followed by a code and message | ElevenLabs rejected the request. The message says why. | Common causes: wrong key, quota used up, or an **Output format:** your plan doesn't allow. Clear **Output format:** first. |
-| Lines appear on screen but nothing is spoken | Muted; Kokoro chosen on a PC that hasn't got its voice file, or where it won't load; ElevenLabs chosen with no key, no voice or no quota left and no stand-in (the box is unticked, or Kokoro can't speak); or the HeatCaller voice chosen with no voice picked on a PC where Kokoro can't stand in. | Check **Sounds → Mixer**: it shows "NO VOICE:" and the reason. For anything to do with Kokoro, press **Download** beside **Kokoro voice:** on **Voice Settings**. See [When nothing can speak](#when-nothing-can-speak). |
-| The **Mixer** shows a red "NO VOICE:" and **Voice Settings** says "NOTHING CAN SPEAK -" | Kokoro's voice file isn't on this PC, or it's there and won't load. Nothing stands behind Kokoro, so the announcer has no voice at all. | Press **Download (about 310 MB)** beside **Kokoro voice:** on **Voice Settings**, or **Download Again (about 310 MB)** if a copy is there but won't load. See [When nothing can speak](#when-nothing-can-speak). |
+| Lines appear on screen but nothing is spoken | Muted; Kokoro chosen on a PC that hasn't got its voice file, or where it won't load; ElevenLabs chosen with no key, no voice or no quota left and no stand-in (the box is unticked, or Kokoro can't speak); or the HeatCaller voice chosen with no voice picked on a PC where Kokoro can't stand in. | Check **Sounds → Mixer**: it shows "NO VOICE:" and the reason. For anything to do with Kokoro, press **Download** under the Kokoro choice on **Voice Settings**. See [When nothing can speak](#when-nothing-can-speak). |
+| The **Mixer** shows a red "NO VOICE:" and **Voice Settings** says "NOTHING CAN SPEAK -" | Kokoro's voice file isn't on this PC, or it's there and won't load. Nothing stands behind Kokoro, so the announcer has no voice at all. | Press **Download (about 310 MB)** under the Kokoro choice on **Voice Settings**, or **Download Again (about 310 MB)** if a copy is there but won't load. See [When nothing can speak](#when-nothing-can-speak). |
 | Some lines are in the Kokoro voice instead of your ElevenLabs voice | Kokoro is standing in: no key or voice set, no internet, the quota is used up, or ElevenLabs turned the API key down. | **Sounds → Mixer** says which. Once that's fixed, ElevenLabs takes over again by itself. Untick the stand-in box if you'd rather those lines were skipped. See [When ElevenLabs can't speak a line](#when-elevenlabs-cant-speak-a-line). |
-| A voice in **Kokoro voice:** says "(not on this PC - Michael (American, male) speaks instead)" | The settings came from another laptop whose Kokoro installation had that voice. | Pick one of the listed voices in **Kokoro voice:**. |
-| **Hear It** isn't shown, or says "This relay doesn't offer voice samples yet." | The relay hasn't been redeployed since the samples were added, or there's no relay address on the **Club Website** page yet. | Fill the address in, or ask whoever runs your relay to deploy it again. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it). |
-| **Preview** is grayed out and the page says "Listening only for now - ..." | The relay has nothing to offer this club yet, so the list is HeatCaller's free samples. They can be heard but not saved as your club's voice. | **Hear It** still works. To use a voice, set the club up on the **Club Website** page and have the relay switched on for it. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it). |
+| A voice in **Kokoro voice:** at the top of **Voice → Cast** says "(not on this PC - Michael (American, male) speaks instead)" | The settings came from another laptop whose Kokoro installation had that voice. | Pick one of the listed voices in **Kokoro voice:**. |
+| **Hear It** isn't shown at the top of **Voice → Cast**, or says "This relay doesn't offer voice samples yet." | The relay hasn't been redeployed since the samples were added, or there's no relay address on the **Club Website** page yet. | Fill the address in, or ask whoever runs your relay to deploy it again. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it). |
+| **Preview** is grayed out and the line under it says "Listening only for now - ..." | The relay has nothing to offer this club yet, so the list is HeatCaller's free samples. They can be heard but not saved as your club's voice. | **Hear It** still works. To use a voice, set the club up on the **Club Website** page and have the relay switched on for it. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it). |
 | "Today's previews are used up. They start again tomorrow - ..." | The day's separate preview allowance is spent. Your race-night allowance hasn't been touched. | Wait for tomorrow, or use **Hear It**, which costs nothing. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it). |
 | **Prepare Lines** is grayed out: "Not needed with the Kokoro voice - it speaks each line on this PC as it's wanted." | The Kokoro voice is chosen. | Nothing to do. Choose the HeatCaller voice or ElevenLabs under **Speak with** if you want to prepare lines. |
 | The first word of each line is cut off | The speaker is set to sleep after a very short time, or HeatCaller's sound output couldn't open when the app started. | Restart HeatCaller. The announcer and sound effects share one output that stays on while the app is open, so a Bluetooth speaker doesn't fall asleep between lines. |

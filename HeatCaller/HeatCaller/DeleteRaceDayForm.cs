@@ -164,9 +164,8 @@ public sealed class DeleteRaceDayForm : Form
             counts.Sessions == 1
                 ? "Delete the 1 saved race from Race History"
                 : $"Delete the {counts.Sessions} saved races from Race History",
-            "Their finishing order, lap times and notes. Personal bests, pace charts and head-to-head all "
-            + "read from these, so those go with them. Leave this unticked and the races stay - they simply "
-            + "stop belonging to a race day.",
+            "Their finishing order, lap times and notes, and the personal bests, pace charts and head-to-head "
+            + "read from them. Unticked, the races stay but stop belonging to a race day.",
             0,
             anyRaces);
 
@@ -178,8 +177,8 @@ public sealed class DeleteRaceDayForm : Form
             counts.Records == 1
                 ? "Also clear 1 track record set in them"
                 : $"Also clear {counts.Records} track records set in them",
-            "A lap record lives on the track layout, not in history, so it survives unless it is cleared "
-            + "here. Cleared means back to no record - it is not recalculated from the races that are left.",
+            "A lap record lives on the track layout, so it stays unless cleared here. Cleared means no record; "
+            + "it is not recalculated from the races left.",
             TickBox.UnderCaption(TickIndent),
             anyRaces && counts.Records > 0);
 
@@ -187,8 +186,8 @@ public sealed class DeleteRaceDayForm : Form
             counts.Seasons == 1
                 ? "Also take them out of 1 championship that picked them by hand"
                 : $"Also take them out of {counts.Seasons} championships that picked them by hand",
-            "Deleting the day already stops these races counting toward a championship that scores by race "
-            + "day. This is for a season someone named the races in individually.",
+            "Deleting the day already stops these races counting toward a championship scored by race day. "
+            + "This is for a season that named the races one by one.",
             TickBox.UnderCaption(TickIndent),
             anyRaces && counts.Seasons > 0);
 
@@ -199,9 +198,8 @@ public sealed class DeleteRaceDayForm : Form
                 ? "Also take back 1 achievement earned in them"
                 : $"Also take back {counts.Badges} achievements earned in them",
             // Says what really happens (22 Oct 2026, bug hunt): milestones are kept.
-            "An achievement names the race that produced it. Race totals on a driver's profile are left as they "
-            + "are - winding those back cannot be done reliably from here - so milestone achievements (race, lap, "
-            + "win and podium counts) are kept, since the totals that earned them are kept too.",
+            "Achievements tied to these races are taken back. Milestones (race, lap, win and podium counts) are "
+            + "kept, as the profile totals that earned them are left as they are.",
             TickBox.UnderCaption(TickIndent),
             anyRaces && counts.Badges > 0,
             gapBelow: UiLayout.SectionGap);
@@ -232,8 +230,8 @@ public sealed class DeleteRaceDayForm : Form
 
         var lblUndo = new Label
         {
-            Text = "Undo puts all of it back - but only until a few more changes are made, or the app is closed. "
-                   + "Anything set since (a track record taken in a later race, a race added to a season) is left as it is.",
+            Text = "Undo puts all of it back until a few more changes are made or the app is closed. "
+                   + "Anything set since (a later track record, a race added to a season) is left as it is.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -254,6 +252,15 @@ public sealed class DeleteRaceDayForm : Form
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnDelete), gapBelow: 0);
         btnDelete.TabIndex = 0;
         btnCancel.TabIndex = 1;
+
+        // WHY (23 Oct 2026, bug hunt 10): on a day with no saved races every
+        // tick is greyed out, so the window's first focus fell on Delete (the
+        // first tab stop) - and a focused button outranks AcceptButton, so
+        // Enter deleted the day. Start on Cancel then; Tab still goes to Delete.
+        if (!anyRaces)
+        {
+            Load += (_, _) => ActiveControl = btnCancel;
+        }
 
         Controls.Add(page);
 

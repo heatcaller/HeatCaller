@@ -89,6 +89,36 @@ public sealed class AppSettings
     /// </summary>
     public int SplitLoopOffsetMs { get; set; }
 
+    /// <summary>
+    /// Record every pass the race is given and every command it is told
+    /// (Stage, the green, flags, laps added by hand, warnings, penalties,
+    /// releases, undo) to a file under this PC's data folder - see
+    /// TimingRecorder. Off by default. Read when HeatCaller starts.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Oct 2026, timing layer, P0): a recorded night can be played
+    /// back through the race engine, so a change to how passes reach it can
+    /// be proved not to change a result. A diagnostic, so it is off unless
+    /// someone asks for it; with it off nothing is written and nothing about
+    /// timing changes.
+    /// </remarks>
+    public bool RecordTimingPasses { get; set; }
+
+    /// <summary>
+    /// "Run timing on its own thread" (Connection page): the race engine runs
+    /// on a dedicated timing thread rather than the window's, so a frozen
+    /// window, a stuck sound card or a closed Race Control page can't hold up
+    /// a lap, the time limit or the checkered flag - see TimingHost and
+    /// RaceTiming. Off by default. Read once, when HeatCaller starts: a
+    /// change takes effect at the next start.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Oct 2026, timing layer, P4): a switch, so a club can rehearse
+    /// with it on and fall back with one tick if anything looks odd. With it
+    /// off the app times exactly as it did before (inline mode).
+    /// </remarks>
+    public bool TimingOnItsOwnThread { get; set; }
+
     // Automated backup settings. AutoBackupFolder empty = use
     // BackupService.DefaultBackupFolder (a Documents subfolder) rather than
     // baking in a path here, so the default can change later without an
@@ -656,6 +686,96 @@ public sealed class AppSettings
     /// night it holds. See RelayPublisher.CloseDriverNightsOnTheRelay.
     /// </summary>
     public bool PublishDriverNightsToTheRelay { get; set; }
+
+    // --- Driver experience (22 Oct 2026) --------------------------------
+    //
+    // WHY (22 Oct 2026, driver experience): every one of these starts OFF.
+    // Each puts something new on the internet or in a driver's inbox, and
+    // an update does not get to decide that for a club - the same rule as
+    // the nights switch above.
+
+    /// <summary>
+    /// Let a driver ask, from their own phone, to change their own details
+    /// (announcer name, pronouns, about line, email, privacy), pick their
+    /// battery pack, or query a result. Nothing changes until the desk
+    /// approves it. Also needs online check-in and driver nights on.
+    /// Unticking it is SENT to the relay, which throws away every ask it
+    /// holds (RelayPublisher.CloseDriverAsksOnTheRelay).
+    /// </summary>
+    public bool RelayDriverRequests { get; set; }
+
+    /// <summary>
+    /// Publish what the announcer says as text captions on the club's live
+    /// page, for drivers who can't hear the PA. Names of drivers who asked
+    /// for initials only are redacted.
+    /// </summary>
+    public bool RelayCaptions { get; set; }
+
+    /// <summary>Draw a captions strip along the bottom of the Big Screen (key C toggles it).</summary>
+    public bool BigScreenCaptions { get; set; }
+
+    /// <summary>
+    /// Offer to email each driver who asked for it a summary of their
+    /// night with a link to their night page.
+    /// </summary>
+    public bool NightEmailOffered { get; set; }
+
+    /// <summary>Send the night emails by themselves when the race day is closed.</summary>
+    public bool NightEmailAutomatic { get; set; }
+
+    /// <summary>The night (yyyy-MM-dd) that NightEmailSentTo is about. Empty before the first send.</summary>
+    public string NightEmailSentFor { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Transponders already emailed their night for NightEmailSentFor, so a
+    /// second press (or the automatic send after a manual one) never emails
+    /// anybody twice.
+    /// </summary>
+    public List<string> NightEmailSentTo { get; set; } = new();
+
+    /// <summary>
+    /// Transponders whose online privacy changed and whose saved results
+    /// are still being republished, so a restart finishes the job
+    /// (MainForm.Privacy.cs).
+    /// </summary>
+    public List<string> PrivacyRepublishOwed { get; set; } = new();
+
+    /// <summary>
+    /// Drivers who asked for no photo, no videos or initials only online and
+    /// whose profile has since been deleted, still protected (23 Oct 2026,
+    /// bug hunt 10). Deleting the profile used to drop the protection and
+    /// republish their saved results with the full name. Kept on this
+    /// laptop only; see PublicPrivacy.Retain. Empty in older files.
+    /// </summary>
+    public List<PrivacyRetainedDriver> PrivacyRetained { get; set; } = new();
+
+    /// <summary>
+    /// PublicPrivacy.FlaggedFingerprint of the register last made to stick
+    /// (23 Oct 2026, bug hunt 10). A start-up that finds the profiles say
+    /// otherwise - a privacy tick saved moments before HeatCaller closed or
+    /// crashed, before the roster tick saw it - republishes for every
+    /// flagged driver instead of taking the change as already done. Null in
+    /// older files: the first start just records it.
+    /// </summary>
+    public string? PrivacyAppliedFingerprint { get; set; }
+
+    /// <summary>
+    /// The flagged drivers (by transponder) of that same register (23 Oct
+    /// 2026, bug hunt 10 review). With it a start-up that finds the
+    /// fingerprint moved also republishes a driver whose flag went OFF just
+    /// before closing - the profiles alone no longer say they were flagged.
+    /// Empty in older files.
+    /// </summary>
+    public List<string> PrivacyAppliedFlagged { get; set; } = new();
+
+    /// <summary>
+    /// The night-before preview on the club's page, or null for none (23
+    /// Oct 2026, bug hunt 10). It was remembered in memory only, so after a
+    /// restart (written on Thursday, laptop shut, raced on Saturday) the
+    /// meeting never took it down; and with no script kept it could not be
+    /// redone when a driver later asked for initials only.
+    /// </summary>
+    public NightBeforePreviewUp? NightBeforeOnThePage { get; set; }
 
     /// <summary>
     /// Whether the night-before preview also goes onto the club's own web
@@ -1437,6 +1557,21 @@ public sealed class AppSettings
     /// </summary>
     public bool RaceNightFocus { get; set; } = true;
 
+    /// <summary>
+    /// THE BETA TIER (22 Oct 2026): keep the pages that have not yet been
+    /// tested at a real event out of the sidebar (NavTiers.UntestedPages -
+    /// Championship, Rentals, Handicaps, Venues and Garage). A search still
+    /// finds them, under a "NOT YET TESTED" heading, and a button
+    /// that opens one still does.
+    ///
+    /// Off unless asked for. A settings file written before this existed
+    /// has no value for it and loads as off, so a club already running a
+    /// championship does not lose the page from under it on an update. A new
+    /// club is asked on the last step of the first-run wizard, ticked there
+    /// by default; anyone can change it in Manage Navigation.
+    /// </summary>
+    public bool HideUntestedPages { get; set; }
+
     // Track Layouts page - which track was last viewed, so its photo/details show automatically on returning to that page.
     public string LastViewedTrackLayoutName { get; set; } = string.Empty;
 
@@ -1681,6 +1816,13 @@ public sealed class AppSettings
 
     /// <summary>Show published names as a first name and an initial rather than in full.</summary>
     public bool RelayAbbreviateNames { get; set; } = true;
+
+    /// <summary>
+    /// The announcer's delivery steps with how big the race is - steadier in
+    /// the heats, livelier in the top main (DeliveryEnergies, 22 Oct 2026).
+    /// A club's own ElevenLabs voice only.
+    /// </summary>
+    public bool VoiceEnergyFollowsRace { get; set; } = true;
 
     // The last relay settings that were PROVED to work, by a test that
     // came back connected. Kept beside the live ones rather than instead
@@ -2361,6 +2503,24 @@ public sealed class AppSettings
         PracticeKpis = Clean(PracticeKpis);
         BigScreenKpis = Clean(BigScreenKpis);
         WebKpis = Clean(WebKpis);
+        // WHY (22 Oct 2026, driver experience): the night-email and privacy
+        // republish work lists are read on every roster tick; a null in the
+        // file means "none", not a crash.
+        NightEmailSentTo = Clean(NightEmailSentTo);
+        PrivacyRepublishOwed = Clean(PrivacyRepublishOwed);
+        PrivacyAppliedFlagged = Clean(PrivacyAppliedFlagged);
+
+        // WHY (23 Oct 2026, bug hunt 10): read on every privacy change; a
+        // null in the file means "none".
+        PrivacyRetained = (PrivacyRetained ?? new List<PrivacyRetainedDriver>()).Where(item => item is not null).ToList();
+
+        foreach (var retained in PrivacyRetained)
+        {
+            retained.Transponders = Clean(retained.Transponders);
+            retained.Name ??= string.Empty;
+            retained.AnnouncerName ??= string.Empty;
+        }
+        NightEmailSentFor ??= string.Empty;
 
         // The voice gate reads these on every HeatCaller line, and the
         // Voice Settings page as it is built - a null in the file threw
@@ -2597,4 +2757,48 @@ public sealed class AppSettings
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
         return SafeFile.WriteAllText(SettingsPath, json);
     }
+}
+
+/// <summary>
+/// A removed driver's online privacy choices, kept so deleting their
+/// profile does not undo them (23 Oct 2026, bug hunt 10). See
+/// AppSettings.PrivacyRetained and PublicPrivacy.Retain. Local only - none
+/// of this is ever published.
+/// </summary>
+public sealed class PrivacyRetainedDriver
+{
+    /// <summary>Every transponder they had when their profile went.</summary>
+    public List<string> Transponders { get; set; } = new();
+
+    public string Name { get; set; } = string.Empty;
+
+    public string AnnouncerName { get; set; } = string.Empty;
+
+    public bool NoPhoto { get; set; }
+
+    public bool NoVideo { get; set; }
+
+    public bool Initials { get; set; }
+}
+
+/// <summary>
+/// The night-before preview on the club's page: the race day it is for and
+/// what it was built from, script unredacted, so it can be taken down after
+/// a restart and redone when a driver's privacy changes (23 Oct 2026, bug
+/// hunt 10). Kept on this laptop only.
+/// </summary>
+public sealed class NightBeforePreviewUp
+{
+    /// <summary>The race day it was written for; empty for the legacy holder.</summary>
+    public string DayId { get; set; } = string.Empty;
+
+    public string? DayName { get; set; }
+
+    /// <summary>The day it previews, local, as NightBefore takes it.</summary>
+    public DateTime WhenLocal { get; set; }
+
+    public TimeSpan? FirstRaceLocal { get; set; }
+
+    /// <summary>The script as written, before PublicPrivacy.Redact.</summary>
+    public string? Script { get; set; }
 }

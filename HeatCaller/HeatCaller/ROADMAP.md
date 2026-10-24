@@ -47,10 +47,10 @@ What follows from that:
 
 | | |
 |---|---|
-| Version | 0.59.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.59.0 was cut on 28 Sep 2026 from everything since 0.52.0; its notes are in `website\docs\release-notes.md`, where "Unreleased" has grown again and is owed a 0.60.0 cut |
+| Version | 0.60.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.60.0 was cut on 22 Oct 2026 from everything since 0.59.0 (28 Sep); its notes are in `website\docs\release-notes.md`, with a fresh empty "Unreleased" above it. **Not yet packed or uploaded** - that needs `publish.cmd`, `pack.cmd` and the releases repo (Beta readiness 3, Feed) |
 | App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 362 source files, ~259k lines with the tests, 25 pages |
 | Tests | `HeatCaller.Tests`: **3,710 tests, measured** (`check.cmd`, 22 Oct 2026 - 3,710 passed, 0 failed, 0 warnings; 12 to 23 minutes on the dev laptop, the layout sweep being most of it), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes and once with the text size changed while the window is up (`LayoutTests`, `WindowLayoutTests`). **Only ever write a figure `check.cmd` has actually measured, with its date**: the row carried 1,921 for a day after the suite had grown, and a number nobody measured is worse than an old one, because it reads as current |
-| Relay | TypeScript on Fly.io (`relay\`), **770 tests, measured 22 Oct 2026** (770 passed, 0 failed). **Deployed 22 Oct 2026** (`fly deploy --ha=false`) with everything to date - the nights, the night-before preview, the voice samples and Preview, the usage and top-up routes, the podium videos and the 22 Oct bug-hunt fixes. **No undeployed changes.** The rule still stands: a relay change does nothing for a club until it is deployed, and the laptop's console says "redeploy it" when it meets a route the relay doesn't have |
+| Relay | TypeScript on Fly.io (`relay\`), **770 tests, measured 22 Oct 2026** (770 passed, 0 failed). **Deployed 22 Oct 2026** (`fly deploy --ha=false`) with everything to date - the nights, the night-before preview, the voice samples and Preview, the usage and top-up routes, the podium videos and the 22 Oct bug-hunt fixes. **Undeployed: the known-issues round's re-roll (`fresh` takes), the `previewDailyChars` comment, and the coaching round's report card on a driver's night page** - relay tests 772, measured 22 Oct 2026 in the container, not yet by `check.cmd`. The rule still stands: a relay change does nothing for a club until it is deployed, and the laptop's console says "redeploy it" when it meets a route the relay doesn't have |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
 | Real use | Four solo rehearsal nights at home; rehearsal 4 (4-5 Oct) called clean. The I-Lap is proven on real hardware, split times and all. No club has run a night on it yet |
@@ -1956,10 +1956,18 @@ Decisions worth keeping:
 
 ### Still not started
 
-- **A spoken option for the split times** (asked 10 Oct 2026). The split
-  CALLS exist already - **Fastest sector**, **Up at the split**, **Record
-  pace at the split** on **Voice - Announcements** - so this is something
-  else, and what exactly is still to be settled with the club.
+- ~~**A spoken option for the split times**~~ (asked 10 Oct 2026) -
+  **decided and built 22 Oct 2026.** Asher chose all four lines, with the
+  live ones practice-only by default: **Split time** (each car's time to the
+  split, every Nth crossing per driver), **Split coach (up or down)** (one
+  driver picked on Race Control's right-click - Coach (name) > At the split since the coaching round - up or down on their own best
+  of the session at every crossing), **Battle gap at the split** (two cars
+  on the same lap under a second apart, once every five laps per pair and
+  only when the gap moved a tenth), and **Sectors at the flag** (who was
+  quickest through each sector, in the same breath as the unofficial
+  result; off by default, as a race line). Events `SplitTime`, `SplitDelta`,
+  `SplitBattle`, `SectorsRecap`; `AnnouncementService.Splits.cs`,
+  `RaceControlControl.Splits.cs`, `SpokenSplitsTests`.
 
 ## The swarm bug hunt (12 Oct 2026)
 
@@ -2884,9 +2892,15 @@ With that in place:
 
 ### Still on the list, from the same brainstorm
 
-6. **Audio replay** - unblocked, not built. The seam exists; what remains
-   is a ring buffer on the audio thread and one ranking decision. See
-   "Item 6" below.
+6. **Audio replay - BUILT, by hand only (22 Oct 2026).** `RaceReplayBuffer`
+   holds the last 30 s of the mix in memory, fed lock- and allocation-free
+   from `RaceAudioRecorder.Mixed`, started fresh each race. **Replay Moment**
+   on the announcer strip (`ReplayTheMomentAsync`, RaceControlControl.Broadcast)
+   plays the 20 s before the press through `AudioBus`, between the show's
+   boundary stings; **Skip** rides it down. Needs race recording on. (Not
+   the same as **Play again**, which re-speaks the last commentary segment.)
+   **Still open: the ranking decision** - which moments deserve an
+   automatic replay (`NightMoments.Rank`). Nothing replays unless pressed.
 7. **Duck, don't gate - ALREADY DONE** (found 15 Oct 2026, nothing built).
    The bed already ducks rather than gating, and more thoroughly than the
    brainstorm assumed: `_settings.ShowBedDuckPercent` is a club-settable
@@ -2915,13 +2929,31 @@ With that in place:
    (`Ceiling`, `EverySponsorShown`) the room is left hanging, so it gets a
    sting and a line that promises nothing about a recap that may never
    come. **Done.**
-9. Crowd ambience swelling on a pass (`AmbienceService`).
-10. Pronunciation overrides per driver (`RacingWordsForm`).
-11. A clock with stakes - "two minutes to go" (see the horizon question
-    above).
-12. Contractions and fragments in the model instructions.
-13. Delivery energy driven by `RaceStature`, not just segment count
-    (ElevenLabs stability and style).
+9. ~~Crowd ambience swelling on a pass~~ - **already done** (checked 22 Oct
+   2026): `AmbienceService.Surge` is fired from `MainForm.Audio` for a lead
+   change, a close battle, a fastest lap, a personal best, a streak, the
+   last lap, a jump start and (at Peak) a track record.
+10. ~~Pronunciation overrides per driver~~ - **already done** (checked 22
+    Oct 2026): a driver's **Announcer name:** takes the name spelled the way
+    it sounds, with **Hear It** under it and **Check Names** on Driver Hub
+    (10 Oct). `RacingWordsForm` turned out to be the glossary, not this.
+11. ~~A clock with stakes~~ - **done** (checked 22 Oct 2026): the horizon
+    (`RaceHorizon`, `SegmentKind.Horizon`, wired 15 Oct) says what a gap
+    needs over the road left, estimated from the clock in a timed race,
+    and the **Final minute** call exists. A literal "two minutes to go"
+    call is not a separate event; add one only if a club asks.
+12. ~~Contractions and fragments in the model instructions~~ - **done 22
+    Oct 2026**: `CommentaryService.SpokenStyleLine`, in the base system
+    prompt for every tone and segment.
+13. ~~Delivery energy driven by `RaceStature`~~ - **done 22 Oct 2026**
+    (`AnnouncementService.Energy.cs`, `DeliveryEnergies`): Steady for
+    practice and heats, the club's own settings for lesser mains, Lively
+    for the top main, one step up for the last race; a tenth on stability
+    and style, bounded. A club's own ElevenLabs voice on non-v3 models
+    only - the HeatCaller voice is left alone so its shared takes stay
+    shared. An existing take of the line at any step is played before
+    anything is bought. **Livelier in the big races, steadier in the
+    heats** on Voice Settings (`VoiceEnergyFollowsRace`, on).
 
 ---
 
@@ -3247,6 +3279,63 @@ banner for ghosts. The Program-tab undo item was stale (already refused,
 and pinned). Docs: install.md around the installer, driver warnings.
 
 Still open: `RecordWatch` speaks nothing yet, and the releases repo.
+
+### The roadmap round (22 Oct)
+
+Asked for the same morning: "complete and build what you can" of the
+roadmap's partly-done and not-started items. Everything below is in 0.60.0
+and **none of it has been built or run yet** - the container has no .NET
+SDK. Two independent reviews read it for compile errors first.
+
+- **Built:** print with preview (heat sheet, results); the hand-counted
+  "*" mark everywhere results are shown; **Paste a Table...**; **Replay
+  Moment** (by hand); delivery energy from `RaceStature`; contractions and
+  fragments in the model's instructions; the beta tier; relay ops
+  (`mint-club.cmd`, `backup.cmd`, the uptime workflow, the checklist and
+  sizing docs); the first-night guide's fallback plan and who to call; the
+  two giant methods split.
+- **Drafted, not done:** the beta agreement, the privacy notice and the
+  ElevenLabs questions (`website\legal-drafts\`) - for a lawyer.
+- **Not built, and why:**
+  - **MyLaps / AMB.** Nothing to build against: it needs a capture from a
+    real MyLaps decoder, the way the EasyLap's was captured. Still Beta
+    readiness 1's question.
+  - **The I-Lap capture test.** Needs a real `ilap-raw-*.log`; the app
+    writes them to its data folder (`AppPaths.Root`), which this session
+    couldn't read.
+  - ~~**A spoken option for the split times.**~~ Decided and built 22 Oct
+    2026 - all four lines; see "Still not started" under "The night in four minutes".
+  - **Automatic replays** - which moments earn one (`NightMoments.Rank`).
+  - **The business items** - the ElevenLabs business account, voices,
+    allowance, billing - and the lawyer.
+
+### The coaching round (22 Oct)
+
+Asked the same day, after the split times: "plan other ways a driver can
+be coached", then all four options chosen. Built in three groups, in
+0.60.0, and like the rest of the day **not built or run yet**.
+
+- **Spoken and tone coaching** - Race Control's right-click **Coach
+  (name)** submenu replaced "Coach (name) at the split": **At the split**,
+  **Target lap...**, **Consistency**, **Tones instead of words**, **Stop
+  coaching**. Two events, `TargetPace` and `ConsistencyCoach` (practice
+  on, races off). One coached driver at a time, because none of the lines
+  or tones names the driver; the target is the driver's for the night
+  (`DriverTargets`, in memory, never saved). Tones play straight through
+  `ToneGenerator`, never queued. `DriverCoaching.cs`,
+  `AnnouncementService.Coaching.cs`, `RaceControlControl.Coaching.cs`,
+  `CoachingSpokenTests`.
+- **The report card and the phone coach page** - `CoachReport` (pure
+  arithmetic, every line left out rather than guessed when the laps are too
+  few), `/coach` on the club Wi-Fi (`WebServerService.Coach.cs`), the
+  driver's own night page on the relay, and Race History's **Report Card
+  for (name)...**. The setup line goes only on the driver's own relay night
+  and in Race History; names online are shortened as the public pages are.
+  **The online card needs a relay deploy** (`fly deploy --ha=false`).
+- **Chase your own ghost** - **Chase a Best Lap...** on Practice's ghost
+  cars card, and the pace source `OwnBestTonight` ("A driver's best tonight
+  (or ever, before tonight's)"): fixed for the run, brought up to date by
+  picking the driver again. `OwnBestGhost.cs`.
 
 ## The season's own piece (scoped 13 Oct 2026, not started)
 
@@ -3796,11 +3885,14 @@ day: the layout overhaul is finished before the beta rather than after it
    - the "Where things stand" table says .NET 10, and a release note.
    The serial and HID packages sit on the timing path, so the next
    rehearsal counts as the check that it still reads the decoder.
-6. **The installer** (Beta readiness 3), then **the beta tier and the
-   first-night guide** (Beta readiness 4). The installer before the relay
-   work (Beta readiness 6): every beta club needs it, and only a club
-   using online check-in, the phone manager or the website needs the
-   relay - but re-mint the `horizon-test` token whenever it's convenient.
+6. **Ship 0.60.0** (Beta readiness 3). The beta tier, the first-night
+   guide and the relay's ops work are done (22 Oct 2026); the version is
+   cut. What is left is the release itself: `check.cmd` green, then
+   `publish.cmd` and `pack.cmd`, then the public `HeatCaller-releases` repo
+   created on GitHub and the packed assets uploaded to it (`vpk upload
+   github`), then an update taken end to end on a second machine. Re-mint
+   the `horizon-test` token whenever it's convenient (`mint-club.cmd
+   horizon-test`).
 7. ~~**I-Lap on real hardware**~~ - **done, weekend of 3 Oct 2026.**
    `ILapClient` was written before a unit was on the bench; it now reads a
    real one, and reads it as a split loop with split times coming through.
@@ -3818,12 +3910,17 @@ day: the layout overhaul is finished before the beta rather than after it
    it did on the night, and the A-Main's passes then go through
    `RaceControlSession` and must count the same laps. The session log keeps
    the decoder lines.
-9. **Split the two remaining giant methods.** `PopulateTabs`
-   (`MainForm.Pages.cs`, ~1,715 lines) and `BuildLayout`
-   (`RaceControlControl.Layout.cs`, ~800 lines - mostly the flag actions
-   now; the page itself is put together from the pieces at the end) each
-   build many pages or panels in one method. Split them page by page, one per commit, each
-   checked by running the app.
+9. ~~**Split the two remaining giant methods.**~~ **Done 22 Oct 2026, not
+   yet run.** `PopulateTabs` (`MainForm.Pages.cs`) went from ~2,330 lines to
+   154, calling 23 page builders (`BuildRaceControlPage`,
+   `BuildRaceDayAndChampionshipPages`, `BuildVoicePage` and so on) in the
+   original order; `BuildLayout` (`RaceControlControl.Layout.cs`) from
+   ~1,185 to 225, with 11 pieces (`BuildClockColumn`, `BuildStageButton`,
+   `BuildResetButton`, `BuildLeaderboardGrid`...). Checked by inlining
+   every piece back and comparing line for line. Left whole on purpose:
+   the rest of Race Day inside `BuildRaceDayAndChampionshipPages` (about
+   ten shared locals) and the tails of both methods. **Run the app once
+   and open every page** before calling it proved.
 
 Done and kept going: the off-site copy on GitHub (26 Sep 2026,
 `asherizm/HeatCaller`). Push after every commit;
@@ -4206,12 +4303,22 @@ second project. Not WiX/MSI: too heavy.
 
 The sidebar already has tiers (`NavTiers.cs`: Essentials, Club Tools).
 
-- [ ] A **beta tier**: only what has been through a rehearsal is shown.
-      Untested features - handicaps, batteries, championships, multi-day
-      events, the soundscape editor - are hidden or clearly marked "not yet
-      tested at a real event".
-- [ ] A **first-night guide**: one page - install, connect the decoder, set
+- [x] A **beta tier** - **built 22 Oct 2026.** `NavTiers.UntestedPages`
+      is the one list: Championship, Rentals, Handicaps, Venues, Garage. A
+      page comes OFF it when it has been used at a rehearsal or club night
+      and that night has its row in the rehearsal table - removed in the
+      same commit. `AppSettings.HideUntestedPages` keeps them out of the
+      sidebar (a search still finds them, under NOT YET TESTED); the tick is
+      in Manage Navigation and on the first-run wizard's last step, ticked
+      for a new club. Off for an existing settings file. Batteries,
+      multi-day events and the soundscape editor live inside pages a night
+      needs (Driver Hub, Race Day, Sounds), so they can't be hidden this
+      way.
+- [x] A **first-night guide**: one page - install, connect the decoder, set
       up the classes, run a practice, the fallback plan, who to call.
+      **Done 22 Oct 2026**: `website\docs\getting-started\first-race-night.md`
+      walks a club from install to a first finished heat, and now has
+      "Your fallback plan" and "Who to call".
 
 ### 5. The first nights at the club
 
@@ -4223,14 +4330,22 @@ The sidebar already has tiers (`NavTiers.cs`: Essentials, Club Tools).
 
 ### 6. The relay, for more than one club
 
-- [ ] **Setting up a club** (minting): a written checklist around
-      `npm run mint` and `fly-set-config.cmd`, and a safe way to get the
-      token to the club (not in an email body). Self-service can wait.
-- [ ] **Uptime check** that alerts you when the relay stops answering.
-- [ ] **Backups** of the relay's volume (published results, queues).
-- [ ] **Sized** for several clubs racing on the same night (one
-      shared-cpu machine today).
-- [ ] Re-mint the old `horizon-test` token (it appeared in a chat).
+- [x] **Setting up a club** (minting) - **22 Oct 2026**: `relay\mint-club.cmd`
+      (build, mint, `fly-set-config.cmd` in one), a 7-step checklist and
+      "Handing a club its token" in `admin\relay-hosting.md`. No one-time
+      link: the relay has no operator login to make one safely.
+- [x] **Uptime check** - **22 Oct 2026**: `.github\workflows\relay-uptime.yml`
+      pings `/healthz` (every 20 min in the evening, every 4 h otherwise);
+      GitHub emails on a failed run. **Run it once by hand** (Actions → Relay
+      uptime → Run workflow) to prove it.
+- [x] **Backups** - **22 Oct 2026**: `relay\backup.cmd` downloads the volume
+      to `relay-backups\<date>`; Fly's daily snapshots documented, with
+      restore. **Take the first one.**
+- [x] **Sized** - documented 22 Oct 2026: what to watch and the
+      `fly scale` / `fly volumes extend` commands. No change made.
+- [ ] Re-mint the old `horizon-test` token (it appeared in a chat):
+      `mint-club.cmd horizon-test`, then paste the new token into the
+      laptop's **Publish token**. Asher's to run.
 
 ### 7. The HeatCaller voice (ElevenLabs), as a business
 
@@ -4257,11 +4372,15 @@ never silent, and a warning at nine tenths. What remains is not code:
 ### 8. Terms and privacy
 
 - [ ] A **beta agreement**: no warranty, results are the club's
-      responsibility, and the club keeps its own fallback.
+      responsibility, and the club keeps its own fallback. **Drafted 22 Oct
+      2026** (`website\legal-drafts\beta-agreement.md`, not published) -
+      for the lawyer, with its [CHECK]s.
 - [ ] A **privacy notice**: driver names - some of them children's - go to
       the relay and to ElevenLabs; what is kept, where, for how long, and
-      how a driver is removed.
-- [ ] The **terms ElevenLabs requires** clubs to be bound by.
+      how a driver is removed. **Drafted 22 Oct 2026**
+      (`website\legal-drafts\privacy-notice.md`), with ten [CHECK]s.
+- [ ] The **terms ElevenLabs requires** clubs to be bound by. The questions
+      to put to them are in `website\legal-drafts\elevenlabs-questions.md`.
 - [ ] An hour with a lawyer on the above. Claude is not one.
 
 ---
@@ -4291,22 +4410,27 @@ from. Ranked by what decides whether a club switches, and stays.
    - **Column mapping** - built 27 Sep 2026 (`DriverImport`,
      `CsvMappingForm`). Import from CSV takes any file - comma, semicolon or
      tab - and shows its first rows with a list above each column, guessed
-     from the heading and changeable, first and last names included. Still
-     to do: taking a table pasted from a web page, for systems that only
-     show their lists on screen.
+     from the heading and changeable, first and last names included.
+   - **A table pasted from a web page** - built 22 Oct 2026 (`PastedTable`,
+     **Paste a Table...** on Driver Profiles): the clipboard's HTML table,
+     or tab-separated text from a spreadsheet, into the same mapping form
+     and import.
    - **Season points as a starting number** - built 27 Sep 2026. Past race
      results are not imported. A "Points so far" column carries each
      driver's points into a championship (`Season.CarriedPoints`), added
      after the best-rounds rule; typed in or changed on the Championship
      page with Points Carried In.
-3. **A pit TV display.** The Big Screen is a window on the race laptop.
-   Clubs want a TV in the pits showing the live board: a full-screen page
-   from the laptop's own Wi-Fi server, opened in any TV browser or a cheap
-   stick, would do it.
-4. **Printed heat sheets and results.** Heat and run sheets can be
-   rendered, but the only real print dialog is the join poster. Clubs still
-   pin heat lists on a board: print, with a preview, from the Program tab
-   and Race History.
+3. ~~**A pit TV display.**~~ **Done** (checked 22 Oct 2026): the laptop's
+   own Wi-Fi server has the **Live Results** page, built to be left on a
+   TV all day - it follows the crowd-screen look and reloads itself when
+   the look or logo changes (`WebServerService`, `/api/look`). Any TV
+   browser or stick on the club's Wi-Fi opens it.
+4. ~~**Printed heat sheets and results**~~ - **done 22 Oct 2026, not yet
+   tried on a printer.** `PagePrinting.PrintWithPreview` (printer picker,
+   then preview): **Print Heat Sheet...** on the Program tab's menu, and
+   **Print Results...** in Race History for the selected races
+   (`ResultsSheetRenderer`, letter pages, a race moved whole to a fresh page
+   rather than split).
 
 ### Timing that holds up on a bad night
 
@@ -4336,9 +4460,14 @@ from. Ranked by what decides whether a club switches, and stays.
    same clock could give the green a real decoder time instead of an
    estimate from the last pass - not done. Bytes 7-10 were the same in
    every one.
-6. **A "counted by hand" mark.** When a transponder fails, laps are added
-   by hand. The result should show which cars were hand-counted, so results
-   built partly by hand can be trusted and questioned.
+6. ~~**A "counted by hand" mark.**~~ **Done 22 Oct 2026** (`HandCountedLaps`,
+   `SessionResultEntry.LapsByHand`): a lap count with hand laps shows as
+   "12*" with "* includes laps counted by hand" on the board, Race History,
+   the Event Report, printed results and the LAN Live Results page; the lap
+   strip says "+N by hand"; an optional **By Hand** column; a column/field
+   in every export. Edit Result's added laps count too. Scoring unchanged.
+   **Not yet: the relay's own results pages**, which draw the board
+   themselves - they show the "*" but not the legend.
 
 ### Could be better
 
@@ -4880,7 +5009,8 @@ fits.
 ## Known open issues
 
 **All but two closed on 22 Oct 2026** - see "The known-issues round
-(22 Oct)" in the 18-22 Oct section. What is left:
+(22 Oct)" and "The roadmap round (22 Oct)" in the 18-22 Oct section. What
+is left:
 
 - **The releases repo doesn't exist yet**, so the installer has nowhere
   public to download from and the update feed points at nothing.
@@ -4890,6 +5020,10 @@ fits.
   reset each race since 22 Oct, but by design it must not drive
   `NotifyRecordPace`/`NotifyTrackRecord`; it needs a segment of its own
   before anything is spoken.
+- **The club's website doesn't mark hand-counted laps.** The laptop's
+  pages, printouts and exports do ("12*" with its legend); the relay copy
+  of the board is sent unmarked, since the relay draws its own pages and
+  has no legend. Needs a relay change.
 
 Decided and closed rather than fixed: the relay's three voice routes that
 name no club stay a deliberate exception (the security page states it);

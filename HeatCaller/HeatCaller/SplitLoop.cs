@@ -24,6 +24,17 @@ public sealed record SplitPass(
     long? RawLineMs);
 
 /// <summary>
+/// A split read understood (SplitLoop.Understand), without touching the
+/// loop's own lists - safe on any thread when its lookups are. SplitLoop.Keep
+/// keeps it, on the UI thread.
+/// </summary>
+/// <param name="Pass">What the read was understood as.</param>
+/// <param name="ArrivedMs">When it arrived (TimingClock) - LastPassAt, and the unknown list's time.</param>
+/// <param name="Owned">Whether a driver has it as their split transponder; an unowned one goes on the unknown list.</param>
+/// <param name="Description">The console line for it.</param>
+public sealed record SplitReading(SplitPass Pass, long ArrivedMs, bool Owned, string Description);
+
+/// <summary>
 /// The split loop: every pass the split decoder reads comes here instead of
 /// to the race. It works out whose transponder it was and when, on the line
 /// decoder's clock, the car crossed - and keeps the last few minutes of
@@ -35,7 +46,10 @@ public sealed record SplitPass(
 /// loop that drops out, misreads or reads a stranger leaves the race exactly
 /// as it would have been without it.
 ///
-/// UI thread only (MainForm posts every pass here).
+/// UI thread only (MainForm posts every pass here) - except Understand,
+/// which is safe on any thread when its lookups are: with timing on its own
+/// thread MainForm calls it on the timing thread, on a SplitLoop of its own
+/// given lookups made for that (24 Oct 2026, timing layer, P8).
 /// </summary>
 public sealed class SplitLoop
 {
@@ -143,7 +157,23 @@ public sealed class SplitLoop
     }
 
     /// <summary>A pass from the split decoder. Returns what it was understood as.</summary>
-    public SplitPass Record(DirectLapEvent pass)
+    public SplitPass Record(DirectLapEvent pass) => Keep(Understand(pass));
+
+    /// <summary>
+    /// What a split read means - whose split transponder, and when on the
+    /// line's clock - without touching this loop's own lists or raising
+    /// anything. Safe on any thread when the lookups it was given are
+    /// (AppTimeOf, LineTimeOf, OffsetMs, the owner lookup and ClaimantsOf).
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Oct 2026, timing layer, P8): Record cut in two. With timing on
+    /// its own thread a split pass is understood on the timing thread, which
+    /// puts it into the race there (RaceTiming.PostSplitPass), and only the
+    /// keeping - the recent and unknown lists, the console, PassRecorded - is
+    /// done on the UI thread (Keep). Inline, Record does both, one after the
+    /// other, exactly as it always did.
+    /// </remarks>
+    public SplitReading Understand(DirectLapEvent pass)
     {
         var id = pass.TransponderId?.Trim() ?? string.Empty;
         var arrived = pass.ReceivedMs != 0 ? pass.ReceivedMs : TimingClock.NowMs;
@@ -169,7 +199,23 @@ public sealed class SplitLoop
             rawLine - offset,
             rawLine);
 
-        LastPassAt = arrived;
+        return new SplitReading(
+            understood,
+            arrived,
+            owner is not null,
+            Describe(understood, owner?.Driver, owner is null ? ClaimantsOf?.Invoke(id) ?? 0 : 1));
+    }
+
+    /// <summary>
+    /// Keeps a read <see cref="Understand"/> made sense of: the recent and
+    /// unknown lists, LastPassAt, the console line and PassRecorded, in the
+    /// order Record has always done them. UI thread only. Returns the pass.
+    /// </summary>
+    public SplitPass Keep(SplitReading reading)
+    {
+        var understood = reading.Pass;
+
+        LastPassAt = reading.ArrivedMs;
         _recent.Add(understood);
 
         if (_recent.Count > Kept)
@@ -177,12 +223,12 @@ public sealed class SplitLoop
             _recent.RemoveRange(0, _recent.Count - Kept);
         }
 
-        if (owner is null)
+        if (!reading.Owned)
         {
-            _unknown[id] = arrived;
+            _unknown[understood.Transponder] = reading.ArrivedMs;
         }
 
-        Log?.Invoke(Describe(understood, owner?.Driver, owner is null ? ClaimantsOf?.Invoke(id) ?? 0 : 1));
+        Log?.Invoke(reading.Description);
         PassRecorded?.Invoke(understood);
         return understood;
     }
@@ -214,4 +260,56 @@ public static class SplitLoopNames
         TimingPoint.Split3 => "Split 3",
         _ => point.ToString(),
     };
+}
+
+/// <summary>
+/// Which race row a split pass belongs to - MainForm.RowForSplit's rule,
+/// on any thread.
+/// </summary>
+/// <remarks>
+/// WHY (24 Oct 2026, timing layer, P8): with timing on its own thread the
+/// row is found on the timing thread, from the standings' ids and a lookup
+/// safe there (ProfileStore.RowOwnerForAnyThread), not from the live
+/// standings and profiles. The steps are RowForSplit's, line for line.
+/// </remarks>
+internal static class SplitRows
+{
+    /// <summary>RowForSplit's rule on any thread: the driver's one row, or with two of their cars out the row whose transponder is fitted to the split's car. Null when it can't be told.</summary>
+    /// <param name="pass">The split pass.</param>
+    /// <param name="rowTransponders">The race's rows (their transponders), in the standings' order.</param>
+    /// <param name="rowOwnerOf">A row's driver (main transponder) and the car its transponder is fitted to, or null for nobody's.</param>
+    internal static string? RowFor(SplitPass pass, IReadOnlyList<string> rowTransponders, Func<string, (string Main, string? CarId)?> rowOwnerOf)
+    {
+        if (pass.Driver is null)
+        {
+            return null;
+        }
+
+        var rows = rowTransponders
+            .Where(r => !Ghosts.IsGhost(r)
+                        && string.Equals(rowOwnerOf(r)?.Main, pass.Driver, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (rows.Count == 1)
+        {
+            return rows[0];
+        }
+
+        // RowForSplit asks the pass's driver's profile which car each row's
+        // transponder is fitted to; every row here is that same profile's,
+        // so its own answer for the row is that one.
+        if (rows.Count > 1 && pass.CarId.Length > 0)
+        {
+            var inThatCar = rows
+                .Where(r => string.Equals(rowOwnerOf(r)?.CarId, pass.CarId, StringComparison.Ordinal))
+                .ToList();
+
+            if (inThatCar.Count == 1)
+            {
+                return inThatCar[0];
+            }
+        }
+
+        return null;
+    }
 }

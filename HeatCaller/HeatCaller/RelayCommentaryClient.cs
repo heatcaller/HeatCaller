@@ -430,9 +430,18 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
             // first throw to pit lane of a demo was never heard. A busy
             // answer spends nothing, so it is asked again shortly, inside
             // the same timeout. Any other refusal is final, as before.
+            //
+            // WHY (23 Oct 2026, bug hunt 10): the relay also answers 429
+            // "busy" when its own 20s wait on the model runs out - and that
+            // one is not free: the model was asked and ran the whole time.
+            // A night recap (180s timeout) was then asked for eight times
+            // over, every one a paid generation that timed out the same way.
+            // The cap's busy comes back at once, so only a busy that came
+            // back quickly (QuickBusy) is asked again; a slow one is final.
             for (var attempt = 1; ; attempt++)
             {
                 TimeSpan? retryAfter;
+                System.Diagnostics.Stopwatch sent;
 
                 using (var request = new HttpRequestMessage(
                     HttpMethod.Post,
@@ -442,6 +451,8 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
                 })
                 {
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
+
+                    sent = System.Diagnostics.Stopwatch.StartNew();
 
                     using var response = await Http.SendAsync(request, timeoutCts.Token).ConfigureAwait(false);
 
@@ -453,7 +464,7 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
                     retryAfter = response.Headers.RetryAfter?.Delta;
                 }
 
-                if (status == HttpStatusCode.TooManyRequests && attempt < BusyAttempts && IsBusy(body))
+                if (WorthAskingAgain(status, attempt, sent.Elapsed, body))
                 {
                     var wait = retryAfter is { } asked
                         ? TimeSpan.FromMilliseconds(Math.Clamp(asked.TotalMilliseconds, 500, 3000))
@@ -609,6 +620,24 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
 
     /// <summary>How long to wait before asking a busy relay again, when it does not say.</summary>
     private static readonly TimeSpan BusyWait = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>
+    /// The longest a "busy" answer may take and still be the relay's
+    /// in-flight cap (which answers before any model is asked) rather than
+    /// its writer timing out on a model that was asked - see GenerateCoreAsync.
+    /// </summary>
+    private static readonly TimeSpan QuickBusy = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Whether one answer is worth asking for again: a 429 "busy", with tries
+    /// left, that came back quickly. A slow busy means the model was already
+    /// asked (and paid for) and timed out; asking again only pays again.
+    /// </summary>
+    internal static bool WorthAskingAgain(HttpStatusCode status, int attempt, TimeSpan took, string body)
+        => status == HttpStatusCode.TooManyRequests
+           && attempt < BusyAttempts
+           && took < QuickBusy
+           && IsBusy(body);
 
     /// <summary>Whether a refusal is the relay's "busy" - writing another line for this club right now - and so worth asking again.</summary>
     private static bool IsBusy(string body)

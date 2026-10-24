@@ -136,7 +136,12 @@ public sealed partial class AnnouncementService
     /// <param name="transponder">Who the call is about, for the lost-lines window (20 Oct 2026). Null for nobody in particular.</param>
     /// <param name="words">What the call would have said, for the lost-lines window. Null when the caller has no words yet.</param>
     /// <param name="paced">Run when the call is HELD by the pacing gap, as against dropped or kept (22 Oct 2026) - see EnqueueVoiceWork.</param>
-    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Func<bool>? holdOver = null, bool alreadyCounted = false, Action? lost = null, string? transponder = null, string? words = null, Action? paced = null)
+    /// <param name="routineWeight">
+    /// The call's weight when it is not the weight of its type - a rivalry
+    /// line, queued as a LeaderChange (23 Oct 2026, bug hunt 10). Null for
+    /// the type's own.
+    /// </param>
+    private bool RoutineCallGetsTheAir(AnnouncementEventType type, out bool kept, Func<bool>? holdOver = null, bool alreadyCounted = false, Action? lost = null, string? transponder = null, string? words = null, Action? paced = null, int? routineWeight = null)
     {
         kept = false;
 
@@ -148,9 +153,14 @@ public sealed partial class AnnouncementService
         // A change of lead is never held for pacing, whatever weight the
         // Voice page has it at - the pacing dial's own description promises
         // so (22 Oct 2026, bug hunt). It was only true at the shipped 100.
-        var weight = type == AnnouncementEventType.LeaderChange
+        //
+        // WHY (23 Oct 2026, bug hunt 10): a rivalry line borrows LeaderChange
+        // as its queue key, so it took that floor too and skipped the pacing
+        // dial. It brings its own weight, and the floor is for a real lead
+        // change only.
+        var weight = routineWeight ?? (type == AnnouncementEventType.LeaderChange
             ? Math.Max(AnnouncerDensity.Commanding, WeightOf(type))
-            : WeightOf(type);
+            : WeightOf(type));
         var gap = AnnouncerDensity.GapSeconds(Stature, Density);
 
         if (_isVoiceSpeaking)

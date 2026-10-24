@@ -31,6 +31,15 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // WHY (24 Oct 2026, timing bug hunt): checked here, on the stale
+        // lap's own thread - the sound itself is played later from the pool,
+        // outside the stale scope, so a track-record fanfare used to play on
+        // its own for a lap the room never heard called.
+        if (SkippedAsStale())
+        {
+            return;
+        }
+
         // Only counted as pending if the sound will ACTUALLY play. Your
         // trace showed the staging cue reported as pending for 8.5 seconds
         // before being skipped as "disabled for races" - the gate dutifully
@@ -121,6 +130,14 @@ public sealed partial class AnnouncementService
         StatusMessage?.Invoke($"[audio-trace] PlaySound requested: {kind} (muted={Muted})");
 
         if (Muted)
+        {
+            finished?.TrySetResult();
+            return;
+        }
+
+        // A sound for a lap the window was told of too late (23 Oct 2026,
+        // timing layer, P4b) - see WhileLapCallsAreStale.
+        if (SkippedAsStale())
         {
             finished?.TrySetResult();
             return;

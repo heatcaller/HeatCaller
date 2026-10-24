@@ -534,6 +534,25 @@ public sealed partial class RaceControlControl
         return true;
     }
 
+    /// <summary>
+    /// RefuseIfPracticeRunning for anything that starts a race (Stage,
+    /// Countdown, Green, On Air, a heat from the program, a demo): first, in
+    /// threaded mode, a practice the timing thread started at the gate that
+    /// this window has not taken over yet is handed back - the race wins -
+    /// and no car can start one until this click is over. Inline that is a
+    /// no-op and this is RefuseIfPracticeRunning exactly.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Oct 2026, timing layer, P7): see RaceTiming.
+    /// TakeBackPracticeAutoStartForRace. A practice this window already runs
+    /// is still refused here, as it always was.
+    /// </remarks>
+    public bool RefuseIfPracticeRunningForRaceStart(string action)
+    {
+        _race.TakeBackPracticeAutoStartForRace();
+        return RefuseIfPracticeRunning(action);
+    }
+
     /// <summary>Why a yellow or red is refused during practice, for RefuseIfPracticeRunning's box.</summary>
     private const string NoFlagsInPractice = "practice has no flags, and nothing could clear one until practice stopped";
 
@@ -617,6 +636,12 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void CancelAutoStart()
     {
+        // WHY (24 Oct 2026, timing layer, P8): threaded, the automatic start's
+        // green waits on the timing tick, not on _autoStartCts - so it is
+        // dropped here too, first. A manual Green during the countdown then
+        // greens as it always did. Inline: does nothing.
+        _race.DisarmGreenAfterCountdown();
+
         _autoStartCts?.Cancel();
         _autoStartCts = null;
 
@@ -654,6 +679,10 @@ public sealed partial class RaceControlControl
     /// <param name="forQuickRace">True when Quick Race is opening it - see _warmUpOpenedByQuickRace.</param>
     private bool TryBeginWarmUp(Action then, bool forQuickRace = false)
     {
+        // Threaded, a warm-up is a race start too (24 Oct 2026, timing
+        // layer, P7) - see RefuseIfPracticeRunningForRaceStart.
+        _race.TakeBackPracticeAutoStartForRace();
+
         if (_race.IsPracticeMode || _race.State is not (RaceState.Idle or RaceState.Finished))
         {
             return false;
@@ -746,6 +775,13 @@ public sealed partial class RaceControlControl
         _warmUpCts?.Cancel();
         _warmUpCts = null;
         _afterWarmUp = null;
+
+        // WHY (24 Oct 2026, timing layer, P7): threaded, the cars still lapping
+        // when the warm-up ends must not start practice at the gate in the
+        // moment between it ending and the Stage below - the race is held for
+        // first. Taken before the warm-up ends, while the session cannot have
+        // a gate practice; a no-op inline.
+        _race.TakeBackPracticeAutoStartForRace();
 
         _race.EndWarmUp(skipped ? "Warm-up skipped." : "Warm-up over.");
 
@@ -911,6 +947,17 @@ public sealed partial class RaceControlControl
                 _countdownGreenIn = null;
             }
 
+            // WHY (24 Oct 2026, timing layer, P8): threaded, the green is handed
+            // to the timing tick now, due when the countdown ends, so a frozen
+            // window cannot hold it while passes are booked as jump starts. This
+            // path's green never re-applied the format, and the engine's gate
+            // already waits for the audio, so neither is done here. Inline
+            // (false), the wait below runs as it always did.
+            if (ArmAutoGreen(TimeSpan.FromSeconds(_fmt.CountdownSeconds), waitForAudio: false, asTheGreenButton: false))
+            {
+                return;
+            }
+
             await Task.Delay(TimeSpan.FromSeconds(_fmt.CountdownSeconds), cts.Token);
 
             if (!AutoStartMayContinue(generation, RaceState.Countdown))
@@ -944,6 +991,39 @@ public sealed partial class RaceControlControl
                 _autoStartCts = null;
             }
         }
+    }
+
+    /// <summary>Threaded mode: the automatic start's green handed to the timing thread (RaceTiming.ArmGreenAfterCountdown), with what the Green button does first for a green from the countdown done now. False inline - the caller keeps its own path.</summary>
+    /// <remarks>
+    /// WHY (24 Oct 2026, timing layer, P8): see ArmGreenAfterCountdown. The rest
+    /// of what _actGreen does is not needed for a green from the countdown:
+    /// practice cannot be running in Countdown, On Air ended at Stage, the
+    /// state is not Racing (so neither the already-green nor the GreenRefusal
+    /// check applies), Stage already ended any demo, the jump-start rules are
+    /// not re-applied from Countdown, and nothing is left for CancelAutoStart.
+    /// </remarks>
+    private bool ArmAutoGreen(TimeSpan notBefore, bool waitForAudio, bool asTheGreenButton)
+    {
+        if (!_race.IsThreaded)
+        {
+            return false;
+        }
+
+        if (asTheGreenButton)
+        {
+            // What _actGreen does for a first green from the countdown (BuildGreenButton).
+            ApplyEffectiveFormat(startingNewRace: true);
+            _currentRaceIsRerun |= _rerunPending;
+            _rerunPending = false;
+        }
+
+        // Stamped by the green itself on the timing side (RaceJournalRecorder's
+        // "??=" at Racing), so nothing from an abandoned race may be left in it.
+        _sessionStartedAtUtc = null;
+
+        return _race.ArmGreenAfterCountdown(notBefore,
+            waitForAudio ? token => _announcer.WaitForAudioAsync(TimeSpan.FromSeconds(20), token) : null,
+            TimeSpan.FromSeconds(20));
     }
 
     /// <summary>
@@ -1004,7 +1084,11 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void ApplyJumpStartRules()
     {
-        var round = _activeRound?.Invoke();
+        // WHY (23 Oct 2026, bug hunt 10): read only the Round box, so a demo
+        // of an already-run round (box on freeform, DemoRound set) ran on the
+        // default jump-start rules, not the class's. ShowRound is the same
+        // round EffectiveFormat already took the start type from.
+        var round = ShowRound();
         var raceClass = round is not null && _raceClasses is not null
             ? _raceClasses.All.FirstOrDefault(rc => string.Equals(rc.Name, round.ClassName, StringComparison.OrdinalIgnoreCase))
             : null;
@@ -1086,7 +1170,9 @@ public sealed partial class RaceControlControl
         // order the board and the qualifying projection show. The announcer
         // knows nothing of classes, so it is told at each green, as the
         // jump-start rules are given to the session.
-        var round = _activeRound?.Invoke();
+        // WHY (23 Oct 2026, bug hunt 10): ShowRound, not just the Round box,
+        // so a demo of a round calls pole on that class's rule too.
+        var round = ShowRound();
         var raceClass = round is not null && _raceClasses is not null
             ? _raceClasses.All.FirstOrDefault(rc => string.Equals(rc.Name, round.ClassName, StringComparison.OrdinalIgnoreCase))
             : null;
@@ -1119,7 +1205,12 @@ public sealed partial class RaceControlControl
     {
         fromLastRace = false;
 
-        var roster = _activeRound?.Invoke()?.AssignedTransponders?
+        // WHY (23 Oct 2026, bug hunt 10): this read only the Round box, so a
+        // demo of an already-run round (box on freeform, DemoRound set) took
+        // the round's start type but not its grid - a staggered or
+        // hand-released demo started everyone together, or borrowed another
+        // race's order. ShowRound is the grid the intros already call.
+        var roster = ShowRound()?.AssignedTransponders?
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList() ?? new List<string>();
@@ -1257,10 +1348,24 @@ public sealed partial class RaceControlControl
             // went on the green, so the handicap widened the gap it was set
             // to close - by twice the credit on a shared clock.
             //
-            // The field is the grid when there is one, so a driver with no
-            // handicap entry at all is still held as scratch. Without a grid
-            // only the drivers with a handicap entry can be scheduled, and
-            // anyone else goes on the green.
+            // The field is the grid, so a driver with no handicap entry at
+            // all is still held as scratch.
+            //
+            // WHY (23 Oct 2026, bug hunt 10): with no grid the field used to
+            // be every entry in the handicap store - every class, absent
+            // drivers too - so an absent driver's big credit held the whole
+            // field after the green while the shared race clock ran. With no
+            // grid there is no telling who is racing, so it starts everyone
+            // together instead, as the fixed-gap stagger does.
+            if (startingGrid.Count == 0)
+            {
+                _race.SetReleaseSchedule(new Dictionary<string, long>());
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Handicap start has no grid to know who is racing - "
+                    + "select a round with an assigned roster on Race Day \u2192 Next Steps, or run one race so the last "
+                    + "result can be used. Starting everyone together instead.");
+                return;
+            }
+
             var credits = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var entry in handicaps.All)
@@ -1271,9 +1376,7 @@ public sealed partial class RaceControlControl
                 }
             }
 
-            var pursuitField = startingGrid.Count > 0
-                ? startingGrid
-                : credits.Keys.ToList();
+            var pursuitField = startingGrid;
 
             long CreditOf(string transponder) => credits.TryGetValue(transponder, out var ms) ? ms : 0;
 
@@ -1305,14 +1408,13 @@ public sealed partial class RaceControlControl
             _race.SetReleaseSchedule(schedule);
             StatusMessage?.Invoke(maxCredit > 0
                 ? $"{AppTime.LogStampNow()}  [race] Handicap start (pursuit) - biggest credit away first, "
-                  + $"scratch drivers held {maxCredit / 1000.0:0.0}s"
-                  + (startingGrid.Count > 0 ? "." : ". No grid known - anyone without a handicap entry goes on the green.")
+                  + $"scratch drivers held {maxCredit / 1000.0:0.0}s."
                 : $"{AppTime.LogStampNow()}  [race] Handicap start selected, but no driver has a time credit - everyone goes on the green.");
 
             // The same credit taken off the result as well would count it
             // twice - once as the head start, once off the total.
             if (maxCredit > 0
-                && _activeRound?.Invoke() is { } handicapRound
+                && ShowRound() is { } handicapRound
                 && handicaps.ModeFor(handicapRound.ClassName) == HandicapMode.TimeCredit)
             {
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Note: {handicapRound.ClassName} also takes time credits off "

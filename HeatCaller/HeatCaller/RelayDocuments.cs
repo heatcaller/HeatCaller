@@ -49,15 +49,36 @@ internal static class RelayDocuments
     internal static string PublicNameOrUnnamed(string? name, string? transponder)
     {
         var text = (name ?? string.Empty).Trim();
+        var id = (transponder ?? string.Empty).Trim();
 
         if (text.Length == 0
-            || string.Equals(text, (transponder ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
+            || string.Equals(text, id, StringComparison.OrdinalIgnoreCase)
+            || CarriesTransponder(text, id))
         {
             return UnnamedDriver;
         }
 
         return text;
     }
+
+    /// <summary>
+    /// True when the transponder number is a whole word of the name - the
+    /// "Rental 4012345" a Club Rental with no asset tag is named
+    /// (MainForm.UnknownTransponders.AddClubRental).
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Oct 2026, bug hunt 10): only a name EXACTLY equal to the
+    /// number was caught, so that rental's number went onto public results,
+    /// the results index and the heat line-ups - against this file's own
+    /// rule. Caught here, so profiles already saved that way are too. Only
+    /// an id with a digit in it counts, so a short lettered id can never
+    /// swallow an ordinary word of somebody's name.
+    /// </remarks>
+    private static bool CarriesTransponder(string name, string id) =>
+        id.Length > 0
+        && id.Any(char.IsDigit)
+        && name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Any(word => string.Equals(word, id, StringComparison.OrdinalIgnoreCase));
 
     // ----------------------------------------------------------- programme
 
@@ -236,13 +257,19 @@ internal static class RelayDocuments
     /// Rental transponders are left out: a badge on "Rental 4" belongs to
     /// whoever happened to be holding it, which is nobody in particular.
     /// </summary>
-    internal static string Achievements(AchievementStore store, ProfileStore profiles, bool abbreviate)
+    /// <param name="offeredAt">
+    /// Where the club races (AppSettings.RacingAt), so "next" only ever
+    /// points at a badge the club's badges page offers. Null counts every
+    /// badge.
+    /// </param>
+    internal static string Achievements(AchievementStore store, ProfileStore profiles, bool abbreviate, RacingSetting? offeredAt = null)
     {
         var known = AchievementCatalogue.All.Select(b => b.Id).ToHashSet(StringComparer.Ordinal);
 
         var drivers = store.All
             .Where(d => profiles.Get(d.Transponder) is not { IsRental: true })
             .Select(d => (
+                Driver: d,
                 Name: PublicName(profiles, d.Transponder),
                 Unlocked: d.Unlocked
                     .Where(u => known.Contains(u.Id))
@@ -257,11 +284,12 @@ internal static class RelayDocuments
 
         return JsonSerializer.Serialize(new
         {
-            drivers = drivers.Select(d => new
+            drivers = drivers.Select(d => new AchievementsDriver
             {
-                name = shown[d.Name!],
-                count = d.Unlocked.Count,
-                badges = d.Unlocked.Select(u => new { id = u.Id, whenUtc = u.UnlockedUtc }).ToList(),
+                Name = shown[d.Name!],
+                Count = d.Unlocked.Count,
+                Badges = d.Unlocked.Select(u => new { id = u.Id, whenUtc = u.UnlockedUtc }).ToList(),
+                Next = NextBadgesFor(d.Driver, offeredAt),
             }).ToList(),
 
             recent = drivers
@@ -281,6 +309,46 @@ internal static class RelayDocuments
                 })
                 .ToList(),
         });
+    }
+
+    /// <summary>
+    /// One driver in the achievements document. A class rather than an
+    /// anonymous object so that "next" can be left out altogether when
+    /// there is nothing in reach, and every document from before it stays
+    /// byte for byte the same (22 Oct 2026, driver experience).
+    /// </summary>
+    private sealed class AchievementsDriver
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; init; } = string.Empty;
+
+        [JsonPropertyName("count")]
+        public int Count { get; init; }
+
+        [JsonPropertyName("badges")]
+        public object Badges { get; init; } = Array.Empty<object>();
+
+        /// <summary>The two counting badges they are nearest to, or null - see NextBadgesFor.</summary>
+        [JsonPropertyName("next")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public object? Next { get; init; }
+    }
+
+    /// <summary>
+    /// The two counting badges a driver is nearest to, as bare counts -
+    /// {id, left, noun} - or null when none is in reach (22 Oct 2026, driver
+    /// experience, item 5). Counts only, never the wording or anybody else's
+    /// name: how many races, laps or podiums somebody has is already there
+    /// to be counted in the public results. The name beside it has been
+    /// through DisplayNames like every other, so initials-only holds.
+    /// </summary>
+    private static object? NextBadgesFor(DriverAchievements driver, RacingSetting? offeredAt)
+    {
+        var near = AchievementReach.For(driver, 2, offeredAt);
+
+        return near.Count == 0
+            ? null
+            : near.Select(n => new { id = n.Id, left = n.Left, noun = n.Noun }).ToList();
     }
 
     // -------------------------------------------------------------- tracks
@@ -378,7 +446,17 @@ internal static class RelayDocuments
         // The holder is shortened together with the table, so the record
         // line and the top row of the table name the same person the same
         // way.
-        var shown = NameMap(best.Select(b => b.Name).Append(holder).Concat(sectorRecords.Select(r => r.Holder)).Where(n => n.Length > 0), abbreviate);
+        //
+        // WHY (23 Oct 2026, bug hunt 10): with the rows raced here, so a
+        // driver renamed since their best lap (or record) and then shown by
+        // initials is caught by transponder, not published under the old
+        // full name. A record holder with no row here is matched by name.
+        var raced = sessions
+            .Where(s => string.Equals(s.TrackLayoutName, track.Name, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(s => s.Results)
+            .Where(r => !GhostService.IsGhost(r.Transponder))
+            .Select(r => ((string?)r.DriverName, (string?)r.Transponder));
+        var shown = NameMap(best.Select(b => b.Name).Append(holder).Concat(sectorRecords.Select(r => r.Holder)).Where(n => n.Length > 0), abbreviate, raced);
 
         return new
         {
@@ -643,9 +721,17 @@ internal static class RelayDocuments
 
         // The roster falls back to the transponder for an unnamed driver;
         // that stays on the laptop.
+        //
+        // One read of the privacy register for the whole list (22 Oct 2026,
+        // driver experience), so the names and the photos below agree about
+        // who asked for what. The transponders go in too: a driver asking
+        // for initials only is matched by their car, not just their name.
+        var privacy = PublicPrivacy.Current;
         var names = RelayPublisher.DisplayNames(
             entrants.Select(d => PublicNameOrUnnamed(d.Name, d.Transponder)).ToList(),
-            settings.RelayAbbreviateNames);
+            settings.RelayAbbreviateNames,
+            entrants.Select(d => (string?)d.Transponder).ToList(),
+            privacy);
 
         var json = string.Empty;
 
@@ -680,7 +766,10 @@ internal static class RelayDocuments
                         ClassName = d.ClassName,
                         Number = (profile?.RaceNumber ?? string.Empty).Trim(),
                         CheckedIn = d.CheckedIn,
-                        Photo = withPhotos ? PhotoFor(profile, photoCache) : null,
+                        // Never for a driver who asked for no photo online
+                        // (22 Oct 2026, driver experience), whatever the
+                        // club's own photo setting says.
+                        Photo = withPhotos && !privacy.NoPhoto(d.Transponder) ? PhotoFor(profile, photoCache) : null,
                         RacerPin = RacerPinFor(settings, club, salt, d.Transponder),
                     };
                 }).ToList(),
@@ -970,14 +1059,25 @@ internal static class RelayDocuments
 
         var name = profiles.Get(transponder)?.DriverName?.Trim();
 
-        return string.IsNullOrEmpty(name) ? null : name;
+        // WHY (23 Oct 2026, bug hunt 10): the same check results make, so a
+        // name with the transponder number in it ("Rental 4012345") leaves
+        // the car out of a line-up rather than putting the number online.
+        return string.IsNullOrEmpty(name) || PublicNameOrUnnamed(name, transponder) == UnnamedDriver ? null : name;
     }
 
     /// <summary>
     /// Full name to published name, for a set shortened together so no two
     /// drivers in it end up looking the same.
     /// </summary>
-    private static Dictionary<string, string> NameMap(IEnumerable<string> names, bool abbreviate)
+    /// <param name="rows">
+    /// Saved rows (name, transponder) the names may have come from, or null.
+    /// Given, each name is also matched to an initials-only driver by
+    /// transponder - see PublicPrivacy.TransponderForEach.
+    /// </param>
+    private static Dictionary<string, string> NameMap(
+        IEnumerable<string> names,
+        bool abbreviate,
+        IEnumerable<(string? Name, string? Transponder)>? rows = null)
     {
         var distinct = names
             .Select(n => n.Trim())
@@ -985,7 +1085,10 @@ internal static class RelayDocuments
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        var shown = RelayPublisher.DisplayNames(distinct, abbreviate);
+        var privacy = PublicPrivacy.Current;
+        var shown = rows is null
+            ? RelayPublisher.DisplayNames(distinct, abbreviate)
+            : RelayPublisher.DisplayNames(distinct, abbreviate, privacy.TransponderForEach(distinct, rows), privacy);
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
 
         for (var i = 0; i < distinct.Count; i++)

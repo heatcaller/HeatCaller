@@ -786,8 +786,12 @@ public sealed class ThemeStore
 
         if (background.MusicPlaylist is { Count: > 0 } && musicStore is not null)
         {
+            // WHY (23 Oct 2026, bug hunt 10): matched through CurrentTitle the
+            // way the player matches, so a soundscape still listing the old
+            // song names is not told its music is missing from the library.
             var have = musicStore.Current.Tracks
-                .Where(t => background.MusicPlaylist.Contains(t.DisplayName.Trim(), StringComparer.OrdinalIgnoreCase))
+                .Where(t => background.MusicPlaylist.Any(title => string.Equals(
+                    MusicStore.CurrentTitle(title), MusicStore.CurrentTitle(t.DisplayName), StringComparison.OrdinalIgnoreCase)))
                 .Select(t => t.DisplayName)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();

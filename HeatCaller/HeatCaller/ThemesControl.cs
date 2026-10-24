@@ -228,8 +228,8 @@ public sealed class ThemesControl : UserControl
         {
             Text = "A soundscape is the whole sound of race day: a sound for every moment, with an announcer's lines and delivery to match. " +
                    "Preview one to hear a pretend race, Apply it to use it, or Customize to mix packs and rewrite lines. " +
-                   "Applying swaps in its lines, voice tuning and look (a custom one saved with a voice brings that voice too); " +
-                   "your API key, speech engine and this PC's volumes stay. The look can be changed back on the Themes page.",
+                   "Applying swaps in its lines, voice tuning and look (and a custom one's saved voice); " +
+                   "your API key, speech engine and this PC's volumes stay. Change the look back on the Themes page.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

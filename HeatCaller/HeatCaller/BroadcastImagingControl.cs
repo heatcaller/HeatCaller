@@ -198,6 +198,17 @@ public sealed class BroadcastImagingControl : UserControl
 
     private void BuildLayout()
     {
+        // (22 Oct 2026, page tidy): one caption column down the page
+        // (FieldGrid.LineUp, at the end) - the five grids each had their own,
+        // so no two cards' fields started at the same x. The Show treatment
+        // card's captions are a step in under its switch, so these keep the
+        // step on their right instead, as CommentaryControl's Flush does.
+        static Label Flush(Label caption)
+        {
+            caption.Margin = new Padding(caption.Margin.Left, caption.Margin.Top, caption.Margin.Right + UiLayout.Indent, caption.Margin.Bottom);
+            return caption;
+        }
+
         var lblIntro = new Label
         {
             Text = "BROADCAST IMAGING. Jingles, sweepers, bumpers, stingers and music beds that make race night sound like a radio station. "
@@ -246,7 +257,7 @@ public sealed class BroadcastImagingControl : UserControl
         _textSize.Wear(_lblSoundscape, () => AppTheme.SmallFont);
 
         var soundscapeGrid = new FieldGrid();
-        soundscapeGrid.AddRow("Soundscape:", FieldGrid.Inline(_cmbSoundscape, _lblSoundscape));
+        Flush(soundscapeGrid.AddRow("Soundscape:", FieldGrid.Inline(_cmbSoundscape, _lblSoundscape)));
         soundscapeGrid.AddHint(
             "Race night plays the soundscape in use on the Soundscapes tab; any of them can be set up here.");
 
@@ -345,11 +356,11 @@ public sealed class BroadcastImagingControl : UserControl
         btnPlayPost.Click += (_, _) => PlayFromOut();
 
         var postGrid = new FieldGrid();
-        postGrid.AddRow("Post at:", FieldGrid.Inline(_numTalkUp, new Label { Text = "s" }, btnMarkTalkUp, btnSetTalkUp, btnClearTalkUp, btnPlayToTalkUp, _lblTalkUpRoom));
+        Flush(postGrid.AddRow("Post at:", FieldGrid.Inline(_numTalkUp, new Label { Text = "s" }, btnMarkTalkUp, btnSetTalkUp, btnClearTalkUp, btnPlayToTalkUp, _lblTalkUpRoom)));
         postGrid.AddHint(
             "POST: where the piece's own voice comes in - the announcer talks over the intro and stops right on it. "
             + "Press Play, then Mark Post when you hear the voice; Reset means no intro (right for a stinger).");
-        postGrid.AddRow("Out at:", FieldGrid.Inline(_numPost, new Label { Text = "s" }, btnMarkOut, btnSetPost, btnAutoPost, btnPlayPost, _lblPostSource));
+        Flush(postGrid.AddRow("Out at:", FieldGrid.Inline(_numPost, new Label { Text = "s" }, btnMarkOut, btnSetPost, btnAutoPost, btnPlayPost, _lblPostSource)));
         postGrid.AddHint(
             "OUT: where the piece's voice ends and only music is left - the next line starts there as the music fades. "
             + "Mark it the same way; Reset goes back to the piece's own mark.");
@@ -368,7 +379,7 @@ public sealed class BroadcastImagingControl : UserControl
 
         var lblAddHint = new Label
         {
-            Text = "Add Files copies the files into the club's data as the element picked beside it, so moving the originals loses nothing. "
+            Text = "Add Files copies the files into the club's data as the element picked beside it. "
                  + "Restore Element Defaults puts that element back to what the soundscape ships with.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
@@ -412,7 +423,7 @@ public sealed class BroadcastImagingControl : UserControl
             var when = new Label { Text = BroadcastImaging.When(cue), AutoSize = true, ForeColor = AppTheme.TextMuted };
             _textSize.Wear(when, () => AppTheme.SmallFont);
 
-            runGrid.AddRow(BroadcastImaging.Describe(cue) + ":", FieldGrid.Inline(picker, when));
+            Flush(runGrid.AddRow(BroadcastImaging.Describe(cue) + ":", FieldGrid.Inline(picker, when)));
         }
 
         var btnRestoreRun = new Button { Text = "Restore Run of Show Defaults" };
@@ -468,7 +479,7 @@ public sealed class BroadcastImagingControl : UserControl
         // with every other level and duck. The timing stays, beside the
         // marks it nudges.
         var levelGrid = new FieldGrid();
-        levelGrid.AddRow("Post timing:", FieldGrid.Inline(_numNudge, lblNudgeSuffix));
+        Flush(levelGrid.AddRow("Post timing:", FieldGrid.Inline(_numNudge, lblNudgeSuffix)));
         levelGrid.AddHint("The pieces' and beds' levels are on the Mixer tab.");
 
         var levels = new Section("Timing");
@@ -493,6 +504,9 @@ public sealed class BroadcastImagingControl : UserControl
         _imagingCards.AddRange(new Control[] { top, pieces, run, levels });
 
         Controls.Add(page);
+
+        // Every grid on the page, the Show treatment card's too.
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { soundscapeGrid, postGrid, runGrid, levelGrid, _showTreatment.Grid }));
 
         _textSize.Keep(SizeFields);
     }

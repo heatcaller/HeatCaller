@@ -307,13 +307,12 @@ public sealed class LooksControl : UserControl
         // they don't (FieldRow).
         var screens = new FieldRow();
 
-        screens.Add(new Label { Text = "Crowd screens (Big Screen, Wi-Fi pages, online pages):" }, _cmbScreens);
+        screens.Add(new Label { Text = "Crowd screens:" }, _cmbScreens);
 
         var lblScreensHint = new Label
         {
             Text = "Same choice as the Use for Crowd Screens button. The Big Screen changes straight away, the Wi-Fi "
-                 + "pages within about 5 seconds, the online pages within a few seconds. \"Match the app\" follows "
-                 + "the look the app is running now.",
+                 + "and online pages within a few seconds. \"Match the app\" follows the look the app is running now.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -504,7 +503,7 @@ public sealed class LooksControl : UserControl
         var lblAnimateHint = new Label
         {
             Text = "Only for looks with Synthwave effects, and not while the club logo is shown there. Turn it off "
-                 + "for a still image if you'd rather avoid the motion.",
+                 + "for a still image.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

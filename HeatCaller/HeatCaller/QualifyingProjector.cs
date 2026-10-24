@@ -53,7 +53,7 @@ public sealed class QualifyingProjector
         IReadOnlyList<Row> Rows,
         IReadOnlyDictionary<string, Slot> Slots);
 
-    private readonly RaceControlSession _race;
+    private readonly RaceTiming _race;
     private readonly ProfileStore _profiles;
     private readonly RaceClassStore _raceClasses;
     private readonly SessionHistoryStore _history;
@@ -74,7 +74,7 @@ public sealed class QualifyingProjector
     private Projection? _cached;
 
     public QualifyingProjector(
-        RaceControlSession race,
+        RaceTiming race,
         ProfileStore profiles,
         RaceClassStore raceClasses,
         SessionHistoryStore history,

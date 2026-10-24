@@ -16,9 +16,9 @@ namespace HeatCaller;
 /// </summary>
 public sealed class RaceClockPanel : Control
 {
-    private readonly RaceControlSession _race;
+    private readonly RaceTiming _race;
 
-    public RaceClockPanel(RaceControlSession race)
+    public RaceClockPanel(RaceTiming race)
     {
         _race = race;
 

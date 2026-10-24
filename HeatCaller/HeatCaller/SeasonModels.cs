@@ -303,4 +303,13 @@ public sealed class SeasonStandingEntry
 
     /// <summary>Points carried in from before - included in TotalPoints and RawPoints. Zero for most.</summary>
     public int CarriedIn { get; set; }
+
+    /// <summary>
+    /// Every transponder a scored row under this name raced on, in the order
+    /// met; empty for carried points alone. For the public standings to
+    /// match an initials-only driver by transponder as well as by name (23
+    /// Oct 2026, bug hunt 10) - a row from before a rename carries the old
+    /// name, which the privacy register no longer knows. Never published.
+    /// </summary>
+    public List<string> Transponders { get; } = new();
 }

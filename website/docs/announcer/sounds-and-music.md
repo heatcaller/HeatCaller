@@ -287,7 +287,7 @@ The choice is applied when you move off the step, and stays until you change it,
 - **Voice → Announcements:** the lap time, the start, time up, the checkered flag and the yellow, red and green flags are switched on, for races and practice. Staging, the countdown, jump starts, staggered starts, the grid call, last lap and final minute are left as you have them. Everything else, such as fast laps, records, leader changes, battles and streaks, is switched off. Only the ticks change, so this works the same on every voice, the HeatCaller voice included.
 - **Sounds → Effects:** the sounds that play on a lap (**Good lap**, **Invalid lap**, **Personal best**, **Fast lap**, **Track record**, **Consistency streak** and **Leader change**) are switched off. The start, countdown, flag and finish sounds are left as they are, and so are **Lap Beeps**.
 - **Mixer:** **Bring up:** **Music** and **Ambience** are unticked, so a race doesn't bring them up. Music or ambience playing now is stopped.
-- **Voice → AI Commentary:** **Race intros - a "coming up" line before a round starts**, **Race recaps - a wrap-up after the checkered flag** and **Teasers before the recap:** are switched off.
+- **Voice → AI Commentary:** **Race intros - a "coming up" line as each race goes to the grid**, **Race recaps - a wrap-up after the checkered flag** and **Teasers before the recap:** are switched off.
 - No soundscape card is marked **LAST APPLIED**.
 - The **Unofficial result** at the flag isn't said while lap times only is on, whatever its tick box says. That tick box itself isn't changed, so it's back when lap times only ends.
 
@@ -548,12 +548,15 @@ After a race HeatCaller can turn a driver's clip into a short upright video for 
 | **Highlight videos:** | Who gets one: **Off**, **The winner**, **The podium** or **Every driver**. | Every driver |
 | **Club handle:** | Your club's social handle, for example `@yourclub`, shown at the end of each video. | Blank |
 | **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** | Puts 1st, 2nd and 3rd's videos online for a week, with a QR code on the Big Screen after the race. See [Podium videos](../online/index.md#podium-videos). | On |
+| **Put each driver's clip on their own night on the club's page** | Puts each driver's mp3 clip on their own private night page, which only their badge code opens, with a player and a download link. Never on a public page. Needs **Give each driver their own night at a private address** on the Club Website page; kept online for a week. See [A driver's own night](../online/index.md#race-cards). | Off |
 
 - A video is made from the driver's clip, so it needs **A clip for each driver as well as the race's own recording** ticked too.
 - Videos are made a minute or so after the race, on a background thread, after every driver's mp3 clip is saved. A video that fails costs the night nothing: the clip and the race are untouched.
 - Each runs for 55 seconds at most. When a clip is longer, the earliest stretches go first, because the finish is the part worth keeping.
 - **Share video** in a driver's drawer on **Race Control** opens their video in File Explorer, ready to send. See [The drawer](../race-control/corrections-and-recovery.md).
 - Only 1st to 3rd are ever put online, and only the ones a video was made for: with **The winner** chosen, only the winner's. Every other video stays on this PC.
+- A driver who asked for **No podium videos of them** on their profile never has a video put online (see [Online privacy](../race-day/drivers-and-classes.md#online-privacy)).
+- Drivers' clips go to their nights after every clip and video is saved, and the race log says, for example, "[audio] 8 driver clips put on the drivers' own nights." Like the videos, they need **A clip for each driver as well as the race's own recording** ticked.
 - Windows makes the video itself, with nothing extra installed. An "N" edition of Windows without the Media Feature Pack can't, and the race log says so; the clips are unaffected.
 
 The race log says what happened:

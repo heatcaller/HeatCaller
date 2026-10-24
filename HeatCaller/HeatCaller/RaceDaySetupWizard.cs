@@ -1610,8 +1610,8 @@ internal sealed class RaceDaySetupWizard : Form
             case StepDay:
                 _lblStepTitle.Text = "Tonight's day";
                 _lblStepBody.Text = _sound is null
-                    ? "What kind of night it is, and where. Moving on from here opens the day."
-                    : "What kind of night it is, where, and how it sounds. Moving on from here opens the day.";
+                    ? "What kind of night it is, and where."
+                    : "What kind of night it is, where, and how it sounds.";
                 LoadDayStep();
                 content = _dayStep;
                 break;

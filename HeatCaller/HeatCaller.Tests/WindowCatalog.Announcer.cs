@@ -177,7 +177,7 @@ internal static partial class WindowCatalog
             sheet.CurrentEventId = day;
 
             var announcer = new AnnouncerControl(
-                race,
+                new RaceTiming(race),
                 profiles,
                 history,
                 sheet,
@@ -254,7 +254,7 @@ internal static partial class WindowCatalog
         schedule.CurrentEventId = "announcer-empty-day";
 
         var announcer = new AnnouncerControl(
-            new RaceControlSession(),
+            new RaceTiming(new RaceControlSession()),
             profiles,
             SessionHistoryStore.FromSessions(new List<SessionRecord>()),
             schedule,

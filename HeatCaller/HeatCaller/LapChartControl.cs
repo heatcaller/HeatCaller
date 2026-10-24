@@ -94,8 +94,7 @@ public sealed class LapChartControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Lap-by-lap pace for a saved race. Tick drivers on the left to compare them. Sessions recorded before " +
-                   "lap-by-lap tracking was added won't have chart data - only races run from now on will.",
+            Text = "Lap-by-lap pace for a saved race. Tick drivers on the left to compare them.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

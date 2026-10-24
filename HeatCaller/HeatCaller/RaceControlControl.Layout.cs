@@ -80,6 +80,239 @@ public sealed partial class RaceControlControl
 
     private void BuildLayout()
     {
+        BuildSessionFields();
+
+        BuildNextUpBar();
+
+        BuildClockColumn();
+
+        // --- The flags ---
+        //
+        // One row, in F1-F7 order, each button as wide as its own caption:
+        // a tight row (ButtonBar tight), because seven buttons at the usual
+        // minimum width would not fit on one line beside the clock. It
+        // wraps rather than clipping the last flag off the end when even
+        // that is too wide - a longer language, a bigger text size.
+        // On Air, in front of Stage: the jingle, the opening and a bumper,
+        // then it presses Stage itself. See RaceControlControl.OnAir.cs.
+        BuildOnAirButton();
+
+        BuildStageButton();
+
+        BuildCountdownButton();
+
+        BuildGreenButton();
+
+        BuildYellowRedAndCheckeredButtons();
+
+        BuildResetButton();
+
+        BuildShortcutTips();
+
+        // The state and the flag, each caption beside what it names. They
+        // sat at fixed x positions, and "Flag:" at 200 ran into "None" at
+        // 246 at every text size - by five pixels at the normal one.
+        _lblRaceState.Text = "Idle";
+        _lblRaceState.AutoSize = true;
+
+        _lblFlag.Text = "None";
+        _lblFlag.ForeColor = AppTheme.TextMuted;
+        _lblFlag.AutoSize = true;
+
+        BuildFormatChip();
+
+        BuildLeaderboardGrid();
+
+        // --- Manual corrections ---
+        //
+        // CLICK TO CORRECT (21 Oct 2026). The row of buttons that sat under
+        // the board - +1 Lap, -1 Lap, +5s, +10s, Clear Penalties, Warning -
+        // is gone. The same corrections open in a drawer under the driver
+        // you click (see the drawer in RaceControlControl.Leaderboard.cs),
+        // so they sit beside the name they act on rather than a screen away
+        // from it, and the board gets the room the buttons took: more rows
+        // of drivers. The keys (+, -, P, Shift+P, C, W) and the right-click
+        // menu are unchanged.
+        var btnColumns = new Button { Text = "Columns..." };
+        btnColumns.Click += (_, _) =>
+        {
+            using var form = new KpiPickerForm("Race Control", _settings.RaceControlKpis, KpiCatalog.DefaultRaceControl);
+            if (form.ShowDialog(this) == DialogResult.OK)
+            {
+                // The picker's Restore Defaults lands here too, so the old
+                // list is kept for Undo. This page lives as long as the app.
+                var before = _settings.RaceControlKpis.ToList();
+                if (!before.SequenceEqual(form.SelectedKeys))
+                {
+                    _undo.Capture("Change the Race Control columns", () =>
+                    {
+                        _settings.RaceControlKpis = before.ToList();
+                        _settings.Save();
+
+                        if (!IsDisposed)
+                        {
+                            RebuildLeaderboardColumns();
+                            RenderLeaderboard();
+                        }
+                    });
+                }
+
+                _settings.RaceControlKpis = form.SelectedKeys;
+                _settings.Save();
+                RebuildLeaderboardColumns();
+                RenderLeaderboard();
+            }
+        };
+
+        // --- The page ---
+        //
+        // Top to bottom: the host's Session row (see ShowSessionRow), the
+        // Next Up bar, then the flags and the board beside the clock column,
+        // the board taking the height that is left. Too short a window
+        // scrolls the page rather than squashing the board below its least.
+        var flags = new Section("Race Control");
+
+        // Every flag the same width (21 Oct 2026): a bar of one width,
+        // measured for On Air's widest caption as well as what it says now -
+        // see OnAirLeastWidth.
+        flags.Add(new ButtonBar(tight: true, sameWidth: true) { LeastWidth = OnAirLeastWidth }.With(
+            _btnOnAir, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset), gapBelow: 0);
+
+        // Start races On Air, the format line and its button moved to the
+        // foot of the board (21 Oct 2026) - set once a night, not pressed
+        // during a race, so they gave up their place beside the flags.
+        //
+        // The State and Flag line under the flags is gone (22 Oct 2026, as
+        // asked): the lit flag button and the board already say both. The
+        // two labels are still kept up to date, so nothing that reads them
+        // changes - they are just not on the page.
+
+        // The board's instructions used to be its group box's caption, all
+        // hundred-odd characters of it; a card's caption is a heading, and
+        // they are a line of help under it.
+        var board = new Section("Leaderboard");
+
+        board.Add(
+            Hint("Click a driver for laps, penalties and warnings, or double-click for their lap breakdown. "
+                 + "Right-click for names and everything else. Press ? for shortcuts."),
+            gapBelow: UiLayout.HintGap);
+
+        board.AddFill(_dgvLeaderboard, LeastBoardHeight);
+
+        // The foot of the board: the things set once a night rather than
+        // pressed during a race - whether a start goes through On Air, the
+        // race format in force, and which columns the board shows.
+        board.Add(_lblFormat, gapBelow: UiLayout.HintGap);
+
+        var footer = new ButtonBar().With(_chkStartWithOnAir, _btnFormat, btnColumns);
+
+        // The tick box is shorter than the buttons beside it; the bar lines
+        // everything up along the top, so it is brought down to their middle.
+        footer.Layout += (_, _) =>
+        {
+            var drop = Math.Max(0, (_btnFormat.Height - _chkStartWithOnAir.Height) / 2);
+            var margin = _chkStartWithOnAir.Margin;
+
+            if (margin.Top != drop)
+            {
+                _chkStartWithOnAir.Margin = new Padding(margin.Left, drop, margin.Right, margin.Bottom);
+            }
+        };
+
+        board.Add(footer, gapBelow: 0);
+
+        var body = new Beside(sideLeastWidth: ClockWidth);
+
+        body.Add(flags);
+        body.AddFill(board, board.LeastHeight);
+
+        body.AddSide(_clock);
+        body.AddSide(_btnQuickRace);
+        body.AddSide(_btnBigScreen);
+        body.AddSide(_btnAnnouncer);
+        body.AddSide(_btnProjection);
+        body.AddSide(_btnReadiness);
+
+        // Mission Control under the pre-race check (21 Oct 2026) - it used
+        // to be reached only from inside that check or the Connection page.
+        //
+        // THE STAT TILES ARE GONE from the foot of this column (21 Oct 2026):
+        // the leader's laps and the session best are both on the board
+        // itself (Laps, Best), and the column reads cleaner without a second
+        // copy of them. _statStrip is still built, and repainted with the
+        // clock, so nothing else that reaches for it has to change.
+        var btnMissionControl = new Button { Text = "Mission Control" };
+        btnMissionControl.Click += (_, _) => MissionControlRequested?.Invoke();
+        body.AddSide(btnMissionControl);
+
+        _page.Add(_nextUpBar, gapBelow: UiLayout.RowGap);
+
+        // Under the Next Up bar, where the race director's eye already
+        // goes between races. Hidden until there is commentary to report
+        // on - see AnnouncerStrip.
+        _announcerStrip.Visible = false;
+        _announcerStrip.HoldChanged += held =>
+        {
+            if (Commentary?.Invoke() is { } director)
+            {
+                director.Held = held;
+
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] "
+                    + (held ? "Segments held by the race director." : "Segments released."));
+            }
+
+            // AND THE RECAP SHOW (17 Oct 2026). Hold used to reach only the
+            // director's segments, so the recap's honours, interview and
+            // sign-off went on starting while the race director had the
+            // mic. Treated as Skip for the recap - the simpler of the two
+            // safe readings: one cancel the sequence already handles, rather
+            // than a held check before each of its parts. Release does not
+            // bring it back. See EndRecapShow.
+            if (held)
+            {
+                EndRecapShow("the segments were held from Race Control");
+            }
+        };
+
+        // THE BROADCAST'S OWN CONTROLS (11 Oct 2026). Beside Hold, in the
+        // band, for the reason the Next Up bar's buttons are in theirs: a
+        // child always draws over its parent, so painting order is never a
+        // question, and the three of them read as one group - Hold stops
+        // the next thing, Skip stops the one in progress, Play again puts
+        // the last one back out.
+        //
+        // Fire-and-forget, because neither is anything the page waits on
+        // and the click arrives on the UI thread. Both report to the
+        // console with a [show] tag, since a line that goes out twice -
+        // or stops mid-sentence - needs to be accounted for afterwards.
+        _announcerStrip.ReplayWanted += () => _ = ReplayLastSegmentAsync();
+        _announcerStrip.ReplayMomentWanted += () => _ = ReplayTheMomentAsync();
+        _announcerStrip.SkipWanted += SkipWhatIsOnAir;
+        _announcerStrip.NotesWanted += ShowTonightsClubNotes;
+        _announcerStrip.VotesWanted += ShowTonightsRoomVote;
+        _announcerStrip.LoadWanted += ShowUnsaidLines;
+
+        _page.Add(_announcerStrip, stretch: false, gapBelow: UiLayout.RowGap);
+        _page.Add(_unknownBanner, gapBelow: UiLayout.RowGap);
+        _page.AddFill(body, body.LeastHeight, gapBelow: 0);
+
+        Controls.Add(_page);
+
+        // Hidden, and driven from the Session row - see the top of this
+        // method. Off the page: nothing is laid out round them.
+        Controls.Add(_cmbTrackLayout);
+        Controls.Add(_txtSessionLabel);
+    }
+
+    /// <summary>
+    /// The hidden track and session-name fields.
+    ///
+    /// Split out of BuildLayout on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the page is still built and
+    /// wired in the order it always was.
+    /// </summary>
+    private void BuildSessionFields()
+    {
         // --- The hidden track and session-name fields ---
         //
         // Track and Session Name are set on the Session row, MainForm's, at
@@ -103,7 +336,17 @@ public sealed partial class RaceControlControl
         _txtSessionLabel.Width = 220;
         _txtSessionLabel.PlaceholderText = "optional, e.g. \"Friday Main\"";
         _txtSessionLabel.TextChanged += (_, _) => SessionLabelChanged?.Invoke(_txtSessionLabel.Text);
+    }
 
+    /// <summary>
+    /// The Next Up bar and its two buttons.
+    ///
+    /// Split out of BuildLayout on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the page is still built and
+    /// wired in the order it always was.
+    /// </summary>
+    private void BuildNextUpBar()
+    {
         // --- The Next Up bar ---
         //
         // Its two buttons live INSIDE the bar, so painting order is never a
@@ -167,7 +410,17 @@ public sealed partial class RaceControlControl
 
         _nextUpBar.AddButton(_btnStartNext, ProgramCaptions.NextUpBarWidest);
         _nextUpBar.AddButton(_btnReseed);
+    }
 
+    /// <summary>
+    /// The clock column's buttons: Quick Race, the Big Screen, the pre-race check, the announcer screen and the qualifying projection.
+    ///
+    /// Split out of BuildLayout on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the page is still built and
+    /// wired in the order it always was.
+    /// </summary>
+    private void BuildClockColumn()
+    {
         // --- The clock column ---
         //
         // Down the right-hand side, beside the flags and the board: the
@@ -190,6 +443,11 @@ public sealed partial class RaceControlControl
         // ignored while F1-F7 worked.
         _actQuickRace = () =>
         {
+            // Threaded, a race start wins over a practice a car started at
+            // the gate a moment ago (24 Oct 2026, timing layer, P7) - see
+            // RaceTiming.TakeBackPracticeAutoStartForRace.
+            _race.TakeBackPracticeAutoStartForRace();
+
             // Pressed again during its own warm-up: skip the rest of it and
             // go straight on to the start.
             //
@@ -364,24 +622,23 @@ public sealed partial class RaceControlControl
             screen.Show();
         };
         _btnBigScreen.Click += (_, _) => _actBigScreen();
+    }
 
-        // --- The flags ---
-        //
-        // One row, in F1-F7 order, each button as wide as its own caption:
-        // a tight row (ButtonBar tight), because seven buttons at the usual
-        // minimum width would not fit on one line beside the clock. It
-        // wraps rather than clipping the last flag off the end when even
-        // that is too wide - a longer language, a bigger text size.
-        // On Air, in front of Stage: the jingle, the opening and a bumper,
-        // then it presses Stage itself. See RaceControlControl.OnAir.cs.
-        BuildOnAirButton();
-
+    /// <summary>
+    /// Stage.
+    ///
+    /// Split out of BuildLayout on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the page is still built and
+    /// wired in the order it always was.
+    /// </summary>
+    private void BuildStageButton()
+    {
         _btnStage.Text = "Stage";
         _actStage = (confirmedOverRunningRace, restoreHostOnUndo) =>
         {
             // Before anything else - Stage clears the standings, and the
             // shared session is holding a practice's laps.
-            if (RefuseIfPracticeRunning("stage a race"))
+            if (RefuseIfPracticeRunningForRaceStart("stage a race"))
             {
                 return;
             }
@@ -485,11 +742,21 @@ public sealed partial class RaceControlControl
             }
         };
         _btnStage.Click += (_, _) => _actStage(false, null);
+    }
 
+    /// <summary>
+    /// Countdown.
+    ///
+    /// Split out of BuildLayout on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the page is still built and
+    /// wired in the order it always was.
+    /// </summary>
+    private void BuildCountdownButton()
+    {
         _btnCountdown.Text = "Countdown";
         _actCountdown = confirmedOverRunningRace =>
         {
-            if (RefuseIfPracticeRunning("start a countdown"))
+            if (RefuseIfPracticeRunningForRaceStart("start a countdown"))
             {
                 return;
             }
@@ -548,15 +815,32 @@ public sealed partial class RaceControlControl
 
             if (_fmt.AutoAdvance)
             {
-                ChainAfterAudio(RaceState.Countdown, () => _actGreen?.Invoke(), mutedSeconds: _fmt.CountdownSeconds);
+                // WHY (24 Oct 2026, timing layer, P8): threaded, the green is
+                // armed on the timing tick after the same waits as the chain -
+                // the audio (up to 20 s), then the muted floor - so a frozen
+                // window cannot hold it. Inline, the chain as it always was.
+                if (!ArmAutoGreen(StartStepFloor(_announcer.Muted, TimeSpan.Zero, _fmt.CountdownSeconds), waitForAudio: true, asTheGreenButton: true))
+                {
+                    ChainAfterAudio(RaceState.Countdown, () => _actGreen?.Invoke(), mutedSeconds: _fmt.CountdownSeconds);
+                }
             }
         };
         _btnCountdown.Click += (_, _) => _actCountdown(false);
+    }
 
+    /// <summary>
+    /// Green.
+    ///
+    /// Split out of BuildLayout on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the page is still built and
+    /// wired in the order it always was.
+    /// </summary>
+    private void BuildGreenButton()
+    {
         _btnGreen.Text = "Green";
         _actGreen = () =>
         {
-            if (RefuseIfPracticeRunning("start a race"))
+            if (RefuseIfPracticeRunningForRaceStart("start a race"))
             {
                 return;
             }
@@ -625,7 +909,17 @@ public sealed partial class RaceControlControl
             StartGreenNow(resuming);
         };
         _btnGreen.Click += (_, _) => _actGreen();
+    }
 
+    /// <summary>
+    /// Yellow, Red and Checkered.
+    ///
+    /// Split out of BuildLayout on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the page is still built and
+    /// wired in the order it always was.
+    /// </summary>
+    private void BuildYellowRedAndCheckeredButtons()
+    {
         _btnYellow.Text = "Yellow";
         _actYellow = () =>
         {
@@ -728,7 +1022,17 @@ public sealed partial class RaceControlControl
             _race.CheckeredFlag();
         };
         _btnCheckered.Click += (_, _) => _actCheckered();
+    }
 
+    /// <summary>
+    /// Reset.
+    ///
+    /// Split out of BuildLayout on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the page is still built and
+    /// wired in the order it always was.
+    /// </summary>
+    private void BuildResetButton()
+    {
         _btnReset.Text = "Reset";
         _actReset = () =>
         {
@@ -746,6 +1050,19 @@ public sealed partial class RaceControlControl
             // demo race put back without the simulator driving it would sit
             // on the board as a "real" race with fake drivers in it.
             var tookOverDemo = EndDemoForTakeover("reset");
+
+            // WHY (23 Oct 2026, bug hunt 10): Quick Race writes its
+            // "Quick Race HH:mm" stamp into this page's own copy of the
+            // name only - the Name box on the main window never sees it -
+            // and nothing cleared it. With that box empty (the usual case
+            // for freeform running) ClearRoundBinding below has nothing to
+            // do, so every freeform race after it, Reset or not, was saved
+            // under the Quick Race's name, and one brought back from the
+            // crash journal was taken for a Quick Race. Read here, before
+            // ClearRoundBinding can change the box, and cleared below; the
+            // undo puts it back. A name the director typed is not a stamp
+            // and is left alone.
+            var quickStamp = QuickRaceStampToRelease(_txtSessionLabel.Text);
 
             // Reset now also unbinds the round and clears the session name.
             // That was a second button - "Reset Round", in the session row a
@@ -828,6 +1145,14 @@ public sealed partial class RaceControlControl
                         }
                     }
 
+                    // The Quick Race's name, after the binding (which may
+                    // write the Name box's text over this one) and before
+                    // the journal is written - see quickStamp above.
+                    if (quickStamp is not null)
+                    {
+                        _txtSessionLabel.Text = quickStamp;
+                    }
+
                     // Before the snapshot, as the abandoned-race undo does:
                     // the session is still Idle here, and RestoreSnapshot
                     // reads the limits when it works out where the warning
@@ -901,6 +1226,7 @@ public sealed partial class RaceControlControl
             CancelAutoStart();
             CancelWarmUp();
             _race.Reset();
+            EndSplitCoaching("the race was reset");
             generationAfterReset = _race.SessionGeneration;
 
             // Reset is a decision, not an accident - there is nothing left
@@ -909,11 +1235,8 @@ public sealed partial class RaceControlControl
             //
             // Not while an earlier race is still waiting to be saved: the
             // journal is then the only copy of it on disk (see
-            // FileUnfiledRaces).
-            if (_unfiledRaces.Count == 0)
-            {
-                _journal.Clear();
-            }
+            // RaceFilingService.FileUnfiledRaces).
+            _filing.ClearJournalUnlessUnfiled();
 
             _toldAboutRecordPace.Clear();
             _promptedTransponders.Clear();
@@ -923,6 +1246,12 @@ public sealed partial class RaceControlControl
             _currentRaceIsQuick = false;
             _currentRaceIsRerun = false;
             _rerunPending = false;
+
+            // The Quick Race's stamp goes with it - see quickStamp above.
+            if (quickStamp is not null)
+            {
+                _txtSessionLabel.Text = string.Empty;
+            }
 
             // The reset race's start goes with it (Undo puts it back). Left
             // here, a start that does not stamp its own - a demo's green -
@@ -938,14 +1267,36 @@ public sealed partial class RaceControlControl
             UpdateClockDisplay(force: true);
         };
         _btnReset.Click += (_, _) => _actReset();
+    }
 
+    /// <summary>
+    /// The session name as it stands when it is Quick Race's own
+    /// "Quick Race HH:mm" stamp, so it can be cleared (and put back by an
+    /// undo); null for any other name, which is the director's and is kept.
+    ///
+    /// Added 23 Oct 2026 (bug hunt 10) - see Reset. Saving a Quick Race
+    /// (SaveCompletedSessionToHistory) should release the stamp the same way
+    /// once the race is filed.
+    /// </summary>
+    internal static string? QuickRaceStampToRelease(string? label) =>
+        label is not null && IsQuickRaceStamp(label.Trim()) ? label : null;
+
+    /// <summary>
+    /// The flag row's and the clock column's shortcut tooltips.
+    ///
+    /// Split out of BuildLayout on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the page is still built and
+    /// wired in the order it always was.
+    /// </summary>
+    private void BuildShortcutTips()
+    {
         var shortcutTips = new ToolTip();
         AppTheme.StyleToolTip(shortcutTips, keep: true);
         // F1 is the START key now, not this button's (17 Oct 2026): through
         // On Air when Start races On Air is ticked. This button stages
         // straight away, as it always has. See TriggerStart.
         shortcutTips.SetToolTip(_btnStage,
-            "Stages the race straight away, with no On Air. F1 starts the race the normal way - through On Air when "
+            "Stages the race now, without On Air. F1 is the normal start: through On Air when "
             + "Start races On Air is ticked (press F1 again to skip to Stage).");
         shortcutTips.SetToolTip(_btnCountdown, "Shortcut: F2");
         shortcutTips.SetToolTip(_btnGreen, "Shortcut: F3");
@@ -957,17 +1308,17 @@ public sealed partial class RaceControlControl
         shortcutTips.SetToolTip(_btnBigScreen, "Shortcut: B");
         shortcutTips.SetToolTip(_btnReadiness, "Shortcut: R");
         shortcutTips.SetToolTip(_btnAnnouncer, "Shortcut: A  -  press ? for every shortcut");
+    }
 
-        // The state and the flag, each caption beside what it names. They
-        // sat at fixed x positions, and "Flag:" at 200 ran into "None" at
-        // 246 at every text size - by five pixels at the normal one.
-        _lblRaceState.Text = "Idle";
-        _lblRaceState.AutoSize = true;
-
-        _lblFlag.Text = "None";
-        _lblFlag.ForeColor = AppTheme.TextMuted;
-        _lblFlag.AutoSize = true;
-
+    /// <summary>
+    /// The race format chip, the automatic start and the flag row's focus release.
+    ///
+    /// Split out of BuildLayout on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the page is still built and
+    /// wired in the order it always was.
+    /// </summary>
+    private void BuildFormatChip()
+    {
         // --- The race format chip ----------------------------------------
         //
         // Twelve setup knobs used to fill this group - limits, start type,
@@ -1010,14 +1361,24 @@ public sealed partial class RaceControlControl
         var formatTip = new ToolTip();
         AppTheme.StyleToolTip(formatTip, keep: true);
         formatTip.SetToolTip(_lblFormat,
-            "Which race format is in force for what's about to run: the round's override if it has one, "
-            + "else its class's format, else the app default. Class formats are set on the Classes page.");
+            "The format for the next race: the round's override, else its class's format, else the app default. "
+            + "Class formats are set on the Classes page.");
 
         _btnFormat.Text = "Race Format...";
         _btnFormat.Click += (_, _) => EditFormat();
 
         ApplyEffectiveFormat();
+    }
 
+    /// <summary>
+    /// The leaderboard grid.
+    ///
+    /// Split out of BuildLayout on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the page is still built and
+    /// wired in the order it always was.
+    /// </summary>
+    private void BuildLeaderboardGrid()
+    {
         // --- The leaderboard ---
         //
         // BESIDE the clock column, not below it, and given every pixel the
@@ -1083,185 +1444,6 @@ public sealed partial class RaceControlControl
         _dgvLeaderboard.CellPainting += LeaderboardDetailPaint;
         _dgvLeaderboard.ContextMenuStrip = BuildLeaderboardMenu();
         RebuildLeaderboardColumns();
-
-        // --- Manual corrections ---
-        //
-        // CLICK TO CORRECT (21 Oct 2026). The row of buttons that sat under
-        // the board - +1 Lap, -1 Lap, +5s, +10s, Clear Penalties, Warning -
-        // is gone. The same corrections open in a drawer under the driver
-        // you click (see the drawer in RaceControlControl.Leaderboard.cs),
-        // so they sit beside the name they act on rather than a screen away
-        // from it, and the board gets the room the buttons took: more rows
-        // of drivers. The keys (+, -, P, Shift+P, C, W) and the right-click
-        // menu are unchanged.
-        var btnColumns = new Button { Text = "Columns..." };
-        btnColumns.Click += (_, _) =>
-        {
-            using var form = new KpiPickerForm("Race Control", _settings.RaceControlKpis, KpiCatalog.DefaultRaceControl);
-            if (form.ShowDialog(this) == DialogResult.OK)
-            {
-                // The picker's Restore Defaults lands here too, so the old
-                // list is kept for Undo. This page lives as long as the app.
-                var before = _settings.RaceControlKpis.ToList();
-                if (!before.SequenceEqual(form.SelectedKeys))
-                {
-                    _undo.Capture("Change the Race Control columns", () =>
-                    {
-                        _settings.RaceControlKpis = before.ToList();
-                        _settings.Save();
-
-                        if (!IsDisposed)
-                        {
-                            RebuildLeaderboardColumns();
-                            RenderLeaderboard();
-                        }
-                    });
-                }
-
-                _settings.RaceControlKpis = form.SelectedKeys;
-                _settings.Save();
-                RebuildLeaderboardColumns();
-                RenderLeaderboard();
-            }
-        };
-
-        // --- The page ---
-        //
-        // Top to bottom: the host's Session row (see ShowSessionRow), the
-        // Next Up bar, then the flags and the board beside the clock column,
-        // the board taking the height that is left. Too short a window
-        // scrolls the page rather than squashing the board below its least.
-        var flags = new Section("Race Control");
-
-        // Every flag the same width (21 Oct 2026): a bar of one width,
-        // measured for On Air's widest caption as well as what it says now -
-        // see OnAirLeastWidth.
-        flags.Add(new ButtonBar(tight: true, sameWidth: true) { LeastWidth = OnAirLeastWidth }.With(
-            _btnOnAir, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset), gapBelow: 0);
-
-        // Start races On Air, the format line and its button moved to the
-        // foot of the board (21 Oct 2026) - set once a night, not pressed
-        // during a race, so they gave up their place beside the flags.
-        //
-        // The State and Flag line under the flags is gone (22 Oct 2026, as
-        // asked): the lit flag button and the board already say both. The
-        // two labels are still kept up to date, so nothing that reads them
-        // changes - they are just not on the page.
-
-        // The board's instructions used to be its group box's caption, all
-        // hundred-odd characters of it; a card's caption is a heading, and
-        // they are a line of help under it.
-        var board = new Section("Leaderboard");
-
-        board.Add(
-            Hint("Click a driver for laps, penalties and warnings. Double-click for their lap breakdown. "
-                 + "Right-click for names and everything else. Press ? for keyboard shortcuts."),
-            gapBelow: UiLayout.HintGap);
-
-        board.AddFill(_dgvLeaderboard, LeastBoardHeight);
-
-        // The foot of the board: the things set once a night rather than
-        // pressed during a race - whether a start goes through On Air, the
-        // race format in force, and which columns the board shows.
-        board.Add(_lblFormat, gapBelow: UiLayout.HintGap);
-
-        var footer = new ButtonBar().With(_chkStartWithOnAir, _btnFormat, btnColumns);
-
-        // The tick box is shorter than the buttons beside it; the bar lines
-        // everything up along the top, so it is brought down to their middle.
-        footer.Layout += (_, _) =>
-        {
-            var drop = Math.Max(0, (_btnFormat.Height - _chkStartWithOnAir.Height) / 2);
-            var margin = _chkStartWithOnAir.Margin;
-
-            if (margin.Top != drop)
-            {
-                _chkStartWithOnAir.Margin = new Padding(margin.Left, drop, margin.Right, margin.Bottom);
-            }
-        };
-
-        board.Add(footer, gapBelow: 0);
-
-        var body = new Beside(sideLeastWidth: ClockWidth);
-
-        body.Add(flags);
-        body.AddFill(board, board.LeastHeight);
-
-        body.AddSide(_clock);
-        body.AddSide(_btnQuickRace);
-        body.AddSide(_btnBigScreen);
-        body.AddSide(_btnAnnouncer);
-        body.AddSide(_btnProjection);
-        body.AddSide(_btnReadiness);
-
-        // Mission Control under the pre-race check (21 Oct 2026) - it used
-        // to be reached only from inside that check or the Connection page.
-        //
-        // THE STAT TILES ARE GONE from the foot of this column (21 Oct 2026):
-        // the leader's laps and the session best are both on the board
-        // itself (Laps, Best), and the column reads cleaner without a second
-        // copy of them. _statStrip is still built, and repainted with the
-        // clock, so nothing else that reaches for it has to change.
-        var btnMissionControl = new Button { Text = "Mission Control" };
-        btnMissionControl.Click += (_, _) => MissionControlRequested?.Invoke();
-        body.AddSide(btnMissionControl);
-
-        _page.Add(_nextUpBar, gapBelow: UiLayout.RowGap);
-
-        // Under the Next Up bar, where the race director's eye already
-        // goes between races. Hidden until there is commentary to report
-        // on - see AnnouncerStrip.
-        _announcerStrip.Visible = false;
-        _announcerStrip.HoldChanged += held =>
-        {
-            if (Commentary?.Invoke() is { } director)
-            {
-                director.Held = held;
-
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] "
-                    + (held ? "Segments held by the race director." : "Segments released."));
-            }
-
-            // AND THE RECAP SHOW (17 Oct 2026). Hold used to reach only the
-            // director's segments, so the recap's honours, interview and
-            // sign-off went on starting while the race director had the
-            // mic. Treated as Skip for the recap - the simpler of the two
-            // safe readings: one cancel the sequence already handles, rather
-            // than a held check before each of its parts. Release does not
-            // bring it back. See EndRecapShow.
-            if (held)
-            {
-                EndRecapShow("the segments were held from Race Control");
-            }
-        };
-
-        // THE BROADCAST'S OWN CONTROLS (11 Oct 2026). Beside Hold, in the
-        // band, for the reason the Next Up bar's buttons are in theirs: a
-        // child always draws over its parent, so painting order is never a
-        // question, and the three of them read as one group - Hold stops
-        // the next thing, Skip stops the one in progress, Play again puts
-        // the last one back out.
-        //
-        // Fire-and-forget, because neither is anything the page waits on
-        // and the click arrives on the UI thread. Both report to the
-        // console with a [show] tag, since a line that goes out twice -
-        // or stops mid-sentence - needs to be accounted for afterwards.
-        _announcerStrip.ReplayWanted += () => _ = ReplayLastSegmentAsync();
-        _announcerStrip.SkipWanted += SkipWhatIsOnAir;
-        _announcerStrip.NotesWanted += ShowTonightsClubNotes;
-        _announcerStrip.VotesWanted += ShowTonightsRoomVote;
-        _announcerStrip.LoadWanted += ShowUnsaidLines;
-
-        _page.Add(_announcerStrip, stretch: false, gapBelow: UiLayout.RowGap);
-        _page.Add(_unknownBanner, gapBelow: UiLayout.RowGap);
-        _page.AddFill(body, body.LeastHeight, gapBelow: 0);
-
-        Controls.Add(_page);
-
-        // Hidden, and driven from the Session row - see the top of this
-        // method. Off the page: nothing is laid out round them.
-        Controls.Add(_cmbTrackLayout);
-        Controls.Add(_txtSessionLabel);
     }
 
     /// <summary>

@@ -254,6 +254,67 @@ internal sealed class ClubNotes
     }
 
     /// <summary>
+    /// The race day the notes belong on, from the day the app has current:
+    /// its id when it is a real day still open, otherwise null (no day).
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10): the callers passed the current day's
+    /// id whatever it was, and a CLOSED day is current whenever last week's
+    /// is picked to look at its results (and stays current across a
+    /// restart). Notes typed or sent in then went under last week's id, and
+    /// Start a Race Day cleared them, because NewMeeting only adopts from no
+    /// day; picking a closed day mid-night cleared tonight's at once. Only
+    /// an open day is a meeting the notes move onto now - looking at a
+    /// closed one changes nothing, just as closing one does.
+    /// </summary>
+    internal static string? OpenDayId(RaceEvent? day) =>
+        day is { IsOpen: true, IsLegacy: false } && !string.IsNullOrWhiteSpace(day.Id) ? day.Id : null;
+
+    /// <summary>
+    /// Puts the notes on the current day when it is an open one, and does
+    /// nothing when it is closed or there is none - for the day switching
+    /// and the announcer's tick. Startup calls <see cref="StartUp"/>.
+    /// </summary>
+    internal void FollowDay(RaceEvent? day)
+    {
+        if (OpenDayId(day) is { } dayId)
+        {
+            NewMeeting(dayId);
+        }
+    }
+
+    /// <summary>
+    /// Puts the notes on the right day as the app starts: the current day
+    /// when it is open; otherwise no day, which clears last week's - unless
+    /// the notes are filed on a day that is still open.
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10, review): starting up with a closed day
+    /// current must clear last week's notes, but it is also what happens
+    /// when the app is restarted mid-night while last week's results are
+    /// being looked at - tonight's day still open, just not current. A
+    /// plain NewMeeting(no day) wiped tonight's notes then. A day still open
+    /// is still tonight's, so its notes are kept; <paramref name="find"/>
+    /// looks a day up by id (RaceEventStore.Get).
+    /// </summary>
+    internal void StartUp(RaceEvent? current, Func<string, RaceEvent?> find)
+    {
+        if (OpenDayId(current) is { } dayId)
+        {
+            NewMeeting(dayId);
+
+            return;
+        }
+
+        var filedOn = DayId;
+
+        if (filedOn.Length > 0 && OpenDayId(find(filedOn)) is not null)
+        {
+            return;
+        }
+
+        NewMeeting(null);
+    }
+
+    /// <summary>
     /// Adds a note the race director typed, approved because they typed
     /// it - and answers why not, in their words, when it cannot be added.
     ///

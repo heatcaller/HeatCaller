@@ -34,6 +34,25 @@ The decoder you choose here is the start/finish line, where laps are counted. If
 - **EasyLap:** it's tried once as HeatCaller opens. To keep trying until the decoder is found, and after a dropped connection, tick [Auto-connect](#auto-connect) as well.
 - Pressing **Connect** or **Disconnect** yourself, or unticking the box, stops it waiting.
 
+## Run timing on its own thread
+
+**Run timing on its own thread**, on the **Connection** page, keeps lap counting going even when the HeatCaller window is busy or stops responding for a few seconds. It's off to begin with. Changing it takes effect the next time HeatCaller starts.
+
+With it ticked, every pass from the line decoder and the split loop goes straight to timing instead of waiting for the window, whether or not a race is running, so a freeze doesn't lose sector times either. Practice still starts by itself when a car crosses the gate (with **Start automatically when a car crosses the gate** ticked on the Practice page); the Practice page catches up when the window does, and starting a race at that same moment wins over the practice. The race clock, the time limit, the checkered flag and the crash-recovery file keep up on their own, and the start still waits for the countdown audio (up to 10 seconds) without needing the window. An automatic start's green is dropped by timing too, as soon as the countdown audio ends, so cars crossing the line after the countdown are never booked as jump starts because the window was late; the horn may sound late, but the race clock starts on time. Phones on the club's Wi-Fi pages and the club's live page keep the board, flag, countdown and standings live; parts the window works out (the track map, call-ups, championship, race in hand and sponsors) catch up when it does. When the window catches up, the board jumps to the present, and lap calls that are more than a few seconds old aren't spoken, so the room hears what's happening now. The results still get every lap.
+
+With it off, everything works as it always has, except that practice no longer starts by itself at the gate while On Air is running (a car warming up during the opening used to start practice and call On Air off). Either way, each pass is now judged by the moment it reached HeatCaller, so a window that was busy across the time limit can't move a driver's crossing to the wrong side of the flag.
+
+!!! tip "Try it at a rehearsal first"
+    Tick it in a **HeatCaller Rehearsal** first (the Start menu shortcut that runs on a copy of your club's data, see [What the installer adds](../getting-started/install.md)) and run a few races before you use it on a race night.
+
+## Record every pass to a file
+
+**Record every pass to a file**, on the **Connection** page, writes down every pass the race is given and every race command (Stage, the green, flags, laps added by hand, warnings, penalties, releases, undo), with the moment each one arrived. It's off to begin with, and ticking or unticking it takes effect straight away. A night recorded this way can be played back through HeatCaller's race timing to check a result afterwards, or to show exactly what the decoder sent and when.
+
+- One file per run of HeatCaller, in `%LocalAppData%\HeatCaller\timing-recordings`, named like `passes-20261024-191500.jsonl`. A rehearsal adds `-rehearsal` to the name.
+- Files are kept for 30 days, then deleted. One file stops at 64 MB; the console says so, and timing is never affected.
+- The files stay on this PC and aren't part of backups. Each is plain text you can open while the night is still being recorded.
+
 ## Direct EasyLap Decoder (USB)
 
 ### Before you start
@@ -157,6 +176,17 @@ With the split loop on, each flying lap is cut into two sectors: **S1** from the
 - **Speeds:** place the split loops on the layout's plan in the Track Designer (see [Split loops](../race-day/drivers-and-classes.md#draw-the-layout-in-the-track-designer)). Race Control then knows each sector's length, and the **S1 mph**, **S2 mph** and **Top Speed** columns show average speeds. **Top Speed** is the fastest the driver has gone through any sector this session.
 - **Speed trap:** to measure top speed rather than sector times, put the split loop a short, measured distance past the line on the main straight, at least 8 ft, and mark it there on the plan. Sector 1 is then the trap, and **S1 mph** and **Top Speed** are trap speeds. With loops this close, a timing error of about 15 ms is several percent of the speed, so treat trap speeds as close, not exact.
 - **The announcer:** three new calls on **Voice → Announcements**, all off by default: **Fastest sector**, **Up at the split** (a tenth or more up on the driver's own best lap at the split) and **Record pace at the split** (ahead of the track record lap there). Record pace at the split needs a track record set with a split loop running, so its sectors were kept. New placeholders for these lines: {sector}, {sectortime}, {split} and {gap}.
+
+### Hearing the splits
+
+Four more lines on **Voice → Announcements** speak the split loop's times rather than mark a moment. The first three are ticked for **Practice** and not for **Race** in a new install, because practice is where a driver wants their split; tick **Race** on a row to hear it in races too. None says anything without a split loop.
+
+- **Split time**: each car's time to the split as it crosses, "Eight point four zero seconds at the split." **Read every** _n_ **split crossing(s) per driver** spaces it out.
+- **Split coach (up or down)**: right-click a driver on the Race Control board and choose **Coach *name*** → **At the split** (see [Coaching a driver](../race-control/running-a-race.md#coaching-a-driver)). Each time they cross the split they hear "Up a tenth at the split.", "Down two tenths at the split." or "Level at the split.", against their own best lap this session. One driver at a time: coaching another moves it. It ends when you untick **At the split**, with **Stop coaching *name***, a **Reset**, or the end of the race they were picked for, whether you picked them between races or during one; in practice it lasts until **Reset**. The console says when it stops. With **Tones instead of words** ticked for them, a tone plays at the split instead: high when up, middle when level, low when down. Each time the driver is told up or down they don't also hear their **Split time**; before they have a best lap to compare with, or with **Split coach** switched off for the session, they still hear it.
+- **Battle gap at the split**: two cars on the same lap less than a second apart, timed at the split, "At the split, Sam's two tenths up on Bill." At most once every five laps per pair, and only when the gap has moved.
+- **Sectors at the flag** (off until you tick it): after a race, who was quickest through each sector, said with the unofficial result. "Quickest through sector one was Sam, sector two Bill."
+
+Under **Lap times only**, **Split time** and **Split coach** stay as you have them; the battle gap and the sectors at the flag are switched off. See [Voice announcements](../announcer/voice.md#every-announcement).
 
 A lap gets no sectors when the split loop didn't read the car, when it's the start lap or a lap through a crash recovery, or when it was merged or edited by hand afterwards. It still counts as a lap.
 

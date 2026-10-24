@@ -75,6 +75,32 @@ public sealed class RelaySettingsControl : UserControl
     private readonly CheckBox _chkRoster = new ThemedCheckBox();
     private readonly CheckBox _chkDriverNights = new ThemedCheckBox();
     private readonly CheckBox _chkAbbreviate = new ThemedCheckBox();
+
+    // --- Driver experience (22 Oct 2026) ---------------------------------
+    //
+    // WHY (22 Oct 2026, driver experience): the drivers' own requests from
+    // their phones, the announcer's words as captions on the live page, and
+    // each driver's night by email. All off until the club ticks them, like
+    // everything else on this page that puts something new online or in
+    // somebody's inbox.
+    private readonly CheckBox _chkDriverRequests = new ThemedCheckBox();
+    private readonly CheckBox _chkRelayCaptions = new ThemedCheckBox();
+    private readonly CheckBox _chkNightEmail = new ThemedCheckBox();
+    private readonly CheckBox _chkNightEmailAuto = new ThemedCheckBox();
+    private readonly Label _lblNightEmailState = new();
+    private readonly Button _btnEmailNights = new();
+
+    /// <summary>What the Email Tonight's Nights button's send is up to, for its status line. Null when it is not sending.</summary>
+    private string? _nightProgress;
+
+    /// <summary>
+    /// How this page reaches the night emails MainForm gathers and sends -
+    /// set by MainForm.WireNightEmail before the page is built, the way
+    /// QrBadgeRenderer.OnlineBadgeUrl is. Null (no MainForm behind the page,
+    /// as in the layout tests) and Email Tonight's Nights stays greyed out.
+    /// (22 Oct 2026, driver experience.)
+    /// </summary>
+    internal static NightEmailDesk? NightEmails { get; set; }
     private readonly Button _btnTest = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnRestore = new();
@@ -283,7 +309,11 @@ public sealed class RelaySettingsControl : UserControl
     ///                           Restore Last Working; what the last test said
     ///                           and what last worked.
     ///   What gets published     what always goes, and the roster and
-    ///                           short-name switches with what each means.
+    ///                           short-name switches with what each means;
+    ///                           since 22 Oct 2026 also the drivers' own
+    ///                           requests (a step in under their nights),
+    ///                           their night by email with its button, and
+    ///                           the live page's captions.
     ///   Look                    the welcome line, the club's links, and the
     ///                           way to Themes → Looks.
     ///   Online check-in         the switch, the staff PIN, photos, how it is
@@ -298,11 +328,10 @@ public sealed class RelaySettingsControl : UserControl
     ///   Status                  whether anything is getting through, and
     ///                           Delete Everything Published.
     ///
-    /// The relay's, the look's, the personal PINs' and the mail's captions
-    /// share one column (FieldGrid.LineUp), so their boxes line up down the
-    /// page. The staff PIN's caption is nearly half as long again as the
-    /// longest of those, and keeps a column of its own in its card rather
-    /// than pushing every other box on the page to the right. Nothing is placed
+    /// The relay's, the look's, the staff PIN's, the personal PINs' and the
+    /// mail's captions share one column (FieldGrid.LineUp), so their boxes
+    /// line up down the page (the staff PIN's too since 22 Oct 2026, when
+    /// its caption was shortened to fit). Nothing is placed
     /// by hand, and the page scrolls, down only, when it is taller than the
     /// window (PageStack).
     ///
@@ -317,9 +346,9 @@ public sealed class RelaySettingsControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Publishes results, standings and the live race to a relay, so they are reachable from off the "
-                 + "venue's Wi-Fi and outlive this laptop being closed. The laptop stays in charge: it only ever "
-                 + "sends, and nothing on a race day waits for the network.",
+            Text = "Publishes results, standings and the live race to a relay, so they can be reached off the "
+                 + "venue's Wi-Fi and stay up when this laptop is closed. The laptop only ever sends, and nothing "
+                 + "on race day waits for the network.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -544,10 +573,9 @@ public sealed class RelaySettingsControl : UserControl
         };
 
         var lblRosterHint = HintLabel(
-            "Off by default on purpose. This puts driver names on an address anyone can open, and some of "
-            + "those drivers are likely to be children. The relay withholds the roster page as well unless the "
-            + "club is set up to allow it, so both ends have to agree before that list is public. Heat line-ups "
-            + "are held back here, on the laptop: with this off, the schedule shows the heats but not who is in them.");
+            "Off by default: it puts driver names, some likely children's, on an address anyone can open. The "
+            + "relay also withholds the roster unless the club is set up to allow it. With this off, the schedule "
+            + "shows the heats but not who is in them.");
 
         _chkDriverNights.Text = "Give each driver their own night at a private address";
         _chkDriverNights.AutoSize = true;
@@ -569,19 +597,24 @@ public sealed class RelaySettingsControl : UserControl
             if (!_chkDriverNights.Checked)
             {
                 _publisher.CloseDriverNightsOnTheRelay();
+
+                // Drivers' requests are part of their night, so they close
+                // with it - and the relay throws away any it still holds
+                // (RelayPublisher.Requests.AsksWanted; 22 Oct 2026, driver
+                // experience). Ticked again, they reopen by themselves.
+                _publisher.CloseDriverAsksOnTheRelay();
             }
 
             _publisher.SettingsChanged();
         };
 
         var lblNightsHint = HintLabel(
-            "Off by default. Each driver who raced gets a page of their own evening - their races, where "
-            + "they finished, their best laps and what the night's moments say they did - at an address "
-            + "that carries the twenty-character code already printed on their check-in badge. Nobody "
-            + "without that code can open it or find it, and the relay answers everybody else the same way "
-            + "whether the code is wrong or the driver simply did not race. Needs online check-in set up, "
-            + "because the badge is what the address is built from. Unticking this takes every night back "
-            + "off the relay.");
+            "Off by default. Each driver who raced gets a page of their evening - races, finishes, best laps "
+            + "and moments - at an address built from the code on their check-in badge, which nobody without "
+            + "it can find or open. Needs online check-in set up. Unticking takes every night off the relay, "
+            + "with any driver requests still waiting there.");
+
+        var (lblRequestsHint, lblNightEmailHint, lblNightEmailAutoHint, lblCaptionsHint) = BuildDriverExtras();
 
         _chkAbbreviate.Text = "Shorten published names to a first name and an initial";
         _chkAbbreviate.AutoSize = true;
@@ -598,9 +631,8 @@ public sealed class RelaySettingsControl : UserControl
         };
 
         var lblNameHint = HintLabel(
-            "\"Sam K\" rather than the full name, everywhere the relay shows one - the live board, "
-            + "results, standings and the roster. Only the last name is shortened and a single-word name is "
-            + "left alone. Affects what is sent from now on, not what is already on the relay.");
+            "\"Sam K\" rather than the full name, everywhere the relay shows one. A single-word name is left "
+            + "alone. Affects what is sent from now on, not what is already on the relay.");
 
         var card = new Section("What gets published");
 
@@ -609,10 +641,332 @@ public sealed class RelaySettingsControl : UserControl
         card.Add(lblRosterHint);
         card.Add(_chkDriverNights, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblNightsHint);
+
+        // A step in, under the nights tick they need (22 Oct 2026, driver
+        // experience) - see StepIn.
+        StepIn(card.Add(_chkDriverRequests, stretch: false, gapBelow: UiLayout.HintGap));
+        StepIn(card.Add(lblRequestsHint));
+
+        card.Add(_chkNightEmail, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblNightEmailHint);
+        StepIn(card.Add(_chkNightEmailAuto, stretch: false, gapBelow: UiLayout.HintGap));
+        StepIn(card.Add(lblNightEmailAutoHint));
+        card.Add(_lblNightEmailState, gapBelow: UiLayout.HintGap);
+        card.Add(new ButtonBar().With(_btnEmailNights));
+
+        card.Add(_chkRelayCaptions, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblCaptionsHint);
+
         card.Add(_chkAbbreviate, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblNameHint, gapBelow: 0);
 
         return card;
+    }
+
+    /// <summary>
+    /// The driver experience ticks (22 Oct 2026) - the drivers' own requests,
+    /// the night email and the live page's captions - and what each means,
+    /// for the "What gets published" card to place. Returned rather than
+    /// kept: only the ticks and the night email's status line and button are
+    /// spoken to again.
+    /// </summary>
+    private (Label RequestsHint, Label NightEmailHint, Label NightEmailAutoHint, Label CaptionsHint) BuildDriverExtras()
+    {
+        _chkDriverRequests.Text = "Let drivers send changes from their phone";
+        _chkDriverRequests.AutoSize = true;
+        _chkDriverRequests.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.RelayDriverRequests = _chkDriverRequests.Checked;
+            _settings.Save();
+
+            // UNTICKING IS SENT, the way the nights box's is: the relay holds
+            // the requests drivers have sent until this laptop collects them,
+            // so it is told to stop taking them and throw away what it holds.
+            // See RelayPublisher.CloseDriverAsksOnTheRelay. (22 Oct 2026,
+            // driver experience.)
+            if (!_chkDriverRequests.Checked)
+            {
+                _publisher.CloseDriverAsksOnTheRelay();
+            }
+
+            _publisher.SettingsChanged();
+        };
+
+        var lblRequestsHint = HintLabel(
+            "Off by default. From their night page a driver can ask to change their details or battery pack, ask "
+            + "to be kept more private online, or query a result. Nothing changes until the desk approves it. Needs "
+            + "online check-in and the box above. Unticking throws away any requests still on the relay.");
+
+        _chkNightEmail.Text = "Offer drivers their night by email";
+        _chkNightEmail.AutoSize = true;
+        _chkNightEmail.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.NightEmailOffered = _chkNightEmail.Checked;
+            _settings.Save();
+            RefreshNightEmailState();
+        };
+
+        var lblNightEmailHint = HintLabel(
+            "Off by default. Drivers who asked for it on their profile are emailed their races, their report card "
+            + "and a link to their night page. Sent from this laptop through the Email card below, and never "
+            + "twice to anybody for one night.");
+
+        _chkNightEmailAuto.Text = "Send automatically when the race day closes";
+        _chkNightEmailAuto.AutoSize = true;
+        _chkNightEmailAuto.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.NightEmailAutomatic = _chkNightEmailAuto.Checked;
+            _settings.Save();
+        };
+
+        var lblNightEmailAutoHint = HintLabel(
+            "When tonight's race day is closed on Race Day. Otherwise, press Email Tonight's Nights.");
+
+        // Rewritten while it sends, and every second - see KeepLines.
+        KeepLines(_lblNightEmailState);
+
+        _btnEmailNights.Text = "Email Tonight's Nights...";
+        _btnEmailNights.Click += async (_, _) => await EmailNightsAsync();
+
+        _chkRelayCaptions.Text = "Captions on the club's live page";
+        _chkRelayCaptions.AutoSize = true;
+        _chkRelayCaptions.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            // Saving is all it takes here: the captions are published, or
+            // emptied when this goes off, by MainForm.Captions on its own
+            // pass. (22 Oct 2026, driver experience.)
+            _settings.RelayCaptions = _chkRelayCaptions.Checked;
+            _settings.Save();
+            _publisher.SettingsChanged();
+        };
+
+        var lblCaptionsHint = HintLabel(
+            "Off by default. What the announcer says, as text on the live page, for anyone who can't hear the PA "
+            + "- no sound needed. Lines about drivers who asked to be shown by initials are left out.");
+
+        return (lblRequestsHint, lblNightEmailHint, lblNightEmailAutoHint, lblCaptionsHint);
+    }
+
+    /// <summary>
+    /// A part a step in, under the tick it belongs to: the app's usual step,
+    /// or as far in as the tick's caption starts once the box has grown past
+    /// that with the text (TickBox.CaptionIndent). Set after the card places
+    /// it, which gives every part a margin of its own, and again whenever the
+    /// text size changes. The card measures a part inside its margins, so a
+    /// hint a step in wraps to the room it has. (22 Oct 2026, driver
+    /// experience.)
+    /// </summary>
+    private void StepIn(Control part)
+    {
+        _textSize.Keep(() =>
+        {
+            var left = TickBox.CaptionIndent;
+
+            if (part.Margin.Left != left)
+            {
+                part.Margin = new Padding(left, part.Margin.Top, part.Margin.Right, part.Margin.Bottom);
+            }
+        });
+    }
+
+    /// <summary>
+    /// The driver experience ticks greyed out while what they need is off,
+    /// the way "Email automatically when PINs change" is under its own
+    /// switch: driver requests need online check-in and drivers' nights,
+    /// and sending automatically needs the night email offered. The
+    /// setting is kept either way. Then the night email's status line.
+    /// </summary>
+    private void RefreshDriverExtras()
+    {
+        _chkDriverRequests.Enabled = _settings.PublishDriverNightsToTheRelay && _settings.RelayCheckInEnabled;
+        _chkNightEmailAuto.Enabled = _settings.NightEmailOffered;
+
+        RefreshNightEmailState();
+    }
+
+    /// <summary>
+    /// The night emails at a glance: how many drivers want theirs, how many
+    /// have had it tonight - or, while sending, how far it has got.
+    /// </summary>
+    private void RefreshNightEmailState()
+    {
+        var desk = NightEmails;
+        var sending = _nightProgress is not null || PinMailer.IsSending || desk?.IsSending() == true;
+
+        string text;
+        var colour = AppTheme.TextMuted;
+
+        if (_nightProgress is { } progress)
+        {
+            text = progress;
+            colour = AppTheme.Accent;
+        }
+        else if (!_settings.NightEmailOffered)
+        {
+            text = "Off. Nobody is emailed their night.";
+        }
+        else if (desk?.IsSending() == true || PinMailer.IsSending)
+        {
+            text = "Sending email in the background...";
+            colour = AppTheme.Accent;
+        }
+        else if (!PinMailer.IsConfigured(_settings))
+        {
+            text = "Set up the Email card below to send drivers their nights.";
+            colour = AppTheme.Primary;
+        }
+        else
+        {
+            var asked = _profiles.All.Count(p => p.EmailMyNight && !p.IsRental && NightEmail.AddressOf(p.Email) is not null);
+            var tonight = NightEmail.NightKey(TonightAtTheTrack.NightOf(DateTime.Now));
+            var emailed = string.Equals(_settings.NightEmailSentFor, tonight, StringComparison.Ordinal)
+                ? _settings.NightEmailSentTo.Count
+                : 0;
+
+            text = asked == 0
+                ? "Nobody has asked for their night by email yet - tick it on a driver's profile."
+                : $"{Plural.Of(asked, "driver")} {(asked == 1 ? "wants" : "want")} their night by email \u00B7 {emailed} emailed tonight";
+            colour = asked == 0 ? AppTheme.TextMuted : AppTheme.Accent;
+        }
+
+        if (_lblNightEmailState.Text != text)
+        {
+            _lblNightEmailState.Text = text;
+        }
+
+        _lblNightEmailState.ForeColor = colour;
+        _btnEmailNights.Enabled = _settings.NightEmailOffered && desk is not null && !sending;
+    }
+
+    /// <summary>
+    /// Email Tonight's Nights...: who would be emailed is worked out first,
+    /// the count asked about, and only then sent - one at a time, through
+    /// MainForm (NightEmails), which records who got theirs so nobody gets
+    /// it twice. (22 Oct 2026, driver experience, item 11.)
+    /// </summary>
+    private async Task EmailNightsAsync()
+    {
+        var desk = NightEmails;
+
+        if (desk is null)
+        {
+            return;
+        }
+
+        var plan = desk.Plan();
+
+        if (plan.Problem is { } problem)
+        {
+            AppDialog.Show(this, problem, "Can't email nights", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var count = plan.Messages.Count;
+
+        if (count == 0)
+        {
+            var why = "Nobody to email tonight.";
+
+            if (plan.AlreadySent > 0)
+            {
+                why += $"\n\n{Plural.Of(plan.AlreadySent, "driver")} who asked {(plan.AlreadySent == 1 ? "has" : "have")} already been sent tonight's.";
+            }
+
+            if (plan.NoAddress > 0)
+            {
+                why += $"\n\n{Plural.Of(plan.NoAddress, "driver")} who asked {(plan.NoAddress == 1 ? "has" : "have")} no usable address in the Email box on their driver profile.";
+            }
+
+            if (plan.AlreadySent == 0 && plan.NoAddress == 0)
+            {
+                why += "\n\nOnly drivers who raced tonight and asked for their night by email (on their driver profile) are sent one.";
+            }
+
+            AppDialog.Show(this, why, "Nobody to email", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // About a second and a half apart, as the PINs go.
+        var minutes = Math.Max(1, (int)Math.Ceiling(count * 2 / 60.0));
+
+        var question = $"Email {Plural.Of(count, "driver")} their night?";
+
+        if (plan.AlreadySent > 0)
+        {
+            question += $"\n\n{Plural.Of(plan.AlreadySent, "driver")} already had tonight's and won't be sent it again.";
+        }
+
+        if (plan.NoAddress > 0)
+        {
+            question += $"\n\n{Plural.Of(plan.NoAddress, "driver")} asked but {(plan.NoAddress == 1 ? "has" : "have")} no usable email address, and won't get one.";
+        }
+
+        question += $"\n\nThey go one at a time - about {Plural.Of(minutes, "minute")}. Everything else keeps working meanwhile. "
+                    + "An email can't be taken back once it has gone - Undo won't recall it.";
+
+        if (AppDialog.Show(this, question, "Email Tonight's Nights", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        _nightProgress = "Starting to email nights...";
+        RefreshNightEmailState();
+
+        // Created here, on the UI thread, so each report lands back on it.
+        var progress = new Progress<string>(report =>
+        {
+            if (_nightProgress is not null && !IsDisposed)
+            {
+                _nightProgress = report;
+                RefreshNightEmailState();
+            }
+        });
+
+        MailResult result;
+
+        try
+        {
+            result = await desk.SendAsync(progress, _mailCancel.Token);
+        }
+        catch (Exception ex)
+        {
+            result = new MailResult { Ok = false, Message = ex.Message };
+        }
+        finally
+        {
+            _nightProgress = null;
+        }
+
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        RefreshNightEmailState();
+
+        AppDialog.Show(this, DescribeMailResult(result), result.Ok ? "Nights emailed" : "Nights not all emailed",
+            MessageBoxButtons.OK,
+            result.Ok && result.Failures.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }
 
     /// <summary>
@@ -655,9 +1009,8 @@ public sealed class RelaySettingsControl : UserControl
         var lblSocial = _textSize.Wear(new Label { Text = "Club links", AutoSize = true }, () => AppTheme.BoldFont);
 
         var lblSocialHint = HintLabel(
-            "Shown on the club's home page and at the foot of every page, so visitors can find you "
-            + "elsewhere. Paste the full address, or just @yourclub for Instagram, YouTube, TikTok and X. "
-            + "Leave a box empty to leave that one off.");
+            "Shown on the club's home page and at the foot of every page. Paste the full address, or just "
+            + "@yourclub for Instagram, YouTube, TikTok and X. Leave a box empty to leave that one off.");
 
         var links = new FieldGrid();
 
@@ -904,19 +1257,22 @@ public sealed class RelaySettingsControl : UserControl
             RefreshCheckInState();
         };
 
-        // A caption column of its own. The caption is nearly half as long
-        // again as the longest of the other cards', and lined up with them
-        // it would push every box on the page to the right for this one.
+        // (22 Oct 2026, page tidy): this grid kept a caption column of its
+        // own because its caption, "Staff PIN (opens the full list):", was
+        // too long to share - so its box started at a different x from every
+        // other card's. The bracket said what the hint under it says, so the
+        // caption is now "Staff PIN:" and the grid lines up with the rest.
         var pin = new FieldGrid();
 
-        pin.AddRow("Staff PIN (opens the full list):", _txtCheckInPin);
+        pin.AddRow("Staff PIN:", _txtCheckInPin);
+
+        _linedUp.Add(pin);
 
         var lblHint = HintLabel(
-            "The staff PIN opens everybody's list at the club's check-in page - for a tablet on the desk. A "
-            + "driver's QR check-in opens just that driver, no PIN needed: print QR check-ins on Race Day > Who's Racing while this "
-            + "is on and any phone camera, iPhones included, opens them straight to a Check In button. A racer's "
-            + "own PIN (Personal PINs, below) does the same without a QR check-in. Nobody is checked in until somebody "
-            + "taps it. Taps reach this laptop within a few seconds and land exactly like the Wi-Fi check-in page's.");
+            "The staff PIN opens everybody's list on the club's check-in page, for a tablet on the desk. A "
+            + "driver's QR check-in (print them on Race Day > Who's Racing while this is on) or their own PIN "
+            + "(Personal PINs, below) opens just that driver, no staff PIN needed. Nobody is checked in until "
+            + "they tap Check In, and taps reach this laptop within a few seconds.");
 
         _chkCheckInPhotos.Text = "Include photos (drivers can be children - off unless you're sure)";
         _chkCheckInPhotos.AutoSize = true;
@@ -1229,9 +1585,9 @@ public sealed class RelaySettingsControl : UserControl
         };
 
         var lblPinsHint = HintLabel(
-            "Six digits each, and no two racers share one. A racer types theirs on the club's check-in page and "
-            + "it checks in only them - it cannot open the list or check in anybody else. The relay is only ever "
-            + "sent a scrambled form of each PIN, never the PIN. The staff PIN above still opens everything.");
+            "Six digits each, never shared. A racer types theirs on the club's check-in page and it checks in "
+            + "only them - it cannot open the list. The relay only ever gets a scrambled form of each PIN. The "
+            + "staff PIN above still opens everything.");
 
         _cmbPinRotation.DropDownStyle = ComboBoxStyle.DropDownList;
         _cmbPinRotation.Items.AddRange(new object[]
@@ -1293,9 +1649,9 @@ public sealed class RelaySettingsControl : UserControl
         };
 
         var lblAutoHint = HintLabel(
-            "Each racer is sent their new PIN when a new set is made, and a newcomer theirs within ten minutes "
-            + "of being added - as is anybody who has not been sent their current PIN yet. Racers need an "
-            + "email address on their driver profile, and the Email group below set up.");
+            "Racers are sent their new PIN when a new set is made, and a newcomer, or anyone not yet sent "
+            + "theirs, within ten minutes. Needs an email address on the driver profile and the Email card "
+            + "below set up.");
 
         var card = new Section("Personal PINs");
 
@@ -1960,11 +2316,10 @@ public sealed class RelaySettingsControl : UserControl
         // round or throws a flag on the venue's Wi-Fi either - but there its
         // Race tab can (RaceDayService refuses race control only off Wi-Fi).
         var lblHint = HintLabel(
-            "The same page as Local Screens's race-day manager - setting up the day, entries, check-in, the "
-            + "program and results - reachable from off the venue's Wi-Fi too. Through the relay it never "
-            + "starts a round or throws a flag; on the venue's own Wi-Fi its Race tab can, so give the Manager "
-            + "PIN only to people you would let run Race Control. Guarded by the Manager PIN set on Local "
-            + "Screens; nothing here works without one.");
+            "Local Screens' race-day manager (the day, entries, check-in, program and results), reachable off "
+            + "the venue's Wi-Fi too. Through the relay it never starts a round or throws a flag, but on the "
+            + "venue's Wi-Fi its Race tab can, so give the Manager PIN only to people you'd let run Race Control. "
+            + "Needs a Manager PIN set on Local Screens.");
 
         // Two lines kept, like check-in's and personal PINs' own state lines
         // above - see KeepLines.
@@ -2079,9 +2434,8 @@ public sealed class RelaySettingsControl : UserControl
         _btnPoster.Click += (_, _) => ShowClubPoster();
 
         var lblShareHint = HintLabel(
-            "The club's home page: what is on now, the schedule, results, standings, achievements and tracks. It "
-            + "works from anywhere, on any network - no need to be on the venue's Wi-Fi. The poster puts it in "
-            + "a QR code for the pits wall.");
+            "The club's home page: what's on now, the schedule, results, standings, achievements and tracks, "
+            + "from any network. The poster puts it in a QR code for the pits wall.");
 
         var card = new Section("Share");
 
@@ -2204,10 +2558,9 @@ public sealed class RelaySettingsControl : UserControl
         _btnDelete.Click += async (_, _) => await DeleteAsync();
 
         var lblDeleteHint = HintLabel(
-            "Removes everything this club has published - results, standings, the live race, the schedule, "
-            + "achievements, tracks, the look and the online check-in list. The laptop keeps its own copy of "
-            + "everything; this only clears the relay. It also turns \"Publish to the relay\" off, so nothing "
-            + "goes back up until you tick it again - and ticking it sends everything again, including the "
+            "Clears everything this club has published from the relay - results, standings, the live race, the "
+            + "schedule, achievements, tracks, the look and the check-in list. The laptop keeps its own copy. It "
+            + "also turns \"Publish to the relay\" off; ticking it again sends everything again, including the "
             + "last day and a half of results.");
 
         var card = new Section("Status");
@@ -2238,6 +2591,10 @@ public sealed class RelaySettingsControl : UserControl
             _chkRoster.Checked = _settings.RelayPublishRoster;
             _chkDriverNights.Checked = _settings.PublishDriverNightsToTheRelay;
             _chkAbbreviate.Checked = _settings.RelayAbbreviateNames;
+            _chkDriverRequests.Checked = _settings.RelayDriverRequests;
+            _chkNightEmail.Checked = _settings.NightEmailOffered;
+            _chkNightEmailAuto.Checked = _settings.NightEmailAutomatic;
+            _chkRelayCaptions.Checked = _settings.RelayCaptions;
 
             _txtTagline.Text = _settings.RelayTagline;
 
@@ -2593,6 +2950,7 @@ public sealed class RelaySettingsControl : UserControl
         RefreshShare();
         RefreshCheckInState();
         RefreshPinsState();
+        RefreshDriverExtras();
         RefreshManagerState();
 
         var status = _publisher.Status;

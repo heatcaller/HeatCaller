@@ -75,7 +75,7 @@ public sealed class PaceWatch
     private string? _sessionBestHolder;
     private int _lapsSeen;
 
-    /// <summary>This driver's best lap before tonight, where it is known. From PersonalBests.</summary>
+    /// <summary>This driver's best lap before this race (tonight's saved heats included), where it is known. From PersonalBests.</summary>
     public Func<string, double?>? PersonalBestBefore { get; set; }
 
     /// <summary>The fastest lap turned tonight before this race, and who turned it. From the day's sessions.</summary>
@@ -230,6 +230,48 @@ public sealed class PaceWatch
         storedSeconds > 0 && sessionBest < storedSeconds
             ? (sessionBest, sessionHolder ?? string.Empty)
             : (storedSeconds, storedHolder);
+
+    /// <summary>
+    /// A lap of this driver's was taken off by hand (bug hunt 10). Their
+    /// session best is rebuilt from the laps that are left, and the race's
+    /// fastest lap from every driver's best, so a phantom split that was
+    /// taken off no longer stands as the bar for the rest of the race.
+    /// Whether their personal best has been said is left alone: it was
+    /// said, and saying it twice is the thing that rule prevents.
+    /// </summary>
+    // WHY (23 Oct 2026, bug hunt 10): FeedLaps only ever added laps, so a
+    // double read folded away by -1 lap stayed the session best.
+    internal void Forget(string driverId, IEnumerable<double> survivingLapSeconds)
+    {
+        if (string.IsNullOrWhiteSpace(driverId))
+        {
+            return;
+        }
+
+        _bestThisSession.Remove(driverId);
+
+        var best = survivingLapSeconds
+            .Where(s => s > 0 && s <= LongestCredibleLap)
+            .DefaultIfEmpty(0)
+            .Min();
+
+        if (best > 0)
+        {
+            _bestThisSession[driverId] = best;
+        }
+
+        _sessionBest = double.MaxValue;
+        _sessionBestHolder = null;
+
+        foreach (var (driver, seconds) in _bestThisSession)
+        {
+            if (seconds > 0 && seconds < _sessionBest)
+            {
+                _sessionBest = seconds;
+                _sessionBestHolder = driver;
+            }
+        }
+    }
 
     /// <summary>
     /// A new race. The session's own bests go; what the night and the

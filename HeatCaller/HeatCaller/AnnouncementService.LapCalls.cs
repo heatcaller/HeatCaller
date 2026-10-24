@@ -156,6 +156,14 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // A lap the window was told of too late to say (23 Oct 2026, timing
+        // layer, P4b) - dropped here, as it is offered, because the batch is
+        // spoken later on another thread. See WhileLapCallsAreStale.
+        if (SkippedAsStale())
+        {
+            return;
+        }
+
         if (transponder is null)
         {
             action();
@@ -357,9 +365,17 @@ public sealed partial class AnnouncementService
         string SpokenNameFor(RaceStanding s)
         {
             var profile = _profiles.Get(s.Transponder);
-            return profile is not null && !string.IsNullOrWhiteSpace(profile.SpokenName)
+            var saidAs = profile is not null && !string.IsNullOrWhiteSpace(profile.SpokenName)
                 ? profile.SpokenName
                 : s.DisplayName;
+
+            // WHY (23 Oct 2026, bug hunt 10): a car with no announcer name is said by
+            // its number, which must stay in the room - noted, so listen-along,
+            // the public captions and the podium videos leave the line out. See
+            // NoteSpokenAsNumber.
+            NoteSpokenAsNumber(s.Transponder, saidAs);
+
+            return saidAs;
         }
 
         // The line is picked BEFORE the order is worded, because what the
@@ -502,10 +518,30 @@ public sealed partial class AnnouncementService
         // EnqueueVoiceWork. A report turned down (or kept and then lost)
         // gives the sponsor's ration back (20 Oct 2026, Bug Hunt 8).
         var accepted = EnqueueVoiceWork(AnnouncementEventType.PositionReport, leader.Transponder,
-            () =>
+            async () =>
             {
-                countMention?.Invoke();
-                return SynthesizeAndPlayAsync(text, "[voice] Position report", speedOverride: reportSpeed);
+                // WHY (23 Oct 2026, bug hunt 10): counted only once the line is
+                // certain to be heard (SynthesizeAndPlayAsync's spoken); a line
+                // dropped for no voice, a flag, the countdown or a mute - or
+                // whose synthesis threw - gives the reservation back instead.
+                var heard = false;
+
+                try
+                {
+                    await SynthesizeAndPlayAsync(text, "[voice] Position report", speedOverride: reportSpeed,
+                        spoken: () =>
+                        {
+                            heard = true;
+                            countMention?.Invoke();
+                        });
+                }
+                finally
+                {
+                    if (!heard)
+                    {
+                        releaseMention?.Invoke();
+                    }
+                }
             },
             displayText: text,
             lost: releaseMention);
@@ -1341,10 +1377,30 @@ public sealed partial class AnnouncementService
 
             var paced = false;
             var accepted = EnqueueVoiceWork(type, driverTransponder,
-                () =>
+                async () =>
                 {
-                    countMention?.Invoke();
-                    return SynthesizeAndPlayAsync(said, $"[voice] {type}", speedOverride: speed);
+                    // WHY (23 Oct 2026, bug hunt 10): counted only once the line is
+                    // certain to be heard (SynthesizeAndPlayAsync's spoken); a line
+                    // dropped for no voice, a flag, the countdown or a mute - or
+                    // whose synthesis threw - gives the reservation back - and the pair - instead (GiveBack).
+                    var heard = false;
+
+                    try
+                    {
+                        await SynthesizeAndPlayAsync(said, $"[voice] {type}", speedOverride: speed,
+                            spoken: () =>
+                            {
+                                heard = true;
+                                countMention?.Invoke();
+                            });
+                    }
+                    finally
+                    {
+                        if (!heard)
+                        {
+                            GiveBack();
+                        }
+                    }
                 },
                 displayText: said,
                 lost: GiveBack,
@@ -1463,6 +1519,23 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // WHY (23 Oct 2026, bug hunt 10): this line goes straight to
+        // EnqueueVoiceWork, so it skipped the club's chattiness dial - a
+        // quiet announcer still called every rivalry swap, even for 8th.
+        // A rivalry is a pass for position, so it is now weighed like a
+        // close battle and asked of the dial first, the way a ghost pass is
+        // (and, like that one, before a line is drawn from the bag, so a
+        // held swap doesn't use one up). The pacing gap still sees it as
+        // the LeaderChange it borrows below with this weight, not a lead
+        // change's (routineWeight).
+        var rivalryWeight = WeightOf(AnnouncementEventType.CloseBattle);
+
+        if (!ShowChatter.CallIsWorthIt(rivalryWeight, Chatter, alwaysSaid: false))
+        {
+            StatusMessage?.Invoke($"[voice] Rivalry line held - the announcer is set to {ShowChatter.For(Chatter).Name}.");
+            return;
+        }
+
         var chosenTemplate = templates.Count == 1 ? templates[0] : TemplateBag.Pick(templates);
         var text = chosenTemplate
             .Replace("{overtaker}", overtakerName)
@@ -1482,7 +1555,8 @@ public sealed partial class AnnouncementService
         // Shown only if accepted - see EnqueueVoiceWork.
         EnqueueVoiceWork(AnnouncementEventType.LeaderChange, overtakerTransponder, () => SynthesizeAndPlayAsync(text, "[voice] Rivalry announcement",
             "[voice] Skipped rivalry announcement - ElevenLabs API key or voice not configured."),
-            displayText: text);
+            displayText: text,
+            routineWeight: rivalryWeight);
     }
 
     private void HandleGatePassed(GatePassEvent gate)
@@ -1672,7 +1746,9 @@ public sealed partial class AnnouncementService
         // and it should land as close to their crossing as possible rather
         // than behind a queue of shared chatter. Deliberately not queued for
         // the same reason: a cue that arrives late is worse than none.
-        if (!Muted && LapBeeps?.ToneFor(transponder) is { } toneIndex)
+        // Nor for a lap the window was told of too late (23 Oct 2026, timing
+        // layer, P4b): a cue that arrives late is worse than none, as above.
+        if (!Muted && LapBeeps?.ToneFor(transponder) is { } toneIndex && !SkippedAsStale())
         {
             var beepVolume = (float)_soundStore.Current.Volume;
             _ = ToneGenerator.PlayDriverLapAsync(toneIndex, beepVolume);

@@ -76,6 +76,9 @@ public sealed class AchievementsControl : UserControl
     /// <summary>The driver picker's width as last measured - see Pieces.PickerWidth. Forgotten when the list is refilled.</summary>
     private (Font Font, int Count, int Width)? _driverWidth;
 
+    /// <summary>The where-you-race picker's width as last measured - see Pieces.PickerWidth.</summary>
+    private (Font Font, int Count, int Width)? _whereWidth;
+
     /// <summary>The picker's line - held so a refilled list can re-measure it.</summary>
     private FieldRow? _pickRow;
 
@@ -145,7 +148,10 @@ public sealed class AchievementsControl : UserControl
 
         if (_settings is not null)
         {
-            pickRow.Add(lblWhere, _cmbWhere, () => UiLayout.AtTextSize(130));
+            // (22 Oct 2026, page tidy): as wide as its longer choice too, the
+            // way every other picker is (Pieces.PickerWidth) - it was a fixed
+            // 130px at the text size in use, measured against nothing.
+            pickRow.Add(lblWhere, _cmbWhere, () => Math.Max(UiLayout.AtTextSize(130), Pieces.PickerWidth(_cmbWhere, ref _whereWidth)));
             pickRow.Add(null, _chkShowOthers);
             ShowWhere();
         }

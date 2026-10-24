@@ -84,6 +84,11 @@ export interface ChannelSpec {
    * The largest one document in this collection may be, when the general
    * COLLECTION_ITEM_MAX_BYTES is the wrong ceiling for it.
    *
+   * SNAPSHOTS TOO (22 Oct 2026, driver experience): a snapshot without
+   * this may be as big as the relay's whole body limit, which is right for
+   * the badge artwork and far too much for a drivers' live document or a
+   * few lines of captions. Set on one, it is that snapshot's ceiling.
+   *
    * A year of a busy club - twenty heats a night, forty-odd nights -
    * passes 256 KB somewhere around nine hundred sessions, and the publish
    * is then refused with a 413 the laptop treats as "drop it". That year's
@@ -290,6 +295,56 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
     // Its ids are a running count, not years - see ChannelSpec.rollOldest
     // for what assuming otherwise would have cost.
     rollOldest: true,
+  },
+  /*
+   * EACH DRIVER'S LIVE EVENING (22 Oct 2026, driver experience): their
+   * next race and how far away it is, whether they are staged, their
+   * marshal duty, when their transponder was last seen, whether they are
+   * checked in, and the desk's answers to what they asked - keyed by badge
+   * id, for the night page to poll.
+   *
+   * PRIVATE, read only through readOneNight by somebody holding that
+   * driver's badge id, exactly as the nights are. A snapshot rather than a
+   * collection because it is one document the laptop rewrites every few
+   * seconds, not one per driver; the relay hands out one driver's entry
+   * and never the whole thing. Switched by the nights switch, and taken
+   * down when it closes. Read as stale - and so not served - once it is
+   * half an hour old.
+   */
+  driverlive: {
+    name: "driverlive",
+    kind: "snapshot",
+    what: "each driver's live evening, for the driver whose badge id it is",
+    private: true,
+    maxItemBytes: 256 * 1024,
+  },
+  /*
+   * WHAT EACH DRIVER CAN ASK THE DESK TO CHANGE (22 Oct 2026, driver
+   * experience): their announcer name, pronouns, about line, a masked
+   * email, the privacy ticks and their battery packs to choose from -
+   * keyed by badge id. Private as driverlive is, switched by the club's
+   * driver-requests switch (driver/open), and taken down when that closes.
+   */
+  driverme: {
+    name: "driverme",
+    kind: "snapshot",
+    what: "each driver's own details, for the driver whose badge id it is",
+    private: true,
+    maxItemBytes: 512 * 1024,
+  },
+  /*
+   * THE ANNOUNCER'S LAST FEW LINES, AS TEXT (22 Oct 2026, driver
+   * experience), for a captions view on the live page - for somebody who
+   * cannot hear the PA, or is somewhere they cannot play sound. Public,
+   * like the live race; the laptop redacts drivers who asked for initials
+   * only before it sends, and publishes an empty document when the club
+   * switches captions off.
+   */
+  captions: {
+    name: "captions",
+    kind: "snapshot",
+    what: "the announcer's last few lines, as captions",
+    maxItemBytes: 16 * 1024,
   },
   signup: {
     name: "signup",

@@ -343,19 +343,20 @@ public sealed class CommentaryControl : UserControl
     /// what it needs and the master switch, then a card for each part of the
     /// job, in the order someone setting this up needs them:
     ///
-    ///   Connection      where the model is, with Test Connection and what it
-    ///                   found right under the fields it checks (it used to
-    ///                   be at the very bottom, a whole page away from them).
-    ///   What it writes  intros, recaps, talking points - each switch with
-    ///                   its own settings a step in under it.
-    ///   Writing style   how those lines are WORDED. The tone here was once
-    ///                   headed plain "Style", right under a "Style:" voice
-    ///                   setting, so the two read as duplicates.
-    ///   Segments        how chatty, the pacing, and which segments run.
-    ///   Race recap      what happens after the flag, in the order it
-    ///                   happens.
-    ///   Broadcast       the recap dressed up as TV: the commercial break,
-    ///                   the opening, the sign-off and the show's name.
+    ///   Who writes it      the relay, the model on this PC, the month's lines,
+    ///                      and Test Connection right under what it checks.
+    ///   Before the start   race intros, driver introductions (with the
+    ///                      qualifying recap), the throw to pit lane.
+    ///   Through the night  how chatty, the pacing, how far down the segments
+    ///                      go, talking points and the segments themselves.
+    ///   After the flag     the pause, the unofficial result, the Technical
+    ///                      Lead, the teasers and the commercial break.
+    ///   Recap show         the recap, its opening, the booth interview, the
+    ///                      sign-off and the show's name.
+    ///   Writing style      how every line is WORDED.
+    ///
+    /// In the order the night happens since 22 Oct 2026 (page tidy) - see
+    /// the note above the cards in BuildLayout.
     ///
     /// Who SAYS it - the names and voices - is on Voice > Cast since 17 Oct
     /// 2026 (CastControl), and the club notes, the room's vote and listening
@@ -467,23 +468,17 @@ public sealed class CommentaryControl : UserControl
         // Intro and master switch
         // ------------------------------------------------------------------
 
+        // ONE LINE OF INTRO (22 Oct 2026, page tidy). There were two - this
+        // and an orange requirement line - and the relay box under them had a
+        // third saying much the same. What writes is now said once, by the
+        // live line in the Who writes it card (UpdateRelayState).
         var lblIntro = new Label
         {
-            Text = "Optional color commentary from a language model. HeatCaller can have it written by the club relay, "
-                 + "or by a small model built into HeatCaller that runs on this PC. Neither needs anything installed.",
+            Text = "Color commentary written by the club relay or by a small model built into HeatCaller. Nothing to "
+                 + "install. When neither can write, the normal announcement lines are used.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
-
-        var lblRequirement = _textSize.Wear(
-            new Label
-            {
-                Text = "The relay writes for clubs whose plan includes commentary (set up the Club Website page); the built-in "
-                     + "model covers the rest, even with no internet. If neither writes, the normal announcement lines are used.",
-                AutoSize = true,
-                ForeColor = AppTheme.Accent,
-            },
-            () => AppTheme.SmallFont);
 
         Check(_chkEnabled, "Enable AI commentary");
         _textSize.Wear(_chkEnabled, () => AppTheme.BoldFont);
@@ -502,13 +497,16 @@ public sealed class CommentaryControl : UserControl
         };
 
         // ------------------------------------------------------------------
-        // Where the writing happens
+        // Who writes it
         //
-        // Above the Connection card rather than in it: it decides which
-        // brain writes, and the card under it is only one of the two.
+        // In the same card as the model on this PC since 22 Oct 2026 (page
+        // tidy). It sat above the Connection card with a hint of its own,
+        // because that card was only about one of the two brains - which left
+        // the choice of brain outside any card, and the page's first card
+        // starting halfway through the answer.
         // ------------------------------------------------------------------
 
-        Check(_chkUseRelay, "Write through the relay when it can");
+        Check(_chkUseRelay, "Write through the club relay when it can");
         _chkUseRelay.Checked = _settings.CommentaryUseRelay;
         _chkUseRelay.CheckedChanged += (_, _) =>
         {
@@ -517,10 +515,6 @@ public sealed class CommentaryControl : UserControl
             ApplyToService();
             UpdateEnabledState();
         };
-
-        var relayHint = Hint(
-            "The relay writes with a hosted model and needs nothing installed here. Untick this and the model on this PC "
-            + "writes everything.");
 
         // Every sentence UpdateRelayState can produce, built by the same
         // method that produces it. The list is only here so the label can
@@ -558,14 +552,13 @@ public sealed class CommentaryControl : UserControl
 
         Stepped(connectionGrid.AddRow(string.Empty, _chkLocalModel));
         connectionGrid.AddHint(
-            "Built in and works with the internet down, though its lines are plainer than the relay's. Untick it and "
-            + "the races the relay can't cover are simply quieter - but it still takes over by itself when this "
-            + "month's relay lines run out, so the commentary carries on.");
+            "Works with the internet down, but its lines are plainer. Unticked, it still takes over when this "
+            + "month's relay lines run out.");
 
         // FOR THE MODEL ON THIS PC (17 Oct 2026): this sets
         // BundledLlmClient.Timeout only - the relay keeps its own fixed wait
         // (RelayCommentaryClient.Timeout) - so it greys with the box above.
-        Flush(connectionGrid.AddRow("Give up after:", Line(_numTimeout, Suffix("seconds, for the model on this PC - after this the normal announcement line is used instead"))));
+        Flush(connectionGrid.AddRow("Give up after:", Line(_numTimeout, Suffix("seconds (the model on this PC), then the normal line is used"))));
 
         // THIS MONTH'S RELAY LINES (19 Oct 2026), next to what writes when
         // they run out: the share used, how many nights like tonight are
@@ -609,11 +602,10 @@ public sealed class CommentaryControl : UserControl
         testRow.Add(_lblTestResult, gapBelow: 0);
         testRow.AddSide(Steady(btnTest, TestCaption), gapBelow: 0);
 
-        var connection = new Section("Connection");
+        var connection = new Section("Who writes it");
 
-        connection.Add(Hint(
-            "What writes on this PC: everything when the relay box above is off, or whatever the relay can't write "
-            + "when it is on."));
+        connection.Add(_chkUseRelay, stretch: false, gapBelow: UiLayout.HintGap);
+        connection.Add(_lblRelayState, gapBelow: UiLayout.RowGap);
         connection.Add(connectionGrid);
         connection.Add(testRow, gapBelow: 0);
 
@@ -621,7 +613,7 @@ public sealed class CommentaryControl : UserControl
         // What it writes
         // ------------------------------------------------------------------
 
-        Check(_chkIntros, "Race intros - a \"coming up\" line before a round starts");
+        Check(_chkIntros, "Race intros - a \"coming up\" line as each race goes to the grid");
         _chkIntros.Checked = _settings.CommentaryRaceIntros;
         _chkIntros.CheckedChanged += (_, _) => { _settings.CommentaryRaceIntros = _chkIntros.Checked; _settings.Save(); UpdateEnabledState(); };
 
@@ -638,13 +630,11 @@ public sealed class CommentaryControl : UserControl
         var introsGrid = new FieldGrid();
 
         Stepped(introsGrid.AddRow(string.Empty, _chkIntrosSelective));
-        introsGrid.AddHint(
-            "Every other race starts without one - fewer words between heats, and the intro saved for the races that "
-            + "matter. Rivalries are set at the bottom of the Race Calls tab.");
+        introsGrid.AddHint("Rivalries are set at the bottom of the Race Calls tab.");
 
         // THE DRIVER INTRODUCTIONS (18 Oct 2026) - a roll call of the grid,
         // written by the model from exact facts, after the race intro.
-        Check(_chkDriverIntros, "Driver introductions - each driver on the grid, in order, before the start");
+        Check(_chkDriverIntros, "Driver introductions - each driver on the grid, in order");
         _chkDriverIntros.Checked = _settings.CommentaryDriverIntros;
         _chkDriverIntros.CheckedChanged += (_, _) => { _settings.CommentaryDriverIntros = _chkDriverIntros.Checked; _settings.Save(); UpdateEnabledState(); };
 
@@ -656,17 +646,21 @@ public sealed class CommentaryControl : UserControl
             _settings.Save();
         };
 
+        // The qualifying recap a step in under the driver introductions
+        // (22 Oct 2026, page tidy): it is the opening of a main's
+        // introductions and greys with them, so it is theirs, not a switch
+        // of its own between them and pit lane.
         var driverIntrosGrid = new FieldGrid();
 
         Stepped(driverIntrosGrid.AddRow(string.Empty, _chkDriverIntrosMains));
+        Stepped(driverIntrosGrid.AddRow(string.Empty, _chkQualifyingRecap));
         driverIntrosGrid.AddHint(
-            "Grid position, racing number and home club from each driver's profile, and a line of form from their "
-            + "saved races - a milestone start, a winning run, recent wins, their average driver rating. Before a main "
-            + "it opens with what qualifying decided. The automatic start waits for it before the countdown.");
+            "Grid spot, number, home club and a line of form for each driver. The automatic start waits for them.");
 
         // THE PIT LANE AND THE QUALIFYING RECAP (18 Oct 2026) - ticks of their
-        // own, in the Segments card's "Before the start" group with the
-        // driver introductions, in the order On Air says them.
+        // own, on the Before the start card with the driver introductions,
+        // in the order On Air says them (the qualifying recap a step in
+        // under the introductions since 22 Oct 2026).
         Check(_chkPitLane, "Throw to pit lane - the co-host's word with a Team Principal");
         _chkPitLane.Checked = _settings.PrincipalBeforeRace;
         _chkPitLane.CheckedChanged += (_, _) =>
@@ -710,7 +704,7 @@ public sealed class CommentaryControl : UserControl
             }
         };
 
-        Check(_chkQualifyingRecap, "Qualifying recap - before a main, what qualifying decided");
+        Check(_chkQualifyingRecap, "Before a main, open with what qualifying decided");
         _chkQualifyingRecap.Checked = _settings.CommentaryQualifyingRecap;
         _chkQualifyingRecap.CheckedChanged += (_, _) =>
         {
@@ -747,9 +741,9 @@ public sealed class CommentaryControl : UserControl
 
         Stepped(summariesGrid.AddRow("Mention up to:", Line(_numFinishers, lblFinishersSuffix)));
         summariesGrid.AddField(_chkMentionFastestLap);
-        summariesGrid.AddHint("Off if this feels repetitive - the fastest lap already gets its own announcement live during the race.");
+        summariesGrid.AddHint("The fastest lap is already called live, so leave this off if it feels repetitive.");
 
-        Check(_chkTalkingPoints, "Announcer talking points - suggested lines on screen, never spoken automatically");
+        Check(_chkTalkingPoints, "Talking points - suggested lines on the Announcer screen, never spoken");
         _chkTalkingPoints.Checked = _settings.CommentaryTalkingPoints;
         _chkTalkingPoints.CheckedChanged += (_, _) => { _settings.CommentaryTalkingPoints = _chkTalkingPoints.Checked; _settings.Save(); UpdateEnabledState(); };
 
@@ -773,24 +767,13 @@ public sealed class CommentaryControl : UserControl
 
         var talkingGrid = new FieldGrid();
 
-        Stepped(talkingGrid.AddRow("Refresh every:", Line(_numInterval, Suffix("seconds - lower feels fresher, higher means less repeated wording"))));
-        Stepped(talkingGrid.AddRow("Consider up to:", Line(_numObservations, Suffix("of the current talking points to pick from"))));
+        Stepped(talkingGrid.AddRow("Refresh every:", Line(_numInterval, Suffix("seconds"))));
+        Stepped(talkingGrid.AddRow("Consider up to:", Line(_numObservations, Suffix("talking points at a time"))));
 
-        var writes = new Section("What it writes");
-
-        writes.Add(_chkIntros, stretch: false);
-        writes.Add(introsGrid);
-        writes.Add(_chkSummaries, stretch: false);
-        writes.Add(summariesGrid);
-        writes.Add(_chkTalkingPoints, stretch: false);
-        writes.Add(talkingGrid);
-
-        // Belongs with what it writes - it is the answer to "why not a line
-        // every lap?", which is a question about this list.
-        writes.Add(
-            Hint("Not written lap by lap - a model takes longer to answer than a lap lasts. Most is written between "
-                 + "races; the During the race segments below cover fights and records that last longer than a lap."),
-            gapBelow: 0);
+        // The "What it writes" card is gone (22 Oct 2026, page tidy): its
+        // intros went to Before the start, its recaps to Recap show and its
+        // talking points to Through the night - each beside the rest of
+        // what the room hears at that point.
 
         // ------------------------------------------------------------------
         // Writing style - the WORDS
@@ -850,22 +833,17 @@ public sealed class CommentaryControl : UserControl
 
         Flush(styleGrid.AddRow("Writing tone:", _cmbTone));
         Flush(styleGrid.AddRow(string.Empty, _chkVoiceTags));
-        styleGrid.AddHint(
-            "Marks the recap and the segments as excited, and opens the cold open and sign-off on a shout. "
-            + "Needs an ElevenLabs v3 voice and the Enthusiastic tone.");
-        Flush(styleGrid.AddRow("Max length:", Line(_numMaxWords, Suffix("words", muted: false))));
-        Flush(styleGrid.AddRow("Phrasing variety:", _numVariety));
+        styleGrid.AddHint("Needs an ElevenLabs v3 voice and the Enthusiastic tone.");
+
+        // Each figure's meaning beside it (22 Oct 2026, page tidy), rather
+        // than in a paragraph under the card explaining both.
+        Flush(styleGrid.AddRow("Max length:", Line(_numMaxWords, Suffix("words - 30 is about a sentence, 70 is two"))));
+        Flush(styleGrid.AddRow("Phrasing variety:", Line(_numVariety, Suffix("low is steady, high is livelier but now and then odd"))));
 
         var style = new Section("Writing style");
 
-        style.Add(Hint(
-            "How the lines are worded - intros, recaps and talking points alike. This changes the words, not the "
-            + "voice; how the recap sounds is set on the Cast tab, under Recap host."));
-        style.Add(styleGrid);
-        style.Add(
-            Hint("Length: 30 words is about one sentence, 70 is two, more is a paragraph - all read aloud. "
-                 + "Variety: low is safe and consistent, high is more varied but now and then odd."),
-            gapBelow: 0);
+        style.Add(Hint("How every line is worded. How it sounds is set on the Cast tab."));
+        style.Add(styleGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
         // Race recap - after the flag, in the order it happens
@@ -915,7 +893,7 @@ public sealed class CommentaryControl : UserControl
 
         var pauseGrid = new FieldGrid();
 
-        Flush(pauseGrid.AddRow("Pause after the flag:", Line(_numSummaryDelay, Suffix("seconds - lets the finish call and the cheering land before the recap starts"))));
+        Flush(pauseGrid.AddRow("Pause after the flag:", Line(_numSummaryDelay, Suffix("seconds, so the finish call and the cheering land"))));
 
         // The teasers' box under the switch that turns them on, a step in,
         // and the wait after them under the box - "teasers before the recap:
@@ -924,19 +902,8 @@ public sealed class CommentaryControl : UserControl
         var teaserGrid = new FieldGrid();
 
         teaserGrid.AddField(_txtTeaser);
-        teaserGrid.AddHint(
-            "Only when a recap follows. The AI writes the line itself each race - naming the show, the recap host and the "
-            + "announcer - and uses these for the feel.");
-        Stepped(teaserGrid.AddRow("then wait:", Line(_numTeaserGap, Suffix("seconds"))));
-
-        var recap = new Section("Race recap");
-
-        recap.Add(Hint(
-            "The running order is on Sounds > Imaging > Run of show. These are the waits - the commercial break shares "
-            + "the wait after the teaser, so it adds no time."));
-        recap.Add(pauseGrid);
-        recap.Add(_chkTeaser, stretch: false);
-        recap.Add(teaserGrid, gapBelow: 0);
+        teaserGrid.AddHint("The AI writes the line itself each race and uses these for the feel.");
+        Stepped(teaserGrid.AddRow("then wait:", Line(_numTeaserGap, Suffix("seconds - the commercial break plays in this wait"))));
 
         // Recap voice delivery - the recap's own stability and style - moved
         // to the Cast tab's Recap host card on 17 Oct 2026, beside the voice
@@ -978,7 +945,7 @@ public sealed class CommentaryControl : UserControl
 
         var showGrid = new FieldGrid();
 
-        Stepped(showGrid.AddRow("Show name:", Line(_txtShowName, Suffix("named in the opening, the sign-off and the end-of-night sign-off - leave it blank for none"))));
+        Flush(showGrid.AddRow("Show name:", Line(_txtShowName, Suffix("said in the openings and sign-offs - blank for none"))));
 
         Check(_chkAdBreak, "Play the sponsors as a commercial break while the recap is being written");
         _chkAdBreak.Checked = _settings.RecapAdBreak;
@@ -988,8 +955,6 @@ public sealed class CommentaryControl : UserControl
             _settings.Save();
             UpdateEnabledState();
         };
-
-        var broadcast = new Section("Broadcast");
 
         // THE RUNNING ORDER HAS TO BE THE REAL ONE. This card used to say
         // "recap -> honours -> interview -> sign-off", which was wrong three
@@ -1010,19 +975,10 @@ public sealed class CommentaryControl : UserControl
         // Round 3 text clean-up (17 Oct 2026): the running order is now
         // explained in ONE place, Sounds > Imaging > Run of show, and this
         // card points there - keep that one the real one.
-        broadcast.Add(Hint(
-            "The running order is on Sounds > Imaging > Run of show. The interview and the achievements are switched on "
-            + "from the Cast tab."));
-        broadcast.Add(_chkAdBreak, stretch: false, gapBelow: UiLayout.HintGap);
-        broadcast.Add(Hint(
-            "Sponsor slides fill the Big Screen while the recap is written (8 to 90 seconds, ending when the next race "
-            + "is called). Needs a Big Screen open with sponsor slides on; without one, nothing changes."));
-        broadcast.Add(Hint(
-            "Paid sponsor reads are set on the Sponsors page but spoken from here, so they need a race day open, AI "
-            + "commentary on and a writer available - even though the words are the ones you typed."));
-        broadcast.Add(_chkOpening, stretch: false);
-        broadcast.Add(_chkClosing, stretch: false);
-        broadcast.Add(showGrid, gapBelow: 0);
+        //
+        // The Broadcast and Race recap cards are After the flag and Recap
+        // show since 22 Oct 2026 (page tidy) - assembled below with the rest
+        // of the page, in the order the room hears them.
 
         // The mechanic's interview and the badges reader - their switches,
         // names and voices - moved to the Cast tab on 17 Oct 2026, with the
@@ -1152,81 +1108,85 @@ public sealed class CommentaryControl : UserControl
 
         _lblLowestTier.Text = TierChoices[TierChoiceIndex(_settings.CommentaryLowestTier)].Says;
 
+        // The three dials on the left caption column with every other field
+        // (Flush): they were a step in, as if they belonged to a switch above
+        // them, and there is none.
         var chatterGrid = new FieldGrid();
 
-        Stepped(chatterGrid.AddRow("How chatty:", Line(_cmbChatter)));
+        Flush(chatterGrid.AddRow("How chatty:", Line(_cmbChatter)));
         chatterGrid.AddHint(_lblChatter);
 
-        Stepped(chatterGrid.AddRow("Pacing:", Line(_cmbDensity)));
+        Flush(chatterGrid.AddRow("Pacing:", Line(_cmbDensity)));
         chatterGrid.AddHint(_lblDensity);
 
-        Stepped(chatterGrid.AddRow("Segments run:", Line(_cmbLowestTier)));
+        Flush(chatterGrid.AddRow("Segments run:", Line(_cmbLowestTier)));
         chatterGrid.AddHint(_lblLowestTier);
 
         chatterGrid.AddHint(Hint(
-            "Race Control counts the timing calls that got out: \"held\" is this dial leaving a gap, \"lost\" "
-            + "is the announcer running out of room."));
+            "On Race Control, \"held\" timing calls are this dial leaving a gap; \"lost\" ones are the announcer "
+            + "running out of room."));
 
-        var segments = new Section("Segments");
+        // ------------------------------------------------------------------
+        // THE CARDS IN THE ORDER THE NIGHT HAPPENS (22 Oct 2026, page tidy).
+        //
+        // The page was six cards in the order they were built - Connection,
+        // What it writes, Segments, Writing style, Race recap, Broadcast -
+        // with the pre-race and after-the-flag ticks inside Segments, the
+        // recap's switch three cards away from the recap's settings, the
+        // throw to pit lane listed before the driver introductions it now
+        // follows (On Air: opening, introductions, pit lane), and a gray
+        // line under nearly every box, several of them saying the same
+        // thing twice. Now: who writes it, then the night in order - before
+        // the start, through the night, after the flag, the recap show -
+        // then the wording, which covers all of them. Every setting, switch
+        // and rule is the same; only where it sits and what it says changed.
+        // ------------------------------------------------------------------
+
+        // A tick and its one line of explanation, as every card below has them.
+        void Ticked(Section card, CheckBox box, string? hint, bool lastInCard = false)
+        {
+            if (hint is null)
+            {
+                card.Add(box, stretch: false, gapBelow: lastInCard ? 0 : UiLayout.HintGap);
+                return;
+            }
+
+            card.Add(box, stretch: false, gapBelow: 0);
+            card.Add(Hint(hint), gapBelow: lastInCard ? 0 : UiLayout.HintGap);
+        }
+
+        // A bold group heading inside a card, with its line.
+        void Group(Section card, string heading, string hint)
+        {
+            card.Add(
+                _textSize.Wear(new Label { Text = heading, AutoSize = true, ForeColor = AppTheme.TextDark }, () => AppTheme.BoldFont),
+                stretch: false,
+                gapBelow: 0);
+            card.Add(Hint(hint), gapBelow: UiLayout.HintGap);
+        }
+
+        // --- Before the start: what On Air says between the show open and staging, in that order.
+        var before = new Section("Before the start");
+
+        before.Add(Hint("In the order the room hears them, after the show open and before staging."));
+        before.Add(_chkIntros, stretch: false, gapBelow: 0);
+        before.Add(introsGrid, gapBelow: UiLayout.HintGap);
+        before.Add(_chkDriverIntros, stretch: false, gapBelow: 0);
+        before.Add(driverIntrosGrid, gapBelow: UiLayout.HintGap);
+        Ticked(before, _chkPitLane,
+            "Two questions with the Team Principal of the driver with most riding on it. Who, and which races, are on the Cast tab.",
+            lastInCard: true);
+
+        // --- Through the night: how much is said, and the segments.
+        var segments = new Section("Through the night");
 
         segments.Add(Hint(
-            "What the announcer covers beyond the intros and recaps above. Each one only speaks when the race actually "
-            + "gives it something to say, so switching them all on does not mean hearing them all every race."));
-
-        segments.Add(Hint(
-            "The night stays quiet through practice and the heats and saves itself for the mains. How chatty sets the "
-            + "overall level, never that shape."));
+            "Not written lap by lap - a model takes longer than a lap. Each segment speaks only when the race gives it "
+            + "something to say, and the night saves itself for the mains."));
         segments.Add(chatterGrid, gapBelow: UiLayout.SectionGap);
 
-        // BEFORE THE START (18 Oct 2026) - what On Air says between the
-        // opening and the race, in that order: the throw to pit lane, then
-        // the driver introductions with the qualifying recap that opens a
-        // main's. Not budget segments (no CommentaryBudget spec), so they
-        // have their own settings rather than CommentarySegmentsOff.
-        var beforeHeading = _textSize.Wear(
-            new Label { Text = "Before the start", AutoSize = true, ForeColor = AppTheme.TextDark },
-            () => AppTheme.BoldFont);
-
-        segments.Add(beforeHeading, stretch: false, gapBelow: 0);
-        segments.Add(Hint("After the race intro and before staging. With On Air, the show open comes first."), gapBelow: UiLayout.HintGap);
-
-        segments.Add(_chkPitLane, stretch: false, gapBelow: 0);
-        segments.Add(Hint(
-            "The announcer throws down to the co-host in pit lane for two questions with the Team Principal of the driver "
-            + "with most riding on it. Names, voices, heats and teams are set on the Cast tab."), gapBelow: UiLayout.HintGap);
-
-        segments.Add(_chkDriverIntros, stretch: false, gapBelow: 0);
-        segments.Add(driverIntrosGrid, gapBelow: UiLayout.HintGap);
-
-        segments.Add(_chkQualifyingRecap, stretch: false, gapBelow: 0);
-        segments.Add(Hint(
-            "Part of a main's driver introductions, so it needs them on. Uses tonight's qualifying, ranked as the grid sheet ranks it."),
-            gapBelow: UiLayout.SectionGap);
-
-        // AFTER THE FLAG (18 Oct 2026) - in the order the room hears them.
-        var afterHeading = _textSize.Wear(
-            new Label { Text = "After the flag", AutoSize = true, ForeColor = AppTheme.TextDark },
-            () => AppTheme.BoldFont);
-
-        segments.Add(afterHeading, stretch: false, gapBelow: 0);
-        segments.Add(Hint("The race announcer, after the finish call and before the teaser takes the room into the break - "
-            + "then, on the recap show, the booth."), gapBelow: UiLayout.HintGap);
-
-        segments.Add(_chkFlagResult, stretch: false, gapBelow: 0);
-        segments.Add(Hint("Fixed words, no AI needed - the finish call itself names nobody."), gapBelow: UiLayout.HintGap);
-
-        segments.Add(_chkFlagTechLead, stretch: false, gapBelow: 0);
-        segments.Add(Hint(
-            // Heats too since 21 Oct (22 Oct 2026, bug hunt).
-            "After a main, and after heats too when \"After heats too\" is ticked on the Cast tab. The announcer throws down to the co-host in pit lane, who asks the winner's Technical Lead two "
-            + "questions about the race and the car, then hands back. Name and voice are on the Cast tab. Needs race recaps on."),
-            gapBelow: UiLayout.HintGap);
-
-        segments.Add(_chkBoothPrincipal, stretch: false, gapBelow: 0);
-        segments.Add(Hint(
-            "On the recap show, after the night's colour: the recap host has the winner's Team Principal in the booth for two "
-            + "questions on what the win means. Heats and teams are set on the Cast tab. Needs race recaps on."),
-            gapBelow: UiLayout.SectionGap);
+        segments.Add(_chkTalkingPoints, stretch: false, gapBelow: 0);
+        segments.Add(talkingGrid, gapBelow: UiLayout.SectionGap);
 
         var switchedOff = new HashSet<SegmentKind>(CommentaryBudget.ParseSwitches(_settings.CommentarySegmentsOff));
 
@@ -1239,12 +1199,7 @@ public sealed class CommentaryControl : UserControl
                 continue;
             }
 
-            var heading = _textSize.Wear(
-                new Label { Text = TierHeading(tier), AutoSize = true, ForeColor = AppTheme.TextDark },
-                () => AppTheme.BoldFont);
-
-            segments.Add(heading, stretch: false, gapBelow: 0);
-            segments.Add(Hint(TierWhen(tier)), gapBelow: UiLayout.HintGap);
+            Group(segments, TierHeading(tier), TierWhen(tier));
 
             foreach (var spec in inTier)
             {
@@ -1270,10 +1225,38 @@ public sealed class CommentaryControl : UserControl
                 var last = ReferenceEquals(spec, inTier[^1]);
 
                 segments.Add(box, stretch: false, gapBelow: 0);
-                segments.Add(Hint(spec.What + (spec.CanBeExchange ? "  Can be a two-hander with the co-host (Cast tab)." : string.Empty)),
+                segments.Add(Hint(spec.What + (spec.CanBeExchange ? " Can be a two-hander (Cast tab)." : string.Empty)),
                     gapBelow: last ? UiLayout.SectionGap : UiLayout.HintGap);
             }
         }
+
+        // --- After the flag: the race announcer, from the finish call to the break.
+        var after = new Section("After the flag");
+
+        after.Add(Hint(
+            "In the order the room hears them. Everything after the result needs race recaps on (Recap show, below). "
+            + "The full running order is on Sounds > Imaging > Run of show."));
+        after.Add(pauseGrid, gapBelow: UiLayout.HintGap);
+        Ticked(after, _chkFlagResult, "Fixed words - no AI needed.");
+        Ticked(after, _chkFlagTechLead,
+            // Heats too since 21 Oct (22 Oct 2026, bug hunt).
+            "After a main (and after heats, when ticked on the Cast tab): the co-host asks the winner's Technical Lead two questions, then hands back.");
+        after.Add(_chkTeaser, stretch: false, gapBelow: 0);
+        after.Add(teaserGrid, gapBelow: UiLayout.HintGap);
+        Ticked(after, _chkAdBreak,
+            "Sponsor slides fill the Big Screen while the recap is written, when one is open with slides on. Paid "
+            + "sponsor reads (Sponsors page) need AI commentary on too.",
+            lastInCard: true);
+
+        // --- Recap show: the recap and what dresses it.
+        var recap = new Section("Recap show");
+
+        recap.Add(_chkSummaries, stretch: false, gapBelow: 0);
+        recap.Add(summariesGrid, gapBelow: UiLayout.HintGap);
+        Ticked(recap, _chkOpening, null);
+        Ticked(recap, _chkBoothPrincipal, "The recap host asks two questions on what the win means. Who, and which races, are on the Cast tab.");
+        Ticked(recap, _chkClosing, null);
+        recap.Add(showGrid, gapBelow: 0);
 
         // The show's music and Recording the night were the last two cards
         // here until 17 Oct 2026. They are on Sounds now - the show's music
@@ -1298,18 +1281,14 @@ public sealed class CommentaryControl : UserControl
 
         var page = new PageStack();
 
-        page.Add(lblIntro, gapBelow: UiLayout.HintGap);
-        page.Add(lblRequirement, gapBelow: UiLayout.RowGap);
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.Add(_chkEnabled, stretch: false);
-        page.Add(_chkUseRelay, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(relayHint, gapBelow: UiLayout.HintGap);
-        page.Add(_lblRelayState, gapBelow: UiLayout.RowGap);
         page.Add(connection);
-        page.Add(writes);
+        page.Add(before);
         page.Add(segments);
-        page.Add(style);
+        page.Add(after);
         page.Add(recap);
-        page.Add(broadcast, gapBelow: 0);
+        page.Add(style, gapBelow: 0);
 
         Controls.Add(page);
 

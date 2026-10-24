@@ -24,7 +24,7 @@ The roster is down the left and the driver you pick is beside it.
 
 - Under the roster: **Add Driver** (see [Add a driver](#add-a-driver)) and **Delete**, for the drivers selected.
 - Under the driver: **Edit Profile**, which opens the profile form (double-clicking a driver in the roster does the same), and **Photo**.
-- On the right, for the whole list: **Import from CSV** and **Download Template** (see [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet)), and **Check Names**, which reads the roster's names out loud in the club's announcer voice so you can hear what will be said tonight (see [Check how names are read](#check-how-names-are-read)).
+- On the right, for the whole list: **Import from CSV**, **Paste a Table...** and **Download Template** (see [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet)), and **Check Names**, which reads the roster's names out loud in the club's announcer voice so you can hear what will be said tonight (see [Check how names are read](#check-how-names-are-read)).
 
 The driver has six tabs:
 
@@ -168,12 +168,14 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 | **Driver name:** | The driver's name, as shown on screens, results and heat sheets. |
 | **Announcer name:** | What the announcer reads instead of their real name: a nickname the crowd knows, or the name spelled the way it sounds, which is how you fix a name the voice says wrong. Leave it blank to use the driver name. It takes effect straight away, and **Hear It** under the box reads it back to you. See [The name the announcer says](#the-name-the-announcer-says). |
 | **Pronouns:** | How the AI commentary refers to them — pick he/him, she/her or they/them, or type their own (like she/they). It's handed to the AI beside their name whenever it writes about them, so it uses these instead of guessing from the name. Leave it blank if you don't know; blank changes nothing. |
+| **About them:** | One line in the driver's own words for the AI commentary, up to 120 characters, for example "racing since I was eight; my dad builds the cars". The commentary is handed it as something they said about themselves. It's never shown publicly. Drivers can ask to change it from their phone (see [Driver requests](../online/driver-requests.md)). |
 | **Active car:** | The car they race in now — the one that's announced and recorded. Pick one of their cars from the list. To add a new car, type its name and click **Add**; it's added to their garage when you save (a name you type but don't add is saved too). To retire a car or give it to someone else, use their [garage](#a-drivers-garage). |
 | **Race number:** | Racing number. Shown as a chip on the driver card, on Race Control, and on the online check-in list. |
 | **Home track:** | Home club or town. |
 | **Skill level:** | Free text, for example "Novice / Intermediate / Expert". |
 | **Contact:** | For organizer use only. It's never announced. |
-| **Email:** | Where the driver's personal check-in PIN is sent. It's never shown publicly. See [Emailing racer PINs](../online/email.md). |
+| **Email:** | Where the driver's personal check-in PIN is sent, and their night if they want it. It's never shown publicly. See [Emailing racer PINs](../online/email.md). |
+| **Email them their night** | When the club sends night emails, this driver is sent their races, their report card and a link to their night page after racing. It's grayed out until **Email:** has an address. See [Drivers' nights by email](../online/setup.md#drivers-nights-by-email). |
 | **Transponders:** | The driver's other transponders: a second car's, a spare, a replacement. Type a number and click **Add**. Pick one and click **Retire** when it's no longer used (what was timed on it stays theirs), or **Remove** for one added by mistake. The main transponder is listed first and can be retired too. See [Alternate transponder](../timing/transponders.md#alternate-transponder). |
 | **Class:** | The driver's main class, or **(none)**: the one their card, the check-in sheet, results and badges give as their class. Click **Manage** to open the class list if the class you need doesn't exist yet. |
 | **Also races:** | Any other classes the driver races besides their main one. Click **Choose...** and tick them. See [A driver in more than one class](#a-driver-in-more-than-one-class). |
@@ -197,7 +199,7 @@ If the driver has earned any achievements, a **Badges** line appears at the bott
 
 **Announcer name:** on a driver's profile changes the name the announcer says, and nothing else about the driver. It has two uses, and the hint under the box names both:
 
-> What the announcer reads instead of their real name. Two uses: a nickname the crowd knows, or the name spelled the way it SOUNDS, which is how you fix one the voice gets wrong - "Jacques" typed as "Zhock", "Siobhan" as "Shiv-awn". They keep their real name everywhere else. Hear It reads it out exactly as the announcer will.
+> Read out instead of their real name: a nickname, or the name spelled the way it SOUNDS to fix one the voice gets wrong ("Jacques" as "Zhock"). Their real name is used everywhere else. Hear It plays it as the announcer will say it.
 
 The second use is the one clubs miss: the box takes a phonetic spelling. Put "Zhock" in it and the announcer says Jacques properly, while he stays Jacques on the heat sheet, in the results and on the club's website. Nothing checks that what you type is a real name, because a respelling isn't one. When the announcer name differs from the name on screen, the driver card shows it under their name as `Announced as "Zhock"`, so you can see at a glance which drivers have one.
 
@@ -261,6 +263,23 @@ The picture is checked before it's opened. A file over 50 MB, a picture over 200
 
 If a picture can't be used, a **Photo not added** message says **Couldn't use that picture:** and why, for example "That picture is 12000 x 9000 pixels, too big to use as a driver photo. It can be up to 20000 pixels across or down, and 64 million pixels in all - save a smaller copy and choose that." The profile keeps its existing photo.
 
+### Online privacy
+
+Under the profile's fields, the **ONLINE PRIVACY** group has three ticks on its **Online:** row. They're for a driver, or a parent, who wants less of them on the internet. All three start unticked.
+
+| Tick | What it changes online |
+|---|---|
+| **Leave their photo out** | Their photo is left out of the online check-in list, which shows their initials instead, and a podium video that goes online is made without it. Their podium videos already on the club's page are taken down. |
+| **No podium videos of them** | Their podium videos stay on this PC and aren't put on the club's page; the race log says "[video] *name*'s video stays on this PC - they asked for no videos online." Their videos already on the club's page are taken down. Their own race calls on their private night page aren't affected. |
+| **Initials only ("Sam Parker" shows as "S.P.")** | Everywhere on the club's pages - live, results, standings, schedule, badges, tracks, check-in and podium videos - they're shown by their initials. Lines the announcer says about them are left out of the captions on the club's page and aren't sent to people listening along from home. Their own night page still uses their full name. |
+
+The hint under them says: "Only what goes on the internet: the club's relay pages and podium videos. In the room nothing changes - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. A driver can ask for these from their phone; only the desk can turn one off."
+
+- **A driver can turn them on from their phone; only the desk can turn them off.** From their night page, a driver can ask for any of the three (see [Driver requests](../online/driver-requests.md)). Nothing changes until the desk approves it. A phone can never untick one: to turn one off, untick it here and click **Save**.
+- **It's quick, but not instant.** Once the profile is saved, the club's live pages follow within a few seconds. HeatCaller then re-sends every saved result the driver is in, a few at a time so results from tonight aren't held up. For a driver with a long history this takes a few minutes, and it carries on after a restart if HeatCaller is closed first. The console says "[privacy] A driver's online privacy changed - the club's page is being brought in line." and then "[privacy] The club's page now shows the drivers' latest privacy choices."
+- **Podium videos can't be edited.** Another driver's podium video already online may show this driver's name or photo in the picture. Those stay until they expire, a week after they went up; only the driver's own videos are taken down at once.
+- **Lines about them are matched widely.** A line is left out of the club's captions and kept from listeners at home when it has any of the driver's names in it, or any word of one, so a line about another driver with the same first name may be held back too.
+
 ### Import drivers from a spreadsheet
 
 If you have your drivers in a spreadsheet, or in the timing software your club used before, you can import them from a CSV file instead of typing each one in. Any CSV will do: HeatCaller shows you the file's columns first and you say what each one is. If your old software exports its championship standings, the points can come in too, as each driver's starting total.
@@ -271,6 +290,15 @@ If you have your drivers in a spreadsheet, or in the timing software your club u
 4. Click **Import**.
 
 <!-- screenshot: the import preview with a list above each column and Points so far go into -->
+
+**From a web page or a spreadsheet, without a file:** if your old timing software only shows its driver list on a web page, select the whole table there and copy it (Ctrl+C), or copy the rows out of a spreadsheet. Then click **Paste a Table...**. HeatCaller reads the table from the clipboard and opens the same preview as a CSV file, so steps 2 to 4 are the same. A few things it does for you:
+
+- If the copy took in more than one table, the biggest one is used.
+- Links, bold and line breaks inside a cell become plain words.
+- Blank rows, a heading row repeated part way down, and a one-cell class title across the table ("Stock - A-Main") are skipped.
+- The first row is used as headings when it looks like headings. Otherwise the columns are called "Column 1", "Column 2" and so on, and you pick each one from its list.
+
+If nothing usable is on the clipboard, a **Nothing to paste** message says how to copy the list.
 
 What each column can be:
 

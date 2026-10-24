@@ -57,6 +57,22 @@ public sealed partial class AnnouncementService
                 await _audioPlaybackLock.WaitAsync();
                 try
                 {
+                    // WHY (23 Oct 2026, bug hunt 10): this path checked only
+                    // Muted after the speaker lock. The line was taken off
+                    // the queue before it waited, so the countdown's purge
+                    // could not reach it - and when the cut stopped the
+                    // sound holding the lock, a stale "<driver>, go!" got the
+                    // speaker first and played over the new countdown. Now
+                    // it makes the same countdown check SpeakPrepared and
+                    // SynthesizeAndPlayAsync make. No flag check: a release
+                    // survives a flag, so the voice loop stamps no interrupt
+                    // generation for it.
+                    if (IsCutByCountdown())
+                    {
+                        StatusMessage?.Invoke($"[voice] {type} (prepared): dropped \"{prepared.Text}\" - the countdown started while it waited for the speaker.");
+                        return;
+                    }
+
                     // Muted while it waited for the speaker.
                     if (Muted)
                     {
@@ -75,10 +91,17 @@ public sealed partial class AnnouncementService
 
                     if (SendToListeners is not null && ListenersWanted?.Invoke() == true)
                     {
-                        OfferToListenersOnly(prepared.Text, EncodeWav(prepared.Pcm, prepared.Format));
+                        // WHY (23 Oct 2026, bug hunt 10): with whether the
+                        // clip says the names shortened - a batch and a saved
+                        // take are both made from ForCloudVoice(text), and a
+                        // line rendered alone keeps RenderLineAsync's source.
+                        OfferToListenersOnly(prepared.Text, EncodeWav(prepared.Pcm, prepared.Format),
+                            AudioFromShortenedText(prepared.Source, prepared.Text));
                     }
 
-                    await PlayPcmAsync(prepared.Pcm, prepared.Format, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence);
+                    // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
+                    await PlayPcmAsync(prepared.Pcm, prepared.Format, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence,
+                        stillWanted: () => !IsCutByCountdown() && !Muted);
                 }
                 finally
                 {

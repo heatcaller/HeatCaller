@@ -75,8 +75,7 @@ public sealed class PersonalBestsControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Each driver's best-ever lap time per track, across every saved session - separate from the single all-time track " +
-                   "record on the Track Layouts page, since this tracks your own progress rather than the fastest lap anyone's set.",
+            Text = "Each driver's best lap on each track, across every saved session. The all-time track record is on the Track Layouts page.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -127,8 +126,8 @@ public sealed class PersonalBestsControl : UserControl
 
         var lblResetHint = new Label
         {
-            Text = "Resetting ignores laps set before now when working out a best - it never deletes race history, "
-                 + "and results, records and season points are untouched. Clear Reset brings the full history back.",
+            Text = "A reset ignores laps set before now when working out a best. Race history, results, records and season points "
+                 + "are untouched. Clear Reset brings the full history back.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

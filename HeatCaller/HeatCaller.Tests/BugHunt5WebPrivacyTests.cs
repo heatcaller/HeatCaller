@@ -196,7 +196,7 @@ public sealed class BugHunt5WebPrivacyTests : IDisposable
         // way.
         var settings = new AppSettings { DisplayLook = Looks.MidnightKey };
 
-        return new WebServerService(race, profiles, settings: settings)
+        return new WebServerService(new RaceTiming(race), profiles, settings: settings)
         {
             TrackMap = () => (TrackLine.From(Square()), cars),
         };

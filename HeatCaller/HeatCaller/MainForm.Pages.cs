@@ -4,8 +4,9 @@ namespace HeatCaller;
 
 /// <summary>
 /// PopulateTabs: builds every page and sub-tab and wires them to the stores
-/// and services. One long method, moved here whole and unchanged from
-/// MainForm.cs on 26 Sep 2026 when the file was split into parts.
+/// and services. Moved here from MainForm.cs on 26 Sep 2026 when the file
+/// was split into parts, and split into one method per page on 22 Oct 2026 -
+/// PopulateTabs calls them in the order the pages were always built.
 /// </summary>
 public partial class MainForm
 {
@@ -42,7 +43,169 @@ public partial class MainForm
     /// </summary>
     private void PopulateTabs()
     {
-        var raceControl = new RaceControlControl(_race, _announcer, _profiles, _raceClasses, _trackLayouts, _sessionHistory, _settings, _undo, _daySchedule, _sponsors, _rounds, () => _activeRound, _commentary, _transponderWatch, _raceEvents, _checkInStore, _seasonStore, techInspections: _techInspections) { Dock = DockStyle.Fill };
+        var raceControl = BuildRaceControlPage();
+
+        BuildDriverHubPage();
+
+        BuildClassesPage();
+
+        StartupMark("Race Control, Driver Hub and Classes");
+
+        var (raceProgram, achievements) = BuildRaceDayAndChampionshipPages(raceControl);
+
+        var pageGhosts = BuildPracticeGhostsAndDemoPages(raceControl, raceProgram, achievements);
+
+        StartupMark("Practice, Ghost Cars and Demo Mode");
+
+        var announcer = BuildVoicePage(raceControl);
+
+        StartupMark("Voice");
+
+        BuildSoundsPage(announcer);
+
+        BuildThemesPage();
+
+        StartupMark("Sounds and Themes");
+
+        BuildSponsorsPage();
+
+        BuildLocalScreensPage();
+
+        BuildClubWebsitePage();
+
+        BuildVenuesPage(raceControl);
+
+        BuildBackupPage();
+
+        // The session row's Round picker can go stale while another page
+        // adds or removes rounds, so it is refreshed every time Race Control
+        // becomes the active page.
+        //
+        // This was keyed to "Connection", from when the session row lived on
+        // the Connection page. It moved to Race Control and this did not
+        // move with it, so the row was refreshed on a visit to a page it was
+        // no longer on and never on a visit to the one it was. A track made
+        // on Track Layouts, or a programme built on Race Day, did not appear
+        // in it until the app restarted.
+        //
+        // The track picker is not refreshed here any more: it follows the
+        // layout store directly (OnTrackLayoutsChanged), which catches a
+        // change made while Race Control is already showing, and this could
+        // not. Safe mid-race: the round list is rebuilt around the running
+        // round, and RefreshFormat only writes the race limits while the
+        // race is idle or finished.
+        _navRefreshHooks["Race Control"] = RefreshActiveRoundCombo;
+
+        BuildNavItems(pageGhosts);
+
+        txtNavSearch.TextChanged += (_, _) => RebuildNav();
+        // ~20fps is plenty for a slow-drifting grid, and keeps the cost
+        // negligible on a laptop at a track.
+        _headerAnimationTimer.Tick += (_, _) =>
+        {
+            AppTheme.AnimationPhase = (AppTheme.AnimationPhase + 0.004f) % 1f;
+            lblAppTitle.Invalidate();
+        };
+
+        // The club logo, if there is one and it is wanted there - which
+        // also starts the header animation, or leaves it off while a logo
+        // is showing.
+        RefreshHeaderLogo();
+
+        btnManageNav.Click += BtnManageNav_Click;
+
+        // The chevron in the page-search row: the sidebar down to its icons
+        // and back - see SetNavIconsOnly. Ctrl+B does the same from anywhere.
+        btnCollapseNav.Click += (_, _) => ToggleNavIconsOnly();
+
+        _announcer.Muted = _settings.AnnouncerMuted;
+
+        // The icon and the tooltip both default to "not muted" until told
+        // otherwise (SetUpFooterButton runs before this setting is known) -
+        // this is what makes a club that starts up already muted show it.
+        UpdateMuteButtonText();
+
+        WireUndoButton();
+
+        StartupMark("the other pages");
+
+        // The sidebar narrowed to its icons, if that is how the club left it
+        // (AppSettings.NavIconsOnly) - BEFORE the window is laid out rather
+        // than after, so it comes up narrow from the first frame instead of
+        // being seen to fold a moment after the window appears. Nothing to do
+        // when it is not: the designer builds the open sidebar, and
+        // ApplyFontScale below gives it its width either way (PlaceSidebar).
+        if (_settings.NavIconsOnly)
+        {
+            SetNavIconsOnly(true, save: false);
+        }
+
+        // The theme pass, once: ApplyFontScale runs it (with the sidebar's
+        // chrome put back after it), in the window's own face - which it
+        // sets first. It used to be run here as well, just before, which
+        // was the whole window themed twice at every start.
+        ApplyFontScale();
+
+        StartupMark("text size and theme");
+
+        btnMuteToggle.Click += (_, _) => SetAllSoundMuted(!_announcer.Muted);
+
+        lstNav.SelectionChanged += LstNav_SelectionChanged;
+        lstNav.ItemsReordered += LstNav_ItemsReordered;
+
+        // Essentials and club tools, each under a quiet heading - see NavTiers.
+        // Asked per row on every repaint, so it has to read the same flag the
+        // ordering above does - see _navRaceNight.
+        lstNav.SectionOf = name => NavTiers.SectionOf(name, _navRaceNight);
+
+        // Before the first build, not after: a club that closed the app
+        // mid-race-day reopens it with that day still current, and the sidebar
+        // should already be in race-night order rather than rearranging itself
+        // a moment later.
+        _navRaceNight = RaceNightWanted;
+
+        RebuildNav();
+
+        StartupMark("first page");
+
+        // After the window is actually up: the pages' handles are made in
+        // the window's, which does not exist while it is still being built.
+        // Timed for the session log.
+        Shown += (_, _) =>
+        {
+            var warming = System.Diagnostics.Stopwatch.StartNew();
+
+            // What the windows made meanwhile cost, when it is slow - see
+            // WhereTimeGoes.
+            WhereTimeGoes.StartOnShownWindow("Making the pages ready");
+            string? timing;
+            try
+            {
+                WarmPages();
+            }
+            finally
+            {
+                // 17 Oct 2026, Bug Hunt 8, A30-6: a page throwing during warm-up
+                // (caught by ThreadException) left the thread-wide hooks counting
+                // every UI-thread message.
+                timing = WhereTimeGoes.Take();
+            }
+
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [startup] Every page and tab made ready in {warming.Elapsed.TotalSeconds:0.0}s."
+                + (warming.Elapsed.TotalSeconds >= 1 && timing is not null ? $" {timing}" : string.Empty));
+        };
+    }
+
+    /// <summary>
+    /// Race Control: the page, the stores and hooks it is handed, and the session row it carries.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private RaceControlControl BuildRaceControlPage()
+    {
+        var raceControl = new RaceControlControl(_race, _announcer, _profiles, _raceClasses, _trackLayouts, _sessionHistory, _settings, _undo, _daySchedule, _sponsors, _rounds, () => _activeRound, _commentary, _transponderWatch, _raceEvents, _checkInStore, _seasonStore, techInspections: _techInspections, filing: _raceFiling) { Dock = DockStyle.Fill };
         _raceControlControl = raceControl;
 
         // Pack, on a row's right-click - see RaceControlControl.Packs.
@@ -56,15 +219,20 @@ public partial class MainForm
 
         // What the phone remote says it is controlling - on the UI thread,
         // where the LAN copy of the live state is built.
-        _webServer.RaceInHand = raceControl.RaceInHandTitle;
+        //
+        // These three are this page's to answer, so threaded - where the live
+        // state is built off the UI - each is a frozen feed, answered on the
+        // UI tick (24 Oct 2026, timing layer, P8; see MainForm.LiveFeed).
+        // Inline LiveFeed hands back the callback itself.
+        _webServer.RaceInHand = LiveFeed<string>(raceControl.RaceInHandTitle);
 
         // The races still to run, for phones following a driver - when is
         // their next race and where do they grid. See PhoneFollow.
-        _webServer.UpcomingRaces = () => raceControl.UpcomingRaces(8);
+        _webServer.UpcomingRaces = LiveFeed<IReadOnlyList<UpcomingRace>>(() => raceControl.UpcomingRaces(8));
 
         // The championship as it would stand if the race ended now, for the
         // Live Results page - see ChampionshipLive.
-        _webServer.IfItEndedNow = raceControl.ChampionshipIfItEndedNow;
+        _webServer.IfItEndedNow = LiveFeed<IfItEndedNow?>(raceControl.ChampionshipIfItEndedNow);
 
         // The live track map, for the Big Screen this page opens - see MainForm.TrackMap.
         raceControl.TrackMap = TrackMapNow;
@@ -125,6 +293,18 @@ public partial class MainForm
 
         pageRaceControl.Controls.Add(raceControl);
 
+        return raceControl;
+    }
+
+    /// <summary>
+    /// Driver Hub, with the stores its driver card and garage read.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildDriverHubPage()
+    {
         // The stores the driver card reads its numbers from - results,
         // championships, rivalries, personal-best resets and the
         // race-day paperwork. Every one of them already lives here.
@@ -168,6 +348,10 @@ public partial class MainForm
         };
 
         var driverProfiles = new ProfileManagerControl(_profiles, _raceClasses, _undo, driverStatsSources, _settings, driverGarage) { Dock = DockStyle.Fill };
+
+        // Tonight's report card for a driver - a right-click on the roster
+        // (22 Oct 2026). See MainForm.Coach.
+        driverProfiles.ReportCardFor = transponder => CoachReportFor(transponder, publicNames: false, includeSetup: true);
         pageDriverProfiles.Controls.Add(driverProfiles);
         _navRefreshHooks["Driver Hub"] = driverProfiles.RefreshAll;
         driverProfiles.AttachUnknownTransponders(_unknownTransponders);
@@ -182,7 +366,17 @@ public partial class MainForm
         // deliberate: a dead button reads as a broken feature.
         driverProfiles.SpeakName = text => _announcer.SpeakTest(text, _voiceStore.Current.Speed);
         WireUnknownTransponders();
+    }
 
+    /// <summary>
+    /// Classes.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildClassesPage()
+    {
         // Next to Driver Hub in the sidebar: the two together are "who
         // races and under what rules", and they are the two pages somebody
         // sets up before a first race day.
@@ -195,9 +389,17 @@ public partial class MainForm
         // edited from the dialog on Driver Hub while this page sits in
         // the background.
         _navRefreshHooks["Classes"] = classes.RefreshAll;
+    }
 
-        StartupMark("Race Control, Driver Hub and Classes");
-
+    /// <summary>
+    /// Race Day and Championship, and the pages built alongside them - Rentals, Handicaps, Track Layouts, Race History, Achievements, Garage and Race Analytics. The program and the badges page are handed back: Practice and Demo Mode need them.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private (RaceProgramControl RaceProgram, AchievementsControl Achievements) BuildRaceDayAndChampionshipPages(RaceControlControl raceControl)
+    {
         // --- Race Day and Championship ---
         //
         // Six nav items became two pages, and the split is by time scale:
@@ -261,7 +463,7 @@ public partial class MainForm
             // Checked before the round is set up or its grid call spoken -
             // practice is on the same session, and starting over it would
             // wipe the practice laps.
-            if (_raceControlControl.RefuseIfPracticeRunning("start a race"))
+            if (_raceControlControl.RefuseIfPracticeRunningForRaceStart("start a race"))
             {
                 return;
             }
@@ -284,7 +486,7 @@ public partial class MainForm
         // page switch, because the person pressing it is already there.
         raceControl.NextRoundStartRequested += round =>
         {
-            if (_raceControlControl.RefuseIfPracticeRunning("start a race"))
+            if (_raceControlControl.RefuseIfPracticeRunningForRaceStart("start a race"))
             {
                 return;
             }
@@ -336,255 +538,25 @@ public partial class MainForm
         ConfigurePage(pageRentals);
         ConfigurePage(pageHandicaps);
 
-        var rentals = new RentalTransponderControl(_rentals, _profiles, _undo) { Dock = DockStyle.Fill };
-        pageRentals.Controls.Add(rentals);
-        _navRefreshHooks["Rentals"] = rentals.RefreshAll;
+        BuildRentalsPage();
 
-        // Keep the sidebar count in step with the page, so outstanding units
-        // are visible from wherever you happen to be working.
-        rentals.OutstandingCountChanged += count => lstNav.SetBadge("Rentals", count);
+        WireScrutineeringLog(checkIn);
 
-        // Set once up front as well - otherwise a unit left out overnight
-        // wouldn't show a badge until someone happened to open the page.
-        lstNav.SetBadge("Rentals", _rentals.OutNow.Count);
-
-        // Scrutineering is no longer a tab. What it held was the
-        // scrutineer's record list, which a scrutineer opens a few times an
-        // evening and nobody else opens at all; the gate itself has always
-        // been the Tech column on Who's Racing. So it is a drawer off that
-        // page now - "Scrutineering Log..." - and Race Day is three tabs.
-        //
-        // A fresh page per opening, and the one currently open is held in
-        // techLog so the two places that have to redraw it can find it.
-        //
-        // It was one long-lived control moved from window to window, which is a
-        // worse idea than it looks in WinForms: a themed scrollbar parks itself
-        // as a SIBLING of the control it scrolls, so it belongs to the window,
-        // and closing that window disposed a bar the page was still
-        // subscribed to. The page's next ParentChanged then added a disposed
-        // control to the next window, and showing it threw ObjectDisposedException
-        // out of the message pump. ThinScrollBar refuses that now - a disposed
-        // bar no longer re-parents, and a dead entry no longer blocks a new one -
-        // but a page that never outlives its window cannot get into that state
-        // in the first place.
-        TechInspectionControl? techLog = null;
-
-        void ShowScrutineeringLog()
-        {
-            var log = new TechInspectionControl(_techInspections, _profiles, _raceClasses, _undo)
-            {
-                Dock = DockStyle.Fill,
-            };
-
-            // The page filling a window of its own with Close under it, and
-            // Close or Esc to shut it - see PageWindow.
-            using var host = PageWindow.ScrutineeringLog(log);
-
-            techLog = log;
-
-            // Cleared on the way out, so nothing refreshes a page that has
-            // gone. Both readers below are null-conditional for the ordinary
-            // case: the log is shut, and there is nothing to redraw.
-            host.FormClosed += (_, _) => techLog = null;
-
-            host.ShowDialog(this);
-        }
-
-        checkIn.TechLogRequested += ShowScrutineeringLog;
-
-        // Jumping from Check-In to record or edit a tech inspection without
-        // leaving the check-in table - the whole point of surfacing tech
-        // status there instead of merging the two records together.
-        checkIn.InspectRequested += profile =>
-        {
-            // The class the desk's Tech column is showing, not always their
-            // main one: a driver through tech in Stock and not in Modified
-            // used to have their Stock pass opened, and switching it to
-            // Modified replaced it.
-            var className = checkIn.InspectClassFor(profile);
-            var latest = _techInspections.Today(profile.Transponder, className);
-
-            // Only today's inspection is opened for editing. A race day can
-            // span a weekend, and the inspection that counts on Sunday
-            // morning can be Saturday's - editing that one overwrote
-            // Saturday's record with Sunday's look at the car, instead of
-            // filing a new one for Sunday. The Tech Log still edits any
-            // record picked from its list. "Today" also takes in the last
-            // few hours, so a club night running past midnight still edits
-            // the inspection made before twelve rather than starting over.
-            var existing = latest is not null
-                           && (latest.InspectedAtUtc.ToLocalTime().Date == DateTime.Now.Date
-                               || DateTime.UtcNow - latest.InspectedAtUtc < TimeSpan.FromHours(6))
-                ? latest
-                : null;
-
-            using var form = existing is not null
-                ? new TechInspectionEditForm(existing, _profiles, _raceClasses)
-                : new TechInspectionEditForm(null, _profiles, _raceClasses, profile.Transponder, className);
-
-            if (form.ShowDialog(this) != DialogResult.OK)
-            {
-                return;
-            }
-
-            // Just this one record, not the whole log: undoing it must not
-            // also throw away inspections recorded since.
-            var before = existing is null ? null : _techInspections.CopyOf(existing.Id);
-            var resultId = form.Result.Id;
-            _undo.Capture($"{(existing is null ? "Record" : "Edit")} tech inspection for {profile.DriverName}", () =>
-            {
-                // Said out loud when it has been deleted since, rather than
-                // logging "Undid" over a step that put nothing back.
-                var putBack = _techInspections.UndoUpsert(resultId, before);
-                techLog?.RefreshAll();
-                checkIn.RefreshAll();
-
-                if (!putBack)
-                {
-                    throw new InvalidOperationException("that inspection has been deleted since, so there is nothing to put back.");
-                }
-            });
-
-            _techInspections.Upsert(form.Result);
-
-            // Both pages show tech state, so both need to pick up the change
-            // immediately rather than whichever one you happen to revisit -
-            // the log only when it is actually open behind this dialog.
-            techLog?.RefreshAll();
-            checkIn.RefreshAll();
-        };
-
-        // 17 Oct 2026, Bug Hunt 8, A26-1: the programme lets suggested
-        // handicaps and "Recent best lap" use only the selected class's races.
-        var handicaps = new HandicapControl(_handicaps, _profiles, _raceClasses, _sessionHistory, _undo, _rounds) { Dock = DockStyle.Fill };
-        pageHandicaps.Controls.Add(handicaps);
-        _navRefreshHooks["Handicaps"] = handicaps.RefreshAll;
+        BuildHandicapsPage();
 
         var eventsPage = new EventsControl(_raceEvents, _rounds, _sessionHistory, _undo, _seasonStore, _trackLayouts) { Dock = DockStyle.Fill };
         subPageCalendar.Controls.Add(eventsPage);
         _subTabRefresh[subPageCalendar] = eventsPage.RefreshAll;
 
-        var trackLayouts = new TrackLayoutManagerControl(_trackLayouts, _settings, _undo) { Dock = DockStyle.Fill };
-        pageTrackLayouts.Controls.Add(trackLayouts);
-        _navRefreshHooks["Track Layouts"] = trackLayouts.RefreshAll;
+        BuildTrackLayoutsAndRaceHistoryPages();
 
-        var raceHistory = new RaceHistoryControl(_sessionHistory, _undo, _settings, _rounds, _raceClasses, _profiles, _trackLayouts, _techInspections, _rentals, _handicaps, _raceEvents) { Dock = DockStyle.Fill };
-        pageRaceHistory.Controls.Add(raceHistory);
-        _navRefreshHooks["Race History"] = raceHistory.RefreshAll;
+        var achievements = BuildAchievementsPage();
 
-        var achievements = new AchievementsControl(_profiles, _settings) { Dock = DockStyle.Fill };
-
-        // Where you race changed: the club website's badge list is sent
-        // again on the next pass, with what is on offer now.
-        achievements.RacingAtChanged += () => _lastRelayDocuments.Remove(RelayChannel.Badges);
-        pageAchievements.Controls.Add(achievements);
-
-        // Refreshed on entry, not just at construction: Race Control awards
-        // badges while this page sits in the background, so a page built
-        // once would show yesterday's picture forever.
-        _navRefreshHooks["Achievements"] = achievements.RefreshAll;
-
-        // The Garage, in the page Tuning used to have. Tuning logged a
-        // setup against a driver's name and a typed car string; the Garage
-        // is that with the car made real, and the setup log is the lower
-        // half of it - so there is one page about a car rather than two
-        // that half-know about each other.
-        var garage = new GarageControl(
-            _cars, _chassisTypes, _profiles, _raceClasses, _setupLog, _sessionHistory,
-            _trackLayouts, _chassisTemplates, _undo, _raceEvents, batteries: _batteryPacks) { Dock = DockStyle.Fill };
-
-        pageSetupLog.Controls.Add(garage);
-        _navRefreshHooks["Garage"] = garage.RefreshAll;
+        BuildGaragePage();
 
         StartupMark("Race Day to Garage");
 
-        // --- Race Analytics ---
-        //
-        // Four separate nav items became one page with tabs, the same shape
-        // as Sounds. They were always one job - "what does the history say"
-        // - split four ways down the sidebar, and a question like "is he
-        // quicker than me, and is he improving?" meant two round trips
-        // through the nav to answer.
-        _tabAnalyticsSubNav = new TabControl { Dock = DockStyle.Fill };
-
-        // First tab: the one nobody has to be told to look at. Every other
-        // tab answers a question you arrived with; this one answers the
-        // question on the wall of every club - what is the record here, and
-        // who holds it.
-        var subPageOverview = new TabPage("Overview");
-        // 17 Oct 2026, Bug Hunt 8, A30-2: the profiles, so the overview leaves
-        // out the drivers the club has hidden, not only ghosts.
-        var overview = new AnalyticsOverviewControl(_sessionHistory, _profiles);
-        subPageOverview.Controls.Add(overview);
-
-        var subPagePersonalBests = new TabPage("Personal Bests");
-        var personalBests = new PersonalBestsControl(_sessionHistory, _pbResets, _undo) { Dock = DockStyle.Fill };
-        subPagePersonalBests.Controls.Add(personalBests);
-
-        var subPageLapTimes = new TabPage("Lap Times");
-        var lapChart = new LapChartControl(_sessionHistory, _settings) { Dock = DockStyle.Fill };
-        subPageLapTimes.Controls.Add(lapChart);
-
-        var subPageHeadToHead = new TabPage("Head to Head");
-        var headToHead = new HeadToHeadControl(_sessionHistory) { Dock = DockStyle.Fill };
-        subPageHeadToHead.Controls.Add(headToHead);
-
-        var subPageTrends = new TabPage("Trends");
-        var trend = new TrendChartControl(_sessionHistory, _settings) { Dock = DockStyle.Fill };
-        subPageTrends.Controls.Add(trend);
-
-        // The same table Race Control opens after a race, with a picker on
-        // it. Reading pace is not only a thing you do in the ten minutes
-        // after a heat - "why was I slower last week" is the question this
-        // answers best, and it needed a way in that was not "find the race
-        // in History and open it".
-        var subPagePace = new TabPage("Pace");
-        var pace = new PaceAnalysisControl(_sessionHistory);
-        subPagePace.Controls.Add(pace);
-
-        _tabAnalyticsSubNav.TabPages.Add(subPageOverview);
-        _tabAnalyticsSubNav.TabPages.Add(subPagePersonalBests);
-        _tabAnalyticsSubNav.TabPages.Add(subPageLapTimes);
-        _tabAnalyticsSubNav.TabPages.Add(subPageHeadToHead);
-        _tabAnalyticsSubNav.TabPages.Add(subPageTrends);
-        _tabAnalyticsSubNav.TabPages.Add(subPagePace);
-        AppTheme.StyleTabControl(_tabAnalyticsSubNav);
-
-        // Every one of these reads the session history, and races finish
-        // while this page is in the background - so the tab being opened is
-        // what refreshes it, not the page being built once at startup.
-        void RefreshAnalyticsTab()
-        {
-            switch (_tabAnalyticsSubNav.SelectedTab)
-            {
-                case { } tab when tab == subPageOverview:
-                    overview.RefreshAll();
-                    break;
-                case { } tab when tab == subPagePersonalBests:
-                    personalBests.RefreshAll();
-                    break;
-                case { } tab when tab == subPageLapTimes:
-                    lapChart.RefreshAll();
-                    break;
-                case { } tab when tab == subPageHeadToHead:
-                    headToHead.RefreshAll();
-                    break;
-                case { } tab when tab == subPageTrends:
-                    trend.RefreshAll();
-                    break;
-                case { } tab when tab == subPagePace:
-                    pace.RefreshAll();
-                    break;
-            }
-        }
-
-        _tabAnalyticsSubNav.SelectedIndexChanged += (_, _) => RefreshAnalyticsTab();
-
-        pageAnalytics.Controls.Add(_tabAnalyticsSubNav);
-
-        // Opening the page refreshes whichever tab is showing, so arriving
-        // from the sidebar is as current as switching tabs once here.
-        _navRefreshHooks["Race Analytics"] = RefreshAnalyticsTab;
+        BuildAnalyticsPage();
 
         var seasons = new SeasonsControl(_seasonStore, _sessionHistory, _undo, _rounds, _raceClasses, _raceEvents, _profiles) { Dock = DockStyle.Fill };
         subPageStandings.Controls.Add(seasons);
@@ -843,6 +815,402 @@ public partial class MainForm
 
         today.ConnectTimerRequested += () => GoToPage("Connection");
 
+        BuildTodayWithTheProgramme(subPageToday, raceProgram, today);
+
+        // Both halves, because they are one tab now. Today reads the
+        // programme control for its next step, so the programme is refreshed
+        // first - otherwise the card above the grid is a refresh behind it.
+        _subTabRefresh[subPageToday] = () =>
+        {
+            raceProgram.RefreshAll();
+            today.RefreshAll();
+        };
+
+        pageRaceDay.Controls.Add(tabRaceDay);
+        pageChampionship.Controls.Add(tabChampionship);
+
+        _navRefreshHooks["Race Day"] = () => RefreshSubTab(tabRaceDay);
+        _navRefreshHooks["Championship"] = () => RefreshSubTab(tabChampionship);
+
+        // Switching the current event switches what every scoped store
+        // answers, so whatever page is showing re-reads. Wired once, here,
+        // rather than each page having to know events exist.
+        _raceEvents.CurrentChanged += (_, _) =>
+        {
+            if (!IsDisposed)
+            {
+                RefreshCurrentPage();
+
+                // Today names the day in its heading and counts against
+                // it, so it re-reads whether or not it is the tab being
+                // looked at - switching the day while standing on Race
+                // Control should not leave yesterday's name waiting on
+                // Race Day.
+                _todayControl?.RefreshAll();
+
+                // The Track box follows the day that just opened, rather
+                // than staying on whatever was used last. See
+                // SyncTrackLayoutToRaceDay for what that was costing.
+                //
+                // Not while a race or practice is under way: the box is the
+                // track the running race is filed under, and switching it to
+                // the other day's layout moved the race and its records to a
+                // track it was never run on. (The running round is kept the
+                // same way - see RefreshActiveRoundCombo.)
+                if (!RaceUnderWay)
+                {
+                    SyncTrackLayoutToRaceDay();
+                }
+
+                // And the sidebar, if this was a day opening or the last one
+                // closing. A no-op when the grouping is unchanged.
+                SyncRaceNightNav();
+            }
+        };
+
+        return (raceProgram, achievements);
+    }
+
+    /// <summary>
+    /// Rentals, and its badge in the sidebar.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildRentalsPage()
+    {
+        var rentals = new RentalTransponderControl(_rentals, _profiles, _undo) { Dock = DockStyle.Fill };
+        pageRentals.Controls.Add(rentals);
+        _navRefreshHooks["Rentals"] = rentals.RefreshAll;
+
+        // Keep the sidebar count in step with the page, so outstanding units
+        // are visible from wherever you happen to be working.
+        rentals.OutstandingCountChanged += count => lstNav.SetBadge("Rentals", count);
+
+        // WHY (23 Oct 2026, bug hunt 10): an online sign-up approval (or its undo)
+        // lends or takes back a unit straight through the store; refresh the page
+        // so it and the sidebar badge follow.
+        _signupDesk.Changed += rentals.RefreshAll;
+
+        // Set once up front as well - otherwise a unit left out overnight
+        // wouldn't show a badge until someone happened to open the page.
+        lstNav.SetBadge("Rentals", _rentals.OutNow.Count);
+    }
+
+    /// <summary>
+    /// The scrutineering log drawer and Inspect, both off Who's Racing.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void WireScrutineeringLog(CheckInControl checkIn)
+    {
+        // Scrutineering is no longer a tab. What it held was the
+        // scrutineer's record list, which a scrutineer opens a few times an
+        // evening and nobody else opens at all; the gate itself has always
+        // been the Tech column on Who's Racing. So it is a drawer off that
+        // page now - "Scrutineering Log..." - and Race Day is three tabs.
+        //
+        // A fresh page per opening, and the one currently open is held in
+        // techLog so the two places that have to redraw it can find it.
+        //
+        // It was one long-lived control moved from window to window, which is a
+        // worse idea than it looks in WinForms: a themed scrollbar parks itself
+        // as a SIBLING of the control it scrolls, so it belongs to the window,
+        // and closing that window disposed a bar the page was still
+        // subscribed to. The page's next ParentChanged then added a disposed
+        // control to the next window, and showing it threw ObjectDisposedException
+        // out of the message pump. ThinScrollBar refuses that now - a disposed
+        // bar no longer re-parents, and a dead entry no longer blocks a new one -
+        // but a page that never outlives its window cannot get into that state
+        // in the first place.
+        TechInspectionControl? techLog = null;
+
+        void ShowScrutineeringLog()
+        {
+            var log = new TechInspectionControl(_techInspections, _profiles, _raceClasses, _undo)
+            {
+                Dock = DockStyle.Fill,
+            };
+
+            // The page filling a window of its own with Close under it, and
+            // Close or Esc to shut it - see PageWindow.
+            using var host = PageWindow.ScrutineeringLog(log);
+
+            techLog = log;
+
+            // Cleared on the way out, so nothing refreshes a page that has
+            // gone. Both readers below are null-conditional for the ordinary
+            // case: the log is shut, and there is nothing to redraw.
+            host.FormClosed += (_, _) => techLog = null;
+
+            host.ShowDialog(this);
+        }
+
+        checkIn.TechLogRequested += ShowScrutineeringLog;
+
+        // Jumping from Check-In to record or edit a tech inspection without
+        // leaving the check-in table - the whole point of surfacing tech
+        // status there instead of merging the two records together.
+        checkIn.InspectRequested += profile =>
+        {
+            // The class the desk's Tech column is showing, not always their
+            // main one: a driver through tech in Stock and not in Modified
+            // used to have their Stock pass opened, and switching it to
+            // Modified replaced it.
+            var className = checkIn.InspectClassFor(profile);
+            var latest = _techInspections.Today(profile.Transponder, className);
+
+            // Only today's inspection is opened for editing. A race day can
+            // span a weekend, and the inspection that counts on Sunday
+            // morning can be Saturday's - editing that one overwrote
+            // Saturday's record with Sunday's look at the car, instead of
+            // filing a new one for Sunday. The Tech Log still edits any
+            // record picked from its list. "Today" also takes in the last
+            // few hours, so a club night running past midnight still edits
+            // the inspection made before twelve rather than starting over.
+            var existing = latest is not null
+                           && (latest.InspectedAtUtc.ToLocalTime().Date == DateTime.Now.Date
+                               || DateTime.UtcNow - latest.InspectedAtUtc < TimeSpan.FromHours(6))
+                ? latest
+                : null;
+
+            using var form = existing is not null
+                ? new TechInspectionEditForm(existing, _profiles, _raceClasses)
+                : new TechInspectionEditForm(null, _profiles, _raceClasses, profile.Transponder, className);
+
+            if (form.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            // Just this one record, not the whole log: undoing it must not
+            // also throw away inspections recorded since.
+            var before = existing is null ? null : _techInspections.CopyOf(existing.Id);
+            var resultId = form.Result.Id;
+            _undo.Capture($"{(existing is null ? "Record" : "Edit")} tech inspection for {profile.DriverName}", () =>
+            {
+                // Said out loud when it has been deleted since, rather than
+                // logging "Undid" over a step that put nothing back.
+                var putBack = _techInspections.UndoUpsert(resultId, before);
+                techLog?.RefreshAll();
+                checkIn.RefreshAll();
+
+                if (!putBack)
+                {
+                    throw new InvalidOperationException("that inspection has been deleted since, so there is nothing to put back.");
+                }
+            });
+
+            _techInspections.Upsert(form.Result);
+
+            // Both pages show tech state, so both need to pick up the change
+            // immediately rather than whichever one you happen to revisit -
+            // the log only when it is actually open behind this dialog.
+            techLog?.RefreshAll();
+            checkIn.RefreshAll();
+        };
+    }
+
+    /// <summary>
+    /// Handicaps.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildHandicapsPage()
+    {
+        // 17 Oct 2026, Bug Hunt 8, A26-1: the programme lets suggested
+        // handicaps and "Recent best lap" use only the selected class's races.
+        var handicaps = new HandicapControl(_handicaps, _profiles, _raceClasses, _sessionHistory, _undo, _rounds) { Dock = DockStyle.Fill };
+        pageHandicaps.Controls.Add(handicaps);
+        _navRefreshHooks["Handicaps"] = handicaps.RefreshAll;
+    }
+
+    /// <summary>
+    /// Track Layouts and Race History.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildTrackLayoutsAndRaceHistoryPages()
+    {
+        var trackLayouts = new TrackLayoutManagerControl(_trackLayouts, _settings, _undo) { Dock = DockStyle.Fill };
+        pageTrackLayouts.Controls.Add(trackLayouts);
+        _navRefreshHooks["Track Layouts"] = trackLayouts.RefreshAll;
+
+        var raceHistory = new RaceHistoryControl(_sessionHistory, _undo, _settings, _rounds, _raceClasses, _profiles, _trackLayouts, _techInspections, _rentals, _handicaps, _raceEvents) { Dock = DockStyle.Fill };
+        pageRaceHistory.Controls.Add(raceHistory);
+        _navRefreshHooks["Race History"] = raceHistory.RefreshAll;
+
+        // A driver's report card for the night of the race shown - the
+        // right-click on a result (22 Oct 2026). See MainForm.Coach.
+        // WHY (22 Oct 2026): a past night's setup line used to decide whose
+        // car was whose by the race day open NOW, so tonight's loan could
+        // move a setup change to the wrong driver. That is fixed where the
+        // line is worked out (CoachSetupChange asks about the race day of the
+        // night shown), so past nights keep their setup line here.
+        raceHistory.ReportCardFor = (transponder, night) =>
+            CoachReportFor(transponder, publicNames: false, includeSetup: true, night: night);
+    }
+
+    /// <summary>
+    /// Achievements - handed back, because Practice awards badges through it.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private AchievementsControl BuildAchievementsPage()
+    {
+        var achievements = new AchievementsControl(_profiles, _settings) { Dock = DockStyle.Fill };
+
+        // Where you race changed: the club website's badge list is sent
+        // again on the next pass, with what is on offer now.
+        achievements.RacingAtChanged += () => _lastRelayDocuments.Remove(RelayChannel.Badges);
+        pageAchievements.Controls.Add(achievements);
+
+        // Refreshed on entry, not just at construction: Race Control awards
+        // badges while this page sits in the background, so a page built
+        // once would show yesterday's picture forever.
+        _navRefreshHooks["Achievements"] = achievements.RefreshAll;
+
+        return achievements;
+    }
+
+    /// <summary>
+    /// The Garage.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildGaragePage()
+    {
+        // The Garage, in the page Tuning used to have. Tuning logged a
+        // setup against a driver's name and a typed car string; the Garage
+        // is that with the car made real, and the setup log is the lower
+        // half of it - so there is one page about a car rather than two
+        // that half-know about each other.
+        var garage = new GarageControl(
+            _cars, _chassisTypes, _profiles, _raceClasses, _setupLog, _sessionHistory,
+            _trackLayouts, _chassisTemplates, _undo, _raceEvents, batteries: _batteryPacks) { Dock = DockStyle.Fill };
+
+        pageSetupLog.Controls.Add(garage);
+        _navRefreshHooks["Garage"] = garage.RefreshAll;
+    }
+
+    /// <summary>
+    /// Race Analytics and its six tabs.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildAnalyticsPage()
+    {
+        // --- Race Analytics ---
+        //
+        // Four separate nav items became one page with tabs, the same shape
+        // as Sounds. They were always one job - "what does the history say"
+        // - split four ways down the sidebar, and a question like "is he
+        // quicker than me, and is he improving?" meant two round trips
+        // through the nav to answer.
+        _tabAnalyticsSubNav = new TabControl { Dock = DockStyle.Fill };
+
+        // First tab: the one nobody has to be told to look at. Every other
+        // tab answers a question you arrived with; this one answers the
+        // question on the wall of every club - what is the record here, and
+        // who holds it.
+        var subPageOverview = new TabPage("Overview");
+        // 17 Oct 2026, Bug Hunt 8, A30-2: the profiles, so the overview leaves
+        // out the drivers the club has hidden, not only ghosts.
+        var overview = new AnalyticsOverviewControl(_sessionHistory, _profiles);
+        subPageOverview.Controls.Add(overview);
+
+        var subPagePersonalBests = new TabPage("Personal Bests");
+        var personalBests = new PersonalBestsControl(_sessionHistory, _pbResets, _undo) { Dock = DockStyle.Fill };
+        subPagePersonalBests.Controls.Add(personalBests);
+
+        var subPageLapTimes = new TabPage("Lap Times");
+        var lapChart = new LapChartControl(_sessionHistory, _settings) { Dock = DockStyle.Fill };
+        subPageLapTimes.Controls.Add(lapChart);
+
+        var subPageHeadToHead = new TabPage("Head to Head");
+        var headToHead = new HeadToHeadControl(_sessionHistory) { Dock = DockStyle.Fill };
+        subPageHeadToHead.Controls.Add(headToHead);
+
+        var subPageTrends = new TabPage("Trends");
+        var trend = new TrendChartControl(_sessionHistory, _settings) { Dock = DockStyle.Fill };
+        subPageTrends.Controls.Add(trend);
+
+        // The same table Race Control opens after a race, with a picker on
+        // it. Reading pace is not only a thing you do in the ten minutes
+        // after a heat - "why was I slower last week" is the question this
+        // answers best, and it needed a way in that was not "find the race
+        // in History and open it".
+        var subPagePace = new TabPage("Pace");
+        var pace = new PaceAnalysisControl(_sessionHistory);
+        subPagePace.Controls.Add(pace);
+
+        _tabAnalyticsSubNav.TabPages.Add(subPageOverview);
+        _tabAnalyticsSubNav.TabPages.Add(subPagePersonalBests);
+        _tabAnalyticsSubNav.TabPages.Add(subPageLapTimes);
+        _tabAnalyticsSubNav.TabPages.Add(subPageHeadToHead);
+        _tabAnalyticsSubNav.TabPages.Add(subPageTrends);
+        _tabAnalyticsSubNav.TabPages.Add(subPagePace);
+        AppTheme.StyleTabControl(_tabAnalyticsSubNav);
+
+        // Every one of these reads the session history, and races finish
+        // while this page is in the background - so the tab being opened is
+        // what refreshes it, not the page being built once at startup.
+        void RefreshAnalyticsTab()
+        {
+            switch (_tabAnalyticsSubNav.SelectedTab)
+            {
+                case { } tab when tab == subPageOverview:
+                    overview.RefreshAll();
+                    break;
+                case { } tab when tab == subPagePersonalBests:
+                    personalBests.RefreshAll();
+                    break;
+                case { } tab when tab == subPageLapTimes:
+                    lapChart.RefreshAll();
+                    break;
+                case { } tab when tab == subPageHeadToHead:
+                    headToHead.RefreshAll();
+                    break;
+                case { } tab when tab == subPageTrends:
+                    trend.RefreshAll();
+                    break;
+                case { } tab when tab == subPagePace:
+                    pace.RefreshAll();
+                    break;
+            }
+        }
+
+        _tabAnalyticsSubNav.SelectedIndexChanged += (_, _) => RefreshAnalyticsTab();
+
+        pageAnalytics.Controls.Add(_tabAnalyticsSubNav);
+
+        // Opening the page refreshes whichever tab is showing, so arriving
+        // from the sidebar is as current as switching tabs once here.
+        _navRefreshHooks["Race Analytics"] = RefreshAnalyticsTab;
+    }
+
+    /// <summary>
+    /// Next Steps: the day's card above the programme, split by a line the director can drag.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildTodayWithTheProgramme(TabPage subPageToday, RaceProgramControl raceProgram, TodayControl today)
+    {
         // --- Today, with the programme under it ---
         //
         // This is the fold of the old Heats & Mains tab. That page had two
@@ -1096,58 +1464,17 @@ public partial class MainForm
         };
 
         subPageToday.Controls.Add(todaySplit);
+    }
 
-        // Both halves, because they are one tab now. Today reads the
-        // programme control for its next step, so the programme is refreshed
-        // first - otherwise the card above the grid is a refresh behind it.
-        _subTabRefresh[subPageToday] = () =>
-        {
-            raceProgram.RefreshAll();
-            today.RefreshAll();
-        };
-
-        pageRaceDay.Controls.Add(tabRaceDay);
-        pageChampionship.Controls.Add(tabChampionship);
-
-        _navRefreshHooks["Race Day"] = () => RefreshSubTab(tabRaceDay);
-        _navRefreshHooks["Championship"] = () => RefreshSubTab(tabChampionship);
-
-        // Switching the current event switches what every scoped store
-        // answers, so whatever page is showing re-reads. Wired once, here,
-        // rather than each page having to know events exist.
-        _raceEvents.CurrentChanged += (_, _) =>
-        {
-            if (!IsDisposed)
-            {
-                RefreshCurrentPage();
-
-                // Today names the day in its heading and counts against
-                // it, so it re-reads whether or not it is the tab being
-                // looked at - switching the day while standing on Race
-                // Control should not leave yesterday's name waiting on
-                // Race Day.
-                _todayControl?.RefreshAll();
-
-                // The Track box follows the day that just opened, rather
-                // than staying on whatever was used last. See
-                // SyncTrackLayoutToRaceDay for what that was costing.
-                //
-                // Not while a race or practice is under way: the box is the
-                // track the running race is filed under, and switching it to
-                // the other day's layout moved the race and its records to a
-                // track it was never run on. (The running round is kept the
-                // same way - see RefreshActiveRoundCombo.)
-                if (!RaceUnderWay)
-                {
-                    SyncTrackLayoutToRaceDay();
-                }
-
-                // And the sidebar, if this was a day opening or the last one
-                // closing. A no-op when the grouping is unchanged.
-                SyncRaceNightNav();
-            }
-        };
-
+    /// <summary>
+    /// Ghost Cars, Practice and Demo Mode. The Ghost Cars page is made here rather than in the designer, so it is handed back for the sidebar's list.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private Panel BuildPracticeGhostsAndDemoPages(RaceControlControl raceControl, RaceProgramControl raceProgram, AchievementsControl achievements)
+    {
         var pageGhosts = new Panel();
         ConfigurePage(pageGhosts);
         StartupMark("Race Analytics, Championship and Next Steps");
@@ -1186,7 +1513,7 @@ public partial class MainForm
 
         raceControl.AchievementStores = badgeStores;
         practice.AchievementStores = badgeStores;
-        practice.HasUnfiledRaces = () => raceControl.HasUnfiledRaces;
+        practice.HasUnfiledRaces = () => _raceFiling.HasUnfiledRaces;
         practice.BatteryPacks = _batteryPacks;
         practice.StatusMessage += OnClientRawMessage;
         practice.BadgesAwarded += raceControl.ReloadAchievements;
@@ -1242,6 +1569,10 @@ public partial class MainForm
         // Race Control's format line is re-read then, so it shows what the
         // next race will actually use rather than what was there before.
         practice.PracticeStopped += _raceControlControl.RefreshFormat;
+
+        // Threaded, the timing thread's gate-pass plan follows the page at
+        // once (24 Oct 2026, timing layer, P7) - see RefreshPracticeAutoStartPlan.
+        practice.AutoStartConditionsChanged += RefreshPracticeAutoStartPlan;
         _practiceControl = practice;
         pagePractice.Controls.Add(practice);
         _navRefreshHooks["Practice"] = practice.RefreshAll;
@@ -1310,7 +1641,7 @@ public partial class MainForm
         {
             // A demo drives the same session practice is running on, and
             // would wipe the practice laps just as a real start would.
-            if (_raceControlControl.RefuseIfPracticeRunning("run a demo"))
+            if (_raceControlControl.RefuseIfPracticeRunningForRaceStart("run a demo"))
             {
                 return;
             }
@@ -1431,8 +1762,18 @@ public partial class MainForm
             }
         };
 
-        StartupMark("Practice, Ghost Cars and Demo Mode");
+        return pageGhosts;
+    }
 
+    /// <summary>
+    /// Voice and its four tabs, and the announcer's wiring to Race Control.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private AnnouncerControl BuildVoicePage(RaceControlControl raceControl)
+    {
         // Voice Announcements hosts a small internal sub-nav: general
         // voice settings, and Rivalries (custom lines for specific driver
         // matchups) - grouped together since rivalries are fundamentally
@@ -1489,7 +1830,8 @@ public partial class MainForm
         // feed it gathers has no store behind it - a control built when the
         // window opens would start every race with an empty page and lose
         // the lot each time the window was closed.
-        _announcerControl = new AnnouncerControl(_race, _profiles, _sessionHistory, _daySchedule, _announcer, _commentary, _settings, _undo) { Dock = DockStyle.Fill };
+        // WHY (23 Oct 2026, bug hunt 10): the director's personal-best check honours the club's resets.
+        _announcerControl = new AnnouncerControl(_race, _profiles, _sessionHistory, _daySchedule, _announcer, _commentary, _settings, _undo) { Dock = DockStyle.Fill, PersonalBestResets = _pbResets };
         var announcer = _announcerControl;
 
         // The broadcast segments' own console lines. Every refusal says
@@ -1565,6 +1907,8 @@ public partial class MainForm
         cmbActiveRound.SelectedIndexChanged += (_, _) => _raceControlControl.RefreshFormat();
 
         _raceControlControl.AnnouncerRequested += OpenAnnouncerWindow;
+        _raceControlControl.ChaseOwnBest = ChaseOwnBestFromRaceControl;
+        _raceControlControl.OwnBestGhosts = () => OwnBestGhost.ChasedBy(_ghostStore.Current);
         _raceControlControl.MissionControlRequested += ShowMissionControl;
 
         // Brings Race Control forward without closing the announcer's
@@ -1592,6 +1936,7 @@ public partial class MainForm
         // co-host, the mechanic and the badges reader.
         var cast = new CastControl(_settings) { Dock = DockStyle.Fill };
         subPageCast.Controls.Add(cast);
+        _castControl = cast;
 
         // The recap's broadcast: the Garage's record of the winning car for
         // the mechanic's interview, and the cast's voice lists - see
@@ -1657,6 +2002,12 @@ public partial class MainForm
         _voiceSettingsControl = voiceSettings;
         _voiceSettingsSubPage = subPageVoiceSettings;
 
+        // The announcer's voice picker and Test Voice, built by the Voice tab
+        // and shown at the top of Cast (22 Oct 2026) - see
+        // CastControl.HostAnnouncerVoice, and RebuildVoiceAndSoundTabs for
+        // handing them over again when a soundscape rebuilds this tab.
+        cast.HostAnnouncerVoice(voiceSettings.AnnouncerVoiceGrid);
+
         // The announcement rows, built by the same control so they stay part
         // of the one voice profile it saves, but parented here so they get a
         // tab of their own - Race Calls. See VoiceSettingsControl.Announcements.cs.
@@ -1671,8 +2022,18 @@ public partial class MainForm
 
         _navRefreshHooks["Voice"] = () => rivalries.RefreshDriverCombos();
 
-        StartupMark("Voice");
+        return announcer;
+    }
 
+    /// <summary>
+    /// Sounds and its tabs, and the ambience's wiring to the race.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildSoundsPage(AnnouncerControl announcer)
+    {
         // Sound Effects hosts the audio sub-nav: discrete effects, the
         // continuous ambience beds, and per-driver lap cues. Grouped because
         // all three are "what the app sounds like", and Lap Beeps never
@@ -1817,7 +2178,17 @@ public partial class MainForm
 
         // Ambience is wired to race state so the crowd follows the action.
         WireAmbienceToRace();
+    }
 
+    /// <summary>
+    /// Themes - the Looks page.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildThemesPage()
+    {
         // Themes is the Looks page itself - the colours the app and the crowd
         // screens wear, and the club logo - with no tabs. It held two tabs
         // until 0.56, when Announcer Style (now Soundscapes) moved to Sounds.
@@ -1832,9 +2203,17 @@ public partial class MainForm
         // change while the page is out of sight - an undo, most often - so it
         // re-reads them each time it comes into view.
         _navRefreshHooks["Themes"] = () => _looksControl.RefreshAll();
+    }
 
-        StartupMark("Sounds and Themes");
-
+    /// <summary>
+    /// Sponsors.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildSponsorsPage()
+    {
         var sponsors = new SponsorsControl(_sponsors, _undo) { Dock = DockStyle.Fill };
         pageSponsors.Controls.Add(sponsors);
 
@@ -1857,7 +2236,17 @@ public partial class MainForm
         // announcer counts them as each one goes to the speaker. See
         // SponsoredMomentGate.
         sponsors.MentionsTonight = () => _announcer.SponsorMentions.MentionsTonight();
+    }
 
+    /// <summary>
+    /// Local Screens.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildLocalScreensPage()
+    {
         var webServer = new WebServerControl(
             _webServer,
             _settings,
@@ -1876,7 +2265,17 @@ public partial class MainForm
         // to act on what they asked. Shown handlers run in the order they
         // were added, so the one that marks the host ready has run first.
         Shown += (_, _) => webServer.AutoStartIfConfigured();
+    }
 
+    /// <summary>
+    /// Club Website.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildClubWebsitePage()
+    {
         // Next to Local Screens in the sidebar: the two together answer "how
         // does somebody who is not stood at this laptop see the race" -
         // one on the venue's wifi, one from anywhere.
@@ -1969,7 +2368,17 @@ public partial class MainForm
         // Refreshed on entry: the boxes have to show what settings hold,
         // not what they held when the page was built.
         _navRefreshHooks["Club Website"] = online.RefreshAll;
+    }
 
+    /// <summary>
+    /// Venues.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildVenuesPage(RaceControlControl raceControl)
+    {
         var venues = new VenuesControl(_venueStore, _trackLayouts, _themeStore, _undo) { Dock = DockStyle.Fill };
 
         // Applying a venue switches the decoder and the track layout, which
@@ -2084,7 +2493,17 @@ public partial class MainForm
         };
         pageVenues.Controls.Add(venues);
         _navRefreshHooks["Venues"] = venues.RefreshDropdownSources;
+    }
 
+    /// <summary>
+    /// Backup & Restore.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildBackupPage()
+    {
         var backupRestore = new BackupRestoreControl(_settings, _undo) { Dock = DockStyle.Fill };
 
         // A restore restarts the app, which would end a race or practice
@@ -2128,26 +2547,17 @@ public partial class MainForm
             }
         };
         pageBackup.Controls.Add(backupRestore);
+    }
 
-        // The session row's Round picker can go stale while another page
-        // adds or removes rounds, so it is refreshed every time Race Control
-        // becomes the active page.
-        //
-        // This was keyed to "Connection", from when the session row lived on
-        // the Connection page. It moved to Race Control and this did not
-        // move with it, so the row was refreshed on a visit to a page it was
-        // no longer on and never on a visit to the one it was. A track made
-        // on Track Layouts, or a programme built on Race Day, did not appear
-        // in it until the app restarted.
-        //
-        // The track picker is not refreshed here any more: it follows the
-        // layout store directly (OnTrackLayoutsChanged), which catches a
-        // change made while Race Control is already showing, and this could
-        // not. Safe mid-race: the round list is rebuilt around the running
-        // round, and RefreshFormat only writes the race limits while the
-        // race is idle or finished.
-        _navRefreshHooks["Race Control"] = RefreshActiveRoundCombo;
-
+    /// <summary>
+    /// The sidebar's list of pages, and each page parented, held and given its header.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void BuildNavItems(Panel pageGhosts)
+    {
         _navItems = new List<NavItem>
         {
             new("Race Control", pageRaceControl),
@@ -2207,34 +2617,17 @@ public partial class MainForm
         {
             PageHeader.Attach(item.Page, item.Name);
         }
+    }
 
-        txtNavSearch.TextChanged += (_, _) => RebuildNav();
-        // ~20fps is plenty for a slow-drifting grid, and keeps the cost
-        // negligible on a laptop at a track.
-        _headerAnimationTimer.Tick += (_, _) =>
-        {
-            AppTheme.AnimationPhase = (AppTheme.AnimationPhase + 0.004f) % 1f;
-            lblAppTitle.Invalidate();
-        };
-
-        // The club logo, if there is one and it is wanted there - which
-        // also starts the header animation, or leaves it off while a logo
-        // is showing.
-        RefreshHeaderLogo();
-
-        btnManageNav.Click += BtnManageNav_Click;
-
-        // The chevron in the page-search row: the sidebar down to its icons
-        // and back - see SetNavIconsOnly. Ctrl+B does the same from anywhere.
-        btnCollapseNav.Click += (_, _) => ToggleNavIconsOnly();
-
-        _announcer.Muted = _settings.AnnouncerMuted;
-
-        // The icon and the tooltip both default to "not muted" until told
-        // otherwise (SetUpFooterButton runs before this setting is known) -
-        // this is what makes a club that starts up already muted show it.
-        UpdateMuteButtonText();
-
+    /// <summary>
+    /// The footer's Undo button, and the clear-out of what undo set aside.
+    ///
+    /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
+    /// unchanged and called in the same place, so the pages are still built in
+    /// the order they always were.
+    /// </summary>
+    private void WireUndoButton()
+    {
         // Files an undoable action set aside (a deleted song, a replaced
         // logo) are kept for a week in case they're wanted back, then
         // cleared here. Off the UI thread since it walks folders on disk;
@@ -2302,74 +2695,6 @@ public partial class MainForm
         };
 
         AppTheme.StyleToolTip(_footerTooltip);
-
-        StartupMark("the other pages");
-
-        // The sidebar narrowed to its icons, if that is how the club left it
-        // (AppSettings.NavIconsOnly) - BEFORE the window is laid out rather
-        // than after, so it comes up narrow from the first frame instead of
-        // being seen to fold a moment after the window appears. Nothing to do
-        // when it is not: the designer builds the open sidebar, and
-        // ApplyFontScale below gives it its width either way (PlaceSidebar).
-        if (_settings.NavIconsOnly)
-        {
-            SetNavIconsOnly(true, save: false);
-        }
-
-        // The theme pass, once: ApplyFontScale runs it (with the sidebar's
-        // chrome put back after it), in the window's own face - which it
-        // sets first. It used to be run here as well, just before, which
-        // was the whole window themed twice at every start.
-        ApplyFontScale();
-
-        StartupMark("text size and theme");
-
-        btnMuteToggle.Click += (_, _) => SetAllSoundMuted(!_announcer.Muted);
-
-        lstNav.SelectionChanged += LstNav_SelectionChanged;
-        lstNav.ItemsReordered += LstNav_ItemsReordered;
-
-        // Essentials and club tools, each under a quiet heading - see NavTiers.
-        // Asked per row on every repaint, so it has to read the same flag the
-        // ordering above does - see _navRaceNight.
-        lstNav.SectionOf = name => NavTiers.SectionOf(name, _navRaceNight);
-
-        // Before the first build, not after: a club that closed the app
-        // mid-race-day reopens it with that day still current, and the sidebar
-        // should already be in race-night order rather than rearranging itself
-        // a moment later.
-        _navRaceNight = RaceNightWanted;
-
-        RebuildNav();
-
-        StartupMark("first page");
-
-        // After the window is actually up: the pages' handles are made in
-        // the window's, which does not exist while it is still being built.
-        // Timed for the session log.
-        Shown += (_, _) =>
-        {
-            var warming = System.Diagnostics.Stopwatch.StartNew();
-
-            // What the windows made meanwhile cost, when it is slow - see
-            // WhereTimeGoes.
-            WhereTimeGoes.StartOnShownWindow("Making the pages ready");
-            string? timing;
-            try
-            {
-                WarmPages();
-            }
-            finally
-            {
-                // 17 Oct 2026, Bug Hunt 8, A30-6: a page throwing during warm-up
-                // (caught by ThreadException) left the thread-wide hooks counting
-                // every UI-thread message.
-                timing = WhereTimeGoes.Take();
-            }
-
-            OnClientRawMessage($"{AppTime.LogStampNow()}  [startup] Every page and tab made ready in {warming.Elapsed.TotalSeconds:0.0}s."
-                + (warming.Elapsed.TotalSeconds >= 1 && timing is not null ? $" {timing}" : string.Empty));
-        };
     }
 
     /// <summary>

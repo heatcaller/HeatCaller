@@ -68,6 +68,11 @@ public sealed class CommentaryDirector
     private readonly AppSettings _settings;
     private readonly Func<DateTime> _clock;
 
+    // WHY (23 Oct 2026, bug hunt 10): the relay's month as of the last time
+    // nights-left was worked out, as year * 12 + month; 0 before NewMeeting.
+    // See RelayDay.
+    private int _relayMonth;
+
     private string _raceKey = string.Empty;
     private string? _className;
     private bool _racing;
@@ -288,7 +293,8 @@ public sealed class CommentaryDirector
     }
 
     /// <summary>
-    /// The host dropped this segment unheard: give back its budget and
+    /// The host dropped this segment unheard: keep the line's charge (the
+    /// relay kept it), free the segment to be written again, and
     /// leave its facts and marks unspent, exactly as a segment dropped
     /// inside TryAsync is. Safe to call for a segment already settled or
     /// dropped - it does nothing.
@@ -300,7 +306,8 @@ public sealed class CommentaryDirector
             return;
         }
 
-        Budget.Release(waiting.Ticket);
+        // WHY (23 Oct 2026, bug hunt 10): the relay kept the charge for this written line, so the budget keeps it too.
+        Budget.Release(waiting.Ticket, written: true);
         Account.DroppedAfterWriting();
 
         // Nobody heard it, so it is not the line Repeat offers.
@@ -688,7 +695,14 @@ public sealed class CommentaryDirector
         // The nights still to come this month, not the month's whole count -
         // which never counted down, so the last night was handed a quarter
         // of what was left. See CommentaryBudget.NightsLeft.
-        Budget.NightsLeftThisMonth = CommentaryBudget.NightsLeft(_settings.CommentaryNightsPerMonth, _clock());
+        // WHY (23 Oct 2026, bug hunt 10): counted on the laptop's own date,
+        // but the relay keeps the club's month in UTC. A New York club on
+        // the 31st was told "one night left" all evening while the relay had
+        // already started the next month at 8pm, so the rest of the night
+        // was paced against the whole of next month's allowance. Now counted
+        // on the relay's (UTC) date, and worked out again in MonthlyUsage
+        // when that month turns over mid-night.
+        CountNightsLeft(RelayDay(_clock()));
         Budget.KeepEverythingRunning = _settings.CommentaryKeepEverything;
 
         // WHY (20 Oct 2026): the club's lowest tier was stored in settings
@@ -819,7 +833,41 @@ public sealed class CommentaryDirector
     }
 
     /// <summary>The club's month, as the relay reported it on its last answer.</summary>
-    public void MonthlyUsage(int used, int allowance) => Budget.MonthlyUsage(used, allowance);
+    public void MonthlyUsage(int used, int allowance)
+    {
+        // WHY (23 Oct 2026, bug hunt 10): the relay's month can turn over in
+        // the middle of a race night (UTC midnight is 8pm in New York). The
+        // count of nights left was taken once, in NewMeeting, so the first
+        // answer from the new month divided its whole allowance by the old
+        // month's last night. Counted again when the relay's month changes.
+        var relayDay = RelayDay(_clock());
+        var month = relayDay.Year * 12 + relayDay.Month;
+        var known = Volatile.Read(ref _relayMonth);
+
+        if (known != 0 && known != month)
+        {
+            CountNightsLeft(relayDay);
+        }
+
+        Budget.MonthlyUsage(used, allowance);
+    }
+
+    /// <summary>
+    /// The day as the relay counts the club's month: UTC (bug hunt 10,
+    /// 23 Oct 2026). A clock that says which zone it is in is turned to UTC;
+    /// one that does not (a test's fixed time) is taken as already being the
+    /// relay's day, so a test does not depend on the zone of the machine
+    /// that runs it.
+    /// </summary>
+    internal static DateTime RelayDay(DateTime now) =>
+        now.Kind == DateTimeKind.Local ? now.ToUniversalTime() : now;
+
+    /// <summary>Tonight's share of the month: the club's nights still to come in the relay's month.</summary>
+    private void CountNightsLeft(DateTime relayDay)
+    {
+        Budget.NightsLeftThisMonth = CommentaryBudget.NightsLeft(_settings.CommentaryNightsPerMonth, relayDay);
+        Volatile.Write(ref _relayMonth, relayDay.Year * 12 + relayDay.Month);
+    }
 
     /// <summary>
     /// How big the race in front of the announcer is - see
@@ -1915,7 +1963,8 @@ public sealed class CommentaryDirector
 
             if (_clock() - asked > spec.NeedsBy)
             {
-                Budget.Release(verdict.Ticket);
+                // WHY (23 Oct 2026, bug hunt 10): the relay kept the charge for this written line, so the budget keeps it too.
+                Budget.Release(verdict.Ticket, written: true);
                 Account.DroppedAfterWriting();
 
                 // Nobody heard it, so it is not the line Repeat offers.
@@ -1927,12 +1976,13 @@ public sealed class CommentaryDirector
 
             // Held while it was being written. Nothing is lost by
             // holding, which is what Held promises: the line is dropped,
-            // the budget goes back, and the facts are NOT marked - before
+            // the segment can be written again, and the facts are NOT marked - before
             // this they were, so a hold turned on mid-write took that
             // fight, or the cold open, off the night for good.
             if (Held)
             {
-                Budget.Release(verdict.Ticket);
+                // WHY (23 Oct 2026, bug hunt 10): the relay kept the charge for this written line, so the budget keeps it too.
+                Budget.Release(verdict.Ticket, written: true);
                 Account.DroppedAfterWriting();
                 _commentary.ForgetLine(written.Text);
 
@@ -1948,7 +1998,8 @@ public sealed class CommentaryDirector
             // Given back like a hold, so nothing is marked said.
             if (InRace(kind) != _racing)
             {
-                Budget.Release(verdict.Ticket);
+                // WHY (23 Oct 2026, bug hunt 10): the relay kept the charge for this written line, so the budget keeps it too.
+                Budget.Release(verdict.Ticket, written: true);
                 Account.DroppedAfterWriting();
 
                 // Nobody heard this one either - see the two drops above.
@@ -1968,7 +2019,8 @@ public sealed class CommentaryDirector
                 && noteId is { Length: > 0 }
                 && ClubAsideStillWanted?.Invoke(noteId) == false)
             {
-                Budget.Release(verdict.Ticket);
+                // WHY (23 Oct 2026, bug hunt 10): the relay kept the charge for this written line, so the budget keeps it too.
+                Budget.Release(verdict.Ticket, written: true);
                 Account.DroppedAfterWriting();
                 _commentary.ForgetLine(written.Text);
 

@@ -91,6 +91,28 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     public const string InProgressExtension = ".recording.wav";
 
     /// <summary>
+    /// The marker a race's wav carries once its mp3 has landed but the clips
+    /// and videos are still being cut from it.
+    /// </summary>
+    // WHY (23 Oct 2026, bug hunt 10): the wav kept its ".recording.wav" name
+    // until the last highlight video was made, minutes after the mp3. Closing
+    // the app in that time left it looking like a crashed race, and the next
+    // sweep made a second mp3 of a race already saved and logged it as a
+    // rescued recording. Now it is renamed to this once the mp3 is on disk,
+    // and the sweep only deletes a leftover of this name - never encodes it.
+    public const string PublishedExtension = ".published.wav";
+
+    /// <summary>
+    /// The in-progress wavs a Publish is still working from, by full path.
+    /// </summary>
+    // WHY (22 Oct 2026, bug hunt 9): videos now queue one at a time across
+    // races, so a race's Publish can wait minutes with its wav untouched.
+    // The sweep at the end of the race before took that for a file left
+    // behind, made a second mp3 of it and deleted it, and the waiting
+    // race's later videos then had no source. SweepOrphans skips these.
+    private static readonly ConcurrentDictionary<string, byte> Publishing = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// How many converted buffers may wait for the writer.
     ///
     /// The bus hands over about ten buffers a second (WaveOutEvent at 300ms
@@ -217,6 +239,18 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     /// </summary>
     public static RaceAudioRecorder? StartFor(RaceAudioStore store, string? raceLabel, DateTime startedUtc, Action<string> log)
     {
+        // A new race: the last one's closing seconds are not this race's to
+        // replay (RaceReplayBuffer, 22 Oct 2026).
+        //
+        // WHY (22 Oct 2026, Bug Hunt 9): this used to run only once the
+        // recording had actually started, after the "recording off", "no
+        // room on the disk" and could-not-open-the-file returns. A race that
+        // was not recorded then left the last race's finish in the ring, and
+        // Replay played it over this race as "the last seconds of the race".
+        // Now every start moves the replay's start, recorded or not. Safe
+        // with nothing listening: Restart only moves where this race begins.
+        RaceReplayBuffer.Shared.Restart();
+
         if (!store.Enabled)
         {
             return null;
@@ -287,6 +321,12 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 log($"{AppTime.LogStampNow()}  [audio] Something else was already recording - this race takes the "
                     + "feed, and whatever it was ends here. Its own file is still written, just short.");
             }
+
+            // WHY (22 Oct 2026, Bug Hunt 9 review): done again here as well
+            // as at the top, so a recording that takes the feed from
+            // something else starts its replay at the takeover, not with
+            // the folder and file setup's worth of what was recording before.
+            RaceReplayBuffer.Shared.Restart();
 
             // Last, so the tap can never be handed a buffer before the
             // writer thread that drains the queue is running.
@@ -371,6 +411,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
             var bytes = new byte[frames * BytesPerSample];
             var at = 0;
+            var replay = RaceReplayBuffer.Shared;
 
             for (var frame = 0; frame < frames; frame++)
             {
@@ -392,7 +433,14 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
                 bytes[at++] = (byte)(sample & 0xFF);
                 bytes[at++] = (byte)((sample >> 8) & 0xFF);
+
+                // The replay's copy (22 Oct 2026): a store into a ring that
+                // was allocated once - no lock, no allocation. See
+                // RaceReplayBuffer.
+                replay.Put(sample);
             }
+
+            replay.Commit();
 
             // WHY (20 Oct 2026): counted before TryAdd, so the writer can
             // never write this chunk before it is counted, and taken back off
@@ -585,6 +633,16 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // Nothing left to do about it.
         }
 
+        // WHY (22 Oct 2026, Bug Hunt 9): the replay ring is fed only by this
+        // tap, which has just come off the bus with the race still running
+        // (the minute cap, a low disk, the writer failing). What it held
+        // used to stay there and be offered as "the last seconds of the
+        // race" long after it stopped, so a recording that has given up now
+        // holds nothing to replay. A race that ended normally never gets
+        // here: BeginStop has already set _closed, and the return above
+        // leaves its replay alone.
+        RaceReplayBuffer.Shared.Restart();
+
         try
         {
             _pending.CompleteAdding();
@@ -716,16 +774,24 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     /// </summary>
     /// <param name="record">The result as it was filed, for the drivers' names and finishing positions. Null when the race was never saved - then only the race's own mp3 is written.</param>
     /// <param name="releaseOffsetsMs">Each driver's release offset off the board at the flag - zero in an ordinary race. See RaceHighlights.OffsetOf.</param>
+    /// <param name="clipShare">Where each driver's mp3 clip goes on their own night, or null to keep them on this PC - see ClipShare.</param>
     public static void Publish(
         RaceAudioRecording recording,
         RaceAudioStore store,
         SessionRecord? record,
         IReadOnlyDictionary<string, long>? releaseOffsetsMs,
         Action<string> log,
-        HighlightVideoOptions? video = null)
+        HighlightVideoOptions? video = null,
+        ClipShare? clipShare = null)
     {
+        string? publishing = null;
+
         try
         {
+            // Held for the whole of this Publish - see Publishing.
+            publishing = Path.GetFullPath(recording.WavPath);
+            Publishing[publishing] = 0;
+
             if (recording.DroppedChunks > 0)
             {
                 log($"{AppTime.LogStampNow()}  [audio] The recording of \"{recording.BaseName}\" has gaps in it: "
@@ -768,10 +834,38 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // The race's mp3 first, and the clips after: it is the thing
             // asked for, and if anything goes wrong from here it is already
             // on disk.
+            // Where the clips are cut from: the in-progress wav, or the same
+            // file under its published name once the mp3 has landed.
+            var source = recording.WavPath;
+
             if (TryEncode(recording.WavPath, mp3Path, out var why))
             {
                 log($"{AppTime.LogStampNow()}  [audio] Saved {mp3Path} ({recording.LengthMs / 60000}m"
                     + $"{recording.LengthMs / 1000 % 60:00}s).");
+
+                // Off the in-progress name now the mp3 exists (23 Oct 2026,
+                // bug hunt 10) - see PublishedExtension. The new name is held
+                // in Publishing before the move, so no sweep can catch the
+                // file between the two; if the move fails the clips are cut
+                // from the original, exactly as before.
+                if (RenamedOffInProgress(source, PublishedExtension) is { } published)
+                {
+                    var publishedFull = Path.GetFullPath(published);
+                    Publishing[publishedFull] = 0;
+
+                    try
+                    {
+                        File.Move(source, published);
+                        Publishing.TryRemove(publishing, out _);
+                        publishing = publishedFull;
+                        source = published;
+                    }
+                    catch (Exception ex)
+                    {
+                        Publishing.TryRemove(publishedFull, out _);
+                        log($"{AppTime.LogStampNow()}  [audio] Could not rename {source} ({ex.Message}).");
+                    }
+                }
             }
             else
             {
@@ -792,7 +886,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 // rename failed; either reads the same.
                 if (store.DriverHighlights && record is not null)
                 {
-                    WriteClips(recording with { WavPath = kept }, record, releaseOffsetsMs, baseName, log, video);
+                    WriteClips(recording with { WavPath = kept }, record, releaseOffsetsMs, baseName, log, video, clipShare);
                 }
 
                 // The ceiling matters most here: a PC with no mp3 encoder
@@ -803,13 +897,13 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
             if (store.DriverHighlights && record is not null)
             {
-                WriteClips(recording, record, releaseOffsetsMs, baseName, log, video);
+                WriteClips(recording with { WavPath = source }, record, releaseOffsetsMs, baseName, log, video, clipShare);
             }
 
             // Only now, and only because the mp3 landed.
-            TryDelete(recording.WavPath, log);
+            TryDelete(source, log);
 
-            SweepOrphans(store, recording.WavPath, log);
+            SweepOrphans(store, source, log);
 
             // AND THE CEILING (11 Oct 2026). Nothing ever deleted any of
             // this: a club running a season would have put twenty
@@ -826,6 +920,13 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             log($"{AppTime.LogStampNow()}  [audio] Finishing the recording of \"{recording.BaseName}\" failed "
                 + $"({ex.Message}). Anything already written is where it was.");
         }
+        finally
+        {
+            if (publishing is not null)
+            {
+                Publishing.TryRemove(publishing, out _);
+            }
+        }
     }
 
     /// <summary>One mp3 per driver, holding the stretches of the recording where they were called.</summary>
@@ -835,7 +936,8 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         IReadOnlyDictionary<string, long>? releaseOffsetsMs,
         string baseName,
         Action<string> log,
-        HighlightVideoOptions? video = null)
+        HighlightVideoOptions? video = null,
+        ClipShare? clipShare = null)
     {
         var marks = RaceHighlights.MarksFrom(record, releaseOffsetsMs);
         var clips = RaceHighlights.ClipsFor(record, marks, recording.GreenAtMs, recording.LengthMs);
@@ -858,6 +960,10 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
         var videos = 0;
 
+        // Each mp3 that landed, for the drivers' own nights below (22 Oct
+        // 2026, driver experience). A clip kept as a wav never goes up.
+        var encoded = new List<(RaceHighlights.DriverClip Clip, string Mp3)>();
+
         foreach (var clip in clips)
         {
             var name = RaceHighlights.ClipNameFor(baseName, clip.Position, clip.DriverName);
@@ -877,6 +983,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 if (TryEncode(temp, clipPath, out var why))
                 {
                     written++;
+                    encoded.Add((clip, clipPath));
                 }
                 else
                 {
@@ -912,6 +1019,15 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         {
             foreach (var clip in clips.Where(c => video.Wants(c.Position)))
             {
+                // Once this PC's encoder has refused (22 Oct 2026), no more
+                // per-driver video wavs are cut - HighlightVideo.Make would only
+                // return at once. Checked each driver, as the first refusal
+                // can come partway through a race.
+                if (HighlightVideo.EncoderUnavailable)
+                {
+                    break;
+                }
+
                 var name = RaceHighlights.ClipNameFor(baseName, clip.Position, clip.DriverName);
                 videos += MakeVideo(recording, record, releaseOffsetsMs, clip, folder, name, video, log) ? 1 : 0;
             }
@@ -928,7 +1044,83 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             log($"{AppTime.LogStampNow()}  [audio] Could not make {Plural.Of(keptAsWav.Count, "driver clip")} an mp3 "
                 + $"({refusedWhy}) - kept as wavs in {folder}: {string.Join(", ", keptAsWav)}.");
         }
+
+        // EACH DRIVER'S CLIP ON THEIR OWN NIGHT (22 Oct 2026, driver
+        // experience), last of all - after every clip and every video, for
+        // the reason the videos wait for the clips: the podium's videos have
+        // a QR code on the Big Screen until the next race, and a clip is for
+        // later. See ClipShare.
+        if (clipShare is not null && encoded.Count > 0)
+        {
+            ShareClips(encoded, clipShare, log);
+        }
     }
+
+    /// <summary>
+    /// Sends each encoded clip of a driver with a badge id to their own
+    /// night on the relay (22 Oct 2026, driver experience), one at a time on
+    /// this background thread. One line for the race, not one per driver; a
+    /// refusal that every clip would get (no clip route, nights closed)
+    /// stops the rest. A failure costs only the online copy.
+    /// </summary>
+    private static void ShareClips(
+        IReadOnlyList<(RaceHighlights.DriverClip Clip, string Mp3)> encoded,
+        ClipShare share,
+        Action<string> log)
+    {
+        var sent = 0;
+        string? problem = null;
+
+        foreach (var (clip, mp3) in ClipsToShare(encoded, share.DriverIds))
+        {
+            try
+            {
+                var result = share.Publisher
+                    .UploadDriverClipAsync(mp3, share.DriverIds[clip.Transponder], share.RaceLabel, share.RaceId, clip.DriverName)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (result.Clip is not null)
+                {
+                    sent++;
+                }
+
+                problem ??= result.Problem;
+
+                if (result.GiveUp)
+                {
+                    break;
+                }
+            }
+            catch (Exception ex)
+            {
+                problem ??= $"could not send {clip.DriverName}'s clip: {ex.Message}";
+            }
+        }
+
+        if (sent > 0)
+        {
+            log($"{AppTime.LogStampNow()}  [audio] {Plural.Of(sent, "driver clip")} put on the drivers' own nights.");
+        }
+
+        if (problem is not null)
+        {
+            log($"{AppTime.LogStampNow()}  [audio] Not every driver clip went to their night ({problem}). They are still in the Highlights folder.");
+        }
+    }
+
+    /// <summary>
+    /// Which encoded clips go up (22 Oct 2026, driver experience): mp3s
+    /// only, and only for a driver with a badge id - see ClipShare.DriverIdsFor.
+    /// </summary>
+    internal static IReadOnlyList<(RaceHighlights.DriverClip Clip, string Mp3)> ClipsToShare(
+        IReadOnlyList<(RaceHighlights.DriverClip Clip, string Mp3)> encoded,
+        IReadOnlyDictionary<string, string> driverIds) =>
+        encoded
+            .Where(e => !string.IsNullOrWhiteSpace(e.Clip.Transponder)
+                && driverIds.ContainsKey(e.Clip.Transponder)
+                && string.Equals(Path.GetExtension(e.Mp3), ".mp3", StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
     /// <summary>One driver's highlight video, from its own cut of the recording. True when it landed.</summary>
     private static bool MakeVideo(
@@ -941,14 +1133,14 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         HighlightVideoOptions video,
         Action<string> log)
     {
-        var mp4 = MakeVideoFile(recording, record, releaseOffsetsMs, clip, folder, name, video, log);
+        var mp4 = MakeVideoFile(recording, record, releaseOffsetsMs, clip, folder, name, video, log, out var carriesWithheld);
 
         if (mp4 is null)
         {
             return false;
         }
 
-        ShareOnline(mp4, clip, video, log);
+        ShareOnline(mp4, clip, video, carriesWithheld, log);
         return true;
     }
 
@@ -959,7 +1151,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     /// for a track's Wi-Fi. A failure costs only the online copy; the file
     /// is still in the Highlights folder.
     /// </summary>
-    private static void ShareOnline(string mp4, RaceHighlights.DriverClip clip, HighlightVideoOptions video, Action<string> log)
+    private static void ShareOnline(string mp4, RaceHighlights.DriverClip clip, HighlightVideoOptions video, bool carriesWithheld, Action<string> log)
     {
         var share = video.Share;
 
@@ -968,12 +1160,36 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             return;
         }
 
+        // "No videos online" (22 Oct 2026, driver experience): the video is
+        // made and kept on this PC as ever; it just never goes up.
+        if (HighlightShare.NotOnline(clip.Transponder))
+        {
+            log($"{AppTime.LogStampNow()}  [video] {clip.DriverName}'s video stays on this PC - they asked for no videos online.");
+            return;
+        }
+
+        // WHY (23 Oct 2026, bug hunt 10): the video's AUDIO says every line
+        // in its windows even when the captions leave one out, so a video
+        // that plays a race-control call, a line naming an initials-only
+        // driver or an unnamed car's number never goes up.
+        if (carriesWithheld)
+        {
+            log($"{AppTime.LogStampNow()}  [video] {clip.DriverName}'s video stays on this PC - it carries a race-control call, a line naming a driver shown by initials online, or an unnamed car's number.");
+            return;
+        }
+
         try
         {
             share.DriverIds.TryGetValue(clip.Transponder, out var driverId);
 
+            // The name the public page shows (22 Oct 2026) - see
+            // HighlightShare.PublicNames. The transponder lets the upload
+            // turn a number standing in for a name into "Unnamed driver".
+            share.PublicNames.TryGetValue(clip.Transponder, out var publicName);
+
             var page = share.Publisher
-                .UploadPodiumVideoAsync(mp4, share.RaceKey, clip.Position, driverId, clip.DriverName, share.RaceLabel)
+                .UploadPodiumVideoAsync(mp4, share.RaceKey, clip.Position, driverId, clip.DriverName, share.RaceLabel,
+                    publicName: publicName, transponder: clip.Transponder)
                 .GetAwaiter()
                 .GetResult();
 
@@ -1000,8 +1216,11 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         string folder,
         string name,
         HighlightVideoOptions video,
-        Action<string> log)
+        Action<string> log,
+        out bool carriesWithheld)
     {
+        carriesWithheld = false;
+
         // Where the flag is in this file, so a long window is cut round the
         // finish rather than from its start (22 Oct 2026, bug hunt).
         var flagAt = RaceHighlights.FlagAtMsFrom(record, releaseOffsetsMs);
@@ -1011,6 +1230,9 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         {
             return null;
         }
+
+        // Worked out from the same windows the video is cut to - see ShareOnline.
+        carriesWithheld = HighlightShare.CarriesWithheldLine(recording.Heard, windows);
 
         var wav = RaceHighlights.UnusedPath(folder, name + " video", ".wav");
 
@@ -1180,7 +1402,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     /// Run after a race has finished and published, never during one, and
     /// only over nights that are not tonight's own live file.
     /// </summary>
-    private static void SweepOrphans(RaceAudioStore store, string? skipPath, Action<string> log)
+    internal static void SweepOrphans(RaceAudioStore store, string? skipPath, Action<string> log)
     {
         try
         {
@@ -1203,6 +1425,13 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
                 if (skipPath is not null
                     && string.Equals(Path.GetFullPath(orphan), Path.GetFullPath(skipPath), StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // Another race's Publish is still working from it, queued
+                // behind the videos (22 Oct 2026) - see Publishing.
+                if (Publishing.ContainsKey(Path.GetFullPath(orphan)))
                 {
                     continue;
                 }
@@ -1238,6 +1467,43 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                         + $"made into an mp3 ({why}). It is still there and still plays: {kept}");
                 }
             }
+
+            // WHY (23 Oct 2026, bug hunt 10): a race whose mp3 was saved but
+            // whose clips were still being cut when the app closed. Its mp3
+            // is already on disk, so this is only deleted - encoding it again
+            // made a duplicate of the race. Same checks as above for a file
+            // something may still be using.
+            foreach (var leftover in Directory.EnumerateFiles(root, "*" + PublishedExtension, SearchOption.AllDirectories))
+            {
+                if (!leftover.EndsWith(PublishedExtension, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (skipPath is not null
+                    && string.Equals(Path.GetFullPath(leftover), Path.GetFullPath(skipPath), StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (Publishing.ContainsKey(Path.GetFullPath(leftover)))
+                {
+                    continue;
+                }
+
+                if (DateTime.UtcNow - File.GetLastWriteTimeUtc(leftover) < TimeSpan.FromMinutes(2))
+                {
+                    continue;
+                }
+
+                TryDelete(leftover, log);
+
+                if (!File.Exists(leftover))
+                {
+                    log($"{AppTime.LogStampNow()}  [audio] Removed the working copy of a race whose mp3 was "
+                        + $"already saved: {leftover}");
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -1255,16 +1521,11 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     {
         try
         {
-            if (!path.EndsWith(InProgressExtension, StringComparison.OrdinalIgnoreCase))
+            if (RenamedOffInProgress(path, ".wav") is not { } plain)
             {
                 return path;
             }
 
-            var folder = Path.GetDirectoryName(path) ?? string.Empty;
-            var name = Path.GetFileName(path);
-            name = name[..(name.Length - InProgressExtension.Length)];
-
-            var plain = RaceHighlights.UnusedPath(folder, name, ".wav");
             File.Move(path, plain);
             return plain;
         }
@@ -1273,6 +1534,26 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             log($"{AppTime.LogStampNow()}  [audio] Could not rename {path} ({ex.Message}).");
             return path;
         }
+    }
+
+    /// <summary>
+    /// The unused path <paramref name="path"/> would move to with its
+    /// ".recording.wav" marker swapped for <paramref name="extension"/>, in
+    /// the same folder - or null when it does not carry the marker. Only
+    /// works the name out; moving the file is the caller's.
+    /// </summary>
+    internal static string? RenamedOffInProgress(string path, string extension)
+    {
+        if (!path.EndsWith(InProgressExtension, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var folder = Path.GetDirectoryName(path) ?? string.Empty;
+        var name = Path.GetFileName(path);
+        name = name[..(name.Length - InProgressExtension.Length)];
+
+        return RaceHighlights.UnusedPath(folder, name, extension);
     }
 
     private static void TryDelete(string path, Action<string>? log)

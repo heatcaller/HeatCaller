@@ -96,11 +96,9 @@ public sealed class EventsControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Every race day the club has run, and the one it is running now. A race day groups the rounds that "
-                 + "belong together: without one, qualifying counts every heat ever recorded for a class, so a second "
-                 + "race day would seed its mains from both days mixed together.\r\n\r\n"
-                 + "The same days Race Day > Setup works on, and the same words - this page is where a club looks across all of "
-                 + "them and picks the one to work on.",
+            Text = "Every race day the club has run, and the one it's running now - the same days Race Day > Setup works on. "
+                 + "A race day groups its rounds: without one, qualifying counts every heat ever recorded for a class, "
+                 + "so a second day would seed its mains from both days mixed together.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -574,7 +572,7 @@ public sealed class EventEditForm : Form
     {
         Result = existing ?? new RaceEvent();
 
-        Text = existing is null ? "New Event" : $"Edit {Result.DisplayName}";
+        Text = existing is null ? "New Race Day" : $"Edit {Result.DisplayName}";
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
         ForeColor = AppTheme.TextDark;

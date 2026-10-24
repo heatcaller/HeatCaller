@@ -190,16 +190,18 @@ public sealed class QualifyingStandingsForm : Form
             args.Handled = true;
         };
 
+        // WHY (23 Oct 2026, bug hunt 10): the consecutive Window and Avg / Lap
+        // figures include penalties but nothing said so; the rule now does.
         var lblRule = new Label
         {
             Text = countBest > 1
                 ? (method == QualifyingMethod.BestConsecutiveLaps
-                    ? $"Each heat is scored on its quickest unbroken run of {Plural.Of(lapCount, "lap")}. The best {countBest} heats "
+                    ? $"Each heat is scored on its quickest unbroken run of {Plural.Of(lapCount, "lap")}, penalties included. The best {countBest} heats "
                       + "are totaled and the rest dropped - \"Heats\" shows counted/run. Double-click a row for detail."
                     : $"Each heat is scored on laps then time. The best {countBest} heats are totaled and the rest "
                       + "dropped - \"Heats\" shows counted/run. Double-click a row for detail.")
                 : method == QualifyingMethod.BestConsecutiveLaps
-                ? $"Ranked on each driver's quickest unbroken run of {Plural.Of(lapCount, "lap")}. A driver's BEST heat counts - "
+                ? $"Ranked on each driver's quickest unbroken run of {Plural.Of(lapCount, "lap")}, penalties included. A driver's BEST heat counts - "
                   + "double-click a row to see exactly which session to open in Lap Times."
                 : "Ranked on most laps, then lowest time. A driver's BEST heat counts - \"Counted Heat\" shows which one.",
             AutoSize = true,
@@ -244,9 +246,16 @@ public sealed class QualifyingStandingsForm : Form
                 return;
             }
 
+            // WHY (23 Oct 2026, bug hunt 10): since 20 Oct the consecutive
+            // figure has the driver's race, time and lap penalties added in,
+            // but this said the laps alone "should total" it - so for a
+            // penalized driver the Lap Times figures could never match and
+            // the director was told correct maths was broken. The wording
+            // now comes from ConsecutiveDetail, which says so. The penalty
+            // share now comes from the calculator (Entry.ConsecutivePenaltyMs),
+            // so the laps and the penalties are itemized separately.
             var detail = method == QualifyingMethod.BestConsecutiveLaps && entry.BestConsecutiveMs > 0
-                ? $"\r\n\r\nCheck laps {entry.ConsecutiveStartLap} to {entry.ConsecutiveStartLap + lapCount - 1} - "
-                  + $"they should total {entry.BestConsecutiveMs / 1000.0:0.000}s."
+                ? ConsecutiveDetail(entry.ConsecutiveStartLap, lapCount, entry.BestConsecutiveMs, penaltyMs: entry.ConsecutivePenaltyMs)
                 : string.Empty;
 
             AppDialog.Show(this,
@@ -270,5 +279,31 @@ public sealed class QualifyingStandingsForm : Form
         Pieces.KeepHeadingsWhole(grid);
 
         DialogFit.Keep(this, page, width: (wide ? 980 : 660) + (dropping ? 160 : 0), height: 448);
+    }
+
+    /// <summary>
+    /// The "check laps A to B" line of the double-click detail for a single
+    /// counted heat under the consecutive rule. totalMs is the ranked figure,
+    /// which includes any penalty. penaltyMs is the penalty share of it when
+    /// known: above zero it is itemized, zero means none, and null means the
+    /// caller can't tell, so the text says a penalty may be inside the figure.
+    /// </summary>
+    internal static string ConsecutiveDetail(int startLap, int lapCount, long totalMs, long? penaltyMs)
+    {
+        var range = $"\r\n\r\nCheck laps {startLap} to {startLap + Math.Max(1, lapCount) - 1} - ";
+
+        if (penaltyMs is not { } penalty)
+        {
+            return range + $"together with any penalty race control gave, they make {totalMs / 1000.0:0.000}s. "
+                + "A penalty is added to this figure but never to the lap times, so with one the laps alone come to less.";
+        }
+
+        if (penalty <= 0)
+        {
+            return range + $"they should total {totalMs / 1000.0:0.000}s.";
+        }
+
+        return range + $"they should total {(totalMs - penalty) / 1000.0:0.000}s, plus {penalty / 1000.0:0.000}s "
+            + $"in penalties = {totalMs / 1000.0:0.000}s.";
     }
 }

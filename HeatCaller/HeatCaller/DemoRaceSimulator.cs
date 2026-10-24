@@ -17,7 +17,7 @@ namespace HeatCaller;
 /// </summary>
 public sealed class DemoRaceSimulator : IDisposable
 {
-    private readonly RaceControlSession _race;
+    private readonly RaceTiming _race;
     private readonly AnnouncementService _announcer;
     private readonly System.Windows.Forms.Timer _tickTimer = new() { Interval = 100 };
     private readonly Random _random = new();
@@ -125,7 +125,7 @@ public sealed class DemoRaceSimulator : IDisposable
         public double[] SplitDueAtMs { get; set; } = Array.Empty<double>();
     }
 
-    public DemoRaceSimulator(RaceControlSession race, AnnouncementService announcer)
+    public DemoRaceSimulator(RaceTiming race, AnnouncementService announcer)
     {
         _race = race;
         _announcer = announcer;
@@ -723,6 +723,11 @@ public sealed class DemoRaceSimulator : IDisposable
             DeviceTimeMs = (uint)Math.Max(0, crossingMs),
             SignalHits = 25 + _random.Next(20),
             SignalStrength = 70 + _random.Next(60),
+
+            // WHY (23 Oct 2026, timing layer, P1): the demo's pass carries
+            // when it was made, as a decoder's does - the race judges every
+            // pass by its arrival. Handed straight in, so it is "now".
+            ReceivedMs = TimingClock.NowMs,
         });
 
         LogMessage?.Invoke($"{racer.TransponderId} lap: {lapSeconds:0.000}s");

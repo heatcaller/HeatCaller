@@ -421,10 +421,32 @@ public sealed partial class RaceControlControl
     private readonly System.Windows.Forms.Timer _voiceAheadTimer = new();
 
     /// <summary>Lines already in the announcer's voice, by their exact words.</summary>
-    private readonly Dictionary<string, AnnouncementService.PreparedSpeech> _voicedAhead = new(StringComparer.Ordinal);
+    /// <remarks>
+    /// WHY (22 Oct 2026, bug hunt 9): each take now carries whether the free
+    /// Kokoro voice may have made it. The voice signature is built from the
+    /// saved settings only, so a take rendered while ElevenLabs was resting
+    /// looked current once ElevenLabs answered again, and On Air opened in
+    /// Kokoro with the rest of the show in the club's voice. A take marked
+    /// StandIn is used only while Kokoro is still standing in.
+    /// </remarks>
+    private readonly Dictionary<string, (AnnouncementService.PreparedSpeech Take, bool StandIn)> _voicedAhead = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// True when Kokoro is standing in for the chosen voice right now - a
+    /// render now may come back in the free voice (22 Oct 2026, bug hunt 9).
+    /// </summary>
+    private bool KokoroStandingIn() => _announcer.DescribeStandIn() is not null;
 
     /// <summary>Lines a render has been tried for, so a failed one is not tried every two seconds.</summary>
     private readonly HashSet<string> _voiceAheadTried = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Lines whose stand-in take has already been dropped once to be voiced
+    /// again (22 Oct 2026, bug hunt 9 review): a line Kokoro stands in for on
+    /// every try, with no rest, would otherwise be dropped and rendered again
+    /// every two seconds. One retry each; On Air renders it at the press.
+    /// </summary>
+    private readonly HashSet<string> _voiceAheadRetried = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The voice the lines in _voicedAhead were rendered in (22 Oct 2026, bug
@@ -449,12 +471,13 @@ public sealed partial class RaceControlControl
 
         _voicedAhead.Clear();
         _voiceAheadTried.Clear();
+        _voiceAheadRetried.Clear();
         _voicedAheadIn = now;
         return true;
     }
 
     /// <summary>The render under way, if any - one at a time, so it never crowds the voice.</summary>
-    private (string Text, Task<AnnouncementService.PreparedSpeech?> Render)? _voicingAhead;
+    private (string Text, Task<AnnouncementService.PreparedSpeech?> Render, bool StandInAtStart)? _voicingAhead;
 
     /// <summary>Every two seconds: renders the next line On Air will want, when nothing else needs the voice.</summary>
     private void VoiceAheadTick()
@@ -467,7 +490,15 @@ public sealed partial class RaceControlControl
         // Only between races, with the floor free and the voice on. A
         // render during a race or under the recap would compete with the
         // lines actually being said.
-        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing
+        //
+        // WHY (23 Oct 2026, bug hunt 10): with "Start races On Air" unticked
+        // nothing ever plays these takes - every start goes straight to Stage,
+        // and Stage voices no opening or introductions - yet each filed or
+        // corrected result paid for two renders (ElevenLabs characters) that
+        // were thrown away. Now nothing is voiced ahead while the box is
+        // unticked; a manual On Air press still renders at the press.
+        if (!StartWithOnAir
+            || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing
             || _race.IsWarmingUp
             || _race.IsPracticeMode
             || ShowFloor.Busy
@@ -501,6 +532,25 @@ public sealed partial class RaceControlControl
         }
 
         _voiceAheadTried.RemoveWhere(k => !wanted.Contains(k));
+        _voiceAheadRetried.RemoveWhere(k => !wanted.Contains(k));
+
+        // WHY (22 Oct 2026, bug hunt 9): a take Kokoro may have made sat here
+        // after ElevenLabs came back, so it was never voiced ahead again and
+        // On Air had to render it at the press. Once Kokoro is no longer
+        // standing in, such a take goes and is voiced ahead again, in the
+        // voice the show will be in.
+        if (!KokoroStandingIn())
+        {
+            foreach (var stale in _voicedAhead.Where(e => e.Value.StandIn).Select(e => e.Key).ToList())
+            {
+                _voicedAhead.Remove(stale);
+
+                if (_voiceAheadRetried.Add(stale))
+                {
+                    _voiceAheadTried.Remove(stale);
+                }
+            }
+        }
 
         var next = wanted.FirstOrDefault(t => !_voicedAhead.ContainsKey(t) && !_voiceAheadTried.Contains(t));
 
@@ -511,18 +561,23 @@ public sealed partial class RaceControlControl
 
         _voiceAheadTried.Add(next);
 
+        // Read before the render starts: a rest that ends during it still
+        // means the take may be in the free voice.
+        var standInAtStart = KokoroStandingIn();
         var render = _announcer.PrepareReminderAsync(next);
-        _voicingAhead = (next, render);
-        _ = KeepVoicedAheadAsync(next, render, _voicedAheadIn);
+        _voicingAhead = (next, render, standInAtStart);
+        _ = KeepVoicedAheadAsync(next, render, _voicedAheadIn, standInAtStart);
     }
 
-    private async Task KeepVoicedAheadAsync(string text, Task<AnnouncementService.PreparedSpeech?> render, string voice)
+    private async Task KeepVoicedAheadAsync(string text, Task<AnnouncementService.PreparedSpeech?> render, string voice, bool standInAtStart)
     {
         try
         {
             if (await render is { } ready && string.Equals(voice, VoiceSignature(), StringComparison.Ordinal))
             {
-                _voicedAhead[text] = ready;
+                // Stand-in either side of the render marks the take - see _voicedAhead.
+                // ready.StandIn (22 Oct 2026) also catches Kokoro stepping in for this one line without a rest.
+                _voicedAhead[text] = (ready, ready.StandIn || standInAtStart || KokoroStandingIn());
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] Voiced part of the next opening ahead - On Air will have less to wait for.");
             }
         }
@@ -547,17 +602,22 @@ public sealed partial class RaceControlControl
         // Never a take in a voice that has since been changed.
         var voiceChanged = ForgetVoicedAheadIfTheVoiceChanged();
 
-        if (_voicedAhead.Remove(text, out var ready))
+        // A take Kokoro may have made is used only while Kokoro is still
+        // standing in (22 Oct 2026, bug hunt 9) - otherwise it is rendered
+        // again below, in the voice the rest of the show will be in.
+        if (_voicedAhead.Remove(text, out var ready) && (!ready.StandIn || KokoroStandingIn()))
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - that line was voiced ahead.");
-            return ready;
+            return ready.Take;
         }
 
         if (!voiceChanged && _voicingAhead is { } inFlight && string.Equals(inFlight.Text, text, StringComparison.Ordinal))
         {
             try
             {
-                if (await inFlight.Render is { } finished)
+                if (await inFlight.Render is { } finished
+                    && (!inFlight.StandInAtStart || KokoroStandingIn())
+                    && (!finished.StandIn || KokoroStandingIn()))
                 {
                     _voicedAhead.Remove(text);
                     return finished;
@@ -687,7 +747,7 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        if (RefuseIfPracticeRunning("go on air"))
+        if (RefuseIfPracticeRunningForRaceStart("go on air"))
         {
             return;
         }
@@ -712,6 +772,31 @@ public sealed partial class RaceControlControl
             return;
         }
 
+        // WHY (24 Oct 2026, timing layer, P8): threaded, no practice starts at
+        // the gate while On Air runs. The session stays Idle through the
+        // opening, and a car warming up during it started practice on the
+        // timing thread - and On Air was then called off ("the race was moved
+        // on"). Let go in the finally below, after the hand-over's Stage,
+        // whose own take-back covers the rest of that UI message. Inline: a
+        // hold that does nothing (MaybeAutoStartPracticeOnGatePass asks
+        // OnAirRunning instead).
+        var practiceHold = _race.HoldPracticeAutoStart();
+
+        try
+        {
+            await RunOnAirHoldingPracticeAsync(round, start, handOver);
+        }
+        finally
+        {
+            // Every way out, a throw before the opening included - a hold
+            // left on would stop practice starting at the gate until restart.
+            practiceHold.Dispose();
+        }
+    }
+
+    /// <summary>The rest of RunOnAirAsync, with practice at the gate held off - see there.</summary>
+    private async Task RunOnAirHoldingPracticeAsync(RoundDefinition? round, Action? start, Action? handOver)
+    {
         // THE BROADCAST FLOOR, FROM THE PRESS UNTIL THE RACE IS STAGED OR
         // ON AIR IS CALLED OFF (17 Oct 2026). Without it the announcer
         // screen's director, which asks for a segment twice a second, saw a
@@ -722,7 +807,8 @@ public sealed partial class RaceControlControl
         //
         // The recap show still running is called off first: On Air is the
         // next race being called, which is what used to end it at Stage.
-        EndRecapShow("On Air was pressed for the next race");
+        // The shared constant and nextRace: true (22 Oct 2026) - see EndRecapShow.
+        EndRecapShow(OnAirPressedForNextRace, nextRace: true);
 
         _onAirHasFloor = ShowFloor.TryClaim(OnAirHoldsTheFloor);
 

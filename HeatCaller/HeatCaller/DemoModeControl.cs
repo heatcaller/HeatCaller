@@ -10,7 +10,7 @@ namespace HeatCaller;
 public sealed class DemoModeControl : UserControl
 {
     private readonly DemoRaceSimulator _simulator;
-    private readonly RaceControlSession _race;
+    private readonly RaceTiming _race;
     private readonly ProfileStore _profiles;
     private readonly TrackLayoutStore _trackLayouts;
     private readonly AppSettings _settings;
@@ -54,7 +54,7 @@ public sealed class DemoModeControl : UserControl
     /// </summary>
     public event Action? DemoStopped;
 
-    public DemoModeControl(RaceControlSession race, AnnouncementService announcer, ProfileStore profiles, TrackLayoutStore trackLayouts, AppSettings settings,
+    public DemoModeControl(RaceTiming race, AnnouncementService announcer, ProfileStore profiles, TrackLayoutStore trackLayouts, AppSettings settings,
         RoundDefinitionStore? rounds = null, RaceEventStore? events = null, GhostStore? ghostStore = null)
     {
         _profiles = profiles;
@@ -161,10 +161,9 @@ public sealed class DemoModeControl : UserControl
         var lblIntro = new Label
         {
             Text = "Runs a fake race through the same race-control logic as a real one - no decoder needed. " +
-                   "Voice announcements and sound effects fire for real, so this is a genuine rehearsal of your setup before race day. " +
-                   "Switch to the Race Control page to watch it play out on the actual leaderboard and clock.\n\n" +
-                   "Demo races never set track records, and are only kept in Race History if you tick the box below - even then " +
-                   "they are marked [DEMO] and never count for championship points, heats, achievements or personal bests.",
+                   "Voice announcements and sound effects fire for real, so it is a genuine rehearsal of your setup. " +
+                   "Watch it play out on the Race Control page.\n\n" +
+                   "A demo race never scores - no track records, championship points, achievements or personal bests - even when saved.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -241,9 +240,8 @@ public sealed class DemoModeControl : UserControl
 
         var lblSaveDemoHint = new Label
         {
-            Text = "Off by default so fake results stay out of your real history. Turn it on to keep a copy of each demo "
-                 + "race, marked [DEMO], to look back over or print a results card from. A saved demo is never scored - no "
-                 + "championship points, no achievements, no personal bests, no track records - whatever else it is tied to.",
+            Text = "Off by default so fake results stay out of your real history. On keeps a copy of each demo "
+                 + "race, marked [DEMO], to look back over or print a results card from.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -273,13 +271,10 @@ public sealed class DemoModeControl : UserControl
 
         var lblDemoNightHint = new Label
         {
-            Text = "Off by default. With this on, a demo race marks its heat as run, the program moves to the next one, "
-                 + "and qualifying and the mains - bump-ups and all - are worked out from the demo results. That is how you "
-                 + "rehearse a whole night: heats, qualifying, mains, bump-ups, the lot. It still scores nothing - no "
-                 + "championship points, no achievements, no personal bests, no track records - because every one of those is "
-                 + "worked out separately and each one ignores a demo. A demo will not replace a heat that has really been "
+            Text = "Off by default. On, a demo race marks its heat as run and the program moves on, with qualifying, "
+                 + "the mains and bump-ups worked out from the demo results. It never replaces a heat that has really been "
                  + "run. To clear a rehearsed night, delete its [DEMO] races from Race History and the heats go back to "
-                 + "unrun. Needs demo races saved to history, so ticking this ticks that.",
+                 + "unrun. Needs demo races saved, so ticking this ticks that.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -812,6 +807,12 @@ public sealed class DemoModeControl : UserControl
     /// <summary>Shared launch path - settings are read from this page either way.</summary>
     private bool StartSimulation(IReadOnlyList<string> realTransponders, int placeholderCount)
     {
+        // Threaded, a demo is a race start: it wins over a practice a car
+        // started at the gate that the Practice page has not taken over yet
+        // (24 Oct 2026, timing layer, P7) - see RaceTiming.
+        // TakeBackPracticeAutoStartForRace. A no-op inline.
+        _race.TakeBackPracticeAutoStartForRace();
+
         // A demo drives the same race session as Race Control and Practice,
         // and starting one resets it. A real heat or a practice in progress
         // would be wiped without a word - so refuse, unless what's running is

@@ -157,7 +157,8 @@ public sealed class BugHunt7DirectorTimingTests : IDisposable
         Assert.Null(await _rig.Director.NextAsync());
 
         Assert.Equal(1, _rig.Model.Asked);
-        Assert.Equal(0, _rig.Director.Budget.SpentTonight);
+        // WHY (23 Oct 2026, bug hunt 10): the relay keeps the charge for a line it wrote, so a written line that is dropped is charged too.
+        Assert.Equal(1, _rig.Director.Budget.SpentTonight);
         Assert.Equal(0, _rig.Director.Budget.InFlight);
         Assert.Equal(0, _rig.Director.Said.Count);
         Assert.Contains(_rig.Console, line => line.Contains("finished while it was being written"));
@@ -174,7 +175,8 @@ public sealed class BugHunt7DirectorTimingTests : IDisposable
         Assert.Null(await _rig.Director.NextAsync());
 
         Assert.Equal(1, _rig.Model.Asked);
-        Assert.Equal(0, _rig.Director.Budget.SpentTonight);
+        // WHY (23 Oct 2026, bug hunt 10): the relay keeps the charge for a line it wrote, so a written line that is dropped is charged too.
+        Assert.Equal(1, _rig.Director.Budget.SpentTonight);
         Assert.Equal(0, _rig.Director.Said.Count);
         Assert.Contains(_rig.Console, line => line.Contains("went green while it was being written"));
     }
@@ -220,7 +222,10 @@ public sealed class BugHunt7DirectorTimingTests : IDisposable
         Assert.NotNull(said);
         Assert.Equal(SegmentKind.ChampionshipCheck, said!.Kind);
         Assert.Equal(2, _rig.Model.Asked);
-        Assert.Equal(1, _rig.Director.Budget.SpentTonight);
+
+        // Two, not one (23 Oct 2026, bug hunt 10): the dropped battle call was
+        // written and the relay kept its charge, so the budget keeps it too.
+        Assert.Equal(2, _rig.Director.Budget.SpentTonight);
         Assert.Equal(0, _rig.Director.Budget.InFlight);
     }
 

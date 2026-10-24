@@ -1,0 +1,136 @@
+namespace HeatCaller;
+
+/// <summary>
+/// Drivers' own requests on the Main Window (22 Oct 2026, driver
+/// experience): the store and the desk made at start-up, the relay publisher
+/// told where to file what it collects, the phone's answers handed to the
+/// driver's live document (_askAnswersFor, read by MainForm.DriverLive), and
+/// the Driver Requests button on Who's Racing kept up to date on the roster
+/// tick.
+///
+/// Wired before the pages are built (see the hooks in MainForm.cs), so the
+/// Entries page's button is joined up on the first roster tick that finds it.
+/// </summary>
+public partial class MainForm
+{
+    private DriverRequestStore? _driverRequests;
+    private DriverRequestDesk? _driverRequestDesk;
+    private DriverRequestsForm? _driverRequestsForm;
+
+    /// <summary>Whether the Entries page's button has been joined to the window yet.</summary>
+    private bool _driverRequestsButtonWired;
+
+    /// <summary>The store's version last shown on the button, so the tick does nothing while nothing changed.</summary>
+    private int _driverRequestsVersionShown;
+
+    /// <summary>Whether the button was last shown or hidden, so a change of the setting is picked up.</summary>
+    private bool _driverRequestsShownAs;
+
+    /// <summary>Requests already mentioned in the console, so each is announced once.</summary>
+    private HashSet<string>? _driverRequestsAnnounced;
+
+    partial void WireDriverRequests()
+    {
+        var store = DriverRequestStore.Load();
+
+        _driverRequests = store;
+        _driverRequestDesk = new DriverRequestDesk(
+            store,
+            _settings,
+            _profiles,
+            _batteryPacks,
+            _sessionHistory,
+            _undo,
+            OnClientRawMessage,
+
+            // Read on the UI thread; the map is swapped whole (RebuildBadgeIds).
+            badge => _relayBadgeIds.TryGetValue(badge, out var transponder) ? transponder : null)
+        {
+            RelayProblem = () => _relayPublisher.DriverRequestsProblem,
+        };
+
+        // Filed on the publisher's own thread - the store is thread-safe.
+        _relayPublisher.TonightsDriverRequests = () => store;
+
+        // For the phone: what the desk has answered (driverlive asks).
+        _askAnswersFor = badge => store.AnswersFor(badge, DateTime.UtcNow);
+
+        // Those already waiting from before a restart aren't new.
+        _driverRequestsAnnounced = new HashSet<string>(store.Waiting.Select(r => r.Id), StringComparer.Ordinal);
+        _driverRequestsVersionShown = -1;
+
+        if (store.LoadedUnreadable)
+        {
+            OnClientRawMessage("[driver requests] driver-requests.json couldn't be read, so drivers' requests are left on the club's website "
+                + "until HeatCaller is restarted and can read it. Close anything that might have it open (a backup or sync tool is the usual cause).");
+        }
+    }
+
+    partial void RosterTickDriverRequests()
+    {
+        if (_driverRequests is not { } store || _closingDown)
+        {
+            return;
+        }
+
+        if (!_driverRequestsButtonWired && _checkInControl is { } entries)
+        {
+            entries.DriverRequestsRequested += ShowDriverRequests;
+            _driverRequestsButtonWired = true;
+            _driverRequestsVersionShown = -1;
+        }
+
+        var shown = _settings.RelayDriverRequests || store.WaitingCount > 0;
+        var version = store.Version;
+
+        if (version == _driverRequestsVersionShown && shown == _driverRequestsShownAs)
+        {
+            return;
+        }
+
+        _driverRequestsVersionShown = version;
+        _driverRequestsShownAs = shown;
+
+        var waiting = store.Waiting;
+        _checkInControl?.SetDriverRequestCount(waiting.Count, shown);
+
+        // A console line when new ones arrive. No names: the session log
+        // goes into support bundles (as RelaySignupDesk).
+        var fresh = waiting.Count(r => _driverRequestsAnnounced!.Add(r.Id));
+
+        if (fresh > 0)
+        {
+            OnClientRawMessage($"[driver requests] {(fresh == 1 ? "A driver has" : $"{fresh} drivers have")} sent a request from their phone. "
+                + "Approve or decline it under Driver Requests on Race Day → Who's Racing.");
+        }
+    }
+
+    /// <summary>Opens Driver Requests, or brings it forward if it is already open - as Online Sign-ups.</summary>
+    private void ShowDriverRequests()
+    {
+        if (_driverRequestDesk is not { } desk)
+        {
+            return;
+        }
+
+        if (_driverRequestsForm is { IsDisposed: false } open)
+        {
+            open.Activate();
+            return;
+        }
+
+        var form = new DriverRequestsForm(desk, _profiles, text => _announcer.SpeakTest(text, _voiceStore.Current.Speed), _checkInStore);
+        form.FormClosed += (_, _) =>
+        {
+            if (ReferenceEquals(_driverRequestsForm, form))
+            {
+                _driverRequestsForm = null;
+            }
+
+            form.Dispose();
+        };
+
+        _driverRequestsForm = form;
+        form.Show(this);
+    }
+}

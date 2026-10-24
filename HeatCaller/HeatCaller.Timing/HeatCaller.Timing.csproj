@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- WHY (23 Oct 2026, timing layer P6): the race engine, the timing
+       thread, the timing clock, the journal and the decoder framing live in
+       their own library so the compiler keeps screen code out of them for
+       good. It targets plain net10.0 - NOT net10.0-windows, and no
+       UseWindowsForms - so a Form, a Control, BeginInvoke on a control or
+       a MessageBox written in here is a build error, not a review comment.
+
+       No package references, on purpose. The decoder CLIENTS that need
+       HidSharp (EasyLap over USB) and System.IO.Ports (I-Lap over serial)
+       stay in the app; only the pure pieces they share with the engine -
+       DirectLapEvent, the EasyLap framer, the decoder ids, the watches -
+       are here.
+
+       Same namespace as the app (HeatCaller), so no file on either side
+       needed a new using. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>HeatCaller.Timing</AssemblyName>
+    <RootNamespace>HeatCaller</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The app and the tests reach the engine's internal types and members
+         (FinishedRace, TimingWatch, EasyLapFramer, DecoderConnection, the
+         internal hooks the app sets at startup) exactly as they did when
+         these files were part of the app. -->
+    <InternalsVisibleTo Include="HeatCaller" />
+    <InternalsVisibleTo Include="HeatCaller.Tests" />
+  </ItemGroup>
+
+</Project>

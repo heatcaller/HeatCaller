@@ -6,7 +6,7 @@ HeatCaller has one main window with a sidebar of pages on the left and the curre
 
 ## The title bar
 
-The title bar shows the app name and version, for example **HeatCaller - BETA 0.59.0**. Quote this version in any bug report.
+The title bar shows the app name and version, for example **HeatCaller - BETA 0.60.0**. Quote this version in any bug report.
 
 ## The sidebar
 
@@ -129,6 +129,7 @@ You can put the pages you use most at the top, and hide the ones you never use.
     - Select a page and use **Move Up** or **Move Down** to change its position.
     - **Show All** ticks every page again.
     - **While a race day is open, bring Race Day, Race Control and Championship to the top** turns the **TONIGHT** group on or off. It's on by default.
+    - **Keep pages not yet tested at a real event out of the sidebar (Championship, Garage, Handicaps, Rentals, Venues) - a search still finds them** hides the pages that haven't yet been used at a real race night. A sidebar search still lists them, last, under **NOT YET TESTED**, and they show "(not yet tested at an event)" in this list. **Restore Defaults** leaves this tick alone. It's off unless you ticked it in the first-run wizard.
     - **Restore Defaults** puts the default order back, shows every page and turns the **TONIGHT** group back on.
 3. Click **OK**.
 

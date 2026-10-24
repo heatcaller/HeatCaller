@@ -35,17 +35,181 @@ internal sealed record HighlightPalette(
 /// <param name="RaceKey">The race's page on the relay: 128 random bits (RelayPublisher.NewVideoKey).</param>
 /// <param name="RaceLabel">The race's own name - "A-Main".</param>
 /// <param name="DriverIds">Badge ids by transponder, so a driver's own night offers their video. May be empty.</param>
+/// <param name="PublicNames">
+/// Every car's name as the club's public pages show it, by transponder
+/// (RelayPublisher.FieldPublicNames, 22 Oct 2026): shortened when the club
+/// asked for that, "Unnamed driver" for a car nobody named. Sent with the
+/// upload and drawn into the video, since the video itself goes online.
+/// </param>
 /// <param name="Publisher">The relay.</param>
 /// <param name="Shared">Called on a background thread with the race page's address and the race's name, each time a video lands there.</param>
 internal sealed record HighlightShare(
     string RaceKey,
     string RaceLabel,
     IReadOnlyDictionary<string, string> DriverIds,
+    IReadOnlyDictionary<string, string> PublicNames,
     RelayPublisher Publisher,
     Action<string, string>? Shared)
 {
     /// <summary>Whether a driver who finished here has their video put online: the podium only.</summary>
     public static bool Wants(int position) => position is >= 1 and <= 3;
+
+    /// <summary>
+    /// Whether this driver asked for no videos online (22 Oct 2026, driver
+    /// experience): their podium video is still made and kept on this PC,
+    /// it just never goes up. Read from the privacy register
+    /// (PublicPrivacy.Current) unless one is given, as tests do.
+    /// </summary>
+    public static bool NotOnline(string? transponder, PublicPrivacy? privacy = null) =>
+        (privacy ?? PublicPrivacy.Current).NoVideo(transponder);
+
+    /// <summary>
+    /// The photo a driver's video is drawn with (22 Oct 2026, driver
+    /// experience): blank when the video may go online - the club shares
+    /// the podium's and they finished on it - and they asked for no photo
+    /// online. A video only ever draws its own driver's photo, so nobody
+    /// else's video needs changing; one kept on this PC keeps the photo.
+    /// </summary>
+    public static string PhotoFor(string? photoFile, string? transponder, int position, bool sharing, PublicPrivacy? privacy = null) =>
+        sharing && Wants(position) && (privacy ?? PublicPrivacy.Current).NoPhoto(transponder)
+            ? string.Empty
+            : photoFile ?? string.Empty;
+
+    /// <summary>
+    /// Whether a heard line must not go online (23 Oct 2026, bug hunt 10):
+    /// the listen-along rule (race control's calls, a line naming an
+    /// initials-only driver - AnnouncementService.WithheldFromListeners),
+    /// or a line naming a car by its transponder number
+    /// (AnnouncementService.NamesACarByNumber). One rule with listen-along
+    /// and the public captions, so the three cannot drift apart.
+    /// </summary>
+    public static bool Withheld(string? text, PublicPrivacy? privacy = null) =>
+        AnnouncementService.WithheldFromListeners(text, privacy ?? PublicPrivacy.Current)
+        || AnnouncementService.NamesACarByNumber(text);
+
+    /// <summary>
+    /// Whether a video cut to <paramref name="windows"/> plays any withheld
+    /// line (see <see cref="Withheld"/>) - for the upload to keep that video
+    /// on this PC, since its AUDIO says the line even when its captions
+    /// leave it out (23 Oct 2026, bug hunt 10).
+    /// </summary>
+    public static bool CarriesWithheldLine(
+        IReadOnlyList<HeardLine>? heard,
+        IReadOnlyList<RaceHighlights.Window> windows,
+        PublicPrivacy? privacy = null)
+    {
+        if (heard is null || heard.Count == 0 || windows.Count == 0)
+        {
+            return false;
+        }
+
+        var register = privacy ?? PublicPrivacy.Current;
+
+        return heard.Any(h =>
+        {
+            // Roughly as long as the line takes to say - the captions' own
+            // reckoning - so a line that starts just before a window and runs
+            // into it counts.
+            var words = (h.Text ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+            var endMs = h.AtMs + Math.Max(800, words * 360L + 400);
+
+            return windows.Any(w => h.AtMs < w.EndMs && endMs > w.StartMs) && Withheld(h.Text, register);
+        });
+    }
+
+    /// <summary>
+    /// The heard lines as a video bound for the club's page may caption them
+    /// (23 Oct 2026, bug hunt 10): withheld lines left out (see
+    /// <see cref="Withheld"/>), the rest redacted for the internet.
+    /// </summary>
+    public static IReadOnlyList<HeardLine> PublicHeard(IReadOnlyList<HeardLine> heard, PublicPrivacy? privacy = null)
+    {
+        var register = privacy ?? PublicPrivacy.Current;
+
+        return heard
+            .Where(h => !Withheld(h.Text, register))
+            .Select(h => h with { Text = register.Redact(h.Text) })
+            .Where(h => !string.IsNullOrWhiteSpace(h.Text))
+            .ToList();
+    }
+}
+
+/// <summary>
+/// Putting each driver's own mp3 clip on their private night page on the
+/// relay (22 Oct 2026, driver experience) - gathered on the UI thread at
+/// the flag, like <see cref="HighlightShare"/>, and handed to the thread
+/// that cuts the clips. Null unless the club ticked "share drivers' clips"
+/// (RaceAudioStore.ShareDriverClips) AND offers drivers their nights.
+///
+/// BEHIND THE BADGE, NOT PUBLIC. A clip is listed only on that driver's
+/// own night, which only their badge code opens, so the relay is told whose
+/// it is by badge id (RelayCheckIn.IdFor) and never by transponder or name.
+/// A driver with no badge id here gets no upload.
+/// </summary>
+/// <param name="RaceId">The session's id (SessionRecord.Id, 32 hex), so the night page can put the clip on that race's card. Empty when it is not one.</param>
+/// <param name="RaceLabel">The race's own name - "Q1 Heat 2".</param>
+/// <param name="DriverIds">Badge ids by transponder - see <see cref="DriverIdsFor"/>.</param>
+/// <param name="Publisher">The relay.</param>
+internal sealed record ClipShare(
+    string RaceId,
+    string RaceLabel,
+    IReadOnlyDictionary<string, string> DriverIds,
+    RelayPublisher Publisher)
+{
+    /// <summary>
+    /// The badge ids for a race's drivers (22 Oct 2026, driver experience),
+    /// by transponder. The same rule a driver's night has (MainForm.Relay
+    /// PublishNightsFor): a car nobody named gets nothing, as no one has its
+    /// badge. Ghosts are not people, and a rental transponder is somebody
+    /// else's next week - their badge would open this driver's recording -
+    /// so neither gets one.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> DriverIdsFor(
+        IEnumerable<SessionResultEntry> results,
+        Func<string, DriverProfile?> profileOf,
+        string? secret)
+    {
+        var ids = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (string.IsNullOrWhiteSpace(secret))
+        {
+            return ids;
+        }
+
+        foreach (var row in results)
+        {
+            var transponder = (row?.Transponder ?? string.Empty).Trim();
+
+            if (transponder.Length == 0 || ids.ContainsKey(transponder) || GhostService.IsGhost(transponder))
+            {
+                continue;
+            }
+
+            var profile = profileOf(transponder);
+
+            if (profile is null || profile.IsRental || string.IsNullOrWhiteSpace(profile.DriverName))
+            {
+                continue;
+            }
+
+            // The driver's MAIN transponder, not the row's (22 Oct 2026,
+            // security review): a driver out on a second transponder has a
+            // row under that one when it was timed as a car of its own, but
+            // their badge - the check-in roster's, MainForm.RebuildBadgeIds -
+            // is made from profile.Transponder. profileOf (ProfileStore.Get)
+            // already resolves an alternate to its owner.
+            var main = (profile.Transponder ?? string.Empty).Trim();
+
+            if (main.Length == 0 || GhostService.IsGhost(main))
+            {
+                continue;
+            }
+
+            ids[transponder] = RelayCheckIn.IdFor(main, secret);
+        }
+
+        return ids;
+    }
 }
 
 /// <summary>What a video shows about one driver beyond the result: their photo and number, read from their profile on the UI thread.</summary>
@@ -110,8 +274,11 @@ internal sealed record HighlightVideoOptions(
 /// without the H.264 encoder (Windows "N" editions) gets no video and a line
 /// in the console saying so; the clip and the race are untouched.
 ///
-/// Run on the recording's own background thread after the race is filed,
-/// never during a race. A video failing costs the night nothing.
+/// Run on the recording's own background thread after the race is filed.
+/// Videos are made one at a time across races, and one being made pauses
+/// between frames while <see cref="RaceLive"/> is set, so the encoding
+/// waits out the next race rather than competing with it. A video failing
+/// costs the night nothing.
 /// </summary>
 internal static class HighlightVideo
 {
@@ -140,8 +307,63 @@ internal static class HighlightVideo
     /// <summary>The newest video made for each driver this session, for the leaderboard drawer's Share video.</summary>
     private static readonly ConcurrentDictionary<string, string> Latest = new(StringComparer.OrdinalIgnoreCase);
 
+    // WHY (22 Oct 2026, bug hunt 9): every race's Publish ran on its own
+    // pool thread, so when heats finished faster than their videos, two or
+    // three 1080p encodes ran at once - and on into the next live race,
+    // which the summary promised never happened. Now one video is made at a
+    // time across the whole session (the rest queue, in race order), and a
+    // video being made sits still between frames while RaceLive is set.
+    private static readonly SemaphoreSlim VideoGate = new(1, 1);
+
+    /// <summary>
+    /// Set while a race is on track (true at the green, false when it is
+    /// filed or abandoned). A video being made waits between frames until
+    /// it clears; the frames' times come from their index, so the file is
+    /// the same either way.
+    /// </summary>
+    public static bool RaceLive
+    {
+        get => Interlocked.Read(ref _liveSinceMs) != 0;
+        set => Interlocked.Exchange(ref _liveSinceMs, value ? Math.Max(1, Environment.TickCount64) : 0);
+    }
+
+    // WHY (22 Oct 2026, bug hunt 9 review): the 30 minutes used to be each
+    // video's own allowance, so a flag left on by mistake held every
+    // queued video for 30 minutes apiece - ten drivers' videos, five hours.
+    // Now the flag itself goes stale 30 minutes after the green that set
+    // it, so a stuck flag costs the queue 30 minutes once; the next green
+    // starts the count again. 0 = no race on track, otherwise
+    // Environment.TickCount64 at the green.
+    private static long _liveSinceMs;
+
+    /// <summary>How long after the green <see cref="RaceLive"/> is believed - longer than any club race, so a flag left on by mistake does not stall the night's videos.</summary>
+    private static readonly TimeSpan LongestPause = TimeSpan.FromMinutes(30);
+
+    // WHY (22 Oct 2026, bug hunt 9): a PC without Windows' H.264/AAC
+    // encoder used to repeat the whole attempt - read the wav, build the
+    // painter, fail to open the writer - and log three sentences for every
+    // driver of every race, about 150 identical lines over a club night.
+    // The first refusal is remembered for the session and logged once.
+    private static volatile bool _noEncoder;
+
+    /// <summary>True once this PC's video encoder has refused this session - the caller can skip cutting the video's wav.</summary>
+    public static bool EncoderUnavailable => _noEncoder;
+
     /// <summary>Raised on the background thread when a video lands - the driver's name and the file.</summary>
     public static event Action<string, string>? Made;
+
+    /// <summary>
+    /// The name a video draws for a car: its public name when the video goes
+    /// online (HighlightShare.PublicNames), otherwise the result's own name,
+    /// or the transponder when nobody named the car.
+    /// </summary>
+    // WHY (22 Oct 2026, bug hunt 9): a podium video goes on the club's public
+    // page, but drew every full name in the field whatever "Shorten published
+    // names" said.
+    internal static string ShownName(IReadOnlyDictionary<string, string>? publicNames, string transponder, string? driverName) =>
+        publicNames is not null && publicNames.TryGetValue(transponder.Trim(), out var shown) && !string.IsNullOrWhiteSpace(shown)
+            ? shown
+            : string.IsNullOrWhiteSpace(driverName) ? transponder : driverName;
 
     /// <summary>The newest video made for a driver this session, or null.</summary>
     public static string? LatestFor(string transponder) =>
@@ -224,17 +446,31 @@ internal static class HighlightVideo
         var row = record.Results.FirstOrDefault(r =>
             string.Equals(r.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
 
-        if (row is null)
+        if (row is null || _noEncoder)
         {
             return null;
         }
 
         var previousPriority = Thread.CurrentThread.Priority;
+        var gateTaken = false;
 
         try
         {
             // Below everything the night is doing: this is a courtesy.
             Thread.CurrentThread.Priority = ThreadPriority.BelowNormal;
+
+            // One video at a time across races (see VideoGate), and none
+            // started while a race is on track.
+            VideoGate.Wait();
+            gateTaken = true;
+
+            WaitOutRace();
+
+            if (_noEncoder)
+            {
+                // Found missing by the video ahead of this one in the queue.
+                return null;
+            }
 
             using var reader = new WaveFileReader(audioWavPath);
 
@@ -267,13 +503,44 @@ internal static class HighlightVideo
                 return null;
             }
 
-            var timeline = new RaceTimeline(record, releaseOffsetsMs);
-            var captions = Captions.Build(heard, windows);
+            // WHY (22 Oct 2026, bug hunt 9): the writer is opened before the
+            // timeline, captions and painter are built, so a PC that cannot
+            // encode finds out before doing that work - and says so once
+            // for the session, not once per driver (see _noEncoder).
+            Mp4Writer opened;
+
+            try
+            {
+                opened = Mp4Writer.Open(mp4Path, Width, Height, FramesPerSecond, format);
+            }
+            catch (Exception ex) when (ex is Mp4Writer.NoEncoderException or DllNotFoundException or EntryPointNotFoundException)
+            {
+                if (!_noEncoder)
+                {
+                    _noEncoder = true;
+                    log($"{AppTime.LogStampNow()}  [video] No highlight videos on this PC this session ({(ex.InnerException ?? ex).Message}): "
+                        + "Windows' video encoder refused - usually an \"N\" edition of Windows without the Media Feature Pack. "
+                        + "Audio clips are unaffected.");
+                }
+
+                TryDeleteMp4(mp4Path);
+                return null;
+            }
+
+            using var writer = opened;
+
+            var timeline = new RaceTimeline(record, releaseOffsetsMs, options.Share?.PublicNames);
+            // WHY (23 Oct 2026, bug hunt 10): the captions were the heard
+            // lines unfiltered, so a podium video bound for the club's page
+            // spelled out race control's penalty reasons, an initials-only
+            // driver's full name and an unnamed car's transponder - all of
+            // which every other public path withholds. Filtered whenever the
+            // podium's videos go online, the way the drawn names already are.
+            var captions = Captions.Build(options.Share is null ? heard : HighlightShare.PublicHeard(heard), windows);
             var envelope = Envelope(pcm, read, format);
             var frames = (int)(lengthMs * FramesPerSecond / 1000);
 
             using var painter = new Painter(record, row, options, timeline, captions, envelope, windows, greenAtMs, lengthMs);
-            using var writer = Mp4Writer.Open(mp4Path, Width, Height, FramesPerSecond, format);
 
             var bytesPerFrameOfAudio = format.AverageBytesPerSecond / FramesPerSecond;
             bytesPerFrameOfAudio -= bytesPerFrameOfAudio % format.BlockAlign;
@@ -282,6 +549,9 @@ internal static class HighlightVideo
             for (var frame = 0; frame < frames; frame++)
             {
                 var videoMs = (long)frame * 1000 / FramesPerSecond;
+
+                // A race went green while this was being made: wait it out.
+                WaitOutRace();
 
                 writer.WriteFrame(painter.Paint(videoMs), frame);
 
@@ -322,23 +592,43 @@ internal static class HighlightVideo
                 + "Their audio clip is unaffected. A PC without Windows' video encoder - an \"N\" edition of Windows "
                 + "without the Media Feature Pack - cannot make these.");
 
-            try
-            {
-                if (File.Exists(mp4Path))
-                {
-                    File.Delete(mp4Path);
-                }
-            }
-            catch
-            {
-                // Left behind; it plays as far as it got, or not at all.
-            }
-
+            TryDeleteMp4(mp4Path);
             return null;
         }
         finally
         {
+            if (gateTaken)
+            {
+                VideoGate.Release();
+            }
+
             Thread.CurrentThread.Priority = previousPriority;
+        }
+    }
+
+    /// <summary>Sleeps while <see cref="RaceLive"/> is set and no older than <see cref="LongestPause"/>.</summary>
+    private static void WaitOutRace()
+    {
+        while (Interlocked.Read(ref _liveSinceMs) is var since
+            && since != 0
+            && Environment.TickCount64 - since < (long)LongestPause.TotalMilliseconds)
+        {
+            Thread.Sleep(250);
+        }
+    }
+
+    private static void TryDeleteMp4(string mp4Path)
+    {
+        try
+        {
+            if (File.Exists(mp4Path))
+            {
+                File.Delete(mp4Path);
+            }
+        }
+        catch
+        {
+            // Left behind; it plays as far as it got, or not at all.
         }
     }
 
@@ -399,13 +689,13 @@ internal static class HighlightVideo
 
         private readonly List<Car> _cars;
 
-        public RaceTimeline(SessionRecord record, IReadOnlyDictionary<string, long>? releaseOffsetsMs)
+        public RaceTimeline(SessionRecord record, IReadOnlyDictionary<string, long>? releaseOffsetsMs, IReadOnlyDictionary<string, string>? publicNames = null)
         {
             _cars = record.Results
                 .Where(r => !string.IsNullOrWhiteSpace(r.Transponder))
                 .Select(r => new Car(
                     r.Transponder,
-                    string.IsNullOrWhiteSpace(r.DriverName) ? r.Transponder : r.DriverName,
+                    ShownName(publicNames, r.Transponder, r.DriverName),
                     r.Position,
                     RaceHighlights.CrossingTimesMs(r.LapTimesMs, Offset(releaseOffsetsMs, r.Transponder)),
                     r.LapTimesMs.ToList()))
@@ -625,12 +915,16 @@ internal static class HighlightVideo
 
             _logo = string.IsNullOrWhiteSpace(options.LogoFile) ? null : ClubLogo.Load(options.LogoFile);
 
-            // An odd size of its own, so the thumbnail the cache keeps for
-            // it is never one the UI thread is drawing at the same time.
+            // WHY (22 Oct 2026, bug hunt 9): this used to copy the photo out
+            // of DriverPhotos' shared thumbnail cache at "an odd size the UI
+            // never draws" - but nothing kept the UI off 441px (it reaches it
+            // under --dpi-aware), and two threads using one GDI+ image throw.
+            // Every video's 441px thumbnail also stayed cached all session,
+            // used once. The video now reads its own copy, which no other
+            // thread ever sees and which Dispose frees (DriverPhotos.OwnedThumb).
             if (options.Drivers.TryGetValue(row.Transponder, out var driver) && !string.IsNullOrWhiteSpace(driver.PhotoFile))
             {
-                var thumb = DriverPhotos.Thumb(driver.PhotoFile, 441);
-                _photo = thumb is null ? null : new Bitmap(thumb);
+                _photo = DriverPhotos.OwnedThumb(driver.PhotoFile, 441);
             }
         }
 
@@ -661,7 +955,7 @@ internal static class HighlightVideo
             _body.Dispose();
         }
 
-        private string Name => string.IsNullOrWhiteSpace(_row.DriverName) ? _row.Transponder : _row.DriverName;
+        private string Name => ShownName(_options.Share?.PublicNames, _row.Transponder, _row.DriverName);
 
         private string Number =>
             _options.Drivers.TryGetValue(_row.Transponder, out var d) && !string.IsNullOrWhiteSpace(d.Number) ? d.Number.Trim() : string.Empty;
@@ -964,7 +1258,7 @@ internal static class HighlightVideo
                 }
 
                 Text(r.Position.ToString(), _display, 46, ink, new Rectangle(line.X, line.Y, 80, line.Height), StringAlignment.Near);
-                Text(string.IsNullOrWhiteSpace(r.DriverName) ? r.Transponder : r.DriverName, _body, 46, ink,
+                Text(ShownName(_options.Share?.PublicNames, r.Transponder, r.DriverName), _body, 46, ink,
                     new Rectangle(line.X + 90, line.Y, line.Width - 340, line.Height), StringAlignment.Near);
                 Text(r.FastLapMs > 0 ? $"{r.FastLapMs / 1000.0:0.000}" : "—", _body, 38, _p.Muted,
                     new Rectangle(line.Right - 240, line.Y, 240, line.Height), StringAlignment.Far);
@@ -1176,8 +1470,10 @@ internal static class HighlightVideo
 
         private static string Surname(string name)
         {
+            // The whole name when the last word is only an initial - a public
+            // name shortened to "Samuel H" - or for "Unnamed driver" (22 Oct 2026).
             var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            return parts.Length > 1 ? parts[^1] : name;
+            return parts.Length > 1 && parts[^1].Length > 1 && name != RelayDocuments.UnnamedDriver ? parts[^1] : name;
         }
     }
 
@@ -1250,66 +1546,85 @@ internal static class HighlightVideo
             _frameBytes = new byte[width * height * 4];
         }
 
+        /// <summary>
+        /// Thrown by <see cref="Open"/> when Windows will not set up the
+        /// H.264 or AAC encoder - a property of the PC, not of one video.
+        /// A file that cannot be created is not this.
+        /// </summary>
+        internal sealed class NoEncoderException(Exception inner)
+            : Exception(inner.Message, inner);
+
         public static Mp4Writer Open(string path, int width, int height, int fps, WaveFormat audioFormat)
         {
             MediaFoundationApi.Startup();
 
             MediaFoundationInterop.MFCreateSinkWriterFromURL(path, null!, null!, out var writer);
 
+            // WHY (22 Oct 2026, bug hunt 9): the four media types were
+            // released only when everything succeeded, so a refusal part way
+            // left them to the finalizer. They are released either way now.
+            IMFMediaType? videoOut = null, videoIn = null, audioOut = null, audioIn = null;
+
             try
             {
-                // Video: H.264 out, RGB32 in.
-                MFCreateMediaType(out var videoOut);
-                videoOut.SetGUID(MajorType, MediaTypeVideo);
-                videoOut.SetGUID(Subtype, VideoH264);
-                videoOut.SetUINT32(AvgBitrate, VideoBitrate);
-                videoOut.SetUINT32(InterlaceMode, ProgressiveVideo);
-                videoOut.SetUINT64(FrameSize, Pack(width, height));
-                videoOut.SetUINT64(FrameRate, Pack(fps, 1));
-                videoOut.SetUINT64(PixelAspectRatio, Pack(1, 1));
-                writer.AddStream(videoOut, out var video);
+                int video, audio;
 
-                MFCreateMediaType(out var videoIn);
-                videoIn.SetGUID(MajorType, MediaTypeVideo);
-                videoIn.SetGUID(Subtype, VideoRgb32);
-                videoIn.SetUINT32(InterlaceMode, ProgressiveVideo);
-                videoIn.SetUINT64(FrameSize, Pack(width, height));
-                videoIn.SetUINT64(FrameRate, Pack(fps, 1));
-                videoIn.SetUINT64(PixelAspectRatio, Pack(1, 1));
+                try
+                {
+                    // Video: H.264 out, RGB32 in.
+                    MFCreateMediaType(out videoOut);
+                    videoOut.SetGUID(MajorType, MediaTypeVideo);
+                    videoOut.SetGUID(Subtype, VideoH264);
+                    videoOut.SetUINT32(AvgBitrate, VideoBitrate);
+                    videoOut.SetUINT32(InterlaceMode, ProgressiveVideo);
+                    videoOut.SetUINT64(FrameSize, Pack(width, height));
+                    videoOut.SetUINT64(FrameRate, Pack(fps, 1));
+                    videoOut.SetUINT64(PixelAspectRatio, Pack(1, 1));
+                    writer.AddStream(videoOut, out video);
 
-                // Positive: the rows run top to bottom, as a Bitmap's do.
-                videoIn.SetUINT32(DefaultStride, width * 4);
-                videoIn.SetUINT32(AllSamplesIndependent, 1);
-                writer.SetInputMediaType(video, videoIn, null!);
+                    MFCreateMediaType(out videoIn);
+                    videoIn.SetGUID(MajorType, MediaTypeVideo);
+                    videoIn.SetGUID(Subtype, VideoRgb32);
+                    videoIn.SetUINT32(InterlaceMode, ProgressiveVideo);
+                    videoIn.SetUINT64(FrameSize, Pack(width, height));
+                    videoIn.SetUINT64(FrameRate, Pack(fps, 1));
+                    videoIn.SetUINT64(PixelAspectRatio, Pack(1, 1));
 
-                // Audio: AAC out, the recording's own 16-bit PCM in.
-                MFCreateMediaType(out var audioOut);
-                audioOut.SetGUID(MajorType, MediaTypeAudio);
-                audioOut.SetGUID(Subtype, AudioAac);
-                audioOut.SetUINT32(AudioBitsPerSample, 16);
-                audioOut.SetUINT32(AudioSamplesPerSecond, audioFormat.SampleRate);
-                audioOut.SetUINT32(AudioChannels, audioFormat.Channels);
+                    // Positive: the rows run top to bottom, as a Bitmap's do.
+                    videoIn.SetUINT32(DefaultStride, width * 4);
+                    videoIn.SetUINT32(AllSamplesIndependent, 1);
+                    writer.SetInputMediaType(video, videoIn, null!);
 
-                // 128kbps - one of the four rates Windows' AAC encoder offers.
-                audioOut.SetUINT32(AudioAvgBytesPerSecond, 16000);
-                writer.AddStream(audioOut, out var audio);
+                    // Audio: AAC out, the recording's own 16-bit PCM in.
+                    MFCreateMediaType(out audioOut);
+                    audioOut.SetGUID(MajorType, MediaTypeAudio);
+                    audioOut.SetGUID(Subtype, AudioAac);
+                    audioOut.SetUINT32(AudioBitsPerSample, 16);
+                    audioOut.SetUINT32(AudioSamplesPerSecond, audioFormat.SampleRate);
+                    audioOut.SetUINT32(AudioChannels, audioFormat.Channels);
 
-                MFCreateMediaType(out var audioIn);
-                audioIn.SetGUID(MajorType, MediaTypeAudio);
-                audioIn.SetGUID(Subtype, AudioPcm);
-                audioIn.SetUINT32(AudioBitsPerSample, 16);
-                audioIn.SetUINT32(AudioSamplesPerSecond, audioFormat.SampleRate);
-                audioIn.SetUINT32(AudioChannels, audioFormat.Channels);
-                audioIn.SetUINT32(AudioBlockAlignment, audioFormat.BlockAlign);
-                audioIn.SetUINT32(AudioAvgBytesPerSecond, audioFormat.AverageBytesPerSecond);
-                writer.SetInputMediaType(audio, audioIn, null!);
+                    // 128kbps - one of the four rates Windows' AAC encoder offers.
+                    audioOut.SetUINT32(AudioAvgBytesPerSecond, 16000);
+                    writer.AddStream(audioOut, out audio);
+
+                    MFCreateMediaType(out audioIn);
+                    audioIn.SetGUID(MajorType, MediaTypeAudio);
+                    audioIn.SetGUID(Subtype, AudioPcm);
+                    audioIn.SetUINT32(AudioBitsPerSample, 16);
+                    audioIn.SetUINT32(AudioSamplesPerSecond, audioFormat.SampleRate);
+                    audioIn.SetUINT32(AudioChannels, audioFormat.Channels);
+                    audioIn.SetUINT32(AudioBlockAlignment, audioFormat.BlockAlign);
+                    audioIn.SetUINT32(AudioAvgBytesPerSecond, audioFormat.AverageBytesPerSecond);
+                    writer.SetInputMediaType(audio, audioIn, null!);
+                }
+                catch (COMException ex)
+                {
+                    // The sink writer exists, so the file was fine: it is
+                    // the encoders Windows would not give it.
+                    throw new NoEncoderException(ex);
+                }
 
                 writer.BeginWriting();
-
-                Marshal.ReleaseComObject(videoOut);
-                Marshal.ReleaseComObject(videoIn);
-                Marshal.ReleaseComObject(audioOut);
-                Marshal.ReleaseComObject(audioIn);
 
                 return new Mp4Writer(writer, video, audio, width, height, fps, audioFormat);
             }
@@ -1317,6 +1632,16 @@ internal static class HighlightVideo
             {
                 Marshal.ReleaseComObject(writer);
                 throw;
+            }
+            finally
+            {
+                foreach (var type in new[] { videoOut, videoIn, audioOut, audioIn })
+                {
+                    if (type is not null)
+                    {
+                        Marshal.ReleaseComObject(type);
+                    }
+                }
             }
         }
 

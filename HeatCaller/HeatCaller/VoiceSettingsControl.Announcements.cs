@@ -1209,6 +1209,58 @@ public sealed partial class VoiceSettingsControl
             lines.Add(Line(UiLayout.RowGap, (lblEvery, 0), (_numLapTimeEveryN, caption), (lblSuffix, UiLayout.HintGap)));
         }
 
+        // The split time's cadence (22 Oct 2026), worded like the lap
+        // time's above it - the same per-driver count.
+        if (type == AnnouncementEventType.SplitTime)
+        {
+            _numSplitTimeEveryN.Minimum = 1;
+            _numSplitTimeEveryN.Maximum = 20;
+            _numSplitTimeEveryN.Value = Math.Clamp(config.SplitTimeEveryNLaps, 1, 20);
+
+            var lblSplitEvery = new Label { Text = "Read every", AutoSize = true };
+            var lblSplitSuffix = new Label { Text = "split crossing(s) per driver (1 = every one)", AutoSize = true };
+
+            rows.Controls.Add(lblSplitEvery);
+            rows.Controls.Add(_numSplitTimeEveryN);
+            rows.Controls.Add(lblSplitSuffix);
+
+            lines.Add(Line(UiLayout.RowGap, (lblSplitEvery, 0), (_numSplitTimeEveryN, caption), (lblSplitSuffix, UiLayout.HintGap)));
+        }
+
+        // The coaching lines' own boxes (22 Oct 2026), worded like the
+        // split time's above.
+        if (type == AnnouncementEventType.TargetPace)
+        {
+            _numTargetPaceEveryN.Minimum = 1;
+            _numTargetPaceEveryN.Maximum = 20;
+            _numTargetPaceEveryN.Value = Math.Clamp(config.TargetPaceEveryNLaps, 1, 20);
+
+            var lblTargetEvery = new Label { Text = "Say it every", AutoSize = true };
+            var lblTargetSuffix = new Label { Text = "lap(s) (1 = every lap)", AutoSize = true };
+
+            rows.Controls.Add(lblTargetEvery);
+            rows.Controls.Add(_numTargetPaceEveryN);
+            rows.Controls.Add(lblTargetSuffix);
+
+            lines.Add(Line(UiLayout.RowGap, (lblTargetEvery, 0), (_numTargetPaceEveryN, caption), (lblTargetSuffix, UiLayout.HintGap)));
+        }
+
+        if (type == AnnouncementEventType.ConsistencyCoach)
+        {
+            _numConsistencyEveryLaps.Minimum = 3;
+            _numConsistencyEveryLaps.Maximum = 20;
+            _numConsistencyEveryLaps.Value = Math.Clamp(config.ConsistencyEveryLaps, 3, 20);
+
+            var lblBlockEvery = new Label { Text = "Every", AutoSize = true };
+            var lblBlockSuffix = new Label { Text = "clean laps, about those laps", AutoSize = true };
+
+            rows.Controls.Add(lblBlockEvery);
+            rows.Controls.Add(_numConsistencyEveryLaps);
+            rows.Controls.Add(lblBlockSuffix);
+
+            lines.Add(Line(UiLayout.RowGap, (lblBlockEvery, 0), (_numConsistencyEveryLaps, caption), (lblBlockSuffix, UiLayout.HintGap)));
+        }
+
         if (type == AnnouncementEventType.Streak)
         {
             // TWO cadence boxes, one per context - see the field's note.
@@ -1664,7 +1716,8 @@ public sealed partial class VoiceSettingsControl
                      _chkSayLapTimeLabel, _chkIncludeDriverNameInLapTime,
                      _numStreakEveryN, _numStreakEveryNPractice,
                      _chkOnlyLongestStreak, _chkMentionStreakChaser,
-                     _numPositionEveryLaps, _numPositionDepth, _chkPositionGaps, _numLapTimeEveryN,
+                     _numPositionEveryLaps, _numPositionDepth, _chkPositionGaps, _numLapTimeEveryN, _numSplitTimeEveryN,
+                     _numTargetPaceEveryN, _numConsistencyEveryLaps,
                      _chkLeadChangeCount,
                  })
         {

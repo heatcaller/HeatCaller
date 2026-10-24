@@ -218,7 +218,7 @@ public sealed class ChassisTemplateForm : Form
         // --- Extra fields ---
         var lblExtrasHint = new Label
         {
-            Text = "Things with no sensible place on a picture - motor, gearing, battery. These appear as a list under the diagram.",
+            Text = "Things with no place on the picture - motor, gearing, battery. They're listed under the diagram.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,

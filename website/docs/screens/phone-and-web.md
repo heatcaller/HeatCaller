@@ -63,6 +63,8 @@ When the server is running, the page lists one address for each page:
 | **OBS overlay:** | `http://<laptop address>:<port>/?overlay=1` | **Copy** |
 | **Broadcast graphics:** | `http://localhost:<port>/broadcast` | **Copy** |
 
+The coach page, `http://<laptop address>:<port>/coach`, isn't listed: type the live results address with `/coach` on the end, or make a QR code of it. See [Coach](#coach).
+
 HeatCaller works out the laptop's address on the local network for you (usually something like `192.168.1.20`). If an address says `localhost`, the laptop isn't connected to a network phones can reach.
 
 ### QR posters
@@ -111,13 +113,35 @@ Under it, the call-up says when they race next and where they grid:
 
 | Call-up | When |
 |---|---|
-| "ON TRACK NOW - Q2 Heat 1 (Stock) - grid 3" | Their race is staged or running. |
+| "STAGED - GO TO THE DRIVER STAND - Q2 Heat 1 (Stock) - grid 3" | Their race is being staged. It flashes. |
+| "ON TRACK NOW - Q2 Heat 1 (Stock) - grid 3" | Their race is running. |
 | "YOU'RE UP NEXT - Q2 Heat 3 (Stock) - grid 4" | Theirs is the next race. It flashes. |
 | "2 RACES BEFORE YOURS - ..." | Races to go before theirs. |
 
 The call-up follows the program on **Race Day → Next Steps**, in running order. The grid slot is their place in the round's roster.
 
-When their race becomes the next one, the phone buzzes and beeps. Phones only allow this after you've touched the page, and choosing a driver counts. Buzzing works on Android phones; iPhones flash the call-up but don't buzz. Leave the page open, with the screen on.
+Under a race still to come, the call-up says about when it should start, for example "about 7 min (19:42)", or "any minute now (19:42)" when the time has come. HeatCaller works it out from the time on the day's **Timetable** plus how late the night is running, or, where a line has no time it can read, from how long tonight's races have been taking. With neither, no time is shown. The time is the laptop's, so a phone whose clock is wrong still shows the right minute.
+
+The phone buzzes and beeps twice: once when their race becomes the next one, and again when it's staged, which is the moment to go to the driver stand. Phones only allow this after you've touched the page, and choosing a driver counts. Buzzing works on Android phones; iPhones flash the call-up but don't buzz. Leave the page open, with the screen on.
+
+Under the call-up, when there's something to say, are the driver's penalties:
+
+- **This race:** their warnings and penalty time in the race that's running, for example "This race: 1 warning, +5 s penalty".
+- **Tonight:** each penalty from their races saved tonight, with race control's reason, for example "Q1 Heat 2: +5 s - jump start" or "Q2 Heat 1: Warning 1 - Blocking".
+
+The reasons are on this page because it's in the room, where the PA has already said them. The club's online pages show only the numbers, except on the driver's own night page (see [Penalties on the results](../online/index.md#penalties-on-the-results)).
+
+##### Check my transponder
+
+While you're following a driver, a **Check my transponder** button sits under the call-up. Use it to check a transponder before a race:
+
+1. Tap **Check my transponder**. It says "Drive past the line now - watching for it...".
+2. Drive the car over the timing line.
+3. When the line hears it, the phone buzzes and says, for example, "Seen at 7:42 PM, signal good". A weak signal reads "Seen at 7:42 PM, signal weak - check it is mounted where the loop can see it, and its battery." A decoder that doesn't report signal strength just gives the time.
+
+If it isn't heard within 3 minutes: "Not seen. Check it is switched on and charged, and mounted with a clear view of the track - then try again." Nothing needs doing at the desk: HeatCaller notes every pass over the line anyway, practice included. See [Signal strength](../timing/transponders.md#signal-strength).
+
+The same check is on the driver's own night page online; see [Check my transponder](../online/index.md#check-my-transponder).
 
 The phone remembers who it's following, so it's still following them after a reload. Pick **Follow a driver...** to stop.
 
@@ -136,9 +160,73 @@ Keep the screen on: most phones stop a page running when the screen goes off.
 
 The follow view is only on the club Wi-Fi page, not on your club's online pages, and never in the OBS overlay.
 
+### Coach
+
+The page at `/coach` is for one driver to watch their own laps on their phone while they practise, or for whoever is coaching them in the pits. It needs no PIN.
+
+- **Pick your driver...** at the top chooses who it's for. The phone remembers the choice, and it's the same choice as following a driver on the live results page, so a phone already following somebody opens on them.
+- **Last lap** shows their latest lap and how far it was off their best, or **Best lap** when it was their best.
+- **Target** shows how far the last lap was from the target lap race control set for them (**Coach *name*** → **Target lap...** on Race Control; see [Coaching a driver](../race-control/running-a-race.md#coaching-a-driver)), or **On target**. It's only there when a target is set.
+- **Last 10 laps** shows the trend of their last ten.
+- **Say my lap time**: tick it and the phone reads out the driver's own lap time after every lap, "nine point two one", with "best lap" on a new best - nobody else's laps. It's the phone's own voice, so it doesn't wait for the PA announcer. The phone remembers the tick. It's hidden on a phone that can't speak.
+- A new best lap flashes the page and buzzes the phone. An iPhone can't buzz for a web page, so it beeps instead once the page has been tapped (ticking **Say my lap time** counts).
+- Under that is **Your report card** for the night, the same card as on their own night page (see below), worked out each time a race or practice is saved.
+
+"Not on track right now. Your laps show here as soon as you are." means they aren't on the board in the session that's running.
+
+#### The pit board
+
+Once a driver is picked, a **Pit board** button turns the phone into a pit board: a few numbers as big as the screen allows, to read from the driver stand or hold up in the pits.
+
+| Box | What it shows |
+|---|---|
+| **Last lap** | Their latest lap time, the largest number on the board. |
+| **Position** | Their place, for example "P2". |
+| **Laps** | How many laps they've done. |
+| **Gap ahead** | The gap to the car in front. |
+| **To target** | How far the last lap was from their target lap, when race control has set one. |
+
+The whole board flashes green on a new best lap, and the last lap goes red when it was slower than the target. The driver's name is at the top, with **×** to close the board. A box with nothing to show reads "-".
+
+Opening the board makes the page full screen and turns it sideways where the phone allows (an iPhone has no full screen for a web page, so the board just fills the window). To open the coach page straight onto the board, add `?board=1` to the address (`/coach?board=1`) and tap the screen where it says "Tap anywhere to start the pit board": a phone only goes full screen, or stays awake, for a page that's been tapped.
+
+**Keeping the screen on.** While the board is up, the page keeps the phone from going dark. Because the Wi-Fi pages are plain `http`, it usually does this by playing a tiny silent video on a loop, which phones don't sleep through. If that doesn't work on a phone, the board says "If the screen still goes dark, set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while the pit board is up." Closing the board lets the phone sleep again.
+
+The pit board reads the same live information as the rest of the coach page, so it shows nothing the live results don't.
+
+Anybody on the club's Wi-Fi can open any driver's coach page, so the card here **leaves out the setup line**: what a driver changed on their car is theirs to share. The live laps come from the same board the live results page shows, so nothing appears here that the live results don't already show.
+
+#### The report card
+
+| Line | What it says |
+|---|---|
+| Best lap | Their best lap tonight on the layout of their latest run, and the ideal lap their best sectors add up to, with the time still to find (the ideal lap needs a split loop). |
+| Driver rating | The driver rating (out of 150) each race they ran that night earned: the one race's, or the average over several and the best. Races only. |
+| Consistency | How far, on average, their clean laps were off their typical lap, and how many of their laps were clean. Needs five clean laps. |
+| Where the time goes | The sector they lose most in, against their best through it. Needs a split loop and three laps with sectors. |
+| Against last time | Quicker, level or off against their best the last night they ran this layout. |
+| The setup change | What a setup change logged tonight did to their typical lap ("Since the setup change (softer front springs) logged at 8:40, your typical lap is 0.12s quicker"). Needs eight clean laps before the change and eight after. |
+| Against the quickest | How far off the quickest lap of anyone they raced with tonight they are, and in which sector most of it is. |
+
+A clean lap is a flying lap no slower than 7% over their best on that layout tonight, so a crash or a pit stop doesn't count against them. Every line is worked out from the timed laps, and a line with too little to go on is left out rather than guessed. A driver who ran two layouts gets the card for the layout of their latest run.
+
 ### OBS overlay
 
 The overlay address (`/?overlay=1`) is the same live results page with a transparent background and no sponsor slides, so it sits cleanly over video. In OBS, add a **Browser** source and paste the **OBS overlay:** address.
+
+### Captions
+
+The live results page, the OBS overlay and the broadcast graphics can show what the announcer says as text, for viewers watching with the sound off or anyone who can't hear the PA. Add `captions=1` to the address:
+
+| Page | Address with captions |
+|---|---|
+| Live results | `http://<laptop address>:<port>/?captions=1` |
+| OBS overlay | `http://<laptop address>:<port>/?overlay=1&captions=1` |
+| Broadcast graphics | `http://localhost:<port>/broadcast?captions=1` (with `&hide=...` after it if you use that) |
+
+The line the announcer has just said appears near the bottom of the page and fades after eight seconds. Only lines said while the page is open are shown, so reloading an OBS source in the middle of a race doesn't put an old line back up. On the broadcast graphics, the battle bar and the fastest-lap box move up to make room.
+
+These are in the room, so they use drivers' full names, as the PA does. For captions on the club's online live page, see [Captions](../online/index.md#captions); for the Big Screen, see [Captions on the Big Screen](big-screen.md#captions).
 
 ### Broadcast graphics
 
@@ -155,7 +243,7 @@ The page at `/broadcast` is TV-style graphics for a stream, over your camera in 
 | The grid (middle) | Staging and countdown | The race name and its grid in order. |
 | The podium (middle) | Finished | The top three, with their laps and best lap. |
 
-To leave graphics out, add `?hide=` and their names to the address, separated by commas: `tower`, `champ`, `battle`, `fastest`, `grid` and `podium`. For example, `/broadcast?hide=grid,podium`.
+To leave graphics out, add `?hide=` and their names to the address, separated by commas: `tower`, `champ`, `battle`, `fastest`, `grid` and `podium`. For example, `/broadcast?hide=grid,podium`. To add a captions strip, see [Captions](#captions).
 
 ### Race remote
 

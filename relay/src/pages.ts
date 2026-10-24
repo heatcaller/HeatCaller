@@ -222,6 +222,88 @@ a.go { text-align: center; text-decoration: none; }
 .night li:first-child { border-top: 0; }
 #nt h2 { margin: 0 0 2px; font-size: 1.3rem; }
 #nt .sub { margin-bottom: 4px; }
+/* A driver's evening as it happens (22 Oct 2026, driver experience): the
+   live card on top of their night page - next race, marshal duty, check-in
+   and their transponder - and, under the night's facts, one card per race
+   with its lap chart. Held to the same reading width as the facts. */
+.lc, .rc, .pg, .rch, .guide { max-width: 42rem; margin: 0 auto 14px; text-align: left; }
+.lc { background: var(--surface); border: 1px solid var(--border); border-left: 6px solid var(--muted);
+      border-radius: 12px; padding: 16px 18px; }
+.lc.next { border-left-color: var(--accent); }
+.lc.staged { border-left-color: var(--good); }
+.lc h3, #nx h3 { margin: 0 0 6px; font-size: 1rem; }
+.lc-big { font-size: 1.35rem; font-weight: 700; }
+.lc.staged .lc-big { color: var(--good); }
+.lc.next .lc-big { color: var(--accent); }
+.lc-eta { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
+.lc-part { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
+.lc .go { margin: 12px 0 4px; max-width: none; }
+.lc-check { margin-top: 8px; font-weight: 600; }
+.lc-check.seen { color: var(--good); }
+.lc-check.missed { color: var(--bad); }
+#nx { max-width: 42rem; margin: 18px auto 0; text-align: left; }
+#nx h3 { margin: 22px 0 8px; }
+.rc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.rc-top { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.rc-facts { color: var(--muted); font-size: 0.9rem; }
+.rc-pen { list-style: none; margin: 8px 0 0; padding: 0; font-size: 0.9rem; color: var(--bad); }
+.rc-pen li { padding: 2px 0; }
+.lapfig { margin: 0; }
+.lapchart, .pgchart { display: block; width: 100%; height: auto; margin: 8px 0 2px; }
+.lapchart polyline { stroke: var(--accent); stroke-width: 2; fill: none; stroke-linejoin: round; }
+.lapchart circle { fill: var(--good); }
+.lapchart .slow { fill: var(--muted); }
+.cap { color: var(--muted); font-size: 0.78rem; }
+.pgchart rect { fill: var(--border); }
+.pgchart rect.tonight { fill: var(--primary); }
+.pgchart text { fill: var(--muted); font-size: 11px; text-anchor: middle; }
+.pgchart text.t { fill: var(--text); }
+.pg-since { font-weight: 600; margin: 4px 0 0; }
+/* A second transponder raced as a car of its own (22 Oct 2026): each car
+   gets a section of its own on the one night, headed with which car it was,
+   and nothing is added up across them. */
+.car { border-top: 2px solid var(--border); margin-top: 22px; padding-top: 2px; }
+#nx .car-h { margin: 14px 0 6px; font-size: 1.1rem; }
+.car h4 { margin: 16px 0 8px; font-size: 0.95rem; }
+.clip { margin: 10px 0 4px; }
+.clip audio { display: block; width: 100%; margin: 6px 0; }
+.clip a { color: var(--accent); font-size: 0.9rem; }
+.guide { overflow: hidden; }
+.guide summary { font-weight: 600; }
+.guide dl { margin: 0; padding: 4px 16px 14px; }
+.guide dt { font-weight: 600; margin-top: 10px; }
+.guide dd { margin: 2px 0 0; color: var(--muted); }
+/* The results page's penalty chip: numbers only, never the reason. */
+.chip { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 0.72rem;
+        font-weight: 700; color: var(--bad); border: 1px solid var(--bad); vertical-align: 1px; }
+#nextup .row b { color: var(--accent); }
+/* Asking the desk from the night page (22 Oct 2026, driver experience,
+   RP2): their details, their pack, "Something wrong?" under each race and
+   how each request is getting on. The sign-up form's fields, in a card. */
+.yd { max-width: 42rem; margin: 18px auto 14px; text-align: left; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.yd h3 { margin: 0 0 6px; font-size: 1rem; }
+.yd h4 { margin: 22px 0 8px; font-size: 0.95rem; }
+.yd .su { max-width: none; }
+.su textarea, .rc-ask textarea {
+  width: 100%; min-height: 88px; margin: 0; padding: 12px; font: inherit; font-size: 1rem; font-weight: 400;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); resize: vertical; }
+.yd-said { margin: 6px 0 0; font-weight: 600; }
+.yd-said:empty { display: none; }
+.rc-ask { margin-top: 10px; display: grid; gap: 8px; }
+.rc-ask .go { margin: 0; max-width: none; }
+.linkish { background: none; border: 0; padding: 6px 0; font: inherit; font-size: 0.9rem; color: var(--accent);
+           text-decoration: underline; cursor: pointer; justify-self: start; }
+.yd-asks { list-style: none; margin: 6px 0 0; padding: 0; font-size: 0.9rem; }
+.yd-asks li { padding: 3px 0; }
+.yd-asks .ask-approved, .yd-asks .ask-noted { color: var(--good); }
+.yd-asks .ask-declined { color: var(--bad); }
+/* The live page's captions view (22 Oct 2026, driver experience, RP2). */
+.caps { padding: 14px 18px; }
+.caps .note { padding: 8px 0 0; text-align: left; }
+.caps .lines p { margin: 8px 0 0; font-size: 1.15rem; line-height: 1.4; }
+.caps .lines p:last-child { font-weight: 600; }
+.caps button[aria-pressed=true] { background: var(--primary); color: var(--on-primary, #FFFFFF); }
 
 /* Light themes: the few colours chosen for a dark page that vanish on a pale one */
 html.light .tier-gold { color: #9A6B00; }
@@ -240,7 +322,9 @@ html.light .follow, html.light .toast { box-shadow: 0 8px 28px rgba(17, 21, 28, 
 .flagbar.f-yellow { border-left-color: #FFD34D; }
 .flagbar.f-red { border-left-color: var(--bad); }
 .flagbar.f-white { border-left-color: #FFFFFF; }
-.flagbar.f-chequered { border-left-color: var(--accent); }
+/* WHY (23 Oct 2026, bug hunt 10): the app sends FlagState "Checkered", so the
+   class is f-checkered; only f-chequered had a rule and the finish bar stayed grey. */
+.flagbar.f-checkered, .flagbar.f-chequered { border-left-color: var(--accent); }
 .state { font-weight: 700; font-size: 1.1rem; }
 .count { font-variant-numeric: tabular-nums; font-size: 1.1rem; color: var(--accent); }
 .ondeck { color: var(--muted); font-size: 0.85rem; margin-left: auto; }
@@ -578,6 +662,12 @@ interface Shell {
   readonly script: string;
   /** Asks search engines to leave the page out - for a page reached only by a link somebody was sent, like sign-up. */
   readonly noindex?: boolean;
+  /**
+   * The page's own address when it is not /c/<club>/<active> - a race's
+   * podium videos live at /c/<club>/videos/<race>. Already a relay path;
+   * escaped in shell().
+   */
+  readonly path?: string;
 }
 
 function escapeHtml(value: string): string {
@@ -624,9 +714,19 @@ function shell(page: Shell, context: PageContext): string {
 
   // The whole path this page answers to, which for a session is the
   // session's own address rather than the results tab it is drawn on.
-  const path = card === undefined
-    ? `/c/${club}${page.active === "home" ? "" : `/${page.active}`}`
-    : escapeHtml(card.path);
+  // WHY (22 Oct 2026): the podium videos page only exists at
+  // /c/<club>/videos/<race>, but this used to build /c/<club>/videos for it
+  // - not a route - and put that in og:url, so a shared link's preview and
+  // click-through went to a page that is not there. A page can now say its
+  // own address; a videos page that does not know its race gets no og:url
+  // at all, and link-preview sites fall back to the address actually shared.
+  const path: string | undefined = card !== undefined
+    ? escapeHtml(card.path)
+    : page.path !== undefined
+      ? escapeHtml(page.path)
+      : page.active === "videos"
+        ? undefined
+        : `/c/${club}${page.active === "home" ? "" : `/${page.active}`}`;
 
   const tab = (href: string, label: string, key: string) =>
     `<a href="/c/${club}${href === "" ? "" : "/" + href}"${page.active === key ? ' aria-current="page"' : ""}>${label}</a>`;
@@ -674,8 +774,8 @@ function shell(page: Shell, context: PageContext): string {
 
   const preview = context.origin === ""
     ? ""
-    : `<meta property="og:url" content="${origin}${path}">
-<meta property="og:image" content="${image}">${banner === undefined ? "" : `
+    : `${path === undefined ? "" : `<meta property="og:url" content="${origin}${path}">
+`}<meta property="og:image" content="${image}">${banner === undefined ? "" : `
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -891,8 +991,24 @@ function rows(results) {
       <td class="car">\${esc(r.car || '')}</td>
       <td class="n">\${esc(r.laps ?? '-')}</td>
       <td class="n">\${lap(r.fastLapMs)}\${sectors(r.sectorsMs) ? '<span class="sec">' + esc(sectors(r.sectorsMs)) + '</span>' : ''}</td>
-      <td class="n">\${esc(r.status) || clock(r.elapsedMs)}</td>
+      <td class="n">\${esc(r.status) || clock(r.elapsedMs)}\${penChip(r)}</td>
     </tr>\`).join('') + '</tbody>';
+}
+
+// A small "+5s" or "1 warning" beside a row's time (22 Oct 2026, driver
+// experience). Numbers only: the public results document carries penS and
+// warn and never the reason, which goes only to the driver's own night.
+// Each is whole and positive or it is not drawn, so nothing but digits a
+// page made itself reaches the markup; a row from before them has neither.
+function penChip(r) {
+  const pen = r ? Math.round(Number(r.penS)) : 0;
+  const warn = r ? Math.round(Number(r.warn)) : 0;
+  const parts = [];
+
+  if (Number.isFinite(pen) && pen > 0) parts.push('+' + pen + 's');
+  if (Number.isFinite(warn) && warn > 0) parts.push(warn + (warn === 1 ? ' warning' : ' warnings'));
+
+  return parts.length === 0 ? '' : '<span class="chip" title="Time added or warnings from race control">' + parts.join(' · ') + '</span>';
 }
 
 // 1 becomes 1st. Only ever given a finishing position, and the teens are
@@ -1826,7 +1942,9 @@ async function yearDoc(wanted) {
   const answer = await grab('/collection/resultsindex/' + encodeURIComponent(wanted)).catch(() => null);
 
   if (answer === null) return null;
-  if (answer.missing) return { missing: true };
+  // The status goes with it (23 Oct 2026, bug hunt 10): only a 404 is a
+  // year the relay no longer has - see openYear.
+  if (answer.missing) return { missing: true, status: answer.status };
 
   const doc = answer.body.body;
 
@@ -1876,6 +1994,18 @@ async function openYear(wanted) {
     return;
   }
 
+  // WHY (23 Oct 2026, bug hunt 10): every non-OK answer used to read as a
+  // deleted season, so a 429 (one venue address, every phone) or a 503
+  // (a store read error) dropped the year - and with one season left,
+  // dropped to the flat listing for the rest of the visit. Anything but a
+  // 404 is now handled like no answer at all: the year is kept, and the
+  // next poll tries again.
+  if (got.missing === true && got.status !== 404) {
+    yearPick.value = year;
+    fail(++turn, OFFLINE);
+    return;
+  }
+
   if (got.missing === true) {
     years = years.filter((other) => other !== wanted);
 
@@ -1919,6 +2049,14 @@ async function boot() {
   const meta = await grab('/collection/resultsindex?meta=1').catch(() => null);
 
   if (meta === null) {
+    fail(++turn, OFFLINE);
+    return;
+  }
+
+  // WHY (23 Oct 2026, bug hunt 10): a busy or failed listing (429, 5xx) is
+  // not "no index at all" - it set flat for good. idx stays null, so the
+  // next poll boots again; only a 404 or an empty listing goes flat.
+  if (meta.missing && meta.status !== 404) {
     fail(++turn, OFFLINE);
     return;
   }
@@ -2364,6 +2502,154 @@ function listenControl(listening: boolean): string {
     + "</div>";
 }
 
+/**
+ * The announcer's words as text (22 Oct 2026, driver experience, RP2) -
+ * for somebody who cannot hear the PA, or is somewhere they cannot play
+ * sound. Drawn for every club, unlike Listen: the relay page cannot know
+ * whether the laptop has captions switched on, so the view says so itself
+ * when there is nothing to show. Nothing is fetched until it is pressed.
+ * aria-pressed says whether it is on; the lines go into a polite live
+ * region, so a screen reader reads each new line once, as it arrives.
+ */
+function captionsControl(): string {
+  return '<div class="card caps" id="captions">'
+    + '<button type="button" id="capbtn" class="btn" aria-pressed="false" aria-controls="caplines">Captions</button>'
+    + '<p class="note" id="capnote">The announcer&rsquo;s words as text. No sound needed.</p>'
+    + '<div id="caplines" class="lines" role="log" aria-live="polite" aria-label="Captions" hidden></div>'
+    + "</div>";
+}
+
+/**
+ * The captions view's script. Its own closure, beside LISTEN_JS and never
+ * touching it: captions and listening are separate presses, and either
+ * works without the other.
+ *
+ * ONLY NEW LINES ARE ADDED, never the whole list redrawn: the region is
+ * aria-live, and rebuilding it every two seconds would have a screen
+ * reader start the last six lines again on every poll. A highest line
+ * number lower than the one already drawn is the laptop starting its
+ * count again (a restart), and starts the view afresh.
+ */
+const CAPTIONS_JS = `
+(function () {
+  const btn = document.getElementById('capbtn');
+  const box = document.getElementById('caplines');
+  const note = document.getElementById('capnote');
+
+  if (!btn || !box || !note) {
+    return;
+  }
+
+  const SHOWN = 6;
+  const EVERY_MS = 2000;
+  const INTRO = 'The announcer\\u2019s words as text. No sound needed.';
+  const NONE = 'No captions just now. They show here as the announcer speaks, when the club has them switched on.';
+
+  let on = false;
+  let timer = 0;
+  let busy = false;
+  let last = 0;
+
+  // Moved on by every press, so a read still on its way when Captions is
+  // turned off cannot draw lines into a view that has been closed.
+  let turn = 0;
+
+  function clear() {
+    box.textContent = '';
+    last = 0;
+  }
+
+  function drawLines(list) {
+    const good = (Array.isArray(list) ? list : [])
+      .filter((l) => l && typeof l === 'object' && typeof l.t === 'string' && l.t.trim() !== ''
+        && typeof l.n === 'number' && Number.isFinite(l.n))
+      .sort((a, b) => a.n - b.n)
+      .slice(-SHOWN);
+
+    if (good.length === 0) {
+      clear();
+      note.textContent = NONE;
+      return;
+    }
+
+    const top = good[good.length - 1].n;
+    if (top < last) clear();
+
+    for (const l of good) {
+      if (l.n <= last) continue;
+      const p = document.createElement('p');
+      p.textContent = l.t.trim().slice(0, 300);
+      box.appendChild(p);
+    }
+
+    while (box.children.length > SHOWN) box.children[0].remove();
+
+    last = Math.max(last, top);
+    note.textContent = 'The announcer\\u2019s words as text, every couple of seconds. No sound needed.';
+    touched();
+  }
+
+  async function sweep() {
+    if (!on || busy) return;
+
+    busy = true;
+    const mine = turn;
+    const answer = await grab('/snapshot/captions').catch(() => null);
+    busy = false;
+
+    if (!on || mine !== turn) return;
+
+    if (answer === null) {
+      note.textContent = 'Could not reach the relay. This will keep trying.';
+      return;
+    }
+
+    // Never published is the same as nothing to say. Anything else that
+    // is not an answer - too many requests, a relay starting up - keeps
+    // what is on screen and tries again.
+    if (answer.missing) {
+      if (answer.status === 404) drawLines([]);
+      else note.textContent = 'The relay is busy. This will keep trying.';
+      return;
+    }
+
+    const doc = answer.body && typeof answer.body.body === 'object' && answer.body.body !== null ? answer.body.body : null;
+    drawLines(doc ? doc.lines : []);
+  }
+
+  function loop() {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (!on) return;
+      if (!document.hidden) sweep();
+      loop();
+    }, EVERY_MS);
+  }
+
+  btn.addEventListener('click', () => {
+    on = !on;
+    turn++;
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+
+    if (on) {
+      box.hidden = false;
+      note.textContent = 'Loading captions\\u2026';
+      sweep();
+      loop();
+    } else {
+      clearTimeout(timer);
+      clear();
+      box.hidden = true;
+      note.textContent = INTRO;
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (on && !document.hidden) sweep();
+  });
+})();
+`;
+
 export function livePage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
   return shell({
     club,
@@ -2373,8 +2659,9 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     sub: "The race as it runs. Updates every couple of seconds.",
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
       + listenControl(context.look.listening)
+      + captionsControl()
       + '<div id="board"></div>',
-    script: LIVE_JS + (context.look.listening ? LISTEN_JS : ""),
+    script: LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS,
   }, context);
 }
 
@@ -2996,12 +3283,19 @@ board.addEventListener('toggle', (e) => {
 async function load() {
   const answer = await grab('/snapshot/programme').catch(() => null);
 
-  if (answer === null) {
+  // WHY (23 Oct 2026, bug hunt 10): a failed poll overwrote the board but
+  // kept lastText, so the next good answer with the same programme hit the
+  // "unchanged" early return and the failure message stayed up. Any failure
+  // now forgets lastText so the next good answer always redraws, and only a
+  // 404 means "nothing published" - a 429/5xx is the relay being busy.
+  if (answer === null || (answer.missing && answer.status !== 404)) {
+    lastText = '';
     board.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
     return;
   }
 
   if (answer.missing) {
+    lastText = '';
     doc = { lines: [] };
     draw();
     touched();
@@ -3151,6 +3445,86 @@ function drawAll(doc) {
     }).join('') + '</div>';
 }
 
+// WHAT IS NEXT FOR THE DRIVER THIS PHONE FOLLOWS (22 Oct 2026, driver
+// experience): "2 more podiums for Podium Regular", from the counts the
+// achievements document carries as drivers[].next. Only for the one driver
+// followed on this phone - the counts are public (anybody could work them
+// out from the results), but a page of everybody's would be a league table
+// of who is nearly something, which is not what this is for. Built with
+// textContent: the name and the noun are the club's own typing.
+const nextUp = document.getElementById('nextup');
+let lastDoc = {};
+
+function sameName(a, b) {
+  return String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+}
+
+function nextFor(doc, who) {
+  if (!who || !doc || !Array.isArray(doc.drivers)) return [];
+
+  const d = doc.drivers.find((x) => x && x.name === who) || doc.drivers.find((x) => x && sameName(x.name, who));
+  const list = d && Array.isArray(d.next) ? d.next : [];
+
+  return list.slice(0, 2).map((n) => {
+    const b = n && catalogue && catalogue.get(n.id);
+    const left = n ? Math.round(Number(n.left)) : 0;
+
+    if (!b || !b.name || !Number.isFinite(left) || left <= 0 || typeof n.noun !== 'string' || n.noun.trim() === '') return null;
+
+    return { badge: b, words: left + ' more ' + n.noun.trim() + ' for ' + b.name };
+  }).filter(Boolean);
+}
+
+function drawNext(doc) {
+  if (!nextUp) return;
+
+  nextUp.textContent = '';
+
+  const who = memory;
+  const near = nextFor(doc, who);
+
+  if (near.length === 0) {
+    nextUp.hidden = true;
+    return;
+  }
+
+  const head = document.createElement('div');
+  head.className = 'day';
+  head.textContent = 'Next for ' + who;
+  nextUp.appendChild(head);
+
+  const list = document.createElement('div');
+  list.className = 'feed';
+
+  for (const n of near) {
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    const words = document.createElement('div');
+    const title = document.createElement('b');
+    title.textContent = n.words;
+    title.className = tierClass(n.badge);
+    words.appendChild(title);
+
+    if (n.badge.description) {
+      const sub = document.createElement('span');
+      sub.textContent = String(n.badge.description);
+      words.appendChild(sub);
+    }
+
+    row.appendChild(words);
+    list.appendChild(row);
+  }
+
+  nextUp.appendChild(list);
+  nextUp.hidden = false;
+}
+
+// Following somebody else - or nobody - redraws it at once rather than at
+// the next minute's poll. After the shared handler, which has already
+// changed who is followed by the time this runs.
+document.addEventListener('click', () => setTimeout(() => drawNext(lastDoc), 0));
+
 async function load() {
   await loadCatalogue();
   const answer = await grab('/snapshot/achievements').catch(() => null);
@@ -3161,6 +3535,8 @@ async function load() {
   }
 
   const doc = answer.missing ? {} : answer.body.body || {};
+  lastDoc = doc;
+  drawNext(doc);
   drawRecent(doc);
   drawLeaders(doc);
   drawAll(doc);
@@ -3178,6 +3554,7 @@ export function badgesPage(club: string, clubName: string, context: PageContext 
     heading: "Achievements",
     sub: "Earned on track, handed out after every race.",
     body:
+      '<div id="nextup" hidden></div>' +
       '<div class="day">Just earned</div><div class="feed" id="recent"><p class="note">Loading&hellip;</p></div>' +
       '<div class="day">Most collected</div><div id="leaders"></div>' +
       '<div class="day">Every achievement</div><div id="all"></div>',
@@ -3257,7 +3634,61 @@ export function tracksPage(club: string, clubName: string, context: PageContext 
 
 // --------------------------------------------------------------- check-in
 
+/**
+ * "Your first night" (22 Oct 2026, driver experience, item 8): a short,
+ * collapsible guide for a driver the laptop says has never raced here
+ * before, on both pages that open with their badge code - the check-in
+ * page (from checkin/one's firstNight) and their night page (from the
+ * night or the live entry). Static words written for drivers, not the
+ * desk's own racing words, which say things like "Build the finals".
+ *
+ * Shared by both scripts rather than written twice, and built with
+ * createElement and textContent like the rest of the new parts. Whether it
+ * is open survives the redraws both pages do on every poll.
+ */
+const GUIDE_JS = `
+const GUIDE = [
+  ['This page', 'When a time like "about 7 min (19:42)" shows, that is when your race should start. Turn on alerts and keep the page open: your phone beeps twice and buzzes when your race is next, and again when it is staged.'],
+  ['Heats and mains', 'You race a few short heats first. How you do in them decides which main (final) you race in later, with drivers of a similar pace.'],
+  ['Your grid slot', 'Every race gives you a grid slot - where your car starts. Slot 1 is the front.'],
+  ['Staged', 'When your race is staged, go to the driver stand with your radio, put your car on the track and wait for the start.'],
+  ['The start', 'A countdown runs before every start. Wait for the start signal - going early is a jump start, and it can add time to your race.'],
+  ['Your transponder', 'The small transponder on your car counts your laps. Make sure it is switched on and mounted before every race, and drive past the timing line once to check it is seen.'],
+  ['Warnings', 'Race control can give a warning for blocking or rough driving. More warnings add time to your race.'],
+  ['Marshal after your race', 'After you race, you marshal the next one: stand at your post beside the track and put back any car that flips or gets stuck. Everybody takes a turn.'],
+  ['Questions', 'Ask at the timing desk. Everybody was new once.'],
+];
+
+let guideOpen = false;
+
+function firstNightGuide() {
+  const d = document.createElement('details');
+  d.className = 'guide';
+  d.open = guideOpen;
+  d.addEventListener('toggle', () => { guideOpen = d.open; });
+
+  const s = document.createElement('summary');
+  s.textContent = 'Your first night - what happens';
+  d.appendChild(s);
+
+  const list = document.createElement('dl');
+
+  for (const pair of GUIDE) {
+    const t = document.createElement('dt');
+    t.textContent = pair[0];
+    const w = document.createElement('dd');
+    w.textContent = pair[1];
+    list.appendChild(t);
+    list.appendChild(w);
+  }
+
+  d.appendChild(list);
+  return d;
+}
+`;
+
 const CHECKIN_JS = `
+${GUIDE_JS}
 const box = document.getElementById('ci');
 const params = new URLSearchParams(location.search);
 const BADGE = /^[0-9a-f]{20}$/.test(params.get('d') || '') ? params.get('d') : '';
@@ -3277,6 +3708,15 @@ let racer = false;
 // Whether this club offers drivers their own night - the relay says, on
 // the one answer that already knows which driver this is.
 let nights = false;
+// Whether the laptop says this is their first night here (22 Oct 2026,
+// driver experience) - on the same badge-code answer, only ever true.
+let firstNight = false;
+
+// The first-night guide under their card, for a badge only: a racer signed
+// in by PIN gets checkin/list's answer, which does not carry the flag.
+function showGuide() {
+  if (firstNight && BADGE && drivers.length > 0) box.appendChild(firstNightGuide());
+}
 
 async function api(action, payload) {
   const r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/checkin/' + action, {
@@ -3433,7 +3873,9 @@ async function loadOne() {
   drivers = [answer.body.driver];
   eventName = answer.body.event || '';
   nights = answer.body.nights === true;
+  firstNight = answer.body.firstNight === true;
   drawOne();
+  showGuide();
   touched();
 }
 
@@ -3599,7 +4041,7 @@ function busy(answer) {
 }
 
 function draw() {
-  if (BADGE || racer) drawOne(); else if (built) drawList();
+  if (BADGE || racer) { drawOne(); showGuide(); } else if (built) drawList();
 }
 
 // Ten seconds for both. A paddock of phones on one connection all polling
@@ -3655,6 +4097,12 @@ let classes = [];
 let eventName = '';
 // What the relay last said about this sign-up, or null before it has said anything.
 let standing = null;
+// WHY (23 Oct 2026, bug hunt 10): true while the last status read failed
+// before the relay had said anything. The page promised "This page will keep
+// trying", but the polls below only ran for a pending sign-up, so with
+// standing still null nothing ever asked again. Set only by refresh()'s own
+// failures, so the code box and an in-flight signIn are never polled under.
+let retrying = false;
 // True while the form is on screen, so a poll never redraws it under somebody
 // typing - unless the desk has answered meanwhile (see refresh). 17 Oct 2026,
 // Bug Hunt 8, A21-2: the polls now run while editing a pending sign-up, or
@@ -3708,6 +4156,7 @@ function trouble(text) {
 function drawCode(message) {
   editing = false;
   standing = null;
+  retrying = false;
   box.innerHTML = '<form class="pin" id="codeform">' +
     '<label for="code">Your sign-up code</label>' +
     '<input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required>' +
@@ -3765,8 +4214,10 @@ async function refresh() {
   // Signed out, or signed in again with another code, while this was on its way.
   if (held() !== p) return;
 
+  retrying = false;
+
   if (answer === null) {
-    if (!standing) trouble('Could not reach the relay. This page will keep trying.');
+    if (!standing) { trouble('Could not reach the relay. This page will keep trying.'); retrying = true; }
     return;
   }
 
@@ -3777,7 +4228,7 @@ async function refresh() {
   if (answer.status === 403) { hold(''); drawCode(answer.body.error || ''); return; }
 
   if (answer.status !== 200) {
-    if (!standing) trouble(answer.body.error || 'The relay could not answer just now. This page will keep trying.');
+    if (!standing) { trouble(answer.body.error || 'The relay could not answer just now. This page will keep trying.'); retrying = true; }
     return;
   }
 
@@ -3972,12 +4423,13 @@ else drawCode('');
 
 // Only while the desk has it: an open form, an answer or the code box has
 // nothing to wait for. Ten seconds, as check-in's page polls.
+// ...or while a first status read failed and the page said it would keep trying.
 setInterval(() => {
-  if (!document.hidden && standing && standing.state === 'pending') refresh();
+  if (!document.hidden && ((standing && standing.state === 'pending') || retrying)) refresh();
 }, 10000);
 
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && standing && standing.state === 'pending') refresh();
+  if (!document.hidden && ((standing && standing.state === 'pending') || retrying)) refresh();
 });
 `;
 
@@ -4107,9 +4559,26 @@ function draw() {
     '<div class="sub">' + esc([night.title, night.when].filter(Boolean).join(' · ')) + '</div>',
   ].join('');
 
-  const body = '<ul class="night">' + said.map((l) => '<li>' + esc(l) + '</li>').join('') + '</ul>';
+  // A night of more than one car (22 Oct 2026, second transponder) draws
+  // each car's facts and report card in that car's own section, under
+  // drawExtras - so here there is only the heading.
+  // (The test of carsOf, written out, so draw stays whole on its own.)
+  const split = Array.isArray(night.cars) && night.cars.some((c) => c && typeof c === 'object' && typeof c.id === 'string' && c.id !== '');
 
-  box.innerHTML = head + body + videoList(videos)
+  const body = split ? '' : '<ul class="night">' + said.map((l) => '<li>' + esc(l) + '</li>').join('') + '</ul>';
+
+  // Their report card (22 Oct 2026): arithmetic over their own laps, sent
+  // by the laptop as a list of its own beside the night's facts, so it
+  // gets a heading of its own rather than reading as more of them. A
+  // night from a laptop before it has no "coach" and shows nothing here.
+  const card = lines(night.coach);
+  const coach = card.length === 0 || split ? ''
+    : '<h3>Your report card</h3><ul class="night">' + card.map((l) => '<li>' + esc(l) + '</li>').join('') + '</ul>';
+
+  // "nx" is where drawExtras() puts the race cards, progress, reach and
+  // clips (22 Oct 2026, driver experience) - built with the DOM rather
+  // than as markup, so it is an empty hook here and nothing more.
+  box.innerHTML = head + body + coach + '<div id="nx"></div>' + videoList(videos)
     + '<button id="pic" class="go" type="button">Make a picture to share</button>'
     + '<button id="dl" class="go quiet" type="button">Save this as a text file</button>';
 
@@ -4146,8 +4615,24 @@ function hand(blob, name) {
 }
 
 function save() {
+  const card = lines(night.coach);
+  const cars = carsOf(night);
+  let said = [];
+
+  if (cars.length === 0) {
+    said = lines(night.lines).concat(card.length === 0 ? [] : ['', 'Your report card'].concat(card));
+  } else {
+    // Car by car, as the page draws it (22 Oct 2026, second transponder).
+    cars.forEach((c, i) => {
+      const facts = lines(i === 0 ? night.lines : c.lines);
+      const coach = lines(i === 0 ? night.coach : c.coach);
+      said = said.concat(i === 0 ? [] : [''], [carHeading(c)], facts,
+        coach.length === 0 ? [] : ['', 'Report card'].concat(coach));
+    });
+  }
+
   const text = [night.driver || '', [night.title, night.when].filter(Boolean).join(' · '), '']
-    .concat(lines(night.lines))
+    .concat(said)
     .join('\\r\\n') + '\\r\\n';
 
   hand(new Blob([text], { type: 'text/plain;charset=utf-8' }), fileName(night, 'txt'));
@@ -4325,6 +4810,1402 @@ function picture() {
   }, 'image/png');
 }
 
+// ---- their evening as it happens ----------------------------------------
+//
+// 22 Oct 2026, driver experience (items 2-8). The relay's night answer now
+// carries, beside the night itself, the driver's own entry in the private
+// live document (next race, marshal duty, the last time their transponder
+// was seen, whether they are checked in, whether it is their first night)
+// and their own race clips. The page polls only the live part, every
+// twenty seconds while it is on screen, and every five while a
+// transponder check is waiting.
+//
+// EVERYTHING BELOW IS BUILT WITH createElement AND textContent, never as
+// markup: race names, posts and penalty reasons are the club's own typing.
+// The code goes only into POST bodies, through post(), exactly as the
+// night's own read does - never into an address.
+
+const lvBox = document.getElementById('lv');
+const API = '/api/v1/c/' + encodeURIComponent(CLUB);
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Their own race calls, as the relay lists them.
+let clips = [];
+// Their live entry, or null when the laptop is not sending one.
+let live = null;
+// Phone clock minus relay clock, learned off each answer's Date header, so
+// a phone set five minutes out still counts down to the right minute.
+let skew = 0;
+let firstNight = false;
+
+// Check-in from this page: shown only once checkin/one has said check-in
+// is open and they are on the list. pending holds a tap until the laptop's
+// next live entry agrees, as the check-in page does.
+const ci = { shown: false, on: false, busy: false, pending: null };
+
+// Alerts: off until tapped, because a phone only lets a page beep or buzz
+// after a touch. lastKey is what the call-up said last time.
+let alertsOn = false;
+let audio = null;
+let lastKey = '';
+
+// The transponder check: '' (not running), 'waiting', 'seen' or 'missed'.
+const check = { state: '', pressed: 0, baseline: '', until: 0, words: '' };
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null && text !== '') e.textContent = String(text);
+  return e;
+}
+
+function sv(tag, attrs) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const k of Object.keys(attrs || {})) e.setAttribute(k, String(attrs[k]));
+  return e;
+}
+
+function tapButton(text, cls, onTap) {
+  const b = el('button', cls, text);
+  b.type = 'button';
+  b.addEventListener('click', onTap);
+  return b;
+}
+
+function num(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+
+function nth(v) {
+  const n = Math.round(num(v));
+  const tail = n % 100;
+  return n + (tail >= 11 && tail <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] || 'th'));
+}
+
+function plural(n, one, many) {
+  return n + ' ' + (n === 1 ? one : many);
+}
+
+function hm(ms) {
+  return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// A time off the laptop, drawn as the phone's own clock reads it - or a
+// short "19:42" kept as it came, or nothing.
+function timeOf(raw) {
+  if (typeof raw !== 'string' || raw === '') return '';
+  if (/^[0-9]{1,2}:[0-9]{2}$/.test(raw)) return raw;
+  const at = Date.parse(raw);
+  return Number.isFinite(at) && /T/.test(raw) ? hm(at) : '';
+}
+
+function relayNow() {
+  return Date.now() + skew;
+}
+
+function learnClock(r) {
+  try {
+    const at = Date.parse(r.headers.get('date') || '');
+    if (Number.isFinite(at)) skew = at - Date.now();
+  } catch (e) { /* no header, or no headers at all: the phone's own clock */ }
+}
+
+// Every relay call this page makes beyond the first read: a POST, with
+// whatever it carries in the body.
+async function post(path, payload) {
+  const r = await fetch(API + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+  let body = {};
+  try { body = await r.json(); } catch (e) { /* an empty answer is still an answer */ }
+  learnClock(r);
+  return { status: r.status, body: body || {} };
+}
+
+// "about 7 min (19:42)" from the laptop's estimate, or nothing when it has
+// none. Measured on the relay's clock - see skew.
+function etaWords(eta, now) {
+  const at = Date.parse(String(eta || ''));
+  if (!Number.isFinite(at)) return '';
+  const mins = Math.round((at - now) / 60000);
+  if (mins <= 0) return 'due now (' + hm(at) + ')';
+  if (mins > 90) return 'at about ' + hm(at);
+  return 'about ' + mins + ' min (' + hm(at) + ')';
+}
+
+// The laptop's own words for a call-up, with the same rule as a fallback
+// for an entry that came without them (PhoneFollow.Words).
+function callWords(n) {
+  if (typeof n.words === 'string' && n.words.trim() !== '') return n.words;
+  if (n.staged === true) return 'Staged - go to the driver stand';
+  if (n.now === true) return 'On track now';
+  if (num(n.away) === 0) return "You're up next";
+  return plural(num(n.away), 'race', 'races') + ' before yours';
+}
+
+// What a call-up says, as one string: a change in it is what alerts
+// listen for. race|away|staged, as the Wi-Fi follow page keys its buzz.
+function callKey(n) {
+  return n && typeof n === 'object' ? String(n.race || '') + '|' + num(n.away) + '|' + (n.staged === true) : 'none';
+}
+
+// Whether a new call-up is worth beeping for: their race has just become
+// the next one, or has just been staged. Never on the first look - before
+// is '' until alerts have seen one - so turning alerts on does not go off
+// for a race that was already next.
+function worthABuzz(before, n) {
+  if (before === '' || !n || typeof n !== 'object' || callKey(n) === before) return false;
+  return n.staged === true || (n.now !== true && num(n.away) === 0);
+}
+
+// Two beeps and a buzz - the Wi-Fi follow page's own.
+function buzz() {
+  try { if (navigator.vibrate) navigator.vibrate([250, 120, 250, 120, 400]); } catch (e) {}
+  try {
+    if (!audio) return;
+    if (audio.state !== 'running') audio.resume();
+    [0, 0.25].forEach((at) => {
+      const o = audio.createOscillator();
+      const g = audio.createGain();
+      o.frequency.value = 880;
+      o.connect(g);
+      g.connect(audio.destination);
+      g.gain.setValueAtTime(0.2, audio.currentTime + at);
+      g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + at + 0.2);
+      o.start(audio.currentTime + at);
+      o.stop(audio.currentTime + at + 0.22);
+    });
+  } catch (e) {}
+}
+
+function toggleAlerts() {
+  alertsOn = !alertsOn;
+
+  if (alertsOn) {
+    // Made - or woken - inside the tap, which is the only time a phone
+    // allows it; the test buzz says it works before it matters.
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state !== 'running') audio.resume();
+    } catch (e) { audio = null; }
+    lastKey = callKey(live && live.next);
+    buzz();
+    toast('Alerts on. Keep this page open on your screen.');
+  } else {
+    lastKey = '';
+    toast('Alerts off.');
+  }
+
+  drawLive();
+}
+
+// ---- the transponder check
+
+function seenAtOf(entry) {
+  return entry && entry.seen && typeof entry.seen.at === 'string' ? entry.seen.at : '';
+}
+
+// Whether a sighting is new since the button was pressed: one that differs
+// from the sighting on screen when they pressed (the baseline). Anything
+// else can only be a pass made since the last poll - a real sighting.
+//
+// WHY (23 Oct 2026, bug hunt 10): this also asked for seen.at >= pressed -
+// 10 s, but pressed is the relay's clock (relayNow) and seen.at is the race
+// laptop's, rounded up to ten seconds. Nothing relates the two, so a laptop
+// whose clock was minutes slow had every real pass read as "before the
+// press" and the check ended "Not seen in 3 minutes". The Wi-Fi follow page
+// never mixes the clocks either. pressed is kept as a parameter, unused, so
+// callers and tests that lift this function keep the same shape.
+function sighted(seen, pressed, baseline) {
+  if (!seen || typeof seen !== 'object' || typeof seen.at !== 'string') return false;
+  const at = Date.parse(seen.at);
+  return Number.isFinite(at) && seen.at !== baseline;
+}
+
+function signalWords(signal) {
+  if (signal === 'good') return 'signal good';
+  if (signal === 'weak') return 'signal weak - mount it higher and clear of carbon and wires';
+  return 'signal not reported by this timing system';
+}
+
+function seenWords(seen) {
+  const at = seen && typeof seen.at === 'string' ? Date.parse(seen.at) : NaN;
+  return Number.isFinite(at)
+    ? 'Last seen at ' + hm(at) + ', ' + signalWords(seen.signal) + '.'
+    : 'Not seen by the timing line tonight yet.';
+}
+
+function startCheck() {
+  check.state = 'waiting';
+  check.pressed = relayNow();
+  check.baseline = seenAtOf(live);
+  check.until = Date.now() + 180000;
+  check.words = 'Drive past the timing line now. This page is watching for it.';
+  drawLive();
+  schedule();
+}
+
+// After every poll: has the car been seen, or has the wait run out?
+function watchCheck() {
+  if (check.state !== 'waiting') return;
+
+  const seen = live && live.seen;
+
+  if (sighted(seen, check.pressed, check.baseline)) {
+    check.state = 'seen';
+    check.words = 'Seen at ' + hm(Date.parse(seen.at)) + ', ' + signalWords(seen.signal) + '.';
+    if (navigator.vibrate) navigator.vibrate(60);
+  } else if (Date.now() > check.until) {
+    check.state = 'missed';
+    check.words = 'Not seen in 3 minutes. Check it is switched on, charged and mounted where the timing line can see it, '
+      + 'then try again - or ask at the timing desk.';
+  }
+}
+
+// ---- check-in
+
+function checkedIn() {
+  if (ci.pending && ci.pending.until > Date.now()) return ci.pending.wanted;
+  if (live) return live.checkedIn === true;
+  return ci.on;
+}
+
+async function loadCheckIn() {
+  let a = null;
+  try { a = await post('/checkin/one', { id: CODE }); } catch (e) { return; }
+
+  // 409 is check-in closed and 404 is not on tonight's list: either way
+  // there is no button to offer. Busy answers leave things as they are.
+  if (a.status === 409 || a.status === 404) {
+    ci.shown = false;
+  } else if (a.status === 200 && a.body.driver) {
+    ci.shown = true;
+    ci.on = a.body.driver.checkedIn === true;
+    if (a.body.firstNight === true) firstNight = true;
+  }
+
+  drawLive();
+}
+
+async function tapCheckIn() {
+  if (ci.busy) return;
+
+  const wanted = !checkedIn();
+  ci.busy = true;
+  ci.pending = { wanted: wanted, until: Date.now() + 60000 };
+  drawLive();
+
+  let a = null;
+  try { a = await post('/checkin/tap', { id: CODE, wanted: wanted }); } catch (e) { a = null; }
+
+  ci.busy = false;
+
+  if (a !== null && a.status === 409) {
+    ci.shown = false;
+    ci.pending = null;
+    drawLive();
+    toast('Online check-in is closed just now - check in at the desk.');
+    return;
+  }
+
+  if (a === null || a.status !== 200) {
+    ci.pending = null;
+    drawLive();
+    toast(a && a.body.error ? a.body.error : 'Could not reach the club. Try again.');
+    return;
+  }
+
+  ci.on = wanted;
+  if (navigator.vibrate) navigator.vibrate(30);
+  toast(wanted ? 'You are checked in.' : 'You are checked out.');
+  drawLive();
+}
+
+// ---- the live card
+
+function marshalWhen(away) {
+  const n = Math.round(num(away));
+  return n <= 0 ? 'That race is next - head to your post.' : plural(n, 'race', 'races') + ' before it.';
+}
+
+function liveCard() {
+  const n = live && live.next && typeof live.next === 'object' ? live.next : null;
+  const card = el('section', 'lc' + (n && n.staged === true ? ' staged' : n && n.now !== true && num(n.away) === 0 ? ' next' : ''));
+
+  card.appendChild(el('h3', '', 'Right now'));
+
+  if (live) {
+    if (n) {
+      card.appendChild(el('div', 'lc-big', callWords(n)));
+      card.appendChild(el('div', '', [n.race, num(n.slot) > 0 ? 'grid slot ' + num(n.slot) : ''].filter(Boolean).join(' · ')));
+      const eta = el('div', 'lc-eta', n.now === true ? '' : etaWords(n.eta, relayNow()));
+      eta.id = 'lc-eta';
+      card.appendChild(eta);
+    } else {
+      card.appendChild(el('div', '', 'None of your races is in the next few on the running order.'));
+    }
+
+    card.appendChild(tapButton(alertsOn ? 'Alerts on - tap to turn off' : 'Turn on alerts', 'go quiet' + (alertsOn ? ' on' : ''), toggleAlerts));
+    card.appendChild(el('div', 'when', alertsOn
+      ? 'Keep this page open on your screen. It beeps and buzzes when your race is next, and again when it is staged.'
+      : 'Two beeps and a buzz when your race is next, and again when it is staged.'));
+
+    const m = live.marshal;
+
+    if (m && typeof m === 'object' && typeof m.race === 'string' && m.race !== '') {
+      const duty = el('div', 'lc-part');
+      duty.appendChild(el('b', '', 'Your marshal duty'));
+      duty.appendChild(el('div', '', m.race + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : '')));
+      duty.appendChild(el('div', 'when', marshalWhen(m.away)));
+      card.appendChild(duty);
+    }
+  }
+
+  if (ci.shown) {
+    const on = checkedIn();
+    const part = el('div', 'lc-part');
+    const b = tapButton(on ? 'Checked in \\u2713' : 'Check in', 'go' + (on ? ' on' : ''), tapCheckIn);
+    b.disabled = ci.busy;
+    part.appendChild(b);
+    part.appendChild(el('div', 'when', on ? 'Tap again if you need to check out.' : 'One tap and the timing desk knows you are here.'));
+    card.appendChild(part);
+  } else if (live && live.checkedIn === true) {
+    card.appendChild(el('div', 'lc-part', 'You are checked in.'));
+  }
+
+  if (live) {
+    const tp = el('div', 'lc-part');
+    tp.appendChild(el('b', '', 'Your transponder'));
+    tp.appendChild(el('div', 'when', seenWords(live.seen)));
+    if (check.state !== '') tp.appendChild(el('div', 'lc-check ' + check.state, check.words));
+    if (check.state !== 'waiting') tp.appendChild(tapButton('Check my transponder', 'go quiet', startCheck));
+    card.appendChild(tp);
+  }
+
+  const asked = asksPart();
+  if (asked) card.appendChild(asked);
+
+  return card;
+}
+
+function drawLive() {
+  if (!lvBox) return;
+
+  lvBox.textContent = '';
+
+  if (live || ci.shown) lvBox.appendChild(liveCard());
+  if (firstNight) lvBox.appendChild(firstNightGuide());
+}
+
+// The minutes on the card, kept counting between polls.
+function tickClock() {
+  const e = document.getElementById('lc-eta');
+  const n = live && live.next;
+  if (e && n && n.now !== true) e.textContent = etaWords(n.eta, relayNow());
+}
+
+// ---- the night's own extras, under its facts
+
+// Only the relay's own clip addresses are played, as with videos: the
+// club's path, a 32-hex id, and the download form of that same address.
+function ownClip(c) {
+  const at = /^\\/c\\/([a-z0-9-]+)\\/clip\\/[0-9a-f]{32}\\.mp3$/.exec(c && typeof c.url === 'string' ? c.url : '');
+  return at !== null && at[1] === CLUB && c.download === c.url + '?download=1';
+}
+
+function clipBlock(c, words) {
+  const box = el('div', 'clip');
+  box.appendChild(el('div', 'sub', [words || c.label, timeOf(c.at)].filter(Boolean).join(' · ')));
+  const player = document.createElement('audio');
+  player.controls = true;
+  player.preload = 'none';
+  player.src = c.url;
+  box.appendChild(player);
+  const link = el('a', '', 'Download the call (mp3)');
+  link.href = c.download;
+  link.setAttribute('download', '');
+  box.appendChild(link);
+  return box;
+}
+
+// One race's laps as a line: quicker is higher, the best lap marked. A lap
+// far slower than the rest (a crash, a flipped car) is drawn at the bottom
+// edge rather than squashing every other lap into a flat line.
+function lapChart(list, bestMs) {
+  const laps = Array.isArray(list) ? list.filter((ms) => typeof ms === 'number' && ms > 0).slice(0, 200) : [];
+  if (laps.length < 2) return null;
+
+  const sorted = laps.slice().sort((a, b) => a - b);
+  const quick = sorted[0];
+  const cap = Math.max(sorted[Math.floor(sorted.length / 2)] * 1.6, quick * 1.2);
+  const slow = Math.min(sorted[sorted.length - 1], cap);
+  const span = Math.max(1, slow - quick);
+  const W = 300;
+  const H = 90;
+  const P = 6;
+  const x = (i) => P + i * (W - 2 * P) / (laps.length - 1);
+  const y = (ms) => P + (Math.min(ms, cap) - quick) / span * (H - 2 * P);
+  const best = typeof bestMs === 'number' && laps.includes(bestMs) ? bestMs : quick;
+  const at = laps.indexOf(best);
+
+  const svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'lapchart', role: 'img',
+    'aria-label': 'Lap times for ' + laps.length + ' laps, best ' + lap(best) + ' on lap ' + (at + 1) });
+  svg.appendChild(sv('polyline', { points: laps.map((ms, i) => x(i).toFixed(1) + ',' + y(ms).toFixed(1)).join(' ') }));
+
+  laps.forEach((ms, i) => {
+    if (ms > cap) svg.appendChild(sv('circle', { cx: x(i).toFixed(1), cy: (H - P).toFixed(1), r: 3, class: 'slow' }));
+  });
+
+  svg.appendChild(sv('circle', { cx: x(at).toFixed(1), cy: y(best).toFixed(1), r: 4.5 }));
+
+  const fig = el('figure', 'lapfig');
+  fig.appendChild(svg);
+  fig.appendChild(el('figcaption', 'cap', 'Each lap, left to right - higher is quicker. Best ' + lap(best) + ' on lap ' + (at + 1) + '.'));
+  return fig;
+}
+
+// The cars a driver raced tonight, when one of them was a second
+// transponder raced as a car of its own (22 Oct 2026): [{id, label, name?,
+// lines?, coach?, improve?, progress?}]. The first car's lines, report card,
+// improvement and progress are the night's own top-level ones, so a page
+// from before cars still showed them. Empty for a night of one car, which
+// draws exactly as it always did.
+function carsOf(n) {
+  return n && Array.isArray(n.cars)
+    ? n.cars.filter((c) => c && typeof c === 'object' && typeof c.id === 'string' && c.id !== '')
+    : [];
+}
+
+// "Main car · B6.4", or the label alone when the results did not say which car.
+function carHeading(c) {
+  const label = c && typeof c.label === 'string' && c.label.trim() !== '' ? c.label.trim() : 'Car';
+  const name = c && typeof c.name === 'string' ? c.name.trim() : '';
+  return name !== '' ? label + ' · ' + name : label;
+}
+
+// Which car ran a race: its own tag, or the first car for an untagged one.
+function carOf(r, cars) {
+  const id = r && typeof r.car === 'string' && r.car !== '' ? r.car : '';
+  return id === '' ? cars[0] : cars.find((c) => c.id === id);
+}
+
+function raceFacts(r) {
+  const parts = [];
+  if (r.out === 'DQ') parts.push('Disqualified');
+  else if (r.out === 'DNF') parts.push('Did not finish');
+  else if (num(r.pos) > 0) parts.push(nth(r.pos) + (num(r.of) > 0 ? ' of ' + num(r.of) : ''));
+  if (num(r.start) > 0) parts.push('started ' + nth(r.start));
+  if (num(r.laps) > 0) parts.push(plural(num(r.laps), 'lap', 'laps'));
+  if (num(r.bestMs) > 0) parts.push('best ' + lap(r.bestMs));
+  return parts.join(' · ');
+}
+
+function raceCard(r, ownClips) {
+  const c = el('div', 'rc');
+  const top = el('div', 'rc-top');
+  top.appendChild(el('b', '', typeof r.label === 'string' && r.label !== '' ? r.label : 'Race'));
+  const t = timeOf(r.at);
+  if (t) top.appendChild(el('span', 'when', t));
+  c.appendChild(top);
+  c.appendChild(el('div', 'rc-facts', raceFacts(r)));
+
+  const chart = lapChart(r.lapsMs, r.bestMs);
+  if (chart) c.appendChild(chart);
+
+  // The reasons are theirs alone: only their own night carries them.
+  const pen = lines(r.pen);
+
+  if (pen.length > 0) {
+    const list = el('ul', 'rc-pen');
+    list.setAttribute('aria-label', 'Penalties');
+    for (const p of pen) list.appendChild(el('li', '', p));
+    c.appendChild(list);
+  }
+
+  for (const clip of ownClips) c.appendChild(clipBlock(clip, 'The call of this race'));
+
+  const ask = queryPart(r);
+  if (ask) c.appendChild(ask);
+
+  return c;
+}
+
+// "2026-10-22" as the day it names, not midnight UTC (see dayDate on the
+// results page): "22 Oct".
+function shortDay(iso) {
+  const p = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(String(iso || ''));
+  if (!p) return '';
+  const d = new Date(Number(p[1]), Number(p[2]) - 1, Number(p[3]));
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+}
+
+// Their best lap on one layout, night by night - six bars at most, tonight
+// last, and a quicker night stands taller.
+function progressPart(p) {
+  if (!p || typeof p !== 'object') return null;
+
+  const nights = (Array.isArray(p.nights) ? p.nights : [])
+    .filter((n) => n && typeof n.bestMs === 'number' && n.bestMs > 0)
+    .slice(-6);
+  const since = typeof p.since === 'string' ? p.since.trim() : '';
+
+  if (nights.length === 0 && since === '') return null;
+
+  const part = el('div', 'pg');
+  part.appendChild(el('h3', '', 'Your progress' + (typeof p.layout === 'string' && p.layout !== '' ? ' on ' + p.layout : '')));
+
+  if (nights.length > 0) {
+    const all = nights.map((n) => n.bestMs);
+    const lo = Math.min.apply(null, all);
+    const hi = Math.max.apply(null, all);
+    const W = 300;
+    const H = 130;
+    const slot = W / 6;
+    const room = H - 40;
+    const svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'pgchart', role: 'img',
+      'aria-label': 'Best lap on each of your last ' + nights.length + (nights.length === 1 ? ' night' : ' nights') });
+    const left = (6 - nights.length) * slot;
+
+    nights.forEach((n, i) => {
+      const share = hi === lo ? 0.8 : 0.35 + 0.65 * (hi - n.bestMs) / (hi - lo);
+      const h = Math.round(room * share);
+      const cx = left + slot * i + slot / 2;
+      const last = i === nights.length - 1;
+      svg.appendChild(sv('rect', { x: (cx - slot * 0.32).toFixed(1), y: 18 + room - h, width: (slot * 0.64).toFixed(1), height: h, rx: 3,
+        class: last ? 'tonight' : '' }));
+      const value = sv('text', { x: cx.toFixed(1), y: 14 + room - h, class: last ? 't' : '' });
+      value.textContent = lap(n.bestMs);
+      svg.appendChild(value);
+      const when = sv('text', { x: cx.toFixed(1), y: H - 6 });
+      when.textContent = last ? 'Tonight' : shortDay(n.night);
+      svg.appendChild(when);
+    });
+
+    part.appendChild(svg);
+  }
+
+  if (since !== '') part.appendChild(el('p', 'pg-since', since));
+  return part;
+}
+
+// A badge within reach: the laptop's own words, or built from its counts.
+function reachWords(r) {
+  if (typeof r === 'string') return r.trim();
+  if (!r || typeof r !== 'object') return '';
+  if (typeof r.words === 'string' && r.words.trim() !== '') return r.words.trim();
+  const left = typeof r.left === 'number' ? r.left : num(r.need) - num(r.have);
+  return typeof r.name === 'string' && r.name !== '' && typeof r.noun === 'string' && left > 0
+    ? left + ' more ' + r.noun + ' for ' + r.name
+    : '';
+}
+
+function listPart(title, said) {
+  const part = el('div', 'rch');
+  part.appendChild(el('h3', '', title));
+  const list = el('ul', 'night');
+  for (const s of said) list.appendChild(el('li', '', s));
+  part.appendChild(list);
+  return part;
+}
+
+function drawExtras() {
+  const at = document.getElementById('nx');
+  if (!at || !night) return;
+
+  at.textContent = '';
+
+  const good = (Array.isArray(clips) ? clips : []).filter(ownClip);
+  const shown = new Set();
+  const races = Array.isArray(night.races) ? night.races.filter((r) => r && typeof r === 'object') : [];
+
+  const cardsFor = (list, into) => {
+    for (const r of list) {
+      const own = good.filter((c) => typeof c.race === 'string' && c.race !== '' && c.race === r.sid);
+      own.forEach((c) => shown.add(c));
+      into.appendChild(raceCard(r, own));
+    }
+  };
+  const cars = carsOf(night);
+
+  if (cars.length === 0) {
+    if (races.length > 0) {
+      at.appendChild(el('h3', '', races.length === 1 ? 'Your race' : 'Your races'));
+      cardsFor(races, at);
+    }
+
+    const better = typeof night.improve === 'string' ? lines([night.improve]) : lines(night.improve);
+    if (better.length > 0) at.appendChild(listPart('Your improvement tonight', better));
+
+    const progress = progressPart(night.progress);
+    if (progress) at.appendChild(progress);
+  } else {
+    // One section per car (22 Oct 2026, second transponder): its facts,
+    // report card, races, improvement and progress, and nothing added up
+    // across cars - a best lap or a place means something for one car.
+    cars.forEach((car, i) => {
+      const sec = el('section', 'car');
+      sec.appendChild(el('h3', 'car-h', carHeading(car)));
+
+      const said = lines(i === 0 ? night.lines : car.lines);
+      if (said.length > 0) {
+        const list = el('ul', 'night');
+        for (const l of said) list.appendChild(el('li', '', l));
+        sec.appendChild(list);
+      }
+
+      const card = lines(i === 0 ? night.coach : car.coach);
+      if (card.length > 0) {
+        sec.appendChild(el('h4', '', 'Report card'));
+        const list = el('ul', 'night');
+        for (const l of card) list.appendChild(el('li', '', l));
+        sec.appendChild(list);
+      }
+
+      const mine = races.filter((r) => carOf(r, cars) === car);
+      if (mine.length > 0) {
+        sec.appendChild(el('h4', '', mine.length === 1 ? 'Race' : 'Races'));
+        cardsFor(mine, sec);
+      }
+
+      const imp = i === 0 ? night.improve : car.improve;
+      const better = typeof imp === 'string' ? lines([imp]) : lines(imp);
+      if (better.length > 0) {
+        sec.appendChild(el('h4', '', 'Improvement tonight'));
+        const list = el('ul', 'night');
+        for (const l of better) list.appendChild(el('li', '', l));
+        sec.appendChild(list);
+      }
+
+      const progress = progressPart(i === 0 ? night.progress : car.progress);
+      if (progress) sec.appendChild(progress);
+
+      at.appendChild(sec);
+    });
+
+    // A race tagged with a car the list does not have cannot come off the
+    // laptop; drawn rather than lost if it ever does.
+    const stray = races.filter((r) => carOf(r, cars) === undefined);
+    if (stray.length > 0) {
+      at.appendChild(el('h3', '', 'Other races'));
+      cardsFor(stray, at);
+    }
+  }
+
+  const reach = (Array.isArray(night.reach) ? night.reach : []).map(reachWords).filter(Boolean).slice(0, 3);
+  if (reach.length > 0) at.appendChild(listPart('Achievements in reach', reach));
+
+  const rest = good.filter((c) => !shown.has(c));
+
+  if (rest.length > 0) {
+    at.appendChild(el('h3', '', 'Your race calls'));
+    for (const c of rest) at.appendChild(clipBlock(c, ''));
+  }
+}
+
+// What goes in the night box: the night, or - for a driver with a live
+// entry and nothing filed yet, which is everybody before their first race
+// - a line that says so. Only ever reached with a real code that has a
+// live entry, so it gives nothing away that the live card does not.
+function paintNight() {
+  if (night !== null) {
+    draw();
+    drawExtras();
+    return;
+  }
+
+  box.textContent = '';
+  box.appendChild(el('h2', '', 'Your night'));
+  box.appendChild(el('p', 'note', 'Nothing is filed for you yet tonight. Your races show here after each one.'));
+}
+
+function take(body) {
+  night = body && typeof body.night === 'object' && body.night !== null ? body.night : null;
+  videos = Array.isArray(body && body.videos) ? body.videos : [];
+  clips = Array.isArray(body && body.clips) ? body.clips : [];
+  live = body && typeof body.live === 'object' && body.live !== null ? body.live : null;
+  if ((night && night.firstNight === true) || (live && live.firstNight === true)) firstNight = true;
+  // What they can ask the desk to change, and whether they can ask at all
+  // (22 Oct 2026, driver experience, RP2). Both only on the full answer;
+  // anything missing or of the wrong shape counts as no.
+  me = body && typeof body.me === 'object' && body.me !== null && !Array.isArray(body.me) ? body.me : null;
+  asksOpen = !!body && body.asksOpen === true;
+}
+
+// ---- asking the desk
+//
+// 22 Oct 2026, driver experience (items 12-14), RP2. Shown only while the
+// relay says asksOpen - the club takes requests, and this driver is on
+// tonight's check-in list - and every one is only a REQUEST: it goes to
+// driver/ask, waits for the desk, and comes back as a state in the live
+// entry's "asks", drawn on the live card.
+//
+// THE CODE GOES ONLY INTO POST BODIES, through post(), as everything else
+// on this page. The personal PIN is sent once, to checkin/list, and never
+// kept; what is kept is the pass it is answered with, in sessionStorage -
+// this tab only, gone when it closes, as the check-in page keeps its own -
+// and NEVER localStorage, which would leave a phone handed back to its
+// owner able to change their details for good.
+//
+// PRIVACY TICKS ARE ONLY EVER SENT AS true. The relay refuses false, and
+// turning one off is the desk's to do, so a tick already on is drawn on
+// and fixed, with "ask at the desk to undo".
+
+const ydBox = document.getElementById('yd');
+const PASS_KEY = 'hg-night-pass-' + CLUB;
+const OBJECT_ID = /^[0-9a-f]{32}$/;
+const ASK_STATES = ['waiting', 'approved', 'noted', 'declined'];
+
+// The driver's own details off the relay (driverme, plus pin), or null.
+let me = null;
+// Whether the relay will take a request from this code right now.
+let asksOpen = false;
+// What this page sent and the relay took, until the live entry lists it.
+const sentAsks = [];
+// Each race's "Something wrong?", by race id, so a redraw of the night
+// keeps what was being typed.
+const queries = new Map();
+// What "Your details" was drawn from, and whether it has been typed in
+// since - a refresh never redraws over somebody's typing.
+let asksKey = '';
+let edited = false;
+
+function pass() {
+  try { return sessionStorage.getItem(PASS_KEY) || ''; } catch (e) { return ''; }
+}
+
+function setPass(v) {
+  try {
+    if (typeof v === 'string' && v !== '') sessionStorage.setItem(PASS_KEY, v);
+    else sessionStorage.removeItem(PASS_KEY);
+  } catch (e) { /* private browsing: they sign in again next time */ }
+}
+
+// The relay's own cleaning (cleanAskText), so "changed" means changed to
+// the relay too: control characters out, runs of space one, trimmed.
+function cleanText(v) {
+  return String(v === undefined || v === null ? '' : v).replace(/[\\u0000-\\u001f\\u007f]/g, ' ').replace(/\\s+/g, ' ').trim();
+}
+
+// Every refusal driver/ask has, in words - the relay's own where it has
+// them, which are already plain; never "Not found", which is the one
+// answer for every closed gate and reads as broken.
+function askTrouble(a) {
+  if (a === null) return 'Could not reach the club. Check your connection and try again.';
+
+  const said = a.body && typeof a.body.error === 'string' && a.body.error.trim() !== '' ? a.body.error.trim() : '';
+
+  if (a.status === 400) return said || 'That could not be sent. Check what you typed and try again.';
+  if (a.status === 403) return said || 'Sign in with your personal PIN first.';
+  if (a.status === 404) return "The desk is not taking requests from phones just now, or you are not on tonight's check-in list. Ask at the desk.";
+  if (a.status === 413) return said || 'That is too long.';
+  if (a.status === 429) return said || 'You have asked a few times already - wait a while, or ask at the desk.';
+  if (a.status === 503) return said || 'The desk has a lot to get through right now. Try again in a while, or ask at the desk.';
+  return 'The club could not take that just now. Try again in a minute.';
+}
+
+// One request to the desk. The pass goes only with a details change, the
+// one kind that needs it. Answers { ok, words, status }.
+async function sendAsk(kind, f) {
+  const payload = { id: CODE, kind: kind, f: f };
+  const p = kind === 'details' ? pass() : '';
+  if (p !== '') payload.pass = p;
+
+  let a = null;
+  try { a = await post('/driver/ask', payload); } catch (e) { a = null; }
+
+  if (a !== null && a.status === 200 && a.body.ok === true) {
+    const ref = typeof a.body.ref === 'string' && /^[0-9A-F]{6}$/.test(a.body.ref) ? a.body.ref : '';
+    if (ref !== '') {
+      sentAsks.push({ ref: ref, kind: kind });
+      if (sentAsks.length > 10) sentAsks.shift();
+    }
+    if (navigator.vibrate) navigator.vibrate(30);
+    drawLive();
+    return { ok: true, status: 200, words: 'Sent - the desk will check it' + (ref !== '' ? ' (ref ' + ref + ')' : '') };
+  }
+
+  return { ok: false, status: a === null ? 0 : a.status, words: askTrouble(a) };
+}
+
+// ---- how each request is getting on, on the live card
+
+function kindWords(kind) {
+  if (kind === 'details') return 'Your details';
+  if (kind === 'pack') return 'Battery pack';
+  if (kind === 'query') return 'Race query';
+  return 'Request';
+}
+
+function stateWords(state) {
+  if (state === 'approved') return 'approved';
+  if (state === 'noted') return 'noted by the desk';
+  if (state === 'declined') return 'declined';
+  return 'waiting for the desk';
+}
+
+function asksPart() {
+  const list = (live && Array.isArray(live.asks) ? live.asks : []).filter((a) => a && typeof a === 'object');
+  const known = new Set(list.map((a) => String(a.ref || '')));
+  const all = list.concat(sentAsks.filter((s) => !known.has(s.ref)).map((s) => ({ ref: s.ref, kind: s.kind })));
+
+  if (all.length === 0) return null;
+
+  const part = el('div', 'lc-part');
+  part.appendChild(el('b', '', 'Your requests to the desk'));
+  const ul = el('ul', 'yd-asks');
+
+  for (const a of all.slice(-8)) {
+    // A missing or unknown state is one the desk has not answered yet.
+    const state = ASK_STATES.includes(a.state) ? a.state : 'waiting';
+    const ref = typeof a.ref === 'string' && /^[0-9A-F]{6}$/.test(a.ref) ? ' (ref ' + a.ref + ')' : '';
+    const said = typeof a.said === 'string' && a.said.trim() !== '' ? ': ' + a.said.trim() : '';
+    ul.appendChild(el('li', 'ask-' + state, kindWords(a.kind) + ref + ' - ' + stateWords(state) + said));
+  }
+
+  part.appendChild(ul);
+  return part;
+}
+
+// ---- "Something wrong?" under a race
+
+function queryPart(r) {
+  if (!asksOpen || !r || typeof r.sid !== 'string' || !OBJECT_ID.test(r.sid)) return null;
+
+  // Both of a driver's cars in one race is two cards with the same race id
+  // (22 Oct 2026, second transponder). Each keeps its own query, and says
+  // which car it is about - the desk sees two rows for them in that race.
+  const tag = typeof r.car === 'string' ? r.car : '';
+  const key = r.sid + '|' + tag;
+  let q = queries.get(key);
+  if (!q) {
+    const cars = carsOf(night);
+    const both = cars.length > 0
+      && (Array.isArray(night.races) ? night.races : []).filter((x) => x && x.sid === r.sid).length > 1;
+    const car = both ? carOf(r, cars) : undefined;
+    q = { open: false, text: '', said: '', busy: false, prefix: car ? '[' + carHeading(car) + '] ' : '' };
+    queries.set(key, q);
+  }
+
+  const part = el('div', 'rc-ask');
+  fillQuery(part, r.sid, q);
+  return part;
+}
+
+function fillQuery(part, sid, q) {
+  part.textContent = '';
+
+  const said = el('p', 'yd-said', q.said);
+  said.setAttribute('role', 'status');
+
+  if (!q.open) {
+    part.appendChild(tapButton('Something wrong?', 'linkish', () => {
+      q.open = true;
+      q.said = '';
+      fillQuery(part, sid, q);
+    }));
+    part.appendChild(said);
+    return;
+  }
+
+  const label = el('label', 'f', 'What looks wrong with this race?');
+  // Room for the car's name in front, when it goes in front (and the space after it).
+  const room = cleanText(q.prefix || '') === '' ? 300 : 300 - cleanText(q.prefix).length - 1;
+  const box = document.createElement('textarea');
+  box.setAttribute('maxlength', String(room));
+  box.setAttribute('rows', '3');
+  box.value = q.text;
+  label.appendChild(box);
+  part.appendChild(label);
+
+  const count = el('div', 'when', cleanText(q.text).length + ' of ' + room + ' characters. The desk reads it and notes it against the race.');
+  part.appendChild(count);
+  box.addEventListener('input', () => {
+    q.text = String(box.value || '');
+    count.textContent = cleanText(q.text).length + ' of ' + room + ' characters. The desk reads it and notes it against the race.';
+  });
+
+  const send = tapButton(q.busy ? 'Sending\\u2026' : 'Send to the desk', 'go', async () => {
+    if (q.busy) return;
+    q.text = String(box.value || '');
+    const m = cleanText(q.text);
+
+    if (m === '') { said.textContent = 'Say what looks wrong.'; return; }
+    if (m.length > room) { said.textContent = 'Keep it under ' + room + ' characters.'; return; }
+
+    q.busy = true;
+    send.disabled = true;
+    said.textContent = 'Sending\\u2026';
+    const got = await sendAsk('query', { race: sid, m: cleanText((q.prefix || '') + m) });
+    q.busy = false;
+    q.said = got.words;
+    if (got.ok) {
+      q.open = false;
+      q.text = '';
+    }
+    fillQuery(part, sid, q);
+  });
+  send.disabled = q.busy;
+  part.appendChild(send);
+
+  part.appendChild(tapButton('Cancel', 'linkish', () => {
+    q.open = false;
+    q.said = '';
+    fillQuery(part, sid, q);
+  }));
+  part.appendChild(said);
+}
+
+// ---- "Your details" and their pack
+
+// Drawn again only when what it shows has changed and nobody is typing in
+// it, so a twenty-second refresh never takes a half-typed change away.
+function refreshAsks() {
+  const key = JSON.stringify([asksOpen, me]);
+  if (key === asksKey) return;
+  if (edited && asksOpen && me) return;
+  asksKey = key;
+  drawAsks('');
+}
+
+function markEdited() {
+  edited = true;
+}
+
+function drawAsks(message) {
+  if (!ydBox) return;
+
+  ydBox.textContent = '';
+  edited = false;
+
+  // No details off the laptop yet: nothing to show them, so no form - a
+  // race's "Something wrong?" still works, needing only asksOpen.
+  if (!asksOpen || !me) return;
+
+  const sec = el('section', 'yd');
+  sec.appendChild(el('h3', '', 'Your details'));
+  sec.appendChild(el('p', 'when', 'Ask the timing desk to change how you are called and shown. Nothing changes until the desk checks it.'));
+
+  if (me.pin === true && pass() === '') sec.appendChild(pinGate(message));
+  else sec.appendChild(detailsForm(message));
+
+  const packs = packPart();
+  if (packs) sec.appendChild(packs);
+
+  ydBox.appendChild(sec);
+}
+
+// ---- signing in with the personal PIN
+
+function pinTrouble(a) {
+  if (a === null) return 'Could not reach the club. Check your connection and try again.';
+
+  const said = a.body && typeof a.body.error === 'string' && a.body.error.trim() !== '' ? a.body.error.trim() : '';
+
+  if (a.status === 200 && a.body.mode === 'staff') return "That is the club's PIN, not your own. Use the personal PIN the club sent you.";
+  if (a.status === 200 && a.body.mode === 'racer') return 'That PIN belongs to a different driver. Use your own personal PIN.';
+  if (a.status === 200) return 'That PIN did not sign you in. Ask at the desk.';
+  if (a.status === 403) return said || 'That PIN is not right.';
+  if (a.status === 409) return 'Online check-in is closed just now, and PIN sign-in with it. Ask at the desk.';
+  if (a.status === 429) return said || 'Too many tries. Wait a few minutes and try again.';
+  return 'The club could not answer just now. Try again in a minute.';
+}
+
+function pinGate(message) {
+  const part = el('div', 'su');
+  part.appendChild(el('p', '', 'You have a personal PIN, so sign in with it before changing your details. '
+    + 'This phone remembers it only until you close this tab.'));
+
+  const label = el('label', 'f', 'Your personal PIN');
+  const input = document.createElement('input');
+  input.type = 'password';
+  input.setAttribute('inputmode', 'numeric');
+  input.setAttribute('autocomplete', 'off');
+  input.setAttribute('maxlength', '8');
+  input.addEventListener('input', markEdited);
+  label.appendChild(input);
+  part.appendChild(label);
+
+  const said = el('p', 'yd-said', message || '');
+  said.setAttribute('role', 'status');
+
+  const go = tapButton('Sign in', 'go', async () => {
+    const p = String(input.value || '').trim();
+
+    if (!/^[0-9]{4,8}$/.test(p)) {
+      said.textContent = 'A personal PIN is 4 to 8 digits.';
+      return;
+    }
+
+    go.disabled = true;
+    said.textContent = 'Checking\\u2026';
+
+    let a = null;
+    try { a = await post('/checkin/list', { pin: p }); } catch (e) { a = null; }
+
+    go.disabled = false;
+    input.value = '';
+
+    // Only their OWN racer pass: the club's staff PIN, or another
+    // driver's, would be refused by driver/ask anyway - said here, at the
+    // PIN, rather than at the first change they try to send.
+    if (a !== null && a.status === 200 && a.body.mode === 'racer' && a.body.driver && a.body.driver.id === CODE
+      && typeof a.body.pass === 'string' && a.body.pass !== '') {
+      setPass(a.body.pass);
+      drawAsks('Signed in.');
+      return;
+    }
+
+    said.textContent = pinTrouble(a);
+  });
+
+  part.appendChild(go);
+  part.appendChild(said);
+  return part;
+}
+
+// ---- the details form
+
+function textField(parent, title, hint, value, max, long) {
+  const label = el('label', 'f', title);
+  const input = document.createElement(long ? 'textarea' : 'input');
+  if (!long) input.type = 'text';
+  input.setAttribute('maxlength', String(max));
+  input.setAttribute('autocomplete', 'off');
+  input.value = value;
+  input.addEventListener('input', markEdited);
+  label.appendChild(input);
+  if (hint) label.appendChild(el('span', 'hint', hint));
+  parent.appendChild(label);
+  return input;
+}
+
+function tick(parent, title, hint, on, fixed) {
+  const label = el('label', 'chk');
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = on === true;
+  box.disabled = fixed === true;
+  box.addEventListener('change', markEdited);
+  label.appendChild(box);
+  const words = el('span', '', title);
+  if (hint) words.appendChild(el('span', 'hint', ' ' + hint));
+  label.appendChild(words);
+  parent.appendChild(label);
+  return box;
+}
+
+function detailsForm(message) {
+  const base = {
+    announcer: cleanText(me.announcer),
+    pronouns: cleanText(me.pronouns),
+    about: cleanText(me.about),
+    emailMyNight: me.emailMyNight === true,
+  };
+  const privacy = me.privacy && typeof me.privacy === 'object' ? me.privacy : {};
+  const email = typeof me.email === 'string' ? me.email : '';
+  // Signed in by here when they have a PIN at all: without one, an email
+  // change is the desk's, since the badge code alone is on a lanyard.
+  const withPin = me.pin === true && pass() !== '';
+
+  const form = el('div', 'su');
+
+  const name = el('div', 'f', 'Name');
+  name.appendChild(el('span', 'hint', (cleanText(me.name) || 'Not set') + ' - the desk changes this one.'));
+  form.appendChild(name);
+
+  const announcer = textField(form, 'Announcer name', 'How the announcer should say your name - spell it the way it sounds.', base.announcer, 40, false);
+  const pronouns = textField(form, 'Pronouns', 'For example she/her, he/him or they/them. Leave it empty for none.', base.pronouns, 24, false);
+  const about = textField(form, 'About you', 'One line the commentary can use, like "races a red buggy and loves the hairpin".', base.about, 120, true);
+
+  const mail = el('div', 'f', 'Email');
+  mail.appendChild(el('span', 'hint', email !== '' ? 'On file: ' + email : 'No email on file.'));
+  form.appendChild(mail);
+
+  let newEmail = null;
+  if (withPin) {
+    newEmail = textField(form, 'New email address', 'Only if it has changed. The desk lets your old address know.', '', 120, false);
+    newEmail.type = 'email';
+  } else {
+    mail.appendChild(el('span', 'hint', ' Changing your email needs your personal PIN - ask at the desk.'));
+  }
+
+  const nightMail = tick(form, 'Email me my night after racing', '', base.emailMyNight, false);
+  const mailable = () => email !== '' || (newEmail !== null && cleanText(newEmail.value) !== '');
+  // As the desk's own form: no address, nothing to email - unless it is
+  // already on, which they may always turn off.
+  nightMail.disabled = !mailable() && !base.emailMyNight;
+  if (newEmail) newEmail.addEventListener('input', () => { nightMail.disabled = !mailable() && !base.emailMyNight; });
+
+  const set = el('fieldset', '');
+  set.appendChild(el('legend', '', 'Online privacy'));
+  set.appendChild(el('span', 'hint', "These change the club's web pages only. In the room - the PA, the big screen and the club's Wi-Fi pages - nothing changes."));
+  const flags = [
+    ['noPhoto', 'Leave my photo off the web pages'],
+    ['noVideo', 'Leave me out of podium videos online'],
+    ['initials', 'Show only my initials online'],
+  ].map(([key, words]) => {
+    const on = privacy[key] === true;
+    return [key, tick(set, words, on ? 'On - ask at the desk to undo.' : '', on, on)];
+  });
+  form.appendChild(set);
+
+  const guardian = tick(form, "I'm a parent or guardian making this change", '', false, false);
+
+  const said = el('p', 'yd-said', message || '');
+  said.setAttribute('role', 'status');
+
+  const send = tapButton('Send to the desk', 'go', async () => {
+    const f = {};
+    const a1 = cleanText(announcer.value);
+    const p1 = cleanText(pronouns.value);
+    const b1 = cleanText(about.value);
+
+    if (a1 !== base.announcer) f.announcer = a1;
+    if (p1 !== base.pronouns) f.pronouns = p1;
+    if (b1 !== base.about) f.about = b1;
+
+    if (newEmail !== null) {
+      const e1 = cleanText(newEmail.value);
+      if (e1 !== '') {
+        if (e1.length > 120 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(e1)) {
+          said.textContent = 'That email address does not look right.';
+          return;
+        }
+        f.email = e1;
+      }
+    }
+
+    if ((nightMail.checked === true) !== base.emailMyNight) f.emailMyNight = nightMail.checked === true;
+
+    // Only ever true - see the note at the top of this part.
+    for (const [key, box] of flags) {
+      if (box.checked === true && !box.disabled && privacy[key] !== true) f[key] = true;
+    }
+
+    if (Object.keys(f).length === 0) {
+      said.textContent = 'Nothing has changed yet.';
+      return;
+    }
+
+    // WHY (23 Oct 2026, bug hunt 10): the lengths were checked on every box,
+    // sent or not. The desk can save an announcer name over 40 characters
+    // (and maxlength does not cut a value set from script), so that driver
+    // could send nothing at all - not even a privacy tick - and was pointed
+    // at a box they never touched. Only fields being sent are checked now,
+    // like the relay's own check, and the message names the box.
+    if (f.announcer !== undefined && f.announcer.length > 40) {
+      said.textContent = 'Your announcer name is over 40 characters - shorten it to send.';
+      return;
+    }
+
+    if ((f.pronouns !== undefined && f.pronouns.length > 24) || (f.about !== undefined && f.about.length > 120)) {
+      said.textContent = 'One of those is too long - the box stops you at its limit.';
+      return;
+    }
+
+    if (guardian.checked === true) f.guardian = true;
+
+    send.disabled = true;
+    said.textContent = 'Sending\\u2026';
+    const got = await sendAsk('details', f);
+    send.disabled = false;
+
+    if (got.ok) {
+      // What was sent is the new starting point, so pressing again does
+      // not send it twice; privacy ticks sent stay on and fixed.
+      if (f.announcer !== undefined) base.announcer = f.announcer;
+      if (f.pronouns !== undefined) base.pronouns = f.pronouns;
+      if (f.about !== undefined) base.about = f.about;
+      if (f.emailMyNight !== undefined) base.emailMyNight = f.emailMyNight;
+      if (newEmail !== null) newEmail.value = '';
+      for (const [key, box] of flags) if (f[key] === true) box.disabled = true;
+      guardian.checked = false;
+      edited = false;
+      said.textContent = got.words;
+      return;
+    }
+
+    // Their PIN has changed since they signed in, or the pass is from
+    // another driver's code: back to the PIN, saying why.
+    if (got.status === 403 && me && me.pin === true && !/email/i.test(got.words)) {
+      setPass('');
+      drawAsks(got.words);
+      return;
+    }
+
+    said.textContent = got.words;
+  });
+
+  form.appendChild(send);
+  form.appendChild(said);
+
+  if (withPin) {
+    form.appendChild(tapButton('Forget my PIN on this phone', 'linkish', () => {
+      setPass('');
+      drawAsks('Signed out on this phone.');
+    }));
+  }
+
+  return form;
+}
+
+// Which battery pack they are running, from the packs the desk knows are
+// theirs. The badge is enough for this one.
+function packPart() {
+  const packs = me && me.packs && typeof me.packs === 'object' ? me.packs : null;
+  const choices = (packs && Array.isArray(packs.choices) ? packs.choices : [])
+    .filter((c) => c && typeof c.id === 'string' && OBJECT_ID.test(c.id) && typeof c.label === 'string')
+    .slice(0, 12);
+
+  if (choices.length === 0) return null;
+
+  const current = typeof packs.current === 'string' && choices.some((c) => c.id === packs.current) ? packs.current : 'none';
+
+  const part = el('div', 'su');
+  part.appendChild(el('h4', '', 'Your battery pack'));
+
+  const label = el('label', 'f', 'The pack in your car now');
+  const pick = document.createElement('select');
+  for (const [value, words] of [['none', 'No pack']].concat(choices.map((c) => [c.id, c.label]))) {
+    const o = document.createElement('option');
+    o.value = value;
+    o.textContent = words;
+    if (value === current) o.selected = true;
+    pick.appendChild(o);
+  }
+  pick.value = current;
+  pick.addEventListener('change', markEdited);
+  label.appendChild(pick);
+  part.appendChild(label);
+
+  const said = el('p', 'yd-said', '');
+  said.setAttribute('role', 'status');
+
+  let sentPack = current;
+  const send = tapButton('Tell the desk', 'go quiet', async () => {
+    const value = String(pick.value || '');
+
+    if (value !== 'none' && !OBJECT_ID.test(value)) {
+      said.textContent = 'Pick one of your packs.';
+      return;
+    }
+
+    if (value === sentPack) {
+      said.textContent = value === current ? 'That is already your pack.' : 'Already sent - the desk will check it.';
+      return;
+    }
+
+    send.disabled = true;
+    said.textContent = 'Sending\\u2026';
+    const got = await sendAsk('pack', { pack: value });
+    send.disabled = false;
+    if (got.ok) {
+      sentPack = value;
+      edited = false;
+    }
+    said.textContent = got.words;
+  });
+
+  part.appendChild(send);
+  part.appendChild(said);
+  return part;
+}
+
+// ---- polling the live part
+
+let liveTimer = 0;
+let lastPoll = 0;
+let polling = false;
+let started = false;
+let refreshTimer = 0;
+
+function schedule() {
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => {
+    if (document.hidden) schedule(); else pollLive();
+  }, check.state === 'waiting' ? 5000 : 20000);
+}
+
+// A race of theirs has moved on - the one they were called for is no
+// longer next - so their night has probably gained a card. Read again a
+// little later, once the laptop has filed it; only redrawn when it says
+// something new, so a call playing in a card is not cut off for nothing.
+function refreshSoon() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(refreshNight, 30000);
+}
+
+async function refreshNight() {
+  let a = null;
+  try { a = await post('/night', { id: CODE }); } catch (e) { return; }
+  if (a.status !== 200) return;
+
+  // asksOpen is in the key because each race card's "Something wrong?"
+  // comes and goes with it (22 Oct 2026, driver experience, RP2).
+  const before = JSON.stringify([night, clips, videos, asksOpen]);
+  const was = live;
+  take(a.body);
+  if (live === null) live = was;
+  if (JSON.stringify([night, clips, videos, asksOpen]) !== before) paintNight();
+  drawLive();
+  refreshAsks();
+}
+
+function takeLive(entry) {
+  const before = live && live.next ? String(live.next.race || '') : '';
+  live = entry && typeof entry === 'object' ? entry : null;
+  if (live && live.firstNight === true) firstNight = true;
+
+  const n = live && live.next;
+  const now = n && typeof n === 'object' ? String(n.race || '') : '';
+
+  if (alertsOn) {
+    if (worthABuzz(lastKey, n)) {
+      buzz();
+      toast(callWords(n) + ' - ' + String(n.race || ''));
+    }
+    lastKey = callKey(n);
+  }
+
+  if (before !== '' && before !== now) refreshSoon();
+}
+
+async function pollLive() {
+  if (polling) return;
+  polling = true;
+  lastPoll = Date.now();
+
+  let a = null;
+  try { a = await post('/night', { id: CODE, part: 'live' }); } catch (e) { a = null; }
+
+  polling = false;
+
+  // A 200 without a live entry is the laptop gone quiet; a 404 is the
+  // club closing nights. Either way there is nothing live to show - but
+  // the night already on screen stays. A busy or failed poll keeps it all.
+  if (a !== null && a.status === 200) takeLive(a.body.live);
+  else if (a !== null && a.status === 404) takeLive(null);
+
+  watchCheck();
+  drawLive();
+  schedule();
+}
+
+function startLive() {
+  if (started) return;
+  started = true;
+  schedule();
+  setInterval(() => { if (!document.hidden) tickClock(); }, 15000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && Date.now() - lastPoll > 5000) pollLive();
+  });
+}
+
+${GUIDE_JS}
+
 async function load() {
   if (!CODE) {
     nothing('This page needs the code from your check-in badge. Open the link your club sent you, or ask at the timing desk.');
@@ -4352,26 +6233,44 @@ async function load() {
     return;
   }
 
+  // WHY (23 Oct 2026, bug hunt 10): a 5xx (a store read error, or Fly's
+  // proxy while the relay restarts or deploys) fell into the refusal below,
+  // telling a real driver their club may not offer this, and nothing ever
+  // asked again. NOTHING stands in for the relay's 404 only; a fault says so
+  // and tries again shortly. Safe to rerun: tuck() is idempotent and
+  // startLive() has its own started guard.
+  if (answer.status >= 500) {
+    nothing('The relay could not answer just now. This page will try again in a moment.');
+    setTimeout(load, 15000);
+    return;
+  }
+
   if (!answer.ok) {
     nothing(NOTHING);
     return;
   }
 
+  learnClock(answer);
+
   let body = {};
   try { body = await answer.json(); } catch (e) { /* an empty answer is still an answer */ }
 
-  night = body && typeof body.night === 'object' && body.night !== null ? body.night : null;
-  videos = Array.isArray(body && body.videos) ? body.videos : [];
+  take(body);
 
-  // A 200 whose body is not a night. The same answer as every other kind
+  // Neither a night nor a live entry: the same answer as every other kind
   // of nothing, for the same reason - and it should not be reachable at
-  // all, because readOneNight sends the document or a 404.
-  if (night === null) {
+  // all, because readOneNight sends one of them or a 404. night: null WITH
+  // a live entry is a driver before their first race (22 Oct 2026).
+  if (night === null && live === null) {
     nothing(NOTHING);
     return;
   }
 
-  draw();
+  paintNight();
+  drawLive();
+  refreshAsks();
+  startLive();
+  loadCheckIn();
 }
 
 load();
@@ -4390,7 +6289,12 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     active: "night",
     heading: "Your night",
     sub: "Your own races, from the timing desk's own record - opened with the code on your check-in badge.",
-    body: '<div id="nt"><p class="note">Loading&hellip;</p></div>',
+    // "lv" is their live card (22 Oct 2026, driver experience), above the
+    // night itself; empty until the relay says there is something live.
+    // "yd" is "Your details" (22 Oct 2026, driver experience, RP2), under
+    // the night and outside it, so a redraw of the night never wipes a
+    // half-typed change; empty unless the club is taking requests.
+    body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>',
     script: NIGHT_JS,
     noindex: true,
   }, context);
@@ -4417,6 +6321,7 @@ export function videosPage(
   clubName: string,
   context: PageContext = DEFAULT_CONTEXT,
   videos: readonly PodiumVideo[] = [],
+  race = "",
 ): string {
   const place = (p: number) => (p === 1 ? "1st" : p === 2 ? "2nd" : "3rd");
   const label = videos[0]?.label ?? "";
@@ -4439,6 +6344,10 @@ export function videosPage(
     body,
     script: "",
     noindex: true,
+    // WHY (22 Oct 2026): the page's real address carries the race id, so
+    // og:url says that rather than the bare /c/<club>/videos. Encoded so a
+    // junk segment cannot make a strange URL; escaped again in shell().
+    ...(race === "" ? {} : { path: `/c/${club}/videos/${encodeURIComponent(race)}` }),
   }, context);
 }
 

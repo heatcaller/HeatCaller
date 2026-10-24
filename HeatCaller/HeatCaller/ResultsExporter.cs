@@ -66,7 +66,7 @@ public static class ResultsExporter
         // disqualified driver came out as an unexplained no-lap row at the
         // bottom and a DNF as an ordinary finisher - the outcome Edit Result
         // set (ResultEditor puts it in Status) was lost on the way out.
-        sb.AppendLine("SessionDate,SessionTime,SessionLabel,Round,Class,Track,Position,Driver,Transponder,Car,Laps,TotalTimeSeconds,BestLapSeconds,Status");
+        sb.AppendLine("SessionDate,SessionTime,SessionLabel,Round,Class,Track,Position,Driver,Transponder,Car,Laps,TotalTimeSeconds,BestLapSeconds,Status,LapsCountedByHand");
 
         foreach (var session in sessions.OrderBy(s => s.StartedAtUtc))
         {
@@ -91,6 +91,9 @@ public static class ResultsExporter
                     Seconds(result.ElapsedMs),
                     result.FastLapMs > 0 ? Seconds(result.FastLapMs) : string.Empty,
                     Csv(result.Status),
+                    // After Status for the same reason Status is last of
+                    // the rest (22 Oct 2026) - see HandCountedLaps.
+                    HandCountedLaps.In(result).ToString(CultureInfo.InvariantCulture),
                 }));
             }
         }
@@ -179,6 +182,7 @@ public static class ResultsExporter
                     transponder = r.Transponder,
                     car = r.CarModel,
                     laps = r.Laps,
+                    lapsCountedByHand = HandCountedLaps.In(r),
                     totalTimeSeconds = r.ElapsedMs / 1000.0,
                     bestLapSeconds = r.FastLapMs > 0 ? r.FastLapMs / 1000.0 : (double?)null,
                     lapTimesSeconds = r.LapTimesMs.Select(l => l / 1000.0).ToList(),

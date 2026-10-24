@@ -203,7 +203,7 @@ public sealed class BugHunt4WebTests : IDisposable
                 UiThread = window,
                 Settings = settings,
                 Undo = new UndoService(),
-                Race = new RaceControlSession(),
+                Race = new RaceTiming(new RaceControlSession()),
                 Events = RaceEventStore.Load(),
                 Classes = RaceClassStore.Load(),
                 Profiles = ProfileStore.Load(),
@@ -281,7 +281,7 @@ public sealed class BugHunt4WebTests : IDisposable
     // --- Helpers ----------------------------------------------------------------------------
 
     private static WebServerService Server(AppSettings settings) =>
-        new(new RaceControlSession(), ProfileStore.Load(), settings: settings);
+        new(new RaceTiming(new RaceControlSession()), ProfileStore.Load(), settings: settings);
 
     /// <summary>
     /// A server to build the pages from. Set to one of the app's own looks

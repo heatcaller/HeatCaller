@@ -23,6 +23,12 @@ public sealed class PersonalBestResetStore
         AppPaths.Root,
         "pb-resets.json");
 
+    // WHY (23 Oct 2026, bug hunt 10): the AI announcer caches personal bests
+    // and must know when a reset (or its undo) changes them. Bumped before
+    // Save(), so it counts even when an unreadable store holds the save back.
+    /// <summary>Goes up every time a cutoff is set, cleared or restored. UI thread, like the rest of the store.</summary>
+    public int Revision { get; private set; }
+
     private PersonalBestResetStore(Dictionary<string, DateTime> cutoffs)
     {
         _cutoffs = cutoffs;
@@ -115,6 +121,7 @@ public sealed class PersonalBestResetStore
     public void SetCutoff(string driver, string track, DateTime utc)
     {
         _cutoffs[Key(driver, track)] = utc;
+        Revision++;
         Save();
     }
 
@@ -122,6 +129,7 @@ public sealed class PersonalBestResetStore
     public void ClearCutoff(string driver, string track)
     {
         _cutoffs.Remove(Key(driver, track));
+        Revision++;
         Save();
     }
 
@@ -133,6 +141,7 @@ public sealed class PersonalBestResetStore
         {
             _cutoffs.Remove(key);
         }
+        Revision++;
         Save();
     }
 
@@ -147,6 +156,7 @@ public sealed class PersonalBestResetStore
         {
             _cutoffs[key] = value;
         }
+        Revision++;
         Save();
     }
 
@@ -172,6 +182,7 @@ public sealed class PersonalBestResetStore
             }
         }
 
+        Revision++;
         Save();
     }
 

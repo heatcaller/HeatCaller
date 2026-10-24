@@ -25,6 +25,31 @@ import {
   type PageContext,
 } from "./pages.js";
 import { VIDEO_ID, VIDEO_MAX_BYTES, videosToDrop, type VideoMeta, type VideoVault } from "./videos.js";
+import {
+  CLIP_DRIVER_ID,
+  CLIP_ID,
+  CLIP_LABEL_MAX,
+  CLIP_MAX_BYTES,
+  CLIP_RACE_ID,
+  clipsToDrop,
+  looksLikeMp3,
+  type ClipMeta,
+  type ClipVault,
+} from "./clips.js";
+import {
+  askFieldsFrom,
+  askRefOf,
+  asDriverAsk,
+  DRIVER_ASK_KINDS,
+  DRIVER_ASK_MAX_BODY,
+  DRIVER_ASK_MAX_STORED,
+  DRIVER_ASKS_CHANNEL,
+  DRIVER_ASKS_COLLECT_MAX_BODY,
+  DRIVER_ASKS_OPEN_DOC,
+  DRIVER_ASKS_PER_CLUB,
+  DRIVER_ASKS_PER_DRIVER,
+  type DriverAskBody,
+} from "./driverasks.js";
 import { DEFAULT_LOOK, flagColours, lookFrom, type Look } from "./site.js";
 import { BRAIN_LONG_WORDS_CEILING, BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
 import { VOICE_PLAN_OFF, type MeterUsage, type VoiceService } from "./voice.js";
@@ -216,6 +241,24 @@ const NIGHTS_CHANNEL = "nights";
 /** The collection the announcer's lines arrive in - see CHANNELS.listen. */
 const LISTEN_CHANNEL = "listen";
 
+/** Each driver's live evening - see CHANNELS.driverlive. Switched by the nights switch. (22 Oct 2026, driver experience) */
+const DRIVER_LIVE_CHANNEL = "driverlive";
+
+/** Each driver's own details - see CHANNELS.driverme. Switched by the driver-requests switch. (22 Oct 2026, driver experience) */
+const DRIVER_ME_CHANNEL = "driverme";
+
+/**
+ * How old the live document may be and still be served (22 Oct 2026,
+ * driver experience). The laptop sends it at least once a minute while it
+ * runs (its "at" moves on the minute), so half an hour without one is a
+ * laptop that has gone home - and "your race is next" from then is a lie.
+ *
+ * Judged by when THIS relay took it, not by the "at" inside it: a laptop
+ * whose clock is an hour out would otherwise never be fresh, or never
+ * stale.
+ */
+const DRIVER_LIVE_FRESH_MS = 30 * 60 * 1000;
+
 /**
  * The channels a club has to switch ON before this relay will take a
  * document for one, and the plain refusal for one that is off.
@@ -241,6 +284,10 @@ const LISTEN_CHANNEL = "listen";
 const SWITCHED_CHANNELS: ReadonlyMap<string, string> = new Map([
   [LISTEN_CHANNEL, "This club is not letting people listen along, so the announcer's lines are not accepted."],
   [NIGHTS_CHANNEL, "This club is not offering drivers their own night, so those are not accepted."],
+  // 22 Oct 2026, driver experience: the drivers' live evening goes with
+  // their nights, and their own details with the driver-requests switch.
+  [DRIVER_LIVE_CHANNEL, "This club is not offering drivers their own night, so their live evening is not accepted."],
+  [DRIVER_ME_CHANNEL, "This club is not taking drivers' own requests, so their details are not accepted."],
 ]);
 
 /**
@@ -759,6 +806,19 @@ interface RacerEntry {
 }
 
 /**
+ * The drivers' live document or their details document, read and parsed
+ * once (22 Oct 2026, driver experience) - see Relay.driverDocOf.
+ */
+interface DriverDoc {
+  /** When this relay took it, in milliseconds - what freshness is judged by. */
+  readonly takenAt: number;
+  /** The document's own "at", or "" when it has none. */
+  readonly at: string;
+  /** Badge id to that driver's entry. A Map, so no key a laptop sent can be "__proto__". */
+  readonly drivers: ReadonlyMap<string, Readonly<Record<string, unknown>>>;
+}
+
+/**
  * A club's look as its site document sets it, and the two pictures drawn
  * from it once somebody has asked for them: the home-screen icon, and
  * the club's generic result card. Both live here rather than in caches
@@ -902,6 +962,12 @@ export interface RelayOptions {
    */
   readonly videos?: VideoVault | undefined;
   /**
+   * Where drivers' own race clips are kept (22 Oct 2026, driver
+   * experience) - see clips.ts. Absent, the relay does not take them, and
+   * says so.
+   */
+  readonly clips?: ClipVault | undefined;
+  /**
    * The commentary brain. Absent means this relay writes no commentary:
    * clubs use Ollama on the race laptop, or go without, exactly as
    * before this existed.
@@ -986,6 +1052,72 @@ export class Relay {
   private readonly videoUploads: Limiter;
   /** Uploads being read right now, across every club. */
   private videoUploadsInFlight = 0;
+  /**
+   * How many times each club has deleted everything (22 Oct 2026, Bug Hunt
+   * 9): an upload that started before a delete and finishes after it sees
+   * the count has moved and keeps nothing. See receiveVideo and deleteClub.
+   */
+  private readonly videoWipes = new Map<string, number>();
+  /**
+   * How many times each driver's podium videos have been taken down, keyed
+   * `${club}|${badge id}` (see forgetDriverMedia and receiveVideo).
+   *
+   * WHY (23 Oct 2026, bug hunt 10): forget-media only deleted the videos
+   * already stored, so an upload whose body was still arriving when it ran
+   * was saved afterwards - against the driver's "no video online" - and
+   * nothing ever asked again. Now an upload notes this count before its
+   * body is read and keeps nothing if it has moved, as videoWipes does for
+   * a deleted club. Emptied whenever no upload is waiting to be saved.
+   */
+  private readonly videoForgets = new Map<string, number>();
+  /** Uploads that have noted their start counts and not yet finished saving - wider than videoUploadsInFlight, which ends once the body is in. */
+  private videoSavesPending = 0;
+  /** Drivers' own race clips - see clips.ts (22 Oct 2026, driver experience). */
+  private readonly clips: ClipVault | undefined;
+  /** Phones fetching a clip, per club and address - an audio player asks in ranges too. */
+  private readonly clipReads: Limiter;
+  /** One laptop sending clips: one per driver per race, so far more than videos. */
+  private readonly clipUploads: Limiter;
+  /** Clip uploads being read right now, across every club. */
+  private clipUploadsInFlight = 0;
+  /**
+   * How many times each club's clips have been wiped - by closing nights or
+   * deleting everything. An upload that started before and finishes after
+   * sees the count has moved and keeps nothing, as videoWipes does.
+   */
+  private readonly clipWipes = new Map<string, number>();
+  /**
+   * Drivers' asks from one address, per club: three hundred in ten minutes
+   * (22 Oct 2026, driver experience).
+   *
+   * WHY (23 Oct 2026, bug hunt 10): it was twenty, but a whole paddock
+   * shares the venue Wi-Fi's one address (or a carrier's NAT), so the 21st
+   * pack change between two rounds was refused for everybody. This is a
+   * flood brake only - the per-person limits are askPerDriver, askQueries
+   * and DRIVER_ASKS_PER_DRIVER, all keyed by badge.
+   */
+  private readonly askTraffic: Limiter;
+  /** Asks from one badge, per club: six an hour, whatever they are. */
+  private readonly askPerDriver: Limiter;
+  /** Result queries from one badge, per club: three an hour. */
+  private readonly askQueries: Limiter;
+  /**
+   * The night page's live poll ({part:"live"}), per club and address -
+   * apart from checkinReads, because a paddock of phones on the venue's
+   * one address polling every twenty seconds would otherwise use up the
+   * allowance the check-in page and full night reads share.
+   */
+  private readonly nightLiveReads: Limiter;
+  /**
+   * The drivers' live and details documents, parsed, per club and channel
+   * - "club/driverlive", "club/driverme". null is "nothing there". Every
+   * publish to either calls forgetDriverDoc, as checkin's does
+   * forgetCheckin: two hundred phones polling a quarter-megabyte document
+   * must not mean two hundred parses of it.
+   */
+  private readonly driverDocs = new Map<string, DriverDoc | null>();
+  private driverDocEpoch = 0;
+  private readonly driverDocLoads = new Map<string, Load<DriverDoc | undefined>>();
   private readonly brain: BrainService | undefined;
   private readonly topUpRequests: TopUpRequests | undefined;
   private readonly listings = new Map<string, Buffer>();
@@ -1200,6 +1332,14 @@ export class Relay {
     this.videos = options.videos;
     this.videoReads = new Limiter(900, 60 * 1000, () => this.now().getTime());
     this.videoUploads = new Limiter(30, 60 * 1000, () => this.now().getTime());
+    // 22 Oct 2026, driver experience: clips and drivers' asks. See the fields.
+    this.clips = options.clips;
+    this.clipReads = new Limiter(900, 60 * 1000, () => this.now().getTime());
+    this.clipUploads = new Limiter(120, 60 * 1000, () => this.now().getTime());
+    this.askTraffic = new Limiter(300, 10 * 60 * 1000, () => this.now().getTime());
+    this.askPerDriver = new Limiter(6, 60 * 60 * 1000, () => this.now().getTime());
+    this.askQueries = new Limiter(3, 60 * 60 * 1000, () => this.now().getTime());
+    this.nightLiveReads = new Limiter(1200, 60 * 1000, () => this.now().getTime());
     this.brain = options.brain;
     this.topUpRequests = options.topUpRequests;
   }
@@ -1812,10 +1952,42 @@ export class Relay {
     // finish a request - long enough for a handful of slow connections to
     // hold a small machine's sockets open indefinitely. Nothing honest
     // takes more than a few seconds to send a result or ask for a page.
+    //
+    // WHY (22 Oct 2026, Bug Hunt 9): a podium video (POST .../video/<id>)
+    // is the exception - up to 48 MB over a track's uplink, which the
+    // laptop gives five minutes (RelayPublisher.Videos.cs). The old 30 s
+    // server-wide ceiling covered the whole body, so on a 5 Mbps line
+    // every winner's clip was cut off with a 408. The server-wide ceiling
+    // is now the laptop's five minutes; handle() puts the 30-second
+    // ceiling back on every request, receiveVideo lifts it only for an
+    // upload that passed its checks and gives that an idle timeout
+    // instead, so a slow but steady upload finishes and a stalled one is
+    // still dropped.
     server.headersTimeout = 15_000;
-    server.requestTimeout = 30_000;
+    server.requestTimeout = 300_000;
     server.keepAliveTimeout = 5_000;
     server.maxHeadersCount = 100;
+
+    // WHY (22 Oct 2026, Bug Hunt 9): videos past their week used to be
+    // deleted only when the same club uploaded again, so a club that
+    // stopped sending kept its last night's videos - drivers' names and
+    // all - on the disk for good. A sweep now runs a minute after start
+    // and then every hour. Both timers are unref'd so they never hold the
+    // process open, and they stop when the server closes.
+    // 22 Oct 2026, driver experience: drivers' clips are swept on the same
+    // timers, for the same reason.
+    const sweep = (): void => {
+      void this.sweepVideos().catch(() => 0);
+      void this.sweepClips().catch(() => 0);
+    };
+    const firstSweep = setTimeout(sweep, 60_000);
+    const hourlySweep = setInterval(sweep, 60 * 60 * 1000);
+    firstSweep.unref();
+    hourlySweep.unref();
+    server.once("close", () => {
+      clearTimeout(firstSweep);
+      clearInterval(hourlySweep);
+    });
 
     server.listen(port, host);
     return server;
@@ -1830,6 +2002,23 @@ export class Relay {
     }
 
     const { segments } = parsed;
+
+    // WHY (22 Oct 2026, Bug Hunt 9): the server-wide requestTimeout is now
+    // five minutes for the podium video (see listen()), so every request
+    // gets the old 30-second ceiling back here: a body still arriving after
+    // 30 s is cut off. Only receiveVideo lifts it (liftCeiling), and only
+    // once an upload has passed every check - so a video POST with no
+    // token, or one refused as busy, still cannot trickle for minutes
+    // while it is drained. The upload then gets an idle timeout instead.
+    const cut = setTimeout(() => {
+      if (!request.complete) {
+        request.destroy();
+      }
+    }, 30_000);
+    cut.unref();
+    request.once("end", () => clearTimeout(cut));
+    response.once("close", () => clearTimeout(cut));
+    const liftCeiling = (): void => clearTimeout(cut);
 
     // HEAD is GET without the body, and Node leaves the body off a HEAD
     // answer by itself - so it only has to reach the same routes. Without
@@ -1999,6 +2188,13 @@ export class Relay {
 
         if (tenant !== undefined && segments.length === 4 && segments[2] === "video") {
           await this.videoFile(request, response, tenant.club, segments[3] as string, parsed.query);
+          return;
+        }
+
+        // A driver's own race clip (22 Oct 2026, driver experience) - named
+        // by 128 random bits, listed only on that driver's night. See clips.ts.
+        if (tenant !== undefined && segments.length === 4 && segments[2] === "clip") {
+          await this.clipFile(request, response, tenant.club, segments[3] as string, parsed.query);
           return;
         }
 
@@ -2188,7 +2384,44 @@ export class Relay {
 
     // A podium video from the laptop - see videos.ts and receiveVideo.
     if (method === "POST" && rest.length === 2 && rest[0] === "video") {
-      await this.receiveVideo(request, response, club, rest[1] as string, parsed.query);
+      await this.receiveVideo(request, response, club, rest[1] as string, parsed.query, liftCeiling);
+      return;
+    }
+
+    // A driver's own race clip from the laptop (22 Oct 2026, driver
+    // experience) - see clips.ts and receiveClip.
+    if (method === "POST" && rest.length === 2 && rest[0] === "clip") {
+      await this.receiveClip(request, response, club, rest[1] as string, parsed.query, liftCeiling);
+      return;
+    }
+
+    // A DRIVER ASKING THE DESK (22 Oct 2026, driver experience): the phone
+    // sends an ask with its badge code, the laptop collects and confirms
+    // with its token - the notes shape - and opens or closes the whole
+    // thing. forget-media takes a driver's podium videos down when they
+    // turn on "no photo" or "no video". See driverasks.ts.
+    if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "ask") {
+      await this.driverAsk(request, response, club);
+      return;
+    }
+
+    if (method === "GET" && rest.length === 2 && rest[0] === "driver" && rest[1] === "inbox") {
+      await this.readDriverAsks(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "collected") {
+      await this.clearDriverAsks(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "open") {
+      await this.setDriverAsksOpen(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "forget-media") {
+      await this.forgetDriverMedia(request, response, club);
       return;
     }
 
@@ -2400,17 +2633,19 @@ export class Relay {
       return;
     }
 
-    const limit =
-      spec.kind === "collection"
-        ? Math.min(this.maxBodyBytes, spec.maxItemBytes ?? COLLECTION_ITEM_MAX_BYTES)
-        : this.maxBodyBytes;
+    // A snapshot's own maxItemBytes caps it too (22 Oct 2026, driver
+    // experience) - see ChannelSpec.maxItemBytes.
+    const limit = Math.min(
+      this.maxBodyBytes,
+      spec.maxItemBytes ?? (spec.kind === "collection" ? COLLECTION_ITEM_MAX_BYTES : this.maxBodyBytes),
+    );
     const body = await readBody(request, response, limit);
 
     if (body === "too-big") {
       sendJson(response, 413, {
         ok: false,
         error:
-          spec.kind === "collection"
+          spec.kind === "collection" || spec.maxItemBytes !== undefined
             ? `One "${spec.name}" document may be at most ${limit} bytes, and this one is larger.`
             : `That payload is larger than this relay accepts (${limit} bytes).`,
       });
@@ -2464,10 +2699,22 @@ export class Relay {
       };
 
       if (spec.kind === "snapshot") {
+        // A switched snapshot is checked again inside the lock, as a
+        // collection is below (22 Oct 2026, driver experience): the drivers'
+        // live document is the first switched snapshot, and a close landing
+        // while it arrived would otherwise be undone by it.
+        if (SWITCHED_CHANNELS.has(spec.name) && (await this.switchedOff(club, spec.name))) {
+          return "closed" as const;
+        }
+
         await this.store.putSnapshot(club, spec.name, doc);
 
         // The copy readSnapshot holds, and any read of it in flight.
         this.forgetListing(club, spec.name);
+
+        if (spec.name === DRIVER_LIVE_CHANNEL || spec.name === DRIVER_ME_CHANNEL) {
+          this.forgetDriverDoc(club, spec.name);
+        }
 
         if (spec.name === "checkin") {
           this.forgetCheckin(club);
@@ -2625,7 +2872,7 @@ export class Relay {
     const channel = spec.name;
     const maxItems = spec.maxItems ?? Number.POSITIVE_INFINITY;
 
-    const [items, used, tunnel, signups, votes, notes, inbox] = await Promise.all([
+    const [items, used, tunnel, signups, votes, notes, inbox, asks] = await Promise.all([
       this.store.itemSizes(club, channel),
       this.store.usage(club),
       this.store.snapshotBytes(club, MANAGE_QUEUE),
@@ -2633,6 +2880,9 @@ export class Relay {
       this.store.itemSizes(club, VOTE_CHANNEL),
       this.store.itemSizes(club, NOTES_CHANNEL),
       this.store.snapshotBytes(club, INBOX),
+      // Drivers' asks are written by phones too (22 Oct 2026, driver
+      // experience), with a ceiling of their own (DRIVER_ASKS_PER_CLUB).
+      this.store.itemSizes(club, DRIVER_ASKS_CHANNEL),
     ]);
     const replaced = items.find((item) => item.id === id);
     const others = items.filter((item) => item.id !== id).sort((a, b) => a.at - b.at);
@@ -2725,7 +2975,8 @@ export class Relay {
     // Bug Hunt 8, A20-2.
     const offQuota = await this.offQuotaBytes(club);
     const phoneWritten =
-      votes.reduce((sum, item) => sum + item.bytes, 0) + notes.reduce((sum, item) => sum + item.bytes, 0) + inbox;
+      votes.reduce((sum, item) => sum + item.bytes, 0) + notes.reduce((sum, item) => sum + item.bytes, 0) + inbox +
+      asks.reduce((sum, item) => sum + item.bytes, 0);
 
     let total = used - tunnel - signups - phoneWritten - offQuota - (replaced?.bytes ?? 0) + bytes;
     let count = others.length + 1;
@@ -4172,7 +4423,25 @@ export class Relay {
       this.lastStaffPin.delete(club);
       this.lastManagePin.delete(club);
       // Its podium videos, kept outside the club's folder (videos.ts).
-      await this.videos?.removeClub(club).catch(() => {});
+      //
+      // WHY (22 Oct 2026, Bug Hunt 9): an upload whose body was still
+      // arriving when Delete was pressed took its own lock after this wipe
+      // and wrote the video - a named driver's - straight back. The wipe
+      // count goes up first, so any upload already on its way keeps
+      // nothing, and the wipe itself takes the videos lock, so it waits for
+      // a save already writing instead of racing it.
+      this.videoWipes.set(club, (this.videoWipes.get(club) ?? 0) + 1);
+      const vault = this.videos;
+
+      if (vault !== undefined) {
+        await this.withLock(`${club}|videos`, () => vault.removeClub(club).catch(() => {}));
+      }
+
+      // And its drivers' clips, the same way and for the same reason
+      // (22 Oct 2026, driver experience) - see clips.ts.
+      await this.wipeClips(club);
+      this.forgetDriverDoc(club, DRIVER_LIVE_CHANNEL);
+      this.forgetDriverDoc(club, DRIVER_ME_CHANNEL);
 
       // And the voice's lines for this club - drivers' names, spoken -
       // which the voice keeps in a folder of its own rather than the
@@ -4281,6 +4550,16 @@ export class Relay {
 
     const drivers = checkin.drivers;
 
+    // WHY (23 Oct 2026, bug hunt 10): the staff list used to hand out every
+    // driver's real badge id - and since 13 and 22 Oct that id alone opens
+    // the driver's private night, clips, live entry and details asks. The
+    // staff PIN is a desk PIN shared with volunteers, so it must not carry
+    // that. Staff now get the same rows with an opaque handle in place of
+    // the id (staffRowRef); a tap with that handle is turned back into the
+    // driver below. A racer still gets their own real id.
+    const staffRows = (): CheckinDriver[] =>
+      drivers.map((d) => ({ ...d, id: staffRowRef(checkin.passKey, club, checkin.pinSha256, d.id) }));
+
     if (action === "list") {
       // A pass first. It is what a right PIN was answered with, and it is
       // 256 bits nobody can guess, so taking it costs the PIN limits
@@ -4290,7 +4569,7 @@ export class Relay {
 
       if (PASS.test(pass)) {
         if (checkin.staffPass !== "" && sameHash(pass, checkin.staffPass)) {
-          sendJson(response, 200, { ok: true, mode: "staff", event: checkin.event, drivers, pass: checkin.staffPass });
+          sendJson(response, 200, { ok: true, mode: "staff", event: checkin.event, drivers: staffRows(), pass: checkin.staffPass });
           return;
         }
 
@@ -4368,7 +4647,7 @@ export class Relay {
       const staffHash = wellFormed && checkin.pinSha256 !== "" ? pinHash(club, offered, checkin.salt) : "";
 
       if (staffHash !== "" && sameHash(staffHash, checkin.pinSha256)) {
-        sendJson(response, 200, { ok: true, mode: "staff", event: checkin.event, drivers, pass: checkin.staffPass });
+        sendJson(response, 200, { ok: true, mode: "staff", event: checkin.event, drivers: staffRows(), pass: checkin.staffPass });
         return;
       }
 
@@ -4414,8 +4693,18 @@ export class Relay {
       return;
     }
 
-    const id = typeof input["id"] === "string" ? (input["id"] as string) : "";
-    const driver = DRIVER_ID.test(id) ? drivers.find((d) => d.id === id) : undefined;
+    const asked = typeof input["id"] === "string" ? (input["id"] as string) : "";
+    let driver = DRIVER_ID.test(asked) ? drivers.find((d) => d.id === asked) : undefined;
+
+    // A tap from the staff list carries the row's handle, not the badge id
+    // (23 Oct 2026, bug hunt 10 - see staffRows above). Only a tap: "one"
+    // answers with the real id, so a handle must never open it.
+    if (driver === undefined && action === "tap" && DRIVER_ID.test(asked) && checkin.pinSha256 !== "") {
+      driver = drivers.find((d) => sameHash(staffRowRef(checkin.passKey, club, checkin.pinSha256, d.id), asked));
+    }
+
+    // Everything from here on is keyed by the real badge id.
+    const id = driver?.id ?? "";
 
     if (driver === undefined) {
       sendJson(response, 404, { ok: false, error: "That driver is not on today's check-in list." });
@@ -4435,11 +4724,20 @@ export class Relay {
       // badge code - and whether a club offers this is not a secret from
       // its own drivers. What IS a secret is which codes are real, and
       // that is what the 404 above and readOneNight's single 404 keep.
+      const nights = await this.nightsOpenFor(club);
+
+      // AND WHETHER IT IS THEIR FIRST NIGHT (22 Oct 2026, driver
+      // experience), from their own live entry, so the badge page can offer
+      // the first-night guide before they have raced. Only ever true, and
+      // only to the holder of this badge code - the same reach as above.
+      const live = nights ? await this.liveEntryOf(club, id) : undefined;
+
       sendJson(response, 200, {
         ok: true,
         event: checkin.event,
         driver,
-        nights: await this.nightsOpenFor(club),
+        nights,
+        ...(live !== undefined && live.entry["firstNight"] === true ? { firstNight: true } : {}),
       });
       return;
     }
@@ -5709,6 +6007,13 @@ export class Relay {
       return !(await this.listeningOpenFor(club));
     }
 
+    // 22 Oct 2026, driver experience: the drivers' details go with the
+    // driver-requests switch; their live evening, like their nights, with
+    // the nights switch.
+    if (channel === DRIVER_ME_CHANNEL) {
+      return !(await this.driverAsksOpenFor(club));
+    }
+
     return !(await this.nightsOpenFor(club));
   }
 
@@ -5724,6 +6029,7 @@ export class Relay {
     club: string,
     id: string,
     query: URLSearchParams,
+    liftCeiling: () => void = () => {},
   ): Promise<void> {
     const who = this.authorise(request, club);
 
@@ -5788,50 +6094,136 @@ export class Relay {
       return;
     }
 
-    this.videoUploadsInFlight += 1;
-    let bytes: Buffer | "too-big" | "unreadable";
+    // Taken before the body is read: a delete while it arrives moves it.
+    const wipesAtStart = this.videoWipes.get(club) ?? 0;
+    // And a take-down of this driver's videos, the same way (23 Oct 2026,
+    // bug hunt 10 - see videoForgets). Noted in the same step as the count
+    // of saves pending goes up, so forgetDriverMedia never empties the map
+    // under an upload holding a start value.
+    const forgetsAtStart = driver.length > 0 ? (this.videoForgets.get(`${club}|${driver}`) ?? 0) : 0;
+    this.videoSavesPending += 1;
 
     try {
-      bytes = await readRawBody(request, response, VIDEO_MAX_BYTES);
-    } finally {
-      this.videoUploadsInFlight -= 1;
-    }
+      this.videoUploadsInFlight += 1;
+      let bytes: Buffer | "too-big" | "unreadable";
 
-    if (bytes === "too-big") {
-      sendJson(response, 413, { ok: false, error: "That video is too big." });
-      return;
-    }
+      // WHY (22 Oct 2026, Bug Hunt 9): an upload that got this far loses the
+      // 30-second ceiling on the whole body (see listen() and handle()), so a
+      // stall is caught instead - thirty seconds with no bytes at all drops
+      // the upload, while a slow but steady one gets the five minutes the
+      // laptop allows. Every chunk that arrives restarts the timer. It is
+      // switched off again once the body is in, so a kept-alive socket does
+      // not carry it on.
+      liftCeiling();
+      request.setTimeout(30_000, () => request.destroy());
 
-    // An mp4 opens with its "ftyp" box. Anything else is not a video this
-    // relay will hand to a phone as one.
-    if (bytes === "unreadable" || bytes.length < 12 || bytes.toString("latin1", 4, 8) !== "ftyp") {
-      sendJson(response, 400, { ok: false, error: "That is not an mp4 video." });
-      return;
-    }
-
-    const meta: VideoMeta = {
-      id,
-      race,
-      position,
-      name,
-      label,
-      at: this.now().toISOString(),
-      bytes: bytes.length,
-      ...(driver.length > 0 ? { driver } : {}),
-    };
-
-    const vault = this.videos;
-
-    await this.withLock(`${club}|videos`, async () => {
-      // Room first: the oldest go, never the newest. See videosToDrop.
-      for (const old of videosToDrop(await vault.list(club), this.now().getTime(), bytes.length)) {
-        await vault.remove(club, old.id);
+      try {
+        bytes = await readRawBody(request, response, VIDEO_MAX_BYTES);
+      } finally {
+        if (!request.destroyed) {
+          request.setTimeout(0);
+        }
+        this.videoUploadsInFlight -= 1;
       }
 
-      await vault.put(club, meta, bytes);
-    });
+      if (bytes === "too-big") {
+        sendJson(response, 413, { ok: false, error: "That video is too big." });
+        return;
+      }
 
-    sendJson(response, 200, { ok: true, page: `/c/${club}/videos/${race}`, video: `/c/${club}/video/${id}.mp4` });
+      // An mp4 opens with its "ftyp" box. Anything else is not a video this
+      // relay will hand to a phone as one.
+      if (bytes === "unreadable" || bytes.length < 12 || bytes.toString("latin1", 4, 8) !== "ftyp") {
+        sendJson(response, 400, { ok: false, error: "That is not an mp4 video." });
+        return;
+      }
+
+      const meta: VideoMeta = {
+        id,
+        race,
+        position,
+        name,
+        label,
+        at: this.now().toISOString(),
+        bytes: bytes.length,
+        ...(driver.length > 0 ? { driver } : {}),
+      };
+
+      const vault = this.videos;
+
+      const kept = await this.withLock(`${club}|videos`, async () => {
+        // The club deleted everything while this was on its way: keep none of it.
+        if ((this.videoWipes.get(club) ?? 0) !== wipesAtStart) {
+          return false;
+        }
+
+        // Or this driver's videos were taken down while it was on its way
+        // (23 Oct 2026, bug hunt 10 - see videoForgets): keep none of it.
+        if (driver.length > 0 && (this.videoForgets.get(`${club}|${driver}`) ?? 0) !== forgetsAtStart) {
+          return false;
+        }
+
+        // Room first: the oldest go, never the newest. See videosToDrop.
+        for (const old of videosToDrop(await vault.list(club), this.now().getTime(), bytes.length)) {
+          await vault.remove(club, old.id);
+        }
+
+        await vault.put(club, meta, bytes);
+        return true;
+      });
+
+      if (!kept) {
+        sendJson(response, 410, { ok: false, error: "This video was taken down while it was on its way." });
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, page: `/c/${club}/videos/${race}`, video: `/c/${club}/video/${id}.mp4` });
+    } finally {
+      this.videoSavesPending -= 1;
+    }
+  }
+
+  /**
+   * Deletes every club's videos past their week (22 Oct 2026, Bug Hunt 9).
+   * The upload's own clear-out only runs for a club that keeps uploading,
+   * so this runs on a timer from listen(). It drops exactly what
+   * videosHeld already hides (videosToDrop with nothing incoming), so it
+   * never takes a video a phone can still see, and it holds each club's
+   * videos lock so it cannot race an upload.
+   *
+   * The clubs come from the caller, or from the vault's listClubs().
+   */
+  async sweepVideos(clubs?: Iterable<string>): Promise<number> {
+    const vault = this.videos as (VideoVault & { listClubs?: () => Promise<string[]> }) | undefined;
+
+    if (vault === undefined) {
+      return 0;
+    }
+
+    const names =
+      clubs !== undefined
+        ? [...clubs]
+        : typeof vault.listClubs === "function"
+          ? await vault.listClubs().catch(() => [] as string[])
+          : [];
+    let dropped = 0;
+
+    for (const club of names) {
+      if (!isValidClubId(club)) {
+        continue;
+      }
+
+      await this.withLock(`${club}|videos`, async () => {
+        const held = await vault.list(club);
+
+        for (const old of videosToDrop(held, this.now().getTime())) {
+          await vault.remove(club, old.id);
+          dropped += 1;
+        }
+      }).catch(() => {});
+    }
+
+    return dropped;
   }
 
   /** A club's videos still held - anything past its week dropped from the answer, whether or not it has been swept yet. */
@@ -5872,7 +6264,7 @@ export class Relay {
         .sort((a, b) => a.position - b.position)
       : [];
 
-    sendHtml(response, 200, videosPage(tenant.club, tenant.name, context, videos), context.nonce);
+    sendHtml(response, 200, videosPage(tenant.club, tenant.name, context, videos, VIDEO_ID.test(wanted) ? wanted : ""), context.nonce);
   }
 
   /**
@@ -5904,7 +6296,35 @@ export class Relay {
       return;
     }
 
-    const total = meta.bytes;
+    const download = query.get("download") === "1";
+    const fileName = `${[meta.label, meta.name].filter((s) => s.length > 0).join(" - ") || "Highlight"}`
+      .replace(/[^A-Za-z0-9 ._-]/g, "")
+      .trim()
+      .slice(0, 80) || "Highlight";
+    const vault = this.videos;
+
+    await this.sendRanged(request, response, meta.bytes, "video/mp4", `${fileName}.mp4`, download, (start, end) =>
+      vault.read(club, id, start, end),
+    );
+  }
+
+  /**
+   * Bytes held outside the store - a podium video or a driver's clip - in
+   * ranges, because a phone's player asks for them that way and will not
+   * play (or seek) them served whole without. ?download=1 (download here)
+   * hands it over as a file to keep. Factored out of videoFile (22 Oct
+   * 2026, driver experience) so the clips are served by the very same
+   * code, its two bug-hunt fixes included.
+   */
+  private async sendRanged(
+    request: IncomingMessage,
+    response: ServerResponse,
+    total: number,
+    type: string,
+    fileName: string,
+    download: boolean,
+    read: (start: number, end: number) => Promise<Buffer | undefined>,
+  ): Promise<void> {
     let start = 0;
     let end = total - 1;
     let partial = false;
@@ -5938,20 +6358,14 @@ export class Relay {
       partial = true;
     }
 
-    const download = query.get("download") === "1";
-    const fileName = `${[meta.label, meta.name].filter((s) => s.length > 0).join(" - ") || "Highlight"}`
-      .replace(/[^A-Za-z0-9 ._-]/g, "")
-      .trim()
-      .slice(0, 80) || "Highlight";
-
     response.writeHead(partial ? 206 : 200, {
       ...BASE_HEADERS,
-      "content-type": "video/mp4",
+      "content-type": type,
       "accept-ranges": "bytes",
       "content-length": end - start + 1,
       "cache-control": "private, max-age=3600",
       ...(partial ? { "content-range": `bytes ${start}-${end}/${total}` } : {}),
-      ...(download ? { "content-disposition": `attachment; filename="${fileName}.mp4"` } : {}),
+      ...(download ? { "content-disposition": `attachment; filename="${fileName}"` } : {}),
     });
 
     if (request.method === "HEAD") {
@@ -5960,11 +6374,10 @@ export class Relay {
     }
 
     // A megabyte at a time, so a whole video is never in memory at once.
-    const vault = this.videos;
     const chunk = 1024 * 1024;
 
     for (let at = start; at <= end; at += chunk) {
-      const piece = await vault.read(club, id, at, Math.min(end, at + chunk - 1)).catch(() => undefined);
+      const piece = await read(at, Math.min(end, at + chunk - 1)).catch(() => undefined);
 
       if (piece === undefined || piece.length === 0) {
         break;
@@ -6057,7 +6470,17 @@ export class Relay {
         // listen switch, and a cache that outlived its files is the bug
         // that taught them to.
         this.forgetListing(club, NIGHTS_CHANNEL);
+
+        // AND THE DRIVERS' LIVE EVENING WITH THEM (22 Oct 2026, driver
+        // experience) - where each of them is racing next, under their
+        // badge id. The store has no way to delete a snapshot, so it is
+        // written over with nothing, which every reader takes as absent;
+        // seq 0, so the laptop's next publish after reopening always wins.
+        await this.blankSnapshot(club, DRIVER_LIVE_CHANNEL);
       });
+
+      // And their clips - the announcer calling a named driver's race.
+      await this.wipeClips(club);
     }
 
     sendJson(response, 200, { ok: true, open });
@@ -6087,14 +6510,25 @@ export class Relay {
   private async readOneNight(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
     const who = `${club}|${clientAddress(request)}`;
 
-    if (this.checkinReads.blocked(who)) {
+    // Read before the limit is chosen (22 Oct 2026, driver experience): the
+    // live poll, {part:"live"}, has an allowance of its own - see
+    // nightLiveReads - and only the body says which this is. A body is at
+    // most CHECKIN_MAX_BODY, so reading one before refusing costs nothing.
+    if (this.checkinReads.blocked(who) && this.nightLiveReads.blocked(who)) {
       sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
       return;
     }
 
-    this.checkinReads.hit(who);
-
     const body = await readBody(request, response, CHECKIN_MAX_BODY);
+    const liveOnly = isPlainObject(body) && body["part"] === "live";
+    const reads = liveOnly ? this.nightLiveReads : this.checkinReads;
+
+    if (reads.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    reads.hit(who);
 
     if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
       sendJson(response, 400, { ok: false, error: "That could not be read." });
@@ -6113,9 +6547,31 @@ export class Relay {
       return;
     }
 
+    // THEIR LIVE EVENING (22 Oct 2026, driver experience) - next race,
+    // marshal duty, transponder, the desk's answers - from the driver's
+    // own entry in the private live document, when it is fresh. A driver
+    // with a live entry and no night yet (before their first race) is
+    // answered with night: null rather than the 404, which is now only for
+    // somebody with neither.
+    const live = await this.liveEntryOf(club, id);
+    const liveField = live === undefined ? {} : { live: { ...live.entry, at: live.at } };
+
+    // The page's twenty-second poll: only the live entry. A night with no
+    // live entry (the laptop has gone home) still answers ok, so the page
+    // keeps what it has rather than reading the poll as "not found".
+    if (liveOnly) {
+      if (live === undefined && (await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined)) === undefined) {
+        sendJson(response, 404, { ok: false, error: "Not found" });
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, ...liveField });
+      return;
+    }
+
     const doc = await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined);
 
-    if (doc === undefined) {
+    if (doc === undefined && live === undefined) {
       sendJson(response, 404, { ok: false, error: "Not found" });
       return;
     }
@@ -6124,7 +6580,686 @@ export class Relay {
     // on the same badge id, which is already the credential for this.
     const videos = await this.videosOfDriver(club, id);
 
-    sendJson(response, 200, { ok: true, night: doc.body, ...(videos.length > 0 ? { videos } : {}) });
+    // Their own race clips, the same way (22 Oct 2026, driver experience).
+    const clips = await this.clipsOfDriver(club, id);
+
+    // What they can ask the desk to change, and whether they can ask at
+    // all right now - only while the club takes asks and they are on
+    // tonight's check-in list, exactly the rule driver/ask applies. "pin"
+    // is whether they have a personal PIN, which the laptop never needs
+    // to say: the relay knows from its own racer map.
+    const checkin = await this.askGateOf(club, id);
+    const meEntry = checkin === undefined ? undefined : (await this.driverDocOf(club, DRIVER_ME_CHANNEL))?.drivers.get(id);
+    const me = checkin === undefined || meEntry === undefined ? {} : { me: { ...meEntry, pin: hasRacerPin(checkin, id) } };
+
+    sendJson(response, 200, {
+      ok: true,
+      night: doc === undefined ? null : doc.body,
+      ...(videos.length > 0 ? { videos } : {}),
+      ...(clips.length > 0 ? { clips } : {}),
+      ...liveField,
+      ...me,
+      ...(checkin !== undefined ? { asksOpen: true } : {}),
+    });
+  }
+
+  // ------------------------------------------- drivers' own documents
+  //
+  // 22 Oct 2026, driver experience: the private live and details
+  // documents, parsed once and held, as the check-in roster is.
+
+  /** One of the drivers' private documents, parsed - or undefined when there is none, or it will not read. */
+  private async driverDocOf(club: string, channel: string): Promise<DriverDoc | undefined> {
+    const key = `${club}/${channel}`;
+    const held = this.driverDocs.get(key);
+
+    if (held !== undefined) {
+      return held ?? undefined;
+    }
+
+    return this.shared(
+      this.driverDocLoads,
+      key,
+      () => this.driverDocEpoch,
+      async () => driverDocFrom(await this.store.getSnapshot(club, channel)),
+      (doc) => {
+        this.driverDocs.set(key, doc ?? null);
+      },
+    ).catch(() => undefined);
+  }
+
+  /** Called after every write to a club's driverlive or driverme. After, not before, as forgetCheckin is. */
+  private forgetDriverDoc(club: string, channel: string): void {
+    this.driverDocEpoch++;
+    this.driverDocs.delete(`${club}/${channel}`);
+  }
+
+  /** One driver's entry in the live document, with the document's "at" - only while the document is fresh. */
+  private async liveEntryOf(club: string, id: string): Promise<{ entry: Readonly<Record<string, unknown>>; at: string } | undefined> {
+    const doc = await this.driverDocOf(club, DRIVER_LIVE_CHANNEL);
+
+    if (doc === undefined || this.now().getTime() - doc.takenAt > DRIVER_LIVE_FRESH_MS) {
+      return undefined;
+    }
+
+    const entry = doc.drivers.get(id);
+
+    return entry === undefined ? undefined : { entry, at: doc.at !== "" ? doc.at : new Date(doc.takenAt).toISOString() };
+  }
+
+  /**
+   * Writes a snapshot over with nothing, which every reader takes as absent
+   * - the store has no way to delete one. seq 0, so whatever the laptop
+   * publishes next always wins. Called inside the club's lock.
+   */
+  private async blankSnapshot(club: string, channel: string): Promise<void> {
+    await this.store.putSnapshot(club, channel, { seq: 0, publishedAt: this.now().toISOString(), body: null });
+    this.forgetListing(club, channel);
+
+    if (channel === DRIVER_LIVE_CHANNEL || channel === DRIVER_ME_CHANNEL) {
+      this.forgetDriverDoc(club, channel);
+    }
+  }
+
+  // --------------------------------------------------- drivers' clips
+
+  /**
+   * A driver's own race clip from the laptop (22 Oct 2026, driver
+   * experience). The bytes are the body (audio/mpeg); what it is comes in
+   * the query: driver (badge id, required), label, race. Only while the
+   * club offers drivers their nights. See clips.ts.
+   */
+  private async receiveClip(
+    request: IncomingMessage,
+    response: ServerResponse,
+    club: string,
+    rawId: string,
+    query: URLSearchParams,
+    liftCeiling: () => void = () => {},
+  ): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      await discardRest(request, response);
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      await discardRest(request, response);
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    if (this.clips === undefined) {
+      await discardRest(request, response);
+      sendJson(response, 404, { ok: false, error: "This relay does not keep drivers' clips." });
+      return;
+    }
+
+    // Taken before the switch is read: a close that lands after this moves
+    // it, and one that landed before is seen by the check below.
+    const wipesAtStart = this.clipWipes.get(club) ?? 0;
+
+    if (!(await this.nightsOpenFor(club))) {
+      await discardRest(request, response);
+      sendJson(response, 403, { ok: false, error: "This club is not offering drivers their own night, so their clips are not accepted." });
+      return;
+    }
+
+    if (this.clipUploadsInFlight >= 2) {
+      await discardRest(request, response);
+      sendJson(response, 429, { ok: false, error: "Busy with other clips. Try again in a minute." });
+      return;
+    }
+
+    if (this.clipUploads.blocked(club)) {
+      await discardRest(request, response);
+      sendJson(response, 429, { ok: false, error: "Too many clips at once. Try again in a minute." });
+      return;
+    }
+
+    this.clipUploads.hit(club);
+
+    const id = rawId.toLowerCase();
+    const driver = (query.get("driver") ?? "").trim().toLowerCase();
+    const race = (query.get("race") ?? "").trim().toLowerCase();
+    const label = cleanText(query.get("label") ?? "", CLIP_LABEL_MAX);
+
+    if (!CLIP_ID.test(id) || !CLIP_DRIVER_ID.test(driver) || (race.length > 0 && !CLIP_RACE_ID.test(race))) {
+      await discardRest(request, response);
+      sendJson(response, 400, { ok: false, error: "That clip's details could not be read." });
+      return;
+    }
+
+    const declared = Number(request.headers["content-length"] ?? "0");
+
+    if (Number.isFinite(declared) && declared > CLIP_MAX_BYTES) {
+      await discardRest(request, response);
+      sendJson(response, 413, { ok: false, error: "That clip is too big." });
+      return;
+    }
+
+    this.clipUploadsInFlight += 1;
+    let bytes: Buffer | "too-big" | "unreadable";
+
+    // The idle timeout the podium video has, and for its reason: four
+    // megabytes over a track's uplink can take longer than thirty seconds.
+    liftCeiling();
+    request.setTimeout(30_000, () => request.destroy());
+
+    try {
+      bytes = await readRawBody(request, response, CLIP_MAX_BYTES);
+    } finally {
+      if (!request.destroyed) {
+        request.setTimeout(0);
+      }
+      this.clipUploadsInFlight -= 1;
+    }
+
+    if (bytes === "too-big") {
+      sendJson(response, 413, { ok: false, error: "That clip is too big." });
+      return;
+    }
+
+    if (bytes === "unreadable" || !looksLikeMp3(bytes)) {
+      sendJson(response, 400, { ok: false, error: "That is not an mp3." });
+      return;
+    }
+
+    const meta: ClipMeta = {
+      id,
+      driver,
+      label,
+      at: this.now().toISOString(),
+      bytes: bytes.length,
+      ...(race.length > 0 ? { race } : {}),
+    };
+
+    const vault = this.clips;
+    const body = bytes;
+
+    const kept = await this.withLock(`${club}|clips`, async () => {
+      // Nights closed, or the club deleted everything, while this was on
+      // its way: keep none of it.
+      if ((this.clipWipes.get(club) ?? 0) !== wipesAtStart || !(await this.nightsOpenFor(club))) {
+        return false;
+      }
+
+      // Room first: the oldest go, never the newest. See clipsToDrop.
+      for (const old of clipsToDrop(await vault.list(club), this.now().getTime(), { driver, bytes: body.length })) {
+        await vault.remove(club, old.id);
+      }
+
+      await vault.put(club, meta, body);
+      return true;
+    });
+
+    if (!kept) {
+      sendJson(response, 410, { ok: false, error: "The club closed drivers' nights, or deleted what it had published, while this clip was on its way." });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true, clip: `/c/${club}/clip/${id}.mp3` });
+  }
+
+  /** Every one of a club's clips, gone - when nights close or the club is deleted. Anything on its way keeps nothing. */
+  private async wipeClips(club: string): Promise<void> {
+    this.clipWipes.set(club, (this.clipWipes.get(club) ?? 0) + 1);
+    const vault = this.clips;
+
+    if (vault !== undefined) {
+      await this.withLock(`${club}|clips`, () => vault.removeClub(club).catch(() => {}));
+    }
+  }
+
+  /**
+   * Deletes every club's clips past their week, or past a driver's or a
+   * club's share - exactly what clipsHeld already hides, so it never takes
+   * a clip a phone can still see. On the videos' timers (see listen()).
+   */
+  async sweepClips(clubs?: Iterable<string>): Promise<number> {
+    const vault = this.clips;
+
+    if (vault === undefined) {
+      return 0;
+    }
+
+    const names = clubs !== undefined ? [...clubs] : await vault.listClubs().catch(() => [] as string[]);
+    let dropped = 0;
+
+    for (const club of names) {
+      if (!isValidClubId(club)) {
+        continue;
+      }
+
+      await this.withLock(`${club}|clips`, async () => {
+        for (const old of clipsToDrop(await vault.list(club), this.now().getTime())) {
+          await vault.remove(club, old.id);
+          dropped += 1;
+        }
+      }).catch(() => {});
+    }
+
+    return dropped;
+  }
+
+  /** A club's clips still held - anything past its week or its share dropped from the answer, swept or not. */
+  private async clipsHeld(club: string): Promise<ClipMeta[]> {
+    if (this.clips === undefined) {
+      return [];
+    }
+
+    const held = await this.clips.list(club).catch(() => [] as ClipMeta[]);
+    const stale = new Set(clipsToDrop(held, this.now().getTime()).map((c) => c.id));
+
+    return held.filter((c) => !stale.has(c.id));
+  }
+
+  /** One driver's clips, newest first, as the night page shows them. */
+  private async clipsOfDriver(
+    club: string,
+    driver: string,
+  ): Promise<{ url: string; download: string; label: string; at: string; race?: string }[]> {
+    return (await this.clipsHeld(club))
+      .filter((c) => c.driver === driver)
+      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+      .map((c) => ({
+        url: `/c/${club}/clip/${c.id}.mp3`,
+        download: `/c/${club}/clip/${c.id}.mp3?download=1`,
+        label: c.label,
+        at: c.at,
+        ...(c.race !== undefined ? { race: c.race } : {}),
+      }));
+  }
+
+  /** One clip's bytes, in ranges, as a video's are - see sendRanged. */
+  private async clipFile(
+    request: IncomingMessage,
+    response: ServerResponse,
+    club: string,
+    file: string,
+    query: URLSearchParams,
+  ): Promise<void> {
+    const address = `${club}|${clientAddress(request)}`;
+
+    if (this.clipReads.blocked(address)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.clipReads.hit(address);
+
+    const id = file.endsWith(".mp3") ? file.slice(0, -4).toLowerCase() : "";
+    const vault = this.clips;
+
+    // One file read for an id that is not held, before the whole folder is
+    // (22 Oct 2026, security review): clipsHeld reads every one of the
+    // club's up-to-800 metas, and this route is public - so a guessed id
+    // cost the relay 800 reads, 900 times a minute per address. Only a real
+    // clip's address (128 random bits) pays for the full check.
+    const known = vault !== undefined && CLIP_ID.test(id) ? await vault.meta(club, id).catch(() => undefined) : undefined;
+    const meta = known !== undefined ? (await this.clipsHeld(club)).find((c) => c.id === id) : undefined;
+
+    if (vault === undefined || meta === undefined || meta.bytes === 0) {
+      sendJson(response, 404, { ok: false, error: "That clip has gone - they are kept for a week." });
+      return;
+    }
+
+    const fileName = meta.label.replace(/[^A-Za-z0-9 ._()-]/g, "").trim().slice(0, 80) || "Race call";
+
+    await this.sendRanged(request, response, meta.bytes, "audio/mpeg", `${fileName}.mp3`, query.get("download") === "1", (start, end) =>
+      vault.read(club, id, start, end),
+    );
+  }
+
+  // ---------------------------------------------------- drivers' asks
+  //
+  // 22 Oct 2026, driver experience - see driverasks.ts.
+
+  /** Whether this club takes drivers' asks at all. Absent means no, as every switch here does. */
+  private async driverAsksOpenFor(club: string): Promise<boolean> {
+    const body = (await this.store.getSnapshot(club, DRIVER_ASKS_OPEN_DOC))?.body;
+
+    return isPlainObject(body) && body["open"] === true;
+  }
+
+  /**
+   * The check-in roster, when this driver may ask the desk for something
+   * right now - nights open, asks open, check-in open and them on its list
+   * - or undefined. One rule, so the night answer's asksOpen and the ask
+   * route can never disagree. Every way of failing it is answered the same.
+   */
+  private async askGateOf(club: string, id: string): Promise<CheckinView | undefined> {
+    if (!(await this.nightsOpenFor(club)) || !(await this.driverAsksOpenFor(club))) {
+      return undefined;
+    }
+
+    const checkin = await this.checkinOf(club).catch(() => undefined);
+
+    if (checkin === undefined || !checkin.enabled || !checkin.drivers.some((d) => d.id === id)) {
+      return undefined;
+    }
+
+    return checkin;
+  }
+
+  /**
+   * A driver asking the desk for something, with their badge code - see
+   * driverasks.ts. Held until the laptop collects it; never acted on here.
+   */
+  private async driverAsk(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.askTraffic.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a few minutes and try again." });
+      return;
+    }
+
+    this.askTraffic.hit(who);
+
+    const body = await readBody(request, response, DRIVER_ASK_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That request could not be read." });
+      return;
+    }
+
+    const id = typeof body["id"] === "string" ? body["id"].trim().toLowerCase() : "";
+
+    // ONE ANSWER for a code that is not a code, a club that is closed and a
+    // driver who is not on tonight's list - as readOneNight does, so this
+    // route tells a stranger nothing about which codes are real.
+    const checkin = DRIVER_ID.test(id) ? await this.askGateOf(club, id) : undefined;
+
+    if (checkin === undefined) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const kind = typeof body["kind"] === "string" ? body["kind"] : "";
+
+    if (!(DRIVER_ASK_KINDS as readonly string[]).includes(kind)) {
+      sendJson(response, 400, { ok: false, error: "That request could not be read." });
+      return;
+    }
+
+    // The personal PIN's proof is the pass checkin/list answered it with,
+    // checked against this driver's own in constant time (racerByPass).
+    const pass = typeof body["pass"] === "string" && PASS.test(body["pass"]) ? body["pass"] : "";
+    const withPin = pass !== "" && racerByPass(checkin, pass)?.id === id;
+
+    // A driver who HAS a personal PIN changes their details only with it:
+    // the badge code alone is printed on a lanyard. A driver without one
+    // can use the badge - but not for their email (askFieldsFrom).
+    if (kind === "details" && hasRacerPin(checkin, id) && !withPin) {
+      sendJson(response, 403, { ok: false, error: "Sign in with your personal PIN first." });
+      return;
+    }
+
+    const check = askFieldsFrom(kind, body["f"], withPin);
+
+    if (!check.ok) {
+      sendJson(response, check.status, { ok: false, error: check.error });
+      return;
+    }
+
+    const badge = `${club}|${id}`;
+
+    if (this.askPerDriver.blocked(badge) || (kind === "query" && this.askQueries.blocked(badge))) {
+      sendJson(response, 429, { ok: false, error: "You have asked a few times already - wait a while, or ask at the desk." });
+      return;
+    }
+
+    this.askPerDriver.hit(badge);
+
+    if (kind === "query") {
+      this.askQueries.hit(badge);
+    }
+
+    const at = this.now();
+    const stored: DriverAskBody = { b: id, k: kind as DriverAskBody["k"], v: withPin ? "pin" : "badge", f: check.f, at: at.toISOString() };
+
+    if (jsonBytes(stored) > DRIVER_ASK_MAX_STORED) {
+      sendJson(response, 413, { ok: false, error: "That is too long." });
+      return;
+    }
+
+    const outcome = await this.withLock(club, async () => {
+      // Read again inside the lock, as sendClubNote does: the club may have
+      // closed asks or nights, or taken them off the list, while this
+      // waited for it - and closing deletes what is held under this lock.
+      if ((await this.askGateOf(club, id)) === undefined) {
+        return "closed" as const;
+      }
+
+      const held = await this.store.listItems(club, DRIVER_ASKS_CHANNEL);
+
+      if (held.length >= DRIVER_ASKS_PER_CLUB) {
+        return "full" as const;
+      }
+
+      if (held.filter((item) => asDriverAsk(item.doc.body)?.b === id).length >= DRIVER_ASKS_PER_DRIVER) {
+        return "mine" as const;
+      }
+
+      // Random, as a note's id is: it says nothing about what was asked or
+      // how many have been.
+      const itemId = randomBytes(12).toString("hex");
+
+      await this.store.putItem(club, DRIVER_ASKS_CHANNEL, itemId, {
+        seq: at.getTime(),
+        publishedAt: at.toISOString(),
+        body: stored,
+      });
+
+      return { itemId };
+    });
+
+    if (outcome === "closed") {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    if (outcome === "full") {
+      sendJson(response, 503, { ok: false, error: "The desk has a lot to get through right now. Try again in a while, or ask at the desk." });
+      return;
+    }
+
+    if (outcome === "mine") {
+      sendJson(response, 429, { ok: false, error: `You have ${DRIVER_ASKS_PER_DRIVER} waiting already - the desk will get to them.` });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true, ref: askRefOf(outcome.itemId) });
+  }
+
+  /**
+   * What the laptop collects: every ask held, oldest first. NOT DELETED
+   * HERE - the laptop files them, then confirms through driver/collected,
+   * so a poll whose answer never arrived loses nothing (the notes shape).
+   */
+  private async readDriverAsks(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const items = (await this.store.listItems(club, DRIVER_ASKS_CHANNEL))
+      .map((item) => ({ id: item.id, seq: item.doc.seq, ask: asDriverAsk(item.doc.body) }))
+      .filter((item): item is { id: string; seq: number; ask: DriverAskBody } => item.ask !== undefined)
+      .sort((a, b) => a.seq - b.seq || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((item) => ({ id: item.id, ...item.ask }));
+
+    sendJson(response, 200, { ok: true, items });
+  }
+
+  /** The laptop saying it has filed these asks, so the relay can let them go. An id already gone is not an error. */
+  private async clearDriverAsks(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const body = await readBody(request, response, DRIVER_ASKS_COLLECT_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const asked = Array.isArray(body["ids"]) ? (body["ids"] as unknown[]) : [];
+    const ids = asked
+      .filter((id): id is string => typeof id === "string" && /^[0-9a-f]{24}$/.test(id))
+      .slice(0, DRIVER_ASKS_PER_CLUB);
+
+    let gone = 0;
+
+    await this.withLock(club, async () => {
+      for (const id of ids) {
+        await this.store.deleteItem(club, DRIVER_ASKS_CHANNEL, id);
+        gone++;
+      }
+    });
+
+    sendJson(response, 200, { ok: true, cleared: gone });
+  }
+
+  /**
+   * The laptop saying whether its club takes drivers' asks - sent when the
+   * setting changes and on every start. CLOSING CLEARS WHAT IS HELD: every
+   * ask not yet collected, and the drivers' details document, which only
+   * exists so they can ask.
+   */
+  private async setDriverAsksOpen(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const body = await readBody(request, response, NOTES_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const open = body["open"] === true;
+
+    await this.store.putSnapshot(club, DRIVER_ASKS_OPEN_DOC, {
+      seq: this.now().getTime(),
+      publishedAt: this.now().toISOString(),
+      body: { open },
+    });
+
+    if (!open) {
+      await this.withLock(club, async () => {
+        // Ids from the directory listing, as the other switches do, so a
+        // file that will not parse is deleted too.
+        for (const item of await this.store.itemSizes(club, DRIVER_ASKS_CHANNEL)) {
+          await this.store.deleteItem(club, DRIVER_ASKS_CHANNEL, item.id);
+        }
+
+        await this.blankSnapshot(club, DRIVER_ME_CHANNEL);
+      });
+    }
+
+    sendJson(response, 200, { ok: true, open });
+  }
+
+  /**
+   * Takes down a driver's podium videos at once (22 Oct 2026, driver
+   * experience), when the desk has turned on "no photo online" or "no
+   * video online" for them. Body {id} or {ids:[...]}, badge ids. Their
+   * clips stay: those are private to their own badge, and these flags are
+   * about what the public sees.
+   */
+  private async forgetDriverMedia(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const body = await readBody(request, response, NOTES_COLLECT_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const asked = [
+      ...(typeof body["id"] === "string" ? [body["id"]] : []),
+      ...(Array.isArray(body["ids"]) ? (body["ids"] as unknown[]) : []),
+    ];
+    const drivers = new Set(
+      asked
+        .filter((id): id is string => typeof id === "string")
+        .map((id) => id.trim().toLowerCase())
+        .filter((id) => DRIVER_ID.test(id))
+        .slice(0, 100),
+    );
+
+    if (drivers.size === 0) {
+      sendJson(response, 400, { ok: false, error: "Say whose videos to take down." });
+      return;
+    }
+
+    const vault = this.videos;
+    let forgotten = 0;
+
+    if (vault !== undefined) {
+      await this.withLock(`${club}|videos`, async () => {
+        // WHY (23 Oct 2026, bug hunt 10): an upload still arriving for one
+        // of these drivers used to be saved after this ran. Counting the
+        // take-down first makes it keep nothing (see videoForgets). With no
+        // upload waiting to be saved, nothing holds an old count, so the
+        // map is emptied first and never grows past what is in flight.
+        if (this.videoSavesPending === 0) {
+          this.videoForgets.clear();
+        }
+
+        for (const d of drivers) {
+          this.videoForgets.set(`${club}|${d}`, (this.videoForgets.get(`${club}|${d}`) ?? 0) + 1);
+        }
+
+        for (const video of await vault.list(club)) {
+          if (video.driver !== undefined && drivers.has(video.driver)) {
+            await vault.remove(club, video.id);
+            forgotten += 1;
+          }
+        }
+      });
+    }
+
+    sendJson(response, 200, { ok: true, forgotten });
   }
 
   /**
@@ -7212,6 +8347,20 @@ export function keyedPass(key: Buffer, kind: "staff" | "racer" | "manager" | "si
   return createHmac("sha256", key).update(`hg-pass2|${passFor(kind, club, hash)}`, "utf8").digest("hex");
 }
 
+/**
+ * The handle the staff check-in list shows in place of a driver's badge id
+ * (23 Oct 2026, bug hunt 10 - see checkinRequest). A badge id is the whole
+ * credential for a driver's private night, so a list shared with every
+ * gate volunteer must not carry it. Twenty hex characters, the shape of a
+ * badge id, so the page handles it the same way; keyed with the relay-only
+ * pass key, so a leaked list cannot be turned back into badge ids; and
+ * made with the staff PIN's hash in it, so it goes stale when the PIN
+ * changes. Its own label, so it can never be mistaken for a pass.
+ */
+export function staffRowRef(key: Buffer, club: string, staffPinSha256: string, driverId: string): string {
+  return createHmac("sha256", key).update(`hg-staffrow|${club}|${staffPinSha256}|${driverId}`, "utf8").digest("hex").slice(0, 20);
+}
+
 /** Where a club's pass key is kept. A snapshot name no channel uses, like pinguard: nobody can publish it or read it, and deleting the club deletes it. */
 const PASS_KEY_DOC = "passkey";
 
@@ -7637,6 +8786,47 @@ function racerByPass(checkin: CheckinView, pass: string): CheckinDriver | undefi
   return found;
 }
 
+/** Whether this driver has a personal PIN - some racer entry opens them (22 Oct 2026, driver experience). */
+function hasRacerPin(checkin: CheckinView, id: string): boolean {
+  for (const entry of checkin.racers.values()) {
+    if (entry.driver.id === id) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * driverlive or driverme as stored, parsed down to each badge id's entry
+ * (22 Oct 2026, driver experience). A blanked document (body null), or
+ * anything that is not an object, reads as absent.
+ */
+function driverDocFrom(doc: StoredDocument | undefined): DriverDoc | undefined {
+  if (doc === undefined || !isPlainObject(doc.body)) {
+    return undefined;
+  }
+
+  const drivers = new Map<string, Readonly<Record<string, unknown>>>();
+  const listed = doc.body["drivers"];
+
+  if (isPlainObject(listed)) {
+    for (const [id, entry] of Object.entries(listed)) {
+      if (DRIVER_ID.test(id) && isPlainObject(entry)) {
+        drivers.set(id, entry);
+      }
+    }
+  }
+
+  const at = doc.body["at"];
+
+  return {
+    takenAt: Date.parse(doc.publishedAt) || 0,
+    at: typeof at === "string" && !Number.isNaN(Date.parse(at)) ? at : "",
+    drivers,
+  };
+}
+
 /** What a value costs written out as JSON, in bytes - how it is stored. */
 function jsonBytes(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value));
@@ -7979,6 +9169,7 @@ function readRawBody(
         chunks.length = 0;
         request.off("data", onData);
         request.off("end", onEnd);
+        request.off("close", onClose);
         void discardRest(request, response).then(() => finish("too-big"));
         return;
       }
@@ -7990,10 +9181,19 @@ function readRawBody(
       finish(total === 0 ? "unreadable" : Buffer.concat(chunks));
     };
 
+    // Taken off while a too-big body drains, so the 413 is not turned into
+    // "unreadable" by the close that follows the drain.
+    const onClose = (): void => finish("unreadable");
+
     request.on("data", onData);
     request.on("end", onEnd);
     request.on("error", () => finish("unreadable"));
     request.on("aborted", () => finish("unreadable"));
+    // WHY (22 Oct 2026, Bug Hunt 9): a stalled upload is now destroyed by
+    // the relay itself (receiveVideo's idle timeout), and a destroyed
+    // request is not sure to say "aborted" - "close" always comes, and
+    // after "end" it changes nothing because the answer is already settled.
+    request.on("close", onClose);
   });
 }
 

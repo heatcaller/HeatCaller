@@ -102,7 +102,7 @@ public sealed class BugHunt4RaceControlTests : IDisposable
             UiThread = window,
             Settings = new AppSettings(),
             Undo = new UndoService(),
-            Race = race,
+            Race = new RaceTiming(race),
             Events = RaceEventStore.Load(),
             Classes = RaceClassStore.Load(),
             Profiles = ProfileStore.Load(),
@@ -188,7 +188,7 @@ public sealed class BugHunt4RaceControlTests : IDisposable
 
         // A re-run races with the Round box on freeform, so there is no round
         // to file it under - only the name, which is the recorded heat's own.
-        new RaceJournal().Record(race, DateTime.UtcNow, string.Empty, force: true,
+        new RaceJournal().Record(new RaceTiming(race), DateTime.UtcNow, string.Empty, force: true,
             roundId: null, raceLabel: "Stock - Q1 Heat 1", isRerun: true);
 
         var entry = RaceJournal.Unfinished();
@@ -200,7 +200,7 @@ public sealed class BugHunt4RaceControlTests : IDisposable
     [Fact]
     public void Any_other_race_in_the_crash_journal_is_not_a_rerun()
     {
-        new RaceJournal().Record(RaceWithLaps(), DateTime.UtcNow, string.Empty, force: true,
+        new RaceJournal().Record(new RaceTiming(RaceWithLaps()), DateTime.UtcNow, string.Empty, force: true,
             roundId: null, raceLabel: "Stock - Q1 Heat 1");
 
         var entry = RaceJournal.Unfinished();

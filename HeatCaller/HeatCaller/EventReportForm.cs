@@ -264,8 +264,11 @@ public sealed class EventReportForm : Form
 
         try
         {
+            // WHY (23 Oct 2026, bug hunt 10): the days go in so a race whose
+            // round belongs to no real race day is still reported on the day
+            // it ran.
             var html = EventReportBuilder.Build(options, _history, _rounds, _classes,
-                _profiles, _trackLayouts, _tech, _rentals, _handicaps);
+                _profiles, _trackLayouts, _tech, _rentals, _handicaps, _events);
 
             File.WriteAllText(dialog.FileName, html);
 

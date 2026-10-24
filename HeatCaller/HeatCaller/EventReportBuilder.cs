@@ -43,9 +43,10 @@ public static class EventReportBuilder
         TrackLayoutStore trackLayouts,
         TechInspectionStore tech,
         RentalTransponderStore rentals,
-        HandicapStore? handicaps = null)
+        HandicapStore? handicaps = null,
+        RaceEventStore? events = null)
     {
-        var sessions = SessionsFor(options, history, rounds);
+        var sessions = SessionsFor(options, history, rounds, events);
 
         var sb = new StringBuilder();
         WriteHead(sb, options);
@@ -120,7 +121,8 @@ public static class EventReportBuilder
     /// official record, and a simulated race in it would read as real
     /// results, real records and real qualifying.
     /// </summary>
-    private static List<SessionRecord> SessionsFor(Options options, SessionHistoryStore history, RoundDefinitionStore rounds)
+    private static List<SessionRecord> SessionsFor(
+        Options options, SessionHistoryStore history, RoundDefinitionStore rounds, RaceEventStore? events)
     {
         var real = history.All.Where(s => !s.IsDemoSession()).ToList();
 
@@ -157,8 +159,28 @@ public static class EventReportBuilder
             eventDays.Add(options.Day.Date);
         }
 
+        // WHY (23 Oct 2026, bug hunt 10): only a session with no round at
+        // all counted as unlinked, so a race from a round that belongs to no
+        // real race day - added by hand after Close Day, or since filed
+        // under the legacy holder - was dropped, and as the dialog has no
+        // way to ask for the by-date report it was in no report at all.
+        // Such a round now counts like no round, the same rule TechFor
+        // applies to an empty or legacy event id. Another real day's rounds
+        // stay out. With no event store to ask, the old rule stands, since
+        // every round would otherwise look like it belongs nowhere.
+        var realDayRoundIds = events?.Real
+            .SelectMany(e => e.RoundIds)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // The report's own rounds are already in eventSessions; counting
+        // them as belonging somewhere keeps a race from being listed twice
+        // should the day handed in not be the store's own copy.
+        realDayRoundIds?.UnionWith(roundIds);
+
         var unlinked = real
-            .Where(s => s.RoundId is null && !linkedSessionIds.Contains(s.Id))
+            .Where(s => (s.RoundId is null
+                         || (realDayRoundIds is not null && !realDayRoundIds.Contains(s.RoundId)))
+                        && !linkedSessionIds.Contains(s.Id))
             .Where(s => eventDays.Contains(s.StartedAtUtc.ToLocalTime().Date));
 
         return eventSessions
@@ -342,7 +364,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                                   + $"<td class=\"num\">{result.Position}</td>"
                                   + $"<td>{Esc(name)}</td>"
                                   + $"<td>{Esc(string.IsNullOrWhiteSpace(result.CarModel) ? "-" : result.CarModel)}</td>"
-                                  + $"<td class=\"num\">{result.Laps}</td>"
+                                  + $"<td class=\"num\">{HandCountedLaps.LapsText(result.Laps, HandCountedLaps.In(result))}</td>"
                                   + $"<td class=\"num\">{result.ElapsedMs / 1000.0:0.000}s</td>"
                                   + $"<td class=\"num\">{(result.FastLapMs > 0 ? $"{result.FastLapMs / 1000.0:0.000}s" : "-")}</td>"
                                   + (hasOutcome ? $"<td>{Esc(OutcomeOf(result))}</td>" : string.Empty)
@@ -351,6 +373,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                 }
 
                 sb.AppendLine("</table>");
+
+                // 22 Oct 2026: what the * after a lap count means - see HandCountedLaps.
+                if (session.Results.Any(r => HandCountedLaps.In(r) > 0))
+                {
+                    sb.AppendLine($"<p class=\"sub\">{Esc(HandCountedLaps.Legend)}</p>");
+                }
 
                 // The correction log, so the order above can be explained.
                 if (session.Edits is { Count: > 0 } edits)

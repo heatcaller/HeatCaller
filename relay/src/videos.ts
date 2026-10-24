@@ -73,6 +73,8 @@ export interface VideoVault {
   remove(club: string, id: string): Promise<void>;
   /** Every one of a club's videos - when the club is deleted. */
   removeClub(club: string): Promise<void>;
+  /** The clubs holding videos, for the hourly clean-up (22 Oct 2026: without it the timed sweep found no clubs). */
+  listClubs(): Promise<string[]>;
 }
 
 /** The folder under dataDir, with a dot so no club id can name it. */
@@ -132,11 +134,20 @@ export function videosToDrop(held: readonly VideoMeta[], now: number, incoming =
   const drop: VideoMeta[] = [];
   let count = incoming > 0 ? 1 : 0;
   let bytes = incoming;
+  // WHY (22 Oct 2026): a big newer video that did not fit used to be dropped
+  // while a smaller, older one further down still fitted and was kept - so the
+  // newer race's video vanished and the older one stayed. Once the club is full,
+  // everything older than that point goes too.
+  let full = false;
 
   for (const video of newestFirst) {
     const old = now - Date.parse(video.at) > VIDEO_KEEP_MS;
 
-    if (old || count + 1 > VIDEO_MAX_PER_CLUB || bytes + video.bytes > VIDEO_MAX_CLUB_BYTES) {
+    if (!full && (count + 1 > VIDEO_MAX_PER_CLUB || bytes + video.bytes > VIDEO_MAX_CLUB_BYTES)) {
+      full = true;
+    }
+
+    if (full || old) {
       drop.push(video);
       continue;
     }
@@ -187,6 +198,10 @@ export class MemoryVideoVault implements VideoVault {
   async removeClub(club: string): Promise<void> {
     this.clubs.delete(club);
   }
+
+  async listClubs(): Promise<string[]> {
+    return [...this.clubs.keys()];
+  }
 }
 
 /**
@@ -203,6 +218,14 @@ export class DiskVideoVault implements VideoVault {
 
   private folder(club: string): string {
     return join(this.root, club);
+  }
+
+  async listClubs(): Promise<string[]> {
+    try {
+      return (await readdir(this.root, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
+    } catch {
+      return [];
+    }
   }
 
   private file(club: string, id: string, ext: "mp4" | "json"): string {

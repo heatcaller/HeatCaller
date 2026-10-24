@@ -332,7 +332,7 @@ public sealed class BackupRestoreControl : UserControl
         _numKeepCount.ValueChanged += (_, _) => SaveAutoBackupSettings();
 
         var lblKeep = new Label { Text = "Keep the last", AutoSize = true };
-        var lblKeepSuffix = new Label { Text = "automatic backups (older ones are deleted automatically)", AutoSize = true };
+        var lblKeepSuffix = new Label { Text = "automatic backups (older ones are deleted)", AutoSize = true };
 
         // --- Folder: [path] [Change...] ---
         var lblFolder = new Label { Text = "Folder:", AutoSize = true };

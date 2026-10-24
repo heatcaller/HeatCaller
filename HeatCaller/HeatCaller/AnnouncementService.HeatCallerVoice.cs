@@ -178,7 +178,8 @@ public sealed partial class AnnouncementService
         {
             LogStandInOnce(
                 "heatcaller-setup",
-                "[voice] No HeatCaller voice is chosen yet - the free Kokoro voice is speaking. Pick one on the Voice tab.");
+                // The picker is at the top of the Cast tab since 22 Oct 2026.
+                "[voice] No HeatCaller voice is chosen yet - the free Kokoro voice is speaking. Pick one at the top of the Cast tab.");
 
             return await RenderWithStandInAsync(profile, onThisPc);
         }

@@ -209,7 +209,9 @@ public sealed class UsageUiTests
     [Fact]
     public void Open_requests_are_listed_and_finished_ones_are_not()
     {
-        var asked = new DateTime(2026, 10, 19, 12, 0, 0, DateTimeKind.Utc);
+        // WHY (23 Oct 2026, bug hunt 10): midday UTC was 20 Oct on a PC at UTC+12 or more
+        // (New Zealand daylight time), so this failed there. Midday LOCAL time reads 19 Oct anywhere.
+        var asked = new DateTime(2026, 10, 19, 12, 0, 0, DateTimeKind.Local).ToUniversalTime();
         var commentaryName = Measured(MeterKind.Commentary, 0, 1).Name;
 
         var text = ThisMonthForm.DescribeRequests(new[]

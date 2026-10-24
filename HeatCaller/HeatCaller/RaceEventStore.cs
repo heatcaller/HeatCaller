@@ -195,6 +195,19 @@ public sealed class RaceEventStore
     /// <summary>Raised when the current event changes, so anything scoped to it can re-read.</summary>
     public event EventHandler? CurrentChanged;
 
+    /// <summary>
+    /// Raised when a day is closed off by somebody closing it - never by an
+    /// undo putting back a close (Close with a finishedUtc), which would
+    /// otherwise do what closing the day does a second time. After the save
+    /// and after CurrentChanged, so a handler sees the day as closed.
+    ///
+    /// WHY (22 Oct 2026, driver experience): the drivers' night emails can go
+    /// by themselves when the race day closes (AppSettings.NightEmailAutomatic,
+    /// MainForm.NightEmail). Raised on whatever thread closed the day; a
+    /// handler that touches the window posts to it.
+    /// </summary>
+    public event Action<RaceEvent>? Closed;
+
     private static string FilePath => Path.Combine(
         AppPaths.Root,
         "events.json");
@@ -250,7 +263,7 @@ public sealed class RaceEventStore
                 var file = JsonSerializer.Deserialize<EventFile>(SafeFile.ReadAllTextWithRetry(FilePath));
                 if (file is not null)
                 {
-                    return new RaceEventStore(file.Events, file.ActiveEventId);
+                    return new RaceEventStore(Repair(file.Events), file.ActiveEventId);
                 }
 
                 // Present, parsed, and not the shape this store writes. Not a
@@ -268,6 +281,41 @@ public sealed class RaceEventStore
         }
 
         return new RaceEventStore(new List<RaceEvent>(), null) { _loadedUnreadable = unreadable };
+    }
+
+    /// <summary>
+    /// Puts back what an explicit JSON null took out of a parsed events.json.
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10): the deserializer calls a setter with an
+    /// explicit null, so the "= new()" defaults did not protect this file.
+    /// "Events": null, a null day in the list, or a day with "RoundIds": null
+    /// parsed without error and then threw in EventSpine.Migrate in MainForm's
+    /// constructor - "HeatCaller couldn't start" on every launch, with nothing
+    /// naming events.json. The other stores got this repair in bug hunt 8
+    /// (A23-1); this one now does the same: null days are dropped, null lists
+    /// become empty, null entries in them are dropped, and null text becomes
+    /// empty. The app never writes nulls, so a file it saved is unchanged.
+    /// </summary>
+    private static List<RaceEvent> Repair(List<RaceEvent>? events)
+    {
+        var list = events ?? new List<RaceEvent>();
+        list.RemoveAll(e => e is null);
+
+        foreach (var e in list)
+        {
+            e.Id ??= Guid.NewGuid().ToString("N");
+            e.Name ??= string.Empty;
+            e.Notes ??= string.Empty;
+            e.ChampionshipId ??= string.Empty;
+            e.VenueName ??= string.Empty;
+            e.TrackLayoutName ??= string.Empty;
+            e.AutoAdvanceScope ??= string.Empty;
+            e.AutoAdvanceClassName ??= string.Empty;
+            e.RoundIds = (e.RoundIds ?? new List<string>()).Where(id => id is not null).ToList();
+            e.ClassNames = (e.ClassNames ?? new List<string>()).Where(n => n is not null).ToList();
+        }
+
+        return list;
     }
 
     public void Save()
@@ -763,6 +811,13 @@ public sealed class RaceEventStore
         if (wasCurrent)
         {
             CurrentChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        // Only a real close, not an undo of a Reopen putting the old time
+        // back - see Closed. (22 Oct 2026, driver experience.)
+        if (finishedUtc is null)
+        {
+            Closed?.Invoke(raceEvent);
         }
     }
 

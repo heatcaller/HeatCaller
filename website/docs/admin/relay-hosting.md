@@ -262,7 +262,7 @@ The relay can also speak. With an ElevenLabs key of your own on the relay, the c
 This is optional, and the relay works exactly as it did without it. Leave the key out and the relay starts, says so in the log, and every club carries on with its own key or the free Kokoro voice.
 
 !!! warning "Deploy again before Hear It and Preview do anything"
-    The two buttons that let a club listen to a voice before choosing it — **Hear It** and **Preview**, beside the voice list on **Voice → Voice Settings** — are answered by routes a relay only has once it has been deployed again:
+    The two buttons that let a club listen to a voice before choosing it — **Hear It** and **Preview**, beside the voice list at the top of **Voice → Cast** — are answered by routes a relay only has once it has been deployed again:
 
     ```
     fly deploy --ha=false
@@ -396,16 +396,35 @@ Every refusal has the same effect on the night: the free Kokoro voice says that 
 
 ### Adding a club
 
-1. From the relay folder: `node dist/src/index.js mint new-club "New Club" --write` (run `npm run build` first if you've updated the code).
-2. `fly-set-config.cmd`. Fly restarts the machine with the new config.
-3. Give the new club its token, privately.
+From the relay folder, one command does the build, the mint and the Fly secret:
+
+```
+mint-club.cmd new-club New Club
+```
+
+It builds the relay, mints the token, writes the club into `relay.config.json` (other clubs untouched), and runs `fly-set-config.cmd`, so the live relay knows the club as soon as Fly has restarted it. Then:
+
+1. Prove the token from outside: `probe.cmd hg_THE_TOKEN new-club https://heatcaller-relay.fly.dev`.
+2. Hand the token over the safe way - see [Handing a club its token](#handing-a-club-its-token).
+3. On the club's laptop: **Club Website** page, the club id, the address and the token in **Publish token**, then **Test Connection**.
+
+Doing it by hand still works: `node dist/src/index.js mint new-club "New Club" --write`, then `fly-set-config.cmd`.
+
+### Handing a club its token
+
+The token is the club: anyone who has it can publish as that club, delete everything it has published, and spend its voice and commentary allowances. It is shown once, when it is minted, and the relay keeps only its hash. Treat it like a password.
+
+- **Best: type it in yourself.** If you are at the club's laptop (or on a screen share with it), paste the token straight into **Publish token** and click **Test Connection**. It never travels anywhere else.
+- **Next best: a password manager's expiring share.** Bitwarden Send, 1Password's share link or similar, set to expire after one view or a day. The link can go by email or text; the token isn't in the message itself.
+- **On the phone:** read it out. It's long, so read it in groups of four and have them read it back.
+- **Never:** in the body of an email, a text, a chat or a screenshot. Those are kept, forwarded and backed up for years. If that happens, [replace the token](#replacing-a-leaked-or-lost-token) - it takes two minutes.
 
 ### Replacing a leaked or lost token
 
 If a token has been shared somewhere it shouldn't be (a chat, a screenshot, an email), replace it:
 
-1. Mint the same club id again: `node dist/src/index.js mint acme-rc "Acme RC" --write`. The new hash replaces the old one.
-2. `fly-set-config.cmd`. As soon as the relay restarts with the new config, the old token stops working.
+1. Mint the same club id again: `mint-club.cmd acme-rc` (or by hand: `node dist/src/index.js mint acme-rc --write`, then `fly-set-config.cmd`). The new hash replaces the old one, and the club keeps its name and its roster setting. As soon as the relay restarts with the new config, the old token stops working.
+2. Check it: `probe.cmd hg_THE_NEW_TOKEN acme-rc https://heatcaller-relay.fly.dev`.
 3. On the laptop's **Club Website** page, paste the new token into **Publish token** and click **Test Connection**.
 
 The club's published data isn't affected. Publishing pauses between step 2 and step 3; the laptop keeps its queue and catches up once the new token is in. Printed QR check-ins keep working, because they don't depend on the token.
@@ -496,7 +515,7 @@ fly deploy --ha=false
 The volume, and every published result on it, survives the deploy. A laptop whose podium videos log `[video] The relay does not take highlight videos yet - redeploy it (fly deploy --ha=false).` is talking to a relay from before 21 Oct 2026; this is the fix for that too. If the laptop reports `The relay is an older build that cannot take this. Redeploy it.`, this is the fix.
 
 !!! note "HeatCaller 0.59.0: redeploy the relay first"
-    Deploy the relay before any laptop runs 0.59.0: the new relay reads both the old and the new, salted PIN hashes, and the old one can't read the new ones. It also brings driver sign-up, limits on bulk result reads, per-club voice limits and tighter file permissions, and it signs every check-in, manager and sign-up pass with a secret of its own - so check-in desks, race-day managers and drivers waiting on a sign-up enter their PIN or invite code once more afterwards. It also adds the two open voice-sample routes and the **Preview** button's own daily allowance, so **Hear It** and **Preview** on **Voice → Voice Settings** do nothing until it is deployed — see [Hearing a voice before choosing it](#hearing-a-voice-before-choosing-it). A relay still on an older Fly app name moves first: see [Moving to a new app name](#moving-to-a-new-app-name). From the relay folder, run `npm test`, then `fly deploy --ha=false`. See [0.59.0](../release-notes.md#0590) in the release notes.
+    Deploy the relay before any laptop runs 0.59.0: the new relay reads both the old and the new, salted PIN hashes, and the old one can't read the new ones. It also brings driver sign-up, limits on bulk result reads, per-club voice limits and tighter file permissions, and it signs every check-in, manager and sign-up pass with a secret of its own - so check-in desks, race-day managers and drivers waiting on a sign-up enter their PIN or invite code once more afterwards. It also adds the two open voice-sample routes and the **Preview** button's own daily allowance, so **Hear It** and **Preview** at the top of **Voice → Cast** do nothing until it is deployed — see [Hearing a voice before choosing it](#hearing-a-voice-before-choosing-it). A relay still on an older Fly app name moves first: see [Moving to a new app name](#moving-to-a-new-app-name). From the relay folder, run `npm test`, then `fly deploy --ha=false`. See [0.59.0](../release-notes.md#0590) in the release notes.
 
 !!! note "HeatCaller 0.52.0: redeploy the relay"
     The 0.52.0 relay adds the HeatCaller voice: a voice catalog in the config, a per-club allowance, and two endpoints the laptop uses to list voices and have a line spoken. Clubs start with it switched off, and a relay with no `RELAY_VOICE_KEY` secret starts and simply doesn't offer it, so redeploying changes nothing until you set one up. See [The HeatCaller voice](#the-heatcaller-voice). From the relay folder, run `npm test`, then `fly deploy --ha=false`.
@@ -538,6 +557,91 @@ fly status
 ### The machine sleeps when idle
 
 The machine stops when there's no traffic and starts on the next request. The first request after a quiet spell takes a second or two longer. The laptop's publisher rides this out with its normal retries.
+
+## Running it for several clubs
+
+One relay serves every club; each one is a separate folder on the volume and a separate token. What changes as more clubs join is that the relay is now something other people rely on. Four things make that safe.
+
+### The checklist for a new club
+
+1. **Mint** the club: `mint-club.cmd <club-id> <Club Name>` (see [Adding a club](#adding-a-club)).
+2. **Probe** it from outside: `probe.cmd hg_THE_TOKEN <club-id> https://heatcaller-relay.fly.dev`.
+3. **Hand over the token** without putting it in an email - see [Handing a club its token](#handing-a-club-its-token).
+4. **Decide the roster**: leave `publishRoster` off unless the club has decided to publish names (see [Turning on a club's public roster](#turning-on-a-clubs-public-roster)).
+5. **Set its allowances** if it isn't on the defaults (`voice.monthlyChars`, `brain.monthlyLines`), then `fly-set-config.cmd`.
+6. **Take a backup** (below), so the first copy with the new club in it exists before its first night.
+7. **Note it down**: club id, name, contact, the date minted. The config holds the id and name; who to call when it breaks is yours to keep.
+
+Re-minting the old `horizon-test` token, which appeared in a chat, is the same thing done once for the test club:
+
+```
+mint-club.cmd horizon-test
+probe.cmd hg_THE_NEW_TOKEN horizon-test https://heatcaller-relay.fly.dev
+```
+
+Then paste the new token into **Publish token** on any laptop that publishes as `horizon-test`.
+
+### Knowing when it's down
+
+Fly checks the machine itself (`GET /healthz` every 30 seconds, in `fly.toml`) and restarts it if it stops answering, but it doesn't tell you. For that, the repository has a scheduled GitHub Action, `.github/workflows/relay-uptime.yml`, that asks `https://heatcaller-relay.fly.dev/healthz` and **fails when the relay doesn't answer** after three tries. GitHub emails you when a scheduled run fails, so the failure is the alert.
+
+- It checks every 20 minutes from 21:00 to 04:59 UTC (5pm to 1am in New York in summer), when clubs race, and every four hours otherwise. Each check wakes the machine if it's asleep, and each counts as a GitHub Actions minute on a private repository - about 28 a day. Change the `cron` lines to check more or less often.
+- If the relay moves, set a repository variable `RELAY_URL` (**Settings → Secrets and variables → Actions → Variables**) to the new address. No secret is needed: `/healthz` is public and says only `{"ok":true,"clubs":N}`.
+- **Run it now** from the **Actions** tab (**Relay uptime → Run workflow**) to check it works.
+- Make sure GitHub is allowed to email you about failed runs: **GitHub Settings → Notifications → Actions**.
+
+### Backups
+
+Two layers, because they protect against different things.
+
+**Fly's own snapshots.** Fly takes a snapshot of the volume once a day and keeps it for 5 days by default. That covers a corrupted or deleted volume. Check them, and keep them longer:
+
+```
+fly volumes list
+fly volumes snapshots list <volume-id>
+fly volumes update <volume-id> --snapshot-retention 14
+```
+
+To restore one, make a new volume from it in the same region, then move the machine onto it:
+
+```
+fly volumes create relay_data --snapshot-id <snapshot-id> --region ewr --size 1
+fly machine list
+fly machine destroy <machine-id> --force
+fly deploy --ha=false
+```
+
+The new deploy mounts a `relay_data` volume; with the old volume still there it may pick either, so destroy the old volume (`fly volumes destroy <old-volume-id>`) once you have checked the restored one has the data. Snapshots are stored by Fly and billed at its current rate.
+
+**A copy on your own PC.** Snapshots live in the same Fly account as the relay, so they don't help if the account is the problem. `backup.cmd` in the relay folder copies the whole volume down:
+
+```
+backup.cmd
+```
+
+It wakes the machine, packs `/data` into one file there, downloads it to `relay-backups\<date>_<time>\relay-data.tgz` and deletes the packed file from the machine. That file is every club's published results, nights, videos and the voice and commentary usage files clubs are billed by. Take one before a deploy that changes storage, once a week while clubs are racing, and before adding or removing a club; keep a copy somewhere other than the race PC.
+
+To put a backup back onto a volume (it replaces what is there):
+
+```
+fly ssh sftp put relay-backups\<date>_<time>\relay-data.tgz /tmp/relay-data.tgz
+fly ssh console -C "tar xzf /tmp/relay-data.tgz -C /data"
+fly machine restart
+```
+
+### Sizing
+
+One `shared-cpu-1x` machine with 256 MB and a 1 GB volume is enough for a handful of clubs racing on different nights. What to watch, and what to do:
+
+| Watch | Where | When it's time | Do this |
+|---|---|---|---|
+| Memory | `fly logs` (an out-of-memory restart), `fly status` | Restarts during a race night | `fly scale memory 512` |
+| CPU | Fly dashboard → Metrics | Pages slow while two or more clubs race at once | `fly scale vm shared-cpu-2x` |
+| Volume space | `fly ssh console -C "df -h /data"` | Over about 70% | `fly volumes extend <volume-id> --size 3` |
+| Podium videos | The same `df`, and `du -sh /data/.videos` | Each club may keep up to 1 GB of them for a week | Extend the volume before clubs turn video sharing on |
+| Requests at once | `fly logs` (busy or 503 answers) | Several clubs' Live Results open on TVs at once | Raise `[http_service.concurrency]` in `fly.toml`, then deploy |
+
+Stay on **one machine** whatever happens (`--ha=false`): the relay's data is one volume, and two machines would each have half of it. Scale it up, not out.
 
 ## Moving to a new app name
 

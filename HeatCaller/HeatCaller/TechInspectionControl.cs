@@ -97,10 +97,9 @@ public sealed class TechInspectionControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "The full scrutineering record - every inspection, with its car, its checks, who did it and their "
-                 + "notes. The gate itself is on Who's Racing: the Tech column per driver, and a filter for the cars "
-                 + "still to be looked at. Set each class's checklist on the Classes page. When a heat is staged, Race "
-                 + "Control warns about any driver in it who hasn't passed today (a warning only; it can be switched "
+            Text = "Every inspection, with its car, checks, inspector and notes. Each class's checklist is set on the "
+                 + "Classes page, and Who's Racing has a Tech column and a filter for cars still to check. Race Control "
+                 + "warns when a staged heat has a driver who hasn't passed today (a warning only; it can be switched "
                  + "off per class).",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,

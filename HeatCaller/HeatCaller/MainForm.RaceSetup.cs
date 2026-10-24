@@ -212,6 +212,16 @@ public partial class MainForm
     /// <param name="logLine">What to write in the console, after the time stamp.</param>
     private string? StartRoundNow(RoundDefinition round, bool confirmedOverRunningRace, bool showRaceControl, string logLine)
     {
+        // WHY (24 Oct 2026, timing layer, P7, review): threaded, a round
+        // started from a phone (RaceDayService) is a race start like the
+        // desk's, which takes back first (RefuseIfPracticeRunningForRaceStart):
+        // a practice a car started at the gate a moment ago, not yet taken
+        // over by the Practice page, is handed back and held off until this
+        // message is over - rather than refusing the phone as "practice is
+        // running", or starting under the round setup below. A no-op inline,
+        // and a repeat of the desk's own (harmless) when it came from there.
+        _race.TakeBackPracticeAutoStartForRace();
+
         // Practice is on the same session, and starting over it would wipe
         // the practice laps. The Practice page has its own save and
         // teardown, so it is stopped there, never taken over here.

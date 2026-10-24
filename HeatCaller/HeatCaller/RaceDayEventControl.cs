@@ -157,10 +157,10 @@ public sealed class RaceDayEventControl : UserControl
     private readonly SteadyLabel _lblClassHint = new() { Wordings = new[] { RaceDayClassHint, ClubNightClassHint } };
 
     private const string RaceDayClassHint =
-        "Tick the classes running today. Next Steps builds all of tonight's heats for every one of them in one press.";
+        "Tick the classes running today. Next Steps builds all their heats in one press.";
 
     private const string ClubNightClassHint =
-        "Tick the classes running today. Next Steps builds all of tonight's races for every one of them in one press.";
+        "Tick the classes running today. Next Steps builds all their races in one press.";
 
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
@@ -302,10 +302,8 @@ public sealed class RaceDayEventControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "The race day everything on this page belongs to. Check-ins, scrutineering, the heats and the "
-                 + "timetable are all filed against the current one, so starting a new race day starts them all fresh - "
-                 + "and last week's are kept under last week's day instead of being cleared away. Changes here save "
-                 + "themselves as you make them.",
+            Text = "Check-ins, scrutineering, the heats and the timetable are all filed against the race day picked here. "
+                 + "A new race day starts them fresh and keeps last week's under last week's day. Changes save as you make them.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -513,8 +511,7 @@ public sealed class RaceDayEventControl : UserControl
         var lblHint = _textSize.Wear(
             new Label
             {
-                Text = "Picking a day above points check-in, scrutineering, the heats and the timetable at it. "
-                     + "Close Day stops new rounds joining it - results and standings keep reading it forever. "
+                Text = "Close Day stops new rounds joining the day; results and standings still read it. "
                      + "The legacy day holds everything recorded before race days were tracked, and is read-only here.",
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,

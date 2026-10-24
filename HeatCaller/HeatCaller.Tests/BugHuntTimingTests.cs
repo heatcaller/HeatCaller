@@ -128,12 +128,12 @@ public sealed class BugHuntTimingTests : IDisposable
         var journal = new RaceJournal();
 
         Cross(race, "AAAAAA", 5_000);
-        journal.Record(race, DateTime.UtcNow, string.Empty, force: true);
+        journal.Record(new RaceTiming(race), DateTime.UtcNow, string.Empty, force: true);
         Assert.False(journal.IsBehind);
 
         // The second car, a moment later: held back by the throttle.
         Cross(race, "BBBBBB", 5_300);
-        journal.Record(race, DateTime.UtcNow, string.Empty);
+        journal.Record(new RaceTiming(race), DateTime.UtcNow, string.Empty);
 
         Assert.True(journal.IsBehind);
         Assert.DoesNotContain("BBBBBB", JournalledCars());
@@ -141,7 +141,7 @@ public sealed class BugHuntTimingTests : IDisposable
         // What the race clock's tick does: ask again, not forced, once the
         // throttle has passed - no further crossing needed.
         Thread.Sleep(500);
-        journal.Record(race, DateTime.UtcNow, string.Empty);
+        journal.Record(new RaceTiming(race), DateTime.UtcNow, string.Empty);
 
         Assert.False(journal.IsBehind);
         Assert.Contains("BBBBBB", JournalledCars());
@@ -157,9 +157,9 @@ public sealed class BugHuntTimingTests : IDisposable
         var journal = new RaceJournal();
 
         Cross(race, "AAAAAA", 5_000);
-        journal.Record(race, DateTime.UtcNow, string.Empty, force: true);
+        journal.Record(new RaceTiming(race), DateTime.UtcNow, string.Empty, force: true);
         Cross(race, "BBBBBB", 5_300);
-        journal.Record(race, DateTime.UtcNow, string.Empty);
+        journal.Record(new RaceTiming(race), DateTime.UtcNow, string.Empty);
         Assert.True(journal.IsBehind);
 
         journal.Clear();

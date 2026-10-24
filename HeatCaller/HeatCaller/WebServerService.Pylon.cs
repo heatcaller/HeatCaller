@@ -30,7 +30,14 @@ public sealed partial class WebServerService
     /// Adds node["pylon"], node["presented"], node["moment"] and
     /// node["ratings"] to the LAN copy of the live state.
     /// </summary>
-    private void AddBroadcast(JsonObject node, IReadOnlyList<RacerStanding> ordered, byte[] rosterKey)
+    /// <remarks>
+    /// WHY (24 Oct 2026, timing layer, P8): the presenting sponsors come from
+    /// the window's side the build read (ui - see WebServerService.
+    /// LiveInputs), the names from Names, and the race's state from the same
+    /// moment as the board (view, threaded; null inline, where it is read
+    /// here as always), so this can run off the UI thread.
+    /// </remarks>
+    private void AddBroadcast(JsonObject node, IReadOnlyList<RacerStanding> ordered, byte[] rosterKey, UiSide ui, LiveRaceView? view)
     {
         var (changes, leaders) = (0, 0);
 
@@ -59,7 +66,7 @@ public sealed partial class WebServerService
             {
                 // The racing number from the driver's profile - empty for a
                 // driver without one, and the tower then leaves the box off.
-                ["num"] = (_profiles.Get(standing.TransponderId)?.RaceNumber ?? string.Empty).Trim(),
+                ["num"] = (Names.Get(standing.TransponderId)?.RaceNumber ?? string.Empty).Trim(),
                 ["led"] = standing.LapsLed,
 
                 // To the car at the top of the board, in the same words the
@@ -81,20 +88,17 @@ public sealed partial class WebServerService
         // Who presents the moments the graphics show, by moment name. A
         // caption costs the room nothing, so it is shown every time - unlike
         // the voice, which rations its "presented by" (SponsoredMomentGate).
+        //
+        // Worked out with the rest of the window's side (UiSideNow), in the
+        // same order. Null there when the sponsors could not be read, which
+        // leaves the rest of the broadcast extras out, as a failed read here
+        // always did.
         var presented = new JsonObject();
-        var sponsors = _sponsors?.Current.Sponsors;
+        var presentedBy = ui.Presented ?? throw new InvalidOperationException("The sponsors could not be read.");
 
-        foreach (var moment in new[]
-                 {
-                     SponsoredMoment.FastestLap, SponsoredMoment.LeadChange, SponsoredMoment.Battle,
-                     SponsoredMoment.DriverIntros, SponsoredMoment.QualifyingRecap, SponsoredMoment.Milestones,
-                     SponsoredMoment.RaceResult, SponsoredMoment.RunThrough,
-                 })
+        foreach (var (moment, sponsor) in presentedBy)
         {
-            if (SponsoredMoments.SponsorFor(sponsors, moment) is { } sponsor)
-            {
-                presented[moment.ToString()] = sponsor.Name.Trim();
-            }
+            presented[moment] = sponsor;
         }
 
         node["presented"] = presented;
@@ -113,7 +117,7 @@ public sealed partial class WebServerService
         // The driver ratings, once the race is over - for the podium. Not
         // during it: a rating halfway through rewards whoever happens to
         // be leading on the lap the page was read.
-        if (_race.State == RaceState.Finished)
+        if ((view?.State ?? _race.State) == RaceState.Finished)
         {
             var ratings = new JsonObject();
 

@@ -24,6 +24,13 @@ public enum RelayChannel
     CheckIn,
     Manage,
     Signup,
+
+    // 22 Oct 2026 (driver experience). The first two are private, per
+    // badge, and only taken by the relay while drivers' nights are open;
+    // captions is public, and its text is redacted (PublicPrivacy).
+    DriverLive,
+    DriverMe,
+    Captions,
 }
 
 /// <summary>
@@ -230,7 +237,43 @@ public sealed partial class RelayPublisher : IDisposable
         _nightsClosePending = !settings.PublishDriverNightsToTheRelay;
         _notesClosePending = !settings.ClubNotesFromTheRelay;
         _voteClosePending = !settings.RoomVoteFromTheRelay;
+
+        // 22 Oct 2026 (driver experience): the asks drivers sent from their
+        // phones are held on the relay until collected, so switching them
+        // off has to be told too, or the relay keeps taking them. Off with
+        // drivers' nights too - see RelayPublisher.Requests.AsksWanted.
+        _asksClosePending = !AsksWanted(settings);
     }
+
+    /// <summary>
+    /// A close of the drivers' own requests is owed to the relay: it then
+    /// stops taking them and throws away every one it still holds. Set by
+    /// ArmCloses on every start while the switch is off, and by
+    /// CloseDriverAsksOnTheRelay; cleared by the requests pass
+    /// (RelayPublisher.Requests) once the relay has taken it.
+    /// (22 Oct 2026, driver experience.)
+    /// </summary>
+    private volatile bool _asksClosePending;
+
+    /// <summary>
+    /// Called when the club unticks driver requests: the relay is told, on
+    /// the worker thread, until it has taken it - see _asksClosePending.
+    /// Returns at once; nothing here waits on the network.
+    /// </summary>
+    public void CloseDriverAsksOnTheRelay()
+    {
+        _asksClosePending = true;
+        _wake.Set();
+    }
+
+    /// <summary>
+    /// The drivers' own requests (details, battery pack, result queries):
+    /// collected from the relay, filed, then confirmed, and the close sent
+    /// while one is owed. Implemented in RelayPublisher.Requests.cs; runs on
+    /// the worker thread once per pass, after sign-up, and keeps its own
+    /// tick. (22 Oct 2026, driver experience.)
+    /// </summary>
+    partial void CollectDriverAsksPass(CancellationToken token);
 
     /// <summary>
     /// Whether a refused CLOSE (a switch going off) may count as taken.
@@ -974,6 +1017,21 @@ public sealed partial class RelayPublisher : IDisposable
     }
 
     /// <summary>
+    /// Throws away a snapshot of this channel that is still waiting to go
+    /// (22 Oct 2026, driver experience). For a switched channel whose switch
+    /// has just closed: the relay would refuse it with a 403 anyway, and the
+    /// copy it last held has been taken down by the close. One already in
+    /// flight is not recalled - its refusal is dropped in Send.
+    /// </summary>
+    public void DropQueuedSnapshot(RelayChannel channel)
+    {
+        lock (_gate)
+        {
+            _snapshots.Remove(NameOf(channel));
+        }
+    }
+
+    /// <summary>
     /// The roster sent while the club has not chosen to publish it: the
     /// same shape as a real one (MainForm.PublishRosterToRelay), with nobody
     /// in it. What replaces a roster published before the box was unticked.
@@ -1477,11 +1535,27 @@ public sealed partial class RelayPublisher : IDisposable
     public async Task QuiesceAsync()
     {
         CancellationTokenSource? pass;
+        CancellationTokenSource? videos;
 
         lock (_gate)
         {
             _quiesced = true;
             pass = _pass;
+
+            // A podium upload on its way is stopped too (22 Oct 2026) - see
+            // RelayPublisher.Videos.cs, _videoUploadStop. Never disposed:
+            // an upload may still be linking to it.
+            videos = _videoUploadStop;
+            _videoUploadStop = null;
+        }
+
+        try
+        {
+            videos?.Cancel();
+        }
+        catch (AggregateException)
+        {
+            // A callback threw; the upload is cancelled all the same.
         }
 
         try
@@ -2001,6 +2075,11 @@ public sealed partial class RelayPublisher : IDisposable
                         _signupProblem = null;
                         Interlocked.Exchange(ref _signupLockedUntilTicks, 0);
                     }
+
+                    // The drivers' own requests (22 Oct 2026, driver
+                    // experience) - see RelayPublisher.Requests. Its own
+                    // tick and its own close, like sign-up above.
+                    CollectDriverAsksPass(pass.Token);
                 }
                 finally
                 {
@@ -3351,9 +3430,29 @@ public sealed partial class RelayPublisher : IDisposable
             // lost them for good.
             var unknownChannel = code == 404 && body.Contains("No channel called", StringComparison.OrdinalIgnoreCase);
 
+            // THE DRIVERS' LIVE PAGES ARE SWITCHED, like a night (22 Oct
+            // 2026, driver experience): the relay refuses driverlive with a
+            // 403 while drivers' nights are closed there, and driverme while
+            // driver requests are. Either refusal means the relay has not
+            // been told what this laptop believes - a relay redeployed onto
+            // an empty volume, or a snapshot that went out a moment before
+            // the switch did. Dropped, not retried: retried, it started the
+            // publisher's backoff and held every snapshot behind it, results
+            // queue included. A newer copy follows within seconds anyway.
+            var driverLiveRefused = code is 401 or 403 && item.ItemId is null
+                && item.Channel == NameOf(RelayChannel.DriverLive);
+            var driverMeRefused = code is 401 or 403 && item.ItemId is null
+                && item.Channel == NameOf(RelayChannel.DriverMe);
+
+            // And not called "a different club": a 403 on a switched channel
+            // is a switch not told, and the token is fine. A 401 is still the
+            // token, and says so.
+            var switchedRefused = code == 403
+                && (driverLiveRefused || driverMeRefused || item.Channel == DriverNight.Channel);
+
             lock (_gate)
             {
-                _lastError = code switch
+                _lastError = switchedRefused ? _lastError : code switch
                 {
                     401 => "The relay does not recognize this token.",
                     403 => "This token belongs to a different club.",
@@ -3410,7 +3509,25 @@ public sealed partial class RelayPublisher : IDisposable
                 _nextNightsOpenTick = 0;
             }
 
+            if (driverLiveRefused)
+            {
+                // driverlive rides on the nights switch, so it is the nights
+                // switch that is told again - at once, as above.
+                _nightsOpenTold = false;
+                _nextNightsOpenTick = 0;
+            }
+
+            if (driverMeRefused)
+            {
+                // Forgotten, so the requests pass tells the relay "open"
+                // again. The worker thread owns both, and this is it. Taken,
+                // that counts as a reopen (DriverAsksOpenedCount), which is
+                // what makes MainForm send driverme again.
+                _asksOpenToldTo = null;
+            }
+
             var outcome = code is 400 or 413 || unknownChannel || indexRefused || nightRefused
+                    || driverLiveRefused || driverMeRefused
                 ? SendOutcome.Rejected
                 : SendOutcome.Retry;
 
@@ -3574,6 +3691,9 @@ public sealed partial class RelayPublisher : IDisposable
         RelayChannel.CheckIn => "checkin",
         RelayChannel.Manage => "manage",
         RelayChannel.Signup => "signup",
+        RelayChannel.DriverLive => "driverlive",
+        RelayChannel.DriverMe => "driverme",
+        RelayChannel.Captions => "captions",
 
         // A NAME THE RELAY WILL REFUSE, not "state" (13 Oct 2026). This
         // arm used to answer "state", so a channel added to the enum and
@@ -3614,8 +3734,156 @@ public sealed partial class RelayPublisher : IDisposable
     /// Applied where documents are BUILT, never in the publisher: it does
     /// not look inside what it carries, and a privacy rule enforced by
     /// something that cannot read the payload is not enforced at all.
+    ///
+    /// INITIALS ONLY (22 Oct 2026, driver experience). Every caller of this
+    /// builds something bound for the internet, so this is also where a
+    /// driver who asked to be shown online by initials only becomes "S.P."
+    /// (PublicPrivacy.Current) - whether or not the club shortens names.
+    /// Decided on the name AS GIVEN, before any shortening: "Sam P" is
+    /// nobody in the register, "Sam Parker" is. Where the caller knows each
+    /// row's transponder it should pass them, so a row carrying a name from
+    /// before a rename is still caught. Two drivers who would share
+    /// initials get a number ("S.P.", "S.P. 2") rather than letters back,
+    /// which would give away part of the name they asked to keep off.
+    /// Spoken lines that stay in the room use DisplayNamesForTheRoom.
     /// </summary>
-    public static IReadOnlyList<string> DisplayNames(IReadOnlyList<string> names, bool abbreviate)
+    /// <param name="transponders">Each name's transponder, in the same order, where the caller has them; null (or a null entry) matches by name alone.</param>
+    public static IReadOnlyList<string> DisplayNames(
+        IReadOnlyList<string> names,
+        bool abbreviate,
+        IReadOnlyList<string?>? transponders = null) =>
+        DisplayNames(names, abbreviate, transponders, PublicPrivacy.Current);
+
+    /// <summary>DisplayNames against a register of the caller's choosing - for tests, and for a document that has already read the register once.</summary>
+    internal static IReadOnlyList<string> DisplayNames(
+        IReadOnlyList<string> names,
+        bool abbreviate,
+        IReadOnlyList<string?>? transponders,
+        PublicPrivacy privacy)
+    {
+        // The usual case, nobody asked: exactly the old answer, so every
+        // document stays byte for byte what it was.
+        if (privacy is null || (!privacy.AnyInitials && transponders is null))
+        {
+            return DisplayNamesForTheRoom(names, abbreviate);
+        }
+
+        var source = names.Select(n => (n ?? string.Empty).Trim()).ToList();
+        var hidden = new bool[source.Count];
+
+        for (var i = 0; i < source.Count; i++)
+        {
+            var transponder = transponders is not null && i < transponders.Count ? transponders[i] : null;
+
+            // The stand-in for a car nobody named is not anybody's name.
+            hidden[i] = source[i].Length > 0
+                        && !string.Equals(source[i], RelayDocuments.UnnamedDriver, StringComparison.Ordinal)
+                        && (privacy.InitialsForTransponder(transponder) || privacy.InitialsFor(source[i]));
+        }
+
+        if (!hidden.Any(h => h))
+        {
+            return DisplayNamesForTheRoom(names, abbreviate);
+        }
+
+        // Everybody else is shortened among themselves only. Shortened with
+        // the hidden names still in, "Sam Pike" would have grown to "Sam Pi"
+        // to keep clear of a "Sam Parker" nobody can see - telling the
+        // reader there is another Sam P. in the field.
+        var visible = Enumerable.Range(0, source.Count).Where(i => !hidden[i]).ToList();
+        var shortened = DisplayNamesForTheRoom(visible.Select(i => source[i]).ToList(), abbreviate);
+        var result = new string[source.Count];
+
+        for (var v = 0; v < visible.Count; v++)
+        {
+            result[visible[v]] = shortened[v];
+        }
+
+        for (var i = 0; i < source.Count; i++)
+        {
+            if (hidden[i])
+            {
+                // A name with no letter or digit in it has nothing to hide.
+                var initials = PublicPrivacy.Initials(source[i]);
+                result[i] = initials.Length > 0 ? initials : source[i];
+            }
+        }
+
+        KeepInitialsApart(result, source, hidden);
+        return result;
+    }
+
+    /// <summary>
+    /// Two different drivers shown as the same initials - Sam Parker and
+    /// Steve Pike, both "S.P." - numbered so a reader can tell the rows
+    /// apart (22 Oct 2026, driver experience). The same name twice is the
+    /// same driver, as DisplayNames has always had it, and is left alone.
+    /// In order of the full name, so the same pair is numbered the same way
+    /// in every document that holds both of them.
+    /// </summary>
+    private static void KeepInitialsApart(string[] result, IReadOnlyList<string> source, bool[] hidden)
+    {
+        var used = new HashSet<string>(result, StringComparer.CurrentCultureIgnoreCase);
+
+        var clashes = Enumerable.Range(0, result.Length)
+            .GroupBy(i => result[i], StringComparer.CurrentCultureIgnoreCase)
+            .Where(group => group.Any(i => hidden[i])
+                            && group.Select(i => source[i]).Distinct(StringComparer.CurrentCultureIgnoreCase).Count() > 1)
+            .ToList();
+
+        foreach (var clash in clashes)
+        {
+            var shown = clash.Key;
+
+            // Somebody NOT hidden already reads this way (a driver who
+            // really is called "S.P."), so every hidden one takes a number.
+            var number = clash.Any(i => !hidden[i]) ? 2 : 1;
+
+            var people = clash
+                .Where(i => hidden[i])
+                .Select(i => source[i])
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var person in people)
+            {
+                string label;
+
+                if (number == 1)
+                {
+                    label = shown;
+                    number++;
+                }
+                else
+                {
+                    do
+                    {
+                        label = $"{shown} {number++}";
+                    }
+                    while (used.Contains(label));
+
+                    used.Add(label);
+                }
+
+                foreach (var i in clash.Where(i => hidden[i] && string.Equals(source[i], person, StringComparison.CurrentCultureIgnoreCase)))
+                {
+                    result[i] = label;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// DisplayNames as it was before anybody could ask for initials only:
+    /// the shortening alone, with nobody's privacy choice applied (22 Oct
+    /// 2026, driver experience). For what stays in the room - the short
+    /// names the cloud voices say over the PA (AnnouncementService
+    /// .ShortNames) - since the PA, the Big Screen and the Wi-Fi pages all
+    /// use the full name whatever a driver asked for online. Never for a
+    /// document bound for the relay.
+    /// </summary>
+    public static IReadOnlyList<string> DisplayNamesForTheRoom(IReadOnlyList<string> names, bool abbreviate)
     {
         var source = names.Select(n => (n ?? string.Empty).Trim()).ToList();
 
@@ -3633,7 +3901,11 @@ public sealed partial class RelayPublisher : IDisposable
 
         static string Build(string original, string[] parts, int letters)
         {
-            if (parts.Length < 2)
+            // WHY (23 Oct 2026, bug hunt 10): the stand-in for a car nobody
+            // named was shortened like a real name, so results, the year
+            // index and the vote ballot listed a driver called "Unnamed d".
+            // It is nobody's name, so it always stays whole.
+            if (parts.Length < 2 || string.Equals(original, RelayDocuments.UnnamedDriver, StringComparison.Ordinal))
             {
                 return original;
             }

@@ -215,6 +215,30 @@ public partial class MainForm
         // own thread. See OnUiThread.
         if (!IsHandleCreated || InvokeRequired) { OnUiThread(() => OnDecoderLapEvent(lap)); return; }
 
+        LinePassSeenOnUi(lap);
+
+        // Checked BEFORE the lap is processed. Starting practice afterwards
+        // would mean the crossing that triggered it lands in a session that
+        // didn't exist yet, and the driver's first lap silently vanishes.
+        // Practice goes green here, and this same crossing is then counted
+        // by the line below as the driver's start lap.
+        MaybeAutoStartPracticeOnGatePass(lap);
+
+        _race.ProcessLapEvent(lap);
+    }
+
+    /// <summary>
+    /// The screens' share of a line pass - Line Up, the transponder watch and
+    /// its health across nights - before the race counts it. UI thread.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Oct 2026, timing layer, P4): its own method so a threaded pass,
+    /// which the race counts on the timing thread, still does exactly this on
+    /// the UI thread (see SendLinePassToTiming). Inline it runs where it
+    /// always did, at the top of OnDecoderLapEvent.
+    /// </remarks>
+    private void LinePassSeenOnUi(DirectLapEvent lap)
+    {
         // For the split loop's "quiet" warning and for Line Up, which pairs
         // the line's passes with the split loop's. Line Up can never cost
         // the race a lap: whatever it does, the pass goes on below.
@@ -237,15 +261,6 @@ public partial class MainForm
         // And across nights, so a transponder that is fading shows up before
         // it fails - see TransponderHealthStore. Never throws.
         RecordTransponderHealth(lap);
-
-        // Checked BEFORE the lap is processed. Starting practice afterwards
-        // would mean the crossing that triggered it lands in a session that
-        // didn't exist yet, and the driver's first lap silently vanishes.
-        // Practice goes green here, and this same crossing is then counted
-        // by the line below as the driver's start lap.
-        MaybeAutoStartPracticeOnGatePass(lap);
-
-        _race.ProcessLapEvent(lap);
     }
 
     /// <summary>
@@ -264,16 +279,30 @@ public partial class MainForm
     /// estimated clock could land a few milliseconds after it, and the
     /// crossing was then thrown away as coming before the start.
     /// </param>
+    /// <remarks>
+    /// Threaded (24 Oct 2026, timing layer, P7), the line's passes do not come
+    /// this way: the timing thread starts practice on them itself, from the
+    /// checks below handed over beforehand - see RefreshPracticeAutoStartPlan.
+    /// This still runs for a line pass that takes the UI path (the moment
+    /// after the line is switched, see SendLinePassToTiming), as it always did.
+    /// </remarks>
     private void MaybeAutoStartPracticeOnGatePass(DirectLapEvent lap)
     {
         // Not until the unfinished-race offer has been answered: a
         // practice started first took the session, and the race waiting to
         // be recovered was then never offered. See _recoveryDecided. Nor
         // while Line Up is open - see _lineUpOpen.
+        //
+        // WHY (24 Oct 2026, timing layer, P8): nor while On Air is opening a
+        // race. It runs with the session Idle, sometimes for minutes, and a
+        // car warming up during the opening started practice - and On Air was
+        // then called off ("the race was moved on"). Threaded, On Air holds
+        // the timing side's start the same way (RaceTiming.HoldPracticeAutoStart).
         if (!_settings.PracticeAutoStartOnGatePass
             || !_recoveryDecided
             || _lineUpOpen
             || _practiceControl is null
+            || _raceControlControl?.OnAirRunning == true
             || _race.State != RaceState.Idle
             || _race.IsWarmingUp)
         {
@@ -344,6 +373,12 @@ public partial class MainForm
 
         _lineDecoder = decoder;
         _lineDecoderKnown = true;
+
+        // The decoders' threads and the timing thread read these copies,
+        // never the settings (24 Oct 2026, timing layer, P8) - see
+        // SendSplitPassToTiming. After the offset is turned round above.
+        _splitLoopOn = _settings.SplitLoopEnabled;
+        _frozenSplitOffsetMs = _settings.SplitLoopOffsetMs;
 
         // How many sectors a lap is cut into: one split loop, two sectors.
         _race.SplitCount = _settings.SplitLoopEnabled ? 1 : 0;

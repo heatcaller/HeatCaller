@@ -28,7 +28,10 @@ public partial class MainForm
             OnClientRawMessage($"{AppTime.LogStampNow()}  [track] {DriverNameOf(standing.TransponderId)} may have stopped {where} - "
                                + "nothing heard at the next loop. It's shown red on the track map.");
 
-        _webServer.TrackMap = TrackMapNow;
+        // Threaded, a frozen feed answered on the UI tick (24 Oct 2026,
+        // timing layer, P8): the map is this window's to work out, and the
+        // live state is built off the UI then. Inline, TrackMapNow itself.
+        _webServer.TrackMap = LiveFeed<(TrackLine? Line, IReadOnlyList<TrackPositions.Car> Cars)>(TrackMapNow);
     }
 
     /// <summary>

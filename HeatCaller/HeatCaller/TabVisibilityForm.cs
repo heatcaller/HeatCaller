@@ -30,6 +30,12 @@ public sealed class TabVisibilityForm : Form
     /// </summary>
     public bool RaceNightFocus { get; private set; }
 
+    /// <summary>
+    /// Whether the pages not yet tested at a real event are kept out of the
+    /// sidebar (AppSettings.HideUntestedPages). Read back by the caller on OK.
+    /// </summary>
+    public bool HideUntested { get; private set; }
+
     /// <summary>The full set of toggleable names in their final chosen order (visible and hidden alike) - used to persist NavOrder.</summary>
     public List<string> OrderedNames => _entries.Select(e => e.Name).ToList();
 
@@ -37,10 +43,12 @@ public sealed class TabVisibilityForm : Form
         IReadOnlyList<string> toggleableTabNames,
         IEnumerable<string> currentlyHidden,
         IReadOnlyList<string>? defaultOrder = null,
-        bool raceNightFocus = true)
+        bool raceNightFocus = true,
+        bool hideUntested = false)
     {
         HiddenTabs = new HashSet<string>(currentlyHidden);
         RaceNightFocus = raceNightFocus;
+        HideUntested = hideUntested;
         _entries = toggleableTabNames
             .Select(n => new NavEntry(n) { Visible = !HiddenTabs.Contains(n) })
             .ToList();
@@ -87,6 +95,23 @@ public sealed class TabVisibilityForm : Form
             Font = AppTheme.BodyFont,
         };
 
+        // THE BETA TIER (22 Oct 2026). Its own tick rather than the pages'
+        // ticks above: those are the club's choice of what it uses, this is
+        // the app's own word on what has been tried on a night, and the list
+        // changes as rehearsals happen (NavTiers.UntestedPages). Restore
+        // Defaults leaves it alone - it is about order and the club's own
+        // ticks, and a beta club pressing it should not get five untested
+        // pages back by surprise.
+        var chkUntested = new ThemedCheckBox
+        {
+            Text = "Keep pages not yet tested at a real event out of the sidebar ("
+                + string.Join(", ", NavTiers.Untested.OrderBy(n => n, StringComparer.CurrentCulture))
+                + ") - a search still finds them",
+            AutoSize = true,
+            Checked = HideUntested,
+            Font = AppTheme.BodyFont,
+        };
+
         var btnDefaults = new Button { Text = "Restore Defaults" };
         btnDefaults.Click += (_, _) =>
         {
@@ -123,6 +148,7 @@ public sealed class TabVisibilityForm : Form
         {
             HiddenTabs = new HashSet<string>(_entries.Where(e => !e.Visible).Select(e => e.Name));
             RaceNightFocus = chkRaceNight.Checked;
+            HideUntested = chkUntested.Checked;
         };
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
@@ -194,7 +220,8 @@ public sealed class TabVisibilityForm : Form
         var page = new FillPage();
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.AddFill(band, band.LeastHeight, gapBelow: UiLayout.RowGap);
-        page.Add(chkRaceNight);
+        page.Add(chkRaceNight, gapBelow: UiLayout.RowGap);
+        page.Add(chkUntested);
         page.Add(footer, gapBelow: 0);
 
         Controls.Add(page);
@@ -265,8 +292,13 @@ public sealed class TabVisibilityForm : Form
         var textLeft = UiLayout.AtTextSize(28);
         var textColor = entry.Visible ? AppTheme.TextDark : AppTheme.TextMuted;
         var textRect = new Rectangle(e.Bounds.Left + textLeft, e.Bounds.Top, e.Bounds.Width - UiLayout.AtTextSize(32), e.Bounds.Height);
-        TextRenderer.DrawText(e.Graphics, entry.Name, AppTheme.BodyFont, textRect, textColor,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+        // A page not yet tested at a real event says so after its name, in
+        // the muted colour, so the tick under the list has something to point
+        // at. Cut short with an ellipsis rather than wrapped when the window
+        // is narrow - the name comes first and is never the part cut.
+        var name = NavTiers.IsUntested(entry.Name) ? entry.Name + "  (not yet tested at an event)" : entry.Name;
+        TextRenderer.DrawText(e.Graphics, name, AppTheme.BodyFont, textRect, textColor,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
     }
 
     /// <summary>

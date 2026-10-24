@@ -69,10 +69,17 @@ public sealed class SeasonRulesForm : Form
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        var (page, body, classCaption, bestCaption) = BuildLayout(classes, events);
+        var (page, body, grids, classCaption, bestCaption) = BuildLayout(classes, events);
         LoadFromSeason(events);
 
         AppTheme.ApplyRecursively(this);
+
+        // (22 Oct 2026, page tidy): the three grids each had a caption column
+        // of their own, so the class, the rounds counted and the season's
+        // rounds started at three different x. One column down all three,
+        // measured in the faces the theme pass left the captions in - before
+        // the width below, which is worked out from the captions.
+        FieldGrid.LineUp(grids);
 
         // After the theme pass, in the faces it leaves them in, and after
         // the season is loaded - a class it names that is no longer on file
@@ -130,7 +137,7 @@ public sealed class SeasonRulesForm : Form
     /// DialogFit, and the class's and the rounds' captions, which the
     /// window's width is worked out from.
     /// </summary>
-    private (FillPage Page, PageStack Body, Label ClassCaption, Label BestCaption) BuildLayout(RaceClassStore classes, RaceEventStore? events)
+    private (FillPage Page, PageStack Body, FieldGrid[] Grids, Label ClassCaption, Label BestCaption) BuildLayout(RaceClassStore classes, RaceEventStore? events)
     {
         var lblWhat = new Label
         {
@@ -147,9 +154,8 @@ public sealed class SeasonRulesForm : Form
 
         var lblAutoHint = new Label
         {
-            Text = "Off means you tick every race by hand, the way this always worked. "
-                 + "On means anything matching the rules below joins as it is recorded - "
-                 + "and you can still untick a round to force it out.",
+            Text = "Off, you tick every race by hand. On, anything matching the rules below joins as it is "
+                 + "recorded - and you can still untick a round to force it out.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -251,10 +257,8 @@ public sealed class SeasonRulesForm : Form
 
         var lblPlannedWhy = new Label
         {
-            Text = "Only the announcer uses this, and it is the one figure that lets it talk about what is still "
-                 + "possible: \"nobody can catch him now\", \"three rounds left and these two are level\", "
-                 + "\"a win today and it's his\". Leave it at none and it says nothing about any of that rather "
-                 + "than guessing. It changes no points and no standings.",
+            Text = "Only the announcer uses this, to talk about what is still possible: \"nobody can catch him now\", "
+                 + "\"a win today and it's his\". It changes no points and no standings.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -344,7 +348,7 @@ public sealed class SeasonRulesForm : Form
 
         Controls.Add(page);
 
-        return (page, body, classCaption, bestCaption);
+        return (page, body, new[] { classRow, bestRow, plannedRow }, classCaption, bestCaption);
 
         // A step in, under the tick it belongs to, as it always was - and
         // under its caption once the tick box has grown past the step with

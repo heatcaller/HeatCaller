@@ -324,6 +324,11 @@ public sealed partial class AnnouncementService
         int clearedVoice;
         int abandonedWriting;
 
+        // WHY (23 Oct 2026, bug hunt 10): a line binned here gives back what
+        // it reserved (a sponsor's ration, a battle's pair) once the queue
+        // lock is released - see BinQueuedLocked.
+        List<Action>? giveBack = null;
+
         lock (_voiceQueueLock)
         {
             lock (_linesBeingWrittenLock)
@@ -339,9 +344,10 @@ public sealed partial class AnnouncementService
                 _linesBeingWritten = 0;
             }
 
-            clearedVoice = _voiceQueue.Count;
-            _voiceQueue.Clear();
+            clearedVoice = BinQueuedLocked(_ => true, ref giveBack);
         }
+
+        GiveBackLost(giveBack);
 
         int clearedSounds;
 
@@ -626,10 +632,30 @@ public sealed partial class AnnouncementService
         // loses - gives the sponsor's allowance back, or the sponsor went
         // unnamed on milestones for three minutes over a line nobody heard.
         var accepted = EnqueueVoiceWork(type, transponderId,
-            () =>
+            async () =>
             {
-                countMention?.Invoke();
-                return SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed);
+                // WHY (23 Oct 2026, bug hunt 10): counted only once the line is
+                // certain to be heard (SynthesizeAndPlayAsync's spoken); a line
+                // dropped for no voice, a flag, the countdown or a mute - or
+                // whose synthesis threw - gives the reservation back instead.
+                var heard = false;
+
+                try
+                {
+                    await SynthesizeAndPlayAsync(text, $"[voice] {type}", speedOverride: speed,
+                        spoken: () =>
+                        {
+                            heard = true;
+                            countMention?.Invoke();
+                        });
+                }
+                finally
+                {
+                    if (!heard)
+                    {
+                        releaseMention?.Invoke();
+                    }
+                }
             },
             displayText: text,
             lost: releaseMention);
@@ -651,9 +677,17 @@ public sealed partial class AnnouncementService
     {
         var profile = _profiles.Get(transponder);
 
-        return profile is not null && !string.IsNullOrWhiteSpace(profile.SpokenName)
+        var saidAs = profile is not null && !string.IsNullOrWhiteSpace(profile.SpokenName)
             ? profile.SpokenName
             : transponder;
+
+        // WHY (23 Oct 2026, bug hunt 10): a car with no announcer name is said by
+        // its number, which must stay in the room - noted, so listen-along,
+        // the public captions and the podium videos leave the line out. See
+        // NoteSpokenAsNumber.
+        NoteSpokenAsNumber(transponder, saidAs);
+
+        return saidAs;
     }
 
     public void NotifyRaceStarted()
@@ -1134,7 +1168,15 @@ public sealed partial class AnnouncementService
             // nickname the room knows, or a spelling the voice gets right.
             var names = assignment.Posts
                 .Where(p => p.IsFilled)
-                .Select(p => _profiles.Get(p.Transponder!)?.SpokenName ?? p.DriverName ?? p.Transponder!)
+                .Select(p =>
+                {
+                    var name = _profiles.Get(p.Transponder!)?.SpokenName ?? p.DriverName ?? p.Transponder!;
+
+                    // WHY (23 Oct 2026, bug hunt 10): a marshal with no name is
+                    // said by number - noted, so the line never goes online.
+                    NoteSpokenAsNumber(p.Transponder, name);
+                    return name;
+                })
                 .Where(n => !string.IsNullOrWhiteSpace(n))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();

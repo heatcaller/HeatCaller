@@ -18,6 +18,9 @@ public partial class MainForm
     /// <summary>The AI Commentary page, whose spoken intros, recaps and teaser lap times only changes - see AfterSoundscapeApplied.</summary>
     private CommentaryControl? _commentaryControl;
 
+    /// <summary>The Cast tab - kept so a rebuilt Voice tab can hand it the announcer's voice rows again (RebuildVoiceAndSoundTabs, 22 Oct 2026).</summary>
+    private CastControl? _castControl;
+
     /// <summary>What a setup wizard is handed to offer the sound.</summary>
     private SoundOfferHost MakeSoundOfferHost() => new(
         Soundscapes: () => _themeStore.All,

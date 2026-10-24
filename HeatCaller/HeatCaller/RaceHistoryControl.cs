@@ -32,6 +32,10 @@ public sealed class RaceHistoryControl : UserControl
     private readonly TextBox _txtNotes = new();
     private string? _currentSessionId;
 
+    // The notes as the box was filled from the race - so SaveNotes writes
+    // back only what was typed, not a stale copy (bug hunt 10).
+    private string? _notesAsLoaded;
+
     public RaceHistoryControl(SessionHistoryStore history, UndoService undo, AppSettings settings,
         RoundDefinitionStore? rounds = null, RaceClassStore? classes = null, ProfileStore? profiles = null,
         TrackLayoutStore? trackLayouts = null, TechInspectionStore? tech = null, RentalTransponderStore? rentals = null,
@@ -192,6 +196,31 @@ public sealed class RaceHistoryControl : UserControl
         // Every heading whole, at the text size in use - see Pieces.KeepHeadingsWhole.
         _textSize.Keep(() => Pieces.KeepHeadingsWhole(_detailGrid));
 
+        _detailGrid.CellFormatting += FormatHandCountedLaps;
+
+        // 22 Oct 2026: a driver's report card for the night of this race -
+        // right-click their row. See CoachReport. Only once the host has
+        // wired ReportCardFor in, so the item never opens onto nothing.
+        var cardMenu = new ContextMenuStrip();
+        var cardItem = new ToolStripMenuItem("Report Card...", null, (_, _) => ShowReportCard());
+        cardMenu.Items.Add(cardItem);
+        cardMenu.Opening += (_, e) =>
+        {
+            var row = _detailGrid.CurrentRow;
+            cardItem.Text = row?.Cells[1].Value is string named && named.Length > 0 ? $"Report Card for {named}..." : "Report Card...";
+            e.Cancel = ReportCardFor is null || row?.Tag is not string { Length: > 0 };
+        };
+        _detailGrid.ContextMenuStrip = cardMenu;
+        _detailGrid.CellMouseDown += (_, e) =>
+        {
+            // A right-click picks the row it was on, so the card is for the
+            // driver under the pointer rather than whoever was selected.
+            if (e.Button == MouseButtons.Right && e.RowIndex >= 0 && e.RowIndex < _detailGrid.Rows.Count)
+            {
+                _detailGrid.CurrentCell = _detailGrid.Rows[e.RowIndex].Cells[Math.Max(0, e.ColumnIndex)];
+            }
+        };
+
         _lblNotes.Text = "Notes (weather, track surface, incidents, whatever's worth remembering):";
         _lblNotes.AutoSize = true;
         _textSize.Wear(_lblNotes, () => AppTheme.SmallFont);
@@ -234,6 +263,9 @@ public sealed class RaceHistoryControl : UserControl
         var btnExportAll = new Button { Text = "Export Results..." };
         btnExportAll.Click += (_, _) => ExportResults();
 
+        var btnPrintResults = new Button { Text = "Print Results..." };
+        btnPrintResults.Click += (_, _) => PrintSelectedResults();
+
         var btnEditResult = new Button { Text = "Edit Result..." };
         btnEditResult.Click += (_, _) => EditSelectedResult();
 
@@ -244,7 +276,7 @@ public sealed class RaceHistoryControl : UserControl
         // wraps onto more lines when the card is too narrow for them.
         var actions = new ButtonBar().With(
             btnReplay, btnPace, btnShareCard, btnEventReport,
-            btnExportSession, btnExportAll, btnEditResult, btnDelete);
+            btnExportSession, btnExportAll, btnPrintResults, btnEditResult, btnDelete);
 
         var results = new Section("Results");
 
@@ -313,6 +345,7 @@ public sealed class RaceHistoryControl : UserControl
         _detailGrid.Rows.Clear();
         _lblDetailTitle.Text = "Select a session to see full results.";
         _currentSessionId = null;
+        _notesAsLoaded = null;
         _txtNotes.Text = string.Empty;
         _txtNotes.Enabled = false;
     }
@@ -334,6 +367,7 @@ public sealed class RaceHistoryControl : UserControl
 
         _currentSessionId = session.Id;
         _txtNotes.Text = session.Notes;
+        _notesAsLoaded = session.Notes;
         _txtNotes.Enabled = true;
 
         var duration = session.EndedAtUtc - session.StartedAtUtc;
@@ -379,6 +413,20 @@ public sealed class RaceHistoryControl : UserControl
                 Sectors.Bests(r) is { } bests ? Sectors.Line(bests) : "-",
                 Sectors.Bests(r) is { } forIdeal ? $"{Sectors.Format(forIdeal.Sum())}s" : "-");
 
+            // The driver, for the Report Card on the right-click menu.
+            _detailGrid.Rows[rowIndex].Tag = r.Transponder;
+
+            // 22 Oct 2026: a count with laps counted by hand says so on
+            // hover - see HandCountedLaps.
+            // The number stays in the cell, so the column sorts as numbers;
+            // the mark is added as it is drawn (FormatHandCountedLaps).
+            if (HandCountedLaps.In(r) is > 0 and var byHand)
+            {
+                var lapsCell = _detailGrid.Rows[rowIndex].Cells["laps"];
+                lapsCell.Tag = byHand;
+                lapsCell.ToolTipText = HandCountedLaps.Note(byHand);
+            }
+
             // Hover for what each warning was for.
             if (r.Warnings.Count > 0)
             {
@@ -394,6 +442,91 @@ public sealed class RaceHistoryControl : UserControl
                 _detailGrid.Rows[rowIndex].Cells[5].Style.Font = AppTheme.BoldFont;
             }
         }
+    }
+
+    /// <summary>
+    /// Prints the selected races' results for the pit board - one after
+    /// another, oldest first, with a preview first (22 Oct 2026). Select
+    /// several with Ctrl or Shift to print a whole evening on one run of
+    /// paper. See ResultsSheetRenderer and PagePrinting.
+    /// </summary>
+    private void PrintSelectedResults()
+    {
+        var sessions = _sessionList.SelectedItems
+            .Cast<ListViewItem>()
+            .Select(i => _history.Get((string)i.Tag!))
+            .Where(s => s is not null)
+            .Select(s => s!)
+            .OrderBy(s => s.StartedAtUtc)
+            .ToList();
+
+        if (sessions.Count == 0)
+        {
+            AppDialog.Show(this, "Select a race first - or several, with Ctrl or Shift, to print them together.",
+                "Nothing to print", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var sections = sessions.Select(PrintSectionFor).ToList();
+        var title = sessions.Count == 1
+            ? sections[0].Title
+            : $"Results - {AppTime.DateAndTime(sessions[0].StartedAtUtc.ToLocalTime())}";
+
+        IReadOnlyList<Bitmap> pages;
+
+        try
+        {
+            pages = ResultsSheetRenderer.RenderPages(title, sections);
+        }
+        catch (Exception ex)
+        {
+            AppDialog.Show(this, $"Couldn't create the results sheet: {ex.Message}", "Print",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        try
+        {
+            PagePrinting.PrintWithPreview(this, title, pages);
+        }
+        finally
+        {
+            foreach (var page in pages)
+            {
+                page.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// "12*" in the Laps column for a count with laps counted by hand - the
+    /// cell holds the number and its Tag the hand count, so sorting still
+    /// goes by the number (22 Oct 2026). See HandCountedLaps.
+    /// </summary>
+    private void FormatHandCountedLaps(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || _detailGrid.Columns[e.ColumnIndex].Name != "laps")
+        {
+            return;
+        }
+
+        if (_detailGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag is int byHand && byHand > 0 && e.Value is int laps)
+        {
+            e.Value = HandCountedLaps.LapsText(laps, byHand);
+            e.FormattingApplied = true;
+        }
+    }
+
+    /// <summary>One race's block on the printed sheet: what it was, where and when, and its results in finishing order.</summary>
+    private static ResultsSheetSection PrintSectionFor(SessionRecord session)
+    {
+        var label = string.IsNullOrWhiteSpace(session.Label) ? "" : $" - {session.Label}";
+        var track = string.IsNullOrWhiteSpace(session.TrackLayoutName) ? "" : $"{session.TrackLayoutName}  -  ";
+
+        return new ResultsSheetSection(
+            $"{TypeText(session, full: true)}{label}",
+            $"{track}{AppTime.DateAndTime(session.StartedAtUtc.ToLocalTime())}",
+            session.Results.OrderBy(r => r.Position).ToList());
     }
 
     /// <summary>"-", "\u26A0 2", or "\u2691 Black flag" for the history grid.</summary>
@@ -424,13 +557,20 @@ public sealed class RaceHistoryControl : UserControl
         }
 
         var session = _history.Get(_currentSessionId);
-        if (session is null || session.Notes == _txtNotes.Text)
+        // WHY (23 Oct 2026, bug hunt 10): a query noted into this race's
+        // notes from elsewhere (DriverRequestDesk.Note) was wiped by this
+        // box's stale copy on the next page visit or at close. Unedited, the
+        // box is not written back.
+        if (session is null || _txtNotes.Text == (_notesAsLoaded ?? string.Empty) || session.Notes == _txtNotes.Text)
         {
             return;
         }
 
         session.Notes = _txtNotes.Text;
-        _history.SaveChanges();
+        if (_history.SaveChanges())
+        {
+            _notesAsLoaded = _txtNotes.Text;
+        }
     }
 
     private void ShareResultsCard()
@@ -787,6 +927,48 @@ public sealed class RaceHistoryControl : UserControl
         RefreshList();
     }
 
+    /// <summary>
+    /// A driver's report card for a night, a line at a time - set by the
+    /// host (MainForm.CoachReportFor). Null hides the right-click item.
+    /// </summary>
+    public Func<string, DateTime, IReadOnlyList<string>>? ReportCardFor { get; set; }
+
+    /// <summary>
+    /// The report card for the driver on the current row, for the night the
+    /// race shown was run on (22 Oct 2026). See CoachReport.
+    /// </summary>
+    private void ShowReportCard()
+    {
+        if (ReportCardFor is not { } cardFor
+            || _detailGrid.CurrentRow?.Tag is not string { Length: > 0 } transponder
+            || _currentSessionId is null
+            || _history.All.FirstOrDefault(s => s.Id == _currentSessionId) is not { } session)
+        {
+            return;
+        }
+
+        var night = TonightAtTheTrack.NightOf(session.StartedAtUtc.ToLocalTime());
+        var named = _detailGrid.CurrentRow.Cells[1].Value as string;
+        var who = string.IsNullOrWhiteSpace(named) ? transponder : named;
+        var when = night.ToString("ddd d MMM", System.Globalization.CultureInfo.CurrentCulture);
+
+        IReadOnlyList<string> lines;
+
+        try
+        {
+            lines = cardFor(transponder, night);
+        }
+        catch
+        {
+            lines = Array.Empty<string>();
+        }
+
+        // A window of its own (22 Oct 2026), with Print and Save Image - see ReportCardForm.
+        // The race's own night goes in (22 Oct 2026) so a saved card is named for that date, not today's.
+        using var form = new ReportCardForm(who, night, when, lines);
+        form.ShowDialog(this);
+    }
+
     /// <summary>The session highlighted in the list, or null with a nudge shown.</summary>
     private SessionRecord? SelectedSession()
     {
@@ -993,7 +1175,7 @@ public sealed class RaceHistoryControl : UserControl
 
         try
         {
-            var lines = new List<string> { CsvHelper.BuildRow("Position", "Driver", "Car", "Laps", "Fastest Lap (s)", "Elapsed", "Status") };
+            var lines = new List<string> { CsvHelper.BuildRow("Position", "Driver", "Car", "Laps", "Fastest Lap (s)", "Elapsed", "Status", "Laps Counted By Hand") };
             foreach (var r in session.Results.OrderBy(r => r.Position))
             {
                 lines.Add(CsvHelper.BuildRow(
@@ -1010,7 +1192,10 @@ public sealed class RaceHistoryControl : UserControl
                         ? (r.FastLapMs / 1000.0).ToString("0.000", CultureInfo.InvariantCulture)
                         : string.Empty,
                     FormatElapsed(r.ElapsedMs),
-                    r.Status));
+                    r.Status,
+                    // Last, so a sheet built against the old columns still
+                    // finds every one where it was (22 Oct 2026).
+                    HandCountedLaps.In(r)));
             }
 
             File.WriteAllLines(dialog.FileName, lines, CsvHelper.FileEncoding);

@@ -164,6 +164,17 @@ public sealed class SeasonStore
         }
     }
 
+    /// <summary>Adds a transponder to an entry's list, once (any case).</summary>
+    private static void NoteTransponder(SeasonStandingEntry entry, string transponder)
+    {
+        var id = transponder.Trim();
+
+        if (!entry.Transponders.Contains(id, StringComparer.OrdinalIgnoreCase))
+        {
+            entry.Transponders.Add(id);
+        }
+    }
+
     /// <summary>
     /// Computes the standings table for a season: total points, sessions
     /// counted, wins, podiums, and best finish per driver, across every
@@ -252,7 +263,23 @@ public sealed class SeasonStore
 
                 var name = string.IsNullOrWhiteSpace(result.DriverName) ? result.Transponder : result.DriverName;
 
-                if (string.IsNullOrWhiteSpace(name) || !scoredHere.Add(name))
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+
+                // WHY (23 Oct 2026, bug hunt 10): every transponder raced
+                // under this name is noted - the second row under one name
+                // too, before it is skipped below - so the public standings
+                // can find an initials-only driver by transponder (see
+                // SeasonStandingEntry.Transponders). Nothing about scoring
+                // changes: the first row here always creates the entry.
+                if (byDriver.TryGetValue(name, out var seen) && !string.IsNullOrWhiteSpace(result.Transponder))
+                {
+                    NoteTransponder(seen, result.Transponder);
+                }
+
+                if (!scoredHere.Add(name))
                 {
                     continue;
                 }
@@ -269,6 +296,11 @@ public sealed class SeasonStore
                     entry = new SeasonStandingEntry { DriverName = name };
                     byDriver[name] = entry;
                     rounds[name] = new List<int>();
+
+                    if (!string.IsNullOrWhiteSpace(result.Transponder))
+                    {
+                        NoteTransponder(entry, result.Transponder);
+                    }
                 }
 
                 // No laps is a DNF: on the entry list, never across the

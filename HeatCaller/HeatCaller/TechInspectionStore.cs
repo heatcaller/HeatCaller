@@ -396,12 +396,24 @@ public sealed class TechInspectionStore
         // Stamped on the way in rather than at every call site, so a new
         // inspection cannot be filed against nothing by a caller that
         // predates events.
-        if (string.IsNullOrEmpty(inspection.EventId))
+        //
+        // WHY (23 Oct 2026, bug hunt 10): this stamped ANY inspection with
+        // no race day, edits included. A pass recorded before race days
+        // existed has none, so correcting a typo in its notes filed a
+        // months-old pass under tonight's race day - and a pass filed under
+        // the current race day counts however old it is, so the car showed
+        // as cleared without anybody looking at it. Now only a new
+        // inspection or a re-inspection is stamped. The edit form re-stamps
+        // the time only when the car was looked at again, so a changed time
+        // is what marks a re-inspection; a note-only edit keeps its blank
+        // race day and stays judged by the recent window.
+        var index = _inspections.FindIndex(i => i.Id == inspection.Id);
+        var reinspection = index >= 0 && _inspections[index].InspectedAtUtc != inspection.InspectedAtUtc;
+        if (string.IsNullOrEmpty(inspection.EventId) && (index < 0 || reinspection))
         {
             inspection.EventId = CurrentEventId;
         }
 
-        var index = _inspections.FindIndex(i => i.Id == inspection.Id);
         if (index >= 0)
         {
             _inspections[index] = inspection;

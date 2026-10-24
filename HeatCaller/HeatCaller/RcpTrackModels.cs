@@ -927,10 +927,34 @@ public static class RcpPlan
             ? (startDecal.Col, startDecal.Row)
             : (floor[0].Col, floor[0].Row);
 
+        // WHY (23 Oct 2026, bug hunt 10): the "open on three sides" test
+        // used to run over EVERY floor cell, including the floor inside an
+        // island the rails wall off from the corridor. Laying the whole
+        // floor first and then standing rails on it is the way the designer
+        // tells people to work, so any island two tiles or more across
+        // failed Trace route, naming a tile no car can reach. Now only the
+        // floor a car can get to from the start is checked.
+        var reachable = new HashSet<(int, int)> { start };
+        var frontier = new Queue<(int, int)>();
+        frontier.Enqueue(start);
+
+        while (frontier.Count > 0)
+        {
+            var (c, r) = frontier.Dequeue();
+
+            foreach (var n in Open(c, r))
+            {
+                if (reachable.Add(n))
+                {
+                    frontier.Enqueue(n);
+                }
+            }
+        }
+
         // Nullable, so "none" can't be mistaken for the tile at column 0,
         // row 0 - which is where the first tile of a plan usually goes, and
         // which the old "!= default" test let through however open it was.
-        (int, int)? open3 = cells.Keys
+        (int, int)? open3 = reachable
             .Where(k => Open(k.Item1, k.Item2).Count > 2)
             .Select(k => ((int, int)?)k)
             .FirstOrDefault();

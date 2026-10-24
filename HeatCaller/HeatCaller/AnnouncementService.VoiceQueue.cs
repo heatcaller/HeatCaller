@@ -169,6 +169,11 @@ public sealed partial class AnnouncementService
             ? driverProfile.SpokenName
             : standing?.DisplayName ?? transponder ?? "Racer";
 
+        // A car said by its number stays in the room (23 Oct 2026, bug hunt
+        // 10): noted, so listen-along, the public captions and the podium
+        // videos leave the line out - see NoteSpokenAsNumber.
+        NoteSpokenAsNumber(transponder, driver);
+
         // Diagnostic: an announcement was reported with {driver} resolving
         // to an empty string ("The  get fastest lap!") despite
         // RaceStanding.DisplayName always falling back to the transponder
@@ -309,6 +314,14 @@ public sealed partial class AnnouncementService
         // The sponsor's credit when a sponsor has this moment, rationed and
         // counted by SponsorMentions. Counted in the work itself, so a line
         // the queue drops is not one the sponsor is told they got.
+        //
+        // WHY (23 Oct 2026, bug hunt 10): it was counted at the START of the
+        // work, and SynthesizeAndPlayAsync can still drop the line after that
+        // - a flag or the countdown while it synthesised, a mute, no voice at
+        // all - so the sponsor report counted mentions nobody heard and the
+        // ration was spent for three minutes. Now it is counted at the one
+        // point the line is certain to be heard (SynthesizeAndPlayAsync's
+        // spoken), and given back on every other way out.
         var (sponsorTag, countMention, releaseMention) = SponsorTag(type);
 
         if (sponsorTag.Length > 0)
@@ -325,10 +338,26 @@ public sealed partial class AnnouncementService
         // sponsor's ration back (20 Oct 2026, Bug Hunt 8), or the sponsor
         // went unnamed for three minutes over a line nobody heard.
         var accepted = EnqueueVoiceWork(type, transponder,
-            () =>
+            async () =>
             {
-                countMention?.Invoke();
-                return SynthesizeAndPlayAsync(text, "[voice] Announcing", speedOverride: speed);
+                var said = false;
+
+                try
+                {
+                    await SynthesizeAndPlayAsync(text, "[voice] Announcing", speedOverride: speed,
+                        spoken: () =>
+                        {
+                            said = true;
+                            countMention?.Invoke();
+                        });
+                }
+                finally
+                {
+                    if (!said)
+                    {
+                        releaseMention?.Invoke();
+                    }
+                }
             },
             displayText: displayText.Length > 0 ? displayText : text,
             lost: releaseMention);
@@ -366,6 +395,12 @@ public sealed partial class AnnouncementService
     /// doors open reads out every saved driver's full name, and none of
     /// that is the race - it must not go out on the public listen page.
     /// </param>
+    /// <param name="spoken">
+    /// Run once the line is certain to be heard - past every check that can
+    /// still drop it, just before the speaker (23 Oct 2026, bug hunt 10). A
+    /// sponsor's mention is counted here and nowhere earlier. Not run when
+    /// the line is dropped or its synthesis fails.
+    /// </param>
     private async Task SynthesizeAndPlayAsync(
         string text,
         string announcingLogPrefix,
@@ -376,7 +411,8 @@ public sealed partial class AnnouncementService
         SecondVoice? voice = null,
         SpeechTail tail = SpeechTail.Normal,
         SpeechLead lead = SpeechLead.Normal,
-        bool forListeners = true)
+        bool forListeners = true,
+        Action? spoken = null)
     {
         var currentProfile = _voiceStore.Current;
 
@@ -468,6 +504,15 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // How big the race is, in the delivery (22 Oct 2026) - a race line
+        // only: not a line with a delivery of its own (the race summary's),
+        // not a test pressed by hand, and not the second voice. See
+        // AnnouncementService.Energy.
+        if (deliveryOverride is null && honourMute && forListeners && voice is null)
+        {
+            currentProfile = WithTheRacesEnergy(currentProfile, text);
+        }
+
         StatusMessage?.Invoke($"{announcingLogPrefix}: \"{text}\"");
         var synthesis = await RenderLineAsync(currentProfile, text);
         var audio = synthesis.Audio;
@@ -518,6 +563,21 @@ public sealed partial class AnnouncementService
             // AnnouncementGain for why that clamp made the boost do nothing.
             var volume = AnnouncementGain(currentProfile.Volume);
 
+            // Past every check that drops a line: it is heard from here, so
+            // this is where a sponsor's mention counts - see spoken. A
+            // failing count never costs the line.
+            if (spoken is not null)
+            {
+                try
+                {
+                    spoken();
+                }
+                catch
+                {
+                    // The report is a courtesy.
+                }
+            }
+
             try
             {
                 // ANYONE LISTENING FROM HOME, from here and nowhere else
@@ -529,16 +589,21 @@ public sealed partial class AnnouncementService
                 // because after would put the whole length of the line on
                 // top of the lag. It returns at once - see
                 // AnnouncementService.ListenAlong.
+                //
+                // With whether the audio says the names shortened (23 Oct
+                // 2026, bug hunt 10), so a line whose audio says them in
+                // full stays off the public page - see OfferToListenersOnly.
                 if (forListeners)
                 {
-                    OfferLineToListeners(text, audio);
+                    OfferLineToListeners(text, audio, AudioFromShortenedText(synthesis.Source, text));
                 }
 
                 // The pads the CALLER asked for, since 11 Oct 2026. This
                 // was the default 0.9s tail and the full lead whatever the
                 // line was, so two turns of one exchange paid both in full
                 // with the hand-over's beat on top - see SpeechLead.
-                await PlayAsync(audio, volume, TailSecondsFor(tail), LeadSecondsFor(lead));
+                // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
+                await PlayAsync(audio, volume, TailSecondsFor(tail), LeadSecondsFor(lead), StillWantedUnlessOvertaken(honourMute));
             }
             catch (Exception ex) when (synthesis.FromLibrary && IsUndecodable(ex))
             {
@@ -921,7 +986,7 @@ public sealed partial class AnnouncementService
     /// the same call again on the next crossing (CheckCloseBattles) can wait
     /// out the gap instead of being held again and again.
     /// </param>
-    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false, Action? lost = null, Action? paced = null)
+    private bool EnqueueVoiceWork(AnnouncementEventType type, string? transponder, Func<Task> work, string? displayText = null, string? onAir = null, bool heldOver = false, Action? lost = null, Action? paced = null, int? routineWeight = null)
     {
         // 17 Oct 2026, Bug Hunt 8, A06-5: a call already past the entry
         // points' mute check - a field flush still in its window, a call kept
@@ -932,6 +997,16 @@ public sealed partial class AnnouncementService
         if (Muted)
         {
             NoteKeptCallLost(heldOver, type, transponder, displayText, "the announcer was muted");
+            return false;
+        }
+
+        // A call about a lap the window was told of too late (23 Oct 2026,
+        // timing layer, P4b) - see WhileLapCallsAreStale. Only ever true on
+        // the thread handling that lap, so a line coming back from being kept
+        // (heldOver) or a batch flushing elsewhere is never caught by it.
+        if (SkippedAsStale())
+        {
+            NoteKeptCallLost(heldOver, type, transponder, displayText, "its lap was too old to call by the time the window heard of it");
             return false;
         }
 
@@ -981,12 +1056,15 @@ public sealed partial class AnnouncementService
             && !RoutineCallGetsTheAir(
                 type,
                 out var kept,
-                holdOver: heldOver ? null : () => EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true, lost: lost),
+                // With its own weight when it has one (23 Oct 2026, bug hunt
+                // 10), so a kept rivalry line comes back weighed the same.
+                holdOver: heldOver ? null : () => EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true, lost: lost, routineWeight: routineWeight),
                 alreadyCounted: heldOver,
                 lost: lost,
                 transponder: transponder,
                 words: displayText,
-                paced: paced))
+                paced: paced,
+                routineWeight: routineWeight))
         {
             return kept;
         }
@@ -1004,11 +1082,16 @@ public sealed partial class AnnouncementService
             return true;
         }
 
+        // What the lines binned below were to run if lost - given back once
+        // the queue lock is released (23 Oct 2026, bug hunt 10): see
+        // BinQueuedLocked.
+        List<Action>? giveBack = null;
+
         lock (_voiceQueueLock)
         {
             if (transponder is not null && SupersedesPerDriver(type))
             {
-                _voiceQueue.RemoveAll(item => item.Type == type && item.Transponder == transponder);
+                BinQueuedLocked(item => item.Type == type && item.Transponder == transponder, ref giveBack);
             }
 
             // A running order is about the whole field, not the driver it is
@@ -1018,7 +1101,7 @@ public sealed partial class AnnouncementService
             // the per-driver rule above exists to prevent.
             if (type == AnnouncementEventType.PositionReport)
             {
-                _voiceQueue.RemoveAll(item => item.Type == AnnouncementEventType.PositionReport);
+                BinQueuedLocked(item => item.Type == AnnouncementEventType.PositionReport, ref giveBack);
             }
 
             if (isPriority)
@@ -1033,8 +1116,8 @@ public sealed partial class AnnouncementService
                 // anyway - the very thing IsWorthWaitingFor exists to stop.
                 // A real flag still clears them (ClearTheDecksFor), since a
                 // yellow or a finish does make them stale.
-                var discarded = _voiceQueue.RemoveAll(item =>
-                    !IsPriorityAnnouncement(item.Type) && !IsWorthWaitingFor(item.Type));
+                var discarded = BinQueuedLocked(item =>
+                    !IsPriorityAnnouncement(item.Type) && !IsWorthWaitingFor(item.Type), ref giveBack);
                 if (discarded > 0)
                 {
                     StatusMessage?.Invoke($"[voice] Cleared {Plural.Of(discarded, "queued announcement")} to make way for {type}.");
@@ -1052,7 +1135,7 @@ public sealed partial class AnnouncementService
             // the line it waited on was still speaking.
             var at = heldOver ? HeldOverSlot(_voiceQueue.Select(waiting => waiting.Type).ToList()) : _voiceQueue.Count;
 
-            _voiceQueue.Insert(at, new QueuedVoiceItem(type, transponder, OnAir: onAir, Work: async () =>
+            var queued = new QueuedVoiceItem(type, transponder, OnAir: onAir, Work: async () =>
             {
                 try
                 {
@@ -1079,11 +1162,84 @@ public sealed partial class AnnouncementService
                 {
                     StatusMessage?.Invoke($"[voice] Playback failed: {ex.Message}");
                 }
-            }));
+            });
+
+            _voiceQueue.Insert(at, queued);
+
+            // Kept beside the line, so a line binned before it is said gives
+            // the sponsor's ration (or a battle's claim) back - see
+            // BinQueuedLocked.
+            if (lost is not null)
+            {
+                (_lostIfBinned ??= new System.Runtime.CompilerServices.ConditionalWeakTable<QueuedVoiceItem, Action>())
+                    .AddOrUpdate(queued, lost);
+            }
         }
+
+        GiveBackLost(giveBack);
 
         _voiceQueueSignal.Release();
         return true;
+    }
+
+    /// <summary>
+    /// What each queued line is to run if it is thrown away before it is said
+    /// - EnqueueVoiceWork's <c>lost</c>. Made on first use (a part file has no
+    /// initializers); read and written only under _voiceQueueLock. Weak, so a
+    /// line said or binned takes its entry with it.
+    /// </summary>
+    private System.Runtime.CompilerServices.ConditionalWeakTable<QueuedVoiceItem, Action>? _lostIfBinned;
+
+    /// <summary>
+    /// Removes the queued lines that match, as List.RemoveAll does, and adds
+    /// what each was to run if lost to <paramref name="giveBack"/> - for the
+    /// caller to run with <see cref="GiveBackLost"/> AFTER the queue lock is
+    /// released (a battle's give-back takes the battles lock). Call only
+    /// under _voiceQueueLock.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Oct 2026, bug hunt 10): a sponsored line reserves the
+    /// sponsor's ration as it is built, and only a line turned down at the
+    /// door gave it back. One binned from the queue - replaced by a newer one
+    /// for the same driver, or cleared by a priority line - kept the ration
+    /// stamped for three minutes over a line nobody heard, so the sponsor's
+    /// name was left off every call for that moment.
+    /// </remarks>
+    private int BinQueuedLocked(Predicate<QueuedVoiceItem> match, ref List<Action>? giveBack)
+    {
+        if (_lostIfBinned is { } table)
+        {
+            foreach (var item in _voiceQueue)
+            {
+                if (match(item) && table.TryGetValue(item, out var lost))
+                {
+                    (giveBack ??= new List<Action>()).Add(lost);
+                }
+            }
+        }
+
+        return _voiceQueue.RemoveAll(match);
+    }
+
+    /// <summary>Runs what <see cref="BinQueuedLocked"/> collected. Outside the queue lock; never throws.</summary>
+    private void GiveBackLost(IEnumerable<Action>? giveBack)
+    {
+        if (giveBack is null)
+        {
+            return;
+        }
+
+        foreach (var lost in giveBack)
+        {
+            try
+            {
+                lost();
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"[voice] Couldn't give back a binned line's reservation: {ex.Message}");
+            }
+        }
     }
 
     /// <summary>
@@ -1197,6 +1353,9 @@ public sealed partial class AnnouncementService
             AnnouncementEventType? onAirCall = null;
             string? onAirNamed = null;
 
+            // What the line runs if it is never said - for the mute below.
+            Action? lostIfUnsaid = null;
+
             lock (_voiceQueueLock)
             {
                 if (_voiceQueue.Count > 0)
@@ -1206,6 +1365,11 @@ public sealed partial class AnnouncementService
                     onAirCall = item.Type;
                     onAirNamed = item.OnAir;
                     _voiceQueue.RemoveAt(0);
+
+                    if (_lostIfBinned is { } table && table.TryGetValue(item, out var lost))
+                    {
+                        lostIfUnsaid = lost;
+                    }
 
                     // Captured under the queue lock, which ClearTheDecksFor's
                     // queue purge also takes: a line either gets the
@@ -1240,8 +1404,16 @@ public sealed partial class AnnouncementService
             // Mute can land between an item being queued and it being
             // played, so check again here rather than trusting the
             // enqueue-time guard alone.
+            //
+            // Its reservation is given back (23 Oct 2026, bug hunt 10): the
+            // work never runs, so nothing else would.
             if (Muted)
             {
+                if (lostIfUnsaid is not null)
+                {
+                    GiveBackLost(new[] { lostIfUnsaid });
+                }
+
                 continue;
             }
 

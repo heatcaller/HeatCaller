@@ -266,7 +266,8 @@ public sealed partial class RelayPublisher
         var real = options.Where(one => !Ghosts.IsGhost(one.Id)).ToList();
         var names = RelayPublisher.DisplayNames(
             real.Select(one => RelayDocuments.PublicNameOrUnnamed(one.Name, one.Id)).ToList(),
-            abbreviate);
+            abbreviate,
+            real.Select(one => (string?)one.Id).ToList());
 
         var drivers = new List<object>();
 

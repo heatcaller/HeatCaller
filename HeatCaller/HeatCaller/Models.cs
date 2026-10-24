@@ -241,6 +241,40 @@ public sealed class DriverProfile
     /// </summary>
     public string Email { get; set; } = string.Empty;
 
+    // --- Online privacy and the driver's own words (22 Oct 2026) ---------
+    //
+    // WHY (22 Oct 2026, driver experience): a driver can ask from their own
+    // phone to be kept off the internet in three ways. A phone can only
+    // turn these ON; turning one off is a desk edit on the profile. None of
+    // them changes anything in the room - the Wi-Fi pages, Big Screen and
+    // PA are in the building and still use the full name and photo. They
+    // are enforced for the relay by PublicPrivacy.
+
+    /// <summary>Leave their photo out of everything that goes online (check-in list, podium videos).</summary>
+    public bool NoPhotoOnline { get; set; }
+
+    /// <summary>Don't put podium videos of them online, and forget the ones already there.</summary>
+    public bool NoVideoOnline { get; set; }
+
+    /// <summary>Show them online by initials only ("Sam Parker" becomes "S.P.").</summary>
+    public bool InitialsOnline { get; set; }
+
+    /// <summary>
+    /// They'd like their night emailed to them (to <see cref="Email"/>) when
+    /// the club sends night emails. Off until they or the desk say so.
+    /// </summary>
+    public bool EmailMyNight { get; set; }
+
+    /// <summary>
+    /// A line in their own words for the AI commentary ("Racing since I
+    /// was eight; my dad builds the cars"). At most
+    /// <see cref="AboutLineMaxChars"/> characters. Never published online.
+    /// </summary>
+    public string AboutLine { get; set; } = string.Empty;
+
+    /// <summary>Longest <see cref="AboutLine"/> the desk or a phone can set.</summary>
+    public const int AboutLineMaxChars = 120;
+
     /// <summary>
     /// Every transponder this driver has besides the main one - a second
     /// car's, a replacement, a spare - and, when it has been given one, an

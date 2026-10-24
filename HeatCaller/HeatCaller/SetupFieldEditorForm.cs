@@ -36,7 +36,7 @@ public sealed class SetupFieldEditorForm : Form
     private const int LeastRows = 4;
 
     /// <summary>What the note under the options says - see UpdateOptionsEnabled.</summary>
-    private const string OptionsHint = "Editing an option does not change entries already saved - a value no longer in the list is kept and still shown.";
+    private const string OptionsHint = "Changing an option doesn't change setups already saved - a value no longer in the list is kept and still shown.";
     private const string NoOptionsHint = "This field type doesn't use an option list.";
 
     private readonly SetupField _field;

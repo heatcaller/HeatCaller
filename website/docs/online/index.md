@@ -1,6 +1,6 @@
 # The online relay
 
-The online relay gives your club one web address that anyone can open, on any network, to see what's on track, today's schedule, results, standings, badges and track records. It also lets drivers check themselves in from their own phones. Use it when you want people off the venue's Wi-Fi (in the car park, at home, on mobile data) to follow the racing, or when you want results to stay up after the laptop is closed.
+The online relay gives your club one web address that anyone can open, on any network, to see what's on track, today's schedule, results, standings, badges and track records. It also lets drivers check themselves in from their own phones, follow their own night, and send changes to the desk (see [Driver requests](driver-requests.md)). Use it when you want people off the venue's Wi-Fi (in the car park, at home, on mobile data) to follow the racing, or when you want results to stay up after the laptop is closed.
 
 The relay is a small server your club (or whoever looks after your IT) hosts on the internet, usually on Fly.io. You turn publishing on from the **Club Website** page in HeatCaller. To set up the relay itself, see [Hosting the relay on Fly.io](../admin/relay-hosting.md). To connect the laptop to it, see [Setting up the Club Website page](setup.md).
 
@@ -20,12 +20,12 @@ Your club's address is the relay address followed by `/c/` and your club id, for
 | Page | Address | What it shows | Refreshes |
 |---|---|---|---|
 | Home | `/c/<club>` | What's on track now (or on now, or up next), the next few sessions, the three latest results, and tiles for every other page. | Every 15 seconds |
-| Live | `/c/<club>/live` | The race as it runs: state, countdown, flag, what's next, and the leaderboard. | Every 2 seconds |
+| Live | `/c/<club>/live` | The race as it runs: state, countdown, flag, what's next, and the leaderboard. A **Captions** button shows the announcer's words as text (see [Captions](#captions)). | Every 2 seconds |
 | Schedule | `/c/<club>/schedule` | Today's running order, each line marked Done, On track or Next. A class picker appears when there's more than one class. | Every 15 seconds |
 | Check in | `/c/<club>/checkin` | Online check-in. The tab only appears while online check-in is switched on. See [Online check-in](check-in.md). | Every 10 seconds |
-| Results | `/c/<club>/results` | Finished sessions, newest first, grouped by day. Tap a session to see every finisher's laps, best lap and time, with their best sectors under the best lap when the session had a split loop. | Every 30 seconds |
+| Results | `/c/<club>/results` | Finished sessions, newest first, grouped by day. Tap a session to see every finisher's laps, best lap and time, with their best sectors under the best lap when the session had a split loop. A small chip beside a time shows time added or warnings (see [Penalties on the results](#penalties-on-the-results)). | Every 30 seconds |
 | Standings | `/c/<club>/standings` | Championship points for each season, with a season picker when there's more than one. | Every 30 seconds |
-| Badges | `/c/<club>/badges` | "Just earned", "Most collected" and "Every badge". | Every minute |
+| Badges | `/c/<club>/badges` | "Just earned", "Most collected" and "Every badge". While you're [following a driver](#following-a-driver), a "Next for *name*" list at the top shows up to two badges they're close to, such as "2 more podiums for Podium Regular". | Every minute |
 | Tracks | `/c/<club>/tracks` | Every track layout with its picture, lap record, sector records, length, typical lap and the ten best laps on it. Today's layout comes first, marked "Racing here today". | Every 5 minutes |
 
 ![The Schedule page on a phone, showing today's running order with Done, On track and Next markers](../assets/images/online-schedule-page-phone.png)
@@ -40,6 +40,25 @@ Pages only refresh while someone is looking at them. A phone left in a pocket wi
 - **Standings** go up after each session is saved, and again whenever the Online settings change.
 - **Tracks** follow the same rules as the **Personal Bests** page: rental transponders, drivers marked to be left out of records, ghost cars and demo sessions don't count, and a personal best reset hides laps from before it.
 
+### Captions
+
+The **Live** page has a **Captions** button, under "The announcer's words as text. No sound needed." It's for someone who can't hear the PA, or is somewhere they can't play sound. Nothing is fetched until it's pressed.
+
+- Tap **Captions** and the announcer's last few lines appear as text, newest at the bottom, up to six at a time. New lines are added every couple of seconds as the announcer speaks. Tap it again to close them.
+- It works on its own, with or without the **Listen** button. Listening plays the announcer's voice; captions need no sound at all.
+- A screen reader reads each new line once, as it arrives.
+- The button is on every club's live page, because the page can't tell whether captions are switched on. When there's nothing to show, it says "No captions just now. They show here as the announcer speaks, when the club has them switched on."
+
+Captions are switched on with **Captions on the club's live page** on the Club Website page, and are off until you tick it (see [What gets published](setup.md#what-gets-published)). A line that mentions a driver who asked to be shown by initials only, by any of their names, is left out of the captions, as it is for people listening along from home. Race control's warning and black-flag calls are left out of both too, because they say the reason; the room still hears and sees them.
+
+The Big Screen and the Wi-Fi pages have captions of their own, in the room; see [Captions on the Big Screen](../screens/big-screen.md#captions) and [Captions on the overlay and broadcast pages](../screens/phone-and-web.md#captions).
+
+### Penalties on the results
+
+On the **Results** page, a driver who had time added or a warning in a session has a small chip beside their time, for example "+5s", "1 warning" or "+10s · 2 warnings". Hold a finger or the mouse on it for "Time added or warnings from race control".
+
+The chip has numbers only, never the reason. Race control's reasons ("Blocking", "jump start") are written about a named person, who may be a child, so they only appear on that driver's own night page (see [Race cards](#race-cards)) and on the Wi-Fi follow view in the room. Results published by an older version of HeatCaller have no chip.
+
 ### Podium videos
 
 After a race, the top three's [highlight videos](../announcer/sounds-and-music.md#highlight-videos) can go on a page of their own, `/c/<club>/videos/<race>`, headed with the race's name ("A-Main podium") and "The announcer's call of the top three, to watch and keep. Kept for a week." Each video has its place and the driver's name, a player, and **Download video**, which saves it to the phone as a file named for the race and the driver.
@@ -50,6 +69,124 @@ After a race, the top three's [highlight videos](../announcer/sounds-and-music.m
 - If the page is opened before the videos are up, or after the week, it says "These videos have gone - they are kept for a week - or they are still on their way. Try again in a minute."
 
 It's switched on with **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** on **Sounds → Recording**, and only works while the club's page is switched on (see [Setting up the Club Website page](setup.md)).
+
+### A driver's own night
+
+Each driver has a page of their own on the relay, headed "Your night". It opens from a link that carries the code from their check-in badge: **See your racing from last time** on their own check-in card, or the link in their [night email](setup.md#drivers-nights-by-email). Nobody without that code can find or open it. It's switched on with **Give each driver their own night at a private address** on the Club Website page, which is off by default and needs online check-in set up (see [What gets published](setup.md#what-gets-published)).
+
+!!! warning "The night link is private - don't share it"
+    The link is the driver's own, like a door key. Anyone holding it can see when and where that driver races next, their marshal duty and their transponder, check them in or out, and send requests to the desk in their name. Don't post it in a group chat, a social media post or a screenshot. To show someone how the night went, use **Make a picture to share** at the bottom of the page instead: the picture has no code in it. If a link has got out, **Reissue All QR Check-ins** on the Club Website page changes every driver's code (see [Reissue all QR check-ins](check-in.md#reissue-all-qr-check-ins)).
+
+From top to bottom, the page shows:
+
+1. **Right now**, a live card for the evening as it happens (see below).
+2. **Your first night - what happens**, a short guide, on a driver's first night only.
+3. The night itself: the night's facts, **Your report card**, a card for each race, how the night went, their race calls and their podium videos.
+4. **Your details**, where they ask the desk for changes, when the club takes requests (see [Driver requests](driver-requests.md)).
+
+Before their first race of the night, the night part says "Nothing is filed for you yet tonight. Your races show here after each one." The live card above it still works.
+
+Everything on this page except the night's facts, the report card and the podium videos needs the relay redeployed after 22 Oct 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)). Until it is, the night page looks as it did before.
+
+#### Right now
+
+The **Right now** card is at the top of the page while HeatCaller is sending the driver's live details. That covers everyone in the grids of the next dozen races, their marshals, and anyone who has raced or checked in tonight. Ghost cars and rentals never get one. The card refreshes every 20 seconds while the page is on screen.
+
+- **The call-up**, in large type: "You're up next", "2 races before yours", "Staged - go to the driver stand" or "On track now". Under it, the race and their grid slot, for example "Q2 Heat 1 (Stock Buggy) · grid slot 3". When none of their races is coming up soon: "None of your races is in the next few on the running order."
+- **When it should start**, for example "about 7 min (19:42)", counting down between refreshes. It says "due now (19:42)" once the time has come, and "at about 21:10" for a race more than an hour and a half away. HeatCaller works it out from the time on the day's timetable plus how late the night is running, or, where the timetable has no time it can read, from how long tonight's races have been taking. With neither, no time is shown. The page goes by the relay's clock, so a phone whose clock is wrong still counts down to the right minute.
+- **Turn on alerts**, with "Two beeps and a buzz when your race is next, and again when it is staged." Tap it and the phone beeps once to show it works, and says "Alerts on. Keep this page open on your screen." The button then reads **Alerts on - tap to turn off**. A phone only lets a page beep after a tap, and only while the page is open with the screen on. An iPhone can't buzz for a web page, so it only beeps.
+- **Your marshal duty**, when they marshal one of the coming races: the race and their post, for example "Q2 Heat 2 (Stock Buggy) - Turn 3", with "1 race before it." or "That race is next - head to your post." It's the same duty the announcer calls; see [Corner marshals](../race-day/program-and-mains.md#corner-marshals).
+- **Check in**, while online check-in is open and they're on tonight's list: "One tap and the timing desk knows you are here." After the tap it reads **Checked in ✓**, with "Tap again if you need to check out." It works exactly like the button on their check-in card (see [Online check-in](check-in.md)). If check-in has closed, the phone says "Online check-in is closed just now - check in at the desk."
+- **Your transponder**, with when the timing line last heard it and a **Check my transponder** button (see below).
+- **Your requests to the desk**, once they've sent one, with how each is getting on (see [What the driver sees](driver-requests.md#what-the-driver-sees)).
+
+#### Check my transponder
+
+Under **Your transponder**, the card says when the timing line last heard the driver's transponder tonight, for example "Last seen at 19:40, signal good.", or "Not seen by the timing line tonight yet."
+
+To check a transponder before a race:
+
+1. Tap **Check my transponder**. The card says "Drive past the timing line now. This page is watching for it."
+2. Drive the car over the timing line, in practice or between races.
+3. Within about half a minute the card says, for example, "Seen at 19:42, signal good.", and the phone gives a short buzz.
+
+| What it says after the time | What it means |
+|---|---|
+| "signal good" | Heard cleanly. |
+| "signal weak - mount it higher and clear of carbon and wires" | Heard, but only just. Move the transponder before the race. |
+| "signal not reported by this timing system" | Heard. The decoder doesn't report signal strength, so there's nothing to say about it. See [Signal strength](../timing/transponders.md#signal-strength). |
+
+If it hasn't been heard after 3 minutes, the card says "Not seen in 3 minutes. Check it is switched on, charged and mounted where the timing line can see it, then try again - or ask at the timing desk."
+
+Nothing needs doing at the desk for this. HeatCaller notes every pass over the line anyway, practice included, and the page just watches for one newer than the tap. Times are to the nearest ten seconds.
+
+#### Your first night
+
+On a driver's first night at the club (HeatCaller has no result for them before tonight, demo races aside), a folded section, **Your first night - what happens**, sits under the live card. Tapping it opens a short guide written for drivers:
+
+| Heading | What it covers |
+|---|---|
+| This page | What the start time means, and turning on alerts. |
+| Heats and mains | Heats first; how they do decides which main (final) they race in. |
+| Your grid slot | Where the car starts. Slot 1 is the front. |
+| Staged | Go to the driver stand with the radio, put the car on the track and wait for the start. |
+| The start | The countdown, and why going early is a jump start that can add time. |
+| Your transponder | Switched on and mounted before every race, and drive past the timing line once to check it. |
+| Warnings | Race control can warn for blocking or rough driving, and more warnings add time. |
+| Marshal after your race | Stand at your post and put back any car that flips or gets stuck. Everybody takes a turn. |
+| Questions | "Ask at the timing desk. Everybody was new once." |
+
+The same guide is on their check-in card when they open it from their QR check-in (see [What the racer sees](check-in.md#what-the-racer-sees)).
+
+#### Two cars on one night
+
+A driver who races a second transponder as a car of its own gets one night page, not two. HeatCaller times a driver's other transponder as a separate row in the results when another of their cars is already on track in that race; otherwise its laps go in their main row. See [Alternate transponder](../timing/transponders.md#alternate-transponder).
+
+When that happens, the night page splits into a section for each car, headed with the car and its name from the results, for example **Main car · B6.4** and **Second car · RC10 B7**. Each section has that car's own facts, report card, races, improvement tonight and progress. Nothing is added up across the two cars: a place, a best lap or an improvement only means something for one car. Badges within reach and the first-night guide are the driver's, so they appear once.
+
+- **A race where the second transponder was merged** into the main row counts as the main car's, as it does on the result sheet.
+- **Both cars in the same race** shows that race once in each car's section. **Something wrong?** under either one names the car in the message to the desk.
+- **Only the second car raced** still gets a heading saying which car it was.
+- **The night email** groups the races and report cards the same way, and goes to the driver once.
+
+The car's name is the one saved with the result when the race was filed, so changing the garage later doesn't rewrite a past night. A driver whose results don't say which car gets "Main car" and "Second car" alone.
+
+The sections need the relay redeployed after 22 Oct 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)). Until it is, the page shows the first car's facts and every race card in one list.
+
+#### Race cards
+
+Under the report card, **Your races** (or **Your race**) has a card for each race they ran tonight, in order:
+
+- The race's name and when it ran.
+- How it went, for example "2nd of 8 · started 4th · 12 laps · best 9.214", or "Disqualified" or "Did not finish". Ghost cars aren't counted in "of 8".
+- **A lap chart**: one line across the card, a point for each lap, left to right, with quicker laps higher and the best lap marked. Under it: "Each lap, left to right - higher is quicker. Best 9.214 on lap 7." A lap far slower than the rest, such as a crash or a flipped car, is drawn along the bottom edge so the rest of the line isn't squashed flat. A race with fewer than two laps has no chart.
+- **Penalties**, in red, one line each, with race control's reason: "Warning 1 - Blocking", "+5 s - Blocking (warning 2)", "+5 s - jump start", "Jump start (no time added)", or a change made after the race with the reason given for it. A penalty with no reason typed reads "no reason given". These lines are only ever on the driver's own night; the public results show numbers only (see [Penalties on the results](#penalties-on-the-results)).
+- **The call of this race**, when the club shares drivers' clips: the announcer's call of that driver in that race, with a player and **Download the call (mp3)**.
+- **Something wrong?**, when the club takes requests: a way to ask the desk to look at that result (see [Querying a result](driver-requests.md#querying-a-result)).
+
+#### How the night went
+
+After the race cards, as much of this as there's something to say about:
+
+- **Your improvement tonight**: their middle lap against their first race tonight, for example "Your middle lap is 0.40 s quicker than in your first race tonight (Q1 Heat 2)", or slower, or "the same pace as". It needs two races, and never compares them with anyone else.
+- **Your progress on** *layout*: up to six bars, their best lap on each of their last nights on the layout of their latest race tonight, with tonight last and marked **Tonight**. A quicker night stands taller. Under it, when it applies, "Your best on Club Oval since 3 September 2026" or "Your best ever on Club Oval". Demo races and ghost cars don't count, and a personal best reset hides laps from before it.
+- **Achievements in reach**: up to three badges they're close to, for example "2 more podiums for Podium Regular".
+- **Your race calls**: any of the driver's clips that didn't go with a race card.
+- **Your podium videos**: see [Podium videos](#podium-videos).
+
+The driver's clips go online only when **Put each driver's clip on their own night on the club's page** is ticked on **Sounds → Recording** (see [Highlight videos](../announcer/sounds-and-music.md#highlight-videos)). It's off by default. A clip is only ever on that driver's own night, never on a public page. Clips are kept for a week, and the relay keeps a driver's eight most recent.
+
+#### The report card
+
+The night has **Your report card**: a few lines of arithmetic about their laps tonight. See [The report card](../screens/phone-and-web.md#the-report-card) for what each line says.
+
+- This page is the driver's own, so it's the one online place the card includes the **setup line**, what a setup change logged tonight did to their pace.
+- The driver they're compared with in the last line is named the way your public pages name people, shortened to a first name and initial when **Shorten published names** is ticked.
+- The card needs the relay updated. On a relay that hasn't been redeployed since 22 Oct 2026, the night page simply shows no card.
+
+#### Your details
+
+When the club has ticked **Let drivers send changes from their phone**, a **Your details** card at the foot of the page lets the driver ask the desk to change how they're called and shown, to keep them more private online, or to change the battery pack in their car. Nothing changes until the desk approves it. See [Driver requests](driver-requests.md).
 
 ### Following a driver
 
@@ -85,13 +222,16 @@ Once publishing is on, HeatCaller sends:
 - every track layout with its picture, lap record and best laps
 - the site look (the look's colors, welcome line, logo)
 - the online check-in list, if online check-in is on (never shown whole; see below)
+- the announcer's words as captions, if you tick **Captions on the club's live page**
+- each driver's own night, if you tick **Give each driver their own night at a private address** (only ever served to that driver's code; see [A driver's own night](#a-drivers-own-night))
 
 These are **never** published:
 
 | Never published | Why |
 |---|---|
 | Transponder numbers | A number that follows someone from meeting to meeting next to their name is a tracking key. Drivers are shown by name only. |
-| Email addresses | They're used on the laptop to send racers their PINs, and never leave it except inside those emails. |
+| Email addresses | They're used on the laptop to send racers their PINs and nights, and never leave it except inside those emails. When the club takes [driver requests](driver-requests.md), a driver's own night page shows a masked form of their address, such as "s•••@gmail.com", so they can see which one is on file. |
+| Penalty reasons | What race control typed about a driver is shown only on that driver's own night. Public results carry the numbers: seconds added and how many warnings. |
 | PINs | The staff PIN and racers' personal PINs are only ever sent in scrambled (hashed) form, for the relay to check a typed PIN against. |
 | Ghost cars | They're pace references, not entrants. |
 
@@ -118,6 +258,8 @@ The laptop only sends a document when it has changed, and re-sends everything pe
 | Badges earned, tracks | Checked every 30 seconds; sent when changed. |
 | Badge list (with artwork) | Once at start-up, then hourly. |
 | Roster (only if you publish it) | Checked every 2 seconds; sent when changed. |
+| Captions (only if you switch them on) | Within a second of each line the announcer says. |
+| Drivers' live cards (only with drivers' own nights on) | At most every 10 seconds, and straight away when a race is staged, starts or ends. |
 
 Every 10 minutes, the schedule, site look, check-in list, badges earned, tracks and roster are sent again whether they changed or not, so a relay that restarted or lost a document catches up.
 
@@ -140,6 +282,8 @@ Many clubs race juniors, so the defaults are cautious, and it's worth deciding e
 - **Leave short names on** unless you're sure every family is happy with full names on a public page.
 - **Leave the roster off** unless you need heat line-ups online. With it on, anyone with the address can see which children are entered and in which heat.
 - **Leave photos off** unless you're sure. Photos are only visible behind a PIN or QR check-in, but anyone with the staff PIN sees every driver's face next to their name.
+- **One driver can ask for more.** Each driver profile has three **Online privacy** ticks: leave their photo out, no podium videos of them, and initials only. They cover everything the relay shows, captions included, and nothing in the room. A driver or a parent can ask for them from the night page; only the desk can turn one off. See [Online privacy](../race-day/drivers-and-classes.md#online-privacy).
+- **Night links are private.** A driver's night link opens their next race, their marshal post and their check-in. Tell drivers and families not to share it (see [A driver's own night](#a-drivers-own-night)).
 - **Club ids aren't secret.** They go on posters. Treat the club address as public, and assume anything published can be seen by anyone.
 - **Staff PIN.** Share it with the people running the desk, not with the paddock. Racers get their own PINs, which only check in themselves.
 - **You can take it all down.** **Delete Everything Published** on the Club Website page removes everything your club has on the relay and turns publishing off so it stays down (see [Deleting everything published](setup.md#deleting-everything-published)).

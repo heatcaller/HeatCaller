@@ -1083,7 +1083,16 @@ public sealed partial class AnnouncementService
     /// recap showed "6 point nine four seconds" where the live path shows
     /// "6.935s".
     /// </param>
-    public sealed record PreparedSpeech(string Text, byte[] Audio, string DisplayText);
+    /// <param name="StandIn">
+    /// True when Kokoro stood in for the chosen voice on this line (22 Oct
+    /// 2026, bug hunt 9) - a one-off refusal or server error can do that
+    /// without starting a rest, so the caller cannot tell from the rest alone.
+    /// </param>
+    /// <param name="AudioShortened">
+    /// Whether <paramref name="Audio"/> says the names shortened, for
+    /// listen-along - see AudioFromShortenedText (23 Oct 2026, bug hunt 10).
+    /// </param>
+    public sealed record PreparedSpeech(string Text, byte[] Audio, string DisplayText, bool StandIn = false, bool AudioShortened = false);
 
     /// <summary>
     /// Renders a line now and hands the audio back instead of speaking it.
@@ -1149,8 +1158,9 @@ public sealed partial class AnnouncementService
             // Rendered ahead, so a long line gets the long limit - see
             // RenderingAhead (22 Oct 2026, bug hunt).
             RenderingAhead.Value = true;
-            var audio = (await RenderLineAsync(profile, spoken, cancel: cancel)).Audio;
-            return new PreparedSpeech(spoken, audio, text);
+            var rendered = await RenderLineAsync(profile, spoken, cancel: cancel);
+            return new PreparedSpeech(spoken, rendered.Audio, text, rendered.Source == LineSource.StandIn,
+                AudioShortened: AudioFromShortenedText(rendered.Source, spoken));
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {
@@ -1293,12 +1303,17 @@ public sealed partial class AnnouncementService
                 // Listeners at home hear a prepared line (recap, teaser, a
                 // two-hander's turn) too - offered just before the speaker,
                 // the way the queued lines are. This path never did.
-                OfferLineToListeners(prepared.Text, prepared.Audio);
+                //
+                // WHY (23 Oct 2026, bug hunt 10): with whether its audio says
+                // the names shortened, so the line is not held back from
+                // listeners just because this path could not say.
+                OfferLineToListeners(prepared.Text, prepared.Audio, prepared.AudioShortened);
 
                 // Noting when its last word lands, so a piece of imaging
                 // can hit the post on it (17 Oct 2026) - see TalkUp. Plays
                 // exactly as PlayAsync did.
-                await PlayNotingLastWordAsync(prepared.Audio, volume, trailing, leading);
+                // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
+                await PlayNotingLastWordAsync(prepared.Audio, volume, trailing, leading, StillWantedUnlessOvertaken(honourMute: true));
             }
             finally
             {
@@ -1560,22 +1575,20 @@ public sealed partial class AnnouncementService
         // would keep them.
         CancelCountdownTicks();
 
+        // WHY (23 Oct 2026, bug hunt 10): a line binned here gives back what
+        // it reserved (a sponsor's ration, a battle's pair) once the queue
+        // lock is released - see BinQueuedLocked.
+        List<Action>? giveBack = null;
+
         lock (_voiceQueueLock)
         {
-            if (keepPriority)
-            {
-                var kept = _voiceQueue.Where(item => IsPriorityAnnouncement(item.Type)).ToList();
-                voiceCleared = _voiceQueue.Count - kept.Count;
-
-                _voiceQueue.Clear();
-                _voiceQueue.AddRange(kept);
-            }
-            else
-            {
-                voiceCleared = _voiceQueue.Count;
-                _voiceQueue.Clear();
-            }
+            // RemoveAll keeps the survivors in order, as Clear + AddRange did.
+            voiceCleared = keepPriority
+                ? BinQueuedLocked(item => !IsPriorityAnnouncement(item.Type), ref giveBack)
+                : BinQueuedLocked(_ => true, ref giveBack);
         }
+
+        GiveBackLost(giveBack);
 
         lock (_soundQueueLock)
         {
@@ -1634,6 +1647,8 @@ public sealed partial class AnnouncementService
             // next race offset, hearing their time on laps 2, 5, 8 instead
             // of 3, 6, 9.
             _lapTimeCounts.Clear();
+            ForgetSplitTimeCounts();
+            ForgetCoachingCounts();
             _lastLapElapsedMs.Clear();
             _lapCrossings.Clear();
             _qualifyingLaps.Clear();

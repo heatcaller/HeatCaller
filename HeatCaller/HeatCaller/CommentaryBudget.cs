@@ -747,6 +747,20 @@ public sealed class CommentaryBudget
     /// <summary>True once the relay has told us what the club's allowance is. Before that there is no budget gate.</summary>
     public bool AllowanceKnown => _allowance > 0;
 
+    // WHY (23 Oct 2026, bug hunt 10): talking points outside the budget need
+    // the allowance to honour the essential reserve the director keeps.
+    /// <summary>The club's month allowance, as the relay last reported it. Zero when it hasn't said.</summary>
+    public int MonthAllowance
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _allowance;
+            }
+        }
+    }
+
     /// <summary>
     /// Asked whether the model on this PC is writing because the relay's
     /// lines for the month are used up - FallbackCommentaryBrain.TakingOver,
@@ -922,6 +936,15 @@ public sealed class CommentaryBudget
             // stood before this laptop wrote anything - its count already
             // includes what is settled and what is in flight, including a
             // night picked back up after a restart. See NightAllotment.
+            // WHY (23 Oct 2026, bug hunt 10): the relay's month can roll over
+            // mid-night (it counts in UTC), and its count then falls below
+            // where tonight began. Start tonight's new-month lines from the
+            // new count, or they are counted twice in NightAllotment.
+            if (_usedBeforeTonight is { } before && _usedThisMonth < before)
+            {
+                _usedBeforeTonight = _usedThisMonth;
+            }
+
             _usedBeforeTonight ??= Math.Max(0, _usedThisMonth - (int)Math.Round(ChargedLines()));
         }
     }
@@ -1214,12 +1237,18 @@ public sealed class CommentaryBudget
     }
 
     /// <summary>
-    /// Nothing was written - the relay refused, the line came back too
-    /// late to be worth saying, or the facts turned out to be nothing. The
-    /// hold is given back whole; the relay refunds its own count the same
-    /// way.
+    /// The segment will not be said. Its once-a-night and per-class turns
+    /// are always given back, so it can still be said later tonight.
+    ///
+    /// The lines are given back only when nothing was written (the relay
+    /// refused, the write failed, or the facts turned out to be nothing):
+    /// the relay refunds its own count only for an empty answer or a failed
+    /// write. Pass <paramref name="written"/> true when a line DID come
+    /// back and is being dropped (too late, held, the race moved on, the
+    /// host dropped it) - the relay kept that charge, so tonight keeps it
+    /// too, as a settle that was not spoken.
     /// </summary>
-    public void Release(long ticket)
+    public void Release(long ticket, bool written = false)
     {
         lock (_gate)
         {
@@ -1228,6 +1257,24 @@ public sealed class CommentaryBudget
             if (!_open.Remove(ticket, out var held))
             {
                 return;
+            }
+
+            // WHY (23 Oct 2026, bug hunt 10): a line the relay wrote and the
+            // app then dropped was handed back whole, but the relay keeps the
+            // charge for any line it returned (brain.ts write refunds only an
+            // empty answer or a throw). Tonight's headroom and SpentTonight
+            // under-counted every dropped line, the director wrote another at
+            // once, and the month ran out before its last nights. A written
+            // drop is now charged like an unspoken settle - the airtime clock
+            // is left alone, because nothing was said.
+            if (written)
+            {
+                _spentTonight += held.Lines;
+
+                if (held.Free)
+                {
+                    _freeTonight += held.Lines;
+                }
             }
 
             // The counters are taken at reserve time so two requests in the

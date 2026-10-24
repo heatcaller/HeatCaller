@@ -90,9 +90,49 @@ The **What gets published** card lists what's always sent: the live race while o
 | Setting | What it does | Default |
 |---|---|---|
 | **Also publish the roster and heat line-ups (who is entered, and who is in which heat)** | Adds who is in each heat to the Schedule page, and sends the list of who is entered. The relay only shows either if your relay admin has also allowed it for your club; until then the Schedule page shows the heats without who is in them. | Off |
+| **Give each driver their own night at a private address** | "Each driver who raced gets a page of their evening - races, finishes, best laps and moments - at an address built from the code on their check-in badge, which nobody without it can find or open." Needs online check-in set up. Unticking takes every night off the relay, with any driver requests still waiting there. See [A driver's own night](index.md#a-drivers-own-night). | Off |
+| **Let drivers send changes from their phone** | A step in, under the nights tick. From their night page a driver can ask to change their details or battery pack, ask to be kept more private online, or query a result. Nothing changes until the desk approves it. Grayed out until drivers' nights and online check-in are on. Unticking throws away any requests still on the relay. See [Driver requests](driver-requests.md). | Off |
+| **Offer drivers their night by email** | Drivers who asked for it on their profile are emailed their races, their report card and a link to their night page. See [Drivers' nights by email](#drivers-nights-by-email). | Off |
+| **Send automatically when the race day closes** | A step in, under the email tick: sends tonight's night emails by itself "When tonight's race day is closed on Race Day. Otherwise, press Email Tonight's Nights." Grayed out until **Offer drivers their night by email** is ticked. | Off |
+| **Captions on the club's live page** | "What the announcer says, as text on the live page, for anyone who can't hear the PA - no sound needed. Lines about drivers who asked to be shown by initials are left out." See [Captions](index.md#captions). Unticking takes the captions back off the relay, and lines said while it was off are never sent later. | Off |
 | **Shorten published names to a first name and an initial** | Shows "Dana S" instead of "Dana Sloane" everywhere online. Only the last name is shortened, and a one-word name is left alone. Affects what's sent from now on: standings and the last 36 hours of results are re-sent with the new names, but older results already on the relay keep the names they were sent with. It also shortens names in announcer lines sent to the HeatCaller voice or ElevenLabs; the Kokoro voice still says them in full (see [Shortened names on the paid voices](../announcer/voice.md#fix-a-line-that-came-out-wrong)). | On |
 
-Both are off-by-default decisions about children's names; see [Children and privacy](index.md#children-and-privacy).
+The roster and short names are decisions about children's names; see [Children and privacy](index.md#children-and-privacy). Each driver can also be kept more private online than the club's settings, from their profile; see [Online privacy](../race-day/drivers-and-classes.md#online-privacy).
+
+The drivers' nights, requests, night emails and captions need the relay redeployed since 22 Oct 2026. Update it before you tick them; see [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
+
+A driver's own race calls can go on their night page too, with a tick on another page: **Put each driver's clip on their own night on the club's page** on **Sounds → Recording**. See [Highlight videos](../announcer/sounds-and-music.md#highlight-videos).
+
+### Drivers' nights by email
+
+With **Offer drivers their night by email** ticked, HeatCaller can email each driver their night after racing. Only drivers who want one get it: tick **Email them their night** on their driver profile (see [Profile fields](../race-day/drivers-and-classes.md#profile-fields)), or the driver asks for it from their night page. They need an address in **Email:** on their profile.
+
+The emails go from this laptop through the **Email (for racer PINs)** card, the same mailbox that sends racers their PINs, so set that up first (see [Emailing racer PINs](email.md)).
+
+The email is headed "Your night at *club* - *Tuesday 22 October*" and has:
+
+- a greeting by first name and the night's date;
+- "YOUR RACES": the night's facts, as on their night page;
+- "YOUR REPORT CARD": the same report card as on their night page;
+- if they made the podium, a note that their podium video is on their night page for about a week;
+- a link to their night page, with "This link is yours - it can also check you in, so don't share it.";
+- "You're getting this because you asked for your night by email. To stop, ask at the desk."
+
+The link is only there while **Give each driver their own night at a private address** is ticked. The email never carries a transponder number.
+
+The line under the ticks says where things stand, for example "6 drivers want their night by email · 0 emailed tonight", or "Off. Nobody is emailed their night.", or "Set up the Email card below to send drivers their nights."
+
+#### Email Tonight's Nights
+
+1. After the last race, click **Email Tonight's Nights**.
+2. HeatCaller works out who would get one and asks, for example "Email 6 drivers their night?". It also says how many already had tonight's and won't get it again, and how many asked but have no usable address. "An email can't be taken back once it has gone - Undo won't recall it."
+3. Click **Yes**. They go one at a time, a second or two apart, and the line under the ticks shows how far it has got. Everything else keeps working meanwhile.
+
+Only drivers who raced tonight and asked are sent one, and nobody is sent the same night twice, even if you press the button again or the automatic send runs too. If there's nobody to send to, it says "Nobody to email tonight." and why.
+
+#### Sending automatically
+
+With **Send automatically when the race day closes** ticked, the emails go by themselves when you close tonight's race day with **Close Day** on **Race Day → Setup** (see [Close, reopen and delete a race day](../race-day/events-and-entries.md#close-reopen-and-delete-a-race-day)). Undoing the close doesn't send them again. The console says how it went, for example "[email] Race day closed - drivers' nights: ...".
 
 ## Look
 
@@ -104,7 +144,7 @@ The **Look** card holds the welcome line. Changes reach the pages within a few s
 
 The pages' colors and the club logo used to be set here too. Since 0.48 they're on the **Themes** page, shared with the app, the Big Screen and the Wi-Fi pages; the card says "Colours and club logo are set in the Looks card on Themes (shared with the app, Big Screen and Wi-Fi pages)." Click **Open Looks** to go there. See [Looks and the club logo](../screens/looks-and-logo.md).
 
-- **Colors:** the online pages use the crowd-screen look, set in **Crowd screens (Big Screen, Wi-Fi pages, online pages):**. Any look works, including the ones you make yourself. The choice you'd made here before 0.48 carries over.
+- **Colors:** the online pages use the crowd-screen look, set in **Crowd screens:**. Any look works, including the ones you make yourself. The choice you'd made here before 0.48 carries over.
 - **Logo:** choose it with **Choose Logo** in the **Club logo** card. The online pages always show it, in a block of its own beside the club's name, drawn between 72 and 180 pixels across depending on the screen, and on a plate if it would vanish on the page background. It's also the icon when someone adds the pages to their home screen. A new logo shows straight away. Without a logo, the icon is a checkered flag in the look's colors.
 
 !!! note
@@ -114,7 +154,7 @@ The pages' colors and the club logo used to be set here too. Since 0.48 they're 
 
 Once the **Relay** card is filled in and testing clean, the same address, club id and token give the laptop the [HeatCaller voice](../announcer/voice.md#the-heatcaller-voice): natural announcer voices on HeatCaller's own ElevenLabs account, so your club needs no account, no key and no bill.
 
-There's nothing to set up here for it. Choose it under **Speak with** on **Voice → Voice Settings**, pick an announcer voice, and the page shows your club's allowance for the month. Until the **Relay** card is filled in, that page says "Set the club up on the Club Website page first - the HeatCaller voice speaks through the same relay, with the same token."
+There's nothing to set up here for it. Choose it under **Speak with** on **Voice → Voice Settings**, pick an announcer voice in **HeatCaller voice:** at the top of **Voice → Cast**, and **Voice Settings** shows your club's allowance for the month. Until the **Relay** card is filled in, **Voice Settings** says "Set the club up on the Club Website page first - the HeatCaller voice speaks through the same relay, with the same token."
 
 A few things follow from sharing the relay:
 
@@ -122,7 +162,7 @@ A few things follow from sharing the relay:
 - **Your club has to be switched on for the voice on the relay.** It isn't automatic, and publishing works perfectly well without it. Ask whoever runs your relay; see [The HeatCaller voice](../admin/relay-hosting.md#the-heatcaller-voice).
 - **Spoken lines don't count against your 50 MB.** The relay keeps rendered audio in a store of its own, and a line with no driver's name in it is kept once for every club.
 - **You don't have to tick Publish to the relay** to use the voice. The three boxes and a clean test are enough.
-- **Listening to a voice needs no token at all.** With only the address filled in, **Hear It** on **Voice → Voice Settings** still plays a sample of every HeatCaller voice, free, so you can choose one before your club is switched on. **Preview**, which says your own words, needs the club and token. Both need the relay redeployed; see [Hearing a voice before choosing it](../admin/relay-hosting.md#hearing-a-voice-before-choosing-it).
+- **Listening to a voice needs no token at all.** With only the address filled in, **Hear It**, at the top of **Voice → Cast**, still plays a sample of every HeatCaller voice, free, so you can choose one before your club is switched on. **Preview**, which says your own words, needs the club and token. Both need the relay redeployed; see [Hearing a voice before choosing it](../admin/relay-hosting.md#hearing-a-voice-before-choosing-it).
 
 ## Online check-in, Personal PINs and Email
 

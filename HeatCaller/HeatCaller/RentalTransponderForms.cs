@@ -84,7 +84,7 @@ public sealed class RentalCheckOutForm : Form
         fields.AddHint("Pick a saved driver or just type a name - a walk-in doesn't need a profile first.");
 
         captions.Add(fields.AddRow("Deposit held:", _txtDeposit, stretch: true));
-        fields.AddHint("Whatever you're holding until it comes back. Recorded so whoever is on the counter later knows what to return.");
+        fields.AddHint("Whatever you're holding until it comes back, so whoever is on the counter later knows what to return.");
 
         var page = new FillPage();
         page.Add(lblUnit, gapBelow: UiLayout.RowGap);

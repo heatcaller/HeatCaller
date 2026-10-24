@@ -139,7 +139,7 @@ internal static class PaceHistory
     }
 
     /// <summary>
-    /// Every driver's best lap on a named layout from races BEFORE tonight,
+    /// Every driver's best lap on a named layout from races BEFORE THIS ONE,
     /// in seconds, keyed by transponder - the index PaceWatch.PersonalBestBefore
     /// reads (22 Oct 2026, known issues).
     ///
@@ -151,16 +151,34 @@ internal static class PaceHistory
     ///
     /// The same exclusions as NightBestFor, for the same reasons: another
     /// layout's laps are not a figure to beat, a ghost is not a driver and a
-    /// demo race's laps are invented. "Before tonight" by the race night
-    /// (TonightAtTheTrack.NightOf), so a heat run earlier this evening is
-    /// not "before" - PaceWatch already counts the driver's laps tonight on
-    /// its own terms. By transponder, as AchievementEvaluator counts a
-    /// driver's personal bests.
+    /// demo race's laps are invented. By transponder, as AchievementEvaluator
+    /// counts a driver's personal bests.
+    ///
+    /// BEFORE THIS RACE, TONIGHT'S SAVED RACES INCLUDED (22 Oct 2026, bug
+    /// hunt 9). This first skipped every race from tonight, on the belief
+    /// that PaceWatch counts the driver's laps tonight itself. It does not:
+    /// PaceWatch.Reset clears its per-driver bests at every race start, so
+    /// it only knows the race being run. A driver who turned 7.80 in the
+    /// heat and 7.90 in the main, against 8.00 from last week, was called a
+    /// "personal best" for a lap slower than the one the room saw an hour
+    /// earlier. Every saved race now counts, tonight's included - the race
+    /// being run is not saved until it ends, the same fact NightBestFor
+    /// relies on. Only a race dated AFTER tonight (a PC clock that was
+    /// wrong) is still left out. The parameter and the callers keep the
+    /// "tonight" names.
+    ///
+    /// A PERSONAL-BEST RESET COUNTS HERE TOO (23 Oct 2026, bug hunt 10).
+    /// <paramref name="cutoffFor"/> is asked (driver name as saved, layout as
+    /// saved) and a race at or before the answer is skipped for that driver -
+    /// the same rule PersonalBestsControl.ComputeBests and DriverStats apply
+    /// through PersonalBestResetStore.EffectiveCutoff. Null means no resets,
+    /// which is what every caller got before.
     /// </summary>
     internal static Dictionary<string, double> PersonalBestsBefore(
         IEnumerable<SessionRecord>? sessions,
         string? layoutName,
-        DateTime tonight)
+        DateTime tonight,
+        Func<string, string, DateTime?>? cutoffFor = null)
     {
         var bests = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
 
@@ -177,7 +195,9 @@ internal static class PaceHistory
             if (race is null
                 || race.IsDemoSession()
                 || !string.Equals(race.TrackLayoutName?.Trim(), wanted, StringComparison.OrdinalIgnoreCase)
-                || TonightAtTheTrack.NightOf(race.StartedAtUtc.ToLocalTime()) >= night)
+                // WHY (22 Oct 2026): was >= night, which dropped tonight's earlier
+                // heats; > keeps them and still drops anything dated after tonight.
+                || TonightAtTheTrack.NightOf(race.StartedAtUtc.ToLocalTime()) > night)
             {
                 continue;
             }
@@ -188,6 +208,18 @@ internal static class PaceHistory
                     || entry.FastLapMs <= 0
                     || string.IsNullOrWhiteSpace(entry.Transponder)
                     || Ghosts.IsGhost(entry.Transponder))
+                {
+                    continue;
+                }
+
+                // WHY (23 Oct 2026, bug hunt 10): this ignored the club's
+                // personal-best resets, so the announcer measured a reset
+                // driver against the lap the club had told the app to stop
+                // counting and never called their new best. A race at or
+                // before the driver's cutoff is now skipped, as on the
+                // Personal Bests page.
+                if (cutoffFor?.Invoke(entry.DriverName ?? string.Empty, race.TrackLayoutName ?? string.Empty) is { } cutoff
+                    && race.StartedAtUtc <= cutoff)
                 {
                     continue;
                 }

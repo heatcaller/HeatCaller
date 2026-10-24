@@ -246,9 +246,8 @@ public sealed class SponsorsControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Show sponsor or promo images and videos in rotation on the Big Screen between leaderboard views. Leave this off " +
-                   "entirely for a home setup - it's meant for a shop or club venue with sponsors to display. A video plays to its " +
-                   "own end rather than for the slide time below.",
+            Text = "Show sponsor or promo images and videos in rotation on the Big Screen between leaderboard views - meant for a " +
+                   "shop or club venue, so leave it off at home. A video plays to its own end rather than for the slide time below.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -409,9 +408,8 @@ public sealed class SponsorsControl : UserControl
 
         var lblVideoSound = new Label
         {
-            Text = "A sponsor who paid for a spot has been promised nobody talks over it, so the music and the crowd bed fade out "
-                   + "while a video with sound is on screen and fade back when it ends. The announcer still speaks - a race call "
-                   + "always wins.",
+            Text = "A sponsor who paid for a spot was promised nobody talks over it, so the music and crowd can fade out while "
+                   + "their video's sound plays. The announcer still speaks - a race call always wins.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -424,7 +422,7 @@ public sealed class SponsorsControl : UserControl
 
         SyncVideoSoundEnabled();
 
-        var readsCard = BuildSponsorReadsCard();
+        var readsCard = BuildSponsorReadsCard(out var readsGrid);
 
         // The number boxes at the text size in use - see SizeFields.
         _textSize.Keep(SizeFields);
@@ -441,6 +439,12 @@ public sealed class SponsorsControl : UserControl
         page.Add(readsCard, gapBelow: 0);
 
         Controls.Add(page);
+
+        // (22 Oct 2026, page tidy): the timing and the sponsor reads each
+        // had a caption column of their own, so their fields started at
+        // different x. One column for both now - once the grids are on the
+        // page and wear its face, which is what the captions are measured in.
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { timing, readsGrid }));
     }
 
     /// <summary>
@@ -459,13 +463,13 @@ public sealed class SponsorsControl : UserControl
     /// pixel being worked out here - see SizeFields for the two things that
     /// do need a measurement.
     /// </summary>
-    private Section BuildSponsorReadsCard()
+    private Section BuildSponsorReadsCard(out FieldGrid grid)
     {
         var lblReadsIntro = new Label
         {
-            Text = "A sponsor can have a read - a few sentences somebody wrote to be spoken aloud - and the announcer will read it "
-                   + "as written, in whichever gaps you allow below. It costs nothing to run and needs no AI: the words are yours, "
-                   + "not the app's. A race call always comes first, so a read waits for the next gap rather than going over a flag.",
+            Text = "A sponsor can have a read - a few sentences written to be spoken aloud - and the announcer reads it as written, "
+                   + "in the gaps you allow below. It needs no AI: the words are yours. A race call always comes first, so a read "
+                   + "waits for the next gap.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -561,12 +565,12 @@ public sealed class SponsorsControl : UserControl
         // and the two switches go on the card itself rather than in here,
         // exactly as the video card above does it - a wrapping note belongs
         // to the card's width, not to a grid's field column.
-        var grid = new FieldGrid();
+        grid = new FieldGrid();
 
         grid.AddRow("Sponsors:", _lstSponsors);
         grid.AddField(new ButtonBar().With(btnAddSponsor, btnRemoveSponsor, btnSponsorUp, btnSponsorDown));
         grid.AddRow("Name, as it's said:", _txtSponsorName);
-        grid.AddHint("Spell it the way it should sound - \"and co\" rather than the ampersand on their banner. A voice reads what it is given.");
+        grid.AddHint("Spell it the way it should sound - \"and co\" rather than the ampersand on their banner.");
         grid.AddRow("One-line tagline:", _txtSponsorTagline);
         grid.AddHint("Said after every credit for a moment they present (below), and once on their first read of the night. "
                      + "Leave it empty if they only bought the full read.");
@@ -580,10 +584,8 @@ public sealed class SponsorsControl : UserControl
 
         grid.AddRow("Picture for their read:", FieldGrid.Inline(_cmbSponsorPicture, _btnSponsorPicture));
         grid.AddHint(
-            "On the Big Screen for the length of their read - the one part of the rotation that had nothing to "
-            + "look at. Choose a picture the club has already uploaded, or upload one for the read; an uploaded "
-            + "picture joins the slides above, so you can see it and remove it there. With none chosen the screen "
-            + "shows their name instead, spelled as in the box above.");
+            "On the Big Screen for the length of their read. Choose a picture already uploaded, or upload one - it "
+            + "joins the slides above, where you can see or remove it.");
 
         grid.AddRow("Share of the reads:", _numSponsorWeight);
         grid.AddHint("Two gets twice the reads of one, however many the night has room for. Everyone ends up within one of their share.");
@@ -618,12 +620,10 @@ public sealed class SponsorsControl : UserControl
 
         grid.AddRow("Presents:", _lstSponsorMoments);
         grid.AddHint(
-            "Their name rides on these moments of the race - a short credit such as \"That fastest lap is brought to "
-            + "you by\" and their name, as it's said above, then their tagline if they have one, on the end of the call "
-            + "(at the top of their segment on the recap show), and on the stream's graphic for it. A moment that happens many times a race "
-            + "(fastest laps, lead changes, battles) is named at most once every three minutes so it never turns into "
-            + "noise; the introductions, the qualifying recap and the result are named every time. Each mention the "
-            + "announcer actually makes goes in tonight's report.");
+            "A short credit - \"That fastest lap is brought to you by\", their name, then their tagline - on the end of "
+            + "the call (the top of their segment on the recap show) and on the stream's graphic. A moment that happens "
+            + "often (fastest laps, lead changes, battles) is credited at most once every three minutes; introductions, the qualifying recap "
+            + "and the result every time. Every mention goes in tonight's report.");
         grid.AddHint(_lblMomentClashes);
         grid.AddField(_chkSponsorEnabled);
 
@@ -636,10 +636,9 @@ public sealed class SponsorsControl : UserControl
 
         grid.AddField(new ButtonBar().With(_btnReport));
         grid.AddHint(
-            "Puts a plain-text report of what each sponsor got tonight on the clipboard, ready to paste into an "
-            + "email: the reads they had, the share of the evening that was, and the share they bought. It covers "
-            + "the reads only - the slide rotation is a list of pictures and the app does not know which sponsor "
-            + "each one belongs to, so a figure for those would not be one anybody could stand behind.");
+            "Copies a plain-text report of what each sponsor got tonight, ready to paste into an email: their reads, "
+            + "the share of the evening that was, and the share they bought. Reads only - the app doesn't know which "
+            + "slide belongs to which sponsor.");
 
         var card = new Section("Sponsor reads");
 

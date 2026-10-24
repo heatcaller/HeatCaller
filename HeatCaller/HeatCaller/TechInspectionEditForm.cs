@@ -443,7 +443,12 @@ public sealed class TechInspectionEditForm : Form
             ? null
             : _classes.All.FirstOrDefault(rc => string.Equals(rc.Name, className, StringComparison.OrdinalIgnoreCase));
 
-        var items = (raceClass?.TechCheckItems ?? new List<string>()).ToList();
+        // WHY (23 Oct 2026, bug hunt 10): a check listed twice word for word
+        // (Add Common, then the same check typed by hand) drew two rows but
+        // kept only the second's drop-down - a FAIL on the first was never
+        // counted and the car came out cleared. One row per check now, matched
+        // exactly as _checkControls and the saved ItemsPassed/ItemsFailed are.
+        var items = (raceClass?.TechCheckItems ?? new List<string>()).Distinct(StringComparer.Ordinal).ToList();
 
         // Checks this inspection recorded against ITS class that the class's
         // checklist no longer has. Only for the class it was recorded in -

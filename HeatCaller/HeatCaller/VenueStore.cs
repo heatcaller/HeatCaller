@@ -47,6 +47,14 @@ public sealed class VenueStore
 
                     return new VenueStore(loaded);
                 }
+
+                // WHY (23 Oct 2026, bug hunt 10): present, parsed, and not the
+                // shape this store writes. A file holding the literal "null"
+                // does not throw, so it used to fall through to the empty
+                // store below with the flag left false, and the first venue
+                // edit replaced every saved venue. Not a fresh install, so
+                // never save over it - the same rule as TrackLayoutStore.
+                unreadable = true;
             }
         }
         catch (Exception ex)

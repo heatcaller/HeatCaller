@@ -36,6 +36,18 @@ public enum GhostPaceSource
 
     /// <summary>The driver's best lap within a chosen window of dates - racing a past version of yourself.</summary>
     PersonalBestInRange,
+
+    /// <summary>
+    /// CHASE YOUR OWN GHOST (22 Oct 2026): the driver's best lap TONIGHT on
+    /// this layout - this session's laps and anything saved since the night
+    /// began - or, before they have set one tonight, their best ever on it.
+    ///
+    /// Fixed for the run, unlike LiveOwnPace: a target that moves the moment
+    /// you beat it is never beaten, and beating your own best is the point.
+    /// "Chase a Best Lap..." on the Practice page again for the same driver
+    /// brings it up to their new best (GhostCar.PaceRevision).
+    /// </summary>
+    OwnBestTonight,
 }
 
 /// <summary>Which live number a LiveOwnPace ghost follows.</summary>
@@ -122,6 +134,14 @@ public sealed class GhostCar
     /// following an average rather than a best lap.
     /// </summary>
     public int LiveAverageLaps { get; set; } = 5;
+
+    /// <summary>
+    /// Bumped to ask a running OwnBestTonight ghost to re-read the driver's
+    /// best - "Chase a Best Lap..." picked again for the same driver. A
+    /// running ghost whose revision has moved takes the new pace from its
+    /// next lap (GhostService.RefreshChangedPaces). 22 Oct 2026.
+    /// </summary>
+    public int PaceRevision { get; set; }
 
     /// <summary>Whether this ghost's pace changes during the session rather than being fixed at the green.</summary>
     public bool IsLivePace => PaceSource is GhostPaceSource.LiveOwnPace or GhostPaceSource.LiveLeaderPace;

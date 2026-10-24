@@ -396,7 +396,7 @@ public partial class MainForm
     }
 
     /// <summary>Every nav item, hidden ones included, in the user's chosen order.</summary>
-    private List<string> OrderedNavNames() => OrderedNavNames(_navRaceNight);
+    private List<string> OrderedNavNames() => OrderedNavNames(_navRaceNight, NavTiers.HidingUntested);
 
     /// <param name="raceNight">
     /// False asks for the CLUB'S OWN order - the arrangement they dragged
@@ -410,7 +410,15 @@ public partial class MainForm
     /// opening Manage Navigation during a race night and pressing OK
     /// without touching anything.
     /// </param>
-    private List<string> OrderedNavNames(bool raceNight)
+    private List<string> OrderedNavNames(bool raceNight) => OrderedNavNames(raceNight, hidingUntested: false);
+
+    /// <summary>
+    /// The same, with the pages not yet tested at a real event grouped at
+    /// the foot when <paramref name="hidingUntested"/> - a VIEW, like the
+    /// race-night grouping, so anything about to save an order asks for
+    /// it without (see the raceNight note above).
+    /// </summary>
+    private List<string> OrderedNavNames(bool raceNight, bool hidingUntested)
     {
         var ordered = _navItems.Select(i => i.Name).ToList();
         if (_settings.NavOrder.Count > 0)
@@ -431,7 +439,7 @@ public partial class MainForm
         // evening. It is zero everywhere else, and a stable sort leaves those
         // rows exactly as they were.
         ordered = ordered
-            .OrderBy(n => NavTiers.TierOf(n, raceNight))
+            .OrderBy(n => NavTiers.TierOf(n, raceNight, hidingUntested))
             .ThenBy(n => NavTiers.TonightRank(n, raceNight))
             .ToList();
 
@@ -444,25 +452,53 @@ public partial class MainForm
     /// <summary>The same, in the club's own order when raceNight is false. See OrderedNavNames.</summary>
     private List<string> VisibleOrderedNavNames(bool raceNight)
     {
-        var ordered = OrderedNavNames(raceNight);
+        var ordered = OrderedNavNames(raceNight, NavTiers.HidingUntested);
 
         // Connection is no longer pinned to the top - it sits low in the
         // canonical order with the other setup pages - but it still can't
         // be hidden, so it survives the visibility filter regardless.
-        return ordered.Where(n => n == "Connection" || !_settings.HiddenTabs.Contains(n)).ToList();
+        //
+        // A page not yet tested at a real event is left out too while the
+        // club hides those (22 Oct 2026) - RebuildNav still lets a search
+        // turn one up, under its own heading. See NavTiers.UntestedPages.
+        return ordered
+            .Where(n => n == "Connection" || !_settings.HiddenTabs.Contains(n))
+            .Where(n => !(NavTiers.HidingUntested && NavTiers.IsUntested(n)))
+            .ToList();
     }
+
+    /// <summary>
+    /// The untested pages a search turns up while the club hides them - in
+    /// the sidebar's order, so they land at its foot under their heading.
+    /// A page the club hid by hand stays hidden, as it does from a search
+    /// today.
+    /// </summary>
+    private List<string> UntestedPagesMatching(string query) =>
+        !NavTiers.HidingUntested || query.Length == 0
+            ? new List<string>()
+            : OrderedNavNames(_navRaceNight, hidingUntested: true)
+                .Where(NavTiers.IsUntested)
+                .Where(n => !_settings.HiddenTabs.Contains(n))
+                .Where(n => MatchesNavSearch(n, query))
+                .ToList();
 
     /// <summary>Rebuilds the sidebar list from the current order/visibility settings and shows whichever item was selected before (or Race Control by default).</summary>
     private void RebuildNav()
     {
         var previouslySelected = lstNav.SelectedItem;
 
+        // Before anything is ordered: SectionOf, which the list asks for each
+        // row's heading, reads the same flag, and the two have to agree.
+        NavTiers.HidingUntested = _settings.HideUntestedPages;
+
         var names = VisibleOrderedNavNames();
 
         var query = txtNavSearch.Text.Trim();
         if (query.Length > 0)
         {
-            var matched = names.Where(n => MatchesNavSearch(n, query)).ToList();
+            var matched = names.Where(n => MatchesNavSearch(n, query))
+                .Concat(UntestedPagesMatching(query))
+                .ToList();
             // Never filter down to nothing - an empty sidebar looks broken
             // and leaves no way back, so a query with no hits just shows
             // everything rather than a blank panel.
@@ -1093,9 +1129,23 @@ public partial class MainForm
         // leave them pinned there after the day closed - the same fault as
         // Manage Navigation's. They keep the slot the saved order already
         // gives them; the drag rearranges everything else.
-        if (_navRaceNight)
+        //
+        // The same for the untested pages kept at the foot while a beta club
+        // hides them: a view, not the club's arrangement.
+        //
+        // WHY (22 Oct 2026): these used to be two passes, one after the
+        // other. Putting pages back at their saved index only works when
+        // every OTHER page is already in saved order, and during the first
+        // pass the untested pages were still parked at the foot - so on a
+        // race night with untested pages hidden, Race Day and Race Control
+        // landed in the wrong slot and drifted further on every drag. Both
+        // groupings now come out in one pass.
+        var hidingUntested = NavTiers.HidingUntested;
+        if (_navRaceNight || hidingUntested)
         {
-            fullOrder = WithoutRaceNightGrouping(fullOrder, orderBefore);
+            fullOrder = WithoutGrouping(fullOrder, orderBefore, n =>
+                (_navRaceNight && NavTiers.TierOf(n, raceNight: true, hidingUntested: false) == NavTier.Tonight)
+                || (hidingUntested && NavTiers.IsUntested(n)));
         }
         if (!orderBefore.SequenceEqual(fullOrder))
         {
@@ -1118,20 +1168,22 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// A dragged order with the race-night grouping taken back out: the
-    /// promoted pages returned to wherever the club's saved order had them,
-    /// everything else left exactly as dragged.
+    /// A dragged order with the pages a view moved (<paramref name="moved"/>)
+    /// put back wherever the club's saved order had them, everything else
+    /// left exactly as dragged. Every grouping must be taken out in ONE call:
+    /// the put-back is only right when the pages left behind are already in
+    /// saved order.
     /// </summary>
     /// <param name="saved">
     /// The order as last saved. Empty on a club that has never rearranged
     /// anything, in which case the app's canonical order stands in - without
-    /// that, the two promoted pages would be appended at the BOTTOM, which
+    /// that, the promoted pages would be appended at the BOTTOM, which
     /// is the opposite of the bug this is preventing.
     /// </param>
-    private List<string> WithoutRaceNightGrouping(List<string> dragged, List<string> saved)
+    private List<string> WithoutGrouping(List<string> dragged, List<string> saved, Func<string, bool> moved)
     {
         var promoted = dragged
-            .Where(n => NavTiers.TierOf(n, raceNight: true) == NavTier.Tonight)
+            .Where(moved)
             .ToList();
 
         if (promoted.Count == 0)
@@ -1181,7 +1233,7 @@ public partial class MainForm
         var defaultOrder = _navItems.Where(i => i.Name != "Connection").Select(i => i.Name).ToList();
 
         using var form = new TabVisibilityForm(
-            orderedToggleable, _settings.HiddenTabs, defaultOrder, _settings.RaceNightFocus);
+            orderedToggleable, _settings.HiddenTabs, defaultOrder, _settings.RaceNightFocus, _settings.HideUntestedPages);
         if (form.ShowDialog(this) != DialogResult.OK)
         {
             return;
@@ -1201,6 +1253,7 @@ public partial class MainForm
         var hiddenBefore = _settings.HiddenTabs.ToList();
         var orderBefore = _settings.NavOrder.ToList();
         var raceNightBefore = _settings.RaceNightFocus;
+        var hideUntestedBefore = _settings.HideUntestedPages;
 
         // The order is compared with the one the sidebar actually goes by,
         // not with the raw saved NavOrder: that can be empty (a club that
@@ -1210,13 +1263,15 @@ public partial class MainForm
         // in that case - it is the same arrangement, written out in full.
         if (!form.HiddenTabs.SetEquals(hiddenBefore)
             || !orderShownBefore.SequenceEqual(newOrder)
-            || form.RaceNightFocus != raceNightBefore)
+            || form.RaceNightFocus != raceNightBefore
+            || form.HideUntested != hideUntestedBefore)
         {
             _undo.Capture("Change the sidebar's pages", () =>
             {
                 _settings.HiddenTabs = hiddenBefore.ToList();
                 _settings.NavOrder = orderBefore.ToList();
                 _settings.RaceNightFocus = raceNightBefore;
+                _settings.HideUntestedPages = hideUntestedBefore;
                 _settings.Save();
 
                 // Recomputed, not remembered: the undo can be pressed much
@@ -1230,6 +1285,7 @@ public partial class MainForm
         _settings.HiddenTabs = form.HiddenTabs.ToList();
         _settings.NavOrder = newOrder;
         _settings.RaceNightFocus = form.RaceNightFocus;
+        _settings.HideUntestedPages = form.HideUntested;
         _settings.Save();
 
         _navRaceNight = RaceNightWanted;

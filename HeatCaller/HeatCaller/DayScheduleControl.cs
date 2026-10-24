@@ -196,10 +196,9 @@ public sealed class DayScheduleControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "The day's running order, straight from the program. Every heat and final is here in the order it "
-                 + "runs, ticking itself off as it is recorded and showing when it actually started - so to reorder one, "
-                 + "move it here or on Next Steps and both follow. Add your own lines (doors open, lunch, presentation) "
-                 + "anywhere between them; they stay where you put them.",
+            Text = "The day's running order, straight from the program. Each heat and final ticks itself off as it is "
+                 + "recorded and shows when it started; reorder it here or on Next Steps and both follow. Add your own "
+                 + "lines (doors open, lunch, presentation) anywhere; they stay where you put them.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

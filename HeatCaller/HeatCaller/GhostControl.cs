@@ -166,8 +166,7 @@ public sealed class GhostControl : UserControl
 
         var lblQuickHint = new Label
         {
-            Text = "Quick Rival adds a ghost set to 98% of your own best lap - something you can't quite beat yet, "
-                 + "which is the point.",
+            Text = "Quick Rival adds a ghost set to 98% of your own best lap - something you can't quite beat yet.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -314,6 +313,7 @@ public sealed class GhostControl : UserControl
             ? $"{NameFor(ghost.SourceTransponder)}'s live average"
             : $"{NameFor(ghost.SourceTransponder)}'s live best",
         GhostPaceSource.LiveLeaderPace => "the leader's live pace",
+        GhostPaceSource.OwnBestTonight => $"{NameFor(ghost.SourceTransponder)}'s best tonight",
         _ => "-",
     };
 
@@ -578,15 +578,25 @@ public sealed class GhostRivalPickerForm : Form
 
     public string? SelectedTransponder { get; private set; }
 
-    public GhostRivalPickerForm(List<DriverProfile> drivers)
+    /// <param name="title">The window's title - the Quick Rival's unless given.</param>
+    /// <param name="question">The line over the drop-down.</param>
+    /// <param name="okText">The button that takes the pick.</param>
+    /// <remarks>
+    /// The wording is optional since 22 Oct 2026, so the Practice page's
+    /// "Chase a Best Lap..." asks its own question with the same picker.
+    /// </remarks>
+    public GhostRivalPickerForm(List<DriverProfile> drivers,
+        string title = "Quick Rival",
+        string question = "Build a rival from whose best lap?",
+        string okText = "Add")
     {
-        Text = "Quick Rival";
+        Text = title;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
         var lbl = new Label
         {
-            Text = "Build a rival from whose best lap?",
+            Text = question,
             AutoSize = true,
         };
 
@@ -603,7 +613,7 @@ public sealed class GhostRivalPickerForm : Form
 
         _cmbDriver.SelectedIndex = 0;
 
-        var btnOk = new Button { Text = "Add", DialogResult = DialogResult.OK };
+        var btnOk = new Button { Text = okText, DialogResult = DialogResult.OK };
         btnOk.Click += (_, _) => SelectedTransponder = drivers[_cmbDriver.SelectedIndex].Transponder;
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };

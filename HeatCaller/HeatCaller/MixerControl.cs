@@ -602,8 +602,7 @@ public sealed class MixerControl : UserControl
         duckGrid.AddRow("Voice lift:", FieldGrid.Inline(_chkBoostVoice, _numVoiceBoost));
         duckGrid.AddHint("Scaled by how loud the crowd bed actually is - no lift over a quiet one.");
         duckGrid.AddRow("Race recap:", FieldGrid.Inline(_chkRecapDuck, _numRecapDuck, new Label { Text = "%" }));
-        duckGrid.AddHint("An extra drop for the half-minute race recap, so music and crowd don't compete with it. "
-                       + "Needs AI commentary's race recaps on (Voice > AI Commentary).");
+        duckGrid.AddHint("An extra drop under the race recap. Needs AI commentary's race recaps on (Voice > AI Commentary).");
 
         var duckCard = new Section("Ducking");
 
@@ -812,8 +811,7 @@ public sealed class MixerControl : UserControl
         var auditionGrid = new FieldGrid();
 
         auditionGrid.AddRow("Announce every:", FieldGrid.Inline(_numAnnounceEvery, new Label { Text = "seconds" }));
-        auditionGrid.AddHint("The bed plays clean first, so you can hear the blend before anything ducks it. "
-                           + "Widen this to listen longer between announcements.");
+        auditionGrid.AddHint("The bed plays clean first, so you can hear the blend before anything ducks it.");
 
         // --- Buttons ---
         //
@@ -1213,6 +1211,12 @@ public sealed class MixerControl : UserControl
         if (_ambience.IsHeld)
         {
             _ambience.Stop();
+            // WHY (22 Oct 2026): the "was running" snapshot above was taken
+            // while the held crowd still counted as running, so Stop Everything
+            // thought the crowd predated the audition and never closed the one
+            // the audition opens below - it played on, unheld, into the race.
+            // The held crowd is closed now, so nothing was really playing.
+            _ambienceWasRunning = false;
         }
 
         if (!_ambience.IsRunning)

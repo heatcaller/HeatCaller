@@ -74,10 +74,9 @@ public sealed class FillTimesForm : Form
 
         var lblHint = new Label
         {
-            Text = "Start to start, so allow for the changeover as well as the race itself.\r\n\r\n"
-                 + "Your own lines - doors, lunch, presentation - are filled in too. One that already has a "
-                 + "time keeps it, and the rest of the day is worked on from there, so \"lunch 13:00\" moves "
-                 + "the afternoon rather than being moved by it.",
+            Text = "Start to start, so allow for the changeover as well as the race.\r\n\r\n"
+                 + "Your own lines (doors, lunch, presentation) are filled in too. One that already has a time "
+                 + "keeps it and the day is worked on from there, so \"lunch 13:00\" moves the afternoon.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,

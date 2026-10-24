@@ -197,17 +197,16 @@ public sealed class WebServerControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Serves five pages to any device on the same Wi-Fi: live results (also usable as an OBS browser "
-                 + "source), a phone remote for throwing flags at the track, a self check-in page for drivers, a "
-                 + "race-day manager for running entries, the program and results from a phone, and a "
-                 + "transparent overlay for streaming.",
+            Text = "Serves pages to any device on the same Wi-Fi: live results, a phone remote for throwing flags, "
+                 + "a self check-in page for drivers, a race-day manager for entries, the program and results, and "
+                 + "overlays for streaming.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
 
         var server = BuildServerCard(out var serverGrid);
         var manager = BuildManagerCard(out var managerGrid);
-        var urls = BuildUrlCard();
+        var urls = BuildUrlCard(out var urlGrid);
 
         // --- The screens' columns, and the Big Screen ---
 
@@ -306,8 +305,10 @@ public sealed class WebServerControl : UserControl
         //
         // One caption column for the server's PINs and the manager's, so
         // the three PIN boxes line up down the page as they are read.
+        // (22 Oct 2026, page tidy): the addresses' grid was left out, so its
+        // boxes started at a different x from the PIN boxes above them.
         _textSize.Keep(SizeFields);
-        _textSize.Keep(() => FieldGrid.LineUp(new[] { serverGrid, managerGrid }));
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { serverGrid, managerGrid, urlGrid }));
     }
 
     /// <summary>
@@ -370,12 +371,10 @@ public sealed class WebServerControl : UserControl
 
         var lblPinHint = new Label
         {
-            Text = "The race remote only works with a PIN of four or more digits - without one, anybody on the "
-                 + "venue's Wi-Fi could throw flags. The check-in page has a PIN of its own, and needs one only if "
-                 + "you set it: it goes on the wall for drivers, so never make it the same as the remote's. Live "
-                 + "results are always open to view. Ten wrong PINs from one phone make it wait five minutes. "
-                 + "The port and both PINs can only be changed while the server is stopped - they are read as it "
-                 + "starts, so a change made now would not be the one the phones were using.",
+            Text = "The race remote only works with a PIN of four or more digits, or anybody on the venue's Wi-Fi "
+                 + "could throw flags. The check-in PIN goes on the wall for drivers, so never make it the remote's. "
+                 + "Live results are always open. Ten wrong PINs from one phone make it wait five minutes. The port "
+                 + "and PINs can only be changed while the server is stopped.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -459,12 +458,11 @@ public sealed class WebServerControl : UserControl
 
         var lblManagerHint = new Label
         {
-            Text = "The race-day manager is a fuller phone page than the remote: it can add and edit drivers, "
-                 + "check people in, build and reorder the program, start races and throw flags, and - only "
-                 + "with the box above checked - correct a saved result. It refuses every request until its PIN "
-                 + "is six or more digits, so give it out only to people you'd trust with the laptop itself. Ten "
-                 + "wrong PINs from one phone make it wait five minutes, same as the other PINs above. Like "
-                 + "those, this PIN can only be changed while the server is stopped.",
+            Text = "A fuller phone page than the remote: it can add and edit drivers, check people in, build the "
+                 + "program, start races, throw flags and, with the box above ticked, correct a saved result. It "
+                 + "refuses every request until its PIN is six or more digits, so give it only to people you'd "
+                 + "trust with the laptop. Like the PINs above, ten wrong tries mean a five-minute wait, and it can "
+                 + "only be changed while the server is stopped.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -492,7 +490,7 @@ public sealed class WebServerControl : UserControl
     /// line is too narrow for them (FieldGrid.Inline) - and a note under
     /// them.
     /// </summary>
-    private Section BuildUrlCard()
+    private Section BuildUrlCard(out FieldGrid grid)
     {
         var btnCopyResults = new Button { Text = "Copy" };
         var btnQrResults = new Button { Text = "QR code" };
@@ -513,7 +511,7 @@ public sealed class WebServerControl : UserControl
         // One column for every caption, as wide as the widest - which is
         // what makes the six boxes line up rather than each starting
         // wherever its own caption happened to end.
-        var grid = new FieldGrid();
+        grid = new FieldGrid();
 
         grid.AddRow("Live results:", FieldGrid.Inline(_txtResultsUrl, btnCopyResults, btnQrResults));
         grid.AddRow("Phone remote:", FieldGrid.Inline(_txtRemoteUrl, btnCopyRemote, btnQrRemote));
@@ -545,9 +543,8 @@ public sealed class WebServerControl : UserControl
 
         var lblUrlHint = new Label
         {
-            Text = "All devices must be on the same Wi-Fi. The overlay URL is the same results page with a "
-                 + "transparent background and no sponsor slides, so it composites cleanly over video in an OBS "
-                 + "Browser source. The check-in page has its own wall poster: Self Check-In Poster on Race Day > Who's Racing.",
+            Text = "All devices must be on the same Wi-Fi. The OBS overlay is the results page with a transparent "
+                 + "background and no sponsor slides. The check-in wall poster is Self Check-In Poster on Race Day > Who's Racing.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

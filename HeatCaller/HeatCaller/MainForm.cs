@@ -189,6 +189,45 @@ public partial class MainForm : Form
     /// </summary>
     private readonly System.Windows.Forms.Timer _webRosterTimer = new() { Interval = 2000 };
 
+    // --- Driver experience hooks (22 Oct 2026) ---------------------------
+    //
+    // WHY (22 Oct 2026, driver experience): nine packages built the driver
+    // features at the same time, so each owns a MainForm part file of its
+    // own and joins in only through these. A partial method nobody has
+    // implemented compiles to nothing, call and all. Each has exactly one
+    // implementation, in the file named beside it.
+
+    /// <summary>
+    /// What the desk has answered for one badge's requests, for the phone
+    /// (driverlive asks). Set by MainForm.DriverRequests.cs; read by
+    /// MainForm.DriverLive.cs. Null until requests are wired. Called from
+    /// the UI thread.
+    /// </summary>
+    private Func<string, IReadOnlyList<DriverAskAnswer>>? _askAnswersFor;
+
+    // Once, at start-up, after the web server and the relay publisher are
+    // made and wired - BEFORE the pages are built (PopulateTabs), so
+    // _raceControlControl and _checkInControl are not there yet.
+    partial void WireDriverRequests();   // MainForm.DriverRequests.cs
+    partial void WireDriverLive();       // MainForm.DriverLive.cs
+    partial void WireWiFiExtras();       // MainForm.WiFiExtras.cs
+    partial void WireCaptions();         // MainForm.Captions.cs
+    partial void WirePrivacy();          // MainForm.Privacy.cs
+    partial void WireNightEmail();       // MainForm.NightEmail.cs
+
+    // Every two seconds on the UI thread, on _webRosterTimer, after the
+    // check-in roster and the relay extras have gone.
+    partial void RosterTickPrivacy();        // MainForm.Privacy.cs
+    partial void RosterTickDriverLive();     // MainForm.DriverLive.cs
+    partial void RosterTickCaptions();       // MainForm.Captions.cs
+    partial void RosterTickDriverRequests(); // MainForm.DriverRequests.cs
+
+    // Each time a race is filed or corrected, from PublishDriverNightsFor
+    // (MainForm.Relay.cs), whatever the relay switches say - the Wi-Fi
+    // pages want it too.
+    partial void RaceFiledWiFiExtras(SessionRecord session); // MainForm.WiFiExtras.cs
+    partial void RaceFiledDriverLive(SessionRecord session); // MainForm.DriverLive.cs
+
     /// <summary>The Entries page, so a check-in arriving from a phone shows up on it straight away.</summary>
     private CheckInControl? _checkInControl;
 
@@ -325,7 +364,22 @@ public partial class MainForm : Form
     /// </summary>
     private readonly HeatCallerVoiceClient _heatCallerVoice;
 
-    private readonly RaceControlSession _race = new();
+    // WHY (23 Oct 2026, timing layer, P3): the app holds the race through
+    // RaceTiming, its one front door, never the engine itself - so P4 can
+    // put the engine on a thread of its own without touching the callers.
+    //
+    // WHY (23 Oct 2026, timing layer, P4): made in the constructor, straight
+    // after the settings are read, because "Run timing on its own thread"
+    // (AppSettings.TimingOnItsOwnThread) decides which kind it is: inline
+    // (the default - exactly as before) or on the timing thread, _timingHost.
+    private readonly RaceTiming _race;
+
+    /// <summary>The timing thread, when "Run timing on its own thread" is on; null otherwise. Disposed at close - see FormClosing.</summary>
+    private readonly TimingHost? _timingHost;
+
+    /// <summary>"Run timing on its own thread" - AppSettings.TimingOnItsOwnThread, on the Connection page. Takes effect at the next start.</summary>
+    private readonly CheckBox chkTimingThread = new ThemedCheckBox();
+    private readonly CheckBox chkRecordPasses = new ThemedCheckBox();
     private readonly System.Windows.Forms.Timer _raceTickTimer = new() { Interval = 500 };
     private readonly System.Windows.Forms.Timer _autoBackupCheckTimer = new() { Interval = (int)TimeSpan.FromHours(1).TotalMilliseconds };
 
@@ -377,6 +431,14 @@ public partial class MainForm : Form
     /// <summary>The Themes page's content (the Looks editor), which the Club Website page opens directly.</summary>
     private LooksControl _looksControl = null!;
     private RaceControlControl _raceControlControl = null!;
+
+    /// <summary>
+    /// The app's crash-journal writer and race filing (23 Oct 2026, timing
+    /// layer, P2) - made in WireRaceFiling before the pages, and handed to
+    /// Race Control. See MainForm.RaceJournal.
+    /// </summary>
+    private RaceJournalRecorder _journalRecorder = null!;
+    private RaceFilingService _raceFiling = null!;
 
     /// <summary>The Program tab - a field (rather than PopulateTabs' local) only so the race-day manager can read and command it. See WireRaceDayService.</summary>
     private RaceProgramControl _raceProgram = null!;
@@ -443,6 +505,21 @@ public partial class MainForm : Form
         // InitializeComponent, since the Designer now builds the sidebar
         // and every page using AppTheme colors that depend on CurrentMode.
         _settings = AppSettings.Load();
+
+        // The race, straight after the settings and before anything that
+        // could use it. Threaded only with the setting on and a UI context to
+        // deliver the race's events through (WinForms installs one as the
+        // window is made, before this runs); otherwise inline, as always.
+        if (_settings.TimingOnItsOwnThread && SynchronizationContext.Current is { } uiContext)
+        {
+            _timingHost = new TimingHost(log: SessionLog.Write);
+            _race = new RaceTiming(new RaceControlSession(), _timingHost, uiContext);
+            SessionLog.Write("[timing] Timing runs on its own thread (Connection page: \"Run timing on its own thread\").");
+        }
+        else
+        {
+            _race = new RaceTiming(new RaceControlSession());
+        }
 
         // "Setup Log" became "Tuning", and Tuning is now the lower half of
         // "Garage". The sidebar order and the hidden-pages list are saved
@@ -633,6 +710,23 @@ public partial class MainForm : Form
         _race.AlternateTransponderOwner = _profiles.PrimaryForAlternate;
         _transponderWatch.AlternateTransponderOwner = _profiles.PrimaryForAlternate;
 
+        // WHY (23 Oct 2026, timing layer, P0): when asked for, every pass and
+        // race command is recorded for playing back (see TimingRecorder). Off
+        // by default; with it off the race is given no recorder and nothing
+        // changes. The file is written on a thread of its own, and a file
+        // that can't be opened just means no recording.
+        //
+        // WHY (24 Oct 2026): it can now be switched on and off from the
+        // Connection page while HeatCaller runs (StartPassRecording /
+        // StopPassRecording in MainForm.TimingThread.cs), so the closing
+        // handler is always there.
+        if (_settings.RecordTimingPasses)
+        {
+            StartPassRecording();
+        }
+
+        FormClosed += (_, _) => StopPassRecording();
+
         _voiceStore = VoiceSettingsStore.Load();
 
         // Straight after both loads, before anything can make or save a
@@ -729,16 +823,18 @@ public partial class MainForm : Form
         // NewMeeting adopts what is added under no day when one opens),
         // and a day opened or switched to puts them on that day at once.
         // Closing a day changes nothing, so a close undone keeps tonight's.
-        _clubNotes.NewMeeting(_raceEvents.Active?.Id);
-        _roomVote.NewMeeting(_raceEvents.Active?.Id);
+        // WHY (23 Oct 2026, bug hunt 10): only an open day moves the notes
+        // and the vote. Race Day's picker makes a closed day current just to
+        // look at its results; treating that as a new meeting wiped
+        // tonight's open room vote and club notes for good, and a restart
+        // while viewing one now keeps what is filed on a day still open.
+        _clubNotes.StartUp(_raceEvents.Active, _raceEvents.Get);
+        _roomVote.StartUp(_raceEvents.Active, _raceEvents.Get);
 
         _raceEvents.CurrentChanged += (_, _) =>
         {
-            if (_raceEvents.Active?.Id is { Length: > 0 } dayId)
-            {
-                _clubNotes.NewMeeting(dayId);
-                _roomVote.NewMeeting(dayId);
-            }
+            _clubNotes.FollowDay(_raceEvents.Active);
+            _roomVote.FollowDay(_raceEvents.Active);
         };
 
         // --- The event spine ---
@@ -1145,6 +1241,16 @@ public partial class MainForm : Form
             PublishCheckInRoster();
         };
 
+        // The driver experience packages (22 Oct 2026) - see the hooks by
+        // _webRosterTimer. Here, with the server and publisher wired and
+        // before the roster timer starts, so the first tick finds them ready.
+        WireDriverRequests();
+        WireDriverLive();
+        WireWiFiExtras();
+        WireCaptions();
+        WirePrivacy();
+        WireNightEmail();
+
         _webRosterTimer.Tick += (_, _) =>
         {
             // Always, whatever is switched on: the desk's USB scanner has to
@@ -1168,6 +1274,13 @@ public partial class MainForm : Form
             }
 
             PublishExtrasToRelay();
+
+            // 22 Oct 2026 (driver experience). Privacy first, so the
+            // register the others redact by is this tick's.
+            RosterTickPrivacy();
+            RosterTickDriverLive();
+            RosterTickCaptions();
+            RosterTickDriverRequests();
         };
 
         _webRosterTimer.Start();
@@ -1334,7 +1447,11 @@ public partial class MainForm : Form
         // See SponsoredMoments, BroadcastMomentFeed and LeadTracker.
         _announcer.SponsorsProvider = () => _sponsors.Current.Sponsors.ToList();
         _announcer.MomentHappened += moment => _webServer.Moments.Post(moment);
-        _webServer.LeadChanges = () => (_announcer.Leads.Changes, _announcer.Leads.Leaders);
+        //
+        // Threaded, through a frozen feed (24 Oct 2026, timing layer, P8):
+        // the live state is built off the UI then, and the count is read here
+        // on the UI tick - see MainForm.LiveFeed.
+        _webServer.LeadChanges = LiveFeed<(int Changes, int Leaders)>(() => (_announcer.Leads.Changes, _announcer.Leads.Leaders));
 
         // A written commentary segment carries the sponsor of its moment (a
         // battle watch, the battles' sponsor), rationed like the calls.
@@ -1361,13 +1478,31 @@ public partial class MainForm : Form
         // so they now ask the same place. Resolved on demand rather than
         // pushed in, because practice has its own threshold and the session
         // is shared between the two.
-        _race.StreakThresholdProvider = () => _soundStore.Current.StreakThresholdFor(_race.IsPracticeMode);
+        //
+        // Threaded (23 Oct 2026, timing layer, P4), the race asks on the
+        // timing thread, which must not read the sound store the UI edits: it
+        // answers the two figures last read on the UI thread instead - see
+        // FrozenStreakThreshold.
+        if (_race.IsThreaded)
+        {
+            RefreshFrozenStreakThresholds();
+            _race.StreakThresholdProvider = FrozenStreakThreshold;
+        }
+        else
+        {
+            _race.StreakThresholdProvider = () => _soundStore.Current.StreakThresholdFor(_race.IsPracticeMode);
+        }
 
         // The final-lap shout and the one-minute warning: the session raises
         // them, the announcer says them.
+        //
+        // WHY (23 Oct 2026, timing layer, P4b): a last-lap shout the window is
+        // only now being told of, seconds late after a freeze (threaded), is
+        // not said - see RaceTiming.DeliveringIsStale. Never so inline.
         _race.LastLapStarted += standing =>
         {
             if (InvokeRequired) { TryPost(() => _announcer.NotifyLastLap(standing.TransponderId)); return; }
+            if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => _announcer.NotifyLastLap(standing.TransponderId), _race.DeliveringAgeMs); return; }
             _announcer.NotifyLastLap(standing.TransponderId);
         };
 
@@ -1530,6 +1665,11 @@ public partial class MainForm : Form
         _startupClock = System.Diagnostics.Stopwatch.StartNew();
         LayoutFreeze.BeginBuilding();
 
+        // Before the pages: Race Control is handed the filing service, and
+        // the journal's handlers go on the session ahead of the page's - see
+        // WireRaceFiling.
+        WireRaceFiling();
+
         try
         {
             PopulateTabs();
@@ -1659,6 +1799,14 @@ public partial class MainForm : Form
 
         // The live track map: following the race's crossings - see MainForm.TrackMap.
         WireTrackMap();
+
+        // The phone coach page's report cards, for a laptop restarted mid-evening - see MainForm.Coach.
+        PublishCoachCards();
+
+        // A target lap set or cleared reaches the phone coach page at once,
+        // not at the driver's next lap - see MainForm.Coach.
+        WatchDriverTargets();
+
         WirePhotoFinish();
 
         _decoderAutoConnectRetryTimer.Tick += (_, _) =>
@@ -1703,6 +1851,46 @@ public partial class MainForm : Form
         _decoderAutoConnectRetryTimer.Start();
         chkAutoConnect.Checked = _settings.DirectDecoderAutoConnect; // fires CheckedChanged, which connects if already in EasyLap mode
 
+        // Read once at start (see the constructor), so a change is saved for
+        // the next start and says so on the page.
+        chkTimingThread.Checked = _settings.TimingOnItsOwnThread;
+        chkTimingThread.CheckedChanged += (_, _) =>
+        {
+            if (_settings.TimingOnItsOwnThread == chkTimingThread.Checked)
+            {
+                return;
+            }
+
+            _settings.TimingOnItsOwnThread = chkTimingThread.Checked;
+            _settings.Save();
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [timing] \"Run timing on its own thread\" turned {(chkTimingThread.Checked ? "on" : "off")} - it takes effect the next time HeatCaller starts.");
+        };
+
+        // The pass recording, switched straight away (24 Oct 2026) - the
+        // recorder is handed to the race through RaceTiming, which is safe
+        // in either timing mode.
+        chkRecordPasses.Checked = _settings.RecordTimingPasses;
+        chkRecordPasses.CheckedChanged += (_, _) =>
+        {
+            if (_settings.RecordTimingPasses == chkRecordPasses.Checked)
+            {
+                return;
+            }
+
+            _settings.RecordTimingPasses = chkRecordPasses.Checked;
+            _settings.Save();
+
+            if (chkRecordPasses.Checked)
+            {
+                StartPassRecording();
+            }
+            else
+            {
+                StopPassRecording();
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [timing] Pass recording stopped.");
+            }
+        };
+
         // Set before it is wired, so reading the setting in is not taken for
         // somebody changing it. Acted on once the window is up - see
         // ConnectAtStartup, called from RaiseReady.
@@ -1725,7 +1913,36 @@ public partial class MainForm : Form
         // closing that window mid-session.
         _raceTickTimer.Tick += (_, _) =>
         {
-            _race.Tick();
+            // Threaded (23 Oct 2026, timing layer, P4), the race's clock
+            // ticks on the timing thread itself, every 100 ms, whatever this
+            // window is doing - so here only the lookups it reads are brought
+            // up to date. Everything else in this tick is as it was.
+            if (_race.IsThreaded)
+            {
+                RefreshFrozenLookups();
+            }
+            else
+            {
+                _race.Tick();
+            }
+
+            // A crossing the journal's throttle held back, written at most a
+            // tick late whether or not Race Control is there to do it (23 Oct
+            // 2026, timing layer, P2) - see RaceJournalRecorder.OnClockTick.
+            //
+            // WHY (23 Oct 2026, timing layer, P4b): threaded, the journal
+            // catches up on the timing tick itself, and the timing side never
+            // reads the screen - so here the screen's details (track, round,
+            // name, re-run) are brought up to date for it instead, twice a
+            // second, which is what the inline write read at every write.
+            if (_race.IsThreaded)
+            {
+                _journalRecorder.CaptureDetails();
+            }
+            else
+            {
+                _journalRecorder.OnClockTick();
+            }
 
             UpdateTimingWatch();
 
@@ -1736,9 +1953,24 @@ public partial class MainForm : Form
             // thread, and served from a published copy - see
             // WebServerService.PublishState. A request thread must never
             // walk the standings while the lap pipeline is writing to them.
-            _webServer.PublishState();
+            //
+            // WHY (24 Oct 2026, timing layer, P8): threaded, it is built off
+            // the UI on a timer of its own (MainForm.LiveState), so the
+            // phones and the relay stay live through a freeze; here only what
+            // that build reads from this window is brought up to date.
+            if (_race.IsThreaded)
+            {
+                RefreshFrozenLiveInputs();
+            }
+            else
+            {
+                _webServer.PublishState();
+            }
         };
         _raceTickTimer.Start();
+
+        // Threaded only: the live state and the relay's frame, off the UI.
+        StartLiveStateOffUi();
         _race.LogMessage += msg => OnClientRawMessage($"[race] {msg}");
 
         // Checked once now and again every hour, so a long-running session
@@ -1852,6 +2084,10 @@ public partial class MainForm : Form
 
             _settings.Save();
 
+            // 22 Oct 2026: the wizard's last step can keep untested pages out
+            // of the sidebar - shown now, not at the next start.
+            RebuildNav();
+
             RefreshTrackLayoutCombo();
             RefreshActiveRoundCombo();
 
@@ -1937,6 +2173,10 @@ public partial class MainForm : Form
             finally
             {
                 _recoveryDecided = true;
+
+                // Threaded, practice may start at the gate from now on (24
+                // Oct 2026, timing layer, P7). Never throws.
+                RefreshPracticeAutoStartPlan();
             }
         });
 
@@ -2034,6 +2274,12 @@ public partial class MainForm : Form
             _closingDown = true;
             _webServer.HostReady = false;
 
+            // The live state built off the UI (threaded only), stopped and
+            // waited for before anything it reads - the web server, the relay,
+            // the stores, the timing thread - is taken down (24 Oct 2026,
+            // timing layer, P8).
+            StopLiveStateOffUi();
+
             // Off AdBreak's static event before the audio goes - see
             // _adBreakHandler.
             if (_adBreakHandler is not null)
@@ -2114,6 +2360,13 @@ public partial class MainForm : Form
                 _settings.StartMaximized = startMaximized;
             }
 
+            // WHY (23 Oct 2026, bug hunt 10): a PIN email run or night send
+            // still going at close was never recorded (a closing window takes
+            // no posts), so the same people were emailed again next start.
+            // Both stop the send and record who it reached, before this save.
+            RecordPinMailOnClose();
+            RecordNightEmailsOnClose();
+
             _settings.Save();
 
             // Application.Idle is static. A window closed before it ever
@@ -2144,6 +2397,14 @@ public partial class MainForm : Form
             _relayPublisher.Dispose();
             _decoderClient.Dispose();
             _ilapClient.Dispose();
+
+            // The timing thread, last of the timing (23 Oct 2026, timing
+            // layer, P4): after practice was stopped and filed, the journal
+            // flushed, the ghosts stopped and both decoders closed, so nothing
+            // is left to hand it a pass. What it still holds runs first; from
+            // then on the race is read on the calling thread (see
+            // TimingHost.Dispose), so the window's own teardown still can.
+            _timingHost?.Dispose();
 
             // Releases the ambience output device - it runs on its own
             // WaveOut independent of the announcement audio, so nothing
@@ -2524,6 +2785,12 @@ public partial class MainForm : Form
             {
                 _settings.StartMaximized = startMaximized;
             }
+
+            // WHY (23 Oct 2026, bug hunt 10): FormClosing never runs here, so
+            // a PIN email run or night send under way is recorded now - see
+            // FormClosing.
+            RecordPinMailOnClose();
+            RecordNightEmailsOnClose();
 
             _settings.Save();
 

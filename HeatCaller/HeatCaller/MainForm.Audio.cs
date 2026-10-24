@@ -1002,7 +1002,17 @@ public partial class MainForm
         _voiceAnnouncementsSubPage.Controls.Remove(_voiceSettingsControl.AnnouncementsPage);
         _voiceSettingsControl.AnnouncementsPage.Dispose();
 
+        // The announcer's voice rows the same way (22 Oct 2026): built by
+        // this control but shown at the top of the Cast tab, so its Dispose
+        // never reaches them. Taken back from Cast and disposed by hand, and
+        // the new control's handed over below.
+        var announcerVoice = _castControl?.ReleaseAnnouncerVoice();
+
         _voiceSettingsControl.Dispose();
+
+        // After the control that owns them, which may still reach them as it goes.
+        announcerVoice?.Dispose();
+
         _voiceSettingsControl = new VoiceSettingsControl(_voiceStore, _settings, _undo, _soundStore) { Dock = DockStyle.Fill, Announcer = _announcer, HeatCallerVoice = _heatCallerVoice };
         _voiceSettingsControl.StatusMessage += OnClientRawMessage;
         voiceSubPage.Controls.Add(_voiceSettingsControl);
@@ -1011,6 +1021,19 @@ public partial class MainForm
         if (rivalries is not null)
         {
             _voiceSettingsControl.HostRivalries(rivalries);
+        }
+
+        _castControl?.HostAnnouncerVoice(_voiceSettingsControl.AnnouncerVoiceGrid);
+
+        // Its handle now, not when the Voice tab is next opened (22 Oct 2026).
+        // A soundscape is applied from Sounds, so that tab is hidden and the
+        // new page gets no handle by being added - and its handle is what
+        // loads the HeatCaller voices and samples (OnHandleCreated) and what
+        // its Tests check before reporting (Gone). The pickers and Tests are
+        // on the Cast tab now, usable without ever opening the Voice tab.
+        if (IsHandleCreated)
+        {
+            _ = _voiceSettingsControl.Handle;
         }
 
         // Swapped inside its TAB page, not on pageSound - Sound Effects now

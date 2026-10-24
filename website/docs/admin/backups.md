@@ -60,7 +60,7 @@ An automatic backup runs in the background, so the app keeps responding while it
 |---|---|---|
 | **Automatically back up** | Turns automatic backups on or off. | On |
 | **every** *n* **day** / **days** | How long between automatic backups, from 1 to 30 days. | 1 day |
-| **Keep the last** *n* **automatic backups (older ones are deleted automatically)** | How many automatic backups to keep, from 1 to 200. | 14 |
+| **Keep the last** *n* **automatic backups (older ones are deleted)** | How many automatic backups to keep, from 1 to 200. | 14 |
 | **Folder:** | Where all backups go. Click **Change** to pick another folder. | `Documents\HeatCaller Backups` |
 
 Changes save as soon as you make them.

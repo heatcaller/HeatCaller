@@ -80,7 +80,7 @@ Select a look to see a preview of the app wearing it beside the list, with its n
 
 ## Choose the crowd screens' look
 
-Pick the look in **Crowd screens (Big Screen, Wi-Fi pages, online pages):**, under the buttons in the **Looks** card, or select a look in the list and click **Use for Crowd Screens**. Both do the same thing. There's no restart and no Save button.
+Pick the look in **Crowd screens:**, under the buttons in the **Looks** card, or select a look in the list and click **Use for Crowd Screens**. Both do the same thing. There's no restart and no Save button.
 
 The first choice in the list is **Match the app**, with the name of the look the app is running in brackets, for example **Match the app (Midnight)**. It follows the look the app is running now, not one waiting for a restart.
 
@@ -229,7 +229,7 @@ On the online pages the logo is drawn between 72 and 180 pixels across, dependin
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | The app didn't change color | The app's look only changes when the app restarts. | Click **Use for the App** and answer **Yes**, or restart HeatCaller. |
-| The Big Screen changed color when I changed the app's look | The crowd screens are set to **Match the app**. | Choose a look of their own in **Crowd screens (Big Screen, Wi-Fi pages, online pages):**. |
+| The Big Screen changed color when I changed the app's look | The crowd screens are set to **Match the app**. | Choose a look of their own in **Crowd screens:**. |
 | A Wi-Fi page hasn't changed | Each page checks for a new look or logo every 5 seconds and reloads itself, but waits while someone is typing in it, or while a driver is part way through checking in. | Wait a few seconds, or reload the page. |
 | The online pages haven't changed | Changes are sent within a few seconds. | Reload the page on the phone. Check the **Status** group on the **Club Website** page says it's publishing. |
 | The online logo is small, or a new logo takes up to an hour to show | The relay hasn't been updated for 0.48. | Ask your relay admin to redeploy it. |

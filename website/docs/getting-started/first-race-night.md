@@ -122,7 +122,7 @@ Full detail: [Running a race](../race-control/running-a-race.md). If something g
 
 ## Step 9: Let the announcer call it
 
-The announcer calls the grid, the start, fast laps, lead changes and the finish without you doing anything. A new install speaks with the free Kokoro voice, on the laptop itself, so there's nothing to do here at all. To change it, go to **Voice → Voice Settings** and choose under **Speak with**: the HeatCaller voice if your club is set up on the **Club Website** page, or ElevenLabs if you have a key of your own. **Hear It**, beside **Announcer voice:**, plays a short sample of a HeatCaller voice before you commit to it — it's free and needs no sign-up (see [Hear a voice before you choose it](../announcer/voice.md#hear-a-voice-before-you-choose-it)). With the HeatCaller voice, press **Prepare Lines** before the night — it puts every line that can be known in advance onto the laptop, and most of them cost your club's allowance nothing at all.
+The announcer calls the grid, the start, fast laps, lead changes and the finish without you doing anything. A new install speaks with the free Kokoro voice, on the laptop itself, so there's nothing to do here at all. To change it, go to **Voice → Voice Settings** and choose under **Speak with**: the HeatCaller voice if your club is set up on the **Club Website** page, or ElevenLabs if you have a key of your own. Then pick the announcer's voice at the top of **Voice → Cast**, where **Test Voice** (or, for the HeatCaller voice, **Hear It**) is beside it. **Hear It** plays a short sample of a HeatCaller voice before you commit to it — it's free and needs no sign-up (see [Hear a voice before you choose it](../announcer/voice.md#hear-a-voice-before-you-choose-it)). With the HeatCaller voice, press **Prepare Lines** before the night — it puts every line that can be known in advance onto the laptop, and most of them cost your club's allowance nothing at all.
 
 - **Open Announcer Screen** on **Race Control** (or <kbd>A</kbd>) opens the Announcer screen, a window with talking points for whoever is on the mic. It can sit beside the main window or on a second monitor, and its **Race Control** button brings the main window forward.
 - **Mute Announcer** at the bottom of the sidebar silences it instantly.
@@ -162,6 +162,25 @@ If phones can't connect, Windows is probably blocking the app. There's a one-tim
 ## Optional: online results
 
 For results, standings and check-in that anyone can open from anywhere, set up the online relay. See [Online](../online/index.md) and [Online setup](../online/setup.md).
+
+## Your fallback plan
+
+For your first nights on HeatCaller, keep your club's current timing system ready to take over. Set it up and test it that evening, before the first heat, so switching back takes a minute rather than a scramble.
+
+- **Run both if you can.** If your hardware lets both systems read the same loop, run them side by side for the night and compare the results afterwards. It's the quickest way to trust what HeatCaller is giving you.
+- **Decide in advance who makes the call** to switch, so nobody has to debate it with cars on the track.
+
+If HeatCaller misbehaves during a race:
+
+1. **Finish the race on the old system**, and run the rest of the night there if you need to. The drivers come first.
+2. **Don't lose what HeatCaller has.** Every finished race is already saved in **Race History**. A race that was running when the app stopped is kept on disk and offered back the next time HeatCaller opens (see [Crash recovery](../race-control/corrections-and-recovery.md#crash-recovery)), so you can still save it later. A wrong lap count in a saved race can be fixed afterwards with **Edit Result**, once **Allow corrections to saved results** is ticked on **Local Screens** (see [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result)).
+3. **Save the evidence before you close anything.** On **Backup & Restore**, click **Save Support Info**. It saves one `.zip` with the last few runs' console, the crash log and the version, with driver names and email addresses taken out. Note roughly when it happened and what you were doing.
+
+## Who to call
+
+Email **support@heatcaller.com** with the support file attached and a line on what happened. The address is on the **Getting help** card on **Backup & Restore**, with **Copy Address** beside it for a phone, and the crash dialog names it too. See [Troubleshooting](../admin/troubleshooting.md#still-stuck) for what helps most in a report.
+
+Before your first night, agree with us when someone can be reached during it, and send the notes and the support file afterwards even if the night went well.
 
 ## After the night
 

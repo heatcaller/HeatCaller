@@ -154,7 +154,7 @@ public sealed class BugHunt4PracticeGhostTests : IDisposable
         {
             var pace = new GhostCar { Name = "Pace", Transponder = Ghost, FixedLapMs = 1000 };
             var other = new GhostCar { Name = "Other", Transponder = "GHOST-BBBBBB", FixedLapMs = 60_000 };
-            var ghosts = new GhostService(race, ProfileStore.Load(), SessionHistoryStore.FromSessions(Array.Empty<SessionRecord>()))
+            var ghosts = new GhostService(new RaceTiming(race), ProfileStore.Load(), SessionHistoryStore.FromSessions(Array.Empty<SessionRecord>()))
             {
                 Settings = new GhostSettings { Enabled = true, Ghosts = { pace, other } },
             };
@@ -353,7 +353,7 @@ public sealed class BugHunt4PracticeGhostTests : IDisposable
         };
 
         var race = new RaceControlSession();
-        var ghosts = new GhostService(race, ProfileStore.Load(), SessionHistoryStore.FromSessions(new[] { older, newer }))
+        var ghosts = new GhostService(new RaceTiming(race), ProfileStore.Load(), SessionHistoryStore.FromSessions(new[] { older, newer }))
         {
             Settings = new GhostSettings
             {

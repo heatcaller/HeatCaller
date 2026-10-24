@@ -200,11 +200,11 @@ public sealed class NameCheckForm : Form
             Font = AppTheme.BodyFont,
             ForeColor = AppTheme.TextMuted,
             Text = _speak is null
-                ? "These are the names the announcer will read tonight, word for word. The voice is not "
-                  + "available from this window, so they can be read here but not heard."
-                : "Pick a driver and press Say It, or press Say the Next One to work down the list. You hear exactly "
-                  + "what the announcer will say tonight, in the club's own voice. To fix one, close this and put the "
-                  + "way the name sounds in that driver's Announcer name box.",
+                ? "The names the announcer will read tonight, word for word. The voice isn't available from this "
+                  + "window, so they can't be heard here."
+                : "Press Say It for the picked driver, or Say the Next One to work down the list - exactly as the "
+                  + "announcer will say it tonight. To fix one, close this and type how the name sounds in that "
+                  + "driver's Announcer name box.",
         };
 
         _grid.ReadOnly = true;

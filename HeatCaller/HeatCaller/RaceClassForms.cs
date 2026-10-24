@@ -136,8 +136,8 @@ public sealed class RaceClassEditForm : Form
 
         var lblQualHint = new Label
         {
-            Text = "Best-consecutive scores the quickest unbroken run of N laps. \"Heats that count\" totals that many of "
-                 + "each driver's best heats and drops the rest - set 2 for \"best 2 of 3\". Leave at 1 to count only their single best heat.",
+            Text = "Best consecutive scores the quickest unbroken run of N laps. \"Heats that count\" totals each driver's "
+                 + "best that many heats and drops the rest - 2 for \"best 2 of 3\", 1 for their single best heat.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,

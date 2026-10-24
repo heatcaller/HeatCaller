@@ -475,7 +475,7 @@ public sealed class BugHunt4RaceDayTests : IDisposable
                 UiThread = _window,
                 Settings = Settings,
                 Undo = Undo,
-                Race = Race,
+                Race = new RaceTiming(Race),
                 Events = Events,
                 Classes = Classes,
                 Profiles = Profiles,

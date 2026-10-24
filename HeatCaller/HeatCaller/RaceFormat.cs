@@ -89,10 +89,14 @@ public sealed class RaceFormat
     public const int MaxWarmUpSeconds = 1800;
 
     /// <summary>A warm-up length as people say it: "90s", "2 min", "2:30".</summary>
-    public static string DescribeWarmUp(int seconds) =>
-        seconds < 60 ? $"{seconds}s"
-        : seconds % 60 == 0 ? $"{seconds / 60} min"
-        : $"{seconds / 60}:{seconds % 60:00}";
+    /// <remarks>
+    /// WHY (23 Oct 2026, timing layer P6): the words themselves moved into
+    /// the timing library (WarmUpText), because the race engine logs them
+    /// when a warm-up opens and the library cannot reach RaceFormat - which
+    /// reads AppSettings and carries the format editor. Kept here as the
+    /// name every screen already calls.
+    /// </remarks>
+    public static string DescribeWarmUp(int seconds) => WarmUpText.Describe(seconds);
 
     /// <summary>Writes this format back as the app default. Save() is the caller's, so one edit is one write.</summary>
     public void SaveTo(AppSettings settings)
@@ -284,9 +288,8 @@ public sealed class RaceFormatForm : Form
             _lblFollowing.AutoSize = true;
             _lblFollowing.ForeColor = AppTheme.TextMuted;
             _lblFollowing.Text = _fallback is null
-                ? "Following the app default. Tick the box above to give this a format of its own."
-                : "Following the app default:\n\n" + _fallback.Describe()
-                  + "\n\nTick the box above to give this a format of its own.";
+                ? "Following the app default."
+                : "Following the app default:\n\n" + _fallback.Describe();
 
             body.Add(_lblFollowing, gapBelow: 0);
         }
@@ -360,10 +363,9 @@ public sealed class RaceFormatForm : Form
         // to the grid's width.
         _fields.AddWide(new Label
         {
-            Text = "For qualifying, the two that matter are the first and the last. \"All away together\" is a "
-                 + "simultaneous grid start on one shared clock - PN Racing's PNWC qualifiers work this way, and "
-                 + "the run to the loop is on your time. \"Own clock from 1st crossing\" is the IFMAR convention, "
-                 + "where each driver is measured over their own laps alone.",
+            Text = "For qualifying, the first and last starts are the ones that matter. \"All away together\" is a grid start on one shared "
+                 + "clock (PN Racing's PNWC qualifiers), so the run to the loop is on your time. \"Own clock from "
+                 + "1st crossing\" is the IFMAR convention: each driver is timed over their own laps.",
             AutoSize = true,
             Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,

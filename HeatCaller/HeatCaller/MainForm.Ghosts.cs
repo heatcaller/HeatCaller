@@ -112,6 +112,20 @@ public partial class MainForm
 
         KeepRunningGhostsInStep();
 
+        // An own-best ghost asked to chase a new best (the Practice page's
+        // "Chase a Best Lap..." picked again for the same driver) takes it
+        // from its next lap, without going back to the line (22 Oct 2026).
+        //
+        // The service is handed the settings as they are now first: an Undo
+        // or an edit replaces them, and it finds each running ghost's
+        // current revision there. Start reads Settings afresh every time,
+        // so nothing else depends on it keeping the old object.
+        if (_ghosts is not null)
+        {
+            _ghosts.Settings = _ghostStore.Current;
+            _ghosts.RefreshChangedPaces();
+        }
+
         // Rebuild the pickers immediately. They cache their driver list
         // when built and only rebuild on navigation, so a ghost added
         // while another page was open wouldn't appear until that page

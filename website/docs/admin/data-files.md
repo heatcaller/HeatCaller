@@ -90,7 +90,7 @@ All data files are plain JSON text, except where noted.
 
 | File or folder | What it holds |
 |---|---|
-| `voice-settings.json` | Announcer voice settings (**Voice → Voice Settings** and **Voice → Announcements**): which voice speaks (the HeatCaller voice, ElevenLabs or the free Kokoro voice, and which announcer, ElevenLabs voice or Kokoro voice within it), the announcements and tuning, and the ElevenLabs API key, sealed. See [Secrets](#secrets). The HeatCaller voice needs no secret of its own: it speaks through the relay, using the publish token in `settings.json`. Two keys are older than they look: see [After the Windows voice was retired](#after-the-windows-voice-was-retired). |
+| `voice-settings.json` | Announcer voice settings (**Voice → Voice Settings**, the announcer's voice at the top of **Voice → Cast**, and **Voice → Announcements**): which voice speaks (the HeatCaller voice, ElevenLabs or the free Kokoro voice, and which announcer, ElevenLabs voice or Kokoro voice within it), the announcements and tuning, and the ElevenLabs API key, sealed. See [Secrets](#secrets). The HeatCaller voice needs no secret of its own: it speaks through the relay, using the publish token in `settings.json`. Two keys are older than they look: see [After the Windows voice was retired](#after-the-windows-voice-was-retired). |
 | `sound-effects.json` | Sound effect settings (**Sounds → Effects**). |
 | `ambience.json` | Ambience settings (**Sounds → Ambience**). |
 | `music.json` | Music settings and the track list (**Sounds → Music**). |

@@ -33,7 +33,7 @@ namespace HeatCaller;
 /// </summary>
 public sealed partial class WebServerService
 {
-    private readonly RaceControlSession _race;
+    private readonly RaceTiming _race;
     private readonly ProfileStore _profiles;
     private readonly DayScheduleStore? _schedule;
     private readonly SponsorStore? _sponsors;
@@ -90,7 +90,9 @@ public sealed partial class WebServerService
     /// The races still to run, in order, for phones following a driver -
     /// when is their next race and where do they grid (PhoneFollow). Asked
     /// on the UI thread as the LAN copy of the live state is built. Never in
-    /// the relay's copy.
+    /// the relay's public copy - only, per badge, in the relay's private
+    /// driverlive (22 Oct 2026, driver experience), which is reachable with
+    /// that driver's own badge alone.
     /// </summary>
     public Func<IReadOnlyList<UpcomingRace>>? UpcomingRaces { get; set; }
 
@@ -108,6 +110,88 @@ public sealed partial class WebServerService
     /// the live state is built. Never in the relay's copy.
     /// </summary>
     public Func<IfItEndedNow?>? IfItEndedNow { get; set; }
+
+    /// <summary>
+    /// When the decoder last heard a transponder, and how well - "good",
+    /// "weak" or "unknown" - or null when it has not been heard lately (22
+    /// Oct 2026, driver experience, item 4). For the follow view's "Check my
+    /// transponder": the driver drives past the line and the phone says it
+    /// was heard. Set by MainForm.WiFiExtras from TransponderWatch, which
+    /// has its own lock. Asked on the UI thread as the LAN copy of the live
+    /// state is built, for the people on the follow list only. Never in the
+    /// relay's copy.
+    /// </summary>
+    public Func<string, (DateTime SeenUtc, string Signal)?>? SightingOf { get; set; }
+
+    /// <summary>
+    /// The last few lines the announcer said, oldest first, for the
+    /// captions strip on the OBS overlay and the broadcast graphics with
+    /// ?captions=1 (22 Oct 2026, driver experience, item 9). Set by
+    /// MainForm.WiFiExtras from CaptionLog.Shared. The text as heard, full
+    /// names and all: the LAN pages are in the room, where the PA has
+    /// already said it. Never in the relay's copy - that has its own,
+    /// redacted, captions document.
+    /// </summary>
+    public Func<IReadOnlyList<CaptionLine>>? Captions { get; set; }
+
+    /// <summary>Lines of captions the LAN state carries: the strip shows the newest, and four covers a page that missed a poll or two.</summary>
+    internal const int CaptionsInState = 4;
+
+    /// <summary>The most penalty lines one driver's follow card carries - a night of them is still a phone screen.</summary>
+    internal const int PenaltyLinesPerDriver = 12;
+
+    /// <summary>Tonight's penalty lines, by transponder - replaced whole by PublishPenalties, never changed in place.</summary>
+    private volatile IReadOnlyDictionary<string, IReadOnlyList<string>> _penalties =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Tonight's penalty lines, by transponder - "Q1 Heat 2: +5 s - jump
+    /// start" - for the follow card on the Live Results page (22 Oct 2026,
+    /// driver experience, item 1). Called on the UI thread when a race is
+    /// filed or corrected (MainForm.RaceFiledWiFiExtras), the same way as
+    /// PublishCoachCards. The dictionary is copied, so the caller is free to
+    /// reuse its own.
+    ///
+    /// THE REASONS ARE PRIVATE everywhere but here and the driver's own
+    /// night (see PenaltyWords): the follow view is in the room, where the
+    /// PA has already said them. They go into the LAN copy of the live state
+    /// only, under the roster's opaque id, and never into the relay's.
+    /// </summary>
+    public void PublishPenalties(IReadOnlyDictionary<string, IReadOnlyList<string>> byTransponder)
+    {
+        var copy = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (who, lines) in byTransponder)
+        {
+            var kept = lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
+
+            if (!string.IsNullOrWhiteSpace(who) && kept.Length > 0)
+            {
+                // The latest are the ones the driver is asking about.
+                copy[who.Trim()] = kept.Skip(Math.Max(0, kept.Length - PenaltyLinesPerDriver)).ToArray();
+            }
+        }
+
+        _penalties = copy;
+    }
+
+    /// <summary>
+    /// A time as the pages read it - "2026-10-22T19:42:00.000Z", always UTC
+    /// and always the invariant culture (22 Oct 2026, driver experience). A
+    /// time whose kind nobody set is taken to be UTC already, which is what
+    /// every caller here hands over.
+    /// </summary>
+    internal static string IsoUtc(DateTime time)
+    {
+        var utc = time.Kind switch
+        {
+            DateTimeKind.Utc => time,
+            DateTimeKind.Local => time.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(time, DateTimeKind.Utc),
+        };
+
+        return utc.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     private volatile bool _hostReady;
 
@@ -312,7 +396,7 @@ public sealed partial class WebServerService
     /// </summary>
     public RaceDayService? Manager { get; set; }
 
-    public WebServerService(RaceControlSession race, ProfileStore profiles,
+    public WebServerService(RaceTiming race, ProfileStore profiles,
         DayScheduleStore? schedule = null, SponsorStore? sponsors = null, AppSettings? settings = null)
     {
         _race = race;
@@ -1548,6 +1632,23 @@ public sealed partial class WebServerService
             case "/api/vote":
                 HandleRoomVote(context);
                 break;
+            case "/coach":
+                // One driver's laps, trend and report card on their own
+                // phone - see WebServerService.Coach. No PIN: it shows only
+                // what the spectator board already does, and the card it
+                // adds leaves out anything private (22 Oct 2026).
+                WriteHtml(context, BuildCoachPage());
+                break;
+            case "/api/coach":
+                HandleCoachCard(context);
+                break;
+            case KeepAwake.Address:
+                // The silent video that keeps a phone awake on the pit
+                // board, where the browser will not offer a wake lock to a
+                // plain-http page - see KeepAwake (22 Oct 2026). No PIN: it
+                // is the same few bytes for everybody.
+                HandleKeepAwake(context);
+                break;
             case "/broadcast":
                 // The broadcast graphics for OBS - see WebServerService.Camera.
                 WriteHtml(context, BuildBroadcastPage());
@@ -2605,6 +2706,44 @@ public sealed partial class WebServerService
     }
 
     /// <summary>
+    /// /keepawake.mp4: the pit board's keep-awake video (22 Oct 2026, driver
+    /// experience, item 10), with Range answered because Safari asks for one
+    /// before it will play anything - see KeepAwake.Answer.
+    /// </summary>
+    private static void HandleKeepAwake(HttpListenerContext context)
+    {
+        var (status, contentRange, body) = KeepAwake.Answer(context.Request.Headers["Range"]);
+
+        try
+        {
+            context.Response.StatusCode = status;
+            context.Response.ContentType = KeepAwake.ContentType;
+            context.Response.Headers["Accept-Ranges"] = "bytes";
+
+            if (contentRange is not null)
+            {
+                context.Response.Headers["Content-Range"] = contentRange;
+            }
+
+            context.Response.ContentLength64 = body.Length;
+            context.Response.OutputStream.Write(body, 0, body.Length);
+            context.Response.OutputStream.Close();
+        }
+        catch
+        {
+            // The phone went away mid-answer - see HandleSponsorVideo.
+            try
+            {
+                context.Response.Abort();
+            }
+            catch
+            {
+                // Already gone.
+            }
+        }
+    }
+
+    /// <summary>
     /// The name to show for a transponder, or - when nobody has named it -
     /// the raw id on the LAN pages and "Unnamed driver" on the relay copy.
     /// The LAN pages are only reachable from the venue's Wi-Fi, and the
@@ -2614,7 +2753,9 @@ public sealed partial class WebServerService
     /// </summary>
     private string DisplayNameFor(string transponder, bool publicCopy = false)
     {
-        var profile = _profiles.Get(transponder);
+        // Names, not the store: threaded this may be off the UI thread (24
+        // Oct 2026, timing layer, P8 - see WebServerService.LiveInputs).
+        var profile = Names.Get(transponder);
 
         if (!string.IsNullOrWhiteSpace(profile?.DriverName))
         {
@@ -2628,8 +2769,8 @@ public sealed partial class WebServerService
     private readonly object _stateGate = new();
 
     /// <summary>
-    /// The last state document built on the UI thread, for request threads
-    /// to serve.
+    /// The last state document built - on the UI thread, or threaded by
+    /// MainForm.LiveState off it - for request threads to serve.
     ///
     /// Volatile, and replaced whole: a reader gets either the previous
     /// document or the new one, never half of either.
@@ -2637,7 +2778,9 @@ public sealed partial class WebServerService
     private volatile string _publishedState = "{}";
 
     /// <summary>
-    /// Rebuilds the document /api/state serves. UI thread only.
+    /// Rebuilds the document /api/state serves. Inline, UI thread only.
+    /// Threaded (timing on its own thread), from MainForm.LiveState's
+    /// worker off the UI as well - see the remarks.
     ///
     /// Requests used to build it themselves, on a thread-pool thread. That
     /// meant every phone in the building was walking the race session's
@@ -2651,6 +2794,18 @@ public sealed partial class WebServerService
     /// page is closed, and the page polls once a second anyway, so nothing
     /// on screen is any staler than it was.
     /// </summary>
+    /// <remarks>
+    /// WHY (24 Oct 2026, timing layer, P8): built on the UI thread, the
+    /// document froze whenever the window did - and with timing on its own
+    /// thread the race goes on regardless, so every phone and the relay
+    /// showed a race that had stopped. Threaded, MainForm builds it from a
+    /// thread-pool timer instead (MainForm.LiveState): the race is read from
+    /// the timing thread, the profiles from their frozen view, and what only
+    /// the window can read from what it last captured (CaptureUiSide and the
+    /// frozen feeds). Built and published inside _stateGate (BuildAndPublish),
+    /// so a forced publish from the window and the worker's never land out
+    /// of order. Inline it is the same build on the UI thread as before.
+    /// </remarks>
     public void PublishState(bool force = false)
     {
         if (!force && !IsRunning)
@@ -2660,7 +2815,7 @@ public sealed partial class WebServerService
 
         try
         {
-            _publishedState = BuildStateJson();
+            BuildAndPublish();
         }
         catch (Exception ex)
         {
@@ -2804,7 +2959,16 @@ public sealed partial class WebServerService
 
     private string BuildStateJsonCore(bool abbreviateNames, bool forRelay)
     {
-        var ordered = _race.GetOrderedStandings();
+        // WHY (24 Oct 2026, timing layer, P8): threaded this may run off the
+        // UI thread (MainForm.LiveState). What only the window may read comes
+        // from its last capture (ui - see WebServerService.LiveInputs), and
+        // the race is read in one trip to the timing thread, from one moment
+        // (view). Inline both are read here and now, on the UI thread, at
+        // the same points as always: ui is today's reads, and view is null.
+        var ui = CurrentUiSide();
+        var view = _race.IsThreaded ? _race.ReadLiveView() : null;
+
+        var ordered = view?.Ordered ?? _race.GetOrderedStandings();
 
         // Decided here because here is where the whole field is. Two
         // drivers whose names differ only in their last word would
@@ -2829,9 +2993,9 @@ public sealed partial class WebServerService
             .DefaultIfEmpty(0)
             .Min();
 
-        _kpiTracker.Observe(ordered, _race.SessionGeneration);
+        _kpiTracker.Observe(ordered, view?.Generation ?? _race.SessionGeneration);
 
-        var columns = KpiCatalog.Resolve(_settings?.WebKpis ?? new List<string>(), KpiCatalog.DefaultWeb);
+        var columns = KpiCatalog.Resolve(ui.WebKpis, KpiCatalog.DefaultWeb);
 
         if (forRelay)
         {
@@ -2841,11 +3005,11 @@ public sealed partial class WebServerService
         var context = new KpiContext
         {
             Ordered = ordered,
-            Profiles = _profiles,
+            Profiles = Names,
             Tracker = _kpiTracker,
             FastestOverall = bestLapMs,
-            StreakThreshold = _race.StreakThreshold,
-            SectorLengthsFeet = _race.SectorLengthsFeet,
+            StreakThreshold = view?.StreakThreshold ?? _race.StreakThreshold,
+            SectorLengthsFeet = view is null ? _race.SectorLengthsFeet : view.SectorLengthsFeet,
 
             // Re-read per request rather than held: the web server and Race
             // Control are separate objects, and a badge awarded between
@@ -2883,38 +3047,26 @@ public sealed partial class WebServerService
             best = s.FastestLapMs,
         }).ToList();
 
-        string onDeck = string.Empty;
-        var next = _schedule?.NextUp;
-        if (next is not null)
-        {
-            onDeck = string.Join("  \u2022  ", new[] { next.ScheduledTime, next.ClassName, next.Description }
-                .Where(s => !string.IsNullOrWhiteSpace(s)));
-        }
+        var onDeck = ui.OnDeck;
 
         var document = new
         {
-            state = _race.State.ToString(),
-            flag = _race.Flag.ToString(),
-            countdown = _race.GetCountdownText(),
+            state = (view?.State ?? _race.State).ToString(),
+            flag = (view?.Flag ?? _race.Flag).ToString(),
+            countdown = view is null ? _race.GetCountdownText() : view.Countdown,
             onDeck,
             columns = columns.Select(k => k.Label).ToList(),
-            sponsorCount = _sponsors?.Current.Enabled == true ? _sponsors.SlideFileNames.Count : 0,
-            sponsorLeaderboardSecs = _sponsors?.Current.LeaderboardSeconds ?? 60,
-            sponsorSlideSecs = _sponsors?.Current.SlideSeconds ?? 8,
-            sponsorPauseDuringRace = _sponsors?.Current.PauseDuringRace ?? true,
+            sponsorCount = ui.SponsorCount,
+            sponsorLeaderboardSecs = ui.SponsorLeaderboardSecs,
+            sponsorSlideSecs = ui.SponsorSlideSecs,
+            sponsorPauseDuringRace = ui.SponsorPauseDuringRace,
 
             // Which slots are videos, so a page knows to use its <video>
             // element rather than its <img> - indexes into the same list
             // /api/sponsor?i= serves. Sent as indexes rather than a kind per
             // slide because almost every club's list is all pictures, and
-            // then this is an empty array.
-            sponsorVideos = _sponsors?.Current.Enabled == true
-                ? _sponsors.SlideFileNames
-                    .Select((name, index) => (name, index))
-                    .Where(slide => SponsorMedia.IsVideoName(slide.name))
-                    .Select(slide => slide.index)
-                    .ToList()
-                : new List<int>(),
+            // then this is an empty array. Worked out in UiSideNow.
+            sponsorVideos = ui.SponsorVideos,
             standings,
         };
 
@@ -2941,6 +3093,45 @@ public sealed partial class WebServerService
 
         var node = JsonSerializer.SerializeToNode(document)!.AsObject();
         node["race"] = race;
+
+        // 22 Oct 2026 (driver experience, item 3): the laptop's own clock,
+        // so a phone works out "about 7 min" and "seen 4 s ago" against the
+        // time the ETAs and sightings were measured by, not its own clock,
+        // which may be minutes out.
+        node["now"] = IsoUtc(DateTime.UtcNow);
+
+        // 22 Oct 2026 (driver experience, item 9): the last few lines the
+        // announcer said, for the captions strip (?captions=1). Left out
+        // when nothing has been said. Guarded: the board must not go stale
+        // for the sake of a caption.
+        try
+        {
+            var said = Captions?.Invoke() ?? Array.Empty<CaptionLine>();
+            var last = said.Skip(Math.Max(0, said.Count - CaptionsInState)).ToList();
+
+            if (last.Count > 0)
+            {
+                node["captions"] = new System.Text.Json.Nodes.JsonArray(last
+                    .Select(l => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["n"] = l.N,
+                        ["t"] = l.Text,
+                    })
+                    .ToArray());
+            }
+        }
+        catch
+        {
+            // The board without the captions, rather than no board.
+        }
+
+        // 22 Oct 2026: the key to the * a lap count carries when race
+        // control counted some of it by hand (HandCountedLaps). LAN copy
+        // only - the relay's document keeps the format the relay knows.
+        if (ordered.Any(s => HandCountedLaps.During(s) > 0))
+        {
+            node["byHand"] = HandCountedLaps.Legend;
+        }
 
         // The key the ids below are made with, read once for the whole
         // document. The board, the map and the follow list all have to call
@@ -2982,7 +3173,7 @@ public sealed partial class WebServerService
 
         try
         {
-            AddBroadcast(node, ordered, rosterKey);
+            AddBroadcast(node, ordered, rosterKey, ui, view);
         }
         catch
         {
@@ -3126,9 +3317,15 @@ public sealed partial class WebServerService
         // earbuds ("best lap") and the broadcast graphics.
         var bestOf = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
+        // And each car's standing, for the warnings and penalty time race
+        // control has given it this race (22 Oct 2026, driver experience,
+        // item 1). Read here, on the UI thread, like everything else in it.
+        var standingOf = new Dictionary<string, RacerStanding>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var standing in ordered)
         {
             bestOf.TryAdd(standing.TransponderId, standing.FastestLapMs);
+            standingOf.TryAdd(standing.TransponderId, standing);
         }
 
         foreach (var (id, card) in PhoneFollow.Cards(ordered))
@@ -3144,6 +3341,30 @@ public sealed partial class WebServerService
                 ["ahead"] = card.Ahead,
                 ["behind"] = card.Behind,
             };
+
+            // The target lap race control set for them, for the phone coach
+            // page (22 Oct 2026) - only when there is one. See TargetLapMsFor.
+            if (TargetLapMsFor(id) is > 0 and var target)
+            {
+                cards[RosterId(rosterKey, id)]!["target"] = target;
+            }
+
+            // This race's warnings and penalty time, under the call-up on
+            // the follow card (22 Oct 2026, driver experience, item 1) -
+            // only when there are any, so a clean card is as it was. The
+            // seconds to a tenth, so a 2.5 s penalty does not read as 3.
+            if (standingOf.TryGetValue(id, out var raced))
+            {
+                if (raced.Warnings.Count > 0)
+                {
+                    cards[RosterId(rosterKey, id)]!["warn"] = raced.Warnings.Count;
+                }
+
+                if (raced.PenaltyMs > 0)
+                {
+                    cards[RosterId(rosterKey, id)]!["penS"] = Math.Round(raced.PenaltyMs / 1000.0, 1);
+                }
+            }
         }
 
         node["cards"] = cards;
@@ -3163,7 +3384,7 @@ public sealed partial class WebServerService
 
         foreach (var (id, callUp) in PhoneFollow.CallUps(upcoming))
         {
-            callUps[RosterId(rosterKey, id)] = new System.Text.Json.Nodes.JsonObject
+            var call = new System.Text.Json.Nodes.JsonObject
             {
                 ["race"] = callUp.Race,
                 ["away"] = callUp.Away,
@@ -3171,22 +3392,135 @@ public sealed partial class WebServerService
                 ["now"] = callUp.OnTrack,
                 ["words"] = PhoneFollow.Words(callUp),
             };
+
+            // 22 Oct 2026 (driver experience, item 3): staged - go to the
+            // driver stand - and when the race is expected to start, for
+            // "about 7 min (19:42)". Only when they apply, so a call-up
+            // without them is as it was.
+            if (callUp.Staged)
+            {
+                call["staged"] = true;
+            }
+
+            if (callUp.EtaUtc is { } eta)
+            {
+                call["eta"] = IsoUtc(eta);
+            }
+
+            callUps[RosterId(rosterKey, id)] = call;
         }
 
         node["callups"] = callUps;
 
         // Everyone on the board or due in a race to come, by name - the
         // page's "Follow" list.
-        var people = ordered.Select(s => s.TransponderId)
+        var followable = ordered.Select(s => s.TransponderId)
             .Concat(upcoming.SelectMany(r => r.Grid))
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var people = followable
             .Select(id => (Id: RosterId(rosterKey, id), Name: DisplayNameFor(id, false)))
             .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
             .Select(p => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject { ["id"] = p.Id, ["name"] = p.Name })
             .ToArray();
 
         node["people"] = new System.Text.Json.Nodes.JsonArray(people);
+
+        // 22 Oct 2026 (driver experience): the follow card's extras, for the
+        // people above only - nobody can follow anyone else, so nobody else
+        // needs them. Each under the same opaque id, and each left out when
+        // there is nothing to say.
+        // Each guarded on its own: a sighting that cannot be read must not
+        // take the follow list it is added to down with it.
+        try
+        {
+            AddSightings(node, followable, rosterKey);
+        }
+        catch
+        {
+            // The follow view without the transponder check.
+        }
+
+        try
+        {
+            AddPenalties(node, followable, rosterKey);
+        }
+        catch
+        {
+            // The follow view without tonight's penalties.
+        }
+    }
+
+    /// <summary>
+    /// "seen": when each followable driver's transponder was last heard -
+    /// seconds ago, by the laptop's clock - and how well (22 Oct 2026,
+    /// driver experience, item 4). The "Check my transponder" button on the
+    /// follow card watches for a sighting newer than the press. Nothing
+    /// new is recorded for it: every pass is already (TransponderWatch).
+    /// Ghosts are never heard, so never here.
+    /// </summary>
+    private void AddSightings(System.Text.Json.Nodes.JsonObject node, IReadOnlyList<string> followable, byte[] rosterKey)
+    {
+        if (SightingOf is not { } sightingOf)
+        {
+            return;
+        }
+
+        var seen = new System.Text.Json.Nodes.JsonObject();
+        var now = DateTime.UtcNow;
+
+        foreach (var transponder in followable)
+        {
+            if (Ghosts.IsGhost(transponder) || sightingOf(transponder) is not { } sighting)
+            {
+                continue;
+            }
+
+            seen[RosterId(rosterKey, transponder)] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["ago"] = Math.Max(0, (int)(now - sighting.SeenUtc).TotalSeconds),
+                ["sig"] = sighting.Signal is "good" or "weak" ? sighting.Signal : "unknown",
+            };
+        }
+
+        if (seen.Count > 0)
+        {
+            node["seen"] = seen;
+        }
+    }
+
+    /// <summary>
+    /// "pens": each followable driver's penalty lines from tonight's filed
+    /// races - "Q1 Heat 2: +5 s - jump start" - as PublishPenalties last
+    /// had them (22 Oct 2026, driver experience, item 1).
+    /// </summary>
+    private void AddPenalties(System.Text.Json.Nodes.JsonObject node, IReadOnlyList<string> followable, byte[] rosterKey)
+    {
+        var penalties = _penalties;
+
+        if (penalties.Count == 0)
+        {
+            return;
+        }
+
+        var pens = new System.Text.Json.Nodes.JsonObject();
+
+        foreach (var transponder in followable)
+        {
+            if (penalties.TryGetValue(transponder.Trim(), out var lines) && lines.Count > 0)
+            {
+                pens[RosterId(rosterKey, transponder)] = new System.Text.Json.Nodes.JsonArray(lines
+                    .Select(l => (System.Text.Json.Nodes.JsonNode?)l)
+                    .ToArray());
+            }
+        }
+
+        if (pens.Count > 0)
+        {
+            node["pens"] = pens;
+        }
     }
 
     /// <summary>
@@ -3198,7 +3532,14 @@ public sealed partial class WebServerService
     private IReadOnlyDictionary<string, string> ShortNames(IReadOnlyList<RacerStanding> ordered, bool abbreviate, bool publicCopy)
     {
         var full = ordered.Select(s => DisplayNameFor(s.TransponderId, publicCopy)).ToList();
-        var chosen = RelayPublisher.DisplayNames(full, abbreviate);
+
+        // Initials-only is for the copy bound for the relay, matched by
+        // transponder too; the Wi-Fi pages are in the room and keep the
+        // names everyone there hears on the PA (design 1.4.7; 22 Oct 2026,
+        // driver experience).
+        var chosen = publicCopy
+            ? RelayPublisher.DisplayNames(full, abbreviate, ordered.Select(s => (string?)s.TransponderId).ToList())
+            : RelayPublisher.DisplayNamesForTheRoom(full, abbreviate);
 
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -3425,6 +3766,7 @@ public sealed partial class WebServerService
         tr.p1 td { background:var(--p1-tint); }
         tr.p1 .pos { color:var(--primary); }
         .empty { padding:40px; text-align:center; color:var(--muted); }
+        .handnote { padding:6px 12px; color:var(--muted); font-size:.85em; }
 
         /* --- Swipe deck ---
            One horizontal scroller with snap points rather than a JS carousel:
@@ -3492,6 +3834,26 @@ public sealed partial class WebServerService
         .callup.next { border-color:var(--accent); color:var(--accent); animation:callpulse 1.1s ease-in-out infinite; }
         .callup.now { border-color:var(--good); color:var(--good); }
         @keyframes callpulse { 0%,100% { box-shadow:0 0 0 0 transparent; } 50% { box-shadow:0 0 0 6px var(--accent); } }
+        /* 22 Oct 2026 (driver experience): when the race should start, the
+           penalties race control gave tonight and why, and the transponder
+           check - all under the call-up. */
+        .callup .eta { display:block; margin-top:4px; font-size:15px; font-weight:600; }
+        .fpens { display:none; margin-top:10px; font-size:14px; color:var(--soft); line-height:1.45; }
+        .flost { display:none; margin-top:8px; font-size:14px; color:var(--soft); line-height:1.45; }
+        .fpens b { color:var(--bad); }
+        .fpens ul { margin:4px 0 0; padding-left:18px; }
+        .tcheck { display:none; margin-top:10px; }
+        .tcheck .speak { margin-left:0; }
+        .tsay { display:block; margin-top:6px; font-size:15px; font-weight:700; color:var(--soft); }
+        .tsay.ok { color:var(--good); } .tsay.bad { color:var(--bad); }
+        /* Captions (?captions=1): the line the announcer just said, for
+           anyone who can't hear the PA - on the wall, or over the stream. */
+        #captions { display:none; position:fixed; left:50%; bottom:52px; transform:translateX(-50%); z-index:98;
+                    width:max-content; max-width:min(92vw, 1000px); padding:10px 18px; border-radius:10px;
+                    background:var(--glass-bg); color:var(--text); font-size:22px; font-weight:600; line-height:1.3;
+                    text-align:center; transition:opacity .6s; }
+        #captions.on { display:block; }
+        #captions.fade { opacity:0; }
         tr.me td { outline:2px solid var(--accent); outline-offset:-2px; }
         body.overlay .follow { display:none; }
         /* Lap times read out on the phone, for earbuds. */
@@ -3514,16 +3876,21 @@ public sealed partial class WebServerService
         <div class="champ" id="champ"></div>
         <div class="follow" id="follow">
           <select id="followPick"><option value="">Follow a driver...</option></select>
+          <div class="flost" id="flost">Your driver isn't on the list now. If you are racing tonight, pick your driver again above.</div>
           <button type="button" class="speak" id="speakBtn" style="display:none">Lap times in my ear: off</button>
           <div class="fcard" id="fcard"><span class="fpos" id="fpos"></span>
             <span><span class="fname" id="fname"></span><br><span class="fstat" id="fstat"></span></span></div>
           <div class="callup" id="callup"></div>
+          <div class="fpens" id="fpens"></div>
+          <div class="tcheck" id="tcheck"><button type="button" class="speak" id="tcheckBtn">Check my transponder</button>
+            <span class="tsay" id="tsay" aria-live="polite"></span></div>
         </div>
 
         <div class="deck" id="deck">
           <div class="page">
             <table><thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table>
             <div class="empty" id="empty">Waiting for lap data...</div>
+            <div class="handnote" id="handnote" style="display:none"></div>
           </div>
           <div class="page">
             <div class="ptitle">Lap times</div>
@@ -3543,6 +3910,7 @@ public sealed partial class WebServerService
         </div>
         <div class="dots"><i class="dot on"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
 
+        <div id="captions" aria-live="polite"></div>
         <div id="sponsor"><img id="sponsorImg" src=""><video id="sponsorVid" muted playsinline preload="auto" style="display:none"></video></div>
         <script>
         // Everything below builds rows with innerHTML, and a driver name is
@@ -3576,6 +3944,8 @@ public sealed partial class WebServerService
           const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
           try{
             const r = await fetch('/api/state', { signal: stop.signal }); const d = await r.json();
+            takeClock(d.now);
+            showCaptions(d.captions);
             document.getElementById('state').textContent = d.state + ' - ' + d.flag + ' flag';
             document.getElementById('countdown').textContent = d.countdown || '';
 
@@ -3590,6 +3960,11 @@ public sealed partial class WebServerService
                 `<td class="${i===0?'pos':''} ${c.emphasis!=='none'?esc(c.emphasis):''}">${esc(c.text)}</td>`
               ).join('') + '</tr>').join('');
             document.getElementById('empty').style.display = d.standings.length ? 'none' : 'block';
+
+            // What a * after a lap count means, when one is on the board.
+            const hn = document.getElementById('handnote');
+            if (d.byHand) { hn.textContent = d.byHand; hn.style.display = 'block'; }
+            else { hn.style.display = 'none'; }
 
             showFollowing(d);
             takeMap(d.map);
@@ -3991,6 +4366,14 @@ public sealed partial class WebServerService
           }
           pick.value = people.some(p => p.id === following) ? following : '';
 
+          // WHY (23 Oct 2026, bug hunt 10): a restart of the web server (the
+          // only way to change a PIN) gives everybody new ids, and a phone
+          // still holding the old one showed nothing while its driver raced.
+          // A pick nobody on the list matches now says to pick again. It is
+          // kept, not wiped - as the coach page does.
+          const lost = !!following && people.length > 0 && !people.some(p => p.id === following);
+          document.getElementById('flost').style.display = lost ? 'block' : 'none';
+
           const card = (d.cards || {})[following];
           const fc = document.getElementById('fcard');
           if (following && card){
@@ -4011,17 +4394,136 @@ public sealed partial class WebServerService
           const cu = document.getElementById('callup');
           if (following && call){
             cu.textContent = call.words.toUpperCase() + ' - ' + call.race + ' - grid ' + call.slot;
-            cu.className = 'callup ' + (call.now ? 'now' : call.away === 0 ? 'next' : '');
+            // About when it starts, by the laptop's clock (22 Oct 2026).
+            const eta = etaWords(call);
+            if (eta){ const e = document.createElement('span'); e.className = 'eta'; e.textContent = eta; cu.appendChild(e); }
+            // Staged is the race on track, but it is the one moment the
+            // driver has to move, so it pulses like "next" rather than
+            // sitting green like "on track".
+            cu.className = 'callup ' + (call.staged ? 'next' : call.now ? 'now' : call.away === 0 ? 'next' : '');
             cu.style.display = 'block';
 
-            // Buzz once as their race becomes the next one.
-            const key = call.race + '|' + call.away;
-            if (!call.now && call.away === 0 && lastCallKey && lastCallKey !== key) buzz();
+            // Buzz as their race becomes the next one - and again when it
+            // is staged (22 Oct 2026, driver experience): the key changes at
+            // both, and at nothing in between, because a race that goes on
+            // track keeps the same race and an away of 0.
+            const key = call.race + '|' + call.away + '|' + (call.staged ? 'staged' : '');
+            if (lastCallKey && lastCallKey !== key && (call.staged || (!call.now && call.away === 0))) buzz();
             lastCallKey = key;
           } else {
             cu.style.display = 'none';
             lastCallKey = lastCallKey || 'none';
           }
+
+          showPens(d, card);
+          showCheck(d);
+        }
+
+        // --- The laptop's clock (22 Oct 2026, driver experience) ----------
+        // Every "about 7 min" and "seen at" is worked out against the time
+        // the laptop says it is, carried on each poll as "now": a phone's
+        // own clock can be minutes out, and the ETAs and sightings were all
+        // measured by the laptop's.
+        let skew = 0;
+        function takeClock(now){
+          const t = Date.parse(now || '');
+          if (!isNaN(t)) skew = t - Date.now();
+        }
+        function serverNow(){ return Date.now() + skew; }
+        function clockAt(ms){
+          try { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+          catch(e) { return ''; }
+        }
+
+        // "about 7 min (19:42)" - only for a race still to come. A race
+        // already on track or staged has its own words.
+        function etaWords(call){
+          if (!call || !call.eta || call.now || call.staged) return '';
+          const at = Date.parse(call.eta);
+          if (isNaN(at)) return '';
+          const mins = Math.round((at - serverNow()) / 60000);
+          return (mins >= 1 ? 'about ' + mins + ' min' : 'any minute now') + ' (' + clockAt(at) + ')';
+        }
+
+        // --- Penalties (22 Oct 2026, driver experience) -------------------
+        // This race's warnings and penalty time as they stand, then each
+        // penalty from tonight's filed races with race control's reason.
+        // In the room only: the PA has already said them, and the club's
+        // online pages carry the numbers alone.
+        function showPens(d, card){
+          const box = document.getElementById('fpens');
+          const lines = following ? ((d.pens || {})[following] || []) : [];
+          const now = [];
+          if (following && card){
+            if (card.warn > 0) now.push(card.warn + (card.warn === 1 ? ' warning' : ' warnings'));
+            if (card.penS > 0) now.push('+' + card.penS + ' s penalty');
+          }
+          if (!now.length && !lines.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+          box.innerHTML = (now.length ? 'This race: <b>' + esc(now.join(', ')) + '</b>' : '') +
+            (lines.length ? (now.length ? '<br>' : '') + 'Tonight:<ul>' + lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul>' : '');
+          box.style.display = 'block';
+        }
+
+        // --- Check my transponder (22 Oct 2026, driver experience) --------
+        // Press, drive past the line, and the phone says it was heard and
+        // how well. Nothing special happens on the laptop: every pass is
+        // already recorded, so this only watches "seen" for one newer than
+        // the press.
+        const CHECK_MS = 3 * 60 * 1000;
+        const tcheckBtn = document.getElementById('tcheckBtn'), tsay = document.getElementById('tsay');
+        let checkFor = '', checkFrom = 0;
+
+        function checkSay(text, cls){ tsay.textContent = text; tsay.className = 'tsay' + (cls ? ' ' + cls : ''); }
+
+        tcheckBtn.addEventListener('click', () => {
+          wakeAudio();
+          checkFor = following; checkFrom = serverNow();
+          checkSay('Drive past the line now - watching for it...', '');
+        });
+
+        function showCheck(d){
+          document.getElementById('tcheck').style.display = following ? 'block' : 'none';
+          if (!checkFor) return;
+          if (checkFor !== following){ checkFor = ''; checkSay('', ''); return; }
+          const docNow = isNaN(Date.parse(d.now || '')) ? serverNow() : Date.parse(d.now);
+          const s = (d.seen || {})[following];
+          if (s && docNow - s.ago * 1000 > checkFrom){
+            checkFor = '';
+            const at = docNow - s.ago * 1000;
+            if (s.sig === 'weak') checkSay('Seen at ' + clockAt(at) + ', signal weak - check it is mounted where the loop can see it, and its battery.', 'bad');
+            else checkSay('Seen at ' + clockAt(at) + (s.sig === 'good' ? ', signal good' : ''), 'ok');
+            buzz();
+            return;
+          }
+          if (serverNow() - checkFrom > CHECK_MS){
+            checkFor = '';
+            checkSay('Not seen. Check it is switched on and charged, and mounted with a clear view of the track - then try again.', 'bad');
+          }
+        }
+
+        // --- Captions (?captions=1, 22 Oct 2026, driver experience) -------
+        // The line the announcer has just said, at the bottom of the page,
+        // fading after eight seconds. Only a line said while the page is
+        // open: the first look takes what is there as already said, so an
+        // OBS source reloaded mid-race does not put up an old line.
+        const captionsOn = new URLSearchParams(location.search).get('captions') === '1';
+        const CAPTION_MS = 8000;
+        let captionSeen = -1, captionTimer = 0;
+        function showCaptions(list){
+          if (!captionsOn) return;
+          const lines = Array.isArray(list) ? list : [];
+          const newest = lines.length ? lines[lines.length - 1] : null;
+          if (captionSeen < 0){ captionSeen = newest ? newest.n : 0; return; }
+          // A different number rather than a bigger one: the count starts
+          // again when HeatCaller does, and a page left open must not go
+          // quiet until it catches up.
+          if (!newest || newest.n === captionSeen) return;
+          captionSeen = newest.n;
+          const el = document.getElementById('captions');
+          el.textContent = newest.t;
+          el.classList.remove('fade'); el.classList.add('on');
+          clearTimeout(captionTimer);
+          captionTimer = setTimeout(() => el.classList.add('fade'), CAPTION_MS);
         }
 
         // --- Lap times in your ear ---------------------------------------

@@ -53,7 +53,7 @@ public sealed class BigScreenForm : Form
     // nothing to offer.
     private readonly Func<AchievementStore?>? _achievements;
 
-    private readonly RaceControlSession _race;
+    private readonly RaceTiming _race;
     private readonly AnnouncementService _announcer;
     private readonly ProfileStore _profiles;
     private readonly DayScheduleStore? _schedule;
@@ -158,6 +158,13 @@ public sealed class BigScreenForm : Form
     /// exactly once, the way _adBreakHeld is.
     /// </summary>
     private bool _quietVideoShown;
+
+    /// <summary>
+    /// Whether the sponsor video on screen is playing its own soundtrack.
+    /// Set once it is really on air, cleared by StopSponsorVideo - see
+    /// StopSoundingVideoIfMuted, which is what reads it.
+    /// </summary>
+    private bool _videoHasSound;
 
     /// <summary>
     /// Whether this window is carrying the after-race commercial break: the
@@ -317,11 +324,28 @@ public sealed class BigScreenForm : Form
     private readonly Action<bool> _onAirChangedHandler;
     private bool _onAirSubscribed;
 
+    /// <summary>
+    /// The captions strip (22 Oct 2026, driver experience, item 9): the
+    /// announcer's latest line as text along the very foot of the window,
+    /// for anybody in the room who can't hear the PA. Up while
+    /// AppSettings.BigScreenCaptions is on (key C); see UpdateCaptions.
+    /// </summary>
+    private readonly Label _lblCaption = new();
+
+    /// <summary>The number of the caption line the strip shows, so it is only re-set when a new one is heard.</summary>
+    private long _captionShownN;
+
+    /// <summary>The line the strip shows, kept for the fade - null when nothing has been said since the window opened.</summary>
+    private CaptionLine? _captionShown;
+
+    /// <summary>The strength the caption was last painted at, so the 500-ms tick only repaints while it is fading.</summary>
+    private double _captionStrength = -1;
+
     private bool _isFullscreen;
     private FormBorderStyle _restoreBorderStyle;
     private FormWindowState _restoreWindowState;
 
-    public BigScreenForm(RaceControlSession race, AnnouncementService announcer, ProfileStore profiles,
+    public BigScreenForm(RaceTiming race, AnnouncementService announcer, ProfileStore profiles,
         DayScheduleStore? schedule = null, SponsorStore? sponsors = null, AppSettings? settings = null,
         QualifyingProjector? projector = null, Func<AchievementStore?>? achievements = null,
         TransponderWatch? watch = null, Func<IReadOnlyList<string>>? roster = null,
@@ -446,6 +470,19 @@ public sealed class BigScreenForm : Form
                 // it in front of a room does something straight away.
                 OnAirTreatment.Wanted = !OnAirTreatment.Wanted;
                 UpdateOnAir();
+            }
+            else if (e.KeyCode == Keys.C && _settings is not null)
+            {
+                // The captions strip, the O key's way (22 Oct 2026, driver
+                // experience): a key on the screen it changes, listed in the
+                // reminder strip, and remembered between nights - in
+                // AppSettings, where P0 put the switch, saved at once so a
+                // club that wants captions has them next week too. Applied
+                // here rather than left to the tick, so pressing it in front
+                // of a room does something straight away.
+                _settings.BigScreenCaptions = !_settings.BigScreenCaptions;
+                _settings.Save();
+                UpdateCaptions();
             }
             else if (e.KeyCode == Keys.F11)
             {
@@ -647,6 +684,13 @@ public sealed class BigScreenForm : Form
         _pnlOnDeck.BackColor = PanelColor;
         _lblOnDeck.ForeColor = HighlightColor;
 
+        // The captions strip on the on-air band's plate - Surface, or the
+        // hairline colour in a look whose Surface is its background - with
+        // its ink worked out from that plate, as the warning banner's is.
+        _lblCaption.BackColor = CaptionPlate;
+        _captionStrength = -1;
+        UpdateCaptions();
+
         ApplyLogo();
     }
 
@@ -685,7 +729,7 @@ public sealed class BigScreenForm : Form
     {
         // Colours are left to ApplyLook, which runs straight after this and
         // again whenever the crowd-screen look changes.
-        _lblHint.Text = "F11: toggle fullscreen     M: track map     O: on air     Esc: close";
+        _lblHint.Text = "F11: toggle fullscreen     M: track map     O: on air     C: captions     Esc: close";
         _lblHint.Dock = DockStyle.Top;
         _lblHint.Height = UiLayout.AtDpi(24);
         _lblHint.TextAlign = ContentAlignment.MiddleRight;
@@ -847,6 +891,18 @@ public sealed class BigScreenForm : Form
         _onAir.Dock = DockStyle.Bottom;
         _onAir.Visible = false;
 
+        // The captions strip. Wraps onto a second line and then cuts with
+        // "...", rather than running off the side - a long line is still
+        // mostly read. Shown and hidden only by the switch (UpdateCaptions),
+        // never per line: a strip that came and went with every sentence
+        // would push the leaderboard up and down all evening.
+        _lblCaption.Dock = DockStyle.Bottom;
+        _lblCaption.AutoSize = false;
+        _lblCaption.AutoEllipsis = true;
+        _lblCaption.UseMnemonic = false;
+        _lblCaption.TextAlign = ContentAlignment.MiddleCenter;
+        _lblCaption.Visible = false;
+
         Controls.Add(_pnlLeaderboardArea);
         Controls.Add(_pnlOnDeck);
 
@@ -858,6 +914,11 @@ public sealed class BigScreenForm : Form
         // it. Nothing else moves: the clock, the countdown, the flag band
         // and the board are all laid out before this is even considered.
         Controls.Add(_onAir);
+
+        // After the on-air band, for the same reason (22 Oct 2026): it
+        // claims the very foot of the window, where subtitles are, with the
+        // band and On Deck above it. Nothing above moves while it is up.
+        Controls.Add(_lblCaption);
 
         Controls.Add(_pnlCountdown);
         Controls.Add(_lblWarning);
@@ -958,6 +1019,10 @@ public sealed class BigScreenForm : Form
             // laptop and on a projector without being told which.
             _onAir.Height = Sized(96);
 
+            // Room for two lines of the caption face.
+            _lblCaption.Height = Sized(88);
+            _lblCaption.Padding = new Padding(Sized(24), 0, Sized(24), 0);
+
             // The faces made again at this size; the old ones disposed once
             // nothing wears them.
             var old = _ownedFonts.ToList();
@@ -971,6 +1036,7 @@ public sealed class BigScreenForm : Form
             _grid.DefaultCellStyle.Font = Face(AppTheme.BodyFont.FontFamily, 24F);
             _lblOnDeck.Font = Face(AppTheme.BoldFont.FontFamily, 20F);
             _lblWarning.Font = Face(AppTheme.BoldFont.FontFamily, 30F);
+            _lblCaption.Font = Face(AppTheme.BoldFont.FontFamily, 20F);
 
             // The sponsor being read, large and centred in the board's
             // place. Sized here with every other font on this window, so
@@ -1386,7 +1452,14 @@ public sealed class BigScreenForm : Form
             return;
         }
 
-        var sound = _sponsors!.Current.PlayVideoSound;
+        // WHY (23 Oct 2026, bug hunt 10): the sidebar's Mute means silence,
+        // but this read only the sponsor's "play the video's sound" box, so
+        // a muted console still had the Big Screen play each advert's
+        // soundtrack at full volume through LibVLC's own output - which the
+        // mute has no way to reach. A muted console now plays the video
+        // silent (still slides and silent videos are still wanted in a
+        // muted break), and the ad-break logic below follows `sound`.
+        var sound = _sponsors!.Current.PlayVideoSound && !_announcer.Muted;
         var startedAt = Environment.TickCount64;
 
         if (!_video.Play(path, sound))
@@ -1454,6 +1527,7 @@ public sealed class BigScreenForm : Form
         _lblSponsorRead.Visible = false;
         _showingRead = false;
         _video.View.Visible = true;
+        _videoHasSound = sound;
 
         // No BringToFront. What takes this area is decided by visibility, not
         // z-order - the board and the picture are hidden above - and bringing
@@ -1561,6 +1635,8 @@ public sealed class BigScreenForm : Form
             _video.Stop();
         }
 
+        _videoHasSound = false;
+
         if (_adBreakHeld)
         {
             _adBreakHeld = false;
@@ -1572,6 +1648,44 @@ public sealed class BigScreenForm : Form
             _quietVideoShown = false;
             AdBreak.QuietVideoEnded();
         }
+    }
+
+    /// <summary>
+    /// Takes a sponsor video that is playing its own soundtrack off the
+    /// screen once the console is muted.
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10): ShowSponsorVideo now starts a video
+    /// silent while muted, but one already playing when Mute was pressed
+    /// kept its sound to the end - the sidebar's mute has no hook into this
+    /// window's LibVLC player. Asked on the refresh tick, which runs on the
+    /// UI thread where Muted is set.
+    ///
+    /// Ended through SponsorSlotEnded, the same decision the video's own
+    /// end makes, rather than straight to the standings: inside a break the
+    /// next sponsor follows (a following video plays silent, since the
+    /// console is muted), and outside one the standings come back. Going
+    /// straight to ShowLeaderboardAgain would have left the standings up for
+    /// the rest of the break, because the rotation then waits a whole
+    /// LeaderboardSeconds. Every route out of it stops the old video and
+    /// lets the music hold go exactly once - see StopSponsorVideo.
+    /// </summary>
+    private void StopSoundingVideoIfMuted()
+    {
+        if (!_videoHasSound || !_announcer.Muted)
+        {
+            return;
+        }
+
+        if (_showingSponsor && _video is not null && _video.View.Visible)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [sponsor] Muted - the sponsor video with sound is taken off the Big Screen.");
+
+            SponsorSlotEnded();
+            return;
+        }
+
+        _videoHasSound = false;
     }
 
     private void ShowLeaderboardAgain()
@@ -2488,6 +2602,7 @@ public sealed class BigScreenForm : Form
         UpdateTrackMap();
         UpdateTicker();
         UpdateOnAir();
+        UpdateCaptions();
 
         // The sponsor whose read is going out, before the break is asked:
         // a read cannot happen while a video is on the crowd screen (the
@@ -2495,6 +2610,10 @@ public sealed class BigScreenForm : Form
         // want the screen at the same moment - and if they ever did, the
         // video would keep it. See UpdateSponsorRead.
         UpdateSponsorRead();
+
+        // Before the break is asked, so a video taken down for the mute is
+        // already gone when it is - see StopSoundingVideoIfMuted.
+        StopSoundingVideoIfMuted();
 
         // Last, so everything above has had its turn at the screen before
         // the break takes it or gives it back. Asked here for the reason
@@ -2888,6 +3007,139 @@ public sealed class BigScreenForm : Form
             }
         }
     }
+
+    /// <summary>The captions strip's plate colour - see ApplyLook.</summary>
+    private Color CaptionPlate => PanelColor == CanvasColor ? GridLineColor : PanelColor;
+
+    /// <summary>How long a caption stays at full strength at the least - the design's eight seconds.</summary>
+    internal static readonly TimeSpan CaptionHold = TimeSpan.FromSeconds(8);
+
+    /// <summary>How long a caption takes to fade out once its time is up.</summary>
+    internal static readonly TimeSpan CaptionFade = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Roughly how fast the announcer speaks, in characters a second - so a
+    /// long line is not faded out while it is still being said.
+    /// </summary>
+    private const double CaptionCharsPerSecond = 15;
+
+    /// <summary>
+    /// How strongly a caption is shown <paramref name="nowUtc"/>: 1 while it
+    /// is fresh, falling to 0 across <see cref="CaptionFade"/>, then 0 - when
+    /// the strip goes blank. Fresh for <see cref="CaptionHold"/>, or for as
+    /// long as a line that length takes to say if that is longer (a
+    /// 300-character recap line is twenty seconds of speech, and fading it
+    /// at eight would take the words away mid-sentence). Pure, for the tests.
+    /// </summary>
+    internal static double CaptionStrength(CaptionLine? line, DateTime nowUtc)
+    {
+        if (line is null || string.IsNullOrEmpty(line.Text))
+        {
+            return 0;
+        }
+
+        var hold = TimeSpan.FromSeconds(Math.Max(CaptionHold.TotalSeconds, line.Text.Length / CaptionCharsPerSecond));
+
+        // A clock that has gone backwards reads as "just said".
+        var age = nowUtc - line.AtUtc;
+
+        if (age <= hold)
+        {
+            return 1;
+        }
+
+        var into = (age - hold).TotalMilliseconds / CaptionFade.TotalMilliseconds;
+
+        return into >= 1 ? 0 : 1 - into;
+    }
+
+    /// <summary>
+    /// The captions strip, made to agree with the switch and the log: up
+    /// while BigScreenCaptions is on, showing the newest line from
+    /// CaptionLog.Shared and fading it out. On the 500-ms tick, after
+    /// C, and after a change of look. UI thread only.
+    /// </summary>
+    /// <remarks>
+    /// READ FROM THE SHARED LOG, NOT FROM LineHeard (22 Oct 2026). MainForm
+    /// is the one place that fills CaptionLog.Shared (MainForm.Captions.cs),
+    /// from the announcer's LineHeard on whatever thread the line plays
+    /// from. This window only reads it, here on the UI thread, through the
+    /// log's own lock - so there is no event to unsubscribe, no BeginInvoke
+    /// into a window that may be closing, and no question of which handler
+    /// ran first. A line is on the wall within half a second of being heard.
+    /// The room's own screen, so the line is shown in full: initials-only is
+    /// an online rule (PublicPrivacy).
+    /// </remarks>
+    private void UpdateCaptions()
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        try
+        {
+            var wanted = _settings?.BigScreenCaptions == true;
+
+            if (_lblCaption.Visible != wanted)
+            {
+                _lblCaption.Visible = wanted;
+                _captionStrength = -1;
+            }
+
+            if (!wanted)
+            {
+                return;
+            }
+
+            var newest = CaptionLog.Shared.LatestN;
+
+            if (newest != _captionShownN)
+            {
+                _captionShownN = newest;
+                _captionShown = CaptionLog.Shared.Last(1).LastOrDefault();
+                _captionStrength = -1;
+            }
+
+            var strength = CaptionStrength(_captionShown, DateTime.UtcNow);
+
+            // Repainted only while something changes: the fade, a new line,
+            // the switch or the look. Most ticks this is a compare.
+            if (Math.Abs(strength - _captionStrength) < 0.001)
+            {
+                return;
+            }
+
+            _captionStrength = strength;
+
+            var plate = CaptionPlate;
+            var ink = Looks.ClearestTextOn(plate);
+
+            _lblCaption.ForeColor = Blend(plate, ink, strength);
+            _lblCaption.Text = strength > 0 && _captionShown is { } line ? line.Text : string.Empty;
+        }
+        catch
+        {
+            // No captions rather than no Big Screen - the same bargain
+            // UpdateOnAir makes.
+        }
+    }
+
+    /// <summary>The colour <paramref name="amount"/> of the way from <paramref name="from"/> to <paramref name="to"/> (0 to 1).</summary>
+    private static Color Blend(Color from, Color to, double amount)
+    {
+        var t = Math.Clamp(amount, 0, 1);
+
+        int Mix(int a, int b) => (int)Math.Round(a + (b - a) * t);
+
+        return Color.FromArgb(Mix(from.R, to.R), Mix(from.G, to.G), Mix(from.B, to.B));
+    }
+
+    /// <summary>Whether the captions strip is up, and what it says - for the tests. Nothing in the app reads them.</summary>
+    internal bool CaptionsUpForTests => _lblCaption.Visible;
+
+    /// <inheritdoc cref="CaptionsUpForTests"/>
+    internal string CaptionSaysForTests => _lblCaption.Text;
 
     /// <summary>
     /// Whether the on-air band is up - for the test that drives a real show

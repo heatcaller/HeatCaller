@@ -207,6 +207,20 @@ public sealed partial class ProfileManagerControl : UserControl
         _btnCardPhoto.Text = "Photo...";
         _btnCardPhoto.Click += (_, _) => QuickChangePhoto();
 
+        // 22 Oct 2026: tonight's report card for the driver - a right-click
+        // on the roster. A menu rather than another button on the foot,
+        // which is full already. See CoachReport.
+        var cardMenu = new ContextMenuStrip();
+        var cardItem = new ToolStripMenuItem("Report Card...", null, (_, _) => ShowReportCard());
+        cardMenu.Items.Add(cardItem);
+        cardMenu.Opening += (_, e) =>
+        {
+            var profile = CardProfile();
+            cardItem.Text = profile is { DriverName.Length: > 0 } ? $"Report Card for {profile.DriverName}..." : "Report Card...";
+            e.Cancel = ReportCardFor is null || profile is null;
+        };
+        _list.ContextMenuStrip = cardMenu;
+
         BuildLayout();
 
         // A race finishing while this page is open changes the numbers on
@@ -332,6 +346,11 @@ public sealed partial class ProfileManagerControl : UserControl
         btnDelete.Click += (_, _) => DeleteSelected();
         var btnImport = new Button { Text = "Import from CSV..." };
         btnImport.Click += (_, _) => ImportFromCsv();
+
+        // The same import, from a table copied off a web page or out of a
+        // spreadsheet rather than saved as a file (PastedTable).
+        var btnPaste = new Button { Text = "Paste a Table..." };
+        btnPaste.Click += (_, _) => ImportPastedTable();
         var btnTemplate = new Button { Text = "Download Template..." };
         btnTemplate.Click += (_, _) => DownloadTemplate();
 
@@ -352,7 +371,7 @@ public sealed partial class ProfileManagerControl : UserControl
             // Added last so Tab still reaches Import and Template in the
             // order it always did - the bar takes its buttons right to
             // left, so the last one added is the leftmost on screen.
-            new ButtonBar(alignRight: true).With(btnImport, btnTemplate, btnCheckNames),
+            new ButtonBar(alignRight: true).With(btnImport, btnPaste, btnTemplate, btnCheckNames),
             () => bottom is { IsHandleCreated: true } && card.IsHandleCreated && card.Visible
                 ? bottom.PointToClient(card.PointToScreen(Point.Empty)).X + Section.Inset.Left
                 : 0);
@@ -611,6 +630,38 @@ public sealed partial class ProfileManagerControl : UserControl
         _list.SelectedItems.Cast<ListViewItem>()
             .Select(i => (string)i.Tag!)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A driver's report card for tonight, a line at a time - set by the
+    /// host (MainForm.CoachReportFor). Null hides the right-click item.
+    /// </summary>
+    public Func<string, IReadOnlyList<string>>? ReportCardFor { get; set; }
+
+    /// <summary>Tonight's report card for the driver on the card (22 Oct 2026). See CoachReport.</summary>
+    private void ShowReportCard()
+    {
+        if (ReportCardFor is not { } cardFor || CardProfile() is not { } profile)
+        {
+            return;
+        }
+
+        IReadOnlyList<string> lines;
+
+        try
+        {
+            lines = cardFor(profile.Transponder);
+        }
+        catch
+        {
+            lines = Array.Empty<string>();
+        }
+
+        var named = string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName;
+
+        // A window of its own (22 Oct 2026), with Print and Save Image - see ReportCardForm.
+        using var form = new ReportCardForm(named, TonightAtTheTrack.NightOf(DateTime.Now).ToString("ddd d MMM", System.Globalization.CultureInfo.CurrentCulture), lines);
+        form.ShowDialog(this);
+    }
 
     private DriverProfile? SelectedProfile() =>
         _list.SelectedItems.Count == 1 ? _store.Get((string)_list.SelectedItems[0].Tag!) : null;
@@ -2382,10 +2433,71 @@ public sealed partial class ProfileManagerControl : UserControl
         var rows = lines.Skip(1).Select(line => DriverImport.ParseLine(line.Text, delimiter)).ToList();
         var rowLineNumbers = lines.Skip(1).Select(line => line.LineNumber).ToList();
 
+        ImportRows(Path.GetFileName(dialog.FileName), headers, rows, rowLineNumbers, fromFile: true);
+    }
+
+    /// <summary>
+    /// Imports drivers from a table on the clipboard (22 Oct 2026) - copied
+    /// off the club's old timing software's web page, or out of a
+    /// spreadsheet - through the same column preview and the same import as
+    /// a CSV file, so a driver already here, a transponder already taken and
+    /// points so far are all dealt with exactly as they are for a file.
+    /// </summary>
+    private void ImportPastedTable()
+    {
+        string? html = null;
+        string? text = null;
+
+        try
+        {
+            if (Clipboard.ContainsText(TextDataFormat.Html))
+            {
+                html = Clipboard.GetText(TextDataFormat.Html);
+            }
+
+            if (Clipboard.ContainsText(TextDataFormat.UnicodeText))
+            {
+                text = Clipboard.GetText(TextDataFormat.UnicodeText);
+            }
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or ThreadStateException)
+        {
+            // Another program holding the clipboard open as it is read.
+            AppDialog.Show(this, $"Couldn't read the clipboard just now ({ex.Message}). Try Paste a Table again.",
+                "Paste a table", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        if (PastedTable.Read(html, text) is not { } table)
+        {
+            AppDialog.Show(this,
+                "There's no table on the clipboard to import.\n\n"
+                + "On the web page or in the spreadsheet, select the whole list - its headings and every driver's row - "
+                + "and copy it (Ctrl+C). Then press Paste a Table here.",
+                "Nothing to paste", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        ImportRows(
+            table.FromWebPage ? "table from a web page" : "pasted table",
+            table.Headers.ToList(),
+            table.Rows.ToList(),
+            table.RowNumbers.ToList(),
+            fromFile: false);
+    }
+
+    /// <summary>
+    /// The import itself, once a file or a pasted table has been read into
+    /// headings and rows: the column preview, then the drivers and their
+    /// points. <paramref name="rowLineNumbers"/> is each row's place in the
+    /// file or the table, for the summary's "Row 12".
+    /// </summary>
+    private void ImportRows(string source, List<string> headers, List<List<string>> rows, List<int> rowLineNumbers, bool fromFile)
+    {
         var seasonStore = _sources?.Seasons;
         var seasons = seasonStore?.All ?? Array.Empty<Season>();
 
-        using var mapping = new CsvMappingForm(Path.GetFileName(dialog.FileName), headers, rows, DriverImport.GuessAll(headers), seasons);
+        using var mapping = new CsvMappingForm(source, headers, rows, DriverImport.GuessAll(headers), seasons, fromFile ? "in the file" : "in the table");
 
         if (mapping.ShowDialog(this) != DialogResult.OK)
         {
@@ -2658,7 +2770,7 @@ public sealed partial class ProfileManagerControl : UserControl
             // this sheet touched go back, so an edit made to anyone else
             // since the import survives the undo. The championships go back
             // to the points they carried before.
-            _undo.Capture($"Import {Plural.Of(Math.Max(batch.Count, carried.Values.Sum(s => s.Count)), "driver")} from CSV", () =>
+            _undo.Capture($"Import {Plural.Of(Math.Max(batch.Count, carried.Values.Sum(s => s.Count)), "driver")} from {(fromFile ? "CSV" : "a pasted table")}", () =>
             {
                 var putBack = batch.Count > 0 ? store.PutBack(beforeImport, addedProfilesByImport) : 0;
                 var seasonsPutBack = 0;

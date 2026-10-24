@@ -215,7 +215,14 @@ internal static class RaceFiling
     /// (26 Sep 2026), so the race-night test (RaceNightTests) files a race
     /// with the very rows Race Control saves.
     /// </summary>
-    public static List<SessionResultEntry> ResultsFrom(IReadOnlyList<RacerStanding> racers, ProfileStore profiles) =>
+    /// <param name="jumpStarted">
+    /// Whether race control marked a transponder as jumping the start -
+    /// RaceControlSession.HasJumpStarted when filing a real race. Optional
+    /// (22 Oct 2026, driver experience) so every other caller is unchanged
+    /// and files nobody as a jump starter.
+    /// </param>
+    public static List<SessionResultEntry> ResultsFrom(
+        IReadOnlyList<RacerStanding> racers, ProfileStore profiles, Func<string, bool>? jumpStarted = null) =>
         racers.Select((s, i) =>
         {
             var profile = profiles.Get(s.TransponderId);
@@ -239,6 +246,14 @@ internal static class RaceFiling
                 // 20 Oct 2026: the in-race penalty, so qualifying by best
                 // consecutive laps can charge it (see SessionResultEntry).
                 RacePenaltyMs = Math.Max(0, s.PenaltyMs),
+
+                // 22 Oct 2026: laps race control counted by hand, so the
+                // result can say so (HandCountedLaps).
+                LapsByHand = HandCountedLaps.During(s),
+
+                // 22 Oct 2026 (driver experience): kept so the driver can be
+                // told their added seconds were for a jump start (PenaltyWords).
+                JumpStarted = jumpStarted?.Invoke(s.TransponderId) ?? false,
 
                 // Copies, not the live warnings. The board keeps its
                 // standings after the flag, and Clear Penalty there zeroes

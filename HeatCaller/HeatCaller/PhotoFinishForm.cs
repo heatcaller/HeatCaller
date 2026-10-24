@@ -124,6 +124,12 @@ public sealed class PhotoFinishForm : Form
             _cmbNight.Items.Add(night);
         }
 
+        // (22 Oct 2026, page tidy): the night picker was left at the default
+        // drop-down width, which clips a date at a larger text size. Now as
+        // wide as its longest night, never narrower than it was.
+        (Font Font, int Count, int Width)? nightWidth = null;
+        _cmbNight.Width = Math.Max(_cmbNight.Width, Pieces.PickerWidth(_cmbNight, ref nightWidth));
+
         _cmbNight.SelectedIndex = 0;
     }
 

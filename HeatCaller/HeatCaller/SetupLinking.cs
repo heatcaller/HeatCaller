@@ -156,7 +156,7 @@ internal sealed class PickCarForm : Form
 
         var lblWhat = new Label
         {
-            Text = $"Logged {entry.RecordedAtUtc.ToLocalTime():d MMM yyyy} for {driver}, car {typed}. Pick the car it was for - its setups go with it from now on.",
+            Text = $"Logged {entry.RecordedAtUtc.ToLocalTime():d MMM yyyy} for {driver}, car {typed}. Pick the car it was for - it stays with that car from now on.",
             AutoSize = true,
         };
 
@@ -257,8 +257,8 @@ internal sealed class UnlinkedSetupsForm : Form
 
         var lblWhat = new Label
         {
-            Text = "These setups aren't linked to a car in the garage: logged before setups belonged to cars, or for a car "
-                   + "since deleted. Link each to the car it was for, and it shows with that car and on its driver's Setups tab.",
+            Text = "These setups aren't linked to a car in the garage - logged before setups belonged to cars, or for a "
+                   + "car since deleted. Link each to its car to show it there and on its driver's Setups tab.",
             AutoSize = true,
         };
 

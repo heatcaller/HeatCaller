@@ -18,7 +18,7 @@
          assembly at runtime, and the installer (Velopack) reads the same
          assembly, so the package, the updater and the title bar cannot
          drift apart. Bump it here and nowhere else. -->
-    <Version>0.59.0</Version>
+    <Version>0.60.0</Version>
 
     <!-- The name Windows shows for the exe (Task Manager, file properties). -->
     <Product>HeatCaller</Product>
@@ -131,6 +131,16 @@
          - run from this folder, so NuGet writes the current stable version in
          here itself rather than this file carrying one typed from memory.
          Until it is added, Program.cs and AppUpdates.cs do not compile. -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The timing layer: the race engine, the timing thread and clock, the
+         race journal and the decoder framing (23 Oct 2026, timing layer
+         P6). A plain net10.0 library with no WinForms and no packages, so
+         nothing on a screen can creep into it. Same namespace (HeatCaller),
+         so no file here needs a using for it. Built automatically with the
+         app, and its dll ships beside HeatCaller.exe. -->
+    <ProjectReference Include="..\HeatCaller.Timing\HeatCaller.Timing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

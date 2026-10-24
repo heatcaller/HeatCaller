@@ -110,8 +110,8 @@ public sealed class VenuesControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Save everything specific to one physical track - its decoder, preferred track layout, soundscape, and race defaults - " +
-                   "and apply them all together with one click instead of reconfiguring each piece by hand.",
+            Text = "Save everything specific to one physical track - its decoder, preferred track layout, soundscape and race defaults - " +
+                   "and apply it all with one click.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -172,12 +172,9 @@ public sealed class VenuesControl : UserControl
         // The fields at the text size in use - see SizeFields.
         _textSize.Keep(SizeFields);
 
-        // TWO caption columns, not one. "Streak slow-lap multiplier:" is more
-        // than three times the width of "Name:", so one column for the whole
-        // card left the short rows with a gutter you could park a bus in.
-        // The venue's own details and its race defaults do not need to line
-        // up with each other, so each group is a grid of its own, measured
-        // against its own captions.
+        // Two grids, the venue's own details and its race defaults, with the
+        // bold heading between them - lined up with each other once they are
+        // on the page (FieldGrid.LineUp, below).
         var details = new FieldGrid();
 
         details.AddRow("Name:", _txtName);
@@ -220,6 +217,15 @@ public sealed class VenuesControl : UserControl
         page.AddFill(band, band.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
+
+        // (22 Oct 2026, page tidy): each grid had a caption column of its
+        // own, so the race defaults' boxes started at a different x from the
+        // details' boxes above them in the same card. "Preferred soundscape:"
+        // already sets a wide column for the details, so sharing one costs
+        // little - and the boxes now line up down the card. Once the grids
+        // are on the page and wear its face, which the captions are
+        // measured in.
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { details, defaults }));
 
         SetEditEnabled(false);
     }

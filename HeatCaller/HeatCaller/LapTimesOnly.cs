@@ -52,7 +52,8 @@ internal static class LapTimesOnly
     /// The announcements left exactly as the club has them: the rest of the
     /// start and the finish, which a club sets up for the way it races - a
     /// staggered start needs its releases, a countdown read out may be the
-    /// only one it has - and the reminders of what races next.
+    /// only one it has - the reminders of what races next, and the split
+    /// loop's time and coaching.
     /// </summary>
     public static readonly IReadOnlySet<AnnouncementEventType> LeftAsSet = new HashSet<AnnouncementEventType>
     {
@@ -64,6 +65,19 @@ internal static class LapTimesOnly
         AnnouncementEventType.LastLap,
         AnnouncementEventType.FinalMinute,
         AnnouncementEventType.Reminder,
+
+        // The split loop's own lap time, and the coaching a driver asked
+        // for (22 Oct 2026): a time read out, which is what this mode is,
+        // so left as the club has them rather than switched off. The fight
+        // at the split and the sectors at the flag are chatter, and go.
+        AnnouncementEventType.SplitTime,
+        AnnouncementEventType.SplitDelta,
+
+        // The rest of the coaching (22 Oct 2026), for the same reason: a
+        // driver the desk is coaching asked to hear it, and it is a time.
+        AnnouncementEventType.TargetPace,
+        AnnouncementEventType.ConsistencyCoach,
+        AnnouncementEventType.GhostGap,
     };
 
     /// <summary>The sound effects switched off: every one that plays on a lap.</summary>

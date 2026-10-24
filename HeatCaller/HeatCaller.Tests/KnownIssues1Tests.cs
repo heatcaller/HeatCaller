@@ -193,8 +193,10 @@ public sealed class KnownIssues1Tests
     }
 
     [Fact]
-    public void Tonights_own_races_ghosts_and_demos_are_not_a_best_before_tonight()
+    public void Ghosts_and_demos_are_not_a_best_before_this_race()
     {
+        // 22 Oct 2026: tonight's saved heats now count (bug hunt 9, n=8), so the
+        // 11.0 s heat an hour ago is 101's best; the demo and the ghost still are not.
         var races = new[]
         {
             Race(Tonight.AddHours(-1), "Infield", false, ("101", 11_000)),
@@ -204,7 +206,8 @@ public sealed class KnownIssues1Tests
 
         var bests = PaceHistory.PersonalBestsBefore(races, "Infield", TonightAtTheTrack.NightOf(Tonight));
 
-        Assert.Empty(bests);
+        Assert.Single(bests);
+        Assert.Equal(11.0, bests["101"], 3);
     }
 
     [Fact]

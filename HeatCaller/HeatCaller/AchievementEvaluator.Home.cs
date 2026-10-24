@@ -388,6 +388,7 @@ public static partial class AchievementEvaluator
             // slower on purpose to be beaten.
             var ownBest = ghosts.FirstOrDefault(g =>
                 g.PaceSource is GhostPaceSource.YourPersonalBest or GhostPaceSource.DriverPersonalBest or GhostPaceSource.PersonalBestInRange
+                    or GhostPaceSource.OwnBestTonight
                 && g.PacePercent <= 100
                 && !string.IsNullOrWhiteSpace(g.SourceTransponder)
                 && string.Equals(BatteryPackStore.DriverKey(profiles, g.SourceTransponder), key, StringComparison.OrdinalIgnoreCase));

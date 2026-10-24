@@ -1305,6 +1305,43 @@ Afterwards, day to day:
   retries.
 - **Logs**: `fly logs`, live. **Status**: `fly status`.
 
+### Several clubs on one relay
+
+Four scripts and one workflow cover running it for more than one club. The
+full walk-through, with the token hand-over and restoring a snapshot, is
+on the docs site under admin/relay-hosting.md, "Running it for several clubs".
+
+- **`mint-club.cmd <club-id> [Club Name]`** - builds, mints the token,
+  writes the club into `relay.config.json` (others untouched) and runs
+  `fly-set-config.cmd`. It calls node directly, so a name with a space
+  isn't turned into carets by npm. Re-minting an existing id (a leaked
+  token, or the old `horizon-test` one) is the same command: the club keeps
+  its name and its `publishRoster`. The token is shown once - type it into
+  the club's laptop yourself, or send it through a password manager's
+  expiring share, never in the body of an email or chat.
+- **`probe.cmd hg_THE_TOKEN <club-id> https://heatcaller-relay.fly.dev`** -
+  proves the new token from outside before it is handed over.
+- **`backup.cmd [app]`** - wakes the machine, packs `/data` into
+  `/tmp/relay-data.tgz` there, pulls it down with `fly ssh sftp get` into
+  `relay-backups\<date>_<time>\` and removes the packed file. Fly's own
+  daily volume snapshots (5 days by default;
+  `fly volumes update <id> --snapshot-retention 14`) are the other layer.
+  `relay-backups\` is in no image and should not be committed.
+- **`.github/workflows/relay-uptime.yml`** (repository root) - a scheduled
+  GitHub Action that asks `/healthz` and fails, which GitHub emails you
+  about, when the relay doesn't answer after three tries. Every 20 minutes
+  21:00-04:59 UTC, every four hours otherwise; each run wakes the machine
+  and costs one Actions minute on a private repository. `RELAY_URL` as a
+  repository variable overrides the address. Fly's own check
+  (`[[http_service.checks]]` on `/healthz` in `fly.toml`) restarts a stuck
+  machine but tells nobody.
+- **Sizing**: one machine, always (`--ha=false` - the data is one volume).
+  Scale it up when it needs it: `fly scale memory 512`,
+  `fly scale vm shared-cpu-2x`, `fly volumes extend <id> --size 3`. Watch
+  `fly logs` for out-of-memory restarts and
+  `fly ssh console -C "df -h /data"` for space - podium videos can take up
+  to 1 GB a club.
+
 ### Moving to a new app name
 
 The steps, all from the `relay` folder, in order. `<old-app>` is the Fly app

@@ -167,8 +167,8 @@ public sealed class RivalriesControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Fires a custom line whenever these two named drivers swap position in the standings - in either direction. " +
-                   "Both names must currently be assigned to a driver profile (see Driver Hub) for a rivalry to fire.",
+            Text = "Fires a custom line whenever two named drivers swap places in the standings, either way. " +
+                   "Both need a driver profile in Driver Hub for it to fire.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

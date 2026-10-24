@@ -86,8 +86,7 @@ public sealed class HeadToHeadControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "Pick two drivers to see how they stack up. Only sessions where both raced are counted - a race one of " +
-                   "them sat out doesn't say anything about the matchup.",
+            Text = "Only sessions where both drivers raced are counted.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

@@ -154,7 +154,7 @@ internal sealed class CarForm : Form
         if (!isNew)
         {
             _cmbOwner.Enabled = false;
-            fields.AddHint("To give it to someone else, sold or given, close this and click Transfer.");
+            fields.AddHint("To sell it or give it away, close this and click Transfer.");
         }
         captions.Add(fields.AddRow("Class:", _cmbClass, stretch: true));
         captions.Add(fields.AddRow("Chassis:", _cmbChassis, stretch: true));
@@ -322,8 +322,7 @@ internal sealed class CarPhotosForm : Form
 
         var lblIntro = new Label
         {
-            Text = "Pictures are copied into the app, so they stay with the car. The first one is the picture the car is "
-                 + "shown by.",
+            Text = "Pictures are copied into the app, so they stay with the car. The first one is its main picture.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
@@ -752,8 +751,7 @@ internal sealed class ChassisTypesForm : Form
 
         var lblIntro = new Label
         {
-            Text = "The chassis a car can be. This list is the club's own - the ones here to begin with are a starting "
-                 + "point, not a rulebook.",
+            Text = "The chassis a car can be. The list is the club's own to change - the starting ones aren't a rulebook.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,

@@ -30,6 +30,26 @@ public sealed class CastControl : UserControl
     /// </summary>
     private readonly TextBox _txtAnnouncerName = new();
 
+    // THE ANNOUNCER'S VOICE AT THE TOP OF THE PAGE (22 Oct 2026). Its
+    // picker and Test Voice were on the Voice tab, a different spot for
+    // each engine, while every other voice on the show was picked here. The
+    // rows are still the Voice tab's controls, with all of their logic - it
+    // builds them (VoiceSettingsControl.AnnouncerVoiceGrid) and the host
+    // hands them over (HostAnnouncerVoice), the way the announcement rows
+    // are built there and shown on Race Calls.
+
+    /// <summary>The Announcer card, first on the page - where the voice rows are put.</summary>
+    private Section? _announcerCard;
+
+    /// <summary>The line at the top of the Announcer card - the voice rows go straight under it.</summary>
+    private Control? _announcerHint;
+
+    /// <summary>The voice rows the Voice tab handed over, while they are here.</summary>
+    private FieldGrid? _announcerVoice;
+
+    /// <summary>This page's own grids, for the one caption column - see LineUpGrids.</summary>
+    private FieldGrid[] _ownGrids = Array.Empty<FieldGrid>();
+
     // --- The race recap host (16 Oct 2026) - see AppSettings.RecapHostVoice ---
     private readonly TextBox _txtRecapHostName = new();
     private readonly ComboBox _cmbRecapHostVoice = new();
@@ -346,10 +366,14 @@ public sealed class CastControl : UserControl
 
         var announcer = new Section("Announcer");
 
-        announcer.Add(Hint(
-            "The voice carrying the whole program - the one chosen on the Voice tab. Needs AI commentary on, "
-            + "because it is only ever said in the lines the AI writes."));
+        // The voice rows go under this line when the Voice tab hands them
+        // over (HostAnnouncerVoice), above the name. The name is only said in
+        // the lines the AI writes, which its own note says; the voice
+        // carries everything.
+        _announcerHint = announcer.Add(Hint(
+            "The voice carrying the whole program, from the engine chosen on the Voice tab."));
         announcer.Add(announcerGrid, gapBelow: 0);
+        _announcerCard = announcer;
 
         // ------------------------------------------------------------------
         // The race recap host
@@ -398,8 +422,7 @@ public sealed class CastControl : UserControl
         Flush(recapHostGrid.AddRow("Recap host's name:", Line(_txtRecapHostName, Suffix("said when the recap opens and at its sign-off; blank and the host is never named"))));
         Flush(recapHostGrid.AddRow("Recap host's voice:", Line(_cmbRecapHostVoice, _btnTestRecapHost)));
         recapHostGrid.AddHint(
-            "Reads the recap, the questions to the Technical Lead and the sign-off; the announcer keeps the race calls. "
-            + "With none picked, the announcer hosts the recap too.");
+            "Reads the recap, the questions to the Technical Lead and the sign-off; the announcer keeps the race calls.");
 
         // Stability and style on lines of their own, so neither is ever
         // placed from the width of the other's note.
@@ -411,7 +434,7 @@ public sealed class CastControl : UserControl
         var recapHost = new Section("Recap host");
 
         recapHost.Add(Hint(
-            "Heard only when race recaps are switched on, under What it writes on the AI Commentary tab."));
+            "Heard only when race recaps are switched on, on the AI Commentary tab's Recap show card."));
         recapHost.Add(recapHostGrid, gapBelow: UiLayout.SectionGap);
         recapHost.Add(_chkBroadcastVoice, stretch: false, gapBelow: UiLayout.HintGap);
         recapHost.Add(Hint(
@@ -513,16 +536,11 @@ public sealed class CastControl : UserControl
 
         Stepped(coHostGrid.AddRow("How much they talk:", Line(_cmbExchangeTurns)));
         coHostGrid.AddHint(
-            "Longer conversations are more airtime and more writing - each turn is another line the brain writes, "
-            + "and on the relay that is another line of the club's month.");
+            "Each turn is another line the AI writes - and, on the relay, another line of the club's month.");
 
         Stepped(coHostGrid.AddRow(string.Empty, _chkTwoVoicesInHeats));
         coHostGrid.AddHint(
-            "Normally the two-hander is saved for the mains, which is part of what makes a main sound like one. "
-            + "Tick this to hear them all evening without making the whole night chattier.");
-        coHostGrid.AddHint(
-            "With no voice picked for the engine in use, the announcer's own voice reads both halves - still a "
-            + "conversation, and better than nothing.");
+            "Normally kept for the mains, which helps a main sound like one. Ticking this doesn't make the night any chattier.");
 
         var coHost = new Section("Co-host");
 
@@ -578,9 +596,8 @@ public sealed class CastControl : UserControl
         mechanic.Add(_chkInterview, stretch: false, gapBelow: UiLayout.HintGap);
         mechanic.Add(_chkInterviewHeats, stretch: false, gapBelow: UiLayout.HintGap);
         mechanic.Add(Hint(
-            "At the flag, straight after the finish call: the announcer throws down to the co-host in pit lane, who asks "
-            + "two questions about the race and any setup changes logged in the Garage for the winning car, then hands "
-            + "back before the break. Mains only unless \"After heats too\" is ticked, and it needs race recaps on."));
+            "Straight after the finish call, the co-host in pit lane asks two questions about the race and any setup "
+            + "changes logged in the Garage for the winning car, then hands back before the break. Needs race recaps on."));
         mechanic.Add(mechanicGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
@@ -690,8 +707,6 @@ public sealed class CastControl : UserControl
 
         Stepped(honoursGrid.AddRow("Achievements reader:", Line(_txtHonoursName, Suffix("blank and they are thrown to but never named - no name is made up"))));
         Stepped(honoursGrid.AddRow("Reader's voice:", Line(_cmbHonoursVoice, _btnTestHonours)));
-        honoursGrid.AddHint(
-            "With none picked, the announcer's own voice reads the achievements.");
 
         var honours = new Section("Achievements reader");
 
@@ -707,9 +722,11 @@ public sealed class CastControl : UserControl
 
         var page = new PageStack();
 
+        // The announcer first (22 Oct 2026): the voice everyone hears all
+        // night, above the one Load Voices that fills the other lists.
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(voices);
         page.Add(announcer);
+        page.Add(voices);
         page.Add(recapHost);
         page.Add(coHost);
         page.Add(mechanic);
@@ -720,15 +737,71 @@ public sealed class CastControl : UserControl
 
         // One caption column down every card - every grid on the page, since
         // a grid left out of this still looks correct on its own.
-        _textSize.Keep(() => FieldGrid.LineUp(new[]
+        _ownGrids = new[]
         {
             loadGrid, announcerGrid, recapHostGrid, deliveryGrid, coHostGrid, mechanicGrid, principalGrid, honoursGrid,
-        }));
+        };
+
+        _textSize.Keep(LineUpGrids);
 
         _textSize.Keep(SizeFields);
 
         FillVoices(null);
         RefreshEnabledState();
+    }
+
+    /// <summary>
+    /// One caption column down every card - every grid on the page, the
+    /// announcer's voice rows from the Voice tab included while they are
+    /// here, since a grid left out of this still looks correct on its own.
+    /// </summary>
+    private void LineUpGrids() =>
+        FieldGrid.LineUp(_announcerVoice is { } voice ? _ownGrids.Append(voice).ToArray() : _ownGrids);
+
+    /// <summary>
+    /// Puts the announcer's voice rows - the Voice tab's pickers and Tests
+    /// (VoiceSettingsControl.AnnouncerVoiceGrid) - at the top of the
+    /// Announcer card, under its first line. The host's to call, once the
+    /// Voice tab is built and again whenever it is built anew; give the old
+    /// rows back first (ReleaseAnnouncerVoice).
+    /// </summary>
+    internal void HostAnnouncerVoice(FieldGrid voice)
+    {
+        if (_announcerCard is null || _announcerHint is null || ReferenceEquals(_announcerVoice, voice))
+        {
+            return;
+        }
+
+        ReleaseAnnouncerVoice();
+
+        _announcerVoice = voice;
+        _announcerCard.AddAfter(_announcerHint, voice, gapBelow: UiLayout.RowGap);
+
+        // Built on the Voice tab, outside this page, so the theming pass
+        // that walked this one has never seen it - as the Race Calls page is
+        // themed by the Voice tab for the same reason.
+        AppTheme.ApplyRecursively(voice);
+        LineUpGrids();
+    }
+
+    /// <summary>
+    /// Takes the announcer's voice rows back out, for the host to dispose
+    /// with the Voice tab that built them - a soundscape rebuilds that tab,
+    /// and disposing this page's card must never be what disposes them.
+    /// Null when there were none.
+    /// </summary>
+    internal FieldGrid? ReleaseAnnouncerVoice()
+    {
+        if (_announcerVoice is not { } voice)
+        {
+            return null;
+        }
+
+        _announcerVoice = null;
+        _announcerCard?.RemovePart(voice);
+        LineUpGrids();
+
+        return voice;
     }
 
     /// <summary>

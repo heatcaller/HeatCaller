@@ -80,7 +80,8 @@ internal sealed class CsvMappingForm : Form
     /// <summary>Each driver's points go into the championship for their class.</summary>
     public bool SeasonPerClass { get; private set; }
 
-    public CsvMappingForm(string fileName, IReadOnlyList<string> headers, IReadOnlyList<List<string>> rows, IReadOnlyList<ImportColumn> guesses, IReadOnlyList<Season> seasons)
+    /// <param name="rowsAre">Where the rows are, for the line across the top: "in the file", or "in the table" when it was pasted.</param>
+    public CsvMappingForm(string fileName, IReadOnlyList<string> headers, IReadOnlyList<List<string>> rows, IReadOnlyList<ImportColumn> guesses, IReadOnlyList<Season> seasons, string rowsAre = "in the file")
     {
         _seasons = seasons;
 
@@ -88,7 +89,7 @@ internal sealed class CsvMappingForm : Form
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
 
-        var page = BuildLayout(headers, rows, guesses);
+        var page = BuildLayout(headers, rows, guesses, rowsAre);
 
         AppTheme.ApplyRecursively(this);
         UpdateSeasonChoices();
@@ -114,11 +115,11 @@ internal sealed class CsvMappingForm : Form
     /// hint, the problem line and the buttons - each as tall as it needs at
     /// the width the window has.
     /// </summary>
-    private FillPage BuildLayout(IReadOnlyList<string> headers, IReadOnlyList<List<string>> rows, IReadOnlyList<ImportColumn> guesses)
+    private FillPage BuildLayout(IReadOnlyList<string> headers, IReadOnlyList<List<string>> rows, IReadOnlyList<ImportColumn> guesses, string rowsAre)
     {
         var lblIntro = new Label
         {
-            Text = $"{Plural.Of(rows.Count, "row")} in the file. Pick what each column is from the list at the top of it - "
+            Text = $"{Plural.Of(rows.Count, "row")} {rowsAre}. Pick what each column is from the list at the top of it - "
                    + "the guesses come from the headings. Columns left at (ignore) aren't imported.",
             AutoSize = true,
             Font = AppTheme.BodyFont,

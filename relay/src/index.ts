@@ -7,6 +7,7 @@ import { Relay } from "./server.js";
 import { FileStore } from "./store.js";
 import { TenantRegistry } from "./tenancy.js";
 import { DiskVideoVault } from "./videos.js";
+import { DiskClipVault } from "./clips.js";
 import { elevenLabsRenderer, migrateVoiceFolder, VoiceService } from "./voice.js";
 import { TopUpRequests } from "./topuprequests.js";
 import { ADMIN_COMMANDS, voiceAdmin, type AdminCommand } from "./voiceadmin.js";
@@ -136,6 +137,8 @@ async function serve(): Promise<number> {
     voice,
     // The podium's highlight videos - see videos.ts.
     videos: new DiskVideoVault(config.dataDir),
+    // Drivers' own race clips - see clips.ts (22 Oct 2026, driver experience).
+    clips: new DiskClipVault(config.dataDir),
     brain,
     topUpRequests: new TopUpRequests({ dataDir: config.dataDir, log: (line) => console.log(line) }),
   });

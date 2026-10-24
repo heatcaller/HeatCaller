@@ -27,6 +27,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HeatCaller\HeatCaller.csproj" />
+
+    <!-- The timing library, named as well as reached through the app
+         (23 Oct 2026, timing layer P6): the tests use its internal types
+         directly - TimingWatch, EasyLapFramer, FinishedRace, AppPaths -
+         which HeatCaller.Timing opens to this assembly by name. -->
+    <ProjectReference Include="..\HeatCaller.Timing\HeatCaller.Timing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

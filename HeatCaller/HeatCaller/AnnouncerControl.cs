@@ -13,7 +13,7 @@
 /// </summary>
 public sealed partial class AnnouncerControl : UserControl
 {
-    private readonly RaceControlSession _race;
+    private readonly RaceTiming _race;
     private readonly ProfileStore _profiles;
     private readonly SessionHistoryStore _history;
     private readonly DayScheduleStore _schedule;
@@ -126,7 +126,14 @@ public sealed partial class AnnouncerControl : UserControl
     /// <summary>The heading over a race summary. A talking point shown there instead has its own - see RefreshLastSummary.</summary>
     private const string SummaryCaption = "LAST RACE SUMMARY";
 
-    public AnnouncerControl(RaceControlSession race, ProfileStore profiles,
+    // WHY (23 Oct 2026, bug hunt 10): the AI announcer's "personal best"
+    // check ignored the club's personal-best resets. Read on the UI thread
+    // only, as DriverStats.ApplyPersonalBests reads it - see
+    // PersonalBestBeforeTonight.
+    /// <summary>The club's personal-best resets, so a reset best is not the bar a lap has to beat. Null leaves every race in.</summary>
+    internal PersonalBestResetStore? PersonalBestResets { get; init; }
+
+    public AnnouncerControl(RaceTiming race, ProfileStore profiles,
         SessionHistoryStore history, DayScheduleStore schedule, AnnouncementService announcer,
         CommentaryService? commentary = null, AppSettings? settings = null, UndoService? undo = null)
     {
@@ -201,6 +208,7 @@ public sealed partial class AnnouncerControl : UserControl
         // that send a line off this PC (22 Oct 2026, known issues) - see
         // AnnouncementService.ShortNames. Read live, like the rest.
         _announcer.ShortenNamesForCloudVoices = () => settings.RelayAbbreviateNames;
+        _announcer.EnergyFollowsTheRace = () => settings.VoiceEnergyFollowsRace;
 
         var gate = _announcer.SponsorMentions;
         gate.Restore(settings.SponsorMentionsNight);
@@ -1217,6 +1225,30 @@ public sealed partial class AnnouncerControl : UserControl
             return;
         }
 
+        // WHY (23 Oct 2026, bug hunt 10): talking points went straight to the
+        // brain and never past the budget, so with relay commentary on they
+        // took a line off the club's month every 20 s of racing - roughly a
+        // third of a 1,000-line month on one night, for on-screen hints
+        // nobody hears - and kept spending once the director had stopped
+        // for the night. Now, when the relay writes them and its month is
+        // known, they stand aside whenever the night has no headroom left,
+        // just as the director's own live segments do, and whenever the
+        // month is down to the reserve held for intros and recaps. Not while the club
+        // has chosen to keep everything running, and not while the model on
+        // this PC is writing for a spent month, which costs nothing.
+        // _director rather than Director: asking here must not be what
+        // builds it. LocalModelWriting is asked last: it reaches into the
+        // relay client, and this runs every tick while it holds the hint back.
+        if (_settings?.CommentaryUseRelay == true
+            && _director?.Budget is { AllowanceKnown: true } budget
+            && (budget.Headroom < 1
+                || budget.RemainingThisMonth < budget.MonthAllowance * CommentaryBudget.EssentialReserve)
+            && !budget.KeepEverythingRunning
+            && !budget.LocalModelWriting)
+        {
+            return;
+        }
+
         var observations = GenerateObservations();
         if (observations.Count == 0)
         {
@@ -1378,17 +1410,23 @@ public sealed partial class AnnouncerControl : UserControl
             }
         }
 
-        // All-time best across recorded sessions, for context. Saved demo
-        // races are left out - their lap times are invented, so quoting
-        // one as somebody's personal best would be quoting a made-up lap.
-        var allTime = _history.All
-            .Where(sess => !sess.IsDemoSession())
-            .SelectMany(sess => sess.Results.Where(r =>
-                string.Equals(r.Transponder, item.Transponder, StringComparison.OrdinalIgnoreCase)))
-            .Where(r => r.FastLapMs > 0)
-            .Select(r => r.FastLapMs)
-            .DefaultIfEmpty(0)
-            .Min();
+        // Best before this race, for context. Saved demo races are left
+        // out - their lap times are invented, so quoting one as somebody's
+        // personal best would be quoting a made-up lap.
+        //
+        // WHY (23 Oct 2026, bug hunt 10): this was the fastest lap on ANY
+        // layout, so on a long layout the card said "running 3.300s off it
+        // today" about every driver who had raced the short one, while the
+        // director's pace calls (per layout) called the same laps personal
+        // bests. It now reads the director's own per-layout figure
+        // (PersonalBestBeforeTonight - same demo and ghost filters, tonight's
+        // saved heats counted), and with no layout selected the line is
+        // left out rather than comparing laps from different tracks.
+        var bestBefore = PersonalBestBeforeTonight(item.Transponder);
+        var allTime = bestBefore is { } bestSeconds ? (long)Math.Round(bestSeconds * 1000.0) : 0L;
+        var onLayout = _settings?.LastRaceControlTrackName?.Trim() is { Length: > 0 } layoutName
+            ? $" on {layoutName}"
+            : string.Empty;
 
         if (allTime > 0)
         {
@@ -1398,9 +1436,9 @@ public sealed partial class AnnouncerControl : UserControl
 
             lines.Add(delta switch
             {
-                < 0 => $"Personal best {allTime / 1000.0:0.000}s - and they've just beaten it.",
-                0 => $"Personal best {allTime / 1000.0:0.000}s.",
-                _ => $"Personal best {allTime / 1000.0:0.000}s - running {delta / 1000.0:0.000}s off it today.",
+                < 0 => $"Personal best{onLayout} {allTime / 1000.0:0.000}s - and they've just beaten it.",
+                0 => $"Personal best{onLayout} {allTime / 1000.0:0.000}s.",
+                _ => $"Personal best{onLayout} {allTime / 1000.0:0.000}s - running {delta / 1000.0:0.000}s off it today.",
             });
         }
 

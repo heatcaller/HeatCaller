@@ -17,9 +17,9 @@ namespace HeatCaller;
 /// </summary>
 public sealed class RaceStatStrip : Control
 {
-    private readonly RaceControlSession _race;
+    private readonly RaceTiming _race;
 
-    public RaceStatStrip(RaceControlSession race)
+    public RaceStatStrip(RaceTiming race)
     {
         _race = race;
 

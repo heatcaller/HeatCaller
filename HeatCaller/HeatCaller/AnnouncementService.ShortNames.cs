@@ -12,11 +12,18 @@ namespace HeatCaller;
 /// club. A club that ticked the box for its children's names would not
 /// expect that. So with the box ticked, a line for the HeatCaller voice or
 /// the club's own ElevenLabs account has each driver's full name swapped
-/// for the same short form the pages use (RelayPublisher.DisplayNames, so
-/// two drivers who would share one are told apart the same way).
+/// for the same short form the pages use (RelayPublisher.DisplayNamesForTheRoom,
+/// the pages' shortening without the online initials-only rule, so two
+/// drivers who would share one are told apart the same way).
 ///
-/// NOT FOR KOKORO. It speaks on this PC and sends nothing anywhere, so the
-/// announcer there keeps saying names in full, as it always has.
+/// NOT FOR KOKORO. It renders on this PC, so the announcer there keeps
+/// saying names in full, as it always has. That audio is NOT kept off the
+/// internet, though: listen-along sends what the room hears. So while the
+/// box is ticked, a line whose names this would shorten goes to listeners
+/// only when its audio was rendered from the shortened words, and a Kokoro
+/// (or stand-in, or soundscape) take of it is held back - see
+/// OfferToListenersOnly and AudioFromShortenedText (corrected 23 Oct 2026,
+/// bug hunt 10: this note said Kokoro sends nothing anywhere).
 ///
 /// The swap is of whole names only, longest first, so "Sam Smith-Jones" is
 /// never cut into "Sam S-Jones" by a shorter "Sam Smith".
@@ -99,7 +106,11 @@ public sealed partial class AnnouncementService
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
-        var shortened = RelayPublisher.DisplayNames(full, abbreviate: true);
+        // The room's form (22 Oct 2026, driver experience): these lines are
+        // said over the PA, which is in the building, so a driver who asked
+        // for initials only ONLINE is still called by name here - the same
+        // shortening as ever, nobody's privacy choice applied.
+        var shortened = RelayPublisher.DisplayNamesForTheRoom(full, abbreviate: true);
         var map = new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
 
         for (var i = 0; i < full.Count && i < shortened.Count; i++)

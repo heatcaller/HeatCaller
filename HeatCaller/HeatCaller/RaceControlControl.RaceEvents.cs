@@ -82,9 +82,16 @@ public sealed partial class RaceControlControl
         };
         _race.WarmUpChanged += _warmUpChangedHandler;
 
+        // WHY (23 Oct 2026, timing layer, P4b): threaded, a lap the window is
+        // only now being told of, seconds after it was counted (the window
+        // was frozen), still reaches the board, the coach and the announcer's
+        // running order - but its calls are not spoken: after a freeze the
+        // room hears the present, not a backlog. RaceTiming.DeliveringIsStale
+        // is never true inline, so inline nothing here changes.
         _lapProcessedHandler = (standing, isValid, isFastestLap) =>
         {
             if (InvokeRequired) { BeginInvoke(() => OnLapProcessed(standing, isValid, isFastestLap)); return; }
+            if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => OnLapProcessed(standing, isValid, isFastestLap), _race.DeliveringAgeMs); return; }
             OnLapProcessed(standing, isValid, isFastestLap);
         };
         _race.LapProcessed += _lapProcessedHandler;
@@ -94,6 +101,7 @@ public sealed partial class RaceControlControl
         _splitCrossedHandler = (standing, point, _) =>
         {
             if (InvokeRequired) { BeginInvoke(() => OnSplitCrossed(standing, point)); return; }
+            if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => OnSplitCrossed(standing, point), _race.DeliveringAgeMs); return; }
             OnSplitCrossed(standing, point);
         };
         _race.SplitCrossed += _splitCrossedHandler;
@@ -101,6 +109,7 @@ public sealed partial class RaceControlControl
         _sectorsRecordedHandler = (standing, lapIndex, sectors) =>
         {
             if (InvokeRequired) { BeginInvoke(() => OnSectorsRecorded(standing, lapIndex, sectors)); return; }
+            if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => OnSectorsRecorded(standing, lapIndex, sectors), _race.DeliveringAgeMs); return; }
             OnSectorsRecorded(standing, lapIndex, sectors);
         };
         _race.SectorsRecorded += _sectorsRecordedHandler;
@@ -108,6 +117,7 @@ public sealed partial class RaceControlControl
         _personalBestHandler = standing =>
         {
             if (InvokeRequired) { BeginInvoke(() => _announcer.NotifyPersonalBestLap(standing.TransponderId, standing.FastestLapMs)); return; }
+            if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => _announcer.NotifyPersonalBestLap(standing.TransponderId, standing.FastestLapMs), _race.DeliveringAgeMs); return; }
             _announcer.NotifyPersonalBestLap(standing.TransponderId, standing.FastestLapMs);
         };
         _race.PersonalBestLap += _personalBestHandler;
@@ -176,41 +186,57 @@ public sealed partial class RaceControlControl
         // own gate simply REPLACED that one. The wait for audio had not
         // run before a green flag since this was written, and nothing
         // said so: the only symptom is a start that tramples the call.
-        var hostGate = _race.BeforeGreenFlagAsync;
-        _gateBeforeThisPage = hostGate;
-
-        _race.BeforeGreenFlagAsync = async () =>
+        //
+        // WHY (23 Oct 2026, timing layer, P5): threaded, the green waits on
+        // the timing thread, which must never wait for this window - so the
+        // start rules are not put inside the gate there. They are handed to
+        // the race as the screen's part of the start (StartRulesOnUi), run on
+        // the UI thread just before the green is asked for, and the gate the
+        // green waits for stays the host's audio wait alone. Inline, exactly
+        // as before.
+        if (_race.IsThreaded)
         {
-            _lastUnlocks = new List<AchievementUnlock>();
+            _startRulesOnUi = StartRulesForTheGreen;
+            _race.StartRulesOnUi = _startRulesOnUi;
+        }
+        else
+        {
+            var hostGate = _race.BeforeGreenFlagAsync;
+            _gateBeforeThisPage = hostGate;
 
-            // Reads on-screen values - the gap box, the selected round - so
-            // it has to be on the UI thread. The gate is awaited from
-            // wherever the start happened to be triggered from.
-            //
-            // Never for practice. Open lapping has no grid and no start
-            // procedure, and running this there handed it the race
-            // format's staggered or hand-released start - cars held at the
-            // line, or their laps timed from a release nobody called.
-            if (!IsDisposed && !Disposing && !_race.IsPracticeMode)
+            _race.BeforeGreenFlagAsync = async () =>
             {
-                if (InvokeRequired)
-                {
-                    Invoke(new Action(ApplyStartRules));
-                }
-                else
-                {
-                    ApplyStartRules();
-                }
-            }
+                _lastUnlocks = new List<AchievementUnlock>();
 
-            // Then the host's gate - the audio wait. Rules first because
-            // they are instant and read what is on screen now; the wait
-            // is the part that takes time.
-            if (hostGate is not null)
-            {
-                await hostGate();
-            }
-        };
+                // Reads on-screen values - the gap box, the selected round - so
+                // it has to be on the UI thread. The gate is awaited from
+                // wherever the start happened to be triggered from.
+                //
+                // Never for practice. Open lapping has no grid and no start
+                // procedure, and running this there handed it the race
+                // format's staggered or hand-released start - cars held at the
+                // line, or their laps timed from a release nobody called.
+                if (!IsDisposed && !Disposing && !_race.IsPracticeMode)
+                {
+                    if (InvokeRequired)
+                    {
+                        Invoke(new Action(ApplyStartRules));
+                    }
+                    else
+                    {
+                        ApplyStartRules();
+                    }
+                }
+
+                // Then the host's gate - the audio wait. Rules first because
+                // they are instant and read what is on screen now; the wait
+                // is the part that takes time.
+                if (hostGate is not null)
+                {
+                    await hostGate();
+                }
+            };
+        }
 
         _driverReleasedHandler = (transponder, offsetMs) =>
         {
@@ -218,10 +244,49 @@ public sealed partial class RaceControlControl
             OnDriverReleased(transponder, offsetMs);
         };
         _race.DriverReleased += _driverReleasedHandler;
+
+        // The crash journal is MainForm's to write now (23 Oct 2026, timing
+        // layer, P2), but the track, round, typed name and re-run flag it
+        // records are this page's - so the recorder reads them from here at
+        // every write (as WriteJournal did), and also takes a copy when the
+        // race is staged, counted down and started and whenever the name or
+        // the track changes here, which is what stands once this page is gone.
+        _journalDetailsSource = JournalDetailsNow;
+        _journalRecorder.DetailsSource = _journalDetailsSource;
+        _txtSessionLabel.TextChanged += (_, _) => _journalRecorder.CaptureDetails();
+        _cmbTrackLayout.SelectedIndexChanged += (_, _) => _journalRecorder.CaptureDetails();
+
+        // Keeps the recording in step with the race, at the journal's own
+        // cadence. Here because the journal write is already the one place
+        // every crossing, every flag and every correction passes through. It
+        // means the recording needs no hook of its own on the session, and
+        // nothing about how a lap or a flag is handled changes. Unlike the
+        // write itself it is never throttled, so the green - which is a flag
+        // change, and so a forced write - is always noted the moment it
+        // drops. (The recorder raises Written after every write it is asked
+        // for, written or held back, as WriteJournal always called this.)
+        _journalWrittenHandler = () =>
+        {
+            if (InvokeRequired) { BeginInvoke(FollowRaceAudio); return; }
+            FollowRaceAudio();
+        };
+        _journalRecorder.Written += _journalWrittenHandler;
     }
+
+    /// <summary>This page's part of every crash-journal write - see WireRaceControl.</summary>
+    private Action? _journalWrittenHandler;
+
+    /// <summary>Where the journal recorder reads this page's details from - held so it is taken back only if it is still this page's.</summary>
+    private Func<RaceJournalDetails>? _journalDetailsSource;
 
     private void UnwireRaceControl()
     {
+        if (_journalWrittenHandler is not null) _journalRecorder.Written -= _journalWrittenHandler;
+
+        // The page is going, so the details stay as last captured rather
+        // than being read from controls that are gone.
+        if (_journalDetailsSource is not null && ReferenceEquals(_journalRecorder.DetailsSource, _journalDetailsSource)) _journalRecorder.DetailsSource = null;
+
         if (_stateChangedHandler is not null) _race.StateChanged -= _stateChangedHandler;
         if (_flagChangedHandler is not null) _race.FlagChanged -= _flagChangedHandler;
         if (_warmUpChangedHandler is not null) _race.WarmUpChanged -= _warmUpChangedHandler;
@@ -242,11 +307,49 @@ public sealed partial class RaceControlControl
         // against controls that are gone - but setting it to null also
         // threw away the host's audio wait, which belongs to the session
         // rather than to this page.
+        // Threaded (P5): this page's start rules taken back, if they are
+        // still this page's; the gate was never touched.
+        if (_race.IsThreaded)
+        {
+            // WHY (24 Oct 2026, timing layer, P8): a page that has gone must not
+            // leave an automatic start's green armed that it set up.
+            _race.DisarmGreenAfterCountdown();
+
+            if (_startRulesOnUi is not null && ReferenceEquals(_race.StartRulesOnUi, _startRulesOnUi))
+            {
+                _race.StartRulesOnUi = null;
+            }
+
+            return;
+        }
+
         _race.BeforeGreenFlagAsync = _gateBeforeThisPage;
+    }
+
+    /// <summary>This page's start rules as handed to the race, threaded mode - held so they are taken back only if they are still this page's.</summary>
+    private Action? _startRulesOnUi;
+
+    /// <summary>
+    /// The screen's part of a real start, threaded mode (P5): what the gate
+    /// does before its audio wait inline - this race's unlocks let go, and
+    /// the start rules applied unless the page is going or it is practice.
+    /// On the UI thread, before the green is asked for (RaceTiming.StartRulesOnUi).
+    /// </summary>
+    private void StartRulesForTheGreen()
+    {
+        _lastUnlocks = new List<AchievementUnlock>();
+
+        if (!IsDisposed && !Disposing && !_race.IsPracticeMode)
+        {
+            ApplyStartRules();
+        }
     }
 
     private void OnRaceStateChanged(RaceState state)
     {
+        // The highlight videos' pause (22 Oct 2026) - see FollowRaceLive.
+        FollowRaceLive();
+
         // Stage and Countdown light with the start's own progress.
         UpdateFlagButtonColors(_race.Flag);
 
@@ -308,7 +411,14 @@ public sealed partial class RaceControlControl
                 // the green - a prediction gathered after the flag is not a
                 // prediction. A demo never touches the vote, as in
                 // SettleTheRoomsVote.
-                if (!_race.IsDemoMode)
+                //
+                // WHY (23 Oct 2026, bug hunt 10): practice shares this session
+                // and starts with a real green, while the Round box still
+                // holds the race up next - so a practice run between opening
+                // the vote and the main closed that main's vote early. Practice
+                // never touches the vote either; the board redraw and the
+                // announcer reset above still run for it.
+                if (!_race.IsDemoMode && !_race.IsPracticeMode)
                 {
                     try
                     {
@@ -367,9 +477,10 @@ public sealed partial class RaceControlControl
 
     private void OnFlagChanged(FlagState flag)
     {
-        // A flag is a moment worth being able to come back to, so this one
-        // is written straight away rather than waiting for the next lap.
-        WriteJournal(force: true);
+        // A flag is a moment worth being able to come back to, so the crash
+        // journal is written straight away rather than waiting for the next
+        // lap - by MainForm's journal recorder now, whose handler runs ahead
+        // of this one (23 Oct 2026, timing layer, P2). See MainForm.RaceJournal.
 
         _lblFlag.Text = flag.ToString();
         // Bright variants, not the dark ones these used to be: this label
@@ -516,12 +627,22 @@ public sealed partial class RaceControlControl
         };
         _announcer.OnGatePassed(gate);
 
-        // The safety net. Written after every crossing, so that whatever
-        // happens next - a crash, a power cut, a closed laptop - the race
-        // can be picked up from this lap.
-        WriteJournal();
+        // The safety net, written after every crossing, is MainForm's
+        // journal recorder's now (23 Oct 2026, timing layer, P2), so it is
+        // written whether or not this page is there. See MainForm.RaceJournal.
 
         CheckRecordPace(standing, isValid, thisLapMs);
+
+        // The coached driver's line or tone at the line (22 Oct 2026). A
+        // coaching call is never worth losing the board over.
+        try
+        {
+            CoachAtTheLine(standing, isValid, thisLapMs);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [coach] Couldn't work out a coaching call: {ex.Message}");
+        }
 
         RenderLeaderboard();
     }
@@ -533,7 +654,9 @@ public sealed partial class RaceControlControl
     private void OnStandingRemoved(RacerStanding standing)
     {
         _announcer.OnStandingRemoved(standing.TransponderId);
-        WriteJournal(force: true);
+
+        // Out of the crash journal: MainForm's journal recorder writes it
+        // (23 Oct 2026, timing layer, P2).
         RenderLeaderboard();
     }
 
@@ -561,9 +684,9 @@ public sealed partial class RaceControlControl
             PenaltyMs = standing.PenaltyMs,
         });
 
-        // Forced: a correction by hand is rare and is exactly the sort of
-        // thing nobody wants to do twice.
-        WriteJournal(force: true);
+        // The crash journal is written for it, forced - a correction by hand
+        // is rare and is exactly the sort of thing nobody wants to do twice -
+        // by MainForm's journal recorder (23 Oct 2026, timing layer, P2).
 
         // After the flag the result has already gone to the history, and
         // this only changes the board. Said plainly, because the board then

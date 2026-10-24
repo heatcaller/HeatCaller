@@ -139,7 +139,15 @@ public sealed partial class RaceControlControl
         {
             // Only if it is still the newest - an undo from further back
             // must not take a later warning off instead.
-            if (FindStanding(transponder) is { Warnings.Count: > 0 } s && ReferenceEquals(s.Warnings[^1], warning))
+            //
+            // WHY (23 Oct 2026, timing layer, review): with timing on its own
+            // thread the warning given and the standings read here are copies
+            // (RaceTiming), so the same reference is never there and this undo
+            // silently did nothing. Threaded, the same warning is told by its
+            // number and the moment it was given, which a copy keeps.
+            if (FindStanding(transponder) is { Warnings.Count: > 0 } s
+                && (ReferenceEquals(s.Warnings[^1], warning)
+                    || (_race.IsThreaded && s.Warnings[^1].Number == warning.Number && s.Warnings[^1].AtUtc == warning.AtUtc)))
             {
                 _race.RemoveLastWarning(transponder);
                 RenderLeaderboard();

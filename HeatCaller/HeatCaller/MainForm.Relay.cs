@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace HeatCaller;
 
@@ -450,8 +451,11 @@ public partial class MainForm
             // Called on the UI thread, and SendPinsAsync reads settings and
             // profiles before its first await - so all of that happens here,
             // on this thread. Only the sending happens elsewhere.
-            result = await PinMailer.SendPinsAsync(_settings, _profiles, transponders, null, _pinMailCancel.Token)
-                .ConfigureAwait(false);
+            // Kept, so closing can record who it had already reached - see
+            // RecordPinMailOnClose.
+            var send = PinMailer.SendPinsAsync(_settings, _profiles, transponders, null, _pinMailCancel.Token);
+            _automaticPinSend = send;
+            result = await send.ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -488,6 +492,50 @@ public partial class MainForm
             // No window to take it - closing down, or not shown yet. Counted
             // off here, or nothing held back would ever be sent again.
             Interlocked.Decrement(ref _pinMailsUnrecorded);
+        }
+    }
+
+    /// <summary>
+    /// The automatic PIN email run in hand, or the last one. No initializer
+    /// in a part file (the build rule).
+    /// </summary>
+    private Task<MailResult>? _automaticPinSend;
+
+    /// <summary>
+    /// For FormClosing, BEFORE its settings save: stops an automatic PIN
+    /// email run and records who it had already reached, so they are not
+    /// sent the same PIN again at the next start.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Oct 2026, bug hunt 10): what a run sent was only ever
+    /// recorded by posting back to the window, and a closing window takes no
+    /// posts (TryPost, ApplyAutomaticPinMail both stop on _closingDown). So
+    /// a close or Restart halfway through a batch recorded nobody, and the
+    /// next start emailed every one of them again. Waiting here cannot
+    /// deadlock: the send runs on the thread pool with ConfigureAwait(false)
+    /// throughout and stops promptly once cancelled - the same reasoning as
+    /// RecordNightEmailsOnClose. Marking a racer already recorded changes
+    /// nothing, so a run that had finished is harmless here.
+    /// </remarks>
+    private void RecordPinMailOnClose()
+    {
+        if (_automaticPinSend is not { } send)
+        {
+            return;
+        }
+
+        try
+        {
+            _pinMailCancel.Cancel();
+
+            if (send.Wait(TimeSpan.FromSeconds(2)) && RacerPins.MarkEmailed(_settings, send.Result.Sent) > 0)
+            {
+                _settings.Save();
+            }
+        }
+        catch
+        {
+            // Best effort - at worst a few racers are emailed their PIN again.
         }
     }
 
@@ -655,7 +703,7 @@ public partial class MainForm
 
         if (PinMailer.IsSending)
         {
-            OnClientRawMessage("[signup] PINs are being emailed right now, so the new racer's PIN wasn't sent. Use Email PINs... on the Club Website page once that's done.");
+            OnClientRawMessage("[signup] Emails are being sent right now (PINs, invites or drivers' nights), so the new racer's PIN wasn't sent. Use Email PINs... on the Club Website page once that's done.");
             return false;
         }
 
@@ -868,9 +916,12 @@ public partial class MainForm
 
             // The LAN roster names an unnamed driver by their transponder;
             // that stops here.
+            // With each row's transponder, so initials-only still holds for
+            // a name from before a rename (22 Oct 2026, driver experience).
             var names = RelayPublisher.DisplayNames(
                 roster.Select(d => RelayDocuments.PublicNameOrUnnamed(d.Name, d.Transponder)).ToList(),
-                abbreviate);
+                abbreviate,
+                roster.Select(d => (string?)d.Transponder).ToList());
 
             // Not published: the empty roster PublishSnapshot would put in
             // its place anyway, built here so the check below compares what
@@ -919,6 +970,14 @@ public partial class MainForm
     /// </summary>
     private void PublishStateToRelay()
     {
+        // WHY (24 Oct 2026, timing layer, P8): threaded, the frame is sent
+        // off the UI with the live state (PublishStateToRelayOffUi), so the
+        // relay stays live through a freeze.
+        if (_race.IsThreaded)
+        {
+            return;
+        }
+
         if (!_settings.RelayEnabled)
         {
             return;
@@ -1006,11 +1065,29 @@ public partial class MainForm
                 // Per season, because a season is the list a reader
                 // compares within - and shortened together, so two
                 // drivers never share a name in the same table.
+                //
+                // WHY (23 Oct 2026, bug hunt 10): with each entry's
+                // transponder, as the session results already pass theirs.
+                // By name alone, a driver renamed since their races and then
+                // shown by initials kept their old full name in the table.
+                //
+                // WHY (23 Oct 2026, bug hunt 10 review): and a name with one
+                // of its own transponders in it ("Rental 4012345", a Club
+                // Rental with no asset tag) is nobody's name either - the
+                // check results make (RelayDocuments.PublicNameOrUnnamed).
+                // Rentals score, so it reached the standings in full.
+                var privacy = PublicPrivacy.Current;
+                var shownAs = table.Select(entry => transponderNames.Contains((entry.DriverName ?? string.Empty).Trim())
+                                                    || entry.Transponders.Any(t => RelayDocuments.PublicNameOrUnnamed(entry.DriverName, t) == RelayDocuments.UnnamedDriver)
+                    ? RelayDocuments.UnnamedDriver
+                    : entry.DriverName ?? string.Empty).ToList();
                 var names = RelayPublisher.DisplayNames(
-                    table.Select(entry => transponderNames.Contains((entry.DriverName ?? string.Empty).Trim())
-                        ? RelayDocuments.UnnamedDriver
-                        : entry.DriverName ?? string.Empty).ToList(),
-                    abbreviate);
+                    shownAs,
+                    abbreviate,
+                    privacy.TransponderForEach(
+                        shownAs,
+                        table.SelectMany((entry, index) => entry.Transponders.Select(t => ((string?)shownAs[index], (string?)t)))),
+                    privacy);
 
                 return new
                 {
@@ -1177,8 +1254,20 @@ public partial class MainForm
             return;
         }
 
-        SendToRelayIfChanged(RelayChannel.Achievements, "achievements earned", () => RelayDocuments.Achievements(
-            RelayAchievements(), _profiles, abbreviate));
+        // The club's racing setting, so "next" offers only badges a driver
+        // can earn here - the same catalogue the night page's "in reach"
+        // uses (22 Oct 2026, driver experience).
+        //
+        // WHY (23 Oct 2026, bug hunt 10): read once, and nothing built from
+        // it is sent while there has never been a readable copy - an empty
+        // store from a locked file published a badges page with nobody on it.
+        var badgesNow = RelayAchievements();
+
+        if (!badgesNow.LoadedUnreadable)
+        {
+            SendToRelayIfChanged(RelayChannel.Achievements, "achievements earned", () => RelayDocuments.Achievements(
+                badgesNow, _profiles, abbreviate, _settings.RacingAt));
+        }
 
         // Standings and the results index otherwise only go when a session
         // is saved or a result corrected. Plenty else changes them without
@@ -1203,14 +1292,18 @@ public partial class MainForm
         // Once an hour it goes again regardless, for the same reason the
         // other documents are refreshed: once was once per process, and a
         // relay that lost it kept a badges page with no badges all day.
-        if (!_lastRelayDocuments.ContainsKey(RelayChannel.Badges)
-            || DateTime.UtcNow - _relayBadgesSentUtc > TimeSpan.FromHours(1))
+        // Not on an unreadable pass either (see badgesNow), so it does not
+        // use up the hour on an earned set that is only empty because the
+        // file was locked.
+        if (!badgesNow.LoadedUnreadable
+            && (!_lastRelayDocuments.ContainsKey(RelayChannel.Badges)
+                || DateTime.UtcNow - _relayBadgesSentUtc > TimeSpan.FromHours(1)))
         {
             _lastRelayDocuments.Remove(RelayChannel.Badges);
             _relayBadgesSentUtc = DateTime.UtcNow;
             SendToRelayIfChanged(RelayChannel.Badges, "the achievement list", () => RelayDocuments.Badges(
                 _settings.RacingAt,
-                RelayAchievements().All.SelectMany(d => d.Unlocked).Select(u => u.Id).ToHashSet(StringComparer.Ordinal)));
+                badgesNow.All.SelectMany(d => d.Unlocked).Select(u => u.Id).ToHashSet(StringComparer.Ordinal)));
         }
     }
 
@@ -1227,8 +1320,22 @@ public partial class MainForm
     {
         if (_relayAchievements is null || DateTime.UtcNow - _relayAchievementsReadUtc > TimeSpan.FromMinutes(5))
         {
-            _relayAchievements = AchievementStore.Load();
-            _relayAchievementsReadUtc = DateTime.UtcNow;
+            var loaded = AchievementStore.Load();
+
+            // WHY (23 Oct 2026, bug hunt 10): a locked read (a sync tool or
+            // virus scanner holding the file just after a race's awards were
+            // written) gives an EMPTY store, and it was kept for five
+            // minutes - the public badges page and every night lost their
+            // badges. A LOCKED READ KEEPS THE LAST GOOD COPY, as
+            // WebServerService.EarnedBadges does, and is tried again about a
+            // minute later rather than five.
+            _relayAchievements = loaded.LoadedUnreadable && _relayAchievements is { LoadedUnreadable: false } lastGood
+                ? lastGood
+                : loaded;
+
+            _relayAchievementsReadUtc = loaded.LoadedUnreadable
+                ? DateTime.UtcNow - TimeSpan.FromMinutes(4)
+                : DateTime.UtcNow;
         }
 
         return _relayAchievements;
@@ -1334,6 +1441,67 @@ public partial class MainForm
         var text = (status ?? string.Empty).Trim();
 
         return text.Equals("active", StringComparison.OrdinalIgnoreCase) ? string.Empty : text;
+    }
+
+    /// <summary>
+    /// The seconds a result was charged, in race and after it, rounded to
+    /// the nearest second - the public results document's `penS`. Already
+    /// inside elapsedMs; this only says how much of it was a penalty.
+    /// </summary>
+    internal static int PenaltySecondsOf(SessionResultEntry result) =>
+        (int)Math.Round(
+            (Math.Max(0, result.RacePenaltyMs) + Math.Max(0, result.TimePenaltyMs)) / 1000.0,
+            MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// One row of the public results document. A class rather than the
+    /// anonymous object it was, only so the penalty numbers can be left out
+    /// when they are 0 or false (22 Oct 2026, driver experience): the
+    /// first eight are in the same order with the same names, and
+    /// `sectorsMs` is still written as null without a split loop, so a
+    /// clean row is byte for byte what it was.
+    /// </summary>
+    private sealed class RelayResultRow
+    {
+        [JsonPropertyName("pos")]
+        public int Pos { get; init; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; init; } = string.Empty;
+
+        [JsonPropertyName("car")]
+        public string Car { get; init; } = string.Empty;
+
+        [JsonPropertyName("laps")]
+        public int Laps { get; init; }
+
+        [JsonPropertyName("fastLapMs")]
+        public long FastLapMs { get; init; }
+
+        [JsonPropertyName("sectorsMs")]
+        public long[]? SectorsMs { get; init; }
+
+        [JsonPropertyName("elapsedMs")]
+        public long ElapsedMs { get; init; }
+
+        [JsonPropertyName("status")]
+        public string Status { get; init; } = string.Empty;
+
+        [JsonPropertyName("penS")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? PenS { get; init; }
+
+        [JsonPropertyName("penLaps")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? PenLaps { get; init; }
+
+        [JsonPropertyName("warn")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? Warn { get; init; }
+
+        [JsonPropertyName("jump")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? Jump { get; init; }
     }
 
     /// <summary>
@@ -1546,9 +1714,14 @@ public partial class MainForm
             //
             // A car nobody had named raced under its transponder number,
             // and that is what its result says its name is. Not online.
+            //
+            // With each row's transponder: an old result carries the name as
+            // it was on the night, so a driver renamed since is still caught
+            // by initials-only (22 Oct 2026, driver experience).
             var names = RelayPublisher.DisplayNames(
                 session.Results.Select(r => RelayDocuments.PublicNameOrUnnamed(r.DriverName, r.Transponder)).ToList(),
-                abbreviate);
+                abbreviate,
+                session.Results.Select(r => (string?)r.Transponder).ToList());
 
             var document = JsonSerializer.Serialize(new
             {
@@ -1559,18 +1732,18 @@ public partial class MainForm
                 roundId = session.RoundId,
                 startedUtc = session.StartedAtUtc,
                 endedUtc = session.EndedAtUtc,
-                results = session.Results.Select((r, i) => new
+                results = session.Results.Select((r, i) => new RelayResultRow
                 {
-                    pos = r.Position,
-                    name = names[i],
-                    car = r.CarModel,
-                    laps = r.Laps,
-                    fastLapMs = r.FastLapMs,
+                    Pos = r.Position,
+                    Name = names[i],
+                    Car = r.CarModel,
+                    Laps = r.Laps,
+                    FastLapMs = r.FastLapMs,
 
                     // Their best through each sector, with a split loop -
                     // null without, which the page shows as nothing.
-                    sectorsMs = Sectors.Bests(r),
-                    elapsedMs = r.ElapsedMs,
+                    SectorsMs = Sectors.Bests(r),
+                    ElapsedMs = r.ElapsedMs,
 
                     // "active" is what this app calls a driver who simply
                     // raced. It is internal vocabulary, and published it
@@ -1578,7 +1751,19 @@ public partial class MainForm
                     // "active" on every row. Only a real exception - a
                     // DNF, a disqualification - is worth a reader's
                     // attention, so only that is sent.
-                    status = PublishableStatus(r.Status),
+                    Status = PublishableStatus(r.Status),
+
+                    // 22 Oct 2026 (driver experience, item 1): the penalty
+                    // as NUMBERS ONLY, for the results page's "+5s" or
+                    // "1 warning" chip. The reasons are free text a race
+                    // director typed about a named person, who may be a
+                    // child, so they go only into that driver's own night
+                    // (DriverNightExtras). Each is left out when 0 or false, so
+                    // a clean row is byte for byte what it was.
+                    PenS = PenaltySecondsOf(r) > 0 ? PenaltySecondsOf(r) : (int?)null,
+                    PenLaps = r.LapPenalty > 0 ? r.LapPenalty : (int?)null,
+                    Warn = r.Warnings is { Count: > 0 } ? r.Warnings.Count : (int?)null,
+                    Jump = r.JumpStarted ? true : (bool?)null,
                 }).ToList(),
             });
 
@@ -1644,6 +1829,35 @@ public partial class MainForm
     /// </summary>
     private void PublishDriverNightsFor(SessionRecord session)
     {
+        // 22 Oct 2026: and the phone coach page's report cards, which a
+        // filed race or practice changes too - see PublishCoachCards. Not
+        // behind the relay switch below: the coach page is on the club's
+        // own Wi-Fi.
+        PublishCoachCards();
+
+        // 22 Oct 2026 (driver experience): the Wi-Fi pages' penalty lines
+        // and the phone's live entry - see the hooks in MainForm.cs. Demo
+        // races reach them too; each decides for itself. Caught one by one,
+        // because nothing here may throw into the filing path (see
+        // PublishNightsFor), and one failing must not stop the other.
+        try
+        {
+            RaceFiledWiFiExtras(session);
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"[wifi] Could not update the phone pages for that race: {ex.Message}");
+        }
+
+        try
+        {
+            RaceFiledDriverLive(session);
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"[relay] Could not update the drivers' live pages for that race: {ex.Message}");
+        }
+
         // A demo race is a rehearsal rather than a result, exactly as
         // PublishSessionToRelay has it: it never reaches the club's public
         // results and it must not reach a driver's night either.
@@ -1726,29 +1940,90 @@ public partial class MainForm
             var atUtc = DateTime.UtcNow;
             var sent = 0;
 
-            foreach (var who in drivers)
+            // For the extras (22 Oct 2026, driver experience), read once
+            // for the whole batch rather than once per driver: the history
+            // is a sorted copy, and tonight's pace is the same sum for
+            // everybody in a class.
+            var nowLocal = DateTime.Now;
+            var history = _sessionHistory.All;
+            Func<string, RoundDefinition?> roundOf = id => _rounds.Get(id);
+            var paceByClass = new Dictionary<string, IReadOnlyList<DriverPaceTonight>>(StringComparer.OrdinalIgnoreCase);
+            // WHY (23 Oct 2026, bug hunt 10): an achievements.json that could
+            // not be read gives an empty store, and every night then offered
+            // badges the driver already holds as "in reach". With no good
+            // copy to go on, the nights go without that line instead.
+            var badgeStore = RelayAchievements();
+            IReadOnlyList<DriverAchievements>? achievements = badgeStore.LoadedUnreadable ? null : badgeStore.All;
+
+            // ONE NIGHT PER DRIVER, under their MAIN badge (22 Oct 2026,
+            // second transponder on the same night). A second transponder
+            // timed as a car of its own has a result row under its own
+            // number, and its night used to go to IdFor(that number) - a
+            // badge nobody holds. Rows are put with the driver who owns them
+            // (the "one driver" rule qualifying and the mains use) and each
+            // car gets a section of its own on the one page: see NightOwner.
+            foreach (var driver in NightOwner.Group(drivers, tonight, NightMainOf))
             {
                 // THE FULL NAME, not the club's abbreviated one. See the
                 // note at the top of DriverNight: a results table is a
                 // list of other people and shortening it is right there,
                 // but a driver who opens their own night and reads
                 // "B. Hargrove" has been shown a bug.
-                var named = _profiles.Get(who)?.DriverName;
+                var owner = _profiles.Get(driver.Main);
+                var named = owner?.DriverName;
 
-                if (string.IsNullOrWhiteSpace(named))
+                // WHY (23 Oct 2026, bug hunt 10): a rental or loaner
+                // transponder is the club's, worn by whoever had it tonight
+                // (see DriverLive.Identify). Its night - penalty reasons,
+                // progress and "best since" built from every renter's laps -
+                // was published under the unit's badge, so next week's
+                // renter scanning that card saw last week's evening. Rentals
+                // get no night, as they get no highlight video or night email.
+                if (owner is null || owner.IsRental || string.IsNullOrWhiteSpace(named))
                 {
                     continue;
                 }
 
-                var facts = DriverCut.FactsFor(who, named, tonight, _trackLayouts);
-                var document = DriverNight.Document(named, night, dayName, facts, atUtc);
+                var facts = driver.Cars
+                    .Select(car => DriverCut.FactsFor(car.Transponder, named, tonight, _trackLayouts))
+                    .ToList();
+
+                // The page leads with a car it has something to say about:
+                // a main car that only practised tonight, beside a second
+                // car that raced, would otherwise leave the night empty.
+                var lead = facts.FindIndex(f => f is { Empty: false });
+                var ordered = driver;
+
+                if (lead > 0)
+                {
+                    ordered = NightOwner.WithFirst(driver, lead);
+                    facts = NightOwner.FirstAt(facts, lead);
+                }
+
+                var first = ordered.Cars[0].Transponder;
+
+                // 22 Oct 2026: their report card goes with it, under a
+                // heading of its own on the page - see DriverNight.Document's
+                // coach and CoachReport. Other drivers named in it are named
+                // the way the public pages name them.
+                var coach = CoachReportFor(first, publicNames: true);
+
+                // 22 Oct 2026 (driver experience): and the extras - their
+                // races one by one with laps and penalty reasons, progress,
+                // improvement, badges in reach, first night, and each other
+                // car they raced. Built apart from the facts so one that
+                // fails leaves the night as it was (see WithNightExtras).
+                var parts = WithNightExtras(
+                    new NightParts(named, night, dayName, facts[0], atUtc) { Coach = coach },
+                    ordered, facts, tonight, history, roundOf, paceByClass, achievements, nowLocal);
+                var document = DriverNight.Document(parts);
 
                 if (document is null)
                 {
                     continue;
                 }
 
-                if (_relayPublisher.PublishDriverNight(RelayCheckIn.IdFor(who, secret), document))
+                if (_relayPublisher.PublishDriverNight(RelayCheckIn.IdFor(driver.Main, secret), document))
                 {
                     sent++;
                 }
@@ -1764,6 +2039,165 @@ public partial class MainForm
             OnClientRawMessage($"[relay] Could not build the drivers' own nights: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// One driver's night with the driver experience extras added (22 Oct
+    /// 2026): their races one by one, with laps for the chart and the
+    /// reasons for any penalty; how their middle lap has moved tonight, in
+    /// the class of their latest race; their best lap over recent nights on
+    /// the layout of their latest race; the badges they are nearest; and
+    /// whether tonight is their first night. See DriverNightExtras.
+    ///
+    /// ON ANY FAILURE THE NIGHT GOES WITHOUT THEM, exactly as it went
+    /// before the extras existed. They are a courtesy on top of a courtesy,
+    /// and this runs on the filing path.
+    ///
+    /// The badges are read from RelayAchievements, which is read before
+    /// this race's awards are worked out - so `reach` can be one race
+    /// behind until the driver's next race or the re-send pass.
+    /// </summary>
+    private NightParts WithNightExtras(
+        NightParts parts,
+        NightDriver driver,
+        IReadOnlyList<PackedFacts> facts,
+        IReadOnlyList<SessionRecord> tonight,
+        IReadOnlyList<SessionRecord> history,
+        Func<string, RoundDefinition?> roundOf,
+        Dictionary<string, IReadOnlyList<DriverPaceTonight>> paceByClass,
+        IReadOnlyList<DriverAchievements>? achievements,
+        DateTime nowLocal)
+    {
+        NightParts withFirst;
+
+        try
+        {
+            var lead = driver.Cars[0];
+            var (races, improve, progress) = CarExtras(lead.Transponder, tonight, history, roundOf, paceByClass, nowLocal);
+
+            // Badges are the driver's, not a car's: looked up by their main
+            // transponder, as the badge window keys them, and otherwise by
+            // the car the page leads with.
+            var badges = achievements?.FirstOrDefault(d =>
+                             d is not null && string.Equals(d.Transponder?.Trim(), driver.Main, StringComparison.OrdinalIgnoreCase))
+                         ?? achievements?.FirstOrDefault(d =>
+                             d is not null && string.Equals(d.Transponder?.Trim(), lead.Transponder, StringComparison.OrdinalIgnoreCase));
+
+            // And so is a first night (22 Oct 2026, second transponder): a
+            // driver who has raced here before on their main transponder
+            // is not new because tonight they brought a second car. Every
+            // transponder of theirs, retired ones too, has to be new.
+            var theirs = (_profiles.Get(driver.Main)?.AllTransponderIds ?? Array.Empty<string>())
+                .Concat(driver.Cars.Select(car => car.Transponder))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            withFirst = parts with
+            {
+                Races = races,
+                Improve = improve,
+                Progress = progress,
+                // No badges read (see PublishNightsFor): no "in reach" line.
+                Reach = achievements is null ? null : DriverNightExtras.Reach(badges, _settings.RacingAt),
+                FirstNight = theirs.All(id => DriverFirsts.IsFirstNight(history, id, nowLocal)),
+            };
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"[relay] A driver's night went without its race cards and progress: {ex.Message}");
+            return parts;
+        }
+
+        if (!driver.Split)
+        {
+            return withFirst;
+        }
+
+        // Every other car they raced, kept apart (22 Oct 2026, second
+        // transponder): its own facts, report card, improvement and
+        // progress, and its races tagged with its id. On a failure the
+        // night goes with the first car alone, as a night always went.
+        try
+        {
+            var cars = new List<NightCar>();
+            var raced = new List<(string CarId, IReadOnlyList<NightRace> Races)>();
+
+            for (var i = 0; i < driver.Cars.Count; i++)
+            {
+                var car = driver.Cars[i];
+
+                if (i == 0)
+                {
+                    cars.Add(new NightCar { Id = car.Id, Label = car.Label, Name = car.Name });
+                    raced.Add((car.Id, withFirst.Races ?? Array.Empty<NightRace>()));
+                    continue;
+                }
+
+                var (races, improve, progress) = CarExtras(car.Transponder, tonight, history, roundOf, paceByClass, nowLocal);
+
+                cars.Add(new NightCar
+                {
+                    Id = car.Id,
+                    Label = car.Label,
+                    Name = car.Name,
+                    Lines = i < facts.Count ? DriverNight.Lines(facts[i]) : null,
+                    Coach = CoachReportFor(car.Transponder, publicNames: true).ToArray(),
+                    Improve = improve,
+                    Progress = progress,
+                });
+                raced.Add((car.Id, races));
+            }
+
+            return withFirst with
+            {
+                Races = DriverNightExtras.Merge(raced),
+                Cars = cars,
+            };
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"[relay] A driver's night went without their second car's races: {ex.Message}");
+            return withFirst;
+        }
+    }
+
+    /// <summary>
+    /// One car's races, improvement and progress tonight - by the
+    /// transponder it was timed on, which is what its result rows carry.
+    /// </summary>
+    private (IReadOnlyList<NightRace> Races, string? Improve, NightProgress? Progress) CarExtras(
+        string who,
+        IReadOnlyList<SessionRecord> tonight,
+        IReadOnlyList<SessionRecord> history,
+        Func<string, RoundDefinition?> roundOf,
+        Dictionary<string, IReadOnlyList<DriverPaceTonight>> paceByClass,
+        DateTime nowLocal)
+    {
+        var latest = DriverNightExtras.LatestRace(who, tonight);
+
+        // Like with like: a driver in two classes tonight is measured
+        // in the class of the car they last raced, not across both.
+        var className = latest is { RoundId: { Length: > 0 } roundId } && roundOf(roundId) is { } round
+            ? round.ClassName.Trim()
+            : string.Empty;
+
+        if (!paceByClass.TryGetValue(className, out var paces))
+        {
+            paces = TonightAtTheTrack.PaceTonight(history, roundOf, nowLocal, className);
+            paceByClass[className] = paces;
+        }
+
+        return (
+            DriverNightExtras.Races(who, tonight, roundOf),
+            DriverNightExtras.Improvement(who, paces),
+            DriverNightExtras.Progress(who, history, latest?.TrackLayoutName, _pbResets, nowLocal));
+    }
+
+    /// <summary>
+    /// The driver a result row belongs to - their main transponder, or the
+    /// row's own when nobody owns it (22 Oct 2026, second transponder). The
+    /// same rule as BatteryPackStore.DriverKey and the qualifying projector.
+    /// </summary>
+    private string NightMainOf(string transponder) => BatteryPackStore.DriverKey(_profiles, transponder);
 
     /// <summary>
     /// Everybody who really raced in one session: no ghosts, no blanks, and

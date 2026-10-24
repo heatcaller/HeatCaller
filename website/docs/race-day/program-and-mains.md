@@ -100,7 +100,7 @@ Everything else is on the round menu. Right-click the list to open it: on a roun
 | Menu item | What it does |
 |---|---|
 | **Start This Round** | Same as **Start Selected**. |
-| **Start as Demo...** | Runs the round as a simulated race. Nothing is recorded against it and no timing hardware is used. See [Practice, ghosts and demo mode](../race-control/practice-and-ghosts.md). |
+| **Start as Demo...** | Runs the round as a simulated race, with no timing hardware. Nothing is recorded against the round unless **Let a demo fill in the race program** is ticked on Demo Mode; then the demo marks it as run. See [Practice, ghosts and demo mode](../race-control/practice-and-ghosts.md). |
 | **Edit Drivers...** | Changes who's in the round. |
 | **Move Drivers Between Heats...** | Opens the class's heats side by side. See [Balance heats](#balance-heats). |
 | **Move Up** / **Move Down** | Moves the round one place in the running order. |
@@ -108,6 +108,7 @@ Everything else is on the round menu. Right-click the list to open it: on a roun
 | **Build the Finals from Qualifying...** | Seeds a class's mains. Not shown on a club night. |
 | **Add a Main by Hand...** | Adds a main you choose the drivers for. Not shown on a club night. |
 | **Save Heat Sheet...** | Saves a printable heat sheet for a class. |
+| **Print Heat Sheet...** | Prints the class's heat sheet, with a preview first. |
 | **Delete** | Deletes the selected rounds from the program (it says **Delete 3 Rounds** when several are selected). |
 
 ## Build the qualifying program
@@ -341,7 +342,11 @@ The same marshal list is what the announcer reads out for the `{marshals}` place
 
 A heat sheet is a printable page for the pit table: the current race day's rounds of a class with its drivers, cars, transponders and blank columns to write laps and times in.
 
-1. Right-click the list and choose **Save Heat Sheet...**. It uses the class in the **Class:** filter (or the selected round's class).
+**To print it straight away:** right-click the list and choose **Print Heat Sheet...**. It uses the class in the **Class:** filter (or the selected round's class). Pick the printer, check the preview, and print from the preview's toolbar. Each page is fitted inside the printer's margins without being stretched.
+
+**To save it as a picture instead:**
+
+1. Right-click the list and choose **Save Heat Sheet...**.
 2. Choose where to save the PNG.
 3. Open it and print it at full page size.
 

@@ -129,9 +129,13 @@ internal sealed class BelongsToForm : Form
         AppTheme.ApplyRecursively(this);
         _lblOutcome.ForeColor = AppTheme.TextMuted;
 
+        // (22 Oct 2026, page tidy): the two grids had a caption column each,
+        // so the Find box and "It replaces:" started at different places.
+        // One column down both now, measured in the faces the theme pass left.
+        FieldGrid.LineUp(new[] { find, where });
+
         // After the theme pass, in the faces it leaves them in.
-        _cmbCar.Width = UiLayout.AtTextSize(220);
-        _cmbReplaces.Width = UiLayout.AtTextSize(220);
+        FitPickers();
 
         DialogFit.Keep(this, page, width: 520, height: 560);
     }
@@ -265,7 +269,29 @@ internal sealed class BelongsToForm : Form
         _btnGive.Enabled = profile is not null;
         _btnGive.Text = GiveCaption(profile);
 
+        FitPickers();
         UpdateOutcome();
+    }
+
+    /// <summary>
+    /// The car and "it replaces" drop-downs as wide as their longest
+    /// choice, between the 220px they were made at and a width that still
+    /// fits the window. (22 Oct 2026, page tidy): they were a fixed 220px,
+    /// and a long car name was cut short.
+    /// </summary>
+    private void FitPickers()
+    {
+        foreach (var picker in new[] { _cmbCar, _cmbReplaces })
+        {
+            (Font Font, int Count, int Width)? measured = null;
+
+            var width = Math.Clamp(Pieces.PickerWidth(picker, ref measured), UiLayout.AtTextSize(220), UiLayout.AtTextSize(340));
+
+            if (picker.Width != width)
+            {
+                picker.Width = width;
+            }
+        }
     }
 
     /// <summary>The line saying what pressing the button will do.</summary>

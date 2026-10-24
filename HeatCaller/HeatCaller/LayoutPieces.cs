@@ -777,6 +777,23 @@ internal sealed class Section : TableLayoutPanel
     }
 
     /// <summary>
+    /// Adds a part straight under <paramref name="after"/>, a part already in
+    /// this card - for a part another page owns and hands over after the card
+    /// is built (CastControl.HostAnnouncerVoice, 22 Oct 2026). At the end
+    /// when <paramref name="after"/> is not in the card.
+    /// </summary>
+    public T AddAfter<T>(Control after, T part, bool stretch = true, int gapBelow = UiLayout.RowGap) where T : Control
+    {
+        var row = ReferenceEquals(after.Parent, this) ? GetRow(after) + 1 : RowCount;
+
+        Pieces.PlaceInColumnAt(this, part, stretch, gapBelow, row);
+        return part;
+    }
+
+    /// <summary>Takes a part back out of the card, and its row with it - see Pieces.RemoveFromColumn.</summary>
+    public void RemovePart(Control part) => Pieces.RemoveFromColumn(this, part);
+
+    /// <summary>
     /// Adds a part that takes whatever height the card has left - the list
     /// in a card that fills its page, Race Control's leaderboard. One only.
     ///
@@ -3663,6 +3680,59 @@ internal static class Pieces
             column.RowCount++;
             column.RowStyles.Insert(row, new RowStyle(SizeType.AutoSize));
             column.Controls.Add(part, 0, row);
+        }
+        finally
+        {
+            column.ResumeLayout(true);
+        }
+    }
+
+    /// <summary>
+    /// Takes a part placed by PlaceInColumn or PlaceInColumnAt back out, and
+    /// its row with it: every row under it, and its style, moves up one, so
+    /// a part taken out and put back (CastControl's announcer voice, after a
+    /// soundscape rebuilds the Voice tab - 22 Oct 2026) leaves no empty row
+    /// behind each time. Does nothing for a control not in the column.
+    /// </summary>
+    internal static void RemoveFromColumn(TableLayoutPanel column, Control part)
+    {
+        if (!ReferenceEquals(part.Parent, column))
+        {
+            return;
+        }
+
+        var row = column.GetRow(part);
+
+        column.SuspendLayout();
+
+        try
+        {
+            column.Controls.Remove(part);
+
+            if (row < 0 || row >= column.RowCount)
+            {
+                return;
+            }
+
+            // The highest first, the reverse of PlaceInColumnAt, so no two
+            // are ever given the same cell on the way.
+            var below = column.Controls
+                .Cast<Control>()
+                .Where(control => column.GetRow(control) > row)
+                .OrderBy(control => column.GetRow(control))
+                .ToList();
+
+            foreach (var control in below)
+            {
+                column.SetRow(control, column.GetRow(control) - 1);
+            }
+
+            if (row < column.RowStyles.Count)
+            {
+                column.RowStyles.RemoveAt(row);
+            }
+
+            column.RowCount = Math.Max(0, column.RowCount - 1);
         }
         finally
         {

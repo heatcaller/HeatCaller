@@ -29,6 +29,20 @@ public partial class MainForm
     private SplitLoop? _splitLoop;
 
     /// <summary>
+    /// Threaded mode: a second SplitLoop, used on the timing thread only and
+    /// only to Understand a split pass, with lookups safe there (the frozen
+    /// split owners, the offset below, the locked clock map). Null inline.
+    /// _splitLoop stays the UI's: it keeps what this one understood.
+    /// </summary>
+    private SplitLoop? _splitReader;
+
+    /// <summary>The split loop setting as UpdateConnectionModeUi last read it - for the decoders' own threads, which must not read the settings.</summary>
+    private volatile bool _splitLoopOn;
+
+    /// <summary>The Line Up offset (SplitLoopOffsetMs) as last read on the UI thread - what _splitReader takes off, on the timing thread.</summary>
+    private volatile int _frozenSplitOffsetMs;
+
+    /// <summary>
     /// The line decoder (DecoderConnection), kept for the decoders' own
     /// threads, which must not read the picker. Set by UpdateConnectionModeUi.
     /// </summary>
@@ -87,27 +101,53 @@ public partial class MainForm
     /// <summary>Makes the split loop and hooks it to the decoders. Called once, from the constructor, after both exist.</summary>
     private void WireSplitLoop()
     {
+        // An EasyLap's own clock mapped onto the app's; an I-Lap's
+        // passes are already on it (when they arrived).
+        //
+        // Safe on any thread (24 Oct 2026, timing layer, P8): the clock map
+        // takes its own lock, _lineDecoder is volatile and _decoderClient is
+        // never replaced - so both loops below use these same two.
+        long? AppTimeOfPass(DirectLapEvent pass) => pass.Decoder == DecoderConnection.EasyLap
+            ? _decoderClient.Clock.ToApp(pass.DeviceTimeMs, TimingClock.NowMs)
+            : pass.ReceivedMs != 0 ? pass.ReceivedMs : null;
+
+        // The line's clock: an EasyLap's own, mapped; an I-Lap's is the app's.
+        long? LineTimeOfApp(long app) => _lineDecoder == DecoderConnection.EasyLap
+            ? _decoderClient.Clock.ToDevice(app, TimingClock.NowMs)
+            : app;
+
         var split = new SplitLoop(_profiles.SplitOwnerOf)
         {
             // Only so the console can say a read is contested, not unowned.
             ClaimantsOf = transponder => _profiles.SplitOwnersOf(transponder).Count,
-
-            // An EasyLap's own clock mapped onto the app's; an I-Lap's
-            // passes are already on it (when they arrived).
-            AppTimeOf = pass => pass.Decoder == DecoderConnection.EasyLap
-                ? _decoderClient.Clock.ToApp(pass.DeviceTimeMs, TimingClock.NowMs)
-                : pass.ReceivedMs != 0 ? pass.ReceivedMs : null,
-
-            // The line's clock: an EasyLap's own, mapped; an I-Lap's is the app's.
-            LineTimeOf = app => _lineDecoder == DecoderConnection.EasyLap
-                ? _decoderClient.Clock.ToDevice(app, TimingClock.NowMs)
-                : app,
-
+            AppTimeOf = AppTimeOfPass,
+            LineTimeOf = LineTimeOfApp,
             OffsetMs = () => _settings.SplitLoopOffsetMs,
         };
 
         split.Log += line => OnClientRawMessage($"{AppTime.LogStampNow()}  {line}");
         _splitLoop = split;
+
+        // WHY (24 Oct 2026, timing layer, P8): threaded, a split pass is
+        // understood and put into the race on the timing thread (see
+        // SendSplitPassToTiming), so a frozen window no longer costs the
+        // sector times of every lap run while it was frozen. This reader
+        // does the understanding there, and nothing else: its lookups are
+        // the ones safe off the UI - the profiles' frozen split owners
+        // (rebuilt with every change to them) and the offset as last read
+        // here. What it understood is kept by _splitLoop, on the UI thread.
+        if (_race.IsThreaded)
+        {
+            _frozenSplitOffsetMs = _settings.SplitLoopOffsetMs;
+
+            _splitReader = new SplitLoop(_profiles.SplitOwnerForAnyThread)
+            {
+                ClaimantsOf = _profiles.SplitClaimantsForAnyThread,
+                AppTimeOf = AppTimeOfPass,
+                LineTimeOf = LineTimeOfApp,
+                OffsetMs = () => _frozenSplitOffsetMs,
+            };
+        }
 
         // Sector lengths for the speed columns: from the split loops placed
         // on the plan of the layout being raced on - the Practice page's in
@@ -116,6 +156,11 @@ public partial class MainForm
         //
         // Worked out on the UI thread, where the layouts are changed; the
         // web server asks from its own, and gets the last answer worked out.
+        //
+        // Threaded (23 Oct 2026, timing layer, P4), the race only ever asks
+        // from the timing thread, so it always gets the last answer - which
+        // MainForm's 500 ms tick works out again on the UI thread
+        // (RefreshFrozenLookups). The array is never changed once made.
         _race.SectorLengthsFeetProvider = () =>
         {
             if (!IsHandleCreated || InvokeRequired)
@@ -123,13 +168,7 @@ public partial class MainForm
                 return _sectorLengthsFeet;
             }
 
-            var name = RunningTrackName(_settings.LastRaceControlTrackName);
-
-            _sectorLengthsFeet = string.IsNullOrWhiteSpace(name)
-                ? null
-                : _trackLayouts.All.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.Ordinal))?.SectorLengthsFeet();
-
-            return _sectorLengthsFeet;
+            return SectorLengthsFeetNow();
         };
 
         // Into the race: the row the car is on, and where on the line's
@@ -137,6 +176,14 @@ public partial class MainForm
         // (LineMs null) - a split time that is a guess is worse than none.
         split.PassRecorded += pass =>
         {
+            // WHY (24 Oct 2026, timing layer, P8): threaded, the race was
+            // told on the timing side already (RaceTiming.PostSplitPass) -
+            // this event now only serves Line Up and the other listeners.
+            if (_race.IsThreaded)
+            {
+                return;
+            }
+
             if (pass.LineMs is { } line && RowForSplit(pass) is { } row)
             {
                 _race.ProcessSplitPass(row, pass.Point, line);
@@ -160,11 +207,46 @@ public partial class MainForm
         _splitStatusTimer.Start();
     }
 
+    /// <summary>
+    /// The sector lengths of the layout being raced on, worked out now and
+    /// kept for other threads (_sectorLengthsFeet). UI thread only.
+    /// </summary>
+    private double[]? SectorLengthsFeetNow()
+    {
+        var name = RunningTrackName(_settings.LastRaceControlTrackName);
+
+        _sectorLengthsFeet = string.IsNullOrWhiteSpace(name)
+            ? null
+            : _trackLayouts.All.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.Ordinal))?.SectorLengthsFeet();
+
+        return _sectorLengthsFeet;
+    }
+
     /// <summary>A pass from the EasyLap, whatever it is for. Any thread.</summary>
-    private void OnEasyLapPass(DirectLapEvent lap) => OnUiThread(() => RoutePass(lap));
+    private void OnEasyLapPass(DirectLapEvent lap)
+    {
+        // Threaded, a line pass goes straight to the timing thread from
+        // here (23 Oct 2026, timing layer, P4) - see SendLinePassToTiming -
+        // and a split loop's too (24 Oct 2026, timing layer, P8) - see
+        // SendSplitPassToTiming.
+        if (_race.IsThreaded && (SendLinePassToTiming(lap) || SendSplitPassToTiming(lap)))
+        {
+            return;
+        }
+
+        OnUiThread(() => RoutePass(lap));
+    }
 
     /// <summary>A pass from the I-Lap, whatever it is for. Any thread.</summary>
-    private void OnILapPass(DirectLapEvent lap) => OnUiThread(() => RoutePass(lap));
+    private void OnILapPass(DirectLapEvent lap)
+    {
+        if (_race.IsThreaded && (SendLinePassToTiming(lap) || SendSplitPassToTiming(lap)))
+        {
+            return;
+        }
+
+        OnUiThread(() => RoutePass(lap));
+    }
 
     /// <summary>
     /// Sends a pass where its decoder's role says: the line's to the race,
@@ -181,7 +263,20 @@ public partial class MainForm
                 break;
 
             case DecoderRole.Split:
-                _splitLoop?.Record(lap.Stamped(lap.Decoder, lap.ReceivedMs, TimingPoint.Split1));
+                var stamped = lap.Stamped(lap.Decoder, lap.ReceivedMs, TimingPoint.Split1);
+
+                // Threaded, one that came this way (the moment after a
+                // switch) still goes through the timing thread, behind the
+                // passes already there (24 Oct 2026, timing layer, P8).
+                if (_race.IsThreaded && _splitReader is not null)
+                {
+                    PostSplitToTiming(stamped);
+                }
+                else
+                {
+                    _splitLoop?.Record(stamped);
+                }
+
                 break;
 
             default:
@@ -562,6 +657,11 @@ public partial class MainForm
         DialogResult answer;
         _lineUpOpen = true;
 
+        // Threaded, the timing thread hears at once that no car may start
+        // practice while the window is open, and that one may again when it
+        // shuts (24 Oct 2026, timing layer, P7).
+        RefreshPracticeAutoStartPlan();
+
         try
         {
             answer = form.ShowDialog(this);
@@ -569,6 +669,7 @@ public partial class MainForm
         finally
         {
             _lineUpOpen = false;
+            RefreshPracticeAutoStartPlan();
         }
 
         if (answer != DialogResult.OK || form.OffsetMs is not { } measured)
@@ -584,6 +685,7 @@ public partial class MainForm
         }
 
         _settings.SplitLoopOffsetMs = measured;
+        _frozenSplitOffsetMs = measured;
         _settings.Save();
         OnClientRawMessage($"{AppTime.LogStampNow()}  [split] Lined up: the split loop reads {measured} ms late; that is taken off every split time.");
         RenderSplitStatus();

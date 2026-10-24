@@ -416,8 +416,9 @@ public sealed class DriverStats
 
         var races = new List<(SessionRecord Session, SessionResultEntry Row, int? Place)>();
 
-        // Separate days they turned up, by the local calendar - two heats
-        // and a practice run on one evening is one day at the track.
+        // Separate days they turned up, by race night
+        // (TonightAtTheTrack.NightOf, 6am to 6am) - two heats and a practice
+        // run on one evening is one day at the track.
         var daysOnTrack = new HashSet<DateTime>();
 
         // Laps with sector times: layout, when, sectors.
@@ -481,7 +482,12 @@ public sealed class DriverStats
 
             if (session.StartedAtUtc != default)
             {
-                daysOnTrack.Add(session.StartedAtUtc.ToLocalTime().Date);
+                // WHY (23 Oct 2026, bug hunt 10): this used the local calendar
+                // date, so a club night whose A-main started after midnight
+                // counted as two days at the track. It now groups by race
+                // night (6am to 6am), the same as achievements and the coach
+                // report, so one visit is one day.
+                daysOnTrack.Add(TonightAtTheTrack.NightOf(session.StartedAtUtc.ToLocalTime()));
 
                 if (stats.LastOnTrackUtc is null || session.StartedAtUtc > stats.LastOnTrackUtc)
                 {

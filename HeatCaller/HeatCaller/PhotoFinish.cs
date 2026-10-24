@@ -97,7 +97,7 @@ public sealed class PhotoFinish
     }
 
     /// <summary>Follows <paramref name="race"/>: every counted crossing of a real car. UI thread.</summary>
-    public void Attach(RaceControlSession race)
+    public void Attach(RaceTiming race)
     {
         race.LapProcessed += (standing, valid, _) =>
         {
@@ -121,7 +121,7 @@ public sealed class PhotoFinish
     internal static bool IsFinishCrossing(bool finishing, FlagState flag, int? lapLimit, int laps) =>
         finishing || flag == FlagState.Checkered || (lapLimit is { } limit && limit > 0 && laps >= limit);
 
-    private static int PositionOf(RaceControlSession race, RacerStanding? standing)
+    private static int PositionOf(RaceTiming race, RacerStanding? standing)
     {
         if (standing is null)
         {

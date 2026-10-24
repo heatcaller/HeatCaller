@@ -401,6 +401,18 @@ public sealed partial class AnnouncementService
                 return new PrepareOutcome(rendered, alreadySaved, failed, "the Kokoro voice was chosen on the Voice tab");
             }
 
+            // WHY (23 Oct 2026, bug hunt 10): only Kokoro used to stop the
+            // run. A switch between the club's own ElevenLabs account and the
+            // HeatCaller voice carried on with the engine the plan was made
+            // with - billing the club's key (or the relay's allowance) for
+            // takes saved under keys the newly chosen voice never looks up.
+            // Now any change of engine stops the run before its next request,
+            // the same guard PrimeReleaseLines uses.
+            if (_voiceStore.Current.EffectiveEngine != line.Profile.EffectiveEngine)
+            {
+                return new PrepareOutcome(rendered, alreadySaved, failed, "a different voice was chosen on the Voice tab");
+            }
+
             try
             {
                 // The chosen voice and nothing else - never the stand-in. A
@@ -572,9 +584,14 @@ public sealed partial class AnnouncementService
                     // Listeners at home hear the flag call too - offered
                     // just before the speaker, the way the queued lines are.
                     // A prepared take never went through that path.
-                    OfferLineToListeners(prepared.Text, prepared.Audio);
+                    //
+                    // WHY (23 Oct 2026, bug hunt 10): with whether its audio
+                    // says the names shortened - see OfferToListenersOnly.
+                    OfferLineToListeners(prepared.Text, prepared.Audio, AudioFromShortenedText(prepared.Source, prepared.Text));
 
-                    await PlayAsync(prepared.Audio, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence);
+                    // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
+                    await PlayAsync(prepared.Audio, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence,
+                        () => Volatile.Read(ref _interruptGeneration) == generation && !Muted);
                 }
                 finally
                 {
@@ -647,6 +664,11 @@ public sealed partial class AnnouncementService
         int clearedVoice;
         int generation;
 
+        // WHY (23 Oct 2026, bug hunt 10): a line binned here gives back what
+        // it reserved (a sponsor's ration, a battle's pair) once the queue
+        // lock is released - see BinQueuedLocked.
+        List<Action>? giveBack = null;
+
         lock (_voiceQueueLock)
         {
             // Bumped under the same lock the voice loop dequeues under, in
@@ -660,8 +682,10 @@ public sealed partial class AnnouncementService
             // IsPriorityAnnouncement, which kept the post-race recap -
             // queued as a Reminder - and let it read the last race's
             // result over this one. See SurvivesAFlag.
-            clearedVoice = _voiceQueue.RemoveAll(item => !SurvivesAFlag(item.Type));
+            clearedVoice = BinQueuedLocked(item => !SurvivesAFlag(item.Type), ref giveBack);
         }
+
+        GiveBackLost(giveBack);
 
         int clearedSounds;
 

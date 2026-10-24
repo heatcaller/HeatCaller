@@ -334,7 +334,8 @@ public sealed partial class WebServerService
     /// start, the podium with driver ratings at the end, and the
     /// championship as it stands if it ended now. Transparent everywhere
     /// else. Parts can be left out with
-    /// ?hide=tower,battle,fastest,grid,podium,champ,moment.
+    /// ?hide=tower,battle,fastest,grid,podium,champ,moment. A captions strip
+    /// of what the announcer says is added with ?captions=1 (22 Oct 2026).
     ///
     /// THE PYLON (18 Oct 2026). Each row carries the car's racing number
     /// when the driver has one, and its last column cycles the way a
@@ -417,6 +418,15 @@ public sealed partial class WebServerService
         #podium .line { font-size:1.8vw; }
         #podium .line span.t { margin-left:auto; color:#c9cdd6; font-size:1.2vw; align-self:center; }
         #podium .line span.r { color:var(--accent); font-size:1.1vw; align-self:center; min-width:6vw; text-align:right; }
+        /* CAPTIONS (?captions=1, 22 Oct 2026, driver experience, item 9):
+           the line the announcer has just said, along the very bottom, for
+           a viewer watching with the sound off. With them on, the battle
+           box and the fastest lap sit higher, clear of the strip. */
+        #captions { position:absolute; left:50%; bottom:.8vw; transform:translateX(-50%); width:max-content; max-width:70vw;
+                    padding:.5vw 1.4vw; font-size:1.3vw; font-weight:600; line-height:1.3; text-align:center;
+                    opacity:0; transition:opacity .6s; }
+        #captions.show { opacity:1; }
+        body.cap #battle, body.cap #fastest { bottom:5.4vw; }
         </style></head><body data-look="{{look.Fingerprint}}">
         <div id="tower" class="glass" style="opacity:0"><div class="head"><span id="title">-</span><span id="clock" class="acc"></span></div><div class="sub"><span id="mode" class="mode"></span><span id="changes"></span></div><div id="rows"></div></div>
         <div id="champ" class="glass"></div>
@@ -425,6 +435,7 @@ public sealed partial class WebServerService
         <div id="moment" class="glass"><div class="t" id="mtitle"></div><div class="l" id="mline"></div><span class="by" id="mby"></span></div>
         <div id="grid" class="glass centre"></div>
         <div id="podium" class="glass centre"></div>
+        <div id="captions" class="glass" aria-live="polite"></div>
         <script>
         function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
           return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
@@ -436,6 +447,30 @@ public sealed partial class WebServerService
         const rowEls = {};
         let lastPos = {}, best = { ms: 0, id: '' }, fastTimer = 0, first = true;
         let fight = null, momentSeq = -1, momentTimer = 0;
+
+        // Captions, only when asked for: the line the announcer has just
+        // said, fading after eight seconds. Only a line said while the page
+        // is open - the first look takes what is there as already said, so
+        // OBS reloading the source does not put an old line on the stream.
+        // A different number counts as new rather than only a bigger one,
+        // because the numbers start again when HeatCaller does.
+        const captionsOn = params.get('captions') === '1';
+        if (captionsOn) document.body.classList.add('cap');
+        const CAPTION_MS = 8000;
+        let captionSeen = -1, captionTimer = 0;
+        function showCaptions(list){
+          if (!captionsOn) return;
+          const lines = Array.isArray(list) ? list : [];
+          const newest = lines.length ? lines[lines.length - 1] : null;
+          if (captionSeen < 0){ captionSeen = newest ? newest.n : 0; return; }
+          if (!newest || newest.n === captionSeen) return;
+          captionSeen = newest.n;
+          const el = document.getElementById('captions');
+          el.textContent = newest.t;
+          el.classList.add('show');
+          clearTimeout(captionTimer);
+          captionTimer = setTimeout(() => el.classList.remove('show'), CAPTION_MS);
+        }
 
         function fmt(ms){ return ms > 0 ? (ms/1000).toFixed(3) : '-'; }
         function gapSecs(g){ const m = /^\+(\d+([.,]\d+)?)$/.exec(g || ''); return m ? parseFloat(m[1].replace(',', '.')) : null; }
@@ -468,6 +503,7 @@ public sealed partial class WebServerService
           try { d = await (await fetch('/api/state', { cache: 'no-store', signal: stop.signal })).json(); }
           catch(e) { return; }
           finally { clearTimeout(timer); }
+          showCaptions(d.captions);
           const racing = d.state === 'Racing', finished = d.state === 'Finished';
           const rows = (d.standings || []).filter(s => s.id);
           const cards = d.cards || {};

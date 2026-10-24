@@ -235,8 +235,8 @@ public sealed class GarageControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "The club's cars. Add a photograph and a car starts looking like itself - until then it gets a plate "
-                 + "with its number on. Click a car to open it: its photographs, what it is, and every setup logged for it.",
+            Text = "The club's cars. Click one to open its photographs, details and every setup logged for it. "
+                 + "A car with no photograph shows a plate with its number.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

@@ -81,8 +81,10 @@ public sealed class UsageMetersTests : IDisposable
     [Fact]
     public void Summary_forecast_and_percent_read_as_the_window_shows_them()
     {
-        // Midday UTC, so the local date is 1 Nov wherever the tests run.
-        var resets = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc);
+        // WHY (23 Oct 2026, bug hunt 10): midday UTC was 2 Nov on a PC at UTC+12 or more
+        // (New Zealand in November), so this failed there. Midday LOCAL time on 1 Nov reads
+        // 1 Nov in every time zone.
+        var resets = Local(2026, 11, 1, 12, 0);
         var meter = Commentary(212, 450, tonight: 38, resets: resets);
 
         Assert.Equal("212 of 450 lines · 38 tonight · starts again 1 Nov", Invariant(meter.Summary));

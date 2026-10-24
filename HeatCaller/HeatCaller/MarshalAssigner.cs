@@ -98,6 +98,123 @@ public static class MarshalAssigner
         return results;
     }
 
+    /// <summary>
+    /// One driver's corner for one round: what a phone says as "You marshal
+    /// Q2 Heat 2 (Stock Buggy) - Turn 3".
+    /// </summary>
+    /// <param name="RoundId">The round marshalled.</param>
+    /// <param name="RoundTitle">Its title the way the phone pages name a race: "Q2 Heat 2 (Stock Buggy)".</param>
+    /// <param name="Transponder">Who marshals it. Never leaves the laptop - see DriverLive.</param>
+    /// <param name="PostName">The post's name, or "Corner 3".</param>
+    public sealed record MarshalDuty(string RoundId, string RoundTitle, string Transponder, string PostName);
+
+    /// <summary>
+    /// Every filled corner of every round on the race day now open - or, on
+    /// the legacy holder, of every round, exactly as Race Control's program
+    /// reads it.
+    ///
+    /// WHY (22 Oct 2026, driver experience): a driver's phone now says which
+    /// corner they marshal and when, and the announcer's grid call names
+    /// the same people out loud. The two must never disagree, so the class,
+    /// day and layout scoping the grid call worked out inline
+    /// (AnnouncementService.SpokenMarshalsFor) is here, in
+    /// <see cref="ClassRoundsFor"/> and <see cref="LayoutFor"/>, and this
+    /// reads them the same way round by round. Nobody is given a corner of a
+    /// race they are driving - <see cref="Assign"/> already sees to that.
+    /// </summary>
+    public static IReadOnlyList<MarshalDuty> DutiesForDay(
+        RoundDefinitionStore rounds,
+        RaceEventStore? events,
+        TrackLayoutStore layouts,
+        ProfileStore profiles)
+    {
+        var all = rounds.All;
+
+        // The day, the way RaceControlControl.OrderedProgram bounds it.
+        var day = events?.Current is { IsLegacy: false } current
+            ? all.Where(r => current.RoundIds.Contains(r.Id)).ToList()
+            : all.ToList();
+
+        var duties = new List<MarshalDuty>();
+
+        // Each class-and-day group worked out once, not once per round in it.
+        var done = new Dictionary<string, List<Assignment>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var round in day)
+        {
+            var classRounds = ClassRoundsFor(round, rounds, events);
+            var dayKey = events?.EventForRound(round.Id) is { IsLegacy: false } owner ? owner.Id : string.Empty;
+            var key = $"{round.ClassName}|{dayKey}";
+
+            if (!done.TryGetValue(key, out var assignments))
+            {
+                assignments = Assign(classRounds, LayoutFor(classRounds, layouts), profiles);
+                done[key] = assignments;
+            }
+
+            var assignment = assignments.FirstOrDefault(a => a.Round.Id == round.Id);
+
+            if (assignment is null)
+            {
+                continue;
+            }
+
+            foreach (var post in assignment.Posts.Where(p => p.IsFilled))
+            {
+                duties.Add(new MarshalDuty(round.Id, TitleOf(round), post.Transponder!.Trim(), post.Name));
+            }
+        }
+
+        return duties;
+    }
+
+    /// <summary>
+    /// The rounds a round's marshals are drawn from: its class's, kept to
+    /// the race day the round is on. The legacy holder is not a day, so it
+    /// means "no scoping", exactly as ActiveDay treats it on the Program tab
+    /// - without this the first heat of tonight would be "marshalled" by
+    /// whoever drove the last heat of last week. Moved here from the grid
+    /// call (22 Oct 2026, driver experience).
+    /// </summary>
+    public static IReadOnlyList<RoundDefinition> ClassRoundsFor(RoundDefinition round, RoundDefinitionStore rounds, RaceEventStore? events)
+    {
+        IReadOnlyList<RoundDefinition> classRounds = rounds.ForClass(round.ClassName);
+
+        if (events?.EventForRound(round.Id) is { IsLegacy: false } day)
+        {
+            var dayIds = day.RoundIds.ToHashSet(StringComparer.Ordinal);
+            classRounds = classRounds.Where(r => dayIds.Contains(r.Id)).ToList();
+        }
+
+        return classRounds;
+    }
+
+    /// <summary>
+    /// The track whose posts a class's rounds use, found the way the
+    /// Marshals dialog finds it: the first round of the class that names
+    /// one. Null when none does, or the layout has gone.
+    /// </summary>
+    public static TrackLayout? LayoutFor(IReadOnlyList<RoundDefinition> classRounds, TrackLayoutStore layouts)
+    {
+        var layoutName = classRounds
+            .Select(r => r.TrackLayoutName)
+            .FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
+
+        return layoutName is null
+            ? null
+            : layouts.All.FirstOrDefault(l => string.Equals(l.Name, layoutName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// A round's title as the phone pages give it - "Q2 Heat 2 (Stock
+    /// Buggy)" - the same words as RaceControlControl.RoundTitle, so the
+    /// race a driver marshals reads like the race they drive.
+    /// </summary>
+    public static string TitleOf(RoundDefinition round) =>
+        string.IsNullOrWhiteSpace(round.ClassName)
+            ? round.RoundLabel
+            : $"{round.RoundLabel} ({round.ClassName})";
+
     private static List<Post> EmptyPosts(TrackLayout layout, int postCount) =>
         Enumerable.Range(0, postCount)
             .Select(p => new Post(p, layout.PostName(p), null, null))

@@ -1070,7 +1070,14 @@ internal sealed class UsageMeters
 
             if (saved is null)
             {
-                return;
+                // WHY (23 Oct 2026, bug hunt 10): a file holding the literal
+                // "null" parses to nothing without throwing. It used to
+                // return here with NoticesUnknown left false and no record
+                // of this month's emails, so the 80%/100% emails went again.
+                // It is now treated as unreadable, like the other stores
+                // (bug hunt 5): the catch below starts empty, keeps a copy
+                // and sends no usage email this session.
+                throw new InvalidDataException("usage-meters.json holds no data.");
             }
 
             foreach (var (name, entry) in saved.Meters)

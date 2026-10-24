@@ -69,7 +69,7 @@ public sealed class BugHunt8FJTests : IDisposable
         try
         {
             var pace = new GhostCar { Name = "Pace", Transponder = Ghost, FixedLapMs = 1000 };
-            var ghosts = new GhostService(race, ProfileStore.Load(), SessionHistoryStore.FromSessions(Array.Empty<SessionRecord>()))
+            var ghosts = new GhostService(new RaceTiming(race), ProfileStore.Load(), SessionHistoryStore.FromSessions(Array.Empty<SessionRecord>()))
             {
                 Settings = new GhostSettings { Enabled = true, Ghosts = { pace } },
             };

@@ -115,6 +115,62 @@ public enum AnnouncementEventType
 
     /// <summary>A driver crossed the split loop ahead of the track record lap at that point. Appended at the END. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}.</summary>
     SplitRecordPace,
+
+    /// <summary>
+    /// The time to the split loop, read out as each car crosses it - the
+    /// split loop's "Lap time only" (22 Oct 2026). Appended at the END -
+    /// these persist as integers. Placeholders: {driver} {car} {team}
+    /// {sponsors} {split} {splittime}.
+    /// </summary>
+    SplitTime,
+
+    /// <summary>
+    /// For the one driver being coached at the split (Race Control's
+    /// right-click), how they stand against their own best lap at the
+    /// split - "Up a tenth at the split" (22 Oct 2026). Appended at the
+    /// END. Placeholders: {driver} {car} {team} {sponsors} {split} {delta}.
+    /// </summary>
+    SplitDelta,
+
+    /// <summary>
+    /// Two cars fighting for a place, timed apart at the split loop - "At
+    /// the split, Sam's two tenths up on Bill" (22 Oct 2026). Appended at
+    /// the END. Placeholders: {driver} {car} {team} {sponsors} for the car
+    /// in front, {rival} for the one behind, {gap} {split} {battle}.
+    /// </summary>
+    SplitBattle,
+
+    /// <summary>
+    /// After a race run with a split loop, who was quickest through each
+    /// sector - said with the result at the flag (22 Oct 2026). Appended at
+    /// the END. Placeholder: {sectors}.
+    /// </summary>
+    SectorsRecap,
+
+    /// <summary>
+    /// The coached driver's lap against the target lap set for them on Race
+    /// Control's right-click - "On target", "Two tenths off", "A tenth
+    /// under" (22 Oct 2026). Appended at the END - these persist as
+    /// integers. Placeholders: {driver} {car} {team} {sponsors} {pace}
+    /// {target} {laptime}.
+    /// </summary>
+    TargetPace,
+
+    /// <summary>
+    /// The coached driver's consistency: every few clean laps, how far apart
+    /// the last few were - "Last five within a tenth - that's your rhythm"
+    /// (22 Oct 2026). Appended at the END. Placeholders: {driver} {car}
+    /// {team} {sponsors} {consistency} {spread} {laps}.
+    /// </summary>
+    ConsistencyCoach,
+
+    /// <summary>
+    /// The coached driver against their own-best ghost on track, at the line
+    /// - "Two tenths behind your ghost", "A tenth ahead of your ghost" (22 Oct
+    /// 2026). Appended at the END. Placeholders: {driver} {car} {team}
+    /// {sponsors} {ghostgap} {gap}.
+    /// </summary>
+    GhostGap,
 }
 
 public sealed class AnnouncementEventConfig
@@ -191,6 +247,27 @@ public sealed class AnnouncementEventConfig
     /// one time called for every third pass by anyone.
     /// </summary>
     public int LapTimeEveryNLaps { get; set; } = 1;
+
+    /// <summary>
+    /// For SplitTime: read only every Nth split crossing, per driver - the
+    /// same idea, and the same per-driver count, as LapTimeEveryNLaps
+    /// (22 Oct 2026). 1 reads every one.
+    /// </summary>
+    public int SplitTimeEveryNLaps { get; set; } = 1;
+
+    /// <summary>
+    /// For TargetPace: say the coached driver's pace against their target
+    /// only every Nth lap (22 Oct 2026) - the lap time's own idea. 1 says
+    /// it every lap.
+    /// </summary>
+    public int TargetPaceEveryNLaps { get; set; } = 1;
+
+    /// <summary>
+    /// For ConsistencyCoach: how many clean laps make a block - the line is
+    /// said once a block, about that block (22 Oct 2026). Five by default:
+    /// fewer is a coincidence, more is a long wait to hear anything.
+    /// </summary>
+    public int ConsistencyEveryLaps { get; set; } = 5;
 
     /// <summary>Resolves the right flag for the current context.</summary>
     public bool IsEnabledFor(bool practice) =>
@@ -1548,6 +1625,87 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             },
         };
 
+        // THE SPOKEN SPLIT TIMES (22 Oct 2026). The three read in practice
+        // and not in races until a club ticks them: practice is where a
+        // driver wants their split, and a race has plenty to say already.
+        // The sectors at the flag start off - it is a race line, so
+        // "practice only" means nothing for it. None says anything without
+        // a split loop.
+        p.Events[nameof(AnnouncementEventType.SplitTime)] = new AnnouncementEventConfig
+        {
+            Enabled = false,
+            EnabledInPractice = true,
+            Weight = 30,
+            Templates = new List<string> { "{splittime} at the split." },
+        };
+
+        p.Events[nameof(AnnouncementEventType.SplitDelta)] = new AnnouncementEventConfig
+        {
+            Enabled = false,
+            EnabledInPractice = true,
+            Weight = 75,
+            Templates = new List<string> { "{delta} at the split." },
+        };
+
+        p.Events[nameof(AnnouncementEventType.SplitBattle)] = new AnnouncementEventConfig
+        {
+            Enabled = false,
+            EnabledInPractice = true,
+            Weight = 55,
+            Templates = new List<string>
+            {
+                "At the split, {driver}'s {gap} up on {rival}.",
+                "{driver} has {gap} on {rival} at the split.",
+                "At the split it's {driver}, {gap} clear of {rival}.",
+                "{gap} between {driver} and {rival} at the split.",
+                "[excited] {rival} is {gap} behind {driver} at the split!",
+                "Through the split, {driver} leads {rival} by {gap}.",
+            },
+        };
+
+        p.Events[nameof(AnnouncementEventType.SectorsRecap)] = new AnnouncementEventConfig
+        {
+            Enabled = false,
+            EnabledInPractice = false,
+            Weight = 50,
+            Templates = new List<string>
+            {
+                "Quickest through {sectors}.",
+                "The quickest through {sectors}.",
+            },
+        };
+
+        // COACHING (22 Oct 2026). For the one driver Race Control is
+        // coaching - nobody else ever hears these. On in practice and off
+        // in races until a club ticks them, as the split coach is: practice
+        // is where a driver is being coached, and a race has its own talk.
+        // Short on purpose - the driver is listening for it on the straight.
+        p.Events[nameof(AnnouncementEventType.TargetPace)] = new AnnouncementEventConfig
+        {
+            Enabled = false,
+            EnabledInPractice = true,
+            Weight = 75,
+            Templates = new List<string> { "{pace}." },
+        };
+
+        p.Events[nameof(AnnouncementEventType.ConsistencyCoach)] = new AnnouncementEventConfig
+        {
+            Enabled = false,
+            EnabledInPractice = true,
+            Weight = 60,
+            Templates = new List<string> { "{consistency}." },
+        };
+
+        // The gap to their own-best ghost (22 Oct 2026) - on in practice and
+        // off in races like the rest of the coaching.
+        p.Events[nameof(AnnouncementEventType.GhostGap)] = new AnnouncementEventConfig
+        {
+            Enabled = false,
+            EnabledInPractice = true,
+            Weight = 70,
+            Templates = new List<string> { "{ghostgap}." },
+        };
+
         return p;
     }
 
@@ -1586,6 +1744,13 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.FastestSector => ("Fastest sector", "With a split loop: a driver goes quicker through a sector than anyone has this session - the line to the split is sector 1, the split back to the line sector 2. Not for the first sector times of a session, which are fastest by default. Placeholders: {driver} {car} {team} {sponsors} {sector} (its number) {sectortime}."),
         AnnouncementEventType.SplitPace => ("Up at the split", "With a split loop: a driver crosses the split loop at least a tenth up on their own best lap to that point - the lap that might be a personal best, called before it is done. At most once every five laps per driver. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}."),
         AnnouncementEventType.SplitRecordPace => ("Record pace at the split", "With a split loop: a driver crosses the split loop ahead of the track record lap at that point. Needs the record set with sector times (a record set before the split loop has none). At most once every five laps per driver. Placeholders: {driver} {car} {team} {sponsors} {split} {gap}."),
+        AnnouncementEventType.SplitTime => ("Split time", "With a split loop: each car's time from the line to the split loop, read as it crosses - the split loop's \"Lap time only\". On in practice, off in races, until you tick them. Use the setting below to read only every Nth one per driver. Placeholders: {driver} {car} {team} {sponsors} {split} {splittime}."),
+        AnnouncementEventType.SplitDelta => ("Split coach (up or down)", "With a split loop: for the driver you coach with Coach (name) > At the split on Race Control's right-click menu, how they stand at the split against their own best lap of the session - \"Up a tenth\", \"Down two tenths\", \"Level\". Every split crossing, until you stop coaching them, the race is reset, or the race they were picked for ends (in practice, until Reset). A driver with nothing to hear yet still gets their Split time. Silent until they have a best lap with a split time. With Tones instead of words ticked for them, a tone plays instead. Placeholders: {driver} {car} {team} {sponsors} {split} {delta}."),
+        AnnouncementEventType.SplitBattle => ("Battle gap at the split", "With a split loop: two cars on the same lap less than a second apart, timed at the split - so the room hears a gap closing in the middle of a lap. At most once every five laps per pair, and only when the gap has moved since it was last said. Placeholders: {driver} {car} {team} {sponsors} for the car in front, {rival} for the one behind, {gap}, {split}, {battle} (\"for the lead\", \"for third\" - empty in practice)."),
+        AnnouncementEventType.TargetPace => ("Target lap (coach)", "For the driver you coach with Coach (name) > Target lap... on Race Control's right-click menu: each lap against the target you set - \"On target\" (within a twentieth), \"Two tenths off\", \"A tenth under\". A lap half as long again as their best (a spin, a stop) is not said. With Tones instead of words ticked for them, a tone plays instead. Use the setting below to say it only every Nth lap. Placeholders: {driver} {car} {team} {sponsors} {pace} {target} {laptime}."),
+        AnnouncementEventType.ConsistencyCoach => ("Consistency (coach)", "For the driver you coach with Coach (name) > Consistency on Race Control's right-click menu: once every few clean laps, how far apart those laps were - \"Last five within a tenth - that's your rhythm\", \"Spread's four tenths over the last five - settle it down\" - and whether that is tighter or looser than the block before. A lap half as long again as their best (a spin, a stop) is left out. Use the setting below for how many laps make a block. Placeholders: {driver} {car} {team} {sponsors} {consistency} {spread} {laps}."),
+        AnnouncementEventType.GhostGap => ("Gap to their ghost (coach)", "For the driver you coach with Coach (name) > Gap to their ghost on Race Control's right-click menu, once they have an own-best ghost on track (Chase (name)'s best): at the line, how far behind or ahead of the ghost they are on the track - \"Two tenths behind your ghost\", \"A tenth ahead of your ghost\", \"Level with your ghost\". Placeholders: {driver} {car} {team} {sponsors} {ghostgap} {gap}."),
+        AnnouncementEventType.SectorsRecap => ("Sectors at the flag", "With a split loop: after a race, who was quickest through each sector, said straight after the unofficial result - \"Quickest through sector one was Sam, sector two Bill.\" When one driver was quickest through every sector it says so instead (\"Sam was quickest through both sectors.\"), whatever the line. Off until you tick it. Placeholder: {sectors}."),
         AnnouncementEventType.GreenFlagResumed => ("Green flag (resumed)", "Racing resumed after a yellow or red. Separate from \"Race started\" so the restart can be worded differently from the initial start."),
         _ => (type.ToString(), string.Empty),
     };

@@ -531,7 +531,7 @@ public sealed partial class AnnouncementService
     /// button instead of each guessing at one.
     /// </summary>
     internal const string GetKokoroAdvice =
-        "Open the Voice tab and press Download beside the Kokoro voice ("
+        "Open the Voice tab and press Download under the Kokoro voice ("
         + KokoroSpeech.DownloadSizeText + ", once) - until then the announcer can't say anything at all.";
 
     /// <summary>

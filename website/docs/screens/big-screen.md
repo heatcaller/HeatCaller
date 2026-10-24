@@ -12,7 +12,7 @@ This page also covers choosing which columns each leaderboard shows, and the **S
 4. Press <kbd>F11</kbd> to make it full screen. Press <kbd>F11</kbd> again to go back to a window. The banner, the clocks, the leaderboard and the ON DECK bar grow and shrink with the window, so full screen on a TV the writing fills the screen. It doesn't follow the text size you set for the laptop with <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd>.
 5. Press <kbd>Esc</kbd> to close it.
 
-A small reminder of the keys, "F11: toggle fullscreen     M: track map     O: on air     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Each press of **Open Big Screen** opens another window, so you can run more than one if you have the screens.
+A small reminder of the keys, "F11: toggle fullscreen     M: track map     O: on air     C: captions     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Each press of **Open Big Screen** opens another window, so you can run more than one if you have the screens.
 
 <!-- screenshot: Big Screen during a race, full screen, showing the banner, clock, countdown, leaderboard and ON DECK bar -->
 
@@ -29,6 +29,7 @@ From top to bottom:
 - **ON DECK:** bar at the bottom: the next unfinished line on the day's timetable, with its time, class and description. See [The Timetable](../race-day/program-and-mains.md#the-timetable). During a race that counts towards a championship, the bar shows the championship instead. See [If it ended now](#if-it-ended-now).
 - **ON AIR band** across the very foot of the window, under the ON DECK bar, while the announcer's show is on air. See [When the show is on air](#when-the-show-is-on-air).
 - **Track map**, down the right-hand side, when the layout you're racing on has a plan. See [Track map](#track-map).
+- **Captions** strip along the bottom, when you've turned captions on with <kbd>C</kbd>: what the announcer is saying, as text. See [Captions](#captions).
 
 Before the green, the leaderboard gives way to the [grid roll call](#grid-roll-call). Between races, it gives way to the [between-races cards](#between-races).
 
@@ -36,7 +37,7 @@ If you've set a club logo, it sits in the top-left corner. Untick **Show the log
 
 ### Colors
 
-The Big Screen uses the crowd-screen look, the same one as the Wi-Fi pages and your club's online pages. Choose it on the **Themes** page, in **Crowd screens (Big Screen, Wi-Fi pages, online pages):**. It starts as **Match the app**, which follows the look the app is running. Light looks work too, and can be easier to read in a bright room.
+The Big Screen uses the crowd-screen look, the same one as the Wi-Fi pages and your club's online pages. Choose it on the **Themes** page, in **Crowd screens:**. It starts as **Match the app**, which follows the look the app is running. Light looks work too, and can be easier to read in a bright room.
 
 A change of look or logo shows on an open Big Screen straight away; you don't need to reopen it. For the dark Big Screen of earlier versions, choose **Race Wall**. See [Looks and the club logo](looks-and-logo.md).
 
@@ -215,6 +216,23 @@ Otherwise the band is only up while the show's own music is playing, so it needs
 
 It works in every look, including a club's own, and with or without a club logo. Every open Big Screen shows it. If a show ends early or stops partway, the band comes down by itself within half a second, because the Big Screen keeps asking whether a show is on rather than waiting to be told.
 
+## Captions
+
+The Big Screen can show what the announcer says as text, in a strip along the bottom of the window, for anyone in the room who can't hear the PA or can't hear it over the cars.
+
+Press <kbd>C</kbd> on the Big Screen to turn captions on, and <kbd>C</kbd> again to turn them off. They start off. Like <kbd>O</kbd>, the choice is remembered between sessions.
+
+<!-- screenshot: Big Screen with the captions strip along the bottom showing the announcer's last line -->
+
+- The strip shows the line the announcer is saying now, in large type on a plate in the crowd-screen look's colors.
+- Each line stays up for at least eight seconds, longer for a long line so there's time to read it, then fades out over two seconds. The next line replaces it straight away.
+- A line too long for the width ends in "...".
+- While captions are on, the strip keeps its place at the bottom even when nothing is being said, so the leaderboard doesn't jump up and down.
+
+The captions use drivers' full names, as the PA does, because the Big Screen is in the room. A driver's **Online privacy** ticks only change the club's online pages (see [Online privacy](../race-day/drivers-and-classes.md#online-privacy)).
+
+The same lines can go on the Wi-Fi pages and the stream (see [Captions](phone-and-web.md#captions)) and on the club's online live page (see [Captions on the live page](../online/index.md#captions)).
+
 ## Track map
 
 If the layout you're racing on has a plan in the Track Designer with the racing line and the finish line drawn, the Big Screen shows a live map down its right-hand side. Each car is a dot going round, colored by its place in the race, with its position in the dot. The finish line is marked "S/F" and any split loops "S1", "S2" and "S3".
@@ -370,7 +388,7 @@ Leave **Never interrupt the leaderboard while a race is actually running (recomm
 
 After the checkered flag the announcer says "stand by for the recap" and then has to wait while the model writes it - half a minute is normal, and a slow night is longer. Your slides can fill that wait as a commercial break: they take the crowd's screen, one slide straight into the next, instead of taking a turn each with the standings.
 
-Tick **Play the sponsors as a commercial break while the recap is being written** under **Broadcast** on **Voice → AI Commentary**. It's off until you do, and it needs this page's **Show sponsor slides on the Big Screen** ticked with at least one slide to show, and a Big Screen open. Without those, nothing changes.
+Tick **Play the sponsors as a commercial break while the recap is being written** on the **After the flag** card on **Voice → AI Commentary**. It's off until you do, and it needs this page's **Show sponsor slides on the Big Screen** ticked with at least one slide to show, and a Big Screen open. Without those, nothing changes.
 
 What the Big Screen does:
 
@@ -514,6 +532,7 @@ Having copy doesn't move a sponsor up the queue. Whose turn it is comes first, a
 | A warned driver's name isn't red on the Big Screen | Deliberate: only the good highlights are colored on this screen. The mark after the name is still there. | Nothing to fix. Add the **Warnings** column if you want the count in a column of its own. |
 | The ON AIR band never appears | The show has no opener or bed chosen, no segment is ticked for the music, or the band is turned off on the Big Screen. | Set the music up on **Voice → AI Commentary**; press <kbd>O</kbd> on the Big Screen. |
 | The ON AIR band says "THE SHOW" | The show didn't name itself. **Play It** on **Voice → AI Commentary** always does this. | Nothing to fix. |
+| No captions on the Big Screen | Captions are off, or the announcer isn't saying anything. | Press <kbd>C</kbd> on the Big Screen. |
 | ON DECK bar is empty | Everything on the timetable is done, or there's nothing on it. | Build tonight's program on **Race Day → Next Steps** (the timetable fills itself from it), or add lines in the **Timetable** window. |
 | Countdown is blank | The race has no lap or time limit. | Set a limit on **Race Control**. See [Running a race](../race-control/running-a-race.md). |
 | Qual column shows dashes | The current session isn't a qualifier. | Nothing to fix. |

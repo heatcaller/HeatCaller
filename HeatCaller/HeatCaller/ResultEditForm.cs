@@ -87,10 +87,9 @@ public sealed class ResultEditForm : Form
     {
         var lblIntro = new Label
         {
-            Text = "Corrections are worked out from the race as it was actually run, not from the last correction - "
-                 + "setting everything back to zero and Finished gives the original result back. Qualifying, the "
-                 + "mains, the championship and the results pages all read the corrected figures from here on. "
-                 + "Achievements already earned for this race are not re-evaluated.",
+            Text = "Corrections are worked out from the race as run, not from the last correction: set everything back "
+                 + "to zero and Finished to get the original result. Qualifying, the mains, the championship and the "
+                 + "results pages all use the corrected figures. Achievements already earned aren't re-evaluated.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,

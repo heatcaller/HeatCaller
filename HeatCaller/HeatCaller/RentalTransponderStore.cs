@@ -79,6 +79,34 @@ public sealed class RentalTransponderStore
                 var loaded = JsonSerializer.Deserialize<List<RentalTransponder>>(SafeFile.ReadAllTextWithRetry(FilePath));
                 if (loaded is not null)
                 {
+                    // WHY (23 Oct 2026, bug hunt 10): a hand-edited or
+                    // restored file can say null where the app never writes
+                    // one. A null unit, "Notes": null or "History": null
+                    // crashed the Rentals page as MainForm built it, so
+                    // HeatCaller would not start at all. Repaired as
+                    // RivalryStore (Bug Hunt 8, A11-1), ThemeStore and
+                    // VenueStore do. A unit with no transponder ID is
+                    // dropped: the add dialog never saves one, and without
+                    // an ID it cannot be tied to laps or found again.
+                    loaded.RemoveAll(u => u is null || string.IsNullOrWhiteSpace(u.Transponder));
+
+                    foreach (var unit in loaded)
+                    {
+                        unit.AssetTag ??= string.Empty;
+                        unit.Notes ??= string.Empty;
+                        unit.CurrentHolderName ??= string.Empty;
+                        unit.DepositHeld ??= string.Empty;
+                        unit.History ??= new List<RentalLoan>();
+                        unit.History.RemoveAll(h => h is null);
+
+                        foreach (var loan in unit.History)
+                        {
+                            loan.HolderName ??= string.Empty;
+                            loan.DepositHeld ??= string.Empty;
+                            loan.ReturnNotes ??= string.Empty;
+                        }
+                    }
+
                     return new RentalTransponderStore(loaded);
                 }
             }

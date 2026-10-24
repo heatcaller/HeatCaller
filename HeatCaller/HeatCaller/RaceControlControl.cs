@@ -14,7 +14,7 @@
 /// </summary>
 public sealed partial class RaceControlControl : UserControl
 {
-    private readonly RaceControlSession _race;
+    private readonly RaceTiming _race;
     private readonly AnnouncementService _announcer;
     private readonly ProfileStore _profiles;
     private readonly RaceClassStore _raceClasses;
@@ -144,15 +144,47 @@ public sealed partial class RaceControlControl : UserControl
     // progress isn't affected by someone closing this window.
     private readonly System.Windows.Forms.Timer _clockRefreshTimer = new() { Interval = 250 };
 
-    private DateTime? _sessionStartedAtUtc;
+    /// <summary>
+    /// When this race started, as the saved session will say.
+    ///
+    /// WHY (23 Oct 2026, timing layer, P2): held by the app's journal
+    /// recorder now rather than by this page, so the crash journal - which
+    /// MainForm writes whether or not this page is there - and the filing
+    /// both read the one value. Read and written here exactly as the field it
+    /// used to be.
+    /// </summary>
+    private DateTime? _sessionStartedAtUtc
+    {
+        get => _journalRecorder.SessionStartedAtUtc;
+        set => _journalRecorder.SessionStartedAtUtc = value;
+    }
+
+    /// <summary>
+    /// Files finished races, and keeps the ones that could not be filed until
+    /// they are - the app's, owned by MainForm and handed to this page (23 Oct
+    /// 2026, timing layer, P2). See RaceFilingService.
+    /// </summary>
+    private readonly RaceFilingService _filing;
+
+    /// <summary>The app's crash-journal writer, which the filing service files against - see RaceJournalRecorder.</summary>
+    private readonly RaceJournalRecorder _journalRecorder;
 
     /// <summary>
     /// The running race, written to disk as it happens.
     ///
     /// Everything else here can be done again; a race cannot. See
-    /// <see cref="RaceJournal"/>.
+    /// <see cref="RaceJournal"/>. The app's one journal, which MainForm's
+    /// recorder writes (23 Oct 2026, timing layer, P2).
     /// </summary>
-    private readonly RaceJournal _journal = new();
+    private RaceJournal _journal => _journalRecorder.Journal;
+
+    /// <summary>
+    /// The session generation the replay was last emptied for at its green
+    /// (FollowRaceAudio). WHY (22 Oct 2026, bug hunt 9): demo, practice and
+    /// rehearsal races never start a recording, which is where the replay is
+    /// otherwise emptied, so Replay offered the previous race's finish as theirs.
+    /// </summary>
+    private int _replayRestartGeneration = -1;
 
     /// <summary>What the decoder has been hearing, for the pre-race check. Null when nothing is feeding it.</summary>
     private readonly TransponderWatch? _transponderWatch;
@@ -567,11 +599,16 @@ public sealed partial class RaceControlControl : UserControl
     /// </summary>
     public event Action? AnnouncerRequested;
 
-    public RaceControlControl(RaceControlSession race, AnnouncementService announcer, ProfileStore profiles, RaceClassStore raceClasses, TrackLayoutStore trackLayouts, SessionHistoryStore sessionHistory, AppSettings settings, UndoService undo, DayScheduleStore? daySchedule = null, SponsorStore? sponsors = null,
+    public RaceControlControl(RaceTiming race, AnnouncementService announcer, ProfileStore profiles, RaceClassStore raceClasses, TrackLayoutStore trackLayouts, SessionHistoryStore sessionHistory, AppSettings settings, UndoService undo, DayScheduleStore? daySchedule = null, SponsorStore? sponsors = null,
         RoundDefinitionStore? rounds = null, Func<RoundDefinition?>? activeRound = null, CommentaryService? commentary = null,
         TransponderWatch? transponderWatch = null, RaceEventStore? events = null, CheckInStore? checkIns = null,
-        SeasonStore? seasons = null, TechInspectionStore? techInspections = null)
+        SeasonStore? seasons = null, TechInspectionStore? techInspections = null, RaceFilingService? filing = null)
     {
+        // First, before anything below can read the session start or the
+        // journal through them (23 Oct 2026, timing layer, P2).
+        _filing = filing ?? throw new ArgumentNullException(nameof(filing), "Race Control files through the app's RaceFilingService - MainForm hands it over.");
+        _journalRecorder = _filing.JournalRecorder;
+
         _race = race;
         _transponderWatch = transponderWatch;
         _announcer = announcer;
@@ -606,11 +643,9 @@ public sealed partial class RaceControlControl : UserControl
         BuildLayout();
         WireRaceControl();
 
-        // The journal says when it cannot write, and when it can again -
-        // the one moment the race is running without its safety net is
-        // worth a line in the console.
-        _journal.StatusChanged += message =>
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] {message}");
+        // The journal's "cannot write" and "can again" lines are MainForm's
+        // to log now, since the journal is (23 Oct 2026, timing layer, P2) -
+        // see MainForm.RaceJournal.
 
         // The broadcast floor, which only ever has anything to say when a
         // claim had to be broken - see ShowFloor. Here because this page is
@@ -630,13 +665,24 @@ public sealed partial class RaceControlControl : UserControl
             // Polled on the clock tick rather than a timer per car: this
             // already runs four times a second, which is close enough for a
             // release call, and it can't leak a timer into the next race.
-            _race.PollReleases();
+            //
+            // WHY (23 Oct 2026, timing layer, P5): threaded, the race polls
+            // them itself on the timing clock (RaceTiming.OnHostTick), so a
+            // busy window can't hold a car's release - not from here.
+            if (!_race.IsThreaded)
+            {
+                _race.PollReleases();
+            }
 
             // A crossing the journal's throttle held back is written here, at
             // most a tick late, rather than waiting for the next crossing or
             // flag - the last laps before a crash were lost that way. Not
             // forced: Record keeps its own throttle. See RaceJournal.IsBehind.
-            if (_journal.IsBehind)
+            // (MainForm's race tick does the same, so a held-back write is
+            // still made with this page gone - 23 Oct 2026, timing layer, P2.)
+            // Threaded, the journal catches up on the timing tick instead
+            // (RaceJournalRecorder.ListenOnTimingSide - P4b).
+            if (!_race.IsThreaded && _journal.IsBehind)
             {
                 WriteJournal();
             }
@@ -674,8 +720,10 @@ public sealed partial class RaceControlControl : UserControl
                     _announcer.Load,
                     // The recap show is running, so Skip has something to
                     // stop even in the quiet while the model writes - see
-                    // EndRecapShow.
-                    programmeRunning: Volatile.Read(ref _recapShow) is not null);
+                    // EndRecapShow. And a replayed moment on air, which
+                    // Skip rides down (22 Oct 2026).
+                    programmeRunning: Volatile.Read(ref _recapShow) is not null || _replayCut is not null,
+                    replaying: _replayCut is not null);
             }
         };
         _clockRefreshTimer.Start();
@@ -975,6 +1023,7 @@ public sealed partial class RaceControlControl : UserControl
 
         CancelAutoStart();
         _race.Reset();
+        EndSplitCoaching("the race was reset");
 
         // Which session the reset left behind - see RefuseStaleResetUndo.
         var generationAfterReset = _race.SessionGeneration;
@@ -982,11 +1031,8 @@ public sealed partial class RaceControlControl : UserControl
         // As the Reset button does. Left behind, the journal offered the
         // reset race back at the next launch, as though it had been lost.
         // Not while an earlier race is still waiting to be saved - see
-        // FileUnfiledRaces.
-        if (_unfiledRaces.Count == 0)
-        {
-            _journal.Clear();
-        }
+        // RaceFilingService.FileUnfiledRaces.
+        _filing.ClearJournalUnlessUnfiled();
 
         _promptedTransponders.Clear();
         _unnamedTransponders.Clear();

@@ -13,7 +13,7 @@ namespace HeatCaller;
 /// </summary>
 public sealed class PracticeModeControl : UserControl
 {
-    private readonly RaceControlSession _race;
+    private readonly RaceTiming _race;
     private readonly ProfileStore _profiles;
     private readonly SessionHistoryStore _history;
     private readonly TrackLayoutStore _trackLayouts;
@@ -48,6 +48,23 @@ public sealed class PracticeModeControl : UserControl
     /// than at its Stage.
     /// </summary>
     public event Action? PracticeStopped;
+
+    /// <summary>
+    /// Raised when anything the gate-pass start depends on here changes - the
+    /// tick box, the targets, a practice starting or stopping. The host
+    /// (MainForm) hands the timing thread a fresh plan from it in threaded
+    /// mode (see AutoStartTargets); inline it does nothing with it.
+    /// </summary>
+    public event Action? AutoStartConditionsChanged;
+
+    /// <summary>
+    /// True while StartPractice is under way, from its check that the session
+    /// may be cleared to its end - see AdoptAutoStartedPractice.
+    /// </summary>
+    private bool _starting;
+
+    /// <summary>True for the whole of StartPractice: no plan is offered for a gate-pass start meanwhile (AutoStartTargets).</summary>
+    private bool _holdAutoStart;
 
     /// <summary>
     /// The track this practice is run on - the layout picked on this page,
@@ -158,7 +175,7 @@ public sealed class PracticeModeControl : UserControl
 
     private readonly Label _lblIntro = new();
 
-    public PracticeModeControl(RaceControlSession race, ProfileStore profiles, SessionHistoryStore history, TrackLayoutStore trackLayouts, AppSettings settings,
+    public PracticeModeControl(RaceTiming race, ProfileStore profiles, SessionHistoryStore history, TrackLayoutStore trackLayouts, AppSettings settings,
         GhostStore ghostStore,
         AnnouncementService? announcer = null, DayScheduleStore? daySchedule = null, SponsorStore? sponsors = null,
         UndoService? undo = null,
@@ -232,6 +249,56 @@ public sealed class PracticeModeControl : UserControl
 
     /// <summary>Raised when the user wants the full Ghost Cars page.</summary>
     public event Action? GhostsPageRequested;
+
+    /// <summary>
+    /// "Chase a Best Lap..." (22 Oct 2026): pick a driver - those on the
+    /// board first - and a ghost of their own best lap joins the practice,
+    /// "Sam's best", at their best tonight on this layout or their best ever
+    /// on it before tonight's. Picked again for the same driver, it is
+    /// brought up to their latest best rather than added twice. Ghost racing
+    /// is switched on with it, and in a running practice it goes straight on
+    /// track (MainForm.KeepRunningGhostsInStep). One Undo puts the ghosts
+    /// back as they were. See OwnBestGhost.
+    /// </summary>
+    private void ChaseABestLap()
+    {
+        var onTrack = _race.GetOrderedStandings().Select(s => s.TransponderId);
+        var candidates = OwnBestGhost.Candidates(_profiles.All, onTrack);
+
+        if (candidates.Count == 0)
+        {
+            AppDialog.Show(this,
+                "No driver profiles yet - a driver's best lap is what the ghost runs at, so there needs to be "
+                + "at least one driver on file.",
+                "Nobody to chase", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var picker = new GhostRivalPickerForm(candidates,
+            title: "Chase a Best Lap",
+            question: "Whose best lap should the ghost run at?",
+            okText: "Chase");
+
+        if (picker.ShowDialog(this) != DialogResult.OK || picker.SelectedTransponder is not { } transponder)
+        {
+            return;
+        }
+
+        var profile = _profiles.Get(transponder);
+        var before = _ghostStore.Snapshot();
+
+        var (ghost, refreshed) = OwnBestGhost.ChaseFor(_ghostStore.Current, transponder, profile?.DriverName, profile?.CarModel);
+
+        var store = _ghostStore;
+        _undo?.Capture(refreshed ? $"Bring {ghost.Name} up to date" : $"Chase {ghost.Name}", () =>
+        {
+            store.Restore(before);
+            RefreshGhosts();
+        });
+
+        _ghostStore.Save();
+        RefreshGhosts();
+    }
 
     /// <summary>Wraps a ghost so the list shows its name and pace, not its ID.</summary>
     private sealed record GhostListItem(GhostCar Ghost)
@@ -309,9 +376,9 @@ public sealed class PracticeModeControl : UserControl
         // --- What this page does ---
 
         _lblIntro.Text =
-            "Open lapping with no race structure - every transponder crossing the line is tracked, without touching "
-            + "track records or standings. Saved to Race History flagged as Practice, so it feeds Personal Bests and "
-            + "the Lap Times chart but never counts toward records or season points.";
+            "Open lapping with no race structure - every transponder crossing the line is tracked. Saved to Race "
+            + "History as Practice: it feeds Personal Bests and the Lap Times chart, but never track records, "
+            + "standings or season points.";
         _lblIntro.AutoSize = true;
         _lblIntro.ForeColor = AppTheme.TextMuted;
 
@@ -341,6 +408,10 @@ public sealed class PracticeModeControl : UserControl
         {
             _settings.PracticeAutoStartOnGatePass = _chkAutoStartOnGate.Checked;
             _settings.Save();
+
+            // Threaded, the timing thread is told at once - unticked, no car
+            // may start practice from here on (24 Oct 2026, timing layer, P7).
+            AutoStartConditionsChanged?.Invoke();
         };
 
         // Side by side, and one under the other when the line is too narrow
@@ -368,12 +439,12 @@ public sealed class PracticeModeControl : UserControl
         _numLapTarget.Minimum = 0;
         _numLapTarget.Maximum = 9999;
         _numLapTarget.Value = Math.Clamp(_settings.PracticeLapLimit, 0, 9999);
-        _numLapTarget.ValueChanged += (_, _) => { _settings.PracticeLapLimit = (int)_numLapTarget.Value; _settings.Save(); };
+        _numLapTarget.ValueChanged += (_, _) => { _settings.PracticeLapLimit = (int)_numLapTarget.Value; _settings.Save(); AutoStartConditionsChanged?.Invoke(); };
 
         _numTimeTarget.Minimum = 0;
         _numTimeTarget.Maximum = 180;
         _numTimeTarget.Value = Math.Clamp(_settings.PracticeTimeLimitMinutes, 0, 180);
-        _numTimeTarget.ValueChanged += (_, _) => { _settings.PracticeTimeLimitMinutes = (int)_numTimeTarget.Value; _settings.Save(); };
+        _numTimeTarget.ValueChanged += (_, _) => { _settings.PracticeTimeLimitMinutes = (int)_numTimeTarget.Value; _settings.Save(); AutoStartConditionsChanged?.Invoke(); };
 
         _numRollingWindow.Minimum = 2;
         _numRollingWindow.Maximum = 50;
@@ -455,7 +526,11 @@ public sealed class PracticeModeControl : UserControl
         var btnManageGhosts = new Button { Text = "Manage..." };
         btnManageGhosts.Click += (_, _) => GhostsPageRequested?.Invoke();
 
-        _ghostButtons = new ButtonBar().With(btnManageGhosts);
+        // Chase your own ghost (22 Oct 2026) - see OwnBestGhost.
+        var btnChaseBest = new Button { Text = "Chase a Best Lap..." };
+        btnChaseBest.Click += (_, _) => ChaseABestLap();
+
+        _ghostButtons = new ButtonBar().With(btnChaseBest, btnManageGhosts);
 
         _ghostsCard = new Section("Ghost cars");
 
@@ -621,7 +696,7 @@ public sealed class PracticeModeControl : UserControl
     /// <summary>
     /// The ghost card's width: about a third of the band, between 260px and
     /// 360px at the normal text size, at the size in use - and never
-    /// narrower than its caption, its switch or its button need. The setup
+    /// narrower than its caption, its switch or its widest button need. The setup
     /// card has the rest, and never less than 420px at the text size in
     /// use; too narrow for both at that, and each gives up the same share
     /// of its width, as Batteries' two cards do. Nothing here scrolls
@@ -629,9 +704,20 @@ public sealed class PracticeModeControl : UserControl
     /// </summary>
     private int GhostsWidth(int band)
     {
+        // The widest one button, not the whole row (22 Oct 2026): with
+        // Chase a Best Lap... beside Manage... the row on one line could ask
+        // for more than a narrow window at a large text size has to give, so
+        // a tight card lets the bar wrap its two buttons onto two lines (it
+        // always could - ButtonBar wraps) rather than claiming the width.
+        var widestButton = _ghostButtons?.Controls.OfType<Control>()
+            .Where(part => part.Visible || !_ghostButtons.Visible)
+            .Select(part => part.Width + part.Margin.Horizontal)
+            .DefaultIfEmpty(0)
+            .Max() ?? 0;
+
         var needs = Math.Max(
             Math.Max(_ghostsCard?.CaptionWidth ?? 0, _chkGhosts.GetPreferredSize(Size.Empty).Width),
-            _ghostButtons?.OneLineWidth ?? 0) + Section.Inset.Horizontal;
+            widestButton) + Section.Inset.Horizontal;
 
         var ghosts = Math.Max(
             Math.Clamp((int)(band * 0.34f), UiLayout.AtTextSize(GhostsLeastWidth), UiLayout.AtTextSize(GhostsMostWidth)),
@@ -693,6 +779,135 @@ public sealed class PracticeModeControl : UserControl
         // and it has to find practice already running to be counted.
         StartPractice(fromGatePass: true, triggeringDeviceTimeMs: triggeringDeviceTimeMs);
         return _active;
+    }
+
+    /// <summary>
+    /// Threaded mode: the lap and time targets a practice started at the gate
+    /// would take from this page now - read exactly as StartPractice reads
+    /// them - or null when this page may not have practice started for it:
+    /// one is running, one is being started, or the page is gone. UI thread.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Oct 2026, timing layer, P7): the host builds the timing
+    /// thread's plan from this (see RaceTiming.PracticeAutoStart). The race
+    /// being Idle with no warm-up is the timing side's own check, made at the
+    /// crossing - and at Idle with no warm-up ConfirmRaceControlCanBeCleared
+    /// lets practice through without a dialog, so nothing that asks the
+    /// person is skipped by starting practice there.
+    /// </remarks>
+    internal (int? LapLimit, TimeSpan? TimeLimit)? AutoStartTargets()
+    {
+        if (_active || _starting || _holdAutoStart || IsDisposed || Disposing)
+        {
+            return null;
+        }
+
+        return (
+            (int)_numLapTarget.Value == 0 ? null : (int)_numLapTarget.Value,
+            (int)_numTimeTarget.Value == 0 ? null : TimeSpan.FromMinutes((double)_numTimeTarget.Value));
+    }
+
+    /// <summary>
+    /// Threaded mode, on the UI thread: the timing thread has started practice
+    /// at the gate (RaceTiming.PostLinePass) - the engine's part of
+    /// StartPractice is done and the crossing counted. This page takes the
+    /// running session over WITHOUT resetting it: the rest of StartPractice,
+    /// with the before-values the timing thread kept. True when it did, so
+    /// the host can say so in the console.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WHY (24 Oct 2026, timing layer, P7). Delivered in order with the race's
+    /// events - after the start's, before the crossing's lap - and ahead of
+    /// any command this window issues, so a click always finds the page as
+    /// the race already is. When it cannot take the practice over:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>A Start pressed here is under way (_starting): that start is
+    /// taking the session anyway, and resets it. Only the before-values are
+    /// kept from the notice - they are the session's as it was before either
+    /// practice, while the ones that start read may already be the gate
+    /// practice's targets.</item>
+    /// <item>The page is gone (the app is closing): there is no page to stop
+    /// it, so the session is handed back here as Stop would - reset, practice
+    /// mode off, the race's limits and start type back. Practice is not
+    /// journalled, so there is no journal to clear.</item>
+    /// <item>A practice is already running here: left as it is. (The timing
+    /// side starts no second practice until this one is taken over.)</item>
+    /// <item>The session is no longer practice (something else took it -
+    /// a race recovery's restore): left to whoever has it, with a line in
+    /// the console.</item>
+    /// </list>
+    /// </remarks>
+    internal bool AdoptAutoStartedPractice(PracticeAutoStarted notice)
+    {
+        ArgumentNullException.ThrowIfNull(notice);
+
+        // Taken back by a race start before this page got to it - nothing
+        // here to take over (the host says so in the console).
+        if (notice.Cancelled)
+        {
+            return false;
+        }
+
+        if (_starting)
+        {
+            _lapLimitBeforePractice = notice.LapLimitBefore;
+            _timeLimitBeforePractice = notice.TimeLimitBefore;
+            _startTypeBeforePractice = notice.StartTypeBefore;
+            return false;
+        }
+
+        if (IsDisposed || Disposing)
+        {
+            _race.Reset();
+            _race.IsPracticeMode = false;
+            _race.LapLimit = notice.LapLimitBefore;
+            _race.TimeLimit = notice.TimeLimitBefore;
+            _race.StartType = notice.StartTypeBefore;
+            return false;
+        }
+
+        if (_active)
+        {
+            return false;
+        }
+
+        if (!_race.IsPracticeMode)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [practice] A car started practice at the gate, but the session had been taken over before this page got to it - left as it is.");
+            return false;
+        }
+
+        // Kept to hand back at Stop - see the fields. The timing thread read
+        // them before its Reset, as StartPractice does.
+        _lapLimitBeforePractice = notice.LapLimitBefore;
+        _timeLimitBeforePractice = notice.TimeLimitBefore;
+        _startTypeBeforePractice = notice.StartTypeBefore;
+
+        // From here on, StartPractice's own steps after the green.
+        _lapHandler = (_, _, _) =>
+        {
+            if (InvokeRequired) { BeginInvoke(RefreshGrid); return; }
+            RefreshGrid();
+        };
+        _race.LapProcessed += _lapHandler;
+
+        _tracker.Reset();
+
+        _active = true;
+
+        // When it started, not when this page got to it - the same moment
+        // StartPractice takes, however long the window was busy meanwhile.
+        _startedAtUtc = DateTime.UtcNow - TimeSpan.FromMilliseconds((double)Math.Max(0L, _race.DeliveringAgeMs ?? 0L));
+        _refreshTimer.Start();
+        _lblStatus.Text = "Practice running - lap the track freely";
+        _lblStatus.ForeColor = AppTheme.Success;
+
+        RefreshGrid();
+
+        AutoStartConditionsChanged?.Invoke();
+        return true;
     }
 
     /// <summary>
@@ -859,11 +1074,51 @@ public sealed class PracticeModeControl : UserControl
             return;
         }
 
-        if (!ConfirmRaceControlCanBeCleared())
-        {
-            return;
-        }
+        // WHY (24 Oct 2026, timing layer, P7): threaded, the timing thread
+        // may start practice at the gate on its own (AutoStartTargets). From
+        // here on it must not - this start is taking the session - so the
+        // host takes its plan back first. Then the window catches up with the
+        // timing thread: a practice a car started a moment ago is taken over
+        // now, quietly, and this Start has nothing left to do - rather than
+        // finding a "race running" and refusing it with a dialog. Both are
+        // no-ops inline.
+        _holdAutoStart = true;
 
+        try
+        {
+            AutoStartConditionsChanged?.Invoke();
+            _race.CatchUpWithTiming();
+
+            if (_active || !ConfirmRaceControlCanBeCleared())
+            {
+                return;
+            }
+
+            // Kept as a guard: a gate practice can no longer start from here
+            // on, but one that did is handed to this page in the middle of
+            // the start below, and only its before-values are kept (see
+            // AdoptAutoStartedPractice).
+            _starting = true;
+
+            try
+            {
+                StartPracticeTakingTheSession(fromGatePass, triggeringDeviceTimeMs);
+            }
+            finally
+            {
+                _starting = false;
+            }
+        }
+        finally
+        {
+            _holdAutoStart = false;
+            AutoStartConditionsChanged?.Invoke();
+        }
+    }
+
+    /// <summary>The rest of StartPractice, once the session may be cleared - word for word as it was.</summary>
+    private void StartPracticeTakingTheSession(bool fromGatePass, long? triggeringDeviceTimeMs)
+    {
         // Kept to hand back at Stop - see the fields.
         _lapLimitBeforePractice = _race.LapLimit;
         _timeLimitBeforePractice = _race.TimeLimit;
@@ -1033,6 +1288,10 @@ public sealed class PracticeModeControl : UserControl
         }
 
         PracticeStopped?.Invoke();
+
+        // Threaded, the gate-pass start may be armed again (24 Oct 2026,
+        // timing layer, P7).
+        AutoStartConditionsChanged?.Invoke();
 
         // Last, with the session already handed back and the refresh timer
         // stopped, so nothing runs underneath the dialog while it is up -

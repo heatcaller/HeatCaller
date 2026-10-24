@@ -37,7 +37,7 @@ A new install starts on the Kokoro voice, and Kokoro is also what speaks wheneve
 
 ### Can I hear a voice before I choose it?
 
-Yes. On **Voice → Voice Settings**, **Hear It** beside **Announcer voice:** plays a short sample of the HeatCaller voice you've highlighted. It costs nothing and needs no token, so it works before your club has signed up for anything. **Preview**, beside **Your own words:**, has that voice say words of your own — your class names, your drivers' names — out of a small daily allowance kept separate from the race-night one, so an afternoon of auditioning can't leave you short on Saturday. The Kokoro voice has **Test Kokoro Voice** beside **Kokoro voice:**. See [Hear a voice before you choose it](../announcer/voice.md#hear-a-voice-before-you-choose-it).
+Yes. At the top of **Voice → Cast**, on the **Announcer** card, **Hear It** beside **HeatCaller voice:** plays a short sample of the HeatCaller voice you've highlighted. It costs nothing and needs no token, so it works before your club has signed up for anything, and the free samples show there whichever voice you speak with. **Preview**, beside **Your own words:**, has that voice say words of your own — your class names, your drivers' names — out of a small daily allowance kept separate from the race-night one, so an afternoon of auditioning can't leave you short on Saturday. The Kokoro and ElevenLabs voices have **Test Voice** beside their pickers on the same card. See [Hear a voice before you choose it](../announcer/voice.md#hear-a-voice-before-you-choose-it).
 
 !!! note
     **Hear It** and **Preview** need a relay that has been deployed again since they were added. An older relay answers "This relay doesn't offer voice samples yet." If you run the relay yourself, deploy it again; otherwise ask whoever does.
@@ -115,7 +115,7 @@ Check these in order:
 1. The mute icon at the bottom of the sidebar is red, or hovering it shows **Unmute Announcer**. If so, the announcer is muted. Click it.
 2. ElevenLabs is chosen, and it has no API key or voice, has run out of credit, or can't be reached, while the Kokoro voice isn't standing in (its box under the ElevenLabs choice is unticked).
 3. The HeatCaller voice is chosen with no announcer voice picked, or the relay is refusing, on a PC that hasn't got Kokoro's voice file to stand in. On any PC that has it, this shows up as the whole night in the Kokoro voice rather than silence.
-4. Kokoro's own voice file isn't on this PC, or it's there and won't load. Kokoro is the bottom of the ladder and nothing stands in underneath it, so this is the one state where the announcer has nothing at all to speak with. Open **Voice → Voice Settings** and press **Download (about 310 MB)** beside **Kokoro voice:**. See [When nothing can speak](../announcer/voice.md#when-nothing-can-speak).
+4. Kokoro's own voice file isn't on this PC, or it's there and won't load. Kokoro is the bottom of the ladder and nothing stands in underneath it, so this is the one state where the announcer has nothing at all to speak with. Open **Voice → Voice Settings** and press **Download (about 310 MB)** under the Kokoro choice in **Speak with**. See [When nothing can speak](../announcer/voice.md#when-nothing-can-speak).
 
 **Sounds → Mixer** shows "NO VOICE:" and the reason when the announcer can't speak, and **Voice Settings** shows a red "NOTHING CAN SPEAK -" line when there's no Kokoro voice file either. The Developer Console on the **Connection** page tells you more: choose the **Voice** filter and look for lines like "Skipped announcement - ElevenLabs API key or voice not configured." or "NO VOICE -" and a reason. See [Voice announcements](../announcer/voice.md).
 
@@ -197,7 +197,7 @@ No. Your data isn't kept with the app, so replacing the app leaves it alone. Sti
 
 Email **support@heatcaller.com**, and include these:
 
-- The version, from the title bar, the startup screen or **About HeatCaller...** (for example **BETA 0.59.0**).
+- The version, from the title bar, the startup screen or **About HeatCaller...** (for example **BETA 0.60.0**).
 - What you were doing.
 - The support file: **Save Support Info** on the **Getting help** card of the **Backup & Restore** page. It has the console, the crash log, the version and the PC in it already, with driver names and email addresses taken out. See [Save Support Info](../admin/backups.md#save-support-info).
 

@@ -208,7 +208,7 @@ public sealed class TrackPositions
     /// split, a fresh start when a race is staged, counted down or reset, and
     /// the time under a red flag taken out (see Resumed).
     /// </summary>
-    public void Attach(RaceControlSession race)
+    public void Attach(RaceTiming race)
     {
         race.LapProcessed += (standing, _, _) => Crossed(standing.TransponderId, TimingPoint.Line, TimingClock.NowMs);
         race.SplitCrossed += (standing, point, _) => Crossed(standing.TransponderId, point, TimingClock.NowMs);

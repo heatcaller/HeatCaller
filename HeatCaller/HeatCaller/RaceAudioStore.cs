@@ -95,6 +95,9 @@ internal sealed class RaceAudioStore
         /// <summary>Whether the podium's videos go on the club's page, with a QR code on the Big Screen. On by default.</summary>
         public bool SharePodiumVideos { get; set; } = true;
 
+        /// <summary>Whether each driver's own race clips go up to their private night page. Off by default.</summary>
+        public bool ShareDriverClips { get; set; }
+
         public string Folder { get; set; } = string.Empty;
         public int MaxMinutes { get; set; } = DefaultMaxMinutes;
         public int MinFreeMb { get; set; } = DefaultMinFreeMb;
@@ -254,6 +257,28 @@ internal sealed class RaceAudioStore
         }
     }
 
+    /// <summary>
+    /// Whether each driver's own race clips (the mp3 of their race) go up to
+    /// their private night page on the relay, reachable only with their
+    /// badge (22 Oct 2026, driver experience). OFF by default: it is a
+    /// recording of a named person, so a club decides, not an update. Also
+    /// needs driver nights on.
+    /// </summary>
+    public bool ShareDriverClips
+    {
+        get => _file.ShareDriverClips;
+        set
+        {
+            if (_file.ShareDriverClips == value)
+            {
+                return;
+            }
+
+            _file.ShareDriverClips = value;
+            Save();
+        }
+    }
+
     /// <summary>The club's social handle, shown at the end of each highlight video - "@yourclub". Empty for none.</summary>
     public string VideoHandle
     {
@@ -290,6 +315,33 @@ internal sealed class RaceAudioStore
         get
         {
             var configured = _file.Folder;
+
+            // WHY (23 Oct 2026, bug hunt 10): a rehearsal copies
+            // race-audio.json as it is, so a club's own folder (D:\Race
+            // Audio) came along with it. The cold open, sign-off, recap and
+            // driver pieces then made and marked tonight's night in the
+            // club's REAL folder, and the prune after them deleted the
+            // club's oldest real night to make room. Now a rehearsal always
+            // records into its own folder, as BackupService.SafeBackupFolder
+            // does for backups - a folder inside that one is kept. The
+            // stored setting is untouched (FolderSetting), and the Sounds >
+            // Recording page shows this folder, the one really used.
+            if (AppPaths.IsRehearsal)
+            {
+                try
+                {
+                    return !string.IsNullOrWhiteSpace(configured)
+                        && !PlainFileName.IsNetworkPath(configured)
+                        && Path.IsPathFullyQualified(configured)
+                        && PlainFileName.IsInside(DefaultFolder, configured)
+                            ? configured
+                            : DefaultFolder;
+                }
+                catch (ArgumentException)
+                {
+                    return DefaultFolder;
+                }
+            }
 
             if (string.IsNullOrWhiteSpace(configured) || PlainFileName.IsNetworkPath(configured))
             {
@@ -482,7 +534,7 @@ internal sealed class RaceAudioStore
     /// </summary>
     internal static void DeleteOurOwnFrom(string nightFolder)
     {
-        static void DeleteRecordingsIn(string folder)
+        static void DeleteRecordingsIn(string folder, bool videosToo)
         {
             foreach (var file in Directory.EnumerateFiles(folder).ToList())
             {
@@ -490,22 +542,28 @@ internal sealed class RaceAudioStore
 
                 // .mp4 too (22 Oct 2026, bug hunt): the highlight videos
                 // live here as well, and were left behind for good.
+                //
+                // WHY (23 Oct 2026, bug hunt 10): but only in Highlights,
+                // the one place HeatCaller writes a video. At the night
+                // folder's top level an .mp4 is the club's own - a photo
+                // import files a phone's videos into the same yyyy-MM-dd
+                // folder - and it was deleted for good with the recordings.
                 if (string.Equals(extension, ".mp3", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(extension, ".wav", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(extension, ".mp4", StringComparison.OrdinalIgnoreCase))
+                    || (videosToo && string.Equals(extension, ".mp4", StringComparison.OrdinalIgnoreCase)))
                 {
                     File.Delete(file);
                 }
             }
         }
 
-        DeleteRecordingsIn(nightFolder);
+        DeleteRecordingsIn(nightFolder, videosToo: false);
 
         var highlights = System.IO.Path.Combine(nightFolder, DriversOwnClip.FolderName);
 
         if (Directory.Exists(highlights))
         {
-            DeleteRecordingsIn(highlights);
+            DeleteRecordingsIn(highlights, videosToo: true);
 
             if (!Directory.EnumerateFileSystemEntries(highlights).Any())
             {

@@ -180,6 +180,198 @@ public sealed partial class RaceControlControl
         }
     }
 
+    /// <summary>What a replayed moment calls itself while it holds the broadcast floor.</summary>
+    private const string ReplayingTheMoment = "a moment being replayed";
+
+    /// <summary>How much of the race a replay plays: the design's "take twenty seconds".</summary>
+    internal const double ReplayMomentSeconds = 20;
+
+    /// <summary>Least race audio worth replaying - less is a click, not a moment.</summary>
+    internal const double LeastMomentSeconds = 3;
+
+    /// <summary>The replay on air now, so Skip can ride it down. Null when none is.</summary>
+    private CancellationTokenSource? _replayCut;
+
+    /// <summary>
+    /// Plays the last twenty seconds the room heard, again (22 Oct 2026 -
+    /// roadmap "Item 6: replaying a call").
+    ///
+    /// THE ROOM'S OWN AUDIO, NOT THE WORDS. Play again re-speaks a segment;
+    /// this plays back the finished mix - the call, the crowd, the music
+    /// under it - from RaceReplayBuffer, which the race recording feeds. So
+    /// it only has something to play while race recording is on, and it
+    /// says so when it has not.
+    ///
+    /// TAKEN THE MOMENT THE BUTTON IS PRESSED. The race director presses it
+    /// because of what just happened, so the twenty seconds are the ones
+    /// before the press, copied before anything else plays - the sting
+    /// marking the replay would otherwise be in it. Pressed after the
+    /// flag, it is the last twenty seconds of the race, and the line says
+    /// that instead.
+    ///
+    /// MARKED IN AND OUT with the show's own boundary sting when there is
+    /// one (ShowTreatment.StingForABoundary / MarkOnceAsync - the seam
+    /// built for exactly this), so the room can tell a replay from the race
+    /// still going on. With the floor only, for the reason Play again
+    /// takes it: two shows over each other is the 11 Oct fault.
+    ///
+    /// WHICH MOMENT IS STILL THE RACE DIRECTOR'S CALL. The roadmap's open
+    /// question - which moments are worth an automatic replay, ranked by
+    /// NightMoments.Rank - is not answered here; nothing replays unless
+    /// somebody presses the button.
+    /// </summary>
+    private async Task ReplayTheMomentAsync()
+    {
+        if (_replayCut is not null)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] A replay is already on air - press Skip to stop it.");
+
+            return;
+        }
+
+        // WHY (22 Oct 2026): the replay never looked at the mute, so pressed
+        // while everything was muted it played the race mix over the PA
+        // anyway. Now it does not start while muted.
+        if (BroadcastImaging.Muted)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] Not replaying - all sound is muted. Unmute first.");
+
+            return;
+        }
+
+        var buffer = RaceReplayBuffer.Shared;
+        var samples = buffer.Last(ReplayMomentSeconds);
+        var seconds = samples.Length / (double)RaceReplayBuffer.SampleRate;
+
+        // WHY (22 Oct 2026): a recording that stops partway now empties the
+        // replay, so this also names that cause rather than only the tick box.
+        if (seconds < LeastMomentSeconds)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] Nothing to replay - no race audio is held. The replay comes from the "
+                + "race recording, so \"Record each race, and cut each driver their own clip\" has to be ticked on Sounds - Recording, with a race running or just run. "
+                + "If it was ticked, the recording may have stopped partway (its time limit, a low disk or a write error).");
+
+            return;
+        }
+
+        // Still coming in: the moment just gone. Stopped a while ago: the
+        // end of the race, which is what the room will hear.
+        var finished = buffer.SinceLastAudio > TimeSpan.FromSeconds(5);
+        var what = finished
+            ? $"the last {seconds:0} seconds of the race"
+            : $"the last {seconds:0} seconds";
+
+        var claimed = ShowFloor.TryClaim(ReplayingTheMoment);
+
+        if (!claimed)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [show] Replaying {what} over {ShowFloor.HeldBy ?? "what is already on"} - asked for from Race Control.");
+        }
+
+        var cut = new CancellationTokenSource();
+        _replayCut = cut;
+
+        // WHY (22 Oct 2026): only Skip could cut a replay, so the mute -
+        // which stops everything in BroadcastImaging's Live registry - left
+        // up to twenty seconds of race audio playing over a safety call. The
+        // replay is registered there now, and the mute rides it down exactly
+        // as Skip does (the sting, the gain and the floor all follow cut).
+        BroadcastImaging.Playing(cut, () =>
+        {
+            try
+            {
+                cut.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already over.
+            }
+        });
+
+        try
+        {
+            var treatment = claimed ? ShowMusic?.Invoke() : null;
+            var sting = treatment?.StingForABoundary();
+
+            if (sting is not null)
+            {
+                await treatment!.MarkOnceAsync(sting.Clip, sting.Level, "sting", cut.Token, sting.Post).ConfigureAwait(true);
+            }
+
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Replaying {what} - asked for from Race Control.");
+
+            // Ridden down rather than cut when Skip is pressed, as every
+            // other sound the show stops.
+            var sound = new SmoothGainSampleProvider(RaceReplayBuffer.ToSound(samples), 1f, downSeconds: 0.3);
+
+            // The bus takes no token here, so the wait is on Skip's token as
+            // well: a skipped replay lets go of the floor straight away
+            // rather than when its last twenty seconds would have ended,
+            // while the gain glides what is left of it down to nothing.
+            var playing = AudioBus.PlayAsync(sound, 0.9f);
+
+            using (cut.Token.Register(() => sound.Target = 0f))
+            {
+                await Task.WhenAny(playing, Task.Delay(Timeout.Infinite, cut.Token)).ConfigureAwait(true);
+            }
+
+            if (playing.IsFaulted)
+            {
+                throw playing.Exception!.GetBaseException();
+            }
+
+            if (sting is not null && !cut.IsCancellationRequested)
+            {
+                await treatment!.MarkOnceAsync(sting.Clip, sting.Level, "sting", cut.Token, sting.Post).ConfigureAwait(true);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Skipped - SkipWhatIsOnAir has said so - or muted, which the
+            // mute's own log line covers (22 Oct 2026).
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Couldn't replay {what}: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            _replayCut = null;
+            BroadcastImaging.Gone(cut);
+            cut.Dispose();
+
+            if (claimed)
+            {
+                ShowFloor.Release(ReplayingTheMoment);
+            }
+        }
+    }
+
+    /// <summary>Rides a replay on air down, for Skip. False when none was on.</summary>
+    private bool StopTheReplay()
+    {
+        if (_replayCut is not { } cut)
+        {
+            return false;
+        }
+
+        try
+        {
+            cut.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Replay stopped from Race Control.");
+        return true;
+    }
+
     /// <summary>
     /// Opens tonight's club notes - the asides that are not about the
     /// racing, and the approval list for anything the room sent in.
@@ -349,8 +541,15 @@ public sealed partial class RaceControlControl
         // store the same way, so a ballot built from the staged cars and
         // one built from the program cannot name the same driver
         // differently.
+        //
+        // WHY (23 Oct 2026, bug hunt 10): ghost cars were on the ballot.
+        // A ghost feeds the live standings like any car, so a vote opened
+        // mid-race offered it to the phones - a choice that can never win,
+        // since the saved results never hold a ghost - and one real car
+        // plus a ghost passed the two-driver minimum. Both branches now
+        // drop ghosts, the same way the relay ballot already does.
         var staged = _race.GetOrderedStandings()
-            .Where(one => !string.IsNullOrWhiteSpace(one.TransponderId))
+            .Where(one => !string.IsNullOrWhiteSpace(one.TransponderId) && !Ghosts.IsGhost(one.TransponderId))
             .Select(one => new VoteOption(one.TransponderId, NameOnTheBallot(one.TransponderId)))
             .ToList();
 
@@ -367,7 +566,7 @@ public sealed partial class RaceControlControl
         }
 
         return round.AssignedTransponders
-            .Where(one => !string.IsNullOrWhiteSpace(one))
+            .Where(one => !string.IsNullOrWhiteSpace(one) && !Ghosts.IsGhost(one))
             .Select(one => new VoteOption(one, NameOnTheBallot(one)))
             .ToList();
     }
@@ -423,7 +622,10 @@ public sealed partial class RaceControlControl
     {
         // Before the show music check: a recap runs, and is worth stopping,
         // on a PC with no show music too.
-        var recapStopped = EndRecapShow("it was skipped from Race Control");
+        // A replayed moment first (22 Oct 2026): it is race audio, not a
+        // show, so nothing below would reach it.
+        var replayStopped = StopTheReplay();
+        var recapStopped = EndRecapShow("it was skipped from Race Control") || replayStopped;
 
         if (ShowMusic?.Invoke() is not { } treatment)
         {

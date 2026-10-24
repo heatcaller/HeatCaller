@@ -171,7 +171,7 @@ public sealed class BugHunt7BigscreenVideoTests : IDisposable
     /// running theme, whose fonts need GDI+.
     /// </summary>
     private static WebServerService Pages() =>
-        new(new RaceControlSession(), ProfileStore.Load(), settings: new AppSettings { DisplayLook = Looks.MidnightKey });
+        new(new RaceTiming(new RaceControlSession()), ProfileStore.Load(), settings: new AppSettings { DisplayLook = Looks.MidnightKey });
 
     /// <summary>One function of a page's script, from its first line to the brace that closes it at the left margin.</summary>
     private static string FunctionBody(string page, string start)

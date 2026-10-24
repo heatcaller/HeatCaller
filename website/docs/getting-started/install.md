@@ -49,7 +49,7 @@ If you put it somewhere else, use the full path to the `HeatCaller.csproj` in it
 
 ## The startup screen
 
-A dark startup screen with the **HEATCALLER** name and the version (for example **BETA 0.59.0**) shows while the app loads its pages. It shows short progress lines:
+A dark startup screen with the **HEATCALLER** name and the version (for example **BETA 0.60.0**) shows while the app loads its pages. It shows short progress lines:
 
 - "Starting up..."
 - "Loading settings and driver profiles..."
@@ -83,7 +83,7 @@ The first time HeatCaller starts, the **Welcome to HeatCaller** wizard walks you
 | **Track** | A track layout name, such as "Garage Oval". Then **Where do you race?**: **At a club**, or **At home, with family or friends**. | The **Track Layouts** page. It's also selected as the current layout. Where you race is the setting on the **Achievements** page. See [At a club or at home](../race-control/results-and-championships.md#at-a-club-or-at-home). |
 | **Classes** | One class per line, or press the quick-add buttons (Stock, Modified, Open, Novice, Spec). | The **Classes** page. |
 | **Drivers** | Up to six drivers, each with a name and transponder number, and the class they race in. | The **Driver Hub** page. |
-| **All set** | Nothing. A summary of what was set up, including the sound, and a box to start the app tour. | |
+| **All set** | A summary of what was set up, including the sound, a box to start the app tour, and **Keep pages not yet tested at a real event out of the sidebar for now**, ticked for a new club. | The tick is the same one as in **Manage Navigation** (see [Reordering and hiding pages](tour.md#reordering-and-hiding-pages)). It's saved when you press **Finish**. |
 
 Press **Finish** on the last step.
 

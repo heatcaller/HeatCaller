@@ -95,8 +95,7 @@ public sealed class RaceClassesControl : UserControl
         var lblIntro = new Label
         {
             Text = "A class is the rulebook a group of drivers races under: how qualifying is scored, how many heats "
-                 + "count, how big a main is, whether bump-ups happen, and what a scrutineer checks. Everything here "
-                 + "is per class, because a club rarely runs two classes the same way.",
+                 + "count, how big a main is, whether bump-ups happen, and what a scrutineer checks - set per class.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

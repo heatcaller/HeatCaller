@@ -52,10 +52,10 @@ public sealed class SplitLineUpForm : Form
 
         var intro = new Label
         {
-            Text = "Lay the split loop right beside the start/finish line, at the same spot. Then drive a car with both of its "
-                   + "transponders fitted across them, five or six times. Each crossing both loops read is listed below with how "
-                   + "much later the split loop read it. Save keeps the middle one, and it's taken off every split time. "
-                   + "Then put the split loop back in its place round the track.",
+            Text = "Lay the split loop right beside the start/finish line. Drive a car with both its transponders fitted "
+                   + "across them five or six times; each crossing both loops read is listed below with how much later the "
+                   + "split loop read it. Save keeps the middle one and takes it off every split time. Then put the split "
+                   + "loop back in its place round the track.",
             AutoSize = true,
         };
 

@@ -114,7 +114,7 @@ describe("online check-in", () => {
     assert.equal(inbox.body.items[0].wanted, true);
 
     const list = await call(harness, "POST", "/api/v1/c/acme-rc/checkin/list", { json: { pin: "4321" } });
-    assert.equal(list.body.drivers.find((d: { id: string }) => d.id === SAM).checkedIn, true);
+    assert.equal(list.body.drivers.find((d: { name: string }) => d.name === "Sam Carter").checkedIn, true);
   });
 
   it("forgets taps only once the laptop acknowledges them", async () => {

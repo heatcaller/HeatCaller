@@ -163,7 +163,7 @@ public sealed class RaceAudioTests : IDisposable
         Assert.Equal(new long[] { 1_200, 2_400, 3_600 }, RaceHighlights.CrossingTimesMs(live.LapTimesMs));
 
         var journal = new RaceJournal();
-        journal.Record(race, DateTime.UtcNow, string.Empty, force: true);
+        journal.Record(new RaceTiming(race), DateTime.UtcNow, string.Empty, force: true);
 
         var entry = RaceJournal.Unfinished();
         Assert.NotNull(entry);

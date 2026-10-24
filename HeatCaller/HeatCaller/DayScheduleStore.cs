@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace HeatCaller;
 
@@ -6,6 +7,38 @@ namespace HeatCaller;
 public sealed class DayScheduleStore
 {
     private readonly List<ScheduleEntry> _entries;
+
+    /// <summary>
+    /// Ids of the lines AutoCompleteRecorded ticked itself - as opposed to a
+    /// director's own tick - so it can take back only its own ticks.
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10): the auto-tick only ever ticked. Delete
+    /// a heat's race from Race History (the demo hint's way to clear a
+    /// rehearsal, or the way to re-run a mis-recorded heat) and the round went
+    /// back to unrun while its timetable line stayed done: Up Next, the
+    /// announcer, the countdown and every phone's timetable skipped it. Kept
+    /// by id because Update and UpdateMany swap the line objects. Saved in
+    /// the same file as an extra "AutoCompleted": true on the line (see Save),
+    /// which older builds simply ignore and a missing one reads as false, so
+    /// files written before this load exactly as they did.
+    /// </summary>
+    private readonly HashSet<string> _autoTicked = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The start stamp each auto-untick took off, by line id, so that undoing
+    /// the race delete that caused it gives the line its start back.
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10 review): the untick clears the stamp so a
+    /// re-run is timed from its own start, but Race History's undo relinks the
+    /// race and the line was then ticked again with no start at all, so
+    /// "running late" fell back to an older line. Put back only when the line
+    /// has no start of its own by then - a re-run's real start is never
+    /// overwritten. Memory only: an undo does not outlive the session either.
+    /// </summary>
+    private readonly Dictionary<string, DateTime> _startsTakenBack = new(StringComparer.Ordinal);
+
+    /// <summary>The name the auto-tick flag is saved under on a line in the file.</summary>
+    private const string AutoTickedProperty = "AutoCompleted";
 
     private static string FilePath => Path.Combine(
         AppPaths.Root,
@@ -45,10 +78,12 @@ public sealed class DayScheduleStore
         {
             if (File.Exists(FilePath))
             {
-                var list = JsonSerializer.Deserialize<List<ScheduleEntry>>(SafeFile.ReadAllTextWithRetry(FilePath));
+                var text = SafeFile.ReadAllTextWithRetry(FilePath);
+                var list = JsonSerializer.Deserialize<List<ScheduleEntry>>(text);
                 if (list is not null)
                 {
                     var store = new DayScheduleStore(list);
+                    store._autoTicked.UnionWith(ReadAutoTicked(text));
 
                     // Lines written before they carried an anchor get one from
                     // where they sit in the file, which is exactly where they
@@ -106,12 +141,76 @@ public sealed class DayScheduleStore
             return;
         }
 
-        var json = JsonSerializer.Serialize(_entries, new JsonSerializerOptions { WriteIndented = true });
+        var json = _entries.Any(e => _autoTicked.Contains(e.Id))
+            ? SerializeWithAutoTicks()
+            : JsonSerializer.Serialize(_entries, new JsonSerializerOptions { WriteIndented = true });
 
         // Through SafeFile like every other store: a bare WriteAllText
         // threw out of every schedule edit on a locked or full disk, and a
         // crash partway through left a truncated timetable behind.
         SafeFile.WriteAllText(FilePath, json);
+    }
+
+    /// <summary>
+    /// The lines as Save has always written them, plus "AutoCompleted": true
+    /// on each line the app ticked itself (see _autoTicked). Only taken when
+    /// there is such a line, so a file with none is written exactly as before.
+    /// </summary>
+    private string SerializeWithAutoTicks()
+    {
+        var array = JsonSerializer.SerializeToNode(_entries) as JsonArray;
+        if (array is null || array.Count != _entries.Count)
+        {
+            return JsonSerializer.Serialize(_entries, new JsonSerializerOptions { WriteIndented = true });
+        }
+
+        for (var i = 0; i < _entries.Count; i++)
+        {
+            if (_autoTicked.Contains(_entries[i].Id) && array[i] is JsonObject line)
+            {
+                line[AutoTickedProperty] = true;
+            }
+        }
+
+        return array.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>
+    /// The ids of the lines the file marks as ticked by the app itself. Read
+    /// from the same text the lines came from; anything not shaped as
+    /// expected is simply not a flag, so it can never stop the file loading.
+    /// </summary>
+    internal static IReadOnlyList<string> ReadAutoTicked(string json)
+    {
+        var ids = new List<string>();
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return ids;
+            }
+
+            foreach (var line in doc.RootElement.EnumerateArray())
+            {
+                if (line.ValueKind == JsonValueKind.Object
+                    && line.TryGetProperty(AutoTickedProperty, out var flag)
+                    && flag.ValueKind == JsonValueKind.True
+                    && line.TryGetProperty("Id", out var id)
+                    && id.ValueKind == JsonValueKind.String
+                    && id.GetString() is { Length: > 0 } text)
+                {
+                    ids.Add(text);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Not readable as flags - the lines themselves already loaded.
+        }
+
+        return ids;
     }
 
     /// <summary>
@@ -431,6 +530,10 @@ public sealed class DayScheduleStore
         if (entry is not null)
         {
             entry.IsComplete = complete;
+
+            // WHY (23 Oct 2026, bug hunt 10): a director's own tick or untick
+            // is theirs - AutoCompleteRecorded never takes it back.
+            _autoTicked.Remove(entry.Id);
             Save();
         }
     }
@@ -720,8 +823,17 @@ public sealed class DayScheduleStore
 
     /// <summary>
     /// Ticks off every generated line whose round has been recorded - the
-    /// self-maintenance a line earns by knowing which heat it is. One save
-    /// however many lines changed.
+    /// self-maintenance a line earns by knowing which heat it is - and takes
+    /// its own tick back off a line whose round is no longer recorded. One
+    /// save however many lines changed.
+    ///
+    /// WHY (23 Oct 2026, bug hunt 10): it used to tick only, so deleting a
+    /// heat's race left the heat unrun on the programme and done on the
+    /// timetable. Only a tick this method made is undone (see _autoTicked):
+    /// a line the director ticked by hand - a heat skipped, say - stays
+    /// done. Undoing one also clears its start stamp, because MarkStarted
+    /// never overwrites one and the re-run would otherwise be measured from
+    /// the rehearsal's start time.
     /// </summary>
     public int AutoCompleteRecorded(Func<string, bool> isRecorded)
     {
@@ -729,11 +841,38 @@ public sealed class DayScheduleStore
 
         foreach (var entry in _entries.Where(e =>
                      string.Equals(e.EventId, CurrentEventId, StringComparison.Ordinal)
-                     && e.IsGenerated && !e.IsComplete))
+                     && e.IsGenerated))
         {
-            if (isRecorded(entry.RoundId))
+            if (!entry.IsComplete)
             {
-                entry.IsComplete = true;
+                // A line unticked some other way since is not ours any more.
+                _autoTicked.Remove(entry.Id);
+
+                if (isRecorded(entry.RoundId))
+                {
+                    entry.IsComplete = true;
+                    _autoTicked.Add(entry.Id);
+
+                    // The start an untick took off, back - see _startsTakenBack.
+                    if (_startsTakenBack.Remove(entry.Id, out var started) && entry.ActualStartUtc is null)
+                    {
+                        entry.ActualStartUtc = started;
+                    }
+
+                    changed++;
+                }
+            }
+            else if (_autoTicked.Contains(entry.Id) && !isRecorded(entry.RoundId))
+            {
+                entry.IsComplete = false;
+
+                if (entry.ActualStartUtc is { } was)
+                {
+                    _startsTakenBack[entry.Id] = was;
+                }
+
+                entry.ActualStartUtc = null;
+                _autoTicked.Remove(entry.Id);
                 changed++;
             }
         }

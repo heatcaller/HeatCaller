@@ -112,10 +112,16 @@ public static partial class CommentaryReaders
             return null;
         }
 
-        var name = Typed(profiles.Get(who)?.SpokenName);
+        // WHY (23 Oct 2026, bug hunt 10): this read SpokenName straight off
+        // the profile, which falls back to the TRANSPONDER when a profile has
+        // no driver or announcer name (a CSV row with an empty name column),
+        // so the guard below never fired and the principal was handed the
+        // hardware id as a name. SaidAs needs a driver name first.
+        var name = SaidAs(profiles, who);
 
-        // A driver with no profile has no name to say - the same answer
-        // GridHistory and PaceTonight give, for the same reason.
+        // A driver with no profile, or a profile with no driver name, has no
+        // name to say - see SaidAs. The same answer GridHistory and
+        // PaceTonight give, for the same reason.
         if (name.Length == 0)
         {
             return null;
@@ -240,7 +246,9 @@ public static partial class CommentaryReaders
 
         foreach (var other in opponents)
         {
-            var rivalName = Typed(profiles.Get(other)?.SpokenName);
+            // SaidAs, not SpokenName (23 Oct 2026, bug hunt 10): an unnamed
+            // rival's SpokenName is its transponder - see TheTeamNight.
+            var rivalName = SaidAs(profiles, other);
 
             if (rivalName.Length == 0)
             {

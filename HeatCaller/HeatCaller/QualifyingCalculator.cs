@@ -64,7 +64,10 @@ public static class QualifyingCalculator
         long ElapsedMs,
         long FastLapMs,
         long ConsecutiveMs,
-        int ConsecutiveStartLap);
+        int ConsecutiveStartLap,
+        // WHY (23 Oct 2026, bug hunt 10): the penalty share of ConsecutiveMs,
+        // so "where these numbers came from" can tell laps from penalties.
+        long ConsecutivePenaltyMs = 0);
 
     public sealed record Entry(
         string Transponder,
@@ -93,7 +96,13 @@ public static class QualifyingCalculator
         /// Can be fewer than HeatsCounted: best 2 of 3 still counts a heat
         /// the driver crashed out of when they only ran two.
         /// </summary>
-        int WindowsCounted = 0)
+        int WindowsCounted = 0,
+        /// <summary>
+        /// The penalties inside <see cref="BestConsecutiveMs"/> when it is one
+        /// heat's window (bug hunt 10), so the laps can be checked on their own.
+        /// Zero when several heats are totalled.
+        /// </summary>
+        long ConsecutivePenaltyMs = 0)
     {
         /// <summary>Average lap within the counted consecutive run(s).</summary>
         public long ConsecutiveAverageMs(int lapCount)
@@ -293,16 +302,18 @@ public static class QualifyingCalculator
                 // RacePenaltyMs; a result saved before that reads zero, which
                 // is how it behaved before. The average lap is taken from the
                 // clean window, before any penalty is added.
+                long penaltyMs = 0;
                 if (windowMs > 0)
                 {
                     var averageLapMs = windowMs / lapCount;
-                    windowMs += Math.Max(0, result.RacePenaltyMs) + Math.Max(0, result.TimePenaltyMs) + Math.Max(0, result.LapPenalty) * averageLapMs;
+                    penaltyMs = Math.Max(0, result.RacePenaltyMs) + Math.Max(0, result.TimePenaltyMs) + Math.Max(0, result.LapPenalty) * averageLapMs;
+                    windowMs += penaltyMs;
                 }
 
                 var driverKey = DriverKey(result.Transponder, profiles);
 
                 AddHeat(byDriver, driverKey, method, new HeatScore(round.Id, round.RoundLabel, round.LinkedSessionId, session.StartedAtUtc,
-                    result.Laps, result.ElapsedMs, result.FastLapMs, windowMs, startLap));
+                    result.Laps, result.ElapsedMs, result.FastLapMs, windowMs, startLap, penaltyMs));
 
                 var profile = profiles.Get(driverKey);
                 names[driverKey] = (
@@ -327,15 +338,17 @@ public static class QualifyingCalculator
                 // were left off, so the projection and the provisional pole
                 // call put a penalised driver ahead of a clean one. As above,
                 // only a heat with a window has anything to add to.
+                long penaltyMs = 0;
                 if (windowMs > 0)
                 {
-                    windowMs += Math.Max(0, result.PenaltyMs);
+                    penaltyMs = Math.Max(0, result.PenaltyMs);
+                    windowMs += penaltyMs;
                 }
 
                 var driverKey = DriverKey(result.Transponder, profiles);
 
                 AddHeat(byDriver, driverKey, method, new HeatScore(live.RoundId, live.RoundLabel, null, live.StartedAtUtc,
-                    result.Laps, result.ElapsedMs, result.FastLapMs, windowMs, startLap));
+                    result.Laps, result.ElapsedMs, result.FastLapMs, windowMs, startLap, penaltyMs));
 
                 var liveProfile = profiles.Get(driverKey);
                 names[driverKey] = (
@@ -483,7 +496,8 @@ public static class QualifyingCalculator
             counted.Count == 1 ? counted[0].StartedAtUtc : null,
             counted.Count,
             droppedSummary,
-            counted.Count(h => h.ConsecutiveMs > 0));
+            counted.Count(h => h.ConsecutiveMs > 0),
+            counted.Count == 1 ? counted[0].ConsecutivePenaltyMs : 0);
     }
 
     /// <summary>

@@ -111,6 +111,7 @@ public sealed class GhostEditForm : Form
     {
         (GhostPaceSource.FixedLapTime, "A fixed lap time"),
         (GhostPaceSource.DriverPersonalBest, "A driver's personal best on this track"),
+        (GhostPaceSource.OwnBestTonight, "A driver's best tonight (or ever, before tonight's)"),
         (GhostPaceSource.PersonalBestInRange, "A driver's personal best within a date range"),
         (GhostPaceSource.YourRecentAverage, "A driver's recent average pace"),
         (GhostPaceSource.TrackRecord, "The track record for this layout"),
@@ -152,6 +153,10 @@ public sealed class GhostEditForm : Form
                 RangeToUtc = existing.RangeToUtc,
                 LiveBasis = existing.LiveBasis,
                 LiveAverageLaps = existing.LiveAverageLaps,
+
+                // Kept through an edit, or a running own-best ghost would
+                // take the copy's revision as a request to re-read its pace.
+                PaceRevision = existing.PaceRevision,
             };
 
         Text = existing is null ? "Add Ghost Car" : "Edit Ghost Car";
@@ -451,7 +456,8 @@ public sealed class GhostEditForm : Form
 
         var wantsDriver = source is GhostPaceSource.DriverPersonalBest
             or GhostPaceSource.YourPersonalBest or GhostPaceSource.YourRecentAverage
-            or GhostPaceSource.PersonalBestInRange or GhostPaceSource.LiveOwnPace;
+            or GhostPaceSource.PersonalBestInRange or GhostPaceSource.LiveOwnPace
+            or GhostPaceSource.OwnBestTonight;
 
         _lblFixedLap.Text = source == GhostPaceSource.FixedLapTime ? "Lap time:" : "Until laps come in:";
         _lblFixedLap.Visible = wantsFixedLap;
@@ -498,7 +504,8 @@ public sealed class GhostEditForm : Form
 
         var needsDriver = source is GhostPaceSource.DriverPersonalBest
             or GhostPaceSource.YourPersonalBest or GhostPaceSource.YourRecentAverage
-            or GhostPaceSource.PersonalBestInRange or GhostPaceSource.LiveOwnPace;
+            or GhostPaceSource.PersonalBestInRange or GhostPaceSource.LiveOwnPace
+            or GhostPaceSource.OwnBestTonight;
 
         if (needsDriver && _drivers.Count == 0)
         {
