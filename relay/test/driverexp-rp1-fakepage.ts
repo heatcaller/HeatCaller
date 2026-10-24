@@ -175,6 +175,8 @@ export class FakePage {
   clock = Date.parse("2026-10-22T19:00:00.000Z");
   hidden = false;
   private timers: { at: number; run: () => void }[] = [];
+  /** The page's requests still waiting for an answer - see settle. */
+  private readonly inFlight = new Set<Promise<unknown>>();
   private intervals: { every: number; next: number; run: () => void }[] = [];
   private readonly context: object;
   readonly body: FakeNode;
@@ -249,16 +251,24 @@ export class FakePage {
         page.intervals.push({ every, next: page.clock + every, run });
         return 1000 + page.intervals.length;
       },
-      fetch: async (url: string, init?: { body?: string }) => {
+      fetch: (url: string, init?: { body?: string }) => {
         const body = JSON.parse(init?.body ?? "{}") as Record<string, unknown>;
         page.sent.push({ url, body });
-        const got = await answer(url, body);
-        return {
-          status: got.status,
-          ok: got.status >= 200 && got.status < 300,
-          json: async () => got.body ?? {},
-          headers: { get: (name: string) => (name.toLowerCase() === "date" ? got.date ?? null : null) },
+        const work = (async () => {
+          const got = await answer(url, body);
+          return {
+            status: got.status,
+            ok: got.status >= 200 && got.status < 300,
+            json: async () => got.body ?? {},
+            headers: { get: (name: string) => (name.toLowerCase() === "date" ? got.date ?? null : null) },
+          };
+        })();
+        page.inFlight.add(work);
+        const done = () => {
+          page.inFlight.delete(work);
         };
+        work.then(done, done);
+        return work;
       },
     });
 
@@ -281,9 +291,24 @@ export class FakePage {
     return node;
   }
 
-  /** Lets every pending promise settle. */
+  /**
+   * Lets every pending promise settle, the page's requests included.
+   *
+   * WHY (24 Oct 2026): a page answered by a real relay over HTTP (the
+   * "against the real relay" tests) used to be given twenty turns of the
+   * event loop and no more. On Linux the loopback answer always came back
+   * inside them; on Windows it often did not, so the page was read before
+   * the relay had answered and two tests failed there only. Now it waits
+   * for every request the page has made, then lets the page draw.
+   */
   async settle(): Promise<void> {
-    for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+    for (let round = 0; round < 50; round++) {
+      for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+
+      if (this.inFlight.size === 0) return;
+
+      await Promise.allSettled([...this.inFlight]);
+    }
   }
 
   /** Moves the clock on, running every timer and interval that falls due, in order. */

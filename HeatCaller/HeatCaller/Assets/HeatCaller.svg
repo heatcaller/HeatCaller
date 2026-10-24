@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+<rect width="256" height="256" rx="56" fill="#140829"></rect>
+<circle cx="128" cy="118" r="72" fill="#FF5FA2"></circle>
+<path d="M56 118 A72 72 0 0 1 200 118 Z" fill="#FFB347"></path>
+<path d="M68.1 78 A72 72 0 0 1 187.9 78 Z" fill="#FFE9A0"></path>
+<rect x="40" y="130" width="176" height="6" fill="#140829"></rect>
+<rect x="40" y="146" width="176" height="8" fill="#140829"></rect>
+<rect x="40" y="163" width="176" height="10" fill="#140829"></rect>
+<path d="M0 176 H256 V200 A56 56 0 0 1 200 256 H56 A56 56 0 0 1 0 200 Z" fill="#3B1063"></path>
+<path d="M128 176 L2 207.5 M128 176 L2.8 211.8 M128 176 L4.3 217.2 M128 176 L7.2 224.3 M128 176 L13 233.5 M128 176 L24.9 244.7 M128 176 L49.8 254.2 M128 176 L88.8 254.5 M128 176 L128 254.5 M128 176 L167.2 254.5 M128 176 L206.2 254.2 M128 176 L231.1 244.7 M128 176 L243 233.5 M128 176 L248.8 224.3 M128 176 L251.7 217.2 M128 176 L253.2 211.8 M128 176 L254 207.5" fill="none" stroke="#FF2E9A" stroke-width="2.5"></path>
+<path d="M128 176 L1.5 188.6 M128 176 L1.5 191.8 M128 176 L1.5 194.1 M128 176 L1.5 197.1 M128 176 L1.5 199 M128 176 L1.5 201.3 M128 176 L1.7 204.1 M128 176 L254.3 204.1 M128 176 L254.5 201.3 M128 176 L254.5 199 M128 176 L254.5 197.1 M128 176 L254.5 194.1 M128 176 L254.5 191.8 M128 176 L254.5 188.6" fill="none" stroke="#FF2E9A" stroke-width="2"></path>
+<path d="M1.5 179 H254.5" fill="none" stroke="#FF2E9A" stroke-width="1.5"></path>
+<path d="M1.5 183 H254.5" fill="none" stroke="#FF2E9A" stroke-width="1.8"></path>
+<path d="M1.5 189 H254.5" fill="none" stroke="#FF2E9A" stroke-width="2"></path>
+<path d="M1.5 197 H254.5" fill="none" stroke="#FF2E9A" stroke-width="2.3"></path>
+<path d="M2.1 208 H253.9" fill="none" stroke="#FF2E9A" stroke-width="2.6"></path>
+<path d="M6.6 223 H249.4" fill="none" stroke="#FF2E9A" stroke-width="3"></path>
+<path d="M22.5 243 H233.5" fill="none" stroke="#FF2E9A" stroke-width="3.4"></path>
+<path d="M0 176 H256" fill="none" stroke="#FFD9F0" stroke-width="4"></path>
+</svg>

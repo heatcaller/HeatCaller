@@ -160,6 +160,11 @@ internal static class Program
                 ApplicationConfiguration.Initialize();
             }
 
+            // HeatCaller's own icon on every window from the first one (the
+            // startup screen) on - see AppIcon. After the visual styles are
+            // set up, before any window is made.
+            AppIcon.UseForEveryWindow();
+
             // Before anything reads a file: data saved under the app's
             // earlier names is moved into HeatCaller's folders, once.
             //
@@ -203,6 +208,11 @@ internal static class Program
             // to it. After the rehearsal switch (it decides the folder) and
             // the migration (it moves the folders this writes into).
             SessionLog.Start();
+
+            if (AppIcon.Problem is { } iconProblem)
+            {
+                SessionLog.Write($"[ui] App icon: {iconProblem}.");
+            }
 
             if (_firstRunAfterInstall is { } installed)
             {

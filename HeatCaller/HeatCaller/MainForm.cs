@@ -2517,6 +2517,9 @@ public partial class MainForm : Form
             _readyFallback.Start();
         }
 
+        // HeatCaller's icon by the clock - see MainForm.Tray.cs.
+        StartTrayIcon();
+
         base.OnShown(e);
     }
 

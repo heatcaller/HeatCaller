@@ -3890,9 +3890,9 @@ day: the layout overhaul is finished before the beta rather than after it
    cut. What is left is the release itself: `check.cmd` green, then
    `publish.cmd` and `pack.cmd`, then the public `HeatCaller-releases` repo
    created on GitHub and the packed assets uploaded to it (`vpk upload
-   github`), then an update taken end to end on a second machine. Re-mint
-   the `horizon-test` token whenever it's convenient (`mint-club.cmd
-   horizon-test`).
+   github`), then an update taken end to end on a second machine. The
+   `horizon-test` token was re-minted on 24 Oct 2026; the new one has
+   never been in a chat.
 7. ~~**I-Lap on real hardware**~~ - **done, weekend of 3 Oct 2026.**
    `ILapClient` was written before a unit was on the bench; it now reads a
    real one, and reads it as a split loop with split times coming through.
@@ -4343,9 +4343,8 @@ The sidebar already has tiers (`NavTiers.cs`: Essentials, Club Tools).
       restore. **Take the first one.**
 - [x] **Sized** - documented 22 Oct 2026: what to watch and the
       `fly scale` / `fly volumes extend` commands. No change made.
-- [ ] Re-mint the old `horizon-test` token (it appeared in a chat):
-      `mint-club.cmd horizon-test`, then paste the new token into the
-      laptop's **Publish token**. Asher's to run.
+- [x] Re-mint the old `horizon-test` token (it appeared in a chat) -
+      **done 24 Oct 2026**. The new token has never been in a chat.
 
 ### 7. The HeatCaller voice (ElevenLabs), as a business
 

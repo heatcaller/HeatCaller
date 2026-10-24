@@ -40,6 +40,9 @@ rem The version is read from HeatCaller.csproj rather than typed, because the
 rem updater compares against that number and a release packed under a version
 rem that does not match it is a release that will never be offered to anyone.
 rem
+rem -i gives Setup.exe and the updater the app's own icon (the Sunset Grid,
+rem 24 Oct 2026), the same file the exe is built with.
+rem
 rem -r win-x64 matches publish.cmd. Without it vpk defaults to x86 and
 rem marks an x64-only self-contained build as an x86 release - it warns, but
 rem only in passing, and the wrong architecture is baked into the installer.
@@ -116,9 +119,9 @@ echo   signing:   %SIGNLABEL%
 echo.
 
 if defined SIGNFILE (
-  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "Asher Kent" -c beta -o "%RELDIR%" --azureTrustedSignFile "%CD%\%SIGNFILE%"
+  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "Asher Kent" -i "%CD%\HeatCaller\HeatCaller\Assets\HeatCaller.ico" -c beta -o "%RELDIR%" --azureTrustedSignFile "%CD%\%SIGNFILE%"
 ) else (
-  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "Asher Kent" -c beta -o "%RELDIR%"
+  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "Asher Kent" -i "%CD%\HeatCaller\HeatCaller\Assets\HeatCaller.ico" -c beta -o "%RELDIR%"
 )
 if errorlevel 1 goto :fail
 

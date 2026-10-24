@@ -1315,7 +1315,7 @@ on the docs site under admin/relay-hosting.md, "Running it for several clubs".
   writes the club into `relay.config.json` (others untouched) and runs
   `fly-set-config.cmd`. It calls node directly, so a name with a space
   isn't turned into carets by npm. Re-minting an existing id (a leaked
-  token, or the old `horizon-test` one) is the same command: the club keeps
+  token, say) is the same command: the club keeps
   its name and its `publishRoster`. The token is shown once - type it into
   the club's laptop yourself, or send it through a password manager's
   expiring share, never in the body of an email or chat.

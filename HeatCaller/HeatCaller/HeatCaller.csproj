@@ -23,7 +23,10 @@
     <!-- The name Windows shows for the exe (Task Manager, file properties). -->
     <Product>HeatCaller</Product>
     <AssemblyTitle>HeatCaller</AssemblyTitle>
-    <ApplicationIcon></ApplicationIcon>
+    <!-- The Sunset Grid (24 Oct 2026): the exe's own icon, which Explorer
+         and the desktop and Start menu shortcuts show. The same file is
+         embedded below for the windows and the tray icon (AppIcon). -->
+    <ApplicationIcon>Assets\HeatCaller.ico</ApplicationIcon>
 
     <!-- Every page here is laid out at fixed pixel coordinates. Under the
          SDK default (SystemAware) those are scaled by the OS on a
@@ -219,6 +222,8 @@
          shows and the thing to keep in step with this folder. -->
     <None Include="Assets\Licences\*.txt" Link="Assets\Licences\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
 
+    <!-- The app's icon, for every window and the tray icon - see AppIcon. -->
+    <EmbeddedResource Include="Assets\HeatCaller.ico" LogicalName="HeatCaller.AppIcon.ico" />
     <None Include="Assets\Fonts\*.ttf" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets\Fonts\*.otf" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Globbed, not named. A literal Include of a file that is not there
