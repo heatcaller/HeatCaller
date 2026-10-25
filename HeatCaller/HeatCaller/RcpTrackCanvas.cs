@@ -34,6 +34,15 @@ public enum RcpTool
     /// order they come in here.
     /// </summary>
     Select,
+
+    /// <summary>
+    /// Paint a lane: floor under it and rails down both sides that follow it
+    /// (RcpAutoRails), or drag a box for a ring. Appended, like Select.
+    /// </summary>
+    Lane,
+
+    /// <summary>Cycle a corner: a one-tile turn, a two-tile turn, square. Appended.</summary>
+    Corner,
 }
 
 /// <summary>One thing that can be picked out of the palette.</summary>
@@ -52,6 +61,9 @@ public enum RcpPaletteItem
     Split1,
     Split2,
     Split3,
+
+    /// <summary>A tile's name - "Pit lane", "Marshal" - typed in (Phase 8). Appended.</summary>
+    Label,
 }
 
 /// <summary>
@@ -166,6 +178,17 @@ public sealed class RcpTrackCanvas : Control
 
     private RcpSelection _selection = new();
 
+    // The angled view (Phase 8): which way it looks, and a drag turning it.
+    private RcpAngle _angle = RcpAngle.Start;
+    private Point? _angleFrom;
+
+    // A stretch being dragged (Phase 8): which handle - true for the right
+    // edge's (columns), false for the bottom's (rows) - the selection's box
+    // when it began, and how many tiles it has gone so far.
+    private bool? _stretchColumns;
+    private Rectangle _stretchBox;
+    private int _stretchBy;
+
     /// <summary>The marquee being dragged, in pixels. Null when there isn't one.</summary>
     private Point? _marqueeFrom;
     private Point? _marqueeAt;
@@ -191,6 +214,34 @@ public sealed class RcpTrackCanvas : Control
 
     /// <summary>Where it was copied from, so a paste with the pointer off the board lands beside the original.</summary>
     private Point _clipboardFrom;
+
+    /// <summary>
+    /// Whether Space is held: the left button then moves the view, whatever
+    /// tool is in hand - the way drawing programs do it (Track Designer
+    /// overhaul, Phase 2). The middle button and Shift + right button still do.
+    /// </summary>
+    private bool _spaceHeld;
+
+    // --- The lane being painted (Track Designer overhaul, Phase 3) ----------
+
+    /// <summary>The lane this stroke paints: the one it started on, or a new one.</summary>
+    private int? _laneId;
+
+    /// <summary>The ring being dragged out: the cell its box started at, and the cell it has reached.</summary>
+    private Point? _ringFrom;
+    private Point? _ringAt;
+
+    /// <summary>Said once a session, not once a rail: why a rail along a lane's edge came back.</summary>
+    private bool _toldAboutLaneEdges;
+
+    /// <summary>Said once a stroke: that the lane joined up with one it ran into.</summary>
+    private bool _toldAboutJoining;
+
+    /// <summary>Where the zoom readout was last drawn, so a click on it can be told from a click on the plan.</summary>
+    private RectangleF _zoomChip;
+
+    /// <summary>The zoom the readout calls 100%: a tile 64 pixels across, as a new plan opens.</summary>
+    internal const float HomeScale = 64f;
 
     private float _paceDistance;
     private DateTime _paceLastTick = DateTime.UtcNow;
@@ -253,6 +304,13 @@ public sealed class RcpTrackCanvas : Control
 
             if (value != RcpTool.Select)
             {
+                // A stretch half dragged goes with the selection it was of.
+                if (_stretchColumns is not null)
+                {
+                    EndStroke();
+                    _painting = false;
+                }
+
                 ClearSelection();
             }
 
@@ -267,17 +325,139 @@ public sealed class RcpTrackCanvas : Control
     /// <summary>Radius of the next turn rail, in tiles.</summary>
     public float CurveRadius { get; set; } = 1f;
 
+    /// <summary>How wide the Lane tool paints, in tiles: 1, 2 or 3.</summary>
+    public int LaneWidth
+    {
+        get => _laneWidth;
+        set => _laneWidth = Math.Clamp(value, 1, 3);
+    }
+
+    // Two: a real RCP lane is never narrower (Asher, 25 Oct 2026).
+    private int _laneWidth = 2;
+
+    /// <summary>The Lane tool drags out a ring round a box, rather than painting where the pointer goes.</summary>
+    public bool LaneRing { get; set; }
+
     public int MarkerTurns { get; set; }
 
     public bool ShowGrid { get; set; } = true;
     public bool ShowRoute { get; set; } = true;
 
+    /// <summary>
+    /// What the board says about the plan, over its top-left corner - the
+    /// floor's size and the lap (set by RcpTrackEditorForm). On the board,
+    /// not in a panel, because the drawing is where people are looking.
+    /// </summary>
+    public IReadOnlyList<string> Chips
+    {
+        get => _chips;
+        set
+        {
+            var next = value ?? Array.Empty<string>();
+
+            if (next.SequenceEqual(_chips))
+            {
+                return;
+            }
+
+            _chips = next;
+            Invalidate();
+        }
+    }
+
+    private IReadOnlyList<string> _chips = Array.Empty<string>();
+
+    /// <summary>
+    /// The first chip - the plan's size - in red: the plan uses more of some
+    /// part than the club owns (the Stock tab, Track Designer overhaul Phase 4).
+    /// </summary>
+    public bool ChipWarning
+    {
+        get => _chipWarning;
+        set
+        {
+            if (_chipWarning == value)
+            {
+                return;
+            }
+
+            _chipWarning = value;
+            Invalidate();
+        }
+    }
+
+    private bool _chipWarning;
+
+    /// <summary>
+    /// The board's floor: a dark hall floor whatever the app's look, so the
+    /// foam, the silver rails and the pink turns always read the same - the
+    /// colours they are drawn in were sampled off a real track, and a pale
+    /// page under them changed how all of them looked.
+    /// </summary>
+    internal static readonly Color BoardFloor = ColorTranslator.FromHtml("#17191E");
+
+    /// <summary>The grid's dots, the ruler and the chips' text: light on the board's floor.</summary>
+    internal static readonly Color BoardInk = ColorTranslator.FromHtml("#9AA3B2");
+
     public double LapSeconds { get; set; } = 12;
 
     public bool IsPlaying => _paceTimer.Enabled;
 
+    /// <summary>How fast Play goes against the lap time: 0.5, 1 or 2 (Phase 6).</summary>
+    public float PaceRate { get; set; } = 1f;
+
+    /// <summary>Raised when Play starts or stops - by its button, or by itself when the line goes.</summary>
+    public event Action? PlayingChanged;
+
+    /// <summary>Raised with where to show it when the lap chip is clicked - the window lists the sectors there.</summary>
+    public event Action<Point>? LapChipClicked;
+
+    /// <summary>Where the lap chip was last drawn, so a click on it can be told from a click on the plan.</summary>
+    private RectangleF? _lapChipBox;
+
+    /// <summary>The lap's length when the pace car last moved - a line changed mid-run is not a lap done.</summary>
+    private float _paceLength;
+
+    /// <summary>Laps the pace car has finished since Play was pressed.</summary>
+    private int _paceLaps;
+
     public event Action? DesignChanged;
     public event Action<string>? StatusChanged;
+
+    /// <summary>Raised when the board switches between the flat plan and the angled view.</summary>
+    public event Action? AngledChanged;
+
+    /// <summary>
+    /// The board shows the plan tipped and turned (RcpAngledView) rather
+    /// than flat. A way to look, not a place to draw: dragging turns and
+    /// tips it, the wheel zooms, and nothing on the plan can change until
+    /// it is flat again.
+    /// </summary>
+    public bool Angled { get; private set; }
+
+    /// <summary>Between the flat plan and the angled view. Whatever was being dragged is dropped.</summary>
+    public void ToggleAngled()
+    {
+        EndStroke();
+        _painting = false;
+        _angleFrom = null;
+        Angled = !Angled;
+        Cursor = Angled ? Cursors.SizeAll : Cursors.Default;
+
+        StatusChanged?.Invoke(Angled
+            ? "The angled view: drag to turn the track round and tip it, wheel to zoom. Press View, or pick a tool, to draw again."
+            : "Back to the plan.");
+
+        AngledChanged?.Invoke();
+        Invalidate();
+    }
+
+    /// <summary>
+    /// A tile clicked with the Markings tool's Label: the cell and the name
+    /// it has now (empty for none). The window asks for the name and hands
+    /// it back to SetTileLabel - the board asks nobody anything itself.
+    /// </summary>
+    public event Action<Point, string>? LabelRequested;
 
     /// <summary>Raised when what is picked changes, so the buttons that act on it can be greyed.</summary>
     public event Action? SelectionChanged;
@@ -391,6 +571,17 @@ public sealed class RcpTrackCanvas : Control
         _movingSelection = false;
         _moveLast = null;
         _moved = false;
+
+        // A stretch let go anywhere but the board - Alt-Tab, a dialog - is
+        // dropped: nothing has changed until it is let go here.
+        if (_stretchColumns is not null)
+        {
+            _stretchColumns = null;
+            _stretchBy = 0;
+            StatusChanged?.Invoke("Stretch dropped - nothing changed.");
+            Invalidate();
+        }
+
         _marqueeFrom = null;
         _marqueeAt = null;
         _marqueeAdds = false;
@@ -408,6 +599,9 @@ public sealed class RcpTrackCanvas : Control
         _railLaid = false;
         _ctrlErasing = false;
         _draggingBackdrop = false;
+        _laneId = null;
+        _ringFrom = null;
+        _ringAt = null;
 
         if (wasOpen)
         {
@@ -510,6 +704,7 @@ public sealed class RcpTrackCanvas : Control
         _design.Curves.Clear();
         _design.Decals.Clear();
         _design.Route.Clear();
+        _design.RouteAuto = false;
 
         _design.Tiles.AddRange(stock.Tiles);
         _design.Walls.AddRange(stock.Walls);
@@ -520,6 +715,115 @@ public sealed class RcpTrackCanvas : Control
         _design.KitName = stock.KitName;
 
         RaiseChanged();
+    }
+
+    /// <summary>
+    /// Replaces what is drawn with a layout from Build me a track (Track
+    /// Designer overhaul, Phase 5), in one step Undo takes back - as
+    /// LoadStock does. Unlike a kit, it brings its racing line (traced, so
+    /// it follows the track) and its lanes' turn radius with it. The room
+    /// and the tile size are the plan's own and stay as they are.
+    /// </summary>
+    public void LoadBuilt(RcpTrackDesign layout)
+    {
+        Remember();
+        ClearSelection();
+
+        var copy = layout.Clone();
+
+        _design.Tiles = copy.Tiles;
+        _design.Walls = copy.Walls;
+        _design.Curves = copy.Curves;
+        _design.Decals = copy.Decals;
+        _design.Route = copy.Route;
+        _design.RouteClosed = copy.RouteClosed;
+        _design.RouteAuto = copy.RouteAuto;
+        _design.LaneTurnRadius = copy.LaneTurnRadius;
+
+        if (!string.IsNullOrEmpty(copy.KitName))
+        {
+            _design.KitName = copy.KitName;
+        }
+
+        RaiseChanged();
+    }
+
+    /// <summary>The longest name a tile is given - it is drawn across the foot of one tile.</summary>
+    public const int MostLabel = 40;
+
+    /// <summary>
+    /// Names a tile ("Pit lane", "Marshal") - one undo step; empty takes
+    /// the name off. One line, held to MostLabel. Nothing happens for a
+    /// cell with no tile, or a name that is the same as before.
+    /// </summary>
+    public void SetTileLabel(Point cell, string label)
+    {
+        if (_design.At(cell.X, cell.Y) is not { } tile)
+        {
+            return;
+        }
+
+        var line = string.Join(" ", (label ?? string.Empty).Split(new[] { '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries)).Trim();
+
+        if (line.Length > MostLabel)
+        {
+            line = line[..MostLabel].TrimEnd();
+        }
+
+        if (string.Equals(tile.Label ?? string.Empty, line, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Remember();
+        tile.Label = line;
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// Replaces what is drawn with a plan opened from a .hctrack file (Track
+    /// Designer overhaul, Phase 7), in one step Undo takes back: its floor,
+    /// rails, markings, line, lanes' turns, tile size and kit. The room is
+    /// this club's hall, so it stays - unless none has been given here, when
+    /// the file's is taken. The traced photo stays too; a file carries none.
+    /// The laps raced here before stop counting towards its lap time.
+    /// </summary>
+    /// <returns>Whether the room came from the file.</returns>
+    public bool LoadPlanFile(RcpTrackDesign plan)
+    {
+        Remember();
+        ClearSelection();
+
+        var copy = plan.Clone();
+
+        _design.Tiles = copy.Tiles;
+        _design.Walls = copy.Walls;
+        _design.Curves = copy.Curves;
+        _design.Decals = copy.Decals;
+        _design.Route = copy.Route;
+        _design.RouteClosed = copy.RouteClosed;
+        _design.RouteAuto = copy.RouteAuto;
+        _design.LaneTurnRadius = copy.LaneTurnRadius;
+        _design.TileSizeMm = copy.TileSizeMm;
+        _design.KitName = copy.KitName;
+
+        // A different track: the laps raced on this layout before are not
+        // laps of it (RcpLapModel.Raced) - even where this layout had no
+        // racing line, when Track Layouts wouldn't count it a change.
+        _design.RouteChangedUtc = DateTime.UtcNow;
+
+        var roomFromFile = !_design.HasRoom && copy.HasRoom;
+
+        if (roomFromFile)
+        {
+            _design.RoomWidthMm = copy.RoomWidthMm;
+            _design.RoomDepthMm = copy.RoomDepthMm;
+            _design.RoomInFeet = copy.RoomInFeet;
+        }
+
+        RaiseChanged();
+
+        return roomFromFile;
     }
 
     /// <summary>
@@ -598,6 +902,9 @@ public sealed class RcpTrackCanvas : Control
 
         Remember();
         _design.RouteClosed = closed;
+
+        // Opened or closed by hand: traced again, it would only be closed.
+        _design.RouteAuto = false;
         RaiseChanged();
     }
 
@@ -665,12 +972,15 @@ public sealed class RcpTrackCanvas : Control
         _design.Curves.Clear();
         _design.Decals.Clear();
         _design.Route.Clear();
+        _design.RouteAuto = false;
 
         RaiseChanged();
     }
 
     private void RaiseChanged()
     {
+        Rework();
+
         // The canvas always redraws - that is the feedback the drag is for.
         // The readouts beside it do not: they walk the whole plan to count
         // rails and measure the lap, and doing that again for every tile of
@@ -684,6 +994,171 @@ public sealed class RcpTrackCanvas : Control
 
         DesignChanged?.Invoke();
         Invalidate();
+    }
+
+    /// <summary>
+    /// Works out again everything the plan works out for itself, after an
+    /// edit (Track Designer overhaul, Phase 3, 25 Oct 2026): the rails round
+    /// its lanes (RcpAutoRails), and the racing line, when it was traced and
+    /// not touched by hand since (RcpTrackDesign.RouteAuto).
+    ///
+    /// Inside the edit's own undo step - RaiseChanged comes after the
+    /// Remember - so Undo takes back the rails with the lane that made them.
+    /// Not while a selection is being dragged or nudged: what is picked
+    /// carries its own rails along, and only lands (RcpSelection.Settle) when
+    /// the drag ends - working the rails out over the block's half-landed
+    /// tiles would take the picked rails out of the selection mid-drag. The
+    /// line waits for the end of a stroke, as the readouts do.
+    /// </summary>
+    private void Rework()
+    {
+        if (_movingSelection || _nudgeSettle.Enabled)
+        {
+            return;
+        }
+
+        var outcome = RcpAutoRails.Apply(_design);
+        var forgot = false;
+
+        foreach (var wall in outcome.RemovedWalls)
+        {
+            forgot |= _selection.Forget(wall);
+        }
+
+        foreach (var curve in outcome.RemovedCurves)
+        {
+            forgot |= _selection.Forget(curve);
+        }
+
+        if (forgot)
+        {
+            SelectionChanged?.Invoke();
+        }
+
+        if (!_strokeOpen && _design.RouteAuto)
+        {
+            RetraceLine();
+        }
+    }
+
+    /// <summary>
+    /// Traces the racing line again, quietly, the way it runs now. Only a
+    /// whole lap replaces it: while the corridor is broken - a tile taken
+    /// out halfway through an edit - the line is left as it was, and traced
+    /// again once the corridor closes.
+    /// </summary>
+    private void RetraceLine()
+    {
+        var traced = RcpPlan.AutoRoute(_design, out var problem);
+
+        if (traced is null || traced.Count < 3 || !string.IsNullOrEmpty(problem))
+        {
+            return;
+        }
+
+        traced = SameWayRound(traced, _design.Route);
+
+        var same = _design.RouteClosed
+                   && traced.Count == _design.Route.Count
+                   && traced.Select((point, i) => point == _design.Route[i].Point).All(match => match);
+
+        if (same)
+        {
+            return;
+        }
+
+        var forgot = false;
+
+        foreach (var point in _design.Route)
+        {
+            forgot |= _selection.Forget(point);
+        }
+
+        if (forgot)
+        {
+            SelectionChanged?.Invoke();
+        }
+
+        _design.Route = traced.Select(p => new RcpRoutePoint { X = p.X, Y = p.Y }).ToList();
+        _design.RouteClosed = true;
+    }
+
+    /// <summary>
+    /// A traced lap turned to run the same way round as the line it
+    /// replaces - so a line turned round with Reverse stays turned round
+    /// when it is traced again. Keeps its first point.
+    /// </summary>
+    internal static List<PointF> SameWayRound(List<PointF> traced, IReadOnlyList<RcpRoutePoint> was)
+    {
+        if (was.Count < 3 || traced.Count < 3)
+        {
+            return traced;
+        }
+
+        var before = SignedArea(was.Select(p => p.Point).ToList());
+        var now = SignedArea(traced);
+
+        if (before * now >= 0)
+        {
+            return traced;
+        }
+
+        return new[] { traced[0] }.Concat(traced.Skip(1).Reverse()).ToList();
+    }
+
+    /// <summary>Twice the area a closed line goes round, signed by which way round it goes.</summary>
+    private static float SignedArea(IReadOnlyList<PointF> points)
+    {
+        var sum = 0f;
+
+        for (var i = 0; i < points.Count; i++)
+        {
+            var a = points[i];
+            var b = points[(i + 1) % points.Count];
+
+            sum += a.X * b.Y - b.X * a.Y;
+        }
+
+        return sum;
+    }
+
+    /// <summary>
+    /// The radius of the turns the lanes put round their bends
+    /// (RcpTrackDesign.LaneTurnRadius): 1 or 2 tiles, or 0 for square - one
+    /// undo step. Every lane's turns follow it; a corner set by hand with the
+    /// Corners tool keeps what it was given.
+    /// </summary>
+    public void SetLaneTurnRadius(int radius)
+    {
+        radius = Math.Clamp(radius, 0, RcpAutoRails.MostRadius);
+
+        if (_design.LaneTurnRadius == radius)
+        {
+            return;
+        }
+
+        Remember();
+        _design.LaneTurnRadius = radius;
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// The racing line changed by hand through what is picked, so it is no
+    /// longer traced again by itself. Moving the whole of it with the rest
+    /// of the plan is not that: traced again, it comes out the same.
+    /// </summary>
+    private void LineTouchedByHand(bool deleting)
+    {
+        if (_selection.Route.Count == 0)
+        {
+            return;
+        }
+
+        // The line on its own, with no track picked with it, is moved by hand.
+        if (deleting || _selection.HoldsPartOfTheLine(_design) || _selection.Tiles.Count == 0)
+        {
+            _design.RouteAuto = false;
+        }
     }
 
     // --- The photo being traced ---------------------------------------------
@@ -1058,6 +1533,187 @@ public sealed class RcpTrackCanvas : Control
         RaiseChanged();
     }
 
+    // --- Lanes (Track Designer overhaul, Phase 3, 25 Oct 2026) ---------------
+
+    /// <summary>The lane a cell of floor is part of, or null for plain floor, blocked floor or none.</summary>
+    private int? LaneUnder(Point cell) =>
+        _design.At(cell.X, cell.Y) is { Lane: > 0 } tile && tile.Kind != RcpTileKind.Infield ? tile.Lane : null;
+
+    /// <summary>
+    /// Starts a lane stroke. Started on a lane, it carries that lane on -
+    /// which is how a bend is widened or a bay added; started anywhere else,
+    /// it is a new lane, and where it runs alongside another the seam
+    /// between them is a divider.
+    /// </summary>
+    private void StartLane(Point cell)
+    {
+        _laneId = LaneUnder(cell) ?? RcpAutoRails.NewLane(_design);
+        _toldAboutJoining = false;
+        PaintLane(cell);
+    }
+
+    /// <summary>Paints the lane brush at a cell: floor under it, part of this stroke's lane. The rails follow (Rework).</summary>
+    private void PaintLane(Point cell)
+    {
+        if (_laneId is not { } lane)
+        {
+            return;
+        }
+
+        var changed = false;
+
+        foreach (var at in RcpAutoRails.Brush(cell, LaneWidth))
+        {
+            changed |= LayLaneTile(at, lane, joinOthers: true);
+        }
+
+        if (changed)
+        {
+            RaiseChanged();
+        }
+    }
+
+    /// <summary>
+    /// Makes one cell part of a lane: a tile laid where there was none, plain
+    /// or blocked floor taken into it. A cell of ANOTHER lane joins the two
+    /// up when <paramref name="joinOthers"/> - the whole of that lane takes
+    /// this one's number, so the divider between them goes - and is left
+    /// alone otherwise.
+    /// </summary>
+    private bool LayLaneTile(Point at, int lane, bool joinOthers)
+    {
+        var tile = _design.At(at.X, at.Y);
+
+        if (tile is null)
+        {
+            Remember();
+            _design.Tiles.Add(new RcpTile { Col = at.X, Row = at.Y, Lane = lane });
+            return true;
+        }
+
+        var blocked = tile.Kind == RcpTileKind.Infield;
+
+        if (tile.Lane == lane && !blocked)
+        {
+            return false;
+        }
+
+        if (tile.Lane > 0 && tile.Lane != lane && !blocked)
+        {
+            if (!joinOthers)
+            {
+                return false;
+            }
+
+            Remember();
+
+            var other = tile.Lane;
+
+            foreach (var joined in _design.Tiles.Where(t => t.Lane == other))
+            {
+                joined.Lane = lane;
+            }
+
+            if (!_toldAboutJoining)
+            {
+                _toldAboutJoining = true;
+                StatusChanged?.Invoke("Joined up with the lane it ran into - one lane now, with no divider between them.");
+            }
+
+            return true;
+        }
+
+        Remember();
+        tile.Lane = lane;
+
+        // Blocked floor is unblocked by a lane painted over it; any other
+        // kind (an old plan's start/finish or corner tile) keeps its kind.
+        if (blocked)
+        {
+            tile.Kind = RcpTileKind.Straight;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Lays a ring: a closed lane, the lane's width, just inside the box
+    /// dragged - the quickest way from nothing to a track. A lane of its
+    /// own; where it crosses another lane, that lane keeps its tiles.
+    /// </summary>
+    private void LayRing(Point from, Point to)
+    {
+        if (RcpAutoRails.Ring(from, to, LaneWidth) is not { } cells)
+        {
+            var least = LaneWidth * 2 + 1;
+            StatusChanged?.Invoke($"A ring needs room for an island in the middle - drag a box at least {least} tiles each way.");
+            return;
+        }
+
+        var lane = RcpAutoRails.NewLane(_design);
+        var laid = false;
+
+        foreach (var at in cells)
+        {
+            laid |= LayLaneTile(at, lane, joinOthers: false);
+        }
+
+        if (!laid)
+        {
+            return;
+        }
+
+        StatusChanged?.Invoke("Ring laid, with rails down both sides and turns at its corners. Trace route puts the racing line round it.");
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// One click of the Corners tool: a one-tile turn, a two-tile turn, then
+    /// square, then round again (RcpCorners). Whatever it touches is a hand
+    /// piece from then on, so a lane leaves that corner as it was set.
+    /// </summary>
+    private void CycleCorner(Point at)
+    {
+        if (RcpCorners.Next(_design, at, out var why) is not { } step)
+        {
+            StatusChanged?.Invoke(why);
+            return;
+        }
+
+        Remember();
+
+        var (walls, curves) = RcpCorners.Apply(_design, at, step);
+        var forgot = false;
+
+        foreach (var wall in walls)
+        {
+            forgot |= _selection.Forget(wall);
+        }
+
+        foreach (var curve in curves)
+        {
+            forgot |= _selection.Forget(curve);
+        }
+
+        if (forgot)
+        {
+            SelectionChanged?.Invoke();
+        }
+
+        StatusChanged?.Invoke(step.Said);
+        RaiseChanged();
+    }
+
+    /// <summary>Back to 100% - a tile 64 pixels across - about the middle of the board.</summary>
+    public void ZoomHome()
+    {
+        Zoom(HomeScale / _scale);
+        StatusChanged?.Invoke("Back to 100%. F fits the whole plan in view.");
+    }
+
+    /// <summary>The zoom as the readout says it: 100% is a tile 64 pixels across.</summary>
+    public int ZoomPercent => (int)MathF.Round(_scale / HomeScale * 100f);
+
     /// <summary>
     /// Puts a rail on a seam, or changes the one that is there.
     ///
@@ -1092,17 +1748,30 @@ public sealed class RcpTrackCanvas : Control
 
         Remember();
 
+        // A lane's own rail, clicked, is a hand rail from now on (see
+        // RcpWall.Auto): the lane leaves that seam as it is set here.
+        existing.Auto = false;
+
         if (!existing.Double)
         {
             existing.Double = true;
             StatusChanged?.Invoke("Two rails back to back - racing on both sides.");
-        }
-        else
-        {
-            _design.Walls.Remove(existing);
+            RaiseChanged();
+            return;
         }
 
+        _design.Walls.Remove(existing);
+        Unpick(_selection.Forget(existing));
         RaiseChanged();
+
+        // Taken off the edge of a lane, the lane puts its own rail back.
+        if (_design.WallAt(edge.Col, edge.Row, edge.Vertical) is { Auto: true } && !_toldAboutLaneEdges)
+        {
+            _toldAboutLaneEdges = true;
+            StatusChanged?.Invoke(
+                "That seam is the edge of a lane, so the lane has put its rail back. "
+                + "To open it up, paint the floor beyond it into the lane with the Lane tool.");
+        }
     }
 
     // --- Dragging a run of rail ---------------------------------------------
@@ -1326,6 +1995,8 @@ public sealed class RcpTrackCanvas : Control
 
         if (_design.CurveAt(at.X, at.Y) is { } existing)
         {
+            // Changed by hand, a lane's turn is a hand turn from now on.
+            existing.Auto = false;
             existing.Quadrant = quadrant;
             existing.Radius = 1f;
             existing.Double = Item == RcpPaletteItem.Divider;
@@ -1413,6 +2084,10 @@ public sealed class RcpTrackCanvas : Control
 
         Remember();
 
+        // A lane's own turn, clicked, is a hand turn from now on - or the
+        // lane would put it straight back as it was.
+        existing.Auto = false;
+
         // Clicking it again turns it to face where the pointer is; clicking
         // it in the same quadrant takes it away.
         if (existing.Quadrant != corner.Quadrant)
@@ -1474,10 +2149,17 @@ public sealed class RcpTrackCanvas : Control
         RaiseChanged();
     }
 
-    /// <summary>Takes off whatever is nearest: a curve, then a rail, then a marking, then the floor.</summary>
+    /// <summary>
+    /// Takes off whatever is nearest: a curve, then a rail, then a marking,
+    /// then the floor.
+    ///
+    /// A lane's own rails are passed over (25 Oct 2026): the lane would only
+    /// put them straight back. The eraser takes the lane's floor instead, and
+    /// the rails follow it in.
+    /// </summary>
     private void EraseAt(Point pixel)
     {
-        if (CornerAt(pixel) is { } corner && _design.CurveAt(corner.At.X, corner.At.Y) is { } curve)
+        if (CornerAt(pixel) is { } corner && _design.CurveAt(corner.At.X, corner.At.Y) is { Auto: false } curve)
         {
             Remember();
             _design.Curves.Remove(curve);
@@ -1486,7 +2168,20 @@ public sealed class RcpTrackCanvas : Control
             return;
         }
 
-        if (EdgeAt(pixel) is { } edge && _design.WallAt(edge.Col, edge.Row, edge.Vertical) is { } wall)
+        // On a lane's own rail: the lane's tile beside it, whichever side
+        // of the rail the pointer is on.
+        if (EdgeAt(pixel) is { } laneEdge
+            && _design.WallAt(laneEdge.Col, laneEdge.Row, laneEdge.Vertical) is { Auto: true }
+            && LaneTileBeside(laneEdge, ToCell(pixel)) is { } laneTile)
+        {
+            Remember();
+            _design.Tiles.Remove(laneTile);
+            Unpick(_selection.Forget(laneTile));
+            RaiseChanged();
+            return;
+        }
+
+        if (EdgeAt(pixel) is { } edge && _design.WallAt(edge.Col, edge.Row, edge.Vertical) is { Auto: false } wall)
         {
             Remember();
             _design.Walls.Remove(wall);
@@ -1513,6 +2208,26 @@ public sealed class RcpTrackCanvas : Control
             Unpick(_selection.Forget(tile));
             RaiseChanged();
         }
+    }
+
+    /// <summary>
+    /// The lane tile on one side of a seam: the one under the pointer when
+    /// that is lane, otherwise the one across the seam - or null.
+    /// </summary>
+    private RcpTile? LaneTileBeside((int Col, int Row, bool Vertical) seam, Point under)
+    {
+        var a = new Point(seam.Col, seam.Row);
+        var b = seam.Vertical ? new Point(seam.Col - 1, seam.Row) : new Point(seam.Col, seam.Row - 1);
+
+        foreach (var cell in under == b ? new[] { b, a } : new[] { a, b })
+        {
+            if (LaneUnder(cell) is not null)
+            {
+                return _design.At(cell.X, cell.Y);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1556,6 +2271,9 @@ public sealed class RcpTrackCanvas : Control
 
         Remember();
         _design.Route.Add(new RcpRoutePoint { X = snapped.X, Y = snapped.Y });
+
+        // Drawn by hand from here on, so not traced again by itself.
+        _design.RouteAuto = false;
         RaiseChanged();
     }
 
@@ -1624,7 +2342,20 @@ public sealed class RcpTrackCanvas : Control
         // Every other path that replaces part of the plan drops it too.
         ClearSelection();
 
+        // The same way round as the line it replaces, if there was one -
+        // a line turned round with Reverse stays turned round.
+        var closedLap = string.IsNullOrEmpty(problem);
+
+        if (closedLap)
+        {
+            route = SameWayRound(route, _design.Route);
+        }
+
         _design.Route = route.Select(p => new RcpRoutePoint { X = p.X, Y = p.Y }).ToList();
+
+        // A whole lap is traced again by itself whenever the corridor
+        // changes, until the line is touched by hand (RouteAuto).
+        _design.RouteAuto = closedLap;
 
         // A lap only when the walk came back round to where it started -
         // which is the one case RcpPlan.AutoRoute reports no problem for.
@@ -1674,6 +2405,154 @@ public sealed class RcpTrackCanvas : Control
     }
 
     /// <summary>Whether the pointer is over what is picked - which is what makes a drag a move rather than a new marquee.</summary>
+    /// <summary>The most tiles one drag of a stretch handle adds.</summary>
+    private const int MostStretch = 60;
+
+    /// <summary>
+    /// Where a stretch handle is drawn, on screen: the middle of the
+    /// selection's right edge (columns) or bottom edge (rows). Null when
+    /// there is nothing picked that has a size that way to stretch.
+    /// </summary>
+    private RectangleF? StretchHandle(bool columns)
+    {
+        if (Tool != RcpTool.Select || _selection.Pieces == 0)
+        {
+            return null;
+        }
+
+        var box = _stretchColumns is null ? _selection.Bounds() : _stretchBox;
+
+        if (box.Width < 1 || box.Height < 1)
+        {
+            return null;
+        }
+
+        // Only an edge across the floor, not along its end (RcpStretch).
+        var floor = _design.Tiles.Where(t => t.Kind != RcpTileKind.Infield).ToList();
+
+        if (floor.Count == 0
+            || (columns && (box.Right <= floor.Min(t => t.Col) || box.Right > floor.Max(t => t.Col)))
+            || (!columns && (box.Bottom <= floor.Min(t => t.Row) || box.Bottom > floor.Max(t => t.Row))))
+        {
+            return null;
+        }
+
+        var size = Math.Max(12f, UiLayout.AtTextSize(14));
+        var centre = columns
+            ? new PointF(_origin.X + box.Right * _scale, _origin.Y + (box.Top + box.Height / 2f) * _scale)
+            : new PointF(_origin.X + (box.Left + box.Width / 2f) * _scale, _origin.Y + box.Bottom * _scale);
+
+        return new RectangleF(centre.X - size / 2f, centre.Y - size / 2f, size, size);
+    }
+
+    /// <summary>Which stretch handle is under the pointer: true for the right one, false for the bottom one, null for neither.</summary>
+    private bool? StretchHandleAt(Point pixel)
+    {
+        foreach (var columns in new[] { true, false })
+        {
+            if (StretchHandle(columns) is { } handle)
+            {
+                handle.Inflate(3, 3);
+
+                if (handle.Contains(pixel))
+                {
+                    return columns;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string StretchSays(bool columns, int by) => by == 0
+        ? "Drag the handle out to make the plan longer here, or in to make it shorter."
+        : $"{(by > 0 ? "Longer" : "Shorter")} by {Plural.Of(Math.Abs(by), columns ? "column" : "row")} of tiles, right across the plan.";
+
+    /// <summary>The handles on the selection, and while one is dragged, where the new edge will be.</summary>
+    private void DrawStretch(Graphics g)
+    {
+        if (_stretchColumns is { } columns && _stretchBy != 0)
+        {
+            using var line = new Pen(Color.FromArgb(230, AppTheme.Accent), 2f) { DashStyle = DashStyle.Dash };
+
+            if (columns)
+            {
+                var x = _origin.X + (_stretchBox.Right + _stretchBy) * _scale;
+                g.DrawLine(line, x, 0, x, Height);
+            }
+            else
+            {
+                var y = _origin.Y + (_stretchBox.Bottom + _stretchBy) * _scale;
+                g.DrawLine(line, 0, y, Width, y);
+            }
+        }
+
+        // White with the accent round it, so they stand out from the
+        // selection's own wash, which is the accent.
+        using var fill = new SolidBrush(Color.White);
+        using var rim = new Pen(AppTheme.Accent, 2.5f);
+
+        foreach (var which in new[] { true, false })
+        {
+            if (StretchHandle(which) is { } handle)
+            {
+                g.FillRectangle(fill, handle);
+                g.DrawRectangle(rim, handle.X, handle.Y, handle.Width, handle.Height);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A stretch let go: the plan made longer or shorter at the edge it was
+    /// dragged from, as one undo step - or, when a hand-placed turn rail is
+    /// in the way, nothing, and why (RcpStretch). What is picked afterwards
+    /// is the selection's box, stretched.
+    /// </summary>
+    private void FinishStretch(bool columns, int by)
+    {
+        var box = _stretchBox;
+
+        // Nothing to stretch from any more: the tool changed, or what was
+        // picked went, while the handle was held.
+        if (by == 0 || Tool != RcpTool.Select || _selection.Pieces == 0)
+        {
+            return;
+        }
+
+        var at = columns ? box.Right : box.Bottom;
+
+        // Tried on a copy first, so a stretch refused leaves no empty undo step.
+        var trial = _design.Clone();
+        var why = columns ? RcpStretch.Columns(trial, at, by) : RcpStretch.Rows(trial, at, by);
+
+        if (why is not null)
+        {
+            StatusChanged?.Invoke(why);
+            return;
+        }
+
+        Remember();
+
+        if (columns)
+        {
+            RcpStretch.Columns(_design, at, by);
+        }
+        else
+        {
+            RcpStretch.Rows(_design, at, by);
+        }
+
+        var stretched = columns
+            ? new Rectangle(box.X, box.Y, box.Width + by, box.Height)
+            : new Rectangle(box.X, box.Y, box.Width, box.Height + by);
+
+        _selection = RcpSelection.In(_design, stretched);
+
+        RaiseChanged();
+        SelectionChanged?.Invoke();
+        StatusChanged?.Invoke(StretchSays(columns, by).Replace("Longer", "Made longer").Replace("Shorter", "Made shorter"));
+    }
+
     private bool PointerOnSelection(Point pixel)
     {
         if (_selection.IsEmpty)
@@ -1794,6 +2673,7 @@ public sealed class RcpTrackCanvas : Control
         var keepTheLine = _selection.HoldsPartOfTheLine(_design);
 
         Remember();
+        LineTouchedByHand(deleting: !keepTheLine);
         _selection.DeleteFrom(_design, keepTheLine);
         _selection = new RcpSelection();
 
@@ -1840,6 +2720,12 @@ public sealed class RcpTrackCanvas : Control
         Remember();
         _selection = RcpSelection.Paste(_design, _clipboard, at);
 
+        // Points put down from the clipboard are a line drawn by hand.
+        if (_selection.Route.Count > 0)
+        {
+            _design.RouteAuto = false;
+        }
+
         AnnounceSelection();
         RaiseChanged();
     }
@@ -1871,6 +2757,11 @@ public sealed class RcpTrackCanvas : Control
 
         Remember();
         _selection = RcpSelection.Paste(_design, copy, Beside(box));
+
+        if (_selection.Route.Count > 0)
+        {
+            _design.RouteAuto = false;
+        }
 
         AnnounceSelection();
         RaiseChanged();
@@ -1911,6 +2802,7 @@ public sealed class RcpTrackCanvas : Control
         var pieces = _selection.Pieces;
 
         Remember();
+        LineTouchedByHand(deleting: true);
         _selection.DeleteFrom(_design);
         _selection = new RcpSelection();
 
@@ -1950,6 +2842,7 @@ public sealed class RcpTrackCanvas : Control
 
         _nudgedAt = now;
 
+        LineTouchedByHand(deleting: false);
         _selection.Move(cols, rows);
 
         // Restarted on every press, so it only fires once the run stops.
@@ -2022,6 +2915,7 @@ public sealed class RcpTrackCanvas : Control
         FlushPendingSettle();
 
         Remember();
+        LineTouchedByHand(deleting: false);
 
         for (var i = 0; i < turns; i++)
         {
@@ -2056,6 +2950,7 @@ public sealed class RcpTrackCanvas : Control
         FlushPendingSettle();
 
         Remember();
+        LineTouchedByHand(deleting: false);
 
         if (leftToRight)
         {
@@ -2098,13 +2993,23 @@ public sealed class RcpTrackCanvas : Control
         else
         {
             _paceLastTick = DateTime.UtcNow;
+            _paceLaps = 0;
+            _paceDistance = 0;
             _paceTimer.Start();
         }
 
+        PlayingChanged?.Invoke();
         Invalidate();
     }
 
-    public void StopPlaying() => _paceTimer.Stop();
+    public void StopPlaying()
+    {
+        if (_paceTimer.Enabled)
+        {
+            _paceTimer.Stop();
+            PlayingChanged?.Invoke();
+        }
+    }
 
     private void AdvancePaceCar()
     {
@@ -2112,15 +3017,25 @@ public sealed class RcpTrackCanvas : Control
 
         if (length <= 0)
         {
-            _paceTimer.Stop();
+            StopPlaying();
             return;
         }
 
         var now = DateTime.UtcNow;
-        var elapsed = (float)(now - _paceLastTick).TotalSeconds;
+        var elapsed = (float)(now - _paceLastTick).TotalSeconds * PaceRate;
         _paceLastTick = now;
 
-        _paceDistance = (_paceDistance + length * elapsed / (float)Math.Max(1.0, LapSeconds)) % length;
+        var travelled = _paceDistance + length * elapsed / (float)Math.Max(1.0, LapSeconds);
+
+        // Over the line: another lap done - unless the line itself changed
+        // under the car, which only moves it.
+        if (Math.Abs(length - _paceLength) < 1e-3f)
+        {
+            _paceLaps += (int)(travelled / length);
+        }
+
+        _paceLength = length;
+        _paceDistance = travelled % length;
 
         Invalidate();
     }
@@ -2176,8 +3091,39 @@ public sealed class RcpTrackCanvas : Control
         base.OnMouseDown(e);
         Focus();
 
+        // A stretch being dragged takes no other press - a right click
+        // would erase under it.
+        if (_stretchColumns is not null)
+        {
+            return;
+        }
+
+        // The lap chip (the second) is a button too: the sectors - in the
+        // angled view as well, where it shows too.
+        if (e.Button == MouseButtons.Left && !_spaceHeld && _lapChipBox is { } under && under.Contains(e.Location))
+        {
+            LapChipClicked?.Invoke(new Point((int)under.Left, (int)under.Bottom + 2));
+            return;
+        }
+
+        // The angled view only looks: a drag turns it, and nothing else
+        // reaches the plan.
+        if (Angled)
+        {
+            _angleFrom = e.Button == MouseButtons.Left ? e.Location : null;
+            return;
+        }
+
+        // The zoom readout in the corner is a button: back to 100%.
+        if (e.Button == MouseButtons.Left && !_spaceHeld && _zoomChip.Contains(e.Location))
+        {
+            ZoomHome();
+            return;
+        }
+
         if (e.Button == MouseButtons.Middle
-            || (e.Button == MouseButtons.Right && ModifierKeys.HasFlag(Keys.Shift)))
+            || (e.Button == MouseButtons.Right && ModifierKeys.HasFlag(Keys.Shift))
+            || (e.Button == MouseButtons.Left && _spaceHeld))
         {
             _panning = true;
             _panFrom = e.Location;
@@ -2196,6 +3142,7 @@ public sealed class RcpTrackCanvas : Control
                 {
                     Remember();
                     _design.Route.RemoveAt(index);
+                    _design.RouteAuto = false;
                     RaiseChanged();
                     return;
                 }
@@ -2254,8 +3201,55 @@ public sealed class RcpTrackCanvas : Control
 
                 break;
 
+            case RcpTool.Marker when Item == RcpPaletteItem.Label:
+                var labelCell = ToCell(e.Location);
+
+                if (_design.At(labelCell.X, labelCell.Y) is { } labelled)
+                {
+                    LabelRequested?.Invoke(labelCell, labelled.Label ?? string.Empty);
+                }
+                else
+                {
+                    StatusChanged?.Invoke("A label goes on a tile - lay the floor there first.");
+                }
+
+                break;
+
             case RcpTool.Marker:
                 PlaceMarker(ToCell(e.Location));
+                break;
+
+            case RcpTool.Lane:
+                _painting = true;
+                BeginStroke();
+
+                var laneCell = ToCell(e.Location);
+
+                if (LaneRing)
+                {
+                    // Nothing is laid until the box is let go.
+                    _ringFrom = laneCell;
+                    _ringAt = laneCell;
+                    Invalidate();
+                }
+                else
+                {
+                    _lastPaintedCell = laneCell;
+                    StartLane(laneCell);
+                }
+
+                break;
+
+            case RcpTool.Corner:
+                if (CornerAt(e.Location) is { } bend)
+                {
+                    CycleCorner(bend.At);
+                }
+                else
+                {
+                    StatusChanged?.Invoke("Click nearer a corner of the grid - where two rails meet, or on a turn rail.");
+                }
+
                 break;
 
             case RcpTool.Erase:
@@ -2276,6 +3270,21 @@ public sealed class RcpTrackCanvas : Control
                 _panFrom = e.Location;
                 _backdropFrom = new PointF(_design.BackdropX, _design.BackdropY);
                 _draggingBackdrop = true;
+                break;
+
+            case RcpTool.Select when !ModifierKeys.HasFlag(Keys.Shift) && StretchHandleAt(e.Location) is { } columns:
+                // A handle on the selection's right or bottom edge: drag
+                // it to make the plan longer or shorter there (RcpStretch).
+                // Nothing changes until it is let go.
+                FlushPendingSettle();
+                _painting = true;
+
+                // A stroke, so nothing else - Undo, Redo - lands mid-drag.
+                BeginStroke();
+                _stretchColumns = columns;
+                _stretchBox = _selection.Bounds();
+                _stretchBy = 0;
+                Invalidate();
                 break;
 
             case RcpTool.Select:
@@ -2332,6 +3341,18 @@ public sealed class RcpTrackCanvas : Control
     {
         base.OnMouseMove(e);
 
+        if (Angled)
+        {
+            if (_angleFrom is { } from && e.Button == MouseButtons.Left)
+            {
+                _angle = _angle.Dragged(e.X - from.X, e.Y - from.Y);
+                _angleFrom = e.Location;
+                Invalidate();
+            }
+
+            return;
+        }
+
         if (_panning)
         {
             _origin = new PointF(_panOrigin.X + (e.X - _panFrom.X), _panOrigin.Y + (e.Y - _panFrom.Y));
@@ -2376,7 +3397,7 @@ public sealed class RcpTrackCanvas : Control
         _hoverCell = cell;
 
         var edge = Tool is RcpTool.Wall or RcpTool.Erase ? EdgeAt(e.Location) : null;
-        var corner = Tool is RcpTool.Curve or RcpTool.Erase ? CornerAt(e.Location) : null;
+        var corner = Tool is RcpTool.Curve or RcpTool.Erase or RcpTool.Corner ? CornerAt(e.Location) : null;
 
         if (!Equals(edge, _hoverEdge))
         {
@@ -2403,6 +3424,7 @@ public sealed class RcpTrackCanvas : Control
             if (x != point.X || y != point.Y)
             {
                 Remember();
+                _design.RouteAuto = false;
             }
 
             point.X = x;
@@ -2423,6 +3445,27 @@ public sealed class RcpTrackCanvas : Control
             return;
         }
 
+        if (_stretchColumns is { } stretchingColumns && e.Button == MouseButtons.Left)
+        {
+            var at = stretchingColumns
+                ? (e.X - _origin.X) / _scale - _stretchBox.Right
+                : (e.Y - _origin.Y) / _scale - _stretchBox.Bottom;
+
+            // Shorter by at most all but one of the selection's tiles, and
+            // longer by no more than any hall needs.
+            var least = -((stretchingColumns ? _stretchBox.Width : _stretchBox.Height) - 1);
+            var by = Math.Clamp((int)MathF.Round(at), Math.Min(0, least), MostStretch);
+
+            if (by != _stretchBy)
+            {
+                _stretchBy = by;
+                StatusChanged?.Invoke(StretchSays(stretchingColumns, by) + " Let go to make it so.");
+                Invalidate();
+            }
+
+            return;
+        }
+
         if (_movingSelection && e.Button == MouseButtons.Left && _moveLast is { } last)
         {
             var now = ToCell(e.Location);
@@ -2434,6 +3477,7 @@ public sealed class RcpTrackCanvas : Control
                 // click on the selection that leaves it where it was adds
                 // nothing to undo.
                 Remember();
+                LineTouchedByHand(deleting: false);
 
                 _selection.Move(now.X - last.X, now.Y - last.Y);
                 _moveLast = now;
@@ -2454,9 +3498,15 @@ public sealed class RcpTrackCanvas : Control
 
         // The pointer says what a press would do: a hand over what is
         // picked, because dragging there moves it.
-        if (Tool == RcpTool.Select && !_panning)
+        // Not while Space is held: the next press pans, and the hand says so.
+        if (Tool == RcpTool.Select && !_panning && !_spaceHeld)
         {
-            var wanted = PointerOnSelection(e.Location) ? Cursors.SizeAll : Cursors.Default;
+            var wanted = StretchHandleAt(e.Location) switch
+            {
+                true => Cursors.SizeWE,
+                false => Cursors.SizeNS,
+                null => PointerOnSelection(e.Location) ? Cursors.SizeAll : Cursors.Default,
+            };
 
             if (Cursor != wanted)
             {
@@ -2486,6 +3536,32 @@ public sealed class RcpTrackCanvas : Control
                     ExtendRailRun(ToGridPoint(e.Location));
                     break;
 
+                case RcpTool.Lane when _ringFrom is not null:
+                    if (_ringAt != cell)
+                    {
+                        _ringAt = cell;
+                        Invalidate();
+                    }
+
+                    break;
+
+                case RcpTool.Lane:
+                    // A drag that started with another tool (L pressed mid-
+                    // drag) starts its lane here.
+                    if (_laneId is null)
+                    {
+                        StartLane(cell);
+                    }
+
+                    // Filled in behind a fast drag, as the floor brush is.
+                    foreach (var step in CellsBetween(_lastPaintedCell ?? cell, cell))
+                    {
+                        PaintLane(step);
+                    }
+
+                    _lastPaintedCell = cell;
+                    break;
+
                 case RcpTool.Erase:
                     foreach (var step in PixelsBetween(_lastErasedAt ?? e.Location, e.Location))
                     {
@@ -2509,6 +3585,12 @@ public sealed class RcpTrackCanvas : Control
     {
         base.OnMouseUp(e);
 
+        if (Angled)
+        {
+            _angleFrom = null;
+            return;
+        }
+
         // 20 Oct 2026, #82: keyed on how the drag started, to match OnMouseMove.
         if (_painting && _draggingBackdrop && Tool == RcpTool.Backdrop)
         {
@@ -2530,12 +3612,31 @@ public sealed class RcpTrackCanvas : Control
             }
         }
 
+        // The ring is laid when its box is let go.
+        if (_painting && !_ctrlErasing && Tool == RcpTool.Lane && e.Button == MouseButtons.Left
+            && _ringFrom is { } ringFrom && _ringAt is { } ringTo)
+        {
+            LayRing(ringFrom, ringTo);
+        }
+
         // What the marquee caught, before EndStroke clears it. A marquee
         // abandoned by Alt-Tab goes through EndStroke without coming here,
         // so it is dropped rather than applied.
         if (e.Button == MouseButtons.Left && _marqueeFrom is { } from && _marqueeAt is { } to)
         {
             PickUp(from, to);
+        }
+
+        if (_stretchColumns is { } stretchColumns)
+        {
+            // Only the button that started it ends it.
+            if (e.Button != MouseButtons.Left)
+            {
+                return;
+            }
+
+            _stretchColumns = null;
+            FinishStretch(stretchColumns, _stretchBy);
         }
 
         var movedSomething = _movingSelection && _moved;
@@ -2554,7 +3655,9 @@ public sealed class RcpTrackCanvas : Control
         if (_panning)
         {
             _panning = false;
-            Cursor = Cursors.Default;
+
+            // Still holding Space: the next press pans again, and the hand says so.
+            Cursor = _spaceHeld ? Cursors.Hand : Cursors.Default;
         }
     }
 
@@ -2645,13 +3748,22 @@ public sealed class RcpTrackCanvas : Control
         if (_panning)
         {
             _panning = false;
-            Cursor = Cursors.Default;
+
+            // Still holding Space: the next press pans again, and the hand says so.
+            Cursor = _spaceHeld ? Cursors.Hand : Cursors.Default;
         }
     }
 
     protected override void OnMouseWheel(MouseEventArgs e)
     {
         base.OnMouseWheel(e);
+
+        if (Angled)
+        {
+            _angle = _angle.Zoomed(e.Delta / 120f);
+            Invalidate();
+            return;
+        }
 
         if (Tool == RcpTool.Backdrop && _backdrop is not null)
         {
@@ -2678,8 +3790,41 @@ public sealed class RcpTrackCanvas : Control
     {
         base.OnKeyDown(e);
 
+        // Nothing on the plan changes while it is seen angled - not a
+        // nudge, a turn or a delete of something picked out of sight - or
+        // while a stretch handle is held.
+        if (Angled || _stretchColumns is not null)
+        {
+            return;
+        }
+
         switch (e.KeyCode)
         {
+            // Space on its own: Alt+Space is the window's own menu, and
+            // Ctrl+Space is nothing to do with moving the view.
+            case Keys.Space when e.Modifiers == Keys.None:
+                // Held, not toggled: the view moves while it is down. Auto-
+                // repeat sends it again and again, which changes nothing.
+                if (!_spaceHeld)
+                {
+                    _spaceHeld = true;
+
+                    if (!_panning)
+                    {
+                        Cursor = Cursors.Hand;
+                    }
+                }
+
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                break;
+
+            // Shift+R: the racing line the other way round (the Reverse button).
+            case Keys.R when e.Shift:
+                ReverseRoute();
+                e.Handled = true;
+                break;
+
             case Keys.R:
                 MarkerTurns = (MarkerTurns + 1) % 4;
                 StatusChanged?.Invoke($"Markings turned to {MarkerTurns * 90} degrees.");
@@ -2773,6 +3918,43 @@ public sealed class RcpTrackCanvas : Control
         }
     }
 
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        base.OnKeyUp(e);
+
+        if (e.KeyCode == Keys.Space)
+        {
+            ReleaseSpace();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Space let go somewhere else - another window took the focus while it
+    /// was down - must not leave the left button panning for good.
+    /// </summary>
+    protected override void OnLostFocus(EventArgs e)
+    {
+        base.OnLostFocus(e);
+        ReleaseSpace();
+    }
+
+    private void ReleaseSpace()
+    {
+        if (!_spaceHeld)
+        {
+            return;
+        }
+
+        _spaceHeld = false;
+
+        // A pan in progress keeps its own cursor until the button comes up.
+        if (!_panning)
+        {
+            Cursor = Cursors.Default;
+        }
+    }
+
     // --- Paint ----------------------------------------------------------------
 
     protected override void OnPaint(PaintEventArgs e)
@@ -2782,9 +3964,17 @@ public sealed class RcpTrackCanvas : Control
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
-        using (var background = new SolidBrush(AppTheme.Background))
+        using (var background = new SolidBrush(BoardFloor))
         {
             g.FillRectangle(background, ClientRectangle);
+        }
+
+        if (Angled)
+        {
+            RcpAngledView.Draw(g, _design, ClientSize, _angle, _paceTimer.Enabled ? PaceCarPosition() : null);
+            DrawChips(g);
+            DrawPaceReadout(g);
+            return;
         }
 
         if (ShowGrid)
@@ -2807,6 +3997,219 @@ public sealed class RcpTrackCanvas : Control
         }
 
         DrawRuler(g);
+        DrawChips(g);
+        DrawZoom(g);
+        DrawPaceReadout(g);
+    }
+
+    /// <summary>
+    /// While Play runs: the lap the car is on and how fast it is going -
+    /// the lap's length over its time, at the speed Play is set to - over
+    /// the board's bottom-left, above the ruler.
+    /// </summary>
+    private void DrawPaceReadout(Graphics g)
+    {
+        if (!_paceTimer.Enabled)
+        {
+            return;
+        }
+
+        var metres = RcpPlan.RouteLengthInTiles(_design) * _design.TileSizeMm / 1000.0;
+        var speed = metres / Math.Max(1.0, LapSeconds);
+        var text = $"Lap {_paceLaps + 1} · {speed:0.0} m/s ({speed * 3.6:0.0} km/h)"
+                   + (Math.Abs(PaceRate - 1f) > 0.01f ? $" · shown at {PaceRate:0.#}x" : string.Empty);
+
+        var font = AppTheme.SmallFont;
+        var padX = UiLayout.AtTextSize(9);
+        var padY = UiLayout.AtTextSize(4);
+        var size = g.MeasureString(text, font);
+        var box = new RectangleF(UiLayout.AtTextSize(10), Height - UiLayout.AtTextSize(44) - size.Height, size.Width + padX * 2, size.Height + padY * 2);
+
+        using var fill = new SolidBrush(Color.FromArgb(215, 34, 37, 44));
+        using var edge = new Pen(AppTheme.Accent, 1.4f);
+        using var ink = new SolidBrush(ColorTranslator.FromHtml("#D9DEE7"));
+
+        using (var path = AppTheme.RoundedRect(box, (int)Math.Max(4, box.Height / 2f)))
+        {
+            g.FillPath(fill, path);
+            g.DrawPath(edge, path);
+        }
+
+        g.DrawString(text, font, ink, box.X + padX, box.Y + padY);
+    }
+
+    /// <summary>
+    /// The zoom readout, in the board's bottom-right corner, in the chips'
+    /// style - and a button: a click on it goes back to 100% (ZoomHome).
+    /// </summary>
+    private void DrawZoom(Graphics g)
+    {
+        var font = AppTheme.SmallFont;
+        var text = $"{ZoomPercent}%";
+        var padX = UiLayout.AtTextSize(9);
+        var padY = UiLayout.AtTextSize(4);
+        var inset = UiLayout.AtTextSize(10);
+
+        var size = g.MeasureString(text, font);
+        var box = new RectangleF(
+            Width - inset - size.Width - padX * 2,
+            Height - inset - size.Height - padY * 2,
+            size.Width + padX * 2,
+            size.Height + padY * 2);
+
+        _zoomChip = box;
+
+        using var fill = new SolidBrush(Color.FromArgb(215, 34, 37, 44));
+        using var edge = new Pen(Color.FromArgb(90, BoardInk), 1f);
+        using var ink = new SolidBrush(ColorTranslator.FromHtml("#D9DEE7"));
+
+        using (var path = AppTheme.RoundedRect(box, (int)Math.Max(4, box.Height / 2f)))
+        {
+            g.FillPath(fill, path);
+            g.DrawPath(edge, path);
+        }
+
+        g.DrawString(text, font, ink, box.X + padX, box.Y + padY);
+    }
+
+    /// <summary>
+    /// Where a click will land: a ring round the grid point, so the snap is
+    /// seen before the click rather than after it.
+    /// </summary>
+    private void DrawSnapPoint(Graphics g, PointF point, Color colour)
+    {
+        var ring = Math.Max(5f, _scale * 0.14f);
+
+        using var halo = new SolidBrush(Color.FromArgb(70, colour));
+        using var pen = new Pen(colour, 2f);
+        using var dot = new SolidBrush(colour);
+
+        g.FillEllipse(halo, point.X - ring, point.Y - ring, ring * 2f, ring * 2f);
+        g.DrawEllipse(pen, point.X - ring, point.Y - ring, ring * 2f, ring * 2f);
+        g.FillEllipse(dot, point.X - 3, point.Y - 3, 6, 6);
+    }
+
+    /// <summary>A ghost of a turn rail: its arc, in the tool's colour, as RcpTrackPainter.DrawCurve would place it.</summary>
+    private void DrawGhostTurn(Graphics g, Point at, RcpQuadrant quadrant, float radiusTiles, Color colour)
+    {
+        var point = new PointF(_origin.X + at.X * _scale, _origin.Y + at.Y * _scale);
+        var radius = Math.Max(0.25f, radiusTiles) * _scale;
+        var (dx, dy) = RcpAutoRails.Step(quadrant);
+
+        var start = quadrant switch
+        {
+            RcpQuadrant.NorthEast => 90f,
+            RcpQuadrant.SouthEast => 180f,
+            RcpQuadrant.SouthWest => 270f,
+            _ => 0f,
+        };
+
+        var centre = new PointF(point.X + dx * radius, point.Y + dy * radius);
+
+        using var halo = new Pen(Color.FromArgb(60, colour), Math.Max(8f, _scale * RcpTrackPainter.RailThickness * 2.4f));
+        using var pen = new Pen(Color.FromArgb(200, colour), Math.Max(3f, _scale * RcpTrackPainter.RailThickness));
+
+        g.DrawArc(halo, centre.X - radius, centre.Y - radius, radius * 2f, radius * 2f, start, 90f);
+        g.DrawArc(pen, centre.X - radius, centre.Y - radius, radius * 2f, radius * 2f, start, 90f);
+    }
+
+    /// <summary>A ghost of a straight rail along a seam.</summary>
+    private void DrawGhostRail(Graphics g, (int Col, int Row, bool Vertical) seam, Color colour)
+    {
+        var from = new PointF(_origin.X + seam.Col * _scale, _origin.Y + seam.Row * _scale);
+        var to = seam.Vertical ? new PointF(from.X, from.Y + _scale) : new PointF(from.X + _scale, from.Y);
+
+        using var halo = new Pen(Color.FromArgb(60, colour), Math.Max(8f, _scale * RcpTrackPainter.RailThickness * 2.4f));
+        using var pen = new Pen(Color.FromArgb(200, colour), Math.Max(3f, _scale * RcpTrackPainter.RailThickness))
+        {
+            StartCap = LineCap.Round,
+            EndCap = LineCap.Round,
+        };
+
+        g.DrawLine(halo, from, to);
+        g.DrawLine(pen, from, to);
+    }
+
+    /// <summary>A wash over cells, dashed round each - the ghost of floor about to go down.</summary>
+    private void DrawGhostCells(Graphics g, IEnumerable<Point> cells, Color colour)
+    {
+        using var wash = new SolidBrush(Color.FromArgb(60, colour));
+        using var outline = new Pen(colour, 2f) { DashStyle = DashStyle.Dash };
+
+        foreach (var cell in cells)
+        {
+            var rect = new RectangleF(_origin.X + cell.X * _scale, _origin.Y + cell.Y * _scale, _scale, _scale);
+
+            g.FillRectangle(wash, rect);
+            g.DrawRectangle(outline, rect.Left, rect.Top, rect.Width, rect.Height);
+        }
+    }
+
+    /// <summary>
+    /// The board's chips: a rounded pill for each line of Chips, along the
+    /// top-left corner, in the board's own ink - so they read the same on
+    /// every look, as the board does.
+    /// </summary>
+    private void DrawChips(Graphics g)
+    {
+        if (_chips.Count == 0)
+        {
+            return;
+        }
+
+        var font = AppTheme.SmallFont;
+        var padX = UiLayout.AtTextSize(9);
+        var padY = UiLayout.AtTextSize(4);
+        var gap = UiLayout.AtTextSize(6);
+        var x = (float)UiLayout.AtTextSize(10);
+        var y = (float)UiLayout.AtTextSize(10);
+
+        using var fill = new SolidBrush(Color.FromArgb(215, 34, 37, 44));
+        using var edge = new Pen(Color.FromArgb(90, BoardInk), 1f);
+        using var ink = new SolidBrush(ColorTranslator.FromHtml("#D9DEE7"));
+
+        _lapChipBox = null;
+
+        using var warnEdge = new Pen(AppTheme.Danger, 1.6f);
+        using var warnInk = new SolidBrush(ColorTranslator.FromHtml("#FF8A80"));
+        var first = true;
+
+        foreach (var chip in _chips)
+        {
+            if (string.IsNullOrWhiteSpace(chip))
+            {
+                continue;
+            }
+
+            var warn = first && _chipWarning;
+            first = false;
+
+            var text = g.MeasureString(chip, font);
+            var box = new RectangleF(x, y, text.Width + padX * 2, text.Height + padY * 2);
+
+            // One under another when the board is too narrow to keep them
+            // side by side - never cut off at its edge.
+            if (box.Right > Width - gap && x > UiLayout.AtTextSize(10))
+            {
+                x = UiLayout.AtTextSize(10);
+                y += box.Height + gap;
+                box = new RectangleF(x, y, box.Width, box.Height);
+            }
+
+            using (var path = AppTheme.RoundedRect(box, (int)Math.Max(4, box.Height / 2f)))
+            {
+                g.FillPath(fill, path);
+                g.DrawPath(warn ? warnEdge : edge, path);
+            }
+
+            g.DrawString(chip, font, warn ? warnInk : ink, box.X + padX, box.Y + padY);
+            if (chip.StartsWith("Lap ", StringComparison.Ordinal))
+            {
+                _lapChipBox = box;
+            }
+
+            x = box.Right + gap;
+        }
     }
 
     private void DrawGrid(Graphics g)
@@ -2818,7 +4221,7 @@ public sealed class RcpTrackCanvas : Control
 
         var dot = Math.Max(1f, _scale * 0.03f);
 
-        using var brush = new SolidBrush(Color.FromArgb(70, AppTheme.TextMuted));
+        using var brush = new SolidBrush(Color.FromArgb(70, BoardInk));
 
         var firstCol = (int)MathF.Floor(-_origin.X / _scale);
         var firstRow = (int)MathF.Floor(-_origin.Y / _scale);
@@ -2843,19 +4246,16 @@ public sealed class RcpTrackCanvas : Control
         {
             case RcpTool.Wall when _hoverEdge is { } edge:
             {
+                // The rail that would go in, with a halo and its two ends
+                // marked, so the seam a click lands on is plain to see.
+                DrawGhostRail(g, edge, AppTheme.Accent);
+
                 var from = new PointF(_origin.X + edge.Col * _scale, _origin.Y + edge.Row * _scale);
+                var to = edge.Vertical ? new PointF(from.X, from.Y + _scale) : new PointF(from.X + _scale, from.Y);
 
-                var to = edge.Vertical
-                    ? new PointF(from.X, from.Y + _scale)
-                    : new PointF(from.X + _scale, from.Y);
-
-                using var pen = new Pen(Color.FromArgb(200, AppTheme.Accent), Math.Max(3f, _scale * RcpTrackPainter.RailThickness))
-                {
-                    StartCap = LineCap.Round,
-                    EndCap = LineCap.Round,
-                };
-
-                g.DrawLine(pen, from, to);
+                using var ends = new SolidBrush(AppTheme.Accent);
+                g.FillEllipse(ends, from.X - 3, from.Y - 3, 6, 6);
+                g.FillEllipse(ends, to.X - 3, to.Y - 3, 6, 6);
                 break;
             }
 
@@ -2885,10 +4285,63 @@ public sealed class RcpTrackCanvas : Control
                 using var pen = new Pen(Color.FromArgb(190, AppTheme.Accent), Math.Max(3f, _scale * RcpTrackPainter.RailThickness));
                 g.DrawArc(pen, centre.X - radius, centre.Y - radius, radius * 2f, radius * 2f, start, 90f);
 
-                using var dot = new SolidBrush(AppTheme.Accent);
-                g.FillEllipse(dot, point.X - 3, point.Y - 3, 6, 6);
+                DrawSnapPoint(g, point, AppTheme.Accent);
                 break;
             }
+
+            // The corner this click would make: the turn's arc, or for a
+            // square corner the straights that come back.
+            case RcpTool.Corner when _hoverCorner is { } bend:
+            {
+                var point = new PointF(_origin.X + bend.At.X * _scale, _origin.Y + bend.At.Y * _scale);
+
+                if (RcpCorners.Next(_design, bend.At, out _) is not { } next)
+                {
+                    DrawSnapPoint(g, point, BoardInk);
+                    break;
+                }
+
+                if (next.Radius > 0)
+                {
+                    DrawGhostTurn(g, bend.At, next.Quadrant, next.Radius, AppTheme.Accent);
+                }
+                else if (_design.CurveAt(bend.At.X, bend.At.Y) is { } turn)
+                {
+                    foreach (var seam in RcpAutoRails.Swept(turn))
+                    {
+                        DrawGhostRail(g, seam, AppTheme.Accent);
+                    }
+                }
+
+                DrawSnapPoint(g, point, AppTheme.Accent);
+                break;
+            }
+
+            // The ring the box will lay, or - too small - the box in red.
+            case RcpTool.Lane when _ringFrom is { } ringFrom && _ringAt is { } ringTo:
+            {
+                if (RcpAutoRails.Ring(ringFrom, ringTo, LaneWidth) is { } ring)
+                {
+                    DrawGhostCells(g, ring, AppTheme.Accent);
+                }
+                else
+                {
+                    var left = Math.Min(ringFrom.X, ringTo.X);
+                    var top = Math.Min(ringFrom.Y, ringTo.Y);
+                    var cols = Math.Abs(ringTo.X - ringFrom.X) + 1;
+                    var rows = Math.Abs(ringTo.Y - ringFrom.Y) + 1;
+
+                    using var outline = new Pen(AppTheme.Danger, 2f) { DashStyle = DashStyle.Dash };
+                    g.DrawRectangle(outline, _origin.X + left * _scale, _origin.Y + top * _scale, cols * _scale, rows * _scale);
+                }
+
+                break;
+            }
+
+            // The lane brush: as many tiles as the lane is wide.
+            case RcpTool.Lane when _hoverCell is { } laneAt:
+                DrawGhostCells(g, RcpAutoRails.Brush(laneAt, LaneWidth), AppTheme.Accent);
+                break;
 
             case RcpTool.Floor or RcpTool.Marker or RcpTool.Erase when _hoverCell is { } cell:
             {
@@ -3008,6 +4461,8 @@ public sealed class RcpTrackCanvas : Control
                 _origin.Y + box.Top * _scale,
                 Math.Max(1f, box.Width * _scale),
                 Math.Max(1f, box.Height * _scale));
+
+            DrawStretch(g);
         }
 
         // The marquee, snapped to the tiles it is going to take - so what
@@ -3049,8 +4504,8 @@ public sealed class RcpTrackCanvas : Control
         var y = Height - 22;
         var left = 16f;
 
-        using var pen = new Pen(AppTheme.TextMuted, 2f);
-        using var brush = new SolidBrush(AppTheme.TextMuted);
+        using var pen = new Pen(BoardInk, 2f);
+        using var brush = new SolidBrush(BoardInk);
 
         g.DrawLine(pen, left, y, left + barPixels, y);
         g.DrawLine(pen, left, y - 5, left, y + 5);
@@ -3091,6 +4546,7 @@ public static class RcpTiles
         RcpPaletteItem.Split1 => "Split 1 loop",
         RcpPaletteItem.Split2 => "Split 2 loop",
         RcpPaletteItem.Split3 => "Split 3 loop",
+        RcpPaletteItem.Label => "Tile label",
         _ => "Rostrum / table",
     };
 
@@ -3107,6 +4563,7 @@ public static class RcpTiles
         RcpPaletteItem.Kerb => "Red and white, for marking an apex.",
         RcpPaletteItem.Split1 or RcpPaletteItem.Split2 or RcpPaletteItem.Split3 =>
             "Where a split loop lies across the track. With the racing line through it, it measures each sector for sector speeds.",
+        RcpPaletteItem.Label => "Name a tile - pit lane, marshal. Click a tile to type its name. (T)",
         _ => "Anything else standing on the floor.",
     };
 
@@ -3141,6 +4598,7 @@ public static class RcpTiles
         RcpPaletteItem.Split1,
         RcpPaletteItem.Split2,
         RcpPaletteItem.Split3,
+        RcpPaletteItem.Label,
     };
 
     /// <summary>
@@ -3204,6 +4662,10 @@ public static class RcpTiles
 
             case RcpPaletteItem.Split3:
                 design.Decals.Add(new RcpDecal { Col = 0, Row = 0, Kind = RcpDecalKind.SplitLoop3 });
+                break;
+
+            case RcpPaletteItem.Label:
+                design.Tiles[0].Label = "Pit";
                 break;
         }
 

@@ -114,7 +114,7 @@ In the **Move drivers between heats** window (right-click the program on **Race 
 
 ## Track Designer
 
-In the **Track Designer** (**Track Layouts** → **Track Designer**):
+In the **Track Designer** (**Track Layouts** → **Track Designer**; see [Track Designer](../race-day/track-designer.md)):
 
 | Key | What it does |
 |---|---|
@@ -126,13 +126,20 @@ In the **Track Designer** (**Track Layouts** → **Track Designer**):
 | <kbd>6</kbd> | **Erase** tool |
 | <kbd>7</kbd> | **Photo** tool |
 | <kbd>8</kbd> | **Select** tool |
+| <kbd>L</kbd> | **Lane** tool |
+| <kbd>C</kbd> | **Corners** tool |
+| <kbd>T</kbd> | **Markings** tool with **Tile label**, to name a tile |
+| <kbd>V</kbd> | Shows the track in 3D, or goes back to the flat plan (same as **View**) |
 | <kbd>R</kbd> | Turns markings 90 degrees |
+| <kbd>Shift</kbd>+<kbd>R</kbd> | Runs the racing line the other way (same as **Reverse**) |
 | <kbd>F</kbd> | Fits the whole plan in view (same as **Fit**) |
 | <kbd>G</kbd> | Shows or hides the grid |
+| <kbd>P</kbd> | Hides or shows the panel on the right (same as **Panel**) |
+| <kbd>Space</kbd> + drag | Moves the view, with any tool |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo |
 | <kbd>Ctrl</kbd>+<kbd>Y</kbd> | Redo |
 
-The number keys and <kbd>R</kbd>, <kbd>F</kbd> and <kbd>G</kbd> only work while the plan has the focus, so they never get in the way of typing a track name. Click the plan first if they don't respond. <kbd>Ctrl</kbd>+<kbd>Z</kbd> and <kbd>Ctrl</kbd>+<kbd>Y</kbd> work anywhere in the Track Designer window.
+The number keys, <kbd>L</kbd>, <kbd>C</kbd>, <kbd>T</kbd>, <kbd>V</kbd>, <kbd>R</kbd>, <kbd>F</kbd>, <kbd>G</kbd>, <kbd>P</kbd> and <kbd>Space</kbd> only work while the plan has the focus, so they never get in the way of typing a track name. Click the plan first if they don't respond. <kbd>Ctrl</kbd>+<kbd>Z</kbd> and <kbd>Ctrl</kbd>+<kbd>Y</kbd> work anywhere in the Track Designer window.
 
 With the mouse:
 
@@ -167,6 +174,7 @@ With the mouse:
 - **Drag inside** what's picked to move it.
 - **Shift-drag** another box to add to what's picked - or, over something already picked, to take it back out.
 - **Click** bare floor to drop the selection.
+- **Drag a square handle** on the right or bottom edge to make the plan longer or shorter there, by whole tiles (see [Stretch part of the plan](../race-day/track-designer.md#stretch-part-of-the-plan)).
 
 A turn or a mirror keeps the top-left corner of the box where it is, so turning a layout never slides it off the floor you had it lined up with. One drag, nudge, turn or mirror is one press of <kbd>Ctrl</kbd>+<kbd>Z</kbd>.
 

@@ -2405,6 +2405,14 @@ public sealed class AppSettings
     /// </summary>
     public int RaceWarmUpSeconds { get; set; }
 
+    /// <summary>
+    /// What RCP track the club has in the cupboard - boxed sets and loose
+    /// parts - for the Track Designer's Stock tab to check every layout
+    /// against (Track Designer overhaul, Phase 4, 25 Oct 2026). Empty in an
+    /// older settings file, which checks nothing.
+    /// </summary>
+    public RcpStock TrackStock { get; set; } = new();
+
     private static string SettingsDirectory =>
         AppPaths.Root;
 
@@ -2500,6 +2508,9 @@ public sealed class AppSettings
     {
         static List<string> Clean(List<string>? list) =>
             (list ?? new List<string>()).Where(item => item is not null).ToList();
+
+        // A null or hand-edited cupboard reads as what it can be made into.
+        TrackStock = (TrackStock ?? new RcpStock()).Tidied();
 
         // An empty teaser list is fine: EffectiveTeaserLines falls back to
         // SummaryTeaserText.

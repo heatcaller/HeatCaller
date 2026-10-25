@@ -1431,6 +1431,17 @@ nothing in it reaches the machine's shell; checked field by field) and
 `audit-log --json [--limit N]`, newest first, in `dataDir/.admin-audit/`.
 Only the admin commands write it - there is still no route for it.
 
+### Checking the relay's own keys
+
+`key-check --json` (run by the relay admin app's Replace key and Check keys)
+tries `RELAY_VOICE_KEY` and `RELAY_BRAIN_KEY` on the machine where they are:
+the ElevenLabs account read admin-snapshot already does (a key limited to
+text-to-speech counts as working), and Anthropic's free `GET /v1/models/<model>`
+for the model in relay.config.json. It reports a word per key - ok, no-key,
+refused, no-model, failed - and at most an HTTP status; never a key. Nothing
+is spent. The app sets a new key with `fly secrets import`, the key on
+flyctl's input rather than its command line.
+
 ### Which build is running
 
 `npm run build` writes `dist/src/build-info.json` beside the compiled relay:

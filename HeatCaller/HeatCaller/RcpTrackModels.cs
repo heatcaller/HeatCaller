@@ -108,7 +108,19 @@ public sealed class RcpTile
 
     public string Label { get; set; } = string.Empty;
 
-    public RcpTile Clone() => new() { Col = Col, Row = Row, Kind = Kind, Turns = Turns, Label = Label };
+    /// <summary>
+    /// Which lane this tile is part of, when it was laid by the Lane tool -
+    /// 0 when it is plain floor (every tile in a plan drawn before lanes).
+    ///
+    /// A number rather than a yes or no, because two lanes can run side by
+    /// side: the seam between tiles of the SAME lane is open track, and the
+    /// seam between two DIFFERENT lanes is a divider. The rails round a lane
+    /// are worked out from this by RcpAutoRails (Track Designer overhaul,
+    /// Phase 3, 25 Oct 2026).
+    /// </summary>
+    public int Lane { get; set; }
+
+    public RcpTile Clone() => new() { Col = Col, Row = Row, Kind = Kind, Turns = Turns, Label = Label, Lane = Lane };
 }
 
 /// <summary>
@@ -134,7 +146,15 @@ public sealed class RcpWall
     /// </summary>
     public bool Double { get; set; }
 
-    public RcpWall Clone() => new() { Col = Col, Row = Row, Vertical = Vertical, Double = Double };
+    /// <summary>
+    /// Put down by a lane rather than by hand (see RcpTile.Lane), so it is
+    /// worked out again whenever the lane changes - RcpAutoRails. False for
+    /// a rail drawn by hand, and for every rail in a plan drawn before lanes,
+    /// so nothing in an old plan ever moves.
+    /// </summary>
+    public bool Auto { get; set; }
+
+    public RcpWall Clone() => new() { Col = Col, Row = Row, Vertical = Vertical, Double = Double, Auto = Auto };
 
     [JsonIgnore]
     public Point From => new(Col, Row);
@@ -166,7 +186,10 @@ public sealed class RcpCurve
 
     public bool Double { get; set; }
 
-    public RcpCurve Clone() => new() { Col = Col, Row = Row, Quadrant = Quadrant, Radius = Radius, Double = Double };
+    /// <summary>Put down by a lane rather than by hand - see RcpWall.Auto.</summary>
+    public bool Auto { get; set; }
+
+    public RcpCurve Clone() => new() { Col = Col, Row = Row, Quadrant = Quadrant, Radius = Radius, Double = Double, Auto = Auto };
 
     [JsonIgnore]
     public Point At => new(Col, Row);
@@ -214,6 +237,30 @@ public sealed class RcpTrackDesign
     public List<RcpRoutePoint> Route { get; set; } = new();
 
     public bool RouteClosed { get; set; } = true;
+
+    /// <summary>
+    /// The racing line came from Trace route and has not been touched by
+    /// hand since - so it is traced again by itself whenever the corridor
+    /// changes. Drawing, moving or taking off a point of it by hand turns
+    /// this off. False in every plan saved before it existed.
+    /// </summary>
+    public bool RouteAuto { get; set; }
+
+    /// <summary>
+    /// The radius, in whole tiles, of the turn rails a lane puts round its
+    /// bends: 1 or 2, or 0 for square corners. A turn rail has to meet its
+    /// straights at a seam, so the lanes only use whole tiles; a half-tile
+    /// hairpin is still there, placed by hand with the Turns tool.
+    /// </summary>
+    public int LaneTurnRadius { get; set; } = 1;
+
+    /// <summary>
+    /// When the racing line was last saved changed (UTC) - so the lap raced
+    /// on the layout before then is known to be for a different line
+    /// (RcpLapModel.Raced). Null on a plan whose line hasn't been changed
+    /// since this was recorded (25 Oct 2026), which counts every race.
+    /// </summary>
+    public DateTime? RouteChangedUtc { get; set; }
 
     /// <summary>Tile size in millimetres. RCP sells 30cm and 50cm.</summary>
     public double TileSizeMm { get; set; } = 500;
@@ -265,6 +312,9 @@ public sealed class RcpTrackDesign
         Decals = Decals.Select(d => d.Clone()).ToList(),
         Route = Route.Select(p => new RcpRoutePoint { X = p.X, Y = p.Y }).ToList(),
         RouteClosed = RouteClosed,
+        RouteAuto = RouteAuto,
+        LaneTurnRadius = LaneTurnRadius,
+        RouteChangedUtc = RouteChangedUtc,
         TileSizeMm = TileSizeMm,
         KitName = KitName,
         RoomWidthMm = RoomWidthMm,
@@ -332,10 +382,18 @@ public sealed class RcpTrackDesign
             Take(wall.To.X, wall.To.Y);
         }
 
+        // A turn rail's arc lies in the one quadrant it sweeps through: from
+        // its point, out one radius each way into that quadrant. It used to
+        // be taken a radius out on EVERY side (25 Oct 2026, overhaul Phase
+        // 3), so a plan with two-tile turns at its corners - which every
+        // lane with two-tile turns has - read two tiles too big all round
+        // in the size chip, and Fit and the picture framed the empty space.
         foreach (var curve in Curves)
         {
-            Take(curve.Col - curve.Radius, curve.Row - curve.Radius);
-            Take(curve.Col + curve.Radius, curve.Row + curve.Radius);
+            var (dx, dy) = RcpAutoRails.Step(curve.Quadrant);
+
+            Take(curve.Col, curve.Row);
+            Take(curve.Col + dx * curve.Radius, curve.Row + dy * curve.Radius);
         }
 
         foreach (var decal in Decals)
@@ -443,6 +501,42 @@ public sealed class RcpInventory
     public int EndCaps { get; set; }
 
     /// <summary>
+    /// Tiles that have to be RCP's outer curve tile: the one under each
+    /// turn rail round the outside of a bend (RcpPlan.CornerTiles, Track
+    /// Designer overhaul Phase 4, 25 Oct 2026). Included in Tiles.
+    /// </summary>
+    public int OuterCurveTiles { get; set; }
+
+    /// <summary>
+    /// Tiles that have to be RCP's inner corner tile, with an inner corner
+    /// piece on it: one at the inside of each bend. Included in Tiles.
+    /// </summary>
+    public int InnerCornerTiles { get; set; }
+
+    /// <summary>
+    /// Turn rails two tiles round. RCP's boxes don't say what one of these
+    /// takes, so each is counted as one outer curve tile and one turn rail,
+    /// and the readout says so.
+    /// </summary>
+    public int TwoTileTurns { get; set; }
+
+    /// <summary>
+    /// The turn rails round the OUTSIDE of bends - RCP's outer curve rails -
+    /// counting a back-to-back pair as two. The rest of TurnRails are turns
+    /// put round an inside corner, which stand in for an inner corner piece.
+    /// </summary>
+    public int OuterTurnRails { get; set; }
+
+    /// <summary>
+    /// Inner corner pieces: one at the inside of every bend, on its inner
+    /// corner tile - whether that corner is drawn square or with a turn.
+    /// </summary>
+    public int InnerCornerPieces => InnerCornerTiles;
+
+    /// <summary>The plain floor: every tile that is neither corner tile.</summary>
+    public int PlainTiles => Math.Max(0, Tiles - OuterCurveTiles - InnerCornerTiles);
+
+    /// <summary>
     /// What this layout needs more of than the kit holds - and nothing
     /// else. Empty means the box genuinely builds it.
     ///
@@ -469,8 +563,20 @@ public sealed class RcpInventory
         // a shortfall invented out of a number nobody published.
         if (kit.BreakdownPublished)
         {
+            // The corner tiles (Phase 4): a box with 12 outer curve tiles
+            // can't build 14 outside turns, however many tiles it has in
+            // all. Not the other way round - a spare corner tile is still a
+            // tile of floor, so plain floor is only checked as tiles.
+            Check("outer curve tiles", OuterCurveTiles, kit.OuterCurves);
+            Check("inner corner tiles", InnerCornerTiles, kit.InnerCorners);
             Check("straight rails", StraightRails, kit.TotalStraightRails);
-            Check("turn rails", TurnRails, kit.TotalTurnRails);
+
+            // Outer turns against the box's outer curve rails, and the
+            // inside of each bend against its inner corner pieces - the
+            // same split the Stock tab makes (review, 25 Oct 2026), so the
+            // two never disagree.
+            Check("turn rails", OuterTurnRails, kit.OuterCurveRails);
+            Check("inner corner pieces", InnerCornerPieces, kit.InnerCornerPieces);
         }
 
         return lines;
@@ -539,6 +645,12 @@ public static class RcpPlan
     {
         var added = 0;
 
+        // Not under a turn rail (25 Oct 2026): the turn already stands in
+        // place of the straight there, and a hand rail under a lane's turn
+        // squared that corner off for good (RcpAutoRails).
+        var blocked = BlockedSeams(design);
+        blocked.UnionWith(design.Curves.SelectMany(c => RcpAutoRails.Swept(c)));
+
         foreach (var tile in design.Tiles.Where(t => t.Kind != RcpTileKind.Infield).ToList())
         {
             foreach (var edge in Enum.GetValues<RcpEdge>())
@@ -553,7 +665,7 @@ public static class RcpPlan
 
                 var (c, r, vertical) = EdgeLine(tile.Col, tile.Row, edge);
 
-                if (design.WallAt(c, r, vertical) is not null)
+                if (design.WallAt(c, r, vertical) is not null || blocked.Contains((c, r, vertical)))
                 {
                     continue;
                 }
@@ -673,7 +785,190 @@ public static class RcpPlan
         inventory.StraightRails = design.Walls.Sum(w => w.Double ? 2 : 1);
         inventory.EndCaps = OpenEnds(design).Count;
 
+        var corners = CornerTiles(design);
+        inventory.OuterCurveTiles = corners.Outer.Count;
+        inventory.InnerCornerTiles = corners.Inner.Count;
+        inventory.TwoTileTurns = design.Curves.Count(c => c.Radius > 1.01f);
+        inventory.OuterTurnRails = design.Curves
+            .Where(c => corners.Outer.Contains(QuadrantCell(c)))
+            .Sum(c => c.Double ? 2 : 1);
+
         return inventory;
+    }
+
+    /// <summary>
+    /// Which tiles of the floor have to be RCP's corner tiles (Track
+    /// Designer overhaul, Phase 4, 25 Oct 2026). Worked out from the floor
+    /// and the rails - nothing is saved for it.
+    ///
+    /// RCP's turn rails stand on tiles of their own, which is why every box
+    /// lists them apart from the straight tiles, and in equal numbers (12
+    /// and 12): a bend in a lane - and a real lane is always at least two
+    /// tiles wide (Asher, 25 Oct 2026) - takes
+    ///   - an OUTER CURVE TILE in the outside corner, under the turn rail;
+    ///   - an INNER CORNER TILE at the inside of the bend: the track's own
+    ///     tile diagonally inside the outer one, with the inner corner piece
+    ///     on it round the island's corner.
+    ///
+    /// So: the tile in the quadrant a turn rail bulges into is an outer
+    /// curve tile, when it is track; and wherever three of the four tiles
+    /// round a grid point are one stretch of track and the fourth is not -
+    /// the inside of a bend - the tile across from the fourth is an inner
+    /// corner tile. A turn rail put round an inside corner (the Corners
+    /// tool can) bulges off the track, so it marks that inside corner, not
+    /// an outer one.
+    ///
+    /// "The track" is the lanes, each on its own, when the plan has lanes;
+    /// otherwise the floor a car can reach from the start, as Trace route
+    /// finds it. A tile is one kind or the other, outer first.
+    /// </summary>
+    public static (HashSet<(int Col, int Row)> Outer, HashSet<(int Col, int Row)> Inner) CornerTiles(RcpTrackDesign design)
+    {
+        var outer = new HashSet<(int, int)>();
+        var inner = new HashSet<(int, int)>();
+
+        var track = TrackRegions(design);
+
+        if (track.Count == 0)
+        {
+            return (outer, inner);
+        }
+
+        int RegionAt(int col, int row) => track.TryGetValue((col, row), out var id) ? id : 0;
+
+        foreach (var curve in design.Curves)
+        {
+            var cell = QuadrantCell(curve);
+
+            if (RegionAt(cell.Item1, cell.Item2) != 0)
+            {
+                outer.Add(cell);
+            }
+        }
+
+        // Every grid point at a corner of a track tile, once.
+        var points = track.Keys
+            .SelectMany(c => new[] { (c.Col, c.Row), (c.Col + 1, c.Row), (c.Col, c.Row + 1), (c.Col + 1, c.Row + 1) })
+            .ToHashSet();
+
+        foreach (var (x, y) in points)
+        {
+            var round = new[] { (x - 1, y - 1), (x, y - 1), (x, y), (x - 1, y) };
+            var ids = round.Select(c => RegionAt(c.Item1, c.Item2)).ToArray();
+
+            for (var missing = 0; missing < 4; missing++)
+            {
+                var across = (missing + 2) % 4;
+                var id = ids[across];
+
+                if (id == 0 || ids[missing] == id)
+                {
+                    continue;
+                }
+
+                // The other three all this stretch of track, the fourth not.
+                if (ids[(missing + 1) % 4] == id && ids[(missing + 3) % 4] == id)
+                {
+                    var cell = round[across];
+
+                    if (!outer.Contains(cell))
+                    {
+                        inner.Add(cell);
+                    }
+                }
+            }
+        }
+
+        return (outer, inner);
+    }
+
+    /// <summary>The cell a turn rail's arc bulges into: the corner cell of its quadrant.</summary>
+    internal static (int Col, int Row) QuadrantCell(RcpCurve curve)
+    {
+        var (dx, dy) = RcpAutoRails.Step(curve.Quadrant);
+        return (curve.Col + (dx > 0 ? 0 : -1), curve.Row + (dy > 0 ? 0 : -1));
+    }
+
+    /// <summary>
+    /// The track's tiles, each with the stretch of track it belongs to: the
+    /// lanes, by lane number, when the plan has any; otherwise the floor a
+    /// car can reach from where Trace route starts, as one stretch.
+    /// </summary>
+    internal static Dictionary<(int Col, int Row), int> TrackRegions(RcpTrackDesign design)
+    {
+        var lanes = RcpAutoRails.LaneCells(design);
+
+        if (lanes.Count > 0)
+        {
+            return lanes;
+        }
+
+        var cells = new Dictionary<(int Col, int Row), RcpTile>();
+
+        foreach (var tile in design.Driveable)
+        {
+            cells.TryAdd((tile.Col, tile.Row), tile);
+        }
+
+        var track = new Dictionary<(int Col, int Row), int>();
+
+        if (cells.Count == 0)
+        {
+            return track;
+        }
+
+        // Somewhere surely ON the track (review, 25 Oct 2026): the finish
+        // line, else the racing line's first point, else the tile a turn
+        // rail bulges into. The first tile of the floor came last: laid
+        // whole and railed inside its edge, that is floor outside the
+        // track, and measured from there every outside corner read as an
+        // inside one.
+        var candidates = new List<(int Col, int Row)>();
+
+        if (design.Decals.FirstOrDefault(d => d.Kind == RcpDecalKind.FinishLine) is { } finish)
+        {
+            candidates.Add((finish.Col, finish.Row));
+        }
+
+        if (design.Route.Count > 0)
+        {
+            candidates.Add(((int)MathF.Floor(design.Route[0].X), (int)MathF.Floor(design.Route[0].Y)));
+        }
+
+        candidates.AddRange(design.Curves.Select(QuadrantCell));
+
+        var first = design.Driveable.First();
+        candidates.Add((first.Col, first.Row));
+
+        var start = candidates.First(cells.ContainsKey);
+
+        var blocked = BlockedSeams(design);
+        var frontier = new Queue<(int Col, int Row)>();
+
+        track[start] = 1;
+        frontier.Enqueue(start);
+
+        while (frontier.Count > 0)
+        {
+            var (col, row) = frontier.Dequeue();
+
+            foreach (var edge in new[] { RcpEdge.North, RcpEdge.East, RcpEdge.South, RcpEdge.West })
+            {
+                if (blocked.Contains(EdgeLine(col, row, edge)))
+                {
+                    continue;
+                }
+
+                var next = Neighbour(col, row, edge);
+
+                if (cells.ContainsKey((next.X, next.Y)) && track.TryAdd((next.X, next.Y), 1))
+                {
+                    frontier.Enqueue((next.X, next.Y));
+                }
+            }
+        }
+
+        return track;
     }
 
     /// <summary>
@@ -887,6 +1182,18 @@ public static class RcpPlan
     /// cell and the next - which is exactly what a car can do. Where the
     /// corridor opens out and there is more than one way to go, it stops and
     /// says so rather than picking one.
+    ///
+    /// WIDE LANES (Track Designer overhaul, Phase 3, 25 Oct 2026). A lane two
+    /// or three tiles wide is open on three sides at every tile, so it used
+    /// to fail at the first one. Now, when the corridor is wide, the line
+    /// goes down its middle (CentreLine): the cells' centres for a lane an
+    /// odd number of tiles wide, the seams between the middle two for an
+    /// even one. A one-tile lane is walked exactly as it always was.
+    ///
+    /// A turn rail stops a car too (25 Oct 2026, same phase). The straights
+    /// a turn sweeps across are not on the plan - the turn takes their place
+    /// (RcpAutoRails.Swept) - so with floor beyond the corner the walk used
+    /// to step straight out through it.
     /// </summary>
     public static List<PointF>? AutoRoute(RcpTrackDesign design, out string problem)
     {
@@ -911,9 +1218,11 @@ public static class RcpPlan
             cells.TryAdd((tile.Col, tile.Row), tile);
         }
 
+        var blocked = BlockedSeams(design);
+
         List<(int Col, int Row)> Open(int col, int row) =>
             Enum.GetValues<RcpEdge>()
-                .Where(e => !HasWall(design, col, row, e))
+                .Where(e => !blocked.Contains(EdgeLine(col, row, e)))
                 .Select(e => Neighbour(col, row, e))
                 .Select(p => (p.X, p.Y))
                 .Where(cells.ContainsKey)
@@ -923,9 +1232,21 @@ public static class RcpPlan
         // where the lap begins.
         var startDecal = design.Decals.FirstOrDefault(d => d.Kind == RcpDecalKind.FinishLine);
 
+        // Otherwise on a lane, when there is one (25 Oct 2026): a lane laid
+        // over a whole floor is the track, and the floor round it is not -
+        // starting on the first tile of the floor traced the floor outside
+        // the lane's rails instead.
+        var firstLane = floor
+            .Where(t => t.Lane > 0)
+            .OrderBy(t => t.Row)
+            .ThenBy(t => t.Col)
+            .FirstOrDefault();
+
         var start = startDecal is not null && cells.ContainsKey((startDecal.Col, startDecal.Row))
             ? (startDecal.Col, startDecal.Row)
-            : (floor[0].Col, floor[0].Row);
+            : firstLane is not null
+                ? (firstLane.Col, firstLane.Row)
+                : (floor[0].Col, floor[0].Row);
 
         // WHY (23 Oct 2026, bug hunt 10): the "open on three sides" test
         // used to run over EVERY floor cell, including the floor inside an
@@ -961,8 +1282,20 @@ public static class RcpPlan
 
         if (open3 is { } wide)
         {
+            var from = startDecal is not null
+                ? new PointF(startDecal.Col + 0.5f, startDecal.Row + 0.5f)
+                : new PointF(start.Item1 + 0.5f, start.Item2 + 0.5f);
+
+            if (CentreLine(reachable, blocked, from) is { } middle)
+            {
+                return middle;
+            }
+
+            // Still names the first tile open on three sides: in a lane that
+            // is not one width all the way round, that is often the place.
             problem = $"The floor at column {wide.Item1 + 1}, row {wide.Item2 + 1} is open on three sides, "
-                      + "so there's more than one way round. Wall it in, or draw the line by hand.";
+                      + "so there's more than one way round. Make the track one width all the way round, wall it in, "
+                      + "or draw the line by hand.";
             return null;
         }
 
@@ -1002,5 +1335,208 @@ public static class RcpPlan
             previous = current;
             current = next;
         }
+    }
+
+    /// <summary>
+    /// Every seam a car cannot cross: the rails, and the seams under the
+    /// turn rails (which take the place of the straights they sweep across).
+    /// </summary>
+    public static HashSet<(int Col, int Row, bool Vertical)> BlockedSeams(RcpTrackDesign design)
+    {
+        var blocked = design.Walls.Select(w => (w.Col, w.Row, w.Vertical)).ToHashSet();
+
+        foreach (var curve in design.Curves)
+        {
+            // Only the seams it sweeps the whole of: a hand hairpin of half a
+            // tile leaves its seam half open, as it always has here.
+            blocked.UnionWith(RcpAutoRails.Swept(curve, wholeOnly: true));
+        }
+
+        return blocked;
+    }
+
+    /// <summary>
+    /// The line down the middle of a wide corridor, as one closed lap - or
+    /// null when there isn't one.
+    ///
+    /// Peels the corridor a tile at a time from its rails inwards. After
+    /// each peel it looks for a single loop in what is left, two ways:
+    ///   - the CELLS, each joined to exactly two others - a lane an odd
+    ///     number of tiles wide comes down to this, and the line goes
+    ///     through their centres;
+    ///   - the GRID POINTS with corridor all round them and no rail on
+    ///     any of their four seams, each joined to exactly two others - a
+    ///     lane an even number of tiles wide comes down to this, and the
+    ///     line runs along the seams between its middle two tiles.
+    /// A corridor that is not one width all the way round, or that opens
+    /// out into a bay, never comes down to a single loop, so it is refused
+    /// rather than guessed at.
+    ///
+    /// Starts at the point of the loop nearest <paramref name="from"/> (the
+    /// finish line, when there is one) and sets off the way the narrow walk
+    /// does: the first of north, east, south and west that is open.
+    /// </summary>
+    internal static List<PointF>? CentreLine(
+        IReadOnlyCollection<(int, int)> corridor,
+        HashSet<(int Col, int Row, bool Vertical)> blocked,
+        PointF from)
+    {
+        var layer = new HashSet<(int, int)>(corridor);
+
+        // A wide lane is three tiles at most today, so a handful of peels
+        // is plenty; the guard is for arithmetic, not for people.
+        for (var peel = 0; peel < 32 && layer.Count > 0; peel++)
+        {
+            var current = layer;
+
+            List<(int, int)> Cells((int Col, int Row) cell) =>
+                new[] { RcpEdge.North, RcpEdge.East, RcpEdge.South, RcpEdge.West }
+                    .Where(e => !blocked.Contains(EdgeLine(cell.Col, cell.Row, e)))
+                    .Select(e => Neighbour(cell.Col, cell.Row, e))
+                    .Select(p => (p.X, p.Y))
+                    .Where(current.Contains)
+                    .ToList();
+
+            if (Loop(corridor, current, Cells, c => new PointF(c.Item1 + 0.5f, c.Item2 + 0.5f), from) is { } cellLine)
+            {
+                return cellLine;
+            }
+
+            // A grid point is in the middle of the corridor when all four
+            // cells round it are, and no rail runs out from it.
+            bool Inside(int x, int y) =>
+                current.Contains((x - 1, y - 1)) && current.Contains((x, y - 1))
+                && current.Contains((x - 1, y)) && current.Contains((x, y))
+                && !blocked.Contains((x, y - 1, true)) && !blocked.Contains((x, y, true))
+                && !blocked.Contains((x - 1, y, false)) && !blocked.Contains((x, y, false));
+
+            var points = current
+                .Select(c => (c.Item1 + 1, c.Item2 + 1))
+                .Where(p => Inside(p.Item1, p.Item2))
+                .ToHashSet();
+
+            List<(int, int)> Points((int X, int Y) p) =>
+                new[] { (p.X, p.Y - 1), (p.X + 1, p.Y), (p.X, p.Y + 1), (p.X - 1, p.Y) }
+                    .Where(points.Contains)
+                    .ToList();
+
+            if (Loop(corridor, points, Points, p => new PointF(p.Item1, p.Item2), from) is { } seamLine)
+            {
+                return seamLine;
+            }
+
+            // Peel: keep only the cells open on all four sides with
+            // corridor at all four diagonals too. Without the diagonals the
+            // tile on the inside of each bend, which touches the island
+            // only at its corner, was left behind as a stub off the loop.
+            layer = current
+                .Where(c => Cells(c).Count == 4
+                            && current.Contains((c.Item1 - 1, c.Item2 - 1))
+                            && current.Contains((c.Item1 + 1, c.Item2 - 1))
+                            && current.Contains((c.Item1 - 1, c.Item2 + 1))
+                            && current.Contains((c.Item1 + 1, c.Item2 + 1)))
+                .ToHashSet();
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether a closed line goes round at least one tile that is not
+    /// corridor - an island - rather than round a patch of open floor.
+    /// </summary>
+    private static bool GoesRound(List<PointF> line, IReadOnlyCollection<(int, int)> corridor)
+    {
+        var inCorridor = corridor as ICollection<(int, int)> ?? corridor.ToHashSet();
+
+        var left = (int)MathF.Floor(line.Min(p => p.X));
+        var right = (int)MathF.Ceiling(line.Max(p => p.X));
+        var top = (int)MathF.Floor(line.Min(p => p.Y));
+        var bottom = (int)MathF.Ceiling(line.Max(p => p.Y));
+
+        for (var col = left; col < right; col++)
+        {
+            for (var row = top; row < bottom; row++)
+            {
+                if (!inCorridor.Contains((col, row)) && Inside(line, new PointF(col + 0.5f, row + 0.5f)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether a point is inside a closed line - the even-odd rule.</summary>
+    private static bool Inside(List<PointF> line, PointF p)
+    {
+        var inside = false;
+
+        for (int i = 0, j = line.Count - 1; i < line.Count; j = i++)
+        {
+            var a = line[i];
+            var b = line[j];
+
+            if ((a.Y > p.Y) != (b.Y > p.Y)
+                && p.X < (b.X - a.X) * (p.Y - a.Y) / (b.Y - a.Y) + a.X)
+            {
+                inside = !inside;
+            }
+        }
+
+        return inside;
+    }
+
+    /// <summary>
+    /// The places in order round a single loop through ALL of them, each
+    /// joined to exactly two others - or null when they are not that.
+    /// </summary>
+    private static List<PointF>? Loop(
+        IReadOnlyCollection<(int, int)> corridor,
+        HashSet<(int, int)> places,
+        Func<(int, int), List<(int, int)>> joined,
+        Func<(int, int), PointF> centre,
+        PointF from)
+    {
+        if (places.Count < 4 || places.Any(p => joined(p).Count != 2))
+        {
+            return null;
+        }
+
+        // Nearest the start; ties to the topmost, then leftmost, so the
+        // same plan always starts in the same place.
+        var start = places
+            .OrderBy(p => Distance(centre(p), from))
+            .ThenBy(p => p.Item2)
+            .ThenBy(p => p.Item1)
+            .First();
+
+        var line = new List<PointF>();
+        var previous = ((int, int)?)null;
+        var at = start;
+
+        for (var guard = 0; guard <= places.Count; guard++)
+        {
+            line.Add(centre(at));
+
+            var options = joined(at);
+            var next = previous is { } back && options[0] == back ? options[1] : options[0];
+
+            previous = at;
+            at = next;
+
+            if (at == start)
+            {
+                // Round once, and through every place: anything left out is
+                // a second loop, and that is not one way round. And round
+                // something: peeled far enough, a solid floor comes down to
+                // a little ring in the middle of the room, which is not a
+                // track (review, 25 Oct 2026).
+                return line.Count == places.Count && GoesRound(line, corridor) ? line : null;
+            }
+        }
+
+        return null;
     }
 }

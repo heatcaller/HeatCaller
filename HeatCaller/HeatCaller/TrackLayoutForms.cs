@@ -558,8 +558,12 @@ public sealed class TrackLayoutManagerControl : UserControl
     /// <summary>The least the picture gets at the normal text size - below that the page scrolls.</summary>
     private const int PictureLeastHeight = 160;
 
-    public TrackLayoutManagerControl(TrackLayoutStore store, AppSettings settings, UndoService undo)
+    /// <summary>The club's saved races, for the designer's lap time (Track Designer overhaul, Phase 6). Null in a host without them.</summary>
+    private readonly SessionHistoryStore? _sessions;
+
+    public TrackLayoutManagerControl(TrackLayoutStore store, AppSettings settings, UndoService undo, SessionHistoryStore? sessions = null)
     {
+        _sessions = sessions;
         _store = store;
         _undo = undo;
         _settings = settings;
@@ -915,6 +919,18 @@ public sealed class TrackLayoutManagerControl : UserControl
         // already has a plan opens with its own choice; a first plan still
         // defaults to showing it. A reopen keeps what was ticked.
         var useAsPhotoToOpen = existing?.Design is { IsEmpty: false } ? existing.PreferPlanImage : true;
+
+        // The lap the designer shows (Phase 6): this layout's laps raced
+        // since its line last changed, and the estimate tuned against every
+        // layout the club has both drawn and raced.
+        var raced = _sessions?.Saved ?? Array.Empty<SessionRecord>();
+        var racedHere = existing is null ? null : RcpLapModel.Raced(raced, existing.Name, existing.Design?.RouteChangedUtc);
+        var (tuning, tunedLayouts) = RcpLapModel.Calibrate(_store.All
+            .Where(t => t.Design is { Route.Count: >= 3, RouteClosed: true })
+            .Select(t => (Design: t.Design!, Lap: RcpLapModel.Raced(raced, t.Name, t.Design!.RouteChangedUtc)))
+            .Where(pair => pair.Lap is not null)
+            .Select(pair => (pair.Design, pair.Lap!.Value.Seconds)));
+
         while (true)
         {
             using var form = new RcpTrackEditorForm(
@@ -922,7 +938,19 @@ public sealed class TrackLayoutManagerControl : UserControl
                 nameToOpen,
                 existing?.AverageLapSeconds,
                 unsavedOnOpen: reopened,
-                useAsPhoto: useAsPhotoToOpen);
+                useAsPhoto: useAsPhotoToOpen,
+                stock: _settings.TrackStock,
+                saveStock: owned =>
+                {
+                    // What the club owns is the same for every layout, so
+                    // it is kept with the club's settings, not the plan.
+                    _settings.TrackStock = owned;
+                    return _settings.Save();
+                },
+                raced: racedHere,
+                racedLine: existing?.Design?.Route,
+                tuning: tuning,
+                tunedLayouts: tunedLayouts);
 
             if (form.ShowDialog(this) != DialogResult.OK)
             {
@@ -980,6 +1008,14 @@ public sealed class TrackLayoutManagerControl : UserControl
                 store.Upsert(target);
             }
         });
+
+        // A racing line saved changed: the laps raced on the old one are for
+        // a different track, so from now the designer counts only races
+        // after this (RcpLapModel.Raced). A first line isn't a change.
+        if (previousDesign is { Route.Count: > 0 } && !RcpLapModel.SameLine(previousDesign.Route, chosenDesign.Route, previousDesign.RouteClosed && chosenDesign.RouteClosed))
+        {
+            chosenDesign.RouteChangedUtc = DateTime.UtcNow;
+        }
 
         track.Name = chosenName;
         track.Design = chosenDesign;

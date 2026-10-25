@@ -25,6 +25,25 @@ internal static partial class WindowCatalog
         ("Track Designer (a new track)", () => new RcpTrackEditorForm(null, string.Empty, null)),
         ("Track Designer (its traced photo gone)", () => new RcpTrackEditorForm(TrackDesignerPhotoGone(), TrackDesignerLongName(), 14.25)),
         ("Track Designer (a floor and a lap, no rails yet)", () => new RcpTrackEditorForm(TrackDesignerFloorOnly(), "Club Hall", null)),
+
+        // The panel shows one tab at a time (25 Oct 2026, overhaul Phase 2)
+        // and the audit only sees what is showing - so each tab is opened
+        // in its own right. The kit check that lists what the plan is short
+        // of is on Plan; the longest the lap's readout says is on Lap.
+        ("Track Designer (the Plan tab)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Plan")),
+        ("Track Designer (the Room tab)", () => new RcpTrackEditorForm(TrackDesignerPhotoGone(), TrackDesignerLongName(), 14.25, openOnTab: "Room")),
+        ("Track Designer (the Lap tab)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Lap")),
+        ("Track Designer (the Lap tab, a floor and a lap, no rails yet)", () => new RcpTrackEditorForm(TrackDesignerFloorOnly(), "Club Hall", null, openOnTab: "Lap")),
+        ("Track Designer (the Keys tab)", () => new RcpTrackEditorForm(null, string.Empty, null, openOnTab: "Keys")),
+        ("Track Designer (the Stock tab, nothing owned)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Stock")),
+        ("Track Designer (the Stock tab, short of parts)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Stock", stock: TrackDesignerSmallStock())),
+        ("What the club owns", () => new RcpStockForm(TrackDesignerSmallStock(), 500)),
+        ("What the club owns (nothing yet, 30 cm)", () => new RcpStockForm(null, 300)),
+        ("Track Designer (the Lap tab, laps raced)", () => new RcpTrackEditorForm(TrackDesignerClubLayout(), TrackDesignerLongName(), 14.25, openOnTab: "Lap", raced: (13.82, 412), tuning: 1.1, tunedLayouts: 3)),
+        ("Build me a track", () => new RcpBuildForm(TrackDesignerRoom(), TrackDesignerSmallStock(), 2)),
+        ("Build me a track (no room given)", () => new RcpBuildForm(new RcpTrackDesign { TileSizeMm = 500 }, null, 2)),
+        ("Build me a track (a room nothing fits)", () => new RcpBuildForm(new RcpTrackDesign { TileSizeMm = 500, RoomWidthMm = 2000, RoomDepthMm = 2000 }, null, 3)),
+        ("Print track and parts list", () => new RcpPrintForm(TrackDesignerClubLayout())),
     };
 
     private static string TrackDesignerLongName() => "Riverside Community Hall - Winter Series RCP Layout (Tuesday Nights)";
@@ -165,4 +184,31 @@ internal static partial class WindowCatalog
 
         return design;
     }
+
+    /// <summary>
+    /// A cupboard too small for the catalog's club layout: one boxed set RCP
+    /// doesn't publish the parts of, and a few loose 50 cm parts - so the
+    /// Stock tab has short rows, an unlisted box and a red size chip.
+    /// </summary>
+    private static RcpStock TrackDesignerSmallStock()
+    {
+        var stock = new RcpStock();
+        stock.Sets["50cm Oval"] = 1;
+
+        var loose = stock.LooseFor(500);
+        loose.Tiles = 6;
+        loose.StraightRails = 10;
+        loose.EndCaps = 4;
+
+        return stock;
+    }
+
+    /// <summary>A hall 30ft by 20ft, on 50 cm tiles - room for every shape Build me a track makes.</summary>
+    private static RcpTrackDesign TrackDesignerRoom() => new()
+    {
+        TileSizeMm = 500,
+        RoomWidthMm = RoomFit.FromFeet(30, 0),
+        RoomDepthMm = RoomFit.FromFeet(20, 0),
+        RoomInFeet = true,
+    };
 }

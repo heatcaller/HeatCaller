@@ -62,6 +62,7 @@ docs/getting-started/install.md                Installing/running, updates, wher
 docs/getting-started/tour.md                   Tour of the window: sidebar, pages, search, Manage Navigation, themes, console
 docs/getting-started/first-race-night.md       A walkthrough from empty install to first race (links out)
 docs/race-day/drivers-and-classes.md           Driver Hub, Classes, Rentals, Batteries, Venues, Track Layouts, Garage
+docs/race-day/track-designer.md               The Track Designer: drawing, lanes, the lap, stock, Build me a track, print and share, the angled view
 docs/race-day/events-and-entries.md            Race Day → Setup, Who's Racing, Calendar; the set-up wizard; check-in desk; Scrutineering log; readiness check; QR check-ins
 docs/race-day/program-and-mains.md             Race Day → Next Steps and its program, the Timetable window, rounds, heats, qualifying, mains, bump-ups, marshals, heat sheets
 docs/race-control/running-a-race.md            Race Control page: staging → countdown → green → flags → checkered; start types; limits

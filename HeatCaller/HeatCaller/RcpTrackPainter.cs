@@ -10,13 +10,17 @@ namespace HeatCaller;
 /// The thing being drawn is a continuous floor of interlocking foam tiles
 /// with the circuit standing on top of it: silver straight rails along the
 /// tile seams, pink turn rails swinging them through corners, and a rounded
-/// pink cap wherever a run of rail simply stops. Under all of it the floor
-/// is the same tile everywhere - there is no such thing as a "corner tile",
-/// which is what an earlier version of this got wrong.
+/// pink cap wherever a run of rail simply stops. The floor is drawn as the
+/// same tile everywhere. Corner tiles ARE real (Asher, 25 Oct 2026): RCP's
+/// turn rails stand on an outer curve tile, with an inner corner tile at the
+/// inside of the bend. They are worked out from the rails and counted
+/// (RcpPlan.CornerTiles), but drawn plain until a photo of what is printed
+/// on them is to hand. An earlier version drew the shape of a corner into
+/// the tile itself, which no real tile has.
 ///
 /// All of it is drawn in code, down to the slot screws along the rails and
-/// the interlocking tabs on the tiles, so it stays sharp at any size and
-/// there is nothing to ship.
+/// the T-shaped teeth the tiles lock together with (RcpJoints, measured off
+/// a real tile), so it stays sharp at any size and there is nothing to ship.
 /// </summary>
 public static class RcpTrackPainter
 {
@@ -24,8 +28,11 @@ public static class RcpTrackPainter
     private static readonly Color FoamLight = ColorTranslator.FromHtml("#42423C");
     private static readonly Color FoamDark = ColorTranslator.FromHtml("#2B2B28");
     private static readonly Color FoamSeam = ColorTranslator.FromHtml("#1B1B19");
-    private static readonly Color FoamPin = ColorTranslator.FromHtml("#232320");
-    private static readonly Color FoamGrain = Color.FromArgb(20, 255, 255, 255);
+
+    // The foam's mottle at close zoom: a real tile is plain, slightly
+    // blotchy foam - no pin holes, no grain (Asher's photo, 25 Oct 2026).
+    private static readonly Color FoamFleckLight = Color.FromArgb(7, 255, 255, 255);
+    private static readonly Color FoamFleckDark = Color.FromArgb(12, 0, 0, 0);
 
     /// <summary>Straight rails: light grey moulded plastic, almost silver under strip lights.</summary>
     private static readonly Color RailFace = ColorTranslator.FromHtml("#DEDED8");
@@ -54,7 +61,16 @@ public static class RcpTrackPainter
     private static readonly Color ChequerDark = ColorTranslator.FromHtml("#8E9094");
     private static readonly Color ChequerLight = ColorTranslator.FromHtml("#E9E9E4");
 
-    private const float TabDepth = 0.055f;
+    /// <summary>
+    /// How wide a tooth's head has to be on screen, in pixels, before the
+    /// teeth are drawn. Narrower than this they are a smudge, and a straight
+    /// seam reads better.
+    /// </summary>
+    private const float LeastToothPixels = 4f;
+
+    /// <summary>A whole tile's outline at (0,0), with and without the clipped corner - built once.</summary>
+    private static readonly PointF[] UnitOutline = RcpJoints.Outline(0, 0).ToArray();
+    private static readonly PointF[] UnitOutlineClipped = RcpJoints.Outline(0, 0, clipSouthEast: true).ToArray();
 
     /// <summary>A rail's width as a fraction of a tile, measured off a photograph.</summary>
     public const float RailThickness = 0.12f;
@@ -87,9 +103,26 @@ public static class RcpTrackPainter
         // inside rather than a part of the track.
         DrawRoom(g, design, scale, origin);
 
-        foreach (var tile in design.Tiles)
+        // Blocked-out squares first, then the floor over them: a tile's teeth
+        // reach a centimetre past its square, and on a real track they would
+        // lie over whatever is next to them.
+        foreach (var tile in design.Tiles.Where(t => t.Kind == RcpTileKind.Infield))
         {
-            DrawTileFloor(g, tile, scale, origin, detailed);
+            DrawInfield(g, TileRect(tile, scale, origin), detailed);
+        }
+
+        var floor = new HashSet<(int, int)>(
+            design.Tiles.Where(t => t.Kind != RcpTileKind.Infield).Select(t => (t.Col, t.Row)));
+
+        foreach (var tile in design.Tiles.Where(t => t.Kind != RcpTileKind.Infield))
+        {
+            // The floor's outside corner at the bottom right gets the clipped
+            // corner the photographed tile has there.
+            var outsideCorner = !floor.Contains((tile.Col + 1, tile.Row))
+                                && !floor.Contains((tile.Col, tile.Row + 1))
+                                && !floor.Contains((tile.Col + 1, tile.Row + 1));
+
+            DrawTileFloor(g, tile, scale, origin, detailed, outsideCorner);
         }
 
         foreach (var decal in design.Decals)
@@ -161,104 +194,93 @@ public static class RcpTrackPainter
 
     // --- Floor ---------------------------------------------------------------
 
-    private static void DrawTileFloor(Graphics g, RcpTile tile, float scale, PointF origin, bool detailed)
+    /// <summary>
+    /// One floor tile: its foam, and its outline with the teeth on.
+    ///
+    /// Each tile is drawn whole, teeth and all, from RcpJoints - and because
+    /// a tile's outline and its neighbour's are the same line along their
+    /// seam, stroking every outline draws each seam exactly once over (the
+    /// two strokes land on each other), and an edge with no neighbour shows
+    /// its bare teeth with the floor between them. It used to give every
+    /// edge one round tab bulging outwards, all four of them, so each tab
+    /// spilled over the tile beside it and was half painted out.
+    /// </summary>
+    private static void DrawTileFloor(Graphics g, RcpTile tile, float scale, PointF origin, bool detailed, bool outsideCorner)
     {
         var rect = TileRect(tile, scale, origin);
 
-        if (tile.Kind == RcpTileKind.Infield)
-        {
-            DrawInfield(g, rect, detailed);
-            return;
-        }
+        // The brush covers the teeth too, which reach past the square.
+        var reach = RcpJoints.StripDepth * scale;
+        var shade = new RectangleF(rect.X - reach, rect.Y - reach, Math.Max(1f, rect.Width + reach * 2f), Math.Max(1f, rect.Height + reach * 2f));
 
-        using var path = FoamPath(rect, detailed);
-
-        using (var fill = new LinearGradientBrush(
-                   new RectangleF(rect.X, rect.Y, Math.Max(1f, rect.Width), Math.Max(1f, rect.Height)),
-                   FoamLight, FoamDark, LinearGradientMode.ForwardDiagonal))
-        {
-            g.FillPath(fill, path);
-        }
+        using var fill = new LinearGradientBrush(shade, FoamLight, FoamDark, LinearGradientMode.ForwardDiagonal);
 
         if (!detailed)
         {
+            g.FillRectangle(fill, rect);
             return;
         }
 
-        using (var seam = new Pen(FoamSeam, Math.Max(1f, scale * 0.012f)))
+        using var path = new GraphicsPath();
+
+        if (scale * RcpJoints.HeadWidth >= LeastToothPixels)
         {
-            g.DrawPath(seam, path);
+            var unit = outsideCorner ? UnitOutlineClipped : UnitOutline;
+            var points = new PointF[unit.Length];
+
+            for (var i = 0; i < unit.Length; i++)
+            {
+                points[i] = new PointF(rect.X + unit[i].X * scale, rect.Y + unit[i].Y * scale);
+            }
+
+            path.AddPolygon(points);
+        }
+        else
+        {
+            path.AddRectangle(rect);
         }
 
-        var pin = scale * 0.05f;
-        var inset = scale * 0.10f;
-
-        using var pinBrush = new SolidBrush(FoamPin);
-
-        foreach (var corner in new[]
-                 {
-                     new PointF(rect.Left + inset, rect.Top + inset),
-                     new PointF(rect.Right - inset, rect.Top + inset),
-                     new PointF(rect.Right - inset, rect.Bottom - inset),
-                     new PointF(rect.Left + inset, rect.Bottom - inset),
-                 })
-        {
-            g.FillEllipse(pinBrush, corner.X - pin / 2f, corner.Y - pin / 2f, pin, pin);
-        }
+        g.FillPath(fill, path);
 
         if (scale >= 46f)
         {
-            using var grain = new Pen(FoamGrain, 1f);
-
-            var clip = g.Save();
-            g.SetClip(path);
-
-            for (var i = 1; i < 7; i++)
-            {
-                var y = rect.Top + rect.Height * i / 7f;
-                g.DrawLine(grain, rect.Left + 2, y, rect.Right - 2, y);
-            }
-
-            g.Restore(clip);
+            DrawMottle(g, tile, rect, path);
         }
+
+        using var seam = new Pen(FoamSeam, Math.Max(1f, scale * 0.012f)) { LineJoin = LineJoin.Round };
+        g.DrawPath(seam, path);
     }
 
-    /// <summary>A tile outline with a puzzle tab on two edges and a notch on the other two.</summary>
-    private static GraphicsPath FoamPath(RectangleF rect, bool detailed)
+    /// <summary>
+    /// A few soft flecks, so close up the foam reads as foam rather than as
+    /// a flat colour. Placed from the tile's grid position, never at random,
+    /// so they stay put as the board is panned and redrawn.
+    /// </summary>
+    private static void DrawMottle(Graphics g, RcpTile tile, RectangleF rect, GraphicsPath outline)
     {
-        var path = new GraphicsPath();
+        var state = g.Save();
+        g.SetClip(outline);
 
-        if (!detailed)
+        using var light = new SolidBrush(FoamFleckLight);
+        using var dark = new SolidBrush(FoamFleckDark);
+
+        var seed = unchecked((uint)(tile.Col * 73856093) ^ (uint)(tile.Row * 19349663));
+
+        float Next()
         {
-            path.AddRectangle(rect);
-            return path;
+            seed = unchecked(seed * 1664525u + 1013904223u);
+            return (seed >> 8) / 16777216f;
         }
 
-        var depth = rect.Width * TabDepth;
-        var tab = rect.Width * 0.22f;
+        for (var i = 0; i < 14; i++)
+        {
+            var size = rect.Width * (0.05f + Next() * 0.12f);
+            var x = rect.X + Next() * rect.Width - size / 2f;
+            var y = rect.Y + Next() * rect.Height - size / 2f;
+            g.FillEllipse(i % 3 == 0 ? light : dark, x, y, size, size * (0.6f + Next() * 0.5f));
+        }
 
-        var midX = rect.Left + rect.Width / 2f;
-        var midY = rect.Top + rect.Height / 2f;
-
-        path.AddLine(rect.Left, rect.Top, midX - tab / 2f, rect.Top);
-        path.AddArc(midX - tab / 2f, rect.Top - depth, tab, depth * 2f, 180f, 180f);
-        path.AddLine(midX + tab / 2f, rect.Top, rect.Right, rect.Top);
-
-        path.AddLine(rect.Right, rect.Top, rect.Right, midY - tab / 2f);
-        path.AddArc(rect.Right - depth, midY - tab / 2f, depth * 2f, tab, 270f, 180f);
-        path.AddLine(rect.Right, midY + tab / 2f, rect.Right, rect.Bottom);
-
-        path.AddLine(rect.Right, rect.Bottom, midX + tab / 2f, rect.Bottom);
-        path.AddArc(midX - tab / 2f, rect.Bottom - depth, tab, depth * 2f, 0f, 180f);
-        path.AddLine(midX - tab / 2f, rect.Bottom, rect.Left, rect.Bottom);
-
-        path.AddLine(rect.Left, rect.Bottom, rect.Left, midY + tab / 2f);
-        path.AddArc(rect.Left - depth, midY - tab / 2f, depth * 2f, tab, 90f, 180f);
-        path.AddLine(rect.Left, midY - tab / 2f, rect.Left, rect.Top);
-
-        path.CloseFigure();
-
-        return path;
+        g.Restore(state);
     }
 
     private static void DrawInfield(Graphics g, RectangleF rect, bool detailed)
@@ -983,6 +1005,39 @@ public static class RcpTrackPainter
             (bitmap.Height - bounds.Height * scale) / 2f - bounds.Top * scale);
 
         Draw(g, design, scale, origin, showRoute, showLabels: scale > 40f, offTrack: background);
+
+        return bitmap;
+    }
+
+    /// <summary>
+    /// The part of the plan in <paramref name="region"/> (in tiles) at
+    /// exactly <paramref name="pixelsPerTile"/> - for a picture saved at a
+    /// size chosen, and for each sheet of a plan printed to scale (Track
+    /// Designer overhaul, Phase 7). Render, by contrast, fits the plan to a
+    /// size. 96 DPI, as Render is. The caller keeps the size sensible: the
+    /// bitmap is the region's size at that scale, at least 16 pixels a side.
+    /// </summary>
+    /// <param name="opaque">No transparency, at three bytes a pixel rather than four - for a print, where a sheet's pictures are held in memory together.</param>
+    public static Bitmap RenderRegion(RcpTrackDesign design, RectangleF region, float pixelsPerTile, Color background, bool showRoute = true, bool opaque = false)
+    {
+        var width = Math.Max(16, (int)Math.Ceiling(region.Width * pixelsPerTile));
+        var height = Math.Max(16, (int)Math.Ceiling(region.Height * pixelsPerTile));
+
+        var bitmap = opaque
+            ? new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format24bppRgb)
+            : new Bitmap(width, height);
+        bitmap.SetResolution(96, 96);
+
+        using var g = Graphics.FromImage(bitmap);
+
+        g.Clear(background);
+
+        if (!design.IsEmpty)
+        {
+            var origin = new PointF(-region.Left * pixelsPerTile, -region.Top * pixelsPerTile);
+
+            Draw(g, design, pixelsPerTile, origin, showRoute, showLabels: pixelsPerTile > 40f, offTrack: background);
+        }
 
         return bitmap;
     }

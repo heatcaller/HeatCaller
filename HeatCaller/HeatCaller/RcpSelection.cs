@@ -85,6 +85,8 @@ public sealed class RcpSelection
 
     public bool Forget(RcpDecal decal) => _decals.Remove(decal);
 
+    public bool Forget(RcpRoutePoint point) => _route.Remove(point);
+
     // --- Picking -------------------------------------------------------------
 
     /// <summary>
@@ -703,9 +705,29 @@ public sealed class RcpSelection
             return pasted;
         }
 
+        // A pasted lane is a lane of its own (Track Designer overhaul,
+        // Phase 3, 25 Oct 2026): with the number it was copied with, a copy
+        // dropped beside the original would join up with it - no divider
+        // between them, and one lane's rails worked out round both. Each
+        // lane in the clip gets the next free number on this plan.
+        var next = RcpAutoRails.NewLane(design);
+        var lanes = new Dictionary<int, int>();
+
         foreach (var tile in clip.Tiles)
         {
             var copy = tile.Clone();
+
+            if (copy.Lane > 0)
+            {
+                if (!lanes.TryGetValue(copy.Lane, out var renumbered))
+                {
+                    renumbered = next++;
+                    lanes[copy.Lane] = renumbered;
+                }
+
+                copy.Lane = renumbered;
+            }
+
             design.Tiles.Add(copy);
             pasted._tiles.Add(copy);
         }
@@ -794,6 +816,10 @@ public sealed class RcpSelection
             _ => string.Join(", ", parts.Take(parts.Count - 1)) + " and " + parts[^1],
         };
 
-        return $"{what} picked. Drag to move, arrows to nudge, [ and ] to turn, Ctrl+C to copy, Delete to remove.";
+        var box = Bounds();
+        var handles = Pieces > 0 && box.Width >= 1 && box.Height >= 1;
+
+        return $"{what} picked. Drag to move, arrows to nudge, [ and ] to turn, Ctrl+C to copy, Delete to remove"
+               + (handles ? " - or drag a square handle, where one shows on its edge, to stretch the plan." : ".");
     }
 }

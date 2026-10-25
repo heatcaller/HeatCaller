@@ -116,20 +116,11 @@ public sealed class TrackLayoutStore
             }
         }
 
+        // The plan itself: mended as a plan opened from a .hctrack file is
+        // (RcpPlanFile.Repair, 25 Oct 2026), so the two can never disagree.
         if (t.Design is { } design)
         {
-            design.Tiles = (design.Tiles ?? new List<RcpTile>()).Where(x => x is not null).ToList();
-            design.Walls = (design.Walls ?? new List<RcpWall>()).Where(x => x is not null).ToList();
-            design.Curves = (design.Curves ?? new List<RcpCurve>()).Where(x => x is not null).ToList();
-            design.Decals = (design.Decals ?? new List<RcpDecal>()).Where(x => x is not null).ToList();
-            design.Route = (design.Route ?? new List<RcpRoutePoint>()).Where(x => x is not null).ToList();
-            design.KitName ??= string.Empty;
-            design.BackdropPath ??= string.Empty;
-
-            foreach (var tile in design.Tiles)
-            {
-                tile.Label ??= string.Empty;
-            }
+            RcpPlanFile.Repair(design);
         }
     }
 

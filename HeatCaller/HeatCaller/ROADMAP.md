@@ -143,7 +143,9 @@ log is now a file of its own (`%LocalAppData%\HeatCaller\Logs`), so
 Written down here the moment it is asked for, because a request held only
 in a chat is a request that is lost when the chat is.
 
-- **A Track Designer overhaul** (asked 25 Oct 2026, not started). Asher:
+- **The Track Designer, made better** (asked 25 Oct 2026, planned, not started): "plan on how we can make it better", straight after the overhaul. Seven phases in `plans\track-designer-next-plan.md`: prove it on the floor first, then faster drawing, corner tiles as printed, a lap per class, the plan on race night, sharing and the 3D lap, and the hall's real shape. The order after the first is Asher's choice.
+
+- **A Track Designer overhaul** (asked 25 Oct 2026, all eight phases built). Asher:
   "add to the roadmap a layout editor overhaul", and then on what it
   covers: "all of those things and more". So the scope is all of:
   - **A fresh look** for the designer window.
@@ -167,6 +169,72 @@ in a chat is a request that is lost when the chat is.
   never to copy. What it does, where HeatCaller is already ahead (real
   lap times, the plan feeding the timing) and the ideas it suggests are
   in the project notes, `claude/track-designer-racelyx-look.md`.
+
+  **Planned 25 Oct 2026**, with Asher's own addition, a more realistic
+  tile joint: `plans\track-designer-overhaul-plan.md`. Eight phases, one
+  commit each - tile joints first (today's tiles draw four round tabs
+  that spill onto their neighbours; real RCP tiles have a row of dovetail
+  teeth), then the new look, the Lane tool with rails that follow the
+  floor, the club's own stock, Build me a track, the lap on screen,
+  export and print, and the leftovers. It ends with four questions for
+  Asher (measure a tile, corner tiles, his stock, the angled view).
+
+  **Phase 1 built 25 Oct 2026, not yet compiled on Windows:** the tile
+  joints. `RcpJoints` holds the measured T-tooth outline (7 teeth an
+  edge, 6.2cm pitch, 4cm head on a 2.2cm neck, 2cm proud), and the
+  painter draws each tile from it, so neighbours lock with no hole and an
+  open edge shows bare teeth. Pin dots and grain lines gone; a faint
+  mottle close up. `RcpJointTests` (13), run here against the real
+  painter on Mono's GDI+: all pass, and the bare-teeth test fails on the
+  old painter.
+
+  **Phase 2 built 25 Oct 2026, not yet compiled on Windows:** the new
+  look. The palette column is gone; one panel on the right with five
+  tabs (Pieces, Plan, Room, Lap, Keys), remembered while the app runs;
+  Panel / P hides it. The board is a dark hall floor with size and lap
+  chips (`RcpTrackCanvas.Chips`); Space+drag pans; Save as PNG is in an
+  Export menu. Compiled against Mono's WinForms with stand-ins and opened
+  under a virtual screen: every tab renders, `TrackDesignerLookTests` (4)
+  pass there. Not done from the plan: Turn plan, and icons on the tools
+  (the captions stay) - neither needed for the layout change.
+
+  **Phase 3 built 25 Oct 2026, not yet compiled on Windows:** easier
+  drawing. A Lane tool (L): paint a lane 1 to 3 tiles wide and its rails
+  go down both sides by themselves (`RcpAutoRails`), with turns round
+  the outside of bends at the plan's radius (1, 2 or square), dividers
+  between lanes side by side, and Ring to lay a closed lane round a box.
+  Hand rails are never moved. A Corners tool (C) clicks a corner through
+  1 tile, 2 tiles and square. Trace route finds the middle of 2- and
+  3-tile lanes, and a traced line follows the track after edits until
+  touched by hand; Shift+R reverses it. Ghosts before the click, a zoom
+  readout that resets to 100%. Also fixed: plans with two-tile turns
+  measured two tiles too big. 48 new tests; reviewed, 11 findings fixed.
+
+  **Phase 4 built 25 Oct 2026, not yet compiled on Windows:** what the
+  club owns. A Stock tab checks the plan against the club's cupboard -
+  boxed sets and loose parts, entered once and kept in the settings -
+  part by part, used / owned / left, red when short, and the size chip
+  goes red too. Corner tiles are counted at last: each bend takes an
+  outer curve tile and an inner corner tile (Asher: real lanes are
+  always at least two tiles wide), and the kit check catches too many
+  bends for the box. The Lane tool starts two wide. 12 new tests;
+  reviewed, 9 findings fixed.
+
+  **Phase 5 built 25 Oct 2026, not yet compiled on Windows:** Build me a
+  track. From the Plan tab, layouts made to fit the room: RCP's own that
+  fit, then an oval, L, U hairpin, T, S-bend and serpentine as big as the
+  room allows (and shrunk to the cupboard), longest lap first, each made
+  of lanes with its finish line and traced line. One undo step to use.
+  Not done: the figure of two loops (its line crosses itself). 13 new
+  tests; reviewed, 7 findings fixed.
+
+  **Phase 6 built 25 Oct 2026, not yet compiled on Windows:** the lap,
+  always on screen. The board's lap now always has a time and says where
+  it's from: laps raced on the layout (new - from the saved races, since
+  its line last changed), as entered, or an estimate from the plan that
+  tunes itself to the club's real laps. Play drives at it, 0.5x/1x/2x,
+  with the lap and speed shown; click the lap for the sectors. 16 new
+  tests; reviewed, 11 findings fixed.
 
 ### Built since it was asked for
 

@@ -288,9 +288,15 @@ public sealed class BroadcastFeaturesTests
         Assert.Contains(SponsoredMoments.CreditLines(SponsoredMoment.Battle),
             line => plain == line.Replace("{sponsor}", "Joe's Hobby Shop"));
         Assert.Equal(string.Empty, SponsoredMoments.Credit(SponsoredMoment.Battle, " ", "Go faster"));
+
+        // Said once, then looked for: LeadIn deals its lines from a bag
+        // (TemplateBag), so calling it inside the filter dealt a different
+        // line for every one it was compared with - and failed whenever none
+        // of the deals happened to land on the line it was held against.
+        var leadIn = SponsoredMoments.LeadIn(SponsoredMoment.RaceResult, "Joe's", "Go faster");
+
         Assert.Contains(SponsoredMoments.LeadInLines(SponsoredMoment.RaceResult),
-            line => SponsoredMoments.LeadIn(SponsoredMoment.RaceResult, "Joe's", "Go faster")
-                    == line.Replace("{sponsor}", "Joe's") + " Go faster.");
+            line => leadIn == line.Replace("{sponsor}", "Joe's") + " Go faster.");
     }
 
     [Fact]

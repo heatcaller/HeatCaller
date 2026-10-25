@@ -412,7 +412,7 @@ internal static class LayoutAudit
         // One race's pace table as a window, from Race History's Pace... (PaceAnalysisForm, titled "Pace - <race>").
         "Pace",
 
-        // The RCP track designer: the toolbar, the board between the palette and the side panel, and the status line under the board (RcpTrackEditorForm, titled "Track Designer - <track>").
+        // The RCP track designer: the toolbar, the board with the panel of tabs down its right, and the status line under the board (RcpTrackEditorForm, titled "Track Designer - <track>"). Each tab is a catalog entry of its own, as only the one showing is checked.
         "Track Designer",
 
         // A track layout added or edited: the figures lined up, the notes, the photo's place beside its name and buttons, the main picture (TrackLayoutEditForm).

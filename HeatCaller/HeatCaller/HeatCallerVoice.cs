@@ -403,9 +403,13 @@ internal sealed class HeatCallerVoiceClient
 
             if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
             {
+                // Paused by HeatCaller (relay admin): the token is fine, so
+                // not "check the token" - that sends a club hunting a typo.
                 throw new HeatCallerVoiceException(
                     HeatCallerRefusal.NotAllowed,
-                    "The relay didn't accept this club's token. Check the Club Website page.");
+                    response.StatusCode == System.Net.HttpStatusCode.Forbidden && RelayPublisher.IsPaused(body)
+                        ? RelayPublisher.PausedMessage
+                        : "The relay didn't accept this club's token. Check the Club Website page.");
             }
 
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -747,6 +751,11 @@ internal sealed class HeatCallerVoiceClient
                 throw new HeatCallerVoiceException(
                     HeatCallerRefusal.Off,
                     "This relay doesn't offer voice samples yet.");
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden && RelayPublisher.IsPaused(body))
+            {
+                throw new HeatCallerVoiceException(HeatCallerRefusal.NotAllowed, RelayPublisher.PausedMessage);
             }
 
             if (!response.IsSuccessStatusCode)

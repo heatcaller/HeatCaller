@@ -5,6 +5,7 @@ import { BRAIN_DIR, brainTopUpPath, brainUsagePath } from "./brain.js";
 import { loadConfig, type RelayConfig } from "./config.js";
 import { isActive } from "./tenancy.js";
 import { readUsageLog, USAGE_LOG_PAGE } from "./usagelog.js";
+import { checkKeys } from "./keycheck.js";
 import { checkVoiceAccount, type VoiceAccountCheck } from "./voiceaccount.js";
 import { autoGiven, type AutoGiven } from "./autotopup.js";
 import { appendAudit, readAudit, readAuditArgument } from "./adminaudit.js";
@@ -56,6 +57,7 @@ export const ADMIN_COMMANDS = [
   "usage-log",
   "audit-append",
   "audit-log",
+  "key-check",
 ] as const;
 
 export type AdminCommand = (typeof ADMIN_COMMANDS)[number];
@@ -420,6 +422,18 @@ export async function voiceAdmin(
     return 0;
   }
 
+  if (command === "key-check") {
+    // key-check [--json] (v1.3.2): whether RELAY_VOICE_KEY and RELAY_BRAIN_KEY
+    // work, tried on this machine where they are (keycheck.ts). Never prints them.
+    if (args.some((arg) => arg !== "--json")) {
+      err("Usage: key-check [--json]\n");
+      return 1;
+    }
+
+    out(JSON.stringify(await checkKeys(env, config.brain.model, fetchImpl)) + "\n");
+    return 0;
+  }
+
   if (command === "audit-log") {
     // audit-log [--json] [--limit <n>]: the shared audit log, newest first.
     const at = args.indexOf("--limit");
@@ -678,7 +692,7 @@ export async function adminSnapshot(
     requests: open.map(({ club, request }) => ({ club, ...request })),
     // What this build can do, so the admin app never sends a command an
     // older relay doesn't know (round E). Added to, never changed.
-    capabilities: ["usage-since", "auto-top-up", "audit", "build-info"],
+    capabilities: ["usage-since", "auto-top-up", "audit", "build-info", "key-check"],
     autoTopUps: (await Promise.all(config.tenants.map(async (tenant) =>
       (await autoGiven(config.dataDir, tenant.club, monthOf(now))).map((given) => ({ club: tenant.club, ...given }))))).flat()
       .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)),

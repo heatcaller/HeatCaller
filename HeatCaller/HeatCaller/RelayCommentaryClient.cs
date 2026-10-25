@@ -690,6 +690,13 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
 
             var body = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
 
+            if (response.StatusCode == HttpStatusCode.Forbidden && RelayPublisher.IsPaused(body))
+            {
+                // Paused by HeatCaller (relay admin): said as what it is.
+                StatusMessage?.Invoke("[brain] " + RelayPublisher.PausedMessage);
+                return;
+            }
+
             if (!response.IsSuccessStatusCode || body.Length > MaxBodyChars)
             {
                 StatusMessage?.Invoke($"[brain] The relay wouldn't say whether commentary is on ({(int)response.StatusCode}).");
