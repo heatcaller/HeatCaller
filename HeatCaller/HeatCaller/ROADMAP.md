@@ -143,6 +143,15 @@ log is now a file of its own (`%LocalAppData%\HeatCaller\Logs`), so
 Written down here the moment it is asked for, because a request held only
 in a chat is a request that is lost when the chat is.
 
+- **A Track Designer overhaul** (asked 25 Oct 2026, not started). Asher:
+  "add to the roadmap a layout editor overhaul". What it should change
+  has not been said yet - write it here when it is, before anything is
+  built. The starting point is "After the freeze - Could be better",
+  item 11, which records what the designer already does and what was
+  left: a docs page of its own, printing a plan to scale, the inventory
+  as a build list, setting tile labels, a zoom readout, a PNG at a chosen
+  scale, and handles to size a selection rather than only move it.
+
 ### Built since it was asked for
 
 - **The championship conditional, with its condition said out loud**
