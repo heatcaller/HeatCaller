@@ -144,13 +144,29 @@ Written down here the moment it is asked for, because a request held only
 in a chat is a request that is lost when the chat is.
 
 - **A Track Designer overhaul** (asked 25 Oct 2026, not started). Asher:
-  "add to the roadmap a layout editor overhaul". What it should change
-  has not been said yet - write it here when it is, before anything is
-  built. The starting point is "After the freeze - Could be better",
-  item 11, which records what the designer already does and what was
-  left: a docs page of its own, printing a plan to scale, the inventory
-  as a build list, setting tile labels, a zoom readout, a PNG at a chosen
-  scale, and handles to size a selection rather than only move it.
+  "add to the roadmap a layout editor overhaul", and then on what it
+  covers: "all of those things and more". So the scope is all of:
+  - **A fresh look** for the designer window.
+  - **Easier drawing** - laying tiles and rails should take fewer clicks
+    and fewer mistakes.
+  - **Everything left from item 11** ("After the freeze - Could be
+    better"): a docs page of its own, printing a plan to scale, the
+    inventory as a build list, setting tile labels, a zoom readout, a PNG
+    at a chosen scale, and handles to size a selection rather than only
+    move it.
+  - **And more** - not yet named. Write each one here as it is asked for.
+
+  Before building: plan it as a whole first (one plan doc, the way the
+  timing layer was planned), because the look and the drawing changes
+  touch the same canvas code. Nothing here may change what the designer
+  saves in a way that breaks the Big Screen's live track map, the sector
+  speeds or the kit check, which all read the plan it produces.
+
+  Another perspective, 25 Oct 2026: Asher pointed at a competitor's
+  online editor (RaceLyx, live.racelyx.com/designer) - to learn from,
+  never to copy. What it does, where HeatCaller is already ahead (real
+  lap times, the plan feeding the timing) and the ideas it suggests are
+  in the project notes, `claude/track-designer-racelyx-look.md`.
 
 ### Built since it was asked for
 
