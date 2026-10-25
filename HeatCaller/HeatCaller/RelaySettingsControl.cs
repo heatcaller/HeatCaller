@@ -75,6 +75,7 @@ public sealed class RelaySettingsControl : UserControl
     private readonly CheckBox _chkRoster = new ThemedCheckBox();
     private readonly CheckBox _chkDriverNights = new ThemedCheckBox();
     private readonly CheckBox _chkAbbreviate = new ThemedCheckBox();
+    private readonly CheckBox _chkFullNamesAloud = new ThemedCheckBox();
 
     // --- Driver experience (22 Oct 2026) ---------------------------------
     //
@@ -628,11 +629,36 @@ public sealed class RelaySettingsControl : UserControl
             _settings.RelayAbbreviateNames = _chkAbbreviate.Checked;
             _settings.Save();
             _publisher.SettingsChanged();
+            _chkFullNamesAloud.Enabled = _chkAbbreviate.Checked;
         };
 
         var lblNameHint = HintLabel(
             "\"Sam K\" rather than the full name, everywhere the relay shows one. A single-word name is left "
-            + "alone. Affects what is sent from now on, not what is already on the relay.");
+            + "alone. Affects what is sent from now on, not what is already on the relay. While it is ticked the "
+            + "HeatCaller and ElevenLabs voices say the short name too, unless the box below is ticked.");
+
+        // WHY (24 Oct 2026): the announcer had started calling drivers "Sam K"
+        // with the online voices, because the box above reached them too (22
+        // Oct). A club that wants full names in the room and short ones online
+        // ticks this. See AnnouncementService.SayFullNamesWithCloudVoices.
+        _chkFullNamesAloud.Text = "Say full names aloud with the online voices";
+        _chkFullNamesAloud.AutoSize = true;
+        _chkFullNamesAloud.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.SayFullNamesWithOnlineVoices = _chkFullNamesAloud.Checked;
+            _settings.Save();
+        };
+
+        var lblFullNamesHint = HintLabel(
+            "The announcer says each driver's full name with the HeatCaller voice and ElevenLabs, as the Kokoro "
+            + "voice always does. Those voices render on the internet, so the full names are sent there. The "
+            + "club's pages and captions still show the short name, and a line that says a full name is not "
+            + "sent to people listening along at home.");
 
         var card = new Section("What gets published");
 
@@ -658,7 +684,9 @@ public sealed class RelaySettingsControl : UserControl
         card.Add(lblCaptionsHint);
 
         card.Add(_chkAbbreviate, stretch: false, gapBelow: UiLayout.HintGap);
-        card.Add(lblNameHint, gapBelow: 0);
+        card.Add(lblNameHint);
+        StepIn(card.Add(_chkFullNamesAloud, stretch: false, gapBelow: UiLayout.HintGap));
+        StepIn(card.Add(lblFullNamesHint, gapBelow: 0));
 
         return card;
     }
@@ -2591,6 +2619,8 @@ public sealed class RelaySettingsControl : UserControl
             _chkRoster.Checked = _settings.RelayPublishRoster;
             _chkDriverNights.Checked = _settings.PublishDriverNightsToTheRelay;
             _chkAbbreviate.Checked = _settings.RelayAbbreviateNames;
+            _chkFullNamesAloud.Checked = _settings.SayFullNamesWithOnlineVoices;
+            _chkFullNamesAloud.Enabled = _settings.RelayAbbreviateNames;
             _chkDriverRequests.Checked = _settings.RelayDriverRequests;
             _chkNightEmail.Checked = _settings.NightEmailOffered;
             _chkNightEmailAuto.Checked = _settings.NightEmailAutomatic;

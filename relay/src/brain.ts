@@ -148,6 +148,8 @@ export interface WriteOk {
   readonly ok: true;
   readonly text: string;
   readonly usage: BrainUsage;
+  /** Anthropic's count for this line, when it gave one - for the usage log, never sent to the club. */
+  readonly tokens?: { readonly input: number; readonly output: number };
 }
 
 export interface WriteNo {
@@ -160,13 +162,28 @@ export interface WriteNo {
 
 export type WriteResult = WriteOk | WriteNo;
 
-/** What actually asks the model. Separated so the tests can run the whole service without a key or a network. */
+/**
+ * A written line with what it cost, as Anthropic reported it (24 Oct
+ * 2026, relay admin round 3): the tokens go to the usage log, where the
+ * admin app turns them into money.
+ */
+export interface WrittenLine {
+  readonly text: string;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+}
+
+/**
+ * What actually asks the model. Separated so the tests can run the whole
+ * service without a key or a network. A plain string is still a line -
+ * every test writer returns one - just one with no token counts.
+ */
 export type WriteFn = (
   system: string,
   user: string,
   maxTokens: number,
   temperature: number,
-) => Promise<string>;
+) => Promise<string | WrittenLine>;
 
 /** Thrown by a WriteFn when the model itself failed, so the service can tell "busy" from "broken". */
 export class BrainUpstreamError extends Error {
@@ -240,6 +257,16 @@ export class BrainService {
     this.log = options.log ?? (() => {});
     this.now = options.now ?? (() => new Date());
     this.owner = options.owner;
+  }
+
+  /** The model lines are written with, for the usage log. */
+  get model(): string {
+    return this.config.model;
+  }
+
+  /** The longest a normal line may be; anything asked for over this is a long piece. */
+  get maxWords(): number {
+    return this.config.maxWords;
   }
 
   /** True when this relay could write a line for somebody - a model and a key. */
@@ -405,7 +432,11 @@ export class BrainService {
       const maxTokens = Math.ceil(words * 2) + 40;
 
       const answer = await (this.writeFn as WriteFn)(system, prompt, maxTokens, temperature);
-      const line = answer.trim();
+      const line = (typeof answer === "string" ? answer : answer.text).trim();
+      const tokens =
+        typeof answer !== "string" && typeof answer.inputTokens === "number" && typeof answer.outputTokens === "number"
+          ? { input: answer.inputTokens, output: answer.outputTokens }
+          : undefined;
 
       if (line.length === 0) {
         await this.refund(club, reserved.month);
@@ -419,7 +450,7 @@ export class BrainService {
         };
       }
 
-      return { ok: true, text: line, usage: await this.usageFor(club, plan) };
+      return { ok: true, text: line, usage: await this.usageFor(club, plan), ...(tokens === undefined ? {} : { tokens }) };
     } catch (error) {
       // A line that was never written is a line the club keeps.
       await this.refund(club, reserved.month);
@@ -732,7 +763,7 @@ export function anthropicWriter(apiKey: string, model: string, timeoutMs = 20_00
     }
 
     const payload = (await response.json().catch(() => null)) as
-      | { content?: { type?: string; text?: string }[] }
+      | { content?: { type?: string; text?: string }[]; usage?: { input_tokens?: unknown; output_tokens?: unknown } }
       | null;
 
     const text = (payload?.content ?? [])
@@ -745,7 +776,13 @@ export function anthropicWriter(apiKey: string, model: string, timeoutMs = 20_00
       throw new BrainUpstreamError("the model answered with no text", false);
     }
 
-    return text;
+    // What the line cost, as Anthropic counted it - for the usage log.
+    const input = payload?.usage?.input_tokens;
+    const output = payload?.usage?.output_tokens;
+
+    return typeof input === "number" && typeof output === "number"
+      ? { text, inputTokens: input, outputTokens: output }
+      : { text };
   };
 }
 

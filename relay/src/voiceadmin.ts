@@ -2,7 +2,10 @@ import { lchown, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { BRAIN_DIR, brainTopUpPath, brainUsagePath } from "./brain.js";
 import { loadConfig, type RelayConfig } from "./config.js";
-import { closeRequests, openRequests, type MeterName } from "./topuprequests.js";
+import { isActive } from "./tenancy.js";
+import { readUsageLog, USAGE_LOG_PAGE } from "./usagelog.js";
+import { checkVoiceAccount, type VoiceAccountCheck } from "./voiceaccount.js";
+import { closeRequests, isMeterName, openRequests, type MeterName, type TopUpAsk } from "./topuprequests.js";
 import {
   monthOf,
   readTopUps,
@@ -39,7 +42,16 @@ import {
  */
 
 /** Every command this file answers, as typed after `node dist/src/index.js`. */
-export const ADMIN_COMMANDS = ["voice-usage", "voice-topup", "brain-usage", "brain-topup", "topup-requests"] as const;
+export const ADMIN_COMMANDS = [
+  "voice-usage",
+  "voice-topup",
+  "brain-usage",
+  "brain-topup",
+  "topup-requests",
+  "topup-decline",
+  "admin-snapshot",
+  "usage-log",
+] as const;
 
 export type AdminCommand = (typeof ADMIN_COMMANDS)[number];
 
@@ -303,6 +315,7 @@ export async function voiceAdmin(
   now: Date = new Date(),
   out: (text: string) => void = (text) => process.stdout.write(text),
   err: (text: string) => void = (text) => process.stderr.write(text),
+  fetchImpl: typeof fetch = fetch,
 ): Promise<number> {
   let config: RelayConfig;
 
@@ -327,6 +340,81 @@ export async function voiceAdmin(
   if (owner !== undefined && (env["RELAY_DATA"] ?? "").trim().length === 0) {
     err(`RELAY_DATA is not set, so this cannot tell where the relay keeps its data. Run it through ${command}.cmd, or set RELAY_DATA.\n`);
     return 1;
+  }
+
+  if (command === "admin-snapshot") {
+    const unknown = args.filter((arg) => arg !== "--json");
+
+    if (unknown.length > 0) {
+      err(`admin-snapshot takes nothing but --json, not ${unknown.join(" ")}.\n`);
+      return 1;
+    }
+
+    // JSON only, with or without the flag: this one is read by the relay
+    // admin app, not by a person, and a table of every meter for every
+    // club would not fit a terminal anyway.
+    out(JSON.stringify(await adminSnapshot(config, now, env, fetchImpl), null, 2) + "\n");
+    return 0;
+  }
+
+  if (command === "usage-log") {
+    // usage-log [--json] [--since <ISO time>] [--limit <n>]: the usage log's
+    // events after a moment, oldest first, as JSON - read by the relay
+    // admin app, which asks again from the last one it has. See usagelog.ts.
+    let since: string | undefined;
+    let limit = USAGE_LOG_PAGE;
+
+    for (let i = 0; i < args.length; i += 1) {
+      const arg = args[i] as string;
+
+      if (arg === "--json") {
+        continue;
+      }
+
+      if (arg === "--since" && args[i + 1] !== undefined && !Number.isNaN(Date.parse(args[i + 1] as string))) {
+        since = new Date(Date.parse(args[i + 1] as string)).toISOString();
+        i += 1;
+        continue;
+      }
+
+      if (arg === "--limit" && /^\d{1,6}$/.test(args[i + 1] ?? "") && Number(args[i + 1]) > 0) {
+        limit = Math.min(Number(args[i + 1]), USAGE_LOG_PAGE);
+        i += 1;
+        continue;
+      }
+
+      err("Usage: usage-log [--json] [--since 2026-10-01T00:00:00Z] [--limit 5000]\n");
+      return 1;
+    }
+
+    out(JSON.stringify(await readUsageLog(config.dataDir, since, limit)) + "\n");
+    return 0;
+  }
+
+  if (command === "topup-decline") {
+    const json = args.includes("--json");
+    const [club, meter, ...extra] = args.filter((arg) => arg !== "--json");
+
+    if (club === undefined || meter === undefined || extra.length > 0 || !isMeterName(meter)) {
+      err("Usage: topup-decline <club> <voice|commentary> [--json]   e.g. topup-decline acme-rc voice\n");
+      return 1;
+    }
+
+    const result = await declineRequests(config, club, meter, now, owner);
+
+    if (!result.ok) {
+      err(`${result.error}\n`);
+      return 1;
+    }
+
+    out(
+      json
+        ? JSON.stringify({ ok: true, club, meter, closed: result.closed }) + "\n"
+        : result.closed > 0
+          ? `Answered ${club}'s ${result.closed === 1 ? "request" : `${result.closed} requests`} for more ${METERS[meter].unit} without a top-up.\n`
+          : `${club} has no open request for more ${METERS[meter].unit} this month.\n`,
+    );
+    return 0;
   }
 
   if (command === "voice-usage" || command === "brain-usage" || command === "topup-requests") {
@@ -357,7 +445,9 @@ export async function voiceAdmin(
 
   const meter: MeterName = command === "voice-topup" ? "voice" : "commentary";
   const words = METERS[meter];
-  const [club, amount, ...extra] = args;
+  // --json for the relay admin app, which reads the result rather than the sentence.
+  const json = args.includes("--json");
+  const [club, amount, ...extra] = args.filter((arg) => arg !== "--json");
 
   if (club === undefined || amount === undefined || extra.length > 0 || !/^[+-]?\d{1,9}$/.test(amount.replace(/[,_]/g, ""))) {
     err(
@@ -375,6 +465,11 @@ export async function voiceAdmin(
     return 1;
   }
 
+  if (json) {
+    out(JSON.stringify({ club, meter, ...result }) + "\n");
+    return 0;
+  }
+
   out(
     `${club}: ${result.topUp > 0 ? `${grouped(result.topUp)} ${words.unit} on top of its plan` : "no top-up"} for ${monthName(result.month)}. ` +
       `It may ${meter === "voice" ? "speak" : "have"} ${grouped(result.allowance)} this month and has used ${grouped(result.used)}.\n` +
@@ -386,6 +481,138 @@ export async function voiceAdmin(
       (result.closed > 0 ? `Marked ${club}'s request for more ${words.unit} done.\n` : ""),
   );
   return 0;
+}
+
+/** One meter of one club, as admin-snapshot gives it. */
+export interface MeterStanding {
+  readonly enabled: boolean;
+  readonly plan: number;
+  readonly topUp: number;
+  readonly allowance: number;
+  readonly used: number;
+  readonly history: Readonly<Record<string, number>>;
+}
+
+/** One club, as admin-snapshot gives it. */
+export interface ClubSnapshot {
+  readonly club: string;
+  readonly name: string;
+  readonly active: boolean;
+  readonly publishRoster: boolean;
+  readonly voice: MeterStanding;
+  readonly commentary: MeterStanding;
+}
+
+/**
+ * Everything the relay admin app shows on its Clubs page, in one answer
+ * (24 Oct 2026).
+ *
+ * One command rather than three because each one is a `fly ssh console`
+ * from the app, and each of those is a few seconds of connecting before
+ * any of it runs. Read-only: nothing here writes, so a refresh can never
+ * change anything on the relay.
+ *
+ * Whether each key is SET is said, never what it is - the app needs to
+ * know whether a club switched on for the voice can actually be heard, and
+ * nothing about the key itself.
+ *
+ * `voiceAccount` (round 5) is the relay's own ElevenLabs account - credits
+ * used and held - read from ElevenLabs with the relay's key, here on the
+ * machine where the key lives (voiceaccount.ts). Counts only. It is the one
+ * part of the answer that leaves the machine to find out, so it has a short
+ * timeout and an answer for every way it can fail; the rest is never held up.
+ *
+ * `version` is the shape of this answer. It goes up when a field changes
+ * meaning or goes away; added fields leave it alone, and the app ignores
+ * what it does not know.
+ */
+export async function adminSnapshot(
+  config: RelayConfig,
+  now: Date,
+  env: NodeJS.ProcessEnv = process.env,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{
+  readonly version: 1;
+  readonly generatedAt: string;
+  readonly month: string;
+  readonly resetsAt: string;
+  readonly dataDir: string;
+  readonly relay: {
+    readonly voice: { readonly voices: number; readonly monthlyChars: number; readonly keySet: boolean };
+    readonly commentary: { readonly model: string; readonly monthlyLines: number; readonly keySet: boolean };
+  };
+  readonly clubs: readonly ClubSnapshot[];
+  readonly requests: readonly ({ readonly club: string } & TopUpAsk)[];
+  readonly voiceAccount: VoiceAccountCheck;
+}> {
+  // Started first and awaited last, so ElevenLabs answers while the files are read.
+  const account = checkVoiceAccount(env["RELAY_VOICE_KEY"] ?? "", fetchImpl);
+  const voice = await voiceStandings(config, now);
+  const commentary = await brainStandings(config, now);
+  const meter = (standing: VoiceStanding | undefined): MeterStanding => ({
+    enabled: standing?.enabled ?? false,
+    plan: standing?.plan ?? 0,
+    topUp: standing?.topUp ?? 0,
+    allowance: standing?.allowance ?? 0,
+    used: standing?.used ?? 0,
+    history: standing?.history ?? {},
+  });
+
+  const clubs = config.tenants.map((tenant) => ({
+    club: tenant.club,
+    name: tenant.name,
+    active: isActive(tenant),
+    publishRoster: tenant.publishRoster,
+    voice: meter(voice.find((standing) => standing.club === tenant.club)),
+    commentary: meter(commentary.find((standing) => standing.club === tenant.club)),
+  }));
+
+  const open = await openRequests(config.dataDir, config.tenants.map((tenant) => tenant.club), now);
+
+  return {
+    version: 1,
+    generatedAt: now.toISOString(),
+    month: monthOf(now),
+    resetsAt: resetOf(now),
+    dataDir: config.dataDir,
+    relay: {
+      voice: {
+        voices: config.voice.voices.length,
+        monthlyChars: config.voice.monthlyChars,
+        keySet: (env["RELAY_VOICE_KEY"] ?? "").trim().length > 0,
+      },
+      commentary: {
+        model: config.brain.model,
+        monthlyLines: config.brain.monthlyLines,
+        keySet: (env["RELAY_BRAIN_KEY"] ?? "").trim().length > 0,
+      },
+    },
+    clubs,
+    requests: open.map(({ club, request }) => ({ club, ...request })),
+    voiceAccount: await account,
+  };
+}
+
+/**
+ * `topup-decline`: answers a club's open asks for more of one meter
+ * without giving any (24 Oct 2026, relay admin).
+ *
+ * The ask is marked done exactly as a top-up marks it, so the club's app
+ * stops showing it as waiting. Why it was declined is the relay admin
+ * app's to record - nothing the club wrote is changed here.
+ */
+export async function declineRequests(
+  config: RelayConfig,
+  club: string,
+  meter: MeterName,
+  now: Date,
+  owner: { readonly uid: number; readonly gid: number } | undefined,
+): Promise<{ readonly ok: true; readonly closed: number } | { readonly ok: false; readonly error: string }> {
+  if (!config.tenants.some((known) => known.club === club)) {
+    return { ok: false, error: `There is no club "${club}" in this relay's config.` };
+  }
+
+  return { ok: true, closed: await closeRequests(config.dataDir, club, meter, now, owner) };
 }
 
 /** topup-requests as a list to read: who asked for what, when, and what they said. */

@@ -208,6 +208,7 @@ public sealed partial class AnnouncerControl : UserControl
         // that send a line off this PC (22 Oct 2026, known issues) - see
         // AnnouncementService.ShortNames. Read live, like the rest.
         _announcer.ShortenNamesForCloudVoices = () => settings.RelayAbbreviateNames;
+        _announcer.SayFullNamesWithCloudVoices = () => settings.SayFullNamesWithOnlineVoices;
         _announcer.EnergyFollowsTheRace = () => settings.VoiceEnergyFollowsRace;
 
         var gate = _announcer.SponsorMentions;

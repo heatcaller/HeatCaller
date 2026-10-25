@@ -103,9 +103,20 @@ export async function loadConfig(path: string, env: NodeJS.ProcessEnv = process.
       throw new Error(`Club ${index + 1} in ${source} needs at least "club" and "tokenSha256".`);
     }
 
+    // Paused from the relay admin app. Strictly true or false: a string
+    // "false" typed by hand would otherwise read as switched on, which is
+    // the opposite of what whoever typed it meant.
+    const active = (entry as Record<string, unknown>)["active"];
+
+    if (active !== undefined && typeof active !== "boolean") {
+      throw new Error(`"active" for ${club.club} in ${source} must be true or false, not ${JSON.stringify(active)}.`);
+    }
+
     return {
       club: club.club,
       name: typeof club.name === "string" && club.name.length > 0 ? club.name : club.club,
+      // Absent is active - see the note on Tenant.
+      ...(active === false ? { active: false } : {}),
       // Lower-cased because mint and a hand-copied hash may not agree on
       // case, and the registry compares hex as written - an upper-case
       // hash would otherwise refuse to start a relay whose token is fine.

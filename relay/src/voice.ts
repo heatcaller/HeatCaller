@@ -222,6 +222,10 @@ export interface SpeakOk {
   /** True when it came from this relay's cache, so nothing was spent. */
   readonly cached: boolean;
   readonly usage: VoiceUsage;
+  /** Characters sent to ElevenLabs for this line - absent when it came from the cache. For the usage log. */
+  readonly characters?: number;
+  /** The ElevenLabs model it was spoken with. For the usage log. */
+  readonly model?: string;
 }
 
 export interface SpeakNo {
@@ -817,7 +821,7 @@ export class VoiceService {
     // fails costs the club nothing beyond rendering the line again.
     await this.writeCache(club, keepFor, key, audio);
 
-    return { ok: true, audio, cached: false, usage };
+    return { ok: true, audio, cached: false, usage, characters: spoken.length, model: voice.modelId };
   }
 
   // --- Hearing a voice before choosing it ---------------------------------
@@ -1179,7 +1183,7 @@ export class VoiceService {
 
     await this.writeCache(club, false, key, audio);
 
-    return { ok: true, audio, cached: false, usage: reserved.usage };
+    return { ok: true, audio, cached: false, usage: reserved.usage, characters: spoken.length, model: voice.modelId };
   }
 
   // --- The preview allowance ----------------------------------------------

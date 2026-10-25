@@ -1394,6 +1394,7 @@ public sealed partial class RelayPublisher : IDisposable
             {
                 200 => new RelayProbe(true, $"Connected as {ClubNameFrom(body, club)}."),
                 401 => new RelayProbe(false, "The relay does not recognize that token."),
+                403 when IsPaused(body) => new RelayProbe(false, PausedMessage),
                 403 => new RelayProbe(false, "That token belongs to a different club. Check the club id."),
                 404 => new RelayProbe(false, NotFound(body, club)),
                 var other => new RelayProbe(false, $"The relay answered HTTP {other}."),
@@ -3447,7 +3448,7 @@ public sealed partial class RelayPublisher : IDisposable
             // And not called "a different club": a 403 on a switched channel
             // is a switch not told, and the token is fine. A 401 is still the
             // token, and says so.
-            var switchedRefused = code == 403
+            var switchedRefused = code == 403 && !IsPaused(body)
                 && (driverLiveRefused || driverMeRefused || item.Channel == DriverNight.Channel);
 
             lock (_gate)
@@ -3455,6 +3456,7 @@ public sealed partial class RelayPublisher : IDisposable
                 _lastError = switchedRefused ? _lastError : code switch
                 {
                     401 => "The relay does not recognize this token.",
+                    403 when IsPaused(body) => PausedMessage,
                     403 => "This token belongs to a different club.",
                     404 when unknownChannel => $"The relay has no \"{item.Channel}\" channel - it may need updating.",
                     404 when body.Contains("endpoint", StringComparison.OrdinalIgnoreCase)
@@ -4300,6 +4302,19 @@ public sealed partial class RelayPublisher : IDisposable
         HttpRequestException http when http.InnerException is not null => http.InnerException.Message,
         _ => ex.Message,
     };
+
+    /// <summary>
+    /// What the club sees when HeatCaller has paused it on the relay (24 Oct
+    /// 2026, relay admin): every route under the club answers 403 with
+    /// "paused": true. Said as what it is, rather than the "token belongs to
+    /// a different club" a plain 403 means - the token is fine, and a club
+    /// told otherwise would go hunting for a typo that isn't there.
+    /// </summary>
+    internal const string PausedMessage = "This club is paused on the HeatCaller relay. Ask HeatCaller to switch it back on.";
+
+    /// <summary>Whether a refusal from the relay is the club being paused.</summary>
+    internal static bool IsPaused(string? body) =>
+        body is not null && body.Contains("\"paused\":true", StringComparison.Ordinal);
 }
 
 /// <summary>

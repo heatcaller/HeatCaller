@@ -211,10 +211,11 @@ public partial class MainForm
 
             // A car said by its transponder number, and the club's "shorten
             // published names", reach the public copy too (23 Oct 2026, bug
-            // hunt 10) - see CaptionsDocument. TextForCloudVoice shortens only
-            // while that box is ticked, and leaves the line alone otherwise.
+            // hunt 10) - see CaptionsDocument. TextForPublicPages shortens only
+            // while that box is ticked, and leaves the line alone otherwise -
+            // whether or not the voices say names in full (24 Oct 2026).
             Func<string, bool> namesACarByNumber = AnnouncementService.NamesACarByNumber;
-            Func<string, string>? shorten = _settings.RelayAbbreviateNames ? _announcer.TextForCloudVoice : null;
+            Func<string, string>? shorten = _settings.RelayAbbreviateNames ? _announcer.TextForPublicPages : null;
 
             // The empty document's time is when it went empty, kept, so the
             // same empty document is the same bytes on every tick.

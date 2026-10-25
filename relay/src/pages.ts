@@ -7641,3 +7641,46 @@ export function manifest(club: string, clubName: string, look: Look): string {
     icons: [{ src: `${base}/icon.png?v=${look.iconVersion}`, sizes: iconSize(look), type: "image/png", purpose: "any" }],
   });
 }
+
+/**
+ * What a paused club's address shows instead of its pages (24 Oct 2026,
+ * relay admin): one notice, nothing else.
+ *
+ * Deliberately not the club's usual shell. The shell carries the tabs,
+ * the live channels and the club's script, and every one of those would
+ * lead somewhere that is also paused. No script at all, so the page's
+ * nonce goes unused; the club's own background colour so a regular still
+ * recognises whose page it is.
+ */
+export function pausedPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+  const name = escapeHtml(clubName.length > 0 ? clubName : club);
+  const look = context.look;
+  const background = escapeHtml(look.themeColor);
+  const ink = look.light ? "#1a1a1a" : "#f2f2f2";
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="${background}">
+<title>${name} - paused</title>
+<style>
+  html { color-scheme: ${look.light ? "light" : "dark"}; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: ${background}; color: ${ink};
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 32rem; padding: 2rem 1.5rem; text-align: center; }
+  h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
+  p { margin: 0; opacity: .8; }
+</style>
+</head>
+<body>
+<main>
+  <h1>${name}</h1>
+  <p>This club's pages are paused for now. Results, schedules and live timing will be back here when the club returns.</p>
+</main>
+</body>
+</html>
+`;
+}

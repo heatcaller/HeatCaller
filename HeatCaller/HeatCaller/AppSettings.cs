@@ -1818,6 +1818,15 @@ public sealed class AppSettings
     public bool RelayAbbreviateNames { get; set; } = true;
 
     /// <summary>
+    /// The announcer says drivers' names in full with the HeatCaller voice
+    /// and ElevenLabs too, even while RelayAbbreviateNames shortens them on
+    /// the club's pages (24 Oct 2026). Off by default: those voices render
+    /// off this PC. Lines that say a full name are then kept from
+    /// listen-along. See AnnouncementService.SayFullNamesWithCloudVoices.
+    /// </summary>
+    public bool SayFullNamesWithOnlineVoices { get; set; }
+
+    /// <summary>
     /// The announcer's delivery steps with how big the race is - steadier in
     /// the heats, livelier in the top main (DeliveryEnergies, 22 Oct 2026).
     /// A club's own ElevenLabs voice only.

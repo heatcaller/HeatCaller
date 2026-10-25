@@ -58,6 +58,27 @@ export interface Tenant {
    * spends money, so it is opted into rather than out of.
    */
   readonly brain?: BrainPlan;
+  /**
+   * False when the club is paused - deactivated from the relay admin app
+   * (24 Oct 2026) rather than taken out of the config.
+   *
+   * Paused rather than removed, because removing a club is the one change
+   * that cannot be taken back cleanly: its token, its name and its
+   * settings go with the entry, and bringing it back means a new token in
+   * the club's hands. A paused club keeps all of that. Its token stops
+   * working, every route under its id answers "paused", and its public
+   * pages say so - its data stays where it was until it is switched back
+   * on.
+   *
+   * Absent means active, so every club configured before this existed
+   * carries on exactly as it was.
+   */
+  readonly active?: boolean;
+}
+
+/** A club the relay is serving: anything but an explicit `active: false`. */
+export function isActive(tenant: Tenant): boolean {
+  return tenant.active !== false;
 }
 
 export interface TenantConfig {
@@ -129,13 +150,25 @@ export class TenantRegistry {
       return undefined;
     }
 
+    // A paused club's token names nobody. This is the one place every
+    // token-checked route asks, so a route added later cannot forget the
+    // pause - the routes under /api/v1/c/<club> also answer "paused" by
+    // name (see Relay.handle), and this is what covers the one that has
+    // no club in its path (voicePreview).
+    return this.resolveAnyToken(token, (tenant) => isActive(tenant));
+  }
+
+  /** resolveToken without the pause, for the comparison itself. */
+  private resolveAnyToken(token: string, accept: (tenant: Tenant) => boolean): Tenant | undefined {
     const offered = createHash("sha256").update(token, "utf8").digest();
 
     for (const [hex, tenant] of this.byTokenHash) {
       const known = Buffer.from(hex, "hex");
 
+      // The pause is checked after the comparison, so a paused club's
+      // token takes as long to refuse as a live one takes to accept.
       if (known.length === offered.length && timingSafeEqual(known, offered)) {
-        return tenant;
+        return accept(tenant) ? tenant : undefined;
       }
     }
 

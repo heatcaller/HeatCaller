@@ -984,6 +984,10 @@ topup-requests.cmd --json          the same, as JSON
 - A positive `voice-topup` or `brain-topup` marks that club's open ask for
   that meter done (in `dataDir/.requests/done/<club>.json`, which only the
   commands write).
+- **Declining an ask** (24 Oct 2026): `node /app/dist/src/index.js
+  topup-decline <club> <voice|commentary>` marks that club's open asks for
+  that meter answered without giving anything. The relay admin app runs it
+  from its Requests page and keeps the reason on the PC.
 - Any club can see its own figures: the app's This Month window and the
   manager page's Today tab both read `GET /api/v1/c/<club>/usage` (the club's
   own token, or its manager pass), which spends nothing.
@@ -1305,6 +1309,89 @@ Afterwards, day to day:
   retries.
 - **Logs**: `fly logs`, live. **Status**: `fly status`.
 
+### Pausing a club, and the relay admin app
+
+A club can be **paused** instead of removed (24 Oct 2026): `"active": false`
+on its entry in `relay.config.json`, then `fly-set-config.cmd`. While it is
+paused:
+
+- every route under `/api/v1/c/<club>` answers 403 with `"paused": true` and
+  a sentence the laptop can show, whatever token or pass it carries;
+- its token resolves to nobody, including on `/voice/preview`;
+- every page under `/c/<club>` is one "paused" notice (403, `noindex`, no script);
+- its results, roster, counts and top-ups stay on the volume untouched.
+
+Taking the line out, or setting it to `true`, switches it back on with the
+same token. Anything but `true` or `false` refuses to start, so a hand-typed
+`"false"` can't quietly read as on.
+
+The **relay admin app** (the `HeatCaller-Admin` repo) does this, minting,
+plans and top-ups from buttons. It works the way the `.cmd` scripts do -
+editing `relay.config.json` and pushing it, and running commands on the
+machine over `fly ssh console` - so there are still no admin routes on the
+internet. It reads every club at once with:
+
+```
+node /app/dist/src/index.js admin-snapshot --json
+```
+
+which prints each club's `active`, `publishRoster`, both meters (plan,
+top-up, allowance, used, earlier months) and the open asks, plus whether
+each key is set (never the key). Since round 5 it also gives `voiceAccount`:
+the relay's own ElevenLabs plan - credits used and held, the plan's name and
+status, when it resets - read from `GET /v1/user/subscription` with
+`RELAY_VOICE_KEY`, here on the machine where the key lives. Only those counts
+come back; the key and the rest of ElevenLabs' answer stay put. It gives up
+after 8 seconds and says why when it can't read the plan (`no-key`,
+`refused` - a key limited to speech may not be allowed to read the account,
+which needs read access to User in the key's permissions - `failed` or
+`unreadable`), so a slow ElevenLabs never holds up the clubs' figures.
+`voice-topup` and `brain-topup` take
+`--json` too, for the app; without it they print the same sentence as before.
+
+Before every push the app also runs, on the PC in this folder:
+
+```
+node dist/src/index.js check-config <file>
+```
+
+which reads that file exactly as the relay reads its config at start and
+prints `{"ok":true,"clubs":N,"active":N}` or `{"ok":false,"error":"..."}`.
+It reads only the file it is given, never `RELAY_CONFIG_JSON`, so a config
+the relay would refuse to start on never reaches Fly.
+
+### The usage log
+
+Since 24 Oct 2026 the relay keeps one line per HeatCaller voice and AI
+commentary request, for the relay admin app's charts, in
+`dataDir/.usage-log/<YYYY-MM>.jsonl` (24 months kept):
+
+```
+{"at":"2026-10-24T20:00:01.000Z","club":"acme-rc","meter":"voice","kind":"shared","units":11,"outcome":"ok","ms":812,"voice":"clubhouse","model":"eleven_flash_v2_5","cached":false}
+{"at":"2026-10-24T20:00:09.000Z","club":"acme-rc","meter":"commentary","kind":"line","units":1,"outcome":"ok","ms":1403,"model":"claude-haiku-4-5-20251001","words":40,"in":512,"out":41}
+```
+
+- `units` is what it cost the club: characters sent to ElevenLabs (0 for a
+  line from the cache), or 1 commentary line (0 when none was written).
+- `in` / `out` are Anthropic's own token counts for the line.
+- `outcome` is `ok` or the refusal (`allowance`, `busy`, `upstream`, ...).
+- `kind`: voice `line`, `shared`, `reroll` or `preview`; commentary `line`
+  or `long` (a recap or preview over `brain.maxWords`).
+- **No words are ever kept** - not a line spoken, not the facts sent, not a
+  driver's name. Only counts and labels.
+- Writing it never holds up or refuses a request: a failure is logged and
+  ignored. The meters stay the record for allowances.
+
+Read it with:
+
+```
+node /app/dist/src/index.js usage-log --json --since 2026-10-01T00:00:00Z
+```
+
+which prints `{"version":1,"events":[...],"more":false}` - events strictly
+after `--since`, oldest first, up to 20,000 (`--limit` for fewer). When
+`more` is true, ask again with the last event's `at`.
+
 ### Several clubs on one relay
 
 Four scripts and one workflow cover running it for more than one club. The
@@ -1421,6 +1508,7 @@ voice-usage.cmd       every club's HeatCaller voice usage, read on the Fly machi
 brain-usage.cmd       every club's AI commentary lines, read on the Fly machine
 brain-topup.cmd       more AI commentary lines for one club, this month only
 topup-requests.cmd    the clubs waiting on an answer to Ask for More
+                      (the relay admin app does all of these from buttons - see "Pausing a club")
 voice-topup.cmd       gives a club more voice characters for this month, on the Fly machine
 voice-test.cmd        runs a voice relay on this laptop against your own ElevenLabs key
 voice-test-setup.mjs  writes that test relay's config, once, from the account's own voices

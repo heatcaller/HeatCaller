@@ -160,9 +160,16 @@ public sealed partial class AnnouncementService
     /// <see cref="OfferLineToListeners"/>'s audioShortened (23 Oct 2026, bug
     /// hunt 10).
     /// </summary>
-    private static bool AudioFromShortenedText(LineSource source, string text) =>
-        source is LineSource.HeatCaller or LineSource.ElevenLabs
-        || (source == LineSource.Library && !StingerLibrary.Shared.Has(text));
+    ///
+    /// WHY (24 Oct 2026): not while "Say full names aloud with the online
+    /// voices" is on - those voices were then sent the names in full, so their
+    /// audio says them, and the line is held back as a Kokoro one is. Read as
+    /// the line is offered; a switch flipped while a line is being rendered
+    /// can misjudge that one line.
+    private bool AudioFromShortenedText(LineSource source, string text) =>
+        ShortensForCloudVoice()
+        && (source is LineSource.HeatCaller or LineSource.ElevenLabs
+            || (source == LineSource.Library && !StingerLibrary.Shared.Has(text)));
 
     /// <summary>
     /// Offers a line to listeners at home, and returns at once.
@@ -283,7 +290,7 @@ public sealed partial class AnnouncementService
                 // and a line whose names it shortens goes out only when its
                 // audio was rendered from the shortened words; otherwise it is
                 // withheld, the way an initials-only line is.
-                var caption = ForCloudVoice(words);
+                var caption = TextForPublicPages(words);
 
                 if (!string.Equals(caption, words, StringComparison.Ordinal) && audioShortened != true)
                 {

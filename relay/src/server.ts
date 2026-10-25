@@ -2,7 +2,7 @@ import { createHash, createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { isIP } from "node:net";
 import { isValidItemId, StoreReadError, type Store } from "./store.js";
-import { isValidClubId, type Tenant, type TenantRegistry } from "./tenancy.js";
+import { isActive, isValidClubId, type Tenant, type TenantRegistry } from "./tenancy.js";
 import { CHANNELS, channelSpec, type ChannelSpec, type StoredDocument } from "./types.js";
 import { flagIcon } from "./icon.js";
 import { cardVersionOf, clubCard, sessionCard } from "./card.js";
@@ -16,6 +16,7 @@ import {
   managePage,
   manifest,
   nightPage,
+  pausedPage,
   resultsPage,
   schedulePage,
   signupPage,
@@ -54,6 +55,7 @@ import { DEFAULT_LOOK, flagColours, lookFrom, type Look } from "./site.js";
 import { BRAIN_LONG_WORDS_CEILING, BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
 import { VOICE_PLAN_OFF, type MeterUsage, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
+import type { UsageLog } from "./usagelog.js";
 
 /** The public pages under /c/<club>/, by their last path segment. */
 const PAGES: Readonly<Record<string, (club: string, clubName: string, context: PageContext) => string>> = Object.freeze({
@@ -979,6 +981,12 @@ export interface RelayOptions {
    * answer, with no requests, and asking is refused as unavailable.
    */
   readonly topUpRequests?: TopUpRequests | undefined;
+  /**
+   * Where every voice and commentary request is logged for the relay admin
+   * app's charts (see usagelog.ts). Absent means nothing is logged - the
+   * requests themselves are unaffected either way.
+   */
+  readonly usageLog?: UsageLog | undefined;
 }
 
 interface Parsed {
@@ -1120,6 +1128,7 @@ export class Relay {
   private readonly driverDocLoads = new Map<string, Load<DriverDoc | undefined>>();
   private readonly brain: BrainService | undefined;
   private readonly topUpRequests: TopUpRequests | undefined;
+  private readonly usageLog: UsageLog | undefined;
   private readonly listings = new Map<string, Buffer>();
   /**
    * ?meta=1&limit=N cuts, keyed to the very meta listing Buffer they were
@@ -1342,6 +1351,7 @@ export class Relay {
     this.nightLiveReads = new Limiter(1200, 60 * 1000, () => this.now().getTime());
     this.brain = options.brain;
     this.topUpRequests = options.topUpRequests;
+    this.usageLog = options.usageLog;
   }
 
   /**
@@ -2064,6 +2074,19 @@ export class Relay {
       if (name !== undefined && isValidClubId(name)) {
         const tenant = this.tenants.club(name);
 
+        // A paused club (24 Oct 2026, relay admin): every page, file and
+        // icon under its address is the one notice. Its results stay on
+        // the volume, untouched, for when it is switched back on - but a
+        // club that has stopped paying or asked to stop is not showing
+        // them meanwhile. 403 rather than 404: the club exists, and a
+        // search engine told "gone" would forget a page that may be back
+        // next month.
+        if (tenant !== undefined && !isActive(tenant)) {
+          const context = await this.contextFor(request, tenant.club);
+          sendHtml(response, 403, pausedPage(tenant.club, tenant.name, context), context.nonce);
+          return;
+        }
+
         if (tenant !== undefined && segments.length === 2) {
           // The short address is the one people will type, and the one on
           // the poster - so it is a page in its own right that points at
@@ -2244,7 +2267,25 @@ export class Relay {
       return;
     }
 
-    if (this.tenants.club(club) === undefined) {
+    const known = this.tenants.club(club);
+
+    // Paused from the relay admin app: every route under the club, token
+    // or pass or neither, answers this and does nothing - no publish, no
+    // voice, no commentary, no check-in, no phone. Said in words the club's
+    // laptop can show, so a club that was paused hears why rather than
+    // seeing its token suddenly called wrong. The body is read and dropped
+    // so a refused upload does not hold the connection open.
+    if (known !== undefined && !isActive(known)) {
+      request.resume();
+      sendJson(response, 403, {
+        ok: false,
+        paused: true,
+        error: "This club is paused on the HeatCaller relay. Ask HeatCaller to switch it back on.",
+      });
+      return;
+    }
+
+    if (known === undefined) {
       // The same answer as a malformed id, which keeps this route from
       // saying more than it must. It does not make club ids secret, and
       // nothing should rely on them being so: /c/<club> serves a page for
@@ -3871,7 +3912,23 @@ export class Relay {
     // (22 Oct 2026). Charged like any line that was not saved.
     const fresh = body["fresh"] === true;
 
+    const started = Date.now();
     const result = await this.voice.speak(club, who.voice ?? VOICE_PLAN_OFF, voiceId, text, shared, fresh);
+
+    // For the admin app's charts: counts and labels, never the words.
+    // Not awaited - the club's line goes out without waiting on the log.
+    void this.usageLog?.record({
+      at: this.now().toISOString(),
+      club,
+      meter: "voice",
+      kind: fresh ? "reroll" : shared ? "shared" : "line",
+      units: result.ok && !result.cached ? (result.characters ?? 0) : 0,
+      outcome: result.ok ? "ok" : result.refusal,
+      ms: Date.now() - started,
+      voice: loggedVoice(voiceId, result),
+      ...(result.ok && result.model !== undefined ? { model: result.model } : {}),
+      ...(result.ok ? { cached: result.cached } : {}),
+    });
 
     if (!result.ok) {
       sendJson(response, result.status, {
@@ -4025,7 +4082,23 @@ export class Relay {
     const voiceId = typeof body["voiceId"] === "string" ? body["voiceId"].trim() : "";
     const text = typeof body["text"] === "string" ? body["text"] : "";
 
+    const started = Date.now();
     const result = await this.voice.preview(who.club, who.voice ?? VOICE_PLAN_OFF, voiceId, text);
+
+    // A preview spends ElevenLabs characters too (from its own daily
+    // allowance), so it is logged like a line - see voiceSpeak.
+    void this.usageLog?.record({
+      at: this.now().toISOString(),
+      club: who.club,
+      meter: "voice",
+      kind: "preview",
+      units: result.ok && !result.cached ? (result.characters ?? 0) : 0,
+      outcome: result.ok ? "ok" : result.refusal,
+      ms: Date.now() - started,
+      voice: loggedVoice(voiceId, result),
+      ...(result.ok && result.model !== undefined ? { model: result.model } : {}),
+      ...(result.ok ? { cached: result.cached } : {}),
+    });
 
     if (!result.ok) {
       sendJson(response, result.status, {
@@ -4166,6 +4239,8 @@ export class Relay {
     const words = typeof body["words"] === "number" ? body["words"] : 60;
     const variety = typeof body["variety"] === "number" ? body["variety"] : 0.7;
 
+    const started = Date.now();
+    const askedWords = Math.max(10, Math.min(Math.round(words), BRAIN_LONG_WORDS_CEILING));
     const result = await this.brain.write(
       club,
       who.brain ?? BRAIN_PLAN_OFF,
@@ -4179,6 +4254,21 @@ export class Relay {
       Math.max(10, Math.min(Math.round(words), BRAIN_LONG_WORDS_CEILING)),
       Math.max(0, Math.min(variety, 1)),
     );
+
+    // For the admin app's charts - see voiceSpeak. The facts and the line
+    // written are never kept; the tokens are Anthropic's own count.
+    void this.usageLog?.record({
+      at: this.now().toISOString(),
+      club,
+      meter: "commentary",
+      kind: askedWords > this.brain.maxWords ? "long" : "line",
+      units: result.ok ? 1 : 0,
+      outcome: result.ok ? "ok" : result.refusal,
+      ms: Date.now() - started,
+      model: this.brain.model,
+      words: askedWords,
+      ...(result.ok && result.tokens !== undefined ? { in: result.tokens.input, out: result.tokens.output } : {}),
+    });
 
     if (!result.ok) {
       sendJson(response, result.status, {
@@ -9364,6 +9454,17 @@ function noRoute(response: ServerResponse, method: string): void {
   }
 
   sendJson(response, 404, { ok: false, error: "No such endpoint." });
+}
+
+/**
+ * The voice id as the usage log may keep it: the catalogue id the line was
+ * spoken with, or "unknown". It is the one thing in the log that comes
+ * from the request rather than the relay, so nothing a laptop typed is
+ * kept unless it named a voice the relay actually has.
+ */
+function loggedVoice(voiceId: string, result: { readonly ok: boolean; readonly refusal?: string }): string {
+  const refusedAsUnknown = !result.ok && result.refusal === "unknown-voice";
+  return refusedAsUnknown || !/^[A-Za-z0-9_-]{1,64}$/.test(voiceId) ? "unknown" : voiceId;
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {

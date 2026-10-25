@@ -37,6 +37,24 @@ public sealed partial class AnnouncementService
     /// </summary>
     public Func<bool>? ShortenNamesForCloudVoices { get; set; }
 
+    /// <summary>
+    /// "Say full names aloud with the online voices" (24 Oct 2026): the
+    /// HeatCaller voice and ElevenLabs are sent each line with names in full,
+    /// as Kokoro always is, even while the club shortens published names.
+    /// Read live. Null or false (the default) shortens as before.
+    ///
+    /// WHY: the club wanted the announcer to call drivers by their full names
+    /// but still keep them short on its pages. The pages, the public captions
+    /// and listen-along still shorten (see TextForPublicPages): a line whose
+    /// audio says a full name is held back from listeners at home exactly as
+    /// a Kokoro line is - see AudioFromShortenedText.
+    /// </summary>
+    public Func<bool>? SayFullNamesWithCloudVoices { get; set; }
+
+    /// <summary>Whether a line for a cloud voice is shortened just now - the club shortens and has not asked for full names aloud.</summary>
+    private bool ShortensForCloudVoice() =>
+        ShortenNamesForCloudVoices?.Invoke() == true && SayFullNamesWithCloudVoices?.Invoke() != true;
+
     private readonly object _shortNamesLock = new();
     private string? _shortNamesKey;
     private (Regex Pattern, Dictionary<string, string> Map)? _shortNames;
@@ -48,10 +66,21 @@ public sealed partial class AnnouncementService
     /// </summary>
     internal string TextForCloudVoice(string text) => ForCloudVoice(text);
 
-    /// <summary>The line as a cloud voice should be sent it - see the class note.</summary>
-    private string ForCloudVoice(string text)
+    /// <summary>
+    /// The line as the club's public pages show it - names shortened while
+    /// "Shorten published names" is ticked, whatever the voices are sent. For
+    /// the public captions and listen-along (24 Oct 2026).
+    /// </summary>
+    internal string TextForPublicPages(string text) =>
+        ShortenNamesForCloudVoices?.Invoke() == true ? Shortened(text) : text;
+
+    /// <summary>The line as a cloud voice should be sent it - see the class note and SayFullNamesWithCloudVoices.</summary>
+    private string ForCloudVoice(string text) => ShortensForCloudVoice() ? Shortened(text) : text;
+
+    /// <summary>The line with every driver's full name in its short form.</summary>
+    private string Shortened(string text)
     {
-        if (string.IsNullOrWhiteSpace(text) || ShortenNamesForCloudVoices?.Invoke() != true)
+        if (string.IsNullOrWhiteSpace(text))
         {
             return text;
         }

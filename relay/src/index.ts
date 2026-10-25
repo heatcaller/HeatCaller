@@ -10,6 +10,7 @@ import { DiskVideoVault } from "./videos.js";
 import { DiskClipVault } from "./clips.js";
 import { elevenLabsRenderer, migrateVoiceFolder, VoiceService } from "./voice.js";
 import { TopUpRequests } from "./topuprequests.js";
+import { UsageLog } from "./usagelog.js";
 import { ADMIN_COMMANDS, voiceAdmin, type AdminCommand } from "./voiceadmin.js";
 
 /**
@@ -141,6 +142,9 @@ async function serve(): Promise<number> {
     clips: new DiskClipVault(config.dataDir),
     brain,
     topUpRequests: new TopUpRequests({ dataDir: config.dataDir, log: (line) => console.log(line) }),
+    // One line per voice and commentary request, for the relay admin app's
+    // charts - see usagelog.ts.
+    usageLog: new UsageLog({ dataDir: config.dataDir, log: (line) => console.log(line) }),
   });
 
   if (voice !== undefined) {
@@ -183,10 +187,40 @@ async function serve(): Promise<number> {
   return 0;
 }
 
+/**
+ * `check-config [path]`: reads a config exactly as the relay does at
+ * start - every club, every plan, the token registry - and prints one line
+ * of JSON: `{"ok":true,"clubs":N,"active":N}` or `{"ok":false,"error":"..."}`.
+ *
+ * The file named, never RELAY_CONFIG_JSON: this is asked about a file
+ * that has not been pushed yet, and on a machine where the secret happened
+ * to be set the answer would otherwise be about the wrong config.
+ */
+async function checkConfig(path: string | undefined): Promise<number> {
+  const { RELAY_CONFIG_JSON: _ignored, ...env } = process.env;
+
+  try {
+    const config = await loadConfig(path ?? "./relay.config.json", env);
+    const registry = new TenantRegistry(config.tenants);
+    const active = config.tenants.filter((tenant) => tenant.active !== false).length;
+
+    process.stdout.write(JSON.stringify({ ok: true, clubs: registry.count, active }) + "\n");
+    return 0;
+  } catch (error) {
+    process.stdout.write(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }) + "\n");
+    return 1;
+  }
+}
+
 const [command, ...args] = process.argv.slice(2);
 
 if (command === "mint") {
   process.exit(mint(args[0], args.slice(1)));
+} else if (command === "check-config") {
+  // Run on the PC by the relay admin app before it pushes a config (24 Oct
+  // 2026): the relay's own reading of the file, so nothing the relay would
+  // refuse to start on ever reaches Fly. See checkConfig.
+  checkConfig(args[0]).then((code) => process.exit(code));
 } else if (command !== undefined && (ADMIN_COMMANDS as readonly string[]).includes(command)) {
   // Run on the relay's machine by whoever runs it, through fly ssh console
   // - see voiceadmin.ts and voice-usage.cmd. Not a server: no privileges
