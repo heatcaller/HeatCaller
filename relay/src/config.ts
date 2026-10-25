@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { Tenant } from "./tenancy.js";
+import { readAutoTopUp, type AutoTopUpPlan } from "./autotopup.js";
 import { readBrainConfig, readBrainPlan, type BrainConfig } from "./brain.js";
 import { readVoiceConfig, readVoicePlan, type VoiceConfig } from "./voice.js";
 
@@ -127,6 +128,7 @@ export async function loadConfig(path: string, env: NodeJS.ProcessEnv = process.
       voice: readVoicePlan((entry as Record<string, unknown>)["voice"], voice, club.club, source),
       // Opt-in as well, and for the same reason as the voice above.
       brain: readBrainPlan((entry as Record<string, unknown>)["brain"], brain, club.club, source),
+      ...autoTopUpOf((entry as Record<string, unknown>)["autoTopUp"], club.club, source),
     };
   });
 
@@ -197,4 +199,10 @@ export function redirectOriginFrom(value: string | undefined): string | undefine
   }
 
   return url.origin;
+}
+
+/** A club's automatic top-ups, as a field to spread in - none at all when the config has none. */
+function autoTopUpOf(value: unknown, club: string, source: string): { autoTopUp?: AutoTopUpPlan } {
+  const plan = readAutoTopUp(value, club, source);
+  return plan === undefined ? {} : { autoTopUp: plan };
 }

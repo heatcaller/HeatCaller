@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { lchown, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { autoTopUpPath, readAutoFile, type AutoGiven, type AutoTopUpRule } from "./autotopup.js";
 import { monthOf, writeFileAtomically } from "./voice.js";
 
 /**
@@ -146,6 +147,13 @@ export async function requestsFor(dataDir: string, club: string, month: string):
   const asks = raw === UNREADABLE ? [] : (readRequestFile(raw)[month] ?? []);
   const done = doneRaw === UNREADABLE ? {} : readDoneFile(doneRaw);
 
+  // Answered by the relay itself (autotopup.ts) counts as done too.
+  const autoRaw = await readJsonFile(autoTopUpPath(dataDir, club));
+
+  for (const given of autoRaw === UNREADABLE ? [] : (readAutoFile(autoRaw)[month] ?? [])) {
+    done[given.id] ??= given.at;
+  }
+
   return asks
     .map((ask) => ({ ...ask, status: done[ask.id] === undefined ? ("open" as const) : ("done" as const) }))
     .sort((a, b) => (a.askedAt < b.askedAt ? 1 : a.askedAt > b.askedAt ? -1 : 0));
@@ -227,6 +235,55 @@ export class TopUpRequests {
       this.log(`[relay] "${club}" asked for more ${meter === "commentary" ? "commentary lines" : "HeatCaller voice characters"} (${ask.id}).`);
 
       return { ok: true, request: { ...ask, status: "open" }, already: false };
+    });
+  }
+
+  /**
+   * Answers a club's new ask at once, when its config allows (autotopup.ts):
+   * gives <rule.amount> for this month, unless <rule.perMonth> have been
+   * given this month already. Returns what was given, or undefined when
+   * nothing was - the ask then waits for the operator as it always has.
+   *
+   * The relay's own file, which nothing else writes (see autotopup.ts).
+   * Never written over when it will not read: an unreadable file is a
+   * reason to give nothing, not to start the month's count again.
+   */
+  async autoTopUp(club: string, meter: MeterName, askId: string, rule: AutoTopUpRule, askedAt?: string): Promise<AutoGiven | undefined> {
+    return this.serialise(club, async (): Promise<AutoGiven | undefined> => {
+      // The ask's own month, not the moment this runs: an ask a breath
+      // before midnight on the last day is answered in the month it was made.
+      const now = askedAt !== undefined && !Number.isNaN(Date.parse(askedAt)) ? new Date(Date.parse(askedAt)) : this.now();
+      const month = monthOf(now);
+      const path = autoTopUpPath(this.dataDir, club);
+      const raw = await readJsonFile(path);
+
+      if (raw === UNREADABLE) {
+        this.log(`[relay] "${club}": the automatic top-ups file will not read; giving nothing automatically.`);
+        return undefined;
+      }
+
+      const months = readAutoFile(raw);
+      const mine = months[month] ?? [];
+
+      if (mine.some((given) => given.id === askId) || mine.filter((given) => given.meter === meter).length >= rule.perMonth) {
+        return undefined;
+      }
+
+      const given: AutoGiven = { id: askId, meter, amount: rule.amount, at: now.toISOString() };
+      months[month] = [...mine, given];
+
+      const kept: Record<string, AutoGiven[]> = {};
+
+      for (const key of Object.keys(months).sort().slice(-MONTHS_KEPT)) {
+        kept[key] = months[key] as AutoGiven[];
+      }
+
+      await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+      await writeFileAtomically(path, Buffer.from(JSON.stringify(kept), "utf8"));
+
+      this.log(`[relay] "${club}": gave ${rule.amount} more ${meter === "commentary" ? "commentary lines" : "HeatCaller voice characters"} automatically (${askId}).`);
+
+      return given;
     });
   }
 

@@ -2,6 +2,7 @@ import { createHash, createHmac, pbkdf2Sync, randomBytes, timingSafeEqual } from
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { isIP } from "node:net";
 import { isValidItemId, StoreReadError, type Store } from "./store.js";
+import { AUTO_WHEN_USED } from "./autotopup.js";
 import { isActive, isValidClubId, type Tenant, type TenantRegistry } from "./tenancy.js";
 import { CHANNELS, channelSpec, type ChannelSpec, type StoredDocument } from "./types.js";
 import { flagIcon } from "./icon.js";
@@ -4263,7 +4264,10 @@ export class Relay {
       meter: "commentary",
       kind: askedWords > this.brain.maxWords ? "long" : "line",
       units: result.ok ? 1 : 0,
-      outcome: result.ok ? "ok" : result.refusal,
+      // Anthropic's own 429 or 5xx is "upstream" here, though the club is
+      // told "busy": the log is for telling Anthropic failing from the
+      // relay's own one-line-at-a-time limit (relay admin, round C).
+      outcome: result.ok ? "ok" : result.fromModel === true ? "upstream" : result.refusal,
       ms: Date.now() - started,
       model: this.brain.model,
       words: askedWords,
@@ -4341,10 +4345,32 @@ export class Relay {
 
     const ask = result.request;
 
+    // Answered at once when the club's config allows it (autotopup.ts):
+    // only a new ask, from a club that is on and has the meter in its plan.
+    const tenant = this.tenants.club(club);
+    const rule = tenant?.autoTopUp?.[meter];
+    const included = meter === "voice" ? tenant?.voice?.enabled === true : tenant?.brain?.enabled === true;
+    // And only when the club has nearly used what it has (AUTO_WHEN_USED):
+    // otherwise a few taps of Ask for More would take every automatic
+    // top-up of the month at once.
+    let nearlySpent = false;
+
+    if (!result.already && rule !== undefined && tenant !== undefined && isActive(tenant) && included) {
+      const usage = meter === "voice"
+        ? (tenant.voice !== undefined ? await this.voice?.usage(club, tenant.voice) : undefined)
+        : (tenant.brain !== undefined ? await this.brain?.usage(club, tenant.brain) : undefined);
+      nearlySpent = usage !== undefined && usage.enabled && usage.used >= usage.allowance * AUTO_WHEN_USED;
+    }
+
+    const given = nearlySpent && rule !== undefined
+      ? await this.topUpRequests.autoTopUp(club, meter, ask.id, rule, ask.askedAt)
+      : undefined;
+
     sendJson(response, 200, {
       ok: true,
-      request: { id: ask.id, meter: ask.meter, askedAt: ask.askedAt, note: ask.note, status: ask.status },
+      request: { id: ask.id, meter: ask.meter, askedAt: ask.askedAt, note: ask.note, status: given === undefined ? ask.status : "done" },
       already: result.already,
+      ...(given === undefined ? {} : { autoTopUp: given.amount }),
     });
   }
 

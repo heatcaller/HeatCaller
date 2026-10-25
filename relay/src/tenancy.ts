@@ -1,3 +1,4 @@
+import type { AutoTopUpPlan } from "./autotopup.js";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { BrainPlan } from "./brain.js";
 import type { VoicePlan } from "./voice.js";
@@ -74,6 +75,8 @@ export interface Tenant {
    * carries on exactly as it was.
    */
   readonly active?: boolean;
+  /** Asks for more answered by the relay itself, up to a limit (autotopup.ts). Absent is none. */
+  readonly autoTopUp?: AutoTopUpPlan;
 }
 
 /** A club the relay is serving: anything but an explicit `active: false`. */

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { AutoTopUps } from "./autotopup.js";
 import { access, lchown, mkdir, readdir, readFile, rename, rm, stat, unlink, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isValidClubId } from "./tenancy.js";
@@ -1449,6 +1450,15 @@ export class VoiceService {
    * modification time, so asking costs one stat.
    */
   private async topUpFor(club: string, month: string): Promise<number> {
+    // The operator's top-ups and the relay's automatic ones (autotopup.ts),
+    // each from the file only its own writer writes.
+    this.autoTopUps ??= new AutoTopUps(this.dataDir);
+    return (await this.operatorTopUpFor(club, month)) + (await this.autoTopUps.total(club, "voice", month));
+  }
+
+  private autoTopUps: AutoTopUps | undefined;
+
+  private async operatorTopUpFor(club: string, month: string): Promise<number> {
     const path = voiceTopUpPath(this.dataDir, club);
     const info = await stat(path).catch(() => undefined);
 

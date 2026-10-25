@@ -1,3 +1,4 @@
+import { readBuildInfo, type BuildInfo } from "./buildinfo.js";
 import { lchown, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { BRAIN_DIR, brainTopUpPath, brainUsagePath } from "./brain.js";
@@ -5,6 +6,8 @@ import { loadConfig, type RelayConfig } from "./config.js";
 import { isActive } from "./tenancy.js";
 import { readUsageLog, USAGE_LOG_PAGE } from "./usagelog.js";
 import { checkVoiceAccount, type VoiceAccountCheck } from "./voiceaccount.js";
+import { autoGiven, type AutoGiven } from "./autotopup.js";
+import { appendAudit, readAudit, readAuditArgument } from "./adminaudit.js";
 import { closeRequests, isMeterName, openRequests, type MeterName, type TopUpAsk } from "./topuprequests.js";
 import {
   monthOf,
@@ -51,6 +54,8 @@ export const ADMIN_COMMANDS = [
   "topup-decline",
   "admin-snapshot",
   "usage-log",
+  "audit-append",
+  "audit-log",
 ] as const;
 
 export type AdminCommand = (typeof ADMIN_COMMANDS)[number];
@@ -69,14 +74,21 @@ export interface VoiceStanding {
   readonly enabled: boolean;
   /** Characters a month from the config (the club's own line, or the relay's default). */
   readonly plan: number;
-  /** Characters given for this month on top of the plan (voice-topup). */
+  /** Characters given for this month on top of the plan: voice-topup's and the relay's automatic ones together. */
   readonly topUp: number;
+  /** Of topUp, what the relay gave automatically (autotopup.ts). */
+  readonly autoTopUp: number;
   /** What the club may spend this month: plan and top-up together. */
   readonly allowance: number;
   /** Spent this month so far. */
   readonly used: number;
   /** Earlier months' totals, by "YYYY-MM", oldest first. */
   readonly history: Readonly<Record<string, number>>;
+}
+
+/** What the relay gave a club automatically for one meter. */
+function sum(given: readonly AutoGiven[], meter: MeterName): number {
+  return given.filter((item) => item.meter === meter).reduce((total, item) => total + item.amount, 0);
 }
 
 /** Every club in the config, with where it stands with the brain this month - the same shape as the voice's. */
@@ -87,7 +99,8 @@ export async function brainStandings(config: RelayConfig, now: Date): Promise<Vo
   for (const tenant of config.tenants) {
     const plan = tenant.brain?.monthlyLines ?? config.brain.monthlyLines;
     const usage = readUsageRecord(await readJson(brainUsagePath(config.dataDir, tenant.club)), month);
-    const topUp = readTopUps(await readJson(brainTopUpPath(config.dataDir, tenant.club)))[month] ?? 0;
+    const auto = sum(await autoGiven(config.dataDir, tenant.club, month), "commentary");
+    const topUp = (readTopUps(await readJson(brainTopUpPath(config.dataDir, tenant.club)))[month] ?? 0) + auto;
 
     standings.push({
       club: tenant.club,
@@ -95,6 +108,7 @@ export async function brainStandings(config: RelayConfig, now: Date): Promise<Vo
       enabled: tenant.brain?.enabled === true,
       plan,
       topUp,
+      autoTopUp: auto,
       allowance: plan + topUp,
       used: usage.used,
       history: usage.history,
@@ -112,7 +126,8 @@ export async function voiceStandings(config: RelayConfig, now: Date): Promise<Vo
   for (const tenant of config.tenants) {
     const plan = tenant.voice?.monthlyChars ?? config.voice.monthlyChars;
     const usage = readUsageRecord(await readJson(voiceUsagePath(config.dataDir, tenant.club)), month);
-    const topUp = readTopUps(await readJson(voiceTopUpPath(config.dataDir, tenant.club)))[month] ?? 0;
+    const auto = sum(await autoGiven(config.dataDir, tenant.club, month), "voice");
+    const topUp = (readTopUps(await readJson(voiceTopUpPath(config.dataDir, tenant.club)))[month] ?? 0) + auto;
 
     standings.push({
       club: tenant.club,
@@ -120,6 +135,7 @@ export async function voiceStandings(config: RelayConfig, now: Date): Promise<Vo
       enabled: tenant.voice?.enabled === true,
       plan,
       topUp,
+      autoTopUp: auto,
       allowance: plan + topUp,
       used: usage.used,
       history: usage.history,
@@ -299,7 +315,10 @@ export async function topUp(
   // Giving more answers the club's ask for more; taking some back does not.
   const closed = characters > 0 ? await closeRequests(config.dataDir, club, meter, now, owner) : 0;
 
-  return { ok: true, month, topUp: given, allowance: plan + given, used: usage.used, voiceOff: !on, closed };
+  // The relay's automatic top-ups count towards what the club may use, though they live in its own file.
+  const auto = sum(await autoGiven(config.dataDir, club, month), meter);
+
+  return { ok: true, month, topUp: given + auto, allowance: plan + given + auto, used: usage.used, voiceOff: !on, closed };
 }
 
 /**
@@ -343,17 +362,76 @@ export async function voiceAdmin(
   }
 
   if (command === "admin-snapshot") {
-    const unknown = args.filter((arg) => arg !== "--json");
+    // --usage-since <ISO time | all> (round B): the first page of the usage
+    // log after that moment comes back in the same answer, so the admin
+    // app's refresh is one trip to the machine rather than two.
+    let usageSince: string | null | undefined;
+    const unknown: string[] = [];
+
+    for (let i = 0; i < args.length; i += 1) {
+      const arg = args[i] as string;
+
+      if (arg === "--json") {
+        continue;
+      }
+
+      if (arg === "--usage-since" && args[i + 1] === "all") {
+        usageSince = null;
+        i += 1;
+        continue;
+      }
+
+      if (arg === "--usage-since" && args[i + 1] !== undefined && !Number.isNaN(Date.parse(args[i + 1] as string))) {
+        usageSince = new Date(Date.parse(args[i + 1] as string)).toISOString();
+        i += 1;
+        continue;
+      }
+
+      unknown.push(arg);
+    }
 
     if (unknown.length > 0) {
-      err(`admin-snapshot takes nothing but --json, not ${unknown.join(" ")}.\n`);
+      err(`admin-snapshot takes nothing but --json and --usage-since <time|all>, not ${unknown.join(" ")}.\n`);
       return 1;
     }
 
     // JSON only, with or without the flag: this one is read by the relay
     // admin app, not by a person, and a table of every meter for every
     // club would not fit a terminal anyway.
-    out(JSON.stringify(await adminSnapshot(config, now, env, fetchImpl), null, 2) + "\n");
+    const snapshot = await adminSnapshot(config, now, env, fetchImpl);
+    const usageLog = usageSince === undefined ? undefined : await readUsageLog(config.dataDir, usageSince ?? undefined, USAGE_LOG_PAGE);
+
+    out(JSON.stringify(usageLog === undefined ? snapshot : { ...snapshot, usageLog }, null, 2) + "\n");
+    return 0;
+  }
+
+  if (command === "audit-append") {
+    // audit-append <base64url JSON>: one entry for the shared audit log
+    // (adminaudit.ts), from the relay admin app.
+    const entry = args.length === 1 ? readAuditArgument(args[0] as string) : undefined;
+
+    if (entry === undefined) {
+      err("Usage: audit-append <entry> - the entry as the relay admin app sends it.\n");
+      return 1;
+    }
+
+    await appendAudit(config.dataDir, entry);
+    out(JSON.stringify({ ok: true }) + "\n");
+    return 0;
+  }
+
+  if (command === "audit-log") {
+    // audit-log [--json] [--limit <n>]: the shared audit log, newest first.
+    const at = args.indexOf("--limit");
+    const limit = at >= 0 && /^\d{1,5}$/.test(args[at + 1] ?? "") ? Math.max(1, Math.min(Number(args[at + 1]), 5000)) : 1000;
+    const unknown = args.filter((arg, i) => arg !== "--json" && !(at >= 0 && (i === at || i === at + 1)));
+
+    if (unknown.length > 0) {
+      err("Usage: audit-log [--json] [--limit 1000]\n");
+      return 1;
+    }
+
+    out(JSON.stringify({ version: 1, entries: await readAudit(config.dataDir, limit) }) + "\n");
     return 0;
   }
 
@@ -488,6 +566,7 @@ export interface MeterStanding {
   readonly enabled: boolean;
   readonly plan: number;
   readonly topUp: number;
+  readonly autoTopUp: number;
   readonly allowance: number;
   readonly used: number;
   readonly history: Readonly<Record<string, number>>;
@@ -531,6 +610,7 @@ export async function adminSnapshot(
   now: Date,
   env: NodeJS.ProcessEnv = process.env,
   fetchImpl: typeof fetch = fetch,
+  buildInfo: () => Promise<BuildInfo | null> = readBuildInfo,
 ): Promise<{
   readonly version: 1;
   readonly generatedAt: string;
@@ -540,9 +620,14 @@ export async function adminSnapshot(
   readonly relay: {
     readonly voice: { readonly voices: number; readonly monthlyChars: number; readonly keySet: boolean };
     readonly commentary: { readonly model: string; readonly monthlyLines: number; readonly keySet: boolean };
+    /** Which source this build was made from (buildinfo.ts); null for a build made without `npm run build`. */
+    readonly build: BuildInfo | null;
   };
   readonly clubs: readonly ClubSnapshot[];
   readonly requests: readonly ({ readonly club: string } & TopUpAsk)[];
+  /** This month's asks the relay answered by itself (autotopup.ts), oldest first. */
+  readonly capabilities: readonly string[];
+  readonly autoTopUps: readonly ({ readonly club: string } & AutoGiven)[];
   readonly voiceAccount: VoiceAccountCheck;
 }> {
   // Started first and awaited last, so ElevenLabs answers while the files are read.
@@ -553,6 +638,7 @@ export async function adminSnapshot(
     enabled: standing?.enabled ?? false,
     plan: standing?.plan ?? 0,
     topUp: standing?.topUp ?? 0,
+    autoTopUp: standing?.autoTopUp ?? 0,
     allowance: standing?.allowance ?? 0,
     used: standing?.used ?? 0,
     history: standing?.history ?? {},
@@ -586,9 +672,16 @@ export async function adminSnapshot(
         monthlyLines: config.brain.monthlyLines,
         keySet: (env["RELAY_BRAIN_KEY"] ?? "").trim().length > 0,
       },
+      build: await buildInfo(),
     },
     clubs,
     requests: open.map(({ club, request }) => ({ club, ...request })),
+    // What this build can do, so the admin app never sends a command an
+    // older relay doesn't know (round E). Added to, never changed.
+    capabilities: ["usage-since", "auto-top-up", "audit", "build-info"],
+    autoTopUps: (await Promise.all(config.tenants.map(async (tenant) =>
+      (await autoGiven(config.dataDir, tenant.club, monthOf(now))).map((given) => ({ club: tenant.club, ...given }))))).flat()
+      .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)),
     voiceAccount: await account,
   };
 }

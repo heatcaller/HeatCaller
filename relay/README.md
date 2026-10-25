@@ -1392,6 +1392,56 @@ which prints `{"version":1,"events":[...],"more":false}` - events strictly
 after `--since`, oldest first, up to 20,000 (`--limit` for fewer). When
 `more` is true, ask again with the last event's `at`.
 
+### Automatic top-ups, the shared audit log, one-trip refresh
+
+Added for the relay admin app's improvement rounds (Oct 2026).
+
+**Automatic top-ups.** A club's config can answer its asks for more by
+itself, up to a limit, so a club that runs out on a race night isn't
+waiting on an email:
+
+```
+"autoTopUp": { "voice": { "amount": 25000, "perMonth": 2 },
+               "commentary": { "amount": 200, "perMonth": 1 } }
+```
+
+When the club asks (Ask for More, or the manager's phone) having used 90% or more of that meter, the relay gives
+`amount` for this month at once - only to a club that is on and has that
+meter in its plan, and at most `perMonth` times a calendar month. Asks after
+that wait for you as before. Off unless a club's config says so; a rule
+outside 1 to 10 a month, or bigger than one `voice-topup` may give, refuses
+to start. What the relay gives goes in a file of its own,
+`.requests/<club>.auto.json`, never in your top-up files - each file still
+has one writer - and the allowance, the ask's "done" mark and
+`admin-snapshot` (each meter's `autoTopUp`, and `autoTopUps` for the month)
+all count it. The admin app sets these on a club's plan.
+
+**One trip per refresh.** `admin-snapshot --json --usage-since <time|all>`
+adds `usageLog` - the usage log's first page after that moment - to the
+answer, so the app's Refresh is one `fly ssh` call, not two.
+
+**Anthropic's failures in the usage log.** When Anthropic itself answers 429
+or 5xx, the club is still told `busy` (so it tries again), but the usage log
+says `upstream`, so the app's Health page can tell Anthropic failing from
+the relay's own one-line-at-a-time limit.
+
+**The shared audit log.** With more than one admin, the app can keep its
+audit log here too: `audit-append <entry>` (the entry base64url-encoded, so
+nothing in it reaches the machine's shell; checked field by field) and
+`audit-log --json [--limit N]`, newest first, in `dataDir/.admin-audit/`.
+Only the admin commands write it - there is still no route for it.
+
+### Which build is running
+
+`npm run build` writes `dist/src/build-info.json` beside the compiled relay:
+the version from package.json, when it was built, and a SHA-256 over every
+`.ts` file under `src/` (by path, with Windows line endings read as plain
+ones, so a Windows checkout and Fly's copy agree). `admin-snapshot` reports it
+as `relay.build`, with `build-info` in its capabilities. The relay admin app
+works the same hash out from the relay folder on its PC and says on its
+Checks page when the relay on Fly is older than that folder - the reminder to
+deploy. A build made without `npm run build` (plain `tsc`) reports `null`.
+
 ### Several clubs on one relay
 
 Four scripts and one workflow cover running it for more than one club. The

@@ -1,4 +1,5 @@
 import { mkdir, readFile, stat } from "node:fs/promises";
+import { AutoTopUps } from "./autotopup.js";
 import { dirname, join } from "node:path";
 import {
   monthOf,
@@ -158,6 +159,13 @@ export interface WriteNo {
   readonly status: number;
   readonly message: string;
   readonly usage?: BrainUsage;
+  /**
+   * Anthropic itself refused or failed (a 429 or 5xx it may get over),
+   * though the club is told "busy" so it tries again. For the usage log
+   * only (round C, relay admin): there it is "upstream", so the admin
+   * app's Health page tells Anthropic failing from the relay's own limit.
+   */
+  readonly fromModel?: true;
 }
 
 export type WriteResult = WriteOk | WriteNo;
@@ -464,6 +472,7 @@ export class BrainService {
         ok: false,
         refusal: retryable ? "busy" : "upstream",
         status: retryable ? 429 : 502,
+        ...(upstream ? { fromModel: true as const } : {}),
         message: retryable
           ? "The commentary brain is busy. The announcer carries on with its usual lines."
           : "The commentary brain couldn't write that one.",
@@ -568,6 +577,15 @@ export class BrainService {
    * An unreadable file is no top-up, not no commentary.
    */
   private async topUpFor(club: string, month: string): Promise<number> {
+    // The operator's top-ups and the relay's automatic ones (autotopup.ts),
+    // each from the file only its own writer writes.
+    this.autoTopUps ??= new AutoTopUps(this.dataDir);
+    return (await this.operatorTopUpFor(club, month)) + (await this.autoTopUps.total(club, "commentary", month));
+  }
+
+  private autoTopUps: AutoTopUps | undefined;
+
+  private async operatorTopUpFor(club: string, month: string): Promise<number> {
     const path = brainTopUpPath(this.dataDir, club);
     const info = await stat(path).catch(() => undefined);
 

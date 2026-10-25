@@ -232,6 +232,13 @@ if (command === "mint") {
       process.exit(1);
     },
   );
+} else if (command !== undefined) {
+  // A command this relay doesn't know - from a newer admin app, say - is
+  // refused, never taken as "start a relay": a second relay started
+  // through fly ssh beside the running one hands /data's files about and
+  // sweeps the running one's half-written files before it fails on the port.
+  console.error(`[relay] There is no command "${command}" in this build of the relay. Deploy a newer one.`);
+  process.exit(2);
 } else {
   serve().catch((error: unknown) => {
     console.error(`[relay] ${error instanceof Error ? error.message : String(error)}`);
