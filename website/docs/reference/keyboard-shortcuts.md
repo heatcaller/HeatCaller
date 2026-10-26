@@ -10,7 +10,7 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 
 | Key | Does the same as |
 |---|---|
-| <kbd>O</kbd> | **On Air**. Pressed again while On Air runs, skips straight to staging. |
+| <kbd>O</kbd> | **On Air** (it has no button on the flag row). Pressed again while On Air runs, skips straight to staging. |
 | <kbd>F1</kbd> | Starts the race the normal way: through **On Air** when **Start races On Air** is ticked (press it again to skip to staging), otherwise **Stage**. The **Stage** button itself always stages straight away. |
 | <kbd>F2</kbd> | **Countdown** |
 | <kbd>F3</kbd> | **Green**. It also resumes the race after a yellow or red. |
@@ -19,9 +19,9 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 | <kbd>F6</kbd> | **Checkered** |
 | <kbd>F7</kbd> | **Reset**. If a race is staging, counting down or running, it asks first ("A race is under way. Reset it? (Undo can still bring it back.)"). |
 | <kbd>F8</kbd> | **Quick Race** |
-| <kbd>B</kbd> | **Open Big Screen** |
+| <kbd>B</kbd> | **Big Screen** |
 | <kbd>R</kbd> | **Pre-race check** |
-| <kbd>A</kbd> | **Open Announcer Screen** |
+| <kbd>A</kbd> | **Announcer Screen** |
 
 Each key does what clicking its button does (except <kbd>F1</kbd>, described above, and <kbd>F7</kbd>, which asks first while a race is under way; the button doesn't), including the automatic follow-on from Stage to Countdown to Green when the race format has that turned on. See [Running a race](../race-control/running-a-race.md).
 

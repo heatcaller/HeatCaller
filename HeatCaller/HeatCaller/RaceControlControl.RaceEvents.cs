@@ -562,6 +562,11 @@ public sealed partial class RaceControlControl
         _btnYellow.Lit = flag == FlagState.Yellow;
         _btnRed.Lit = flag == FlagState.Red;
         _btnCheckered.Lit = flag == FlagState.Checkered;
+
+        // Which buttons are on the row at all (25 Oct 2026) - see
+        // RaceControlControl.Morph. Here, so it follows every change of
+        // state and flag and the clock tick, exactly as the lights do.
+        UpdateMorphingBar(flag);
     }
 
     /// <summary>

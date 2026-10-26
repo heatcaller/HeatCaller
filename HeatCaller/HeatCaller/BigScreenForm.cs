@@ -1627,6 +1627,35 @@ public sealed class BigScreenForm : Form
     /// because it is called from the video's own end, from the rotation
     /// moving on, and from the window closing.
     /// </summary>
+    /// <summary>
+    /// The sponsor spot on screen comes off NOW - a video stopped, sound and
+    /// all, a slide taken down - and the standings come back (26 Oct 2026,
+    /// for Race Control's Reset - asked for by Asher: "music and crowd and
+    /// sponsor spot should be stopped with a reset as well"). Through
+    /// ShowLeaderboardAgain, the one way back to the board, so the music's
+    /// hold is let go exactly once (see StopSponsorVideo) and the rotation
+    /// starts its wait for the next spot from now. Safe when nothing is up,
+    /// and twice. UI thread.
+    /// </summary>
+    internal void StopSponsorSpot()
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        if (_showingSponsor && _sponsors is not null)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [sponsor] Reset - the sponsor spot is taken off the Big Screen.");
+            ShowLeaderboardAgain();
+            return;
+        }
+
+        // Nothing "showing", but a video can still be making a sound - see
+        // the roll call's own stop.
+        StopSponsorVideo();
+    }
+
     private void StopSponsorVideo()
     {
         if (_video is not null)

@@ -224,7 +224,7 @@ Ollama loads a model into memory on its first request, which can take a while on
 
 The settings are on cards down the **Voice → AI Commentary** tab, in the order the night happens: **Who writes it**, **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Writing style**. Above them is the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
 
-Who speaks - the announcer's and the recap host's names, the co-host, the Technical Lead, the Team Principal and the achievements reader, with their voices - is on **Voice → Cast**. The announcer's own voice, with **Test Voice**, is on the **Announcer** card at the top; under it, one **Load Voices** on the **Voices** card fills every other voice list. The show's music is on **Sounds → Imaging**, and recording the night is on **Sounds → Recording**. The sections below still describe those settings here, where they're explained.
+Who speaks - the announcer's and the recap host's names, the co-host, the Technical Lead, the Team Principal and the achievements reader, with their voices - is on **Voice → Cast**. One **Load Voices**, on the **Voices** card at the top, fills every voice list on the tab. Under it, every speaker has a card laid out the same way: their name first, then their voice with **Test Voice**, then what they do and the settings for it - the **Announcer** card first. The show's music is on **Sounds → Imaging**, and recording the night is on **Sounds → Recording**. The sections below still describe those settings here, where they're explained.
 
 ### Who writes it
 
@@ -258,7 +258,7 @@ Intros and recaps say what kind of race it is: a qualifying heat, a main (the A-
 
 Intros and recaps are what the announcer says about a race. This card is everything else, and how much of it there is: *"Not written lap by lap - a model takes longer than a lap. Each segment speaks only when the race gives it something to say, and the night saves itself for the mains."* So switching every segment on doesn't mean hearing them all every race.
 
-**How chatty:** and **Pacing:** come first, each with a line under it describing the choice. **How chatty** sets the level the night's shape sits at - see [How chatty](#how-chatty). The line under the three dials: "On Race Control, "held" timing calls are this dial leaving a gap; "lost" ones are the announcer running out of room." See [The announcer strip on Race Control](#the-announcer-strip-on-race-control).
+**How chatty:** and **Pacing:** come first, each with a line under it describing the choice. **How chatty** sets the level the night's shape sits at - see [How chatty](#how-chatty). The line under the three dials: "On Race Control, "held" timing calls are this dial leaving a gap; "lost" ones are the announcer running out of room." See [The Broadcast window](#the-broadcast-window).
 
 **Segments run:**, under **Pacing:**, sets how far down the segment groups below the night goes, whatever is ticked. Segments past the choice are grayed out, and a change takes effect straight away.
 
@@ -452,7 +452,7 @@ Both are on **Voice → Cast**, a card each. The Technical Lead has the car; the
 | **Only for drivers with a team on their profile** | A driver with a team gets that team's principal; one without gets their own, unless this is ticked. | Off |
 | **Team Principal's name:** / **Team Principal's voice:** | As for the Technical Lead. Blank is "the team principal". | Blank / the announcer's own voice |
 | **After a race, a third voice reads out the achievements it unlocked** (Achievements reader card) | The achievements the race just unlocked, read out as a segment of the recap rather than called out one at a time at the flag: the announcer throws to the reader, they go over who got what, and it comes back. This one needs no model. | Off |
-| **Achievements reader:** / **Reader's voice:** | What the announcer calls the reader, and the voice they read in. Blank and they're thrown to but never named. With no voice picked, the announcer's own voice reads them. | Blank / the announcer's own voice |
+| **Reader's name:** / **Reader's voice:** | What the announcer calls the reader, and the voice they read in. Blank and they're thrown to but never named. With no voice picked, the announcer's own voice reads them. | Blank / the announcer's own voice |
 
 The two pit-lane tick boxes and the booth tick box are also on the AI Commentary tab - the Team Principal's throw on **Before the start**, the Technical Lead's on **After the flag** and the booth on **Recap show**; ticking either copy ticks both.
 
@@ -464,12 +464,12 @@ What the Technical Lead says about the car comes from the **Garage**: the setup 
 
 #### Pick a voice for the Technical Lead or Team Principal
 
-1. Choose the voice engine on **Voice Settings** first. The list offers that engine's voices: your ElevenLabs voices, the HeatCaller voices your club can use, or the Kokoro voices on this laptop.
-2. On **Voice → Cast**, click **Load Voices** on the **Voices** card, under the **Announcer** card.
+1. Choose the voice engine on **Voice Settings** first. The list offers that engine's voices: your ElevenLabs voices, the HeatCaller voices your club can use, or the Kokoro voices on this laptop. With ElevenLabs or the HeatCaller voice chosen, the list ends with the Kokoro voices on this laptop too, marked "Kokoro:" - pick one and that speaker talks in Kokoro's free voice whatever the announcer uses. See [Use the Kokoro voice](voice.md#use-the-kokoro-voice).
+2. On **Voice → Cast**, click **Load Voices** on the **Voices** card at the top.
 3. Pick a voice from **Technical Lead's voice:** or **Team Principal's voice:**.
 4. Click **Test Voice** to hear a line in it. It plays even while the announcer is muted.
 
-A voice is kept for each engine, so if you switch engine on **Voice Settings**, pick a voice for the new one too. With none picked for the engine in use, the announcer's own voice answers, and the console says so after the race.
+A voice is kept for each engine, so if you switch engine on **Voice Settings**, pick a voice for the new one too - except a Kokoro voice picked from another engine's list, which is kept whatever the engine. With none picked for the engine in use, the announcer's own voice answers, and the console says so after the race.
 
 <a id="broadcast"></a>
 
@@ -975,7 +975,7 @@ A club note is the other kind: *"it's Jack's first race since his operation — 
 
 ### Typing one
 
-**Notes** on the announcer strip on **Race Control** — beside Hold, Play again and Skip, because that's the screen you're looking at when somebody tells you. Type it, press Enter, and the announcer works it into a sentence of its own between races.
+**Notes** in the **Broadcast** window (the **Broadcast** button on **Race Control**) — beside Hold, Play again and Skip, because that's the screen you're looking at when somebody tells you. Type it, press Enter, and the announcer works it into a sentence of its own between races.
 
 The window lists everything for tonight: what's waiting for you, what's ready to go out, and what's already been said. Notes last for one night and are cleared when you start a new race day — a dedication read out at the wrong meeting, to the wrong room, about people who aren't there, is the one thing this must never do.
 
@@ -1027,12 +1027,12 @@ That last one is the line people repeat in the car park, and no amount of lap da
 
 ### Running one
 
-Open and close it on the **Votes** button on Race Control's announcer strip, beside **Notes**.
+Open and close it on the **Votes** button in the **Broadcast** window (the **Broadcast** button on **Race Control**), beside **Notes**.
 
 | Step | What happens |
 |---|---|
 | Call the race to the grid | The window offers **Open voting on &lt;this race&gt;**, with the drivers actually staged on the ballot |
-| Open it | Phones can vote. The button on the strip carries the count as it climbs, in your look's accent |
+| Open it | Phones can vote. The **Votes** button carries the count as it climbs, in your look's accent |
 | Before the start | Press **Close voting** — or don't; it closes itself when the result comes in |
 | After the race | The announcer works the verdict in as a segment of its own, **The Room's Verdict** on the Big Screen's band |
 
@@ -1315,13 +1315,28 @@ Commentary is best-effort. If Ollama isn't running, the model name is wrong, or 
 
 The console notes what happened, for example "No recap - the local model isn't reachable." or a line starting `[llm]` saying whether the request timed out or was refused. Nothing interrupts the race.
 
-## The announcer strip on Race Control
+## The Broadcast window
 
-Everything else in the commentary layer reports to the developer console, which nobody has open during a race. The strip puts the one piece of state worth a place on the page where the race director is actually looking - under the Next Up bar on **Race Control** - and gives them something to do about it. It is off the page entirely until a club has commentary running.
+Everything else in the commentary layer reports to the developer console, which nobody has open during a race. The **Broadcast** window gathers the state worth knowing and the buttons to do something about it. Open it with **Broadcast** on **Race Control**, under **Mission Control**, or double-click the On Air bar under the flag row. Until 25 Oct 2026 these buttons were a row under the Next Up bar; they're now in a window of their own, with more said about each.
 
-It reads: a lamp, what the announcer is doing (**off / ready / writing... / held / on air**), what it last did, and three buttons.
+The window stays open beside Race Control while you work, and closing it only hides it: a hold you put on stays on. While a hold is on, the **Broadcast** button on Race Control reads **Broadcast · HELD** in amber, and when notes from the room are waiting it reads **Broadcast · 3 notes**, so neither is missed with the window shut. The flag keys, <kbd>F1</kbd> to <kbd>F8</kbd>, still work while the window has the focus.
 
-**What it last did is the segment's NAME**, not the line itself - "Last: Race Recap", "Last: Club Honours", "Last: Cold Open". Until 11 Oct 2026 it printed the first ninety characters of what had just been said, in quotes, and that was the wrong thing: a race director does not read a quote - they heard the line, or they were busy, and a wall of text in a strip is not how anybody catches up. It also pushed the buttons about on the row as it grew and shrank. What is actually wanted is which part of the programme just went out, because that is what says where the show is up to. A two-voice segment says so: "Last: Form Guide (two voices)".
+Across the top is what's on air now, or the last segment that went out. The level meters are on Race Control's flag row, not here (see [Level meters](../race-control/running-a-race.md#level-meters)).
+
+Under that, **Controls** has the buttons in the table below, and **At a glance** says:
+
+| Line | What it says |
+|---|---|
+| **Announcer** | Ready, writing a line, speaking, muted on the Mixer, or held until you press **Release**. |
+| **Last segment** | The last part of the programme that went out, and whether it was two voices. |
+| **Tonight** | How many lines the announcer has written tonight, and what the budget is letting through. |
+| **This race** | How many of its timing calls the announcer made this race, and how many it lost or held back. |
+| **Club notes** | How many notes are waiting for you to approve. |
+| **Room vote** | How many votes are in so far. |
+| **Recap show** | Whether the recap show is running. |
+| **Replay Moment** | Whether there's a moment ready to play again. |
+
+**What went out last is named by its segment**, not the line itself - "Last: Race Recap", "Last: Club Honours", "Last: Cold Open". Until 11 Oct 2026 the row printed the first ninety characters of what had just been said, in quotes, and that was the wrong thing: a race director does not read a quote - they heard the line, or they were busy, and a wall of text in a strip is not how anybody catches up. It also pushed the buttons about on the row as it grew and shrank. What is actually wanted is which part of the programme just went out, because that is what says where the show is up to. A two-voice segment says so: "Last: Form Guide (two voices)".
 
 | Button | What it does |
 |---|---|
@@ -1334,9 +1349,9 @@ It reads: a lamp, what the announcer is doing (**off / ready / writing... / held
 
 **Skip lets the current sentence finish**, and that is deliberate. Cutting a line off mid-word would mean clearing the voice queue, and the voice queue is where the checkered flag, the countdown, the green and a driver's release call all sit - every one of them marked so that colour commentary cannot bin them. A Skip button that could swallow a release call and leave a car sitting on the line would be worse than no Skip button. In the hall it is the better behaviour anyway: a segment stopped mid-word sounds like a fault, where one that finishes its sentence and hands back sounds like a programme moving on.
 
-Both buttons drop focus the moment they're clicked, for the same reason the flag buttons do: a button that keeps focus keeps answering to Space and Enter, and on this row a stray keypress would put the last segment out over a live PA. Both report what they did to the console on a line starting `[show]`.
+The buttons drop focus the moment they're clicked, for the same reason the flag buttons do: a button that keeps focus keeps answering to Space and Enter, and on this row a stray keypress would put the last segment out over a live PA. Both report what they did to the console on a line starting `[show]`.
 
-**The count at the end of the row** says how many timing calls weren't said this race: "17 lost" (in the warning color) when calls were lost because the announcer was already speaking, or "6 held" when the pacing dial held them back on purpose. **Click it** to open **Lines not said this race**: every one of those calls stacked up, newest first, each card showing when it was, what kind of call it was, who it was about, the words it would have said, and why it went - lost behind another line (named), pushed out by a call that outranked it, waiting too long, cleared by a flag, or held back by the pacing dial. Lost cards have a red edge; untick **Show lines held back by the pacing dial too** to see only those. The window stays open beside Race Control and updates as the race runs, and starts empty again with each new race. It keeps the last 300.
+**The count at the end of the buttons** says how many timing calls weren't said this race: "17 lost" (in the warning color) when calls were lost because the announcer was already speaking, or "6 held" when the pacing dial held them back on purpose. **Click it** to open **Lines not said this race**: every one of those calls stacked up, newest first, each card showing when it was, what kind of call it was, who it was about, the words it would have said, and why it went - lost behind another line (named), pushed out by a call that outranked it, waiting too long, cleared by a flag, or held back by the pacing dial. Lost cards have a red edge; untick **Show lines held back by the pacing dial too** to see only those. The window stays open beside Race Control and updates as the race runs, and starts empty again with each new race. It keeps the last 300.
 
 ## The gap when the voice changes hands
 
@@ -1369,7 +1384,7 @@ If a claim is ever still held after six minutes it is let go and the console say
 
 ## Using the recap on the Announcer screen
 
-The last race summary is shown under **LAST RACE SUMMARY** on the Announcer screen (**Open Announcer Screen** on **Race Control**). Press **Repeat Race Summary** to say it again with the same delivery. It repeats the stored text rather than asking the model again, so it works even if Ollama has since stopped. When commentary is off, that area says "Commentary is off. Enable it on the Commentary page." See [Announcer screen](voice.md#announcer-screen).
+The last race summary is shown under **LAST RACE SUMMARY** on the Announcer screen (**Announcer Screen** on **Race Control**). Press **Repeat Race Summary** to say it again with the same delivery. It repeats the stored text rather than asking the model again, so it works even if Ollama has since stopped. When commentary is off, that area says "Commentary is off. Enable it on the Commentary page." See [Announcer screen](voice.md#announcer-screen).
 
 ## Privacy
 

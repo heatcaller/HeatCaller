@@ -240,6 +240,10 @@ public partial class MainForm
         // A finished race changes race-program state, so refresh the visible
         // page rather than leaving a heat showing "Scheduled" until the user
         // happens to navigate away and back.
+        // The flag row's Results and Edit Result after the flag (25 Oct 2026).
+        raceControl.ResultsRequested += () => ShowLatestRaceInHistory(edit: false);
+        raceControl.EditResultRequested += () => ShowLatestRaceInHistory(edit: true);
+
         raceControl.SessionSaved += () =>
         {
             // The heat just recorded comes off the timetable here, open or
@@ -1037,6 +1041,27 @@ public partial class MainForm
     /// unchanged and called in the same place, so the pages are still built in
     /// the order they always were.
     /// </summary>
+    /// <summary>Race History, once built - for Race Control's Results and Edit Result.</summary>
+    private RaceHistoryControl? _raceHistoryControl;
+
+    /// <summary>
+    /// The race just run - the one that finished last - in Race History, and
+    /// with Edit Result open on it when <paramref name="edit"/> is set. Race
+    /// Control's flag row after the flag (25 Oct 2026). Says so in the
+    /// console when there is no race to show yet.
+    /// </summary>
+    private void ShowLatestRaceInHistory(bool edit)
+    {
+        if (_raceHistoryControl is null || _sessionHistory.All.MaxBy(s => s.EndedAtUtc) is not { } latest)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [results] No race in Race History to show yet.");
+            return;
+        }
+
+        GoToPage("Race History");
+        _raceHistoryControl.ShowSession(latest.Id, edit);
+    }
+
     private void BuildTrackLayoutsAndRaceHistoryPages()
     {
         var trackLayouts = new TrackLayoutManagerControl(_trackLayouts, _settings, _undo, _sessionHistory) { Dock = DockStyle.Fill };
@@ -1045,6 +1070,7 @@ public partial class MainForm
 
         var raceHistory = new RaceHistoryControl(_sessionHistory, _undo, _settings, _rounds, _raceClasses, _profiles, _trackLayouts, _techInspections, _rentals, _handicaps, _raceEvents) { Dock = DockStyle.Fill };
         pageRaceHistory.Controls.Add(raceHistory);
+        _raceHistoryControl = raceHistory;
         _navRefreshHooks["Race History"] = raceHistory.RefreshAll;
 
         // A driver's report card for the night of the race shown - the
@@ -1549,6 +1575,20 @@ public partial class MainForm
 
             _ambience.SetDuckDepthOverride(fraction);
             _music.SetDuckDepthOverride(fraction);
+        };
+
+        // Reset stops everything (26 Oct 2026): Race Control stops what it
+        // puts out, and the music and the crowd - which live here - go with
+        // it. See StopMusicAndCrowd.
+        raceControl.EverythingStopped += () =>
+        {
+            if (InvokeRequired)
+            {
+                TryPost(() => StopMusicAndCrowd("Race reset"));
+                return;
+            }
+
+            StopMusicAndCrowd("Race reset");
         };
 
         raceControl.SessionAudioFinished += () =>

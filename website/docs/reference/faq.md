@@ -135,7 +135,7 @@ Usually Windows is blocking the app from accepting connections, and HeatCaller s
 
 ### How do I put the leaderboard on a TV?
 
-Click **Open Big Screen** on **Race Control** (or on **Local Screens**), drag the window onto the TV, and press <kbd>F11</kbd> for full screen. See [Big Screen](../screens/big-screen.md).
+Click **Big Screen** on **Race Control** (or **Open Big Screen** on **Local Screens**), drag the window onto the TV, and press <kbd>F11</kbd> for full screen. See [Big Screen](../screens/big-screen.md).
 
 ### Can the screens use our club colors and logo?
 

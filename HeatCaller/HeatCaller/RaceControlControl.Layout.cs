@@ -170,13 +170,41 @@ public sealed partial class RaceControlControl
         // Next Up bar, then the flags and the board beside the clock column,
         // the board taking the height that is left. Too short a window
         // scrolls the page rather than squashing the board below its least.
-        var flags = new Section("Race Control");
+        // No title of the card's own: the flag row draws RACE CONTROL itself,
+        // so the meters at its right can reach up to the top of it (26 Oct
+        // 2026, see FlagRow).
+        var flags = new Section { AccessibleName = "Race Control" };
 
-        // Every flag the same width (21 Oct 2026): a bar of one width,
-        // measured for On Air's widest caption as well as what it says now -
-        // see OnAirLeastWidth.
-        flags.Add(new ButtonBar(tight: true, sameWidth: true) { LeastWidth = OnAirLeastWidth }.With(
-            _btnOnAir, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset), gapBelow: 0);
+        // Every flag the same width (21 Oct 2026): a bar of one width.
+        //
+        // NO ON AIR BUTTON (25 Oct 2026, and again on 26 Oct - Asher: "remove
+        // the on air flag like button"): On Air's writing and voicing are
+        // shown on the strip under the row, as a hold is, and On Air is
+        // started by the starts that go through it and by O - see
+        // RaceControlControl.OnAir.
+        //
+        // THE MORPHING BAR (25 Oct 2026): the bar sits in a FlagRow, with
+        // where the race is in a word at its left and Now Playing in cyan at
+        // its right, and only the buttons that mean something now are
+        // shown - see RaceControlControl.Morph. Under it, the hold strip,
+        // which is always there so nothing moves when a hold starts.
+        var flagBar = new ButtonBar(tight: true, sameWidth: true).With(
+            _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered,
+            _btnBarNext, _btnBarResults, _btnBarEditResult, _btnReset);
+
+        // After the flag (25 Oct 2026): Next Heat is wired with Start Next,
+        // which it is (see StartNext); these two go to Race History.
+        _btnBarResults.Click += (_, _) => ResultsRequested?.Invoke();
+        _btnBarEditResult.Click += (_, _) => EditResultRequested?.Invoke();
+
+        // Double-click the On Air bar for the Broadcast window (26 Oct 2026,
+        // asked for by Asher) - what Broadcast under Mission Control opens.
+        _holdStrip.DoubleClick += (_, _) => ShowBroadcastWindow();
+
+        // The On Air bar is held in the row since 26 Oct 2026, under the
+        // buttons and beside the meters - see FlagRow.
+        flags.Add(BuildFlagRow(flagBar), gapBelow: 0);
+        UpdateMorphingBar(_race.Flag);
 
         // Start races On Air, the format line and its button moved to the
         // foot of the board (21 Oct 2026) - set once a night, not pressed
@@ -245,6 +273,11 @@ public sealed partial class RaceControlControl
         btnMissionControl.Click += (_, _) => MissionControlRequested?.Invoke();
         body.AddSide(btnMissionControl);
 
+        // The broadcast's controls, in a window of their own (25 Oct 2026) -
+        // they were the row under the Next Up bar. See BroadcastWindow.
+        _btnBroadcast.Click += (_, _) => ShowBroadcastWindow();
+        body.AddSide(_btnBroadcast);
+
         _page.Add(_nextUpBar, gapBelow: UiLayout.RowGap);
 
         // Under the Next Up bar, where the race director's eye already
@@ -272,6 +305,12 @@ public sealed partial class RaceControlControl
             {
                 EndRecapShow("the segments were held from Race Control");
             }
+
+            // The Broadcast button's HELD and the window's Announcer line
+            // on the next quarter-second tick, not up to a second later.
+            // Not drawn from here: this also runs from inside the row's own
+            // Show, when switching commentary off lets a hold go.
+            _nextUpDueUtc = DateTime.MinValue;
         };
 
         // THE BROADCAST'S OWN CONTROLS (11 Oct 2026). Beside Hold, in the
@@ -292,7 +331,10 @@ public sealed partial class RaceControlControl
         _announcerStrip.VotesWanted += ShowTonightsRoomVote;
         _announcerStrip.LoadWanted += ShowUnsaidLines;
 
-        _page.Add(_announcerStrip, stretch: false, gapBelow: UiLayout.RowGap);
+        // The row itself lives in the Broadcast window now (25 Oct 2026),
+        // not on this page - opened from the Broadcast button above. It is
+        // still built and drawn here, every second, so a hold and the counts
+        // stay true whether the window is open or not.
         _page.Add(_unknownBanner, gapBelow: UiLayout.RowGap);
         _page.AddFill(body, body.LeastHeight, gapBelow: 0);
 
@@ -366,41 +408,9 @@ public sealed partial class RaceControlControl
         // loudly, it just clips the new caption on the one screen the
         // director watches all night.
         _btnStartNext.Text = ProgramCaptions.StartNext;
-        _btnStartNext.Click += (_, _) =>
-        {
-            if (_race.State is not (RaceState.Idle or RaceState.Finished))
-            {
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next: a session is already under way - finish or reset it first.");
-                return;
-            }
-
-            // 17 Oct 2026, Bug Hunt 8, A03-1: not while On Air is opening the
-            // race already. NextRound would skip the round On Air is opening
-            // and start the one after it, under that round's opening.
-            if (OnAirRunning)
-            {
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next: On Air is opening the race already.");
-                return;
-            }
-
-            // Something is owed before the next race can go out - see
-            // UpdateNextUpBar. The button is captioned for it, so it does
-            // it.
-            if (_barStep is { } step)
-            {
-                RunProgramStepRequested?.Invoke(step);
-                return;
-            }
-
-            if (NextRound() is { } next)
-            {
-                NextRoundStartRequested?.Invoke(next);
-            }
-            else
-            {
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next: nothing left to run - the program is complete. Quick Race still works.");
-            }
-        };
+        // The flag row's Next Heat after the flag (25 Oct 2026) does exactly this - see StartNext.
+        _btnStartNext.Click += (_, _) => StartNext();
+        _btnBarNext.Click += (_, _) => StartNext();
 
         // Was "Re-seed Remaining...". It rebuilds the rosters of the heats
         // that have not run yet from who is checked in now, which is what
@@ -525,7 +535,7 @@ public sealed partial class RaceControlControl
         };
         _btnQuickRace.Click += (_, _) => _actQuickRace?.Invoke();
 
-        _btnBigScreen.Text = "Open Big Screen";
+        _btnBigScreen.Text = "Big Screen";
 
         // At the foot of the button column. It is run once before racing
         // starts and then left alone, so it gives up the higher slots to the
@@ -543,7 +553,7 @@ public sealed partial class RaceControlControl
         // the director works the flags. A window can sit beside this one or
         // own a second monitor. A tab could do neither, and every glance at
         // the announcer's notes took Race Control off the screen.
-        _btnAnnouncer.Text = "Open Announcer Screen";
+        _btnAnnouncer.Text = "Announcer Screen";
         _btnAnnouncer.Click += (_, _) => AnnouncerRequested?.Invoke();
 
         _btnProjection.Text = "Qualifying Projection";
@@ -995,7 +1005,11 @@ public sealed partial class RaceControlControl
 
             _race.RedFlag();
         };
-        _btnRed.Click += (_, _) => _actRed();
+        // HELD, NOT CLICKED (25 Oct 2026): a red stops the race, and a
+        // stray click on it in the middle of one cannot be taken back - so
+        // it has to be held for about a second. F5 and the phone still
+        // throw it at once. See RaceControlControl.Morph and HoldToAct.
+        HoldToUse(_btnRed, "throw the red flag", () => _actRed());
 
         _btnCheckered.Text = "Checkered";
         _actCheckered = () =>
@@ -1021,7 +1035,9 @@ public sealed partial class RaceControlControl
             CancelAutoStart();
             _race.CheckeredFlag();
         };
-        _btnCheckered.Click += (_, _) => _actCheckered();
+        // Held, as Red is (25 Oct 2026): a checkered ends the race. F6 and
+        // the phone still throw it at once.
+        HoldToUse(_btnCheckered, "end the race", () => _actCheckered());
     }
 
     /// <summary>
@@ -1258,7 +1274,14 @@ public sealed partial class RaceControlControl
             // kept it through the "??=" at Racing, and was saved as having
             // begun when the abandoned race did.
             _sessionStartedAtUtc = null;
-            _announcer.StopAllPendingAudio();
+
+            // EVERYTHING STOPS (26 Oct 2026, asked for by Asher: "when using
+            // reset the voice should stop. everything should stop and be
+            // brought back to nothing"). It used to clear only the lines
+            // queued, keeping the race-control ones and letting the line in
+            // the speakers - and the recap show, and any jingle or bed - play
+            // on over a reset race. See StopTheBroadcast.
+            StopTheBroadcast("Race reset");
 
             // A new race starts with no driver's corrections open - and
             // nothing left sliding.
@@ -1266,7 +1289,11 @@ public sealed partial class RaceControlControl
             _dgvLeaderboard.Rows.Clear();
             UpdateClockDisplay(force: true);
         };
-        _btnReset.Click += (_, _) => _actReset();
+        // Held, as Red is (25 Oct 2026). The hold is the asking: the
+        // button never put up the "Reset it?" question F7 asks during a race,
+        // and a click went straight through. F7 still asks, and the phone
+        // still resets at once.
+        HoldToUse(_btnReset, "reset the race", () => _actReset());
     }
 
     /// <summary>
@@ -1280,6 +1307,47 @@ public sealed partial class RaceControlControl
     /// </summary>
     internal static string? QuickRaceStampToRelease(string? label) =>
         label is not null && IsQuickRaceStamp(label.Trim()) ? label : null;
+
+    /// <summary>
+    /// Start Next on the Next Up bar, and Next Heat on the flag row after the
+    /// flag (25 Oct 2026): the program's next race, or the step owed before
+    /// it. One method, so the two can never do different things.
+    /// </summary>
+    private void StartNext()
+    {
+        if (_race.State is not (RaceState.Idle or RaceState.Finished))
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next: a session is already under way - finish or reset it first.");
+            return;
+        }
+
+        // 17 Oct 2026, Bug Hunt 8, A03-1: not while On Air is opening the
+        // race already. NextRound would skip the round On Air is opening
+        // and start the one after it, under that round's opening.
+        if (OnAirRunning)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next: On Air is opening the race already.");
+            return;
+        }
+
+        // Something is owed before the next race can go out - see
+        // UpdateNextUpBar. The button is captioned for it, so it does
+        // it.
+        if (_barStep is { } step)
+        {
+            RunProgramStepRequested?.Invoke(step);
+            return;
+        }
+
+        if (NextRound() is { } next)
+        {
+            NextRoundStartRequested?.Invoke(next);
+        }
+        else
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [day] Start Next: nothing left to run - the program is complete. Quick Race still works.");
+        }
+    }
 
     /// <summary>
     /// The flag row's and the clock column's shortcut tooltips.
@@ -1298,13 +1366,17 @@ public sealed partial class RaceControlControl
         shortcutTips.SetToolTip(_btnStage,
             "Stages the race now, without On Air. F1 is the normal start: through On Air when "
             + "Start races On Air is ticked (press F1 again to skip to Stage).");
+        shortcutTips.SetToolTip(_holdStrip, "Double-click for the Broadcast window.");
         shortcutTips.SetToolTip(_btnCountdown, "Shortcut: F2");
         shortcutTips.SetToolTip(_btnGreen, "Shortcut: F3");
         shortcutTips.SetToolTip(_btnYellow, "Shortcut: F4");
-        shortcutTips.SetToolTip(_btnRed, "Shortcut: F5");
-        shortcutTips.SetToolTip(_btnCheckered, "Shortcut: F6");
-        shortcutTips.SetToolTip(_btnReset, "Shortcut: F7 (asks first if a race is running)");
+        shortcutTips.SetToolTip(_btnRed, "Press and hold for a second. Shortcut: F5");
+        shortcutTips.SetToolTip(_btnCheckered, "Press and hold for a second. Shortcut: F6");
+        shortcutTips.SetToolTip(_btnReset, "Press and hold for a second. Shortcut: F7 (asks first if a race is running)");
         shortcutTips.SetToolTip(_btnQuickRace, "Shortcut: F8");
+        shortcutTips.SetToolTip(_btnBarNext, "The program's next race - the same as Start Next on the Next Up bar, so it does the step owed first when there is one.");
+        shortcutTips.SetToolTip(_btnBarResults, "The race just run, in Race History.");
+        shortcutTips.SetToolTip(_btnBarEditResult, "The race just run, in Race History, with Edit Result open - a penalty, a missed lap, a DNF.");
         shortcutTips.SetToolTip(_btnBigScreen, "Shortcut: B");
         shortcutTips.SetToolTip(_btnReadiness, "Shortcut: R");
         shortcutTips.SetToolTip(_btnAnnouncer, "Shortcut: A  -  press ? for every shortcut");
@@ -1351,7 +1423,8 @@ public sealed partial class RaceControlControl
         // re-start a race that is already running - and the focus ring it
         // draws over a flag colour looks like a fault besides.
         AppTheme.ReleaseFocusAfterClick(
-            _btnOnAir, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered, _btnReset);
+            _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered,
+            _btnBarNext, _btnBarResults, _btnBarEditResult, _btnReset);
 
         // The chip wraps to the card's width - the value can run long - and
         // wears the window's font.
@@ -1466,6 +1539,10 @@ public sealed partial class RaceControlControl
         _clock.Invalidate();
         _statStrip.Invalidate();
         UpdateFlagButtonColors(_race.Flag);
+
+        // What the room is hearing, at the right of the flag row (25 Oct
+        // 2026) - see NowPlaying.
+        UpdateNowPlaying();
     }
 
     private void RefreshTrackLayoutCombo()

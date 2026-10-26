@@ -319,7 +319,35 @@ public sealed partial class AnnouncementService
     /// the round intro - were all about getting to this moment, and the
     /// countdown is the instruction that replaces them.
     /// </summary>
-    private void CutForCountdown()
+    private void CutForCountdown() => CutEverything("Countdown started", alsoFlagCalls: false);
+
+    /// <summary>
+    /// Everything the announcer is saying or about to say stops NOW (26 Oct
+    /// 2026, asked for by Asher: "when using reset the voice should stop.
+    /// everything should stop and be brought back to nothing") - the line in
+    /// the speakers, the sound playing, every queued line and sound, a line
+    /// still being written or voiced, the countdown's ticks, and the
+    /// sponsor's picture. The countdown's own cut (CutForCountdown), with
+    /// nothing spared, and the ticks as well, since a reset is never
+    /// followed by the green they were counting down to. For Race Control's
+    /// Reset.
+    /// </summary>
+    public void SilenceNow(string why)
+    {
+        CancelCountdownTicks();
+        CutEverything(why, alsoFlagCalls: true);
+    }
+
+    /// <summary>
+    /// The cut itself - see CutForCountdown and SilenceNow. <paramref name="why"/>
+    /// starts the log line. <paramref name="alsoFlagCalls"/>: a flag call
+    /// still being voiced is cut too (SilenceNow). The countdown spares it -
+    /// a flag call is never queued behind the countdown's cut generation -
+    /// but a reset must not have "Red flag" arrive a second after it, so the
+    /// flags' own generation is moved on as well, which is what silences a
+    /// flag call overtaken by a newer flag.
+    /// </summary>
+    private void CutEverything(string why, bool alsoFlagCalls)
     {
         int clearedVoice;
         int abandonedWriting;
@@ -339,6 +367,11 @@ public sealed partial class AnnouncementService
                 // cleared just below. Under the writing lock too, so a line
                 // being written is either released here or started after.
                 Interlocked.Increment(ref _countdownCutGeneration);
+
+                if (alsoFlagCalls)
+                {
+                    Interlocked.Increment(ref _interruptGeneration);
+                }
 
                 abandonedWriting = _linesBeingWritten;
                 _linesBeingWritten = 0;
@@ -403,7 +436,7 @@ public sealed partial class AnnouncementService
         }
 
         StatusMessage?.Invoke(
-            $"[voice] Countdown started - {(wasSpeaking ? "cut off the line in progress" : "nothing was speaking")}"
+            $"[voice] {why} - {(wasSpeaking ? "cut off the line in progress" : "nothing was speaking")}"
             + $"{(cutSound ? " and the sound playing" : string.Empty)}, "
             + $"cleared {Plural.Of(clearedVoice, "queued line")} and {Plural.Of(clearedSounds, "sound")}"
             + $"{(abandonedWriting > 0 ? $", and stopped waiting for {Plural.Of(abandonedWriting, "line")} still being written" : string.Empty)}.");

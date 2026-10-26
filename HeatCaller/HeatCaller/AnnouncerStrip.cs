@@ -116,6 +116,59 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
 
     private bool _holding;
 
+    /// <summary>
+    /// Whether the row shows its own "On air / Last" label. Off in the
+    /// Broadcast window (25 Oct 2026), which says the same thing larger,
+    /// across its top - see BroadcastWindow.
+    /// </summary>
+    internal bool ShowsSaying
+    {
+        get => _showsSaying;
+        set
+        {
+            _showsSaying = value;
+
+            // At once, not on the next tick: the window would otherwise open
+            // with the label shown twice for up to a second.
+            if (!value)
+            {
+                _said.Visible = false;
+            }
+        }
+    }
+
+    private bool _showsSaying = true;
+
+    /// <summary>What the row's label says now - on air, last, writing or muted - for the Broadcast window's heading.</summary>
+    internal string Saying => _said.Text;
+
+    /// <summary>Whether that is lit - something going out, or a line seconds away.</summary>
+    internal bool SayingLit => _said.ForeColor == AppTheme.Accent;
+
+    /// <summary>Whether the announcer is held - so Race Control's Broadcast button can say HELD while the window is shut.</summary>
+    internal bool Holding => _holding;
+
+    /// <summary>
+    /// Puts Hold's own colours back after a theme pass has reset every
+    /// button's (BroadcastWindow.Restyle) - and each button's width with
+    /// them. The pass turns AutoSize off on a button shorter than it likes,
+    /// and this row is styled before it has ever been laid out, so every
+    /// button would keep the 75px a new one starts at: "Replay Moment" cut
+    /// in half, "HELD - Release" worse. Back on, as tall as the pass made
+    /// it, and shrinking again when Hold's caption does.
+    /// </summary>
+    internal void Restyle()
+    {
+        ShowHold();
+
+        foreach (var button in new[] { _hold, _replay, _replayMoment, _skip, _notes, _votes })
+        {
+            button.MinimumSize = new Size(0, button.Height);
+            button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            button.AutoSize = true;
+        }
+    }
+
     public AnnouncerStrip()
     {
         FlowDirection = FlowDirection.LeftToRight;
@@ -439,10 +492,14 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
             _skip.Visible = roomOnly;
             _skip.Enabled = replaying;
 
-            if (Visible != roomOnly)
-            {
-                Visible = roomOnly;
-            }
+            // Set every time, not on a change (25 Oct 2026): the row lives in
+            // the Broadcast window now, hidden most of the night, and while
+            // its window is hidden Visible reads false whatever the row's own
+            // setting - so "has it changed" never hid it, and the window
+            // opened with the announcer off on an empty row squeezed to 0x0
+            // (LayoutTests, "Broadcast (the announcer off)"). As _replayMoment
+            // above.
+            Visible = roomOnly;
 
             _said.Text = string.Empty;
 
@@ -582,6 +639,10 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
         {
             c.Visible = show;
         }
+
+        // Kept even when its text is, so the heading of the Broadcast window
+        // can read it - just not shown there twice.
+        _said.Visible = show && ShowsSaying;
     }
 
     /// <summary>

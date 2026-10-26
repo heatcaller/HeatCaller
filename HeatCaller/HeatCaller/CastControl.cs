@@ -41,8 +41,8 @@ public sealed class CastControl : UserControl
     /// <summary>The Announcer card, first on the page - where the voice rows are put.</summary>
     private Section? _announcerCard;
 
-    /// <summary>The line at the top of the Announcer card - the voice rows go straight under it.</summary>
-    private Control? _announcerHint;
+    /// <summary>The announcer's name, first on the Announcer card - the voice rows go straight under it (25 Oct 2026).</summary>
+    private Control? _announcerName;
 
     /// <summary>The voice rows the Voice tab handed over, while they are here.</summary>
     private FieldGrid? _announcerVoice;
@@ -129,6 +129,16 @@ public sealed class CastControl : UserControl
     /// <summary>The engine the lists were last filled for - what a pick is saved against.</summary>
     private VoiceEngine _voiceListEngine = VoiceEngine.ElevenLabs;
 
+    /// <summary>
+    /// The voices Load Voices last brought back, and for which engine - kept
+    /// so the lists can be set out again (Kokoro downloaded, the page shown
+    /// again) without the loaded voices going from them.
+    /// </summary>
+    private (VoiceEngine Engine, IReadOnlyList<VoiceChoice> Voices)? _loaded;
+
+    /// <summary>Whether the lists were last filled with the Kokoro voices on them - see FillVoices.</summary>
+    private bool _kokoroOffered;
+
     /// <summary>Set while the lists are being filled, so filling them isn't taken for a pick.</summary>
     private bool _fillingVoices;
 
@@ -140,7 +150,13 @@ public sealed class CastControl : UserControl
     /// <summary>A voice one of the cast can be given - what is saved for it, and what the list shows.</summary>
     /// <param name="Id">The ElevenLabs voice id, the HeatCaller voice's id, or Kokoro's name for the voice. Empty for the announcer's own voice.</param>
     /// <param name="Rev">The HeatCaller catalogue's fingerprint for the voice; empty for the other engines.</param>
-    public sealed record VoiceChoice(string Id, string Name, string Rev, string Display)
+    /// <param name="IsKokoro">
+    /// A Kokoro voice on the list of another engine (25 Oct 2026): picked,
+    /// the speaker talks in it whatever engine the announcer uses - see
+    /// SecondVoice.KokoroAlways. False for the engine's own voices, Kokoro's
+    /// included when Kokoro is the engine.
+    /// </param>
+    public sealed record VoiceChoice(string Id, string Name, string Rev, string Display, bool IsKokoro = false)
     {
         public override string ToString() => Display;
     }
@@ -152,6 +168,14 @@ public sealed class CastControl : UserControl
 
     /// <summary>Fetches the voices one engine offers. Set by the host, which has the clients. Throws with a sentence for the page when it can't.</summary>
     internal Func<VoiceEngine, Task<IReadOnlyList<VoiceChoice>>>? LoadVoices { get; set; }
+
+    /// <summary>
+    /// Fills the announcer's own ElevenLabs voice list, on the Announcer card
+    /// (VoiceSettingsControl.LoadAnnouncerElevenLabsVoicesAsync) - Load Voices
+    /// fills every list on the page since its own button beside that list
+    /// went (25 Oct 2026). Never throws: it says what happened under the list.
+    /// </summary>
+    internal Func<Task>? LoadAnnouncerVoices { get; set; }
 
     /// <summary>Says a test line in the mechanic's voice, even while the announcer is muted. Set by the host.</summary>
     internal Action<SecondVoice>? SpeakAsMechanic { get; set; }
@@ -215,9 +239,12 @@ public sealed class CastControl : UserControl
             return;
         }
 
-        if (EngineInUse?.Invoke() is { } engine && engine != _voiceListEngine)
+        // Again, too, when Kokoro has come or gone since (downloaded on the
+        // Voice tab), so its voices are on the lists or off them.
+        if ((EngineInUse?.Invoke() is { } engine && engine != _voiceListEngine)
+            || KokoroOffered(_voiceListEngine) != _kokoroOffered)
         {
-            FillVoices(engine);
+            FillVoices(EngineInUse?.Invoke());
         }
 
         // The AI Commentary tab's "Throw to pit lane" is this switch too
@@ -341,8 +368,10 @@ public sealed class CastControl : UserControl
 
         Flush(loadGrid.AddRow("Voices:", Line(Steady(_btnLoadVoices, LoadVoicesCaption), _lblVoiceSource)));
         loadGrid.AddHint(
-            "Fills every voice list below from the engine chosen on the Voice tab. Each engine keeps its own picks; "
-            + "with none picked, the announcer's own voice speaks.");
+            "Fills every voice list on this tab, the announcer's included, from the engine chosen on the Voice tab. Each engine keeps its own picks; "
+            + "with none picked, the announcer's own voice speaks. The Kokoro voices on this PC are on every list too, "
+            + "whatever the engine: pick one and that speaker talks in Kokoro's free voice even beside an ElevenLabs "
+            + "or HeatCaller announcer.");
 
         var voices = new Section("Voices");
 
@@ -366,13 +395,14 @@ public sealed class CastControl : UserControl
 
         var announcer = new Section("Announcer");
 
-        // The voice rows go under this line when the Voice tab hands them
-        // over (HostAnnouncerVoice), above the name. The name is only said in
-        // the lines the AI writes, which its own note says; the voice
-        // carries everything.
-        _announcerHint = announcer.Add(Hint(
-            "The voice carrying the whole program, from the engine chosen on the Voice tab."));
-        announcer.Add(announcerGrid, gapBelow: 0);
+        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
+        // speaker's name first, then their voice, then what they do and the
+        // settings for it.
+        // The voice rows go under the name when the Voice tab hands them
+        // over (HostAnnouncerVoice).
+        _announcerName = announcer.Add(announcerGrid, gapBelow: UiLayout.RowGap);
+        announcer.Add(Hint(
+            "The voice carrying the whole program, from the engine chosen on the Voice tab."), gapBelow: 0);
         _announcerCard = announcer;
 
         // ------------------------------------------------------------------
@@ -433,9 +463,12 @@ public sealed class CastControl : UserControl
 
         var recapHost = new Section("Recap host");
 
+        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
+        // speaker's name first, then their voice, then what they do and the
+        // settings for it.
+        recapHost.Add(recapHostGrid);
         recapHost.Add(Hint(
-            "Heard only when race recaps are switched on, on the AI Commentary tab's Recap show card."));
-        recapHost.Add(recapHostGrid, gapBelow: UiLayout.SectionGap);
+            "Heard only when race recaps are switched on, on the AI Commentary tab's Recap show card."), gapBelow: UiLayout.SectionGap);
         recapHost.Add(_chkBroadcastVoice, stretch: false, gapBelow: UiLayout.HintGap);
         recapHost.Add(Hint(
             "Overrides the Voice tab's stability and style for the recap only, so lap calls aren't over-acted. "
@@ -527,10 +560,14 @@ public sealed class CastControl : UserControl
             RefreshEnabledState();
         };
 
+        // The name and voice first, above the switch (25 Oct 2026) - see the card below.
+        var coHostVoiceGrid = new FieldGrid();
+
+        Flush(coHostVoiceGrid.AddRow("Co-host's name:", Line(_txtCoHostName, Suffix("blank and they are talked to but never named - the model never makes one up"))));
+        Flush(coHostVoiceGrid.AddRow("Co-host's voice:", Line(_cmbCoHostVoice, _btnTestCoHost)));
+
         var coHostGrid = new FieldGrid();
 
-        Stepped(coHostGrid.AddRow("Co-host's name:", Line(_txtCoHostName, Suffix("blank and they are talked to but never named - the model never makes one up"))));
-        Stepped(coHostGrid.AddRow("Co-host's voice:", Line(_cmbCoHostVoice, _btnTestCoHost)));
         Stepped(coHostGrid.AddRow("What they're like:", Line(_cmbCoHostStance)));
         coHostGrid.AddHint(_lblCoHostStance);
 
@@ -544,6 +581,10 @@ public sealed class CastControl : UserControl
 
         var coHost = new Section("Co-host");
 
+        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
+        // speaker's name first, then their voice, then what they do and the
+        // settings for it.
+        coHost.Add(coHostVoiceGrid);
         coHost.Add(Hint(
             "A second commentator who answers the announcer in the segments marked as a two-hander on the AI "
             + "Commentary tab, and asks the questions in the Technical Lead's and the Team Principal's interviews. "
@@ -588,17 +629,20 @@ public sealed class CastControl : UserControl
 
         var mechanicGrid = new FieldGrid();
 
-        Stepped(mechanicGrid.AddRow("Technical Lead's name:", Line(_txtMechanicName, Suffix("blank for \"the team's technical lead\" - the model never makes a name up"))));
-        Stepped(mechanicGrid.AddRow("Technical Lead's voice:", Line(_cmbMechanicVoice, _btnTestMechanic)));
+        Flush(mechanicGrid.AddRow("Technical Lead's name:", Line(_txtMechanicName, Suffix("blank for \"the team's technical lead\" - the model never makes a name up"))));
+        Flush(mechanicGrid.AddRow("Technical Lead's voice:", Line(_cmbMechanicVoice, _btnTestMechanic)));
 
         var mechanic = new Section("Technical Lead");
 
+        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
+        // speaker's name first, then their voice, then what they do and the
+        // settings for it.
+        mechanic.Add(mechanicGrid);
         mechanic.Add(_chkInterview, stretch: false, gapBelow: UiLayout.HintGap);
         mechanic.Add(_chkInterviewHeats, stretch: false, gapBelow: UiLayout.HintGap);
         mechanic.Add(Hint(
             "Straight after the finish call, the co-host in pit lane asks two questions about the race and any setup "
-            + "changes logged in the Garage for the winning car, then hands back before the break. Needs race recaps on."));
-        mechanic.Add(mechanicGrid, gapBelow: 0);
+            + "changes logged in the Garage for the winning car, then hands back before the break. Needs race recaps on."), gapBelow: 0);
 
         // ------------------------------------------------------------------
         // The Team Principal (17 Oct 2026)
@@ -654,11 +698,15 @@ public sealed class CastControl : UserControl
 
         var principalGrid = new FieldGrid();
 
-        Stepped(principalGrid.AddRow("Team Principal's name:", Line(_txtPrincipalName, Suffix("blank for \"the team principal\" - the model never makes a name up"))));
-        Stepped(principalGrid.AddRow("Team Principal's voice:", Line(_cmbPrincipalVoice, _btnTestPrincipal)));
+        Flush(principalGrid.AddRow("Team Principal's name:", Line(_txtPrincipalName, Suffix("blank for \"the team principal\" - the model never makes a name up"))));
+        Flush(principalGrid.AddRow("Team Principal's voice:", Line(_cmbPrincipalVoice, _btnTestPrincipal)));
 
         var principal = new Section("Team Principal");
 
+        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
+        // speaker's name first, then their voice, then what they do and the
+        // settings for it.
+        principal.Add(principalGrid);
         principal.Add(Hint(
             "The big picture, where the Technical Lead has the car: the result, the points, the championship and the "
             + "rivalry - never the setup. A driver with a team gets that team's principal; one without gets their own."),
@@ -673,8 +721,7 @@ public sealed class CastControl : UserControl
             "The recap host has them in the booth later that night for two questions about what the win means to the "
             + "team. Part of the recap show, so it needs race recaps on."));
         principal.Add(_chkPrincipalHeats, stretch: false, gapBelow: UiLayout.HintGap);
-        principal.Add(_chkPrincipalTeamsOnly, stretch: false, gapBelow: UiLayout.RowGap);
-        principal.Add(principalGrid, gapBelow: 0);
+        principal.Add(_chkPrincipalTeamsOnly, stretch: false, gapBelow: 0);
 
         // ------------------------------------------------------------------
         // The badges reader
@@ -705,16 +752,19 @@ public sealed class CastControl : UserControl
 
         var honoursGrid = new FieldGrid();
 
-        Stepped(honoursGrid.AddRow("Achievements reader:", Line(_txtHonoursName, Suffix("blank and they are thrown to but never named - no name is made up"))));
-        Stepped(honoursGrid.AddRow("Reader's voice:", Line(_cmbHonoursVoice, _btnTestHonours)));
+        Flush(honoursGrid.AddRow("Reader's name:", Line(_txtHonoursName, Suffix("blank and they are thrown to but never named - no name is made up"))));
+        Flush(honoursGrid.AddRow("Reader's voice:", Line(_cmbHonoursVoice, _btnTestHonours)));
 
         var honours = new Section("Achievements reader");
 
+        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
+        // speaker's name first, then their voice, then what they do and the
+        // settings for it.
+        honours.Add(honoursGrid);
         honours.Add(_chkBadgeHonours, stretch: false, gapBelow: UiLayout.HintGap);
         honours.Add(Hint(
             "Ticking this MOVES the achievement calls from the flag into the recap, so nobody hears an achievement twice. Untick it "
-            + "and the calls at the flag come back, as set up on Race Calls."));
-        honours.Add(honoursGrid, gapBelow: 0);
+            + "and the calls at the flag come back, as set up on Race Calls."), gapBelow: 0);
 
         // ------------------------------------------------------------------
         // The page
@@ -722,11 +772,13 @@ public sealed class CastControl : UserControl
 
         var page = new PageStack();
 
-        // The announcer first (22 Oct 2026): the voice everyone hears all
-        // night, above the one Load Voices that fills the other lists.
+        // The one Load Voices first (25 Oct 2026, asked for by Asher): it fills
+        // every list on the page, the announcer's included since that list's
+        // own Load Voices went, so it goes above all of them. Then the
+        // announcer, the voice everyone hears all night (22 Oct 2026).
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(announcer);
         page.Add(voices);
+        page.Add(announcer);
         page.Add(recapHost);
         page.Add(coHost);
         page.Add(mechanic);
@@ -739,7 +791,7 @@ public sealed class CastControl : UserControl
         // a grid left out of this still looks correct on its own.
         _ownGrids = new[]
         {
-            loadGrid, announcerGrid, recapHostGrid, deliveryGrid, coHostGrid, mechanicGrid, principalGrid, honoursGrid,
+            loadGrid, announcerGrid, recapHostGrid, deliveryGrid, coHostVoiceGrid, coHostGrid, mechanicGrid, principalGrid, honoursGrid,
         };
 
         _textSize.Keep(LineUpGrids);
@@ -767,7 +819,7 @@ public sealed class CastControl : UserControl
     /// </summary>
     internal void HostAnnouncerVoice(FieldGrid voice)
     {
-        if (_announcerCard is null || _announcerHint is null || ReferenceEquals(_announcerVoice, voice))
+        if (_announcerCard is null || _announcerName is null || ReferenceEquals(_announcerVoice, voice))
         {
             return;
         }
@@ -775,7 +827,7 @@ public sealed class CastControl : UserControl
         ReleaseAnnouncerVoice();
 
         _announcerVoice = voice;
-        _announcerCard.AddAfter(_announcerHint, voice, gapBelow: UiLayout.RowGap);
+        _announcerCard.AddAfter(_announcerName, voice, gapBelow: UiLayout.RowGap);
 
         // Built on the Voice tab, outside this page, so the theming pass
         // that walked this one has never seen it - as the Race Calls page is
@@ -943,10 +995,11 @@ public sealed class CastControl : UserControl
         _btnTestCoHost.Enabled = coHostOn && anyExchange;
         _cmbCoHostStance.Enabled = coHostOn && anyExchange;
 
-        // Load Voices fills every list in one pass (FillVoices), so it is
-        // live while ANY of the speakers is set up. Dark only when none of
-        // them is, which is when there is nothing for a voice list to be for.
-        _btnLoadVoices.Enabled = interviewOn || principalOn || honoursOn || summariesOn || coHostOn;
+        // Load Voices fills every list in one pass (FillVoices) - and the
+        // announcer's (25 Oct 2026), who is always on the show - so it is
+        // never dark. It used to go dark with every speaker below switched
+        // off, when it had nothing else to fill.
+        _btnLoadVoices.Enabled = true;
     }
 
     // ==================== The voice lists ====================
@@ -969,6 +1022,22 @@ public sealed class CastControl : UserControl
     {
         static string Shown(string name, string id) => string.IsNullOrWhiteSpace(name) ? id : name;
 
+        // A Kokoro voice picked for every engine (25 Oct 2026) is what this
+        // engine's list shows for them, ahead of whatever it holds of its own.
+        //
+        // Said when Kokoro can't speak on this PC (the model deleted, or
+        // never downloaded on a PC the settings were restored to): the line
+        // then goes out as it did before, so the list says so rather than
+        // name a voice nobody will hear. See VoiceProfile.CloneWithVoice.
+        if (voice.SpeaksKokoroWith(engine))
+        {
+            var name = voice.KokoroVoiceName.Trim();
+
+            return KokoroChoice(name, KokoroSpeech.IsModelAvailable
+                ? KokoroSpeech.Describe(name)
+                : $"{KokoroSpeech.Describe(name)} - not downloaded");
+        }
+
         return engine switch
         {
             VoiceEngine.Kokoro => string.IsNullOrWhiteSpace(voice.KokoroVoiceName)
@@ -985,6 +1054,19 @@ public sealed class CastControl : UserControl
         };
     }
 
+    /// <summary>A Kokoro voice on another engine's list, marked as Kokoro's so nobody takes it for one of that engine's.</summary>
+    private static VoiceChoice KokoroChoice(string name, string described) =>
+        new(name, name, string.Empty, $"Kokoro: {described}", IsKokoro: true);
+
+    /// <summary>
+    /// Whether the lists offer the Kokoro voices beside an engine's own: for
+    /// every engine but Kokoro (whose own list they are), once the model is
+    /// on this PC - a voice offered and then never heard is worse than one
+    /// not offered.
+    /// </summary>
+    private static bool KokoroOffered(VoiceEngine engine) =>
+        engine != VoiceEngine.Kokoro && KokoroSpeech.IsModelAvailable;
+
     /// <summary>
     /// Sets every list out for an engine, in ONE pass: the announcer's own
     /// voice, the voice saved for that engine, and - once loaded - every
@@ -1000,7 +1082,37 @@ public sealed class CastControl : UserControl
         var shown = engine ?? EngineInUse?.Invoke() ?? VoiceEngine.ElevenLabs;
         _voiceListEngine = shown;
 
+        // Kept for the next fill of the same engine, and used by one with
+        // none given - so setting the lists out again never empties them.
+        if (loaded is not null)
+        {
+            _loaded = (shown, loaded);
+        }
+        else if (_loaded is { } kept && kept.Engine == shown)
+        {
+            loaded = kept.Voices;
+        }
+
+        // Kokoro's voices are the names of files beside the exe - nothing to
+        // load or ask for - so with Kokoro the engine they are there from the
+        // start, Load Voices or not.
+        if (loaded is null && shown == VoiceEngine.Kokoro)
+        {
+            loaded = KokoroSpeech.InstalledVoices()
+                .Select(v => new VoiceChoice(v.Name, v.Name, string.Empty, v.Display))
+                .ToList();
+        }
+
         var choices = (loaded ?? Array.Empty<VoiceChoice>()).ToList();
+
+        // And every other engine's lists end with them (25 Oct 2026), so any
+        // of the cast can be given a Kokoro voice whatever the announcer uses.
+        _kokoroOffered = KokoroOffered(shown);
+
+        if (_kokoroOffered)
+        {
+            choices.AddRange(KokoroSpeech.InstalledVoices().Select(v => KokoroChoice(v.Name, v.Display)));
+        }
 
         _fillingVoices = true;
 
@@ -1014,7 +1126,12 @@ public sealed class CastControl : UserControl
             {
                 var theirs = choices.ToList();
 
-                if (savedForThem.Id.Length > 0 && !theirs.Any(c => string.Equals(c.Id, savedForThem.Id, StringComparison.Ordinal)))
+                // The same voice is the same id from the same list - a Kokoro
+                // voice on an ElevenLabs list is never one of ElevenLabs'.
+                bool Same(VoiceChoice c) =>
+                    c.IsKokoro == savedForThem.IsKokoro && string.Equals(c.Id, savedForThem.Id, StringComparison.Ordinal);
+
+                if (savedForThem.Id.Length > 0 && !theirs.Any(Same))
                 {
                     theirs.Insert(0, savedForThem);
                 }
@@ -1029,7 +1146,7 @@ public sealed class CastControl : UserControl
 
                 var at = savedForThem.Id.Length == 0
                     ? 0
-                    : theirs.FindIndex(c => string.Equals(c.Id, savedForThem.Id, StringComparison.Ordinal)) + 1;
+                    : theirs.FindIndex(Same) + 1;
 
                 picker.SelectedIndex = Math.Max(0, at);
             }
@@ -1045,9 +1162,10 @@ public sealed class CastControl : UserControl
             _fillingVoices = false;
         }
 
-        _lblVoiceSource.Text = loaded is null
-            ? $"{EngineLabel(shown)} voices"
-            : Plural.Of(loaded.Count, $"{EngineLabel(shown)} voice");
+        _lblVoiceSource.Text = (loaded is null
+                ? $"{EngineLabel(shown)} voices"
+                : Plural.Of(loaded.Count, $"{EngineLabel(shown)} voice"))
+            + (_kokoroOffered ? ", and the Kokoro voices" : string.Empty);
 
         // The longest voice may have come or gone: the pickers measured again.
         _mechanicVoiceWidth = null;
@@ -1066,6 +1184,27 @@ public sealed class CastControl : UserControl
         if (_fillingVoices || _cmbMechanicVoice.SelectedItem is not VoiceChoice choice)
         {
             return;
+        }
+
+        // A Kokoro voice for every engine - see SecondVoice.KokoroAlways.
+        if (choice.IsKokoro)
+        {
+            _settings.MechanicKokoroVoiceName = choice.Id;
+            _settings.MechanicKokoroAlways = true;
+            _settings.Save();
+
+            // Loaded now, so the Test beside it and the first line on the
+            // night don't wait for the model to be read.
+            KokoroSpeech.WarmUp();
+            return;
+        }
+
+        // Any other pick from another engine's list is that engine's voice
+        // for them again. From Kokoro's own, a voice keeps the choice as it
+        // was; the announcer's own voice ends it.
+        if (_voiceListEngine != VoiceEngine.Kokoro || choice.Id.Length == 0)
+        {
+            _settings.MechanicKokoroAlways = false;
         }
 
         switch (_voiceListEngine)
@@ -1097,6 +1236,27 @@ public sealed class CastControl : UserControl
             return;
         }
 
+        // A Kokoro voice for every engine - see SecondVoice.KokoroAlways.
+        if (choice.IsKokoro)
+        {
+            _settings.PrincipalKokoroVoiceName = choice.Id;
+            _settings.PrincipalKokoroAlways = true;
+            _settings.Save();
+
+            // Loaded now, so the Test beside it and the first line on the
+            // night don't wait for the model to be read.
+            KokoroSpeech.WarmUp();
+            return;
+        }
+
+        // Any other pick from another engine's list is that engine's voice
+        // for them again. From Kokoro's own, a voice keeps the choice as it
+        // was; the announcer's own voice ends it.
+        if (_voiceListEngine != VoiceEngine.Kokoro || choice.Id.Length == 0)
+        {
+            _settings.PrincipalKokoroAlways = false;
+        }
+
         switch (_voiceListEngine)
         {
             case VoiceEngine.Kokoro:
@@ -1124,6 +1284,27 @@ public sealed class CastControl : UserControl
         if (_fillingVoices || _cmbCoHostVoice.SelectedItem is not VoiceChoice choice)
         {
             return;
+        }
+
+        // A Kokoro voice for every engine - see SecondVoice.KokoroAlways.
+        if (choice.IsKokoro)
+        {
+            _settings.CoHostKokoroVoiceName = choice.Id;
+            _settings.CoHostKokoroAlways = true;
+            _settings.Save();
+
+            // Loaded now, so the Test beside it and the first line on the
+            // night don't wait for the model to be read.
+            KokoroSpeech.WarmUp();
+            return;
+        }
+
+        // Any other pick from another engine's list is that engine's voice
+        // for them again. From Kokoro's own, a voice keeps the choice as it
+        // was; the announcer's own voice ends it.
+        if (_voiceListEngine != VoiceEngine.Kokoro || choice.Id.Length == 0)
+        {
+            _settings.CoHostKokoroAlways = false;
         }
 
         switch (_voiceListEngine)
@@ -1159,6 +1340,27 @@ public sealed class CastControl : UserControl
             return;
         }
 
+        // A Kokoro voice for every engine - see SecondVoice.KokoroAlways.
+        if (choice.IsKokoro)
+        {
+            _settings.HonoursKokoroVoiceName = choice.Id;
+            _settings.HonoursKokoroAlways = true;
+            _settings.Save();
+
+            // Loaded now, so the Test beside it and the first line on the
+            // night don't wait for the model to be read.
+            KokoroSpeech.WarmUp();
+            return;
+        }
+
+        // Any other pick from another engine's list is that engine's voice
+        // for them again. From Kokoro's own, a voice keeps the choice as it
+        // was; the announcer's own voice ends it.
+        if (_voiceListEngine != VoiceEngine.Kokoro || choice.Id.Length == 0)
+        {
+            _settings.HonoursKokoroAlways = false;
+        }
+
         switch (_voiceListEngine)
         {
             case VoiceEngine.Kokoro:
@@ -1186,6 +1388,27 @@ public sealed class CastControl : UserControl
         if (_fillingVoices || _cmbRecapHostVoice.SelectedItem is not VoiceChoice choice)
         {
             return;
+        }
+
+        // A Kokoro voice for every engine - see SecondVoice.KokoroAlways.
+        if (choice.IsKokoro)
+        {
+            _settings.RecapHostKokoroVoiceName = choice.Id;
+            _settings.RecapHostKokoroAlways = true;
+            _settings.Save();
+
+            // Loaded now, so the Test beside it and the first line on the
+            // night don't wait for the model to be read.
+            KokoroSpeech.WarmUp();
+            return;
+        }
+
+        // Any other pick from another engine's list is that engine's voice
+        // for them again. From Kokoro's own, a voice keeps the choice as it
+        // was; the announcer's own voice ends it.
+        if (_voiceListEngine != VoiceEngine.Kokoro || choice.Id.Length == 0)
+        {
+            _settings.RecapHostKokoroAlways = false;
         }
 
         switch (_voiceListEngine)
@@ -1232,6 +1455,10 @@ public sealed class CastControl : UserControl
         _loadingVoices = true;
         _btnLoadVoices.Text = "Loading...";
 
+        // The announcer's list alongside, at the same time (it never throws).
+        // Awaited in finally, so the button says Loading... until both are in.
+        var announcer = LoadAnnouncerVoices?.Invoke() ?? Task.CompletedTask;
+
         try
         {
             var voices = await LoadVoices(engine);
@@ -1251,6 +1478,15 @@ public sealed class CastControl : UserControl
         }
         finally
         {
+            try
+            {
+                await announcer;
+            }
+            catch (Exception)
+            {
+                // It says what went wrong under its own list.
+            }
+
             _loadingVoices = false;
 
             if (!IsDisposed)

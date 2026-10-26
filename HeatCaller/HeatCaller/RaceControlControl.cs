@@ -350,6 +350,32 @@ public sealed partial class RaceControlControl : UserControl
     private readonly Button _btnStartNext = new();
     private readonly Button _btnReseed = new();
 
+    // THE FLAG ROW AFTER THE FLAG (25 Oct 2026, the mockup's After row):
+    // Next Heat, Results and Edit Result, with Reset - see RaceBar.ButtonsFor.
+
+    /// <summary>Next Heat: Start Next's own action (StartNext), on the flag row once a race is over.</summary>
+    private readonly Button _btnBarNext = new() { Text = "Next Heat" };
+
+    /// <summary>Results: the race just run, in Race History - see ResultsRequested.</summary>
+    private readonly Button _btnBarResults = new() { Text = "Results" };
+
+    /// <summary>Edit Result: the race just run, in Race History, with Edit Result open - see EditResultRequested.</summary>
+    private readonly Button _btnBarEditResult = new() { Text = "Edit Result" };
+
+    /// <summary>
+    /// Whether the program has something for Next Heat to start - a round, or
+    /// a step owed before one. Worked out with the Next Up bar
+    /// (UpdateNextUpBar) and read by the flag row, which shows Stage in its
+    /// place when there is nothing.
+    /// </summary>
+    private bool _nextWaiting;
+
+    /// <summary>Results on the flag row after the flag: the host shows the race just run in Race History.</summary>
+    internal event Action? ResultsRequested;
+
+    /// <summary>Edit Result on the flag row after the flag: the host opens Edit Result on the race just run.</summary>
+    internal event Action? EditResultRequested;
+
     /// <summary>Throttle for the bar: rebuilt once a second on the clock tick, not four times.</summary>
     private DateTime _nextUpDueUtc = DateTime.MinValue;
 
@@ -517,6 +543,22 @@ public sealed partial class RaceControlControl : UserControl
     private readonly Button _btnAnnouncer = new();
 
     /// <summary>
+    /// Opens the Broadcast window (25 Oct 2026): Hold, Play again, Replay
+    /// Moment, Skip, Notes and Votes, which used to be a row under the Next
+    /// Up bar. Under Mission Control in the column of things that open a
+    /// window. Says HELD while a hold stands - see ShowBroadcastButton.
+    /// </summary>
+    private readonly Button _btnBroadcast = new() { Text = BroadcastCaption };
+
+    /// <summary>The Broadcast window, built the first time it is asked for and kept - see BroadcastWindow.</summary>
+    private BroadcastWindow? _broadcastWindow;
+
+    private const string BroadcastCaption = "Broadcast";
+
+    /// <summary>The Broadcast button's text colour as its style left it, to go back to once no notes are waiting.</summary>
+    private Color _btnBroadcastFore = AppTheme.TextDark;
+
+    /// <summary>
     /// Opens the live qualifying projection.
     ///
     /// In the right-hand column with Big Screen, Pre-race check and
@@ -566,6 +608,13 @@ public sealed partial class RaceControlControl : UserControl
     /// should fade rather than at the checkered flag.
     /// </summary>
     public event Action? SessionAudioFinished;
+
+    /// <summary>
+    /// Raised when Race Control has stopped everything it puts out (Reset -
+    /// see StopTheBroadcast), so the host stops what Race Control does not
+    /// own: the music and the crowd. UI thread.
+    /// </summary>
+    public event Action? EverythingStopped;
 
     /// <summary>
     /// Raised with true while the AI recap is speaking, false when it ends.
@@ -697,33 +746,7 @@ public sealed partial class RaceControlControl : UserControl
                 // On the same second. "Writing" is the state worth
                 // catching and a line takes seconds to write, so once a
                 // second is a warning rather than a record of one.
-                _announcerStrip.Show(
-                    Commentary?.Invoke(),
-                    _settings.CommentaryEnabled,
-                    _speaking,
-                    // READ ON THE TICK, not stored from SpeakingChanged.
-                    // The event only says that something started or
-                    // stopped; what is actually in the speakers changes
-                    // under it as a flag call cuts in or a recap moves on
-                    // to its next piece. See AnnouncementService.OnAirNow.
-                    _announcer.OnAirNow,
-                    // Read on the tick like the rest: mute is a button on
-                    // the Mixer, which is a different page, so nothing
-                    // tells this row about it.
-                    _announcer.Muted,
-                    NotesWaitingForApproval(),
-                    VotesCastSoFar(),
-                    // How many of its own timing calls the announcer did
-                    // not get out this race. Read on the tick like the
-                    // rest - see AnnouncerStrip._load for the report that
-                    // put a number on this row.
-                    _announcer.Load,
-                    // The recap show is running, so Skip has something to
-                    // stop even in the quiet while the model writes - see
-                    // EndRecapShow. And a replayed moment on air, which
-                    // Skip rides down (22 Oct 2026).
-                    programmeRunning: Volatile.Read(ref _recapShow) is not null || _replayCut is not null,
-                    replaying: _replayCut is not null);
+                ShowBroadcast();
             }
         };
         _clockRefreshTimer.Start();
@@ -1199,6 +1222,157 @@ public sealed partial class RaceControlControl : UserControl
     /// <summary>Sets the session name from Session Setup.</summary>
     public void SetSessionLabel(string label) => _txtSessionLabel.Text = label;
 
+    /// <summary>
+    /// The announcer's row, the Broadcast window and the Broadcast button,
+    /// drawn together from one reading of each value - once a second on the
+    /// clock, and straight away when the window opens or Hold is pressed, so
+    /// the three never disagree (a note arriving between two reads used to
+    /// be able to make them).
+    /// </summary>
+    private void ShowBroadcast()
+    {
+        var director = Commentary?.Invoke();
+        var notes = NotesWaitingForApproval();
+        var votes = VotesCastSoFar();
+        var recapRunning = Volatile.Read(ref _recapShow) is not null;
+        var replaying = _replayCut is not null;
+
+        _announcerStrip.Show(
+            director,
+            _settings.CommentaryEnabled,
+            _speaking,
+            // READ ON THE TICK, not stored from SpeakingChanged.
+            // The event only says that something started or
+            // stopped; what is actually in the speakers changes
+            // under it as a flag call cuts in or a recap moves on
+            // to its next piece. See AnnouncementService.OnAirNow.
+            _announcer.OnAirNow,
+            // Read on the tick like the rest: mute is a button on
+            // the Mixer, which is a different page, so nothing
+            // tells this row about it.
+            _announcer.Muted,
+            notes,
+            votes,
+            // How many of its own timing calls the announcer did
+            // not get out this race. Read on the tick like the
+            // rest - see AnnouncerStrip._load for the report that
+            // put a number on this row.
+            _announcer.Load,
+            // The recap show is running, so Skip has something to
+            // stop even in the quiet while the model writes - see
+            // EndRecapShow. And a replayed moment on air, which
+            // Skip rides down (22 Oct 2026).
+            programmeRunning: recapRunning || replaying,
+            replaying: replaying);
+
+        // The Broadcast window says the same in full, from the same values,
+        // once the row has been drawn - see BroadcastWindow. Nothing before
+        // it has been opened.
+        _broadcastWindow?.ShowState(
+            director,
+            _settings.CommentaryEnabled,
+            _speaking,
+            _announcer.Muted,
+            notes,
+            votes,
+            _announcer.Load,
+            recapRunning: recapRunning,
+            replaying: replaying,
+            momentHeld: RaceReplayBuffer.Shared.HeldSeconds >= LeastMomentSeconds);
+
+        ShowBroadcastButton(notes);
+    }
+
+    /// <summary>
+    /// The Broadcast window, opened - or brought to the front when it is open
+    /// already. One window, kept for the life of this page: it holds the
+    /// broadcast's own row (see BroadcastWindow). Built again, while it is
+    /// shut, when the text size has changed since (Ctrl +/-): it is laid out
+    /// for the size it was built at.
+    /// </summary>
+    private void ShowBroadcastWindow()
+    {
+        if (_broadcastWindow is { IsDisposed: false, Visible: false, BuiltForTextSize: false })
+        {
+            // Disposing the window lets go of the row first, so the row
+            // carries on into the new one (BroadcastWindow.Dispose).
+            _broadcastWindow.Dispose();
+        }
+
+        if (_broadcastWindow is null or { IsDisposed: true })
+        {
+            _broadcastWindow = new BroadcastWindow(_announcerStrip, RaceKeyFromBroadcastWindow);
+        }
+
+        // The theme first - it resets every button's colours - then the row,
+        // the window and the button drawn over it, so it opens showing now
+        // and lit as the row should be.
+        _broadcastWindow.Restyle();
+        ShowBroadcast();
+        _broadcastWindow.Bring(FindForm());
+    }
+
+    /// <summary>
+    /// The flag keys, pressed while the Broadcast window has the focus. The
+    /// window is a separate form, so they would otherwise go nowhere - and a
+    /// race director who has just pressed Hold must still be able to throw a
+    /// yellow with F4. The same actions MainForm's keys take (F1 to F8).
+    /// </summary>
+    private bool RaceKeyFromBroadcastWindow(Keys key)
+    {
+        switch (key)
+        {
+            case Keys.F1: TriggerStart(); return true;
+            case Keys.F2: TriggerCountdown(); return true;
+            case Keys.F3: TriggerGreen(); return true;
+            case Keys.F4: TriggerYellow(); return true;
+            case Keys.F5: TriggerRed(); return true;
+            case Keys.F6: TriggerCheckered(); return true;
+            case Keys.F7: TriggerResetFromKeyboard(); return true;
+            case Keys.F8: TriggerQuickRace(); return true;
+            default: return false;
+        }
+    }
+
+    /// <summary>
+    /// The Broadcast button says what would otherwise be out of sight with
+    /// the window shut: a hold standing - amber, as Hold itself is - and
+    /// notes from the room waiting to be approved.
+    /// </summary>
+    private void ShowBroadcastButton(int notes)
+    {
+        var held = _announcerStrip.Holding;
+
+        var caption = held
+            ? $"{BroadcastCaption} \u00B7 HELD"
+            : notes > 0
+                ? $"{BroadcastCaption} \u00B7 {Plural.Of(notes, "note")}"
+                : BroadcastCaption;
+
+        if (!string.Equals(_btnBroadcast.Text, caption, StringComparison.Ordinal))
+        {
+            _btnBroadcast.Text = caption;
+        }
+
+        // Styled again on a change - and after a theme pass, which resets
+        // every button's colours: the tag remembers the colour this set, so
+        // a back colour that no longer matches it means the theme reset it.
+        if (_btnBroadcast.Tag is not ValueTuple<bool, Color> styled || styled.Item1 != held || styled.Item2 != _btnBroadcast.BackColor)
+        {
+            AppTheme.StyleButton(_btnBroadcast, held ? AppTheme.ButtonKind.Warning : AppTheme.ButtonKind.Auto);
+            _btnBroadcast.Tag = (held, _btnBroadcast.BackColor);
+            _btnBroadcastFore = _btnBroadcast.ForeColor;
+        }
+
+        // Notes waiting light the caption, as the Notes button lights.
+        var fore = !held && notes > 0 ? AppTheme.Accent : _btnBroadcastFore;
+
+        if (_btnBroadcast.ForeColor != fore)
+        {
+            _btnBroadcast.ForeColor = fore;
+        }
+    }
+
     /// <summary>Opens the Big Screen. Routed through the same button the Race Control page uses, so the window is only ever constructed in one place.</summary>
     public void TriggerOpenBigScreen() => _actBigScreen?.Invoke();
 
@@ -1213,6 +1387,9 @@ public sealed partial class RaceControlControl : UserControl
             // holding a reference to this control through its Tick handler.
             _clockRefreshTimer.Dispose();
 
+            // The hold buttons' timers (25 Oct 2026) - see RaceControlControl.Morph.
+            DisposeHolds();
+
             CancelAutoStart();
 
             // Before unwiring, so the session's warm-up flag is cleared
@@ -1223,6 +1400,13 @@ public sealed partial class RaceControlControl : UserControl
             // A drop-down is a window of its own, not a child of this
             // control - closing the page does not close it.
             CloseLapPopup();
+
+            // Nor is the Broadcast window, which hides rather than closes.
+            // It lets go of the row before it goes (BroadcastWindow.Dispose),
+            // so the row is this page's to dispose - opened or not.
+            _broadcastWindow?.Dispose();
+            _broadcastWindow = null;
+            _announcerStrip.Dispose();
         }
         base.Dispose(disposing);
     }

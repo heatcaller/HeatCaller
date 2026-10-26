@@ -11,7 +11,7 @@ Everything to do with the announcer speaking is on the **Voice** page (called **
 | Tab | What's on it |
 |---|---|
 | **Voice Settings** | Which voice speaks, your own ElevenLabs connection, the voice's tuning, and the lines saved on the laptop. Covered from [Choose the voice](#choose-the-voice) down to [Saved voice lines](#saved-voice-lines). |
-| **Cast** | The announcer's voice, with **Test Voice**, at the top, and everyone else on the show below it. See [Choose the voice](#choose-the-voice) for the announcer, and [Commentary](commentary.md#technical-lead-and-team-principal) for the rest. |
+| **Cast** | **Load Voices** at the top, which fills every voice list on the tab, then the announcer's voice with **Test Voice**, and everyone else on the show below it. See [Choose the voice](#choose-the-voice) for the announcer, and [Commentary](commentary.md#technical-lead-and-team-principal) for the rest. |
 | **Announcements** | One row for each moment the announcer can call: whether it's on for races and for practice, and the lines it picks from. See [Announcements](#announcements). |
 | **Commentary** | Race intros and recaps written by a local AI model. It has [its own page](commentary.md). |
 | **Rivalries** | Lines for two particular drivers swapping places. See [Rivalries](#rivalries). |
@@ -32,12 +32,12 @@ This page also covers the [Announcer screen](#announcer-screen), a window for wh
 
 The **Speak with** card at the top of **Voice → Voice Settings** decides what speaks every announcement. Like everything on this tab, the choice saves as you make it. Its first line says where the rest is: "Choose what speaks here. The announcer's voice, and Test Voice, are at the top of the Cast tab."
 
-The announcer's voice itself is picked on **Voice → Cast**, on the **Announcer** card at the top of the tab, under its first line ("The voice carrying the whole program, from the engine chosen on the Voice tab."). The card shows the picker and the test for each voice that can speak, given the choice made here:
+The announcer's voice itself is picked on **Voice → Cast**, on the **Announcer** card under the **Voices** card at the top of the tab, under its first line ("The voice carrying the whole program, from the engine chosen on the Voice tab."). The card shows the picker and the test for each voice that can speak, given the choice made here:
 
 | Row at the top of **Voice → Cast** | Shown when |
 |---|---|
 | **HeatCaller voice:** with **Refresh** and **Hear It**, then **Your own words:** with **Preview**, and a line saying what the last press did. See [Pick a HeatCaller voice](#pick-a-heatcaller-voice). | The HeatCaller voice is chosen. Also whenever its list holds only its free samples, because your club isn't signed up for it yet, so you can listen before deciding. |
-| **ElevenLabs voice:** with **Load Voices** and **Test Voice**, and a line under them. See [Set up your own ElevenLabs account](#set-up-your-own-elevenlabs-account). | ElevenLabs is chosen. Also while the Kokoro voice is chosen and a key is typed in **API Key:**, so you can set ElevenLabs up before switching to it. |
+| **ElevenLabs voice:** with **Test Voice**, and a line under them. Its list is filled by **Load Voices** on the **Voices** card above. See [Set up your own ElevenLabs account](#set-up-your-own-elevenlabs-account). | ElevenLabs is chosen. Also while the Kokoro voice is chosen and a key is typed in **API Key:**, so you can set ElevenLabs up before switching to it. |
 | **Kokoro voice:** with **Test Voice**, and a line for what the test did. See [Use the Kokoro voice](#use-the-kokoro-voice). | The Kokoro voice is chosen, or it's standing in: always with the HeatCaller voice, and with ElevenLabs while the stand-in box under it is ticked. The voice picked here is the one that stands in. |
 
 The **Announcer's name:** is on the same card, under the voice.
@@ -113,7 +113,9 @@ If the file isn't there, a **Download (about 310 MB)** button appears under the 
 
 The downloaded copy is kept in `%LocalAppData%\HeatCaller\Kokoro`, on that PC only, and isn't part of a backup. Nothing Kokoro says is kept with the [saved voice lines](#saved-voice-lines).
 
-The Technical Lead and the Team Principal can have a Kokoro voice of their own: with Kokoro chosen, pick one in **Technical Lead's voice:** or **Team Principal's voice:** on **Voice → Cast**. See [Technical Lead and Team Principal](commentary.md#technical-lead-and-team-principal).
+Everyone on **Voice → Cast** can have a Kokoro voice of their own — the recap host, the co-host, the Technical Lead, the Team Principal and the achievements reader — **whatever voice the announcer uses**. Every voice list on the Cast tab ends with the Kokoro voices on this PC, each marked "Kokoro:", for example "Kokoro: Emma (British, female)". Pick one and that speaker talks in Kokoro's free voice even beside an ElevenLabs or HeatCaller announcer; press **Test Voice** beside the list to hear it. Picking any other voice in the list, or "(the announcer's own voice)", puts them back on it. With Kokoro chosen under **Speak with**, the lists are the Kokoro voices, as before.
+
+The Kokoro voices are only offered once Kokoro is on this PC (see the **Download** button above). If it is taken off again, a speaker given one says their lines as they did before — in the voice picked for them for the engine in use, or the announcer's — and their list shows the voice with "not downloaded" after it. See [Technical Lead and Team Principal](commentary.md#technical-lead-and-team-principal).
 
 ### What the Kokoro voice uses
 
@@ -168,7 +170,7 @@ That's also why it works differently from a key of your own. The account behind 
 | The **Rivalries** tab's lines and its **Use Default Lines** | Read-only and switched off, with an amber line saying why. See [Rivalries](#rivalries). |
 | A [soundscape](sounds-and-music.md#soundscapes) applied on **Sounds → Soundscapes** | Its sounds apply; nothing from its **Announcements** tab does, lines included. The wording stays the standard set. |
 | **API Key:**, **Show**, **Model:** | Switched off. They belong to your own ElevenLabs account. |
-| **ElevenLabs voice:**, **Load Voices** and **Test Voice** on **Voice → Cast** | Not shown. The **Announcer** card shows the HeatCaller voice's own picker instead. |
+| **ElevenLabs voice:** and **Test Voice** on **Voice → Cast** | Not shown. The **Announcer** card shows the HeatCaller voice's own picker instead. |
 | **Stability:**, **Similarity boost:**, **Style:**, **Speed:**, **Speaker boost**, **Text normalize:**, **Language:**, **Output format:** | Switched off. The relay decides all of these, per voice. |
 
 **Hear It** and **Preview** are the exceptions, and deliberately so: neither spends a character of the race-night allowance, so both stay live while the HeatCaller voice is chosen. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it).
@@ -265,13 +267,13 @@ If you run the relay yourself, [Hosting a relay](../admin/relay-hosting.md#tryin
 
 ## Set up your own ElevenLabs account
 
-The key and the model are on the **ElevenLabs connection** card on **Voice → Voice Settings**; the voice, with **Load Voices** and **Test Voice**, is at the top of **Voice → Cast**. The connection card can be filled in whichever voice is speaking. Its first line says so: "Used when ElevenLabs is chosen above, and for the saved voice lines - it can be set up whichever voice is speaking." The one exception is the HeatCaller voice: the whole card is switched off while that's chosen, because the account behind that voice isn't yours, and the **ElevenLabs voice:** row on **Cast** isn't shown. Choose ElevenLabs or the Kokoro voice under **Speak with** first, then fill the box in.
+The key and the model are on the **ElevenLabs connection** card on **Voice → Voice Settings**; the voice, with **Test Voice**, is at the top of **Voice → Cast**, filled by **Load Voices** on the **Voices** card there. The connection card can be filled in whichever voice is speaking. Its first line says so: "Used when ElevenLabs is chosen above, and for the saved voice lines - it can be set up whichever voice is speaking." The one exception is the HeatCaller voice: the whole card is switched off while that's chosen, because the account behind that voice isn't yours, and the **ElevenLabs voice:** row on **Cast** isn't shown. Choose ElevenLabs or the Kokoro voice under **Speak with** first, then fill the box in.
 
 1. Get an API key from your ElevenLabs account. <!-- TODO: confirm the exact steps/menu names on the ElevenLabs website for creating an API key, and which key permissions HeatCaller needs (it lists voices and synthesizes speech). -->
 2. In HeatCaller, open **Voice → Voice Settings**.
 3. On the **ElevenLabs connection** card, paste the key into **API Key:**. Tick **Show** if you want to check what you pasted. With the Kokoro voice chosen, the **ElevenLabs voice:** row appears on **Cast** once a key is typed.
 4. Pick a model from **Model:** (see [Choosing a model](#choosing-a-model)).
-5. Open **Voice → Cast**. At the top of the **Announcer** card, press **Load Voices** beside **ElevenLabs voice:**. HeatCaller asks ElevenLabs for the voices on your account and fills the list. The line under it says, for example, "Loaded 24 voices."
+5. Open **Voice → Cast** and press **Load Voices** on the **Voices** card at the top. HeatCaller asks ElevenLabs for the voices on your account and fills every voice list on the tab, **ElevenLabs voice:** on the **Announcer** card included. The line under it says, for example, "Loaded 24 voices."
 6. Pick a voice from **ElevenLabs voice:**.
 7. Press **Test Voice** beside it. You should hear "This is HeatCaller testing your announcer voice." It uses the **Voice parameters** on **Voice Settings** as they are on screen, so you can change one there and test again. **Test Voice** always tests ElevenLabs, whichever voice is chosen under **Speak with**.
 8. Back on **Voice Settings**, under **Speak with**, choose **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)**.
@@ -645,7 +647,7 @@ The same two-at-once limit and the same 30-second give-up apply to the relay.
 
 ## Announcer screen
 
-The Announcer screen is a window for whoever is on the microphone. It's not another leaderboard. It gives you things to say. Open it with **Open Announcer Screen** on **Race Control** (shortcut <kbd>A</kbd>). The first time, it opens beside the main window when there's room, so the director keeps **Race Control** while you keep the Announcer; you can also put it on a second monitor. Closing it only hides it: open it again and everything is still on it. The **Race Control** button in the window brings the main window forward on **Race Control** without closing the Announcer.
+The Announcer screen is a window for whoever is on the microphone. It's not another leaderboard. It gives you things to say. Open it with **Announcer Screen** on **Race Control** (shortcut <kbd>A</kbd>). The first time, it opens beside the main window when there's room, so the director keeps **Race Control** while you keep the Announcer; you can also put it on a second monitor. Closing it only hides it: open it again and everything is still on it. The **Race Control** button in the window brings the main window forward on **Race Control** without closing the Announcer.
 
 <!-- screenshot: Announcer screen during a race, talking points list and spotlight filled in -->
 
@@ -712,7 +714,7 @@ Rivalries are also given to the local model for race intros and recaps. See [Com
 | The **Rivalries** phrasing box won't take typing and **Use Default Lines** is grayed out | The HeatCaller voice is chosen. The amber line on the tab says so. | Same answer: your own key or the Kokoro voice. Adding, enabling and deleting rivalries still work. |
 | An announcer voice in the list says "not offered by the relay any more" | The relay has dropped the voice you chose from its catalog. | Pick another one in **HeatCaller voice:** at the top of **Voice → Cast**. Lines already saved in the old voice still play until the allowance or the relay says otherwise. |
 | The whole night is in the Kokoro voice, including lines that used to be in the HeatCaller voice | The month's allowance is used up. Saved lines are passed over too, on purpose, so the night is one voice. | Wait for the allowance to start again — the console line says when. Nothing is lost. Or switch to your own ElevenLabs key. See [When the HeatCaller voice can't speak a line](#when-the-heatcaller-voice-cant-speak-a-line). |
-| "Enter your ElevenLabs API key on the Voice tab first." when pressing **Load Voices** beside **ElevenLabs voice:** | The **API Key:** box on **Voice Settings** is empty. | Paste your key. |
+| "Couldn't load the ElevenLabs voices - there's no ElevenLabs API key on the Voice tab." when pressing **Load Voices** on **Voice → Cast** | The **API Key:** box on **Voice Settings** is empty. | Paste your key. |
 | "Enter an API key on the Voice tab, and pick a voice, first." when pressing **Test Voice** beside **ElevenLabs voice:** | The **API Key:** box on **Voice Settings** is empty, or no voice is picked in **ElevenLabs voice:**. | Paste your key, then press **Load Voices** and pick a voice. |
 | "Failed to load voices:" followed by a message | ElevenLabs refused the key, or there's no internet. | Check the key and the connection. |
 | "Test failed:" followed by a code and message | ElevenLabs rejected the request. The message says why. | Common causes: wrong key, quota used up, or an **Output format:** your plan doesn't allow. Clear **Output format:** first. |

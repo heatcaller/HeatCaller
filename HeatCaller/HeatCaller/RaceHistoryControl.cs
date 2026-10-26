@@ -350,6 +350,40 @@ public sealed class RaceHistoryControl : UserControl
         _txtNotes.Enabled = false;
     }
 
+    /// <summary>
+    /// Shows one race, selected in the list with its results beside it - and
+    /// with Edit Result open on it when <paramref name="edit"/> is set. For
+    /// Race Control's Results and Edit Result after the flag (25 Oct 2026);
+    /// the host has put this page up first. Nothing when the race isn't in
+    /// the history (yet).
+    /// </summary>
+    internal void ShowSession(string id, bool edit)
+    {
+        ListViewItem? Find() => _sessionList.Items.Cast<ListViewItem>()
+            .FirstOrDefault(item => string.Equals(item.Tag as string, id, StringComparison.Ordinal));
+
+        // Not listed yet when the page has not been opened since it was saved.
+        if (Find() is null)
+        {
+            RefreshList();
+        }
+
+        if (Find() is not { } found)
+        {
+            return;
+        }
+
+        _sessionList.SelectedItems.Clear();
+        found.Selected = true;
+        found.Focused = true;
+        found.EnsureVisible();
+
+        if (edit)
+        {
+            EditSelectedResult();
+        }
+    }
+
     private void ShowDetail()
     {
         _detailGrid.Rows.Clear();

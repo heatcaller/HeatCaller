@@ -453,17 +453,27 @@ internal static class VoiceEngines
 /// as a voice for each engine, since the club can switch engine at any time.
 /// Only the one for the engine in use is used; a blank one leaves that part
 /// of the announcer's own voice as it is.
+///
+/// KOKORO FOR ANYONE (25 Oct 2026, asked for by Asher): with
+/// <paramref name="KokoroAlways"/> the speaker talks in their Kokoro voice
+/// whatever engine the announcer uses - a co-host on this PC's free voice
+/// beside an ElevenLabs announcer. See VoiceProfile.CloneWithVoice.
 /// </summary>
+/// <param name="KokoroAlways">
+/// Speak in <paramref name="KokoroVoiceName"/> with every engine, not only
+/// with Kokoro chosen on the Voice tab.
+/// </param>
 public sealed record SecondVoice(
     string ElevenLabsVoiceId,
     string ElevenLabsVoiceName,
     string HeatCallerVoice,
     string HeatCallerVoiceName,
     string HeatCallerRev,
-    string KokoroVoiceName = "")
+    string KokoroVoiceName = "",
+    bool KokoroAlways = false)
 {
     /// <summary>Whether a voice has been picked for this engine - otherwise the announcer's own is used.</summary>
-    public bool IsSetFor(VoiceEngine engine) => engine switch
+    public bool IsSetFor(VoiceEngine engine) => SpeaksKokoroWith(engine) || engine switch
     {
         VoiceEngine.ElevenLabs => !string.IsNullOrWhiteSpace(ElevenLabsVoiceId),
         VoiceEngine.HeatCaller => !string.IsNullOrWhiteSpace(HeatCallerVoice),
@@ -471,8 +481,18 @@ public sealed record SecondVoice(
         _ => false,
     };
 
+    /// <summary>
+    /// Whether this speaker talks in their Kokoro voice while the announcer
+    /// uses <paramref name="engine"/> - a Kokoro voice picked for every
+    /// engine, with one named. Kokoro itself is answered by the plain rule.
+    /// </summary>
+    public bool SpeaksKokoroWith(VoiceEngine engine) =>
+        KokoroAlways && engine != VoiceEngine.Kokoro && !string.IsNullOrWhiteSpace(KokoroVoiceName);
+
     /// <summary>The picked voice's name for this engine, for the page and the console; empty when none is.</summary>
-    public string NameFor(VoiceEngine engine) => engine switch
+    public string NameFor(VoiceEngine engine) => SpeaksKokoroWith(engine)
+        ? KokoroSpeech.Describe(KokoroVoiceName) + " (Kokoro)"
+        : engine switch
     {
         VoiceEngine.ElevenLabs => ElevenLabsVoiceName,
         VoiceEngine.HeatCaller => HeatCallerVoiceName,
@@ -823,9 +843,24 @@ public sealed class VoiceProfile
     /// is picked, so a stand-in for an ElevenLabs line is still a different
     /// voice from the announcer's.
     /// </summary>
-    public VoiceProfile CloneWithVoice(SecondVoice voice)
+    /// <param name="kokoroReady">
+    /// Whether Kokoro can speak on this PC - null asks KokoroSpeech. A
+    /// speaker given a Kokoro voice for every engine speaks in it only when
+    /// it can; otherwise the line goes out as it always did, in the
+    /// engine's voice for them or the announcer's, rather than not at all.
+    /// </param>
+    public VoiceProfile CloneWithVoice(SecondVoice voice, bool? kokoroReady = null)
     {
         var copy = CloneForDelivery(Stability, Style);
+
+        // A Kokoro voice for every engine (25 Oct 2026): this line, and only
+        // this line, goes to Kokoro - every render path reads the engine
+        // from the profile it is handed (EffectiveEngine), so nothing else
+        // has to know. The voice itself is set below with the others.
+        if (voice.SpeaksKokoroWith(EffectiveEngine) && (kokoroReady ?? KokoroSpeech.IsAvailable))
+        {
+            copy.Engine = VoiceEngine.Kokoro;
+        }
 
         if (!string.IsNullOrWhiteSpace(voice.ElevenLabsVoiceId))
         {

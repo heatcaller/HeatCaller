@@ -13,9 +13,53 @@ From top to bottom, the page has:
 
 - **The Session row.** Choose the round, the track and the session name.
 - **The Next Up bar.** Shows what's running now, what's next, and how the day is going.
-- **The Race Control card.** Holds one row of flag buttons, all the same width: **On Air**, **Stage**, **Countdown**, **Green**, **Yellow**, **Red**, **Checkered** and **Reset**. The lit button shows the flag in effect, so there's no separate state line.
+- **The Race Control card.** Holds one row of flag buttons, all the same width and centred over the On Air bar under them, with the level meters at the right, reaching from the card's title down to the foot of the On Air bar (see [Level meters](#level-meters)). The lit flag button and the board show where the race is. Only the buttons that mean something at that moment are shown (see [The flag row](#the-flag-row)). The lit button shows the flag in effect. **Red**, **Checkered** and **Reset** have to be pressed and held for a second (see [Press and hold](#press-and-hold)); the line under the row says so, and shows the hold as it fills. The same line is the **On Air bar** while anything is going out (see [The On Air bar](#the-on-air-bar)).
 - **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, the **Start races On Air** tick box, **Race Format...** and **Columns...**.
-- **The clock column** on the right. It holds the race clock, then **Quick Race**, **Open Big Screen**, **Open Announcer Screen**, **Qualifying Projection**, **Pre-race check...** and **Mission Control**.
+- **The clock column** on the right. It holds the race clock, then **Quick Race**, **Big Screen**, **Announcer Screen**, **Qualifying Projection**, **Pre-race check...**, **Mission Control** and **Broadcast**.
+
+## The flag row
+
+The row changes with the race, so the buttons you need are the only ones there:
+
+| When | Buttons on the row |
+|---|---|
+| Before the green: from a cold start, through On Air, a warm-up, staging and the countdown | **Stage**, **Countdown**, **Green**, **Reset**. The row doesn't change until the race goes green. |
+| Racing | **Green**, **Yellow**, **Red**, **Checkered**, **Reset**, the same five under a yellow or a red. **Green** restarts the race after a caution. |
+| After the flag (finished) | **Next Heat**, **Results**, **Edit Result**, **Reset**. **Next Heat** does what **Start Next** on the Next Up bar does — the program's next race, or the step owed first (it reads **Next Step** then). With nothing next in the program, **Stage** is there instead. **Results** opens the race just run in **Race History**; **Edit Result** opens it there with **Edit Result** open, for a penalty, a missed lap or a DNF. |
+| Practice | None: practice is run from the Practice page |
+
+On Air has no button on the row: <kbd>F1</kbd>, **Start Next** and the other starts go through it (see [On Air](#on-air)), and <kbd>O</kbd> starts it by hand. **Reset** takes the row back to the set before the green. A yellow or a red before the green is <kbd>F4</kbd> or <kbd>F5</kbd>.
+
+The function keys and the phone remote still reach every button, shown or not, exactly as before.
+
+### Press and hold
+
+**Red**, **Checkered** and **Reset** can't be taken back in the middle of a race, so a click on them does nothing: press and hold the button for about a second. Each of them has a small clock beside its caption. While you hold, a bar fills along the foot of the button and the line under the row says "Keep holding to throw the red flag…" (or "to end the race", "to reset the race") with "let go to cancel". Let go before it fills, or slide off the button, and nothing happens: the line says "Let go too soon - nothing was done." for a moment.
+
+**Yellow**, and every other button, is still one click.
+
+The keys don't need holding: <kbd>F5</kbd> throws the red, <kbd>F6</kbd> the checkered, and <kbd>F7</kbd> resets, asking first if a race is under way, as before. The phone remote acts straight away too.
+
+On a touch screen, hold your finger on the button. HeatCaller turns off Windows' "press and hold for a right-click" on these three buttons so the hold reaches them.
+
+### Level meters
+
+At the right of the row are four level meters, like a radio board's channel strips:
+
+- **VOICE**: the announcer speaking.
+- **SFX**: sound effects, lap beeps, imaging, and recordings played back (a replayed moment, a driver's own clip).
+- **MUSIC**: the music.
+- **CROWD**: the crowd and ambience bed.
+
+They run from the top of the card's **RACE CONTROL** title to the foot of the On Air bar. If the window is too narrow, they're hidden so the flag buttons keep their room.
+
+Each strip has a left and a right bar, from -40 dB at the foot to 0 at the top. They are green to -9 dB, amber to -3 dB and red above. They move like a VU meter: each bar follows how loud the sound is over a fraction of a second, not every peak, and settles on a new level in about 300 ms, up or down. A full-scale tone reads 0. A white line marks the highest the bar has reached and holds there for a second and a half. The strips move with what the room hears, not ahead of it, and drop as soon as music or the crowd is stopped or paused. They show the level HeatCaller sends out, after its own volumes and ducking, not the volume set on the PC or the speakers. A sponsor video's sound on the Big Screen isn't on them. They only run while they're on screen.
+
+### The On Air bar
+
+While anything is going out, the line under the row is the **On Air bar**, in cyan. It runs from the left of the card to just short of the level meters. It names the segment on air, for example **On air: Race Recap** or **On air: Driver Intros**, and stays up while anything is going out: the announcer speaking, the recap show (named as on the **AI Commentary** page's **Recap show** card when you've typed a name there), a replayed moment, an imaging piece or bed, a sponsor video, the music or the crowd. While On Air is live, between the jingle and staging, it reads **On air** between segments and shows "press O to skip to Stage" at its right. While On Air is writing and voicing the opening, it's On Air's red bar, filling as the work gets done. When nothing is going out, it goes back to the hint about which buttons to hold. A press-and-hold still takes over the whole line while you hold. Double-click the bar to open the **Broadcast** window.
+
+Inside the bar, after the segment, a small speaker and **Now playing** in cyan name the imaging element the room is hearing: a jingle, sweeper, bumper or stinger (with the point it was played for, for example "Top of the race · Classic station ID"), a music bed, the recap show's opener, bed or sting, a replay, a sponsor video with its sound, the music, or the crowd. When more than one is going out, a piece is named over a sponsor video, a sponsor video over a bed, a bed over the music, and the music over the crowd. When nothing is playing, it's left out.
 
 ## Before you start
 
@@ -68,7 +112,7 @@ For a class or a round, untick **Use a custom format (untick to follow the app d
 ## Start the race
 
 1. Pick the round (or leave the session freeform).
-2. Press **On Air** (<kbd>O</kbd>), or <kbd>F1</kbd>. The show opens the race like a radio station: the soundscape's jingle or sweeper, the opening (the race intro), the throw down to pit lane and the driver introductions when they're switched on, a bumper, and then the race is staged. See [On Air](#on-air).
+2. Press <kbd>F1</kbd> (or <kbd>O</kbd>), or **Start Next**. The show opens the race like a radio station: the soundscape's jingle or sweeper, the opening (the race intro), the throw down to pit lane and the driver introductions when they're switched on, a bumper, and then the race is staged. See [On Air](#on-air).
 3. When staging starts, the board clears, the announcer calls the cars to the grid and **Stage** lights up.
 4. Press **Countdown** (<kbd>F2</kbd>). **Countdown** lights up. From now on, a car that crosses the line counts as a [jump start](#jump-starts).
 5. Press **Green** (<kbd>F3</kbd>). The race starts and the clock begins counting.
@@ -79,14 +123,14 @@ For a class or a round, untick **Use a custom format (untick to follow the app d
 
 On Air is the normal start. With **Start races On Air** ticked at the foot of the leaderboard (it is by default), <kbd>F1</kbd>, **Start Next**, the program's **Start**, the phone and the day schedule all go through On Air first. Unticked, they stage straight away. The **Stage** button always stages straight away, whatever the tick box says.
 
-While On Air gets the opening ready, the button fills from left to right and counts down the seconds it expects to need, learned from your last few openings, with the step it's on: for example "12s · Voicing". The first few times there's no countdown yet, just the step. Once the show is live the button turns cyan and reads **On Air · Skip**.
+While On Air gets the opening ready, the strip under the flag row shows it the way it shows a press and hold: the step it's on ("On Air: writing the opening…", "On Air: voicing the opening…", "On Air: voicing the driver intros…"), a red bar filling from left to right, and the seconds it expects to need, learned from your last few openings, for example "about 12s · press O to skip to Stage". The first few times there's no countdown yet, just the step. Once the show is live the strip turns cyan and reads "On air - the show is going out".
 
-- **Press On Air again** while it runs to skip the rest and stage straight away.
+- **Press <kbd>O</kbd> again** while it runs to skip the rest and stage straight away.
 - **Anything else that moves the race on** (Stage, Countdown, Green or Reset) calls On Air off, and your press wins.
 - **Yellow or Red between races** doesn't call On Air off; it only stops the automatic start.
 - **During a demo's On Air**, a flag press skips the rest of the opening and starts the demo, which stages and goes green by itself.
 
-Between races, HeatCaller writes the next opening and voices it ahead, so pressing On Air usually starts the jingle at once. If you change the voice in between, the lines voiced ahead are dropped and voiced again.
+Between races, HeatCaller writes the next opening and voices it ahead, so On Air usually starts the jingle at once. If you change the voice in between, the lines voiced ahead are dropped and voiced again.
 
 With **Run the start sequence automatically (Stage → Countdown → Green)** ticked (the default), you only need to press **Stage**. HeatCaller moves on to the countdown when the staging announcement finishes, and drops the green when the countdown announcement finishes. It follows the audio rather than a fixed timer, so the start never talks over itself or leaves a silence. With the announcer muted there's no audio to follow, so staging lasts **Stage (s):** and the countdown **Countdown (s):** from the race format instead.
 
@@ -196,10 +240,10 @@ You set the jump-start rules on the class:
 | Button | Key | What happens |
 |---|---|---|
 | **Yellow** | <kbd>F4</kbd> | Caution. Laps still count and the clock keeps running. |
-| **Red** | <kbd>F5</kbd> | Stops the race. The clock pauses and shows **PAUSED**, laps are not counted, and cars waiting to be released stay held. A timed race can't run out while the red flag is out. |
+| **Red** | <kbd>F5</kbd> | Press and hold the button (see [Press and hold](#press-and-hold)). Stops the race. The clock pauses and shows **PAUSED**, laps are not counted, and cars waiting to be released stay held. A timed race can't run out while the red flag is out. |
 | **Green** | <kbd>F3</kbd> | During a race, this resumes racing after a yellow or red. Laps and times are kept. If a lap added by hand under the red brought a driver to the lap limit, the checkered flag comes out instead. |
-| **Checkered** | <kbd>F6</kbd> | Ends the race now, for everyone, and saves the result. Only works while a race is running. |
-| **Reset** | <kbd>F7</kbd> | Clears the race, and the round and name on the **Session** row. The key asks first if a race is under way. See [Corrections and recovery](corrections-and-recovery.md#reset-and-undo). |
+| **Checkered** | <kbd>F6</kbd> | Press and hold the button. Ends the race now, for everyone, and saves the result. Only works while a race is running. |
+| **Reset** | <kbd>F7</kbd> | Press and hold the button. Clears the race, and the round and name on the **Session** row. Everything going out stops at once: the announcer mid-sentence, everything queued to be said, the recap show, a replayed moment, every jingle and bed, the sponsor spot on the Big Screen (a video with its sound), the music and the crowd. The next race brings the music and the crowd back up as usual. The key asks first if a race is under way. See [Corrections and recovery](corrections-and-recovery.md#reset-and-undo). |
 
 Going from red to yellow also restarts the race clock, because laps count under yellow.
 
@@ -214,7 +258,7 @@ The presses below are refused and change nothing. No box appears: the log gives 
 
 **Green** pressed while the race is already green does nothing at all: no horn and no call. The log says "Green pressed - the race is already green, so nothing changed.", and the phone remote shows "Already green."
 
-The lit flag button always shows the flag in effect, however it was thrown: a button, a function key, the phone remote or the automatic start. **Stage** and **Countdown** light up while the start is at that step. There's no separate State or Flag line: the lit button is it.
+The lit flag button always shows the flag in effect, however it was thrown: a button, a function key, the phone remote or the automatic start. **Stage** and **Countdown** light up while the start is at that step. The word at the left of the row says where the race is, and the buttons on the row follow it the same way (see [The flag row](#the-flag-row)).
 
 The function keys work only while the **Race Control** page is showing, and only on their own. Alt+F4, or an F-key with Ctrl or Shift, never throws a flag. See [Keyboard shortcuts](../reference/keyboard-shortcuts.md).
 
@@ -441,11 +485,12 @@ Practice and Demo Mode don't keep shots.
 ## The clock column buttons
 
 - **Quick Race** (<kbd>F8</kbd>) runs a race with whoever is on track. See [Other ways to start](#other-ways-to-start).
-- **Open Big Screen** (<kbd>B</kbd>) opens the audience display. See [Big Screen](../screens/big-screen.md).
-- **Open Announcer Screen** (<kbd>A</kbd>) opens the Announcer screen in a window of its own, beside this one or on a second monitor. Its **Race Control** button brings the main window back to the front. See [Announcer screen](../announcer/voice.md#announcer-screen).
+- **Big Screen** (<kbd>B</kbd>) opens the audience display. See [Big Screen](../screens/big-screen.md).
+- **Announcer Screen** (<kbd>A</kbd>) opens the Announcer screen in a window of its own, beside this one or on a second monitor. Its **Race Control** button brings the main window back to the front. See [Announcer screen](../announcer/voice.md#announcer-screen).
 - **Qualifying Projection** opens or closes a window that shows where the class would qualify if the running heat ended now. See [Program and mains](../race-day/program-and-mains.md#qualifying-projection).
 - **Pre-race check...** (<kbd>R</kbd>) checks which cars in the round (or on the board) the decoder has heard. Its **Mission Control** button opens [Mission Control](#mission-control). See [Pre-race check](../race-day/events-and-entries.md#pre-race-check) and [Transponders](../timing/transponders.md).
 - **Mission Control** opens [Mission Control](#mission-control).
+- **Broadcast** opens the broadcast's controls in a window of their own: **Hold**, **Play again**, **Replay Moment**, **Skip**, **Notes** and **Votes**, with what the announcer is doing said in full under them. The button reads **Broadcast · HELD** in amber while a hold is on, and **Broadcast · 3 notes** when notes from the room are waiting for you, so neither is missed with the window shut. See [The Broadcast window](../announcer/commentary.md#the-broadcast-window).
 
 ## Tips
 

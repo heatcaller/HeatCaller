@@ -431,6 +431,10 @@ public sealed partial class AnnouncementService
                 currentProfile.Stability, currentProfile.Style, speedOnly);
         }
 
+        // Who would say it without the second voice - for a Kokoro voice on
+        // the Cast tab that Kokoro can't say after all (RenderCastLineAsync).
+        var withoutVoice = currentProfile;
+
         if (voice is not null)
         {
             // After the delivery, which it keeps: only who is speaking changes.
@@ -514,7 +518,7 @@ public sealed partial class AnnouncementService
         }
 
         StatusMessage?.Invoke($"{announcingLogPrefix}: \"{text}\"");
-        var synthesis = await RenderLineAsync(currentProfile, text);
+        var synthesis = await RenderCastLineAsync(withoutVoice, currentProfile, voice, text);
         var audio = synthesis.Audio;
 
         // A race-control call with its own sound - the start horn, the

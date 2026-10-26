@@ -143,6 +143,13 @@ log is now a file of its own (`%LocalAppData%\HeatCaller\Logs`), so
 Written down here the moment it is asked for, because a request held only
 in a chat is a request that is lost when the chat is.
 
+- **Race Control's flag row, reimagined** (asked 25 Oct 2026, **built 25 Oct 2026, not yet compiled on Windows**). Asher asked for ten ways to reimagine the flag panel, had them mocked up on the Race Control layouts canvas, and chose "Morphing bar + hold to act", adding "please add what piece of imaging or sound element is playing to the right of the screen in cyan". Built: the row shows only the buttons for where the race is (`RaceBar`, tested without a window), Red, Checkered and Reset are pressed and held for a second (`HoldToAct`, `HoldGesture`) with the strip under the row saying what the hold will do, and Now Playing in cyan at the right (`NowPlaying`, fed by every imaging piece and bed, the recap show, the replay, a sponsor video with sound, and asked of the playlist and the crowd). Keys and the phone remote unchanged. Tests: `RaceControlMorphTests`. **To check on the floor:** the hold on the track PC's touch screen, and the row's height through a whole race at the track PC's width.
+- **A Kokoro voice for anyone on the cast, whatever the announcer uses** (asked 25 Oct 2026: "is the kokoro voice selectable for all voices? if not make it so"; **built 25 Oct 2026, not yet compiled on Windows**). It wasn't: each speaker's voice was picked per engine and the Cast tab's lists held only the engine in use. Now every list ends with the Kokoro voices on this PC (once the model is there), marked "Kokoro:"; picking one sets `<Role>KokoroAlways` (`SecondVoice.KokoroAlways`), and `VoiceProfile.CloneWithVoice` sends that speaker's lines to Kokoro - falling back to how the line went before when Kokoro can't speak (`RenderCastLineAsync`, also when Kokoro fails on the line itself). Kokoro is warmed up at start when any of the cast uses it this way, and on a pick. Also asked: "a test button next to the cohost voice. all voice selection drop downs should have test" - every voice list on the Cast tab already has Test Voice beside it (the co-host's included, greyed while the co-host is off); the HeatCaller voice's is Hear It. Tests: `KokoroForAnyoneTests`.
+- **Cast tab: Voices card to the top, one Load Voices** (asked 25 Oct 2026: "move the voice card to the top and remove the load voices button next to announcer. it's redudant now"; **built 25 Oct 2026, not yet compiled on Windows**). The Voices card is first; its Load Voices also fills the announcer's ElevenLabs list (`CastControl.LoadAnnouncerVoices` → `VoiceSettingsControl.LoadAnnouncerElevenLabsVoicesAsync`, while that row would show), and is never greyed. The announcer's own Load Voices is gone.
+- **Cast tab: one order on every card** (asked 25 Oct 2026: "for all members the first thing on the card is their name, then the voice, then the selections below. make unifiorm for all cast memebers"; **built 25 Oct 2026, not yet compiled on Windows**). Name, voice with Test Voice, then the card's description and switches, on all six cards. The name and voice rows are no longer stepped in under a switch (they sit above it now); the co-host's are a grid of their own (`coHostVoiceGrid`). The announcer's voice rows are hosted under the name (`_announcerName`). "Achievements reader:" is captioned "Reader's name:".
+- **The flag row after the flag, as mocked up** (asked 25 Oct 2026: "the mock up had a different set up buttons for after a race"; **built 25 Oct 2026, not yet compiled on Windows**). Finished shows Next Heat (`_btnBarNext` -> `StartNext`, shared with Start Next; "Next Step" when a step is owed; Stage in its place with nothing next, `_nextWaiting`), Results and Edit Result (`ResultsRequested`/`EditResultRequested` -> `MainForm.ShowLatestRaceInHistory` -> `RaceHistoryControl.ShowSession`), and Reset. On Air only while its show runs. Tests in `RaceControlMorphTests`.
+- **On Air's wait on the hold strip; the On Air button removed** (asked 25 Oct 2026: "use the press and hold animation to denote the writting and voicing delay instead of the on air button whcih you can remove"; **built 25 Oct 2026, not yet compiled on Windows**). `HoldStrip.ShowWork`/`EndWork` draw work under way in the hold's card (`PaintCard`); On Air's steps, fill and countdown go there (`PaintOnAirProgress`, red) and the live show (`ShowOnAirLive`, cyan, no bar). `_btnOnAir`, `OnAirLeastWidth` and `RaceBarButtons.OnAir` are gone; `RaceBar.ButtonsFor` lost `onAirRunning`, `MostShown` is 6. F1, Start Next etc. still go through On Air; O starts/skips it.
+
 - **The Track Designer, made better** (asked 25 Oct 2026, planned, not started): "plan on how we can make it better", straight after the overhaul. Seven phases in `plans\track-designer-next-plan.md`: prove it on the floor first, then faster drawing, corner tiles as printed, a lap per class, the plan on race night, sharing and the 3D lap, and the hall's real shape. The order after the first is Asher's choice.
 
 - **A Track Designer overhaul** (asked 25 Oct 2026, all eight phases built). Asher:
@@ -237,6 +244,98 @@ in a chat is a request that is lost when the chat is.
   tests; reviewed, 11 findings fixed.
 
 ### Built since it was asked for
+
+- **A steady flag row, On Air back on it, taller meters** (asked 26 Oct
+  2026, **built 26 Oct 2026**). "expand the height of the VU meters to the
+  top of the text of the card's title. double clicking the broadcast bar
+  should open the broadcast window. remove the vu meters from the broadcast
+  window. which version the race control morphs into is all over the place.
+  from cold start the following buttons show, on air, stage, countdown,
+  green and reset. they all remain up until green gets pressed or is moved
+  on to naturally. once the race is green the buttons change to green,
+  yellow, red, checkered, reset. reset moves back to the original state."
+  After the flag: the after-race row is kept (asked). RaceBar.ButtonsFor:
+  BeforeTheGreen for Idle, a warm-up, Staging and Countdown; the five flags
+  for Racing; MostShown 5. RaceBarButtons.OnAir is back (_btnBarOnAir ->
+  PressOnAir, lit red/cyan in UpdateOnAirBar). FlagRow draws the card's
+  title (the Section has none) and fits the meters from its top. HoldStrip
+  double-click -> ShowBroadcastWindow. BroadcastWindow has no meters. Not
+  yet seen on Windows. Later the same evening: "instead of saying recap
+  show use the name in the AI commentary if configured. remove the on air
+  flag like button. shorten the on air bar to right before the vu meters.
+  stretch vu meters taller. flag buttons should be centered above on air
+  bar" - the On Air button went again (BeforeTheGreen is Stage, Countdown,
+  Green, Reset; MostShown 5 for racing); FlagRow holds the HoldStrip
+  (FlagRow(bar, caption, strip)) as a left column under the buttons, the
+  meters the full height beside it; the bar is centred over the column
+  (OneLineWidth); RaceControlControl.RecapShowLabel(AppSettings.
+  RecapShowName) replaces "the recap show".
+
+- **The On Air bar stays up; Reset stops everything; a shorter Race
+  Control card** (asked 26 Oct 2026, **built 26 Oct 2026**). "I want the on
+  air bar to remain up while everything is going. instead of it saying show
+  is going out it should list the actual segment that is playing. the
+  imaging element to the far right should be incorporated into it. press and
+  hold buttons don't change ... when using reset the voice should stop.
+  everything should stop and be brought back to nothing. see if you can make
+  the race control card a little shorter. you can pull out the status
+  indicator". RaceControlControl.UpdateOnAirBar (on the clock tick) puts
+  HoldStrip's card up while anything goes out ("On air: <segment>", from
+  AnnouncementService.OnAirNow / ShowOnAir.Caption / the recap show / a
+  replay), with Now Playing drawn inside the card; On Air's red progress
+  card is left alone. Reset calls StopTheBroadcast: AnnouncementService.
+  SilenceNow (the countdown cut plus the ticks), the replay, the recap show,
+  the show block, BroadcastImaging.StopAll, BigScreenForm.StopSponsorSpot
+  and EverythingStopped -> MainForm.StopMusicAndCrowd (music and crowd cut,
+  the mute's record of them cleared; added the same day: "music and crowd
+  and sponsor spot should be stopped with a reset as well"). FlagRow no longer draws the phase word (kept for the screen
+  reader). Not yet seen on Windows.
+
+- **Level meters on Race Control, and VOICE split from SFX** (asked 26 Oct
+  2026, **built 26 Oct 2026**). "I wanted the VU meter here" (the right of
+  the flag row, where Now Playing was), "you can also leave it where it is.
+  add another set up meters so you have one for voice and one for SFX. the
+  segment playing indicator can be built into the on air waiting bar at the
+  bottom." FlagRow carries ChannelStrips.ForRaceControl (compact) at its
+  right, hidden whole when the row is too narrow; HoldStrip draws Now
+  Playing at its right end beside the hint and On Air's card (a hold still
+  takes the whole strip). AudioBus splits its mix: PlayAsync(voice: true)
+  for the announcer's lines (PlayPcmAsync), SFX for everything else
+  (recordings played back included), each clip adding itself to its sub-mix inside the
+  mixer's read (Tapped.Heard, per device thread). Not yet seen on Windows.
+
+- **Channel strips in the Broadcast window** (asked 25 Oct 2026, **built
+  25 Oct 2026**). "Plan on adding a vu meter like on a radio board to race
+  control", then, from fifteen styles on a design canvas, "build three
+  channel strips make sure it has the buttons for notes, votes, and the
+  others". VOICE, MUSIC and CROWD beside the heading (ChannelStrips), one
+  per output, because the three never share one: AudioBus's mix,
+  MusicPlayer's and AmbienceService's own. Levels come from AudioLevels:
+  10ms blocks of power (mean square) read on each device's thread (no
+  allocation, no lock, never the recorder's listener slot), stamped with
+  when they will be heard (the output's queue depth, kept in step against
+  clock drift and pauses; a stop or pause drops what was queued) so the
+  bars move with the room rather than a third of a second ahead. Smooth VU
+  movement as asked ("smooth vu"): a 65ms time constant both ways (300ms
+  to settle), full-scale sine reads 0, 1.5 s hold line; runs only while
+  the window is open. The row of buttons is unchanged. Not metered: a sponsor
+  video's sound (LibVLC's own output). Not yet seen on Windows. Plan:
+  claude/vu-meter-plan.md in the project.
+
+- **The broadcast's controls in a window of their own** (asked 25 Oct
+  2026, **built 25 Oct 2026**). "Take all the functionality of the
+  broadcast controls ... and move them to a pop up window that shows more
+  info at a glance", opened from a button under Mission Control, with
+  "Open" taken off the two buttons above it. Race Control's row of Hold,
+  Play again, Replay Moment, Skip, Notes, Votes and the lost/held count is
+  now in the **Broadcast** window (BroadcastWindow), with what is on air
+  across the top and eight lines under the buttons saying what the
+  announcer is doing, the budget, this race's calls, notes, votes, the
+  recap show and Replay Moment. The window holds Race Control's own row,
+  not a copy, so every button is wired where it was; closing it only hides
+  it, and the **Broadcast** button reads HELD (amber) or the notes waiting
+  while it is shut. **Big Screen** and **Announcer Screen** lost their
+  "Open". Not yet seen on Windows.
 
 - **The championship conditional, with its condition said out loud**
   (asked 11 Oct 2026, **built 11 Oct 2026**). A race intro saying what the

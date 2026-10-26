@@ -30,11 +30,18 @@ namespace HeatCaller;
 /// is the Stage they would have called - see StartThroughOnAir. The Stage
 /// button itself still stages directly, and On Air pressed again still
 /// skips to Stage.
+///
+/// NO BUTTON OF ITS OWN (25 Oct 2026, asked for by Asher: "use the press
+/// and hold animation to denote the writing and voicing delay instead of
+/// the on air button which you can remove"). On Air is started by every
+/// start that goes through it (above) and by its key, O, which pressed again
+/// skips to Stage. While the opening is written and voiced, the strip under
+/// the flag row shows it the way it shows a hold - what is being done, a bar
+/// filling, and how long is left (ShowOnAirWork); while the show is out it
+/// says so in cyan (ShowOnAirLive).
 /// </summary>
 public sealed partial class RaceControlControl
 {
-    private readonly FlagButton _btnOnAir = new() { FlagColour = OnAirRed, FlagText = Color.White };
-
     /// <summary>The sequence On Air is running, or null when it is not running.</summary>
     private CancellationTokenSource? _onAirCts;
 
@@ -89,18 +96,12 @@ public sealed partial class RaceControlControl
     /// <summary>What On Air calls itself while it holds the broadcast floor - see ShowFloor.</summary>
     private const string OnAirHoldsTheFloor = "On Air opening the next race";
 
-    /// <summary>The button's own caption, and what it says while the opening is still being got ready.</summary>
-    private const string OnAirCaption = "On Air";
-    private const string OnAirWaitingCaption = "Waiting\u2026";
+    /// <summary>What the strip says at its right while On Air works: how On Air is skipped, now there is no button.</summary>
+    private const string OnAirSkipNote = "press O to skip to Stage";
 
-    /// <summary>Wires the button. Called from BuildLayout beside Stage.</summary>
+    /// <summary>Wires On Air's switch and timers. Called from BuildLayout. The button went on 25 Oct 2026.</summary>
     private void BuildOnAirButton()
     {
-        _btnOnAir.Text = OnAirCaption;
-        _btnOnAir.Click += (_, _) => PressOnAir();
-
-        // ONE WIDTH FOR THE WHOLE ROW (21 Oct 2026) - see OnAirLeastWidth.
-
         _chkStartWithOnAir.Text = "Start races On Air";
         _chkStartWithOnAir.AutoSize = true;
         _chkStartWithOnAir.Checked = _settings.RaceStartWithOnAir;
@@ -108,14 +109,12 @@ public sealed partial class RaceControlControl
 
         var tip = new ToolTip();
         AppTheme.StyleToolTip(tip, keep: true);
-        tip.SetToolTip(_btnOnAir,
-            "Kicks the race off like a radio show: the soundscape's jingle or sweeper, the opening, a bumper, then "
-            + "Stage. Press it again to skip straight to Stage. The pieces are set on Sounds -> Imaging. Shortcut: O");
         tip.SetToolTip(_chkStartWithOnAir,
-            "Ticked, Start Next, the program's Start, F1, the phone and the day schedule all go through On Air first. "
-            + "Unticked, they stage straight away. The Stage button always stages straight away.");
+            "Ticked, Start Next, the program's Start, F1, the phone and the day schedule all go through On Air first: "
+            + "the soundscape's jingle or sweeper, the opening, a bumper, then Stage. O starts it by hand, and skips it "
+            + "while it runs. Unticked, they stage straight away. The Stage button always stages straight away.");
 
-        // The progress fill and countdown while the opening is got ready.
+        // The strip's bar and countdown while the opening is got ready.
         _onAirProgressTimer.Interval = 150;
         _onAirProgressTimer.Tick += (_, _) => PaintOnAirProgress();
 
@@ -132,6 +131,11 @@ public sealed partial class RaceControlControl
     }
 
     // --- Getting ready, shown on the button (21 Oct 2026) -------------------
+    //
+    // ON THE STRIP UNDER THE FLAG ROW since 25 Oct 2026, when the button
+    // went: the same steps, fill and countdown, drawn as a hold is drawn
+    // ("On Air: voicing the opening…", the bar, "about 8s"). What follows is
+    // how it worked on the button, and why - all of it still true of the strip.
     //
     // Pressing On Air used to put "Waiting..." on the button for as long as
     // the opening took to write and voice - twenty seconds on a slow night,
@@ -167,17 +171,17 @@ public sealed partial class RaceControlControl
         _ => (0.95f, 0.99f),
     };
 
-    /// <summary>The step's word on the button - short, so the flag row does not jump about.</summary>
-    private static string StepWord(OnAirStep step) => step switch
+    /// <summary>The step, as the strip under the flag row says it.</summary>
+    private static string StepWords(OnAirStep step) => step switch
     {
-        OnAirStep.Writing => "Writing",
-        OnAirStep.VoicingOpening => "Voicing",
-        OnAirStep.VoicingIntros => "Intros",
-        _ => "Finishing",
+        OnAirStep.Writing => "On Air: writing the opening…",
+        OnAirStep.VoicingOpening => "On Air: voicing the opening…",
+        OnAirStep.VoicingIntros => "On Air: voicing the driver intros…",
+        _ => "On Air: almost ready…",
     };
 
-    /// <summary>The caption while the show is on air, before the race is staged.</summary>
-    private const string OnAirLiveCaption = "On Air \u00B7 Skip";
+    /// <summary>What the strip says while the show is out, before the race is staged.</summary>
+    internal const string OnAirLiveWords = "On air - the show is going out";
 
     /// <summary>On Air is opening a demo, which starts itself at the end rather than being staged.</summary>
     private bool _onAirForDemo;
@@ -212,61 +216,29 @@ public sealed partial class RaceControlControl
     }
 
 
-    /// <summary>On Air's own red, at rest and while the opening is got ready.</summary>
+    /// <summary>On Air's own red, for the strip while the opening is got ready.</summary>
     private static readonly Color OnAirRed = Color.FromArgb(200, 32, 44);
 
-    /// <summary>The cyan On Air turns while the show is live (21 Oct 2026), and the dark ink that reads on it.</summary>
+    /// <summary>The cyan On Air turns while the show is live (21 Oct 2026).</summary>
     private static readonly Color OnAirLiveCyan = Color.FromArgb(0x2E, 0xE6, 0xFF);
-    private static readonly Color OnAirLiveInk = Color.FromArgb(0x0A, 0x04, 0x18);
-
-    /// <summary>
-    /// EVERY FLAG THE SAME SIZE (21 Oct 2026). On Air and the seven flags
-    /// sit in a ButtonBar of one width, which sizes them all to the widest
-    /// caption and does it again whenever the text size changes. This is
-    /// On Air's part of that: the widest of the captions it shows as it
-    /// works ("On Air · Skip", "Waiting…", "Finishing…"), so the row is
-    /// measured for those too and never grows or shrinks under the button.
-    /// Its countdown is fitted to the width rather than widening it - see
-    /// OnAirProgressCaption.
-    /// </summary>
-    private int OnAirLeastWidth(Button button)
-    {
-        if (!ReferenceEquals(button, _btnOnAir))
-        {
-            return 0;
-        }
-
-        var captions = new List<string> { OnAirCaption, OnAirWaitingCaption, OnAirLiveCaption };
-
-        foreach (var step in Enum.GetValues<OnAirStep>())
-        {
-            captions.Add($"{StepWord(step)}…");
-        }
-
-        return captions.Max(UiLayout.TightButtonWidthFor);
-    }
-
-    /// <summary>
-    /// On Air's countdown, fitted to the row's one width: "12s · Voicing"
-    /// when that fits, and just "12s" when it would not.
-    /// </summary>
-    private string OnAirProgressCaption(int secondsLeft, string word)
-    {
-        var full = $"{secondsLeft}s · {word}";
-
-        return UiLayout.TightButtonWidthFor(full) <= _btnOnAir.Width ? full : $"{secondsLeft}s";
-    }
 
     /// <summary>
     /// Cyan while the show is live (21 Oct 2026) - from the jingle until the
     /// race is staged - so a glance at the flag row says the room is on air.
-    /// Red again the moment it is over, for the next press.
+    /// On the strip under the row since 25 Oct 2026, with no bar: nothing is
+    /// being waited for. Gone the moment it is over.
     /// </summary>
     private void ShowOnAirLive(bool live)
     {
-        _btnOnAir.FlagColour = live ? OnAirLiveCyan : OnAirRed;
-        _btnOnAir.FlagText = live ? OnAirLiveInk : Color.White;
+        // What the card says is the segment on air since 26 Oct 2026, not
+        // OnAirLiveWords, and it stays up while anything is going out - see
+        // UpdateOnAirBar, which this hands to.
+        _onAirLive = live;
+        UpdateOnAirBar();
     }
+
+    /// <summary>On Air is live - between the jingle and the staging. See ShowOnAirLive and UpdateOnAirBar.</summary>
+    private bool _onAirLive;
 
     /// <summary>How many past opens the countdown averages.</summary>
     private const int OnAirReadyHistoryKept = 5;
@@ -289,9 +261,6 @@ public sealed partial class RaceControlControl
         _onAirStepTicks = _onAirPressTicks;
         _onAirStep = OnAirStep.Writing;
         _onAirProgressShowing = true;
-
-        // The width is not touched here: it is held at the widest caption
-        // the button ever shows, all the time - see OnAirLeastWidth.
 
         PaintOnAirProgress();
         _onAirProgressTimer.Start();
@@ -337,19 +306,13 @@ public sealed partial class RaceControlControl
             fill = from + (to - from) * 0.9f * (float)(1 - Math.Exp(-inStep));
         }
 
-        _btnOnAir.Progress = fill;
-
-        var word = StepWord(_onAirStep);
         var left = _onAirEstimateMs is { } est ? (int)Math.Ceiling((est - elapsed) / 1000.0) : 0;
 
-        var caption = left >= 1 && left <= 88 ? OnAirProgressCaption(left, word) : $"{word}…";
-
-        // Only when it changes: a new caption makes the flag row measure
-        // the button again.
-        if (!string.Equals(_btnOnAir.Text, caption, StringComparison.Ordinal))
-        {
-            _btnOnAir.Text = caption;
-        }
+        // On the strip under the flag row, as a hold is shown (25 Oct 2026):
+        // the step, the bar, and the seconds to the jingle when there is an
+        // estimate to count from.
+        _holdStrip.ShowWork(StepWords(_onAirStep), fill,
+            left >= 1 && left <= 88 ? $"about {left}s · {OnAirSkipNote}" : OnAirSkipNote, OnAirRed);
     }
 
     /// <summary>
@@ -366,8 +329,9 @@ public sealed partial class RaceControlControl
 
         _onAirProgressShowing = false;
         _onAirProgressTimer.Stop();
-        _btnOnAir.Progress = null;
-        _btnOnAir.Text = OnAirCaption;
+
+        // Back to the On Air bar as it stands: the show going out, or rest.
+        UpdateOnAirBar();
 
         if (!reachedTheJingle)
         {
@@ -855,7 +819,6 @@ public sealed partial class RaceControlControl
         _openingSaidByOnAir = false;
         _introductionsSaidByOnAir = false;
         _principalSaidByOnAir = false;
-        _btnOnAir.Lit = true;
 
         // 17 Oct 2026, Bug Hunt 8, A03-1: Start Next greys while On Air runs.
         UpdateNextUpBar();
@@ -917,14 +880,10 @@ public sealed partial class RaceControlControl
             //    never dead air in the middle of it.
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air - getting the opening ready.");
 
-            // SAYS SO ON THE BUTTON (16 Oct 2026). Nothing is heard while
-            // the opening is written and rendered, so the button reads
-            // "Waiting..." until the show actually starts - the race
-            // director can see it was pressed and is on its way.
-            //
-            // AND SHOWS HOW FAR ALONG IT IS (21 Oct 2026) - the button fills
-            // and counts down to the jingle. See BeginOnAirProgress.
-            _btnOnAir.Text = OnAirWaitingCaption;
+            // SAYS SO (16 Oct 2026). Nothing is heard while the opening is
+            // written and rendered, so the race director is shown it is on
+            // its way, and how far along it is (21 Oct 2026) - on the strip
+            // under the flag row since 25 Oct 2026. See BeginOnAirProgress.
             BeginOnAirProgress();
 
             // A demo with no round has no race to open - see GoOnAirThenAsync.
@@ -993,12 +952,10 @@ public sealed partial class RaceControlControl
 
             EndOnAirProgress(reachedTheJingle: true);
 
-            // LIVE, AND SAYS SO (21 Oct 2026). The button used to read plain
-            // "On Air" for the whole show - the jingle, the opening, the
-            // introductions and the Team Principal, a minute or more - so it
-            // looked finished while the race was still to be staged. Pressing
-            // it again skips the rest, which the caption now says too.
-            _btnOnAir.Text = OnAirLiveCaption;
+            // LIVE, AND SAYS SO (21 Oct 2026): the jingle, the opening, the
+            // introductions and the Team Principal are a minute or more, and
+            // the race is still to be staged. O skips the rest, which the
+            // strip says too.
             ShowOnAirLive(true);
 
             // 2. The jingle, to its post.
@@ -1145,8 +1102,6 @@ public sealed partial class RaceControlControl
             _onAirForDemo = false;
             EndOnAirProgress(reachedTheJingle: false);
             ShowOnAirLive(false);
-            _btnOnAir.Lit = false;
-            _btnOnAir.Text = OnAirCaption;
             cts.Dispose();
 
             // 17 Oct 2026, Bug Hunt 8, A03-1: and Start Next comes back.

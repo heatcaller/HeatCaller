@@ -33,8 +33,9 @@ Connection, Backup & Restore. There's a "Search pages..." box and "Manage Naviga
 (Checked against the code on 30 Sep 2026: MainForm.Pages.cs `_navItems` and each page's TabPages. "Voice Announcements"
 was renamed "Voice", "Setup Log" became "Garage", Themes' Announcer Style became Sounds → Soundscapes.)
 Some things are windows, not tabs: the **Timetable** (the race day's run sheet, from the program's **Timetable** button),
-the **Scrutineering log** (from **Scrutineering Log** on Who's Racing) and the **Announcer screen** (from **Open Announcer
-Screen** on Race Control).
+the **Scrutineering log** (from **Scrutineering Log** on Who's Racing), the **Announcer screen** (from **Announcer
+Screen** on Race Control) and the **Broadcast** window (from **Broadcast** on Race Control: Hold, Play again, Skip,
+Notes and Votes, which were a row under the Next Up bar until 25 Oct 2026).
 Refer to pages as **Race Control** page, and paths as **Race Day → Entries** (bold, with →).
 
 ## Voice and style

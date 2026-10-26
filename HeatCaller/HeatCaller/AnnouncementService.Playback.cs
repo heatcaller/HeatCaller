@@ -399,7 +399,8 @@ public sealed partial class AnnouncementService
                 ? rawReader.ToSampleProvider()
                 : new FirstReadSampleProvider(rawReader.ToSampleProvider(), started);
 
-            await AudioBus.PlayAsync(source, (float)Math.Clamp(volume, 0.0, AudioBus.MaxBoost), stop.Token, allowBoost: true);
+            // voice: on the VOICE level meter, not SFX (26 Oct 2026 - see AudioLevels).
+            await AudioBus.PlayAsync(source, (float)Math.Clamp(volume, 0.0, AudioBus.MaxBoost), stop.Token, allowBoost: true, voice: true);
         }
         finally
         {

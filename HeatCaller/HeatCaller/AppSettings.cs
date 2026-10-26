@@ -853,6 +853,13 @@ public sealed class AppSettings
     public string CoHostHeatCallerRev { get; set; } = string.Empty;
     public string CoHostKokoroVoiceName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The co-host speaks in CoHostKokoroVoiceName whatever engine the
+    /// announcer uses, not only with Kokoro chosen (25 Oct 2026) - picked
+    /// from the Kokoro voices on the Cast tab's lists. See SecondVoice.KokoroAlways.
+    /// </summary>
+    public bool CoHostKokoroAlways { get; set; }
+
     // CoHostWindowsVoiceName was here, and MechanicWindowsVoiceName below
     // it. The free Windows voice was retired on 10 Oct 2026, so there is no
     // Windows voice to pick one of. An older settings.json still carries
@@ -867,7 +874,8 @@ public sealed class AppSettings
         CoHostHeatCallerVoice ?? string.Empty,
         CoHostHeatCallerVoiceName ?? string.Empty,
         CoHostHeatCallerRev ?? string.Empty,
-        CoHostKokoroVoiceName ?? string.Empty);
+        CoHostKokoroVoiceName ?? string.Empty,
+        CoHostKokoroAlways);
     // Was 6 - too short for Ollama's own documented cold-load behaviour on
     // a model's first request (commonly 13s+, even for a small model on
     // modest hardware). The warm-up call in LocalLlmClient pays that cost
@@ -1199,6 +1207,13 @@ public sealed class AppSettings
     public string MechanicHeatCallerRev { get; set; } = string.Empty;
     public string MechanicKokoroVoiceName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The Technical Lead speaks in MechanicKokoroVoiceName whatever engine the
+    /// announcer uses, not only with Kokoro chosen (25 Oct 2026) - picked
+    /// from the Kokoro voices on the Cast tab's lists. See SecondVoice.KokoroAlways.
+    /// </summary>
+    public bool MechanicKokoroAlways { get; set; }
+
     /// <summary>The mechanic's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
     [JsonIgnore]
     public SecondVoice MechanicVoice => new(
@@ -1207,7 +1222,8 @@ public sealed class AppSettings
         MechanicHeatCallerVoice ?? string.Empty,
         MechanicHeatCallerVoiceName ?? string.Empty,
         MechanicHeatCallerRev ?? string.Empty,
-        MechanicKokoroVoiceName ?? string.Empty);
+        MechanicKokoroVoiceName ?? string.Empty,
+        MechanicKokoroAlways);
 
     // --- The Team Principal (17 Oct 2026) ---------------------------------
     //
@@ -1242,6 +1258,13 @@ public sealed class AppSettings
     public string PrincipalHeatCallerRev { get; set; } = string.Empty;
     public string PrincipalKokoroVoiceName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The Team Principal speaks in PrincipalKokoroVoiceName whatever engine the
+    /// announcer uses, not only with Kokoro chosen (25 Oct 2026) - picked
+    /// from the Kokoro voices on the Cast tab's lists. See SecondVoice.KokoroAlways.
+    /// </summary>
+    public bool PrincipalKokoroAlways { get; set; }
+
     /// <summary>The Team Principal's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
     [JsonIgnore]
     public SecondVoice PrincipalVoice => new(
@@ -1250,7 +1273,8 @@ public sealed class AppSettings
         PrincipalHeatCallerVoice ?? string.Empty,
         PrincipalHeatCallerVoiceName ?? string.Empty,
         PrincipalHeatCallerRev ?? string.Empty,
-        PrincipalKokoroVoiceName ?? string.Empty);
+        PrincipalKokoroVoiceName ?? string.Empty,
+        PrincipalKokoroAlways);
 
     // --- The honours (10 Oct 2026) ---------------------------------------
     //
@@ -1290,6 +1314,13 @@ public sealed class AppSettings
     public string HonoursHeatCallerRev { get; set; } = string.Empty;
     public string HonoursKokoroVoiceName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The achievements reader speaks in HonoursKokoroVoiceName whatever engine the
+    /// announcer uses, not only with Kokoro chosen (25 Oct 2026) - picked
+    /// from the Kokoro voices on the Cast tab's lists. See SecondVoice.KokoroAlways.
+    /// </summary>
+    public bool HonoursKokoroAlways { get; set; }
+
     /// <summary>The honours reader's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
     [JsonIgnore]
     public SecondVoice HonoursVoice => new(
@@ -1298,7 +1329,8 @@ public sealed class AppSettings
         HonoursHeatCallerVoice ?? string.Empty,
         HonoursHeatCallerVoiceName ?? string.Empty,
         HonoursHeatCallerRev ?? string.Empty,
-        HonoursKokoroVoiceName ?? string.Empty);
+        HonoursKokoroVoiceName ?? string.Empty,
+        HonoursKokoroAlways);
 
     // --- The race recap host (16 Oct 2026) -------------------------------
     //
@@ -1316,6 +1348,13 @@ public sealed class AppSettings
     public string RecapHostHeatCallerVoiceName { get; set; } = string.Empty;
     public string RecapHostHeatCallerRev { get; set; } = string.Empty;
     public string RecapHostKokoroVoiceName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The recap host speaks in RecapHostKokoroVoiceName whatever engine the
+    /// announcer uses, not only with Kokoro chosen (25 Oct 2026) - picked
+    /// from the Kokoro voices on the Cast tab's lists. See SecondVoice.KokoroAlways.
+    /// </summary>
+    public bool RecapHostKokoroAlways { get; set; }
 
     /// <summary>
     /// The recap host's name (16 Oct 2026), said when the recap show opens
@@ -1343,7 +1382,8 @@ public sealed class AppSettings
         RecapHostHeatCallerVoice ?? string.Empty,
         RecapHostHeatCallerVoiceName ?? string.Empty,
         RecapHostHeatCallerRev ?? string.Empty,
-        RecapHostKokoroVoiceName ?? string.Empty);
+        RecapHostKokoroVoiceName ?? string.Empty,
+        RecapHostKokoroAlways);
 
     // --- The commercial break (10 Oct 2026) ------------------------------
     //

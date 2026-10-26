@@ -324,6 +324,50 @@ public sealed partial class AnnouncementService
     // library with ElevenLabs lines and nothing else.
 
     /// <summary>
+    /// A line in a second speaker's voice. Their Kokoro voice picked for every
+    /// engine (25 Oct 2026, SecondVoice.KokoroAlways) sends it to Kokoro
+    /// beside an ElevenLabs or HeatCaller announcer - and when Kokoro can't
+    /// say it after all (the model went, or wouldn't load), the line is said
+    /// as it was before there was the choice, in the engine's voice for them
+    /// or the announcer's, rather than lost. Kokoro chosen as the engine is
+    /// not this: nothing covers for it, as RenderWithKokoroAsync says.
+    /// </summary>
+    /// <param name="withoutVoice">The profile the line would have had with no second voice.</param>
+    /// <param name="withVoice">The same with <paramref name="voice"/> on it (VoiceProfile.CloneWithVoice).</param>
+    private async Task<SynthesisResult> RenderCastLineAsync(
+        VoiceProfile withoutVoice, VoiceProfile withVoice, SecondVoice? voice, string text, CancellationToken cancel = default)
+    {
+        var sentToKokoro = voice is not null
+            && withVoice.EffectiveEngine == VoiceEngine.Kokoro
+            && withoutVoice.EffectiveEngine != VoiceEngine.Kokoro;
+
+        if (!sentToKokoro)
+        {
+            return await RenderLineAsync(withVoice, text, cancel: cancel);
+        }
+
+        // Asked first, so a Kokoro that has just gone doesn't log that
+        // nothing on this PC can speak - the announcer's voice still can.
+        if (KokoroSpeech.UnavailableReason is not { } unavailable)
+        {
+            try
+            {
+                return await RenderLineAsync(withVoice, text, cancel: cancel);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                unavailable = ex.Message;
+            }
+        }
+
+        LogStandInOnce("cast-kokoro:" + unavailable,
+            $"[voice] Kokoro couldn't say a line for a Kokoro voice picked on the Cast tab ({unavailable}) - "
+            + "it was said in the voice they have without it instead. Said once for this reason.");
+
+        return await RenderLineAsync(withoutVoice.CloneWithVoice(voice!, kokoroReady: false), text, cancel: cancel);
+    }
+
+    /// <summary>
     /// The audio for one race or announcer line, from whichever voice should
     /// say it:
     ///

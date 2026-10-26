@@ -400,6 +400,10 @@ public sealed class MusicPlayer : IDisposable
                 try
                 {
                     _output.Pause();
+
+                    // What it had queued is not heard now - the MUSIC strip
+                    // drops it rather than moving on to it (AudioLevels).
+                    AudioLevels.Music.Cut();
                 }
                 catch (Exception ex)
                 {
@@ -918,7 +922,9 @@ public sealed class MusicPlayer : IDisposable
             // drivers play 32-bit float as silence without complaint. The
             // volume and the duck are both held at or below 1, so nothing
             // here is pushed into clipping by the conversion.
-            output.Init(new SampleToWaveProvider16(duckGain));
+            // Through the MUSIC strip's level on the way (25 Oct 2026) - a
+            // pass-through that only reads what goes by; see AudioLevels.
+            output.Init(new SampleToWaveProvider16(new AudioLevels.Tap(duckGain, AudioLevels.Music, BedLatencyMs, BedBuffers)));
             output.PlaybackStopped += OnPlaybackStopped;
             output.Play();
         }
@@ -1223,6 +1229,15 @@ public sealed class MusicPlayer : IDisposable
     {
         output = _output;
         reader = _reader;
+
+        // The playing track's queued sound is thrown away with it - off the
+        // MUSIC strip too (AudioLevels). Here, on the track the player was
+        // playing, not in DisposeRetired, which also lets go of a track that
+        // was opened and then superseded while a newer one plays.
+        if (output is not null)
+        {
+            AudioLevels.Music.Cut();
+        }
 
         _output = null;
         _reader = null;

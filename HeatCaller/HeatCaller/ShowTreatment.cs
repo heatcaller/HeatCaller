@@ -2359,6 +2359,15 @@ internal sealed class ShowTreatment
                 CancellationToken.None,
                 TaskContinuationOptions.OnlyOnFaulted,
                 TaskScheduler.Default);
+
+            // Race Control's Now Playing (25 Oct 2026): the show's opener,
+            // bed and stings - "Show opener", "Show break sting" - named
+            // until the bus has let them go.
+            var playingId = NowPlaying.Started(
+                string.Equals(what, "bed", StringComparison.OrdinalIgnoreCase) ? NowPlayingKind.Bed : NowPlayingKind.Piece,
+                $"Show {what}");
+            _ = played.ContinueWith(_ => NowPlaying.Ended(playingId), TaskScheduler.Default);
+
             return played;
         }
         catch (Exception ex)

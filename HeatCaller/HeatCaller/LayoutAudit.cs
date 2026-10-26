@@ -434,6 +434,9 @@ internal static class LayoutAudit
         // Every check before a green flag as a wall of tiles, the headline over them and Close under them (MissionControlForm).
         "Mission Control",
 
+        // The broadcast's controls and what the announcer is doing, from Race Control's Broadcast button: the row of Hold, Play again, Skip, Notes and Votes in a card, the readings under it and Close (BroadcastWindow).
+        "Broadcast",
+
         // The finish camera's shots: the night across the top, the list of shots beside the picture, the slider and its time under it (PhotoFinishForm).
         "Photo Finish",
 

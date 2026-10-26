@@ -314,7 +314,18 @@ public sealed partial class RaceControlControl
             // while the gain glides what is left of it down to nothing.
             var playing = AudioBus.PlayAsync(sound, 0.9f);
 
-            using (cut.Token.Register(() => sound.Target = 0f))
+            // Race Control's Now Playing (25 Oct 2026), until the bus lets it go.
+            var playingId = NowPlaying.Started(NowPlayingKind.Piece, $"Replay of {what}");
+            _ = playing.ContinueWith(_ => NowPlaying.Ended(playingId), TaskScheduler.Default);
+
+            // Skip only rides the gain down, and the bus goes on playing the
+            // silence to the end - so Now Playing lets go of it here too,
+            // not twenty quiet seconds later (Ended is safe twice).
+            using (cut.Token.Register(() =>
+                   {
+                       sound.Target = 0f;
+                       NowPlaying.Ended(playingId);
+                   }))
             {
                 await Task.WhenAny(playing, Task.Delay(Timeout.Infinite, cut.Token)).ConfigureAwait(true);
             }
@@ -589,6 +600,63 @@ public sealed partial class RaceControlControl
     /// </remarks>
     private string NameOnTheBallot(string transponder) =>
         _profiles.Get(transponder)?.DriverName is { Length: > 0 } named ? named : transponder;
+
+    /// <summary>
+    /// Everything going out stops now, and the On Air bar goes back to
+    /// nothing (26 Oct 2026, for Reset - asked for by Asher: "when using reset
+    /// the voice should stop. everything should stop and be brought back to
+    /// nothing"):
+    ///   - the announcer: the line in the speakers, the sound playing, every
+    ///     line and sound queued, a line still being written or voiced, the
+    ///     countdown's ticks (AnnouncementService.SilenceNow);
+    ///   - a replayed moment, the recap show and a show block's running
+    ///     order, as Skip stops them - but at once, not after the line;
+    ///   - every imaging piece and bed playing (BroadcastImaging.StopAll, as
+    ///     the mute does);
+    ///   - the sponsor spot on the Big Screen, a video's sound with it
+    ///     (BigScreenForm.StopSponsorSpot);
+    ///   - the music and the crowd, which the host owns (EverythingStopped -
+    ///     26 Oct 2026, asked for by Asher: "music and crowd and sponsor spot
+    ///     should be stopped with a reset as well"). The next race brings
+    ///     them back up as it always does.
+    /// On Air itself is called off by the reset (CancelAutoStart).
+    /// </summary>
+    private void StopTheBroadcast(string why)
+    {
+        // The producers first - the replay, the recap show (as the next race
+        // being called ends it, so it hands out no held badges and queues no
+        // further turn) and the show block - and only then the voice: cut the
+        // voice first and a recap turn waiting on it could queue its next
+        // line in between.
+        StopTheReplay();
+        EndRecapShow("the race was reset", nextRace: true);
+
+        try
+        {
+            ShowMusic?.Invoke()?.AbandonBlock();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Couldn't stop the show: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        _announcer.SilenceNow(why);
+
+        BroadcastImaging.StopAll();
+
+        if (_bigScreen is { IsDisposed: false } screen)
+        {
+            screen.StopSponsorSpot();
+        }
+
+        EverythingStopped?.Invoke();
+
+        _onAirLive = false;
+        UpdateOnAirBar();
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {why} - the announcer, the show, the imaging, the sponsor spot, the music and the crowd were all stopped.");
+    }
+
 
     /// <summary>
     /// Stops the show that is on air: the bed is ridden down and whatever

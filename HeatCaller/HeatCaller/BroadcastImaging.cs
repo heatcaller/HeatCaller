@@ -1668,6 +1668,9 @@ internal sealed class ImagingPlay
     /// <summary>Its place in ImagingNow, so the strip stops naming it once it is gone.</summary>
     private int _nowId;
 
+    /// <summary>Its place in NowPlaying (25 Oct 2026), so Race Control stops naming it once it is gone.</summary>
+    private int _playingId;
+
     private ImagingPlay(SmoothGainSampleProvider gain, TimeSpan post, TimeSpan length)
     {
         _gain = gain;
@@ -1698,6 +1701,10 @@ internal sealed class ImagingPlay
 
         ShowOnAir.Begin();
         play._nowId = ImagingNow.Started(name ?? what);
+
+        // Race Control's Now Playing (25 Oct 2026): the point it was played
+        // for and the file's own name - "Top of the race · Classic station ID".
+        play._playingId = NowPlaying.Started(NowPlayingKind.Piece, NowPlaying.Joined(what, name));
         BroadcastImaging.Playing(play, play.CrossfadeOut);
 
         try
@@ -1766,6 +1773,7 @@ internal sealed class ImagingPlay
         {
             BroadcastImaging.Gone(this);
             ImagingNow.Ended(_nowId);
+            NowPlaying.Ended(_playingId);
             ShowOnAir.End();
         }
     }
@@ -1794,6 +1802,9 @@ internal sealed class ImagingBed
     private volatile bool _dipped;
     private int _finished;
     private int _released;
+
+    /// <summary>Its place in NowPlaying (25 Oct 2026), so Race Control stops naming it once it is gone.</summary>
+    private int _playingId;
 
     private ImagingBed(ShowBed bed, SmoothGainSampleProvider gain, AnnouncementService announcer, float level, float underVoice)
     {
@@ -1835,6 +1846,14 @@ internal sealed class ImagingBed
         // SpeakingChanged only fires on a change, so a bed started mid-line
         // came up at full level and stayed there until the voice next stopped.
         run._speaking = announcer.IsTalking;
+
+        // Race Control's Now Playing (25 Oct 2026). A bed, so a jingle or a
+        // bumper over it is named instead while that plays - see NowPlaying.Pick.
+        // Before Playing, not after: a mute or stop-all from another thread
+        // in between would run Finish with no id yet, and the bed would be
+        // named for the rest of the night. As ImagingPlay.Start does.
+        run._playingId = NowPlaying.Started(NowPlayingKind.Bed,
+            NowPlaying.Joined(BroadcastImaging.Describe(cue), Path.GetFileNameWithoutExtension(piece.Path)));
 
         ShowOnAir.Begin();
         BroadcastImaging.Playing(run, run.Finish);
@@ -1910,6 +1929,7 @@ internal sealed class ImagingBed
         if (Interlocked.Exchange(ref _released, 1) == 0)
         {
             BroadcastImaging.Gone(this);
+            NowPlaying.Ended(_playingId);
             ShowOnAir.End();
         }
     }

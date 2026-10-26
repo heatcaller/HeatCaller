@@ -149,11 +149,37 @@ internal sealed class FlagButton : Button
         Invalidate();
     }
 
+    /// <summary>
+    /// Drawn over the button once it has painted itself (25 Oct 2026) - the
+    /// clock and the bar of a button that has to be held (see HoldToAct).
+    /// Given the caption's own colour, and a dark edge to go round it on the
+    /// thrown chequers, so what is drawn reads on whatever the face is.
+    /// </summary>
+    public Action<Graphics, Rectangle, Color, Color?>? Overlay { get; set; }
+
+    /// <summary>Whether the face is showing the flag's colour (hovered or lit) rather than resting.</summary>
+    private bool Coloured => Enabled && (_lit || _hover);
+
+    /// <summary>The colour the caption is drawn in right now.</summary>
+    internal Color CaptionInk => !Enabled ? AppTheme.TextMuted
+        : Coloured ? (Chequered ? Color.White : FlagText)
+        : AppTheme.TextDark;
+
+    /// <summary>The edge round the caption on the thrown chequers, else none.</summary>
+    internal Color? CaptionHalo => Coloured && Chequered ? Color.FromArgb(24, 24, 30) : null;
+
     protected override void OnPaint(PaintEventArgs pevent)
+    {
+        PaintFace(pevent);
+
+        Overlay?.Invoke(pevent.Graphics, ClientRectangle, CaptionInk, CaptionHalo);
+    }
+
+    private void PaintFace(PaintEventArgs pevent)
     {
         var g = pevent.Graphics;
         var bounds = ClientRectangle;
-        var coloured = Enabled && (_lit || _hover);
+        var coloured = Coloured;
 
         if (!coloured)
         {

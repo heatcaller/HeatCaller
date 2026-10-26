@@ -698,7 +698,9 @@ public sealed class AmbienceService : IDisposable
                 // Sent to the device as 16-bit, exactly as AudioBus does: some
                 // drivers play 32-bit float as silence without complaint. Every
                 // gain in front of it is already held at or below 1.
-                _output.Init(new SampleToWaveProvider16(_duckGain));
+                // Through the CROWD strip's level on the way (25 Oct 2026) -
+                // a pass-through that only reads what goes by; see AudioLevels.
+                _output.Init(new SampleToWaveProvider16(new AudioLevels.Tap(_duckGain, AudioLevels.Crowd, MusicPlayer.BedLatencyMs, MusicPlayer.BedBuffers)));
 
                 // Watched like AudioBus and MusicPlayer watch theirs. Without
                 // it, a device that went away (a Bluetooth speaker switched
@@ -1261,6 +1263,9 @@ public sealed class AmbienceService : IDisposable
             dead = _output;
             dead.PlaybackStopped -= OnOutputStopped;
 
+            // Nothing more from it reaches the room (AudioLevels).
+            AudioLevels.Crowd.Cut();
+
             // Taken out before the teardown so DisposeAudioLocked doesn't
             // stop and dispose the device from inside its own event - that
             // is done on another thread below, as AudioBus does.
@@ -1313,6 +1318,10 @@ public sealed class AmbienceService : IDisposable
         if (output is not null)
         {
             output.PlaybackStopped -= OnOutputStopped;
+
+            // Its queued sound goes with it - off the CROWD strip too
+            // (AudioLevels).
+            AudioLevels.Crowd.Cut();
         }
 
         loops = _loops.ToList();

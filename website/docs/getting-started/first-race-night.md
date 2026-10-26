@@ -124,7 +124,7 @@ Full detail: [Running a race](../race-control/running-a-race.md). If something g
 
 The announcer calls the grid, the start, fast laps, lead changes and the finish without you doing anything. A new install speaks with the free Kokoro voice, on the laptop itself, so there's nothing to do here at all. To change it, go to **Voice → Voice Settings** and choose under **Speak with**: the HeatCaller voice if your club is set up on the **Club Website** page, or ElevenLabs if you have a key of your own. Then pick the announcer's voice at the top of **Voice → Cast**, where **Test Voice** (or, for the HeatCaller voice, **Hear It**) is beside it. **Hear It** plays a short sample of a HeatCaller voice before you commit to it — it's free and needs no sign-up (see [Hear a voice before you choose it](../announcer/voice.md#hear-a-voice-before-you-choose-it)). With the HeatCaller voice, press **Prepare Lines** before the night — it puts every line that can be known in advance onto the laptop, and most of them cost your club's allowance nothing at all.
 
-- **Open Announcer Screen** on **Race Control** (or <kbd>A</kbd>) opens the Announcer screen, a window with talking points for whoever is on the mic. It can sit beside the main window or on a second monitor, and its **Race Control** button brings the main window forward.
+- **Announcer Screen** on **Race Control** (or <kbd>A</kbd>) opens the Announcer screen, a window with talking points for whoever is on the mic. It can sit beside the main window or on a second monitor, and its **Race Control** button brings the main window forward.
 - **Mute Announcer** at the bottom of the sidebar silences it instantly.
 - If nothing is heard, look at **Sounds → Mixer**, which shows "NO VOICE:" and the reason when the announcer can't speak, and at the Developer Console on the **Connection** page. Lines starting `[voice]` say why an announcement was skipped.
 
@@ -146,7 +146,7 @@ Full detail: [Program and mains](../race-day/program-and-mains.md) and [Results 
 ## Optional: the big screen
 
 1. Connect a TV or second monitor.
-2. On **Race Control**, click **Open Big Screen**.
+2. On **Race Control**, click **Big Screen**.
 3. Drag the window onto the TV and press <kbd>F11</kbd> to make it full screen. <kbd>Esc</kbd> closes it.
 
 See [Big Screen](../screens/big-screen.md).

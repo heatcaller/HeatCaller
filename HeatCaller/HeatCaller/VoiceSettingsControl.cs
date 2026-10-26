@@ -193,7 +193,6 @@ public sealed partial class VoiceSettingsControl : UserControl
     private ElevenLabsClient.VoiceInfo? _voiceNotInAccount;
     private string _voiceNotInAccountName = string.Empty;
 
-    private readonly Button _btnLoadVoices = new();
     private readonly ComboBox _cmbModel = new();
 
     private readonly NumericUpDown _numStability = new();
@@ -668,9 +667,12 @@ public sealed partial class VoiceSettingsControl : UserControl
         _announcerVoiceGrid.AddHint(_lblHeatCallerPreviewStatus);
         _heatCallerVoiceRow.AddRange(new Control[] { heatCallerCaption, heatCallerLine, wordsCaption, wordsLine, _lblHeatCallerPreviewStatus });
 
-        // ElevenLabs: the voice with Load Voices and Test Voice - which tests
-        // the Voice tab's tuning as it is on screen - and what it said.
-        var elevenLabsLine = FieldGrid.Inline(_cmbVoice, _btnLoadVoices, _btnTestVoice);
+        // ElevenLabs: the voice with Test Voice - which tests the Voice tab's
+        // tuning as it is on screen - and what it said. Its own Load Voices
+        // went on 25 Oct 2026 (asked for by Asher, "it's redundant now"):
+        // the Cast tab's one Load Voices, on the card above, fills this list
+        // too - see LoadAnnouncerElevenLabsVoicesAsync.
+        var elevenLabsLine = FieldGrid.Inline(_cmbVoice, _btnTestVoice);
         var elevenLabsCaption = _announcerVoiceGrid.AddRow("ElevenLabs voice:", elevenLabsLine);
         _announcerVoiceGrid.AddHint(_lblTestStatus);
         _elevenLabsVoiceRow.AddRange(new Control[] { elevenLabsCaption, elevenLabsLine, _lblTestStatus });
@@ -2951,7 +2953,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         // The ElevenLabs credentials and everything that shapes a request.
         foreach (var control in new Control[]
                  {
-                     _txtApiKey, _chkShowApiKey, _cmbVoice, _btnLoadVoices, _cmbModel,
+                     _txtApiKey, _chkShowApiKey, _cmbVoice, _cmbModel,
                      _numStability, _numSimilarity, _numStyle, _numSpeed, _chkSpeakerBoost, _chkEnergyFollowsRace,
                      _cmbTextNormalization, _txtLanguageCode, _txtOutputFormat, _btnTestVoice,
                  })
@@ -3225,9 +3227,6 @@ public sealed partial class VoiceSettingsControl : UserControl
             _cmbVoice.Items.Add(new ElevenLabsClient.VoiceInfo(current.VoiceId, string.IsNullOrWhiteSpace(current.VoiceName) ? current.VoiceId : current.VoiceName));
             _cmbVoice.SelectedIndex = 0;
         }
-
-        _btnLoadVoices.Text = "Load Voices";
-        _btnLoadVoices.Click += BtnLoadVoices_Click;
 
         // --- Model ---
         _cmbModel.DropDownStyle = ComboBoxStyle.DropDown;
@@ -4043,17 +4042,32 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     private bool Gone => IsDisposed || Disposing || !IsHandleCreated;
 
-    private async void BtnLoadVoices_Click(object? sender, EventArgs e)
+    /// <summary>
+    /// Fills the announcer's ElevenLabs voice list from the account behind
+    /// the key typed on this tab - for the Cast tab's Load Voices, which
+    /// fills every voice list on that tab, this one included (25 Oct 2026:
+    /// the button of its own beside the list went). What happened goes on
+    /// the line under the list, as it always did.
+    ///
+    /// Only while the ElevenLabs row is showing (ElevenLabs chosen, or a key
+    /// typed to set it up) and the account's voices may be asked for (not
+    /// the HeatCaller voice, whose account isn't the club's). Otherwise
+    /// nothing: the Cast tab's own lists say what was loaded, and a missing
+    /// key is its to report when ElevenLabs is the engine.
+    /// </summary>
+    internal async Task LoadAnnouncerElevenLabsVoicesAsync()
     {
         var apiKey = _txtApiKey.Text.Trim();
-        if (string.IsNullOrWhiteSpace(apiKey))
+
+        // The row's own rule (ShowAnnouncerVoiceRows): with a key typed it
+        // shows for every choice but the HeatCaller voice. Asked of the
+        // choice, not of Visible, which reads false while the Cast tab is not
+        // on screen.
+        if (Gone || string.IsNullOrWhiteSpace(apiKey) || _rdoHeatCaller.Checked)
         {
-            // Says where (22 Oct 2026): Load Voices is on the Cast tab now, the key on the Voice tab.
-            AppDialog.Show(this, "Enter your ElevenLabs API key on the Voice tab first.", "Missing API key", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        _btnLoadVoices.Enabled = false;
         _lblTestStatus.Text = "Loading voices...";
         try
         {
@@ -4123,13 +4137,9 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
         catch (Exception ex)
         {
-            _lblTestStatus.Text = $"Failed to load voices: {ex.Message}";
-        }
-        finally
-        {
             if (!Gone)
             {
-                _btnLoadVoices.Enabled = true;
+                _lblTestStatus.Text = $"Failed to load voices: {ex.Message}";
             }
         }
     }

@@ -25,6 +25,37 @@ public partial class MainForm
         _ambience.Settings = _ambienceStore.Current;
         _ambience.StatusMessage += OnClientRawMessage;
 
+        // RACE CONTROL'S NOW PLAYING (25 Oct 2026). The crowd and the
+        // playlist are simply on or off, so they are asked on Race Control's
+        // clock tick rather than told - nothing is added to either player.
+        // Under names, so a window built again replaces these rather than
+        // adding a second pair. See NowPlaying.
+        NowPlaying.Watch("crowd", () =>
+        {
+            if (!_ambience.IsRunning || _ambience.IsHeld)
+            {
+                return null;
+            }
+
+            var text = _ambience.IsSurging && !string.IsNullOrWhiteSpace(_ambience.SurgeReason)
+                ? NowPlaying.Joined("Crowd ambience", "surge: " + _ambience.SurgeReason)
+                : "Crowd ambience";
+
+            return new NowPlayingEntry(NowPlayingKind.Crowd, NowPlaying.Tidy(text, NowPlayingKind.Crowd), 0);
+        });
+
+        NowPlaying.Watch("music", () =>
+        {
+            if (!_music.IsPlaying || _music.IsPaused || _music.NowPlaying is not { } track)
+            {
+                return null;
+            }
+
+            var title = string.IsNullOrWhiteSpace(track.Title) ? Path.GetFileNameWithoutExtension(track.FilePath) : track.Title;
+
+            return new NowPlayingEntry(NowPlayingKind.Music, NowPlaying.Tidy(NowPlaying.Joined("Music", title), NowPlayingKind.Music), 0);
+        });
+
         // Deliberately NOT started here. The app opening is not a session
         // starting, and audio beginning on its own at launch is startling -
         // especially on a shared club machine where someone is just
@@ -672,6 +703,49 @@ public partial class MainForm
         {
             SetAllSoundMuted(false);
             OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] Unmuted for the new session.");
+        }
+    }
+
+    /// <summary>
+    /// The music and the crowd stop at once - for Race Control's Reset (26
+    /// Oct 2026, asked for by Asher: "music and crowd and sponsor spot should
+    /// be stopped with a reset as well"). Cut, not faded: a reset is "back to
+    /// nothing". Whichever started them - the session, On Air readying them,
+    /// or the club by hand.
+    ///
+    /// The mute's record of what it silenced is cleared with them, as Lap
+    /// times only clears it (MainForm.SoundOffer), so an unmute after a
+    /// reset does not bring them back. The next session starts them again
+    /// as it always does (HandleAudioAutoStart). A crowd fade the last race
+    /// scheduled finds nothing running and does nothing. UI thread.
+    /// </summary>
+    private void StopMusicAndCrowd(string why)
+    {
+        var stopped = new List<string>();
+
+        // Stopped whether or not they read as on: Stop also calls off a
+        // track about to be retried, and lets go of a crowd held for On Air.
+        if (_music.IsPlaying)
+        {
+            stopped.Add("music");
+        }
+
+        _music.Stop();
+
+        if (_ambience.IsRunning)
+        {
+            stopped.Add("crowd");
+        }
+
+        _ambience.Stop();
+
+        _musicPausedByMute = false;
+        _ambienceStoppedByMute = false;
+        _musicReadiedForOnAir = false;
+
+        if (stopped.Count > 0)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [audio] {why} - {string.Join(" and ", stopped)} stopped.");
         }
     }
 

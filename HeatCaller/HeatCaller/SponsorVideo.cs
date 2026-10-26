@@ -252,6 +252,15 @@ internal sealed class SponsorVideoSurface : IDisposable
     private bool _disposed;
 
     /// <summary>
+    /// Its place in NowPlaying (25 Oct 2026) while a video with its own sound
+    /// is playing, so Race Control can name it; 0 when none is.
+    /// </summary>
+    private int _playingId;
+
+    /// <summary>Stops naming the video in Now Playing. Safe from any thread, and twice.</summary>
+    private void ForgetPlaying() => NowPlaying.Ended(Interlocked.Exchange(ref _playingId, 0));
+
+    /// <summary>
     /// What to put in the window: the real video view, or an empty control
     /// standing in for it so the Big Screen's layout is the same either way
     /// and nothing has to check for null while placing controls.
@@ -295,12 +304,18 @@ internal sealed class SponsorVideoSurface : IDisposable
             // from inside its event handlers - Stop() from in here
             // deadlocks. So the only thing either does is hand the fact
             // over, and the Big Screen marshals it (see Finished).
-            _player.EndReached += (_, _) => Finished?.Invoke();
+            _player.EndReached += (_, _) =>
+            {
+                // Touches nothing of LibVLC's - see above.
+                ForgetPlaying();
+                Finished?.Invoke();
+            };
             // Failed first, then Finished (22 Oct 2026, bug hunt): the Big
             // Screen only needs to know it is over; the preview needs to
             // know it broke, rather than telling the club it played fine.
             _player.EncounteredError += (_, _) =>
             {
+                ForgetPlaying();
                 Failed?.Invoke();
                 Finished?.Invoke();
             };
@@ -367,6 +382,17 @@ internal sealed class SponsorVideoSurface : IDisposable
 
             var started = _player.Play(media);
 
+            // Race Control's Now Playing (25 Oct 2026): a video the room can
+            // hear, by its file's name. A silent one is not named - nothing
+            // is going out.
+            ForgetPlaying();
+
+            if (started && withSound)
+            {
+                Interlocked.Exchange(ref _playingId,
+                    NowPlaying.Started(NowPlayingKind.SponsorVideo, NowPlaying.Joined("Sponsor video", Path.GetFileNameWithoutExtension(path))));
+            }
+
             if (started && withSound)
             {
                 // Full scale here; what a club actually hears is Windows'
@@ -423,6 +449,8 @@ internal sealed class SponsorVideoSurface : IDisposable
             return;
         }
 
+        ForgetPlaying();
+
         try
         {
             _player.Stop();
@@ -442,6 +470,7 @@ internal sealed class SponsorVideoSurface : IDisposable
         }
 
         _disposed = true;
+        ForgetPlaying();
 
         try
         {

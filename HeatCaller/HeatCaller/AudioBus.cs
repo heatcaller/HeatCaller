@@ -137,7 +137,15 @@ internal static class AudioBus
     /// loud ambience" setting, which a 0..1 clamp here silently cancelled at
     /// the default 100% announcer level. Everything else stays at or below
     /// unity, exactly as before.
-    public static Task PlayAsync(ISampleProvider source, float volume, CancellationToken cancellationToken = default, bool allowBoost = false)
+    ///
+    /// With <paramref name="voice"/> the sound is the announcer speaking, and
+    /// shows on the VOICE level meter rather than SFX (26 Oct 2026 - see
+    /// AudioLevels). Only the announcer's lines (AnnouncementService's
+    /// PlayPcmAsync) say so; anything that does not is an effect, which is
+    /// what nearly everything else here is - recordings played back (a
+    /// replayed moment, a driver's own clip) included, as they carry the
+    /// room's sound with the call.
+    public static Task PlayAsync(ISampleProvider source, float volume, CancellationToken cancellationToken = default, bool allowBoost = false, bool voice = false)
     {
         if (Silent || cancellationToken.IsCancellationRequested)
         {
@@ -152,7 +160,7 @@ internal static class AudioBus
             gained = new SoftLimiter(gained);
         }
 
-        var clip = new Clip(gained);
+        var clip = new Clip(gained, voice);
 
         MixingSampleProvider? mixer = null;
         Task<MixingSampleProvider>? opening = null;
@@ -327,13 +335,19 @@ internal static class AudioBus
         }
     }
 
+    /// <summary>The output's buffering: about a third of a second over three buffers (see OpenOutput). Named for the VOICE meter, which needs to know when what it reads is heard (AudioLevels).</summary>
+    private const int OutputLatencyMs = 300;
+
+    /// <inheritdoc cref="OutputLatencyMs"/>
+    private const int OutputBuffers = 3;
+
     /// <summary>The slow part: opens the device and starts it playing the mixer. Touches no shared state but <see cref="_pending"/>.</summary>
     private static WaveOutEvent OpenOutput(MixingSampleProvider mixer)
     {
         // Not the shortest buffer possible: some drivers play nothing at
         // all from a very short one (see ToneGenerator), and a continuous
         // stream that runs dry glitches. About a third of a second.
-        var output = new WaveOutEvent { DesiredLatency = 300, NumberOfBuffers = 3 };
+        var output = new WaveOutEvent { DesiredLatency = OutputLatencyMs, NumberOfBuffers = OutputBuffers };
 
         lock (Gate)
         {
@@ -506,13 +520,89 @@ internal static class AudioBus
     {
         private readonly ISampleProvider _source;
 
+        /// <summary>
+        /// The VOICE and SFX strips' levels (25-26 Oct 2026) - see
+        /// AudioLevels. Not the listener above: a meter must never take a
+        /// recording's one slot. One pair per output, as the blocks in
+        /// progress belong to this stream.
+        /// </summary>
+        private readonly AudioLevels.Feeder _voiceLevels = new(AudioLevels.Voice, MixSampleRate, MixChannels, OutputLatencyMs, OutputBuffers);
+        private readonly AudioLevels.Feeder _effectLevels = new(AudioLevels.Effects, MixSampleRate, MixChannels, OutputLatencyMs, OutputBuffers);
+
+        // The two sub-mixes of this read: each clip adds itself to one as
+        // the mixer reads it (Clip.Read -> Heard). Grown once, to the
+        // output's buffer, then reused - no allocation per read.
+        private float[] _voiceMix = Array.Empty<float>();
+        private float[] _effectMix = Array.Empty<float>();
+
+        /// <summary>
+        /// The output whose mixer is reading on this thread right now, so a
+        /// clip can find the sub-mix to add itself to. Per thread: each
+        /// output reads on its own device thread, and this is set only for
+        /// the length of its mixer's read.
+        /// </summary>
+        [ThreadStatic]
+        private static Tapped? _reading;
+
         public Tapped(ISampleProvider source) => _source = source;
+
+        /// <summary>
+        /// A clip's samples for this read, added to the sub-mix it belongs
+        /// to. The mixer reads every clip into the start of its own buffer
+        /// for the same count it was asked for, and adds sample n into
+        /// output n - so the clip's sample n is the sub-mix's sample n too.
+        /// Called on the device's thread from inside the mixer's read; never
+        /// throws.
+        /// </summary>
+        public static void Heard(bool voice, float[] buffer, int offset, int count)
+        {
+            if (_reading is not { } tapped || count <= 0 || offset < 0 || offset + count > buffer.Length)
+            {
+                return;
+            }
+
+            var mix = voice ? tapped._voiceMix : tapped._effectMix;
+            var n = Math.Min(count, mix.Length);
+
+            for (var i = 0; i < n; i++)
+            {
+                mix[i] += buffer[offset + i];
+            }
+        }
 
         public WaveFormat WaveFormat => _source.WaveFormat;
 
         public int Read(float[] buffer, int offset, int count)
         {
-            var read = _source.Read(buffer, offset, count);
+            if (_voiceMix.Length < count)
+            {
+                _voiceMix = new float[count];
+                _effectMix = new float[count];
+            }
+            else
+            {
+                Array.Clear(_voiceMix, 0, count);
+                Array.Clear(_effectMix, 0, count);
+            }
+
+            int read;
+            _reading = this;
+
+            try
+            {
+                read = _source.Read(buffer, offset, count);
+            }
+            finally
+            {
+                _reading = null;
+            }
+
+            // Never throws (AudioLevels.Feeder.Feed).
+            if (read > 0)
+            {
+                _voiceLevels.Feed(_voiceMix, 0, read);
+                _effectLevels.Feed(_effectMix, 0, read);
+            }
 
             if (read > 0 && _listener is { } listener)
             {
@@ -575,13 +665,20 @@ internal static class AudioBus
     {
         private readonly ISampleProvider _source;
 
+        /// <summary>The announcer speaking, for the VOICE meter; else SFX (see PlayAsync).</summary>
+        private readonly bool _voice;
+
         // Continuations off the audio thread: whoever awaits this goes on to
         // do real work, and the device's own thread must not wait for it.
         private readonly TaskCompletionSource _done = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         private volatile bool _finished;
 
-        public Clip(ISampleProvider source) => _source = source;
+        public Clip(ISampleProvider source, bool voice)
+        {
+            _source = source;
+            _voice = voice;
+        }
 
         public WaveFormat WaveFormat => _source.WaveFormat;
 
@@ -607,6 +704,9 @@ internal static class AudioBus
                 Finish(ex);
                 return 0;
             }
+
+            // Onto its level meter's sub-mix (Tapped.Heard).
+            Tapped.Heard(_voice, buffer, offset, read);
 
             // Short of what was asked for is the end: the mixer takes this
             // clip out of the mix on its own.

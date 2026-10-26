@@ -47,12 +47,29 @@ public partial class MainForm
         cast.EngineInUse = () => _voiceStore.Current.EffectiveEngine;
         cast.LoadVoices = MechanicVoiceChoicesAsync;
 
+        // And the announcer's ElevenLabs list (25 Oct 2026) - its own Load
+        // Voices went. Read when pressed, not now: a soundscape builds the
+        // Voice tab anew (RebuildVoiceAndSoundTabs).
+        cast.LoadAnnouncerVoices = () => _voiceSettingsControl.LoadAnnouncerElevenLabsVoicesAsync();
+
         // Heard even while the announcer is muted - it was asked for by hand.
         cast.SpeakAsMechanic = voice => _announcer.SpeakTest(MechanicTestLine, _voiceStore.Current.Speed, voice);
         cast.SpeakAsPrincipal = voice => _announcer.SpeakTest(PrincipalTestLine, _voiceStore.Current.Speed, voice);
         cast.SpeakAsHonours = voice => _announcer.SpeakTest(HonoursTestLine, _voiceStore.Current.Speed, voice);
         cast.SpeakAsRecapHost = voice => _announcer.SpeakTest(RecapHostTestLine, _voiceStore.Current.Speed, voice);
         cast.SpeakAsCoHost = voice => _announcer.SpeakTest(CoHostTestLine, _voiceStore.Current.Speed, voice);
+
+        // A Kokoro voice on the cast beside another engine (25 Oct 2026):
+        // Kokoro is loaded now, in the background, as it is when it is the
+        // engine or the stand-in - or the first line in that voice would
+        // wait for 310 MB to be read. The Cast tab does the same on a pick.
+        var engine = _voiceStore.Current.EffectiveEngine;
+
+        if (new[] { _settings.CoHostVoice, _settings.MechanicVoice, _settings.PrincipalVoice, _settings.HonoursVoice, _settings.RecapHostVoice }
+            .Any(voice => voice.SpeaksKokoroWith(engine)))
+        {
+            KokoroSpeech.WarmUp();
+        }
     }
 
     /// <summary>

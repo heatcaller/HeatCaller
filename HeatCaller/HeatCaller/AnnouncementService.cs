@@ -1130,6 +1130,8 @@ public sealed partial class AnnouncementService
             profile = profile.CloneForDelivery(delivery.Stability, delivery.Style);
         }
 
+        var withoutVoice = profile;
+
         if (voice is not null)
         {
             profile = profile.CloneWithVoice(voice);
@@ -1158,7 +1160,7 @@ public sealed partial class AnnouncementService
             // Rendered ahead, so a long line gets the long limit - see
             // RenderingAhead (22 Oct 2026, bug hunt).
             RenderingAhead.Value = true;
-            var rendered = await RenderLineAsync(profile, spoken, cancel: cancel);
+            var rendered = await RenderCastLineAsync(withoutVoice, profile, voice, spoken, cancel);
             return new PreparedSpeech(spoken, rendered.Audio, text, rendered.Source == LineSource.StandIn,
                 AudioShortened: AudioFromShortenedText(rendered.Source, spoken));
         }

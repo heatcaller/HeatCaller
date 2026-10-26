@@ -44,7 +44,7 @@ How you leave it is remembered, so a club that prefers the rail gets it at every
 
 | Page | What it's for |
 |---|---|
-| **Race Control** | Running a race: the flag buttons, the clock, the live leaderboard, the Next Up bar, the **Session** row (name, track, round), **Quick Race**, **Open Big Screen**, **Open Announcer Screen**, **Qualifying Projection** and **Pre-race check**. See [Running a race](../race-control/running-a-race.md). |
+| **Race Control** | Running a race: the flag buttons, the clock, the live leaderboard, the Next Up bar, the **Session** row (name, track, round), **Quick Race**, **Big Screen**, **Announcer Screen**, **Qualifying Projection**, **Pre-race check**, **Mission Control** and **Broadcast** (the announcer's Hold, Play again, Skip, Notes and Votes). See [Running a race](../race-control/running-a-race.md). |
 | **Driver Hub** | Your drivers: name, transponders, class, photo and email, each driver's cars, setups and battery packs, and their record. Also **Import from CSV**. See [Drivers and classes](../race-day/drivers-and-classes.md). |
 | **Classes** | The rules each class races under: qualifying method, heats that count, main size, bump-ups, race format, tech checklist. |
 | **Track Layouts** | Your layouts, with lap records, photos, marshal posts and the **Track Designer**. |
