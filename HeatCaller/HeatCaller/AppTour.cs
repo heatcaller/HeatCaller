@@ -79,7 +79,8 @@ public sealed class AppTour : Form
 
         new("Club Website", "Club Website",
             "Your club's pages on the internet: live results, schedule and standings anyone can open, plus online "
-            + "check-in and driver sign-up. Set up once with an address and token."),
+            + "check-in and driver sign-up. Set up once with an address and token. Its Recording tab keeps an mp3 "
+            + "of each race, a clip for each driver and their highlight videos."),
 
         new("Themes", "Themes",
             "The look of the app and of everything racers see - colors, and your club logo on screens, pages and "

@@ -1,6 +1,6 @@
 # Commentary
 
-Commentary adds a little color between races: a spoken "coming up" line before a round, a spoken recap after the checkered flag, and suggested talking points on the [Announcer screen](voice.md#announcer-screen). The recap can be dressed up as a TV broadcast, with an opening and a sign-off, and the show can go down to pit lane for a word with the winner's Technical Lead at the flag, or have the winner's Team Principal in the booth. The words are written by a language model, except for the lines that join one part of a show to the next: HeatCaller writes those itself, so they keep working when the model doesn't. It's optional: without it, HeatCaller's normal announcements work exactly the same.
+Commentary adds a little color between races: a spoken "coming up" line before a round, a spoken recap after the checkered flag, and suggested talking points on the [Announcer screen](voice.md#announcer-screen). The recap can be dressed up as a TV broadcast, with an opening and a sign-off, and the show can go down to pit lane for a word with the winner's Technical Lead at the flag, or have the winner's Team Principal in the booth. The words are written by a language model - including the hand-overs between the host and the rest of the cast, which come with HeatCaller's own built-in lines as a fallback, so they keep working when the model doesn't. It's optional: without it, HeatCaller's normal announcements work exactly the same.
 
 There are two places the writing can happen, and HeatCaller uses whichever it can:
 
@@ -224,7 +224,7 @@ Ollama loads a model into memory on its first request, which can take a while on
 
 The settings are on cards down the **Voice → AI Commentary** tab, in the order the night happens: **Who writes it**, **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Writing style**. Above them is the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
 
-Who speaks - the announcer's and the recap host's names, the co-host, the Technical Lead, the Team Principal and the achievements reader, with their voices - is on **Voice → Cast**. One **Load Voices**, on the **Voices** card at the top, fills every voice list on the tab. Under it, every speaker has a card laid out the same way: their name first, then their voice with **Test Voice**, then what they do and the settings for it - the **Announcer** card first. The show's music is on **Sounds → Imaging**, and recording the night is on **Sounds → Recording**. The sections below still describe those settings here, where they're explained.
+Who speaks - the announcer's and the recap host's names, the co-host, the Technical Lead, the Team Principal and the achievements reader, with their voices - is on **Voice → Cast**. One **Load Voices**, on the **Voices** card at the top, fills every voice list on the tab. Under it, every speaker has a card laid out the same way: their name first, then their voice with **Test Voice**, then what they do and the settings for it - the **Announcer** card first. The show's music is on **Sounds → Imaging**, and recording the night is on **Club Website → Recording**. The sections below still describe those settings here, where they're explained.
 
 ### Who writes it
 
@@ -381,6 +381,16 @@ The recap is a short segment rather than a one-line call, so it has its own timi
 
 HeatCaller starts writing the recap the moment the flag drops, so the model works through the finish call, the pause and the teaser.
 
+#### The hand-overs
+
+When the host throws to another member of the cast - the announcer down to the co-host in pit lane, at the flag and before a race, or the recap host over to the achievements reader - the model writes both sides of it: a line or two from the host picking up from what was just said and handing over by name, and a line or two from the guest reacting to what they covered and **handing back to the host by first name** ("...back to you, Rick"). Before 26 Oct 2026 these were the same fixed sentences every race, the pre-race word never handed back at all, and the achievements reader simply stopped.
+
+- **Written and voiced ahead.** Each hand-over is written and turned into speech while something else is playing - the interview being made, or the recap being said - so it plays straight on, with no wait for the model or the voice.
+- **Never a pause for it.** HeatCaller's own built-in lines are made ready as well, and go out for either half that isn't in hand by the moment it's wanted, or that the model got wrong: too long, or missing the name it had to say. A hand-over the model has already written gets up to three seconds more to finish being voiced; one still being written gets none, so it never adds a pause. The interview itself is waited for exactly as long as before, and the hand-over is only looked at once it has come. The console says which went out.
+- **Names come from Voice → Cast.** The announcer's name for the pit lane, the recap host's name for the achievements. With no name set, nobody is named and nothing is made up.
+- **Behind the lines that matter more.** On the model on this PC, which answers one request at a time, the interview is always asked for before its hand-over, and the achievements' hand-over is written after the booth interview and the sign-off - so a hand-over never makes those late. On that model the achievements often get the built-in hand-over for that reason.
+- **Only where there's someone to hand to.** No co-host, and the announcer asks the pit lane questions himself; no voice picked for the achievements reader, and the reader doesn't hand back (it would be the host handing back to himself).
+
 #### The commercial break
 
 The model takes real time to write a recap - half a minute is normal and a slow night is longer. The teaser covers the start of that wait; the commercial break covers the rest of it. Your sponsor slides take the crowd's screen, one slide straight into the next, which is what a station does with that gap and what the club was paid for.
@@ -504,7 +514,7 @@ This changes nothing about **segments during a race or before one**. A battle ca
 
 #### When each part plays
 
-The booth interview and the sign-off are written straight after the recap, while the teaser and the recap play, and each line is turned into speech ahead of time. Each part only starts once the one before it has finished:
+The booth interview and the sign-off are written straight after the recap, while the teaser and the recap play, and each line is turned into speech ahead of time. So are the unofficial result (while the finish call is still being said), the hand-overs, and every colour segment - including one said in a single voice, which until 26 Oct 2026 was still made as it was spoken. Each part only starts once the one before it has finished:
 
 - If a part isn't ready within 15 seconds of the one before it ending, it's skipped rather than leaving a long silence, and the console says so.
 - If the next race is called to the grid, whatever hasn't been spoken yet is dropped.
@@ -699,7 +709,7 @@ Untick all of them and nothing gets music, which is a different thing from switc
 
 ### Recording the night
 
-This card is on **Sounds → Recording** now. Every race is recorded as it goes out — the announcer and the effects, not the music or the crowd — and **each driver gets an mp3 of the stretches where the announcer called them**, and can get a highlight video for their phone too. See also [Race recordings](sounds-and-music.md#race-recordings).
+This card is on **Club Website → Recording** now. Every race is recorded as it goes out — the announcer and the effects, not the music or the crowd — and **each driver gets an mp3 of the stretches where the announcer called them**, and can get a highlight video for their phone too, with the music and the crowd under the call as the room heard them. See also [Race recordings](sounds-and-music.md#race-recordings).
 
 The clips are the half worth having. A driver who posts the forty seconds where their pass for the lead was called is the best advertisement your club has, and nobody else in RC timing produces one at all.
 
@@ -769,6 +779,8 @@ It is **four hundred words**, and the same four hundred whatever you have set **
 **Read in pieces.** Four minutes handed to a voice engine as one request is a request that times out or comes back truncated. It is split into pieces a voice can take, **only ever at the end of a sentence**, so the pauses inside it are the pauses inside a paragraph rather than a stop in the middle of a clause. A single sentence longer than a piece goes out whole rather than being cut.
 
 Each piece queues like any other spoken line, which means **a flag call still jumps in front of whatever of it is unspoken**. On a night that turns out not to be quite over, the race wins.
+
+**Every piece is voiced ahead** (26 Oct 2026), for this and for a driver's own night alike. The pieces are turned into speech one after another from the moment the script is written, the first is ready before the opener plays, and each one after it is queued as soon as it's made - while the piece in front of it is still being spoken - so they run straight on with no gap at the joins. Before, each piece was only made once the one before had finished, and the room heard a pause at every join. There is always one piece waiting behind the one being said: a piece is waited for until a second and a half before the piece in front of it finishes (HeatCaller knows that piece's exact length once it is made), and if it still isn't made it goes out as text and is made as it's said, as before - with its own voicing called off so it isn't paid for twice. When the next race is called, when **Reset** stops everything, or when the announcer is muted (even if it's unmuted again straight away), nothing more is queued, and Reset cuts the read off there.
 
 **When it refuses.** It says why, in one sentence, rather than half-working:
 
@@ -1343,7 +1355,7 @@ Under that, **Controls** has the buttons in the table below, and **At a glance**
 | **Hold** / **HELD · Release** | Stops the **next** thing. While it's on the button reads **HELD · Release**, so a held show can't be mistaken for a quiet one; press it to let the show carry on. Nothing is written or said while it's on - a prize giving, a crash to talk through, a word with a driver. Nothing is lost by holding: a fight is still a fight when it comes off, and a fact that went unsaid is unspent. |
 | **Play again** | Puts the **last** segment out again, with its show round it where that segment is scored. For a line talked over by the room, a PA that cut out, or a club owner who missed the honours. |
 | **Skip** | Stops the show that is on air: the bed rides down and whatever the running order had left is dropped. |
-| **Replay Moment** | Plays the last 20 seconds the room heard again - the call, the crowd and the music - marked in and out with the show's sting. **Skip** stops it. Shown once there's something to replay; it needs **Record each race, and cut each driver their own clip** ticked on **Sounds → Recording**. |
+| **Replay Moment** | Plays the last 20 seconds the room heard again - the call, the crowd and the music - marked in and out with the show's sting. **Skip** stops it. Shown once there's something to replay; it needs **Record each race, and cut each driver their own clip** ticked on **Club Website → Recording**. |
 
 **Play again costs nothing.** Nothing goes to the model and nothing is spent - it is the line HeatCaller already holds, so it works with the AI switched off at the wall, which is exactly when somebody is most likely to want it. It isn't budgeted either: the budget is there to stop the *room* hearing too much, and a line the room asked to hear again is not the budget's business. A two-voice segment goes out as two voices, in the right voices, rather than as one voice reading a transcript of two people talking.
 

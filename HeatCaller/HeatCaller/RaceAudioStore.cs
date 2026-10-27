@@ -95,6 +95,9 @@ internal sealed class RaceAudioStore
         /// <summary>Whether the podium's videos go on the club's page, with a QR code on the Big Screen. On by default.</summary>
         public bool SharePodiumVideos { get; set; } = true;
 
+        /// <summary>Whether the music and crowd go under the highlight videos (RecapBed). On by default, and on for a file saved before it existed.</summary>
+        public bool MusicUnderVideos { get; set; } = true;
+
         /// <summary>Whether each driver's own race clips go up to their private night page. Off by default.</summary>
         public bool ShareDriverClips { get; set; }
 
@@ -253,6 +256,32 @@ internal sealed class RaceAudioStore
             }
 
             _file.SharePodiumVideos = value;
+            Save();
+        }
+    }
+
+    /// <summary>
+    /// Whether the music and crowd the room heard go under the highlight
+    /// videos (RecapBed). Off, no bed is kept at all and every video is the
+    /// call alone, as before 26 Oct 2026.
+    /// </summary>
+    // WHY (26 Oct 2026, Asher's decision on the music licensing question:
+    // "add option to switch off. on by default."): the podium's videos go on
+    // the club's page, and a club playing commercial tracks may not be
+    // allowed to put those online. Here with the other video settings, in
+    // race-audio.json, because the race reads this store fresh at each green
+    // and StartFor - where the bed starts - is handed it.
+    public bool MusicUnderVideos
+    {
+        get => _file.MusicUnderVideos;
+        set
+        {
+            if (_file.MusicUnderVideos == value)
+            {
+                return;
+            }
+
+            _file.MusicUnderVideos = value;
             Save();
         }
     }
@@ -625,7 +654,7 @@ internal sealed class RaceAudioStore
             if (!File.Exists(marker))
             {
                 File.WriteAllText(marker, "HeatCaller made this folder for one race night's recordings. It is "
-                    + "deleted with everything in it once it is older than the nights Sounds > Recording keeps.");
+                    + "deleted with everything in it once it is older than the nights Club Website > Recording keeps.");
             }
         }
         catch

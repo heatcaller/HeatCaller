@@ -181,7 +181,7 @@ Every open issue on this list on the morning of 22 Oct 2026, fixed in one round.
 
 ## Fixed in 0.60.0 (22 Oct)
 
-- **Race recording has a switch, and a ceiling.** **Sounds → Recording** has *Record each race, and cut each driver their own clip* and **Keep the last:** *N* race nights, older nights' folders removed - including, since 22 Oct, the highlight videos in them. (announcer/sounds-and-music.md)
+- **Race recording has a switch, and a ceiling.** **Club Website → Recording** has *Record each race, and cut each driver their own clip* and **Keep the last:** *N* race nights, older nights' folders removed - including, since 22 Oct, the highlight videos in them. (announcer/sounds-and-music.md)
 - **The sting has a level.** **Sting level:** is on the **Show treatment** card beside the opener and bed levels. (announcer/commentary.md)
 - **The two strings that named the retired Windows voice** (Rivalries and the soundscape editor) no longer do.
 - **The station ident, the drama-shaped show and the ad-break bumper** are no longer built-but-unreachable - see that section.

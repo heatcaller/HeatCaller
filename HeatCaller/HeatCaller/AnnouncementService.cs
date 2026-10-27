@@ -906,6 +906,17 @@ public sealed partial class AnnouncementService
     private bool _muted;
 
     /// <summary>
+    /// How many times the announcer has been muted (26 Oct 2026, review). A
+    /// caller feeding lines in over time - tonight's recap, a driver's night -
+    /// captures it at the start and stops once it moves: a mute bins what was
+    /// queued, and a mute lifted while the caller waited must not let the read
+    /// carry on from the middle. See AnnouncerControl.ReadIsOver.
+    /// </summary>
+    public long MutedGeneration => Interlocked.Read(ref _mutedGeneration);
+
+    private long _mutedGeneration;
+
+    /// <summary>
     /// Silences all output. Muting also clears anything already queued -
     /// the per-item guards only stop NEW audio being enqueued, so without
     /// this a backlog kept playing after the mute and the button looked
@@ -922,6 +933,11 @@ public sealed partial class AnnouncementService
 
             if (value && !wasMuted)
             {
+                // Counted first (26 Oct 2026, review), so a long read feeding
+                // its pieces in sees the mute even if it is lifted before it
+                // looks - see MutedGeneration.
+                Interlocked.Increment(ref _mutedGeneration);
+
                 // Everything, race-control lines and their sounds included:
                 // muting means silence, and a finish call kept back here
                 // simply spoke later.
@@ -1058,7 +1074,7 @@ public sealed partial class AnnouncementService
     /// See QueuedVoiceItem.OnAir and OnAirNow.
     /// </param>
     public void SpeakReminder(string text, (double Stability, double Style)? deliveryOverride = null, SecondVoice? voice = null, bool showOnScreens = false,
-        SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null, bool forListeners = true)
+        SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null, Action? dequeued = null, bool forListeners = true)
     {
         if (Muted || string.IsNullOrWhiteSpace(text))
         {
@@ -1070,9 +1086,29 @@ public sealed partial class AnnouncementService
         // must not go out on the public listen-along page.
         var spoken = SpellOutTimesForSpeech(text);
         EnqueueVoiceWork(AnnouncementEventType.Reminder, null,
-            () => SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice, tail: tail, lead: lead, forListeners: forListeners),
+            () =>
+            {
+                // WHY (26 Oct 2026): told the moment the queue takes this
+                // line, so a long read fed in piece by piece knows when the
+                // queue has nothing left behind it - see dequeued.
+                Dequeued(dequeued);
+                return SynthesizeAndPlayAsync(spoken, "[voice] Reminder", deliveryOverride: deliveryOverride, voice: voice, tail: tail, lead: lead, forListeners: forListeners);
+            },
             displayText: showOnScreens ? text : null,
             onAir: onAir);
+    }
+
+    /// <summary>Tells a caller its line has been taken off the queue - see SpeakPrepared's dequeued. A throwing caller never stops the line.</summary>
+    private static void Dequeued(Action? dequeued)
+    {
+        try
+        {
+            dequeued?.Invoke();
+        }
+        catch
+        {
+            // Nothing a caller does here is worth the line.
+        }
     }
 
     /// <summary>A line already rendered to audio, ready to play the instant it's wanted.</summary>
@@ -1248,7 +1284,14 @@ public sealed partial class AnnouncementService
     /// an exchange would have been the one segment the strip could not
     /// name.
     /// </param>
-    public void SpeakPrepared(PreparedSpeech prepared, SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null)
+    /// <param name="dequeued">
+    /// Called the moment the voice queue takes this line to play it (26 Oct
+    /// 2026) - so a long read that feeds its pieces in as they are voiced
+    /// (AnnouncerControl.FeedTheReadAsync) knows the queue has nothing left
+    /// behind this one and the next must go in now. Never called for a line
+    /// that is dropped instead. On the voice loop's thread; must not block.
+    /// </param>
+    public void SpeakPrepared(PreparedSpeech prepared, SpeechTail tail = SpeechTail.Normal, SpeechLead lead = SpeechLead.Normal, string? onAir = null, Action? dequeued = null)
     {
         if (Muted)
         {
@@ -1268,6 +1311,8 @@ public sealed partial class AnnouncementService
         // EnqueueVoiceWork, which raises it once nothing will drop it.
         EnqueueVoiceWork(AnnouncementEventType.Reminder, null, onAir: onAir, work: async () =>
         {
+            Dequeued(dequeued);
+
             StatusMessage?.Invoke($"[voice] Reminder (prepared): \"{prepared.Text}\"");
 
             await _audioPlaybackLock.WaitAsync();

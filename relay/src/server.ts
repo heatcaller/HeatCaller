@@ -24,6 +24,9 @@ import {
   standingsPage,
   tracksPage,
   videosPage,
+  podiumVideosIndexPage,
+  myNightPage,
+  type PodiumRace,
   type PageContext,
 } from "./pages.js";
 import { VIDEO_ID, VIDEO_MAX_BYTES, videosToDrop, type VideoMeta, type VideoVault } from "./videos.js";
@@ -67,6 +70,8 @@ const PAGES: Readonly<Record<string, (club: string, clubName: string, context: P
   badges: badgesPage,
   tracks: tracksPage,
   checkin: checkinPage,
+  // A driver's way to their own night with their personal PIN (26 Oct 2026, asked for by Asher) - see myNightPage.
+  mynight: myNightPage,
 });
 
 /** Where the relay keeps a club's queue of check-in taps. Not a channel: nobody publishes to it, and nobody reads it but the laptop. */
@@ -1011,6 +1016,8 @@ export class Relay {
   private readonly checkinTraffic: Limiter;
   private readonly checkinReads: Limiter;
   private readonly driverTaps: Limiter;
+  /** Wrong PINs carried by check-in taps, per club|badge - see checkinRequest (26 Oct 2026). Apart from pinGuard and pinFailures on purpose. */
+  private readonly badgePinFailures: Limiter;
   /** Ten wrong manager-PIN guesses in ten minutes, per club and address - the manager's own pinFailures. */
   private readonly managePinFailures: Limiter;
   /** The manager PIN's own club-wide lockout, kept apart from checkin's pinGuard - see PinGuard's own doc comment. */
@@ -1254,6 +1261,10 @@ export class Relay {
     // times at most; a script hammering one id to churn the queue and the
     // roster gets six a minute and no more.
     this.driverTaps = new Limiter(6, 60 * 1000, () => this.now().getTime());
+    // Five wrong PINs in ten minutes for any one badge (26 Oct 2026): a
+    // driver fumbling their own PIN is nowhere near it, and somebody holding
+    // another driver's badge gets five tries in a million per ten minutes.
+    this.badgePinFailures = new Limiter(5, 10 * 60 * 1000, () => this.now().getTime());
 
     // The race-day manager's own PIN guard, same shape as check-in's and
     // for the same reasons, but kept entirely apart: a manager PIN and a
@@ -2128,6 +2139,14 @@ export class Relay {
             }
           }
 
+          // Every race's podium videos (26 Oct 2026, asked for by Asher -
+          // see podiumVideosIndexPage). Not in PAGES: it is drawn from the
+          // video vault, not from a published document a script reads.
+          if (page === "videos") {
+            await this.podiumVideosIndex(request, response, tenant);
+            return;
+          }
+
           // Not in PAGES on purpose: this is the race-day manager's own
           // page, not one of the club's public tabs, so it never appears
           // in shell()'s nav bar. The manager PIN and the pass it earns
@@ -2203,8 +2222,10 @@ export class Relay {
         // for, so a stale link is never a stale picture.
         // THE PODIUM'S VIDEOS (21 Oct 2026). A race's page - what the Big
         // Screen's QR code opens - and the video itself. Both are named
-        // by 128 random bits from the laptop, so the link is the
-        // credential; nothing lists them. See videos.ts.
+        // by 128 random bits from the laptop. Since 26 Oct 2026 the
+        // club's Videos tab (/c/<club>/videos, podiumVideosIndex) lists the
+        // week's podiums too - Asher asked for a place to download them.
+        // See videos.ts.
         if (tenant !== undefined && segments.length === 4 && segments[2] === "videos") {
           await this.videosForRace(request, response, tenant, segments[3] as string);
           return;
@@ -4622,7 +4643,11 @@ export class Relay {
    *                          or the pass an earlier right PIN was given
    *   one   { id }           a single driver, for a badge link - the id
    *                          itself is the credential
-   *   tap   { id, wanted }   check in or out - queued for the laptop
+   *   tap   { id, wanted,    check in or out - queued for the laptop. A
+   *           pass?, pin? }  driver with a personal PIN needs their
+   *                          own PIN, or the pass it was answered with
+   *                          (or the desk's staff pass / row handle) -
+   *                          26 Oct 2026
    *
    * The id is a keyed hash the laptop makes from the transponder, eighty
    * bits of it: unguessable, stable across meetings so a printed badge
@@ -4728,7 +4753,7 @@ export class Relay {
           ok: false,
           error:
             `Too many wrong PINs have been tried for this club, so PIN sign-in is closed for about ${wait}. ` +
-            "Phones already signed in and QR check-ins keep working.",
+            "Phones already signed in keep working, and so does checking in or out from a QR check-in with your own PIN.",
         });
         return;
       }
@@ -4812,11 +4837,16 @@ export class Relay {
     const asked = typeof input["id"] === "string" ? (input["id"] as string) : "";
     let driver = DRIVER_ID.test(asked) ? drivers.find((d) => d.id === asked) : undefined;
 
+    // Whether this tap came off the staff list, by a row's handle - which
+    // only the staff PIN (or its pass) is ever answered with.
+    let viaStaffRow = false;
+
     // A tap from the staff list carries the row's handle, not the badge id
     // (23 Oct 2026, bug hunt 10 - see staffRows above). Only a tap: "one"
     // answers with the real id, so a handle must never open it.
     if (driver === undefined && action === "tap" && DRIVER_ID.test(asked) && checkin.pinSha256 !== "") {
       driver = drivers.find((d) => sameHash(staffRowRef(checkin.passKey, club, checkin.pinSha256, d.id), asked));
+      viaStaffRow = driver !== undefined;
     }
 
     // Everything from here on is keyed by the real badge id.
@@ -4856,6 +4886,84 @@ export class Relay {
         ...(live !== undefined && live.entry["firstNight"] === true ? { firstNight: true } : {}),
       });
       return;
+    }
+
+    // WHY (26 Oct 2026, asked for by Asher: "is there a reason the phone
+    // sign in page you can sign in/out anyone you want without a pin?"): a
+    // tap used to need nothing but the driver's badge code. That code is
+    // printed on a lanyard, sits in their night link and can be read off a
+    // badge across the desk, so whoever saw it could check that driver in
+    // or out. A driver who HAS a personal PIN is now checked in or out only
+    // with it - the same rule driver/ask already keeps for their details.
+    // The proof is either the pass checkin/list answered that PIN with,
+    // matched to THIS driver in constant time (racerByPass), or the PIN
+    // itself in the tap's body, checked against this badge's own hash only
+    // (see below - the review of the same day). The desk's staff list
+    // keeps working: a row handle (only ever given for the staff PIN) or
+    // the staff pass is staff's own way in. A driver with no personal PIN
+    // has nothing else to show, so their badge still works as before.
+    const tapPass = typeof input["pass"] === "string" && PASS.test(input["pass"] as string) ? (input["pass"] as string) : "";
+    const byStaff = viaStaffRow || (tapPass !== "" && checkin.staffPass !== "" && sameHash(tapPass, checkin.staffPass));
+    const byOwnPass = tapPass !== "" && racerByPass(checkin, tapPass)?.id === id;
+
+    // The pass this tap earned by carrying the driver's PIN itself, handed
+    // back so the page need not ask again this tab - see below.
+    let earnedPass = "";
+
+    if (!byStaff && !byOwnPass) {
+      const own = racerEntryOf(checkin, id);
+
+      if (own !== undefined) {
+        // WHY (26 Oct 2026, review of the change above): a pass comes only
+        // from checkin/list, and checkin/list closes for the whole club
+        // (up to twelve hours) when anybody types junk PINs, or for every
+        // phone on the venue's one NAT address after ten wrong ones. That
+        // turned a stranger's guessing into "no driver with a PIN can check
+        // in from a phone" - where badges used to carry on through a
+        // lockout. So the tap may carry the PIN itself, and it is checked
+        // against THIS badge's own stored hash and nobody else's: a
+        // targeted guess at one PIN by somebody already holding that badge
+        // code, not a search of the club's PINs. It has its own limit, five
+        // wrong in ten minutes per badge, and is kept apart from the
+        // club-wide lockout and the per-address PIN count. It still pays
+        // the slow hash and its per-address CPU budget, which is "busy",
+        // never a lockout. The PIN is only ever in the POST body.
+        const offered = typeof input["pin"] === "string" ? (input["pin"] as string).trim() : "";
+        const badge = `${club}|${id}`;
+
+        if (offered === "") {
+          sendJson(response, 403, {
+            ok: false,
+            needPin: true,
+            error: "Type your own check-in PIN (the one the club emailed you) to check in or out.",
+          });
+          return;
+        }
+
+        if (this.badgePinFailures.blocked(badge)) {
+          sendJson(response, 429, {
+            ok: false,
+            needPin: true,
+            error: "Too many wrong PINs for this driver. Wait ten minutes, or check in at the desk.",
+          });
+          return;
+        }
+
+        const wellFormed = /^[0-9]{4,8}$/.test(offered);
+
+        if (wellFormed && !this.takeSlowHashes(who, checkin.salt !== "" ? 1 : 0)) {
+          sendJson(response, 429, { ok: false, error: SLOW_HASH_BUSY });
+          return;
+        }
+
+        if (!wellFormed || !sameHash(racerPinHash(club, offered, checkin.salt), own.hash)) {
+          this.badgePinFailures.hit(badge);
+          sendJson(response, 403, { ok: false, needPin: true, error: "That PIN is not right." });
+          return;
+        }
+
+        earnedPass = own.pass;
+      }
     }
 
     if (typeof input["wanted"] !== "boolean") {
@@ -4985,7 +5093,7 @@ export class Relay {
     }
 
     this.log(`[relay] "${club}": a check-${wanted ? "in" : "out"} was queued for the laptop.`);
-    sendJson(response, 200, { ok: true, checkedIn: wanted });
+    sendJson(response, 200, earnedPass === "" ? { ok: true, checkedIn: wanted } : { ok: true, checkedIn: wanted, pass: earnedPass });
   }
 
   /**
@@ -6367,6 +6475,67 @@ export class Relay {
         label: v.label,
         position: v.position,
       }));
+  }
+
+  /**
+   * The club's Videos tab: every race of the last week that has podium
+   * videos, newest race first, each with 1st to 3rd to download (26 Oct
+   * 2026, asked for by Asher: "I don't see a spot on the relay to down load
+   * the top three place recordings."). Only what videosHeld already serves
+   * - the week's videos the relay still holds, which never includes a
+   * driver who asked for no videos online (the laptop does not send theirs,
+   * and forget-media takes down any already sent) - by the same public
+   * name the race's own page shows. Limited per address with the video
+   * reads, since it reads the club's whole vault listing.
+   */
+  private async podiumVideosIndex(request: IncomingMessage, response: ServerResponse, tenant: Tenant): Promise<void> {
+    const address = `${tenant.club}|${clientAddress(request)}`;
+
+    if (this.videoReads.blocked(address)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.videoReads.hit(address);
+
+    const context = await this.contextFor(request, tenant.club);
+    const byRace = new Map<string, VideoMeta[]>();
+
+    for (const v of await this.videosHeld(tenant.club)) {
+      // WHY (26 Oct 2026, review): a video sent without the driver's badge
+      // id - a driver with no profile or no badge key - is one forget-media
+      // can never find, so a driver who later asks for no videos online
+      // could not have it taken down. It stays where it always was, on its
+      // race's own page by the QR link, and is never listed here.
+      if (v.driver === undefined) {
+        continue;
+      }
+
+      const list = byRace.get(v.race);
+
+      if (list === undefined) {
+        byRace.set(v.race, [v]);
+      } else {
+        list.push(v);
+      }
+    }
+
+    const races: PodiumRace[] = [...byRace.entries()]
+      .map(([race, list]) => {
+        const sorted = [...list].sort((a, b) => a.position - b.position);
+        const newest = list.reduce((best, v) => (Date.parse(v.at) > Date.parse(best.at) ? v : best));
+
+        return {
+          race,
+          label: sorted.find((v) => v.label !== "")?.label ?? "",
+          at: newest.at,
+          videos: sorted.map((v) => ({ id: v.id, position: v.position, name: v.name, label: v.label })),
+        };
+      })
+      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+      .slice(0, 60);
+
+    sendHtml(response, 200, podiumVideosIndexPage(tenant.club, tenant.name, context, races), context.nonce);
   }
 
   /** The page a race's QR code opens: its podium videos, to watch and to keep. */
@@ -8900,6 +9069,22 @@ function racerByPass(checkin: CheckinView, pass: string): CheckinDriver | undefi
   }
 
   return found;
+}
+
+/**
+ * This driver's own racer PIN hash and pass, or undefined when they have
+ * none (26 Oct 2026) - what a tap carrying a PIN is checked against, and
+ * nothing else. A hash two drivers share was dropped by readCheckin, so it
+ * opens neither here either.
+ */
+function racerEntryOf(checkin: CheckinView, id: string): { hash: string; pass: string } | undefined {
+  for (const [hash, entry] of checkin.racers) {
+    if (entry.driver.id === id) {
+      return { hash, pass: entry.pass };
+    }
+  }
+
+  return undefined;
 }
 
 /** Whether this driver has a personal PIN - some racer entry opens them (22 Oct 2026, driver experience). */

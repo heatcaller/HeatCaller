@@ -159,6 +159,12 @@ public partial class MainForm
             // The Room & Web card, from the Commentary page (17 Oct 2026).
             "room & web", "room and web", "club notes", "notes", "shout-out", "shout-outs", "dedication",
             "vote", "votes", "room vote", "room's vote", "listen along", "listening along", "listen",
+
+            // The Recording tab, from Sounds (26 Oct 2026, asked for by
+            // Asher: "move it to the club website for now") - its words
+            // came with it, so "recording" still finds it.
+            "record", "recording", "record each race", "clips", "highlights", "highlight video", "videos",
+            "night recap", "tonight's recap", "driver's night", "check a line", "proof", "night before", "preview",
         },
         ["Classes"] = new[]
         {
@@ -214,7 +220,7 @@ public partial class MainForm
             "badge reader", "announcer name", "announcer's name",
         },
         ["Ghost Cars"] = new[] { "ghost", "virtual", "opponent", "rival", "solo", "practice alone", "ai car", "pace" },
-        ["Sounds"] = new[] { "soundscape", "soundscapes", "preset", "voice pack", "sound pack", "announcer style", "personality", "sound effects", "music", "soundtrack", "track", "song", "playlist", "beep", "beeps", "cue", "chime", "per-driver", "ambience", "crowd", "atmosphere", "track noise", "tone", "beep", "audio", "volume", "level", "duck", "ducking", "test", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "run of show", "radio", "hit the post", "post mark", "out mark", "on air", "show music", "show treatment", "opener", "club sting", "record", "recording", "record each race", "clips", "highlights", "night recap", "driver's night", "night before", "preview" },
+        ["Sounds"] = new[] { "soundscape", "soundscapes", "preset", "voice pack", "sound pack", "announcer style", "personality", "sound effects", "music", "soundtrack", "track", "song", "playlist", "beep", "beeps", "cue", "chime", "per-driver", "ambience", "crowd", "atmosphere", "track noise", "tone", "beep", "audio", "volume", "level", "duck", "ducking", "test", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "run of show", "radio", "hit the post", "post mark", "out mark", "on air", "show music", "show treatment", "opener", "club sting" },
         ["Backup & Restore"] = new[] { "save", "restore", "export", "zip", "auto backup", "support", "help", "logs", "log file", "crash", "send logs" },
         ["Garage"] = new[] { "car", "cars", "chassis", "shell", "bodyshell", "tuning", "setup log", "setup", "tires", "gearing", "ride height", "springs", "loan", "borrow", "club car" },
     };
@@ -284,8 +290,9 @@ public partial class MainForm
         // THE VOICE REGROUP (17 Oct 2026): Voice, Cast, Race Calls and AI
         // Commentary. The club's own show music and the recording of the
         // night moved to Sounds (Imaging's Show treatment card, and the
-        // Recording tab), and club notes, the room's vote and listening
-        // along to the Club Website page, so their words are filed there.
+        // Recording tab - on the Club Website page since 26 Oct 2026), and
+        // club notes, the room's vote and listening along to the Club
+        // Website page, so their words are filed there.
         //
         // AI Commentary is listed BEFORE Cast although its tab is after it:
         // the first match wins, and Cast's "recap host" would otherwise take
@@ -330,7 +337,27 @@ public partial class MainForm
                 "show music", "show treatment", "opener", "club sting", "voice comes in", "play it",
             }),
             ("Lap Beeps", new[] { "lap beeps", "beep", "per-driver", "tone" }),
-            ("Recording", new[] { "recording", "record", "record each race", "clips", "highlights", "night recap", "tonight's recap", "driver's night", "check a line", "proof", "night before", "preview" }),
+        },
+
+        // TWO TABS SINCE 26 OCT 2026, when Recording moved here from Sounds
+        // (asked for by Asher: "the recording tab is in a bad location move
+        // it to the club website for now."). Website is listed with the
+        // page's own words so a search for the relay brings Website back to
+        // the front when Recording was the tab left open.
+        ["Club Website"] = new[]
+        {
+            ("Website", new[]
+            {
+                "website", "web site", "club website", "relay", "online", "cloud", "publish", "publishing", "token",
+                "club id", "results page", "standings page", "spectator", "hosted", "url", "share",
+                "room & web", "room and web", "club notes", "shout-out", "shout-outs", "dedication",
+                "vote", "votes", "room vote", "room's vote", "listen along", "listening along",
+            }),
+            ("Recording", new[]
+            {
+                "recording", "record", "record each race", "clips", "highlights", "highlight video", "videos",
+                "night recap", "tonight's recap", "driver's night", "check a line", "proof", "night before", "preview",
+            }),
         },
     };
 

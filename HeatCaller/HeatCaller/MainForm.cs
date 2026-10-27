@@ -400,6 +400,16 @@ public partial class MainForm : Form
     private VoiceSettingsControl _voiceSettingsControl = null!;
     private TabControl _tabVoiceSubNav = null!;
     private TabControl _tabSoundSubNav = null!;
+
+    /// <summary>
+    /// The Recording tab, built with Sounds (its show music and the night's
+    /// pieces are wired to Imaging and the announcer there) and hosted on the
+    /// Club Website page since 26 Oct 2026 - see BuildClubWebsitePage.
+    /// </summary>
+    private TabPage _recordingSubPage = null!;
+
+    /// <summary>The Club Website page's tabs (26 Oct 2026): Website, then Recording.</summary>
+    private TabControl _tabClubWebsiteSubNav = null!;
     private TabControl _tabAnalyticsSubNav = null!;
     private TabPage _soundEffectsSubPage = null!;
 

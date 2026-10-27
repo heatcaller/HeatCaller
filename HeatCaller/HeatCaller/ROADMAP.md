@@ -245,6 +245,27 @@ in a chat is a request that is lost when the chat is.
 
 ### Built since it was asked for
 
+- **Race-night bug list, and My night** (asked 26 Oct 2026, **built 26 Oct
+  2026, not yet compiled on Windows**). Asher's list: heat reminders not
+  heard through Listen Along; relay captions stopping; the Big Screen not
+  reliably showing captions; cast hand-offs sounding robotic ("reference the
+  show host name when sending it back. add in a line or two. make it AI and
+  prerender"); "make sure everything ai generated is prerendered"; the phone
+  sign-in page signing anyone in or out without a PIN; the Recording tab
+  moved to Club Website; no place on the relay to download the top three
+  recordings; video recaps without the music; then "i want to driver to get
+  to own night page through the relay as long as they have their pin" and a
+  switch for the music under videos ("on by default"). Built in four parts
+  and reviewed twice: listen lines sent first and retried (RelayPublisher.
+  Listen.SendListenLinesWaiting, LISTEN_JS), MentionsAnyId/NumberIsACount,
+  CaptionLog pieces (SaidInFull/Unsaid); HandOffs.cs and CommentaryService.
+  BuildHandOffAsync, voiced-ahead flag/pre-race/honours hand-offs and long
+  reads (AnnouncerControl.Director FeedTheReadAsync, AnnouncementService.
+  Silenced/MutedGeneration); Wi-Fi check-in X-Racer-Pin with lockouts,
+  relay tap needPin with a per-badge PIN, /c/<club>/videos and
+  /c/<club>/mynight; RecapBed.cs and RaceAudioStore.MusicUnderVideos;
+  Recording on Club Website (_tabClubWebsiteSubNav). Relay redeploy needed.
+
 - **A steady flag row, On Air back on it, taller meters** (asked 26 Oct
   2026, **built 26 Oct 2026**). "expand the height of the VU meters to the
   top of the text of the card's title. double clicking the broadcast bar

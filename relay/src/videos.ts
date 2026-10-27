@@ -20,10 +20,16 @@ import { writeFileAtomically } from "./voice.js";
  * id can ever name the folder - and none of it counts against a club's
  * publishing quota.
  *
- * THE LINK IS THE CREDENTIAL, as a badge id is for a driver's night: every
- * video and every race has 128 random bits for a name, chosen on the laptop.
- * Nothing lists a club's videos to anybody; a race's page is reached by the
- * QR code shown in the room and a video by that page or the driver's night.
+ * EVERY VIDEO AND EVERY RACE has 128 random bits for a name, chosen on the
+ * laptop. A race's page is reached by the QR code shown in the room, and a
+ * video by that page or the driver's night - and, since 26 Oct 2026, from
+ * the club's Videos tab (server.ts podiumVideosIndex), which lists the
+ * week's podiums. WHY (26 Oct 2026, asked for by Asher: "I don't see a spot
+ * on the relay to down load the top three place recordings."): with the QR
+ * code gone once the next race staged, a driver who missed it had nowhere to
+ * find their video. Privacy is unchanged by the list: what is held here has
+ * already passed the laptop's "no videos online" and initials checks, and a
+ * driver who asks later has theirs taken down (forget-media).
  *
  * KEPT FOR A WEEK, and never more than a club's share: the oldest go first,
  * on every upload. A highlight is something people save the night they see

@@ -18,7 +18,7 @@ Keys, tokens and PINs are a special case. In the data folder they're encrypted s
 
 HeatCaller saves every race as an mp3, with a clip and a highlight video for each driver, in `Documents\HeatCaller Race Audio`. None of it is in a backup, and that's deliberate: one evening's recordings are larger than everything else the club saves put together, and HeatCaller keeps several backups at a time. It's left out for exactly the reason the finish camera's pictures are.
 
-If you want the recordings kept, copy that folder yourself, to the same external drive or cloud folder you keep backups on. HeatCaller keeps only the last few nights there (6 unless you change **Keep the last:** on **Sounds → Recording**), so a night you want for good has to be copied out before it ages off. Restoring a backup doesn't touch it either, and recordings on an old laptop don't come across to a new one.
+If you want the recordings kept, copy that folder yourself, to the same external drive or cloud folder you keep backups on. HeatCaller keeps only the last few nights there (6 unless you change **Keep the last:** on **Club Website → Recording**), so a night you want for good has to be copied out before it ages off. Restoring a backup doesn't touch it either, and recordings on an old laptop don't come across to a new one.
 
 See [Race recordings](../announcer/sounds-and-music.md#race-recordings) for what's in the files, and for how to switch recording off if you'd rather it didn't happen.
 

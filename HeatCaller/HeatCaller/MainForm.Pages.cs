@@ -2115,9 +2115,18 @@ public partial class MainForm
         // RECORDING (17 Oct 2026): the "Recording the night" card from the
         // Commentary page, as a tab of its own - the race recordings, the
         // drivers' clips, and the pieces written from the night.
+        //
+        // WHY (26 Oct 2026, asked for by Asher: "the recording tab is in a
+        // bad location move it to the club website for now."): still BUILT
+        // here, because its show music and the night's pieces are wired to
+        // Imaging's Show treatment card and the announcer just below, but no
+        // longer one of Sounds' tabs - BuildClubWebsitePage, which runs after
+        // this, hosts it on the Club Website page. "For now": moving it again
+        // is only a matter of which TabControl it is added to.
         var subPageRecording = new TabPage("Recording");
         var recordingControl = new RecordingControl(_settings) { Dock = DockStyle.Fill };
         subPageRecording.Controls.Add(recordingControl);
+        _recordingSubPage = subPageRecording;
 
         // Both grey with AI commentary, as they did on its page - and both
         // are told by the host rather than reaching for it.
@@ -2176,8 +2185,9 @@ public partial class MainForm
         subPageSoundscapes.Controls.Add(themes);
 
         // The Voice + Sounds regroup's order (17 Oct 2026): the blend, the
-        // soundscape that sets the rest up, its imaging, then each source,
-        // and last keeping a copy of the night.
+        // soundscape that sets the rest up, its imaging, then each source.
+        // Recording, which came last, is on the Club Website page since
+        // 26 Oct 2026 - see subPageRecording above.
         _tabSoundSubNav.TabPages.Add(subPageMixer);
         _tabSoundSubNav.TabPages.Add(subPageSoundscapes);
         _tabSoundSubNav.TabPages.Add(subPageImaging);
@@ -2185,9 +2195,8 @@ public partial class MainForm
         _tabSoundSubNav.TabPages.Add(subPageAmbience);
         _tabSoundSubNav.TabPages.Add(subPageMusic);
         _tabSoundSubNav.TabPages.Add(subPageLapBeeps);
-        _tabSoundSubNav.TabPages.Add(subPageRecording);
 
-        // Eight tabs: each as wide as its own caption rather than all as
+        // Seven tabs: each as wide as its own caption rather than all as
         // wide as "Soundscapes", or the row is wider than the window at
         // 1280 wide and at 200% text - see AppTheme.SizeTabsToCaptions.
         AppTheme.SizeTabsToCaptions(_tabSoundSubNav);
@@ -2292,7 +2301,7 @@ public partial class MainForm
             _settings,
             () => _raceControlControl.TriggerOpenBigScreen(),
             _relayPublisher,
-            () => GoToPage("Club Website"),
+            GoToClubWebsiteSettings,
             _undo)
         {
             Dock = DockStyle.Fill,
@@ -2305,6 +2314,24 @@ public partial class MainForm
         // to act on what they asked. Shown handlers run in the order they
         // were added, so the one that marks the host ready has run first.
         Shown += (_, _) => webServer.AutoStartIfConfigured();
+    }
+
+    /// <summary>
+    /// The Club Website page on its Website tab - the relay's address, token
+    /// and switches - for a button elsewhere that sends somebody there to set
+    /// the relay up.
+    /// </summary>
+    // WHY (26 Oct 2026): the page has two tabs since Recording moved onto it,
+    // and a page keeps whichever tab was last open - so "set up the Club
+    // Website" could otherwise land on the race recordings.
+    private void GoToClubWebsiteSettings()
+    {
+        GoToPage("Club Website");
+
+        if (_tabClubWebsiteSubNav is { TabCount: > 0 } tabs && tabs.SelectedIndex != 0)
+        {
+            tabs.SelectedIndex = 0;
+        }
     }
 
     /// <summary>
@@ -2322,7 +2349,33 @@ public partial class MainForm
         ConfigurePage(pageOnline);
 
         var online = new RelaySettingsControl(_relayPublisher, _settings, _profiles, _undo) { Dock = DockStyle.Fill };
-        pageOnline.Controls.Add(online);
+
+        // TWO TABS (26 Oct 2026, asked for by Asher: "the recording tab is in
+        // a bad location move it to the club website for now."): the page as
+        // it was, as Website, and Sounds' Recording tab after it - built by
+        // BuildSoundsPage, which runs before this, with all its wiring. The
+        // TabControl is the page's direct child, as on every page with tabs,
+        // so a search for "recording" or "clips" brings that tab to the front
+        // (SelectSearchedTab, NavSearchTabAliases).
+        var subPageWebsite = new TabPage("Website");
+        subPageWebsite.Controls.Add(online);
+
+        _tabClubWebsiteSubNav = new TabControl { Dock = DockStyle.Fill };
+        _tabClubWebsiteSubNav.TabPages.Add(subPageWebsite);
+        _tabClubWebsiteSubNav.TabPages.Add(_recordingSubPage);
+        AppTheme.StyleTabControl(_tabClubWebsiteSubNav);
+
+        // Back on Website, the boxes show what settings hold now - the same
+        // re-read the page gets on entry (the refresh hook at the end).
+        _tabClubWebsiteSubNav.SelectedIndexChanged += (_, _) =>
+        {
+            if (_tabClubWebsiteSubNav.SelectedTab == subPageWebsite)
+            {
+                online.RefreshAll();
+            }
+        };
+
+        pageOnline.Controls.Add(_tabClubWebsiteSubNav);
 
         // ROOM & WEB (17 Oct 2026), from the Commentary page. Shout-outs from
         // the club's web page switched OFF has to be SENT to the relay rather

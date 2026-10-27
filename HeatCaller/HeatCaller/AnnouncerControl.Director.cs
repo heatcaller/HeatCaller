@@ -464,6 +464,20 @@ public partial class AnnouncerControl
 
         _race.StateChanged += onNextRace;
 
+        // WHY (26 Oct 2026, review of the voiced-ahead read): the read's own
+        // stop - the next race, OR a Reset. Pieces are fed into the queue as
+        // they are voiced, so a Reset that only cut the queue left the rest
+        // to arrive afterwards and play over it; the announcer's Silenced
+        // (raised by SilenceNow) now stops the feeding, the voicing ahead and
+        // the show, as the next race does. Cancelled in the finally however
+        // the read ends, so nothing goes on costing characters after it. Not
+        // disposed: it has no timer.
+        var readAhead = CancellationTokenSource.CreateLinkedTokenSource(nextRace.Token);
+        var readToken = readAhead.Token;
+        Action onSilenced = () => StopReadingAhead(readAhead);
+
+        _announcer.Silenced += onSilenced;
+
         try
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Writing tonight's recap...");
@@ -543,13 +557,25 @@ public partial class AnnouncerControl
 
             if (chunks.Count == 0)
             {
-                // Named, not "above" (17 Oct 2026, Bug Hunt 8, A15-2): this is shown on Sounds > Recording.
+                // Named, not "above" (17 Oct 2026, Bug Hunt 8, A15-2): this is shown on Club Website > Recording (Sounds > Recording until 26 Oct 2026).
                 return "The model did not write anything usable. Try again, or check the Connection card on Voice > AI Commentary.";
             }
 
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [show] Tonight's recap: {Plural.Of(chunks.Count, "piece")} to read, "
                 + $"about {SponsorCopy.SpokenLength(script!).TotalSeconds:0} seconds. Playing it now.");
+
+            // WHY (26 Oct 2026, asked for by Asher: "make sure everything ai
+            // generated is prerendered so there's a quick back and forth with
+            // no pausing. drivers night/tonights recap."): every piece is
+            // voiced ahead, one after another from now, and the first is in
+            // hand before the opener plays - see VoiceTheReadAhead. The pieces
+            // used to be queued as text and each made only once the one
+            // before it had finished, so the room heard a round trip of
+            // silence at every seam of a four-minute piece.
+            var voiced = VoiceTheReadAhead(chunks, readToken);
+
+            await FirstPieceVoicedAsync(voiced, readToken).ConfigureAwait(true);
 
             // Started once there is something to record. See the note above.
             recording = BookendRecording.StartForTheNight(line => StatusMessage?.Invoke(line));
@@ -572,11 +598,11 @@ public partial class AnnouncerControl
             // that band for a plain statement of what is happening.
             if (treatment.Treats(SegmentKind.SignOffNumbers)
                 && await treatment.RunLongAsync(
-                    () => SayTheRecap(chunks),
+                    () => SayTheRecap(chunks, voiced, readToken),
                     SegmentKind.SignOffNumbers,
                     NightRecap.LongestRead,
                     caption: NightRecap.OnTheBand,
-                    ct: nextRace.Token).ConfigureAwait(true))
+                    ct: readToken).ConfigureAwait(true))
             {
                 return null;
             }
@@ -587,8 +613,8 @@ public partial class AnnouncerControl
             // next race was called and it gave up at once, and that was read
             // as "no music" - so the whole recap was queued over the staging
             // call. A cancelled run now goes to the cut-off answer below.
-            nextRace.Token.ThrowIfCancellationRequested();
-            SayTheRecap(chunks);
+            readToken.ThrowIfCancellationRequested();
+            SayTheRecap(chunks, voiced, readToken);
 
             // AND THEN WAITED FOR, which this path did not do and the one
             // above always has (12 Oct 2026).
@@ -603,7 +629,7 @@ public partial class AnnouncerControl
             // path was right because RunLongAsync waits for quiet inside
             // itself; the two were one line apart and behaved completely
             // differently.
-            await treatment.WaitForTheReadAsync(NightRecap.LongestRead, nextRace.Token).ConfigureAwait(true);
+            await treatment.WaitForTheReadAsync(NightRecap.LongestRead, readToken).ConfigureAwait(true);
 
             return null;
         }
@@ -613,6 +639,12 @@ public partial class AnnouncerControl
 
             return "The next race was called to the grid, so tonight's recap was cut off. Play it again after the flag.";
         }
+        catch (OperationCanceledException) when (readAhead.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Tonight's recap was stopped - everything was silenced (Reset).");
+
+            return "Everything was stopped (Reset), so tonight's recap was cut off. Play it again when you are ready.";
+        }
         catch (Exception ex)
         {
             return $"Couldn't play tonight's recap: {ex.Message}";
@@ -620,6 +652,9 @@ public partial class AnnouncerControl
         finally
         {
             _race.StateChanged -= onNextRace;
+            _announcer.Silenced -= onSilenced;
+
+            StopReadingAhead(readAhead);
 
             recording?.Finish(line => StatusMessage?.Invoke(line));
 
@@ -744,6 +779,20 @@ public partial class AnnouncerControl
 
         _race.StateChanged += onNextRace;
 
+        // WHY (26 Oct 2026, review of the voiced-ahead read): the read's own
+        // stop - the next race, OR a Reset. Pieces are fed into the queue as
+        // they are voiced, so a Reset that only cut the queue left the rest
+        // to arrive afterwards and play over it; the announcer's Silenced
+        // (raised by SilenceNow) now stops the feeding, the voicing ahead and
+        // the show, as the next race does. Cancelled in the finally however
+        // the read ends, so nothing goes on costing characters after it. Not
+        // disposed: it has no timer.
+        var readAhead = CancellationTokenSource.CreateLinkedTokenSource(nextRace.Token);
+        var readToken = readAhead.Token;
+        Action onSilenced = () => StopReadingAhead(readAhead);
+
+        _announcer.Silenced += onSilenced;
+
         try
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Writing {named}'s night...");
@@ -762,13 +811,21 @@ public partial class AnnouncerControl
 
             if (chunks.Count == 0)
             {
-                // Named, not "above" (17 Oct 2026, Bug Hunt 8, A15-2): this is shown on Sounds > Recording.
+                // Named, not "above" (17 Oct 2026, Bug Hunt 8, A15-2): this is shown on Club Website > Recording (Sounds > Recording until 26 Oct 2026).
                 return "The model did not write anything usable. Try again, or check the Connection card on Voice > AI Commentary.";
             }
 
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [show] {named}'s night: {Plural.Of(chunks.Count, "piece")} to read, "
                 + $"about {SponsorCopy.SpokenLength(script!).TotalSeconds:0} seconds. Playing it now.");
+
+            // WHY (26 Oct 2026, asked for by Asher: "make sure everything ai
+            // generated is prerendered so there's a quick back and forth with
+            // no pausing. drivers night/tonights recap."): every piece voiced
+            // ahead from now, as tonight's recap is - see VoiceTheReadAhead.
+            // Started BEFORE the clip, so the first pieces are made while the
+            // cold open plays, and waited for after it.
+            var voiced = VoiceTheReadAhead(chunks, readToken);
 
             recording = BookendRecording.StartForADriver(named, line => StatusMessage?.Invoke(line));
 
@@ -780,9 +837,11 @@ public partial class AnnouncerControl
             // IN FRONT RATHER THAN INSIDE, which is a constraint and not a
             // preference. RunLongAsync below opens the music, speaks and
             // plays out in one call and returns true when it has; there is
-            // no addressable moment inside it, and SayTheRecap queues every
-            // chunk without awaiting any of them, so "between the second
-            // and third chunk" is not a place this code can stand. In front
+            // no addressable moment inside it, and SayTheRecap queues the
+            // chunks without the caller awaiting any of them (since 26 Oct
+            // 2026 they are fed in as they are voiced, but still from inside
+            // that one call), so "between the second and third chunk" is not
+            // a place this code can stand. In front
             // of all of it is a place, and it is also the right one: a cold
             // open before the title music is what this shape of thing has
             // always been.
@@ -795,9 +854,13 @@ public partial class AnnouncerControl
             // staged during it went on to queue the whole piece over the
             // grid. The clip now stops when the race is called, and the
             // piece is cut off right here rather than started.
-            await PlayTheirOwnClipAsync(treatment, named, transponder!, tonight, nextRace.Token).ConfigureAwait(true);
+            await PlayTheirOwnClipAsync(treatment, named, transponder!, tonight, readToken).ConfigureAwait(true);
 
-            nextRace.Token.ThrowIfCancellationRequested();
+            readToken.ThrowIfCancellationRequested();
+
+            // The first piece in hand before the opener - usually long since,
+            // the clip having played while it was made.
+            await FirstPieceVoicedAsync(voiced, readToken).ConfigureAwait(true);
 
             // THE SIGN-OFF'S TREATMENT, like the night's recap: this is the
             // same shape of thing, an opener in front and a playout at the
@@ -810,25 +873,25 @@ public partial class AnnouncerControl
             // in every sentence of it, under a band reading "Sign-Off".
             if (treatment.Treats(SegmentKind.SignOffNumbers)
                 && await treatment.RunLongAsync(
-                    () => SayTheRecap(chunks),
+                    () => SayTheRecap(chunks, voiced, readToken),
                     SegmentKind.SignOffNumbers,
                     NightRecap.LongestRead,
                     caption: DriverCut.OnTheBand(driverName),
-                    ct: nextRace.Token).ConfigureAwait(true))
+                    ct: readToken).ConfigureAwait(true))
             {
                 return null;
             }
 
             // WHY (20 Oct 2026, Bug Hunt 8): false from a cancelled run is
             // not "no music" - see the recap's path - so it is not read out.
-            nextRace.Token.ThrowIfCancellationRequested();
-            SayTheRecap(chunks);
+            readToken.ThrowIfCancellationRequested();
+            SayTheRecap(chunks, voiced, readToken);
 
             // AND WAITED FOR, for the reason the recap's own path states at
             // length: SpeakReminder queues and returns, so without this the
             // finally below would close the file and free the floor before a
             // word had been said.
-            await treatment.WaitForTheReadAsync(NightRecap.LongestRead, nextRace.Token).ConfigureAwait(true);
+            await treatment.WaitForTheReadAsync(NightRecap.LongestRead, readToken).ConfigureAwait(true);
 
             return null;
         }
@@ -838,6 +901,12 @@ public partial class AnnouncerControl
 
             return $"The next race was called to the grid, so {named}'s night was cut off. Play it again after the flag.";
         }
+        catch (OperationCanceledException) when (readAhead.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] {named}'s night was stopped - everything was silenced (Reset).");
+
+            return $"Everything was stopped (Reset), so {named}'s night was cut off. Play it again when you are ready.";
+        }
         catch (Exception ex)
         {
             return $"Couldn't play {named}'s night: {ex.Message}";
@@ -845,6 +914,9 @@ public partial class AnnouncerControl
         finally
         {
             _race.StateChanged -= onNextRace;
+            _announcer.Silenced -= onSilenced;
+
+            StopReadingAhead(readAhead);
 
             recording?.Finish(line => StatusMessage?.Invoke(line));
 
@@ -1149,27 +1221,350 @@ public partial class AnnouncerControl
     /// paragraph rather than the full stop the voice queue puts after a
     /// line on its own. See AnnouncementService.SpeechTail.
     /// </summary>
-    private void SayTheRecap(IReadOnlyList<string> chunks)
+    /// <remarks>
+    /// VOICED AHEAD AND FED IN (26 Oct 2026, asked for by Asher: "make sure
+    /// everything ai generated is prerendered so there's a quick back and
+    /// forth with no pausing. drivers night/tonights recap."). Every piece
+    /// used to be queued as text at once, and the voice queue made each one
+    /// only when it reached it - so every seam was the previous piece's last
+    /// word, then a round trip to the voice service, then the next. Now the
+    /// pieces are made one after another from the moment the script is back
+    /// (<see cref="VoiceTheReadAhead"/>), the first is queued here already
+    /// made, and each one after it is queued as soon as it is made - and in
+    /// any case before the queue runs dry (see FeedTheReadAsync), so there is
+    /// always a piece waiting behind the one being said. Nothing more is
+    /// queued once <paramref name="stop"/> goes (the next race called, a
+    /// Reset, or the read over), once the announcer is muted, or once a Reset
+    /// has cut everything since the read began.
+    /// </remarks>
+    /// <param name="voiced">Each piece's audio as it is made, index for index - see VoiceTheReadAhead. Null: every piece is made as it is said.</param>
+    private void SayTheRecap(
+        IReadOnlyList<string> chunks,
+        VoicedRead? voiced = null,
+        CancellationToken stop = default)
     {
-        for (var at = 0; at < chunks.Count; at++)
+        if (chunks.Count == 0)
         {
-            var run = CommentaryExchange.ExchangeRun.At(at, chunks.Count);
+            return;
+        }
 
+        if (voiced is null || voiced.Pieces.Count != chunks.Count)
+        {
+            for (var at = 0; at < chunks.Count; at++)
+            {
+                SayAPiece(chunks, at, null);
+            }
+
+            return;
+        }
+
+        // The first piece now, as before - the show is waiting for it. It has
+        // been waited for (FirstPieceVoicedAsync); if it is still not made it
+        // goes as text, and its own render is called off so it is not voiced
+        // (and paid for) twice.
+        var first = voiced.Pieces[0];
+        var made = first.IsCompletedSuccessfully ? first.Result : null;
+
+        if (!first.IsCompleted)
+        {
+            voiced.GiveUp(0);
+        }
+
+        // Captured before anything is queued: a Reset or a mute from here on
+        // ends the feeding - see ReadIsOver.
+        var silencedAt = _announcer.SilencedGeneration;
+        var mutedAt = _announcer.MutedGeneration;
+
+        var taken = new TaskCompletionSource<DateTime>(TaskCreationOptions.RunContinuationsAsynchronously);
+        SayAPiece(chunks, 0, made, () => taken.TrySetResult(DateTime.UtcNow));
+
+        if (chunks.Count > 1)
+        {
+            _ = FeedTheReadAsync(chunks, voiced, taken.Task, made is null ? null : voiced.LengthAt(0), silencedAt, mutedAt, stop);
+        }
+    }
+
+    /// <summary>
+    /// Queues the pieces after the first - see SayTheRecap. On the UI thread,
+    /// like the call that started it.
+    ///
+    /// ONE PIECE ALWAYS WAITING (26 Oct 2026, review). Each piece is waited
+    /// for only until the queue TAKES the piece in front of it - the moment
+    /// the queue would otherwise have nothing left behind what it is saying.
+    /// Not voiced by then, it is queued as text and made as it is said (the
+    /// way every piece went before), and its own render is called off so it
+    /// is not voiced twice. The first version waited for an ESTIMATE of the
+    /// piece in front's length, and with slow voicing and a quick voice the
+    /// queue went quiet long enough for the show to take the read as over -
+    /// and the rest of it was dropped.
+    ///
+    /// AND THE PIECE IN FRONT'S OWN LENGTH WHEN IT IS KNOWN (26 Oct 2026,
+    /// second review). The queue takes a line as it STARTS playing, so
+    /// "taken" alone gave up on the next piece twenty seconds too early - on
+    /// the plain path piece 2 was nearly always still being voiced as piece 1
+    /// began, went as text, and the gap came back between 2 and 3. A piece in
+    /// front that was MADE has an exact length (decoded once it was made -
+    /// see VoicedRead.LengthAt), so the next is waited for until
+    /// <see cref="FrontMargin"/> before the piece in front ends. A piece in
+    /// front that went as text has no length to go by, so the next falls back
+    /// as soon as it is taken, as before.
+    /// </summary>
+    /// <param name="frontTaken">Settles, with the time, when the queue takes the piece in front.</param>
+    /// <param name="frontLength">How long the piece in front takes to say, when it was made; null when it went as text.</param>
+    /// <param name="silencedAt">The announcer's SilencedGeneration when the read began - a Reset since then stops it.</param>
+    /// <param name="mutedAt">And its MutedGeneration - a mute since then stops it, even one lifted again.</param>
+    private async Task FeedTheReadAsync(
+        IReadOnlyList<string> chunks,
+        VoicedRead voiced,
+        Task<DateTime> frontTaken,
+        TimeSpan? frontLength,
+        long silencedAt,
+        long mutedAt,
+        CancellationToken stop)
+    {
+        try
+        {
+            for (var at = 1; at < chunks.Count; at++)
+            {
+                var piece = voiced.Pieces[at];
+
+                if (!piece.IsCompleted)
+                {
+                    await Task.WhenAny(piece, frontTaken, Task.Delay(Timeout.Infinite, stop)).ConfigureAwait(true);
+                }
+
+                // The piece in front is playing and was made: what is left of
+                // it, less the margin, is still time to wait for this one.
+                if (!piece.IsCompleted && frontTaken.IsCompleted && frontLength is { } length)
+                {
+                    var spare = length - FrontMargin - (DateTime.UtcNow - frontTaken.Result);
+
+                    if (spare > TimeSpan.Zero)
+                    {
+                        await Task.WhenAny(piece, Task.Delay(spare, stop)).ConfigureAwait(true);
+                    }
+                }
+
+                if (ReadIsOver(stop, silencedAt, mutedAt))
+                {
+                    return;
+                }
+
+                AnnouncementService.PreparedSpeech? made = null;
+
+                if (piece.IsCompletedSuccessfully)
+                {
+                    made = piece.Result;
+                }
+                else
+                {
+                    voiced.GiveUp(at);
+
+                    StatusMessage?.Invoke(
+                        $"{AppTime.LogStampNow()}  [show] Piece {at + 1} of {chunks.Count} was not voiced ahead in time - it is made as it is said.");
+                }
+
+                var taken = new TaskCompletionSource<DateTime>(TaskCreationOptions.RunContinuationsAsynchronously);
+                SayAPiece(chunks, at, made, () => taken.TrySetResult(DateTime.UtcNow));
+                frontTaken = taken.Task;
+                frontLength = made is null ? null : voiced.LengthAt(at);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !stop.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] The rest of the read could not be queued: {ex.Message}");
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopped - the next race was called, a Reset, or the read is over.
+        }
+    }
+
+    /// <summary>
+    /// Whether a long read must stop feeding pieces in: stopped, the announcer
+    /// muted - now, or at any moment since it began, since a mute bins what
+    /// was queued and a read must not pick up from the middle once it is
+    /// lifted - or a Reset having cut everything since it began - a piece
+    /// queued after that cut would carry the new generation and play over the
+    /// reset.
+    /// </summary>
+    private bool ReadIsOver(CancellationToken stop, long silencedAt, long mutedAt) =>
+        stop.IsCancellationRequested
+        || _announcer.Muted
+        || _announcer.MutedGeneration != mutedAt
+        || _announcer.SilencedGeneration != silencedAt;
+
+    /// <summary>
+    /// How long before the made piece in front ends the next one must be
+    /// queued. A second and a half: the queue takes a line as it starts, so
+    /// this is the margin for the voice loop picking it up and for the
+    /// playback's own pads.
+    /// </summary>
+    private static readonly TimeSpan FrontMargin = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>
+    /// The longest the first piece is waited for before the opener - past it,
+    /// it is made as it is said, which is how it always went.
+    /// </summary>
+    private static readonly TimeSpan FirstPieceWait = TimeSpan.FromSeconds(15);
+
+    /// <summary>One piece of a long read: made already when <paramref name="made"/> is, otherwise made as it is said.</summary>
+    /// <param name="taken">Called when the queue takes the piece - see AnnouncementService.SpeakPrepared.</param>
+    private void SayAPiece(IReadOnlyList<string> chunks, int at, AnnouncementService.PreparedSpeech? made, Action? taken = null)
+    {
+        var run = CommentaryExchange.ExchangeRun.At(at, chunks.Count);
+        var tail = run.AnotherFollows
+            ? AnnouncementService.SpeechTail.BackToBack
+            : AnnouncementService.SpeechTail.Normal;
+        var lead = run.FollowsAnother
+            ? AnnouncementService.SpeechLead.FollowsOn
+            : AnnouncementService.SpeechLead.Normal;
+
+        // Every piece, not just the first: a race director reading the strip
+        // two minutes in has to be told it is still the recap. The Big
+        // Screen's own band says the same thing - see NightRecap.OnTheBand,
+        // which is deliberately this and not the recording's file name.
+        if (made is not null)
+        {
+            _announcer.SpeakPrepared(made, tail, lead, NightRecap.OnTheBand, dequeued: taken);
+        }
+        else
+        {
             _announcer.SpeakReminder(
                 chunks[at],
                 showOnScreens: true,
-                tail: run.AnotherFollows
-                    ? AnnouncementService.SpeechTail.BackToBack
-                    : AnnouncementService.SpeechTail.Normal,
-                lead: run.FollowsAnother
-                    ? AnnouncementService.SpeechLead.FollowsOn
-                    : AnnouncementService.SpeechLead.Normal,
-                // Every piece, not just the first: a race director reading
-                // the strip two minutes in has to be told it is still the
-                // recap. The Big Screen's own band says the same thing -
-                // see NightRecap.OnTheBand, which is deliberately this and
-                // not the recording's file name.
-                onAir: NightRecap.OnTheBand);
+                tail: tail,
+                lead: lead,
+                onAir: NightRecap.OnTheBand,
+                dequeued: taken);
+        }
+    }
+
+    /// <summary>
+    /// A long read's pieces being voiced ahead: each piece's audio as it is
+    /// made (null when it could not be), and a way to call off one piece's
+    /// render once it has gone out as text instead, so it is not paid for
+    /// twice.
+    /// </summary>
+    private sealed class VoicedRead
+    {
+        private readonly CancellationTokenSource[] _each;
+
+        private readonly TimeSpan?[] _lengths;
+
+        public VoicedRead(IReadOnlyList<Task<AnnouncementService.PreparedSpeech?>> pieces, CancellationTokenSource[] each, TimeSpan?[] lengths)
+        {
+            Pieces = pieces;
+            _each = each;
+            _lengths = lengths;
+        }
+
+        /// <summary>
+        /// How long piece <paramref name="at"/> takes to say, decoded when it
+        /// was made; null when it was not made or could not be told. Written
+        /// before the piece's task completes, so read it after that.
+        /// </summary>
+        public TimeSpan? LengthAt(int at) => at >= 0 && at < _lengths.Length ? _lengths[at] : null;
+
+        public IReadOnlyList<Task<AnnouncementService.PreparedSpeech?>> Pieces { get; }
+
+        /// <summary>Calls off piece <paramref name="at"/>'s render, made or not. Safe twice.</summary>
+        public void GiveUp(int at)
+        {
+            try
+            {
+                _each[at].Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already gone.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Voices every piece of a long read, one after another, starting now -
+    /// one at a time rather than all at once, so the voice service is never
+    /// asked for four minutes of speech in one go and the first piece is the
+    /// first one made (26 Oct 2026). Index for index with
+    /// <paramref name="chunks"/>; each answers null when it could not be made
+    /// (voice not set up, muted, a failed render, given up on, or stopped),
+    /// and that piece is then made as it is said.
+    /// </summary>
+    private VoicedRead VoiceTheReadAhead(IReadOnlyList<string> chunks, CancellationToken stop)
+    {
+        var made = new TaskCompletionSource<AnnouncementService.PreparedSpeech?>[chunks.Count];
+        var each = new CancellationTokenSource[chunks.Count];
+        var lengths = new TimeSpan?[chunks.Count];
+
+        for (var at = 0; at < made.Length; at++)
+        {
+            made[at] = new TaskCompletionSource<AnnouncementService.PreparedSpeech?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            // Not disposed: no timer, and the feeder may still call GiveUp.
+            each[at] = CancellationTokenSource.CreateLinkedTokenSource(stop);
+        }
+
+        _ = Task.Run(async () =>
+        {
+            for (var at = 0; at < made.Length; at++)
+            {
+                AnnouncementService.PreparedSpeech? audio = null;
+                var piece = each[at].Token;
+
+                if (!piece.IsCancellationRequested)
+                {
+                    try
+                    {
+                        audio = await _announcer.PrepareReminderAsync(chunks[at], cancel: piece).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // PrepareReminderAsync reports its own failures; the
+                        // piece is made as it is said instead.
+                    }
+                }
+
+                // Given up on while it was being made: it has gone as text.
+                var kept = piece.IsCancellationRequested ? null : audio;
+
+                // Its exact length, here off the UI thread, before the piece
+                // is handed over - see FeedTheReadAsync.
+                lengths[at] = AnnouncementService.LengthOf(kept);
+
+                made[at].TrySetResult(kept);
+            }
+        });
+
+        return new VoicedRead(made.Select(piece => piece.Task).ToArray(), each, lengths);
+    }
+
+    /// <summary>
+    /// Waits for the first piece of a long read to be voiced, up to
+    /// <see cref="FirstPieceWait"/> - so the read starts on audio in hand
+    /// rather than on a round trip. Throws when the read is called off (the
+    /// next race, or a Reset).
+    /// </summary>
+    private static async Task FirstPieceVoicedAsync(VoicedRead voiced, CancellationToken stop)
+    {
+        if (voiced.Pieces.Count > 0 && !voiced.Pieces[0].IsCompleted)
+        {
+            await Task.WhenAny(voiced.Pieces[0], Task.Delay(FirstPieceWait, stop)).ConfigureAwait(true);
+        }
+
+        stop.ThrowIfCancellationRequested();
+    }
+
+    /// <summary>Stops whatever of a long read is still being voiced ahead. Safe with null and safe twice.</summary>
+    private static void StopReadingAhead(CancellationTokenSource? readAhead)
+    {
+        try
+        {
+            readAhead?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already gone.
         }
     }
 

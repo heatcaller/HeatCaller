@@ -251,7 +251,7 @@ public sealed partial class RaceControlControl
         {
             StatusMessage?.Invoke(
                 $"{AppTime.LogStampNow()}  [show] Nothing to replay - no race audio is held. The replay comes from the "
-                + "race recording, so \"Record each race, and cut each driver their own clip\" has to be ticked on Sounds - Recording, with a race running or just run. "
+                + "race recording, so \"Record each race, and cut each driver their own clip\" has to be ticked on Club Website - Recording, with a race running or just run. "
                 + "If it was ticked, the recording may have stopped partway (its time limit, a low disk or a write error).");
 
             return;

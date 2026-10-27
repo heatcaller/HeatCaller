@@ -17,7 +17,7 @@ These pages work only on the venue's own network, with no internet needed. To pu
 1. Open the **Local Screens** page. The port and the first two PINs are on the **Server** card, and the Manager PIN is on the **Race-day manager (phone)** card under it.
 2. In **Port:**, leave the default (`8080`) unless something else on the laptop already uses it. Any port from 1024 to 65535 works.
 3. In **Remote PIN:**, enter a PIN of four or more digits. The race remote won't work without one.
-4. In **Check-in PIN (optional):**, enter a different PIN if you want to restrict the check-in page, or leave it blank to leave check-in open.
+4. In **Check-in PIN (optional):**, enter a different PIN if you want to restrict who can open the check-in page's list, or leave it blank to leave the list open. Either way, checking a driver in or out from a phone also needs that driver's own personal PIN (see [Driver check-in](#driver-check-in)).
 5. In **Manager PIN:**, enter a PIN of six or more digits if you want the race-day manager reachable from a phone. Leave it blank to leave the manager closed - unlike the check-in PIN, a blank Manager PIN does not open the manager to anyone.
 6. Click **Start Server**, at the foot of the **Server** card.
 
@@ -32,7 +32,7 @@ To start the server every time HeatCaller opens, tick **Start the server automat
 | Setting | What it protects | Rules |
 |---|---|---|
 | **Remote PIN:** | The race remote. | Required. Four or more digits, numbers only. With no PIN, or a shorter one, the remote refuses every command. |
-| **Check-in PIN (optional):** | The check-in page, including the list of drivers. | Optional. Blank means anyone on the Wi-Fi can use check-in. |
+| **Check-in PIN (optional):** | Opening the check-in page's list of drivers. | Optional. Blank means anyone on the Wi-Fi can open the list. Checking a driver in or out also needs that driver's own personal PIN, whatever this is set to. |
 | **Manager PIN:** | The race-day manager, on this Wi-Fi and, if turned on, through the relay too. | Required for the manager. Six or more digits, numbers only. With no PIN, or a shorter one, the manager refuses every request - unlike the check-in PIN, it does not open up to anyone. |
 
 All three PINs are hidden. Tick **Show PINs**, under the check-in PIN, to see them. They're hidden by default because this page may be on the laptop screen while drivers queue at the desk.
@@ -224,7 +224,7 @@ The live results page, the OBS overlay and the broadcast graphics can show what 
 | OBS overlay | `http://<laptop address>:<port>/?overlay=1&captions=1` |
 | Broadcast graphics | `http://localhost:<port>/broadcast?captions=1` (with `&hide=...` after it if you use that) |
 
-The line the announcer has just said appears near the bottom of the page and fades after eight seconds. Only lines said while the page is open are shown, so reloading an OBS source in the middle of a race doesn't put an old line back up. On the broadcast graphics, the battle bar and the fastest-lap box move up to make room.
+The line the announcer has just said appears near the bottom of the page and fades after eight seconds. A long line, such as the race recap, is shown a sentence or two at a time as the announcer reaches each part. Only lines said while the page is open are shown, so reloading an OBS source in the middle of a race doesn't put an old line back up. On the broadcast graphics, the battle bar and the fastest-lap box move up to make room.
 
 These are in the room, so they use drivers' full names, as the PA does. For captions on the club's online live page, see [Captions](../online/index.md#captions); for the Big Screen, see [Captions on the Big Screen](big-screen.md#captions).
 
@@ -284,6 +284,16 @@ The page at `/checkin` lets drivers sign themselves on from their own phones, wh
 1. The driver opens the **Driver check-in:** address, usually by scanning the poster.
 2. If you set a check-in PIN, the page asks for it: they type it into "Check-in PIN (leave blank if none)". The phone remembers it. Opening the page before the PIN is typed doesn't count as a wrong guess.
 3. They type in "Find your name" to narrow the list, and tap their name.
+4. The phone asks for *name*'s own check-in PIN. They type their six-digit personal PIN and the check-in goes through.
+
+#### Checking in or out needs the driver's own PIN
+
+Since 26 Oct 2026, every check-in or check-out from this page needs the driver's own personal PIN: the six-digit PIN HeatCaller gives each racer, the same one they use for [online check-in](../online/check-in.md#personal-pins). Before, this page was an open sign-on sheet: anyone on the Wi-Fi (who knew the check-in PIN, if one was set) could tap any name and check that driver in or out. The check-in PIN is shared and goes on the wall, so it was never a lock on one driver.
+
+- The laptop checks the PIN itself before anything changes, so it can't be got round by changing the page. It's asked for on every tap and never kept on the phone or put in the page's address.
+- Ten wrong PINs from one phone in five minutes stop that phone for a while: "Too many wrong PINs. Wait a few minutes." A hundred wrong from all phones together in five minutes stop phone check-ins for everybody for five minutes: "Too many wrong check-in PINs on this Wi-Fi. Phones can't check in for five minutes - check in at the desk." The console shows a "[web] WARNING: ..." line when that happens.
+- A wrong PIN gets "That isn't this driver's check-in PIN. No personal PIN? Check in at the desk." A driver who has no personal PIN can't be checked in from a phone, and gets exactly the same answer, so the page never tells anyone which drivers have a PIN. Every try counts toward the limits above, a PIN or not. PINs are made for every racer while **Give every racer their own PIN** is ticked on the **Club Website** page (it's on by default), including when you only use the Wi-Fi pages. Tell drivers their PIN from **Show PINs** there, or email them (see [Emailing racer PINs](../online/email.md)).
+- **The desk is unchanged.** The **Who's Racing** list, the USB scanner and the [race-day manager](#race-day-manager) (behind the Manager PIN) still check anyone in or out without a driver's PIN.
 
 Each row shows a driver's name and class, marked **TAP** or **HERE**. The top bar counts how many are here, for example "12 / 18 HERE".
 
@@ -361,6 +371,7 @@ The pages are built for a club's own Wi-Fi. HeatCaller protects them as follows:
 - **Wrong-PIN limit.** Ten wrong PINs from one phone within five minutes lock that phone out for a while: "Too many wrong PINs. Wait a few minutes." Each device is counted by its full address, so a phone can't dodge the limit by changing its IPv6 address. The remote, check-in and manager PINs are counted separately, so a driver fumbling the check-in PIN can't lock you out of the remote or the manager.
 - **Guessing from many phones.** If the remote or manager PIN gets 50 wrong tries in five minutes from anywhere (200 for the check-in PIN, since it's on the wall for everyone to type), that PIN is refused for five minutes on every device that hasn't entered it yet: "Too many wrong PINs on this Wi-Fi. The PIN is not being accepted for five minutes." A phone that entered it correctly in the last 12 hours keeps working, so your own remote or manager isn't locked out. The console on the laptop shows a "[web] WARNING: ..." line when this happens.
 - **Check-in rate limit.** One phone can make up to 30 check-in changes a minute. Past that: "Too many changes from this phone. Wait a minute."
+- **Each check-in needs the driver's own PIN.** See [Driver check-in](#driver-check-in). Wrong ones are limited as described there, and knowing your own PIN never lets a phone past the limit.
 - **Stopping and starting the server** clears all lockouts.
 - **Commands only from the app's own pages.** Flags, check-ins and manager changes can only be sent by the app's own pages, not by a link or an image on some other website.
 - **PINs never go in the address,** so they don't end up in a browser's history. Each page remembers its own PIN on the phone, and the check-in page can't read the remote's.

@@ -11,6 +11,7 @@ namespace HeatCaller;
 /// <param name="GreenAtMs">How far into the file the green dropped, so the race's own clock can be laid over it.</param>
 /// <param name="LengthMs">How much audio really landed in the file.</param>
 /// <param name="DroppedChunks">How many buffers the writer could not keep up with. Not zero means a gap in the audio and a warning worth printing.</param>
+/// <param name="BedPath">The music and crowd as heard, on the same clock as the wav, for the highlight videos (RecapBed, 26 Oct 2026) - or null when none was kept.</param>
 internal sealed record RaceAudioRecording(
     string WavPath,
     string Folder,
@@ -20,7 +21,8 @@ internal sealed record RaceAudioRecording(
     long LengthMs,
     int DroppedChunks,
     string? Problem,
-    IReadOnlyList<HeardLine>? Heard = null);
+    IReadOnlyList<HeardLine>? Heard = null,
+    string? BedPath = null);
 
 /// <summary>
 /// Records the night as it goes out, and afterwards writes it as an mp3 with
@@ -45,6 +47,13 @@ internal sealed record RaceAudioRecording(
 /// for a club - a driver's clip is the call, clean, with no music under it to
 /// argue about - so there is one switch (on or off) and not a second one
 /// nobody could explain.
+///
+/// THE VIDEOS ARE THE EXCEPTION (26 Oct 2026, asked for by Asher: "video
+/// recaps should include the music that is playing as well."). A race whose
+/// videos are wanted also keeps a RecapBed beside this file - the music and
+/// crowd as heard, from the taps on their own outputs, on this file's clock
+/// - and each video's stretch of the call is mixed with the same stretch of
+/// it (CutWavWithBed). The race mp3 and the clips are still the call alone.
 ///
 /// HOW IT CANNOT HURT A RACE NIGHT:
 ///  - The tap runs on the sound device's own thread. It copies, converts and
@@ -170,6 +179,12 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     // the queue (the device gone, a dropped buffer) gets padded.
     private long _samplesAccepted;
 
+    /// <summary>The music and crowd kept for this race's videos, or null - see RecapBed. Set before the tap goes on, never after.</summary>
+    private RecapBed? _bed;
+
+    /// <summary>When each read of the bus is heard - the bus's own output's buffering. The device's thread only.</summary>
+    private readonly RecapBed.Stamper _callHeardAt = new(AudioBus.OutputLatencyMs, AudioBus.OutputBuffers);
+
     private long _paddedMs;
     private int _dropped;
 
@@ -237,7 +252,11 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     /// recording off, no room on the disk, a folder that cannot be made. The
     /// reason is logged here, once.
     /// </summary>
-    public static RaceAudioRecorder? StartFor(RaceAudioStore store, string? raceLabel, DateTime startedUtc, Action<string> log)
+    /// <param name="withVideoBed">
+    /// A race (not a bookend or a piece): also keep the music and crowd for
+    /// its highlight videos, when the club makes any - see RecapBed.
+    /// </param>
+    public static RaceAudioRecorder? StartFor(RaceAudioStore store, string? raceLabel, DateTime startedUtc, Action<string> log, bool withVideoBed = false)
     {
         // A new race: the last one's closing seconds are not this race's to
         // replay (RaceReplayBuffer, 22 Oct 2026).
@@ -327,6 +346,20 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // something else starts its replay at the takeover, not with
             // the folder and file setup's worth of what was recording before.
             RaceReplayBuffer.Shared.Restart();
+
+            // THE MUSIC UNDER THE VIDEOS (26 Oct 2026, asked for by Asher:
+            // "video recaps should include the music that is playing as
+            // well."). Only for a race whose clips are cut and whose videos
+            // are wanted - nothing else ever reads the bed, so nobody else
+            // pays its disk. On this recording's clock (startedUtc), and
+            // never the reason the race is not recorded: null just means
+            // videos with the call alone, as before.
+            // And only when the club has left the music under the videos on
+            // (Club Website > Recording, 26 Oct 2026) - off, no bed at all.
+            if (withVideoBed && store.MusicUnderVideos && store.DriverHighlights && store.HighlightVideos != HighlightVideo.Who.Off)
+            {
+                recorder._bed = RecapBed.StartFor(folder, baseName, startedUtc, maxSamples, log);
+            }
 
             // Last, so the tap can never be handed a buffer before the
             // writer thread that drains the queue is running.
@@ -441,6 +474,15 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             }
 
             replay.Commit();
+
+            // Which of this file's samples the room hears when, for the
+            // videos' music to be put under them (26 Oct 2026) - see
+            // RecapBed.CallHeard. Before the add below, so the index is this
+            // read's first sample; a stamp and a write, nothing more.
+            if (_bed is { } bed)
+            {
+                bed.CallHeard(Interlocked.Read(ref _samplesAccepted), _callHeardAt.Next(frames, SampleRate));
+            }
 
             // WHY (20 Oct 2026): counted before TryAdd, so the writer can
             // never write this chunk before it is counted, and taken back off
@@ -633,6 +675,11 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // Nothing left to do about it.
         }
 
+        // The bed stops where the call does (26 Oct 2026): the cap or a low
+        // disk applies to it as much, and past here it would only ever sit
+        // under silence.
+        _bed?.BeginStop();
+
         // WHY (22 Oct 2026, Bug Hunt 9): the replay ring is fed only by this
         // tap, which has just come off the bus with the race still running
         // (the minute cap, a low disk, the writer failing). What it held
@@ -676,6 +723,9 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         {
             // Nothing left to do about it.
         }
+
+        // Instant, like the line above - see RecapBed.BeginStop.
+        _bed?.BeginStop();
 
         try
         {
@@ -745,6 +795,10 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // Nothing left to do about it.
         }
 
+        // The bed's last seconds and its header. Its own bounded wait, on
+        // this same background thread; it never throws.
+        _bed?.Stop();
+
         _result = Describe();
         return _result;
     }
@@ -762,7 +816,8 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             LengthMs,
             dropped,
             _problem,
-            _heard.ToArray());
+            _heard.ToArray(),
+            _bed is { } bed && File.Exists(bed.Path) ? bed.Path : null);
     }
 
     public void Dispose() => Stop();
@@ -785,12 +840,28 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         ClipShare? clipShare = null)
     {
         string? publishing = null;
+        string? bedHeld = null;
 
         try
         {
             // Held for the whole of this Publish - see Publishing.
             publishing = Path.GetFullPath(recording.WavPath);
             Publishing[publishing] = 0;
+
+            // The videos' music and crowd too (26 Oct 2026), which the videos
+            // may wait minutes behind other races' for - see RecapBed.
+            if (recording.BedPath is { } bedPath)
+            {
+                bedHeld = Path.GetFullPath(bedPath);
+                Publishing[bedHeld] = 0;
+
+                // Switched off since the green (26 Oct 2026): the videos are
+                // the call alone after all. Still deleted in the finally.
+                if (!store.MusicUnderVideos)
+                {
+                    recording = recording with { BedPath = null };
+                }
+            }
 
             if (recording.DroppedChunks > 0)
             {
@@ -926,6 +997,14 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             {
                 Publishing.TryRemove(publishing, out _);
             }
+
+            // The bed is only ever for this race's videos, which are made
+            // (or not) by now on every path - so it goes, kept or not.
+            if (bedHeld is not null)
+            {
+                TryDelete(bedHeld, log);
+                Publishing.TryRemove(bedHeld, out _);
+            }
         }
     }
 
@@ -1008,7 +1087,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         }
 
         // THE SHAREABLE VIDEO (21 Oct 2026), for the drivers the club chose
-        // on Sounds > Recording - see HighlightVideo. From the same
+        // on Club Website > Recording - see HighlightVideo. From the same
         // recording and the same moments as the clip, cut to a length a
         // phone wants; a failure here costs only the video.
         //
@@ -1238,7 +1317,28 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
 
         try
         {
-            CutWav(recording.WavPath, wav, windows);
+            // WITH THE MUSIC AND CROWD UNDER IT (26 Oct 2026, asked for by
+            // Asher: "video recaps should include the music that is playing
+            // as well."), from the race's RecapBed. A bed that cannot be read
+            // costs the video its music, never the video: the call alone is
+            // cut instead, as every video was before.
+            if (recording.BedPath is { } bed && File.Exists(bed))
+            {
+                try
+                {
+                    CutWavWithBed(recording.WavPath, bed, wav, windows);
+                }
+                catch (Exception ex)
+                {
+                    log($"{AppTime.LogStampNow()}  [video] {clip.DriverName}'s video has the announcer but not the music ({ex.Message}).");
+                    TryDelete(wav, null);
+                    CutWav(recording.WavPath, wav, windows);
+                }
+            }
+            else
+            {
+                CutWav(recording.WavPath, wav, windows);
+            }
 
             var mp4 = RaceHighlights.UnusedPath(folder, name, ".mp4");
 
@@ -1321,6 +1421,109 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 }
 
                 writer.Write(buffer, 0, read);
+                left -= read;
+            }
+        }
+
+        writer.Flush();
+    }
+
+    /// <summary>
+    /// <see cref="CutWav"/> for a highlight video, with the race's RecapBed
+    /// (the music and crowd as heard) mixed under the call (26 Oct 2026).
+    ///
+    /// The bed is on the recording's own clock and in its own format, so the
+    /// same byte range of each is the same moment of the race: each stretch
+    /// is read from both at once and added together (RecapBed.MixPcm16).
+    /// Where the bed runs out - it stopped early - the call plays alone; it is
+    /// never what decides how long a stretch is. Throws when the two are not
+    /// the same format, for the caller to cut the call alone.
+    /// </summary>
+    internal static void CutWavWithBed(string sourcePath, string bedPath, string targetPath, IReadOnlyList<RaceHighlights.Window> windows)
+    {
+        using var reader = new WaveFileReader(sourcePath);
+        using var bed = new WaveFileReader(bedPath);
+
+        var format = reader.WaveFormat;
+
+        if (format.Encoding != WaveFormatEncoding.Pcm
+            || format.BitsPerSample != 16
+            || format.Channels != 1
+            || bed.WaveFormat.Encoding != WaveFormatEncoding.Pcm
+            || bed.WaveFormat.BitsPerSample != 16
+            || bed.WaveFormat.Channels != 1
+            || bed.WaveFormat.SampleRate != format.SampleRate)
+        {
+            throw new InvalidDataException("the music was kept in a different format from the call");
+        }
+
+        using var writer = new WaveFileWriter(targetPath, format);
+
+        var bytesPerSample = format.BitsPerSample / 8 * format.Channels;
+        var buffer = new byte[64 * 1024];
+        var under = new byte[buffer.Length];
+
+        // The same breath between stretches as CutWav's, silent under both.
+        var seam = new byte[format.AverageBytesPerSecond / 2];
+        var first = true;
+
+        foreach (var window in windows)
+        {
+            var from = RaceHighlights.ByteOffsetFor(window.StartMs, format.SampleRate, bytesPerSample);
+            var to = RaceHighlights.ByteOffsetFor(window.EndMs, format.SampleRate, bytesPerSample);
+
+            from = Math.Clamp(from, 0, reader.Length);
+            to = Math.Clamp(to, from, reader.Length);
+
+            if (to <= from)
+            {
+                continue;
+            }
+
+            if (!first)
+            {
+                writer.Write(seam, 0, seam.Length);
+            }
+
+            first = false;
+            reader.Position = from;
+
+            var at = from;
+            var left = to - from;
+
+            while (left > 0)
+            {
+                var read = reader.Read(buffer, 0, (int)Math.Min(left, buffer.Length));
+
+                if (read <= 0)
+                {
+                    break;
+                }
+
+                // The bed's same moment, as much of it as there is.
+                var underRead = 0;
+
+                if (at < bed.Length)
+                {
+                    bed.Position = at;
+
+                    while (underRead < read)
+                    {
+                        var got = bed.Read(under, underRead, read - underRead);
+
+                        if (got <= 0)
+                        {
+                            break;
+                        }
+
+                        underRead += got;
+                    }
+                }
+
+                RecapBed.MixPcm16(buffer, read, under, underRead);
+
+                writer.Write(buffer, 0, read);
+                at += read;
                 left -= read;
             }
         }
@@ -1503,6 +1706,23 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                     log($"{AppTime.LogStampNow()}  [audio] Removed the working copy of a race whose mp3 was "
                         + $"already saved: {leftover}");
                 }
+            }
+
+            // WHY (26 Oct 2026): a race's music and crowd kept for its videos
+            // (RecapBed), left behind by a close or a crash before they were
+            // made. Nothing but those videos ever reads one, and its race was
+            // never filed, so it is only deleted - quietly, as it was never
+            // something the club was told about. Same checks as above.
+            foreach (var bed in Directory.EnumerateFiles(root, "*" + RecapBed.Extension, SearchOption.AllDirectories))
+            {
+                if (!bed.EndsWith(RecapBed.Extension, StringComparison.OrdinalIgnoreCase)
+                    || Publishing.ContainsKey(Path.GetFullPath(bed))
+                    || DateTime.UtcNow - File.GetLastWriteTimeUtc(bed) < TimeSpan.FromMinutes(2))
+                {
+                    continue;
+                }
+
+                TryDelete(bed, log);
             }
         }
         catch (Exception ex)

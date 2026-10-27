@@ -233,6 +233,40 @@ public sealed partial class RelayPublisher
         }
     }
 
+    /// <summary>
+    /// Sends the announcer's lines that are waiting, if any - called at the
+    /// start of the worker's pass and between the documents Drain sends, as
+    /// well as at the end of the pass where SendListenLines always ran.
+    /// </summary>
+    /// <remarks>
+    /// WHY (26 Oct 2026, asked for by Asher: "can't hear the heat reminders
+    /// that fire between races by listening through the relay"): the lines
+    /// went LAST in a pass - after the night's switches, a queued result,
+    /// every changed snapshot, and the check-in, manager and notes polls - and
+    /// three at most. During a race a pass is a live frame and little else,
+    /// so that was a second or so. Between races it is the busiest pass of
+    /// the evening: the result, its results index, every driver's night, and
+    /// whichever of the standings, the programme and the badges (with their
+    /// artwork) the race changed, each one an upload over the club's Wi-Fi. A line offered then waited behind all
+    /// of it, and ListenAlong throws away a line that has waited longer than
+    /// GoesStale, or that six newer lines have pushed off the front - so
+    /// the reminders and the post-race calls, which are exactly what is said
+    /// between races, were the lines that never reached anybody listening.
+    /// Live audio that arrives late is not audio (see ListenAlong), so it
+    /// now goes ahead of everything that is still true in a minute's time,
+    /// and a line waits for one document at most rather than a whole pass.
+    /// Costs nothing when nobody is listening: a switch and a count.
+    /// </remarks>
+    private void SendListenLinesWaiting(CancellationToken token)
+    {
+        if (!_settings.ListenAlongOnTheRelay || token.IsCancellationRequested || Listening.Waiting == 0)
+        {
+            return;
+        }
+
+        SendListenLines(token);
+    }
+
     /// <summary>What became of one line on the wire. See <see cref="SendOneListenLine"/>.</summary>
     private enum ListenSend
     {

@@ -1,7 +1,10 @@
 namespace HeatCaller;
 
 /// <summary>
-/// Sounds > Recording (17 Oct 2026): recording each race and cutting each
+/// Club Website > Recording (Sounds > Recording from 17 Oct 2026 until it
+/// moved on 26 Oct 2026, asked for by Asher: "the recording tab is in a bad
+/// location move it to the club website for now." - see
+/// MainForm.BuildClubWebsitePage): recording each race and cutting each
 /// driver their clip, where the files go and how many nights are kept, and
 /// the pieces written from the night - tonight's recap, a driver's own
 /// night, the proof of a line and the night-before preview.
@@ -42,6 +45,12 @@ public sealed class RecordingControl : UserControl
 
     /// <summary>The podium's videos on the club's page, with a QR code on the Big Screen (21 Oct 2026).</summary>
     private readonly CheckBox _chkShareVideos = new ThemedCheckBox();
+
+    /// <summary>The music and crowd under the highlight videos (26 Oct 2026) - see RecapBed and RaceAudioStore.MusicUnderVideos.</summary>
+    private readonly CheckBox _chkMusicUnderVideos = new ThemedCheckBox();
+
+    /// <summary>The music tick box's word about licensing, on hover.</summary>
+    private readonly ToolTip _tips = new();
 
     /// <summary>Each driver's own mp3 clip on their private night page on the club's website (22 Oct 2026, driver experience).</summary>
     private readonly CheckBox _chkShareClips = new ThemedCheckBox();
@@ -331,6 +340,19 @@ public sealed class RecordingControl : UserControl
         _chkShareVideos.Checked = _audio.SharePodiumVideos;
         _chkShareVideos.CheckedChanged += (_, _) => _audio.SharePodiumVideos = _chkShareVideos.Checked;
 
+        // THE MUSIC UNDER THE VIDEOS, AND A WAY OUT (26 Oct 2026, Asher's
+        // decision: "add option to switch off. on by default."): the
+        // podium's videos go online, and the club's playlist may not be
+        // theirs to publish. Unticked, no music or crowd is kept at all.
+        Check(_chkMusicUnderVideos, "Put the music and crowd under the highlight videos");
+        _chkMusicUnderVideos.Checked = _audio.MusicUnderVideos;
+        _chkMusicUnderVideos.CheckedChanged += (_, _) => _audio.MusicUnderVideos = _chkMusicUnderVideos.Checked;
+        _tips.SetToolTip(_chkMusicUnderVideos,
+            "Most commercial songs are licensed for playing at your track, not for posting online. If your music is "
+            + "not your own or royalty-free, untick this so the videos (including the podium's on the club's page) "
+            + "have the announcer only. Your music at the track is not affected.");
+        Disposed += (_, _) => _tips.Dispose();
+
         // A DRIVER'S OWN CLIP ON THEIR NIGHT (22 Oct 2026, driver
         // experience): a recording of a named person, so off until the
         // club ticks it - see ClipShare and RelayPublisher.Clips.
@@ -367,13 +389,21 @@ public sealed class RecordingControl : UserControl
         var audio = new Section("Recording the night");
 
         audio.Add(Hint(
-            "Records the announcer and effects (not the music or crowd). A driver's clip is an mp3 of the moments they were "
-            + "called. One folder per night, with a Highlights folder inside."));
+            // WHY (26 Oct 2026, asked for by Asher: "video recaps should
+            // include the music that is playing as well."): the videos carry
+            // the music and crowd now; the mp3s still do not (RecapBed).
+            "Records the announcer and effects. A driver's clip is an mp3 of the moments they were called, and their "
+            + "highlight video has the music and crowd under it as the room heard them. One folder per night, with a "
+            + "Highlights folder inside."));
         audio.Add(_chkRecord, stretch: false);
         audio.Add(_chkClips, stretch: false, gapBelow: UiLayout.HintGap);
         audio.Add(Hint(
             "Recordings are NOT in backups (a night is a few hundred MB). Copy a night's folder elsewhere to keep it."));
         audio.Add(audioGrid);
+        audio.Add(_chkMusicUnderVideos, stretch: false, gapBelow: UiLayout.HintGap);
+        audio.Add(Hint(
+            "As the room heard them. Untick if your music is not licensed for posting online - the videos then have the "
+            + "announcer only."));
         audio.Add(_chkShareVideos, stretch: false, gapBelow: UiLayout.HintGap);
         audio.Add(Hint(
             "Only 1st to 3rd, and only those with a video. Needs the club's page on (Club Website); kept online for a week."));
@@ -565,6 +595,7 @@ public sealed class RecordingControl : UserControl
         _cmbVideos.Enabled = clips;
         _txtVideoHandle.Enabled = clips;
         _chkShareVideos.Enabled = clips;
+        _chkMusicUnderVideos.Enabled = clips;
         _chkShareClips.Enabled = clips;
         _txtAudioFolder.Enabled = recording;
         _btnAudioFolder.Enabled = recording;

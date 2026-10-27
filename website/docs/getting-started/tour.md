@@ -72,9 +72,9 @@ How you leave it is remembered, so a club that prefers the rail gets it at every
 | **Venues** | Save a track's connection settings, layout, soundscape and race defaults, and apply them all in one click. |
 | **Sponsors** | Sponsor slides that rotate on the Big Screen. See [Big Screen](../screens/big-screen.md). |
 | **Local Screens** | The Wi-Fi web server for phones: live results, phone remote, self check-in and OBS overlay. See [Local Screens](../screens/phone-and-web.md). |
-| **Club Website** | Publishing to your club's online relay, online check-in, racer PINs and email. See [Online setup](../online/setup.md). |
+| **Club Website** | Publishing to your club's online relay, online check-in, racer PINs and email, on its **Website** tab. Its **Recording** tab has the race recordings, the drivers' clips and highlight videos (it was on **Sounds** until 26 October 2026). See [Online setup](../online/setup.md) and [Race recordings](../announcer/sounds-and-music.md#race-recordings). |
 
-Some pages have tabs along the top. Race Day, Championship, Race Analytics, Voice and Sounds all do. The tabs refresh when you open them, so they always show the latest data.
+Some pages have tabs along the top. Race Day, Championship, Race Analytics, Voice, Sounds and Club Website all do. The tabs refresh when you open them, so they always show the latest data.
 
 ## Page headers
 
@@ -110,6 +110,7 @@ The search also finds tabs. Typing a tab's name, or a word filed under it, opens
 | `run sheet`, `timetable` | **Race Day → Next Steps** (the **Timetable** button is under the program) |
 | `tech log`, `check-in` | **Race Day → Who's Racing** |
 | `mixer` | **Sounds → Mixer** |
+| `recording`, `clips`, `highlights` | **Club Website → Recording** |
 
 Short keywords filed under a tab, such as `vs`, work the same way.
 

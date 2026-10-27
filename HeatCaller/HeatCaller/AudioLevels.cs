@@ -120,8 +120,15 @@ internal static class AudioLevels
         /// </summary>
         internal void Cut(long? nowTicks = null)
         {
-            Volatile.Write(ref _cutAt, nowTicks ?? Stopwatch.GetTimestamp());
+            var at = nowTicks ?? Stopwatch.GetTimestamp();
+
+            Volatile.Write(ref _cutAt, at);
             Volatile.Write(ref _cutWritten, Volatile.Read(ref _written));
+
+            // WHY (26 Oct 2026): what was queued is not heard, so it is not
+            // under the highlight videos either (RecapBed). A queue add for
+            // the music's and crowd's meters, nothing for the others.
+            RecapBed.Cut(this, at);
         }
 
         /// <summary>
@@ -310,6 +317,10 @@ internal static class AudioLevels
     {
         private readonly ISampleProvider _source;
         private readonly Feeder _feeder;
+        private readonly Meter _meter;
+        private readonly RecapBed.Stamper _heardAt;
+        private readonly int _sampleRate;
+        private readonly int _channels;
 
         /// <param name="latencyMs">The output's DesiredLatency.</param>
         /// <param name="buffers">The output's NumberOfBuffers.</param>
@@ -317,6 +328,10 @@ internal static class AudioLevels
         {
             _source = source;
             _feeder = new Feeder(meter, source.WaveFormat.SampleRate, source.WaveFormat.Channels, latencyMs, buffers);
+            _meter = meter;
+            _heardAt = new RecapBed.Stamper(latencyMs, buffers);
+            _sampleRate = source.WaveFormat.SampleRate;
+            _channels = source.WaveFormat.Channels;
         }
 
         public WaveFormat WaveFormat => _source.WaveFormat;
@@ -328,6 +343,13 @@ internal static class AudioLevels
             if (read > 0)
             {
                 _feeder.Feed(buffer, offset, read);
+
+                // WHY (26 Oct 2026, asked for by Asher: "video recaps should
+                // include the music that is playing as well."): the same read
+                // to the race's recap bed, for the highlight videos - the music
+                // and crowd as heard, after the volume and the duck. A copy
+                // and a queue add, and it never throws; see RecapBed.
+                RecapBed.Offer(_meter, _heardAt, buffer, offset, read, _sampleRate, _channels);
             }
 
             return read;

@@ -347,6 +347,22 @@ public sealed partial class AnnouncementService
     /// flags' own generation is moved on as well, which is what silences a
     /// flag call overtaken by a newer flag.
     /// </summary>
+    /// <summary>
+    /// Raised once everything has been cut by <see cref="SilenceNow"/> - a
+    /// reset (26 Oct 2026). Not by the countdown's own cut. On whatever thread
+    /// called SilenceNow; subscribers must not block.
+    /// </summary>
+    public event Action? Silenced;
+
+    /// <summary>
+    /// How many times <see cref="SilenceNow"/> has cut everything. A caller
+    /// that feeds lines in over time captures it at the start and stops when
+    /// it moves (26 Oct 2026) - see AnnouncerControl.FeedTheReadAsync.
+    /// </summary>
+    public long SilencedGeneration => Interlocked.Read(ref _silencedGeneration);
+
+    private long _silencedGeneration;
+
     private void CutEverything(string why, bool alsoFlagCalls)
     {
         int clearedVoice;
@@ -371,6 +387,12 @@ public sealed partial class AnnouncementService
                 if (alsoFlagCalls)
                 {
                     Interlocked.Increment(ref _interruptGeneration);
+
+                    // Moved on under the same locks as the cut itself (26 Oct
+                    // 2026, review), so a long read's feeder that queues a
+                    // piece is either before the cut (and binned by it) or
+                    // sees the new generation. Raised as Silenced below.
+                    Interlocked.Increment(ref _silencedGeneration);
                 }
 
                 abandonedWriting = _linesBeingWritten;
@@ -427,6 +449,24 @@ public sealed partial class AnnouncementService
         // SponsorOnAir, and BigScreenForm, where Showing takes priority
         // over everything else it would otherwise draw.
         SponsorOnAir.End();
+
+        // WHY (26 Oct 2026, review of the voiced-ahead long reads): tonight's
+        // recap and a driver's night feed their pieces into the queue as they
+        // are voiced, so a piece voiced AFTER this cut would be queued under
+        // the new generation and play over the reset. They watch this to stop
+        // feeding - see SilencedGeneration. Raised whether or not anything was
+        // speaking: a read between two pieces has nothing in the speaker.
+        if (alsoFlagCalls)
+        {
+            try
+            {
+                Silenced?.Invoke();
+            }
+            catch
+            {
+                // A subscriber throwing must never stop a reset.
+            }
+        }
 
         // Silent when there was nothing to cut, which is the usual case -
         // the staging chain waits for the audio before it starts a countdown.

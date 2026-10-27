@@ -1148,6 +1148,21 @@ public sealed partial class RaceControlControl
                     ? WriteFlagInterviewAsync(record, plan, followOnWork.Token)
                     : null;
 
+                // WHY (26 Oct 2026, asked for by Asher: "When the show host
+                // throws it to other cast member it sounds robotic. reference
+                // the show host name when sending it back."): the throw down
+                // to pit lane and the co-host's hand back, written by the AI -
+                // asked for second, straight behind the interview, so it is
+                // written and voiced while the interview is being rendered
+                // and the result read plays. The built-in pair below is
+                // still rendered and goes out if this is not in hand by then.
+                // Only with a co-host to throw to: with none the announcer
+                // asks the questions himself and there is nobody to hand back.
+                var flagHandOff = interviewTask is not null && CoHostInterviews
+                    ? StartHandOff(
+                        FlagHandOffBrief(record, resultRead), null, null, _settings.CoHostVoice, null, followOnWork.Token)
+                    : null;
+
                 // THE THROW INTO THE STOP SET, WRITTEN (19 Oct 2026): the
                 // teaser that takes the room into the break plugs the show
                 // and says the recap, with its host, is up after the break -
@@ -1209,7 +1224,9 @@ public sealed partial class RaceControlControl
                 // the interview, the throw and the recap are done with the
                 // model, so the lines wanted in seconds are asked first.
                 // Never awaited here - it only opens the gate. See _flagLinesAsked.
-                _ = OpenWhenAskedAsync(flagLinesAsked, interviewTask, throwTask, generation);
+                // The hand-over's MODEL call only (26 Oct 2026, review): its
+                // voicing is not the model's business and must not hold the gate.
+                _ = OpenWhenAskedAsync(flagLinesAsked, interviewTask, flagHandOff?.Written, throwTask, generation);
 
                 // What follows the recap is written after it, each part as
                 // soon as the one before is done: the local model answers one
@@ -1278,6 +1295,20 @@ public sealed partial class RaceControlControl
                     ? null
                     : RenderHonoursAsync(honours, delivery, followOnWork.Token);
 
+                // WHY (26 Oct 2026, asked for by Asher: "When the show host
+                // throws it to other cast member it sounds robotic ... make it
+                // AI and prerender."): the throw to the achievements reader
+                // and the reader's hand back to the host, written by the AI
+                // once the recap has been (so the throw can pick up from how
+                // the recap ended) and voiced while the recap plays. Only
+                // with a recap to follow and a reader's voice of their own -
+                // see PlanHonours.
+                if (honours is { Voice: not null } honoursAhead && generation is not null)
+                {
+                    honoursAhead.HandOff = WriteHonoursHandOff(
+                        honoursAhead, generation, (Task?)closingTask ?? principalTask, delivery, followOnWork.Token);
+                }
+
                 // The honours with no recap for them to be a segment OF -
                 // the AI switched off at the wall, the allowance spent, or
                 // the model with nothing to say. They get a show of their
@@ -1326,6 +1357,17 @@ public sealed partial class RaceControlControl
                 }
 
                 var generationStarted = DateTime.UtcNow;
+
+                // WHY (26 Oct 2026, asked for by Asher: "make sure everything
+                // ... is prerendered so there's a quick back and forth with no
+                // pausing"): the result read at the flag is voiced NOW, while
+                // the finish call is still being said, rather than once it has
+                // been heard - it was the one line after the flag still made
+                // on the spot, a round trip of silence between the finish
+                // call and the result.
+                var resultVoiced = resultRead is null
+                    ? null
+                    : _announcer.PrepareReminderAsync(resultRead, cancel: followOnWork.Token);
 
                 // 1. Let the finish call and the cheering actually FINISH.
                 //
@@ -1377,8 +1419,27 @@ public sealed partial class RaceControlControl
                 // result first: the finish call names nobody.
                 if (resultRead is not null && !nextRace.IsCancellationRequested)
                 {
+                    // Voiced since the flag - see resultVoiced. Not in hand
+                    // within HandOffGrace, it is made as it is said, as before.
+                    AnnouncementService.PreparedSpeech? resultAudio = null;
+
+                    if (resultVoiced is not null)
+                    {
+                        (_, resultAudio) = await WithinAsync(resultVoiced, HandOffGrace, nextRace.Token);
+                    }
+
                     var resultQueued = await QueueUnlessNextRaceCalledAsync(
-                        () => _announcer.SpeakReminder(resultRead, showOnScreens: true, onAir: OnAirParts.Result),
+                        () =>
+                        {
+                            if (resultAudio is not null)
+                            {
+                                _announcer.SpeakPrepared(resultAudio, onAir: OnAirParts.Result);
+                            }
+                            else
+                            {
+                                _announcer.SpeakReminder(resultRead, showOnScreens: true, onAir: OnAirParts.Result);
+                            }
+                        },
                         nextRace.Token);
 
                     if (resultQueued)
@@ -1405,9 +1466,16 @@ public sealed partial class RaceControlControl
                         // The interview still goes out, without them.
                     }
 
+                    // WHY (26 Oct 2026, asked for by Asher): the AI's throw and
+                    // hand back go in for the built-in pair above when they are
+                    // in hand - resolved inside SpeakInterviewAsync, once its
+                    // one wait for the interview is over, so the interview is
+                    // never waited for twice and no grace is spent on one that
+                    // did not come.
                     await SpeakInterviewAsync(
                         interviewTask, nextRace.Token, throwLine, handBack, "the finish call", OnAirParts.TechnicalLead,
-                        anotherFollows: teaser is not null && flagPause == 0);
+                        anotherFollows: teaser is not null && flagPause == 0,
+                        handOff: flagHandOff, handOffWhere: "Pit lane at the flag");
 
                     await _announcer.WaitForAudioAsync(SpokenWait(), CancellationToken.None);
                 }
@@ -2360,6 +2428,15 @@ public sealed partial class RaceControlControl
     {
         /// <summary>Set once the achievements segment has begun to go out - see the sequence's finally (22 Oct 2026).</summary>
         public volatile bool Started;
+
+        /// <summary>
+        /// WHY (26 Oct 2026, asked for by Asher): the AI's throw to the
+        /// reader and the reader's hand back to the host, written once the
+        /// recap has been and voiced while it plays - swapped in for the
+        /// built-in turns by SpeakHonoursAsync when they are in hand. Null
+        /// when there is no recap to follow, no reader's voice, or no AI.
+        /// </summary>
+        public HandOffJob? HandOff { get; set; }
     }
 
     /// <summary>
@@ -2447,6 +2524,26 @@ public sealed partial class RaceControlControl
             var engine = _announcer.VoiceEngineInUse;
             var voices = _settings.HonoursVoice;
             var voice = voices.IsSetFor(engine) ? voices : null;
+
+            // WHY (26 Oct 2026, asked for by Asher: "reference the show host
+            // name when sending it back"): the reader hands back to the
+            // recap show's host by name before the host thanks them - the
+            // reader used to stop and the host carry on, as if the read had
+            // been a recording. Only with a reader's voice of their own: in
+            // the announcer's own voice it would be the host handing back to
+            // himself. The fourth turn is the host's thanks, as before; the
+            // AI's version of the throw and of this line is swapped in when
+            // ready (see HonoursPlan.HandOff).
+            if (voice is not null && turns.Count == 3)
+            {
+                turns = new[]
+                {
+                    turns[0],
+                    turns[1],
+                    new ExchangeTurn(true, HandOff.HonoursBack(_settings.HostNameForRecapShow)),
+                    turns[2],
+                };
+            }
 
             var who = CommentaryService.Field(_settings.RecapHonoursName) is { Length: > 0 } named
                 ? named
@@ -3172,6 +3269,213 @@ public sealed partial class RaceControlControl
         return who.Length > 0 ? $"That's the word from pit lane - back to you, {who}." : "That's the word from pit lane - back up to the booth.";
     }
 
+    // ==================== The hand-overs, written and voiced ahead (26 Oct 2026) ====================
+    //
+    // WHY (26 Oct 2026, asked for by Asher: "When the show host throws it to
+    // other cast member it sounds robotic. reference the show host name when
+    // sending it back. add in a line or two. make it AI and prerender."):
+    // the throw to pit lane, the pit lane hand back, the pre-race throw and
+    // the achievements' throw were fixed cards, and the pre-race word and
+    // the achievements never handed back at all. Now the model writes the
+    // pair (CommentaryService.BuildHandOffAsync, checked by HandOff) WHILE
+    // something else is playing, and each line is turned into speech as soon
+    // as it is written - so when the moment comes it is bytes in memory, the
+    // same as every other line of the show. The built-in lines are still
+    // rendered alongside, and they go out for any half the model has not
+    // finished, both writing and voicing, by the time it is wanted: the show
+    // never waits on a hand-over by more than HandOffGrace.
+
+    /// <summary>The model's hand-over, voiced: either half null when it was not written, turned down, or could not be rendered.</summary>
+    private sealed record HandOffLines(SpokenLine? Throw, SpokenLine? Back);
+
+    /// <summary>
+    /// How long past the moment it is wanted a written hand-over may still be
+    /// waited for. Short: the built-in line is already rendered and waiting,
+    /// and a pause in front of a hand-over is the robotic sound this exists
+    /// to get rid of.
+    /// </summary>
+    private static readonly TimeSpan HandOffGrace = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// Writes a hand-over with the model and voices both lines - the throw in
+    /// the host's voice, the hand back in the guest's. Off the UI thread: the
+    /// caller has read everything the brief needs from the settings and the
+    /// stores already.
+    ///
+    /// A line is only handed back WITH its audio. One the voice could not
+    /// render is left out, so the built-in line - rendered already - goes
+    /// instead of a written one that would be synthesised as it is spoken,
+    /// which is the gap this is here to close.
+    /// </summary>
+    /// <param name="after">Waited for first, when the local model should finish something more urgent - null for none.</param>
+    /// <param name="modelDone">
+    /// Settled the moment the model has answered (or will not be asked), BEFORE
+    /// the lines are voiced (26 Oct 2026, review) - so what waits on "done with
+    /// the model" (the next race's write-aheads, see _flagLinesAsked) is not
+    /// held up for the voicing, and a caller can tell a hand-over still being
+    /// written from one only being voiced. See HandOffJob.
+    /// </param>
+    private async Task<HandOffLines?> WriteHandOffAsync(
+        HandOff.Brief brief,
+        SecondVoice? hostVoice,
+        (double Stability, double Style)? hostDelivery,
+        SecondVoice? guestVoice,
+        Task? after,
+        TaskCompletionSource modelDone,
+        CancellationToken cancel)
+    {
+        try
+        {
+            if (after is not null)
+            {
+                try
+                {
+                    await after;
+                }
+                catch
+                {
+                    // Its own failure is its own to report; this still follows.
+                }
+            }
+
+            if (_commentary is not { IsAvailable: true } commentary || cancel.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            HandOff.Written? written;
+
+            try
+            {
+                written = await commentary.BuildHandOffAsync(
+                    brief, note => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}"), cancel);
+            }
+            finally
+            {
+                // Done with the model - the voicing below is not its business.
+                modelDone.TrySetResult();
+            }
+
+            if (written is null || cancel.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            SpokenLine? thrown = null;
+            SpokenLine? back = null;
+
+            if (written.Throw is { } throwText
+                && await _announcer.PrepareReminderAsync(throwText, hostDelivery, hostVoice, cancel) is { } throwAudio)
+            {
+                thrown = new SpokenLine(throwText, hostVoice, hostDelivery, throwAudio);
+            }
+
+            if (!cancel.IsCancellationRequested
+                && written.Back is { } backText
+                && await _announcer.PrepareReminderAsync(backText, null, guestVoice, cancel) is { } backAudio)
+            {
+                back = new SpokenLine(backText, guestVoice, null, backAudio);
+            }
+
+            return cancel.IsCancellationRequested || (thrown is null && back is null) ? null : new HandOffLines(thrown, back);
+        }
+        catch (Exception ex)
+        {
+            if (!cancel.IsCancellationRequested)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] The hand-over goes out as the built-in lines - {ex.Message}");
+            }
+
+            return null;
+        }
+        finally
+        {
+            // Every way out that never reached the model settles it too.
+            modelDone.TrySetResult();
+        }
+    }
+
+    /// <summary>
+    /// A hand-over being written and voiced: <paramref name="Voiced"/> is the
+    /// lines with their audio (see WriteHandOffAsync), <paramref name="Written"/>
+    /// settles as soon as the model has answered - see its modelDone.
+    /// </summary>
+    private sealed record HandOffJob(Task<HandOffLines?> Voiced, Task Written);
+
+    /// <summary>Starts WriteHandOffAsync and hands back both halves of it - see HandOffJob.</summary>
+    private HandOffJob StartHandOff(
+        HandOff.Brief brief,
+        SecondVoice? hostVoice,
+        (double Stability, double Style)? hostDelivery,
+        SecondVoice? guestVoice,
+        Task? after,
+        CancellationToken cancel)
+    {
+        var written = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        return new HandOffJob(
+            WriteHandOffAsync(brief, hostVoice, hostDelivery, guestVoice, after, written, cancel),
+            written.Task);
+    }
+
+    /// <summary>
+    /// The written hand-over if it is in hand within <see cref="HandOffGrace"/>,
+    /// or null - and then the built-in lines go. Said in the console either way,
+    /// so a club can tell a written hand-over from a stock one.
+    ///
+    /// NO GRACE FOR ONE STILL BEING WRITTEN (26 Oct 2026, review): the grace is
+    /// for the voicing of lines the model has already given. A hand-over the
+    /// model has not answered yet is not waited for at all - on the model on
+    /// this PC, which answers one request at a time, it would otherwise add
+    /// its three seconds of silence to every race and still miss.
+    /// </summary>
+    private async Task<HandOffLines?> HandOffInTimeAsync(HandOffJob? job, string where, CancellationToken cancel)
+    {
+        if (job is null)
+        {
+            return null;
+        }
+
+        var (timedOut, lines) = job.Written.IsCompleted
+            ? await WithinAsync(job.Voiced, HandOffGrace, cancel)
+            : (true, job.Voiced.IsCompletedSuccessfully ? job.Voiced.Result : null);
+
+        if (!cancel.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke(lines is not null
+                ? $"{AppTime.LogStampNow()}  [commentary] {where}: the hand-over written by the AI"
+                  + (lines.Throw is null || lines.Back is null ? " (with one built-in line)." : ".")
+                : $"{AppTime.LogStampNow()}  [commentary] {where}: the built-in hand-over, "
+                  + (timedOut ? "because the AI's was not written and voiced in time." : "because the AI's would not do."));
+        }
+
+        return lines;
+    }
+
+    /// <summary>
+    /// What the AI is told about the throw down to pit lane at the flag, and
+    /// the co-host's hand back. The throw must still name the guest's role
+    /// and whose team - the interview is written to pick up from exactly
+    /// that (CommentaryService.ThrownDownTo). Read on the UI thread.
+    /// </summary>
+    private HandOff.Brief FlagHandOffBrief(SessionRecord record, string? resultRead)
+    {
+        var coHost = (_settings.CommentaryCoHostName ?? string.Empty).Trim();
+        var winner = record.Results.OrderBy(r => r.Position).FirstOrDefault() is { } first ? WinnerName(first) : string.Empty;
+        var team = winner.Length > 0 ? $"{winner}'s team" : "the winning team";
+
+        return new HandOff.Brief(
+            Host: _settings.RecapAnnouncerName ?? string.Empty,
+            HostRole: "the race announcer, up in the booth, who has just called the finish",
+            Guest: coHost,
+            GuestRole: "the co-host, down in pit lane",
+            About: $"a quick word with the Technical Lead from {team} about the win and the car",
+            ThrowMustSay: $"that {(coHost.Length > 0 ? coHost : "the co-host")} is with the Technical Lead from {team}",
+            JustSaid: resultRead,
+            GuestCovers: $"how {team} won it and what they did to the car",
+            Next: "the race announcer takes the room on towards the race recap");
+    }
+
     /// <summary>
     /// The unofficial result at the flag (18 Oct 2026), in the race
     /// announcer's voice straight after the finish call, which names nobody:
@@ -3369,7 +3673,8 @@ public sealed partial class RaceControlControl
     /// <param name="after">What the wait is counted from, for the console.</param>
     private async Task<(FollowOn Outcome, bool Said)> SpeakInterviewAsync(
         Task<List<SpokenLine>?> interviewTask, CancellationToken nextRace, SpokenLine? leadIn = null,
-        SpokenLine? handBack = null, string after = "the recap ending", string? onAir = null, bool anotherFollows = false)
+        SpokenLine? handBack = null, string after = "the recap ending", string? onAir = null, bool anotherFollows = false,
+        HandOffJob? handOff = null, string handOffWhere = "Pit lane")
     {
         // Why it stopped, read when it is said (22 Oct 2026, bug hunt): a Skip or a
         // Hold stops it too, and the log blamed the next race for those.
@@ -3396,6 +3701,21 @@ public sealed partial class RaceControlControl
                 : $"{AppTime.LogStampNow()}  [commentary] No interview - nothing usable came back from the model. Any line above says why.");
 
             return (timedOut ? FollowOn.Late : FollowOn.Spoken, false);
+        }
+
+        // The AI's hand-over in for the built-in lead-in and hand back (26 Oct
+        // 2026) - only now the interview is here, and with no grace at all for
+        // one the model has not answered yet. See HandOffInTimeAsync.
+        if (handOff is not null && await HandOffInTimeAsync(handOff, handOffWhere, nextRace) is { } written)
+        {
+            leadIn = written.Throw ?? leadIn;
+            handBack = written.Back ?? handBack;
+        }
+
+        if (nextRace.IsCancellationRequested)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {stopped()}");
+            return (FollowOn.Stopped, false);
         }
 
         if (leadIn is not null || handBack is not null)
@@ -3508,6 +3828,68 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// The achievements' hand-over written by the AI (26 Oct 2026): the
+    /// recap host's throw to the reader, picking up from how the recap
+    /// ended, and the reader's hand back to the host by name, reacting to the
+    /// read. Written once the recap has been - the local model takes one
+    /// request at a time and the recap is wanted first - and voiced while the
+    /// recap plays. Null when there is no recap or the AI's will not do; the
+    /// built-in turns then go, already rendered. See HandOff.
+    /// </summary>
+    /// <param name="behind">
+    /// The booth interview or the sign-off, when either is coming (26 Oct 2026,
+    /// review): written behind them, so on the model on this PC - which answers
+    /// one request at a time - the hand-over never makes either of them late.
+    /// It is the one with a built-in line to fall back on.
+    /// </param>
+    private HandOffJob WriteHonoursHandOff(
+        HonoursPlan plan, Task<string?> recapWritten, Task? behind, (double Stability, double Style)? delivery, CancellationToken cancel)
+    {
+        var modelDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        return new HandOffJob(WriteHonoursHandOffAsync(plan, recapWritten, behind, delivery, modelDone, cancel), modelDone.Task);
+    }
+
+    private async Task<HandOffLines?> WriteHonoursHandOffAsync(
+        HonoursPlan plan, Task<string?> recapWritten, Task? behind, (double Stability, double Style)? delivery,
+        TaskCompletionSource modelDone, CancellationToken cancel)
+    {
+        string? recap;
+
+        try
+        {
+            recap = await recapWritten;
+        }
+        catch
+        {
+            // The recap's own failure is its own to report.
+            modelDone.TrySetResult();
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(recap) || cancel.IsCancellationRequested)
+        {
+            modelDone.TrySetResult();
+            return null;
+        }
+
+        var reader = (_settings.RecapHonoursName ?? string.Empty).Trim();
+        var badges = plan.Badges <= 1 ? "one achievement" : $"{plan.Badges} achievements";
+
+        var brief = new HandOff.Brief(
+            Host: _settings.HostNameForRecapShow,
+            HostRole: "the host of the race recap show, who has just finished the recap",
+            Guest: reader,
+            GuestRole: "reads out the achievements the drivers earned in that race",
+            About: $"reading out the achievements from that race - {badges} to hand out",
+            JustSaid: recap,
+            GuestCovers: plan.Turns.Count > 1 ? plan.Turns[1].Line : null,
+            Next: "the host carries on with the rest of the recap show");
+
+        return await WriteHandOffAsync(brief, RecapHostVoice, delivery, plan.Voice, behind, modelDone, cancel);
+    }
+
+    /// <summary>
     /// Speaks the honours: the announcer's throw, the read in the third
     /// voice, and the announcer's hand-back - a line at a time, each queued
     /// once the one before it has been heard, with the hand-over beat and
@@ -3579,6 +3961,36 @@ public sealed partial class RaceControlControl
                   + "The achievements are on the drivers' records.");
 
             return;
+        }
+
+        // WHY (26 Oct 2026, asked for by Asher): the AI's throw to the reader
+        // and the reader's hand back to the host, written and voiced while
+        // the recap played - in for the built-in turns, which are already
+        // rendered and go out for any half that is not in hand by now.
+        if (plan.HandOff is { } handOff && plan.Turns.Count == 4 && lines.Count == plan.Turns.Count)
+        {
+            var written = await HandOffInTimeAsync(handOff, "Achievements", nextRace);
+
+            if (nextRace.IsCancellationRequested)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [achievements] {Stopped()}");
+                return;
+            }
+
+            if (written is not null)
+            {
+                lines = new List<SpokenLine>(lines);
+
+                if (written.Throw is { } thrown)
+                {
+                    lines[0] = thrown;
+                }
+
+                if (written.Back is { } back)
+                {
+                    lines[2] = back;
+                }
+            }
         }
 
         // Where the voice changes hands, worked out by the file whose
@@ -3976,10 +4388,37 @@ public sealed partial class RaceControlControl
                     continue;
                 }
 
+                // WHY (26 Oct 2026, asked for by Asher): voiced ahead with the
+                // two-handers - see RenderColourExchangesAhead - so it follows
+                // the stinger with no round trip in front of it. Not in hand,
+                // it is made as it is said, as before.
+                AnnouncementService.PreparedSpeech? alone = null;
+
+                if (renders[position] is { } renderingAlone)
+                {
+                    var (_, voicedAlone) = await WithinAsync(renderingAlone, FollowOnWait, nextRace);
+
+                    if (nextRace.IsCancellationRequested)
+                    {
+                        SayUnlessTheNextRaceStopped(stopped(), nextRace);
+
+                        return;
+                    }
+
+                    alone = voicedAlone is { Count: > 0 } ? voicedAlone[0] : null;
+                }
+
                 // Going out now - see the director note above.
                 director?.Spoken(said);
 
-                _announcer.SpeakReminder(said.Text, null, RecapHostVoice, showOnScreens: true, onAir: ShowBlock.NameFor(said.Kind));
+                if (alone is not null)
+                {
+                    _announcer.SpeakPrepared(alone, onAir: ShowBlock.NameFor(said.Kind));
+                }
+                else
+                {
+                    _announcer.SpeakReminder(said.Text, null, RecapHostVoice, showOnScreens: true, onAir: ShowBlock.NameFor(said.Kind));
+                }
             }
         }
         finally
@@ -3995,7 +4434,8 @@ public sealed partial class RaceControlControl
     /// <summary>
     /// Every two-voice colour segment's turns, rendered one after another in
     /// the voices that say them, starting now - index for index with
-    /// <paramref name="segments"/>, null for a segment in one voice. Each
+    /// <paramref name="segments"/>; a segment in one voice is one turn in
+    /// the host's (26 Oct 2026 - it used to be null and made as said). Each
     /// segment's renders wait for the one before it, so the first exchange
     /// to be spoken is the first one ready, and the relay is never asked for
     /// a whole programme's lines at once.
@@ -4016,14 +4456,17 @@ public sealed partial class RaceControlControl
 
         for (var i = 0; i < segments.Count; i++)
         {
-            if (!segments[i].IsExchange)
-            {
-                continue;
-            }
-
-            var turns = segments[i].Turns
-                .Select(turn => (turn.Line, Voice: turn.FromCoHost ? coHostVoice : hostVoice))
-                .ToList();
+            // WHY (26 Oct 2026, asked for by Asher: "make sure everything ai
+            // generated is prerendered so there's a quick back and forth with
+            // no pausing"): a colour segment in ONE voice is voiced ahead too,
+            // as a single turn in the host's voice. It used to be the one AI
+            // line in the programme still made as it was said - a round trip
+            // of silence after the stinger, every time.
+            var turns = segments[i].IsExchange
+                ? segments[i].Turns
+                    .Select(turn => (turn.Line, Voice: turn.FromCoHost ? coHostVoice : hostVoice))
+                    .ToList()
+                : new List<(string Line, SecondVoice? Voice)> { (segments[i].Text, hostVoice) };
             var after = previous;
 
             var rendering = Task.Run<IReadOnlyList<AnnouncementService.PreparedSpeech?>?>(async () =>
@@ -5308,11 +5751,19 @@ public sealed partial class RaceControlControl
                 var store = RaceAudioStore.Load();
                 _raceAudioStore = store;
 
+                // With the music and crowd kept for the videos (26 Oct 2026,
+                // asked for by Asher: "video recaps should include the music
+                // that is playing as well.") - see RecapBed. A race is the
+                // only recording that has videos, so the only one that asks,
+                // and only while "Music and crowd under the videos" is ticked
+                // on Club Website > Recording ("add option to switch off. on
+                // by default.") - StartFor checks it again.
                 _raceAudioRecorder = RaceAudioRecorder.StartFor(
                     store,
                     _txtSessionLabel.Text,
                     DateTime.UtcNow,
-                    message => StatusMessage?.Invoke(message));
+                    message => StatusMessage?.Invoke(message),
+                    withVideoBed: store.MusicUnderVideos);
 
                 // The highlight videos' captions (21 Oct 2026): every line
                 // the announcer is about to say, noted against whichever
@@ -5490,7 +5941,7 @@ public sealed partial class RaceControlControl
     /// <summary>
     /// Where each driver's mp3 clip goes (22 Oct 2026, driver experience):
     /// their own night on the relay, behind their badge. Null unless the
-    /// club ticked "share drivers' clips" on Sounds > Recording, offers
+    /// club ticked "share drivers' clips" on Club Website > Recording, offers
     /// drivers their nights, and the club's page is set up - or when nobody
     /// in the race has a badge id. Badge ids come only from a key that already
     /// exists, as PodiumShareFor's do.
@@ -6962,7 +7413,12 @@ public sealed partial class RaceControlControl
         // and the plain stance is what a club's first heat of the evening
         // gets, and the prompt copes with it.
         IReadOnlyList<FactBlock> NightFacts,
-        PrincipalStance.Stance Stance);
+        PrincipalStance.Stance Stance,
+
+        // WHY (26 Oct 2026, asked for by Asher): the race announcer's name,
+        // read on the UI thread with the rest, for the co-host's hand back
+        // to him by name - see WritePrincipalLinesAsync.
+        string AnnouncerName = "");
 
     /// <summary>
     /// Whether a Team Principal is due before <paramref name="round"/>, and
@@ -7077,7 +7533,8 @@ public sealed partial class RaceControlControl
             (_settings.CommentaryCoHostName ?? string.Empty).Trim(),
             _commentary,
             nightFacts,
-            stance);
+            stance,
+            (_settings.RecapAnnouncerName ?? string.Empty).Trim());
     }
 
     /// <summary>
@@ -7092,19 +7549,54 @@ public sealed partial class RaceControlControl
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
         budget.CancelAfter(PrincipalModelBudget);
 
-        var exchanges = job.Ready ?? await job.Commentary.BuildPrincipalBeforeAsync(
-            job.Round, job.Focus, job.Name, job.Kind, job.Stake,
-            log: note => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}"),
-            ct: budget.Token,
-            interviewer: job.Interviewer,
-            nightFacts: job.NightFacts,
-            stanceBrief: PrincipalStance.BriefFor(job.Stance));
+        // WHY (26 Oct 2026, asked for by Asher: "When the show host throws it
+        // to other cast member it sounds robotic. reference the show host name
+        // when sending it back. add in a line or two. make it AI and
+        // prerender."): the announcer's throw down to pit lane and - new - the
+        // co-host's hand back to him by name, written by the AI in the same
+        // budget as the interview and voiced while the interview is, and used
+        // only if it is in hand once the interview has been rendered - the
+        // built-in pair goes otherwise. The INTERVIEW IS ASKED FOR FIRST and
+        // held (26 Oct 2026, review), so on the model on this PC - which
+        // answers one request at a time - the interview gets the model first
+        // and it is the hand-over that waits, as at the flag.
+        var exchangesTask = job.Ready is { } ready
+            ? Task.FromResult<IReadOnlyList<CommentaryService.InterviewExchange>?>(ready)
+            : job.Commentary.BuildPrincipalBeforeAsync(
+                job.Round, job.Focus, job.Name, job.Kind, job.Stake,
+                log: note => StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] {note}"),
+                ct: budget.Token,
+                interviewer: job.Interviewer,
+                nightFacts: job.NightFacts,
+                stanceBrief: PrincipalStance.BriefFor(job.Stance));
+
+        var handOff = job.CoHostAsks
+            ? StartHandOff(
+                new HandOff.Brief(
+                    Host: job.AnnouncerName,
+                    HostRole: "the race announcer, up in the booth, before the start",
+                    Guest: job.CoHostName,
+                    GuestRole: "the co-host, down in pit lane",
+                    About: $"a word with {(job.Name.Length > 0 ? job.Name + ", " : string.Empty)}the Team Principal from "
+                           + (job.SpokenFocus.Length > 0 ? $"{job.SpokenFocus}'s team" : "one of the teams") + ", before the race",
+                    ThrowMustSay: job.SpokenFocus.Length > 0
+                        ? $"that {(job.CoHostName.Length > 0 ? job.CoHostName : "the co-host")} is with {job.SpokenFocus}'s team"
+                        : null,
+                    GuestCovers: "how the team sees the race ahead",
+                    Next: "the race announcer takes the room on to the start"),
+                null, null, job.CoHostVoice, null, budget.Token)
+            : null;
+
+        var exchanges = await exchangesTask;
 
         if (exchanges is null)
         {
             StatusMessage?.Invoke(budget.IsCancellationRequested
                 ? $"{AppTime.LogStampNow()}  [commentary] Team Principal skipped - the model took longer than {PrincipalModelBudget.TotalSeconds:0}s, so the start went on without it."
                 : $"{AppTime.LogStampNow()}  [commentary] Team Principal skipped - nothing usable came back from the model. Any line above says why.");
+
+            // No interview, so no hand-over either - see the end of this method.
+            budget.Cancel();
             return null;
         }
 
@@ -7116,8 +7608,36 @@ public sealed partial class RaceControlControl
 
         if (lines is not null && job.CoHostAsks)
         {
-            var throwLine = PitLaneThrowBefore(job.CoHostName, job.SpokenFocus);
-            lines.Insert(0, new SpokenLine(throwLine, null, null, await _announcer.PrepareReminderAsync(throwLine)));
+            // The AI's pair if it is in hand by now (see handOff), each
+            // half on its own: a half it did not manage is the built-in line,
+            // rendered here before anything is spoken.
+            var written = await HandOffInTimeAsync(handOff, "Pit lane before the race", ct);
+
+            var throwLine = written?.Throw;
+
+            if (throwLine is null)
+            {
+                var thrown = PitLaneThrowBefore(job.CoHostName, job.SpokenFocus);
+                throwLine = new SpokenLine(thrown, null, null, await _announcer.PrepareReminderAsync(thrown));
+            }
+
+            var backLine = written?.Back;
+
+            if (backLine is null)
+            {
+                var back = HandOff.PitLaneBackBefore(job.AnnouncerName, job.SpokenFocus);
+                backLine = new SpokenLine(back, job.CoHostVoice, null, await _announcer.PrepareReminderAsync(back, null, job.CoHostVoice));
+            }
+
+            lines.Insert(0, throwLine);
+            lines.Add(backLine);
+        }
+
+        // A hand-over still being written or voiced is not wanted any more -
+        // stopped here, before the budget it runs on is disposed.
+        if (handOff is { Voiced.IsCompleted: false })
+        {
+            budget.Cancel();
         }
 
         return lines;

@@ -135,7 +135,7 @@ When the podium's [highlight videos](../announcer/sounds-and-music.md#highlight-
 
 - It appears once the first of the race's videos is up, a minute or so after the race, and takes about a third of the screen's width.
 - It comes down the moment the next race stages, and a video finishing late never puts it back over a race in progress.
-- It needs **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** ticked on **Sounds → Recording**, and the club's page switched on (**Club Website**). Only 1st to 3rd are ever on that page.
+- It needs **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** ticked on **Club Website → Recording**, and the club's page switched on (**Club Website**). Only 1st to 3rd are ever on that page.
 
 ### Track evolution
 
@@ -226,7 +226,8 @@ Press <kbd>C</kbd> on the Big Screen to turn captions on, and <kbd>C</kbd> again
 
 - The strip shows the line the announcer is saying now, in large type on a plate in the crowd-screen look's colors.
 - Each line stays up for at least eight seconds, longer for a long line so there's time to read it, then fades out over two seconds. The next line replaces it straight away.
-- A line too long for the width ends in "...".
+- A long line, such as the race recap or the driver introductions, is shown a sentence or two at a time, each part as the announcer reaches it, so the strip keeps up with the voice for the whole line. If the line is cut off (by a flag, say), the parts the announcer didn't get to are never shown.
+- A part too long for the width ends in "...".
 - While captions are on, the strip keeps its place at the bottom even when nothing is being said, so the leaderboard doesn't jump up and down.
 
 The captions use drivers' full names, as the PA does, because the Big Screen is in the room. A driver's **Online privacy** ticks only change the club's online pages (see [Online privacy](../race-day/drivers-and-classes.md#online-privacy)).

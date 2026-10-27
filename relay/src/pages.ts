@@ -38,6 +38,9 @@ export const DEFAULT_CONTEXT: PageContext = Object.freeze({ look: DEFAULT_LOOK, 
 
 const STYLE = `
 .vid{margin:0 0 28px}
+.pinask{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65)}
+.pinask-card{width:100%;max-width:360px;background:var(--surface);color:var(--text);border-radius:14px;padding:18px}
+.pinask-card input{display:block;width:100%;box-sizing:border-box;font-size:22px;letter-spacing:.2em;padding:12px;margin:10px 0;border-radius:10px;border:1px solid var(--muted);background:var(--bg);color:var(--text)}
 .vid video{display:block;width:100%;max-width:420px;aspect-ratio:9/16;background:#000;border-radius:12px;margin:8px 0}
 
 :root {
@@ -502,10 +505,22 @@ function clock(ms) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
-async function grab(path) {
-  const response = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + path, { cache: 'no-store' });
-  if (!response.ok) return { missing: true, status: response.status };
-  return { body: await response.json() };
+// waitMs (26 Oct 2026): give up after that long, for a view that waits
+// for one read to answer before it asks again (the live page's captions).
+// A read that never came back - a phone moving between networks, venue
+// Wi-Fi dropping - left that view waiting on it for good, so it stopped
+// updating. Without waitMs, or AbortController, a read is as it was.
+async function grab(path, waitMs) {
+  const stop = waitMs && typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = stop ? setTimeout(() => stop.abort(), waitMs) : 0;
+  try {
+    const response = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + path,
+      stop ? { cache: 'no-store', signal: stop.signal } : { cache: 'no-store' });
+    if (!response.ok) return { missing: true, status: response.status };
+    return { body: await response.json() };
+  } finally {
+    if (stop) clearTimeout(timer);
+  }
 }
 
 // Only a string that is already a data: image may become an src. The
@@ -655,7 +670,7 @@ function poll(load, everyMs) {
 interface Shell {
   readonly club: string;
   readonly clubName: string;
-  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "videos";
+  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "videos" | "mynight";
   readonly heading: string;
   readonly sub: string;
   readonly body: string;
@@ -838,7 +853,9 @@ ${overrides}
       ${tab("live", "Live", "live")}
       ${tab("schedule", "Schedule", "schedule")}
       ${look.checkIn || page.active === "checkin" ? tab("checkin", "Check in", "checkin") : ""}
+      ${look.checkIn || page.active === "mynight" ? tab("mynight", "My night", "mynight") : ""}
       ${tab("results", "Results", "results")}
+      ${tab("videos", "Videos", "videos")}
       ${tab("standings", "Standings", "standings")}
       ${tab("badges", "Achievements", "badges")}
       ${tab("tracks", "Tracks", "tracks")}
@@ -2594,7 +2611,9 @@ const CAPTIONS_JS = `
 
     busy = true;
     const mine = turn;
-    const answer = await grab('/snapshot/captions').catch(() => null);
+    // Given up on after ten seconds: busy holds the next read back until
+    // this one answers, so one that never did stopped the captions for good.
+    const answer = await grab('/snapshot/captions', 10000).catch(() => null);
     busy = false;
 
     if (!on || mine !== turn) return;
@@ -2705,8 +2724,16 @@ const LISTEN_JS = `
   // a new line and must be played.
   const SAME_LINE_MS = 2 * 60 * 1000;
 
+  // How long one request may take before it is given up on, and how many
+  // goes one line gets before it is passed over. See ask and sweepOnce.
+  const WAIT_MS = 10000;
+  const MOST_TRIES = 3;
+
   // Id to the time the relay had it, for every line already heard.
   const heard = new Map();
+
+  // Id to how many times fetching it has failed - see sweepOnce.
+  const tries = new Map();
   const queue = [];
   let on = false;
   let playing = false;
@@ -2720,9 +2747,11 @@ const LISTEN_JS = `
   let turn = 0;
 
   // One sweep at a time. The timer starts one every two seconds whatever
-  // happens, and a sweep marks a line heard before fetching it - so a
-  // slow fetch let the next sweep fetch and play the line after it first.
-  // 17 Oct 2026, Bug Hunt 8, A21-1.
+  // happens, and a sweep used to mark a line heard before fetching it - so
+  // a slow fetch let the next sweep fetch and play the line after it first.
+  // 17 Oct 2026, Bug Hunt 8, A21-1. (A line is marked heard once fetched
+  // now - see sweepOnce - and this still keeps two sweeps from fetching,
+  // and queueing, the same line.)
   let sweeping = false;
 
   function say(text) {
@@ -2751,17 +2780,40 @@ const LISTEN_JS = `
     }
   }
 
+  // One request and its answer, given up on after WAIT_MS (26 Oct 2026).
+  // Only one sweep runs at a time (see sweeping), so a request that never
+  // came back - a phone moving between networks, the venue's Wi-Fi
+  // dropping - used to leave the player waiting on it for good: nothing
+  // else was ever fetched and nothing else was played. A browser without
+  // AbortController asks as it always did.
+  async function ask(url) {
+    if (typeof AbortController !== 'function') {
+      const plain = await fetch(url);
+      return { ok: plain.ok, status: plain.status, body: plain.ok ? await plain.json() : null };
+    }
+
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), WAIT_MS);
+
+    try {
+      const got = await fetch(url, { signal: stop.signal });
+      return { ok: got.ok, status: got.status, body: got.ok ? await got.json() : null };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function sweepOnce() {
     const mine = turn;
 
     try {
-      const listing = await fetch('/api/v1/c/' + CLUB + '/collection/listen?meta=1');
+      const listing = await ask('/api/v1/c/' + CLUB + '/collection/listen?meta=1');
 
       if (!listing.ok) {
         return;
       }
 
-      const body = await listing.json();
+      const body = listing.body || {};
 
       if (!on || mine !== turn) {
         return;
@@ -2788,20 +2840,37 @@ const LISTEN_JS = `
           continue;
         }
 
-        heard.set(one.id, one.at);
-
-        const got = await fetch('/api/v1/c/' + CLUB + '/collection/listen/' + encodeURIComponent(one.id));
-
-        if (!got.ok) {
-          continue;
-        }
-
-        const doc = await got.json();
+        const got = await ask('/api/v1/c/' + CLUB + '/collection/listen/' + encodeURIComponent(one.id)).catch(() => null);
 
         if (!on || mine !== turn) {
           return;
         }
 
+        // HEARD ONLY ONCE IT HAS BEEN FETCHED, or is gone for good (26 Oct
+        // 2026, asked for by Asher: "can't hear the heat reminders that fire
+        // between races by listening through the relay"). A line was marked
+        // heard before it was fetched, so one fetch that failed - a busy
+        // relay, a moment without signal - lost that line for good. In a
+        // race the next call is a few seconds behind and nobody noticed;
+        // between races a reminder is the only thing said for minutes, and
+        // losing it was losing everything. Now a failed fetch is tried again
+        // on the next sweep, and the sweep stops there, so the lines after it
+        // still play in the order they were said. A line that fails
+        // MOST_TRIES times is passed over, so one bad line cannot hold up
+        // the evening; a 404 means it has rolled off the relay already.
+        if (got === null || (!got.ok && got.status !== 404)) {
+          const failed = (tries.get(one.id) || 0) + 1;
+
+          if (failed < MOST_TRIES) {
+            tries.set(one.id, failed);
+            break;
+          }
+        }
+
+        tries.delete(one.id);
+        heard.set(one.id, one.at);
+
+        const doc = got && got.ok ? got.body : null;
         const said = doc && doc.body ? doc.body : {};
 
         if (typeof said.audio === 'string' && said.audio.length > 0) {
@@ -3206,7 +3275,9 @@ export function homePage(club: string, clubName: string, context: PageContext = 
       tile("live", "Live", "The race as it runs") +
       tile("schedule", "Schedule", "Who's on when") +
       (context.look.checkIn ? tile("checkin", "Check in", "Tell the desk you're here") : "") +
+      (context.look.checkIn ? tile("mynight", "My night", "Your own races, with your PIN") : "") +
       tile("results", "Results", "Every session") +
+      tile("videos", "Podium videos", "Watch and download the top three") +
       tile("standings", "Standings", "The championship") +
       tile("badges", "Achievements", "Who's earned what") +
       tile("tracks", "Tracks", "Records and best laps") +
@@ -3687,8 +3758,111 @@ function firstNightGuide() {
 }
 `;
 
+/**
+ * WHY (26 Oct 2026, asked for by Asher: "is there a reason the phone sign
+ * in page you can sign in/out anyone you want without a pin?"): a check-in
+ * tap by badge code alone is refused for a driver who has a personal PIN
+ * (checkinRequest answers 403 with needPin). This is how both pages that
+ * tap by badge code - the check-in card and the driver's night - get past
+ * it: ask for the PIN in a small dialog of the page's own, and send the
+ * tap again with the PIN in its POST body (never an address). The relay
+ * checks it against that badge's own PIN only, with a limit of its own,
+ * so somebody else's guessing - a club-wide lockout, or ten wrong from the
+ * venue's shared address - never stops a driver checking themselves in.
+ *
+ * The PIN is never kept. A right one is answered with the driver's own
+ * racer pass, which the caller keeps for the tab so the next tap need not
+ * ask; nothing else is ever kept.
+ *
+ * WHY THE DIALOG (26 Oct 2026, review): window.prompt shows what is typed
+ * in plain text and cannot be told to bring up the number pad. This is a
+ * password box with inputmode=numeric, built with createElement and
+ * textContent only, which Enter sends and Escape (or Cancel) closes.
+ */
+const TAP_PIN_JS = `
+function askPin(message) {
+  return new Promise((resolve) => {
+    const shade = document.createElement('div');
+    shade.className = 'pinask';
+    shade.setAttribute('role', 'dialog');
+    shade.setAttribute('aria-modal', 'true');
+    shade.setAttribute('aria-label', 'Your check-in PIN');
+
+    const card = document.createElement('div');
+    card.className = 'pinask-card';
+
+    const said = document.createElement('p');
+    said.className = 'when';
+    said.textContent = message;
+    card.appendChild(said);
+
+    const input = document.createElement('input');
+    input.id = 'tappin';
+    input.type = 'password';
+    input.setAttribute('inputmode', 'numeric');
+    input.setAttribute('autocomplete', 'off');
+    input.setAttribute('maxlength', '8');
+    input.setAttribute('aria-label', 'Your check-in PIN');
+    card.appendChild(input);
+
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      input.value = '';
+      shade.remove();
+      resolve(value);
+    };
+
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'go';
+    ok.textContent = 'Continue';
+    ok.addEventListener('click', () => finish(String(input.value || '').trim()));
+
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'go quiet';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', () => finish(''));
+
+    input.addEventListener('keydown', (e) => {
+      if (e && e.key === 'Enter') { if (e.preventDefault) e.preventDefault(); finish(String(input.value || '').trim()); }
+      else if (e && e.key === 'Escape') finish('');
+    });
+
+    card.appendChild(ok);
+    card.appendChild(cancel);
+    shade.appendChild(card);
+    document.body.appendChild(shade);
+    try { input.focus(); } catch (e) { /* the box is there to tap */ }
+  });
+}
+
+// Sends the tap; while the relay says it needs this driver's PIN, asks
+// for it and sends the tap again with it. Cancel stops with nothing done.
+async function tapWithPin(send, first) {
+  let a = null;
+  try { a = await send(first); } catch (e) { a = null; }
+  let message = 'Type your own check-in PIN (the one the club emailed you) to check in or out.';
+
+  while (a !== null && a.status === 403 && a.body && a.body.needPin === true) {
+    const p = await askPin(message);
+    if (!p) return { status: 403, body: { error: 'Not changed - your own check-in PIN is needed to check in or out from a phone.' } };
+
+    const again = Object.assign({}, first, { pin: p });
+    delete again.pass;
+    try { a = await send(again); } catch (e) { a = null; }
+    message = a && a.body && typeof a.body.error === 'string' && a.body.error ? a.body.error + ' Try again:' : message;
+  }
+
+  return a;
+}
+`;
+
 const CHECKIN_JS = `
 ${GUIDE_JS}
+${TAP_PIN_JS}
 const box = document.getElementById('ci');
 const params = new URLSearchParams(location.search);
 const BADGE = /^[0-9a-f]{20}$/.test(params.get('d') || '') ? params.get('d') : '';
@@ -3787,7 +3961,19 @@ async function tap(d) {
   pending.set(d.id, { wanted, until: Date.now() + 20000 });
   draw();
 
-  const answer = await api('tap', { id: d.id, wanted }).catch(() => null);
+  // The pass a right PIN earned, when this tab has one, so a driver with a
+  // personal PIN is let through (26 Oct 2026 - see TAP_PIN_JS). Left out
+  // when there is none, as a tap always was.
+  const held = pass();
+  // A badge alone is not enough for a driver with a PIN: ask for it.
+  // Only the driver's OWN racer pass is ever kept here - the relay hands
+  // one back only for that driver's own PIN - so a desk PIN can never be
+  // left behind on a driver's phone (26 Oct 2026, review).
+  const answer = await tapWithPin((payload) => api('tap', payload), held ? { id: d.id, wanted, pass: held } : { id: d.id, wanted });
+
+  if (answer !== null && answer.status === 200 && typeof answer.body.pass === 'string' && answer.body.pass !== '') {
+    setPass(answer.body.pass);
+  }
 
   if (answer === null || answer.status !== 200) {
     pending.delete(d.id);
@@ -3889,7 +4075,7 @@ function drawPin(message) {
     '<p class="when">Racers: your personal PIN from your email. Staff: the desk PIN.</p>' +
     '<button class="go" type="submit">Continue</button>' +
     (message ? '<p class="note bad">' + esc(message) + '</p>' : '') +
-    '<p class="when">Got a QR check-in? Scan it with your phone camera instead - no PIN needed.</p>' +
+    '<p class="when">Got a QR check-in? Scan it with your phone camera instead. If the club gave you a personal PIN, it asks for it when you tap Check in.</p>' +
     '</form>';
 
   document.getElementById('pinform').addEventListener('submit', (e) => {
@@ -5098,8 +5284,16 @@ async function tapCheckIn() {
   ci.pending = { wanted: wanted, until: Date.now() + 60000 };
   drawLive();
 
-  let a = null;
-  try { a = await post('/checkin/tap', { id: CODE, wanted: wanted }); } catch (e) { a = null; }
+  // The pass their personal PIN earned on this page, when it has one (26
+  // Oct 2026 - see TAP_PIN_JS): a driver with a PIN is checked in or out
+  // only with it. Left out when there is none, as a tap always was.
+  const held = pass();
+  // The badge code alone is not enough for a driver with a PIN: ask for
+  // it. The pass a right PIN is answered with is their own racer pass - the
+  // one "Your details" signs in with too - kept for this tab only.
+  let a = await tapWithPin((payload) => post('/checkin/tap', payload), held ? { id: CODE, wanted: wanted, pass: held } : { id: CODE, wanted: wanted });
+
+  if (a !== null && a.status === 200 && typeof a.body.pass === 'string' && a.body.pass !== '') setPass(a.body.pass);
 
   ci.busy = false;
 
@@ -6205,6 +6399,7 @@ function startLive() {
 }
 
 ${GUIDE_JS}
+${TAP_PIN_JS}
 
 async function load() {
   if (!CODE) {
@@ -6300,6 +6495,154 @@ export function nightPage(club: string, clubName: string, context: PageContext =
   }, context);
 }
 
+// ------------------------------------------------------------- my night
+
+/**
+ * "MY NIGHT" - A DRIVER'S WAY TO THEIR OWN NIGHT WITH THEIR PIN (26 Oct 2026).
+ *
+ * WHY (26 Oct 2026, asked for by Asher: "i want to driver to get to own night
+ * page through the relay as long as they have their pin"): the night page
+ * opens only with the code from a driver's badge, so a driver without their
+ * badge or the club's email had no way in from the club's own pages.
+ *
+ * THE PIN ALONE SAYS WHO THEY ARE. Every racer's PIN is their own - no two
+ * racers share one, and a PIN two drivers were given opens neither
+ * (readCheckin) - so there is no name to pick and no list of drivers here
+ * at all. A wrong PIN is answered the same whoever it was aimed at, so this
+ * page cannot tell anybody which names or codes exist.
+ *
+ * EXACTLY THE CHECK-IN PIN PATH. The PIN goes once, in a POST body, to
+ * checkin/list - the same salted slow hash, per-address and club-wide
+ * limits and lockouts that check-in and "Your details" use - and only a
+ * racer answer is any use: it carries that driver's badge code, which is
+ * the night page's credential, handed out only after the PIN has passed.
+ * The page then opens the night with the code in the FRAGMENT, never sent
+ * to any server, and leaves the pass the PIN earned in this tab's
+ * sessionStorage under the night page's own key, so "Your details" there
+ * is already signed in. The PIN itself is never kept.
+ *
+ * WHICH NIGHT. The night page shows the driver's latest night the laptop
+ * has filed - tonight's once tonight has racing in it, else the most recent
+ * - and their live card for tonight. Nothing here chooses differently.
+ *
+ * Only while online check-in is open, because that is where the racers' PIN
+ * hashes are published; closed, the page says to use their link instead.
+ */
+const MYNIGHT_JS = `
+const box = document.getElementById('mn');
+const NIGHT_PASS_KEY = 'hg-night-pass-' + CLUB;
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null && text !== '') e.textContent = String(text);
+  return e;
+}
+
+async function post(action, payload) {
+  const r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/checkin/' + action, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+  let body = {};
+  try { body = await r.json(); } catch (e) { /* an empty answer is still an answer */ }
+  return { status: r.status, body: body || {} };
+}
+
+function keepPass(v) {
+  try { sessionStorage.setItem(NIGHT_PASS_KEY, v); } catch (e) { /* private browsing: Your details asks again */ }
+}
+
+function go(url) {
+  try { location.assign(url); } catch (e) { location.href = url; }
+}
+
+// Every answer in words. One wording for a wrong PIN, whoever it was meant
+// for, so the page says nothing about which names or codes are real.
+function trouble(a) {
+  if (a === null) return 'Could not reach the club. Check your connection and try again.';
+  const b = a.body || {};
+  const said = typeof b.error === 'string' && b.error.trim() !== '' ? b.error.trim() : '';
+  if (a.status === 200 && b.mode === 'staff') return "That is the club's desk PIN, not your own. Use the personal PIN the club sent you.";
+  if (a.status === 403) return said || 'That PIN is not right.';
+  if (a.status === 409) return 'Signing in with your PIN only works while the club has online check-in open. Use the link on your check-in badge or in the club\\'s email, or ask at the desk.';
+  if (a.status === 429) return said || 'Too many tries. Wait a few minutes and try again.';
+  return 'The club could not answer just now. Try again in a minute.';
+}
+
+function draw(message) {
+  box.textContent = '';
+  const part = el('div', 'su');
+  part.appendChild(el('p', 'when', 'Type the personal check-in PIN the club emailed you, and your own night opens: your races, your report card and, once you are racing, your live card.'));
+
+  const label = el('label', 'f', 'Your personal PIN');
+  const input = document.createElement('input');
+  input.id = 'mnpin';
+  input.type = 'password';
+  input.setAttribute('inputmode', 'numeric');
+  input.setAttribute('autocomplete', 'off');
+  input.setAttribute('maxlength', '8');
+  label.appendChild(input);
+  part.appendChild(label);
+
+  const said = el('p', 'note bad', message || '');
+  said.setAttribute('role', 'status');
+
+  const button = el('button', 'go', 'Open my night');
+  button.type = 'button';
+  button.addEventListener('click', async () => {
+    const p = String(input.value || '').trim();
+    input.value = '';
+
+    if (!/^[0-9]{4,8}$/.test(p)) {
+      said.textContent = 'A personal PIN is 4 to 8 digits.';
+      return;
+    }
+
+    button.disabled = true;
+    said.textContent = 'Checking\u2026';
+
+    let a = null;
+    try { a = await post('list', { pin: p }); } catch (e) { a = null; }
+
+    button.disabled = false;
+    const b = a === null ? {} : a.body || {};
+    const code = b.mode === 'racer' && b.driver && typeof b.driver.id === 'string' && /^[0-9a-f]{20}$/.test(b.driver.id) ? b.driver.id : '';
+
+    if (a !== null && a.status === 200 && code !== '') {
+      if (typeof b.pass === 'string' && b.pass !== '') keepPass(b.pass);
+      said.textContent = 'Opening your night\u2026';
+      go('/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
+      return;
+    }
+
+    said.textContent = trouble(a);
+  });
+
+  part.appendChild(button);
+  part.appendChild(said);
+  part.appendChild(el('p', 'when', 'No personal PIN? Open your night with the link on your check-in badge or in the club\\'s email - or ask at the timing desk.'));
+  box.appendChild(part);
+}
+
+draw('');
+`;
+
+export function myNightPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+  return shell({
+    club,
+    clubName,
+    active: "mynight",
+    heading: "My night",
+    sub: "Your own races from the timing desk - opened with your personal PIN.",
+    body: '<div id="mn"><p class="note">Loading&hellip;</p></div>',
+    script: MYNIGHT_JS,
+    noindex: true,
+  }, context);
+}
+
 // ------------------------------------------------------------------ videos
 
 /** One podium video, as the race's page needs it - the relay's VideoMeta, narrowed. */
@@ -6348,6 +6691,76 @@ export function videosPage(
     // og:url says that rather than the bare /c/<club>/videos. Encoded so a
     // junk segment cannot make a strange URL; escaped again in shell().
     ...(race === "" ? {} : { path: `/c/${club}/videos/${encodeURIComponent(race)}` }),
+  }, context);
+}
+
+/** One race's podium videos, for the club's list of them - see podiumVideosIndexPage. */
+export interface PodiumRace {
+  /** The race's own 128-bit name - its page is /c/<club>/videos/<race>. */
+  readonly race: string;
+  readonly label: string;
+  /** When its newest video arrived, ISO 8601. */
+  readonly at: string;
+  /** 1st to 3rd, in that order. */
+  readonly videos: readonly PodiumVideo[];
+}
+
+/**
+ * EVERY RACE'S PODIUM VIDEOS, IN ONE PLACE (26 Oct 2026).
+ *
+ * WHY (26 Oct 2026, asked for by Asher: "I don't see a spot on the relay to
+ * down load the top three place recordings."): the top three's videos were
+ * reachable only from the QR code the Big Screen shows until the next race
+ * stages, or from a driver's own night - so a driver who missed the code,
+ * or a parent at home, had nowhere on the club's site to find them. This
+ * is that place: the club's Videos tab, each race of the last week with
+ * its podium, to watch (on the race's own page) and to download.
+ *
+ * NOTHING HERE THE RACE'S PAGE DID NOT ALREADY SHOW. The same videos the
+ * QR code opens, by the same public names, and only those the relay still
+ * holds: the laptop never sends a video for a driver who asked for no
+ * videos online, or one whose sound names somebody shown by initials, and
+ * a driver who asks later has theirs taken down (forget-media) - so a
+ * video gone from the relay is gone from this list too. Kept for a week,
+ * as ever. noindex like the race page: it is for the club's own people.
+ *
+ * preload="none" and no players: a week of races is up to forty races, and
+ * a phone should not fetch the start of a hundred videos to draw a list.
+ */
+export function podiumVideosIndexPage(
+  club: string,
+  clubName: string,
+  context: PageContext = DEFAULT_CONTEXT,
+  races: readonly PodiumRace[] = [],
+): string {
+  const place = (p: number) => (p === 1 ? "1st" : p === 2 ? "2nd" : "3rd");
+  const c = escapeHtml(club);
+  const day = (iso: string) => {
+    const when = new Date(iso);
+    return Number.isNaN(when.getTime())
+      ? ""
+      : when.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  };
+
+  const body = races.length === 0
+    ? '<p class="note">No podium videos this week. After a race the top three\'s videos appear here - they are kept for a week.</p>'
+    : races.map((r) => `<section class="vid podium">
+    <h2>${escapeHtml(r.label || "Race")}</h2>
+    <div class="sub">${escapeHtml(day(r.at))} &middot; <a class="more" href="/c/${c}/videos/${escapeHtml(r.race)}">Watch the podium</a></div>
+    ${r.videos.map((v) => `<p class="pv"><b>${escapeHtml(place(v.position))}</b> &middot; ${escapeHtml(v.name || "Driver")}
+      <a class="go" href="/c/${c}/video/${escapeHtml(v.id)}.mp4?download=1" download>Download ${escapeHtml(place(v.position))}</a></p>`).join("\n    ")}
+    </section>`).join("\n");
+
+  return shell({
+    club,
+    clubName,
+    active: "videos",
+    heading: "Podium videos",
+    sub: "The announcer's call of every race's top three, to watch and download. Kept for a week.",
+    body,
+    script: "",
+    noindex: true,
+    path: `/c/${club}/videos`,
   }, context);
 }
 

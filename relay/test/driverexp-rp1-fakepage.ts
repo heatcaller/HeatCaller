@@ -16,7 +16,13 @@ export interface Sent {
   readonly body: Record<string, unknown>;
 }
 
-export type Answerer = (url: string, body: Record<string, unknown>) => Promise<{ status: number; body?: unknown; date?: string }>;
+/**
+ * hang (26 Oct 2026): the request never answers - a phone between networks
+ * - and settles only when the page gives up on it through its
+ * AbortController. Not waited for by settle, which would otherwise wait for
+ * ever.
+ */
+export type Answerer = (url: string, body: Record<string, unknown>) => Promise<{ status: number; body?: unknown; date?: string; hang?: boolean }>;
 
 export class FakeNode {
   tagName: string;
@@ -251,11 +257,22 @@ export class FakePage {
         page.intervals.push({ every, next: page.clock + every, run });
         return 1000 + page.intervals.length;
       },
-      fetch: (url: string, init?: { body?: string }) => {
+      AbortController,
+      fetch: (url: string, init?: { body?: string; signal?: AbortSignal }) => {
         const body = JSON.parse(init?.body ?? "{}") as Record<string, unknown>;
         page.sent.push({ url, body });
+        // What settle waits for is the answer, not the request: a request
+        // that hangs has its answer at once and then waits for the abort.
+        const answered = answer(url, body);
         const work = (async () => {
-          const got = await answer(url, body);
+          const got = await answered;
+          if (got.hang) {
+            await new Promise((_resolve, reject) => {
+              const aborted = () => reject(Object.assign(new Error("The operation was aborted."), { name: "AbortError" }));
+              if (init?.signal?.aborted) aborted();
+              init?.signal?.addEventListener("abort", aborted);
+            });
+          }
           return {
             status: got.status,
             ok: got.status >= 200 && got.status < 300,
@@ -263,11 +280,11 @@ export class FakePage {
             headers: { get: (name: string) => (name.toLowerCase() === "date" ? got.date ?? null : null) },
           };
         })();
-        page.inFlight.add(work);
+        page.inFlight.add(answered);
         const done = () => {
-          page.inFlight.delete(work);
+          page.inFlight.delete(answered);
         };
-        work.then(done, done);
+        answered.then(done, done);
         return work;
       },
     });

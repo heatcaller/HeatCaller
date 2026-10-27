@@ -20,8 +20,8 @@ interface Line {
   at?: string;
 }
 
-/** What the relay answers the captions read with: a stored snapshot, a 404, or a deleted (null) body. */
-type Held = { lines: Line[] } | 404 | null | 429;
+/** What the relay answers the captions read with: a stored snapshot, a 404, a deleted (null) body - or no answer at all ("hang"). */
+type Held = { lines: Line[] } | 404 | null | 429 | "hang";
 
 function page(held: () => Held, listening = false): FakePage {
   const context = { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening } };
@@ -31,6 +31,7 @@ function page(held: () => Held, listening = false): FakePage {
       const h = held();
       if (h === 404) return { status: 404, body: { ok: false, error: "Nothing has been published to \"captions\" yet." } };
       if (h === 429) return { status: 429, body: { ok: false } };
+      if (h === "hang") return { status: 0, hang: true };
       return { status: 200, body: { seq: 1, publishedAt: "2026-10-22T19:00:00Z", body: h === null ? null : { at: "2026-10-22T19:00:00Z", ...h } } };
     }
     if (url.endsWith("/snapshot/state")) return { status: 404 };
@@ -130,6 +131,31 @@ describe("the captions control", () => {
     await p.advance(2000);
     assert.deepEqual(shown(p), ["Line 1"]);
     assert.match(p.get("capnote").textContent, /busy/);
+  });
+
+  // 26 Oct 2026, asked for by Asher: "when watching the live captions
+  // through the relay they stopped updating". One read at a time (busy), so
+  // a read that never answered held every later one back for good.
+  it("gives up on a read that never answers, and carries on reading", async () => {
+    let held: Held = lines(1);
+    const p = page(() => held);
+    p.get("capbtn").click();
+    await p.settle();
+    assert.deepEqual(shown(p), ["Line 1"]);
+
+    held = "hang";
+    await p.advance(2000);
+    assert.equal(reads(p), 2);
+
+    // Still waiting on it: nothing new is asked for meanwhile.
+    held = lines(1, 2);
+    await p.advance(6000);
+    assert.equal(reads(p), 2, "one read at a time, as before");
+
+    // Ten seconds on it is given up, and the next read draws the new line.
+    await p.advance(8000);
+    assert.ok(reads(p) >= 3, "reading again after the stuck read was given up");
+    assert.deepEqual(shown(p), ["Line 1", "Line 2"]);
   });
 
   it("draws the words as text, never markup, and skips lines of the wrong shape", async () => {

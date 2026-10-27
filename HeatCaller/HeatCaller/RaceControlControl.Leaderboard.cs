@@ -813,7 +813,7 @@ public sealed partial class RaceControlControl
         if (HighlightVideo.LatestFor(transponder) is not { } path)
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [video] No highlight video for {name} yet. They are made a minute "
-                + "or so after the race, for the drivers chosen on Sounds > Recording (every driver, unless that was changed).");
+                + "or so after the race, for the drivers chosen on Club Website > Recording (every driver, unless that was changed).");
             return;
         }
 

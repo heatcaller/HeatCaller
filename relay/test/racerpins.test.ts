@@ -236,7 +236,9 @@ describe("racer PINs", () => {
 
   it("checks the racer in with the id it was given", async () => {
     const opened = await list(SAM_PIN);
-    const tap = await ask("POST", "/api/v1/c/acme-rc/checkin/tap", { id: opened.body.driver.id, wanted: true });
+    // With the pass their PIN was answered with (26 Oct 2026): a driver
+    // with a personal PIN is never checked in by the badge id alone.
+    const tap = await ask("POST", "/api/v1/c/acme-rc/checkin/tap", { id: opened.body.driver.id, wanted: true, pass: opened.body.pass });
 
     assert.equal(tap.status, 200);
     assert.equal(tap.body.checkedIn, true);

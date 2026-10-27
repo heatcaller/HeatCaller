@@ -15,7 +15,9 @@ namespace HeatCaller;
 ///              being tethered to the laptop.
 ///   /checkin - sign-on from a phone. Drivers find their own name and tap
 ///              it, which is the half of check-in that does not need
-///              somebody standing at the laptop doing it for them.
+///              somebody standing at the laptop doing it for them. Since
+///              26 Oct 2026 each tap needs that driver's own personal
+///              PIN (see _racerPinChecks).
 ///   /manage  - the race-day manager: set up the day, entries and
 ///              check-in, the programme, race control and results, from a
 ///              phone on the track's own Wi-Fi. One JSON endpoint
@@ -354,7 +356,9 @@ public sealed partial class WebServerService
     /// The PIN the check-in page needs, if any. Separate from the remote's
     /// on purpose: this one is written on the wall for drivers, and a
     /// driver who knew the remote PIN could throw a red flag from the pits.
-    /// Empty means the check-in page is open to anybody on the Wi-Fi.
+    /// Empty means anybody on the Wi-Fi can open the list. It no longer
+    /// checks anybody in on its own: each tap also needs that driver's own
+    /// PIN (26 Oct 2026 - see _racerPinChecks).
     /// </summary>
     public string CheckInPin
     {
@@ -363,6 +367,173 @@ public sealed partial class WebServerService
     }
 
     private string _checkInPin = string.Empty;
+
+    // WHY (26 Oct 2026, asked for by Asher: "is there a reason the phone
+    // sign in page you can sign in/out anyone you want without a pin?"):
+    // there was a reason, and it no longer holds. /checkin was built as an
+    // open sign-on sheet - "drivers find their own name and tap it" - with
+    // the check-in PIN above as a PIN for the WALL, shared by every driver
+    // and blank (open to anybody on the Wi-Fi) unless the club set one. So
+    // anybody on the track's Wi-Fi could check any driver in or out. Now
+    // every check-in or check-out from that page needs THAT driver's own
+    // personal PIN - the six digits RacerPins gives each racer and the club
+    // emails them - checked here, on the laptop, before anything changes.
+    // The wall PIN still decides who can open the list at all; the desk
+    // itself and the race-day manager (/manage, behind the manager PIN) are
+    // staff's way to check anybody in, and are unchanged.
+
+    /// <summary>
+    /// Each racer's personal PIN as a keyed hash, by transponder - never the
+    /// PIN itself. Published by the host from the UI thread (see
+    /// PublishRacerPins) and swapped whole, like the roster, so a request
+    /// thread only ever reads one immutable reference.
+    /// </summary>
+    private volatile IReadOnlyDictionary<string, byte[]> _racerPinChecks =
+        new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The key the racer PIN checks are made with: made fresh every run and never saved, so a check means nothing outside this process.</summary>
+    private readonly byte[] _racerPinKey = RandomNumberGenerator.GetBytes(32);
+
+    /// <summary>
+    /// Hands the check-in page each racer's personal PIN, by transponder.
+    /// Called from the UI thread with settings.RacerPins (empty when racer
+    /// PINs are off). Kept only as a keyed hash: the server never holds a
+    /// copy of a PIN, and nothing it writes or logs can carry one.
+    /// </summary>
+    public void PublishRacerPins(IReadOnlyDictionary<string, string>? pinsByTransponder)
+    {
+        var checks = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (transponder, pin) in pinsByTransponder ?? new Dictionary<string, string>())
+        {
+            var key = (transponder ?? string.Empty).Trim();
+            var value = (pin ?? string.Empty).Trim();
+
+            if (key.Length > 0 && value.Length > 0)
+            {
+                checks[key] = RacerPinCheck(_racerPinKey, value);
+            }
+        }
+
+        _racerPinChecks = checks;
+    }
+
+    private static byte[] RacerPinCheck(byte[] key, string pin) =>
+        HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(pin.Trim()));
+
+    /// <summary>What became of a racer PIN offered with a check-in tap. See CheckRacerPin.</summary>
+    internal enum RacerPinVerdict
+    {
+        /// <summary>The driver's own PIN: the tap may go on.</summary>
+        Accepted,
+        /// <summary>
+        /// Not their PIN - or no PIN sent, or a driver with no personal PIN
+        /// at all, which are answered exactly the same (see CheckRacerPin).
+        /// Counted against this device and against every device together.
+        /// </summary>
+        Wrong,
+        /// <summary>This device has had its ten wrong PINs in five minutes.</summary>
+        TooManyFromDevice,
+        /// <summary>Too many wrong racer PINs from everybody at once - nobody's is taken for five minutes.</summary>
+        LockedOut,
+    }
+
+    /// <summary>
+    /// Whether <paramref name="offered"/> is the personal PIN of the driver
+    /// with this transponder - the server-side check every phone tap on
+    /// /checkin has to pass. Ten wrong from one device in five minutes and
+    /// that device waits; a hundred from everybody and racer PINs are refused
+    /// for five minutes (see _racerPinLockout). Compared in constant time, as
+    /// keyed hashes. Internal for the tests.
+    /// </summary>
+    internal RacerPinVerdict CheckRacerPin(string device, string transponder, string? offered)
+    {
+        var pin = (offered ?? string.Empty).Trim();
+
+        // WHY (26 Oct 2026, review): "no PIN sent" and "this driver has no
+        // personal PIN" used to be answered first, uncounted and each in
+        // words of its own - so a phone past the wall PIN (blank by default)
+        // could learn for free which drivers have a PIN. Now every request
+        // is counted first, and all three refusals are one: Wrong. The page
+        // asks for a PIN on it either way.
+        //
+        // Counted BEFORE the comparison and handed back only when right, as
+        // PinAccepted does, so a burst of guesses is held exactly as a
+        // trickle is.
+        var who = "racer|" + device;
+
+        if (!_pinFailures.TryReserve(who, out var ticket))
+        {
+            return RacerPinVerdict.TooManyFromDevice;
+        }
+
+        if (!_racerPinLockout.TryReserve(device, out var lockoutTicket))
+        {
+            _pinFailures.Release(who, ticket);
+            return RacerPinVerdict.LockedOut;
+        }
+
+        // A driver with no PIN is compared against a check nothing matches,
+        // so they take the same path - and much the same time - as a wrong
+        // PIN for a driver who has one.
+        var known = _racerPinChecks.TryGetValue((transponder ?? string.Empty).Trim(), out var expected);
+        var offeredCheck = RacerPinCheck(_racerPinKey, pin);
+
+        if (known && expected is not null && pin.Length > 0 && CryptographicOperations.FixedTimeEquals(offeredCheck, expected))
+        {
+            _pinFailures.Release(who, ticket);
+
+            // Forgiven, not trusted: knowing your OWN PIN says nothing about
+            // anybody else's, so it must not let this phone guess past the
+            // lockout the way a known wall or remote PIN does.
+            _racerPinLockout.Forgive(lockoutTicket);
+            return RacerPinVerdict.Accepted;
+        }
+
+        if (_racerPinLockout.ConfirmWrong())
+        {
+            try
+            {
+                StatusMessage?.Invoke($"[web] WARNING: {_racerPinLockout.MaxWrong} wrong personal check-in PINs in five minutes - somebody may be trying "
+                    + "to guess one. Phones can't check anybody in or out for five minutes; the desk still can.");
+            }
+            catch
+            {
+                // A request thread; the log must not be what fails it.
+            }
+        }
+
+        return RacerPinVerdict.Wrong;
+    }
+
+    /// <summary>
+    /// The racer PIN check for one tap, answered on the request when it is
+    /// refused. The PIN comes in its own X-Racer-Pin header - never the
+    /// address, where it would sit in browser history - and is never kept.
+    /// </summary>
+    private bool RacerPinAccepted(HttpListenerContext context, CheckInEntry driver)
+    {
+        var verdict = CheckRacerPin(ClientKey(context), driver.Transponder, context.Request.Headers["X-Racer-Pin"]);
+
+        if (verdict == RacerPinVerdict.Accepted)
+        {
+            return true;
+        }
+
+        var (status, error) = verdict switch
+        {
+            RacerPinVerdict.TooManyFromDevice => (429, "Too many wrong PINs. Wait a few minutes."),
+            RacerPinVerdict.LockedOut => (429, "Too many wrong check-in PINs on this Wi-Fi. Phones can't check in for five minutes - check in at the desk."),
+            // One answer for a wrong PIN, no PIN, and a driver with no PIN
+            // at all - see CheckRacerPin. The hint covers the last of them
+            // without saying which it was.
+            _ => (403, "That isn't this driver's check-in PIN. No personal PIN? Check in at the desk."),
+        };
+
+        context.Response.StatusCode = status;
+        WriteJson(context, JsonSerializer.Serialize(new { ok = false, racerPin = true, error }));
+        return false;
+    }
 
     /// <summary>
     /// Whether a PIN is good enough to guard the remote: four or more
@@ -476,6 +647,7 @@ public sealed partial class WebServerService
         _remotePinLockout.Clear();
         _checkInPinLockout.Clear();
         _managerPinLockout.Clear();
+        _racerPinLockout.Clear();
         _checkInWrites.Clear();
         _checkInWritesAll.Clear();
         _commands.Clear();
@@ -1314,6 +1486,19 @@ public sealed partial class WebServerService
         }
 
         /// <summary>
+        /// The attempt was right, so it is not counted as a wrong guess - but
+        /// the device is NOT trusted for it (26 Oct 2026). For racer PINs,
+        /// where knowing one PIN proves nothing about the others.
+        /// </summary>
+        public void Forgive(DateTime ticket)
+        {
+            lock (_gate)
+            {
+                _attempts.Remove(ticket);
+            }
+        }
+
+        /// <summary>
         /// The attempt was wrong, and stays counted. True when it is the one
         /// that locks the PIN, so the caller can say so once in the console.
         /// </summary>
@@ -1383,6 +1568,18 @@ public sealed partial class WebServerService
     /// same suspicion as one that can throw a flag.
     /// </summary>
     private readonly PinLockout _managerPinLockout = new(50);
+
+    /// <summary>
+    /// The whole-PIN limit for racers' personal PINs on /checkin (26 Oct
+    /// 2026): a hundred wrong in five minutes, from everybody together, and
+    /// no phone may check anybody in or out for five minutes. Between the
+    /// remote's fifty and the wall PIN's two hundred: a racer PIN is six
+    /// digits and only ever typed by its own driver, so honest mistakes come
+    /// one at a time, not in crowds. Unlike the other three it never trusts
+    /// a device (see CheckRacerPin) - a driver who knows their own PIN is
+    /// no less a stranger to everybody else's.
+    /// </summary>
+    private readonly PinLockout _racerPinLockout = new(100);
 
     /// <summary>
     /// Compares a PIN without saying anything about it through timing.
@@ -1994,6 +2191,16 @@ public sealed partial class WebServerService
         {
             context.Response.StatusCode = 404;
             WriteJson(context, "{\"ok\":false,\"error\":\"Not a driver on this list\"}");
+            return;
+        }
+
+        // That driver's own PIN, before anything is changed or even said
+        // about them (26 Oct 2026 - see _racerPinChecks): the wall PIN
+        // above only opens the list, and a QR badge carries the transponder,
+        // which is no secret. Before "already so", too, or that answer would
+        // tell a stranger whether somebody is here.
+        if (!RacerPinAccepted(context, known))
+        {
             return;
         }
 
@@ -4839,17 +5046,31 @@ public sealed partial class WebServerService
             if (pinBox.value !== sentPin) { setTimeout(load, 0); }
           }
         }
+        // WHY (26 Oct 2026, asked for by Asher: "is there a reason the phone
+        // sign in page you can sign in/out anyone you want without a pin?"):
+        // every check-in or check-out from this page needs THAT driver's own
+        // personal PIN, and the laptop refuses the tap without it. Asked for
+        // on every tap and never kept - not in storage, not in the address;
+        // it goes once, in its own header, to the laptop and nowhere else.
+        function askRacerPin(name, want){
+          var p = '';
+          try { p = window.prompt((name ? name + "'s" : 'Your') + ' own check-in PIN, to check ' + (name ? 'them' : 'you') + ' ' + want + ':') || ''; } catch(e) { p = ''; }
+          p = String(p).trim();
+          return p === '' ? null : p;
+        }
         async function toggle(d){
           // Out asks first. A tap on the wrong row while scrolling used to
           // sign somebody off without a word, and they found out when
           // their heat went without them.
           if (d.in && !confirm('Check ' + d.n + ' out?')) { return; }
           var want = d.in ? 'out' : 'in';
+          var racerPin = askRacerPin(d.n, want);
+          if (racerPin === null) { say('Not changed - ' + d.n + "'s own check-in PIN is needed.", false); return; }
           d.in = !d.in;
           render();
           try {
             var r = await fetch('/api/checkin?t=' + encodeURIComponent(d.t) + '&state=' + want,
-                              { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': pinBox.value } });
+                              { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': pinBox.value, 'X-Racer-Pin': racerPin } });
             var j = await r.json();
             if (!j.ok) { d.in = !d.in; render(); say(j.error || 'Failed', false); return; }
             say(d.n + (d.in ? ' checked in' : ' checked out'), true);
@@ -4857,9 +5078,11 @@ public sealed partial class WebServerService
           setTimeout(load, 500);
         }
         async function send(payload){
+          var racerPin = askRacerPin('', 'in');
+          if (racerPin === null) { say('Not changed - your own check-in PIN is needed.', false); return; }
           try {
             var r = await fetch('/api/checkin?t=' + encodeURIComponent(payload) + '&state=in',
-                              { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': pinBox.value } });
+                              { method: 'POST', headers: { 'X-HeatCaller': '1', 'X-Pin': pinBox.value, 'X-Racer-Pin': racerPin } });
             var j = await r.json();
             say(j.ok ? 'Checked in' : (j.error || 'Failed'), j.ok);
           } catch(e) { say('Connection lost', false); }

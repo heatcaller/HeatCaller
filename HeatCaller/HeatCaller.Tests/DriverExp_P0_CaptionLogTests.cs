@@ -42,18 +42,23 @@ public sealed class DriverExp_P0_CaptionLogTests
         Assert.Equal(new DateTime(2026, 10, 22, 19, 0, 0, DateTimeKind.Utc), line.AtUtc);
     }
 
+    // 26 Oct 2026: a long line is no longer cut to its first three hundred
+    // characters - it is captioned in pieces (CaptionLog's remarks, and
+    // Captions_ListenAlong_Oct26Tests).
     [Fact]
-    public void A_long_line_is_cut_at_a_word_to_three_hundred_characters()
+    public void A_long_line_is_split_at_words_into_pieces_that_keep_every_word()
     {
         var text = string.Join(" ", Enumerable.Repeat("wordy", 100));
-        var clean = CaptionLog.Clean(text);
+        var pieces = CaptionLog.Pieces(text);
 
-        Assert.True(clean.Length <= CaptionLog.MaxChars);
-        Assert.EndsWith("wordy...", clean);
+        Assert.True(pieces.Count > 1);
+        Assert.All(pieces, p => Assert.True(p.Length <= CaptionLog.PieceChars));
+        Assert.Equal(text, string.Join(" ", pieces));
 
-        // One endless word is cut where it must be.
-        var word = CaptionLog.Clean(new string('x', 400));
-        Assert.Equal(CaptionLog.MaxChars, word.Length);
+        // One endless word is cut where it must be, and nothing is lost.
+        var word = CaptionLog.Pieces(new string('x', 400));
+        Assert.Equal(CaptionLog.PieceChars, word[0].Length);
+        Assert.Equal(400, word.Sum(p => p.Length));
     }
 
     [Fact]

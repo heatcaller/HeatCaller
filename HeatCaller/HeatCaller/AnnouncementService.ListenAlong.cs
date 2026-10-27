@@ -139,16 +139,88 @@ public sealed partial class AnnouncementService
                 continue;
             }
 
-            if (Regex.IsMatch(
-                    words,
-                    @"(?<![\p{L}\p{N}])" + Regex.Escape(id) + @"(?![\p{L}\p{N}])",
-                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            var numeric = id.All(char.IsAsciiDigit);
+
+            foreach (Match match in Regex.Matches(
+                         words,
+                         @"(?<![\p{L}\p{N}])" + Regex.Escape(id) + @"(?![\p{L}\p{N}])",
+                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             {
+                // WHY (26 Oct 2026, asked for by Asher: "can't hear the heat
+                // reminders that fire between races by listening through the
+                // relay"): an id that is only digits was found in ANY number
+                // in the line. A decoder whose ids are a few digits (an I-Lap
+                // id loses its leading zeros: "0004567" is "4567") turned
+                // one unnamed car said by its number into every later line
+                // with that number in it kept off listen-along, the public
+                // captions and the podium videos for the rest of the run -
+                // "5 minutes to Stock Q1 Heat 2.", "Heat 3 to the drivers
+                // stand", "Lap 5". Such a line has the number where no name
+                // ever goes - straight after "heat", "round" and the like,
+                // before "minutes" or "point", or inside a time - so those
+                // are passed over and every other place still counts. Not
+                // after "lap": "about to lap {rival}" puts a name there.
+                if (numeric && NumberIsACount(words, match.Index, match.Length))
+                {
+                    continue;
+                }
+
                 return true;
             }
         }
 
         return false;
+    }
+
+    /// <summary>The words a number follows when it labels a race or a place in one, never a car: "Heat 3", "Round 2".</summary>
+    private static readonly HashSet<string> NumberLabels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "heat", "race", "round", "main", "final", "qualifier", "qualifying", "group", "session", "position",
+    };
+
+    /// <summary>The words a number goes before when it is an amount, never a car: "5 minutes", "6 point 9".</summary>
+    private static readonly HashSet<string> NumberUnits = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "point", "minute", "minutes", "seconds",
+    };
+
+    /// <summary>
+    /// Whether the number at <paramref name="index"/> in the words is a
+    /// count or a label rather than a car's name - see the WHY in
+    /// <see cref="MentionsAnyId"/>. Its own method so the rule can be tested.
+    /// </summary>
+    internal static bool NumberIsACount(string words, int index, int length)
+    {
+        var end = index + length;
+
+        // Part of a time or a decimal: "7:30", "6.94".
+        if ((index >= 2 && (words[index - 1] is '.' or ':') && char.IsDigit(words[index - 2]))
+            || (end + 1 < words.Length && (words[end] is '.' or ':') && char.IsDigit(words[end + 1])))
+        {
+            return true;
+        }
+
+        var before = words[..index].TrimEnd();
+        var wordBefore = before[(before.LastIndexOf(' ') + 1)..];
+
+        if (wordBefore.Length > 0 && NumberLabels.Contains(wordBefore))
+        {
+            return true;
+        }
+
+        var after = words[end..].TrimStart().Split(' ', 4, StringSplitOptions.RemoveEmptyEntries);
+        var next = after.Length > 0 ? after[0].TrimEnd('.', ',', '!', '?', ';', ':') : string.Empty;
+
+        if (NumberUnits.Contains(next))
+        {
+            return true;
+        }
+
+        // "3 laps to go", "1 lap to go".
+        return next is "lap" or "laps" or "Lap" or "Laps"
+               && after.Length >= 3
+               && string.Equals(after[1], "to", StringComparison.OrdinalIgnoreCase)
+               && after[2].TrimEnd('.', ',', '!', '?', ';', ':').Equals("go", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

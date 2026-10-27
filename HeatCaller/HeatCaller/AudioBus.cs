@@ -335,11 +335,11 @@ internal static class AudioBus
         }
     }
 
-    /// <summary>The output's buffering: about a third of a second over three buffers (see OpenOutput). Named for the VOICE meter, which needs to know when what it reads is heard (AudioLevels).</summary>
-    private const int OutputLatencyMs = 300;
+    /// <summary>The output's buffering: about a third of a second over three buffers (see OpenOutput). Named for the VOICE meter, which needs to know when what it reads is heard (AudioLevels) - and internal since 26 Oct 2026 for the race recorder, which lines the videos' music up with the call by the same reckoning (RecapBed).</summary>
+    internal const int OutputLatencyMs = 300;
 
     /// <inheritdoc cref="OutputLatencyMs"/>
-    private const int OutputBuffers = 3;
+    internal const int OutputBuffers = 3;
 
     /// <summary>The slow part: opens the device and starts it playing the mixer. Touches no shared state but <see cref="_pending"/>.</summary>
     private static WaveOutEvent OpenOutput(MixingSampleProvider mixer)

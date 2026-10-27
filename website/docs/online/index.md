@@ -24,6 +24,8 @@ Your club's address is the relay address followed by `/c/` and your club id, for
 | Schedule | `/c/<club>/schedule` | Today's running order, each line marked Done, On track or Next. A class picker appears when there's more than one class. | Every 15 seconds |
 | Check in | `/c/<club>/checkin` | Online check-in. The tab only appears while online check-in is switched on. See [Online check-in](check-in.md). | Every 10 seconds |
 | Results | `/c/<club>/results` | Finished sessions, newest first, grouped by day. Tap a session to see every finisher's laps, best lap and time, with their best sectors under the best lap when the session had a split loop. A small chip beside a time shows time added or warnings (see [Penalties on the results](#penalties-on-the-results)). | Every 30 seconds |
+| My night | `/c/<club>/mynight` | A box for a driver's personal PIN, which opens their own night page. The tab only appears while online check-in is switched on. See [Opening your night with your PIN](#opening-your-night-with-your-pin). | When opened |
+| Videos | `/c/<club>/videos` | **Podium videos**: every race of the last week that has podium videos, newest first, with 1st, 2nd and 3rd and a **Download** button for each. See [Podium videos](#podium-videos). | When opened |
 | Standings | `/c/<club>/standings` | Championship points for each season, with a season picker when there's more than one. | Every 30 seconds |
 | Badges | `/c/<club>/badges` | "Just earned", "Most collected" and "Every badge". While you're [following a driver](#following-a-driver), a "Next for *name*" list at the top shows up to two badges they're close to, such as "2 more podiums for Podium Regular". | Every minute |
 | Tracks | `/c/<club>/tracks` | Every track layout with its picture, lap record, sector records, length, typical lap and the ten best laps on it. Today's layout comes first, marked "Racing here today". | Every 5 minutes |
@@ -44,7 +46,8 @@ Pages only refresh while someone is looking at them. A phone left in a pocket wi
 
 The **Live** page has a **Captions** button, under "The announcer's words as text. No sound needed." It's for someone who can't hear the PA, or is somewhere they can't play sound. Nothing is fetched until it's pressed.
 
-- Tap **Captions** and the announcer's last few lines appear as text, newest at the bottom, up to six at a time. New lines are added every couple of seconds as the announcer speaks. Tap it again to close them.
+- Tap **Captions** and the announcer's last few lines appear as text, newest at the bottom, up to six at a time. New lines are added every couple of seconds as the announcer speaks. A long line, such as the race recap, arrives a sentence or two at a time as the announcer reaches each part. Tap it again to close them.
+- If the page can't reach the relay for a moment (a phone changing networks, say), it tries again by itself within about ten seconds; there's no need to reload.
 - It works on its own, with or without the **Listen** button. Listening plays the announcer's voice; captions need no sound at all.
 - A screen reader reads each new line once, as it arrives.
 - The button is on every club's live page, because the page can't tell whether captions are switched on. When there's nothing to show, it says "No captions just now. They show here as the announcer speaks, when the club has them switched on."
@@ -63,19 +66,48 @@ The chip has numbers only, never the reason. Race control's reasons ("Blocking",
 
 After a race, the top three's [highlight videos](../announcer/sounds-and-music.md#highlight-videos) can go on a page of their own, `/c/<club>/videos/<race>`, headed with the race's name ("A-Main podium") and "The announcer's call of the top three, to watch and keep. Kept for a week." Each video has its place and the driver's name, a player, and **Download video**, which saves it to the phone as a file named for the race and the driver.
 
-- Nobody types that address: it's the QR code the Big Screen shows after the race (see [The podium's videos](../screens/big-screen.md#the-podiums-videos)). It isn't in the row of tabs, and the address can't be guessed.
+- Nobody types that address: it's the QR code the Big Screen shows after the race (see [The podium's videos](../screens/big-screen.md#the-podiums-videos)), and every race's page is listed on the **Videos** tab (below). The address itself can't be guessed.
 - Only 1st, 2nd and 3rd are ever put there, and only the ones a video was made for. The relay refuses anything else, whatever sends it.
+- A video has the music and crowd that were playing under the call, as the room heard them. If your between-race music is commercial tracks that aren't licensed for posting online, untick **Put the music and crowd under the highlight videos** on **Club Website → Recording** and the videos have the announcer only.
 - A driver on the podium also finds their video on their own night page (the link with the code from their check-in badge), under **Your podium videos**, with the same **Download video**.
 - If the page is opened before the videos are up, or after the week, it says "These videos have gone - they are kept for a week - or they are still on their way. Try again in a minute."
 
-It's switched on with **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** on **Sounds → Recording**, and only works while the club's page is switched on (see [Setting up the Club Website page](setup.md)).
+It's switched on with **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** on **Club Website → Recording**, and only works while the club's page is switched on (see [Setting up the Club Website page](setup.md)).
+
+#### The Videos tab
+
+Since 26 Oct 2026 the club's pages have a **Videos** tab (and a **Podium videos** tile, "Watch and download the top three", on the home page), so a driver who missed the QR code, or a parent at home, can still find the top three's videos. It's at `/c/<club>/videos`, headed "Podium videos" with "The announcer's call of every race's top three, to watch and download. Kept for a week."
+
+- Each race of the last week that has podium videos is listed, newest first, with its name, its day, **Watch the podium** (which opens that race's page with the players) and, for 1st, 2nd and 3rd, the driver's name and **Download 1st** (**Download 2nd**, **Download 3rd**), which saves the video to the phone.
+- It only lists videos the race pages already show, by the same names. A driver who asked for **Leave me out of podium videos online** never has a video sent, and if they ask later their videos are taken down and drop off this list too. A video sent for a driver HeatCaller couldn't give a QR check-in code (no driver profile, or online check-in never set up) is never listed here, because it couldn't be taken down that way; it's only on its race's page, from the Big Screen's QR code. A driver shown by initials only is listed by their initials, and a video whose sound names a driver shown by initials only never goes up (see [Online privacy](../race-day/drivers-and-classes.md#online-privacy)).
+- With nothing from the last week it says "No podium videos this week. After a race the top three's videos appear here - they are kept for a week."
+- Search engines are asked to leave it out, like the race pages.
+
+The **Videos** tab needs the relay redeployed (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)). Until it is, the club's pages have no **Videos** tab, and the race pages from the Big Screen's QR code work as before.
 
 ### A driver's own night
 
-Each driver has a page of their own on the relay, headed "Your night". It opens from a link that carries the code from their check-in badge: **See your racing from last time** on their own check-in card, or the link in their [night email](setup.md#drivers-nights-by-email). Nobody without that code can find or open it. It's switched on with **Give each driver their own night at a private address** on the Club Website page, which is off by default and needs online check-in set up (see [What gets published](setup.md#what-gets-published)).
+Each driver has a page of their own on the relay, headed "Your night". It opens from a link that carries the code from their check-in badge: **See your racing from last time** on their own check-in card, or the link in their [night email](setup.md#drivers-nights-by-email). A driver who has a personal PIN can also open it from the club's **My night** tab (see [Opening your night with your PIN](#opening-your-night-with-your-pin)). Nobody without that code or that PIN can find or open it. It's switched on with **Give each driver their own night at a private address** on the Club Website page, which is off by default and needs online check-in set up (see [What gets published](setup.md#what-gets-published)).
 
 !!! warning "The night link is private - don't share it"
-    The link is the driver's own, like a door key. Anyone holding it can see when and where that driver races next, their marshal duty and their transponder, check them in or out, and send requests to the desk in their name. Don't post it in a group chat, a social media post or a screenshot. To show someone how the night went, use **Make a picture to share** at the bottom of the page instead: the picture has no code in it. If a link has got out, **Reissue All QR Check-ins** on the Club Website page changes every driver's code (see [Reissue all QR check-ins](check-in.md#reissue-all-qr-check-ins)).
+    The link is the driver's own, like a door key. Anyone holding it can see when and where that driver races next, their marshal duty and their transponder, and send requests to the desk in their name. For a driver without a personal PIN it also checks them in or out; a driver with one is asked for it first (see [Checking in or out needs the driver's own PIN](check-in.md#checking-in-or-out-needs-the-drivers-own-pin)). Don't post it in a group chat, a social media post or a screenshot. To show someone how the night went, use **Make a picture to share** at the bottom of the page instead: the picture has no code in it. If a link has got out, **Reissue All QR Check-ins** on the Club Website page changes every driver's code (see [Reissue all QR check-ins](check-in.md#reissue-all-qr-check-ins)).
+
+#### Opening your night with your PIN
+
+Since 26 Oct 2026 the club's pages have a **My night** tab, and a **My night** tile ("Your own races, with your PIN") on the home page, while online check-in is switched on. It's for a driver who doesn't have their badge or the club's email to hand.
+
+1. The driver opens **My night**. The page says "Type the personal check-in PIN the club emailed you, and your own night opens: your races, your report card and, once you are racing, your live card."
+2. They type their six-digit personal PIN into **Your personal PIN** and tap **Open my night**.
+3. Their own night page opens - the same page their badge link opens. On a race night that's tonight: the live card, and their races as each one is filed (before their first race it says "Nothing is filed for you yet tonight."). Between race nights it's their most recent night. **Your details** on that page is already signed in for as long as the tab is open.
+
+- There's no list of names to pick from: each racer's PIN is their own, so the PIN alone says who they are. A wrong PIN always gets the same answer ("That PIN is not right."), so the page never shows who is on the club's books.
+- The PIN is checked exactly as on the check-in page, with the same [lockouts](check-in.md#lockouts): ten wrong from one connection, or fifty across the club, close PIN sign-in for a while. It's sent once, never put in the page's address, and never kept on the phone; only the sign-in it earns is kept, and only until the tab is closed.
+- The desk's staff PIN doesn't open anyone's night: "That is the club's desk PIN, not your own. Use the personal PIN the club sent you."
+- It only works while online check-in is open, because that's where the racers' PINs are checked. Closed, it says "Signing in with your PIN only works while the club has online check-in open. Use the link on your check-in badge or in the club's email, or ask at the desk."
+- A driver with no personal PIN is told "No personal PIN? Open your night with the link on your check-in badge or in the club's email - or ask at the timing desk."
+- If the club doesn't give drivers their own nights, the night page says so in its usual words.
+
+**My night** needs the relay redeployed (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)).
 
 From top to bottom, the page shows:
 
@@ -174,7 +206,7 @@ After the race cards, as much of this as there's something to say about:
 - **Your race calls**: any of the driver's clips that didn't go with a race card.
 - **Your podium videos**: see [Podium videos](#podium-videos).
 
-The driver's clips go online only when **Put each driver's clip on their own night on the club's page** is ticked on **Sounds → Recording** (see [Highlight videos](../announcer/sounds-and-music.md#highlight-videos)). It's off by default. A clip is only ever on that driver's own night, never on a public page. Clips are kept for a week, and the relay keeps a driver's eight most recent.
+The driver's clips go online only when **Put each driver's clip on their own night on the club's page** is ticked on **Club Website → Recording** (see [Highlight videos](../announcer/sounds-and-music.md#highlight-videos)). It's off by default. A clip is only ever on that driver's own night, never on a public page. Clips are kept for a week, and the relay keeps a driver's eight most recent.
 
 #### The report card
 
@@ -235,7 +267,7 @@ These are **never** published:
 | PINs | The staff PIN and racers' personal PINs are only ever sent in scrambled (hashed) form, for the relay to check a typed PIN against. |
 | Ghost cars | They're pace references, not entrants. |
 
-A car nobody has named yet raced under its transponder number. Online, that name is replaced with "Unnamed driver" in results, standings and check-in, and left out of badges, tracks and line-ups.
+A car nobody has named yet raced under its transponder number. Online, that name is replaced with "Unnamed driver" in results, standings and check-in, and left out of badges, tracks and line-ups. A line the announcer says with that number as the car's name is left out of the captions and isn't sent to people listening along at home. The same number used as a count stays in, so a short transponder number such as `3` doesn't take "Heat 3 to the drivers stand", "5 minutes to Stock Q1 Heat 2" or "3 laps to go" off the captions.
 
 The rest is your choice, on the Club Website page:
 

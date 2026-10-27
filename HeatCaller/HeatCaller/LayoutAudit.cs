@@ -104,8 +104,10 @@ internal static class LayoutAudit
         // The server, the race-day manager and the addresses to open (WebServerControl).
         "Local Screens",
 
-        // The relay and the cards for everything published through it
-        // (RelaySettingsControl), with the Room & Web card (RoomAndWebCard).
+        // Both tabs: Website - the relay and the cards for everything
+        // published through it (RelaySettingsControl), with the Room & Web
+        // card (RoomAndWebCard) - and Recording (RecordingControl), moved
+        // here from Sounds on 26 Oct 2026.
         "Club Website",
 
         // All four tabs: Voice and Race Calls (VoiceSettingsControl, both
@@ -114,11 +116,11 @@ internal static class LayoutAudit
         // (CommentaryControl).
         "Voice",
 
-        // All eight tabs: Mixer (MixerControl), Soundscapes (ThemesControl),
+        // All seven tabs: Mixer (MixerControl), Soundscapes (ThemesControl),
         // Imaging (BroadcastImagingControl, with ShowTreatmentCard), Effects
         // (SoundEffectsControl), Ambience (AmbienceControl), Music
-        // (MusicControl), Lap Beeps (LapBeepControl) and Recording
-        // (RecordingControl).
+        // (MusicControl) and Lap Beeps (LapBeepControl). Recording went to
+        // Club Website on 26 Oct 2026.
         "Sounds",
 
         // Making, restoring and keeping backups, the password and getting help (BackupRestoreControl).

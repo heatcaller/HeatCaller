@@ -45,6 +45,18 @@ public partial class MainForm
             .ToList();
 
         _webServer.PublishRoster(roster);
+
+        // WHY (26 Oct 2026, asked for by Asher: "is there a reason the phone
+        // sign in page you can sign in/out anyone you want without a pin?"):
+        // the Wi-Fi check-in page now checks each tap against that driver's
+        // own personal PIN, so it is handed them with the roster - as keyed
+        // hashes, never kept as PINs (WebServerService.PublishRacerPins).
+        // None while racer PINs are off or still locked to another PC: the
+        // page then sends drivers to the desk rather than checking anybody
+        // in on a PIN they were never given.
+        _webServer.PublishRacerPins(
+            SecretRecovery.Pending || !_settings.RelayRacerPinsEnabled ? null : _settings.RacerPins);
+
         PublishRosterToRelay(roster);
         PublishCheckInToRelay(roster);
     }
@@ -257,7 +269,14 @@ public partial class MainForm
         // Cheap when nobody is held: a count check.
         EmailSignedUpPinsHeldForWarm();
 
-        if (SecretRecovery.Pending || !_settings.RelayCheckInEnabled || !_settings.RelayRacerPinsEnabled)
+        // Also while the Wi-Fi server runs (26 Oct 2026): its check-in page
+        // needs each driver's own PIN for every tap, so a club checking in
+        // only on the track's Wi-Fi gets PINs too. Making one is all this
+        // does - emailing them stays with online check-in (RunRacerPinsPass);
+        // the desk can read them out from Racer Check-in PINs.
+        if (SecretRecovery.Pending
+            || !(_settings.RelayCheckInEnabled || _webServer.IsRunning)
+            || !_settings.RelayRacerPinsEnabled)
         {
             return;
         }

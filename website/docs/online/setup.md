@@ -4,6 +4,8 @@ The **Club Website** page is where you point the laptop at your club's relay, ch
 
 You can also reach this page from **Local Screens**, which shows a one-line relay status and a **Club Website Settings** button.
 
+The page has two tabs. Everything below is on the first, **Website**. The second, **Recording**, holds the race recordings, the drivers' clips and their highlight videos - it moved here from **Sounds** on 26 October 2026; see [Race recordings](../announcer/sounds-and-music.md#race-recordings).
+
 <!-- screenshot: Club Website page, Relay card filled in with a test result reading "Connected as ..." -->
 
 ## Before you start
@@ -102,7 +104,7 @@ The roster and short names are decisions about children's names; see [Children a
 
 The drivers' nights, requests, night emails and captions need the relay redeployed since 22 Oct 2026. Update it before you tick them; see [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
 
-A driver's own race calls can go on their night page too, with a tick on another page: **Put each driver's clip on their own night on the club's page** on **Sounds → Recording**. See [Highlight videos](../announcer/sounds-and-music.md#highlight-videos).
+A driver's own race calls can go on their night page too, with a tick on this page's other tab: **Put each driver's clip on their own night on the club's page** on **Club Website → Recording**. See [Highlight videos](../announcer/sounds-and-music.md#highlight-videos).
 
 ### Drivers' nights by email
 

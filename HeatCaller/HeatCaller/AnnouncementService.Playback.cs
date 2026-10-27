@@ -249,6 +249,34 @@ public sealed partial class AnnouncementService
         return (pcm.ToArray(), format);
     }
 
+    /// <summary>
+    /// How long a line rendered ahead takes to say, from its decoded audio -
+    /// or null when it cannot be told (26 Oct 2026, review). For a long read
+    /// fed in piece by piece: while a made piece plays, the one behind it can
+    /// be waited for this long before it has to go as text. Decodes, so call
+    /// it off the UI thread.
+    /// </summary>
+    public static TimeSpan? LengthOf(PreparedSpeech? prepared)
+    {
+        if (prepared is null || prepared.Audio.Length == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            var (pcm, format) = DecodeAudio(prepared.Audio);
+
+            return format.AverageBytesPerSecond > 0
+                ? TimeSpan.FromSeconds((double)pcm.Length / format.AverageBytesPerSecond)
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>Wraps decoded PCM as a WAV file, for the saved-voice library.</summary>
     private static byte[] EncodeWav(byte[] pcm, WaveFormat format)
     {
@@ -370,6 +398,9 @@ public sealed partial class AnnouncementService
             _activeLine = stop;
         }
 
+        // Whether the line played to its end, for the captions below.
+        var heardToTheEnd = false;
+
         try
         {
             // WHY (23 Oct 2026, bug hunt 10): every caller checks for a flag,
@@ -401,6 +432,10 @@ public sealed partial class AnnouncementService
 
             // voice: on the VOICE level meter, not SFX (26 Oct 2026 - see AudioLevels).
             await AudioBus.PlayAsync(source, (float)Math.Clamp(volume, 0.0, AudioBus.MaxBoost), stop.Token, allowBoost: true, voice: true);
+
+            // Cancelling completes the bus's task exactly as a natural end
+            // does (see _activeLine), so a line cut off is told apart here.
+            heardToTheEnd = !stop.IsCancellationRequested;
         }
         finally
         {
@@ -410,6 +445,25 @@ public sealed partial class AnnouncementService
                 {
                     _activeLine = null;
                 }
+            }
+
+            // WHY (26 Oct 2026, asked for by Asher: "Big screen doesn't
+            // reliably show live captions"): a long line is captioned a
+            // piece at a time, timed by an estimate of how fast the voice
+            // speaks (CaptionLog). The end of the line is the one moment
+            // that is known rather than estimated: played to the end, what
+            // is left of its caption goes up now; cut off by a flag, the
+            // countdown or the mute, or dropped before it started, the rest
+            // is never shown, because the room never heard it. Lines are
+            // played one at a time (the playback lock), so what is waiting
+            // is always this line's. Nothing here can throw.
+            if (heardToTheEnd)
+            {
+                CaptionLog.Shared.SaidInFull();
+            }
+            else
+            {
+                CaptionLog.Shared.Unsaid();
             }
         }
 

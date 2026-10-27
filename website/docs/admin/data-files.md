@@ -20,7 +20,7 @@ HeatCaller also uses two folders in your **Documents** folder:
 |---|---|
 | `Documents\HeatCaller Backups` | Backups, unless you choose another folder on the **Backup & Restore** page. Includes a `Pre-Restore Safety Backups` subfolder. See [Backups](backups.md). |
 | `Documents\HeatCaller Results` | The shareable results card image HeatCaller saves automatically each time a race from the **Race Control** page is saved to **Race History**. |
-| `Documents\HeatCaller Race Audio` | An mp3 of each race, in a folder per night, with a clip for each driver in a `Highlights` subfolder, and each driver's highlight video (`.mp4`) beside their clip. Not part of backups. Only the last 6 nights are kept unless **Keep the last:** on **Sounds → Recording** says otherwise; older nights' folders, videos and all, are removed after a race. **Folder:** on the same tab can point it somewhere else. See [Race recordings](../announcer/sounds-and-music.md#race-recordings). |
+| `Documents\HeatCaller Race Audio` | An mp3 of each race, in a folder per night, with a clip for each driver in a `Highlights` subfolder, and each driver's highlight video (`.mp4`) beside their clip. While a race is on, its working `.recording.wav` sits in the night folder, with a `.bed.wav` beside it (the music and crowd for the videos) when it gets videos; both are removed once the mp3 and the videos are made. Not part of backups. Only the last 6 nights are kept unless **Keep the last:** on **Club Website → Recording** says otherwise; older nights' folders, videos and all, are removed after a race. **Folder:** on the same tab can point it somewhere else. See [Race recordings](../announcer/sounds-and-music.md#race-recordings). |
 
 And one outside both, for saved voice lines:
 
@@ -123,7 +123,7 @@ There is nothing underneath Kokoro: it is both the free voice a club can choose 
 |---|---|
 | `settings.json` | App settings: connection, race defaults, web server, online relay, email, backup schedule, leaderboard columns and more. All secrets in it are sealed. See [Secrets](#secrets). |
 | `big-screen.json` | The Big Screen's own switch, held apart from the rest of the settings because the key that sets it is on the screen itself: one setting, `OnAir`, for whether the **ON AIR** band shows while the announcer's show is on air (<kbd>O</kbd> on the Big Screen). Safe to delete, and safe to be missing: the band is on, as it is on a fresh install. A damaged one is written over rather than kept as an `.unreadable-` copy — there's one setting in it, so there's nothing of yours to lose. See [When the show is on air](../screens/big-screen.md#when-the-show-is-on-air). |
-| `race-audio.json` | Whether races are recorded as mp3s, the driver clips and highlight videos, the club handle, sharing the podium's videos, how many nights are kept, where the recordings go, and the limits that keep a recording off a full disk. Written by **Sounds → Recording**. Safe to delete: the defaults come back, and recording is on by default. See [Turning it off](../announcer/sounds-and-music.md#turning-it-off). |
+| `race-audio.json` | Whether races are recorded as mp3s, the driver clips and highlight videos, the club handle, whether the music and crowd go under the videos, sharing the podium's videos, how many nights are kept, where the recordings go, and the limits that keep a recording off a full disk. Written by **Club Website → Recording**. Safe to delete: the defaults come back, and recording is on by default. See [Turning it off](../announcer/sounds-and-music.md#turning-it-off). |
 | `crash.log` | Details of any unexpected errors. When it passes 5 MB it's renamed to `crash.old.log` and a new one is started. |
 | `crash.old.log` | The previous crash log. |
 | `heatcaller-migrated.txt` | Marks that saved paths and settings from before the rename to HeatCaller have been brought up to date. Safe to delete: HeatCaller checks again on the next start. |
@@ -208,7 +208,7 @@ Close HeatCaller first. Then you can delete:
 | `race-in-progress-discarded.json`, `race-in-progress-cleared.json` | Copies of race journals that are no longer needed. |
 | `*.tmp` | Left over from an interrupted save. |
 | `%LocalAppData%\HeatCaller\Logs` | Console logs and freeze dumps. Safe to delete; keep them if you're reporting a problem. |
-| `Documents\HeatCaller Race Audio` | Recordings and highlight videos of past races. Only the last few nights are kept (**Keep the last:** on **Sounds → Recording**, 6 by default); copy a night's folder elsewhere to keep it longer. |
+| `Documents\HeatCaller Race Audio` | Recordings and highlight videos of past races. Only the last few nights are kept (**Keep the last:** on **Club Website → Recording**, 6 by default); copy a night's folder elsewhere to keep it longer. |
 | `%LocalAppData%\HeatCaller\VoiceLibrary` | Saved voice lines. Safe to delete, but each line is then rendered, and paid for, again the next time it's spoken. **Forget All** on the **Saved voice lines** card of **Voice → Voice Settings** does the same without closing HeatCaller. |
 
 Don't delete or edit anything else by hand. In particular:

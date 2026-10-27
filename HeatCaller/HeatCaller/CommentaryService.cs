@@ -3577,6 +3577,96 @@ public sealed class CommentaryService
             temperature: Math.Max(Variety, 0.9), ct: ct, timeout: BetweenRacesTimeout));
     }
 
+    /// <summary>
+    /// The two lines either side of a hand-over between the show host and
+    /// another member of the cast (26 Oct 2026): the host's throw, and the
+    /// guest's hand back BY THE HOST'S NAME - written as a pair, in one
+    /// request, so the two sound like colleagues who can hear each other.
+    /// See <see cref="HandOff"/>, which checks what comes back and has the
+    /// line to say for any half that will not do.
+    ///
+    /// WHY (26 Oct 2026, asked for by Asher: "When the show host throws it to
+    /// other cast member it sounds robotic. reference the show host name when
+    /// sending it back. add in a line or two. make it AI and prerender."):
+    /// these were fixed cards. The facts carry what was just said and what
+    /// the guest covers, so the throw can pick up from the line before it and
+    /// the hand back can react to the guest's own segment.
+    ///
+    /// Null when there is no model or nothing came back; otherwise each half
+    /// already checked (null for one that will not do).
+    /// </summary>
+    /// <param name="log">Told why a half was turned down. Called on whatever thread the answer arrives on.</param>
+    internal async Task<HandOff.Written?> BuildHandOffAsync(
+        HandOff.Brief brief, Action<string>? log = null, CancellationToken ct = default)
+    {
+        if (Client is null)
+        {
+            return null;
+        }
+
+        // Cleaned here, like every other field a club typed - see Field.
+        // The check (HandOff.Check) compares against the same cleaned names.
+        var host = Field(brief.Host, MaxShowNameChars);
+        var hostFirst = FirstName(brief.Host);
+        var guest = Field(brief.Guest, MaxShowNameChars);
+        var hostRole = Field(brief.HostRole, MaxObservationChars);
+        var guestRole = Field(brief.GuestRole, MaxObservationChars);
+        var about = Field(brief.About, MaxObservationChars);
+        var mustSay = Field(brief.ThrowMustSay, MaxObservationChars);
+        var justSaid = Field(HandOff.Tail(brief.JustSaid, MaxObservationChars), MaxObservationChars);
+        var covers = Field(brief.GuestCovers, MaxObservationChars);
+        var next = Field(brief.Next, MaxObservationChars);
+
+        var facts =
+            FactsOpen + "\n" +
+            $"Host (throws to the guest, and is handed back to): {(host.Length > 0 ? host : "no name is given, so never make one up")}\n" +
+            (hostRole.Length > 0 ? $"Host's role: {hostRole}\n" : string.Empty) +
+            $"Guest: {(guest.Length > 0 ? guest : "no name is given, so never make one up")}\n" +
+            (guestRole.Length > 0 ? $"Guest's role: {guestRole}\n" : string.Empty) +
+            (about.Length > 0 ? $"What the guest does in between: {about}\n" : string.Empty) +
+            (justSaid.Length > 0 ? $"Just said on air, right before the throw: {justSaid}\n" : string.Empty) +
+            (covers.Length > 0 ? $"What the guest covers: {covers}\n" : string.Empty) +
+            (next.Length > 0 ? $"After the hand back: {next}\n" : string.Empty) +
+            FactsClose + "\n" +
+            "\nWrite the two lines either side of this hand-over in a live TV sports broadcast, the way two colleagues "
+            + "who can hear each other talk - warm and natural, not two people reading cards. Exactly two lines, each "
+            + "starting with who says it, like this:\n"
+            + $"{HandOff.ThrowTag} <the host's line>\n{HandOff.BackTag} <the guest's line>\n"
+            + $"{HandOff.ThrowTag} the host picks up from what was just said in a few words of their own, then hands over to the guest"
+            + (guest.Length > 0 ? $" by name, \"{guest}\"" : " without a name (none is given)")
+            + (mustSay.Length > 0 ? $", saying {mustSay}" : string.Empty)
+            + ". Don't give away what the guest is about to say. "
+            + $"{HandOff.BackTag} once the guest is done, they react to what they covered in a few words, then hand back to the host"
+            + (hostFirst.Length > 0 ? $" by first name, \"{hostFirst}\" - never the full name" : " without a name (none is given)")
+            + ". "
+            + $"Each line one or two short sentences, under {HandOff.MaxWords - 10} words. "
+            + "Every name in the facts is exact - use them as written or not at all. "
+            + "No quotes, no stage directions, no square-bracket tags, and nothing before the first line.";
+
+        // Not through RecordAndReturn: the reply is two labelled lines for
+        // two voices, and the Announcer page's "last line" would show (and
+        // could repeat over the PA) the THROW:/BACK: labels with them.
+        var reply = await Ask(Client,
+            BuildBroadcastSystemPrompt(0), facts,
+            maxTokens: Math.Max(160, MaxTokensForWordLimit()),
+            temperature: Math.Max(Variety, 0.9), ct: ct, timeout: BetweenRacesTimeout);
+
+        if (string.IsNullOrWhiteSpace(reply))
+        {
+            return null;
+        }
+
+        var notes = new List<string>();
+        var written = HandOff.Check(StripAudioTags(reply), brief, notes);
+
+        if (notes.Count > 0)
+        {
+            log?.Invoke($"Hand-off: the built-in line goes out for the half that would not do - {string.Join("; ", notes)}.");
+        }
+
+        return written;
+    }
+
     // ==================== The mechanic's interview ====================
 
     /// <summary>

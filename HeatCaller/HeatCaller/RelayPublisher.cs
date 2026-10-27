@@ -1906,6 +1906,11 @@ public sealed partial class RelayPublisher : IDisposable
                         SendNightsOpen(pass.Token);
                     }
 
+                    // The announcer's lines before anything else in the pass,
+                    // and again between the documents Drain sends - see
+                    // SendListenLinesWaiting for why.
+                    SendListenLinesWaiting(pass.Token);
+
                     Drain(pass.Token);
 
                     if (_settings.RelayCheckInEnabled && Environment.TickCount64 >= _nextPollTick)
@@ -2227,6 +2232,11 @@ public sealed partial class RelayPublisher : IDisposable
 
                     return;
             }
+
+            // A result can be a big upload on a club's Wi-Fi. What the
+            // announcer said meanwhile goes before the snapshots - see
+            // SendListenLinesWaiting.
+            SendListenLinesWaiting(token);
         }
 
         var taken = TakeSnapshots();
@@ -2292,6 +2302,10 @@ public sealed partial class RelayPublisher : IDisposable
 
                     return;
             }
+
+            // Between one snapshot and the next - the badges' artwork alone
+            // can be most of a megabyte. See SendListenLinesWaiting.
+            SendListenLinesWaiting(token);
         }
     }
 

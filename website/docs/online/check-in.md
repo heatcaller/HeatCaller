@@ -4,11 +4,25 @@ Online check-in lets drivers tell the timing desk they've arrived from their own
 
 There are three ways in, all on your club's check-in page:
 
-- **A QR check-in.** Each driver's printed QR check-in opens their own card with a **Check in** button. Any phone camera can scan it, iPhones included, with no app and no PIN.
+- **A QR check-in.** Each driver's printed QR check-in opens their own card with a **Check in** button. Any phone camera can scan it, iPhones included, with no app. A driver who has a personal PIN is asked for it when they tap **Check in** (see [Checking in or out needs the driver's own PIN](#checking-in-or-out-needs-the-drivers-own-pin)).
 - **A personal PIN.** Each racer can have their own six-digit PIN, emailed to them. It opens only their own card.
 - **The staff PIN.** A PIN of 6 to 8 digits that opens the full list, for a tablet or phone at the desk.
 
 Nobody is checked in until somebody taps. Opening a QR check-in link or typing a PIN on its own changes nothing.
+
+### Checking in or out needs the driver's own PIN
+
+Since 26 Oct 2026, a driver who has a personal PIN can only be checked in or out from a phone with that PIN. Before, anyone holding a driver's QR check-in (or the link to their night page) could check them in or out, and a QR check-in is easy to see on a lanyard or across the desk.
+
+- Tapping **Check in** (or **Checked in ✓** to check out) on a card opened from a QR check-in opens a small box on the page: "Type your own check-in PIN (the one the club emailed you) to check in or out." The PIN shows as dots, and the phone's number pad comes up. Type the six digits and tap **Continue** (or press Enter) and the tap goes through. A wrong PIN asks again, with the relay's reason, for example "That PIN is not right. Try again:". **Cancel** (or Escape) changes nothing. The PIN is never kept; the phone keeps only the sign-in it earns, until the tab is closed, so the next tap doesn't ask again.
+- A card opened by typing the personal PIN in the PIN box doesn't ask again: the PIN was already given.
+- The same goes for the **Check in** button on a driver's night page.
+- The relay checks this itself, so it can't be got round by changing the page. The PIN is checked against that driver's own PIN only, never anyone else's.
+- **Its own limit, apart from the lockouts.** Each driver's QR check-in allows five wrong PINs in ten minutes; after that it says "Too many wrong PINs for this driver. Wait ten minutes, or check in at the desk." These don't count toward the club's [lockouts](#lockouts), and a lockout someone else caused (the whole club's, or one on the venue's shared connection) doesn't stop a driver checking in with their own PIN.
+- **The staff PIN still checks anyone in or out**, from the full list (staff PIN), as before. Typed into a driver's card, the staff PIN is just a wrong PIN: use the full list at the desk.
+- A driver with no personal PIN (for example with **Give every racer their own PIN** turned off) is checked in with their QR check-in alone, as before.
+
+This needs the relay redeployed (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)). Until it is, the relay still takes a QR check-in alone.
 
 For the Wi-Fi-only check-in page served by the laptop itself, see [Local Screens](../screens/phone-and-web.md). For the desk side, see [Events and entries](../race-day/events-and-entries.md).
 
@@ -66,7 +80,7 @@ A QR check-in link never contains the transponder number. It carries a code the 
 !!! warning
     The secret key is made the first time you turn on online check-in, and only changes when you use **Reissue All QR Check-ins**. If you move to a new laptop, restore from a backup that has your backup password (see [Backups](../admin/backups.md)) so the key comes with it. A laptop with a new key would turn every printed QR check-in into a dead link.
 
-Anyone holding a QR check-in can check that driver in or out, so treat QR check-ins like a door key: hand them to their owners. If QR check-ins are lost, reissue them.
+A QR check-in opens that driver's card and their night page, and, for a driver without a personal PIN, checks them in or out. So treat QR check-ins like a door key: hand them to their owners. If QR check-ins are lost, reissue them.
 
 ### Reissue all QR check-ins
 
@@ -96,7 +110,7 @@ A phone that opens the check-in page without a QR check-in link sees one box:
 - **Your PIN**
 - "Racers: your personal PIN from your email. Staff: the desk PIN."
 - **Continue**
-- "Got a QR check-in? Scan it with your phone camera instead - no PIN needed."
+- "Got a QR check-in? Scan it with your phone camera instead. If the club gave you a personal PIN, it asks for it when you tap Check in."
 
 The same box takes both kinds of PIN. The relay tries the staff PIN first, then the racers' PINs.
 
@@ -119,7 +133,7 @@ The event name at the top comes from the current race day, set up on **Race Day 
 
 ## Personal PINs
 
-Personal PINs let racers check themselves in without a QR check-in, and let a club skip printing QR check-ins altogether. They're set in the **Personal PINs** card on the Club Website page.
+Personal PINs let racers check themselves in without a QR check-in, and let a club skip printing QR check-ins altogether. A personal PIN also opens the racer's own night page from the club's **My night** tab (see [Opening your night with your PIN](index.md#opening-your-night-with-your-pin)). They're set in the **Personal PINs** card on the Club Website page.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -127,7 +141,7 @@ Personal PINs let racers check themselves in without a QR check-in, and let a cl
 | **Change them:** | How often every racer gets a new PIN: **Never**, **Every race day**, **Weekly** or **Monthly**. | Weekly |
 | **Email automatically when PINs change** | Emails each racer their new PIN when a new set is made. See [Emailing racer PINs](email.md). | Off |
 
-PINs only matter while online check-in is on. New racers get a PIN within a few seconds of being added, and a deleted racer's PIN is forgotten.
+PINs are used by online check-in and, since 26 Oct 2026, by the laptop's Wi-Fi check-in page, which needs a driver's own PIN to check them in or out (see [Driver check-in](../screens/phone-and-web.md#driver-check-in)). While online check-in is on or the Wi-Fi server is running, new racers get a PIN within a few seconds of being added, and a deleted racer's PIN is forgotten. Automatic PIN emails only go out while online check-in is on.
 
 ### When PINs change
 
@@ -155,7 +169,7 @@ Photos are never on the public pages, but anyone with the staff PIN sees every d
 A racer who scans their QR check-in, or types their personal PIN, sees their own card:
 
 - their photo (or initials), name, and "#*number* · *class* · *event*"
-- a big **Check in** button, with "One tap and the timing desk knows you are here."
+- a big **Check in** button, with "One tap and the timing desk knows you are here." From a QR check-in, a driver with a personal PIN is asked for it on the first tap; see [Checking in or out needs the driver's own PIN](#checking-in-or-out-needs-the-drivers-own-pin).
 
 After tapping, the button turns to "Checked in ✓", with "Tap again if you need to check out.", and a message says "*name* is checked in."
 
@@ -189,9 +203,12 @@ Messages a racer might see:
 | Message | What it means |
 |---|---|
 | "That PIN is not right." | Wrong PIN. |
+| "Type your own check-in PIN (the one the club emailed you) to check in or out." | A tap from a QR check-in or a night page, for a driver who has a personal PIN, was sent without it. The page asks for the PIN; this shows if the question was cancelled on an older page. |
+| "Not changed - your own check-in PIN is needed to check in or out from a phone." | The PIN question was cancelled. Nothing changed. |
 | "That PIN has changed - check your latest email." | The PIN worked on this phone before, but a new set has been made since. |
 | "Too many wrong PINs from this connection. Try again in a few minutes." | Too many wrong PINs from this connection; see [Lockouts](#lockouts). The page keeps what it was showing and tries again by itself. |
-| "Too many wrong PINs have been tried for this club, so PIN sign-in is closed for about *time*. ..." | The club-wide lockout; see [Lockouts](#lockouts). Phones already signed in and QR check-ins keep working. |
+| "Too many wrong PINs have been tried for this club, so PIN sign-in is closed for about *time*. ..." | The club-wide lockout; see [Lockouts](#lockouts). Phones already signed in keep working, and so do QR check-ins, with the driver's own PIN when they have one. |
+| "Too many wrong PINs for this driver. Wait ten minutes, or check in at the desk." | Five wrong PINs were typed into this driver's card in ten minutes. |
 | "Too many attempts from this connection. Wait a few minutes - this page will try again by itself." | Shown when the relay gives no reason of its own. |
 | **Check-in is closed** | "Online check-in opens when the timing desk switches it on. Try again closer to the start, or check in at the desk." |
 | **QR check-in not recognised** | "That driver is not on today's check-in list." The driver's profile may have been deleted, or the QR check-in was printed before **Reissue All QR Check-ins** was used. |
@@ -221,12 +238,12 @@ Only the latest tap per driver waits in the queue; a newer tap for the same driv
 To stop anyone guessing PINs, the relay limits wrong PINs (staff and personal PINs count together):
 
 - **10 wrong PINs in 10 minutes from one connection.** Phones sharing the venue's Wi-Fi or a mobile network can share one connection address, so one person guessing can lock out others on the same network. The phone shows "Too many wrong PINs from this connection. Try again in a few minutes."
-- **50 wrong PINs in 10 minutes across the whole club.** This closes PIN sign-in for the club: for 10 minutes the first time, then 30 minutes, 2 hours, 6 hours, and 12 hours for each lockout after that. A day with no lockout starts it again from 10 minutes. The relay keeps count even if it's restarted or goes to sleep. Phones show "Too many wrong PINs have been tried for this club, so PIN sign-in is closed for about *time*. Phones already signed in and QR check-ins keep working."
+- **50 wrong PINs in 10 minutes across the whole club.** This closes PIN sign-in for the club: for 10 minutes the first time, then 30 minutes, 2 hours, 6 hours, and 12 hours for each lockout after that. A day with no lockout starts it again from 10 minutes. The relay keeps count even if it's restarted or goes to sleep. Phones show "Too many wrong PINs have been tried for this club, so PIN sign-in is closed for about *time*. Phones already signed in keep working, and so does checking in or out from a QR check-in with your own PIN."
 
 A club-wide lockout is limited in what it can stop:
 
 - Phones and tablets that were already signed in keep working, so the desk carries on.
-- QR check-in links keep working.
+- QR check-in links keep working. A driver with a personal PIN types it into the card's box; that's checked against their own PIN alone, with its own limit, so neither lockout stops it.
 - The **Club Website** page's state line says "PIN sign-in is locked after many wrong guesses until *time* - change the staff PIN to reopen it."
 - **Publishing a new staff PIN reopens sign-in at once.** Type a new staff PIN on the **Club Website** page. Re-entering the same PIN doesn't. A new staff PIN also signs out every device that was using the old one.
 
@@ -259,7 +276,7 @@ Open **Show PINs** and check their current PIN and whether it has been emailed. 
 A new staff PIN must be 6 to 8 digits, and it's only saved when you leave the box. Check the state line.
 
 **A phone says "Too many wrong PINs from this connection" or "Too many attempts from this connection".**
-Too many wrong PINs were typed from that connection. Wait about 10 minutes; the page tries again by itself. QR check-ins keep working in the meantime.
+Too many wrong PINs were typed from that connection. Wait about 10 minutes; the page tries again by itself. QR check-ins keep working in the meantime, with the driver's own PIN when they have one.
 
 **A phone says PIN sign-in is closed for the club.**
-Someone typed 50 wrong PINs in 10 minutes. Phones already signed in and QR check-ins keep working. To reopen sign-in straight away, change the staff PIN on the **Club Website** page. See [Lockouts](#lockouts).
+Someone typed 50 wrong PINs in 10 minutes. Phones already signed in keep working, and so do QR check-ins, with the driver's own PIN when they have one. To reopen sign-in straight away, change the staff PIN on the **Club Website** page. See [Lockouts](#lockouts).

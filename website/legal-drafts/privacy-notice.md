@@ -45,7 +45,7 @@ On the club's race laptop:
 | What | Where | How long |
 |---|---|---|
 | Podium highlight videos | Relay | One week, then deleted |
-| Highlight videos and race recordings | Laptop | The last N race nights the club chooses on **Sounds → Recording**; older nights' folders are removed |
+| Highlight videos and race recordings | Laptop | The last N race nights the club chooses on **Club Website → Recording**; older nights' folders are removed |
 | Online check-in taps | Relay | Ignored after 12 hours [CHECK: when they are actually deleted] |
 | Online sign-ups | Relay | Forgotten after 14 days, transponder number and all; the club's own record stays on the laptop |
 | Spoken announcer lines | Relay (HeatCaller voice) | A line with a name in it is kept for that club alone, a line without one is shared. [CHECK: how long; whether a club or driver can have them deleted] |

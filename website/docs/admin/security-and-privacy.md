@@ -105,7 +105,7 @@ The club-wide limit of 50 is there so guesses can't be spread across many addres
 Growing lockouts make guessing very slow: at the 12-hour cap, someone who keeps at it gets about a hundred guesses a day. The price is that anyone can close a club's PIN sign-in for a while by typing 50 wrong PINs. That's bounded:
 
 - A right PIN is answered with a sign-in pass that the page keeps. Phones and tablets already signed in keep working through a lockout someone else caused. The pass changes whenever the PIN does, so a new PIN signs out every device holding the old one. The relay compares a pass in constant time, like every other secret it checks.
-- QR check-ins keep working throughout.
+- QR check-ins keep working throughout. Since 26 Oct 2026 a driver with a personal PIN types it into their QR check-in card to check in or out. That PIN is sent with the tap and checked against that one driver's PIN only, with a limit of its own (five wrong in ten minutes per driver), and it's kept apart from both lockouts on purpose: it isn't a search of the club's PINs, only a guess at one by someone already holding that driver's QR code, so someone else's guessing can't stop drivers checking in.
 - The laptop is told, and the **Club Website** page shows "PIN sign-in is locked after many wrong guesses until *time* - change the staff PIN to reopen it."
 - **Publishing a new staff PIN reopens sign-in at once**, because every guess so far was at a PIN that no longer exists. Re-publishing the same PIN doesn't.
 
