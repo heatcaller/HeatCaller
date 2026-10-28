@@ -131,11 +131,7 @@ A card with nothing to say is left out. With no card at all, the board stays up.
 
 ### The podium's videos
 
-When the podium's [highlight videos](../announcer/sounds-and-music.md#highlight-videos) go on the club's page, a strip down the right of the board shows a QR code to them, headed **PODIUM VIDEOS** with the race's name and "watch & download", and underneath "Scan with your phone camera" and "Up to 1st, 2nd & 3rd · kept for a week". Scanning it opens the race's [podium videos page](../online/index.md#podium-videos) on a phone.
-
-- It appears once the first of the race's videos is up, a minute or so after the race, and takes about a third of the screen's width.
-- It comes down the moment the next race stages, and a video finishing late never puts it back over a race in progress.
-- It needs **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** ticked on **Club Website → Recording**, and the club's page switched on (**Club Website**). Only 1st to 3rd are ever on that page.
+The Big Screen doesn't show a QR code for the podium's [highlight videos](../announcer/sounds-and-music.md#highlight-videos). Until 28 October 2026 a **PODIUM VIDEOS** strip came up after each race so drivers could download theirs from the club's page; the videos now stay on the race PC, in the night's **Highlights** folder, and **Share video** in a driver's drawer on Race Control opens theirs.
 
 ### Track evolution
 

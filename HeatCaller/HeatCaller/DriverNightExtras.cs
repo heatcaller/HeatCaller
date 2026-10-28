@@ -78,8 +78,28 @@ internal static class DriverNightExtras
             // point, squashing every real lap into a flat line, and the
             // caption counted it as a lap. Only the flying laps go now - the
             // same rule as CoachReport.FlyingLaps, null-guarded here.
-            var laps = (row.LapTimesMs ?? new List<long>()).Skip(1).Where(ms => ms > 0).Take(MostLaps).ToList();
+            //
+            // 28 Oct 2026 (asked for by Asher, matching LiveRC): with where
+            // they were running after each of those laps (LapByLap, over the
+            // whole field) for the Pos column of their lap list, kept in step
+            // with the laps as they are filtered - so a lap the filter drops
+            // takes its position with it.
+            var placesAt = LapByLap.Positions(results)[results.IndexOf(row)];
+            var flying = (row.LapTimesMs ?? new List<long>()).Skip(1).ToList();
+            var kept = flying
+                .Select((ms, i) => (Ms: ms, Pos: i < placesAt.Length ? placesAt[i] : 0))
+                .Where(lap => lap.Ms > 0)
+                .Take(MostLaps)
+                .ToList();
+            var laps = kept.Select(lap => lap.Ms).ToList();
             var pen = PenaltyWords.For(row, session);
+
+            // 28 Oct 2026 (asked for by Asher): their driver rating for this
+            // race, for the night page's Driver score next to the report
+            // card. The same DriverRating the report card's line, Driver Hub
+            // and the leaderboard use, so the numbers never disagree. Left
+            // out when the race has no rating (a field of one).
+            double? rating = DriverRating.ForSession(session).TryGetValue(row.Transponder ?? string.Empty, out var rated) ? rated : null;
 
             races.Add(new NightRace
             {
@@ -95,8 +115,12 @@ internal static class DriverNightExtras
                 Laps = row.Laps,
                 BestMs = row.FastLapMs,
                 LapsMs = laps.Count > 0 ? laps : null,
+                PosAt = laps.Count > 0 && kept.All(lap => lap.Pos > 0) ? kept.Select(lap => lap.Pos).ToList() : null,
+                StartMs = laps.Count > 0 && row.LapTimesMs is { Count: > 1 } ? row.LapTimesMs[0] : null,
+                LengthS = session.TimeLimitSeconds is > 0 ? session.TimeLimitSeconds : null,
                 Pen = pen.Count > 0 ? pen.ToList() : null,
                 Out = OutOf(row),
+                Rating = rating,
             });
         }
 
@@ -445,7 +469,7 @@ internal sealed record NightParts(
         || Cars is { Count: > 0 };
 }
 
-/// <summary>One race in `races[]`: {sid, label, at, pos, of, start, laps, bestMs, lapsMs, pen, out}.</summary>
+/// <summary>One race in `races[]`: {sid, label, at, pos, of, start, laps, bestMs, lapsMs, posAt, startMs, lenS, pen, out, car, rating}.</summary>
 internal sealed record NightRace
 {
     [JsonPropertyName("sid")]
@@ -481,6 +505,21 @@ internal sealed record NightRace
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<long>? LapsMs { get; init; }
 
+    /// <summary>Their position after each lap in LapsMs, in step with it (LapByLap, 28 Oct 2026). Left out with LapsMs, or when any lap's position is not known.</summary>
+    [JsonPropertyName("posAt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<int>? PosAt { get; init; }
+
+    /// <summary>The start-lap slot (green flag to the line) - so the page knows when each lap was crossed, for pace.</summary>
+    [JsonPropertyName("startMs")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? StartMs { get; init; }
+
+    /// <summary>The race's time limit in seconds, for pace. Left out for a race without one.</summary>
+    [JsonPropertyName("lenS")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LengthS { get; init; }
+
     /// <summary>PenaltyWords lines - the reasons are private to this document.</summary>
     [JsonPropertyName("pen")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -499,6 +538,15 @@ internal sealed record NightRace
     [JsonPropertyName("car")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Car { get; init; }
+
+    /// <summary>
+    /// Their driver rating for this race, 0 to 150 to one decimal place -
+    /// DriverRating.ForSession (28 Oct 2026, the night page's Driver score).
+    /// Left out for a race with no rating.
+    /// </summary>
+    [JsonPropertyName("rating")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? Rating { get; init; }
 }
 
 /// <summary>

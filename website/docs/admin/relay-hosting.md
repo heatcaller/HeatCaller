@@ -498,7 +498,7 @@ The data, all under the relay's data folder:
 | `.voice/topups/<club>.json` | Voice characters given on top of the plan, by month. | `voice-topup` only. |
 | `.requests/<club>.json` | The club's requests for more, by month (kept for a year). | The relay only. |
 | `.requests/done/<club>.json` | Which of those requests have been answered. | `brain-topup` and `voice-topup` only. |
-| `.videos/<club>/` | The club's podium highlight videos: `<id>.mp4` beside `<id>.json`. Each is removed after 7 days. | The relay only. |
+| `.clips/<club>/` | A driver's own race calls for their private night page: `<id>.mp3` beside `<id>.json`. Each is removed after 7 days. | The relay only. |
 
 Each file has one writer, so the running relay and a command run at the same moment can never save over each other. Run through ssh, the commands run as root; they hand every file and folder they make to the relay's own user, and refuse to run without `RELAY_DATA`, which is where the relay's data really is.
 
@@ -512,7 +512,7 @@ npm test
 fly deploy --ha=false
 ```
 
-The volume, and every published result on it, survives the deploy. A laptop whose podium videos log `[video] The relay does not take highlight videos yet - redeploy it (fly deploy --ha=false).` is talking to a relay from before 21 Oct 2026; this is the fix for that too. If the laptop reports `The relay is an older build that cannot take this. Redeploy it.`, this is the fix.
+The volume, and every published result on it, survives the deploy. Since 28 Oct 2026 the relay takes no podium videos: they stay on the club's laptop. The first start of that build deletes any it kept before, the whole `/data/.videos` folder, once, and says so in `fly logs` (`[relay] removed the old podium videos: ...`). If the laptop reports `The relay is an older build that cannot take this. Redeploy it.`, this is the fix.
 
 !!! note "HeatCaller 0.59.0: redeploy the relay first"
     Deploy the relay before any laptop runs 0.59.0: the new relay reads both the old and the new, salted PIN hashes, and the old one can't read the new ones. It also brings driver sign-up, limits on bulk result reads, per-club voice limits and tighter file permissions, and it signs every check-in, manager and sign-up pass with a secret of its own - so check-in desks, race-day managers and drivers waiting on a sign-up enter their PIN or invite code once more afterwards. It also adds the two open voice-sample routes and the **Preview** button's own daily allowance, so **Hear It** and **Preview** at the top of **Voice → Cast** do nothing until it is deployed — see [Hearing a voice before choosing it](#hearing-a-voice-before-choosing-it). A relay still on an older Fly app name moves first: see [Moving to a new app name](#moving-to-a-new-app-name). From the relay folder, run `npm test`, then `fly deploy --ha=false`. See [0.59.0](../release-notes.md#0590) in the release notes.
@@ -619,7 +619,7 @@ The new deploy mounts a `relay_data` volume; with the old volume still there it 
 backup.cmd
 ```
 
-It wakes the machine, packs `/data` into one file there, downloads it to `relay-backups\<date>_<time>\relay-data.tgz` and deletes the packed file from the machine. That file is every club's published results, nights, videos and the voice and commentary usage files clubs are billed by. Take one before a deploy that changes storage, once a week while clubs are racing, and before adding or removing a club; keep a copy somewhere other than the race PC.
+It wakes the machine, packs `/data` into one file there, downloads it to `relay-backups\<date>_<time>\relay-data.tgz` and deletes the packed file from the machine. That file is every club's published results, nights, race calls and the voice and commentary usage files clubs are billed by. Take one before a deploy that changes storage, once a week while clubs are racing, and before adding or removing a club; keep a copy somewhere other than the race PC.
 
 To put a backup back onto a volume (it replaces what is there):
 
@@ -638,7 +638,6 @@ One `shared-cpu-1x` machine with 256 MB and a 1 GB volume is enough for a handfu
 | Memory | `fly logs` (an out-of-memory restart), `fly status` | Restarts during a race night | `fly scale memory 512` |
 | CPU | Fly dashboard → Metrics | Pages slow while two or more clubs race at once | `fly scale vm shared-cpu-2x` |
 | Volume space | `fly ssh console -C "df -h /data"` | Over about 70% | `fly volumes extend <volume-id> --size 3` |
-| Podium videos | The same `df`, and `du -sh /data/.videos` | Each club may keep up to 1 GB of them for a week | Extend the volume before clubs turn video sharing on |
 | Requests at once | `fly logs` (busy or 503 answers) | Several clubs' Live Results open on TVs at once | Raise `[http_service.concurrency]` in `fly.toml`, then deploy |
 
 Stay on **one machine** whatever happens (`--ha=false`): the relay's data is one volume, and two machines would each have half of it. Scale it up, not out.
@@ -806,13 +805,12 @@ The relay would rather not start than start wrong. You'll see one of these in `f
 | One preview | `voice.previewMaxChars` (200 by default), or `voice.maxChars` if that is smaller | Refused, with the limit in the message. |
 | The open voice-sample routes | 60 requests a minute per address | Refused with 429. No token is involved, so the address is all the relay knows about the caller. |
 | Rendered audio kept | 200 MB shared, 25 MB per club | The least recently used are swept. None of it counts against a club's 50 MB. |
-| Podium videos | Only 1st to 3rd are taken; anything else is refused with 400. 48 MB per video, 120 videos and 1 GB per club, each kept 7 days | Videos older than 7 days are removed, and the oldest go to make room when a new one would take the club past 120 or 1 GB. They live in `.videos/` in the data folder, outside the club's 50 MB, and **Delete Everything Published** removes them too. |
 
 Rate limits on PINs and check-in are covered in [Security and privacy](security-and-privacy.md#pins-and-rate-limits).
 
 ## Costs
 
-This setup is built to cost as little as Fly allows: one small machine that stops when idle, plus a 1 GB volume. Podium highlight videos are the one thing that can fill it: each club may keep up to 1 GB of them for a week. A relay with several clubs sharing their podium videos wants a bigger volume (`fly volumes extend`). The machine runs while the laptop is publishing or people have the club's pages open, and stops in between, so a club that races one night a week uses it for a small part of the week. The volume is kept whether or not the machine is running. Check Fly.io's current pricing for what that comes to; this page doesn't quote prices because they change.
+This setup is built to cost as little as Fly allows: one small machine that stops when idle, plus a 1 GB volume. Podium videos never go on it: since 28 Oct 2026 they stay on each club's laptop. The machine runs while the laptop is publishing or people have the club's pages open, and stops in between, so a club that races one night a week uses it for a small part of the week. The volume is kept whether or not the machine is running. Check Fly.io's current pricing for what that comes to; this page doesn't quote prices because they change.
 
 The HeatCaller voice adds an ElevenLabs bill on top, on your account rather than the clubs'. Two things keep it down: a line is only ever rendered once — the fixed lines once for every club put together — and each club's monthly allowance caps how much new rendering it can ask for. Set a credit limit on the key as well, so the allowances aren't the only thing between a mistake and a large invoice.
 

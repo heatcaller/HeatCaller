@@ -983,8 +983,10 @@ public partial class MainForm : Form
         // from any thread, and holds them until the window is up.
         _relayPublisher.Log = OnClientRawMessage;
 
-        // The podium's highlight videos go up through it (21 Oct 2026).
-        RelayPublisher.ForVideos = _relayPublisher;
+        // Drivers' own race clips go up through it (22 Oct 2026). (It was
+        // the podium's highlight videos first, until 28 Oct 2026, when they
+        // started staying on this PC.)
+        RelayPublisher.ForClips = _relayPublisher;
 
         // Where a shout-out collected from the club's page is filed - the
         // same single ClubNotes instance the announcer reads from and the

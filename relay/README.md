@@ -242,9 +242,6 @@ finished last.
 /c/:club/manifest.webmanifest   makes "Add to Home Screen" install the pages as an app
 /c/:club/icon.png            the club's logo, or a chequered flag in its colours
 /c/:club/logo.png            the club's logo (404 if it has none)
-/c/:club/videos/:race        a race's podium highlight videos - what the Big Screen's
-                             QR code opens (see Podium videos below)
-/c/:club/video/:id.mp4       one podium video, in ranges; ?download=1 to keep it
 ```
 
 The logo sits in a block of its own at the top of every page, beside the
@@ -1087,46 +1084,29 @@ the config, exactly like the voice, and for the same reason - it spends
 money, so it is opted into rather than out of. A relay configured with no
 `brain.model` does not offer it at all.
 
-### Podium videos (token required to send; the pages are public)
+### Podium videos: not on the relay (removed 28 Oct 2026)
 
-After a race the laptop makes a short upright highlight video for each
-driver it was asked to (Sounds - Recording), and sends the **top three's**
-here, so a driver can watch and keep theirs on a phone: from the QR code the
-Big Screen shows after the race, or from their own night. Added 21 Oct 2026;
-`src/videos.ts`.
+From 21 to 28 Oct 2026 the laptop sent the top three's highlight videos
+here (`POST /api/v1/c/:club/video/:id`), the relay served a page per race
+(the Big Screen's QR code), a Videos tab, the mp4s themselves and
+`driver/forget-media` to take one driver's down, and kept up to 1 GB a club
+in `dataDir/.videos`. All of that is gone, asked for by Asher: "Remove the
+podium videos for downloading from the relay and just have locally." The
+laptop still makes the videos; they stay on it, in its own folder.
 
-```
-POST /api/v1/c/:club/video/:id?race=&position=&driver=&name=&label=
-                             one mp4 (the body, video/mp4), with the club's token
-GET  /c/:club/videos/:race   the race's page: 1st to 3rd, a player and a
-                             Download button each
-GET  /c/:club/video/:id.mp4  the video, honouring Range (206/416); HEAD works;
-                             ?download=1 adds Content-Disposition: attachment
-```
-
-- **Only the podium.** `position` must be 1, 2 or 3; anything else is a 400
-  before a byte is kept, whatever sends it. The laptop sends nothing else
-  either.
-- **The link is the credential**, as a badge id is for a night. The video id
-  and the race key are 128 random bits each (32 hex), chosen on the laptop;
-  nothing lists a club's videos. `driver`, when sent, is the driver's badge
-  id (20 hex) and puts the video on their own night: `POST .../night`
-  answers with a `videos` list (url, download, label, position) beside the
-  night.
-- **Limits:** 48 MB a video (Content-Length checked first, then the body);
-  the body must start with an mp4 `ftyp` box; 30 uploads a minute a club,
-  and never more than two being read at once across every club (a third
-  gets a 429). Reads are limited to 900 a minute an address - a player asks
-  in many small ranges.
-- **Kept for a week, and never more than a club's share:** 7 days, 120
-  videos and 1 GB a club. The oldest go first on every upload
-  (`videosToDrop`); a stale one is left out of every answer even before it
-  is swept.
-- A download the phone drops part-way ends the handler at once (the write
-  loop wakes on `close` as well as `drain`, 22 Oct 2026 - before that an
-  aborted download hung for good, holding its buffer).
-- A relay deployed without this answers the upload with a 404 and the
-  laptop's console says to redeploy.
+- Every old video address now gets the relay's ordinary answer for an
+  address it never had: a 404 page for `/c/:club/videos`,
+  `/c/:club/videos/:race` and `/c/:club/video/:id.mp4` (so an old QR code
+  or bookmark lands on "not found"), and `{"ok":false,"error":"No such
+  endpoint."}` with a 404 for the upload and `driver/forget-media`. An
+  older laptop that still tries to upload keeps the video on its PC.
+- `POST .../night` no longer carries a `videos` list.
+- At start-up the relay deletes `dataDir/.videos` once, if it is there,
+  and logs how many files and megabytes went (`src/oldvideos.ts`). Only
+  that one folder, never through a link; a failure is logged and the relay
+  starts anyway.
+- Drivers' own race clips (`/clip/`, mp3s on their private night) are not
+  podium videos and are unchanged.
 
 ### Race control
 
@@ -1184,12 +1164,10 @@ has published loses its own recorded lines; its usage file, its history and
 its top-ups stay, because those are what it is billed by and a delete must
 not hand it a fresh month's allowance.
 
-Podium videos live in `dataDir/.videos/<club>/` - `<id>.mp4` beside its
-`<id>.json` (race, position, driver, name, label, when, bytes), the video
-written before its meta, both atomically, so a crash leaves no half a video
-listed (`DiskVideoVault`, `src/videos.ts`). Outside the club's tree for the
-same reasons as the voice cache, and none of it counts against the 50 MB
-publishing quota. Deleting a club removes its videos too.
+Drivers' own race clips live in `dataDir/.clips/<club>/` (`src/clips.ts`),
+outside the club's tree for the same reasons as the voice cache. The old
+podium video folder, `dataDir/.videos/`, is no longer written; a relay
+removes any left from before 28 Oct 2026 when it starts (`src/oldvideos.ts`).
 
 Two more folders there belong to hearing a voice before choosing it:
 `samples/` holds one pre-rendered sample per voice, named `<id>-<rev>.mp3`
@@ -1487,8 +1465,7 @@ on the docs site under admin/relay-hosting.md, "Running it for several clubs".
   Scale it up when it needs it: `fly scale memory 512`,
   `fly scale vm shared-cpu-2x`, `fly volumes extend <id> --size 3`. Watch
   `fly logs` for out-of-memory restarts and
-  `fly ssh console -C "df -h /data"` for space - podium videos can take up
-  to 1 GB a club.
+  `fly ssh console -C "df -h /data"` for space.
 
 ### Moving to a new app name
 
@@ -1552,8 +1529,8 @@ src/index.ts     serve, and the argv dispatch
 src/mint.ts      the `mint` subcommand, and the name the shell hands over
 src/voiceadmin.ts the `voice-usage` and `voice-topup` subcommands: every club's voice
                  usage, its history, and characters given on top of a plan
-src/videos.ts    the podium's highlight videos: the vault on disk and in memory, the
-                 week's keep and each club's share
+src/oldvideos.ts removes the old podium video folder (dataDir/.videos) once at start-up -
+                 the videos stay on the laptop since 28 Oct 2026
 tools/build-font.py   rasterises Poppins into src/font-data.ts. Build-time only; needs Pillow
 
 test/            770 tests (measured 22 Oct 2026): tenancy, publishing, isolation, persistence, minting, pages,
@@ -1563,7 +1540,7 @@ test/            770 tests (measured 22 Oct 2026): tenancy, publishing, isolatio
                  Preview button's separate daily allowance, the results archive's meta and by-id reads, the preview reader and
                  its route, the drawn card and the type it is set in, and a relay woken by a burst
                  (PIN guesses, page loads, a link forwarded to twenty people) or an unreadable file,
-                 and the podium videos (podium only, auth, ranges, the night's list, the keep)
+                 and the podium videos' routes staying gone and their folder being cleared
 
 voice-usage.cmd       every club's HeatCaller voice usage, read on the Fly machine
 brain-usage.cmd       every club's AI commentary lines, read on the Fly machine

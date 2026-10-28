@@ -235,7 +235,9 @@ export class FakePage {
 
     this.context = createContext({
       document,
-      window: { AudioContext: FakeAudio },
+      // addEventListener (28 Oct 2026): the results page listens for the
+      // address changing, and its lap tests run the whole page here.
+      window: { AudioContext: FakeAudio, addEventListener() {} },
       location: { hash: where.hash ?? "", search: where.search ?? "", pathname: "/c/acme-rc/night" },
       history: { replaceState() {} },
       URLSearchParams,

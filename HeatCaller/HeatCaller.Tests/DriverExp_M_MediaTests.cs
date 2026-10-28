@@ -2,11 +2,18 @@ namespace HeatCaller.Tests;
 
 /// <summary>
 /// Driver experience package M (22 Oct 2026): a driver's own mp3 clip on
-/// their night (behind their badge), "no photo" and "no videos" online for
-/// the podium videos, and the jump start carried onto each filed row.
+/// their night (behind their badge) and the jump start carried onto each
+/// filed row. Its "no photo" and "no videos" online rules for the podium
+/// videos went on 28 Oct 2026, asked for by Asher ("Remove the podium videos
+/// for downloading from the relay and just have locally"): the videos stay
+/// on this PC, and the checks below now hold that they do.
 /// </summary>
-public sealed class DriverExp_M_MediaTests
+public sealed class DriverExp_M_MediaTests : IDisposable
 {
+    private readonly TempAppData _data = new();
+
+    public void Dispose() => _data.Dispose();
+
     private const string Secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     private static DriverProfile Profile(string transponder, string name, bool rental = false, bool noPhoto = false, bool noVideo = false) => new()
@@ -126,35 +133,82 @@ public sealed class DriverExp_M_MediaTests
         Assert.EndsWith(".mp3", only.Mp3);
     }
 
-    // -------------------------------------------------- photo and video
+    // ------------------------------------------- the videos stay on this PC
 
     [Fact]
-    public void No_videos_online_is_read_from_the_privacy_register()
+    public void A_settings_file_that_still_says_share_the_podium_videos_loads_as_ever()
     {
-        var register = PublicPrivacy.From(new[] { Profile("T1", "Sam Parker", noVideo: true), Profile("T2", "Alex Jones") });
+        // WHY (28 Oct 2026): SharePodiumVideos left RaceAudioStore's file. A
+        // club's race-audio.json from before still carries it, and must load
+        // with every other setting kept rather than fall back to defaults.
+        RaceAudioStore.OffForTests = false;
 
-        Assert.True(HighlightShare.NotOnline("T1", register));
-        Assert.True(HighlightShare.NotOnline("t1", register));
-        Assert.False(HighlightShare.NotOnline("T2", register));
-        Assert.False(HighlightShare.NotOnline("nobody", register));
-        Assert.False(HighlightShare.NotOnline(null, register));
+        try
+        {
+            File.WriteAllText(
+                _data.PathOf("race-audio.json"),
+                "{\"Enabled\":true,\"DriverHighlights\":true,\"HighlightVideos\":2,\"VideoHandle\":\"@acme\","
+                + "\"SharePodiumVideos\":true,\"MusicUnderVideos\":false,\"ShareDriverClips\":true}");
+
+            var store = RaceAudioStore.Load();
+
+            Assert.False(store.LoadedUnreadable);
+            Assert.Equal(HighlightVideo.Who.Podium, store.HighlightVideos);
+            Assert.Equal("@acme", store.VideoHandle);
+            Assert.False(store.MusicUnderVideos);
+            Assert.True(store.ShareDriverClips);
+
+            // And it is not written back.
+            store.VideoHandle = "@acme-rc";
+            Assert.DoesNotContain("SharePodiumVideos", File.ReadAllText(_data.PathOf("race-audio.json")), StringComparison.Ordinal);
+        }
+        finally
+        {
+            RaceAudioStore.OffForTests = true;
+        }
     }
 
     [Fact]
-    public void No_photo_online_blanks_the_photo_only_on_a_video_that_may_go_up()
+    public void Nothing_uploads_a_podium_video_or_shows_its_code()
     {
-        var register = PublicPrivacy.From(new[] { Profile("T1", "Sam Parker", noPhoto: true), Profile("T2", "Alex Jones") });
+        foreach (var gone in new[] { "RelayPublisher.Videos.cs", "PodiumVideoQr.cs", "RelayPublisher.Privacy.cs" })
+        {
+            Assert.False(HasSource(gone), $"{gone} should be gone.");
+        }
 
-        // On the podium, shared: drawn without it.
-        Assert.Equal(string.Empty, HighlightShare.PhotoFor("sam.jpg", "T1", 1, sharing: true, register));
+        foreach (var file in new[] { "RaceAudioRecorder.cs", "RaceControlControl.AfterRace.cs", "BigScreenForm.cs", "RecordingControl.cs", "MainForm.NightEmail.cs", "MainForm.Privacy.cs", "RelayPublisher.Uploads.cs", "RelayPublisher.Clips.cs" })
+        {
+            var source = SourceOf(file);
 
-        // Kept on this PC - not shared, or off the podium so never sent.
-        Assert.Equal("sam.jpg", HighlightShare.PhotoFor("sam.jpg", "T1", 1, sharing: false, register));
-        Assert.Equal("sam.jpg", HighlightShare.PhotoFor("sam.jpg", "T1", 4, sharing: true, register));
+            foreach (var leftover in new[] { "UploadPodiumVideo", "PodiumVideosPageUrl", "PodiumVideoQr ", "ShowPodiumVideos(", "SharePodiumVideos =", "/video/", "forget-media\"" })
+            {
+                Assert.DoesNotContain(leftover, source, StringComparison.Ordinal);
+            }
+        }
+    }
 
-        // Somebody who did not ask keeps theirs.
-        Assert.Equal("alex.jpg", HighlightShare.PhotoFor("alex.jpg", "T2", 2, sharing: true, register));
-        Assert.Equal(string.Empty, HighlightShare.PhotoFor(null, "T2", 2, sharing: true, register));
+    [Fact]
+    public void A_video_is_made_and_kept_in_the_highlights_folder_and_goes_nowhere_else()
+    {
+        // An expression body, so taken up to the next method rather than by braces.
+        var recorder = SourceOf("RaceAudioRecorder.cs");
+        var from = recorder.IndexOf("private static bool MakeVideo(", StringComparison.Ordinal);
+        var to = recorder.IndexOf("private static string? MakeVideoFile(", StringComparison.Ordinal);
+        Assert.True(from >= 0 && to > from, "MakeVideo and MakeVideoFile are no longer where they were.");
+        var make = recorder[from..to];
+
+        Assert.Contains("MakeVideoFile(", make, StringComparison.Ordinal);
+        Assert.DoesNotContain("Upload", make, StringComparison.Ordinal);
+        Assert.DoesNotContain("Publisher", make, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_video_options_draw_each_drivers_own_photo()
+    {
+        var options = MethodBodyOf(SourceOf("RaceControlControl.AfterRace.cs"), "private HighlightVideoOptions? VideoOptionsFor(");
+
+        Assert.Contains("new HighlightDriver(profile?.PhotoFileName ?? string.Empty", options, StringComparison.Ordinal);
+        Assert.DoesNotContain("PhotoFor(", options, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------- the wiring, by source
@@ -174,26 +228,6 @@ public sealed class DriverExp_M_MediaTests
         // jump starters, falling back to the live race's inline.
         Assert.Contains("RaceFiling.ResultsFrom(racers, _profiles, finished is null ? _race.HasJumpStarted : finished.HasJumpStarted)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("RaceFiling.ResultsFrom(racers, _profiles);", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void A_no_video_driver_is_checked_before_the_podium_upload()
-    {
-        var share = MethodBodyOf(SourceOf("RaceAudioRecorder.cs"), "private static void ShareOnline(");
-
-        var check = share.IndexOf("HighlightShare.NotOnline(clip.Transponder)", StringComparison.Ordinal);
-        var upload = share.IndexOf("UploadPodiumVideoAsync(", StringComparison.Ordinal);
-
-        Assert.True(check >= 0 && upload > check, "The no-video check has to come before the upload.");
-    }
-
-    [Fact]
-    public void The_video_options_draw_photos_through_the_privacy_rule()
-    {
-        var options = MethodBodyOf(SourceOf("RaceControlControl.AfterRace.cs"), "private HighlightVideoOptions? VideoOptionsFor(");
-
-        Assert.Contains("HighlightShare.PhotoFor(profile?.PhotoFileName, row.Transponder, row.Position, share is not null)", options, StringComparison.Ordinal);
-        Assert.DoesNotContain("new HighlightDriver(profile?.PhotoFileName", options, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -220,9 +254,9 @@ public sealed class DriverExp_M_MediaTests
 
         Assert.Contains("&& _settings.PublishDriverNightsToTheRelay", source, StringComparison.Ordinal);
         Assert.Contains("RelayCheckInSecret", source, StringComparison.Ordinal);
-        Assert.Contains("_videoUploadStop ??= new CancellationTokenSource()", source, StringComparison.Ordinal);
+        Assert.Contains("_uploadStop ??= new CancellationTokenSource()", source, StringComparison.Ordinal);
         Assert.Contains("new MediaTypeHeaderValue(\"audio/mpeg\")", source, StringComparison.Ordinal);
-        Assert.Contains("/api/v1/c/{club}/clip/{NewVideoKey()}?{query}", source, StringComparison.Ordinal);
+        Assert.Contains("/api/v1/c/{club}/clip/{NewUploadKey()}?{query}", source, StringComparison.Ordinal);
         Assert.DoesNotContain("transponder", MethodBodyOf(source, "internal static string? ClipQuery("), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -236,6 +270,19 @@ public sealed class DriverExp_M_MediaTests
         Assert.Contains("Only for that driver", source, StringComparison.Ordinal);
         Assert.Contains("only their badge code opens", source, StringComparison.Ordinal);
         Assert.Contains("_chkShareClips.Enabled = clips;", source, StringComparison.Ordinal);
+    }
+
+    private static bool HasSource(string fileName)
+    {
+        for (var folder = new DirectoryInfo(AppContext.BaseDirectory); folder is not null; folder = folder.Parent)
+        {
+            if (Directory.Exists(Path.Combine(folder.FullName, "HeatCaller", "HeatCaller")))
+            {
+                return File.Exists(Path.Combine(folder.FullName, "HeatCaller", "HeatCaller", fileName));
+            }
+        }
+
+        throw new DirectoryNotFoundException($"No HeatCaller\\HeatCaller above {AppContext.BaseDirectory}.");
     }
 
     private static string SourceOf(string fileName)

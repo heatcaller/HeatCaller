@@ -23,11 +23,13 @@ internal readonly record struct ClipUploadResult(string? Clip, string? Problem, 
 /// page only their badge code opens. Never a transponder, never a name: the
 /// relay is told whose clip it is and nothing else about them.
 ///
-/// THE PODIUM VIDEO'S ROUTE, COPIED (RelayPublisher.Videos.cs): straight up
-/// on the recorder's background thread, not through the results queue, on
-/// the uploads' own client (VideoHttp), stopped by the same quiesce token
-/// (_videoUploadStop) so "Delete everything" stops a clip mid-way as it does
-/// a video. Only mp3s: a clip the encoder refused stays a wav on this PC.
+/// THE PODIUM VIDEO'S ROUTE, COPIED (it was RelayPublisher.Videos.cs; since
+/// 28 Oct 2026 the videos stay on this PC and what is shared is in
+/// RelayPublisher.Uploads.cs): straight up on the recorder's background
+/// thread, not through the results queue, on the uploads' own client
+/// (UploadHttp), stopped by the quiesce token (_uploadStop) so "Delete
+/// everything" stops a clip mid-way. Only mp3s: a clip the encoder refused
+/// stays a wav on this PC.
 /// </summary>
 public sealed partial class RelayPublisher
 {
@@ -40,7 +42,7 @@ public sealed partial class RelayPublisher
     /// "share drivers' clips" tick is the caller's to check.
     /// </summary>
     public bool CanShareDriverClips =>
-        CanSharePodiumVideos
+        CanUpload
         && _settings.PublishDriverNightsToTheRelay
         && !string.IsNullOrWhiteSpace(_settings.RelayCheckInSecret);
 
@@ -63,7 +65,7 @@ public sealed partial class RelayPublisher
             "label=" + Uri.EscapeDataString(Trim(label, 80)),
         };
 
-        if (IsAVideoKey(raceId))
+        if (IsAnUploadKey(raceId))
         {
             query.Add("race=" + raceId);
         }
@@ -99,7 +101,7 @@ public sealed partial class RelayPublisher
             return new ClipUploadResult(null, null, GiveUp: false);
         }
 
-        // Stopped by QuiesceAsync as well as by the caller - see _videoUploadStop.
+        // Stopped by QuiesceAsync as well as by the caller - see _uploadStop.
         CancellationTokenSource stop;
 
         lock (_gate)
@@ -109,7 +111,7 @@ public sealed partial class RelayPublisher
                 return new ClipUploadResult(null, null, GiveUp: true);
             }
 
-            stop = _videoUploadStop ??= new CancellationTokenSource();
+            stop = _uploadStop ??= new CancellationTokenSource();
         }
 
         using var upload = CancellationTokenSource.CreateLinkedTokenSource(cancel, stop.Token);
@@ -136,7 +138,7 @@ public sealed partial class RelayPublisher
             // second refusal is worth saying rather than retrying for ever.
             for (var attempt = 0; ; attempt++)
             {
-                var url = $"{target.Root}/api/v1/c/{club}/clip/{NewVideoKey()}?{query}";
+                var url = $"{target.Root}/api/v1/c/{club}/clip/{NewUploadKey()}?{query}";
 
                 await using var stream = new FileStream(mp3Path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, useAsync: true);
                 using var request = new HttpRequestMessage(HttpMethod.Post, url);
@@ -145,7 +147,7 @@ public sealed partial class RelayPublisher
                 request.Content.Headers.ContentType = new MediaTypeHeaderValue("audio/mpeg");
                 request.Content.Headers.ContentLength = file.Length;
 
-                using var response = await VideoHttp.SendAsync(request, cancel).ConfigureAwait(false);
+                using var response = await UploadHttp.SendAsync(request, cancel).ConfigureAwait(false);
 
                 if (response.IsSuccessStatusCode)
                 {

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { createContext, runInContext, Script } from "node:vm";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
+import { nightPage } from "../src/pages.js";
+import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
 
 /**
  * THE REPORT CARD ON A DRIVER'S NIGHT (22 Oct 2026). The laptop sends a
@@ -105,43 +107,45 @@ function lifted(html: string, names: readonly string[], extras: Record<string, u
 
 
 describe("the report card", () => {
-  async function drawing() {
-    const box = { innerHTML: "" };
-
-    const run = lifted((await page()).text, ["lines", "nothing", "ownPath", "videoList", "draw"], {
-      box,
-      document: { getElementById: () => null },
-    });
-
-    return (night: unknown) => {
-      run("draw()", { night, videos: [] });
-      return box.innerHTML;
+  // Since 28 Oct 2026 (My Night laid out to be found) the report card is
+  // drawn under the races, with the rest of drawExtras, rather than in
+  // draw()'s markup - so these open the whole page.
+  async function opened(night: Record<string, unknown>): Promise<FakePage> {
+    const answer: Answerer = async (url, body) => {
+      if (url.endsWith("/night")) return { status: 200, body: body["part"] === "live" ? { ok: true } : { ok: true, night } };
+      return { status: 404 };
     };
+    const { html, script } = pageParts(nightPage("acme-rc", "Acme RC"));
+    const page = new FakePage(html, answer, { hash: "#d=a1b2c3d4e5f60718293a" });
+    page.run(script);
+    await page.settle();
+    return page;
   }
 
-  it("is drawn under a heading of its own", async () => {
-    const draw = await drawing();
-    const html = draw({ driver: "Bill", lines: ["A win."], coach: ["Best lap tonight: 8.912s, from 40 laps."] });
+  it("is drawn under a heading of its own, after the night's facts", async () => {
+    const page = await opened({ driver: "Bill", lines: ["A win."], coach: ["Best lap tonight: 8.912s, from 40 laps."] });
+    const nx = page.get("nx").textContent;
 
-    assert.match(html, /Your report card/);
-    assert.match(html, /Best lap tonight: 8\.912s/);
-    assert.ok(html.indexOf("A win.") < html.indexOf("Your report card"), "the night's facts come first");
+    assert.match(nx, /Your report card/);
+    assert.match(nx, /Best lap tonight: 8\.912s/);
+    assert.match(page.get("nt").html, /A win\./);
+    assert.doesNotMatch(page.get("nt").html, /report card/, "not in the markup above the races");
   });
 
   it("is left out of a night that has none", async () => {
-    const draw = await drawing();
+    for (const coach of [undefined, [], "not a list"]) {
+      const page = await opened({ driver: "Bill", lines: ["A win."], coach });
 
-    assert.doesNotMatch(draw({ driver: "Bill", lines: ["A win."] }), /report card/);
-    assert.doesNotMatch(draw({ driver: "Bill", lines: ["A win."], coach: [] }), /report card/);
-    assert.doesNotMatch(draw({ driver: "Bill", lines: ["A win."], coach: "not a list" }), /report card/);
+      assert.doesNotMatch(page.get("nx").textContent, /report card/);
+    }
   });
 
-  it("escapes every line of it", async () => {
-    const draw = await drawing();
-    const html = draw({ driver: "Bill", lines: ["A win."], coach: ["0.31s off <b>Sam</b>'s best"] });
+  it("is built as text, never markup", async () => {
+    const page = await opened({ driver: "Bill", lines: ["A win."], coach: ["0.31s off <b>Sam</b>'s best"] });
 
-    assert.doesNotMatch(html, /<b>Sam<\/b>/);
-    assert.match(html, /&lt;b&gt;Sam/);
+    assert.match(page.get("nx").textContent, /<b>Sam<\/b>/);
+    assert.equal(page.get("nx").find((n) => n.tagName === "B" && n.textContent === "Sam").length, 0);
+    assert.equal(page.get("nx").find((n) => n.hadMarkup).length, 0);
   });
 
   it("does not stop a night without it from drawing", async () => {
@@ -149,4 +153,18 @@ describe("the report card", () => {
 
     assert.match(draw({ driver: "Bill", coach: ["Best lap tonight: 8.912s."] }), /nothing in this night/);
   });
+
+  async function drawing() {
+    const box = { innerHTML: "" };
+
+    const run = lifted((await page()).text, ["lines", "nothing", "draw"], {
+      box,
+      document: { getElementById: () => null },
+    });
+
+    return (night: unknown) => {
+      run("draw()", { night });
+      return box.innerHTML;
+    };
+  }
 });

@@ -370,8 +370,9 @@ public sealed partial class AnnouncementService
                 : s.DisplayName;
 
             // WHY (23 Oct 2026, bug hunt 10): a car with no announcer name is said by
-            // its number, which must stay in the room - noted, so listen-along,
-            // the public captions and the podium videos leave the line out. See
+            // its number, which must stay in the room - noted, so listen-along
+            // and the public captions leave the line out (the podium videos did
+            // too, until 28 Oct 2026, when they stopped going online). See
             // NoteSpokenAsNumber.
             NoteSpokenAsNumber(s.Transponder, saidAs);
 
