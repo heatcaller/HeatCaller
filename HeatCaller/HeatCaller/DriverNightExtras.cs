@@ -94,6 +94,13 @@ internal static class DriverNightExtras
             var laps = kept.Select(lap => lap.Ms).ToList();
             var pen = PenaltyWords.For(row, session);
 
+            // 28 Oct 2026 (asked for by Asher): their driver rating for this
+            // race, for the night page's Driver score next to the report
+            // card. The same DriverRating the report card's line, Driver Hub
+            // and the leaderboard use, so the numbers never disagree. Left
+            // out when the race has no rating (a field of one).
+            double? rating = DriverRating.ForSession(session).TryGetValue(row.Transponder ?? string.Empty, out var rated) ? rated : null;
+
             races.Add(new NightRace
             {
                 Sid = session.Id,
@@ -113,6 +120,7 @@ internal static class DriverNightExtras
                 LengthS = session.TimeLimitSeconds is > 0 ? session.TimeLimitSeconds : null,
                 Pen = pen.Count > 0 ? pen.ToList() : null,
                 Out = OutOf(row),
+                Rating = rating,
             });
         }
 
@@ -461,7 +469,7 @@ internal sealed record NightParts(
         || Cars is { Count: > 0 };
 }
 
-/// <summary>One race in `races[]`: {sid, label, at, pos, of, start, laps, bestMs, lapsMs, posAt, startMs, lenS, pen, out}.</summary>
+/// <summary>One race in `races[]`: {sid, label, at, pos, of, start, laps, bestMs, lapsMs, posAt, startMs, lenS, pen, out, car, rating}.</summary>
 internal sealed record NightRace
 {
     [JsonPropertyName("sid")]
@@ -530,6 +538,15 @@ internal sealed record NightRace
     [JsonPropertyName("car")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Car { get; init; }
+
+    /// <summary>
+    /// Their driver rating for this race, 0 to 150 to one decimal place -
+    /// DriverRating.ForSession (28 Oct 2026, the night page's Driver score).
+    /// Left out for a race with no rating.
+    /// </summary>
+    [JsonPropertyName("rating")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? Rating { get; init; }
 }
 
 /// <summary>

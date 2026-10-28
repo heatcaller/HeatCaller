@@ -318,6 +318,61 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .yd h3 { margin: 0 0 6px; font-size: 1rem; }
 .yd h4 { margin: 22px 0 8px; font-size: 0.95rem; }
 .yd .su { max-width: none; }
+.yd-change { margin-top: 18px; background: none; border: none; }
+.yd-change > summary { color: var(--accent); padding: 6px 0; }
+/* My Night laid out to be found (28 Oct 2026, asked for by Asher): a jump
+   bar that stays at the top, the night at a glance, the races as a short
+   list with one open at a time and its lap stats, lap times and lap chart
+   on tabs, and the driver score beside the report card. Thumb-sized rows
+   for a phone in the pits; the lap table scrolls in its own box. */
+#nj { position: sticky; top: 0; z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
+.jump { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; max-width: 42rem; margin: 0 auto;
+        scrollbar-width: none; }
+.jump::-webkit-scrollbar { display: none; }
+.jump .jb { flex: none; font: inherit; font-size: 0.85rem; color: var(--text); background: var(--surface);
+            border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; min-height: 36px; cursor: pointer; }
+.glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 8px; max-width: 42rem;
+          margin: 14px auto 0; text-align: left; }
+.gl { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+.gl-k { display: block; color: var(--muted); font-size: 0.75rem; }
+.gl b { display: block; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.gl-s { display: block; color: var(--muted); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.car .glance { margin-top: 6px; }
+.nsec { scroll-margin-top: 60px; }
+.car, #n-prog { scroll-margin-top: 60px; }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.pick .pk { font: inherit; font-size: 0.8rem; color: var(--muted); background: none; border: 1px solid var(--border);
+            border-radius: 999px; padding: 4px 10px; min-height: 32px; cursor: pointer; }
+.pick .pk.on { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.rlist { list-style: none; margin: 0; padding: 0; }
+.rrow { border: 1px solid var(--border); border-radius: 12px; margin: 0 0 8px; background: var(--surface); overflow: hidden; }
+.rbtn { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name val" "fin val"; gap: 0 12px;
+        width: 100%; min-height: 56px; padding: 10px 14px; font: inherit; color: var(--text); background: none;
+        border: 0; text-align: left; cursor: pointer; }
+.rname { grid-area: name; }
+.rname .when { margin-left: 8px; }
+.rfin { grid-area: fin; color: var(--muted); font-size: 0.9rem; }
+.rval { grid-area: val; align-self: center; font-variant-numeric: tabular-nums; font-weight: 600; }
+.rval.top { color: var(--good); }
+.rrow.open { border-color: var(--accent); }
+.rrow .rc { border: 0; border-top: 1px solid var(--border); border-radius: 0; margin: 0; }
+.rtabs { display: flex; gap: 4px; margin: 10px 0 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.rtab { flex: none; font: inherit; font-size: 0.9rem; color: var(--muted); background: none; border: 0;
+        border-bottom: 3px solid transparent; padding: 8px 10px; min-height: 40px; cursor: pointer; }
+.rtab.on { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
+.sc-big b { font-size: 2rem; font-variant-numeric: tabular-nums; }
+.sc-big span { color: var(--muted); }
+.scbars { list-style: none; margin: 10px 0 6px; padding: 0; }
+.scbars li { display: grid; grid-template-columns: minmax(5rem, 9rem) 1fr 3rem; gap: 10px; align-items: center; padding: 3px 0; }
+.sc-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
+.sc-bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
+.sc-fill { display: block; height: 100%; background: var(--primary); }
+.sc-v { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.lc-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0 18px; }
+.lc-asks { background: none; border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0; }
+.lc-asks > summary { font-weight: 600; padding: 0; }
+.nshare { display: flex; flex-wrap: wrap; gap: 8px; max-width: 42rem; margin: 22px auto 8px; }
+.nshare .go { flex: 1 1 12rem; margin: 0; }
 .su textarea, .rc-ask textarea {
   width: 100%; min-height: 88px; margin: 0; padding: 12px; font: inherit; font-size: 1rem; font-weight: 400;
   border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); resize: vertical; }
@@ -1234,7 +1289,7 @@ const lapsOpen = new Set();
 let lengthOf = 0;
 
 // One driver's lap stats and lap list, as LiveRC's View Laps shows them.
-// Their lap chart is on their own night - see raceCard there.
+// Their lap chart is on their own night - see raceDetail there.
 function lapPanel(r, lengthS) {
   const stats = lapStatLines(lapStats(r.lapsMs));
   const list = lapRows(r.lapsMs, r.posAt, r.startMs, lengthS);
@@ -5060,20 +5115,16 @@ function draw() {
 
   const body = split ? '' : '<ul class="night">' + said.map((l) => '<li>' + esc(l) + '</li>').join('') + '</ul>';
 
-  // Their report card (22 Oct 2026): arithmetic over their own laps, sent
-  // by the laptop as a list of its own beside the night's facts, so it
-  // gets a heading of its own rather than reading as more of them. A
-  // night from a laptop before it has no "coach" and shows nothing here.
-  const card = lines(night.coach);
-  const coach = card.length === 0 || split ? ''
-    : '<h3>Your report card</h3><ul class="night">' + card.map((l) => '<li>' + esc(l) + '</li>').join('') + '</ul>';
-
-  // "nx" is where drawExtras() puts the race cards, progress, reach and
-  // clips (22 Oct 2026, driver experience) - built with the DOM rather
-  // than as markup, so it is an empty hook here and nothing more.
-  box.innerHTML = head + body + coach + '<div id="nx"></div>'
+  // "nj" is the jump bar and "ng" the night at a glance, above the facts;
+  // "nx" is where drawExtras() puts the races, the report card (since 28
+  // Oct 2026, under the races), the driver score, progress, reach and
+  // clips - built with the DOM rather than as markup, so all three are
+  // empty hooks here and nothing more.
+  box.innerHTML = head + '<div id="nj"></div><div id="ng"></div>' + body + '<div id="nx"></div>'
+    + '<div class="nshare">'
     + '<button id="pic" class="go" type="button">Make a picture to share</button>'
-    + '<button id="dl" class="go quiet" type="button">Save this as a text file</button>';
+    + '<button id="dl" class="go quiet" type="button">Save as a text file</button>'
+    + '</div>';
 
   const shot = document.getElementById('pic');
   if (shot) shot.addEventListener('click', picture);
@@ -5665,6 +5716,11 @@ function liveCard() {
     }
   }
 
+  // Check-in and the transponder side by side (28 Oct 2026, My Night laid
+  // out to be found): two race-day jobs, one row on a wide screen, one
+  // under the other on a phone.
+  const jobs = el('div', 'lc-row');
+
   if (ci.shown) {
     const on = checkedIn();
     const part = el('div', 'lc-part');
@@ -5672,9 +5728,9 @@ function liveCard() {
     b.disabled = ci.busy;
     part.appendChild(b);
     part.appendChild(el('div', 'when', on ? 'Tap again if you need to check out.' : 'One tap and the timing desk knows you are here.'));
-    card.appendChild(part);
+    jobs.appendChild(part);
   } else if (live && live.checkedIn === true) {
-    card.appendChild(el('div', 'lc-part', 'You are checked in.'));
+    jobs.appendChild(el('div', 'lc-part', 'You are checked in.'));
   }
 
   if (live) {
@@ -5683,8 +5739,10 @@ function liveCard() {
     tp.appendChild(el('div', 'when', seenWords(live.seen)));
     if (check.state !== '') tp.appendChild(el('div', 'lc-check ' + check.state, check.words));
     if (check.state !== 'waiting') tp.appendChild(tapButton('Check my transponder', 'go quiet', startCheck));
-    card.appendChild(tp);
+    jobs.appendChild(tp);
   }
+
+  if (jobs.children.length > 0) card.appendChild(jobs);
 
   const asked = asksPart();
   if (asked) card.appendChild(asked);
@@ -5804,91 +5862,6 @@ function raceFacts(r) {
   return parts.join(' · ');
 }
 
-// Their lap stats and every lap, as LiveRC's View Laps shows them (28 Oct
-// 2026, asked for by Asher: the racer's own figures go in their own
-// night). The arithmetic is LAPS_JS's, shared with the results page, so
-// the two never disagree; this only builds it, with textContent like the
-// rest of this page. Nothing for a race from before lap data was sent.
-function lapsPart(r) {
-  const list = lapRows(r.lapsMs, r.posAt, r.startMs, r.lenS);
-  if (list.length === 0) return null;
-
-  const part = el('div', 'nlx');
-  const stats = lapStatLines(lapStats(r.lapsMs));
-
-  if (stats.length > 0) {
-    part.appendChild(el('h4', '', 'Lap stats'));
-    const grid = el('dl', 'lxs');
-    for (const line of stats) {
-      const one = el('div');
-      one.appendChild(el('dt', '', line[0]));
-      one.appendChild(el('dd', '', line[1]));
-      grid.appendChild(one);
-    }
-    part.appendChild(grid);
-  }
-
-  const pace = list.some((x) => x.pace !== '');
-  const pos = list.some((x) => x.pos > 0);
-  const open = el('details', 'lx');
-  open.appendChild(el('summary', '', 'Lap times (' + list.length + ')'));
-
-  const table = el('table', 'lxt');
-  const head = el('thead');
-  const top = el('tr');
-  for (const name of ['#', 'Time'].concat(pace ? ['Pace'] : [], pos ? ['Pos'] : [])) top.appendChild(el('th', 'n', name));
-  head.appendChild(top);
-  table.appendChild(head);
-
-  const body = el('tbody');
-  for (const x of list) {
-    const tr = el('tr', x.best ? 'best' : '');
-    tr.appendChild(el('td', 'n', x.n));
-    tr.appendChild(el('td', 'n', lap(x.ms)));
-    if (pace) tr.appendChild(el('td', 'n', x.pace));
-    if (pos) tr.appendChild(el('td', 'n', x.pos > 0 ? ordinalOf(x.pos) : ''));
-    body.appendChild(tr);
-  }
-  table.appendChild(body);
-  open.appendChild(table);
-  part.appendChild(open);
-
-  return part;
-}
-
-function raceCard(r, ownClips) {
-  const c = el('div', 'rc');
-  const top = el('div', 'rc-top');
-  top.appendChild(el('b', '', typeof r.label === 'string' && r.label !== '' ? r.label : 'Race'));
-  const t = timeOf(r.at);
-  if (t) top.appendChild(el('span', 'when', t));
-  c.appendChild(top);
-  c.appendChild(el('div', 'rc-facts', raceFacts(r)));
-
-  const chart = lapChart(r.lapsMs, r.bestMs);
-  if (chart) c.appendChild(chart);
-
-  const laps = lapsPart(r);
-  if (laps) c.appendChild(laps);
-
-  // The reasons are theirs alone: only their own night carries them.
-  const pen = lines(r.pen);
-
-  if (pen.length > 0) {
-    const list = el('ul', 'rc-pen');
-    list.setAttribute('aria-label', 'Penalties');
-    for (const p of pen) list.appendChild(el('li', '', p));
-    c.appendChild(list);
-  }
-
-  for (const clip of ownClips) c.appendChild(clipBlock(clip, 'The call of this race'));
-
-  const ask = queryPart(r);
-  if (ask) c.appendChild(ask);
-
-  return c;
-}
-
 // "2026-10-22" as the day it names, not midnight UTC (see dayDate on the
 // results page): "22 Oct".
 function shortDay(iso) {
@@ -5967,98 +5940,487 @@ function listPart(title, said) {
   return part;
 }
 
+// ---- the night laid out to be found (28 Oct 2026, asked for by Asher: "My
+// night needs some more organizing. Plan a way to make it easier to find
+// what you want"). Summary first - a few big numbers - then their races as a
+// short list with ONE race open at a time, its lap stats, lap times and lap
+// chart on tabs as LiveRC's driver window has them, then how they did:
+// report card, driver score, progress. A jump bar across the top goes
+// straight to each part. What is open is kept here, so the redraw that
+// comes with new results leaves the page where they had it.
+//
+// view.race is the race open in the list: '' until they choose, which
+// opens their latest race (the one they came to look at after a heat), and
+// 'none' once they close it.
+const view = { race: '', tab: 'stats', pick: 'best', more: false, asks: false, details: false, scroll: '' };
+
+// The parts the jump bar can go to, as drawExtras built them this time.
+let jumps = [];
+
+// The stats a racer can line their races up by, in the race list.
+const PICKS = [['best', 'Best lap'], ['avg', 'Avg. lap'], ['consec3', 'Top 3 consec.'], ['consistency', 'Consistency']];
+
+// The four lap stats a race shows first; the rest wait behind More stats.
+const HEADLINE = ['Fast lap', 'Avg. lap', 'Top 3 consec.', 'Consistency'];
+
+// Which race a row is: its race id and car, or for a race sent without an
+// id, when it started and its name.
+function raceKey(r) {
+  const id = typeof r.sid === 'string' && r.sid !== '' ? r.sid : String(r.at || '') + '#' + String(r.label || '');
+  return id + '|' + (typeof r.car === 'string' ? r.car : '');
+}
+
+// The race that opens by itself: their latest, by drawExtras.
+let latest = '';
+
+// "3rd of 8", "Did not finish" - where a race left them, in a few words.
+function finishWords(r) {
+  if (r.out === 'DQ') return 'Disqualified';
+  if (r.out === 'DNF') return 'Did not finish';
+  return num(r.pos) > 0 ? nth(r.pos) + (num(r.of) > 0 ? ' of ' + num(r.of) : '') : '';
+}
+
+function pickValue(r, stats, key) {
+  if (key === 'best') return num(r.bestMs) > 0 ? r.bestMs : stats ? stats.fast : null;
+  const v = stats ? stats[key] : null;
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+function pickText(key, v) {
+  return key === 'consistency' ? v.toFixed(1) + '%' : lap(Math.round(v));
+}
+
+// A heading that the jump bar can reach.
+function partHead(into, id, title) {
+  const part = el('div', 'nsec');
+  if (id) {
+    part.id = id;
+    jumps.push(id);
+  }
+  part.appendChild(el('h3', '', title));
+  into.appendChild(part);
+  return part;
+}
+
+// Tonight in four numbers: their best finish and best lap (with the race
+// each came in), how many races and how many laps.
+function glancePart(races) {
+  const ran = races.filter((r) => r.out !== 'DQ' && r.out !== 'DNF' && num(r.pos) > 0);
+  const timed = races.filter((r) => num(r.bestMs) > 0);
+  const tiles = [];
+
+  if (ran.length > 0) {
+    const top = ran.reduce((a, r) => (num(r.pos) < num(a.pos) ? r : a));
+    tiles.push(['Best finish', finishWords(top), top.label]);
+  }
+
+  if (timed.length > 0) {
+    const quick = timed.reduce((a, r) => (num(r.bestMs) < num(a.bestMs) ? r : a));
+    tiles.push(['Best lap', lap(quick.bestMs), quick.label]);
+  }
+
+  if (races.length > 0) tiles.push([races.length === 1 ? 'Race' : 'Races', String(races.length), '']);
+
+  const laps = races.reduce((a, r) => a + num(r.laps), 0);
+  if (laps > 0) tiles.push(['Laps', String(laps), '']);
+
+  if (tiles.length === 0) return null;
+
+  const box = el('div', 'glance');
+  for (const t of tiles) {
+    const tile = el('div', 'gl');
+    tile.appendChild(el('span', 'gl-k', t[0]));
+    tile.appendChild(el('b', '', t[1]));
+    if (typeof t[2] === 'string' && t[2] !== '') tile.appendChild(el('span', 'gl-s', t[2]));
+    box.appendChild(tile);
+  }
+  return box;
+}
+
+// The bar across the top of the night that goes straight to each part.
+// Buttons, not links: the page's address carries their code after the #,
+// and a link to a part would put something else there.
+function drawJump() {
+  const at = document.getElementById('nj');
+  if (!at) return;
+
+  at.textContent = '';
+  const names = { 'n-races': 'Races', 'n-how': 'Report card', 'n-score': 'Driver score', 'n-prog': 'Progress', 'n-calls': 'Race calls' };
+  const list = jumps.map((id) => [id, names[id] || (carNames[id] || '')]).filter((x) => x[1] !== '');
+  if (ydBox && ydBox.children && ydBox.children.length > 0) list.push(['yd', 'Your details']);
+
+  if (list.length < 2) return;
+
+  const bar = el('nav', 'jump');
+  bar.setAttribute('aria-label', 'Parts of your night');
+  for (const x of list) {
+    bar.appendChild(tapButton(x[1], 'jb', () => {
+      const to = document.getElementById(x[0]);
+      if (to) to.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
+  }
+  at.appendChild(bar);
+}
+
+// The car sections' names for the jump bar, by section id.
+let carNames = {};
+
+// The stat the race list lines up by - only when there is more than one
+// race with laps to line up.
+function pickPart() {
+  const row = el('div', 'pick');
+  row.setAttribute('role', 'group');
+  row.setAttribute('aria-label', 'Show on each race');
+  for (const p of PICKS) {
+    const b = tapButton(p[1], 'pk' + (view.pick === p[0] ? ' on' : ''), () => {
+      view.pick = p[0];
+      drawExtras();
+    });
+    b.setAttribute('aria-pressed', view.pick === p[0] ? 'true' : 'false');
+    row.appendChild(b);
+  }
+  return row;
+}
+
+// One race as a row: its name and time, where it left them, its laps and
+// the stat picked above the list - the night's best of it marked.
+function raceRow(r, value, top, open, onTap) {
+  const b = el('button', 'rbtn');
+  b.type = 'button';
+  b.setAttribute('aria-expanded', open ? 'true' : 'false');
+
+  const name = el('span', 'rname');
+  name.appendChild(el('b', '', typeof r.label === 'string' && r.label !== '' ? r.label : 'Race'));
+  const t = timeOf(r.at);
+  if (t) name.appendChild(el('span', 'when', t));
+  b.appendChild(name);
+
+  const fin = el('span', 'rfin', [finishWords(r), num(r.laps) > 0 ? plural(num(r.laps), 'lap', 'laps') : ''].filter(Boolean).join(' · '));
+  if (lines(r.pen).length > 0) fin.appendChild(el('span', 'chip', 'Penalty'));
+  b.appendChild(fin);
+
+  b.appendChild(el('span', 'rval' + (value !== null && value === top ? ' top' : ''), value === null ? '-' : pickText(view.pick, value)));
+  b.addEventListener('click', onTap);
+  return b;
+}
+
+// An open race: its facts, then Lap stats, Lap times and Lap chart on
+// tabs (28 Oct 2026, as LiveRC's driver window), then its penalties, its
+// call and "Something wrong?". The tabs switch without a redraw, so a call
+// playing in the card keeps playing.
+function raceDetail(r, stats, own) {
+  const c = el('div', 'rc');
+  const facts = raceFacts(r);
+  if (facts) c.appendChild(el('div', 'rc-facts', facts));
+
+  const list = lapRows(r.lapsMs, r.posAt, r.startMs, r.lenS);
+  const tabs = [];
+
+  if (list.length > 0) {
+    const all = lapStatLines(stats);
+
+    if (all.length > 0) {
+      const p = el('div', 'nlx');
+      const grid = (rows) => {
+        const dl = el('dl', 'lxs');
+        for (const line of rows) {
+          const one = el('div');
+          one.appendChild(el('dt', '', line[0]));
+          one.appendChild(el('dd', '', line[1]));
+          dl.appendChild(one);
+        }
+        return dl;
+      };
+      p.appendChild(grid(all.filter((x) => HEADLINE.includes(x[0]))));
+      const rest = all.filter((x) => !HEADLINE.includes(x[0]));
+      if (rest.length > 0) {
+        const more = el('details', 'lx');
+        more.open = view.more;
+        more.addEventListener('toggle', () => { view.more = more.open; });
+        more.appendChild(el('summary', '', 'More stats'));
+        more.appendChild(grid(rest));
+        p.appendChild(more);
+      }
+      tabs.push(['stats', 'Lap stats', p]);
+    }
+
+    const pace = list.some((x) => x.pace !== '');
+    const pos = list.some((x) => x.pos > 0);
+    const wrap = el('div', 'tw');
+    const table = el('table', 'lxt');
+    const head = el('thead');
+    const top = el('tr');
+    for (const name of ['#', 'Time'].concat(pace ? ['Pace'] : [], pos ? ['Pos'] : [])) top.appendChild(el('th', 'n', name));
+    head.appendChild(top);
+    table.appendChild(head);
+    const body = el('tbody');
+    for (const x of list) {
+      const tr = el('tr', x.best ? 'best' : '');
+      tr.appendChild(el('td', 'n', x.n));
+      tr.appendChild(el('td', 'n', lap(x.ms)));
+      if (pace) tr.appendChild(el('td', 'n', x.pace));
+      if (pos) tr.appendChild(el('td', 'n', x.pos > 0 ? ordinalOf(x.pos) : ''));
+      body.appendChild(tr);
+    }
+    table.appendChild(body);
+    wrap.appendChild(table);
+    tabs.push(['laps', 'Lap times (' + list.length + ')', wrap]);
+
+    const chart = lapChart(r.lapsMs, r.bestMs);
+    if (chart) tabs.push(['chart', 'Lap chart', chart]);
+  }
+
+  if (tabs.length > 0) {
+    const shown = tabs.some((x) => x[0] === view.tab) ? view.tab : tabs[0][0];
+    const bar = el('div', 'rtabs');
+    bar.setAttribute('role', 'tablist');
+    const buttons = [];
+
+    for (const x of tabs) {
+      const b = tapButton(x[1], 'rtab' + (x[0] === shown ? ' on' : ''), () => {
+        view.tab = x[0];
+        tabs.forEach((y, i) => {
+          y[2].hidden = y[0] !== x[0];
+          buttons[i].className = 'rtab' + (y[0] === x[0] ? ' on' : '');
+          buttons[i].setAttribute('aria-selected', y[0] === x[0] ? 'true' : 'false');
+        });
+      });
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', x[0] === shown ? 'true' : 'false');
+      buttons.push(b);
+      bar.appendChild(b);
+    }
+
+    c.appendChild(bar);
+    for (const x of tabs) {
+      x[2].hidden = x[0] !== shown;
+      x[2].setAttribute('role', 'tabpanel');
+      c.appendChild(x[2]);
+    }
+  }
+
+  // The reasons are theirs alone: only their own night carries them.
+  const pen = lines(r.pen);
+
+  if (pen.length > 0) {
+    const ul = el('ul', 'rc-pen');
+    ul.setAttribute('aria-label', 'Penalties');
+    for (const p of pen) ul.appendChild(el('li', '', p));
+    c.appendChild(ul);
+  }
+
+  for (const clip of own) c.appendChild(clipBlock(clip, 'The call of this race'));
+
+  const ask = queryPart(r);
+  if (ask) c.appendChild(ask);
+
+  return c;
+}
+
+// Their races as a list. clipsOf(r) gives a race's own calls (and marks
+// them as shown, open or not, so they are not listed again under Race
+// calls).
+function racesPart(into, id, title, races, clipsOf) {
+  const part = partHead(into, id, title);
+  const stats = races.map((r) => lapStats(r.lapsMs));
+  if (races.length > 1 && stats.filter(Boolean).length > 0) part.appendChild(pickPart());
+
+  const values = races.map((r, i) => pickValue(r, stats[i], view.pick));
+  const good = values.filter((v) => v !== null);
+  const top = good.length < 2 ? null
+    : view.pick === 'consistency' ? Math.max.apply(null, good) : Math.min.apply(null, good);
+  const keys = races.map(raceKey);
+  const open = view.race === '' ? latest : view.race;
+
+  const ul = el('ul', 'rlist');
+  races.forEach((r, i) => {
+    const own = clipsOf(r);
+    const isOpen = keys[i] === open;
+    const li = el('li', 'rrow' + (isOpen ? ' open' : ''));
+    li.appendChild(raceRow(r, values[i], top, isOpen, () => {
+      view.race = isOpen ? 'none' : keys[i];
+      view.scroll = isOpen ? '' : keys[i];
+      drawExtras();
+    }));
+    if (isOpen) {
+      li.appendChild(raceDetail(r, stats[i], own));
+      if (view.scroll === keys[i]) {
+        view.scroll = '';
+        setTimeout(() => li.scrollIntoView({ block: 'nearest' }), 0);
+      }
+    }
+    ul.appendChild(li);
+  });
+  part.appendChild(ul);
+}
+
+// Their driver rating for each race, as their score for the night (28 Oct
+// 2026, asked for by Asher: "Add in driver score, probably near the report
+// card or progress"). The laptop works each race's rating out (its
+// DriverRating, 0 to 150) and sends it with the race; the page only adds up.
+function scorePart(into, id, races) {
+  const rated = races.filter((r) => typeof r.rating === 'number' && r.rating >= 0 && r.rating <= 150);
+  if (rated.length === 0) return;
+
+  const part = partHead(into, id, 'Driver score');
+  const avg = rated.reduce((a, r) => a + r.rating, 0) / rated.length;
+  const big = el('div', 'sc-big');
+  big.appendChild(el('b', '', avg.toFixed(1)));
+  big.appendChild(el('span', '', ' out of 150'));
+  part.appendChild(big);
+
+  if (rated.length > 1) {
+    const best = rated.reduce((a, r) => (r.rating > a.rating ? r : a));
+    part.appendChild(el('div', 'when', 'Average of ' + rated.length + ' races. Best ' + best.rating.toFixed(1)
+      + (typeof best.label === 'string' && best.label !== '' ? ', in ' + best.label : '') + '.'));
+
+    const ul = el('ul', 'scbars');
+    for (const r of rated) {
+      const li = el('li');
+      li.appendChild(el('span', 'sc-n', typeof r.label === 'string' && r.label !== '' ? r.label : 'Race'));
+      const bar = el('span', 'sc-bar');
+      const fill = el('span', 'sc-fill');
+      fill.style.width = Math.round(r.rating / 150 * 100) + '%';
+      bar.appendChild(fill);
+      li.appendChild(bar);
+      li.appendChild(el('span', 'sc-v', r.rating.toFixed(1)));
+      ul.appendChild(li);
+    }
+    part.appendChild(ul);
+  }
+
+  part.appendChild(el('p', 'cap', 'Out of 150 for each race: where you finished, a win, laps led, your best lap against the quickest, the fastest lap, laps completed and places gained, less 5 for each warning.'));
+}
+
+// The report card's lines, less its driver rating line when the Driver
+// score shows the same figure just below it.
+function cardLines(said, scored) {
+  return scored ? said.filter((l) => !/^Driver rating /.test(l)) : said;
+}
+
+// Everything under the night's heading for one car's races: the glance,
+// the races, how they did, the score and progress. A night of one car is
+// drawn with this once; a night of two cars once per car, in its section.
+// ids: where the jump bar can go ({} for a car's section, which the bar
+// reaches as a whole); mine: whether the headings say "Your".
+function nightPart(into, glanceInto, races, facts, coach, improve, progress, clipsOf, ids, mine) {
+  const glance = glancePart(races);
+  if (glance) glanceInto.appendChild(glance);
+
+  if (facts.length > 0) {
+    const ul = el('ul', 'night');
+    for (const l of facts) ul.appendChild(el('li', '', l));
+    into.appendChild(ul);
+  }
+
+  if (races.length > 0) {
+    racesPart(into, ids.races, (mine ? 'Your ' : '') + (races.length === 1 ? (mine ? 'race' : 'Race') : (mine ? 'races' : 'Races')), races, clipsOf);
+  }
+
+  const scored = races.some((r) => typeof r.rating === 'number' && r.rating >= 0 && r.rating <= 150);
+  const card = cardLines(coach, scored);
+  const better = typeof improve === 'string' ? lines([improve]) : lines(improve);
+  const betterTitle = mine ? 'Your improvement tonight' : 'Improvement tonight';
+
+  if (card.length > 0 || better.length > 0) {
+    const part = partHead(into, ids.how, card.length > 0 ? (mine ? 'Your report card' : 'Report card') : betterTitle);
+    if (card.length > 0) {
+      const ul = el('ul', 'night');
+      for (const l of card) ul.appendChild(el('li', '', l));
+      part.appendChild(ul);
+      if (better.length > 0) part.appendChild(el('h4', '', betterTitle));
+    }
+    if (better.length > 0) {
+      const ul = el('ul', 'night');
+      for (const l of better) ul.appendChild(el('li', '', l));
+      part.appendChild(ul);
+    }
+  }
+
+  scorePart(into, ids.score, races);
+
+  const prog = progressPart(progress);
+  if (prog) {
+    if (ids.prog) {
+      prog.id = ids.prog;
+      jumps.push(ids.prog);
+    }
+    into.appendChild(prog);
+  }
+}
+
 function drawExtras() {
   const at = document.getElementById('nx');
   if (!at || !night) return;
 
   at.textContent = '';
+  jumps = [];
+  carNames = {};
+
+  const glanceAt = document.getElementById('ng');
+  if (glanceAt) glanceAt.textContent = '';
 
   const good = (Array.isArray(clips) ? clips : []).filter(ownClip);
   const shown = new Set();
   const races = Array.isArray(night.races) ? night.races.filter((r) => r && typeof r === 'object') : [];
-
-  const cardsFor = (list, into) => {
-    for (const r of list) {
-      const own = good.filter((c) => typeof c.race === 'string' && c.race !== '' && c.race === r.sid);
-      own.forEach((c) => shown.add(c));
-      into.appendChild(raceCard(r, own));
-    }
+  const clipsOf = (r) => {
+    const own = good.filter((c) => typeof c.race === 'string' && c.race !== '' && c.race === r.sid);
+    own.forEach((c) => shown.add(c));
+    return own;
   };
   const cars = carsOf(night);
+  latest = races.length > 0 ? raceKey(races[races.length - 1]) : '';
 
   if (cars.length === 0) {
-    if (races.length > 0) {
-      at.appendChild(el('h3', '', races.length === 1 ? 'Your race' : 'Your races'));
-      cardsFor(races, at);
-    }
-
-    const better = typeof night.improve === 'string' ? lines([night.improve]) : lines(night.improve);
-    if (better.length > 0) at.appendChild(listPart('Your improvement tonight', better));
-
-    const progress = progressPart(night.progress);
-    if (progress) at.appendChild(progress);
+    // One car: the glance goes above the night's facts, which draw() put
+    // there; everything else below them.
+    nightPart(at, glanceAt || at, races, [], lines(night.coach), night.improve, night.progress, clipsOf,
+      { races: 'n-races', how: 'n-how', score: 'n-score', prog: 'n-prog' }, true);
   } else {
-    // One section per car (22 Oct 2026, second transponder): its facts,
-    // report card, races, improvement and progress, and nothing added up
-    // across cars - a best lap or a place means something for one car.
+    // One section per car (22 Oct 2026, second transponder), each laid out
+    // as a night of its own and nothing added up across cars - a best lap
+    // or a place means something for one car. The jump bar goes to each car.
     cars.forEach((car, i) => {
       const sec = el('section', 'car');
+      sec.id = 'n-car-' + i;
+      carNames[sec.id] = carHeading(car);
       sec.appendChild(el('h3', 'car-h', carHeading(car)));
 
-      const said = lines(i === 0 ? night.lines : car.lines);
-      if (said.length > 0) {
-        const list = el('ul', 'night');
-        for (const l of said) list.appendChild(el('li', '', l));
-        sec.appendChild(list);
-      }
-
-      const card = lines(i === 0 ? night.coach : car.coach);
-      if (card.length > 0) {
-        sec.appendChild(el('h4', '', 'Report card'));
-        const list = el('ul', 'night');
-        for (const l of card) list.appendChild(el('li', '', l));
-        sec.appendChild(list);
-      }
-
-      const mine = races.filter((r) => carOf(r, cars) === car);
-      if (mine.length > 0) {
-        sec.appendChild(el('h4', '', mine.length === 1 ? 'Race' : 'Races'));
-        cardsFor(mine, sec);
-      }
-
-      const imp = i === 0 ? night.improve : car.improve;
-      const better = typeof imp === 'string' ? lines([imp]) : lines(imp);
-      if (better.length > 0) {
-        sec.appendChild(el('h4', '', 'Improvement tonight'));
-        const list = el('ul', 'night');
-        for (const l of better) list.appendChild(el('li', '', l));
-        sec.appendChild(list);
-      }
-
-      const progress = progressPart(i === 0 ? night.progress : car.progress);
-      if (progress) sec.appendChild(progress);
-
+      const theirs = races.filter((r) => carOf(r, cars) === car);
+      nightPart(sec, sec, theirs,
+        lines(i === 0 ? night.lines : car.lines),
+        lines(i === 0 ? night.coach : car.coach),
+        i === 0 ? night.improve : car.improve,
+        i === 0 ? night.progress : car.progress,
+        clipsOf, {}, false);
+      jumps.push(sec.id);
       at.appendChild(sec);
     });
 
     // A race tagged with a car the list does not have cannot come off the
     // laptop; drawn rather than lost if it ever does.
     const stray = races.filter((r) => carOf(r, cars) === undefined);
-    if (stray.length > 0) {
-      at.appendChild(el('h3', '', 'Other races'));
-      cardsFor(stray, at);
-    }
+    if (stray.length > 0) racesPart(at, '', 'Other races', stray, clipsOf);
   }
 
   const reach = (Array.isArray(night.reach) ? night.reach : []).map(reachWords).filter(Boolean).slice(0, 3);
-  if (reach.length > 0) at.appendChild(listPart('Achievements in reach', reach));
+  if (reach.length > 0) {
+    const part = listPart('Achievements in reach', reach);
+    if (cars.length === 0 && jumps.indexOf('n-prog') < 0) {
+      part.id = 'n-prog';
+      jumps.push('n-prog');
+    }
+    at.appendChild(part);
+  }
 
   const rest = good.filter((c) => !shown.has(c));
 
   if (rest.length > 0) {
-    at.appendChild(el('h3', '', 'Your race calls'));
-    for (const c of rest) at.appendChild(clipBlock(c, ''));
+    const part = partHead(at, 'n-calls', 'Your race calls');
+    for (const c of rest) part.appendChild(clipBlock(c, ''));
   }
+
+  drawJump();
 }
 
 // What goes in the night box: the night, or - for a driver with a live
@@ -6208,8 +6570,13 @@ function asksPart() {
 
   if (all.length === 0) return null;
 
-  const part = el('div', 'lc-part');
-  part.appendChild(el('b', '', 'Your requests to the desk'));
+  // Folded to a count (28 Oct 2026): the live card is redrawn every few
+  // seconds, so whether it is open is kept in view.
+  const part = el('details', 'lc-part lc-asks');
+  part.open = view.asks;
+  part.addEventListener('toggle', () => { view.asks = part.open; });
+  const answered = all.filter((a) => ASK_STATES.includes(a.state) && a.state !== 'waiting').length;
+  part.appendChild(el('summary', '', 'Your requests to the desk (' + all.length + (answered > 0 ? ', ' + answered + ' answered' : '') + ')'));
   const ul = el('ul', 'yd-asks');
 
   for (const a of all.slice(-8)) {
@@ -6337,19 +6704,31 @@ function drawAsks(message) {
 
   // No details off the laptop yet: nothing to show them, so no form - a
   // race's "Something wrong?" still works, needing only asksOpen.
-  if (!asksOpen || !me) return;
+  if (!asksOpen || !me) {
+    drawJump();
+    return;
+  }
 
   const sec = el('section', 'yd');
   sec.appendChild(el('h3', '', 'Your details'));
   sec.appendChild(el('p', 'when', 'Ask the timing desk to change how you are called and shown. Nothing changes until the desk checks it.'));
 
-  if (me.pin === true && pass() === '') sec.appendChild(pinGate(message));
-  else sec.appendChild(detailsForm(message));
-
+  // The battery pack first, because it changes on race night; the request
+  // to change how they are called folded under it (28 Oct 2026), opened by
+  // itself when there is something to say about it.
   const packs = packPart();
   if (packs) sec.appendChild(packs);
 
+  const change = el('details', 'yd-change');
+  change.open = view.details || !!message;
+  change.addEventListener('toggle', () => { view.details = change.open; });
+  change.appendChild(el('summary', '', 'Change how you are called and shown'));
+  if (me.pin === true && pass() === '') change.appendChild(pinGate(message));
+  else change.appendChild(detailsForm(message));
+  sec.appendChild(change);
+
   ydBox.appendChild(sec);
+  drawJump();
 }
 
 // ---- signing in with the personal PIN

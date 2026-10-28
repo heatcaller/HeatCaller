@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **My night, easier to find your way round (28 October).** A driver's own night page on the club's relay pages is laid out so they find what they want in a tap or two. See [Finding your way round](online/index.md#finding-your-way-round).
+    - **Jump bar.** Buttons under their name go straight to **Races**, **Report card**, **Driver score**, **Progress**, **Race calls** and **Your details**, and stay at the top as they scroll. A night of two cars has a button for each car.
+    - **At a glance.** Their best finish and best lap (with the race each came in), races and laps, above the night's facts.
+    - **One race open at a time.** **Your races** is now a short list, one row per race with where it left them, its laps and a **Penalty** tag. Their latest race opens by itself; tap another to open it. The open race has **Lap stats**, **Lap times** and **Lap chart** on tabs, with four stats first and the rest under **More stats**.
+    - **Line the races up.** Buttons over the list show **Best lap**, **Avg. lap**, **Top 3 consec.** or **Consistency** on every row, the night's best in green.
+    - **Driver score.** Under the report card: their driver rating out of 150, the average and best over the night's races with a bar for each. The laptop now sends each race's rating with the night. See [Driver score](online/index.md#driver-score).
+    - **Tidier around it.** On **Right now**, check-in and the transponder sit side by side and requests to the desk fold to a count. The share and save buttons sit side by side. In **Your details** the battery pack comes first and the request to change how they're called is folded under it.
+    - Update HeatCaller on the race PC for the driver score, and redeploy the relay (`fly deploy --ha=false`) for the new layout.
 - **Results like LiveRC's, and every lap on a driver's night (28 October).**
     - **Heat results.** Each result on the club's relay pages now shows the race length ("3:00 Timed" or "20 Laps"), and for every driver their grid slot under **Qual**, their laps and time ("20/3:10.513"), how far **Behind** the car in front they were (a time, or "2 Laps"), and their best lap.
     - **View laps.** Under each driver, **View laps** opens their lap stats and every lap with its pace ("18/3:02.034") and where they were running, best lap highlighted.
