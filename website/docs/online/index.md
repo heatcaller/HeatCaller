@@ -23,7 +23,7 @@ Your club's address is the relay address followed by `/c/` and your club id, for
 | Live | `/c/<club>/live` | The race as it runs: state, countdown, flag, what's next, and the leaderboard. A **Captions** button shows the announcer's words as text (see [Captions](#captions)). | Every 2 seconds |
 | Schedule | `/c/<club>/schedule` | Today's running order, each line marked Done, On track or Next. A class picker appears when there's more than one class. | Every 15 seconds |
 | Check in | `/c/<club>/checkin` | Online check-in. The tab only appears while online check-in is switched on. See [Online check-in](check-in.md). | Every 10 seconds |
-| Results | `/c/<club>/results` | Finished sessions, newest first, grouped by day. Tap a session to see every finisher's laps, best lap and time, with their best sectors under the best lap when the session had a split loop. A small chip beside a time shows time added or warnings (see [Penalties on the results](#penalties-on-the-results)). | Every 30 seconds |
+| Results | `/c/<club>/results` | Finished sessions, newest first, grouped by day. Tap a session to see every finisher's grid slot, laps and time, how far behind the car in front they were, and best lap, with their best sectors under the best lap when the session had a split loop, plus **View laps** for each driver and a lap-by-lap position graph (see [Lap by lap on the results](#lap-by-lap-on-the-results)). A small chip beside a time shows time added or warnings (see [Penalties on the results](#penalties-on-the-results)). | Every 30 seconds |
 | My night | `/c/<club>/mynight` | A box for a driver's personal PIN, which opens their own night page. The tab only appears while online check-in is switched on. See [Opening your night with your PIN](#opening-your-night-with-your-pin). | When opened |
 | Videos | `/c/<club>/videos` | **Podium videos**: every race of the last week that has podium videos, newest first, with 1st, 2nd and 3rd and a **Download** button for each. See [Podium videos](#podium-videos). | When opened |
 | Standings | `/c/<club>/standings` | Championship points for each season, with a season picker when there's more than one. | Every 30 seconds |
@@ -55,6 +55,20 @@ The **Live** page has a **Captions** button, under "The announcer's words as tex
 Captions are switched on with **Captions on the club's live page** on the Club Website page, and are off until you tick it (see [What gets published](setup.md#what-gets-published)). A line that mentions a driver who asked to be shown by initials only, by any of their names, is left out of the captions, as it is for people listening along from home. Race control's warning and black-flag calls are left out of both too, because they say the reason; the room still hears and sees them.
 
 The Big Screen and the Wi-Fi pages have captions of their own, in the room; see [Captions on the Big Screen](../screens/big-screen.md#captions) and [Captions on the overlay and broadcast pages](../screens/phone-and-web.md#captions).
+
+### Lap by lap on the results
+
+Each race on the **Results** page is laid out the way LiveRC lays out a heat:
+
+- **Length**: "3:00 Timed" for a timed race, or "20 Laps" for a race to a lap count.
+- **Pos**, the driver and their car, and **Qual**: where they started on the grid. **Qual** is empty when the grid wasn't known.
+- **Laps/Time**: laps and the time they took, for example "20/3:10.513", or DNF, DNS or DQ.
+- **Behind**: how far behind the car in front they finished, as a time ("0.342") or in laps ("2 Laps").
+- **Best**: their best lap, with their best sectors under it on a split loop.
+- **View laps**, under each driver: their lap stats (as on their own night, see [Race cards](#race-cards)) and every lap with its **Pace**, and in a race their **Pos** after that lap. Their best lap is highlighted. Pace is the laps and time they'd have done at their average so far, for example "18/3:02.034", and is only shown for a timed race.
+- **Lap-by-lap position graph**, under the table: a coloured line for each driver showing where they were running after every lap, starting from their grid slot, with a key of names under it. Practice and qualifying have no graph.
+
+Results published by an older version of HeatCaller have no laps, so they show without **View laps**, **Qual** or the graph.
 
 ### Penalties on the results
 
@@ -192,6 +206,8 @@ Under the report card, **Your races** (or **Your race**) has a card for each rac
 - The race's name and when it ran.
 - How it went, for example "2nd of 8 · started 4th · 12 laps · best 9.214", or "Disqualified" or "Did not finish". Ghost cars aren't counted in "of 8".
 - **A lap chart**: one line across the card, a point for each lap, left to right, with quicker laps higher and the best lap marked. Under it: "Each lap, left to right - higher is quicker. Best 9.214 on lap 7." A lap far slower than the rest, such as a crash or a flipped car, is drawn along the bottom edge so the rest of the line isn't squashed flat. A race with fewer than two laps has no chart.
+- **Lap stats**: **Fast lap**, **Avg. lap**, **Avg. top 5**, **Avg. top 10** and **Avg. top 15** (the average of their quickest 5, 10 or 15 laps), **Top 2 consec.** and **Top 3 consec.** (their quickest 2 or 3 laps in a row, added up), **Std. deviation** (how far their laps strayed from their average) and **Consistency** (100% would be every lap the same). A figure needs enough laps: **Avg. top 10** needs 10.
+- **Lap times (12)**: tap to see every lap with its time, **Pace** in a timed race, and **Pos**, where they were running after that lap, in a race. Their best lap is highlighted.
 - **Penalties**, in red, one line each, with race control's reason: "Warning 1 - Blocking", "+5 s - Blocking (warning 2)", "+5 s - jump start", "Jump start (no time added)", or a change made after the race with the reason given for it. A penalty with no reason typed reads "no reason given". These lines are only ever on the driver's own night; the public results show numbers only (see [Penalties on the results](#penalties-on-the-results)).
 - **The call of this race**, when the club shares drivers' clips: the announcer's call of that driver in that race, with a player and **Download the call (mp3)**.
 - **Something wrong?**, when the club takes requests: a way to ask the desk to look at that result (see [Querying a result](driver-requests.md#querying-a-result)).
@@ -299,9 +315,9 @@ When the app starts, or when you change the address, club, token or short-name s
 
 ## How long results stay online
 
-The relay keeps every result you publish, so drivers can look back through past seasons on the **Results** page. There's no limit on how many, only on space (below), and a session is only a kilobyte or two. The laptop still keeps every result it has ever recorded, so it stays the record.
+The relay keeps every result you publish, so drivers can look back through past seasons on the **Results** page. There's no limit on how many, only on space (below). A session with every driver's laps is about 3 to 6 KB: a heat of 8 drivers over 20 laps is about 3 KB, a 12-car main of 35 laps about 6 KB. The laptop still keeps every result it has ever recorded, so it stays the record.
 
-Each club can hold 50 MB on the relay in total. If results would take the club past that, the oldest results are dropped to make room.
+Each club can hold 50 MB on the relay in total. If results would take the club past that, the oldest results are dropped to make room. A club racing one night a week keeps about three years of results; a very busy club racing three nights a week, with 40 heats and 20 practices a night, keeps about a year.
 
 The race-day manager's traffic over the relay doesn't count toward those 50 MB. It has an allowance of its own: about 1 MB of requests waiting for the laptop, and 4 MB of answers waiting for phones to collect them. So however busy the manager is, it can't make results fail to publish or push old results off. When too many requests are waiting for the laptop, the manager's page says "The race-day manager is busy - the laptop has not caught up with recent requests yet. Try again shortly."
 

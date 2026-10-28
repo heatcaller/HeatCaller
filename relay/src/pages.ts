@@ -251,6 +251,38 @@ a.go { text-align: center; text-decoration: none; }
 .rc-facts { color: var(--muted); font-size: 0.9rem; }
 .rc-pen { list-style: none; margin: 8px 0 0; padding: 0; font-size: 0.9rem; color: var(--bad); }
 .rc-pen li { padding: 2px 0; }
+/* Heat results as LiveRC lays them out (28 Oct 2026): one tbody per
+   driver, so View laps opens under its own row and the stripes and the
+   winner's colour still go by driver, not by table row. */
+.tw { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.len { color: var(--muted); font-size: 0.85rem; margin: 0; padding: 0 16px 6px; }
+table.res tbody.drv tr { background: none; }
+table.res tbody.drv:nth-of-type(odd) tr { background: var(--row-alt); }
+table.res tbody.drv td.pos { color: var(--muted); font-weight: 400; }
+table.res tbody.drv:first-of-type tr:first-child td.pos { color: var(--primary); font-weight: 700; }
+table.res tr.lxr td { padding-top: 0; white-space: normal; }
+details.lx { background: none; border: none; border-radius: 0; margin: 0; overflow: visible; }
+details.lx > summary { padding: 0 0 6px; color: var(--accent); font-size: 0.85rem; display: inline-block; }
+details.lx[open] > summary { color: var(--text); }
+.lxp, .nlx { padding: 4px 0 10px; }
+.lxs { display: grid; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); gap: 8px 14px; margin: 4px 0 12px; }
+.lxs div { margin: 0; }
+.lxs dt { color: var(--muted); font-size: 0.75rem; }
+.lxs dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+table.lxt { width: auto; min-width: 16rem; }
+table.lxt th, table.lxt td { padding: 4px 12px; }
+table.lxt tbody tr { background: none; }
+table.lxt tbody tr:nth-child(odd) { background: var(--row-alt); }
+table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 700; }
+.posfig { margin: 8px 16px 16px; }
+.posfig figcaption { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; margin-bottom: 4px; }
+.posg { display: block; width: 100%; height: auto; }
+.posg .grid { stroke: var(--border); stroke-width: 1; }
+.posg .ax { fill: var(--muted); font-size: 12px; }
+.posg polyline { stroke: var(--c); stroke-width: 2.5; fill: none; stroke-linejoin: round; }
+.posg circle { fill: var(--surface); stroke: var(--c); stroke-width: 2; }
+.posk { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.85rem; }
+.posk .sw { display: inline-block; width: 0.8em; height: 0.8em; border-radius: 2px; background: var(--c); margin-right: 6px; vertical-align: -1px; }
 .lapfig { margin: 0; }
 .lapchart, .pgchart { display: block; width: 100%; height: auto; margin: 8px 0 2px; }
 .lapchart polyline { stroke: var(--accent); stroke-width: 2; fill: none; stroke-linejoin: round; }
@@ -871,6 +903,172 @@ ${overrides}
 `;
 }
 
+// ------------------------------------------------------------ lap by lap
+
+/**
+ * THE LAP-BY-LAP NUMBERS (28 Oct 2026, asked for by Asher: "We need to make
+ * sure that all of the data points, including the graph, are available in
+ * the relay. Need feature parity here" - with LiveRC).
+ *
+ * Arithmetic only, shared by the results page (View laps, the position
+ * graph) and a driver's night (their lap stats and lap list), so the two
+ * can never disagree about a driver's average or their pace. Each page
+ * draws the answers its own way: the results page writes markup, the night
+ * page builds elements.
+ *
+ * What the laptop sends, per driver (MainForm.PublishSessionToRelay,
+ * DriverNightExtras): lapsMs - every flying lap, the start-lap slot left
+ * out; startMs - that slot, green flag to the line; posAt - their position
+ * after each of those laps, worked out on the laptop over the whole field
+ * (LapByLap). And per race, its time limit in seconds. Any of them may be
+ * missing - a result from before this, a practice, a race with no time
+ * limit - and every function here answers null for what it cannot know
+ * rather than a number made up to fill the gap.
+ *
+ * The definitions are LiveRC's, so a club comparing the two sees the same
+ * figures: the average of the N quickest laps; the quickest run of 2 or 3
+ * laps in a row; the standard deviation of every lap; consistency as 100
+ * less the deviation as a percentage of the average lap; and pace as the
+ * laps the race would come to at their average so far - the first whole
+ * lap past the time limit - with the time that many laps would take.
+ */
+export const LAPS_JS = `
+// Only real lap times: a number above nothing. Anything else in the list
+// is left out rather than counted as a zero-second lap.
+function lxLaps(list) {
+  return Array.isArray(list) ? list.filter((ms) => typeof ms === 'number' && isFinite(ms) && ms > 0) : [];
+}
+
+function lxMean(list) {
+  return list.length === 0 ? null : list.reduce((a, b) => a + b, 0) / list.length;
+}
+
+// The quickest k laps in a row, added up; null on fewer than k laps.
+function lxConsecutive(list, k) {
+  if (list.length < k) return null;
+  let run = 0;
+  for (let i = 0; i < k; i++) run += list[i];
+  let best = run;
+  for (let i = k; i < list.length; i++) {
+    run += list[i] - list[i - k];
+    if (run < best) best = run;
+  }
+  return best;
+}
+
+// LiveRC's lap stats, in ms (consistency in percent), or null with no laps.
+// A figure that needs more laps than they did (the top 15 of a 12-lap race)
+// is null rather than the average of fewer.
+function lapStats(raw) {
+  const laps = lxLaps(raw);
+  if (laps.length === 0) return null;
+
+  const sorted = laps.slice().sort((a, b) => a - b);
+  const avg = lxMean(laps);
+  const top = (n) => (sorted.length >= n ? lxMean(sorted.slice(0, n)) : null);
+  const sd = Math.sqrt(laps.reduce((a, ms) => a + (ms - avg) * (ms - avg), 0) / laps.length);
+
+  return {
+    fast: sorted[0],
+    avg,
+    top5: top(5),
+    top10: top(10),
+    top15: top(15),
+    consec2: lxConsecutive(laps, 2),
+    consec3: lxConsecutive(laps, 3),
+    sd: laps.length >= 2 ? sd : null,
+    consistency: laps.length >= 2 && avg > 0 ? Math.max(0, 100 - sd / avg * 100) : null,
+  };
+}
+
+// The figures in the order LiveRC lists them, as [label, text], leaving out
+// any that could not be worked out.
+function lapStatLines(stats) {
+  if (!stats) return [];
+  const ms = (v) => (typeof v === 'number' ? lap(Math.round(v)) : '');
+  const lines = [
+    ['Fast lap', ms(stats.fast)],
+    ['Avg. lap', ms(stats.avg)],
+    ['Avg. top 5', ms(stats.top5)],
+    ['Avg. top 10', ms(stats.top10)],
+    ['Avg. top 15', ms(stats.top15)],
+    ['Top 2 consec.', ms(stats.consec2)],
+    ['Top 3 consec.', ms(stats.consec3)],
+    ['Std. deviation', typeof stats.sd === 'number' ? (stats.sd / 1000).toFixed(3) : ''],
+    ['Consistency', typeof stats.consistency === 'number' ? stats.consistency.toFixed(3) + '%' : ''],
+  ];
+  return lines.filter((line) => line[1] !== '' && line[1] !== '-');
+}
+
+// One row per flying lap: {n, ms, best, pace, pos}. pace is "18/3:02.034"
+// with a time limit to project over, otherwise ''; pos is the place after
+// that lap, or 0 when it is not known. The laps are taken as sent, in
+// step with posAt, so a lap's position stays on its own row.
+function lapRows(raw, posAt, startMs, lengthS) {
+  const list = Array.isArray(raw) ? raw : [];
+  const places = Array.isArray(posAt) && posAt.length === list.length ? posAt : null;
+  const limitMs = typeof lengthS === 'number' && lengthS > 0 ? lengthS * 1000 : 0;
+  const good = lxLaps(list);
+  const quickest = good.length > 0 ? Math.min.apply(null, good) : 0;
+  let total = typeof startMs === 'number' && startMs > 0 ? startMs : 0;
+  let counted = 0;
+  let marked = false;
+  const rows = [];
+
+  list.forEach((ms, i) => {
+    const real = typeof ms === 'number' && isFinite(ms) && ms > 0;
+    if (!real) return;
+    total += ms;
+    counted++;
+
+    let pace = '';
+    if (limitMs > 0) {
+      const each = total / counted;
+      const laps = Math.max(1, Math.ceil(limitMs / each - 1e-9));
+      pace = laps + '/' + lap(Math.round(laps * each));
+    }
+
+    const best = !marked && ms === quickest;
+    if (best) marked = true;
+
+    const pos = places !== null && typeof places[i] === 'number' && places[i] > 0 ? places[i] : 0;
+    rows.push({ n: counted, ms, best, pace, pos });
+  });
+
+  return rows;
+}
+
+// What sits between a driver and the car in front: whole laps, or the gap
+// in seconds on the same lap. Empty for the winner, and for a row either
+// side of which did not finish normally - a gap to a DNF means nothing.
+function behindWords(row, ahead) {
+  if (!row || !ahead || row.status || ahead.status) return '';
+  const laps = Number(row.laps);
+  const theirs = Number(ahead.laps);
+  if (!isFinite(laps) || !isFinite(theirs)) return '';
+  if (theirs > laps) {
+    const down = theirs - laps;
+    return down + (down === 1 ? ' Lap' : ' Laps');
+  }
+  const gap = Number(row.elapsedMs) - Number(ahead.elapsedMs);
+  return isFinite(gap) && gap > 0 && theirs === laps ? lap(gap) : '';
+}
+
+// "3:00 Timed" or "20 Laps", from the race's limits; '' without either.
+function lengthWords(body) {
+  const s = body ? Number(body.lengthS) : 0;
+  const laps = body ? Number(body.lapLimit) : 0;
+  if (isFinite(s) && s > 0) return clock(s * 1000) + ' Timed';
+  if (isFinite(laps) && laps > 0) return laps + ' Laps';
+  return '';
+}
+
+function ordinalOf(n) {
+  const tail = n % 100;
+  return n + (tail >= 11 && tail <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] || 'th'));
+}
+`;
+
 // ---------------------------------------------------------------- results
 
 /**
@@ -997,19 +1195,125 @@ function when(session, fallback) {
   return d && !isNaN(d) ? d : null;
 }
 
-function rows(results) {
+// One body per driver, so a driver's View laps can open under their own
+// row and the stripes and the winner's colour still go by driver (see
+// .res in the styles).
+//
+// WHY (28 Oct 2026, asked for by Asher, matching LiveRC's heat results):
+// Qual, Laps/Time and Behind, and every driver's laps behind View laps.
+// The car moved under the driver's name to make the room on a phone. A
+// result from before lap data simply has no View laps; the columns it
+// cannot fill are a dash or nothing.
+function rows(results, sid) {
   if (!Array.isArray(results) || results.length === 0) {
     return '<tbody><tr><td colspan="6" class="note">No finishers recorded.</td></tr></tbody>';
   }
 
-  return '<tbody>' + results.map((r) => \`<tr>
-      <td class="pos">\${esc(r.pos)}</td>
-      <td>\${nm(r.name)}</td>
-      <td class="car">\${esc(r.car || '')}</td>
-      <td class="n">\${esc(r.laps ?? '-')}</td>
-      <td class="n">\${lap(r.fastLapMs)}\${sectors(r.sectorsMs) ? '<span class="sec">' + esc(sectors(r.sectorsMs)) + '</span>' : ''}</td>
-      <td class="n">\${esc(r.status) || clock(r.elapsedMs)}\${penChip(r)}</td>
-    </tr>\`).join('') + '</tbody>';
+  return results.map((r, i) => {
+    const laps = lxLaps(r.lapsMs);
+    const key = String(sid ?? '') + ':' + i;
+    const lapsAndTime = r.status
+      ? esc(r.status)
+      : esc(r.laps ?? '-') + '/' + lap(r.elapsedMs);
+
+    return '<tbody class="drv"><tr>' +
+      '<td class="pos">' + esc(r.pos) + '</td>' +
+      '<td>' + nm(r.name) + (r.car ? '<span class="sec">' + esc(r.car) + '</span>' : '') + '</td>' +
+      '<td class="n">' + (Number(r.qual) > 0 ? esc(r.qual) : '') + '</td>' +
+      '<td class="n">' + lapsAndTime + penChip(r) + '</td>' +
+      '<td class="n">' + esc(i === 0 ? '' : behindWords(r, results[i - 1])) + '</td>' +
+      '<td class="n">' + lap(r.fastLapMs) + (sectors(r.sectorsMs) ? '<span class="sec">' + esc(sectors(r.sectorsMs)) + '</span>' : '') + '</td>' +
+      '</tr>' +
+      (laps.length === 0 ? '' :
+        '<tr class="lxr"><td colspan="6"><details class="lx" data-lx="' + esc(key) + '"' + (lapsOpen.has(key) ? ' open' : '') + '>' +
+        '<summary>View laps</summary>' + (lapsOpen.has(key) ? lapPanel(r, lengthOf) : '') +
+        '</details></td></tr>') +
+      '</tbody>';
+  }).join('');
+}
+
+// Which drivers' View laps are open, by session and row, so a refresh puts
+// them back as they were. The panel is only written while open: a club
+// night of sixty heats is not sixty times every driver's lap list.
+const lapsOpen = new Set();
+
+// The race's time limit, in seconds, as the session being drawn says -
+// set by card() just before its rows are, since a lap list's pace needs it.
+let lengthOf = 0;
+
+// One driver's lap stats and lap list, as LiveRC's View Laps shows them.
+// Their lap chart is on their own night - see raceCard there.
+function lapPanel(r, lengthS) {
+  const stats = lapStatLines(lapStats(r.lapsMs));
+  const list = lapRows(r.lapsMs, r.posAt, r.startMs, lengthS);
+  const pace = list.some((x) => x.pace !== '');
+  const pos = list.some((x) => x.pos > 0);
+
+  return '<div class="lxp">' +
+    (stats.length === 0 ? '' : '<dl class="lxs">' + stats.map((line) =>
+      '<div><dt>' + esc(line[0]) + '</dt><dd>' + esc(line[1]) + '</dd></div>').join('') + '</dl>') +
+    '<table class="lxt"><thead><tr><th class="n">#</th><th class="n">Time</th>' +
+    (pace ? '<th class="n">Pace</th>' : '') + (pos ? '<th class="n">Pos</th>' : '') + '</tr></thead><tbody>' +
+    list.map((x) => '<tr' + (x.best ? ' class="best"' : '') + '><td class="n">' + x.n + '</td><td class="n">' + lap(x.ms) + '</td>' +
+      (pace ? '<td class="n">' + esc(x.pace) + '</td>' : '') +
+      (pos ? '<td class="n">' + (x.pos > 0 ? esc(ordinalOf(x.pos)) : '') + '</td>' : '') + '</tr>').join('') +
+    '</tbody></table></div>';
+}
+
+// The lap-by-lap position graph, as LiveRC draws it under a heat: a line
+// per driver from where they started (lap 0, their grid slot when it is
+// known) through their place after every lap, first at the top. Only for a
+// race whose laptop sent the places; a result without them has no graph.
+//
+// Built as markup like the rest of this page. Every number in it is one
+// this function made, and every name goes through esc().
+const LINE_COLOURS = ['#F5C342', '#8EC5FF', '#E5484D', '#46A758', '#A77BEB', '#FF8B3E',
+  '#2EE6FF', '#FF2E9A', '#A0E85B', '#C9A04E', '#D9C2FF', '#7FD6C2'];
+
+function positionGraph(results) {
+  const drivers = (Array.isArray(results) ? results : [])
+    .filter((r) => r && Array.isArray(r.posAt) && r.posAt.length > 0 && r.posAt.every((p) => typeof p === 'number' && p > 0));
+
+  if (drivers.length < 2) return '';
+
+  const field = Math.max(drivers.length, ...drivers.map((r) => Math.max.apply(null, r.posAt)));
+  const most = Math.max(...drivers.map((r) => r.posAt.length));
+  const W = 600;
+  const H = 40 + field * 34;
+  const L = 34;
+  const R = 12;
+  const T = 14;
+  const B = 28;
+  const x = (k) => L + k * (W - L - R) / Math.max(1, most);
+  const y = (p) => T + (p - 1) * (H - T - B) / Math.max(1, field - 1);
+  let svg = '<svg class="posg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Lap-by-lap position graph">';
+
+  for (let p = 1; p <= field; p++) {
+    svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(p).toFixed(1) + '" y2="' + y(p).toFixed(1) + '"/>' +
+      '<text class="ax" x="' + (L - 8) + '" y="' + (y(p) + 4).toFixed(1) + '" text-anchor="end">' + p + '</text>';
+  }
+
+  const step = most > 30 ? 10 : 5;
+  for (let k = 0; k <= most; k += step) {
+    svg += '<text class="ax" x="' + x(k).toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle">' + k + '</text>';
+  }
+
+  drivers.forEach((r, i) => {
+    const colour = LINE_COLOURS[i % LINE_COLOURS.length];
+    const points = [];
+    if (Number(r.qual) > 0) points.push([0, Number(r.qual)]);
+    r.posAt.forEach((p, k) => points.push([k + 1, p]));
+    const path = points.map((pt) => x(pt[0]).toFixed(1) + ',' + y(pt[1]).toFixed(1)).join(' ');
+    svg += '<g style="--c:' + colour + '"><polyline points="' + path + '"/>' +
+      points.map((pt) => '<circle cx="' + x(pt[0]).toFixed(1) + '" cy="' + y(pt[1]).toFixed(1) + '" r="3"/>').join('') + '</g>';
+  });
+
+  svg += '</svg>';
+
+  const key = '<ul class="posk">' + drivers.map((r, i) =>
+    '<li><span class="sw" style="--c:' + LINE_COLOURS[i % LINE_COLOURS.length] + '"></span>' + esc(r.name) + '</li>').join('') + '</ul>';
+
+  return '<figure class="posfig"><figcaption>Lap-by-lap position graph</figcaption>' + svg + key + '</figure>';
 }
 
 // A small "+5s" or "1 warning" beside a row's time (22 Oct 2026, driver
@@ -1100,11 +1404,20 @@ function card(line, body, mine) {
     '</summary>' +
     (body === null
       ? '<p class="note">That result is not on the relay any more.</p>'
-      : '<table><thead><tr>' +
-        '<th class="pos">#</th><th>Driver</th><th class="car">Car</th>' +
-        '<th class="n">Laps</th><th class="n">Best</th><th class="n">Time</th>' +
-        '</tr></thead>' + rows(results) + '</table>') +
+      : (lengthWords(body) === '' ? '' : '<p class="len">Length: ' + esc(lengthWords(body)) + '</p>') +
+        '<div class="tw"><table class="res"><thead><tr>' +
+        '<th class="pos">Pos</th><th>Driver</th><th class="n">Qual</th>' +
+        '<th class="n">Laps/Time</th><th class="n">Behind</th><th class="n">Best</th>' +
+        '</tr></thead>' + withLength(body, () => rows(results, line.id)) + '</table></div>' +
+        positionGraph(results)) +
     '</details>';
+}
+
+// The rows of one session, drawn with its time limit in hand for pace.
+function withLength(body, draw) {
+  const was = lengthOf;
+  lengthOf = body && Number(body.lengthS) > 0 ? Number(body.lengthS) : 0;
+  try { return draw(); } finally { lengthOf = was; }
 }
 
 // "2026-09-16" is a calendar day, not an instant. Handed to Date it is
@@ -2249,6 +2562,25 @@ async function load() {
 // look at somebody's history. Opening one also makes it what the address
 // bar names, so the link in it is a link to what is being read.
 feed.addEventListener('toggle', (e) => {
+  // A driver's View laps (28 Oct 2026): remembered like a session, and its
+  // panel written the first time it opens - rows() leaves it out while shut.
+  const lx = e.target && e.target.dataset ? e.target.dataset.lx : null;
+
+  if (lx) {
+    if (e.target.open && !lapsOpen.has(lx)) {
+      lapsOpen.add(lx);
+      const at = lx.lastIndexOf(':');
+      const body = bodyOf.get(lx.slice(0, at));
+      const row = body && Array.isArray(body.results) ? body.results[Number(lx.slice(at + 1))] : null;
+      if (row && !e.target.querySelector('.lxp')) {
+        e.target.insertAdjacentHTML('beforeend', lapPanel(row, body && Number(body.lengthS) > 0 ? Number(body.lengthS) : 0));
+      }
+    } else if (!e.target.open) {
+      lapsOpen.delete(lx);
+    }
+    return;
+  }
+
   const id = e.target && e.target.dataset ? e.target.dataset.id : null;
 
   if (!id) return;
@@ -2412,7 +2744,7 @@ export function resultsPage(club: string, clubName: string, context: PageContext
       '<p class="when" id="shortnames" style="display:none"></p>' +
       '<div id="feed"><p class="note">Loading&hellip;</p></div>' +
       '<div class="pager" id="pager" style="display:none"></div>',
-    script: RESULTS_JS,
+    script: LAPS_JS + RESULTS_JS,
   }, context);
 }
 
@@ -5497,6 +5829,58 @@ function raceFacts(r) {
   return parts.join(' · ');
 }
 
+// Their lap stats and every lap, as LiveRC's View Laps shows them (28 Oct
+// 2026, asked for by Asher: the racer's own figures go in their own
+// night). The arithmetic is LAPS_JS's, shared with the results page, so
+// the two never disagree; this only builds it, with textContent like the
+// rest of this page. Nothing for a race from before lap data was sent.
+function lapsPart(r) {
+  const list = lapRows(r.lapsMs, r.posAt, r.startMs, r.lenS);
+  if (list.length === 0) return null;
+
+  const part = el('div', 'nlx');
+  const stats = lapStatLines(lapStats(r.lapsMs));
+
+  if (stats.length > 0) {
+    part.appendChild(el('h4', '', 'Lap stats'));
+    const grid = el('dl', 'lxs');
+    for (const line of stats) {
+      const one = el('div');
+      one.appendChild(el('dt', '', line[0]));
+      one.appendChild(el('dd', '', line[1]));
+      grid.appendChild(one);
+    }
+    part.appendChild(grid);
+  }
+
+  const pace = list.some((x) => x.pace !== '');
+  const pos = list.some((x) => x.pos > 0);
+  const open = el('details', 'lx');
+  open.appendChild(el('summary', '', 'Lap times (' + list.length + ')'));
+
+  const table = el('table', 'lxt');
+  const head = el('thead');
+  const top = el('tr');
+  for (const name of ['#', 'Time'].concat(pace ? ['Pace'] : [], pos ? ['Pos'] : [])) top.appendChild(el('th', 'n', name));
+  head.appendChild(top);
+  table.appendChild(head);
+
+  const body = el('tbody');
+  for (const x of list) {
+    const tr = el('tr', x.best ? 'best' : '');
+    tr.appendChild(el('td', 'n', x.n));
+    tr.appendChild(el('td', 'n', lap(x.ms)));
+    if (pace) tr.appendChild(el('td', 'n', x.pace));
+    if (pos) tr.appendChild(el('td', 'n', x.pos > 0 ? ordinalOf(x.pos) : ''));
+    body.appendChild(tr);
+  }
+  table.appendChild(body);
+  open.appendChild(table);
+  part.appendChild(open);
+
+  return part;
+}
+
 function raceCard(r, ownClips) {
   const c = el('div', 'rc');
   const top = el('div', 'rc-top');
@@ -5508,6 +5892,9 @@ function raceCard(r, ownClips) {
 
   const chart = lapChart(r.lapsMs, r.bestMs);
   if (chart) c.appendChild(chart);
+
+  const laps = lapsPart(r);
+  if (laps) c.appendChild(laps);
 
   // The reasons are theirs alone: only their own night carries them.
   const pen = lines(r.pen);
@@ -6490,7 +6877,7 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // the night and outside it, so a redraw of the night never wipes a
     // half-typed change; empty unless the club is taking requests.
     body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>',
-    script: NIGHT_JS,
+    script: LAPS_JS + NIGHT_JS,
     noindex: true,
   }, context);
 }
