@@ -401,8 +401,17 @@ describe("the night's own extras", () => {
     ],
   };
 
+  // Since 28 Oct 2026 the races are a list with one open at a time - the
+  // latest by itself - so a test about an earlier race opens it first.
+  function openRace(page: FakePage, label: string): void {
+    const row = page.get("nx").find((n) => n.className === "rbtn" && n.textContent.startsWith(label))[0];
+    assert.ok(row, `a row for ${label}`);
+    row.click();
+  }
+
   it("draws one card per race with its facts and penalty lines", async () => {
     const page = await open(relay(full));
+    openRace(page, "Q1 Heat 2");
     const nx = page.get("nx");
     const text = nx.textContent;
 
@@ -420,6 +429,7 @@ describe("the night's own extras", () => {
 
   it("draws the lap chart: a point per lap, the best marked, the crash lap held at the edge", async () => {
     const page = await open(relay(full));
+    openRace(page, "Q1 Heat 2");
     const chart = page.get("nx").find((n) => n.tagName === "SVG" && n.getAttribute("class") === "lapchart")[0];
 
     assert.ok(chart, "a chart for the race with laps");
@@ -459,6 +469,7 @@ describe("the night's own extras", () => {
 
   it("plays only the relay's own clips for this club, the race's own in its card", async () => {
     const page = await open(relay(full));
+    openRace(page, "Q1 Heat 2");
     const nx = page.get("nx");
     const players = nx.find((n) => n.tagName === "AUDIO");
 

@@ -111,8 +111,9 @@ From top to bottom, the page shows:
 
 1. **Right now**, a live card for the evening as it happens (see below).
 2. **Your first night - what happens**, a short guide, on a driver's first night only.
-3. The night itself: the night's facts, **Your report card**, a card for each race, how the night went and their race calls.
-4. **Your details**, where they ask the desk for changes, when the club takes requests (see [Driver requests](driver-requests.md)).
+3. The night itself: a bar of buttons that jumps to each part, the night at a glance, the night's facts, **Your races**, **Your report card**, **Driver score**, progress and their race calls (see [Finding your way round](#finding-your-way-round)).
+4. **Make a picture to share** and **Save as a text file**, side by side.
+5. **Your details**, with their battery pack and, folded under it, the request to change how they're called and shown, when the club takes requests (see [Driver requests](driver-requests.md)).
 
 Before their first race of the night, the night part says "Nothing is filed for you yet tonight. Your races show here after each one." The live card above it still works.
 
@@ -127,8 +128,17 @@ The **Right now** card is at the top of the page while HeatCaller is sending the
 - **Turn on alerts**, with "Two beeps and a buzz when your race is next, and again when it is staged." Tap it and the phone beeps once to show it works, and says "Alerts on. Keep this page open on your screen." The button then reads **Alerts on - tap to turn off**. A phone only lets a page beep after a tap, and only while the page is open with the screen on. An iPhone can't buzz for a web page, so it only beeps.
 - **Your marshal duty**, when they marshal one of the coming races: the race and their post, for example "Q2 Heat 2 (Stock Buggy) - Turn 3", with "1 race before it." or "That race is next - head to your post." It's the same duty the announcer calls; see [Corner marshals](../race-day/program-and-mains.md#corner-marshals).
 - **Check in**, while online check-in is open and they're on tonight's list: "One tap and the timing desk knows you are here." After the tap it reads **Checked in ✓**, with "Tap again if you need to check out." It works exactly like the button on their check-in card (see [Online check-in](check-in.md)). If check-in has closed, the phone says "Online check-in is closed just now - check in at the desk."
-- **Your transponder**, with when the timing line last heard it and a **Check my transponder** button (see below).
-- **Your requests to the desk**, once they've sent one, with how each is getting on (see [What the driver sees](driver-requests.md#what-the-driver-sees)).
+- **Your transponder**, with when the timing line last heard it and a **Check my transponder** button (see below). On a wide screen **Check in** and **Your transponder** sit side by side.
+- **Your requests to the desk (2, 1 answered)**, once they've sent one: tap it to see how each is getting on (see [What the driver sees](driver-requests.md#what-the-driver-sees)). It stays open across the card's refreshes once tapped.
+
+#### Finding your way round
+
+The night is laid out so a driver at the track finds what they want in a tap or two:
+
+- **The jump bar.** A row of buttons under the driver's name, **Races**, **Report card**, **Driver score**, **Progress**, **Race calls** and **Your details**, each going straight to that part. Only the parts with something in them get a button. It stays at the top of the screen as they scroll. On a night of two cars it has a button for each car instead.
+- **At a glance.** Four numbers above the night's facts: their **Best finish** and **Best lap**, each with the race it came in, and how many **Races** and **Laps** they did.
+- **One race open at a time.** **Your races** is a list, one row per race: its name and time, where it left them ("3rd of 8"), its laps, and a red **Penalty** tag if it had one. Their latest race is open when the page opens. Tap another row to open it instead, or the open one to close it. What they opened stays open when new results come in.
+- **Line the races up by a stat.** With more than one race, the buttons over the list (**Best lap**, **Avg. lap**, **Top 3 consec.**, **Consistency**) change the number at the end of every row, and the night's best of it is in green. Quicker is best for the lap times; higher is best for consistency.
 
 #### Check my transponder
 
@@ -172,7 +182,7 @@ The same guide is on their check-in card when they open it from their QR check-i
 
 A driver who races a second transponder as a car of its own gets one night page, not two. HeatCaller times a driver's other transponder as a separate row in the results when another of their cars is already on track in that race; otherwise its laps go in their main row. See [Alternate transponder](../timing/transponders.md#alternate-transponder).
 
-When that happens, the night page splits into a section for each car, headed with the car and its name from the results, for example **Main car · B6.4** and **Second car · RC10 B7**. Each section has that car's own facts, report card, races, improvement tonight and progress. Nothing is added up across the two cars: a place, a best lap or an improvement only means something for one car. Badges within reach and the first-night guide are the driver's, so they appear once.
+When that happens, the night page splits into a section for each car, headed with the car and its name from the results, for example **Main car · B6.4** and **Second car · RC10 B7**. Each section has that car's own glance, facts, races, report card, improvement tonight, driver score and progress, and the jump bar has a button for each car. Nothing is added up across the two cars: a place, a best lap or an improvement only means something for one car. Badges within reach and the first-night guide are the driver's, so they appear once.
 
 - **A race where the second transponder was merged** into the main row counts as the main car's, as it does on the result sheet.
 - **Both cars in the same race** shows that race once in each car's section. **Something wrong?** under either one names the car in the message to the desk.
@@ -185,39 +195,48 @@ The sections need the relay redeployed after 22 Oct 2026 (see [Updating the rela
 
 #### Race cards
 
-Under the report card, **Your races** (or **Your race**) has a card for each race they ran tonight, in order:
+**Your races** (or **Your race**) lists each race they ran tonight, in order. The open race shows:
 
-- The race's name and when it ran.
 - How it went, for example "2nd of 8 · started 4th · 12 laps · best 9.214", or "Disqualified" or "Did not finish". Ghost cars aren't counted in "of 8".
-- **A lap chart**: one line across the card, a point for each lap, left to right, with quicker laps higher and the best lap marked. Under it: "Each lap, left to right - higher is quicker. Best 9.214 on lap 7." A lap far slower than the rest, such as a crash or a flipped car, is drawn along the bottom edge so the rest of the line isn't squashed flat. A race with fewer than two laps has no chart.
-- **Lap stats**: **Fast lap**, **Avg. lap**, **Avg. top 5**, **Avg. top 10** and **Avg. top 15** (the average of their quickest 5, 10 or 15 laps), **Top 2 consec.** and **Top 3 consec.** (their quickest 2 or 3 laps in a row, added up), **Std. deviation** (how far their laps strayed from their average) and **Consistency** (100% would be every lap the same). A figure needs enough laps: **Avg. top 10** needs 10.
-- **Lap times (12)**: tap to see every lap with its time, **Pace** in a timed race, and **Pos**, where they were running after that lap, in a race. Their best lap is highlighted.
+- Three tabs, as LiveRC's driver window has them:
+    - **Lap stats**, first: **Fast lap**, **Avg. lap**, **Top 3 consec.** and **Consistency**, then **More stats** for **Avg. top 5**, **Avg. top 10** and **Avg. top 15** (the average of their quickest 5, 10 or 15 laps), **Top 2 consec.** (their quickest 2 laps in a row, added up) and **Std. deviation** (how far their laps strayed from their average). **Consistency** is 100% when every lap is the same. A figure needs enough laps: **Avg. top 10** needs 10.
+    - **Lap times (12)**: every lap with its time, **Pace** in a timed race, and **Pos**, where they were running after that lap, in a race. Their best lap is highlighted. On a narrow phone the table scrolls sideways in its own box.
+    - **Lap chart**: one line, a point for each lap, left to right, with quicker laps higher and the best lap marked. Under it: "Each lap, left to right - higher is quicker. Best 9.214 on lap 7." A lap far slower than the rest, such as a crash or a flipped car, is drawn along the bottom edge so the rest of the line isn't squashed flat. A race with fewer than two laps has no chart.
+- A race filed before lap data was sent has no tabs, only how it went.
 - **Penalties**, in red, one line each, with race control's reason: "Warning 1 - Blocking", "+5 s - Blocking (warning 2)", "+5 s - jump start", "Jump start (no time added)", or a change made after the race with the reason given for it. A penalty with no reason typed reads "no reason given". These lines are only ever on the driver's own night; the public results show numbers only (see [Penalties on the results](#penalties-on-the-results)).
 - **The call of this race**, when the club shares drivers' clips: the announcer's call of that driver in that race, with a player and **Download the call (mp3)**.
 - **Something wrong?**, when the club takes requests: a way to ask the desk to look at that result (see [Querying a result](driver-requests.md#querying-a-result)).
 
 #### How the night went
 
-After the race cards, as much of this as there's something to say about:
+After the races, as much of this as there's something to say about:
 
-- **Your improvement tonight**: their middle lap against their first race tonight, for example "Your middle lap is 0.40 s quicker than in your first race tonight (Q1 Heat 2)", or slower, or "the same pace as". It needs two races, and never compares them with anyone else.
+- **Your improvement tonight**, under the report card: their middle lap against their first race tonight, for example "Your middle lap is 0.40 s quicker than in your first race tonight (Q1 Heat 2)", or slower, or "the same pace as". It needs two races, and never compares them with anyone else.
 - **Your progress on** *layout*: up to six bars, their best lap on each of their last nights on the layout of their latest race tonight, with tonight last and marked **Tonight**. A quicker night stands taller. Under it, when it applies, "Your best on Club Oval since 3 September 2026" or "Your best ever on Club Oval". Demo races and ghost cars don't count, and a personal best reset hides laps from before it.
 - **Achievements in reach**: up to three badges they're close to, for example "2 more podiums for Podium Regular".
-- **Your race calls**: any of the driver's clips that didn't go with a race card.
+- **Your race calls**: any of the driver's clips that didn't go with a race.
 
 The driver's clips go online only when **Put each driver's clip on their own night on the club's page** is ticked on **Club Website → Recording** (see [Highlight videos](../announcer/sounds-and-music.md#highlight-videos)). It's off by default. A clip is only ever on that driver's own night, never on a public page. Clips are kept for a week, and the relay keeps a driver's eight most recent.
 
 #### The report card
 
-The night has **Your report card**: a few lines of arithmetic about their laps tonight. See [The report card](../screens/phone-and-web.md#the-report-card) for what each line says.
+Under the races, **Your report card**: a few lines of arithmetic about their laps tonight. See [The report card](../screens/phone-and-web.md#the-report-card) for what each line says. When the **Driver score** is shown just below it, the card leaves out its own driver rating line, which says the same.
 
 - This page is the driver's own, so it's the one online place the card includes the **setup line**, what a setup change logged tonight did to their pace.
 - The driver they're compared with in the last line is named the way your public pages name people, shortened to a first name and initial when **Shorten published names** is ticked.
 - The card needs the relay updated. On a relay that hasn't been redeployed since 22 Oct 2026, the night page simply shows no card.
 
+#### Driver score
+
+Under the report card, **Driver score** is their driver rating for the night, out of 150: the same rating as the report card's line, Driver Hub and the leaderboard. Each race is rated from where they finished, a win, laps led, their best lap against the quickest in the race, the fastest lap, laps completed and places gained, less 5 for each warning.
+
+- One race: its rating, for example "104.5 out of 150".
+- More than one: the average, the best and which race it came in ("Average of 3 races. Best 118.5, in A-Main."), and a bar for each race.
+- A race needs at least two cars to be rated. A night filed by an older HeatCaller has no **Driver score**; its report card still has the driver rating line.
+
 #### Your details
 
-When the club has ticked **Let drivers send changes from their phone**, a **Your details** card at the foot of the page lets the driver ask the desk to change how they're called and shown, to keep them more private online, or to change the battery pack in their car. Nothing changes until the desk approves it. See [Driver requests](driver-requests.md).
+When the club has ticked **Let drivers send changes from their phone**, a **Your details** card at the foot of the page has the driver's battery pack, and under it **Change how you are called and shown**, which opens the form to ask the desk to change how they're called and shown or to keep them more private online. Nothing changes until the desk approves it. See [Driver requests](driver-requests.md).
 
 ### Following a driver
 
