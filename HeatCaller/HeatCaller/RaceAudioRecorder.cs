@@ -1092,7 +1092,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         // phone wants; a failure here costs only the video.
         //
         // AFTER every clip, not between them (22 Oct 2026, bug hunt): a
-        // video's render and its podium upload take minutes, and the last
+        // video's render takes minutes, and the last
         // driver's mp3 used to wait behind every one of them.
         if (video is not null)
         {
@@ -1125,10 +1125,8 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         }
 
         // EACH DRIVER'S CLIP ON THEIR OWN NIGHT (22 Oct 2026, driver
-        // experience), last of all - after every clip and every video, for
-        // the reason the videos wait for the clips: the podium's videos have
-        // a QR code on the Big Screen until the next race, and a clip is for
-        // later. See ClipShare.
+        // experience), last of all - after every clip and every video: a
+        // clip is for later. See ClipShare.
         if (clipShare is not null && encoded.Count > 0)
         {
             ShareClips(encoded, clipShare, log);
@@ -1202,6 +1200,13 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             .ToList();
 
     /// <summary>One driver's highlight video, from its own cut of the recording. True when it landed.</summary>
+    /// <remarks>
+    /// ON THIS PC ONLY (28 Oct 2026, asked for by Asher: "Remove the podium
+    /// videos for downloading from the relay and just have locally"). The
+    /// top three's used to go on to the club's page from here
+    /// (ShareOnline, RelayPublisher.Videos.cs); now every video stays in the
+    /// race's Highlights folder, exactly as made.
+    /// </remarks>
     private static bool MakeVideo(
         RaceAudioRecording recording,
         SessionRecord record,
@@ -1210,81 +1215,8 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         string folder,
         string name,
         HighlightVideoOptions video,
-        Action<string> log)
-    {
-        var mp4 = MakeVideoFile(recording, record, releaseOffsetsMs, clip, folder, name, video, log, out var carriesWithheld);
-
-        if (mp4 is null)
-        {
-            return false;
-        }
-
-        ShareOnline(mp4, clip, video, carriesWithheld, log);
-        return true;
-    }
-
-    /// <summary>
-    /// Puts a podium video on the club's page (21 Oct 2026) - 1st to 3rd
-    /// and nobody else (HighlightShare.Wants). On this background thread,
-    /// one at a time, so three uploads never fight the next race's results
-    /// for a track's Wi-Fi. A failure costs only the online copy; the file
-    /// is still in the Highlights folder.
-    /// </summary>
-    private static void ShareOnline(string mp4, RaceHighlights.DriverClip clip, HighlightVideoOptions video, bool carriesWithheld, Action<string> log)
-    {
-        var share = video.Share;
-
-        if (share is null || !HighlightShare.Wants(clip.Position))
-        {
-            return;
-        }
-
-        // "No videos online" (22 Oct 2026, driver experience): the video is
-        // made and kept on this PC as ever; it just never goes up.
-        if (HighlightShare.NotOnline(clip.Transponder))
-        {
-            log($"{AppTime.LogStampNow()}  [video] {clip.DriverName}'s video stays on this PC - they asked for no videos online.");
-            return;
-        }
-
-        // WHY (23 Oct 2026, bug hunt 10): the video's AUDIO says every line
-        // in its windows even when the captions leave one out, so a video
-        // that plays a race-control call, a line naming an initials-only
-        // driver or an unnamed car's number never goes up.
-        if (carriesWithheld)
-        {
-            log($"{AppTime.LogStampNow()}  [video] {clip.DriverName}'s video stays on this PC - it carries a race-control call, a line naming a driver shown by initials online, or an unnamed car's number.");
-            return;
-        }
-
-        try
-        {
-            share.DriverIds.TryGetValue(clip.Transponder, out var driverId);
-
-            // The name the public page shows (22 Oct 2026) - see
-            // HighlightShare.PublicNames. The transponder lets the upload
-            // turn a number standing in for a name into "Unnamed driver".
-            share.PublicNames.TryGetValue(clip.Transponder, out var publicName);
-
-            var page = share.Publisher
-                .UploadPodiumVideoAsync(mp4, share.RaceKey, clip.Position, driverId, clip.DriverName, share.RaceLabel,
-                    publicName: publicName, transponder: clip.Transponder)
-                .GetAwaiter()
-                .GetResult();
-
-            if (page is null)
-            {
-                return;
-            }
-
-            log($"{AppTime.LogStampNow()}  [video] {clip.DriverName}'s video is on the club's page: {page}");
-            share.Shared?.Invoke(page, share.RaceLabel);
-        }
-        catch (Exception ex)
-        {
-            log($"{AppTime.LogStampNow()}  [video] Could not put {clip.DriverName}'s video online ({ex.Message}). It is still in the Highlights folder.");
-        }
-    }
+        Action<string> log) =>
+        MakeVideoFile(recording, record, releaseOffsetsMs, clip, folder, name, video, log) is not null;
 
     /// <summary>One driver's highlight video file, or null when it did not land.</summary>
     private static string? MakeVideoFile(
@@ -1295,11 +1227,8 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         string folder,
         string name,
         HighlightVideoOptions video,
-        Action<string> log,
-        out bool carriesWithheld)
+        Action<string> log)
     {
-        carriesWithheld = false;
-
         // Where the flag is in this file, so a long window is cut round the
         // finish rather than from its start (22 Oct 2026, bug hunt).
         var flagAt = RaceHighlights.FlagAtMsFrom(record, releaseOffsetsMs);
@@ -1309,9 +1238,6 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
         {
             return null;
         }
-
-        // Worked out from the same windows the video is cut to - see ShareOnline.
-        carriesWithheld = HighlightShare.CarriesWithheldLine(recording.Heard, windows);
 
         var wav = RaceHighlights.UnusedPath(folder, name + " video", ".wav");
 

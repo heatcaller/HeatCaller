@@ -273,32 +273,20 @@ describe("what it draws", () => {
   async function drawing() {
     const box = { innerHTML: "" };
 
-    const run = lifted((await page()).text, ["lines", "nothing", "ownPath", "videoList", "draw"], {
+    const run = lifted((await page()).text, ["lines", "nothing", "draw"], {
       box,
       document: { getElementById: () => null },
     });
 
-    return (night: unknown, videos: unknown[] = []) => {
-      run("draw()", { night, videos });
+    return (night: unknown) => {
+      run("draw()", { night });
       return box.innerHTML;
     };
   }
 
-  it("draws their podium videos, and only the relay's own", async () => {
-    const draw = await drawing();
-    const id = "11111111111111111111111111111111";
-
-    const html = draw({ driver: "Bill", lines: ["A win."] }, [
-      { url: `/c/acme-rc/video/${id}.mp4`, download: `/c/acme-rc/video/${id}.mp4?download=1`, label: "A-Main", position: 1 },
-      { url: "https://evil.example/x.mp4", download: "https://evil.example/x.mp4", label: "Bad", position: 2 },
-    ]);
-
-    assert.match(html, /Your podium videos/);
-    assert.match(html, /A-Main · 1st/);
-    assert.match(html, /download=1/);
-    assert.doesNotMatch(html, /evil/);
-    assert.doesNotMatch(draw({ driver: "Bill", lines: ["A win."] }), /podium videos/);
-  });
+  // "draws their podium videos, and only the relay's own" went on 28 Oct
+  // 2026 with the videos themselves (they stay on the laptop) - see
+  // novideos.test.ts, which checks a night no longer draws any.
 
   it("shows the name, the day and every line of it", async () => {
     const draw = await drawing();

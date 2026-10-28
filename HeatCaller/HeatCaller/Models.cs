@@ -250,10 +250,14 @@ public sealed class DriverProfile
     // PA are in the building and still use the full name and photo. They
     // are enforced for the relay by PublicPrivacy.
 
-    /// <summary>Leave their photo out of everything that goes online (check-in list, podium videos).</summary>
+    /// <summary>Leave their photo out of everything that goes online (the check-in list).</summary>
     public bool NoPhotoOnline { get; set; }
 
-    /// <summary>Don't put podium videos of them online, and forget the ones already there.</summary>
+    /// <summary>
+    /// Don't put podium videos of them online. Since 28 Oct 2026 no podium
+    /// video goes online at all (they stay on this PC), so this is always met;
+    /// kept so a driver's ask and older profile files still round-trip.
+    /// </summary>
     public bool NoVideoOnline { get; set; }
 
     /// <summary>Show them online by initials only ("Sam Parker" becomes "S.P.").</summary>

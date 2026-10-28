@@ -117,7 +117,6 @@ The email is headed "Your night at *club* - *Tuesday 22 October*" and has:
 - a greeting by first name and the night's date;
 - "YOUR RACES": the night's facts, as on their night page;
 - "YOUR REPORT CARD": the same report card as on their night page;
-- if they made the podium, a note that their podium video is on their night page for about a week;
 - a link to their night page, with "This link is yours - it can also check you in, so don't share it.";
 - "You're getting this because you asked for your night by email. To stop, ask at the desk."
 

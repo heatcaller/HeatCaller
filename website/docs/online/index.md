@@ -25,7 +25,6 @@ Your club's address is the relay address followed by `/c/` and your club id, for
 | Check in | `/c/<club>/checkin` | Online check-in. The tab only appears while online check-in is switched on. See [Online check-in](check-in.md). | Every 10 seconds |
 | Results | `/c/<club>/results` | Finished sessions, newest first, grouped by day. Tap a session to see every finisher's grid slot, laps and time, how far behind the car in front they were, and best lap, with their best sectors under the best lap when the session had a split loop, plus **View laps** for each driver and a lap-by-lap position graph (see [Lap by lap on the results](#lap-by-lap-on-the-results)). A small chip beside a time shows time added or warnings (see [Penalties on the results](#penalties-on-the-results)). | Every 30 seconds |
 | My night | `/c/<club>/mynight` | A box for a driver's personal PIN, which opens their own night page. The tab only appears while online check-in is switched on. See [Opening your night with your PIN](#opening-your-night-with-your-pin). | When opened |
-| Videos | `/c/<club>/videos` | **Podium videos**: every race of the last week that has podium videos, newest first, with 1st, 2nd and 3rd and a **Download** button for each. See [Podium videos](#podium-videos). | When opened |
 | Standings | `/c/<club>/standings` | Championship points for each season, with a season picker when there's more than one. | Every 30 seconds |
 | Badges | `/c/<club>/badges` | "Just earned", "Most collected" and "Every badge". While you're [following a driver](#following-a-driver), a "Next for *name*" list at the top shows up to two badges they're close to, such as "2 more podiums for Podium Regular". | Every minute |
 | Tracks | `/c/<club>/tracks` | Every track layout with its picture, lap record, sector records, length, typical lap and the ten best laps on it. Today's layout comes first, marked "Racing here today". | Every 5 minutes |
@@ -78,26 +77,11 @@ The chip has numbers only, never the reason. Race control's reasons ("Blocking",
 
 ### Podium videos
 
-After a race, the top three's [highlight videos](../announcer/sounds-and-music.md#highlight-videos) can go on a page of their own, `/c/<club>/videos/<race>`, headed with the race's name ("A-Main podium") and "The announcer's call of the top three, to watch and keep. Kept for a week." Each video has its place and the driver's name, a player, and **Download video**, which saves it to the phone as a file named for the race and the driver.
+The top three's [highlight videos](../announcer/sounds-and-music.md#highlight-videos) aren't on the club's pages. From 21 to 28 October 2026 they were: a page per race from a QR code on the Big Screen, a **Videos** tab, and **Your podium videos** on a driver's night. Now every video stays on the race PC, in the night's **Highlights** folder, and **Share video** in a driver's drawer on Race Control opens theirs to send.
 
-- Nobody types that address: it's the QR code the Big Screen shows after the race (see [The podium's videos](../screens/big-screen.md#the-podiums-videos)), and every race's page is listed on the **Videos** tab (below). The address itself can't be guessed.
-- Only 1st, 2nd and 3rd are ever put there, and only the ones a video was made for. The relay refuses anything else, whatever sends it.
-- A video has the music and crowd that were playing under the call, as the room heard them. If your between-race music is commercial tracks that aren't licensed for posting online, untick **Put the music and crowd under the highlight videos** on **Club Website → Recording** and the videos have the announcer only.
-- A driver on the podium also finds their video on their own night page (the link with the code from their check-in badge), under **Your podium videos**, with the same **Download video**.
-- If the page is opened before the videos are up, or after the week, it says "These videos have gone - they are kept for a week - or they are still on their way. Try again in a minute."
-
-It's switched on with **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** on **Club Website → Recording**, and only works while the club's page is switched on (see [Setting up the Club Website page](setup.md)).
-
-#### The Videos tab
-
-Since 26 Oct 2026 the club's pages have a **Videos** tab (and a **Podium videos** tile, "Watch and download the top three", on the home page), so a driver who missed the QR code, or a parent at home, can still find the top three's videos. It's at `/c/<club>/videos`, headed "Podium videos" with "The announcer's call of every race's top three, to watch and download. Kept for a week."
-
-- Each race of the last week that has podium videos is listed, newest first, with its name, its day, **Watch the podium** (which opens that race's page with the players) and, for 1st, 2nd and 3rd, the driver's name and **Download 1st** (**Download 2nd**, **Download 3rd**), which saves the video to the phone.
-- It only lists videos the race pages already show, by the same names. A driver who asked for **Leave me out of podium videos online** never has a video sent, and if they ask later their videos are taken down and drop off this list too. A video sent for a driver HeatCaller couldn't give a QR check-in code (no driver profile, or online check-in never set up) is never listed here, because it couldn't be taken down that way; it's only on its race's page, from the Big Screen's QR code. A driver shown by initials only is listed by their initials, and a video whose sound names a driver shown by initials only never goes up (see [Online privacy](../race-day/drivers-and-classes.md#online-privacy)).
-- With nothing from the last week it says "No podium videos this week. After a race the top three's videos appear here - they are kept for a week."
-- Search engines are asked to leave it out, like the race pages.
-
-The **Videos** tab needs the relay redeployed (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)). Until it is, the club's pages have no **Videos** tab, and the race pages from the Big Screen's QR code work as before.
+- An old QR code, link or bookmark to a podium video or the **Videos** tab opens the relay's "not found" page.
+- Once the relay is redeployed (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)), it deletes the podium videos it was still holding the first time it starts.
+- A driver's own race calls on their night page are separate and unchanged; see [A driver's own night](#race-cards).
 
 ### A driver's own night
 
@@ -127,12 +111,12 @@ From top to bottom, the page shows:
 
 1. **Right now**, a live card for the evening as it happens (see below).
 2. **Your first night - what happens**, a short guide, on a driver's first night only.
-3. The night itself: the night's facts, **Your report card**, a card for each race, how the night went, their race calls and their podium videos.
+3. The night itself: the night's facts, **Your report card**, a card for each race, how the night went and their race calls.
 4. **Your details**, where they ask the desk for changes, when the club takes requests (see [Driver requests](driver-requests.md)).
 
 Before their first race of the night, the night part says "Nothing is filed for you yet tonight. Your races show here after each one." The live card above it still works.
 
-Everything on this page except the night's facts, the report card and the podium videos needs the relay redeployed after 22 Oct 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)). Until it is, the night page looks as it did before.
+Everything on this page except the night's facts and the report card needs the relay redeployed after 22 Oct 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)). Until it is, the night page looks as it did before.
 
 #### Right now
 
@@ -220,7 +204,6 @@ After the race cards, as much of this as there's something to say about:
 - **Your progress on** *layout*: up to six bars, their best lap on each of their last nights on the layout of their latest race tonight, with tonight last and marked **Tonight**. A quicker night stands taller. Under it, when it applies, "Your best on Club Oval since 3 September 2026" or "Your best ever on Club Oval". Demo races and ghost cars don't count, and a personal best reset hides laps from before it.
 - **Achievements in reach**: up to three badges they're close to, for example "2 more podiums for Podium Regular".
 - **Your race calls**: any of the driver's clips that didn't go with a race card.
-- **Your podium videos**: see [Podium videos](#podium-videos).
 
 The driver's clips go online only when **Put each driver's clip on their own night on the club's page** is ticked on **Club Website → Recording** (see [Highlight videos](../announcer/sounds-and-music.md#highlight-videos)). It's off by default. A clip is only ever on that driver's own night, never on a public page. Clips are kept for a week, and the relay keeps a driver's eight most recent.
 
@@ -321,7 +304,6 @@ Each club can hold 50 MB on the relay in total. If results would take the club p
 
 The race-day manager's traffic over the relay doesn't count toward those 50 MB. It has an allowance of its own: about 1 MB of requests waiting for the laptop, and 4 MB of answers waiting for phones to collect them. So however busy the manager is, it can't make results fail to publish or push old results off. When too many requests are waiting for the laptop, the manager's page says "The race-day manager is busy - the laptop has not caught up with recent requests yet. Try again shortly."
 
-Podium videos are kept apart from results and don't count toward the 50 MB. Each one is removed after a week, and the relay holds at most 120 videos and 1 GB per club, dropping the oldest first. One video can be at most 48 MB.
 
 ## Children and privacy
 
@@ -330,7 +312,7 @@ Many clubs race juniors, so the defaults are cautious, and it's worth deciding e
 - **Leave short names on** unless you're sure every family is happy with full names on a public page.
 - **Leave the roster off** unless you need heat line-ups online. With it on, anyone with the address can see which children are entered and in which heat.
 - **Leave photos off** unless you're sure. Photos are only visible behind a PIN or QR check-in, but anyone with the staff PIN sees every driver's face next to their name.
-- **One driver can ask for more.** Each driver profile has three **Online privacy** ticks: leave their photo out, no podium videos of them, and initials only. They cover everything the relay shows, captions included, and nothing in the room. A driver or a parent can ask for them from the night page; only the desk can turn one off. See [Online privacy](../race-day/drivers-and-classes.md#online-privacy).
+- **One driver can ask for more.** Each driver profile has three **Online privacy** ticks: leave their photo out, no podium videos of them (always met now, since no podium video goes online), and initials only. They cover everything the relay shows, captions included, and nothing in the room. A driver or a parent can ask for them from the night page; only the desk can turn one off. See [Online privacy](../race-day/drivers-and-classes.md#online-privacy).
 - **Night links are private.** A driver's night link opens their next race, their marshal post and their check-in. Tell drivers and families not to share it (see [A driver's own night](#a-drivers-own-night)).
 - **Club ids aren't secret.** They go on posters. Treat the club address as public, and assume anything published can be seen by anyone.
 - **Staff PIN.** Share it with the people running the desk, not with the paddock. Racers get their own PINs, which only check in themselves.

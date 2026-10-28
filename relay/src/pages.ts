@@ -37,11 +37,9 @@ export interface PageContext {
 export const DEFAULT_CONTEXT: PageContext = Object.freeze({ look: DEFAULT_LOOK, origin: "", nonce: "" });
 
 const STYLE = `
-.vid{margin:0 0 28px}
 .pinask{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65)}
 .pinask-card{width:100%;max-width:360px;background:var(--surface);color:var(--text);border-radius:14px;padding:18px}
 .pinask-card input{display:block;width:100%;box-sizing:border-box;font-size:22px;letter-spacing:.2em;padding:12px;margin:10px 0;border-radius:10px;border:1px solid var(--muted);background:var(--bg);color:var(--text)}
-.vid video{display:block;width:100%;max-width:420px;aspect-ratio:9/16;background:#000;border-radius:12px;margin:8px 0}
 
 :root {
   --bg: #0F0722;
@@ -702,7 +700,7 @@ function poll(load, everyMs) {
 interface Shell {
   readonly club: string;
   readonly clubName: string;
-  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "videos" | "mynight";
+  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "mynight";
   readonly heading: string;
   readonly sub: string;
   readonly body: string;
@@ -710,9 +708,9 @@ interface Shell {
   /** Asks search engines to leave the page out - for a page reached only by a link somebody was sent, like sign-up. */
   readonly noindex?: boolean;
   /**
-   * The page's own address when it is not /c/<club>/<active> - a race's
-   * podium videos live at /c/<club>/videos/<race>. Already a relay path;
-   * escaped in shell().
+   * The page's own address when it is not /c/<club>/<active> (the podium
+   * videos page used it until 28 Oct 2026). Already a relay path; escaped
+   * in shell().
    */
   readonly path?: string;
 }
@@ -761,19 +759,14 @@ function shell(page: Shell, context: PageContext): string {
 
   // The whole path this page answers to, which for a session is the
   // session's own address rather than the results tab it is drawn on.
-  // WHY (22 Oct 2026): the podium videos page only exists at
-  // /c/<club>/videos/<race>, but this used to build /c/<club>/videos for it
-  // - not a route - and put that in og:url, so a shared link's preview and
-  // click-through went to a page that is not there. A page can now say its
-  // own address; a videos page that does not know its race gets no og:url
-  // at all, and link-preview sites fall back to the address actually shared.
-  const path: string | undefined = card !== undefined
+  // WHY (22 Oct 2026): a page can say its own address (path), so og:url
+  // never names a route that is not there - first needed by the podium
+  // videos page, which went on 28 Oct 2026.
+  const path: string = card !== undefined
     ? escapeHtml(card.path)
     : page.path !== undefined
       ? escapeHtml(page.path)
-      : page.active === "videos"
-        ? undefined
-        : `/c/${club}${page.active === "home" ? "" : `/${page.active}`}`;
+      : `/c/${club}${page.active === "home" ? "" : `/${page.active}`}`;
 
   const tab = (href: string, label: string, key: string) =>
     `<a href="/c/${club}${href === "" ? "" : "/" + href}"${page.active === key ? ' aria-current="page"' : ""}>${label}</a>`;
@@ -821,8 +814,8 @@ function shell(page: Shell, context: PageContext): string {
 
   const preview = context.origin === ""
     ? ""
-    : `${path === undefined ? "" : `<meta property="og:url" content="${origin}${path}">
-`}<meta property="og:image" content="${image}">${banner === undefined ? "" : `
+    : `<meta property="og:url" content="${origin}${path}">
+<meta property="og:image" content="${image}">${banner === undefined ? "" : `
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -887,7 +880,6 @@ ${overrides}
       ${look.checkIn || page.active === "checkin" ? tab("checkin", "Check in", "checkin") : ""}
       ${look.checkIn || page.active === "mynight" ? tab("mynight", "My night", "mynight") : ""}
       ${tab("results", "Results", "results")}
-      ${tab("videos", "Videos", "videos")}
       ${tab("standings", "Standings", "standings")}
       ${tab("badges", "Achievements", "badges")}
       ${tab("tracks", "Tracks", "tracks")}
@@ -3609,7 +3601,6 @@ export function homePage(club: string, clubName: string, context: PageContext = 
       (context.look.checkIn ? tile("checkin", "Check in", "Tell the desk you're here") : "") +
       (context.look.checkIn ? tile("mynight", "My night", "Your own races, with your PIN") : "") +
       tile("results", "Results", "Every session") +
-      tile("videos", "Podium videos", "Watch and download the top three") +
       tile("standings", "Standings", "The championship") +
       tile("badges", "Achievements", "Who's earned what") +
       tile("tracks", "Tracks", "Records and best laps") +
@@ -5037,25 +5028,9 @@ function lines(list) {
   return Array.isArray(list) ? list.filter((l) => typeof l === 'string' && l.trim() !== '') : [];
 }
 
-// Their podium videos, when they have any (21 Oct 2026): only the
-// relay's own paths are played, so nothing in a night can point a player
-// anywhere else.
-let videos = [];
-
-function ownPath(v) {
-  return typeof v === 'string' && /^\\/c\\/[a-z0-9-]+\\/video\\/[0-9a-f]{32}\\.mp4(\\?download=1)?$/.test(v);
-}
-
-function videoList(list) {
-  const good = list.filter((v) => v && ownPath(v.url) && ownPath(v.download));
-  if (good.length === 0) return '';
-  const place = (p) => (p === 1 ? '1st' : p === 2 ? '2nd' : p === 3 ? '3rd' : '');
-  return '<h3>Your podium videos</h3>' + good.map((v) => '<div class="vid">'
-    + '<div class="sub">' + esc([v.label, place(v.position)].filter(Boolean).join(' · ')) + '</div>'
-    + '<video controls playsinline preload="metadata" src="' + esc(v.url) + '"></video>'
-    + '<a class="go" href="' + esc(v.download) + '" download>Download video</a>'
-    + '</div>').join('');
-}
+// Their podium videos were listed here from 21 to 28 Oct 2026; they now
+// stay on the club's laptop (asked for by Asher), and the relay's answer
+// no longer carries any.
 
 function nothing(message) {
   box.innerHTML = '<p class="note">' + esc(message) + '</p>';
@@ -5096,7 +5071,7 @@ function draw() {
   // "nx" is where drawExtras() puts the race cards, progress, reach and
   // clips (22 Oct 2026, driver experience) - built with the DOM rather
   // than as markup, so it is an empty hook here and nothing more.
-  box.innerHTML = head + body + coach + '<div id="nx"></div>' + videoList(videos)
+  box.innerHTML = head + body + coach + '<div id="nx"></div>'
     + '<button id="pic" class="go" type="button">Make a picture to share</button>'
     + '<button id="dl" class="go quiet" type="button">Save this as a text file</button>';
 
@@ -5735,7 +5710,7 @@ function tickClock() {
 
 // ---- the night's own extras, under its facts
 
-// Only the relay's own clip addresses are played, as with videos: the
+// Only the relay's own clip addresses are played: the
 // club's path, a 32-hex id, and the download form of that same address.
 function ownClip(c) {
   const at = /^\\/c\\/([a-z0-9-]+)\\/clip\\/[0-9a-f]{32}\\.mp3$/.exec(c && typeof c.url === 'string' ? c.url : '');
@@ -6104,7 +6079,6 @@ function paintNight() {
 
 function take(body) {
   night = body && typeof body.night === 'object' && body.night !== null ? body.night : null;
-  videos = Array.isArray(body && body.videos) ? body.videos : [];
   clips = Array.isArray(body && body.clips) ? body.clips : [];
   live = body && typeof body.live === 'object' && body.live !== null ? body.live : null;
   if ((night && night.firstNight === true) || (live && live.firstNight === true)) firstNight = true;
@@ -6726,11 +6700,11 @@ async function refreshNight() {
 
   // asksOpen is in the key because each race card's "Something wrong?"
   // comes and goes with it (22 Oct 2026, driver experience, RP2).
-  const before = JSON.stringify([night, clips, videos, asksOpen]);
+  const before = JSON.stringify([night, clips, asksOpen]);
   const was = live;
   take(a.body);
   if (live === null) live = was;
-  if (JSON.stringify([night, clips, videos, asksOpen]) !== before) paintNight();
+  if (JSON.stringify([night, clips, asksOpen]) !== before) paintNight();
   drawLive();
   refreshAsks();
 }
@@ -7031,125 +7005,11 @@ export function myNightPage(club: string, clubName: string, context: PageContext
 }
 
 // ------------------------------------------------------------------ videos
-
-/** One podium video, as the race's page needs it - the relay's VideoMeta, narrowed. */
-export interface PodiumVideo {
-  readonly id: string;
-  readonly position: number;
-  readonly name: string;
-  readonly label: string;
-}
-
-/**
- * A race's podium videos (21 Oct 2026) - the page the Big Screen's QR code
- * opens after a race. Drawn on the relay, not fetched by a script: there
- * is nothing live about it, and a phone in a noisy pit lane should get
- * the player in one request. Only 1st to 3rd ever reach here (videos.ts).
- */
-export function videosPage(
-  club: string,
-  clubName: string,
-  context: PageContext = DEFAULT_CONTEXT,
-  videos: readonly PodiumVideo[] = [],
-  race = "",
-): string {
-  const place = (p: number) => (p === 1 ? "1st" : p === 2 ? "2nd" : "3rd");
-  const label = videos[0]?.label ?? "";
-  const c = escapeHtml(club);
-
-  const body = videos.length === 0
-    ? '<p class="note">These videos have gone - they are kept for a week - or they are still on their way. Try again in a minute.</p>'
-    : videos.map((v) => `<div class="vid">
-    <h2>${escapeHtml(place(v.position))} &middot; ${escapeHtml(v.name || "Driver")}</h2>
-    <video controls playsinline preload="metadata" src="/c/${c}/video/${escapeHtml(v.id)}.mp4"></video>
-    <a class="go" href="/c/${c}/video/${escapeHtml(v.id)}.mp4?download=1" download>Download video</a>
-    </div>`).join("\n");
-
-  return shell({
-    club,
-    clubName,
-    active: "videos",
-    heading: label === "" ? "Podium videos" : `${label} podium`,
-    sub: "The announcer's call of the top three, to watch and keep. Kept for a week.",
-    body,
-    script: "",
-    noindex: true,
-    // WHY (22 Oct 2026): the page's real address carries the race id, so
-    // og:url says that rather than the bare /c/<club>/videos. Encoded so a
-    // junk segment cannot make a strange URL; escaped again in shell().
-    ...(race === "" ? {} : { path: `/c/${club}/videos/${encodeURIComponent(race)}` }),
-  }, context);
-}
-
-/** One race's podium videos, for the club's list of them - see podiumVideosIndexPage. */
-export interface PodiumRace {
-  /** The race's own 128-bit name - its page is /c/<club>/videos/<race>. */
-  readonly race: string;
-  readonly label: string;
-  /** When its newest video arrived, ISO 8601. */
-  readonly at: string;
-  /** 1st to 3rd, in that order. */
-  readonly videos: readonly PodiumVideo[];
-}
-
-/**
- * EVERY RACE'S PODIUM VIDEOS, IN ONE PLACE (26 Oct 2026).
- *
- * WHY (26 Oct 2026, asked for by Asher: "I don't see a spot on the relay to
- * down load the top three place recordings."): the top three's videos were
- * reachable only from the QR code the Big Screen shows until the next race
- * stages, or from a driver's own night - so a driver who missed the code,
- * or a parent at home, had nowhere on the club's site to find them. This
- * is that place: the club's Videos tab, each race of the last week with
- * its podium, to watch (on the race's own page) and to download.
- *
- * NOTHING HERE THE RACE'S PAGE DID NOT ALREADY SHOW. The same videos the
- * QR code opens, by the same public names, and only those the relay still
- * holds: the laptop never sends a video for a driver who asked for no
- * videos online, or one whose sound names somebody shown by initials, and
- * a driver who asks later has theirs taken down (forget-media) - so a
- * video gone from the relay is gone from this list too. Kept for a week,
- * as ever. noindex like the race page: it is for the club's own people.
- *
- * preload="none" and no players: a week of races is up to forty races, and
- * a phone should not fetch the start of a hundred videos to draw a list.
- */
-export function podiumVideosIndexPage(
-  club: string,
-  clubName: string,
-  context: PageContext = DEFAULT_CONTEXT,
-  races: readonly PodiumRace[] = [],
-): string {
-  const place = (p: number) => (p === 1 ? "1st" : p === 2 ? "2nd" : "3rd");
-  const c = escapeHtml(club);
-  const day = (iso: string) => {
-    const when = new Date(iso);
-    return Number.isNaN(when.getTime())
-      ? ""
-      : when.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-  };
-
-  const body = races.length === 0
-    ? '<p class="note">No podium videos this week. After a race the top three\'s videos appear here - they are kept for a week.</p>'
-    : races.map((r) => `<section class="vid podium">
-    <h2>${escapeHtml(r.label || "Race")}</h2>
-    <div class="sub">${escapeHtml(day(r.at))} &middot; <a class="more" href="/c/${c}/videos/${escapeHtml(r.race)}">Watch the podium</a></div>
-    ${r.videos.map((v) => `<p class="pv"><b>${escapeHtml(place(v.position))}</b> &middot; ${escapeHtml(v.name || "Driver")}
-      <a class="go" href="/c/${c}/video/${escapeHtml(v.id)}.mp4?download=1" download>Download ${escapeHtml(place(v.position))}</a></p>`).join("\n    ")}
-    </section>`).join("\n");
-
-  return shell({
-    club,
-    clubName,
-    active: "videos",
-    heading: "Podium videos",
-    sub: "The announcer's call of every race's top three, to watch and download. Kept for a week.",
-    body,
-    script: "",
-    noindex: true,
-    path: `/c/${club}/videos`,
-  }, context);
-}
+//
+// A race's podium videos page and the club's Videos tab (21 and 26 Oct
+// 2026) were here. Both went on 28 Oct 2026, asked for by Asher: "Remove
+// the podium videos for downloading from the relay and just have
+// locally." The laptop still makes the videos; they stay on it.
 
 // ------------------------------------------------------------------ manage
 
