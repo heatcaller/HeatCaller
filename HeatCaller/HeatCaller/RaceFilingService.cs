@@ -370,6 +370,13 @@ public sealed class RaceFilingService
             // positions. Without it an older session looks identical to a
             // race nobody put a wheel wrong in.
             RecordsIncidents = true,
+
+            // How long it was set to run (28 Oct 2026), for the relay's
+            // "Length: 3:00 Timed" and a driver's pace through the race.
+            TimeLimitSeconds = (finished is null ? _race.TimeLimit : finished.TimeLimit) is { } limit && limit > TimeSpan.Zero
+                ? (int)Math.Round(limit.TotalSeconds)
+                : null,
+            LapLimit = (finished is null ? _race.LapLimit : finished.LapLimit) is > 0 and var laps ? laps : null,
         };
 
         record.SectorCut = TrackLayout.CutOfResults(
