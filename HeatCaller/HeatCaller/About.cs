@@ -334,6 +334,20 @@ public sealed class AboutForm : Form
         var lnkEmail = Link(AppSupport.EmailSentence, AppSupport.Email, AppSupport.MailTo);
         var lnkDocs = Link($"Guides and help: {AppSupport.DocsText}", AppSupport.DocsText, AppSupport.DocsUrl);
 
+        // The terms the club accepted before HeatCaller first opened, to
+        // read again - see TermsForm.
+        var lnkTerms = new LinkLabel
+        {
+            Text = "License and privacy notice",
+            AutoSize = true,
+            Font = AppTheme.BodyFont,
+            LinkColor = AppTheme.Accent,
+            ActiveLinkColor = AppTheme.Accent,
+            VisitedLinkColor = AppTheme.Accent,
+        };
+
+        lnkTerms.LinkClicked += (_, _) => TermsForm.ShowFor(this);
+
         var btnCopyEmail = new Button { Text = "Copy Address" };
         btnCopyEmail.Click += (_, _) => AppSupport.CopyEmail();
 
@@ -354,6 +368,7 @@ public sealed class AboutForm : Form
         page.Add(lblWhat);
         page.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail));
         page.Add(lnkDocs);
+        page.Add(lnkTerms);
 
         page.Add(new Label
         {

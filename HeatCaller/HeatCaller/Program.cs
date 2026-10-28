@@ -224,6 +224,21 @@ internal static class Program
                 SessionLog.Write($"[ui] Started DPI-aware (--dpi-aware): the screen is at {UiLayout.DpiScale * 100:0}%.");
             }
 
+            // The license agreement and the privacy notice, before anything
+            // else is built - before the startup screen, the main window and
+            // the first-run wizard. On the first start after installing, and
+            // again whenever the terms change; declined, and HeatCaller does
+            // not start. The .msi asks the same at install, but Setup.exe
+            // cannot, so this is what makes acceptance mandatory however
+            // HeatCaller got onto the PC. See Terms.
+            //
+            // After the rehearsal switch: the acceptance is kept in the data
+            // folder this run uses (AppPaths.Root).
+            if (!TermsForm.Gate())
+            {
+                return;
+            }
+
             // The startup screen goes up FIRST, before anything else is
             // built.
             //

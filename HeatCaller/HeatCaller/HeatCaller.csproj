@@ -224,6 +224,12 @@
 
     <!-- The app's icon, for every window and the tray icon - see AppIcon. -->
     <EmbeddedResource Include="Assets\HeatCaller.ico" LogicalName="HeatCaller.AppIcon.ico" />
+
+    <!-- The beta license agreement and privacy notice, which the app asks a
+         club to accept before it starts - see Terms and TermsForm. Embedded
+         so a build can never be without it. pack.cmd hands the same file to
+         vpk as the .msi's license page, so both ask for the same text. -->
+    <EmbeddedResource Include="Assets\Legal\HeatCaller-Terms.md" LogicalName="HeatCaller.Terms.md" />
     <None Include="Assets\Fonts\*.ttf" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets\Fonts\*.otf" Link="Assets\Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- Globbed, not named. A literal Include of a file that is not there
