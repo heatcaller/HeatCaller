@@ -6,7 +6,7 @@ There are two parts. **Part 1** is the license agreement for the software. **Par
 
 # Part 1: License agreement
 
-This agreement is between Asher Kent, who makes HeatCaller ("we", "us"), and you, the person installing HeatCaller and the club or track you install it for ("you").
+This agreement is between HeatCaller LLC, a New York limited liability company that makes HeatCaller ("we", "us"), and you, the person installing HeatCaller and the club or track you install it for ("you").
 
 ## 1. Beta software
 
@@ -62,7 +62,7 @@ support@heatcaller.com
 
 This notice explains what information about drivers HeatCaller handles when a club uses it, where that information goes, and how long it is kept.
 
-**Who is responsible.** The club running the race night decides what it records and publishes, and is responsible for the information on its own computer. We (Asher Kent, who makes HeatCaller) run the online relay, the HeatCaller voice and online AI commentary that clubs can choose to use, and handle driver information in them only to provide those services to the club.
+**Who is responsible.** The club running the race night decides what it records and publishes, and is responsible for the information on its own computer. We (HeatCaller LLC, which makes HeatCaller) run the online relay, the HeatCaller voice and online AI commentary that clubs can choose to use, and handle driver information in them only to provide those services to the club.
 
 **Children.** Many drivers are children. HeatCaller's defaults are set with that in mind: full names, rosters and photos stay off the internet unless the club turns them on.
 

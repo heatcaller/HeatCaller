@@ -4597,7 +4597,7 @@ never silent, and a warning at nine tenths. What remains is not code:
 - [x] **Something in place before the lawyer** (28 Oct 2026, at Asher's
       ask): `Assets\Legal\HeatCaller-Terms.md` - a beta license agreement
       and the privacy notice, written from the drafts above with every
-      [CHECK] settled in plain words (operator Asher Kent, New York law,
+      [CHECK] settled in plain words (operator HeatCaller LLC, New York law,
       liability capped at US$50) - must be accepted twice: on the .msi's
       license page (pack.cmd `--msi --instLicense`; Setup.exe has none), and
       at first launch (TermsForm, before anything else; recorded in

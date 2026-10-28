@@ -40,6 +40,10 @@ rem The version is read from HeatCaller.csproj rather than typed, because the
 rem updater compares against that number and a release packed under a version
 rem that does not match it is a release that will never be offered to anyone.
 rem
+rem --packAuthors is HeatCaller LLC, the company the license agreement is
+rem with, and what Windows shows as the publisher. The signature still names
+rem Asher Kent: the certificate was validated for him as an individual.
+rem
 rem -i gives Setup.exe and the updater the app's own icon (the Sunset Grid,
 rem 24 Oct 2026), the same file the exe is built with.
 rem
@@ -141,9 +145,9 @@ echo   signing:   %SIGNLABEL%
 echo.
 
 if defined SIGNFILE (
-  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "Asher Kent" -i "%CD%\HeatCaller\HeatCaller\Assets\HeatCaller.ico" -c beta -o "%RELDIR%" --msi --instLocation PerUser --instLicense "%TERMS%" --azureTrustedSignFile "%CD%\%SIGNFILE%"
+  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "HeatCaller LLC" -i "%CD%\HeatCaller\HeatCaller\Assets\HeatCaller.ico" -c beta -o "%RELDIR%" --msi --instLocation PerUser --instLicense "%TERMS%" --azureTrustedSignFile "%CD%\%SIGNFILE%"
 ) else (
-  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "Asher Kent" -i "%CD%\HeatCaller\HeatCaller\Assets\HeatCaller.ico" -c beta -o "%RELDIR%" --msi --instLocation PerUser --instLicense "%TERMS%"
+  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "HeatCaller LLC" -i "%CD%\HeatCaller\HeatCaller\Assets\HeatCaller.ico" -c beta -o "%RELDIR%" --msi --instLocation PerUser --instLicense "%TERMS%"
 )
 if errorlevel 1 goto :fail
 

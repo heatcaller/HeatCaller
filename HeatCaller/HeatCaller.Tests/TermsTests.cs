@@ -88,6 +88,21 @@ public sealed class TermsTests : IDisposable
     }
 
     [Fact]
+    public void The_agreement_is_with_the_company()
+    {
+        // HeatCaller LLC, not Asher Kent personally (Asher, 28 Oct 2026) -
+        // in the agreement, the privacy notice and the publisher the
+        // installer names.
+        Assert.Contains("between HeatCaller LLC", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("We (HeatCaller LLC", Terms.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Asher Kent", Terms.Text, StringComparison.Ordinal);
+
+        var pack = File.ReadAllText(Path.Combine(RepoRoot, "pack.cmd"));
+        Assert.DoesNotContain("--packAuthors \"Asher Kent\"", pack, StringComparison.Ordinal);
+        Assert.Contains("--packAuthors \"HeatCaller LLC\"", pack, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_edition_recorded_is_the_one_the_text_gives()
     {
         // "Beta, 28 October 2026" - the date must be the text's own.
