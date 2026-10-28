@@ -307,11 +307,24 @@ public sealed partial class VoiceSettingsControl
     /// minutes to Stock Buggy A-Main") rather than picking from configured
     /// lines, so it has nothing to edit here and would render as an empty
     /// row that looks broken.
+    ///
+    /// The time-left calls (28 Oct 2026) sit either side of Final minute
+    /// rather than at the foot of the list, where being added last put them,
+    /// so the clock's three rows read in the order they are said: Minutes
+    /// left, Final minute, Last minute countdown.
     /// </remarks>
-    private static AnnouncementEventType[] AnnouncementTypes() =>
-        Enum.GetValues<AnnouncementEventType>()
-            .Where(t => t != AnnouncementEventType.Reminder)
-            .ToArray();
+    internal static AnnouncementEventType[] AnnouncementTypes()
+    {
+        var types = Enum.GetValues<AnnouncementEventType>()
+            .Where(t => t is not (AnnouncementEventType.Reminder or AnnouncementEventType.MinutesLeft or AnnouncementEventType.FinalSeconds))
+            .ToList();
+
+        var finalMinute = types.IndexOf(AnnouncementEventType.FinalMinute);
+        types.Insert(finalMinute + 1, AnnouncementEventType.FinalSeconds);
+        types.Insert(finalMinute, AnnouncementEventType.MinutesLeft);
+
+        return types.ToArray();
+    }
 
     /// <summary>
     /// Builds the whole page on the layout pieces (LayoutPieces.cs):
@@ -1261,6 +1274,28 @@ public sealed partial class VoiceSettingsControl
             lines.Add(Line(UiLayout.RowGap, (lblBlockEvery, 0), (_numConsistencyEveryLaps, caption), (lblBlockSuffix, UiLayout.HintGap)));
         }
 
+        // Minutes left (28 Oct 2026): every minute, or only the last few.
+        // Unticked is every minute, so the box keeps its number for when it
+        // is ticked again.
+        if (type == AnnouncementEventType.MinutesLeft)
+        {
+            _numMinutesLeftFrom.Minimum = 2;
+            _numMinutesLeftFrom.Maximum = 60;
+            _numMinutesLeftFrom.Value = Math.Clamp(config.MinutesLeftFrom > 0 ? config.MinutesLeftFrom : 5, 2, 60);
+
+            _chkMinutesLeftOnlyLast.Text = "Only the last";
+            _chkMinutesLeftOnlyLast.AutoSize = true;
+            _chkMinutesLeftOnlyLast.Checked = config.MinutesLeftFrom > 0;
+
+            var lblMinutesSuffix = new Label { Text = "minutes (untick to call every minute)", AutoSize = true };
+
+            rows.Controls.Add(_chkMinutesLeftOnlyLast);
+            rows.Controls.Add(_numMinutesLeftFrom);
+            rows.Controls.Add(lblMinutesSuffix);
+
+            lines.Add(Line(UiLayout.RowGap, (_chkMinutesLeftOnlyLast, 0), (_numMinutesLeftFrom, caption), (lblMinutesSuffix, UiLayout.HintGap)));
+        }
+
         if (type == AnnouncementEventType.Streak)
         {
             // TWO cadence boxes, one per context - see the field's note.
@@ -1718,6 +1753,7 @@ public sealed partial class VoiceSettingsControl
                      _chkOnlyLongestStreak, _chkMentionStreakChaser,
                      _numPositionEveryLaps, _numPositionDepth, _chkPositionGaps, _numLapTimeEveryN, _numSplitTimeEveryN,
                      _numTargetPaceEveryN, _numConsistencyEveryLaps,
+                     _chkMinutesLeftOnlyLast, _numMinutesLeftFrom,
                      _chkLeadChangeCount,
                  })
         {

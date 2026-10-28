@@ -232,6 +232,10 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>The target line's "every Nth lap", and the consistency line's block of clean laps (22 Oct 2026) - each its own box, as the split time's is.</summary>
     private readonly NumericUpDown _numTargetPaceEveryN = new();
     private readonly NumericUpDown _numConsistencyEveryLaps = new();
+
+    /// <summary>Minutes left's "only the last N minutes" (28 Oct 2026): the tick, and N. Unticked calls every minute.</summary>
+    private readonly CheckBox _chkMinutesLeftOnlyLast = new ThemedCheckBox();
+    private readonly NumericUpDown _numMinutesLeftFrom = new();
     private readonly Dictionary<AnnouncementEventType, NumericUpDown> _eventWeights = new();
     private readonly Dictionary<AnnouncementEventType, NumericUpDown> _eventSpeeds = new();
     private readonly Dictionary<AnnouncementEventType, CheckBox> _eventCaution = new();
@@ -4278,6 +4282,8 @@ public sealed partial class VoiceSettingsControl : UserControl
                 SplitTimeEveryNLaps = type == AnnouncementEventType.SplitTime ? (int)_numSplitTimeEveryN.Value : 1,
                 TargetPaceEveryNLaps = type == AnnouncementEventType.TargetPace ? (int)_numTargetPaceEveryN.Value : 1,
                 ConsistencyEveryLaps = type == AnnouncementEventType.ConsistencyCoach ? (int)_numConsistencyEveryLaps.Value : 5,
+                MinutesLeftFrom = type != AnnouncementEventType.MinutesLeft ? 5
+                    : _chkMinutesLeftOnlyLast.Checked ? (int)_numMinutesLeftFrom.Value : 0,
                 PositionReportEveryLaps = type == AnnouncementEventType.PositionReport ? (int)_numPositionEveryLaps.Value : 5,
                 PositionReportDepth = type == AnnouncementEventType.PositionReport ? (int)_numPositionDepth.Value : 3,
                 PositionReportSayGaps = type == AnnouncementEventType.PositionReport && _chkPositionGaps.Checked,
@@ -4414,6 +4420,8 @@ public sealed partial class VoiceSettingsControl : UserControl
             .Replace("{laps}", "five", StringComparison.OrdinalIgnoreCase)
             .Replace("{achievement}", "Hat-Trick", StringComparison.OrdinalIgnoreCase)
             .Replace("{badge}", "Hat-Trick", StringComparison.OrdinalIgnoreCase)
+            .Replace("{minutes}", "four", StringComparison.OrdinalIgnoreCase)
+            .Replace("{seconds}", "thirty", StringComparison.OrdinalIgnoreCase)
 
             // Tidied as the race tidies every line, so a fixed line tested
             // here is word for word the one the race asks for.

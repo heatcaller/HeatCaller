@@ -381,6 +381,9 @@ public partial class MainForm : Form
     private readonly CheckBox chkTimingThread = new ThemedCheckBox();
     private readonly CheckBox chkRecordPasses = new ThemedCheckBox();
     private readonly System.Windows.Forms.Timer _raceTickTimer = new() { Interval = 500 };
+
+    /// <summary>When the clock of a timed race passes a mark worth calling - see TimeLeftCalls.</summary>
+    private readonly TimeLeftCalls _timeLeftCalls = new();
     private readonly System.Windows.Forms.Timer _autoBackupCheckTimer = new() { Interval = (int)TimeSpan.FromHours(1).TotalMilliseconds };
 
     /// <summary>True while an automatic backup is being made in the background - see CheckAutoBackup.</summary>
@@ -1934,6 +1937,19 @@ public partial class MainForm : Form
             else
             {
                 _race.Tick();
+            }
+
+            // The time left in a timed race (28 Oct 2026): "five minutes to
+            // go", and every fifteen seconds of the last minute. After the
+            // tick, so inline the session's own final minute has gone first.
+            // Not under a red flag, where the race clock is stopped anyway.
+            if (_timeLeftCalls.Next(
+                    _race.RaceStartUtc,
+                    _race.TimeLimit,
+                    _race.ElapsedRaceTime,
+                    timedRace: _race.State == RaceState.Racing && !_race.IsPracticeMode && _race.Flag != FlagState.Red) is { } secondsLeft)
+            {
+                _announcer.NotifyTimeLeft(secondsLeft);
             }
 
             // A crossing the journal's throttle held back, written at most a

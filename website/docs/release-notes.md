@@ -4,6 +4,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The time left, called through a timed race (28 October).** Two new rows on **Voice → Announcements**, beside **Final minute**: **Minutes left** ("Four minutes to go") and **Last minute countdown** (45, 30 and 15 seconds). **Minutes left** calls the last five minutes by default; set how many with **Only the last** _n_ **minutes**, or untick it to hear every minute. Both are on to start with, and either can be unticked. A time call that had to wait behind another line is only said while it's still true. See [Every announcement](announcer/voice.md#every-announcement).
 - **Bug fixes from race night, and drivers' own nights by PIN (26 October).**
     - **Heat reminders through Listen Along.** Reminders between races could be dropped before they reached the relay, or lost on a phone whose download failed once. Listen lines now go to the relay first, a failed line is tried again, and a stuck request no longer stops the player. A short car number said once no longer holds back later lines that contain the same number ("5 minutes to Heat 2").
     - **Live captions.** Long lines - the whole recap, the intros - now come through in short pieces as they're spoken, so the relay's captions and the Big Screen keep moving instead of freezing on one cut-off line. Captions never show words the room didn't hear.

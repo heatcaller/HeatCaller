@@ -171,6 +171,24 @@ public enum AnnouncementEventType
     /// {sponsors} {ghostgap} {gap}.
     /// </summary>
     GhostGap,
+
+    /// <summary>
+    /// A timed race's minutes left - "Five minutes to go" - at each whole
+    /// minute from two up, every minute or only the last few
+    /// (<see cref="AnnouncementEventConfig.MinutesLeftFrom"/>). One minute is
+    /// <see cref="FinalMinute"/>'s. Asked for by Asher (28 Oct 2026).
+    /// Appended at the END - these persist as integers. Placeholder:
+    /// {minutes}.
+    /// </summary>
+    MinutesLeft,
+
+    /// <summary>
+    /// The time left through a timed race's last minute, every fifteen
+    /// seconds - "Forty-five seconds", "Thirty seconds", "Fifteen seconds"
+    /// (28 Oct 2026). The minute itself is <see cref="FinalMinute"/>'s.
+    /// Appended at the END. Placeholder: {seconds}.
+    /// </summary>
+    FinalSeconds,
 }
 
 public sealed class AnnouncementEventConfig
@@ -268,6 +286,22 @@ public sealed class AnnouncementEventConfig
     /// fewer is a coincidence, more is a long wait to hear anything.
     /// </summary>
     public int ConsistencyEveryLaps { get; set; } = 5;
+
+    /// <summary>
+    /// For MinutesLeft: call only the last this many minutes of a timed
+    /// race - 5 says five, four, three and two minutes to go. 0 calls every
+    /// minute (28 Oct 2026). One minute is always Final minute's, whatever
+    /// this says.
+    ///
+    /// Five by default, which is also what a settings file saved before
+    /// this existed reads as: a ten-minute main called every minute is nine
+    /// calls before the last minute even starts.
+    /// </summary>
+    public int MinutesLeftFrom { get; set; } = 5;
+
+    /// <summary>Whether MinutesLeft says <paramref name="minutes"/> to go, by <see cref="MinutesLeftFrom"/>.</summary>
+    public bool SaysMinutesLeft(int minutes) =>
+        minutes >= 2 && (MinutesLeftFrom <= 0 || minutes <= MinutesLeftFrom);
 
     /// <summary>Resolves the right flag for the current context.</summary>
     public bool IsEnabledFor(bool practice) =>
@@ -1532,6 +1566,40 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
             },
         };
 
+        // The time left (28 Oct 2026, asked for by Asher): the minutes, and
+        // every fifteen seconds of the last one. On by default, weighted
+        // with Final minute so the pacing dial treats the clock the same
+        // all the way down. Short lines: on a busy track the next call is
+        // already coming.
+        p.Events[nameof(AnnouncementEventType.MinutesLeft)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 90,
+            MinutesLeftFrom = 5,
+            Templates = new List<string>
+            {
+                "[excited] {minutes} minutes to go!",
+                "{minutes} minutes left on the clock.",
+                "[excited] {minutes} minutes remaining!",
+                "We're down to {minutes} minutes.",
+                "[excited] {minutes} minutes to go - plenty of racing left!",
+                "{minutes} minutes left in this one.",
+            },
+        };
+
+        p.Events[nameof(AnnouncementEventType.FinalSeconds)] = new AnnouncementEventConfig
+        {
+            Enabled = true,
+            Weight = 90,
+            Templates = new List<string>
+            {
+                "[excited] {seconds} seconds!",
+                "[excited] {seconds} seconds to go!",
+                "[shouting] {seconds} seconds left!",
+                "[excited] {seconds} seconds on the clock!",
+            },
+        };
+
         p.Events[nameof(AnnouncementEventType.ProvisionalPole)] = new AnnouncementEventConfig
         {
             Enabled = true,
@@ -1764,6 +1832,8 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         AnnouncementEventType.AchievementUnlocked => ("Achievement unlocked", "A driver just earned an achievement. Fires after a race, once the result is saved and the achievements have been worked out - at most a few per race, so a big night doesn't turn into a list. Placeholders: {driver} {car} {team} {sponsors} {achievement}."),
         AnnouncementEventType.LastLap => ("Last lap", "The leader starts the final lap of a lap-limited race. Fires once. Placeholders: {driver} {car} {team} {sponsors}."),
         AnnouncementEventType.FinalMinute => ("Final minute", "A timed race has one minute left. Fires once. No placeholders."),
+        AnnouncementEventType.MinutesLeft => ("Minutes left", "A timed race's time left, at each whole minute from two up - \"Five minutes to go\". Use the setting below to call only the last few minutes, or every minute. One minute to go is Final minute's. Placeholder: {minutes}."),
+        AnnouncementEventType.FinalSeconds => ("Last minute countdown", "Through a timed race's last minute, the time left every 15 seconds - 45, 30 and 15 seconds. The minute itself is Final minute's. Placeholder: {seconds}."),
         AnnouncementEventType.ProvisionalPole => ("Provisional pole (qualifying)", "The top of the qualifying order changes hands. Fires only during a qualifying session. Placeholders: {driver} {car} {team} {sponsors} {time}."),
         AnnouncementEventType.QualifyingImprovement => ("Qualifying improvement", "A driver improves their own best in a qualifier without taking provisional pole. Off by default. Placeholders: {driver} {car} {team} {sponsors} {time}."),
         AnnouncementEventType.GridCall => ("Grid call", "A round is called to the grid as it starts. Placeholders: {class} {round} {marshals}."),
