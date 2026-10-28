@@ -6,7 +6,8 @@ namespace HeatCaller.Tests;
 /// Bug hunt 10 (23 Oct 2026): what the public pages are given of the
 /// announcer's words - an unnamed car's transponder number, the club's
 /// "shorten published names", lines withheld from the captions document and
-/// the podium videos, and a live two-hander's sponsor credit.
+/// and a live two-hander's sponsor credit (the podium videos too, until
+/// they stopped going online on 28 Oct 2026).
 /// </summary>
 public sealed class BugHunt10_unnamed_public_textTests
 {
@@ -110,36 +111,11 @@ public sealed class BugHunt10_unnamed_public_textTests
     }
 
     // ------------------------------------------------- podium videos
-
-    [Fact]
-    public void A_shared_videos_captions_leave_out_race_control_calls_and_initials_only_drivers()
-    {
-        var register = PublicPrivacy.From(new[] { Sam() });
-        var heard = new List<HeardLine>
-        {
-            new(1_000, "Warning, Alex Jones. Rough driving."),
-            new(5_000, "Sam Parker takes the lead!"),
-            new(9_000, "Alex Jones crosses the line!"),
-        };
-
-        var shown = HighlightShare.PublicHeard(heard, register);
-
-        Assert.Equal(new[] { "Alex Jones crosses the line!" }, shown.Select(h => h.Text));
-    }
-
-    [Fact]
-    public void A_video_whose_cut_plays_a_withheld_line_is_found_and_one_that_does_not_is_not()
-    {
-        var register = PublicPrivacy.From(new[] { Sam() });
-        var heard = new List<HeardLine>
-        {
-            new(1_000, "Warning, Alex Jones. Rough driving."),
-            new(20_000, "Alex Jones crosses the line!"),
-        };
-
-        Assert.True(HighlightShare.CarriesWithheldLine(heard, new[] { new RaceHighlights.Window(0, 5_000) }, register));
-        Assert.False(HighlightShare.CarriesWithheldLine(heard, new[] { new RaceHighlights.Window(15_000, 25_000) }, register));
-    }
+    //
+    // The two checks here - a shared video's captions filtered, and a video
+    // whose cut plays a withheld line kept on this PC - went on 28 Oct 2026
+    // with HighlightShare: no podium video goes online any more (asked for
+    // by Asher), so there is nothing to filter.
 
     // ------------------------------------------------- a live two-hander's credit
 

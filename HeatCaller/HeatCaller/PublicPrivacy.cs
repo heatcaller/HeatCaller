@@ -365,7 +365,7 @@ internal sealed class PublicPrivacy
     /// <summary>True when the driver with this transponder asked for no photo online.</summary>
     public bool NoPhoto(string? transponder) => Find(transponder)?.NoPhoto == true;
 
-    /// <summary>True when the driver with this transponder asked for no podium videos online.</summary>
+    /// <summary>True when the driver with this transponder asked for no podium videos online (always met since 28 Oct 2026: none go online).</summary>
     public bool NoVideo(string? transponder) => Find(transponder)?.NoVideo == true;
 
     /// <summary>

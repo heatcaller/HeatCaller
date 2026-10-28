@@ -497,7 +497,11 @@ public sealed class ProfileForm : Form
         _chkInitialsOnline.Checked = Result.InitialsOnline;
         privacy.AddField(_chkInitialsOnline);
 
-        privacy.AddHint("Only what goes on the internet: the club's relay pages and podium videos. In the room nothing "
+        // "and podium videos" went from this hint on 28 Oct 2026: the videos
+        // stay on this PC now (asked for by Asher), so none goes online.
+        // "No podium videos of them" is kept - it is the driver's own ask,
+        // they can still make it from their phone, and it is already met.
+        privacy.AddHint("Only what goes on the internet: the club's relay pages. In the room nothing "
                         + "changes - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. "
                         + "A driver can ask for these from their phone; only the desk can turn one off.");
 

@@ -43,8 +43,9 @@ public sealed class RecordingControl : UserControl
     /// <summary>The club's handle for the end of each video.</summary>
     private readonly TextBox _txtVideoHandle = new();
 
-    /// <summary>The podium's videos on the club's page, with a QR code on the Big Screen (21 Oct 2026).</summary>
-    private readonly CheckBox _chkShareVideos = new ThemedCheckBox();
+    // "Put the podium's videos on the club's page, with a QR code on the Big
+    // Screen" (21 Oct 2026) is gone: 28 Oct 2026, asked for by Asher, the
+    // videos stay on this PC (RaceAudioStore.SharePodiumVideos went too).
 
     /// <summary>The music and crowd under the highlight videos (26 Oct 2026) - see RecapBed and RaceAudioStore.MusicUnderVideos.</summary>
     private readonly CheckBox _chkMusicUnderVideos = new ThemedCheckBox();
@@ -336,21 +337,19 @@ public sealed class RecordingControl : UserControl
         _txtVideoHandle.Text = _audio.VideoHandle;
         _txtVideoHandle.TextChanged += (_, _) => _audio.VideoHandle = _txtVideoHandle.Text;
 
-        Check(_chkShareVideos, "Put the podium's videos on the club's page, with a QR code on the Big Screen to download them");
-        _chkShareVideos.Checked = _audio.SharePodiumVideos;
-        _chkShareVideos.CheckedChanged += (_, _) => _audio.SharePodiumVideos = _chkShareVideos.Checked;
-
         // THE MUSIC UNDER THE VIDEOS, AND A WAY OUT (26 Oct 2026, Asher's
-        // decision: "add option to switch off. on by default."): the
-        // podium's videos go online, and the club's playlist may not be
-        // theirs to publish. Unticked, no music or crowd is kept at all.
+        // decision: "add option to switch off. on by default."): a driver
+        // who is given their video may post it, and the club's playlist may
+        // not be theirs to publish. Unticked, no music or crowd is kept at
+        // all. (The podium's videos also went on the club's page until 28
+        // Oct 2026; now they stay on this PC.)
         Check(_chkMusicUnderVideos, "Put the music and crowd under the highlight videos");
         _chkMusicUnderVideos.Checked = _audio.MusicUnderVideos;
         _chkMusicUnderVideos.CheckedChanged += (_, _) => _audio.MusicUnderVideos = _chkMusicUnderVideos.Checked;
         _tips.SetToolTip(_chkMusicUnderVideos,
             "Most commercial songs are licensed for playing at your track, not for posting online. If your music is "
-            + "not your own or royalty-free, untick this so the videos (including the podium's on the club's page) "
-            + "have the announcer only. Your music at the track is not affected.");
+            + "not your own or royalty-free, untick this so the videos have the announcer only - drivers often post "
+            + "theirs. Your music at the track is not affected.");
         Disposed += (_, _) => _tips.Dispose();
 
         // A DRIVER'S OWN CLIP ON THEIR NIGHT (22 Oct 2026, driver
@@ -404,9 +403,6 @@ public sealed class RecordingControl : UserControl
         audio.Add(Hint(
             "As the room heard them. Untick if your music is not licensed for posting online - the videos then have the "
             + "announcer only."));
-        audio.Add(_chkShareVideos, stretch: false, gapBelow: UiLayout.HintGap);
-        audio.Add(Hint(
-            "Only 1st to 3rd, and only those with a video. Needs the club's page on (Club Website); kept online for a week."));
         audio.Add(_chkShareClips, stretch: false, gapBelow: UiLayout.HintGap);
         audio.Add(Hint(
             "Only for that driver: their clip is listed on their own night, which only their badge code opens - never on a "
@@ -594,7 +590,6 @@ public sealed class RecordingControl : UserControl
         var clips = recording && _chkClips.Checked;
         _cmbVideos.Enabled = clips;
         _txtVideoHandle.Enabled = clips;
-        _chkShareVideos.Enabled = clips;
         _chkMusicUnderVideos.Enabled = clips;
         _chkShareClips.Enabled = clips;
         _txtAudioFolder.Enabled = recording;

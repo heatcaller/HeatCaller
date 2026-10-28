@@ -271,7 +271,6 @@ describe("the laptop's side", () => {
     assert.equal((await inbox(BROOK_TOKEN)).status, 403);
     assert.equal((await call(h, "POST", `${API}/driver/collected`, { json: { ids: [] } })).status, 401);
     assert.equal((await call(h, "POST", `${API}/driver/open`, { token: BROOK_TOKEN, json: { open: true } })).status, 403);
-    assert.equal((await call(h, "POST", `${API}/driver/forget-media`, { json: { id: SAM } })).status, 401);
   });
 
   it("closing requests deletes every ask held", async () => {
@@ -303,26 +302,5 @@ describe("the laptop's side", () => {
 
     assert.equal((await pending).status, 404);
     assert.deepEqual(await h.store.listItems("acme-rc", "driverasks"), []);
-  });
-
-  it("forget-media takes down that driver's podium videos and nobody else's", async () => {
-    const video = (id: string, driver: string) => ({
-      id,
-      race: "0123456789abcdef0123456789abcdef",
-      position: 1,
-      driver,
-      name: "x",
-      label: "A-Main",
-      at: "2026-10-22T19:00:00.000Z",
-      bytes: 10,
-    });
-    await h.videos.put("acme-rc", video("11111111111111111111111111111111", SAM), Buffer.alloc(10));
-    await h.videos.put("acme-rc", video("22222222222222222222222222222222", BILL), Buffer.alloc(10));
-
-    const answer = await call(h, "POST", `${API}/driver/forget-media`, { token: ACME_TOKEN, json: { ids: [SAM.toUpperCase()] } });
-    assert.deepEqual(answer.body, { ok: true, forgotten: 1 });
-    assert.deepEqual((await h.videos.list("acme-rc")).map((v) => v.driver), [BILL]);
-
-    assert.equal((await call(h, "POST", `${API}/driver/forget-media`, { token: ACME_TOKEN, json: { ids: ["nope"] } })).status, 400);
   });
 });

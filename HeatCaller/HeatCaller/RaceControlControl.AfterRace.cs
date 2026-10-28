@@ -5944,11 +5944,11 @@ public sealed partial class RaceControlControl
     /// club ticked "share drivers' clips" on Club Website > Recording, offers
     /// drivers their nights, and the club's page is set up - or when nobody
     /// in the race has a badge id. Badge ids come only from a key that already
-    /// exists, as PodiumShareFor's do.
+    /// exists.
     /// </summary>
     private ClipShare? ClipShareFor(RaceAudioStore store, SessionRecord? record)
     {
-        var publisher = RelayPublisher.ForVideos;
+        var publisher = RelayPublisher.ForClips;
 
         if (record is null || !store.DriverHighlights || !store.ShareDriverClips || publisher is null || !publisher.CanShareDriverClips)
         {
@@ -5967,7 +5967,7 @@ public sealed partial class RaceControlControl
             var label = string.IsNullOrWhiteSpace(record.Label) ? "Race" : record.Label.Trim();
 
             return new ClipShare(
-                RelayPublisher.IsAVideoKey(record.Id) ? record.Id : string.Empty,
+                RelayPublisher.IsAnUploadKey(record.Id) ? record.Id : string.Empty,
                 label,
                 ids,
                 publisher);
@@ -5979,77 +5979,10 @@ public sealed partial class RaceControlControl
         }
     }
 
-    /// <summary>
-    /// Where the podium's videos go online (21 Oct 2026): a new race page on
-    /// the club's website, the drivers' badge ids so their own night offers
-    /// theirs, and the Big Screen's QR code as each one lands. Null when the
-    /// club has not asked for it or the club's page is not set up. Only 1st
-    /// to 3rd are ever sent - see HighlightShare.Wants.
-    /// </summary>
-    private HighlightShare? PodiumShareFor(RaceAudioStore store, SessionRecord record)
-    {
-        var publisher = RelayPublisher.ForVideos;
-
-        if (!store.SharePodiumVideos || publisher is null || !publisher.CanSharePodiumVideos)
-        {
-            return null;
-        }
-
-        // Badge ids for the podium only, and only from a key that already
-        // exists: minting one here would write settings from a race's end.
-        // The clips' rule (22 Oct 2026, security review): the driver's MAIN
-        // transponder's badge, so a podium on a second transponder lands on
-        // the badge they check in with, and none for a ghost, a rental or a
-        // car nobody named. A video without one still goes on the race page.
-        var ids = ClipShare.DriverIdsFor(
-            record.Results.Where(row => HighlightShare.Wants(row.Position)),
-            _profiles.Get,
-            _settings.RelayCheckInSecret);
-
-        var label = string.IsNullOrWhiteSpace(record.Label) ? "Race" : record.Label.Trim();
-
-        // Which race these are (22 Oct 2026, bug hunt): uploads run long
-        // after the flag, and a late one from an earlier race put its code
-        // over a later race's results.
-        var generation = _race.SessionGeneration;
-
-        // The public form of every name (22 Oct 2026, bug hunt 9): the upload
-        // sent full names whatever "Shorten published names" said, and the
-        // video drew them too. Worked out over the whole field, here on the
-        // UI thread where the settings are read.
-        var names = RelayPublisher.FieldPublicNames(
-            record.Results.Select(r => ((string?)r.DriverName, (string?)r.Transponder, r.Position)).ToList(),
-            _settings.RelayAbbreviateNames);
-
-        return new HighlightShare(
-            RelayPublisher.NewVideoKey(),
-            label,
-            ids,
-            names,
-            publisher,
-            (page, race) =>
-            {
-                try
-                {
-                    if (IsDisposed || !IsHandleCreated)
-                    {
-                        return;
-                    }
-
-                    BeginInvoke(() =>
-                    {
-                        if (_race.SessionGeneration == generation)
-                        {
-                            _bigScreen?.ShowPodiumVideos(page, race);
-                        }
-                    });
-                }
-                catch (InvalidOperationException)
-                {
-                    // Race Control is closing. The video is still online.
-                }
-            });
-    }
+    // PodiumShareFor - where the podium's videos went online, with the Big
+    // Screen's QR code as each one landed (21 Oct 2026) - is gone: 28 Oct
+    // 2026, asked for by Asher, "Remove the podium videos for downloading
+    // from the relay and just have locally." The videos stay on this PC.
 
     /// <summary>The race being filed by SaveCompletedSessionToHistory right now, whose recap follows - or null.</summary>
     private string? _filingForSummary;
@@ -6074,10 +6007,6 @@ public sealed partial class RaceControlControl
         {
             var drivers = new Dictionary<string, HighlightDriver>(StringComparer.OrdinalIgnoreCase);
 
-            // Worked out first (22 Oct 2026, driver experience): whether the
-            // podium's videos go online decides whose photo they may show.
-            var share = PodiumShareFor(store, record);
-
             foreach (var row in record.Results)
             {
                 if (string.IsNullOrWhiteSpace(row.Transponder) || drivers.ContainsKey(row.Transponder))
@@ -6087,10 +6016,9 @@ public sealed partial class RaceControlControl
 
                 var profile = _profiles.Get(row.Transponder);
 
-                // "No photo online": a video that will go up is drawn
-                // without their photo - see HighlightShare.PhotoFor.
-                var photo = HighlightShare.PhotoFor(profile?.PhotoFileName, row.Transponder, row.Position, share is not null);
-                drivers[row.Transponder] = new HighlightDriver(photo, profile?.RaceNumber ?? string.Empty);
+                // Their own photo, always: the video stays on this PC (28
+                // Oct 2026), so "no photo online" has nothing to keep it off.
+                drivers[row.Transponder] = new HighlightDriver(profile?.PhotoFileName ?? string.Empty, profile?.RaceNumber ?? string.Empty);
             }
 
             var palette = new HighlightPalette(
@@ -6107,8 +6035,7 @@ public sealed partial class RaceControlControl
                 store.VideoHandle,
                 _settings.RelayLogoFile ?? string.Empty,
                 palette,
-                drivers,
-                share);
+                drivers);
         }
         catch (Exception ex)
         {

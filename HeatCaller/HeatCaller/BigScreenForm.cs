@@ -89,8 +89,9 @@ public sealed class BigScreenForm : Form
     private bool _showingRead;
     private readonly Panel _pnlLeaderboardArea = new();
 
-    /// <summary>The podium's videos: a QR code to download them, after a race (21 Oct 2026). See PodiumVideoQr.</summary>
-    private readonly PodiumVideoQr _podiumQr = new();
+    // The podium videos' QR code strip (21 Oct 2026, PodiumVideoQr) is gone:
+    // 28 Oct 2026, asked for by Asher, the videos stay on the laptop and are
+    // no longer on the club's page for a phone to download.
     private readonly System.Windows.Forms.Timer _sponsorTimer = new();
     private int _sponsorIndex = -1;
     private bool _showingSponsor;
@@ -410,17 +411,7 @@ public sealed class BigScreenForm : Form
         // lambda can't be unsubscribed - these two were left attached when
         // the window closed, so a reopened-and-closed Big Screen accumulated
         // dead handlers that still fired against a disposed form.
-        _stateChangedHandler = state => SafeInvoke(() =>
-        {
-            // The podium's code comes down as the next race is called -
-            // see ShowPodiumVideos.
-            if (state is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
-            {
-                _podiumQr.HideCode();
-            }
-
-            RefreshAll();
-        });
+        _stateChangedHandler = _ => SafeInvoke(RefreshAll);
         _flagChangedHandler = _ => SafeInvoke(RefreshAll);
 
         _race.LapProcessed += OnRaceEvent;
@@ -866,10 +857,6 @@ public sealed class BigScreenForm : Form
         // Added last, so it takes its strip down the right before the board
         // fills what is left.
         _pnlLeaderboardArea.Controls.Add(_mapView);
-
-        // The podium's code, the same way - outside the map, at the very edge.
-        _podiumQr.Dock = DockStyle.Right;
-        _pnlLeaderboardArea.Controls.Add(_podiumQr);
 
         // On-deck bar: what's coming up next, for calling racers to the table.
         _pnlOnDeck.Dock = DockStyle.Bottom;
@@ -2346,22 +2333,6 @@ public sealed class BigScreenForm : Form
 
         return who;
     }
-
-    /// <summary>
-    /// Puts up the QR code to a race's podium videos (21 Oct 2026) - from
-    /// any thread, as each video lands on the club's page. Taken down when
-    /// the next race stages. Ignored while a race is on: a video finishing
-    /// late must not put a code over the next race's board.
-    /// </summary>
-    public void ShowPodiumVideos(string url, string label) => SafeInvoke(() =>
-    {
-        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
-        {
-            return;
-        }
-
-        _podiumQr.ShowCode(url, label);
-    });
 
     private void SafeInvoke(Action action)
     {

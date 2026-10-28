@@ -5,12 +5,14 @@ namespace HeatCaller;
 /// <summary>
 /// Keeping the club's online pages in step with what each driver asked for
 /// online - no photo, no podium videos, initials only (22 Oct 2026, driver
-/// experience, item 12; design 1.4 rules 3, 4 and 6).
+/// experience, item 12; design 1.4 rules 3, 4 and 6). Since 28 Oct 2026 no
+/// podium video goes online at all (asked for by Asher: they stay on this
+/// PC), so "no podium videos" is always already true there.
 /// </summary>
 /// <remarks>
 /// THE REGISTER. PublicPrivacy.Current is what every public document is
-/// built against (RelayPublisher.DisplayNames, the check-in photos, the
-/// podium videos). It is rebuilt here, on the roster tick, whenever a
+/// built against (RelayPublisher.DisplayNames, the check-in photos). It is
+/// rebuilt here, on the roster tick, whenever a
 /// profile's names or flags change - a desk edit in ProfileForm, or a
 /// driver's own request approved at the desk - and swapped whole.
 ///
@@ -22,9 +24,9 @@ namespace HeatCaller;
 /// sent again: 25 every tick, and only while the publisher's queue is under
 /// 300 (it holds 500 and drops the oldest when full, and a driver with a
 /// season of results must not push tonight's racing out of it). Then each
-/// affected year's index, then tonight's nights, then - for a driver now
-/// keeping their photo, videos or name off - their own podium videos are
-/// taken down (driver/forget-media).
+/// affected year's index, then tonight's nights. (A fourth step took a
+/// driver's own podium videos down from the relay, driver/forget-media; it
+/// went with the videos on 28 Oct 2026.)
 ///
 /// SURVIVES A RESTART. The drivers still owed that are kept in
 /// AppSettings.PrivacyRepublishOwed, and only taken off once all of it has
@@ -50,9 +52,6 @@ public partial class MainForm
     /// <summary>The drivers (by transponder) the batch in hand is for. Null when no batch is running.</summary>
     private HashSet<string>? _privacyBatch;
 
-    /// <summary>Moves on with every new batch, so a forget-media answer for an abandoned one is not taken as this one's.</summary>
-    private int _privacyBatchNumber;
-
     /// <summary>The batch's saved sessions still to send again, by id - looked up afresh when sent, so an edit made meanwhile goes as it now stands.</summary>
     private Queue<string>? _privacySessionsToSend;
 
@@ -60,9 +59,6 @@ public partial class MainForm
     private IReadOnlyCollection<string>? _privacyYears;
 
     private bool _privacyIndexSent;
-    private bool _privacyForgetDone;
-    private bool _privacyForgetRunning;
-    private DateTime _privacyForgetRetryUtc;
 
     /// <summary>The last error said in the console, so a fault that repeats every tick is said once.</summary>
     private string? _privacyLastError;
@@ -294,29 +290,7 @@ public partial class MainForm
             _privacyIndexSent = true;
         }
 
-        // 3. Their own podium videos taken down.
-        if (!_privacyForgetDone)
-        {
-            if (_privacyForgetRunning || DateTime.UtcNow < _privacyForgetRetryUtc)
-            {
-                return;
-            }
-
-            var badges = PrivacyBadgesToForget(_privacyBatch!, PublicPrivacy.Current, _settings.RelayCheckInSecret);
-
-            if (badges.Count == 0)
-            {
-                _privacyForgetDone = true;
-            }
-            else
-            {
-                _privacyForgetRunning = true;
-                _ = ForgetDriverMediaInBackgroundAsync(badges, _privacyBatchNumber);
-                return;
-            }
-        }
-
-        // 4. Done: these drivers are owed nothing more.
+        // 3. Done: these drivers are owed nothing more.
         var finished = _privacyBatch!;
         _settings.PrivacyRepublishOwed = owed.Where(t => !finished.Contains(t)).ToList();
         _settings.Save();
@@ -329,7 +303,6 @@ public partial class MainForm
     private void StartPrivacyBatch(IEnumerable<string> owed)
     {
         _privacyBatch = new HashSet<string>(owed, StringComparer.OrdinalIgnoreCase);
-        _privacyBatchNumber++;
 
         var sessions = PrivacySessionsToRepublish(
             _sessionHistory.Saved,
@@ -339,56 +312,6 @@ public partial class MainForm
         _privacySessionsToSend = new Queue<string>(sessions.Select(s => s.Id));
         _privacyYears = RelayResultsIndex.YearsOf(sessions);
         _privacyIndexSent = false;
-        _privacyForgetDone = false;
-        _privacyForgetRetryUtc = DateTime.MinValue;
-    }
-
-    /// <summary>
-    /// The forget-media request, off the UI thread; its answer comes back to
-    /// it. Taken as done when the relay took it or is too old to (said once
-    /// in the log - the videos then expire within seven days); asked again a
-    /// minute later otherwise.
-    /// </summary>
-    private async Task ForgetDriverMediaInBackgroundAsync(IReadOnlyList<string> badges, int batchNumber)
-    {
-        var result = new ForgetMediaResult(ForgetMediaOutcome.Failed, 0);
-
-        try
-        {
-            result = await _relayPublisher.ForgetDriverMediaAsync(badges).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            // Fire and forget, so nothing else would ever see this.
-            OnClientRawMessage($"[privacy] Could not ask the relay to take podium videos down: {ex.Message}");
-        }
-
-        var answer = result;
-
-        TryPost(() =>
-        {
-            _privacyForgetRunning = false;
-
-            if (batchNumber != _privacyBatchNumber)
-            {
-                // A newer batch has started; it asks again for itself.
-                return;
-            }
-
-            if (answer.Outcome is ForgetMediaOutcome.Done or ForgetMediaOutcome.RelayTooOld)
-            {
-                _privacyForgetDone = true;
-
-                if (answer.Forgotten > 0)
-                {
-                    OnClientRawMessage($"[privacy] {Plural.Of(answer.Forgotten, "podium video")} taken off the club's page.");
-                }
-            }
-            else
-            {
-                _privacyForgetRetryUtc = DateTime.UtcNow + TimeSpan.FromMinutes(1);
-            }
-        });
     }
 
     // ----------------------------------------------------------- pure parts
@@ -459,29 +382,6 @@ public partial class MainForm
             .Where(onRelay)
             .OrderBy(RelayResultsIndex.EffectiveStart)
             .ThenBy(s => s.Id, StringComparer.Ordinal)
-            .ToList();
-    }
-
-    /// <summary>
-    /// The badge ids whose podium videos should come down: drivers in the
-    /// batch who now ask for no photo or no videos online - and, a step
-    /// past the design's rule 4/5, initials only too, since their name is
-    /// drawn into their own videos' pixels and on the videos page. A driver
-    /// whose flags went OFF has nothing to take down. Empty without a badge
-    /// key: no video was ever filed under a badge then.
-    /// </summary>
-    internal static IReadOnlyList<string> PrivacyBadgesToForget(IEnumerable<string> transponders, PublicPrivacy register, string? secret)
-    {
-        if (string.IsNullOrWhiteSpace(secret))
-        {
-            return Array.Empty<string>();
-        }
-
-        return transponders
-            .Where(t => !string.IsNullOrWhiteSpace(t)
-                        && (register.NoPhoto(t) || register.NoVideo(t) || register.InitialsForTransponder(t)))
-            .Select(t => RelayCheckIn.IdFor(t, secret))
-            .Distinct(StringComparer.Ordinal)
             .ToList();
     }
 }

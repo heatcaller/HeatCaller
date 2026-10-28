@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import { CLUB_FAIL_LIMIT } from "../src/pinguard.js";
-import { checkinPage, homePage, myNightPage, nightPage, podiumVideosIndexPage } from "../src/pages.js";
+import { checkinPage, homePage, myNightPage, nightPage } from "../src/pages.js";
 import { pinHash, racerPinHash } from "../src/server.js";
 import { MemoryStore } from "../src/store.js";
-import { MemoryVideoVault } from "../src/videos.js";
 import { ACME_TOKEN, call, start, tenants, type Harness } from "./helpers.js";
 import { FakePage, pageParts } from "./driverexp-rp1-fakepage.js";
 
@@ -19,8 +18,10 @@ import { FakePage, pageParts } from "./driverexp-rp1-fakepage.js";
  *
  * A check-in tap used to need nothing but a badge code. A driver with a
  * personal PIN is now checked in or out only with the pass that PIN was
- * answered with - enforced by the relay, not the page. And the week's
- * podium videos now have a place of their own on the club's site.
+ * answered with - enforced by the relay, not the page. (The week's podium
+ * videos had a place of their own on the club's site too, until 28 Oct
+ * 2026, when they went back to living only on the laptop - see
+ * novideos.test.ts.)
  */
 
 const API = "/api/v1/c/acme-rc";
@@ -231,99 +232,6 @@ describe("the pages that tap by badge code ask for the PIN", () => {
   });
 });
 
-describe("the club's Videos tab", () => {
-  const RACE_A = "0123456789abcdef0123456789abcdef";
-  const RACE_B = "fedcba9876543210fedcba9876543210";
-  let harness: Harness;
-  let vault: MemoryVideoVault;
-
-  beforeEach(async () => {
-    vault = new MemoryVideoVault();
-    harness = await start(new MemoryStore(), tenants(), undefined, undefined, undefined, { videos: vault });
-  });
-
-  afterEach(async () => {
-    await harness.close();
-  });
-
-  const video = (id: string, race: string, position: number, name: string, at: string, driver?: string) => ({
-    id,
-    race,
-    position,
-    name,
-    label: race === RACE_A ? "A-Main" : "B-Main",
-    at,
-    bytes: 10,
-    ...(driver === undefined ? {} : { driver }),
-  });
-
-  it("lists every race's podium, newest race first, each with a download", async () => {
-    await vault.put("acme-rc", video("11111111111111111111111111111111", RACE_A, 2, "Bill T", "2026-09-20T10:00:00.000Z", BILL), Buffer.alloc(10));
-    await vault.put("acme-rc", video("22222222222222222222222222222222", RACE_A, 1, "Sam C", "2026-09-20T10:00:01.000Z", SAM), Buffer.alloc(10));
-    await vault.put("acme-rc", video("33333333333333333333333333333333", RACE_B, 1, "Nell N", "2026-09-20T11:00:00.000Z", NOPIN), Buffer.alloc(10));
-
-    const page = await call(harness, "GET", "/c/acme-rc/videos");
-
-    assert.equal(page.status, 200);
-    assert.ok(page.text.indexOf("B-Main") < page.text.indexOf("A-Main"), "newest race first");
-    assert.ok(page.text.indexOf("Sam C") < page.text.indexOf("Bill T"), "1st before 2nd");
-    assert.match(page.text, /\/c\/acme-rc\/video\/22222222222222222222222222222222\.mp4\?download=1/);
-    assert.match(page.text, new RegExp(`/c/acme-rc/videos/${RACE_A}`), "and the race's own page to watch it");
-    assert.match(page.text, /aria-current="page">Videos</);
-  });
-
-  it("drops a driver's video once they ask for no videos online", async () => {
-    await vault.put("acme-rc", video("22222222222222222222222222222222", RACE_A, 1, "Sam C", "2026-09-20T10:00:01.000Z", SAM), Buffer.alloc(10));
-    await vault.put("acme-rc", video("11111111111111111111111111111111", RACE_A, 2, "Bill T", "2026-09-20T10:00:00.000Z", BILL), Buffer.alloc(10));
-
-    const forgot = await call(harness, "POST", `${API}/driver/forget-media`, { token: ACME_TOKEN, json: { ids: [SAM] } });
-    assert.equal(forgot.status, 200);
-
-    const page = await call(harness, "GET", "/c/acme-rc/videos");
-    assert.doesNotMatch(page.text, /Sam C/);
-    assert.doesNotMatch(page.text, /22222222222222222222222222222222/);
-    assert.match(page.text, /Bill T/);
-  });
-
-  it("never lists a video sent without a driver id - forget-media could not take it down", async () => {
-    await vault.put("acme-rc", video("55555555555555555555555555555555", RACE_A, 1, "No Badge", "2026-09-20T10:00:00.000Z"), Buffer.alloc(10));
-    await vault.put("acme-rc", video("66666666666666666666666666666666", RACE_A, 2, "Sam C", "2026-09-20T10:00:01.000Z", SAM), Buffer.alloc(10));
-
-    const index = await call(harness, "GET", "/c/acme-rc/videos");
-    assert.doesNotMatch(index.text, /No Badge/);
-    assert.doesNotMatch(index.text, /55555555555555555555555555555555/);
-    assert.match(index.text, /Sam C/);
-
-    // Still on its race's own page, by the QR link, as before.
-    const race = await call(harness, "GET", `/c/acme-rc/videos/${RACE_A}`);
-    assert.match(race.text, /No Badge/);
-  });
-
-  it("leaves out anything past its week", async () => {
-    await vault.put("acme-rc", video("44444444444444444444444444444444", RACE_A, 1, "Old Timer", "2026-09-01T10:00:00.000Z"), Buffer.alloc(10));
-
-    const page = await call(harness, "GET", "/c/acme-rc/videos");
-    assert.doesNotMatch(page.text, /Old Timer/);
-    assert.match(page.text, /No podium videos this week/);
-  });
-
-  it("escapes what the laptop sent, and is in the nav and on the home page", () => {
-    const html = podiumVideosIndexPage("acme-rc", "Acme RC", undefined, [
-      { race: RACE_A, label: "<b>A</b>", at: "2026-09-20T10:00:00.000Z", videos: [{ id: "1".repeat(32), position: 1, name: "<script>x</script>", label: "" }] },
-    ]);
-
-    assert.doesNotMatch(html, /<script>x<\/script>/);
-    assert.match(html, /href="\/c\/acme-rc\/videos"/);
-    assert.match(homePage("acme-rc", "Acme RC"), /href="\/c\/acme-rc\/videos"/);
-  });
-});
-
-/**
- * 26 Oct 2026, asked for by Asher: "i want to driver to get to own night
- * page through the relay as long as they have their pin". The club's
- * "My night" tab: the personal PIN, sent once to checkin/list, opens that
- * driver's own night.
- */
 describe("My night: a driver's own night with their PIN", () => {
   const CODE = "a1b2c3d4e5f60718293a";
 

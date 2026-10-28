@@ -208,7 +208,7 @@ public sealed class DriverExp_E_NightEmailTests
     public void The_email_carries_the_facts_the_card_and_the_link_with_its_warning()
     {
         var link = NightEmail.NightLink(Publishing(), "1001");
-        var body = NightEmail.Build("Sam", "Acme RC", new DateTime(2026, 10, 22), "Club Night", Facts, Card, podiumVideo: false, link);
+        var body = NightEmail.Build("Sam", "Acme RC", new DateTime(2026, 10, 22), "Club Night", Facts, Card, link);
 
         Assert.StartsWith("Hi Sam,", body);
         Assert.Contains("Acme RC", body);
@@ -229,7 +229,7 @@ public sealed class DriverExp_E_NightEmailTests
     {
         const string transponder = "8473920";
         var link = NightEmail.NightLink(Publishing(), transponder);
-        var body = NightEmail.Build("Sam", "Acme RC", new DateTime(2026, 10, 22), null, Facts, Card, podiumVideo: true, link);
+        var body = NightEmail.Build("Sam", "Acme RC", new DateTime(2026, 10, 22), null, Facts, Card, link);
 
         Assert.DoesNotContain(transponder, body);
         Assert.DoesNotContain(transponder, NightEmail.Subject("Acme RC", new DateTime(2026, 10, 22)));
@@ -238,7 +238,10 @@ public sealed class DriverExp_E_NightEmailTests
     [Fact]
     public void Without_a_night_page_there_is_no_link_and_no_podium_video_note()
     {
-        var body = NightEmail.Build("Sam", "Acme RC", new DateTime(2026, 10, 22), null, Facts, null, podiumVideo: true, nightLink: null);
+        // The podium note is gone from every email since 28 Oct 2026 (the
+        // videos stay on the laptop - see A_podium_is_never_sent_to_a_video_online);
+        // this still holds that nothing points at a page that is not there.
+        var body = NightEmail.Build("Sam", "Acme RC", new DateTime(2026, 10, 22), null, Facts, null, nightLink: null);
 
         Assert.DoesNotContain("night page", body);
         Assert.DoesNotContain("podium", body, StringComparison.OrdinalIgnoreCase);
@@ -247,13 +250,17 @@ public sealed class DriverExp_E_NightEmailTests
     }
 
     [Fact]
-    public void A_podium_with_a_night_page_mentions_the_video()
+    public void A_podium_is_never_sent_to_a_video_online()
     {
+        // WHY (28 Oct 2026, asked for by Asher: "Remove the podium videos for
+        // downloading from the relay and just have locally"): the email used
+        // to say a podium video was on the night page. None is now.
         var link = NightEmail.NightLink(Publishing(), "1001");
-        var body = NightEmail.Build("", "Acme RC", new DateTime(2026, 10, 22), null, Facts, Card, podiumVideo: true, link);
+        var body = NightEmail.Build("", "Acme RC", new DateTime(2026, 10, 22), null, Facts, Card, link);
 
         Assert.StartsWith("Hi,", body);
-        Assert.Contains("podium video", body);
+        Assert.DoesNotContain("podium video", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Your night page", body);
     }
 
     [Fact]

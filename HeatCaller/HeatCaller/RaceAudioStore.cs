@@ -86,14 +86,17 @@ internal sealed class RaceAudioStore
         public bool Enabled { get; set; } = true;
         public bool DriverHighlights { get; set; } = true;
 
-        /// <summary>Which drivers get a highlight video - see HighlightVideo.Who. Every driver by default; only the podium ever goes online.</summary>
+        /// <summary>Which drivers get a highlight video - see HighlightVideo.Who. Every driver by default; they all stay on this PC.</summary>
         public int HighlightVideos { get; set; } = (int)HighlightVideo.Who.Everyone;
 
         /// <summary>The club's social handle for the end of each video, or empty.</summary>
         public string VideoHandle { get; set; } = string.Empty;
 
-        /// <summary>Whether the podium's videos go on the club's page, with a QR code on the Big Screen. On by default.</summary>
-        public bool SharePodiumVideos { get; set; } = true;
+        // SharePodiumVideos ("the podium's videos on the club's page, with a
+        // QR code on the Big Screen", 21 Oct 2026) went on 28 Oct 2026,
+        // asked for by Asher: the videos stay on this PC. A file saved
+        // before still carries it; Load's plain JsonSerializer.Deserialize
+        // skips a property it does not know, so that file loads as ever.
 
         /// <summary>Whether the music and crowd go under the highlight videos (RecapBed). On by default, and on for a file saved before it existed.</summary>
         public bool MusicUnderVideos { get; set; } = true;
@@ -241,34 +244,15 @@ internal sealed class RaceAudioStore
     }
 
     /// <summary>
-    /// Whether the top three's videos are put on the club's page for the
-    /// drivers to download, with a QR code on the Big Screen after the race
-    /// (21 Oct 2026). Only ever the podium - see RelayPublisher.Videos.
-    /// </summary>
-    public bool SharePodiumVideos
-    {
-        get => _file.SharePodiumVideos;
-        set
-        {
-            if (_file.SharePodiumVideos == value)
-            {
-                return;
-            }
-
-            _file.SharePodiumVideos = value;
-            Save();
-        }
-    }
-
-    /// <summary>
     /// Whether the music and crowd the room heard go under the highlight
     /// videos (RecapBed). Off, no bed is kept at all and every video is the
     /// call alone, as before 26 Oct 2026.
     /// </summary>
     // WHY (26 Oct 2026, Asher's decision on the music licensing question:
-    // "add option to switch off. on by default."): the podium's videos go on
-    // the club's page, and a club playing commercial tracks may not be
-    // allowed to put those online. Here with the other video settings, in
+    // "add option to switch off. on by default."): the podium's videos went
+    // on the club's page then (they stay on this PC since 28 Oct 2026), and
+    // drivers still post their own; a club playing commercial tracks may not
+    // be allowed to put those online. Here with the other video settings, in
     // race-audio.json, because the race reads this store fresh at each green
     // and StartFor - where the bed starts - is handed it.
     public bool MusicUnderVideos

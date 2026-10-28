@@ -95,25 +95,10 @@ public partial class MainForm
         var club = PinMailer.ClubName(_settings);
         var dayName = DayNameFor(tonight);
 
-        // Whether podium videos go to the night page at all - the switch on
-        // the Recording page, and a relay that can take them. Read once.
-        bool clubSharesVideos;
-
-        try
-        {
-            clubSharesVideos = RaceAudioStore.Load().SharePodiumVideos && _relayPublisher.CanSharePodiumVideos;
-        }
-        catch
-        {
-            clubSharesVideos = false;
-        }
-
         var messages = new List<(string Key, string To, string ToName, string Subject, string Body)>();
 
         foreach (var recipient in choice.ToSend)
         {
-            var profile = _profiles.Get(recipient.Transponder);
-
             // Their races in DriverCut's own words, exactly as the night page
             // has them - car by car when they raced a second transponder as
             // a car of its own, led by a car with something to say, as the
@@ -143,8 +128,6 @@ public partial class MainForm
             // same card their night page carries (PublishNightsFor).
             var coach = CoachReportFor(driver.Cars[0].Transponder, publicNames: true);
             var link = NightEmail.NightLink(_settings, recipient.Transponder);
-            var podium = clubSharesVideos && profile is { NoVideoOnline: false }
-                         && driver.Cars.Any(car => MadeThePodium(tonight, car.Transponder));
 
             // Each car kept apart, as on the page - or null for one car,
             // which leaves the email exactly what it was.
@@ -162,7 +145,7 @@ public partial class MainForm
                 recipient.To,
                 recipient.ToName,
                 NightEmail.Subject(club, nightLocal),
-                NightEmail.Build(recipient.FirstName, club, nightLocal, dayName, facts, coach, podium, link, cars)));
+                NightEmail.Build(recipient.FirstName, club, nightLocal, dayName, facts, coach, link, cars)));
         }
 
         return new NightEmail.Plan(night, messages, choice.AlreadySent, choice.NoAddress, null);
@@ -186,12 +169,6 @@ public partial class MainForm
 
         return null;
     }
-
-    /// <summary>A top-three finish in any race tonight - when a podium video may have been made of them.</summary>
-    private static bool MadeThePodium(IEnumerable<SessionRecord> tonight, string transponder) =>
-        tonight.Any(race => race.SessionType == RaceSessionType.Race
-                            && race.Results.Any(row => row.Position is >= 1 and <= 3
-                                                       && string.Equals(row.Transponder?.Trim(), transponder, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
     /// Sends tonight's night emails and records who got theirs. Started on

@@ -108,13 +108,13 @@ describe("the report card", () => {
   async function drawing() {
     const box = { innerHTML: "" };
 
-    const run = lifted((await page()).text, ["lines", "nothing", "ownPath", "videoList", "draw"], {
+    const run = lifted((await page()).text, ["lines", "nothing", "draw"], {
       box,
       document: { getElementById: () => null },
     });
 
     return (night: unknown) => {
-      run("draw()", { night, videos: [] });
+      run("draw()", { night });
       return box.innerHTML;
     };
   }
