@@ -1567,13 +1567,13 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
         };
 
         // The time left (28 Oct 2026, asked for by Asher): the minutes, and
-        // every fifteen seconds of the last one. On by default, weighted
-        // with Final minute so the pacing dial treats the clock the same
-        // all the way down. Short lines: on a busy track the next call is
-        // already coming.
+        // every fifteen seconds of the last one. Off by default (Asher,
+        // 28 Oct): a club ticks them on. Weighted with Final minute so the
+        // pacing dial treats the clock the same all the way down. Short
+        // lines: on a busy track the next call is already coming.
         p.Events[nameof(AnnouncementEventType.MinutesLeft)] = new AnnouncementEventConfig
         {
-            Enabled = true,
+            Enabled = false,
             Weight = 90,
             MinutesLeftFrom = 5,
             Templates = new List<string>
@@ -1589,7 +1589,7 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
 
         p.Events[nameof(AnnouncementEventType.FinalSeconds)] = new AnnouncementEventConfig
         {
-            Enabled = true,
+            Enabled = false,
             Weight = 90,
             Templates = new List<string>
             {

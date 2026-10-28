@@ -265,7 +265,7 @@ The function keys work only while the **Race Control** page is showing, and only
 ## Lap-limited and timed races
 
 - **Lap limit:** The clock's progress ring and the text under the clock count laps: "5 LAPS TO GO", then "1 LAP TO GO". The announcer calls the last lap when the leader starts it.
-- **Time limit:** The ring and the text count down the time, for example "02:30 REMAINING". The announcer calls the minutes left (by default the last five), the final minute, and then every 15 seconds of the last minute. Choose which on **Voice → Announcements**: see [Every announcement](../announcer/voice.md#every-announcement).
+- **Time limit:** The ring and the text count down the time, for example "02:30 REMAINING". The announcer calls the final minute. Tick **Minutes left** and **Last minute countdown** on **Voice → Announcements** to also hear the minutes left (the last five, unless you change it) and every 15 seconds of the last minute: see [Every announcement](../announcer/voice.md#every-announcement).
 - **Both:** The race ends at whichever limit is reached first, and the clock shows the laps remaining.
 - **Neither:** The race runs until you press **Checkered**.
 

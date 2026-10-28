@@ -165,17 +165,17 @@ public sealed class TimeLeftCallsTests : IDisposable
         Assert.Equal(said, new AnnouncementEventConfig { MinutesLeftFrom = from }.SaysMinutesLeft(minutes));
 
     [Fact]
-    public void The_two_new_rows_are_on_by_default_with_the_last_five_minutes()
+    public void The_two_new_rows_are_off_by_default_with_the_last_five_minutes_set()
     {
         var defaults = VoiceProfile.CreateDefault();
 
         var minutes = defaults.Events[nameof(AnnouncementEventType.MinutesLeft)];
-        Assert.True(minutes.Enabled);
+        Assert.False(minutes.Enabled);
         Assert.Equal(5, minutes.MinutesLeftFrom);
         Assert.All(minutes.Templates, line => Assert.Contains("{minutes}", line, StringComparison.Ordinal));
 
         var seconds = defaults.Events[nameof(AnnouncementEventType.FinalSeconds)];
-        Assert.True(seconds.Enabled);
+        Assert.False(seconds.Enabled);
         Assert.All(seconds.Templates, line => Assert.Contains("{seconds}", line, StringComparison.Ordinal));
 
         // A settings file from before this reads as the last five minutes.
