@@ -6,7 +6,7 @@ import { mint } from "./mint.js";
 import { Relay } from "./server.js";
 import { FileStore } from "./store.js";
 import { TenantRegistry } from "./tenancy.js";
-import { DiskVideoVault } from "./videos.js";
+import { removeLeftoverVideos } from "./oldvideos.js";
 import { DiskClipVault } from "./clips.js";
 import { elevenLabsRenderer, migrateVoiceFolder, VoiceService } from "./voice.js";
 import { TopUpRequests } from "./topuprequests.js";
@@ -86,6 +86,12 @@ async function serve(): Promise<number> {
     console.log(`[relay] removed ${swept} half-written file(s) left by an earlier run`);
   }
 
+  // 28 Oct 2026, asked for by Asher: the podium videos stay on the laptop
+  // now, so whatever an older build kept in dataDir/.videos is removed -
+  // once, since after this start there is nothing left to find. Only that
+  // one folder; see oldvideos.ts. Never stops the relay starting.
+  await removeLeftoverVideos(config.dataDir, (line) => console.log(line));
+
   const redirectOrigin = redirectOriginFrom(process.env["RELAY_REDIRECT_ORIGIN"]);
 
   // The one ElevenLabs key, from a secret rather than the config: it is
@@ -136,8 +142,6 @@ async function serve(): Promise<number> {
     maxBodyBytes: config.maxBodyBytes,
     redirectOrigin,
     voice,
-    // The podium's highlight videos - see videos.ts.
-    videos: new DiskVideoVault(config.dataDir),
     // Drivers' own race clips - see clips.ts (22 Oct 2026, driver experience).
     clips: new DiskClipVault(config.dataDir),
     brain,

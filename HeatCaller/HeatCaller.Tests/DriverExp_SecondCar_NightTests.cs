@@ -242,7 +242,7 @@ public sealed class DriverExp_SecondCar_NightTests
     public void The_email_keeps_each_car_under_its_own_heading()
     {
         var body = NightEmail.Build("Sam", "Acme RC", new DateTime(2026, 10, 22), null,
-            new[] { "Main facts." }, new[] { "Main card." }, podiumVideo: false, nightLink: null,
+            new[] { "Main facts." }, new[] { "Main card." }, nightLink: null,
             cars: new[]
             {
                 new NightEmail.EmailCar(NightEmail.CarHeading("Main car", "B6.4"), new[] { "Main facts." }, new[] { "Main card." }),
@@ -260,12 +260,12 @@ public sealed class DriverExp_SecondCar_NightTests
     public void An_email_of_one_car_is_what_it_always_was()
     {
         var plain = NightEmail.Build("Sam", "Acme RC", new DateTime(2026, 10, 22), "Club Night",
-            new[] { "Facts." }, new[] { "Card." }, podiumVideo: false, nightLink: null);
+            new[] { "Facts." }, new[] { "Card." }, nightLink: null);
 
         Assert.Contains("YOUR RACES" + Environment.NewLine + "Facts.", plain);
         Assert.Contains("YOUR REPORT CARD" + Environment.NewLine + "Card.", plain);
         Assert.Equal(plain, NightEmail.Build("Sam", "Acme RC", new DateTime(2026, 10, 22), "Club Night",
-            new[] { "Facts." }, new[] { "Card." }, podiumVideo: false, nightLink: null, cars: Array.Empty<NightEmail.EmailCar>()));
+            new[] { "Facts." }, new[] { "Card." }, nightLink: null, cars: Array.Empty<NightEmail.EmailCar>()));
     }
 
     // --- helpers --------------------------------------------------------------

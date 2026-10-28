@@ -249,7 +249,6 @@ internal static class NightEmail
     /// <param name="dayName">What the club called the race day, or null.</param>
     /// <param name="facts">Their races (DriverNight.Lines over DriverCut.FactsFor).</param>
     /// <param name="coach">Their report card, or null.</param>
-    /// <param name="podiumVideo">True when they made a podium tonight and the club puts podium videos on their night page.</param>
     /// <param name="nightLink">Their night page (NightLink), or null when there isn't one.</param>
     internal static string Build(
         string firstName,
@@ -258,7 +257,6 @@ internal static class NightEmail
         string? dayName,
         IReadOnlyList<string> facts,
         IReadOnlyList<string>? coach,
-        bool podiumVideo,
         string? nightLink,
         IReadOnlyList<EmailCar>? cars = null)
     {
@@ -292,15 +290,11 @@ internal static class NightEmail
             AppendBlock(text, "YOUR REPORT CARD" + suffix, part.Coach, nl);
         }
 
+        // "You made the podium - if a podium video was made, it's on your
+        // night page" went on 28 Oct 2026 (asked for by Asher): the podium
+        // videos stay on the club's laptop and are not on the night page.
         if (nightLink is { Length: > 0 } link)
         {
-            // Only with a page to point at: the video is on the page.
-            if (podiumVideo)
-            {
-                text.Append("You made the podium - if a podium video was made, it's on your night page for about a week.")
-                    .Append(nl).Append(nl);
-            }
-
             text.Append("Your night page, with all of this:").Append(nl);
             text.Append($"  {link}").Append(nl);
             text.Append("This link is yours - it can also check you in, so don't share it.").Append(nl).Append(nl);

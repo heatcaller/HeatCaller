@@ -241,6 +241,17 @@ public sealed class SessionRecord
             : sectors.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
+    /// How long the race was set to run, in seconds - null for a race with
+    /// no time limit, or saved before 28 Oct 2026. The relay's results say
+    /// "Length: 3:00 Timed" from it, and a driver's lap list works out its
+    /// pace (laps and time projected over the race) from it.
+    /// </summary>
+    public int? TimeLimitSeconds { get; set; }
+
+    /// <summary>The race's lap limit - null for a race with none, or saved before 28 Oct 2026.</summary>
+    public int? LapLimit { get; set; }
+
+    /// <summary>
     /// A simulated race from Demo Mode, kept only because "Save demo races
     /// to history" was ticked.
     ///

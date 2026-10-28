@@ -515,8 +515,9 @@ describe("the results page penalty chip", () => {
     assert.equal(await chip(null), "");
   });
 
+  // 28 Oct 2026: the time column is LiveRC's Laps/Time now ("20/3:10.513").
   it("is in the time column of every row", () => {
-    assert.match(resultsPage("acme-rc", "Acme RC"), /clock\(r\.elapsedMs\)\}\$\{penChip\(r\)\}/);
+    assert.match(resultsPage("acme-rc", "Acme RC"), /'<td class="n">' \+ lapsAndTime \+ penChip\(r\) \+ '<\/td>'/);
   });
 });
 

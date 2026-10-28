@@ -138,7 +138,7 @@ What happens next:
 - The driver's profile is changed with just the ticked changes, and their phone shows "approved".
 - **Undo** ("Apply *name*'s own changes (their phone was told yes)") puts the profile back and the request back on the waiting list, and the driver's phone shows it as waiting again. It's refused if the profile has been changed since, so a later edit isn't lost with it.
 - **A new email address** gets a note sent to the **old** address, "Your email address at the race club was changed", saying it was changed at the desk as asked from their phone, and to tell the desk if they didn't ask. It goes through the club mailbox (see [Emailing racer PINs](email.md)).
-- **A privacy tick** takes effect on the club's pages within a few seconds. HeatCaller re-sends that driver's results so older pages follow it too, and takes their own podium videos down from the relay, since those show their photo and name. The console says "[privacy] A driver's online privacy changed - the club's page is being brought in line." and, when it's done, "[privacy] The club's page now shows the drivers' latest privacy choices." See [Online privacy](../race-day/drivers-and-classes.md#online-privacy).
+- **A privacy tick** takes effect on the club's pages within a few seconds. HeatCaller re-sends that driver's results so older pages follow it too. (No podium video goes on the relay any more, so there is none to take down.) The console says "[privacy] A driver's online privacy changed - the club's page is being brought in line." and, when it's done, "[privacy] The club's page now shows the drivers' latest privacy choices." See [Online privacy](../race-day/drivers-and-classes.md#online-privacy).
 
 ### Approving a battery pack
 

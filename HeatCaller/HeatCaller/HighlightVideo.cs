@@ -27,119 +27,11 @@ internal sealed record HighlightPalette(
     Color Good);
 
 /// <summary>
-/// Putting the podium's videos on the club's page (21 Oct 2026) - gathered
-/// on the UI thread with the rest of the options. ONLY 1ST TO 3RD are ever
-/// sent: <see cref="Wants"/> is the one place that says so on this side,
-/// and the relay refuses anything else on its own.
-/// </summary>
-/// <param name="RaceKey">The race's page on the relay: 128 random bits (RelayPublisher.NewVideoKey).</param>
-/// <param name="RaceLabel">The race's own name - "A-Main".</param>
-/// <param name="DriverIds">Badge ids by transponder, so a driver's own night offers their video. May be empty.</param>
-/// <param name="PublicNames">
-/// Every car's name as the club's public pages show it, by transponder
-/// (RelayPublisher.FieldPublicNames, 22 Oct 2026): shortened when the club
-/// asked for that, "Unnamed driver" for a car nobody named. Sent with the
-/// upload and drawn into the video, since the video itself goes online.
-/// </param>
-/// <param name="Publisher">The relay.</param>
-/// <param name="Shared">Called on a background thread with the race page's address and the race's name, each time a video lands there.</param>
-internal sealed record HighlightShare(
-    string RaceKey,
-    string RaceLabel,
-    IReadOnlyDictionary<string, string> DriverIds,
-    IReadOnlyDictionary<string, string> PublicNames,
-    RelayPublisher Publisher,
-    Action<string, string>? Shared)
-{
-    /// <summary>Whether a driver who finished here has their video put online: the podium only.</summary>
-    public static bool Wants(int position) => position is >= 1 and <= 3;
-
-    /// <summary>
-    /// Whether this driver asked for no videos online (22 Oct 2026, driver
-    /// experience): their podium video is still made and kept on this PC,
-    /// it just never goes up. Read from the privacy register
-    /// (PublicPrivacy.Current) unless one is given, as tests do.
-    /// </summary>
-    public static bool NotOnline(string? transponder, PublicPrivacy? privacy = null) =>
-        (privacy ?? PublicPrivacy.Current).NoVideo(transponder);
-
-    /// <summary>
-    /// The photo a driver's video is drawn with (22 Oct 2026, driver
-    /// experience): blank when the video may go online - the club shares
-    /// the podium's and they finished on it - and they asked for no photo
-    /// online. A video only ever draws its own driver's photo, so nobody
-    /// else's video needs changing; one kept on this PC keeps the photo.
-    /// </summary>
-    public static string PhotoFor(string? photoFile, string? transponder, int position, bool sharing, PublicPrivacy? privacy = null) =>
-        sharing && Wants(position) && (privacy ?? PublicPrivacy.Current).NoPhoto(transponder)
-            ? string.Empty
-            : photoFile ?? string.Empty;
-
-    /// <summary>
-    /// Whether a heard line must not go online (23 Oct 2026, bug hunt 10):
-    /// the listen-along rule (race control's calls, a line naming an
-    /// initials-only driver - AnnouncementService.WithheldFromListeners),
-    /// or a line naming a car by its transponder number
-    /// (AnnouncementService.NamesACarByNumber). One rule with listen-along
-    /// and the public captions, so the three cannot drift apart.
-    /// </summary>
-    public static bool Withheld(string? text, PublicPrivacy? privacy = null) =>
-        AnnouncementService.WithheldFromListeners(text, privacy ?? PublicPrivacy.Current)
-        || AnnouncementService.NamesACarByNumber(text);
-
-    /// <summary>
-    /// Whether a video cut to <paramref name="windows"/> plays any withheld
-    /// line (see <see cref="Withheld"/>) - for the upload to keep that video
-    /// on this PC, since its AUDIO says the line even when its captions
-    /// leave it out (23 Oct 2026, bug hunt 10).
-    /// </summary>
-    public static bool CarriesWithheldLine(
-        IReadOnlyList<HeardLine>? heard,
-        IReadOnlyList<RaceHighlights.Window> windows,
-        PublicPrivacy? privacy = null)
-    {
-        if (heard is null || heard.Count == 0 || windows.Count == 0)
-        {
-            return false;
-        }
-
-        var register = privacy ?? PublicPrivacy.Current;
-
-        return heard.Any(h =>
-        {
-            // Roughly as long as the line takes to say - the captions' own
-            // reckoning - so a line that starts just before a window and runs
-            // into it counts.
-            var words = (h.Text ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-            var endMs = h.AtMs + Math.Max(800, words * 360L + 400);
-
-            return windows.Any(w => h.AtMs < w.EndMs && endMs > w.StartMs) && Withheld(h.Text, register);
-        });
-    }
-
-    /// <summary>
-    /// The heard lines as a video bound for the club's page may caption them
-    /// (23 Oct 2026, bug hunt 10): withheld lines left out (see
-    /// <see cref="Withheld"/>), the rest redacted for the internet.
-    /// </summary>
-    public static IReadOnlyList<HeardLine> PublicHeard(IReadOnlyList<HeardLine> heard, PublicPrivacy? privacy = null)
-    {
-        var register = privacy ?? PublicPrivacy.Current;
-
-        return heard
-            .Where(h => !Withheld(h.Text, register))
-            .Select(h => h with { Text = register.Redact(h.Text) })
-            .Where(h => !string.IsNullOrWhiteSpace(h.Text))
-            .ToList();
-    }
-}
-
-/// <summary>
 /// Putting each driver's own mp3 clip on their private night page on the
 /// relay (22 Oct 2026, driver experience) - gathered on the UI thread at
-/// the flag, like <see cref="HighlightShare"/>, and handed to the thread
-/// that cuts the clips. Null unless the club ticked "share drivers' clips"
-/// (RaceAudioStore.ShareDriverClips) AND offers drivers their nights.
+/// the flag and handed to the thread that cuts the clips. Null unless the
+/// club ticked "share drivers' clips" (RaceAudioStore.ShareDriverClips) AND
+/// offers drivers their nights.
 ///
 /// BEHIND THE BADGE, NOT PUBLIC. A clip is listed only on that driver's
 /// own night, which only their badge code opens, so the relay is told whose
@@ -225,14 +117,20 @@ internal sealed record HighlightDriver(string PhotoFile, string Number);
 /// <param name="LogoFile">The club logo's file name (AppSettings.RelayLogoFile), or empty.</param>
 /// <param name="Palette">The Look's colours.</param>
 /// <param name="Drivers">Photo and number by transponder.</param>
-/// <param name="Share">Where the podium's videos go online, or null to keep them on this PC.</param>
+/// <remarks>
+/// 28 Oct 2026, asked for by Asher ("Remove the podium videos for
+/// downloading from the relay and just have locally"): there is no Share
+/// any more. Every video stays on this PC, so each one is drawn as a video
+/// kept here always was - the drivers' own names and photos, every line
+/// the announcer said - and none of the online redactions (public names,
+/// withheld captions, a "no photo online" driver drawn blank) apply.
+/// </remarks>
 internal sealed record HighlightVideoOptions(
     HighlightVideo.Who Who,
     string Handle,
     string LogoFile,
     HighlightPalette Palette,
-    IReadOnlyDictionary<string, HighlightDriver> Drivers,
-    HighlightShare? Share = null)
+    IReadOnlyDictionary<string, HighlightDriver> Drivers)
 {
     /// <summary>Whether a driver who finished in this position gets a video.</summary>
     public bool Wants(int position) => Who switch
@@ -353,17 +251,13 @@ internal static class HighlightVideo
     public static event Action<string, string>? Made;
 
     /// <summary>
-    /// The name a video draws for a car: its public name when the video goes
-    /// online (HighlightShare.PublicNames), otherwise the result's own name,
-    /// or the transponder when nobody named the car.
+    /// The name a video draws for a car: the result's own name, or the
+    /// transponder when nobody named the car. (A podium video bound for the
+    /// club's page drew public names instead, from 22 Oct 2026, bug hunt 9,
+    /// until the videos stopped going online on 28 Oct 2026.)
     /// </summary>
-    // WHY (22 Oct 2026, bug hunt 9): a podium video goes on the club's public
-    // page, but drew every full name in the field whatever "Shorten published
-    // names" said.
-    internal static string ShownName(IReadOnlyDictionary<string, string>? publicNames, string transponder, string? driverName) =>
-        publicNames is not null && publicNames.TryGetValue(transponder.Trim(), out var shown) && !string.IsNullOrWhiteSpace(shown)
-            ? shown
-            : string.IsNullOrWhiteSpace(driverName) ? transponder : driverName;
+    internal static string ShownName(string transponder, string? driverName) =>
+        string.IsNullOrWhiteSpace(driverName) ? transponder : driverName;
 
     /// <summary>The newest video made for a driver this session, or null.</summary>
     public static string? LatestFor(string transponder) =>
@@ -529,14 +423,11 @@ internal static class HighlightVideo
 
             using var writer = opened;
 
-            var timeline = new RaceTimeline(record, releaseOffsetsMs, options.Share?.PublicNames);
-            // WHY (23 Oct 2026, bug hunt 10): the captions were the heard
-            // lines unfiltered, so a podium video bound for the club's page
-            // spelled out race control's penalty reasons, an initials-only
-            // driver's full name and an unnamed car's transponder - all of
-            // which every other public path withholds. Filtered whenever the
-            // podium's videos go online, the way the drawn names already are.
-            var captions = Captions.Build(options.Share is null ? heard : HighlightShare.PublicHeard(heard), windows);
+            var timeline = new RaceTimeline(record, releaseOffsetsMs);
+            // The heard lines as they were said. (23 Oct 2026, bug hunt 10,
+            // filtered them for a podium video bound for the club's page;
+            // since 28 Oct 2026 no video goes there, so none is filtered.)
+            var captions = Captions.Build(heard, windows);
             var envelope = Envelope(pcm, read, format);
             var frames = (int)(lengthMs * FramesPerSecond / 1000);
 
@@ -689,13 +580,13 @@ internal static class HighlightVideo
 
         private readonly List<Car> _cars;
 
-        public RaceTimeline(SessionRecord record, IReadOnlyDictionary<string, long>? releaseOffsetsMs, IReadOnlyDictionary<string, string>? publicNames = null)
+        public RaceTimeline(SessionRecord record, IReadOnlyDictionary<string, long>? releaseOffsetsMs)
         {
             _cars = record.Results
                 .Where(r => !string.IsNullOrWhiteSpace(r.Transponder))
                 .Select(r => new Car(
                     r.Transponder,
-                    ShownName(publicNames, r.Transponder, r.DriverName),
+                    ShownName(r.Transponder, r.DriverName),
                     r.Position,
                     RaceHighlights.CrossingTimesMs(r.LapTimesMs, Offset(releaseOffsetsMs, r.Transponder)),
                     r.LapTimesMs.ToList()))
@@ -955,7 +846,7 @@ internal static class HighlightVideo
             _body.Dispose();
         }
 
-        private string Name => ShownName(_options.Share?.PublicNames, _row.Transponder, _row.DriverName);
+        private string Name => ShownName(_row.Transponder, _row.DriverName);
 
         private string Number =>
             _options.Drivers.TryGetValue(_row.Transponder, out var d) && !string.IsNullOrWhiteSpace(d.Number) ? d.Number.Trim() : string.Empty;
@@ -1258,7 +1149,7 @@ internal static class HighlightVideo
                 }
 
                 Text(r.Position.ToString(), _display, 46, ink, new Rectangle(line.X, line.Y, 80, line.Height), StringAlignment.Near);
-                Text(ShownName(_options.Share?.PublicNames, r.Transponder, r.DriverName), _body, 46, ink,
+                Text(ShownName(r.Transponder, r.DriverName), _body, 46, ink,
                     new Rectangle(line.X + 90, line.Y, line.Width - 340, line.Height), StringAlignment.Near);
                 Text(r.FastLapMs > 0 ? $"{r.FastLapMs / 1000.0:0.000}" : "—", _body, 38, _p.Muted,
                     new Rectangle(line.Right - 240, line.Y, 240, line.Height), StringAlignment.Far);

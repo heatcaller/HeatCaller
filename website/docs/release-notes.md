@@ -4,6 +4,18 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Results like LiveRC's, and every lap on a driver's night (28 October).**
+    - **Heat results.** Each result on the club's relay pages now shows the race length ("3:00 Timed" or "20 Laps"), and for every driver their grid slot under **Qual**, their laps and time ("20/3:10.513"), how far **Behind** the car in front they were (a time, or "2 Laps"), and their best lap.
+    - **View laps.** Under each driver, **View laps** opens their lap stats and every lap with its pace ("18/3:02.034") and where they were running, best lap highlighted.
+    - **Lap-by-lap position graph.** Under each race, a line per driver shows where they ran after every lap, starting from their grid slot.
+    - **My night.** Each race card on a driver's own night now has their **Lap stats** (fast lap, average, average of their top 5, 10 and 15, best 2 and 3 laps in a row, standard deviation and consistency) and **Lap times** with pace and position, under the lap chart.
+    - Races filed before this version show as before, with no laps to view.
+    - The relay must be redeployed for these changes.
+- **Podium videos stay on the laptop (28 October).** The top three's highlight videos are no longer put on the club's relay pages. They're still made after every race and kept in the night's **Highlights** folder on the race PC, exactly as before; **Share video** in a driver's drawer on Race Control still opens theirs.
+    - The Big Screen no longer shows the **PODIUM VIDEOS** QR code after a race.
+    - The relay pages no longer have a **Videos** tab or a **Podium videos** tile, a driver's night page no longer lists **Your podium videos**, and the night email no longer mentions one. An old QR code or link to a video now opens the relay's "not found".
+    - The tick box *Put the podium's videos on the club's page, with a QR code on the Big Screen to download them* is gone from **Club Website → Recording**. Drivers' own race calls on their night page (**Put each driver's clip on their own night on the club's page**) are unchanged.
+    - Redeploy your relay (`fly deploy --ha=false`). On its first start it deletes the podium videos it was still holding, so the space they took on the volume (up to 1 GB a club) comes back.
 - **Bug fixes from race night, and drivers' own nights by PIN (26 October).**
     - **Heat reminders through Listen Along.** Reminders between races could be dropped before they reached the relay, or lost on a phone whose download failed once. Listen lines now go to the relay first, a failed line is tried again, and a stuck request no longer stops the player. A short car number said once no longer holds back later lines that contain the same number ("5 minutes to Heat 2").
     - **Live captions.** Long lines - the whole recap, the intros - now come through in short pieces as they're spoken, so the relay's captions and the Big Screen keep moving instead of freezing on one cut-off line. Captions never show words the room didn't hear.

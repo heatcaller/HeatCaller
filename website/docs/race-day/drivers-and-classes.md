@@ -269,15 +269,14 @@ Under the profile's fields, the **ONLINE PRIVACY** group has three ticks on its 
 
 | Tick | What it changes online |
 |---|---|
-| **Leave their photo out** | Their photo is left out of the online check-in list, which shows their initials instead, and a podium video that goes online is made without it. Their podium videos already on the club's page are taken down. |
-| **No podium videos of them** | Their podium videos stay on this PC and aren't put on the club's page; the race log says "[video] *name*'s video stays on this PC - they asked for no videos online." Their videos already on the club's page are taken down. Their own race calls on their private night page aren't affected. |
-| **Initials only ("Sam Parker" shows as "S.P.")** | Everywhere on the club's pages - live, results, standings, schedule, badges, tracks, check-in and podium videos - they're shown by their initials. Lines the announcer says about them are left out of the captions on the club's page and aren't sent to people listening along from home. Their own night page still uses their full name. |
+| **Leave their photo out** | Their photo is left out of the online check-in list, which shows their initials instead. |
+| **No podium videos of them** | Always met: since 28 October 2026 no podium video goes on the club's page - they all stay on this PC. The tick is kept so a driver's ask still has somewhere to go. Their own race calls on their private night page aren't affected. |
+| **Initials only ("Sam Parker" shows as "S.P.")** | Everywhere on the club's pages - live, results, standings, schedule, badges, tracks and check-in - they're shown by their initials. Lines the announcer says about them are left out of the captions on the club's page and aren't sent to people listening along from home. Their own night page still uses their full name. |
 
-The hint under them says: "Only what goes on the internet: the club's relay pages and podium videos. In the room nothing changes - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. A driver can ask for these from their phone; only the desk can turn one off."
+The hint under them says: "Only what goes on the internet: the club's relay pages. In the room nothing changes - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. A driver can ask for these from their phone; only the desk can turn one off."
 
 - **A driver can turn them on from their phone; only the desk can turn them off.** From their night page, a driver can ask for any of the three (see [Driver requests](../online/driver-requests.md)). Nothing changes until the desk approves it. A phone can never untick one: to turn one off, untick it here and click **Save**.
 - **It's quick, but not instant.** Once the profile is saved, the club's live pages follow within a few seconds. HeatCaller then re-sends every saved result the driver is in, a few at a time so results from tonight aren't held up. For a driver with a long history this takes a few minutes, and it carries on after a restart if HeatCaller is closed first. The console says "[privacy] A driver's online privacy changed - the club's page is being brought in line." and then "[privacy] The club's page now shows the drivers' latest privacy choices."
-- **Podium videos can't be edited.** Another driver's podium video already online may show this driver's name or photo in the picture. Those stay until they expire, a week after they went up; only the driver's own videos are taken down at once.
 - **Lines about them are matched widely.** A line is left out of the club's captions and kept from listeners at home when it has any of the driver's names in it, or any word of one, so a line about another driver with the same first name may be held back too.
 
 ### Import drivers from a spreadsheet

@@ -5,7 +5,6 @@ import { hashToken, TenantRegistry, type Tenant } from "../src/tenancy.js";
 import type { BrainService } from "../src/brain.js";
 import type { TopUpRequests } from "../src/topuprequests.js";
 import type { VoiceService } from "../src/voice.js";
-import type { VideoVault } from "../src/videos.js";
 import type { UsageLog } from "../src/usagelog.js";
 
 export const ACME_TOKEN = "acme-token-aaaaaaaaaaaaaaaa";
@@ -38,7 +37,6 @@ export async function start(
   extras: {
     readonly brain?: BrainService | undefined;
     readonly topUpRequests?: TopUpRequests | undefined;
-    readonly videos?: VideoVault | undefined;
     readonly usageLog?: UsageLog | undefined;
   } = {},
 ): Promise<Harness> {
@@ -50,7 +48,6 @@ export async function start(
     voice,
     brain: extras.brain,
     topUpRequests: extras.topUpRequests,
-    videos: extras.videos,
     usageLog: extras.usageLog,
   });
 
