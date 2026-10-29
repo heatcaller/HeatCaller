@@ -265,6 +265,7 @@ a.go { text-align: center; text-decoration: none; }
 .lc.next .lc-big { color: var(--accent); }
 .lc-eta { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
 .lc-part { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
+.lc-go { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; }
 .lc .go { margin: 12px 0 4px; max-width: none; }
 .lc-check { margin-top: 8px; font-weight: 600; }
 .lc-check.seen { color: var(--good); }
@@ -3542,6 +3543,93 @@ export function standingsPage(club: string, clubName: string, context: PageConte
 
 // ------------------------------------------------------------------- home
 
+/**
+ * YOUR NEXT RACE (29 Oct 2026, relay navigation round 3). When this phone
+ * remembers a driver (round 2), Home asks the relay for their live entry -
+ * the same {part:"live"} read the night page polls, once a minute here -
+ * and shows their next race above everything else, with the way to their
+ * night and, when it is on or next, to Live or the running order. Nothing
+ * at all for a phone that remembers nobody, a driver with no race in the
+ * next few, or a club that is not opening nights. Built with textContent:
+ * the race's name is the laptop's words.
+ */
+const HOME_ME_JS = `
+const mine = document.getElementById('mine');
+const MINE = meCode();
+
+function mineWords(n) {
+  if (typeof n.words === 'string' && n.words.trim() !== '') return n.words;
+  if (n.staged === true) return 'Staged - go to the driver stand';
+  if (n.now === true) return 'On track now';
+  const away = Math.max(0, Math.round(Number(n.away) || 0));
+  if (away === 0) return "You're up next";
+  return away === 1 ? '1 race before yours' : away + ' races before yours';
+}
+
+function mineLink(words, path) {
+  const a = document.createElement('a');
+  a.className = 'more';
+  a.textContent = words;
+  a.setAttribute('href', BASE + path);
+  return a;
+}
+
+function drawMine(entry) {
+  const n = entry && typeof entry === 'object' && entry.next && typeof entry.next === 'object' ? entry.next : null;
+
+  mine.textContent = '';
+  mine.hidden = n === null;
+  if (n === null) return;
+
+  const next = n.now !== true && Math.round(Number(n.away) || 0) === 0;
+  mine.className = 'lc' + (n.staged === true ? ' staged' : next ? ' next' : '');
+
+  const h = document.createElement('h3');
+  h.textContent = 'Your next race';
+  mine.appendChild(h);
+
+  const big = document.createElement('div');
+  big.className = 'lc-big';
+  big.textContent = mineWords(n);
+  mine.appendChild(big);
+
+  if (typeof n.race === 'string' && n.race !== '') {
+    const race = document.createElement('div');
+    race.textContent = n.race;
+    mine.appendChild(race);
+  }
+
+  const links = document.createElement('p');
+  links.className = 'lc-go';
+  links.appendChild(mineLink('Open your night', '/night#d=' + MINE));
+  if (n.now === true) links.appendChild(mineLink('Watch live', '/live'));
+  else if (next) links.appendChild(mineLink('See the running order', '/schedule'));
+  mine.appendChild(links);
+}
+
+async function readMine() {
+  let r = null;
+  try {
+    r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/night', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: MINE, part: 'live' }),
+      cache: 'no-store',
+    });
+  } catch (e) { return; }
+
+  // A busy relay (429) or a failed read keeps what is on screen.
+  if (r.status === 404) drawMine(null);
+  if (r.status !== 200) return;
+
+  let body = {};
+  try { body = await r.json(); } catch (e) { return; }
+  drawMine(body && body.live);
+}
+
+if (mine && MINE) poll(readMine, 60000);
+`;
+
 const HOME_JS = `
 const now = document.getElementById('now');
 const preview = document.getElementById('preview');
@@ -3737,7 +3825,10 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     active: "home",
     heading: "Home",
     sub: context.look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing laptop.",
+    // "mine" is Your next race (29 Oct 2026, relay navigation round 3),
+    // empty and hidden unless this phone remembers a driver with a race on.
     body:
+      '<section class="lc" id="mine" hidden></section>' +
       '<div id="now"><p class="note">Loading&hellip;</p></div>' +
       '<div class="day">The night before</div><div id="preview" style="display:none"></div>' +
       '<div class="day">Up next</div><div class="card" id="upnext" style="display:none"></div>' +
@@ -3753,7 +3844,7 @@ export function homePage(club: string, clubName: string, context: PageContext = 
       tile("tracks", "Tracks", "Records and best laps") +
       "</div>" +
       social,
-    script: HOME_JS,
+    script: HOME_JS + HOME_ME_JS,
   }, context);
 }
 
@@ -5062,6 +5153,10 @@ function drawApproved() {
       ? '<a class="go" href="' + card + '">Open my check-in card</a>' +
         '<p class="when">Keep it - add it to your home screen. It checks you in at every meeting.</p>'
       : '') +
+    // Go to Me (29 Oct 2026, relay navigation round 3): where their own
+    // nights open from here on, so a new driver learns the tab exists.
+    '<p class="when">Your own races and results open under Me, at the bottom of the page on a phone.</p>' +
+    '<a class="more" href="' + BASE + '/mynight">Go to Me</a>' +
     '</div>';
 }
 
@@ -5791,6 +5886,7 @@ function liveCard() {
       const eta = el('div', 'lc-eta', n.now === true ? '' : etaWords(n.eta, relayNow()));
       eta.id = 'lc-eta';
       card.appendChild(eta);
+      const go = goLink(n); if (go) card.appendChild(go);
     } else {
       card.appendChild(el('div', '', 'None of your races is in the next few on the running order.'));
     }
@@ -7334,6 +7430,28 @@ function meRemembered(code) {
 `;
 
 /**
+ * WATCH LIVE AND THE RUNNING ORDER (29 Oct 2026, relay navigation round 3).
+ * The Right now card says when their race is on track or next, but the
+ * place to watch it, or to see what runs before it, was a tab away. One
+ * link under the call-up: Watch live while their race is on track, See
+ * the running order while it is next (staged included). Nothing for a race
+ * further off. Kept apart from NIGHT_JS - liveCard calls it with one line -
+ * so the night page's own script is left as it was.
+ */
+const NIGHT_GO_JS = `
+function goLink(n) {
+  if (!n || typeof n !== 'object') return null;
+  const on = n.now === true;
+  if (!on && num(n.away) !== 0) return null;
+  const p = el('p', 'lc-go');
+  const a = el('a', 'more', on ? 'Watch live' : 'See the running order');
+  a.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + (on ? '/live' : '/schedule'));
+  p.appendChild(a);
+  return p;
+}
+`;
+
+/**
  * The page itself. Served whether or not the club offers this, and whatever
  * the code is, for the reason sign-up's page is: a link somebody was sent
  * that 404s is a link they think is broken. The page asks, and says what
@@ -7355,7 +7473,7 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // round 2), shown once this phone remembers the night it is showing.
     body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
       '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
-    script: LAPS_JS + NIGHT_JS + NIGHT_ME_JS,
+    script: LAPS_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
     noindex: true,
   }, context);
 }
