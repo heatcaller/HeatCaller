@@ -2898,6 +2898,227 @@ export function resultsPage(club: string, clubName: string, context: PageContext
 
 // ------------------------------------------------------------------- live
 
+/**
+ * The lap voice on the phone (29 Oct 2026, asked for by Asher) - the
+ * ElevenLabs clips lapvoice.ts describes, played one after another for
+ * each lap on the Live page and on a driver's own night. Shared by both:
+ * each builds its call as parts, each part its words and the clips that
+ * say them, and hands it here.
+ *
+ * NEVER HALF A CALL. Every clip a call needs is loaded first, and only then
+ * does any of it play; a clip the relay does not have (a 2.40 lap, P31), a
+ * load that fails, or one that takes longer than a second, and the phone's
+ * own voice says the whole line instead, as it did before this existed.
+ * "Phone voice" ticked, or a relay with no clips, is the phone's voice
+ * every time.
+ *
+ * A phone only plays sound once the page has been tapped, so unlock() is
+ * called from the same taps that let the phone's voice talk. Clips are
+ * kept as they came - a few kilobytes each - and decoded as they are
+ * played, so a whole night of them costs a phone a few megabytes, not the
+ * hundreds that decoded sound would.
+ */
+const LAPVOICE_JS = `
+const lapVoice = (function () {
+  const PHONE_KEY = 'hg-lapvoice-phone-' + CLUB;
+  // A call whose clips are not all here by then is said by the phone instead.
+  const LATE_MS = 1000;
+  // The breath between the parts of a call - the commas the phone voice pauses on.
+  const BREATH = 0.12;
+
+  let phone = false;
+  try { phone = localStorage.getItem(PHONE_KEY) === '1'; } catch (e) { /* the clips, then */ }
+
+  let ctx = null, asked = false, version = '', voice = '';
+  let have = null;
+  const kept = new Map();
+  let playing = 0, sources = [];
+  const waiting = [];
+
+  function load() {
+    if (asked) return;
+    asked = true;
+    try {
+      fetch('/lap-voice').then((r) => r && r.ok ? r.json() : null).then((m) => {
+        if (m && Array.isArray(m.clips) && m.clips.length > 0 && typeof m.v === 'string') {
+          have = new Set(m.clips.filter((c) => typeof c === 'string'));
+          version = m.v;
+          voice = typeof m.voice === 'string' ? m.voice : '';
+        }
+        waiting.splice(0).forEach((f) => { try { f(); } catch (e) { /* its own redraw */ } });
+      }, () => { asked = false; });
+    } catch (e) { asked = false; }
+  }
+
+  // From a tap: the sound may start, and the clip list is asked for once.
+  function unlock() {
+    load();
+    try {
+      // iPhone: play through the silent switch, as the phone's voice does.
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';
+    } catch (e) { /* an older phone */ }
+    try {
+      const Kind = window.AudioContext || window.webkitAudioContext;
+      if (!ctx && Kind) ctx = new Kind();
+      if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
+    } catch (e) { ctx = null; }
+  }
+
+  function has() { return have !== null; }
+
+  function using() { return have !== null && !phone && ctx !== null && typeof ctx.decodeAudioData === 'function'; }
+
+  function setPhone(yes) {
+    phone = !!yes;
+    try { localStorage.setItem(PHONE_KEY, phone ? '1' : '0'); } catch (e) { /* this visit only */ }
+  }
+
+  function fetchClip(name) {
+    let got = kept.get(name);
+    if (!got) {
+      got = fetch('/lap-voice/' + name + '.mp3?v=' + version)
+        .then((r) => { if (!r || !r.ok) throw new Error('no clip'); return r.arrayBuffer(); });
+      got.catch(() => { if (kept.get(name) === got) kept.delete(name); });
+      kept.set(name, got);
+    }
+    return got;
+  }
+
+  function decode(bytes) {
+    return new Promise((done, fail) => {
+      // A copy: decoding hands the bytes to the audio and empties them.
+      const p = ctx.decodeAudioData(bytes.slice(0), done, fail);
+      if (p && typeof p.then === 'function') p.then(done, fail);
+    });
+  }
+
+  // The sound of a clip without the quiet ElevenLabs leaves at each end.
+  function trim(buf) {
+    let from = 0, to = buf.duration;
+    try {
+      const data = buf.getChannelData(0);
+      const rate = buf.sampleRate;
+      let a = 0, b = data.length - 1;
+      while (a < data.length && Math.abs(data[a]) < 0.01) a++;
+      while (b > a && Math.abs(data[b]) < 0.01) b--;
+      if (b > a) { from = Math.max(0, a / rate - 0.01); to = Math.min(buf.duration, b / rate + 0.04); }
+    } catch (e) { /* the whole clip, then */ }
+    return { buf: buf, from: from, length: Math.max(0, to - from) };
+  }
+
+  function stop() {
+    playing++;
+    sources.splice(0).forEach((s) => { try { s.stop(); } catch (e) { /* finished already */ } });
+  }
+
+  // parts: [{ text, clips }] - clips null when there is none for those words.
+  function say(parts, speak) {
+    const text = parts.map((p) => p.text).join(', ');
+    const groups = parts.map((p) => p.clips);
+    if (!using() || groups.some((g) => !Array.isArray(g) || g.some((n) => !have.has(n)))) {
+      stop();
+      speak(text);
+      return;
+    }
+
+    stop();
+    const mine = playing;
+    let settled = false;
+    const late = setTimeout(() => {
+      if (settled || mine !== playing) return;
+      settled = true;
+      speak(text);
+    }, LATE_MS);
+
+    Promise.all(groups.map((g) => Promise.all(g.map((n) => fetchClip(n).then(decode)))))
+      .then((decoded) => {
+        if (settled || mine !== playing) return;
+        settled = true;
+        clearTimeout(late);
+        try { window.speechSynthesis.cancel(); } catch (e) { /* not talking */ }
+        let at = ctx.currentTime + 0.02;
+        decoded.forEach((group, i) => {
+          if (i > 0) at += BREATH;
+          group.forEach((buf) => {
+            const t = trim(buf);
+            const s = ctx.createBufferSource();
+            s.buffer = t.buf;
+            s.connect(ctx.destination);
+            s.start(at, t.from, t.length);
+            sources.push(s);
+            at += t.length;
+          });
+        });
+      }, () => {
+        if (settled || mine !== playing) return;
+        settled = true;
+        clearTimeout(late);
+        speak(text);
+      });
+  }
+
+  // The clips a coming lap is likely to want, fetched while nothing is said.
+  function warm(names) {
+    if (!using()) return;
+    names.forEach((n) => { if (have.has(n)) fetchClip(n).catch(() => {}); });
+  }
+
+  function whenReady(f) { if (asked && have === null) waiting.push(f); }
+
+  return {
+    unlock: unlock, has: has, using: using, say: say, stop: stop, warm: warm,
+    phone: () => phone, setPhone: setPhone, voice: () => voice, whenReady: whenReady,
+  };
+})();
+
+// --- The clips for each kind of words, the names lapvoice.ts makes. ---------
+// Null when there is no clip: the call is then the phone's.
+
+// A lap time in hundredths, 3.00 to 19.99.
+function lvTime(ms) {
+  const cs = Math.round(ms / 10);
+  return cs >= 300 && cs <= 1999 ? ['t' + cs] : null;
+}
+
+function lvLap(n) { return n >= 1 && n <= 200 ? ['lap' + n] : null; }
+
+function lvPlace(n) { return n >= 1 && n <= 30 ? ['p' + n] : null; }
+
+// The gap to the car ahead, as RaceNumbers.GapSpoken rounds it: tenths
+// under a second, halves to ten, whole seconds to thirty; or laps.
+function lvGap(gap) {
+  const t = String(gap || '').trim();
+  const laps = /^\\+?(\\d+)\\s*L(aps?)?$/i.exec(t);
+  if (laps) { const l = Number(laps[1]); return l >= 1 && l <= 9 ? ['g-l' + l] : null; }
+  const secs = /^\\+(\\d+([.,]\\d+)?)s?$/.exec(t);
+  if (!secs) return null;
+  const g = Math.abs(Number(secs[1].replace(',', '.')));
+  if (!isFinite(g)) return null;
+  if (g < 0.05) return ['g-0'];
+  if (g < 0.95) return ['g-t' + Math.max(1, Math.round(g * 10))];
+  if (g < 1.05) return ['g-h2'];
+  if (g >= 10) { const s = Math.round(g); return s <= 30 ? ['g-s' + s] : null; }
+  const halves = Math.round(g * 2);
+  return halves >= 20 ? ['g-s10'] : ['g-h' + halves];
+}
+
+// Against a target lap: "on target", or how far and which way.
+function lvTarget(last, target) {
+  const off = last - target;
+  if (Math.abs(off) < 5) return ['tg-on'];
+  const cs = Math.max(1, Math.round(Math.abs(off) / 10));
+  return cs <= 200 ? ['tg-m' + cs, off < 0 ? 'tg-under' : 'tg-off'] : null;
+}
+
+// What the next lap may want: its number, and times near this one.
+function lvAhead(lapNumber, ms) {
+  const names = ['best', 'lap' + (lapNumber + 1)];
+  const cs = Math.round(ms / 10);
+  for (let d = -10; d <= 10; d++) names.push('t' + (cs + d));
+  return names;
+}
+`;
+
 const LIVE_JS = `
 const board = document.getElementById('board');
 const bar = document.getElementById('bar');
@@ -2930,6 +3151,8 @@ const lapTalk = (function () {
   const shortBox = document.getElementById('lapshort');
   const shortRow = document.getElementById('lapshortrow');
   const note = document.getElementById('lapnote');
+  const phoneBox = document.getElementById('lapphone');
+  const phoneRow = document.getElementById('lapphonerow');
   const canSpeak = typeof window.speechSynthesis === 'object' && window.speechSynthesis !== null
     && typeof SpeechSynthesisUtterance === 'function';
   const ON_KEY = 'hg-laptalk-' + CLUB;
@@ -2962,7 +3185,18 @@ const lapTalk = (function () {
   }
 
   function hush() {
+    lapVoice.stop();
     try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+  }
+
+  // A call in the lap voice's clips, or the phone's voice - see LAPVOICE_JS.
+  function call(parts) {
+    lapVoice.say(parts, speak);
+  }
+
+  function wake() {
+    lapVoice.unlock();
+    lapVoice.whenReady(show);
   }
 
   function stayAwake() {
@@ -2992,6 +3226,8 @@ const lapTalk = (function () {
     btn.hidden = !who;
     shortRow.hidden = !who;
     shortBox.checked = timeOnly;
+    if (phoneRow) phoneRow.hidden = !who || !lapVoice.has();
+    if (phoneBox) phoneBox.checked = lapVoice.phone();
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     btn.textContent = 'Lap times in my ear: ' + (!on ? 'off' : unlocked ? 'on' : 'tap to resume');
     if (!who) {
@@ -3014,16 +3250,16 @@ const lapTalk = (function () {
     return secs ? secs[1].replace(',', '.') + ' seconds behind' : '';
   }
 
-  // The gap to the car ahead: the laptop's own figure on the row (a
+  // The gap to the car ahead, as the board wrote it: the laptop's own figure on the row (a
   // HeatCaller from 29 Oct 2026 on sends it), else the club's Interval
   // column, or Gap to P1 for the car in second, where the two are the same.
   function gapAhead(state, row, pos) {
-    if (typeof row.ahead === 'string' && row.ahead !== '') return gapWords(row.ahead);
+    if (typeof row.ahead === 'string' && row.ahead !== '') return row.ahead;
     const columns = Array.isArray(state.columns) ? state.columns.map((c) => String(c)) : [];
     let at = columns.findIndex((c) => /^interval$/i.test(c));
     if (at < 0 && pos === 2) at = columns.findIndex((c) => /^gap/i.test(c));
     const cell = at >= 0 && Array.isArray(row.cells) ? row.cells[at] : null;
-    return cell && typeof cell === 'object' ? gapWords(cell.text) : '';
+    return cell && typeof cell === 'object' ? String(cell.text || '') : '';
   }
 
   function take(state) {
@@ -3054,18 +3290,22 @@ const lapTalk = (function () {
     const last = laps[count - 1];
     const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
     const isBest = count > 1 && last <= best;
-    const words = [(last / 1000).toFixed(2)];
-    if (isBest) words.push('best lap');
+    const parts = [{ text: (last / 1000).toFixed(2), clips: lvTime(last) }];
+    if (isBest) parts.push({ text: 'best lap', clips: ['best'] });
 
     if (!timeOnly) {
       const pos = rows.indexOf(row) + 1;
-      words.unshift('Lap ' + (count + 1));
-      words.push('P' + pos);
-      const gap = pos > 1 ? gapAhead(state, row, pos) : '';
-      if (gap) words.push(gap);
+      parts.unshift({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
+      parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
+      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
+      const gap = gapWords(raw);
+      if (gap) parts.push({ text: gap, clips: lvGap(raw) });
+      lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
+    } else {
+      lapVoice.warm(lvAhead(count + 1, last));
     }
 
-    speak(words.join(', '));
+    call(parts);
   }
 
   if (canSpeak && btn) {
@@ -3073,14 +3313,14 @@ const lapTalk = (function () {
       // On, but waiting for a tap since a reload: this tap resumes it.
       if (on && !unlocked) {
         unlocked = true; heardFor = '';
-        speak('Lap times on'); stayAwake(); show();
+        wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); show();
         return;
       }
       unlocked = true;
       on = !on;
       save(ON_KEY, on);
       heardFor = '';
-      if (on) { speak('Lap times on'); stayAwake(); } else { hush(); letSleep(); }
+      if (on) { wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); } else { hush(); letSleep(); }
       show();
     });
 
@@ -3089,13 +3329,17 @@ const lapTalk = (function () {
       save(SHORT_KEY, timeOnly);
     });
 
+    if (phoneBox) {
+      phoneBox.addEventListener('change', () => { lapVoice.setPhone(!!phoneBox.checked); });
+    }
+
     // Any tap lets a page that was on before a reload speak again - and a
     // tap on a name changes who is followed, so the button is redrawn
     // once the follow has been taken.
     document.addEventListener('click', (e) => {
       if (on && !unlocked && !(e && e.target === btn)) {
         unlocked = true; heardFor = '';
-        speak(' '); stayAwake();
+        speak(' '); wake(); stayAwake();
       }
       setTimeout(show, 0);
     }, true);
@@ -3245,6 +3489,7 @@ function lapTalkControl(): string {
   return '<div class="card ears" id="laptalk">'
     + '<button type="button" id="lapbtn" class="btn" aria-pressed="false" hidden>Lap times in my ear: off</button>'
     + '<label id="lapshortrow" hidden><input type="checkbox" id="lapshort"> Time only</label>'
+    + '<label id="lapphonerow" hidden><input type="checkbox" id="lapphone"> Phone voice</label>'
     + '<p class="note" id="lapnote">Tap a driver&rsquo;s name on the board to follow them, then your phone can read out each of their laps.</p>'
     + "</div>";
 }
@@ -3411,7 +3656,7 @@ export function livePage(club: string, clubName: string, context: PageContext = 
       + captionsControl()
       + lapTalkControl()
       + '<div id="board"></div>',
-    script: LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS,
+    script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS,
   }, context);
 }
 
@@ -5893,7 +6138,18 @@ const nightTalk = (function () {
   }
 
   function hush() {
+    lapVoice.stop();
     try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+  }
+
+  // A call in the lap voice's clips, or the phone's voice - see LAPVOICE_JS.
+  function call(parts) {
+    lapVoice.say(parts, speak);
+  }
+
+  function wake() {
+    lapVoice.unlock();
+    lapVoice.whenReady(drawLive);
   }
 
   // Their cars as the laptop sent them, tags checked to the laptop's shape.
@@ -5934,15 +6190,15 @@ const nightTalk = (function () {
     return secs ? secs[1].replace(',', '.') + ' seconds behind' : '';
   }
 
-  // The gap to the car ahead: the laptop's own figure on the row, else the
+  // The gap to the car ahead, as the board wrote it: the laptop's own figure on the row, else the
   // club's Interval column, else Gap to P1 for the car in second.
   function gapAhead(state, row, pos) {
-    if (typeof row.ahead === 'string' && row.ahead !== '') return gapWords(row.ahead);
+    if (typeof row.ahead === 'string' && row.ahead !== '') return row.ahead;
     const columns = Array.isArray(state.columns) ? state.columns.map((c) => String(c)) : [];
     let at = columns.findIndex((c) => /^interval$/i.test(c));
     if (at < 0 && pos === 2) at = columns.findIndex((c) => /^gap/i.test(c));
     const cell = at >= 0 && Array.isArray(row.cells) ? row.cells[at] : null;
-    return cell && typeof cell === 'object' ? gapWords(cell.text) : '';
+    return cell && typeof cell === 'object' ? String(cell.text || '') : '';
   }
 
   // "0.2 under target", "0.35 off target", "on target" - or nothing with no target.
@@ -5981,20 +6237,24 @@ const nightTalk = (function () {
 
     const last = laps[count - 1];
     const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
-    const words = [(last / 1000).toFixed(2)];
-    if (count > 1 && last <= best) words.push('best lap');
+    const parts = [{ text: (last / 1000).toFixed(2), clips: lvTime(last) }];
+    if (count > 1 && last <= best) parts.push({ text: 'best lap', clips: ['best'] });
     const target = targetWords(last, car && car.target);
-    if (target) words.push(target);
+    if (target) parts.push({ text: target, clips: lvTarget(last, car.target) });
 
     if (!timeOnly) {
       const pos = rows.indexOf(row) + 1;
-      words.unshift('Lap ' + (count + 1));
-      words.push('P' + pos);
-      const gap = pos > 1 ? gapAhead(state, row, pos) : '';
-      if (gap) words.push(gap);
+      parts.unshift({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
+      parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
+      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
+      const gap = gapWords(raw);
+      if (gap) parts.push({ text: gap, clips: lvGap(raw) });
+      lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
+    } else {
+      lapVoice.warm(lvAhead(count + 1, last));
     }
 
-    speak(words.join(', '));
+    call(parts);
   }
 
   async function read() {
@@ -6021,14 +6281,14 @@ const nightTalk = (function () {
   function toggle() {
     if (on && !unlocked) {
       unlocked = true; heardTag = '';
-      speak('Lap times on'); stayAwake(); read(); drawLive();
+      wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); drawLive();
       return;
     }
     unlocked = true;
     on = !on;
     save(ON_KEY, on);
     heardTag = '';
-    if (on) { speak('Lap times on'); stayAwake(); read(); } else { hush(); letSleep(); }
+    if (on) { wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); } else { hush(); letSleep(); }
     drawLive();
   }
 
@@ -6054,6 +6314,19 @@ const nightTalk = (function () {
     row.appendChild(el('span', '', 'Time only'));
     p.appendChild(row);
 
+    // The lap voice's clips or the phone's own voice, once the relay says it has clips.
+    if (lapVoice.has()) {
+      const voiceRow = el('label', 'nt-short');
+      const phoneBox = document.createElement('input');
+      phoneBox.type = 'checkbox';
+      phoneBox.id = 'nt-lapphone';
+      phoneBox.checked = lapVoice.phone();
+      phoneBox.addEventListener('change', () => { lapVoice.setPhone(!!phoneBox.checked); });
+      voiceRow.appendChild(phoneBox);
+      voiceRow.appendChild(el('span', '', 'Phone voice'));
+      p.appendChild(voiceRow);
+    }
+
     p.appendChild(el('div', 'when', !on
       ? 'Your phone reads out each of your laps as you race: lap, time, best lap, your target when one is set, place and gap. Keep this page open with the screen on.'
       : !unlocked
@@ -6070,7 +6343,7 @@ const nightTalk = (function () {
     document.addEventListener('click', (e) => {
       if (on && !unlocked && !(e && e.target && e.target.id === 'nt-laptalk')) {
         unlocked = true; heardTag = '';
-        speak(' '); stayAwake();
+        speak(' '); wake(); stayAwake();
         setTimeout(drawLive, 0);
       }
     }, true);
@@ -7980,7 +8253,7 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // round 2), shown once this phone remembers the night it is showing.
     body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
       '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
-    script: LAPS_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
+    script: LAPS_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
     noindex: true,
   }, context);
 }

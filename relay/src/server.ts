@@ -55,6 +55,7 @@ import {
 } from "./driverasks.js";
 import { DEFAULT_LOOK, flagColours, lookFrom, type Look } from "./site.js";
 import { BRAIN_LONG_WORDS_CEILING, BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
+import { LapVoiceLibrary } from "./lapvoice.js";
 import { VOICE_PLAN_OFF, type MeterUsage, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
@@ -986,6 +987,11 @@ export interface RelayOptions {
    * requests themselves are unaffected either way.
    */
   readonly usageLog?: UsageLog | undefined;
+  /**
+   * The lap voice's clips (29 Oct 2026) - see lapvoice.ts. Absent, the
+   * manifest lists none and the pages use the phone's own voice.
+   */
+  readonly lapVoice?: LapVoiceLibrary | undefined;
 }
 
 interface Parsed {
@@ -998,6 +1004,7 @@ const DEFAULT_MAX_BODY = 1024 * 1024;
 
 export class Relay {
   private readonly store: Store;
+  private readonly lapVoice: LapVoiceLibrary;
   private readonly tenants: TenantRegistry;
   private readonly maxBodyBytes: number;
   private readonly now: () => Date;
@@ -1320,6 +1327,7 @@ export class Relay {
     this.collectionReads = new Limiter(COLLECTION_READS_PER_ADDRESS, 60 * 1000, () => this.now().getTime());
 
     this.voice = options.voice;
+    this.lapVoice = options.lapVoice ?? new LapVoiceLibrary(new Map());
     // 22 Oct 2026, driver experience: clips and drivers' asks. See the fields.
     this.clips = options.clips;
     this.clipReads = new Limiter(900, 60 * 1000, () => this.now().getTime());
@@ -2250,6 +2258,29 @@ export class Relay {
 
     if (method === "POST" && segments.length === 2 && segments[0] === "voice" && segments[1] === "preview") {
       await this.voicePreview(request, response);
+      return;
+    }
+
+    // The lap voice (29 Oct 2026): which clips there are, and each clip.
+    // No token and nothing counted - the same stock recordings for every
+    // club, made once on the operator's own key (see lapvoice.ts).
+    if (method === "GET" && segments.length === 1 && segments[0] === "lap-voice") {
+      sendBody(response, 200, "application/json; charset=utf-8", JSON.stringify(this.lapVoice.manifest), "public, max-age=300");
+      return;
+    }
+
+    if (method === "GET" && segments.length === 2 && segments[0] === "lap-voice") {
+      const file = segments[1] as string;
+      const clip = file.endsWith(".mp3") ? this.lapVoice.clip(file.slice(0, -4)) : undefined;
+
+      if (clip === undefined) {
+        sendJson(response, 404, { ok: false, error: "There is no such clip." });
+        return;
+      }
+
+      // A year: the page asks with the library's version on the address,
+      // so clips made again are new addresses.
+      sendBody(response, 200, "audio/mpeg", clip, "public, max-age=31536000, immutable");
       return;
     }
 
@@ -9292,12 +9323,12 @@ function sendHtml(response: ServerResponse, status: number, html: string, nonce:
 }
 
 /** Bytes of a known type - the manifest, the icon, the logo. Cached for an hour: they change when a club re-brands, not between visits. */
-function sendBody(response: ServerResponse, status: number, type: string, body: string | Buffer): void {
+function sendBody(response: ServerResponse, status: number, type: string, body: string | Buffer, cache = "public, max-age=3600"): void {
   response.writeHead(status, {
     ...BASE_HEADERS,
     "content-type": type,
     "content-length": Buffer.byteLength(body),
-    "cache-control": "public, max-age=3600",
+    "cache-control": cache,
   });
 
   response.end(body);
