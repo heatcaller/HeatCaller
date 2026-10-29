@@ -76,6 +76,33 @@ nav a { white-space: nowrap; flex: none;
 }
 nav a:hover { color: var(--text); background: var(--surface); }
 nav a[aria-current] { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
+/* THE CLUB'S TABS (29 Oct 2026, relay navigation round 1). On a laptop or
+   a tablet, one row across the top as before. On a phone, a bar fixed
+   along the bottom with the five a driver uses on the night - Home, Live,
+   Schedule, Results, Me - in thumb reach and never scrolled out of sight;
+   Standings, Achievements and Tracks are tiles on Home there. The icons
+   only show on the phone bar. */
+nav.tabs svg { display: none; }
+nav.tabs .lv { position: relative; }
+nav.tabs .dot { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--bad);
+                margin-left: 6px; vertical-align: middle; }
+nav.tabs.racing .dot { display: inline-block; }
+@media (max-width: 640px) {
+  body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; margin: 0; gap: 0;
+             overflow: visible; border-bottom: 0; border-top: 1px solid var(--border); background: var(--bg);
+             padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left)); }
+  nav.tabs a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+               min-height: 56px; padding: 8px 2px 6px; font-size: 0.72rem; border-radius: 0;
+               border-bottom: 0; border-top: 2px solid transparent; margin: -1px 0 0; }
+  nav.tabs a[aria-current] { border-top-color: var(--primary); background: none; }
+  nav.tabs a.wide { display: none; }
+  nav.tabs svg { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8;
+                 stroke-linecap: round; stroke-linejoin: round; }
+  nav.tabs .dot { position: absolute; top: 6px; left: calc(50% + 8px); margin: 0; }
+  /* "Following Sam" sits just above the bar instead of under it. */
+  body .follow { bottom: calc(68px + env(safe-area-inset-bottom)); }
+}
 .day { color: var(--accent); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
        margin: 26px 0 10px; font-weight: 600; }
 details {
@@ -238,6 +265,7 @@ a.go { text-align: center; text-decoration: none; }
 .lc.next .lc-big { color: var(--accent); }
 .lc-eta { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
 .lc-part { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
+.lc-go { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; }
 .lc .go { margin: 12px 0 4px; max-width: none; }
 /* Lap times in my ear on their own night (29 Oct 2026). */
 .nt-short { display: inline-flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 0.95rem; }
@@ -750,20 +778,75 @@ function touched() {
 // return to the tab refreshes at once rather than waiting out the gap.
 // Seven tabs do not fit across a phone, so the row scrolls - which left
 // the page you were on out of sight whenever it was one of the later ones.
+// On a phone the tabs are a bar fixed to the bottom with nothing to
+// scroll, and scrolling a fixed bar into view can move the page instead.
 const current = document.querySelector('nav a[aria-current]');
-if (current) current.scrollIntoView({ block: 'nearest', inline: 'center' });
+if (current && !(current.parentElement && getComputedStyle(current.parentElement).position === 'fixed')) {
+  current.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
 
 function poll(load, everyMs) {
   load();
   setInterval(() => { if (!document.hidden) load(); }, everyMs);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 }
+
+// ME, REMEMBERED ON THIS PHONE (29 Oct 2026, relay navigation round 2,
+// Asher's pick: "phone remembers the driver until they sign out"). The
+// code from their badge - what opens their night - kept in this phone's
+// own storage once their night has opened with it, so Me goes straight
+// there next time instead of asking for the PIN or the email again. Only
+// ever a code the relay has just answered with a night; never the PIN,
+// never the pass "Your details" earns (that stays in this tab only). Sign
+// out on this phone (on the night page) forgets it.
+const ME_KEY = 'hg-me-' + CLUB;
+
+function meCode() {
+  try {
+    const v = localStorage.getItem(ME_KEY) || '';
+    return /^[0-9a-f]{20}$/.test(v) ? v : '';
+  } catch (e) { return ''; }
+}
+
+function meRemember(code) {
+  try { if (/^[0-9a-f]{20}$/.test(String(code))) localStorage.setItem(ME_KEY, String(code)); } catch (e) { /* asked again next time */ }
+}
+
+function meForget() {
+  try { localStorage.removeItem(ME_KEY); } catch (e) { /* nothing was kept */ }
+}
+
+// The Me tab goes straight to a remembered night.
+(function () {
+  const code = meCode();
+  const me = code ? document.querySelector('nav.tabs a[href$="/mynight"]') : null;
+  if (me) me.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
+})();
+
+// The red dot on the Live tab while a car is on track (29 Oct 2026, relay
+// navigation round 1), so a driver on Results or their own night can see a
+// race has started without opening Live. The same reading Home's "On track
+// now" makes, and the same two minutes before a laptop that went quiet
+// stops counting. Not on Live itself, which says so in big letters.
+(function () {
+  const tabs = document.querySelector('nav.tabs');
+  const live = tabs ? tabs.querySelector('a.lv') : null;
+  if (!tabs || !live || live.hasAttribute('aria-current')) return;
+  const RACING = ['Staging', 'Countdown', 'Racing'];
+  poll(async () => {
+    const answer = await grab('/snapshot/state').catch(() => null);
+    const frame = answer && !answer.missing && answer.body ? answer.body : null;
+    const s = frame && frame.body ? frame.body : null;
+    const fresh = frame !== null && Date.now() - Date.parse(frame.publishedAt) < 120000;
+    tabs.classList.toggle('racing', !!(s && fresh && RACING.includes(String(s.state))));
+  }, 30000);
+})();
 `;
 
 interface Shell {
   readonly club: string;
   readonly clubName: string;
-  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "mynight";
+  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "mynight" | "missing";
   readonly heading: string;
   readonly sub: string;
   readonly body: string;
@@ -831,8 +914,19 @@ function shell(page: Shell, context: PageContext): string {
       ? escapeHtml(page.path)
       : `/c/${club}${page.active === "home" ? "" : `/${page.active}`}`;
 
-  const tab = (href: string, label: string, key: string) =>
-    `<a href="/c/${club}${href === "" ? "" : "/" + href}"${page.active === key ? ' aria-current="page"' : ""}>${label}</a>`;
+  // A driver's own pages - check in, the PIN box, their night, sign-up -
+  // are all "Me" (29 Oct 2026, relay navigation round 1), so none of them
+  // looks like a page outside the club's site.
+  const lit = page.active === "checkin" || page.active === "signup" || page.active === "night" || page.active === "mynight"
+    ? "me"
+    : page.active;
+
+  // icon is an SVG path, drawn only on the phone bar; cls "wide" keeps a
+  // tab off the phone bar, where Home's tiles carry it instead.
+  const tab = (href: string, label: string, key: string, icon: string, cls = "") =>
+    `<a href="/c/${club}${href === "" ? "" : "/" + href}"${cls === "" ? "" : ` class="${cls}"`}${lit === key ? ' aria-current="page"' : ""}>`
+    + (icon === "" ? "" : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg>`)
+    + `<span>${label}</span>${key === "live" ? '<i class="dot" aria-hidden="true"></i>' : ""}</a>`;
 
   // Only hex colours reach here (site.ts refuses anything else, the logo
   // plate included), under variable names this file chose - never a name
@@ -936,16 +1030,15 @@ ${overrides}
 <div class="wrap">
   <header>
     ${brand}
-    <nav>
-      ${tab("", "Home", "home")}
-      ${tab("live", "Live", "live")}
-      ${tab("schedule", "Schedule", "schedule")}
-      ${look.checkIn || page.active === "checkin" ? tab("checkin", "Check in", "checkin") : ""}
-      ${look.checkIn || page.active === "mynight" ? tab("mynight", "My night", "mynight") : ""}
-      ${tab("results", "Results", "results")}
-      ${tab("standings", "Standings", "standings")}
-      ${tab("badges", "Achievements", "badges")}
-      ${tab("tracks", "Tracks", "tracks")}
+    <nav class="tabs" aria-label="${name}">
+      ${tab("", "Home", "home", "M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10")}
+      ${tab("live", "Live", "live", "M12 12h.01M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8", "lv")}
+      ${tab("schedule", "Schedule", "schedule", "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0")}
+      ${tab("results", "Results", "results", "M5 21V4M5 4h11l-2 4 2 4H5")}
+      ${tab("standings", "Standings", "standings", "", "wide")}
+      ${tab("badges", "Achievements", "badges", "", "wide")}
+      ${tab("tracks", "Tracks", "tracks", "", "wide")}
+      ${tab("mynight", "Me", "me", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0")}
     </nav>
   </header>
   ${page.body}
@@ -3709,6 +3802,93 @@ export function standingsPage(club: string, clubName: string, context: PageConte
 
 // ------------------------------------------------------------------- home
 
+/**
+ * YOUR NEXT RACE (29 Oct 2026, relay navigation round 3). When this phone
+ * remembers a driver (round 2), Home asks the relay for their live entry -
+ * the same {part:"live"} read the night page polls, once a minute here -
+ * and shows their next race above everything else, with the way to their
+ * night and, when it is on or next, to Live or the running order. Nothing
+ * at all for a phone that remembers nobody, a driver with no race in the
+ * next few, or a club that is not opening nights. Built with textContent:
+ * the race's name is the laptop's words.
+ */
+const HOME_ME_JS = `
+const mine = document.getElementById('mine');
+const MINE = meCode();
+
+function mineWords(n) {
+  if (typeof n.words === 'string' && n.words.trim() !== '') return n.words;
+  if (n.staged === true) return 'Staged - go to the driver stand';
+  if (n.now === true) return 'On track now';
+  const away = Math.max(0, Math.round(Number(n.away) || 0));
+  if (away === 0) return "You're up next";
+  return away === 1 ? '1 race before yours' : away + ' races before yours';
+}
+
+function mineLink(words, path) {
+  const a = document.createElement('a');
+  a.className = 'more';
+  a.textContent = words;
+  a.setAttribute('href', BASE + path);
+  return a;
+}
+
+function drawMine(entry) {
+  const n = entry && typeof entry === 'object' && entry.next && typeof entry.next === 'object' ? entry.next : null;
+
+  mine.textContent = '';
+  mine.hidden = n === null;
+  if (n === null) return;
+
+  const next = n.now !== true && Math.round(Number(n.away) || 0) === 0;
+  mine.className = 'lc' + (n.staged === true ? ' staged' : next ? ' next' : '');
+
+  const h = document.createElement('h3');
+  h.textContent = 'Your next race';
+  mine.appendChild(h);
+
+  const big = document.createElement('div');
+  big.className = 'lc-big';
+  big.textContent = mineWords(n);
+  mine.appendChild(big);
+
+  if (typeof n.race === 'string' && n.race !== '') {
+    const race = document.createElement('div');
+    race.textContent = n.race;
+    mine.appendChild(race);
+  }
+
+  const links = document.createElement('p');
+  links.className = 'lc-go';
+  links.appendChild(mineLink('Open your night', '/night#d=' + MINE));
+  if (n.now === true) links.appendChild(mineLink('Watch live', '/live'));
+  else if (next) links.appendChild(mineLink('See the running order', '/schedule'));
+  mine.appendChild(links);
+}
+
+async function readMine() {
+  let r = null;
+  try {
+    r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/night', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: MINE, part: 'live' }),
+      cache: 'no-store',
+    });
+  } catch (e) { return; }
+
+  // A busy relay (429) or a failed read keeps what is on screen.
+  if (r.status === 404) drawMine(null);
+  if (r.status !== 200) return;
+
+  let body = {};
+  try { body = await r.json(); } catch (e) { return; }
+  drawMine(body && body.live);
+}
+
+if (mine && MINE) poll(readMine, 60000);
+`;
+
 const HOME_JS = `
 const now = document.getElementById('now');
 const preview = document.getElementById('preview');
@@ -3904,7 +4084,10 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     active: "home",
     heading: "Home",
     sub: context.look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing laptop.",
+    // "mine" is Your next race (29 Oct 2026, relay navigation round 3),
+    // empty and hidden unless this phone remembers a driver with a race on.
     body:
+      '<section class="lc" id="mine" hidden></section>' +
       '<div id="now"><p class="note">Loading&hellip;</p></div>' +
       '<div class="day">The night before</div><div id="preview" style="display:none"></div>' +
       '<div class="day">Up next</div><div class="card" id="upnext" style="display:none"></div>' +
@@ -3920,7 +4103,7 @@ export function homePage(club: string, clubName: string, context: PageContext = 
       tile("tracks", "Tracks", "Records and best laps") +
       "</div>" +
       social,
-    script: HOME_JS,
+    script: HOME_JS + HOME_ME_JS,
   }, context);
 }
 
@@ -4649,8 +4832,11 @@ function drawOne() {
     // from here. Only drawn with a real badge in the address - a racer
     // signed in by PIN has not shown a code - and only for a club that
     // offers it.
-    (nights && BADGE
-      ? '<p class="note"><a class="more" href="/c/' + encodeURIComponent(CLUB) + '/night#d=' + encodeURIComponent(BADGE) + '">See your racing from last time</a></p>'
+    // A racer signed in by PIN has shown no code, but the relay's answer
+    // to their PIN carries it as their id (29 Oct 2026, relay navigation
+    // round 2), so they get the same link.
+    (nights && (BADGE || (racer && /^[0-9a-f]{20}$/.test(String(d.id))))
+      ? '<p class="note"><a class="more" href="/c/' + encodeURIComponent(CLUB) + '/night#d=' + encodeURIComponent(BADGE || d.id) + '">See your racing from last time</a></p>'
       : '') +
     '<p class="note">' +
     (racer
@@ -5226,6 +5412,10 @@ function drawApproved() {
       ? '<a class="go" href="' + card + '">Open my check-in card</a>' +
         '<p class="when">Keep it - add it to your home screen. It checks you in at every meeting.</p>'
       : '') +
+    // Go to Me (29 Oct 2026, relay navigation round 3): where their own
+    // nights open from here on, so a new driver learns the tab exists.
+    '<p class="when">Your own races and results open under Me, at the bottom of the page on a phone.</p>' +
+    '<a class="more" href="' + BASE + '/mynight">Go to Me</a>' +
     '</div>';
 }
 
@@ -6200,6 +6390,7 @@ function liveCard() {
       const eta = el('div', 'lc-eta', n.now === true ? '' : etaWords(n.eta, relayNow()));
       eta.id = 'lc-eta';
       card.appendChild(eta);
+      const go = goLink(n); if (go) card.appendChild(go);
     } else {
       card.appendChild(el('div', '', 'None of your races is in the next few on the running order.'));
     }
@@ -7713,9 +7904,58 @@ async function load() {
   refreshAsks();
   startLive();
   loadCheckIn();
+  meRemembered(CODE);
 }
 
 load();
+`;
+
+/**
+ * Remembering the driver on the night page (29 Oct 2026, relay navigation
+ * round 2): once the relay has answered this code with a night, this phone
+ * keeps it (meRemember, in the shared script) and the page offers to forget
+ * it. Kept apart from NIGHT_JS so the night itself does not change.
+ */
+const NIGHT_ME_JS = `
+function meRemembered(code) {
+  meRemember(code);
+  const out = document.getElementById('meout');
+  if (out && meCode() === code) out.hidden = false;
+}
+
+(function () {
+  const link = document.getElementById('meoutlink');
+  if (!link) return;
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    meForget();
+    // "Your details" is signed out with it, so a borrowed phone keeps nothing.
+    try { sessionStorage.removeItem('hg-night-pass-' + CLUB); } catch (err) { /* nothing was kept */ }
+    try { location.assign('/c/' + encodeURIComponent(CLUB) + '/mynight'); } catch (err) { location.href = '/c/' + encodeURIComponent(CLUB) + '/mynight'; }
+  });
+})();
+`;
+
+/**
+ * WATCH LIVE AND THE RUNNING ORDER (29 Oct 2026, relay navigation round 3).
+ * The Right now card says when their race is on track or next, but the
+ * place to watch it, or to see what runs before it, was a tab away. One
+ * link under the call-up: Watch live while their race is on track, See
+ * the running order while it is next (staged included). Nothing for a race
+ * further off. Kept apart from NIGHT_JS - liveCard calls it with one line -
+ * so the night page's own script is left as it was.
+ */
+const NIGHT_GO_JS = `
+function goLink(n) {
+  if (!n || typeof n !== 'object') return null;
+  const on = n.now === true;
+  if (!on && num(n.away) !== 0) return null;
+  const p = el('p', 'lc-go');
+  const a = el('a', 'more', on ? 'Watch live' : 'See the running order');
+  a.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + (on ? '/live' : '/schedule'));
+  p.appendChild(a);
+  return p;
+}
 `;
 
 /**
@@ -7736,8 +7976,11 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // "yd" is "Your details" (22 Oct 2026, driver experience, RP2), under
     // the night and outside it, so a redraw of the night never wipes a
     // half-typed change; empty unless the club is taking requests.
-    body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>',
-    script: LAPS_JS + NIGHT_JS,
+    // "meout" is Sign out on this phone (29 Oct 2026, relay navigation
+    // round 2), shown once this phone remembers the night it is showing.
+    body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
+      '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
+    script: LAPS_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
     noindex: true,
   }, context);
 }
@@ -7778,6 +8021,14 @@ export function nightPage(club: string, clubName: string, context: PageContext =
 const MYNIGHT_JS = `
 const box = document.getElementById('mn');
 const NIGHT_PASS_KEY = 'hg-night-pass-' + CLUB;
+
+// A driver this phone remembers goes straight to their night (29 Oct 2026,
+// relay navigation round 2). replace, so Back does not land here again.
+const REMEMBERED = meCode();
+if (REMEMBERED) {
+  const there = '/c/' + encodeURIComponent(CLUB) + '/night#d=' + REMEMBERED;
+  try { location.replace(there); } catch (e) { location.href = there; }
+}
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -7871,10 +8122,12 @@ function draw(message) {
   part.appendChild(button);
   part.appendChild(said);
   part.appendChild(el('p', 'when', 'No personal PIN? Open your night with the link on your check-in badge or in the club\\'s email - or ask at the timing desk.'));
+  part.appendChild(el('p', 'when', 'This phone remembers you once your night opens, until you sign out at the bottom of it.'));
   box.appendChild(part);
 }
 
-draw('');
+if (REMEMBERED) box.textContent = 'Opening your night\u2026';
+else draw('');
 `;
 
 export function myNightPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
@@ -7884,7 +8137,13 @@ export function myNightPage(club: string, clubName: string, context: PageContext
     active: "mynight",
     heading: "My night",
     sub: "Your own races from the timing desk - opened with your personal PIN.",
-    body: '<div id="mn"><p class="note">Loading&hellip;</p></div>',
+    // Check in is part of Me now that it has no tab of its own (29 Oct
+    // 2026, relay navigation round 1), so it is one tap from here whenever
+    // the club is taking check-ins.
+    body: '<div id="mn"><p class="note">Loading&hellip;</p></div>' +
+      (context.look.checkIn
+        ? `<p class="note"><a class="more" href="/c/${escapeHtml(club)}/checkin">Check in for tonight</a></p>`
+        : ""),
     script: MYNIGHT_JS,
     noindex: true,
   }, context);
@@ -9094,7 +9353,10 @@ ${overrides}
 <body data-club="${safeClub}">
 <div class="topbar">
   <div><span class="clubname">${name}</span><span class="clubname role">Manager</span></div>
-  <button class="linkbtn" id="btnSignOut" type="button" style="display:none">Sign out</button>
+  <div>
+    <a class="linkbtn" href="/c/${safeClub}">Club page</a>
+    <button class="linkbtn" id="btnSignOut" type="button" style="display:none">Sign out</button>
+  </div>
 </div>
 <form id="signinForm" class="wrap" method="post">
   <label for="pin">Manager PIN</label>
@@ -9186,6 +9448,70 @@ export function manifest(club: string, clubName: string, look: Look): string {
     // app picks up a new logo instead of keeping the old icon.
     icons: [{ src: `${base}/icon.png?v=${look.iconVersion}`, sizes: iconSize(look), type: "image/png", purpose: "any" }],
   });
+}
+
+/**
+ * A club's "that page isn't here" (29 Oct 2026, relay navigation round 1).
+ *
+ * WHY: an address under a club that is not one of its pages - an old
+ * podium-video QR code, a link cut short in a chat, a typo - used to get
+ * the API's own answer, a line of JSON, with no way back. Now it is a page
+ * in the club's colours with the club's tabs, so whoever landed on it can
+ * carry on. Still a 404, and noindex, so nothing is told it exists.
+ */
+export function missingPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+  const base = `/c/${escapeHtml(club)}`;
+
+  return shell({
+    club,
+    clubName,
+    active: "missing",
+    heading: "Not found",
+    sub: "That page isn't here. It may have moved, or the link was cut short.",
+    body: '<div class="tiles">' +
+      `<a class="tile" href="${base}"><b>Home</b><span>Everything at the club</span></a>` +
+      `<a class="tile" href="${base}/live"><b>Live</b><span>The race as it runs</span></a>` +
+      `<a class="tile" href="${base}/results"><b>Results</b><span>Every session</span></a>` +
+      "</div>",
+    script: "",
+    noindex: true,
+  }, context);
+}
+
+/**
+ * The relay's own address, and a club address that is no club (29 Oct
+ * 2026, relay navigation round 1): a plain notice saying what this is and
+ * where HeatCaller lives, rather than a line of JSON. Not any club's look
+ * - there is no club to take it from - and no script.
+ */
+export function relayNoticePage(heading: string, text: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0F0722">
+<title>${escapeHtml(heading)} - HeatCaller</title>
+<style>
+  html { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0F0722; color: #F7F2FF;
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 32rem; padding: 2rem 1.5rem; text-align: center; }
+  h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
+  p { margin: 0 0 1rem; opacity: .8; }
+  a { color: #2EE6FF; }
+</style>
+</head>
+<body>
+<main>
+  <h1>${escapeHtml(heading)}</h1>
+  <p>${escapeHtml(text)}</p>
+  <p><a href="https://heatcaller.com">heatcaller.com</a></p>
+</main>
+</body>
+</html>
+`;
 }
 
 /**

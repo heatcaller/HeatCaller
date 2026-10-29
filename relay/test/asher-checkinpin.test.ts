@@ -315,10 +315,10 @@ describe("My night: a driver's own night with their PIN", () => {
       await harness.close();
     });
 
-    it("serves the page and shows the tab and tile while check-in is open", async () => {
+    it("serves the page under the Me tab, and the tile while check-in is open", async () => {
       const page = await call(harness, "GET", "/c/acme-rc/mynight");
       assert.equal(page.status, 200);
-      assert.match(page.text, /aria-current="page">My night</);
+      assert.match(page.text, /href="\/c\/acme-rc\/mynight" aria-current="page">[\s\S]*?<span>Me<\/span>/);
 
       const home = await call(harness, "GET", "/c/acme-rc");
       assert.match(home.text, /href="\/c\/acme-rc\/mynight"/);
