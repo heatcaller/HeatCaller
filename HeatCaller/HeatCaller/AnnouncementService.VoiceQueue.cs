@@ -86,7 +86,12 @@ public sealed partial class AnnouncementService
     /// club can either let the announcer add or write into its own lines.
     /// The same rule "Include lap time" goes by.
     /// </param>
-    private void EnqueueVoice(AnnouncementEventType type, RaceStanding? standing, GatePassEvent? gate, long? lapTimeMs = null, int? streakCount = null, string? suffix = null, string? roundLabel = null, string? className = null, string? marshals = null, IReadOnlyDictionary<string, (string Spoken, string Display)>? extras = null, (string Placeholder, string Tail)? autoTail = null)
+    /// <param name="sayByMs">
+    /// The latest TimingClock time the line is still true at - the time-left
+    /// calls (28 Oct 2026). One that waited in the queue past it is not said:
+    /// "thirty seconds" at twenty seconds left is worse than nothing.
+    /// </param>
+    private void EnqueueVoice(AnnouncementEventType type, RaceStanding? standing, GatePassEvent? gate, long? lapTimeMs = null, int? streakCount = null, string? suffix = null, string? roundLabel = null, string? className = null, string? marshals = null, IReadOnlyDictionary<string, (string Spoken, string Display)>? extras = null, (string Placeholder, string Tail)? autoTail = null, long? sayByMs = null)
     {
         if (Muted)
         {
@@ -344,6 +349,12 @@ public sealed partial class AnnouncementService
 
                 try
                 {
+                    if (sayByMs is { } sayBy && TimingClock.NowMs > sayBy)
+                    {
+                        StatusMessage?.Invoke($"[voice] Dropped {type} - it waited too long to still be true (\"{displayText}\").");
+                        return;
+                    }
+
                     await SynthesizeAndPlayAsync(text, "[voice] Announcing", speedOverride: speed,
                         spoken: () =>
                         {
@@ -895,6 +906,13 @@ public sealed partial class AnnouncementService
         AnnouncementEventType.FinalMinute or
         AnnouncementEventType.TrackRecord or
 
+        // The time left (28 Oct 2026): a race moment like the final minute,
+        // and as easily lost behind lap chatter. A newer one replaces one
+        // still waiting (see EnqueueVoiceWork), and one that waits too long
+        // is not said (EnqueueVoice's sayByMs), so they cannot pile up.
+        AnnouncementEventType.MinutesLeft or
+        AnnouncementEventType.FinalSeconds or
+
 
         // The running order. It rations itself to once every N leader laps
         // and uses up that interval the moment it is built, so dropping it
@@ -943,6 +961,16 @@ public sealed partial class AnnouncementService
     /// </summary>
     private static bool SupersedesPerDriver(AnnouncementEventType type) =>
         type is not AnnouncementEventType.AchievementUnlocked;
+
+    /// <summary>
+    /// The calls about the time left in a timed race (28 Oct 2026). Any one
+    /// of them makes any other still waiting out of date: "two minutes" not
+    /// yet said when "one minute to go" arrives is no longer true.
+    /// </summary>
+    internal static bool IsTimeLeftCall(AnnouncementEventType type) => type is
+        AnnouncementEventType.MinutesLeft or
+        AnnouncementEventType.FinalMinute or
+        AnnouncementEventType.FinalSeconds;
 
     /// <summary>
     /// Queues a voice line, first dropping any PENDING (not yet started)
@@ -1106,6 +1134,14 @@ public sealed partial class AnnouncementService
             if (type == AnnouncementEventType.PositionReport)
             {
                 BinQueuedLocked(item => item.Type == AnnouncementEventType.PositionReport, ref giveBack);
+            }
+
+            // The same for the clock (28 Oct 2026): a newer time-left call
+            // replaces an older one still waiting, so a busy announcer says
+            // the time as it is now rather than every mark it missed.
+            if (IsTimeLeftCall(type))
+            {
+                BinQueuedLocked(item => IsTimeLeftCall(item.Type), ref giveBack);
             }
 
             if (isPriority)

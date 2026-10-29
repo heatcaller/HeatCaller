@@ -486,6 +486,8 @@ Placeholders are words in curly brackets that are filled in when the line is spo
 | `{consistency}` | The whole consistency verdict, "Last five within a tenth - that's your rhythm" (**Consistency (coach)** only). |
 | `{spread}` | How far apart the block's laps were, "three tenths" (**Consistency (coach)** only). |
 | `{laps}` | How many laps make the block, "five" (**Consistency (coach)** only). |
+| `{minutes}` | The minutes left, "four" (**Minutes left** only). |
+| `{seconds}` | The seconds left, "thirty" (**Last minute countdown** only). |
 | `{marshals}` | The corner marshals for the heat being called, said as "Sam, Bill and Frank" (**Grid call** only). It's the same list as the **Marshals...** window, for the current race day. |
 
 Each row's hint says which placeholders that announcement supports.
@@ -524,7 +526,9 @@ Defaults are for a new install. The **Practice** tick starts the same as the **R
 | **Achievement unlocked** | A driver earns a badge. Spoken after the race once the result is saved. | `{driver}` `{car}` `{team}` `{sponsors}` `{badge}` | Yes | – |
 | **On record pace** | A driver laps within two percent of the track record without beating it. Needs a layout selected with a record on it. At most once per driver per race, never before their third counted lap. | `{driver}` `{car}` `{team}` `{sponsors}` `{laptime}` (this lap), `{time}` (their best) | No | – |
 | **Last lap** | The leader starts the final lap of a lap-limited race. Fires once. | `{driver}` `{car}` `{team}` `{sponsors}` | Yes | – |
+| **Minutes left** | A timed race's time left at each whole minute from two up, "Four minutes to go". By default only the last five minutes; see [Extra settings on some rows](#extra-settings-on-some-rows). | `{minutes}` | No | – |
 | **Final minute** | A timed race has one minute left. Fires once. | none | Yes | – |
+| **Last minute countdown** | Through a timed race's last minute, the time left every 15 seconds: 45, 30 and 15 seconds. | `{seconds}` | No | – |
 | **Provisional pole (qualifying)** | The top of the qualifying order changes hands. Qualifiers only. | `{driver}` `{car}` `{team}` `{sponsors}` `{time}` | Yes | – |
 | **Qualifying improvement** | A driver improves their own best in a qualifier without taking provisional pole. | `{driver}` `{car}` `{team}` `{sponsors}` `{time}` | No | – |
 | **Grid call** | A round is called to the grid as it starts. | `{class}` `{round}` `{marshals}` | Yes | – |
@@ -562,6 +566,7 @@ Reminders from the race day's **Timetable** ("5 minutes to Stock Buggy A-Main") 
 | **Consistency streak** | **Only the longest streak in the field** | Only the driver on the longest clean run is called. |
 | **Consistency streak** | **Mention the runner-up** | Adds the next-best streak to the line. |
 | **Position report** | **Read every** _n_ **lap(s) of the LEADER, down to P** _n_ | Every 1 to 50 leader laps (default 5), reading from 2 to 10 places deep (default 3). |
+| **Minutes left** | **Only the last** _n_ **minutes (untick to call every minute)** | 2 to 60 (default 5): with 5, a ten-minute race hears five, four, three and two minutes to go. Untick it to hear every minute. One minute to go is always **Final minute**'s, so it's never said twice. |
 
 The streak threshold (how many clean laps count as a streak) is set on **Sounds → Effects** and applies to both the voice and the sound effect. See [Sounds and music](sounds-and-music.md#effects).
 
@@ -571,7 +576,7 @@ There are no **Test** buttons with the HeatCaller voice chosen — not the per-r
 
 To hear a HeatCaller voice, use **Hear It** and **Preview** beside **HeatCaller voice:** at the top of **Voice → Cast** instead: both are meant for exactly this, and neither touches your race-night allowance. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it). Pressing **Test** on the **Announcements** channel of **Sounds → Mixer** also speaks a level-check line in whichever voice is chosen, and a [demo race](../race-control/practice-and-ghosts.md) gives you a fuller listen — but those two do spend a little of the allowance.
 
-Each row's **Test** button on the **Announcements** tab speaks a random line from that row, using what's on screen rather than what was last saved, in the voice chosen under **Speak with**. It fills in sample values: Sam for `{driver}`, Bill for `{rival}`, "Mini-Z MR03" for `{car}`, lap 7, "6.92 seconds" for `{time}` and `{laptime}`, gate 1 and "P1 Sam, P2 Bill, P3 Frank" for `{positions}`. `{round}`, `{class}` and `{marshals}` are filled with sample values too, so you can hear a whole grid call. Other placeholders aren't filled in during a test.
+Each row's **Test** button on the **Announcements** tab speaks a random line from that row, using what's on screen rather than what was last saved, in the voice chosen under **Speak with**. It fills in sample values: Sam for `{driver}`, Bill for `{rival}`, "Mini-Z MR03" for `{car}`, lap 7, "6.92 seconds" for `{time}` and `{laptime}`, gate 1 and "P1 Sam, P2 Bill, P3 Frank" for `{positions}`. `{round}`, `{class}` and `{marshals}` are filled with sample values too, so you can hear a whole grid call, and "four" for `{minutes}` and "thirty" for `{seconds}`. Other placeholders aren't filled in during a test.
 
 The status line at the foot of the **Announcements** tab shows what was spoken, or the reason a test failed — the error message from ElevenLabs, or, with Kokoro chosen and nothing to speak with, "Kokoro can't speak yet - ..." and the reason. While the **ElevenLabs voice:** row is showing, the line under its **Test Voice** at the top of **Voice → Cast** says the same.
 
@@ -587,6 +592,7 @@ The announcer is built so that important calls are never late and routine chatte
 
 - **Flag and race-control calls cut in.** **Race started**, **Green flag (resumed)**, **Yellow flag**, **Red flag**, **Race time over** and **Race completed** stop whatever is being said mid-word and play straight away. Anything routine waiting in the queue is thrown away. If two flag calls are pressed close together, only the newer one is spoken.
 - **Other priority calls are never dropped.** **Race staging**, **Countdown started**, **Staggered start release**, **Last lap**, **Final minute**, **Track record**, **Achievement unlocked** and Timetable reminders wait their turn but are always spoken. A release call or reminder queued behind **Last lap** or **Final minute** doesn't push it out; only a flag call clears them.
+- **The time left is said while it's true.** **Minutes left** and **Last minute countdown** wait their turn like **Final minute**, but a newer time call replaces one still waiting, and one that waited too long isn't said: "thirty seconds" is dropped rather than spoken with twenty left.
 - **The grid call is always spoken**, before the staging line, with the marshals if your lines include them. It's spoken even straight after a race: it ends the post-race quiet.
 - **Routine lines are dropped when the announcer is busy.** If the announcer is already talking when a lap-time, streak or similar line comes up, that line is skipped rather than queued. On a fast track, a late line would describe a lap that's long gone. A newer line about the same driver also replaces an older one still waiting.
 - **Under a yellow or red, routine lines are skipped** so the announcer doesn't talk over instructions to drivers. Tick **Caution** on its row on the **Announcements** tab to let it through anyway. Rivalry lines are also held under caution. Flag calls are never held.

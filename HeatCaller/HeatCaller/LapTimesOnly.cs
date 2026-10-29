@@ -16,8 +16,8 @@ namespace HeatCaller;
 ///  - Voice: the lap time, the green flag, time up, the checkered flag and
 ///    the yellow, red and green-again flags are switched on. The rest of the
 ///    start and finish (staging, the countdown, a jump start, a staggered
-///    driver's release, the grid call, last lap, final minute) and the
-///    program's reminders are left as the club has them. Everything else -
+///    driver's release, the grid call, last lap, final minute and the time
+///    left) and the program's reminders are left as the club has them. Everything else -
 ///    fast laps, records, leader changes, battles, streaks, ghosts, badges,
 ///    position reports - is switched off. Only the switches: the wording is
 ///    the club's, so this is the same on every voice, the HeatCaller voice
@@ -65,6 +65,11 @@ internal static class LapTimesOnly
         AnnouncementEventType.LastLap,
         AnnouncementEventType.FinalMinute,
         AnnouncementEventType.Reminder,
+
+        // The time left (28 Oct 2026), with the final minute beside it: the
+        // clock is part of the race, not chatter about it.
+        AnnouncementEventType.MinutesLeft,
+        AnnouncementEventType.FinalSeconds,
 
         // The split loop's own lap time, and the coaching a driver asked
         // for (22 Oct 2026): a time read out, which is what this mode is,

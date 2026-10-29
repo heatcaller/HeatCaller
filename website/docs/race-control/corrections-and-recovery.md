@@ -196,7 +196,7 @@ A restored race comes back **stopped, under a red flag**, so nothing counts whil
 !!! note
     Each car's first lap after the green is timed from its last crossing before the app closed, so it includes the stoppage and looks long. It counts as a lap, but never as a best lap, never toward a clean run or streak pace, and never in the average or consistency columns, even if you later remove laps. You don't need to remove it.
 
-"Last lap" and "one minute to go" aren't called a second time after a restore if they were already called before the app closed.
+"Last lap" and "one minute to go" aren't called a second time after a restore if they were already called before the app closed. Nor are the minutes or seconds left that went by while the app was closed: the next one due is called as normal.
 
 If the race was on its last lap when the app stopped, the checkered flag is still out after the restore, and drivers who had already taken it stay finished. The 60-second wait for stragglers starts again when you go green.
 

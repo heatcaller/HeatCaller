@@ -214,7 +214,10 @@ public sealed class CoachingSpokenTests
 
         // The gap to the ghost came after them (22 Oct 2026).
         Assert.Equal(AnnouncementEventType.ConsistencyCoach + 1, AnnouncementEventType.GhostGap);
-        Assert.Equal(AnnouncementEventType.GhostGap, Enum.GetValues<AnnouncementEventType>().Max());
+
+        // The time left came after it (28 Oct 2026) - see TimeLeftCallsTests
+        // for the end of the list.
+        Assert.True(AnnouncementEventType.GhostGap < Enum.GetValues<AnnouncementEventType>().Max());
     }
 
     [Fact]
