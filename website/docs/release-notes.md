@@ -4,6 +4,12 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **My night on race night (29 October).** The rest of the night page's **Right now** card is laid out as planned. See [Right now](online/index.md#right-now).
+    - **Race-day jobs in one row.** **Check in**, **Your transponder**, **Lap times in my ear** and **Your battery pack** sit side by side on a wide screen and one under the other on a phone. On race night the battery pack is here instead of in **Your details**, and a pack they've picked stays picked when the card refreshes.
+    - **Marshal duty on one line**: "Your marshal duty: Q2 Heat 2 - Turn 3 · 1 race before it."
+    - **Right now on the jump bar.** While the card is there, the jump bar's first button goes back up to it.
+    - **Bigger buttons** on the jump bar, the stat picker and the race tabs, for thumbs.
+    - Redeploy the relay (`fly deploy --ha=false`). Nothing changes on the race PC.
 - **The race board first on Live (29 October).** On the club's **Live** page the leaderboard now sits straight under the race's flag bar, at the top, so a phone shows it without scrolling. **Listen to the announcer**, **Captions** and **Lap times in my ear** follow it. Redeploy the relay (`fly deploy --ha=false`); nothing changes on the race PC.
 - **Lap times in my ear, in the HeatCaller lap voice (29 October).** On the relay's **Live** page and a driver's own night, laps are now read out in one ElevenLabs voice, **Daniel**, for every club, whatever announcer a club picked in its Cast tab: "Lap seven, nine forty-two, best lap, P two, four tenths back". The phone plays short clips recorded once, so a race night costs nothing however many drivers listen, and nothing about any driver goes to ElevenLabs. See [The HeatCaller lap voice](online/index.md#the-heatcaller-lap-voice).
     - Lap times from 3.00 to 19.99 seconds, laps 1 to 200, places 1 to 30, gaps up to 30 seconds or 9 laps, and up to 2 seconds under or off a target lap. Anything else, or a clip that's slow to arrive, and the phone's own voice says the whole line, as before.

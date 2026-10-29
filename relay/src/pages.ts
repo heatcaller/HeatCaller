@@ -360,7 +360,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
         scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
 .jump .jb { flex: none; font: inherit; font-size: 0.85rem; color: var(--text); background: var(--surface);
-            border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; min-height: 36px; cursor: pointer; }
+            border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; min-height: 44px; cursor: pointer; }
 .glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 8px; max-width: 42rem;
           margin: 14px auto 0; text-align: left; }
 .gl { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
@@ -372,7 +372,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .car, #n-prog { scroll-margin-top: 60px; }
 .pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .pick .pk { font: inherit; font-size: 0.8rem; color: var(--muted); background: none; border: 1px solid var(--border);
-            border-radius: 999px; padding: 4px 10px; min-height: 32px; cursor: pointer; }
+            border-radius: 999px; padding: 4px 12px; min-height: 40px; cursor: pointer; }
 .pick .pk.on { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
 .rlist { list-style: none; margin: 0; padding: 0; }
 .rrow { border: 1px solid var(--border); border-radius: 12px; margin: 0 0 8px; background: var(--surface); overflow: hidden; }
@@ -388,7 +388,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .rrow .rc { border: 0; border-top: 1px solid var(--border); border-radius: 0; margin: 0; }
 .rtabs { display: flex; gap: 4px; margin: 10px 0 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
 .rtab { flex: none; font: inherit; font-size: 0.9rem; color: var(--muted); background: none; border: 0;
-        border-bottom: 3px solid transparent; padding: 8px 10px; min-height: 40px; cursor: pointer; }
+        border-bottom: 3px solid transparent; padding: 8px 12px; min-height: 44px; cursor: pointer; }
 .rtab.on { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
 .sc-big b { font-size: 2rem; font-variant-numeric: tabular-nums; }
 .sc-big span { color: var(--muted); }
@@ -399,6 +399,9 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .sc-fill { display: block; height: 100%; background: var(--primary); }
 .sc-v { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
 .lc-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0 18px; }
+.lc-pack { max-width: none; margin: 14px 0 0; gap: 8px; }
+.lc-pack h4 { margin: 0; font-size: 1rem; }
+.lc-duty .when { display: inline; }
 .lc-asks { background: none; border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0; }
 .lc-asks > summary { font-weight: 600; padding: 0; }
 .nshare { display: flex; flex-wrap: wrap; gap: 8px; max-width: 42rem; margin: 22px auto 8px; }
@@ -6677,23 +6680,23 @@ function liveCard() {
       ? 'Keep this page open on your screen. It beeps and buzzes when your race is next, and again when it is staged.'
       : 'Two beeps and a buzz when your race is next, and again when it is staged.'));
 
-    const ears = nightTalk.part();
-    if (ears) card.appendChild(ears);
-
     const m = live.marshal;
 
+    // On one line (29 Oct 2026, My Night's second round): the duty, the post
+    // and how far off it is.
     if (m && typeof m === 'object' && typeof m.race === 'string' && m.race !== '') {
-      const duty = el('div', 'lc-part');
-      duty.appendChild(el('b', '', 'Your marshal duty'));
-      duty.appendChild(el('div', '', m.race + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : '')));
-      duty.appendChild(el('div', 'when', marshalWhen(m.away)));
+      const duty = el('div', 'lc-part lc-duty');
+      duty.appendChild(el('b', '', 'Your marshal duty: '));
+      duty.appendChild(el('span', '', m.race + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : '')));
+      duty.appendChild(el('span', 'when', ' · ' + marshalWhen(m.away)));
       card.appendChild(duty);
     }
   }
 
-  // Check-in and the transponder side by side (28 Oct 2026, My Night laid
-  // out to be found): two race-day jobs, one row on a wide screen, one
-  // under the other on a phone.
+  // The race-day jobs in one row (28 Oct 2026, My Night laid out to be
+  // found; lap times and the battery pack joined them on 29 Oct): check-in,
+  // the transponder, lap times in my ear and the pack in the car - side by
+  // side on a wide screen, one under the other on a phone.
   const jobs = el('div', 'lc-row');
 
   if (ci.shown) {
@@ -6715,6 +6718,18 @@ function liveCard() {
     if (check.state !== '') tp.appendChild(el('div', 'lc-check ' + check.state, check.words));
     if (check.state !== 'waiting') tp.appendChild(tapButton('Check my transponder', 'go quiet', startCheck));
     jobs.appendChild(tp);
+
+    const ears = nightTalk.part();
+    if (ears) jobs.appendChild(ears);
+
+    // The pack is a race-night job, so on race night it sits here rather
+    // than in Your details. The same element every time the card redraws,
+    // so a pack half picked is still picked after the next poll.
+    const pack = asksOpen && me ? packBox() : null;
+    if (pack) {
+      pack.className = 'su lc-part lc-pack';
+      jobs.appendChild(pack);
+    }
   }
 
   if (jobs.children.length > 0) card.appendChild(jobs);
@@ -6732,7 +6747,17 @@ function drawLive() {
 
   if (live || ci.shown) lvBox.appendChild(liveCard());
   if (firstNight) lvBox.appendChild(firstNightGuide());
+
+  // The jump bar has a Right now button only while there is a card.
+  const now = !!(live || ci.shown);
+  if (now !== jumpNow) {
+    jumpNow = now;
+    drawJump();
+  }
 }
+
+// Whether the jump bar was last drawn with the Right now card there.
+let jumpNow = false;
 
 // The minutes on the card, kept counting between polls.
 function tickClock() {
@@ -7022,6 +7047,8 @@ function drawJump() {
   at.textContent = '';
   const names = { 'n-races': 'Races', 'n-how': 'Report card', 'n-score': 'Driver score', 'n-prog': 'Progress', 'n-calls': 'Race calls' };
   const list = jumps.map((id) => [id, names[id] || (carNames[id] || '')]).filter((x) => x[1] !== '');
+  // Back up to the next race, which is what race night is for (29 Oct 2026).
+  if (lvBox && lvBox.children && lvBox.children.length > 0 && (live || ci.shown)) list.unshift(['lv', 'Right now']);
   if (ydBox && ydBox.children && ydBox.children.length > 0) list.push(['yd', 'Your details']);
 
   if (list.length < 2) return;
@@ -7690,9 +7717,13 @@ function drawAsks(message) {
 
   // The battery pack first, because it changes on race night; the request
   // to change how they are called folded under it (28 Oct 2026), opened by
-  // itself when there is something to say about it.
-  const packs = packPart();
-  if (packs) sec.appendChild(packs);
+  // itself when there is something to say about it. On race night the pack
+  // is in the Right now card instead (29 Oct 2026).
+  const packs = live ? null : packBox();
+  if (packs) {
+    packs.className = 'su';
+    sec.appendChild(packs);
+  }
 
   const change = el('details', 'yd-change');
   change.open = view.details || !!message;
@@ -7959,6 +7990,21 @@ function detailsForm(message) {
   }
 
   return form;
+}
+
+// The pack part, built once for the packs the desk last sent and moved
+// between the Right now card and Your details rather than built again, so
+// what they have picked and what the desk said survive a redraw.
+let packNode = null;
+let packFor = '';
+
+function packBox() {
+  const key = JSON.stringify(me && me.packs ? me.packs : null);
+  if (packNode === null || key !== packFor) {
+    packNode = packPart();
+    packFor = key;
+  }
+  return packNode;
 }
 
 // Which battery pack they are running, from the packs the desk knows are
