@@ -1036,6 +1036,39 @@ network interface, like any relay, so Windows will ask about the firewall
 the first time - "private networks" is enough, and "no" still leaves it
 working for this laptop.
 
+### The lap voice (public, no token)
+
+The spoken laps on the Live page and a driver's own night ("Lap times in my
+ear") play short clips in one ElevenLabs voice, Daniel ("Steady
+Broadcaster", voice `onwK4e9ZLuTAKqWW03F9`, model `eleven_flash_v2_5`), the
+same for every club whatever voice a club runs in its Cast tab. See
+`src/lapvoice.ts`.
+
+| Route | What it is |
+|:--|:--|
+| `GET /lap-voice` | `{ ok, voice, v, clips }`: the clips this relay has. Cached 5 minutes. |
+| `GET /lap-voice/<name>.mp3` | One clip. The page adds `?v=` from the list, so it is cached for a year. |
+
+The clips: lap times 3.00 to 19.99, "Lap one" to "Lap two hundred", "P one"
+to "P thirty", gaps from "nothing in it" to "thirty seconds back" and "a lap
+back" to "nine laps back", the target words up to two seconds, "best lap"
+and "Lap times on". 2,193 clips, 36,946 characters: about $1.48 at Flash's
+$0.04 per 1,000, once. A call the clips can't cover, or a clip that takes
+more than a second, is said in the phone's own voice, whole.
+
+**Making them.** On your own PC, with your ElevenLabs key on the first line
+of `voice-test.key` here (the local voice test's file; a paid plan, for the
+commercial licence):
+
+    lap-voice-render.cmd count     what it would make and cost; spends nothing
+    lap-voice-render.cmd           makes the missing ones, after you type yes
+
+They land in `lap-voice/`, which git ignores. Run it again any time: clips
+already there are never asked for twice. Then `fly deploy --ha=false` carries
+the folder into the image, and the relay logs how many it has when it
+starts. Deploying from a copy without the clips puts the relay back on the
+phone's voice until you make or copy them there.
+
 ### The commentary brain (token required)
 
 ```

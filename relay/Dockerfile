@@ -36,6 +36,12 @@ WORKDIR /app
 COPY package.json ./
 COPY --from=build /app/dist/src ./dist/src
 
+# The lap voice's clips (29 Oct 2026), made on your own PC by
+# lap-voice-render.cmd and carried up by fly deploy - see src/lapvoice.ts.
+# The folder is always there (its README is kept in git), so a deploy with
+# no clips in it is a relay whose spoken laps use the phone's voice.
+COPY lap-voice ./lap-voice
+
 # Config comes from RELAY_CONFIG_JSON (on Fly: a secret), the data
 # directory from RELAY_DATA (on Fly: the mounted volume). See src/config.ts.
 EXPOSE 8787
