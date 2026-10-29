@@ -267,6 +267,8 @@ a.go { text-align: center; text-decoration: none; }
 .lc-part { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
 .lc-go { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; }
 .lc .go { margin: 12px 0 4px; max-width: none; }
+/* Lap times in my ear on their own night (29 Oct 2026). */
+.nt-short { display: inline-flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 0.95rem; }
 .lc-check { margin-top: 8px; font-weight: 600; }
 .lc-check.seen { color: var(--good); }
 .lc-check.missed { color: var(--bad); }
@@ -3012,9 +3014,11 @@ const lapTalk = (function () {
     return secs ? secs[1].replace(',', '.') + ' seconds behind' : '';
   }
 
-  // The gap to the car ahead: the club's Interval column when the board
-  // has one, or Gap to P1 for the car in second, where the two are the same.
+  // The gap to the car ahead: the laptop's own figure on the row (a
+  // HeatCaller from 29 Oct 2026 on sends it), else the club's Interval
+  // column, or Gap to P1 for the car in second, where the two are the same.
   function gapAhead(state, row, pos) {
+    if (typeof row.ahead === 'string' && row.ahead !== '') return gapWords(row.ahead);
     const columns = Array.isArray(state.columns) ? state.columns.map((c) => String(c)) : [];
     let at = columns.findIndex((c) => /^interval$/i.test(c));
     if (at < 0 && pos === 2) at = columns.findIndex((c) => /^gap/i.test(c));
@@ -5838,6 +5842,251 @@ let alertsOn = false;
 let audio = null;
 let lastKey = '';
 
+// --- Lap times in my ear, on their own night (29 Oct 2026, asked for by
+// Asher) -------------------------------------------------------------------
+// The Live page's spoken laps, without having to pick yourself: the laptop
+// puts the tags of the driver's own cars in their private live entry
+// (live.cars), the same tags their rows carry on the public board, so this
+// page finds their row by tag rather than by a name somebody else may
+// share. A car's target lap, when race control set one, comes with its tag:
+// "Lap 7, 9.42, best lap, 0.2 under target, P2, 0.4 seconds behind", or
+// with Time only ticked "9.42, best lap, 0.2 under target".
+//
+// Only drawn when the laptop sends the tags - an older HeatCaller does not,
+// and then there is nothing to say whose row is theirs. The rest is the
+// Live page's care: laps already on the board when it was turned on are not
+// said, fewer laps or a different first lap is a new race, two laps in one
+// read say the newest, and a phone has to be tapped after a reload before
+// it may talk. While it is on and they are racing, the board is read every
+// second and the phone is asked to keep the screen on.
+const nightTalk = (function () {
+  const canSpeak = typeof window.speechSynthesis === 'object' && window.speechSynthesis !== null
+    && typeof SpeechSynthesisUtterance === 'function';
+  const ON_KEY = 'hg-nighttalk-' + CLUB;
+  const SHORT_KEY = 'hg-nighttalk-short-' + CLUB;
+  const AUTOLOCK = ' If your screen goes dark, set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while you race.';
+
+  let on = false, timeOnly = false, unlocked = false;
+  try {
+    on = canSpeak && localStorage.getItem(ON_KEY) === '1';
+    timeOnly = localStorage.getItem(SHORT_KEY) === '1';
+  } catch (e) { /* off, and full calls */ }
+
+  // Which car's laps were last counted, how many, and the first of them.
+  let heardTag = '', heardLaps = 0, firstLap = 0;
+  // The screen wake lock: held, being asked for, and whether the phone gave one.
+  let lock = null, asking = false, awake = null;
+  let reading = false;
+
+  function save(key, yes) {
+    try { localStorage.setItem(key, yes ? '1' : '0'); } catch (e) { /* this visit only */ }
+  }
+
+  function speak(text) {
+    if (!canSpeak) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.1;
+      window.speechSynthesis.speak(u);
+    } catch (e) { /* a phone that will not talk says nothing */ }
+  }
+
+  function hush() {
+    try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+  }
+
+  // Their cars as the laptop sent them, tags checked to the laptop's shape.
+  function cars() {
+    const listed = live && Array.isArray(live.cars) ? live.cars : [];
+    return listed.filter((c) => c && typeof c === 'object' && typeof c.tag === 'string' && /^[0-9a-f]{16}$/.test(c.tag));
+  }
+
+  function ready() {
+    return canSpeak && cars().length > 0;
+  }
+
+  function stayAwake() {
+    if (!on || !unlocked || lock !== null || asking || document.hidden) return;
+    const wl = navigator.wakeLock;
+    if (!wl || typeof wl.request !== 'function') { awake = false; return; }
+    asking = true;
+    try {
+      wl.request('screen').then((got) => {
+        asking = false;
+        if (!on) { try { got.release(); } catch (e) { /* gone already */ } return; }
+        lock = got; awake = true;
+        if (got && typeof got.addEventListener === 'function') got.addEventListener('release', () => { lock = null; });
+      }, () => { asking = false; awake = false; });
+    } catch (e) { asking = false; awake = false; }
+  }
+
+  function letSleep() {
+    try { if (lock !== null) lock.release(); } catch (e) { /* gone already */ }
+    lock = null; awake = null;
+  }
+
+  function gapWords(gap) {
+    const t = String(gap || '').trim();
+    const laps = /^\\+?(\\d+)\\s*L(aps?)?$/i.exec(t);
+    if (laps) return laps[1] + (laps[1] === '1' ? ' lap' : ' laps') + ' behind';
+    const secs = /^\\+(\\d+([.,]\\d+)?)s?$/.exec(t);
+    return secs ? secs[1].replace(',', '.') + ' seconds behind' : '';
+  }
+
+  // The gap to the car ahead: the laptop's own figure on the row, else the
+  // club's Interval column, else Gap to P1 for the car in second.
+  function gapAhead(state, row, pos) {
+    if (typeof row.ahead === 'string' && row.ahead !== '') return gapWords(row.ahead);
+    const columns = Array.isArray(state.columns) ? state.columns.map((c) => String(c)) : [];
+    let at = columns.findIndex((c) => /^interval$/i.test(c));
+    if (at < 0 && pos === 2) at = columns.findIndex((c) => /^gap/i.test(c));
+    const cell = at >= 0 && Array.isArray(row.cells) ? row.cells[at] : null;
+    return cell && typeof cell === 'object' ? gapWords(cell.text) : '';
+  }
+
+  // "0.2 under target", "0.35 off target", "on target" - or nothing with no target.
+  function targetWords(last, target) {
+    if (!(typeof target === 'number' && target > 0)) return '';
+    const off = last - target;
+    if (Math.abs(off) < 5) return 'on target';
+    const n = Number((Math.abs(off) / 1000).toFixed(2));
+    return (n >= 1 ? n.toFixed(2) : String(n)) + (off < 0 ? ' under target' : ' off target');
+  }
+
+  function take(state) {
+    if (!on || !unlocked) { heardTag = ''; return; }
+
+    const mineCars = cars();
+    const rows = Array.isArray(state && state.standings) ? state.standings : [];
+    const mine = rows.filter((r) => r && typeof r === 'object' && typeof r.tag === 'string'
+      && mineCars.some((c) => c.tag === r.tag));
+
+    // Not on track - or, somehow, two of their cars at once: says nothing.
+    if (mine.length !== 1) return;
+
+    const row = mine[0];
+    const car = mineCars.find((c) => c.tag === row.tag);
+    const laps = (Array.isArray(row.laps) ? row.laps : []).filter((v) => typeof v === 'number' && v > 0);
+    const count = laps.length;
+    const first = count > 0 ? laps[0] : 0;
+
+    if (heardTag !== row.tag || count < heardLaps || (heardLaps > 0 && first !== firstLap)) {
+      heardTag = row.tag; heardLaps = count; firstLap = first;
+      return;
+    }
+
+    if (count === heardLaps) return;
+    heardLaps = count; firstLap = first;
+
+    const last = laps[count - 1];
+    const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
+    const words = [(last / 1000).toFixed(2)];
+    if (count > 1 && last <= best) words.push('best lap');
+    const target = targetWords(last, car && car.target);
+    if (target) words.push(target);
+
+    if (!timeOnly) {
+      const pos = rows.indexOf(row) + 1;
+      words.unshift('Lap ' + (count + 1));
+      words.push('P' + pos);
+      const gap = pos > 1 ? gapAhead(state, row, pos) : '';
+      if (gap) words.push(gap);
+    }
+
+    speak(words.join(', '));
+  }
+
+  async function read() {
+    if (reading) return;
+    reading = true;
+    try {
+      const a = await grab('/snapshot/state', 5000);
+      if (a && a.body && a.body.body) take(a.body.body);
+    } catch (e) {
+      // A read that failed is tried again in a second; nothing is lost,
+      // because the next one still has every lap.
+    } finally {
+      reading = false;
+    }
+  }
+
+  function tick() {
+    if (!on || !unlocked || document.hidden) return;
+    if (!ready()) { if (lock !== null) letSleep(); return; }
+    stayAwake();
+    read();
+  }
+
+  function toggle() {
+    if (on && !unlocked) {
+      unlocked = true; heardTag = '';
+      speak('Lap times on'); stayAwake(); read(); drawLive();
+      return;
+    }
+    unlocked = true;
+    on = !on;
+    save(ON_KEY, on);
+    heardTag = '';
+    if (on) { speak('Lap times on'); stayAwake(); read(); } else { hush(); letSleep(); }
+    drawLive();
+  }
+
+  // Its part of the Right now card, or null when there is nothing to read out.
+  function part() {
+    if (!ready()) return null;
+
+    const p = el('div', 'lc-part nt-ears');
+    p.appendChild(el('b', '', 'Lap times in my ear'));
+    const b = tapButton(!on ? 'Read out my laps' : unlocked ? 'Reading out your laps - tap to stop' : 'Tap to resume your lap times',
+      'go quiet' + (on && unlocked ? ' on' : ''), toggle);
+    b.id = 'nt-laptalk';
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    p.appendChild(b);
+
+    const row = el('label', 'nt-short');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.id = 'nt-lapshort';
+    box.checked = timeOnly;
+    box.addEventListener('change', () => { timeOnly = !!box.checked; save(SHORT_KEY, timeOnly); });
+    row.appendChild(box);
+    row.appendChild(el('span', '', 'Time only'));
+    p.appendChild(row);
+
+    p.appendChild(el('div', 'when', !on
+      ? 'Your phone reads out each of your laps as you race: lap, time, best lap, your target when one is set, place and gap. Keep this page open with the screen on.'
+      : !unlocked
+        ? 'Tap anywhere to start the voice again.'
+        : 'Reading out your laps, a second or two after each one.'
+          + (awake === true ? ' Your screen stays on while this is on.' : awake === false ? AUTOLOCK : '')));
+    return p;
+  }
+
+  if (canSpeak) {
+    setInterval(tick, 1000);
+
+    // Any tap lets a page that was on before a reload speak again.
+    document.addEventListener('click', (e) => {
+      if (on && !unlocked && !(e && e.target && e.target.id === 'nt-laptalk')) {
+        unlocked = true; heardTag = '';
+        speak(' '); stayAwake();
+        setTimeout(drawLive, 0);
+      }
+    }, true);
+
+    // A phone lets go of the wake lock when the page is hidden.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) { lock = null; stayAwake(); }
+    });
+  }
+
+  return {
+    part: part,
+    talking: () => on && unlocked,
+  };
+})();
+
 // The transponder check: '' (not running), 'waiting', 'seen' or 'missed'.
 const check = { state: '', pressed: 0, baseline: '', until: 0, words: '' };
 
@@ -6150,6 +6399,9 @@ function liveCard() {
     card.appendChild(el('div', 'when', alertsOn
       ? 'Keep this page open on your screen. It beeps and buzzes when your race is next, and again when it is staged.'
       : 'Two beeps and a buzz when your race is next, and again when it is staged.'));
+
+    const ears = nightTalk.part();
+    if (ears) card.appendChild(ears);
 
     const m = live.marshal;
 

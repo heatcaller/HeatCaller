@@ -306,6 +306,24 @@ public sealed partial class WebServerService
         return new RosterView(roster, ids, byId);
     }
 
+    /// <summary>
+    /// The key the public board's row tags are made with (29 Oct 2026,
+    /// spoken laps on My Night). Its own key, not the roster's, so a tag on
+    /// the public board can never be matched against a check-in id. Made
+    /// once per run, so a driver's tag holds all evening.
+    /// </summary>
+    private readonly byte[] _relayRowKey = RandomNumberGenerator.GetBytes(32);
+
+    /// <summary>
+    /// The tag a car's row carries on the relay's public board: sixteen hex
+    /// characters that say nothing about the transponder. The driver's own
+    /// night page gets the same tags in their private live entry
+    /// (DriverLive), which is how it finds their row on the board without
+    /// going by name. Null for a blank transponder.
+    /// </summary>
+    public string? RelayRowTag(string? transponder) =>
+        string.IsNullOrWhiteSpace(transponder) ? null : RosterId(_relayRowKey, transponder);
+
     /// <summary>Sixteen hex characters of HMAC. Case and spacing in the transponder do not change it.</summary>
     private static string RosterId(byte[] key, string transponder)
     {
@@ -3277,11 +3295,43 @@ public sealed partial class WebServerService
             standings,
         };
 
-        // The relay's copy stays exactly as it was: it is a public document
-        // with a format the relay knows.
+        // The relay's copy keeps the format the relay knows, with two things
+        // added to each row (29 Oct 2026, spoken laps on My Night):
+        //  - "tag", the car's opaque row tag (RelayRowTag), so a driver's own
+        //    night page can find their row without going by name. Never on a
+        //    ghost, which is nobody's car;
+        //  - "ahead", the gap to the car in front in the board's own words
+        //    ("+0.41", "+1L"), so the gap can be read out even when the club
+        //    doesn't show an Interval column. Anyone can already work it out
+        //    from the board. Not on the leader.
         if (forRelay)
         {
-            return JsonSerializer.Serialize(document);
+            var relayNode = JsonSerializer.SerializeToNode(document)!.AsObject();
+
+            if (relayNode["standings"] is System.Text.Json.Nodes.JsonArray rows)
+            {
+                for (var i = 0; i < ordered.Count && i < rows.Count; i++)
+                {
+                    if (rows[i] is not System.Text.Json.Nodes.JsonObject row)
+                    {
+                        continue;
+                    }
+
+                    var car = ordered[i];
+
+                    if (!Ghosts.IsGhost(car.TransponderId) && RelayRowTag(car.TransponderId) is { } tag)
+                    {
+                        row["tag"] = tag;
+                    }
+
+                    if (i > 0 && RaceGaps.Format(RaceGaps.Between(car, ordered[i - 1])) is var ahead && ahead != "-")
+                    {
+                        row["ahead"] = ahead;
+                    }
+                }
+            }
+
+            return relayNode.ToJsonString();
         }
 
         // The LAN copy also says which race Race Control has in hand, for
