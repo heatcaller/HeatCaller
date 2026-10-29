@@ -112,6 +112,9 @@ export class FakeNode {
   }
 
   appendChild(child: FakeNode): FakeNode {
+    // As in a browser, a node already somewhere else moves rather than
+    // being in two places at once.
+    child.remove();
     child.parent = this;
     this.children.push(child);
     if (child.ident !== "") this.page.byId.set(child.ident, child);
