@@ -5088,7 +5088,7 @@ rivalries, analytics, ghost cars, demo mode.
 **Announcer and sound:** ElevenLabs with the club's own key, the
 HeatCaller voice (ElevenLabs through the relay), and the Windows voice as a
 stand-in; lines prepared before the night; commentary written by a local
-model (Ollama); five sound packs, ambience, music, soundscapes, a mixer and
+model (built into HeatCaller since 14 Oct 2026); five sound packs, ambience, music, soundscapes, a mixer and
 lap beeps. The recap can run as a small broadcast (27 Sep 2026): a TV-style
 opening and sign-off, and after a main a pit-lane interview with the
 winner's mechanic in a second voice, who talks from the setup changes the
@@ -5116,7 +5116,7 @@ comes in on its ring-out afterwards, re-establishing the theme after a
 20-minute quiet spell. `CommentaryContinuity` writes the lines that join
 the parts - look-backs, still-to-come, first-up, that-is-the-lot - on the
 laptop, out of a shuffled bag, with no model and no allowance, so they
-survive a dead Ollama. `CommentaryExchange` gives a change of voice a
+survive a local model that can't write. `CommentaryExchange` gives a change of voice a
 450 ms beat and nudges the bed 1.15x. The Big Screen carries an **ON AIR**
 band with the segment's caption (`OnAirTreatment`, `ShowBlock.CaptionFor`
 - one table, after two disagreed on seven of eleven segments), toggled

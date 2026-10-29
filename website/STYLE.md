@@ -71,7 +71,7 @@ docs/race-control/corrections-and-recovery.md  Lap adjust, penalties, undo, cras
 docs/race-control/practice-and-ghosts.md       Practice, Ghost Cars, Demo Mode, Handicaps
 docs/race-control/results-and-championships.md Race History, exports, event report, results card, Championship (incl. DNF), Race Analytics, Achievements, tonight's standings
 docs/announcer/voice.md                        Voice → Voice Settings (Speak with: ElevenLabs, the HeatCaller voice or the free Kokoro voice), Announcements, Rivalries; the Announcer screen; hearing a voice first (Hear It, Preview), the Kokoro voice and its download, ElevenLabs setup, templates, events
-docs/announcer/commentary.md                   Commentary (local LLM / Ollama); the mechanic's own Kokoro voice
+docs/announcer/commentary.md                   Commentary (the relay, and the model built into HeatCaller); the mechanic's own Kokoro voice
 docs/announcer/sounds-and-music.md             Sounds → Mixer, Soundscapes, Effects, Ambience, Music, Lap Beeps; audio auto-start
 docs/timing/decoders.md                        Connection page: direct EasyLap, I-Lap; auto-connect; troubleshooting (Next Level Timing retired in 0.50.0)
 docs/timing/transponders.md                    Transponder handling, unknown transponders, rentals, signal/readiness, minimum lap time

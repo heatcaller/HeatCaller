@@ -93,7 +93,7 @@ Type in the **Search pages...** box to filter the sidebar (<kbd>Ctrl</kbd>+<kbd>
 | `bump up` | Race Day, Classes |
 | `sanctioning` | Classes |
 | `decoder`, `easylap`, `console` | Connection |
-| `ollama`, `elevenlabs`, `commentary` | Voice |
+| `elevenlabs`, `commentary`, `ai` | Voice |
 | `beep`, `music`, `crowd` | Sounds |
 | `token`, `relay`, `club id` | Club Website |
 | `obs`, `overlay` | Local Screens |
