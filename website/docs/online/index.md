@@ -40,6 +40,9 @@ Since 29 October 2026:
 - **Live** shows a small red dot while a car is on track, so you can see a race has started from any page.
 - **Me** is a driver's own corner: the PIN box that opens their night, their night page itself, check-in and sign-up all light up **Me**. While online check-in is open, **Me** has a **Check in for tonight** link.
 - **Me remembers you.** Once a driver's night has opened on their phone (from their badge, their night email or their PIN), the phone remembers them, and **Me** goes straight to their night from then on, whether or not online check-in is open. **Sign out on this phone**, at the bottom of their night, forgets them and signs out **Your details** too. Only the code that opens their night is kept on the phone, never their PIN.
+- **Your next race on Home.** On a phone that remembers its driver, Home opens with **Your next race**: how far off it is ("2 races before yours", "You're up next", "On track now") and the race's name, with **Open your night**. It checks once a minute, and only shows while the timing laptop has one of their races in the next few.
+- **Watch live** and **See the running order.** On a driver's night, the **Right now** card has **Watch live** while their race is on track and **See the running order** (the Schedule page) while it's next. Home's **Your next race** has the same links.
+- **Go to Me** sits under **You are in!** once the desk has accepted a sign-up, so new drivers learn where their own races open.
 - **Following** a driver: the "Following *name*" chip sits just above the phone bar.
 - **A wrong address** under your club (an old podium-video QR code, a link cut short) shows "That page isn't here" with your club's tabs and tiles for Home, Live and Results. An address with no club at it says "No club here", and the relay's own address says what it is, with a link to heatcaller.com.
 - The manager page has a **Club page** link at the top.
