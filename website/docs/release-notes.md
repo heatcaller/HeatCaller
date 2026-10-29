@@ -4,6 +4,12 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The club's pages: a bar along the bottom on phones (29 October).** Getting around the relay pages on a phone is easier. See [Getting around](online/index.md#getting-around).
+    - **Five buttons, always in reach.** On a phone, **Home**, **Live**, **Schedule**, **Results** and **Me** sit in a bar along the bottom of every page instead of a row of tabs across the top that ran off the screen. **Standings**, **Achievements** and **Tracks** are tiles on Home. On a laptop or tablet every tab is still in one row at the top.
+    - **Live dot.** A small red dot on **Live** while a car is on track.
+    - **Me.** **My night** is now **Me**, and shows whether or not online check-in is on. A driver's night, check-in and sign-up pages light it up. While online check-in is open, **Me** has **Check in for tonight**; **Check in** no longer has a tab of its own (the Home tile stays).
+    - **No more dead ends.** A wrong or old address under a club shows "That page isn't here" with the club's tabs, instead of a line of code. An address with no club says "No club here", and the relay's own address says what it is. The manager page has a **Club page** link.
+    - The relay must be redeployed (`fly deploy --ha=false`). Nothing changes on the race PC.
 - **The time left, called through a timed race (28 October).** Two new rows on **Voice → Announcements**, beside **Final minute**: **Minutes left** ("Four minutes to go") and **Last minute countdown** (45, 30 and 15 seconds). Once ticked, **Minutes left** calls the last five minutes; set how many with **Only the last** _n_ **minutes**, or untick it to hear every minute. Both are off to start with: tick them to hear them. A time call that had to wait behind another line is only said while it's still true. See [Every announcement](announcer/voice.md#every-announcement).
 - **My night, easier to find your way round (28 October).** A driver's own night page on the club's relay pages is laid out so they find what they want in a tap or two. See [Finding your way round](online/index.md#finding-your-way-round).
     - **Jump bar.** Buttons under their name go straight to **Races**, **Report card**, **Driver score**, **Progress**, **Race calls** and **Your details**, and stay at the top as they scroll. A night of two cars has a button for each car.
