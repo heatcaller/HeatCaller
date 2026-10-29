@@ -76,6 +76,33 @@ nav a { white-space: nowrap; flex: none;
 }
 nav a:hover { color: var(--text); background: var(--surface); }
 nav a[aria-current] { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
+/* THE CLUB'S TABS (29 Oct 2026, relay navigation round 1). On a laptop or
+   a tablet, one row across the top as before. On a phone, a bar fixed
+   along the bottom with the five a driver uses on the night - Home, Live,
+   Schedule, Results, Me - in thumb reach and never scrolled out of sight;
+   Standings, Achievements and Tracks are tiles on Home there. The icons
+   only show on the phone bar. */
+nav.tabs svg { display: none; }
+nav.tabs .lv { position: relative; }
+nav.tabs .dot { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--bad);
+                margin-left: 6px; vertical-align: middle; }
+nav.tabs.racing .dot { display: inline-block; }
+@media (max-width: 640px) {
+  body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; margin: 0; gap: 0;
+             overflow: visible; border-bottom: 0; border-top: 1px solid var(--border); background: var(--bg);
+             padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left)); }
+  nav.tabs a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+               min-height: 56px; padding: 8px 2px 6px; font-size: 0.72rem; border-radius: 0;
+               border-bottom: 0; border-top: 2px solid transparent; margin: -1px 0 0; }
+  nav.tabs a[aria-current] { border-top-color: var(--primary); background: none; }
+  nav.tabs a.wide { display: none; }
+  nav.tabs svg { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8;
+                 stroke-linecap: round; stroke-linejoin: round; }
+  nav.tabs .dot { position: absolute; top: 6px; left: calc(50% + 8px); margin: 0; }
+  /* "Following Sam" sits just above the bar instead of under it. */
+  body .follow { bottom: calc(68px + env(safe-area-inset-bottom)); }
+}
 .day { color: var(--accent); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
        margin: 26px 0 10px; font-weight: 600; }
 details {
@@ -742,20 +769,43 @@ function touched() {
 // return to the tab refreshes at once rather than waiting out the gap.
 // Seven tabs do not fit across a phone, so the row scrolls - which left
 // the page you were on out of sight whenever it was one of the later ones.
+// On a phone the tabs are a bar fixed to the bottom with nothing to
+// scroll, and scrolling a fixed bar into view can move the page instead.
 const current = document.querySelector('nav a[aria-current]');
-if (current) current.scrollIntoView({ block: 'nearest', inline: 'center' });
+if (current && !(current.parentElement && getComputedStyle(current.parentElement).position === 'fixed')) {
+  current.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
 
 function poll(load, everyMs) {
   load();
   setInterval(() => { if (!document.hidden) load(); }, everyMs);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 }
+
+// The red dot on the Live tab while a car is on track (29 Oct 2026, relay
+// navigation round 1), so a driver on Results or their own night can see a
+// race has started without opening Live. The same reading Home's "On track
+// now" makes, and the same two minutes before a laptop that went quiet
+// stops counting. Not on Live itself, which says so in big letters.
+(function () {
+  const tabs = document.querySelector('nav.tabs');
+  const live = tabs ? tabs.querySelector('a.lv') : null;
+  if (!tabs || !live || live.hasAttribute('aria-current')) return;
+  const RACING = ['Staging', 'Countdown', 'Racing'];
+  poll(async () => {
+    const answer = await grab('/snapshot/state').catch(() => null);
+    const frame = answer && !answer.missing && answer.body ? answer.body : null;
+    const s = frame && frame.body ? frame.body : null;
+    const fresh = frame !== null && Date.now() - Date.parse(frame.publishedAt) < 120000;
+    tabs.classList.toggle('racing', !!(s && fresh && RACING.includes(String(s.state))));
+  }, 30000);
+})();
 `;
 
 interface Shell {
   readonly club: string;
   readonly clubName: string;
-  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "mynight";
+  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "mynight" | "missing";
   readonly heading: string;
   readonly sub: string;
   readonly body: string;
@@ -823,8 +873,19 @@ function shell(page: Shell, context: PageContext): string {
       ? escapeHtml(page.path)
       : `/c/${club}${page.active === "home" ? "" : `/${page.active}`}`;
 
-  const tab = (href: string, label: string, key: string) =>
-    `<a href="/c/${club}${href === "" ? "" : "/" + href}"${page.active === key ? ' aria-current="page"' : ""}>${label}</a>`;
+  // A driver's own pages - check in, the PIN box, their night, sign-up -
+  // are all "Me" (29 Oct 2026, relay navigation round 1), so none of them
+  // looks like a page outside the club's site.
+  const lit = page.active === "checkin" || page.active === "signup" || page.active === "night" || page.active === "mynight"
+    ? "me"
+    : page.active;
+
+  // icon is an SVG path, drawn only on the phone bar; cls "wide" keeps a
+  // tab off the phone bar, where Home's tiles carry it instead.
+  const tab = (href: string, label: string, key: string, icon: string, cls = "") =>
+    `<a href="/c/${club}${href === "" ? "" : "/" + href}"${cls === "" ? "" : ` class="${cls}"`}${lit === key ? ' aria-current="page"' : ""}>`
+    + (icon === "" ? "" : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg>`)
+    + `<span>${label}</span>${key === "live" ? '<i class="dot" aria-hidden="true"></i>' : ""}</a>`;
 
   // Only hex colours reach here (site.ts refuses anything else, the logo
   // plate included), under variable names this file chose - never a name
@@ -928,16 +989,15 @@ ${overrides}
 <div class="wrap">
   <header>
     ${brand}
-    <nav>
-      ${tab("", "Home", "home")}
-      ${tab("live", "Live", "live")}
-      ${tab("schedule", "Schedule", "schedule")}
-      ${look.checkIn || page.active === "checkin" ? tab("checkin", "Check in", "checkin") : ""}
-      ${look.checkIn || page.active === "mynight" ? tab("mynight", "My night", "mynight") : ""}
-      ${tab("results", "Results", "results")}
-      ${tab("standings", "Standings", "standings")}
-      ${tab("badges", "Achievements", "badges")}
-      ${tab("tracks", "Tracks", "tracks")}
+    <nav class="tabs" aria-label="${name}">
+      ${tab("", "Home", "home", "M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10")}
+      ${tab("live", "Live", "live", "M12 12h.01M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8", "lv")}
+      ${tab("schedule", "Schedule", "schedule", "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0")}
+      ${tab("results", "Results", "results", "M5 21V4M5 4h11l-2 4 2 4H5")}
+      ${tab("standings", "Standings", "standings", "", "wide")}
+      ${tab("badges", "Achievements", "badges", "", "wide")}
+      ${tab("tracks", "Tracks", "tracks", "", "wide")}
+      ${tab("mynight", "Me", "me", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0")}
     </nav>
   </header>
   ${page.body}
@@ -7377,7 +7437,13 @@ export function myNightPage(club: string, clubName: string, context: PageContext
     active: "mynight",
     heading: "My night",
     sub: "Your own races from the timing desk - opened with your personal PIN.",
-    body: '<div id="mn"><p class="note">Loading&hellip;</p></div>',
+    // Check in is part of Me now that it has no tab of its own (29 Oct
+    // 2026, relay navigation round 1), so it is one tap from here whenever
+    // the club is taking check-ins.
+    body: '<div id="mn"><p class="note">Loading&hellip;</p></div>' +
+      (context.look.checkIn
+        ? `<p class="note"><a class="more" href="/c/${escapeHtml(club)}/checkin">Check in for tonight</a></p>`
+        : ""),
     script: MYNIGHT_JS,
     noindex: true,
   }, context);
@@ -8587,7 +8653,10 @@ ${overrides}
 <body data-club="${safeClub}">
 <div class="topbar">
   <div><span class="clubname">${name}</span><span class="clubname role">Manager</span></div>
-  <button class="linkbtn" id="btnSignOut" type="button" style="display:none">Sign out</button>
+  <div>
+    <a class="linkbtn" href="/c/${safeClub}">Club page</a>
+    <button class="linkbtn" id="btnSignOut" type="button" style="display:none">Sign out</button>
+  </div>
 </div>
 <form id="signinForm" class="wrap" method="post">
   <label for="pin">Manager PIN</label>
@@ -8679,6 +8748,70 @@ export function manifest(club: string, clubName: string, look: Look): string {
     // app picks up a new logo instead of keeping the old icon.
     icons: [{ src: `${base}/icon.png?v=${look.iconVersion}`, sizes: iconSize(look), type: "image/png", purpose: "any" }],
   });
+}
+
+/**
+ * A club's "that page isn't here" (29 Oct 2026, relay navigation round 1).
+ *
+ * WHY: an address under a club that is not one of its pages - an old
+ * podium-video QR code, a link cut short in a chat, a typo - used to get
+ * the API's own answer, a line of JSON, with no way back. Now it is a page
+ * in the club's colours with the club's tabs, so whoever landed on it can
+ * carry on. Still a 404, and noindex, so nothing is told it exists.
+ */
+export function missingPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+  const base = `/c/${escapeHtml(club)}`;
+
+  return shell({
+    club,
+    clubName,
+    active: "missing",
+    heading: "Not found",
+    sub: "That page isn't here. It may have moved, or the link was cut short.",
+    body: '<div class="tiles">' +
+      `<a class="tile" href="${base}"><b>Home</b><span>Everything at the club</span></a>` +
+      `<a class="tile" href="${base}/live"><b>Live</b><span>The race as it runs</span></a>` +
+      `<a class="tile" href="${base}/results"><b>Results</b><span>Every session</span></a>` +
+      "</div>",
+    script: "",
+    noindex: true,
+  }, context);
+}
+
+/**
+ * The relay's own address, and a club address that is no club (29 Oct
+ * 2026, relay navigation round 1): a plain notice saying what this is and
+ * where HeatCaller lives, rather than a line of JSON. Not any club's look
+ * - there is no club to take it from - and no script.
+ */
+export function relayNoticePage(heading: string, text: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0F0722">
+<title>${escapeHtml(heading)} - HeatCaller</title>
+<style>
+  html { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0F0722; color: #F7F2FF;
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 32rem; padding: 2rem 1.5rem; text-align: center; }
+  h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
+  p { margin: 0 0 1rem; opacity: .8; }
+  a { color: #2EE6FF; }
+</style>
+</head>
+<body>
+<main>
+  <h1>${escapeHtml(heading)}</h1>
+  <p>${escapeHtml(text)}</p>
+  <p><a href="https://heatcaller.com">heatcaller.com</a></p>
+</main>
+</body>
+</html>
+`;
 }
 
 /**

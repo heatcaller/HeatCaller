@@ -43,7 +43,7 @@ New drivers who aren't on your books yet can sign themselves up with an invite; 
 5. Click **Open Check-in Page** to see the page as drivers will.
 6. Print QR check-ins: go to **Race Day → Who's Racing** and click **Print QR Check-ins** (see [QR check-ins](#qr-check-ins)).
 
-The **Check in** tab appears on your club's pages while online check-in is on, and a **Check in** tile ("Tell the desk you're here") appears on the home page.
+While online check-in is on, a **Check in** tile ("Tell the desk you're here") appears on the home page, and **Check in for tonight** appears on the **Me** tab. (Until 29 October 2026 check-in had a tab of its own.)
 
 When you untick **Let drivers check in from their own phones**, the check-in page says it's closed and the list of names is taken back off the relay.
 
@@ -133,7 +133,7 @@ The event name at the top comes from the current race day, set up on **Race Day 
 
 ## Personal PINs
 
-Personal PINs let racers check themselves in without a QR check-in, and let a club skip printing QR check-ins altogether. A personal PIN also opens the racer's own night page from the club's **My night** tab (see [Opening your night with your PIN](index.md#opening-your-night-with-your-pin)). They're set in the **Personal PINs** card on the Club Website page.
+Personal PINs let racers check themselves in without a QR check-in, and let a club skip printing QR check-ins altogether. A personal PIN also opens the racer's own night page from the club's **Me** tab (see [Opening your night with your PIN](index.md#opening-your-night-with-your-pin)). They're set in the **Personal PINs** card on the Club Website page.
 
 | Setting | What it does | Default |
 |---|---|---|
