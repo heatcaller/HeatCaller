@@ -782,6 +782,38 @@ function poll(load, everyMs) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 }
 
+// ME, REMEMBERED ON THIS PHONE (29 Oct 2026, relay navigation round 2,
+// Asher's pick: "phone remembers the driver until they sign out"). The
+// code from their badge - what opens their night - kept in this phone's
+// own storage once their night has opened with it, so Me goes straight
+// there next time instead of asking for the PIN or the email again. Only
+// ever a code the relay has just answered with a night; never the PIN,
+// never the pass "Your details" earns (that stays in this tab only). Sign
+// out on this phone (on the night page) forgets it.
+const ME_KEY = 'hg-me-' + CLUB;
+
+function meCode() {
+  try {
+    const v = localStorage.getItem(ME_KEY) || '';
+    return /^[0-9a-f]{20}$/.test(v) ? v : '';
+  } catch (e) { return ''; }
+}
+
+function meRemember(code) {
+  try { if (/^[0-9a-f]{20}$/.test(String(code))) localStorage.setItem(ME_KEY, String(code)); } catch (e) { /* asked again next time */ }
+}
+
+function meForget() {
+  try { localStorage.removeItem(ME_KEY); } catch (e) { /* nothing was kept */ }
+}
+
+// The Me tab goes straight to a remembered night.
+(function () {
+  const code = meCode();
+  const me = code ? document.querySelector('nav.tabs a[href$="/mynight"]') : null;
+  if (me) me.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
+})();
+
 // The red dot on the Live tab while a car is on track (29 Oct 2026, relay
 // navigation round 1), so a driver on Results or their own night can see a
 // race has started without opening Live. The same reading Home's "On track
@@ -4450,8 +4482,11 @@ function drawOne() {
     // from here. Only drawn with a real badge in the address - a racer
     // signed in by PIN has not shown a code - and only for a club that
     // offers it.
-    (nights && BADGE
-      ? '<p class="note"><a class="more" href="/c/' + encodeURIComponent(CLUB) + '/night#d=' + encodeURIComponent(BADGE) + '">See your racing from last time</a></p>'
+    // A racer signed in by PIN has shown no code, but the relay's answer
+    // to their PIN carries it as their id (29 Oct 2026, relay navigation
+    // round 2), so they get the same link.
+    (nights && (BADGE || (racer && /^[0-9a-f]{20}$/.test(String(d.id))))
+      ? '<p class="note"><a class="more" href="/c/' + encodeURIComponent(CLUB) + '/night#d=' + encodeURIComponent(BADGE || d.id) + '">See your racing from last time</a></p>'
       : '') +
     '<p class="note">' +
     (racer
@@ -7266,9 +7301,36 @@ async function load() {
   refreshAsks();
   startLive();
   loadCheckIn();
+  meRemembered(CODE);
 }
 
 load();
+`;
+
+/**
+ * Remembering the driver on the night page (29 Oct 2026, relay navigation
+ * round 2): once the relay has answered this code with a night, this phone
+ * keeps it (meRemember, in the shared script) and the page offers to forget
+ * it. Kept apart from NIGHT_JS so the night itself does not change.
+ */
+const NIGHT_ME_JS = `
+function meRemembered(code) {
+  meRemember(code);
+  const out = document.getElementById('meout');
+  if (out && meCode() === code) out.hidden = false;
+}
+
+(function () {
+  const link = document.getElementById('meoutlink');
+  if (!link) return;
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    meForget();
+    // "Your details" is signed out with it, so a borrowed phone keeps nothing.
+    try { sessionStorage.removeItem('hg-night-pass-' + CLUB); } catch (err) { /* nothing was kept */ }
+    try { location.assign('/c/' + encodeURIComponent(CLUB) + '/mynight'); } catch (err) { location.href = '/c/' + encodeURIComponent(CLUB) + '/mynight'; }
+  });
+})();
 `;
 
 /**
@@ -7289,8 +7351,11 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // "yd" is "Your details" (22 Oct 2026, driver experience, RP2), under
     // the night and outside it, so a redraw of the night never wipes a
     // half-typed change; empty unless the club is taking requests.
-    body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>',
-    script: LAPS_JS + NIGHT_JS,
+    // "meout" is Sign out on this phone (29 Oct 2026, relay navigation
+    // round 2), shown once this phone remembers the night it is showing.
+    body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
+      '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
+    script: LAPS_JS + NIGHT_JS + NIGHT_ME_JS,
     noindex: true,
   }, context);
 }
@@ -7331,6 +7396,14 @@ export function nightPage(club: string, clubName: string, context: PageContext =
 const MYNIGHT_JS = `
 const box = document.getElementById('mn');
 const NIGHT_PASS_KEY = 'hg-night-pass-' + CLUB;
+
+// A driver this phone remembers goes straight to their night (29 Oct 2026,
+// relay navigation round 2). replace, so Back does not land here again.
+const REMEMBERED = meCode();
+if (REMEMBERED) {
+  const there = '/c/' + encodeURIComponent(CLUB) + '/night#d=' + REMEMBERED;
+  try { location.replace(there); } catch (e) { location.href = there; }
+}
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -7424,10 +7497,12 @@ function draw(message) {
   part.appendChild(button);
   part.appendChild(said);
   part.appendChild(el('p', 'when', 'No personal PIN? Open your night with the link on your check-in badge or in the club\\'s email - or ask at the timing desk.'));
+  part.appendChild(el('p', 'when', 'This phone remembers you once your night opens, until you sign out at the bottom of it.'));
   box.appendChild(part);
 }
 
-draw('');
+if (REMEMBERED) box.textContent = 'Opening your night\u2026';
+else draw('');
 `;
 
 export function myNightPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {

@@ -39,6 +39,7 @@ Since 29 October 2026:
 - **On a laptop or tablet**, the same tabs sit in one row at the top, with **Standings**, **Achievements** and **Tracks** between **Results** and **Me**.
 - **Live** shows a small red dot while a car is on track, so you can see a race has started from any page.
 - **Me** is a driver's own corner: the PIN box that opens their night, their night page itself, check-in and sign-up all light up **Me**. While online check-in is open, **Me** has a **Check in for tonight** link.
+- **Me remembers you.** Once a driver's night has opened on their phone (from their badge, their night email or their PIN), the phone remembers them, and **Me** goes straight to their night from then on, whether or not online check-in is open. **Sign out on this phone**, at the bottom of their night, forgets them and signs out **Your details** too. Only the code that opens their night is kept on the phone, never their PIN.
 - **Following** a driver: the "Following *name*" chip sits just above the phone bar.
 - **A wrong address** under your club (an old podium-video QR code, a link cut short) shows "That page isn't here" with your club's tabs and tiles for Home, Live and Results. An address with no club at it says "No club here", and the relay's own address says what it is, with a link to heatcaller.com.
 - The manager page has a **Club page** link at the top.
