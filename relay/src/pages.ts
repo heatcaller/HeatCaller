@@ -392,6 +392,12 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .caps .lines p { margin: 8px 0 0; font-size: 1.15rem; line-height: 1.4; }
 .caps .lines p:last-child { font-weight: 600; }
 .caps button[aria-pressed=true] { background: var(--primary); color: var(--on-primary, #FFFFFF); }
+/* Lap times in my ear (29 Oct 2026): the live page's spoken laps. */
+.ears { padding: 14px 18px; }
+.ears .note { padding: 8px 0 0; text-align: left; }
+.ears label { display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; font-size: 0.95rem; }
+.ears label[hidden], .ears button[hidden] { display: none; }
+.ears button[aria-pressed=true] { background: var(--primary); color: var(--on-primary, #FFFFFF); }
 
 /* Light themes: the few colours chosen for a dark page that vanish on a pale one */
 html.light .tier-gold { color: #9A6B00; }
@@ -2801,6 +2807,217 @@ const LIVE_JS = `
 const board = document.getElementById('board');
 const bar = document.getElementById('bar');
 
+// --- Lap times in my ear (29 Oct 2026, asked for by Asher) ---------------
+// The followed driver's laps read out by the phone's own voice, as the
+// coach page and Live Results do on the club Wi-Fi: "Lap 7, 9.42, best lap,
+// P2, 0.4 seconds behind", or with Time only ticked "9.42, best lap".
+//
+// NOTHING NEW ON THE WIRE. Every row of the board the laptop sends the
+// relay already carries the driver's name (the one the Driver column
+// shows), their flying laps and their best lap; this is the first page to
+// read them out. Who is followed stays on this phone (followed(), above).
+//
+// A name on two rows - "Unnamed driver", or a name the board could not
+// tell apart - is never read out: it could be anybody's lap. Laps already
+// on the board when it was turned on, or when somebody else was followed,
+// are not said; fewer laps than last time, or a different first lap, is a
+// new race, which starts the count again quietly.
+//
+// A phone only lets a page speak once it has been tapped since it loaded,
+// so after a reload the button says "tap to resume" and the first tap
+// anywhere starts the voice again. While it is on, the page reads the
+// board every second rather than every two, and asks the phone to keep
+// the screen on - the relay is https, so the Screen Wake Lock works here
+// as it cannot on the club Wi-Fi.
+const lapTalk = (function () {
+  const box = document.getElementById('laptalk');
+  const btn = document.getElementById('lapbtn');
+  const shortBox = document.getElementById('lapshort');
+  const shortRow = document.getElementById('lapshortrow');
+  const note = document.getElementById('lapnote');
+  const canSpeak = typeof window.speechSynthesis === 'object' && window.speechSynthesis !== null
+    && typeof SpeechSynthesisUtterance === 'function';
+  const ON_KEY = 'hg-laptalk-' + CLUB;
+  const SHORT_KEY = 'hg-laptalk-short-' + CLUB;
+  const AUTOLOCK = ' If your screen goes dark, set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while you race.';
+
+  let on = false, timeOnly = false, unlocked = false;
+  try {
+    on = canSpeak && localStorage.getItem(ON_KEY) === '1';
+    timeOnly = localStorage.getItem(SHORT_KEY) === '1';
+  } catch (e) { /* off, and full calls */ }
+
+  // Whose laps were last counted, how many, and the first of them.
+  let heardFor = '', heardLaps = 0, firstLap = 0;
+  // The screen wake lock, and whether the phone gave one (null: not asked).
+  let lock = null, awake = null;
+
+  function save(key, yes) {
+    try { localStorage.setItem(key, yes ? '1' : '0'); } catch (e) { /* this visit only */ }
+  }
+
+  function speak(text) {
+    if (!canSpeak) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.1;
+      window.speechSynthesis.speak(u);
+    } catch (e) { /* a phone that will not talk says nothing */ }
+  }
+
+  function hush() {
+    try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+  }
+
+  function stayAwake() {
+    if (!on || !unlocked || lock !== null || document.hidden) return;
+    const wl = navigator.wakeLock;
+    if (!wl || typeof wl.request !== 'function') { awake = false; show(); return; }
+    try {
+      wl.request('screen').then((got) => {
+        if (!on) { try { got.release(); } catch (e) { /* gone already */ } return; }
+        lock = got; awake = true;
+        if (got && typeof got.addEventListener === 'function') got.addEventListener('release', () => { lock = null; });
+        show();
+      }, () => { awake = false; show(); });
+    } catch (e) { awake = false; show(); }
+  }
+
+  function letSleep() {
+    try { if (lock !== null) lock.release(); } catch (e) { /* gone already */ }
+    lock = null; awake = null;
+  }
+
+  function show() {
+    if (!box) return;
+    box.hidden = !canSpeak;
+    if (!canSpeak) return;
+    const who = memory;
+    btn.hidden = !who;
+    shortRow.hidden = !who;
+    shortBox.checked = timeOnly;
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.textContent = 'Lap times in my ear: ' + (!on ? 'off' : unlocked ? 'on' : 'tap to resume');
+    if (!who) {
+      note.textContent = 'Tap a driver\\u2019s name on the board to follow them, then your phone can read out each of their laps.';
+    } else if (!on) {
+      note.textContent = 'Your phone reads out each of ' + who + '\\u2019s laps. Keep this page open with the screen on.';
+    } else if (!unlocked) {
+      note.textContent = 'Tap anywhere to start the voice again.';
+    } else {
+      note.textContent = 'Reading out ' + who + '\\u2019s laps, a second or two after each one.'
+        + (awake === true ? ' Your screen stays on while this is on.' : awake === false ? AUTOLOCK : '');
+    }
+  }
+
+  function gapWords(gap) {
+    const t = String(gap || '').trim();
+    const laps = /^\\+?(\\d+)\\s*L(aps?)?$/i.exec(t);
+    if (laps) return laps[1] + (laps[1] === '1' ? ' lap' : ' laps') + ' behind';
+    const secs = /^\\+(\\d+([.,]\\d+)?)s?$/.exec(t);
+    return secs ? secs[1].replace(',', '.') + ' seconds behind' : '';
+  }
+
+  // The gap to the car ahead: the club's Interval column when the board
+  // has one, or Gap to P1 for the car in second, where the two are the same.
+  function gapAhead(state, row, pos) {
+    const columns = Array.isArray(state.columns) ? state.columns.map((c) => String(c)) : [];
+    let at = columns.findIndex((c) => /^interval$/i.test(c));
+    if (at < 0 && pos === 2) at = columns.findIndex((c) => /^gap/i.test(c));
+    const cell = at >= 0 && Array.isArray(row.cells) ? row.cells[at] : null;
+    return cell && typeof cell === 'object' ? gapWords(cell.text) : '';
+  }
+
+  function take(state) {
+    show();
+    const who = memory;
+    if (!on || !unlocked || !who) { heardFor = ''; return; }
+
+    const rows = Array.isArray(state && state.standings) ? state.standings : [];
+    const mine = rows.filter((r) => r && typeof r === 'object' && r.name === who);
+    if (who === 'Unnamed driver' || mine.length !== 1) return;
+
+    const row = mine[0];
+    const laps = (Array.isArray(row.laps) ? row.laps : []).filter((v) => typeof v === 'number' && v > 0);
+    const count = laps.length;
+    const first = count > 0 ? laps[0] : 0;
+
+    // Somebody new, a new race, or a lap race control took away: counted
+    // from here, quietly.
+    if (heardFor !== who || count < heardLaps || (heardLaps > 0 && first !== firstLap)) {
+      heardFor = who; heardLaps = count; firstLap = first;
+      return;
+    }
+
+    if (count === heardLaps) return;
+    heardLaps = count; firstLap = first;
+
+    // Two laps in one read - the phone or the relay was slow - says the newest.
+    const last = laps[count - 1];
+    const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
+    const isBest = count > 1 && last <= best;
+    const words = [(last / 1000).toFixed(2)];
+    if (isBest) words.push('best lap');
+
+    if (!timeOnly) {
+      const pos = rows.indexOf(row) + 1;
+      words.unshift('Lap ' + (count + 1));
+      words.push('P' + pos);
+      const gap = pos > 1 ? gapAhead(state, row, pos) : '';
+      if (gap) words.push(gap);
+    }
+
+    speak(words.join(', '));
+  }
+
+  if (canSpeak && btn) {
+    btn.addEventListener('click', () => {
+      // On, but waiting for a tap since a reload: this tap resumes it.
+      if (on && !unlocked) {
+        unlocked = true; heardFor = '';
+        speak('Lap times on'); stayAwake(); show();
+        return;
+      }
+      unlocked = true;
+      on = !on;
+      save(ON_KEY, on);
+      heardFor = '';
+      if (on) { speak('Lap times on'); stayAwake(); } else { hush(); letSleep(); }
+      show();
+    });
+
+    shortBox.addEventListener('change', () => {
+      timeOnly = !!shortBox.checked;
+      save(SHORT_KEY, timeOnly);
+    });
+
+    // Any tap lets a page that was on before a reload speak again - and a
+    // tap on a name changes who is followed, so the button is redrawn
+    // once the follow has been taken.
+    document.addEventListener('click', (e) => {
+      if (on && !unlocked && !(e && e.target === btn)) {
+        unlocked = true; heardFor = '';
+        speak(' '); stayAwake();
+      }
+      setTimeout(show, 0);
+    }, true);
+
+    // A phone lets go of the wake lock when the page is hidden.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) { lock = null; stayAwake(); }
+    });
+  }
+
+  show();
+
+  return {
+    take: take,
+    show: show,
+    talking: () => on && unlocked,
+  };
+})();
+
 // Which columns read as words rather than numbers. The relay has no idea
 // what columns a club has chosen - they arrive as labels - so this is the
 // page making a presentation guess, and getting it wrong only means a
@@ -2824,6 +3041,7 @@ function cells(row, columns) {
 }
 
 function render(state) {
+  lapTalk.take(state);
   const flag = String(state.flag || 'None').toLowerCase();
   const running = String(state.state || 'Idle');
 
@@ -2850,7 +3068,9 @@ function render(state) {
 }
 
 async function load() {
-  const answer = await grab('/snapshot/state').catch(() => null);
+  // Given up on after five seconds: read() holds the next one back until
+  // this one answers, so one that never did would stop the board for good.
+  const answer = await grab('/snapshot/state', 5000).catch(() => null);
 
   if (answer === null) {
     board.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
@@ -2861,6 +3081,7 @@ async function load() {
     bar.className = 'flagbar';
     bar.innerHTML = '<span class="state">Not racing</span>';
     board.innerHTML = '<p class="note">No race has been published yet.</p>';
+    lapTalk.show();
     touched();
     return;
   }
@@ -2871,8 +3092,25 @@ async function load() {
 
 // Two seconds against the app's one: fast enough that the board is never
 // more than a lap behind, slow enough that a field of phones does not
-// hammer a small server.
-poll(load, 2000);
+// hammer a small server. Every second while lap times are being read out
+// (29 Oct 2026), so a lap is said about as soon as the laptop has sent it.
+// One read at a time, so an answer that comes back late cannot draw over
+// a newer one or have a lap said twice.
+let reading = false;
+let beat = 0;
+
+async function read() {
+  if (reading) return;
+  reading = true;
+  try { await load(); } finally { reading = false; }
+}
+
+read();
+setInterval(() => {
+  beat += 1;
+  if (!document.hidden && (lapTalk.talking() || beat % 2 === 0)) read();
+}, 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) read(); });
 `;
 
 /**
@@ -2895,6 +3133,22 @@ function listenControl(listening: boolean): string {
   return '<div class="card" id="listen">'
     + '<button type="button" id="listenbtn" class="btn">Listen to the announcer</button>'
     + '<p class="note" id="listennote">A few seconds behind the room. Nothing plays until you press it.</p>'
+    + "</div>";
+}
+
+/**
+ * Lap times in my ear (29 Oct 2026, asked for by Asher: the coach page's
+ * "Say my lap time" on the relay, so a driver hears their laps on any
+ * connection). Drawn for every club: it reads the public board the page
+ * already reads and talks with the phone's own voice, so it costs the club
+ * nothing and shows nothing new. The page hides it on a phone that cannot
+ * speak, and leaves only the note until somebody is followed.
+ */
+function lapTalkControl(): string {
+  return '<div class="card ears" id="laptalk">'
+    + '<button type="button" id="lapbtn" class="btn" aria-pressed="false" hidden>Lap times in my ear: off</button>'
+    + '<label id="lapshortrow" hidden><input type="checkbox" id="lapshort"> Time only</label>'
+    + '<p class="note" id="lapnote">Tap a driver&rsquo;s name on the board to follow them, then your phone can read out each of their laps.</p>'
     + "</div>";
 }
 
@@ -3058,6 +3312,7 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
       + listenControl(context.look.listening)
       + captionsControl()
+      + lapTalkControl()
       + '<div id="board"></div>',
     script: LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS,
   }, context);
