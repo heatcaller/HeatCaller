@@ -16,8 +16,10 @@ import {
   livePage,
   managePage,
   manifest,
+  missingPage,
   nightPage,
   pausedPage,
+  relayNoticePage,
   resultsPage,
   schedulePage,
   signupPage,
@@ -2201,7 +2203,33 @@ export class Relay {
           await this.cardPng(request, response, tenant, segments[3] as string);
           return;
         }
+
+        // Anything else under a club (29 Oct 2026, relay navigation round
+        // 1): a page with the club's tabs on it rather than the API's line
+        // of JSON, so an old QR code or a typo is not a dead end. Still 404.
+        if (tenant !== undefined) {
+          const context = await this.contextFor(request, tenant.club);
+          sendHtml(response, 404, missingPage(tenant.club, tenant.name, context), context.nonce);
+          return;
+        }
       }
+
+      // No such club: the same in plain words, with nothing about which
+      // clubs do exist.
+      sendHtml(response, 404, relayNoticePage(
+        "No club here",
+        "There's no club at this address. Check the link on the club's poster or in their email.",
+      ), randomBytes(16).toString("base64"));
+      return;
+    }
+
+    // The relay's own address, which somebody will type sooner or later.
+    if (method === "GET" && segments.length === 0) {
+      sendHtml(response, 200, relayNoticePage(
+        "HeatCaller",
+        "This is where HeatCaller clubs put their live timing and results. Your club's own page is at the address on its poster.",
+      ), randomBytes(16).toString("base64"));
+      return;
     }
 
     // Hear it before you buy it. The one group of routes outside /api/v1

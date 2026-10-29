@@ -468,13 +468,18 @@ describe("a driver is offered their night where they check in", () => {
     assert.doesNotMatch(draw({ drivers: [bill], nights: false }), /\/night/);
   });
 
-  it("no link for somebody who signed in by PIN rather than by badge", async () => {
-    // A racer behind their own PIN has not shown a badge code, so there is
-    // no code to build the address from - and guessing one is the whole
-    // thing that must never happen.
+  it("links somebody who signed in by PIN to their night by the code their PIN's answer carried, and nobody else", async () => {
+    // Since 29 Oct 2026 (relay navigation round 2). A racer behind their own
+    // PIN has shown no badge, but the relay answers their PIN with their own
+    // driver, whose id is their code - exactly what My night opens the night
+    // with. Never a code guessed or taken from anywhere else: no racer, or
+    // an id that is not a code, and there is no link.
     const draw = await drawingCheckin({ BADGE: "" });
 
-    assert.doesNotMatch(draw({ drivers: [bill], nights: true, racer: true }), /\/night/);
+    assert.match(draw({ drivers: [bill], nights: true, racer: true }), new RegExp(`/night#d=${bill.id}`));
+    assert.doesNotMatch(draw({ drivers: [bill], nights: true, racer: false }), /\/night/);
+    assert.doesNotMatch(draw({ drivers: [{ ...bill, id: "not-a-code" }], nights: true, racer: true }), /\/night/);
+    assert.doesNotMatch(draw({ drivers: [bill], nights: false, racer: true }), /\/night/);
   });
 
   it("still offers the full list and the check-in button", async () => {
