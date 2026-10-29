@@ -20,7 +20,7 @@ Your club's address is the relay address followed by `/c/` and your club id, for
 | Page | Address | What it shows | Refreshes |
 |---|---|---|---|
 | Home | `/c/<club>` | What's on track now (or on now, or up next), the next few sessions, the three latest results, and tiles for every other page. | Every 15 seconds |
-| Live | `/c/<club>/live` | The race as it runs: state, countdown, flag, what's next, and the leaderboard. A **Captions** button shows the announcer's words as text (see [Captions](#captions)). | Every 2 seconds |
+| Live | `/c/<club>/live` | The race as it runs: state, countdown, flag, what's next, and the leaderboard. A **Captions** button shows the announcer's words as text (see [Captions](#captions)), and **Lap times in my ear** reads out the laps of the driver you follow (see [Lap times in my ear](#lap-times-in-my-ear)). | Every 2 seconds (every second while lap times are being read out) |
 | Schedule | `/c/<club>/schedule` | Today's running order, each line marked Done, On track or Next. A class picker appears when there's more than one class. | Every 15 seconds |
 | Check in | `/c/<club>/checkin` | Online check-in, under the **Me** tab. Reached from the **Check in** tile on Home and **Check in for tonight** on **Me** while online check-in is switched on. See [Online check-in](check-in.md). | Every 10 seconds |
 | Results | `/c/<club>/results` | Finished sessions, newest first, grouped by day. Tap a session to see every finisher's grid slot, laps and time, how far behind the car in front they were, and best lap, with their best sectors under the best lap when the session had a split loop, plus **View laps** for each driver and a lap-by-lap position graph (see [Lap by lap on the results](#lap-by-lap-on-the-results)). A small chip beside a time shows time added or warnings (see [Penalties on the results](#penalties-on-the-results)). | Every 30 seconds |
@@ -70,6 +70,23 @@ The **Live** page has a **Captions** button, under "The announcer's words as tex
 Captions are switched on with **Captions on the club's live page** on the Club Website page, and are off until you tick it (see [What gets published](setup.md#what-gets-published)). A line that mentions a driver who asked to be shown by initials only, by any of their names, is left out of the captions, as it is for people listening along from home. Race control's warning and black-flag calls are left out of both too, because they say the reason; the room still hears and sees them.
 
 The Big Screen and the Wi-Fi pages have captions of their own, in the room; see [Captions on the Big Screen](../screens/big-screen.md#captions) and [Captions on the overlay and broadcast pages](../screens/phone-and-web.md#captions).
+
+### Lap times in my ear
+
+The **Live** page can read out the laps of the driver you follow, in your phone's own voice, the way the coach page and the live results do on the club's Wi-Fi. It works on any connection, at the track or away from it.
+
+- Tap a driver's name on the board to follow them (see [Following a driver](#following-a-driver)). A **Lap times in my ear: off** button appears under the captions.
+- Tap it and it changes to "on". The phone says "Lap times on", then after each new lap of that driver: "Lap 7, 9.42, best lap, P2, 0.4 seconds behind". The gap is to the car ahead, read from the board's **Interval** column (or **Gap to P1** for the car in second), so it's only said when the club shows one of them.
+- Tick **Time only** for just the time, and "best lap" on a new best: "9.42, best lap".
+- A lap is said a second or two after the car crosses the line. While it's on, the page reads the board every second.
+- It stays quiet for laps already run when you turn it on or follow someone new, and starts again from the next one. A new race starts the count again.
+- Put earbuds in and you can hear your own laps from the driver's stand.
+
+Keep the page open with the screen on: a phone stops a page talking when its screen locks or the browser goes to the background. While it's on, the page asks the phone to keep the screen on. If your phone won't, the page says so: set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while you race.
+
+If the page reloads, the button reads "Lap times in my ear: tap to resume" until you tap anywhere on the page, since phones only let a page speak after a tap. The phone remembers both settings. A driver whose name is on the board twice, or an **Unnamed driver**, is never read out, since it could be anyone's lap.
+
+It uses your phone's own voice, so it costs the club nothing, and it reads only the laps the live board already has: nothing new is published.
 
 ### Lap by lap on the results
 

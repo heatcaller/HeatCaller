@@ -4,6 +4,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Lap times in my ear on the club's relay pages (29 October).** Follow a driver on the relay's **Live** page and tap **Lap times in my ear**: the phone reads out each of their laps in its own voice, a second or two after the line, on any connection: "Lap 7, 9.42, best lap, P2, 0.4 seconds behind". Tick **Time only** for just "9.42, best lap". The page keeps the screen on while it's talking. It reads only what the live board already shows, so nothing new is published, and it uses the phone's own voice, so there's no cost. See [Lap times in my ear](online/index.md#lap-times-in-my-ear).
+    - Redeploy the relay (`fly deploy --ha=false`). Nothing changes on the race PC.
 - **The club's pages: a bar along the bottom on phones (29 October).** Getting around the relay pages on a phone is easier. See [Getting around](online/index.md#getting-around).
     - **Five buttons, always in reach.** On a phone, **Home**, **Live**, **Schedule**, **Results** and **Me** sit in a bar along the bottom of every page instead of a row of tabs across the top that ran off the screen. **Standings**, **Achievements** and **Tracks** are tiles on Home. On a laptop or tablet every tab is still in one row at the top.
     - **Live dot.** A small red dot on **Live** while a car is on track.
