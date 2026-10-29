@@ -99,6 +99,10 @@ To check in on race day:
 
 Or just scan your QR check-in with your phone's camera.
 
+On race day you can also see your own races: open Me on the club's pages and enter the same PIN.
+  <your club's Me page address>
+Your phone remembers you after that.
+
 This PIN works until <weekday day month>. You'll be sent a new one after that.
 
 Don't share it - it checks in only you.
@@ -107,6 +111,7 @@ Don't share it - it checks in only you.
 ```
 
 - *club* is the **From name**, or your club id made readable if that's blank.
+- The Me lines give your club's **Me** page, the check-in page's address ending in `/mynight` (see [Getting around](index.md#getting-around)).
 - The "This PIN works until..." line is left out when **Change them:** is **Never**. The date is the last day before the next scheduled change.
 - If a profile has no driver name, the greeting is just "Hi,".
 

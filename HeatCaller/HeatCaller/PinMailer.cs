@@ -802,7 +802,7 @@ internal static class PinMailer
     }
 
     /// <summary>The email itself. Plain text: it has to read the same in every mail app, including the ones that block pictures and styling.</summary>
-    private static string Body(string firstName, string club, string pin, string page, DateTime? validUntil)
+    internal static string Body(string firstName, string club, string pin, string page, DateTime? validUntil)
     {
         var nl = Environment.NewLine;
         var text = new StringBuilder();
@@ -814,6 +814,18 @@ internal static class PinMailer
         text.Append("  2. Enter your PIN").Append(nl);
         text.Append("  3. Tap Check In").Append(nl).Append(nl);
         text.Append("Or just scan your QR check-in with your phone's camera.").Append(nl).Append(nl);
+
+        // Me (29 Oct 2026, relay navigation round 4): the same PIN opens the
+        // driver's own races on the club's pages while online check-in is
+        // open, and the phone remembers them after that. Its address is the
+        // check-in page's own, with mynight in place of checkin.
+        if (page.EndsWith("/checkin", StringComparison.Ordinal))
+        {
+            text.Append("On race day you can also see your own races: open Me on the club's pages and enter the same PIN.").Append(nl);
+            var me = page[..^"checkin".Length] + "mynight";
+            text.Append($"  {me}").Append(nl);
+            text.Append("Your phone remembers you after that.").Append(nl).Append(nl);
+        }
 
         if (validUntil is { } until)
         {

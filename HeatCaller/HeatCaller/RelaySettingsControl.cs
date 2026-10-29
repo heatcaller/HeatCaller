@@ -2561,7 +2561,7 @@ public sealed class RelaySettingsControl : UserControl
         var poster = new JoinPosterForm(
             url,
             "FOLLOW THE RACING",
-            "Scan with your phone camera. Live timing, schedule and results - from anywhere, on any network.");
+            "Scan with your phone camera. Live timing, schedule and results - and your own races under Me.");
 
         poster.Show(this);
     }
