@@ -7,9 +7,9 @@ There are two places the writing can happen, and HeatCaller uses whichever it ca
 | Where | What it needs | What it's like |
 |---|---|---|
 | **The relay** (preferred) | The [Club Website page](../online/setup.md) set up, and commentary switched on for your club | Writes through a model far larger than a race laptop could run. Nothing to install. Needs internet during the race. |
-| **Ollama on the race laptop** | [Ollama](https://ollama.com) installed, with a model pulled | Works with the internet down. The models small enough to run beside a race write plainly. |
+| **The model built into HeatCaller** | Nothing. A small model ships inside the installer and runs on the race laptop itself. | Works with the internet down. A model small enough to run beside a race writes plainly. |
 
-It tries the relay first and falls back to Ollama **for each line**, not once when you save the page. So a club with both gets the better words when the relay can be reached and the local ones when it can't, and a club with only one of them simply gets that one.
+It tries the relay first and falls back to the built-in model **for each line**, not once when you save the page. So a club with both gets the better words when the relay can be reached and the local ones when it can't, and a club with only one of them simply gets that one.
 
 Settings are on **Voice → AI Commentary**.
 
@@ -39,7 +39,7 @@ Nothing to install. If the Club Website page is set up and your club is included
 
 Whether your club is included is the relay's decision, not the laptop's - the account is HeatCaller's. When commentary is on and nothing is being said, the console says which it is: that the relay will write for this club, that it won't yet, or that it couldn't be reached. Lines are counted against a monthly allowance, generous enough that no club night comes near it, and the console shows where it stands after every line. The **Who writes it** card shows it too; see [The month's allowance](#the-months-allowance).
 
-**Write through the club relay when it can**, on the **Who writes it** card, turns this off, for a club that would rather nothing left the building. Ollama then does all of it.
+**Write through the club relay when it can**, on the **Who writes it** card, turns this off, for a club that would rather nothing left the building. The model built into HeatCaller then does all of it.
 
 ## The month's allowance
 
@@ -180,26 +180,17 @@ The race-day manager's page on the relay shows the month too, on its **Today** t
 
 Each allowance has **Ask for More** and an **Email support@heatcaller.com** link. **Ask for More** asks first, then notes the request on the relay and says "Asked - noted on the relay. Email support too if it is urgent." The relay sends no email itself, so use the link beside it when it can't wait. Once a request is open the button is replaced by "Already asked this month."
 
-## Using Ollama instead
+## The model built into HeatCaller
 
-Ollama is the fallback, and the only brain that writes with the internet down. You need:
+The model on this PC is the fallback, and the only one that writes with the internet down. It comes inside the installer, so there's nothing to download, install or set up, and it's ready the first time you tick **Enable AI commentary**.
 
-- A Windows laptop with enough memory to run a small model alongside HeatCaller. <!-- TODO: confirm recommended RAM / hardware for llama3.2:3b alongside HeatCaller -->
-- Ollama installed and running on the same laptop.
-- A model downloaded into Ollama.
+- **What it is.** A small language model, about 440 MB, installed beside `HeatCaller.exe` as `commentary.gguf`. It runs inside HeatCaller itself, not as a separate program.
+- **Why it's small.** It has to write a line in the gap between races while the same laptop is reading the decoder, speaking and driving the Big Screen. It only rephrases facts HeatCaller has already worked out, so a small model is enough, and it leaves the race PC room to run the race.
+- **What it needs.** At least 2 GB of memory. On a PC with less, HeatCaller doesn't try it, and the console says "[llm] The built-in model is not being used: this PC has 1.5 GB of memory, too little to run it beside a race." The relay still writes there when it can.
+- **One line at a time.** It writes one line, then the next, so it never takes the processor away from the race. A line still waiting when its moment has passed is dropped, and the normal announcement is used.
+- **It checks itself.** When commentary is switched on, HeatCaller writes one test line in the background and times it. If this PC takes longer than **Give up after:** to write it, the built-in model is switched off for the session and the console says so, rather than making every segment wait and then say nothing. Give it longer on the **Who writes it** card if you'd rather it kept trying.
 
-## Install Ollama and a model
-
-1. Download and install Ollama from [ollama.com](https://ollama.com).
-2. Open a Command Prompt and download a small model:
-
-    ```
-    ollama pull llama3.2:3b
-    ```
-
-    `llama3.2:3b` is HeatCaller's default. The page's advice: a small model is the right choice here. It only has to rephrase facts, and a big one is too slow to be useful.
-
-3. Make sure Ollama is running. <!-- TODO: confirm how Ollama runs on Windows after install (tray app / background service) so we can tell users what to look for -->
+The portable copy of HeatCaller has no model beside it. It also looks in `%LOCALAPPDATA%\HeatCaller\LocalModel` for a `commentary.gguf`, so a model copied there works the same way.
 
 ## Turn commentary on
 
@@ -218,7 +209,7 @@ Changes save as you make them and take effect straight away.
 
 ### Warm-up
 
-Ollama loads a model into memory on its first request, which can take a while on a cold start. HeatCaller sends a background warm-up request so a real race isn't the first thing to pay that cost. It does this when you tick **Enable local LLM commentary**, when you click out of **Endpoint:** or **Model:**, and when HeatCaller starts with commentary already on. HeatCaller also asks Ollama to keep the model loaded for 30 minutes after each request, so it stays ready between races during an event.
+The model takes a few seconds to load into memory the first time it's used. HeatCaller loads it in the background, and writes and times its test line then, so a real race isn't the first thing to pay that cost. It does this when you tick **Enable AI commentary**, when you change **Who writes it**, and when HeatCaller starts with commentary already on. Once loaded, the model stays in memory until HeatCaller closes, so it's ready between races all evening. The console says "[llm] Ready - wrote a test line in 1.8s." when it is.
 
 ## Settings
 
@@ -485,7 +476,7 @@ A voice is kept for each engine, so if you switch engine on **Voice Settings**, 
 
 ### Recap show
 
-The recap, and what dresses it up as a TV broadcast. The model writes each part from the race's facts, like the recap itself, so they need Ollama too - except the honours, which are built from the badges and need no model at all.
+The recap, and what dresses it up as a TV broadcast. The model writes each part from the race's facts, like the recap itself, so they need commentary to be able to write - the relay or the built-in model - except the honours, which are built from the badges and need no model at all.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -719,7 +710,8 @@ The clips are the half worth having. A driver who posts the forty seconds where 
 | **A clip for each driver as well as the race's own recording** | The per-driver clips. Off leaves just the race's own mp3. | On |
 | **Highlight videos:** | Who gets an upright video with captions, for their phone: **Off**, **The winner**, **The podium** or **Every driver**. Made from the driver's clip, so it needs the tick box above. See [Highlight videos](sounds-and-music.md#highlight-videos). | Every driver |
 | **Club handle:** | Your club's social handle, shown at the end of each video. | Blank |
-| **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** | Up to 1st, 2nd and 3rd are put online - only the ones videos are made for, never anyone else, and only while the club's page is switched on (**Club Website**). They're kept there for a week. | On |
+| **Put the music and crowd under the highlight videos** | The music and crowd the room heard go under the call in every video. Untick it if your music isn't licensed for posting online. | On |
+| **Put each driver's clip on their own night on the club's page** | Each driver's mp3 clip goes on their own private night page, which only their badge code opens. Videos never go online: they stay on this PC, in the night's **Highlights** folder, and **Share video** in a driver's drawer on **Race Control** finds them. | Off |
 | **Keep the last:** | How many race nights are kept. After a race, the oldest night's folder beyond this is removed. | 6 nights |
 | **Folder:** | Where it all goes. **Open folder** works whatever the switches say. | `Documents\HeatCaller Race Audio` |
 
@@ -796,7 +788,7 @@ Nothing is written until it has the broadcast floor, because writing takes the b
 #### Two things worth knowing
 
 - **Recordings are not kept with the club's data, on purpose.** Backups zip the data folder whole, and an evening of race audio is a few hundred megabytes — so they go to Documents, where a backup can never sweep them up. Copy a night's folder somewhere else to keep it past the count.
-- **Recording doesn't need the announcer.** A club that runs no commentary at all still has music, effects, flag calls and lap times going out of the PC, and a recording of that is a recording of their night. The card is on **Sounds** because that's the page for everything you hear except the voice.
+- **Recording doesn't need the announcer.** A club that runs no commentary at all still has music, effects, flag calls and lap times going out of the PC, and a recording of that is a recording of their night. The card is on **Club Website → Recording**, beside the other things that leave the room.
 
 A recording stops itself after **40 minutes**, and won't start — or carry on — with less than **750 MB** free on the disk. The race itself needs that disk for the crash journal and the race history; a recording is the one thing here that's nice to have, so it's the first thing out of the way.
 
@@ -1292,7 +1284,7 @@ Some of these have been asked for. Each is left out on purpose, and knowing whic
 
 A broadcast tells a room where it is in the evening, and so does this: "That was the B-Main for Box Stock." then the recap, then "Still to come, the A-Main for Box Stock." Neither half is news, and that isn't the point — it's what turns a run of announcements into something a room can follow.
 
-These lines are **written by HeatCaller, not by the model**. They're built from the race program and from what's been filed, so they keep working when Ollama isn't running, when the relay can't be reached and when the month's allowance has gone — which is exactly the evening a club most wants their night to still sound like a program. There's nothing to switch on and nothing to set: commentary itself has to be on, but none of this waits on a model or costs anything.
+These lines are **written by HeatCaller, not by the model**. They're built from the race program and from what's been filed, so they keep working when the model on this PC can't run, when the relay can't be reached and when the month's allowance has gone — which is exactly the evening a club most wants their night to still sound like a program. There's nothing to switch on and nothing to set: commentary itself has to be on, but none of this waits on a model or costs anything.
 
 | Line | When it's said |
 |---|---|
@@ -1315,9 +1307,9 @@ When there's nothing else worth saying between two races — nothing came back f
 - Never over a race, and never while one is being called to the grid.
 - With the show music on, it's dressed like any other show - the opener, the bed and the mark between the two lines - **as long as at least one segment is ticked** under **Which segments get it**. Untick them all and the hand-over is read plainly, without music, still with its pause between the two lines.
 
-## When Ollama isn't there
+## When nothing can write
 
-Commentary is best-effort. If Ollama isn't running, the model name is wrong, or the model doesn't answer in time, HeatCaller just carries on:
+Commentary is best-effort. If the relay can't be reached and the model on this PC can't run here, is switched off, or doesn't answer in time, HeatCaller just carries on:
 
 - The normal announcement lines from **Voice → Announcements** play as usual. Commentary never replaces them.
 - No race intro is spoken.
@@ -1325,7 +1317,7 @@ Commentary is best-effort. If Ollama isn't running, the model name is wrong, or 
 - No suggested line appears on the Announcer screen; the other talking points still do.
 - The continuity lines are unaffected. HeatCaller writes those itself, so "That was the B-Main. Still to come, the A-Main." still hands one race over to the next.
 
-The console notes what happened, for example "No recap - the local model isn't reachable." or a line starting `[llm]` saying whether the request timed out or was refused. Nothing interrupts the race.
+The console notes what happened, for example "[commentary] No recap - no commentary writer is available (the AI announcer is switched off, or neither the relay nor a local model is set up)." or a line starting `[llm]` saying whether the request timed out. Nothing interrupts the race.
 
 ## The Broadcast window
 
@@ -1396,16 +1388,16 @@ If a claim is ever still held after six minutes it is let go and the console say
 
 ## Using the recap on the Announcer screen
 
-The last race summary is shown under **LAST RACE SUMMARY** on the Announcer screen (**Announcer Screen** on **Race Control**). Press **Repeat Race Summary** to say it again with the same delivery. It repeats the stored text rather than asking the model again, so it works even if Ollama has since stopped. When commentary is off, that area says "Commentary is off. Enable it on the Commentary page." See [Announcer screen](voice.md#announcer-screen).
+The last race summary is shown under **LAST RACE SUMMARY** on the Announcer screen (**Announcer Screen** on **Race Control**). Press **Repeat Race Summary** to say it again with the same delivery. It repeats the stored text rather than asking the model again, so it works even if nothing can write commentary any more. When commentary is off, that area says "Commentary is off. Enable it on the Commentary page." See [Announcer screen](voice.md#announcer-screen).
 
 ## Privacy
 
-Where the writing happens decides this. With **Write through the club relay when it can** ticked - how it comes - the facts below go to your club's relay and on to the model it writes with. Untick it and the model runs entirely on your laptop: nothing is sent over the internet and nothing ships with HeatCaller; it talks to a local Ollama install.
+Where the writing happens decides this. With **Write through the club relay when it can** ticked - how it comes - the facts below go to your club's relay and on to the model it writes with. Untick it and the model built into HeatCaller writes everything, entirely on your laptop: nothing is sent over the internet.
 
 The continuity lines are not part of this: they're built on the laptop from the program and the results, and never go to the model at all. What the model is given: driver names, teams and sponsors from profiles, results and lap times, rivalries, round and class names, the drivers' records at this club, the layout's lap record and its holder, how many cars are out, how a driver's pace has moved tonight, the car they raced, tonight's class and driver counts and the venue typed on the race day, the night's totals, the night's storyline, championship positions and the one conditional worked out from them, the show name, and, for the Technical Lead, the setup changes logged for the winning car in the **Garage**. Names and other typed text are cleaned before they go to the model (one line, no brackets, kept short), so something typed into a profile can't turn into instructions to the model.
 
 !!! note
-    If you change **Endpoint:** to point at Ollama on another computer, those facts are sent to that computer. With ElevenLabs chosen on **Voice Settings**, the spoken intros and recaps also go to ElevenLabs to be turned into speech, like every other announcement. With the HeatCaller voice chosen, they go to your club's relay, and on to ElevenLabs from there. With the Kokoro voice chosen, they're spoken on the laptop and go nowhere.
+    With ElevenLabs chosen on **Voice Settings**, the spoken intros and recaps also go to ElevenLabs to be turned into speech, like every other announcement. With the HeatCaller voice chosen, they go to your club's relay, and on to ElevenLabs from there. With the Kokoro voice chosen, they're spoken on the laptop and go nowhere.
 
 See [Security and privacy](../admin/security-and-privacy.md).
 
@@ -1415,9 +1407,10 @@ See [Security and privacy](../admin/security-and-privacy.md).
 |---|---|---|
 | "Enable commentary first." | **Test Connection** was pressed with commentary off. | Tick **Enable AI commentary**. |
 | The commentary has gone plainer, and the form guide, cold open and the like have stopped | This month's relay lines are used up, and the model on this PC is writing. | Normal. Check **This month:** on the **Who writes it** card, and press **Ask for More** if the month has a while to run. See [The month's allowance](#the-months-allowance). |
-| Test says the model isn't found | The model hasn't been pulled, or the name is typed differently. | Run `ollama pull` with the exact name in **Model:**. |
-| "No response - check Ollama is running and the model name is right." | Ollama isn't running, or **Endpoint:** is wrong. | Start Ollama; check the address. |
-| Recap never arrives after a race | Model too slow, or not reachable. | Press **Test Connection**. If replies take more than 8 seconds, use a smaller model. |
+| "[llm] The built-in model is not being used: no model file is installed" | `commentary.gguf` is missing from beside `HeatCaller.exe`, or this is the portable copy. | Reinstall HeatCaller with the installer, which puts the model back. |
+| "[llm] The built-in model is not being used: this PC has ... GB of memory" | The PC has less than 2 GB of memory. | Use the relay: set up the [Club Website page](../online/setup.md). |
+| "[llm] This PC took ...s to write one line" | This PC is too slow for the built-in model at the current **Give up after:**, so it's switched off for the session. | Raise **Give up after:** on the **Who writes it** card, or rely on the relay. |
+| Recap never arrives after a race | The relay can't be reached, and the model on this PC is too slow or can't run here. | Press **Test Connection** and read the console lines starting `[brain]` and `[llm]`. |
 | No intro before a round | No round selected, or intros off, or **Only for a main, or a race with a known rivalry on the grid** is ticked. | Select the round on **Race Control** before pressing **Stage**, and tick **Race intros**. The console says when an intro was skipped for a heat. |
 | Recap sounds tamer than other calls | **Recap voice delivery** is on with gentler values. | Untick it to use your Voice Settings values. |
 | No interview after a main | The round isn't set up as a main, the model didn't answer in time, or its answer couldn't be split into two voices. | Check the console lines starting `[commentary]` after the race. The interview only follows a race run as a main from the race program. |

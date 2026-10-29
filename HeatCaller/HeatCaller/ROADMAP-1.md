@@ -457,7 +457,7 @@ rivalries, analytics, ghost cars, demo mode.
 **Announcer and sound:** ElevenLabs with the club's own key, the
 HeatCaller voice (ElevenLabs through the relay), and the Windows voice as a
 stand-in; lines prepared before the night; commentary written by a local
-model (Ollama); five sound packs, ambience, music, soundscapes, a mixer and
+model (built into HeatCaller since 14 Oct 2026); five sound packs, ambience, music, soundscapes, a mixer and
 lap beeps.
 
 **Online:** the relay publishes live timing, the schedule, results with

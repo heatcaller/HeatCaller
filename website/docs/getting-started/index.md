@@ -60,7 +60,7 @@ No decoder yet? **Demo Mode** runs a fake race through the same race logic, anno
 |---|---|
 | A natural announcer voice | Your club set up on the **Club Website** page, and internet at the track. The HeatCaller voice comes with HeatCaller: no ElevenLabs account, no key, no bill, and a monthly allowance of characters. The wording it speaks is the standard set of lines. See [The HeatCaller voice](../announcer/voice.md#the-heatcaller-voice). |
 | A natural announcer voice, with your own words and your own voices | An [ElevenLabs](https://elevenlabs.io) account and API key. Without one, the HeatCaller voice or the free Kokoro voice does the announcing. |
-| AI commentary between the calls | Nothing, when your club's [Club Website page](../online/setup.md) is set up: the relay writes it. For commentary with the internet down, [Ollama](https://ollama.com) installed on the race PC with a model pulled - HeatCaller falls back to it line by line. |
+| AI commentary between the calls | Nothing, when your club's [Club Website page](../online/setup.md) is set up: the relay writes it. With the internet down, the small model built into HeatCaller writes it on the race PC instead, line by line. Nothing to install either way. See [Commentary](../announcer/commentary.md). |
 | A leaderboard on a TV | A second screen or TV connected to the laptop. |
 | Phones showing live results, or a phone remote | A Wi-Fi network that the laptop and the phones share. You may need to allow HeatCaller through Windows once (see [Local Screens](../screens/phone-and-web.md)). |
 | Results and check-in online | Somewhere to host the relay. The documented route is [Fly.io](https://fly.io). See [Hosting the relay](../admin/relay-hosting.md). |

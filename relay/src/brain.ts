@@ -336,8 +336,8 @@ export class BrainService {
         refusal: "off",
         status: 503,
         message:
-          "The HeatCaller commentary brain isn't switched on. Use Ollama on the race laptop for now, " +
-          "or turn commentary off - the announcer's normal lines are unaffected.",
+          "The HeatCaller commentary brain isn't switched on, so the model built into HeatCaller writes on the race laptop instead. " +
+          "The announcer's normal lines are unaffected.",
       };
     }
 
