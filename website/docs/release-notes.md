@@ -4,6 +4,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The race board first on Live (29 October).** On the club's **Live** page the leaderboard now sits straight under the race's flag bar, at the top, so a phone shows it without scrolling. **Listen to the announcer**, **Captions** and **Lap times in my ear** follow it. Redeploy the relay (`fly deploy --ha=false`); nothing changes on the race PC.
 - **Lap times in my ear, in the HeatCaller lap voice (29 October).** On the relay's **Live** page and a driver's own night, laps are now read out in one ElevenLabs voice, **Daniel**, for every club, whatever announcer a club picked in its Cast tab: "Lap seven, nine forty-two, best lap, P two, four tenths back". The phone plays short clips recorded once, so a race night costs nothing however many drivers listen, and nothing about any driver goes to ElevenLabs. See [The HeatCaller lap voice](online/index.md#the-heatcaller-lap-voice).
     - Lap times from 3.00 to 19.99 seconds, laps 1 to 200, places 1 to 30, gaps up to 30 seconds or 9 laps, and up to 2 seconds under or off a target lap. Anything else, or a clip that's slow to arrive, and the phone's own voice says the whole line, as before.
     - **Phone voice** on both pages switches back to the phone's own voice.

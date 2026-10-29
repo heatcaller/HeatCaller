@@ -3651,11 +3651,15 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     active: "live",
     heading: "Live",
     sub: "The race as it runs. Updates every couple of seconds.",
+    // The race board first, under its flag bar (29 Oct 2026, asked for by
+    // Asher: "the race board should be first"): it is what the page is
+    // for, so on a phone it is what shows without scrolling. Listen,
+    // Captions and Lap times in my ear follow it.
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
+      + '<div id="board"></div>'
       + listenControl(context.look.listening)
       + captionsControl()
-      + lapTalkControl()
-      + '<div id="board"></div>',
+      + lapTalkControl(),
     script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS,
   }, context);
 }
