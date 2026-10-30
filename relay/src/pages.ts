@@ -8396,7 +8396,7 @@ function trouble(a) {
 function draw(message) {
   box.textContent = '';
   const part = el('div', 'su');
-  part.appendChild(el('p', 'when', 'Type the personal check-in PIN the club emailed you, and your own night opens: your races, your report card and, once you are racing, your live card.'));
+  part.appendChild(el('p', 'when', 'Type the personal check-in PIN the club emailed you. It checks you in for tonight and opens your own night: your races, your report card and, once you are racing, your live card.'));
 
   const label = el('label', 'f', 'Your personal PIN');
   const input = document.createElement('input');
@@ -8411,7 +8411,7 @@ function draw(message) {
   const said = el('p', 'note bad', message || '');
   said.setAttribute('role', 'status');
 
-  const button = el('button', 'go', 'Open my night');
+  const button = el('button', 'go', 'Check in');
   button.type = 'button';
   button.addEventListener('click', async () => {
     const p = String(input.value || '').trim();
@@ -8433,8 +8433,25 @@ function draw(message) {
     const code = b.mode === 'racer' && b.driver && typeof b.driver.id === 'string' && /^[0-9a-f]{20}$/.test(b.driver.id) ? b.driver.id : '';
 
     if (a !== null && a.status === 200 && code !== '') {
-      if (typeof b.pass === 'string' && b.pass !== '') keepPass(b.pass);
-      said.textContent = 'Opening your night\u2026';
+      const pass = typeof b.pass === 'string' ? b.pass : '';
+      if (pass !== '') keepPass(pass);
+
+      // A RIGHT PIN CHECKS THEM IN (30 Oct 2026, asked for by Asher: "On
+      // the relays me tab; entering in a correct pin should check you in.
+      // No need to link to the separate checking page"). PIN sign-in only
+      // answers while online check-in is open, so the same tap the check-in
+      // page makes goes with the pass the PIN just earned. A driver already
+      // checked in is left as they are. A tap that does not go through
+      // still opens their night, whose own Check in button can try again.
+      said.textContent = 'Checking you in\u2026';
+      let inNow = b.driver.checkedIn === true;
+      if (!inNow) {
+        let t = null;
+        try { t = await post('tap', { id: code, pass: pass, wanted: true }); } catch (e) { t = null; }
+        inNow = t !== null && t.status === 200 && t.body.checkedIn === true;
+      }
+
+      said.textContent = inNow ? 'You are checked in. Opening your night\u2026' : 'Opening your night\u2026';
       go('/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
       return;
     }
@@ -8459,14 +8476,10 @@ export function myNightPage(club: string, clubName: string, context: PageContext
     clubName,
     active: "mynight",
     heading: "My night",
-    sub: "Your own races from the timing desk - opened with your personal PIN.",
-    // Check in is part of Me now that it has no tab of its own (29 Oct
-    // 2026, relay navigation round 1), so it is one tap from here whenever
-    // the club is taking check-ins.
-    body: '<div id="mn"><p class="note">Loading&hellip;</p></div>' +
-      (context.look.checkIn
-        ? `<p class="note"><a class="more" href="/c/${escapeHtml(club)}/checkin">Check in for tonight</a></p>`
-        : ""),
+    sub: "Check in and see your own races from the timing desk - with your personal PIN.",
+    // No link to the check-in page (30 Oct 2026, asked for by Asher): a
+    // right PIN here checks the driver in itself.
+    body: '<div id="mn"><p class="note">Loading&hellip;</p></div>',
     script: MYNIGHT_JS,
     noindex: true,
   }, context);
