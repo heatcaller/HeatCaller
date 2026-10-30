@@ -4,12 +4,12 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
-- **A PIN on Me checks you in (30 October).** On the club's **Me** tab, a driver who types their right personal PIN and taps **Check in** is checked in for tonight and their night opens, in one go. **Me** no longer links to the separate check-in page. A driver who's already checked in is left as they are. See [Opening your night with your PIN](online/index.md#opening-your-night-with-your-pin). Redeploy the relay (`fly deploy --ha=false`); nothing changes on the race PC.
 - **The help brought up to date on commentary and videos (29 October).** See [Commentary](announcer/commentary.md).
     - **The built-in model, not the old separate program.** The [Commentary](announcer/commentary.md) page now explains the model built into HeatCaller: what it is, that it needs nothing installed, that it skips a PC with under 2 GB of memory, and how it times itself and switches off on a PC too slow for it. Its troubleshooting covers the built-in model's own console lines. **What HeatCaller does**, the **FAQ** and the **Glossary** say the same.
     - **Console messages.** When the relay can't write commentary, the console and the **Test Connection** result now say the model built into HeatCaller writes instead instead.
     - **Podium videos.** The **Recording** card on the Commentary page, the **Glossary** and the privacy notice draft no longer say the podium's videos go on the club's page. Every highlight video stays on the race PC.
     - Redeploy the relay (`fly deploy --ha=false`) to pick up its new wording when commentary is switched off there. Nothing else changes on the relay.
+- **A PIN on Me checks you in (30 October).** On the club's **Me** tab, a driver who types their right personal PIN and taps **Check in** is checked in for tonight and their night opens, in one go. **Me** no longer links to the separate check-in page. A driver who's already checked in is left as they are. See [Opening your night with your PIN](online/index.md#opening-your-night-with-your-pin). Redeploy the relay (`fly deploy --ha=false`); nothing changes on the race PC.
 - **My night on race night (29 October).** The rest of the night page's **Right now** card is laid out as planned. See [Right now](online/index.md#right-now).
     - **Race-day jobs in one row.** **Check in**, **Your transponder**, **Lap times in my ear** and **Your battery pack** sit side by side on a wide screen and one under the other on a phone. On race night the battery pack is here instead of in **Your details**, and a pack they've picked stays picked when the card refreshes.
     - **Marshal duty on one line**: "Your marshal duty: Q2 Heat 2 - Turn 3 · 1 race before it."
