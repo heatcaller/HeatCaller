@@ -95,8 +95,16 @@ nav.tabs .lv { position: relative; }
 nav.tabs .dot { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--bad);
                 margin-left: 6px; vertical-align: middle; }
 nav.tabs.racing .dot { display: inline-block; }
-nav.subtabs { margin: -6px 0 18px; }
-nav.subtabs a { padding: 7px 12px; font-size: 0.85rem; }
+/* RESULTS' OWN TABS AS BUTTONS (30 Oct 2026, round 6, Asher: "give them
+   more space and make them look more like a button"). Full-width, thumb
+   sized, the page's own one filled in. Me's race tabs and jump bar share
+   the shape (.rtab, .jump .jb), so a tab looks the same wherever it is. */
+nav.subtabs { display: flex; gap: 8px; margin: 14px 0 22px; border-bottom: 0; overflow: visible; flex-wrap: wrap; }
+nav.subtabs a { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 46px;
+                margin: 0; padding: 10px 14px; font-size: 0.95rem; font-weight: 600; color: var(--text);
+                background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+nav.subtabs a:hover { border-color: var(--primary); background: var(--surface); }
+nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var(--primary); border-color: var(--primary); }
 @media (max-width: 640px) {
   body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
   nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; margin: 0; gap: 0;
@@ -368,8 +376,8 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .jump { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; max-width: 42rem; margin: 0 auto;
         scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
-.jump .jb { flex: none; font: inherit; font-size: 0.85rem; color: var(--text); background: var(--surface);
-            border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; min-height: 44px; cursor: pointer; }
+.jump .jb { flex: none; font: inherit; font-size: 0.95rem; font-weight: 600; color: var(--text); background: var(--surface);
+            border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; min-height: 46px; cursor: pointer; }
 .glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 8px; max-width: 42rem;
           margin: 14px auto 0; text-align: left; }
 .gl { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
@@ -395,10 +403,10 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .rval.top { color: var(--good); }
 .rrow.open { border-color: var(--accent); }
 .rrow .rc { border: 0; border-top: 1px solid var(--border); border-radius: 0; margin: 0; }
-.rtabs { display: flex; gap: 4px; margin: 10px 0 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
-.rtab { flex: none; font: inherit; font-size: 0.9rem; color: var(--muted); background: none; border: 0;
-        border-bottom: 3px solid transparent; padding: 8px 12px; min-height: 44px; cursor: pointer; }
-.rtab.on { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
+.rtabs { display: flex; gap: 8px; margin: 12px 0 10px; flex-wrap: wrap; }
+.rtab { flex: 1 1 auto; font: inherit; font-size: 0.95rem; font-weight: 600; color: var(--text); background: var(--bg);
+        border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; min-height: 46px; cursor: pointer; }
+.rtab.on { color: var(--on-primary, #FFFFFF); background: var(--primary); border-color: var(--primary); }
 .sc-big b { font-size: 2rem; font-variant-numeric: tabular-nums; }
 .sc-big span { color: var(--muted); }
 .scbars { list-style: none; margin: 10px 0 6px; padding: 0; }
@@ -407,6 +415,17 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .sc-bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
 .sc-fill { display: block; height: 100%; background: var(--primary); }
 .sc-v { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.you-l { margin: 8px 0 0; }
+.you-l b { display: block; }
+.newbie { border-left-color: var(--primary); }
+.newbie-join { margin: 10px 0 0; }
+.trk { display: flex; gap: 12px; align-items: center; padding: 10px 12px; margin: 0 0 8px; color: var(--text);
+       text-decoration: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.trk:hover { border-color: var(--primary); }
+.trk-img { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; flex: none; }
+.trk-t { min-width: 0; }
+.trk-s { display: block; color: var(--muted); font-size: 0.85rem; }
+#tracks-h { scroll-margin-top: calc(16px + env(safe-area-inset-top, 0px)); }
 .lc-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0 18px; }
 .lc-pack { max-width: none; margin: 14px 0 0; gap: 8px; }
 .lc-pack h4 { margin: 0; font-size: 1rem; }
@@ -929,13 +948,15 @@ function shell(page: Shell, context: PageContext): string {
   // A driver's own pages - check in, the PIN box, their night, sign-up -
   // are all "Me" (29 Oct 2026, relay navigation round 1), so none of them
   // looks like a page outside the club's site.
-  // Standings, Tracks and Achievements are part of Results (30 Oct 2026,
-  // relay navigation round 5, Asher's pick: "tabs on results"), so all
-  // four light up Results and carry its row of tabs.
-  const ofResults = page.active === "results" || page.active === "standings" || page.active === "tracks" || page.active === "badges";
+  // Standings and Achievements are part of Results (30 Oct 2026, relay
+  // navigation round 5, Asher's pick: "tabs on results"), so all three
+  // light up Results and carry its row of tabs. Tracks was the fourth
+  // until round 6 the same night, when it moved onto Home (Asher: "move
+  // track there as well"), so the Tracks page lights Home.
+  const ofResults = page.active === "results" || page.active === "standings" || page.active === "badges";
   const lit = page.active === "checkin" || page.active === "signup" || page.active === "night" || page.active === "mynight"
     ? "me"
-    : ofResults ? "results" : page.active;
+    : ofResults ? "results" : page.active === "tracks" ? "home" : page.active;
 
   // icon is an SVG path, drawn only on the phone bar.
   const tab = (href: string, label: string, key: string, icon: string, cls = "") =>
@@ -1060,7 +1081,6 @@ ${overrides}
   <nav class="subtabs" aria-label="Results">
     ${subTab("results", "Sessions")}
     ${subTab("standings", "Standings")}
-    ${subTab("tracks", "Tracks")}
     ${subTab("badges", "Achievements")}
   </nav>` : ""}
   ${page.body}
@@ -4158,13 +4178,100 @@ async function readMine() {
 }
 
 if (mine && MINE) poll(readMine, 60000);
+
+// THE "YOU" STRIP (30 Oct 2026, relay navigation round 6): for a phone
+// that remembers a driver, on every state of Home - their last night's
+// best finish, where they stand, and the newest achievement they earned,
+// with their night a tap away. Their night is the full read (the live
+// poll above carries only the next race), so it is asked for once on
+// opening and then every five minutes, well inside the relay's allowance.
+const you = document.getElementById('you');
+let youNight = null;
+
+function youLine(label, text) {
+  const p = document.createElement('p');
+  p.className = 'you-l';
+  const k = document.createElement('span');
+  k.className = 'gl-k';
+  k.textContent = label;
+  const v = document.createElement('b');
+  v.textContent = text;
+  p.appendChild(k);
+  p.appendChild(v);
+  return p;
+}
+
+function drawYou() {
+  if (!you) return;
+
+  const night = youNight;
+  const who = night && typeof night.driver === 'string' ? night.driver : '';
+
+  you.textContent = '';
+  you.hidden = night === null;
+  if (night === null) return;
+
+  const h = document.createElement('h3');
+  h.textContent = who ? 'You, ' + who : 'You';
+  you.appendChild(h);
+
+  const races = Array.isArray(night.races) ? night.races.filter((r) => r && Number(r.pos) > 0) : [];
+  const best = races.slice().sort((a, b) => Number(a.pos) - Number(b.pos))[0];
+  const when = [night.title, night.when].filter(Boolean).join(' · ');
+
+  if (best) {
+    you.appendChild(youLine('Best finish' + (when ? ', ' + when : ''), ordinal(best.pos) + (best.label ? ' · ' + best.label : '')));
+  }
+
+  const seasons = standingsDoc && Array.isArray(standingsDoc.seasons) ? standingsDoc.seasons : [];
+  for (const season of seasons) {
+    const row = (Array.isArray(season.standings) ? season.standings : []).find((r) => r && sameName(r.name, who));
+    if (row && who) {
+      you.appendChild(youLine('Standings' + (season.name ? ', ' + season.name : ''), ordinal(row.pos) + ' · ' + row.points + ' pts'));
+      break;
+    }
+  }
+
+  const recent = achievementsDoc && Array.isArray(achievementsDoc.recent) ? achievementsDoc.recent : [];
+  const earned = who ? recent.find((r) => r && sameName(r.name, who)) : null;
+  if (earned) you.appendChild(youLine('Newest achievement', badgeName(earned.id)));
+
+  const links = document.createElement('p');
+  links.className = 'lc-go';
+  links.appendChild(mineLink('Open your night', '/night#d=' + MINE));
+  you.appendChild(links);
+}
+
+async function readYou() {
+  let r = null;
+  try {
+    r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/night', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: MINE }),
+      cache: 'no-store',
+    });
+  } catch (e) { return; }
+
+  // Not found is a phone remembering a night the relay no longer has;
+  // anything else (a busy relay) keeps what is on screen.
+  if (r.status === 404) { youNight = null; drawYou(); }
+  if (r.status !== 200) return;
+
+  let body = {};
+  try { body = await r.json(); } catch (e) { return; }
+  youNight = body && body.night && typeof body.night === 'object' ? body.night : null;
+  drawYou();
+}
+
+if (you && MINE) poll(readYou, 300000);
 `;
 
 const HOME_JS = `
 const now = document.getElementById('now');
-const preview = document.getElementById('preview');
-const upnext = document.getElementById('upnext');
-const latest = document.getElementById('latest');
+const recap = document.getElementById('recap');
+const trackList = document.getElementById('tracks');
+const newbie = document.getElementById('newbie');
 const BASE = '/c/' + encodeURIComponent(CLUB);
 const LIVE = ['Staging', 'Countdown', 'Racing'];
 
@@ -4186,32 +4293,31 @@ function section(el, html) {
   if (heading && heading.classList.contains('day')) heading.style.display = html ? '' : 'none';
 }
 
-// The three newest results, without the whole listing: that is every
-// result the club has ever published, megabytes of it, and this runs on
-// every phone every fifteen seconds. The meta listing names the newest
-// three, and their bodies are only fetched again when those change.
-let latestSig = null;
-let latestRes = null;
-
-async function latestResults() {
-  const meta = await grab('/collection/results?meta=1&limit=3').catch(() => null);
-
-  if (meta === null) return null;
-  if (meta.missing || !Array.isArray(meta.body.items) || meta.body.items.length === 0) return meta.missing ? meta : { body: { items: [] } };
-
-  const ids = meta.body.items.map((item) => String(item.id));
-  const sig = meta.body.items.map((item) => item.id + '@' + item.publishedAt).join('|');
-
-  if (sig === latestSig && latestRes !== null) return latestRes;
-
-  const answer = await grab('/collection/results?ids=' + ids.map(encodeURIComponent).join(',')).catch(() => null);
-
-  if (answer === null || answer.missing || !Array.isArray(answer.body.items)) return latestRes ?? answer;
-
-  latestSig = sig;
-  latestRes = answer;
-  return answer;
+function ordinal(value) {
+  const n = Math.round(Number(value));
+  if (!(n > 0)) return '';
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  return n + (teen ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] || 'th');
 }
+
+function sameName(a, b) {
+  return String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+}
+
+// A race night as its own heading - "Tue 28 Oct" - from the index's
+// yyyy-mm-dd. Noon, so no time zone can move it to the day before.
+function nightName(iso) {
+  const d = new Date(String(iso) + 'T12:00:00');
+  return isNaN(d) ? '' : d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+// HOME CHANGES WITH THE NIGHT (30 Oct 2026, relay navigation round 6,
+// Asher's pick). Racing now: what is on track or up next, and nothing
+// that Live and Schedule already show in full. Before a night: the
+// club's own preview is the main card. In between: how the last race
+// night went. The recap only shows while nothing is on and no preview
+// is up - quiet is that, set by load() and read by drawRecap().
+let quiet = false;
 
 // THE PREVIEW, AND THE EXPIRY THE PAGE HONOURS RATHER THAN THE RELAY.
 //
@@ -4227,17 +4333,14 @@ async function latestResults() {
 // would leave the last one standing for good.
 function previewHtml(answer) {
   if (answer === null || answer.missing) return '';
-
   const b = answer.body && answer.body.body ? answer.body.body : {};
   const text = typeof b.text === 'string' ? b.text.trim() : '';
-
   if (text === '') return '';
 
   // A bad or missing date reads as expired. The other way round - treating
   // an unreadable date as "stands forever" - is how a preview from March
   // is still on a club's front page in June.
   const until = Date.parse(String(b.until || ''));
-
   if (!Number.isFinite(until) || Date.now() > until) return '';
 
   // DOUBLE-BACKSLASHED, because this lives in a template literal: one
@@ -4250,7 +4353,6 @@ function previewHtml(answer) {
   // comment broke across two lines and took the page with it. So the
   // explanation says it in words.
   const paragraphs = text.split(/\\n\\s*\\n/).map((one) => one.trim()).filter(Boolean);
-
   return '<div class="hero next" style="cursor:default">' +
     '<span class="kicker">' + esc(b.kicker || 'Coming up') + '</span>' +
     '<span class="big">' + esc(b.title || 'Next race day') + '</span>' +
@@ -4260,14 +4362,13 @@ function previewHtml(answer) {
 }
 
 async function load() {
-  const [state, prog, res, pre] = await Promise.all([
+  const [state, prog, pre] = await Promise.all([
     grab('/snapshot/state').catch(() => null),
     grab('/snapshot/programme').catch(() => null),
-    latestResults().catch(() => null),
     grab('/snapshot/preview').catch(() => null),
   ]);
 
-  if (state === null && prog === null && res === null) {
+  if (state === null && prog === null) {
     now.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
     return;
   }
@@ -4280,13 +4381,22 @@ async function load() {
   const running = lines.find((l) => l.status === 'running');
   const next = lines.find((l) => l.status === 'next');
   const ev = p && p.event ? p.event : null;
+  const live = s && fresh && LIVE.includes(String(s.state));
 
-  if (s && fresh && LIVE.includes(String(s.state))) {
+  // A line that is only 'next' is not racing: a club that has built
+  // tomorrow's rounds has a 'next' line all the night before, which is
+  // exactly when the preview is meant to show. The laptop withdraws it
+  // once the first race is filed, and its own expiry covers the rest.
+  const coming = live || running ? '' : previewHtml(pre);
+
+  if (live) {
     now.innerHTML = '<a class="hero live" href="' + BASE + '/live">' +
       '<span class="kicker">On track now</span>' +
       '<span class="big">' + esc(running ? lineTitle(running) : s.state) + '</span>' +
       '<span class="when">' + esc(s.state) + (s.countdown ? ' &middot; ' + esc(s.countdown) : '') +
       ' &middot; follow it live &rarr;</span></a>';
+  } else if (coming) {
+    now.innerHTML = coming;
   } else if (running || next) {
     const l = running || next;
     now.innerHTML = '<a class="hero next" href="' + BASE + '/schedule">' +
@@ -4294,80 +4404,275 @@ async function load() {
       '<span class="big">' + esc(lineTitle(l)) + '</span>' +
       '<span class="when">' + (l.time ? esc(l.time) + ' &middot; ' : '') + 'see the full schedule &rarr;</span></a>';
   } else {
+    const usual = now.dataset.when || '';
     now.innerHTML = '<div class="hero">' +
       '<span class="kicker">' + (ev && ev.name ? esc(ev.name) : 'Welcome') + '</span>' +
       '<span class="big">No racing right now</span>' +
-      '<span class="when">Results, standings, tracks and achievements are all under Results.</span></div>';
+      (usual ? '<span class="when">We race ' + esc(usual) + '</span>' : '') + '</div>';
   }
 
-  // UNDER THE HERO, AND ONLY WHILE NOTHING IS RUNNING. A club racing right
-  // now has a live race at the top of its own front page and a preview of
-  // the evening underneath it would be reading out the programme to people
-  // who are watching it happen. The preview is for the days in between,
-  // which is every day this page is open and no race is on.
-  //
-  // A line that is only 'next' is not racing: a club that has built
-  // tomorrow's rounds has a 'next' line all the night before, which is
-  // exactly when the preview is meant to show. The laptop withdraws it
-  // once the first race is filed, and its own expiry covers the rest.
-  section(preview, running || (s && fresh && LIVE.includes(String(s.state))) ? '' : previewHtml(pre));
-
-  const upcoming = lines.filter((l) => l.status === 'next' || l.status === 'upcoming').slice(0, 4);
-
-  section(upnext, upcoming.length === 0 ? '' : '<ul class="list">' + upcoming.map((l) =>
-    '<li><span class="tm">' + esc(l.time || '') + '</span>' +
-    '<span class="title">' + esc(lineTitle(l)) + '</span>' +
-    (l.status === 'next' ? '<span class="right"><span class="pill next">Next</span></span>' : '') +
-    '</li>').join('') +
-    '<li><a class="more" href="' + BASE + '/schedule">The whole day &rarr;</a></li></ul>');
-
-  const items = res && !res.missing && Array.isArray(res.body.items) ? res.body.items.slice() : [];
-  items.sort((a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt)));
-
-  section(latest, items.length === 0 ? '' : '<ul class="list">' + items.slice(0, 3).map((item) => {
-    const b = item.body || {};
-    const first = Array.isArray(b.results) && b.results.length > 0 ? b.results[0] : null;
-    return '<li><span class="title">' + esc(b.label || b.type || 'Session') + '</span>' +
-      (first ? '<span class="when">1st ' + nm(first.name) + '</span>' : '') +
-      '<span class="right">' + esc(ago(b.endedUtc || item.publishedAt)) + '</span></li>';
-  }).join('') +
-  '<li><a class="more" href="' + BASE + '/results">Every result &rarr;</a></li></ul>');
-
+  quiet = !live && !running && !next && !coming;
+  drawRecap();
   touched();
 }
 
+// ---------------------------------------------------------- last night
+
+// What the recap and the You strip read, held between polls.
+let nightHeld = null;
+let standingsDoc = null;
+let achievementsDoc = null;
+let badgeNames = null;
+let badgesAt = 0;
+
+// THE LAST RACE NIGHT, CHEAPLY. The results index's newest year names
+// every session of every night, newest night first, with its winner; the
+// fastest lap needs that night's own results, read once by id. All of it
+// is read again only when the newest year's index changes, so the five
+// minute poll is one small meta read on a quiet day.
+let nightSig = null;
+
+async function lastNight() {
+  const meta = await grab('/collection/resultsindex?meta=1').catch(() => null);
+
+  if (meta === null || meta.missing || !Array.isArray(meta.body.items) || meta.body.items.length === 0) return nightHeld;
+
+  const items = meta.body.items.slice().sort((a, b) => String(b.id).localeCompare(String(a.id)));
+  // Its size too: two writes inside the same second are the same time.
+  const sig = items[0].id + '@' + items[0].publishedAt + '/' + items[0].bytes;
+
+  if (sig === nightSig) return nightHeld;
+
+  const year = await grab('/collection/resultsindex/' + encodeURIComponent(items[0].id)).catch(() => null);
+
+  if (year === null || year.missing) return nightHeld;
+
+  const doc = year.body.body || {};
+  const days = Array.isArray(doc.days) ? doc.days : [];
+  const all = Array.isArray(doc.sessions) ? doc.sessions : [];
+  const first = days[0];
+
+  if (!first) {
+    nightSig = sig;
+    nightHeld = null;
+    return null;
+  }
+
+  const sessions = (Array.isArray(first.sessions) ? first.sessions : [])
+    .map((i) => all[i])
+    .filter((x) => x && typeof x === 'object');
+  const ids = sessions.map((x) => String(x.id || '')).filter(Boolean).slice(0, 50);
+  let fast = null;
+
+  if (ids.length > 0) {
+    const answer = await grab('/collection/results?ids=' + ids.map(encodeURIComponent).join(',')).catch(() => null);
+    const list = answer && !answer.missing && Array.isArray(answer.body.items) ? answer.body.items : [];
+
+    for (const item of list) {
+      const b = item && item.body || {};
+      for (const r of Array.isArray(b.results) ? b.results : []) {
+        const ms = Number(r && r.fastLapMs);
+        if (ms > 0 && r.name && (fast === null || ms < fast.ms)) fast = { ms, name: r.name, label: b.label || '' };
+      }
+    }
+  }
+
+  nightSig = sig;
+  nightHeld = { day: String(first.day || ''), sessions, fast };
+  return nightHeld;
+}
+
+// The night's finals and their winners: every race called a main or a
+// final, in the order they ran. A club that names neither gets its last
+// four races, which on most nights are the ones that decided it.
+function winners(night) {
+  const races = night.sessions.filter((x) => x.type === 'Race' && x.won)
+    .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const finals = races.filter((x) => /\\b(main|final)/i.test(String(x.label)));
+  return finals.length > 0 ? finals : races.slice(-4);
+}
+
+// Who leads each season (a club with several runs one per class), and by
+// how much - at most three, which is as many as a phone shows at a glance.
+function leaders() {
+  const seasons = standingsDoc && Array.isArray(standingsDoc.seasons) ? standingsDoc.seasons : [];
+  return seasons.map((season) => {
+    const rows = Array.isArray(season.standings) ? season.standings : [];
+    const top = rows[0];
+    if (!top || !top.name) return null;
+    const second = rows[1];
+    const clear = second ? Number(top.points) - Number(second.points) : NaN;
+    return { season: season.name || '', name: top.name, points: top.points, clear };
+  }).filter(Boolean).slice(0, 3);
+}
+
+// Achievements earned on that night: from its six in the morning to the
+// next, the same turn the laptop files a night's races by.
+function earnedThatNight(night) {
+  const recent = achievementsDoc && Array.isArray(achievementsDoc.recent) ? achievementsDoc.recent : [];
+  const start = new Date(night.day + 'T06:00:00').getTime();
+  if (isNaN(start)) return [];
+  return recent.filter((r) => {
+    const t = Date.parse(String(r && r.whenUtc || ''));
+    return r && r.name && t >= start && t < start + 86400000;
+  }).slice(0, 5);
+}
+
+function badgeName(id) {
+  return badgeNames && badgeNames.get(id) || String(id || 'Achievement');
+}
+
+function drawRecap() {
+  const night = nightHeld;
+
+  if (!quiet || night === null) {
+    section(recap, '');
+    return;
+  }
+
+  const head = recap.previousElementSibling;
+  if (head && head.classList.contains('day')) head.textContent = 'Last race night' + (nightName(night.day) ? ' \\u00b7 ' + nightName(night.day) : '');
+
+  const rows = [];
+
+  for (const x of winners(night)) {
+    rows.push('<li><span class="title">' + esc(x.label || 'Race') + '</span>' +
+      '<span class="when">1st ' + nm(x.won) + '</span></li>');
+  }
+
+  if (night.fast) {
+    rows.push('<li><span class="title">Fastest lap</span>' +
+      '<span class="when">' + lap(night.fast.ms) + ' &middot; ' + nm(night.fast.name) + '</span>' +
+      (night.fast.label ? '<span class="right">' + esc(night.fast.label) + '</span>' : '') + '</li>');
+  }
+
+  for (const l of leaders()) {
+    rows.push('<li><span class="title">Points leader' + (l.season ? ' &middot; ' + esc(l.season) : '') + '</span>' +
+      '<span class="when">' + nm(l.name) + ' &middot; ' + esc(l.points) + ' pts' +
+      (Number.isFinite(l.clear) ? ' &middot; ' + esc(l.clear) + ' clear' : '') + '</span></li>');
+  }
+
+  for (const r of earnedThatNight(night)) {
+    rows.push('<li><span class="title">New achievement</span>' +
+      '<span class="when">' + nm(r.name) + ' &middot; ' + esc(badgeName(r.id)) + '</span></li>');
+  }
+
+  section(recap, rows.length === 0 ? '' : '<ul class="list">' + rows.join('') +
+    '<li><a class="more" href="' + BASE + '/results#d=' + encodeURIComponent(night.day) + '">All of that night\\'s results &rarr;</a></li></ul>');
+}
+
+async function loadRecap() {
+  if (badgeNames === null || Date.now() - badgesAt > 600000) {
+    const badges = await grab('/snapshot/badges').catch(() => null);
+    if (badges && !badges.missing) {
+      const list = Array.isArray(badges.body.body && badges.body.body.badges) ? badges.body.body.badges : [];
+      badgeNames = new Map(list.map((b) => [b.id, b.name]));
+      badgesAt = Date.now();
+    }
+  }
+
+  const [night, standings, achievements] = await Promise.all([
+    lastNight().catch(() => nightHeld),
+    grab('/snapshot/standings').catch(() => null),
+    grab('/snapshot/achievements').catch(() => null),
+  ]);
+
+  nightHeld = night;
+  if (standings && !standings.missing) standingsDoc = standings.body.body || null;
+  if (achievements && !achievements.missing) achievementsDoc = achievements.body.body || null;
+
+  drawRecap();
+  if (typeof drawYou === 'function') drawYou();
+}
+
+// ------------------------------------------------------------- tracks
+
+// THE CLUB'S TRACKS, ON HOME (30 Oct 2026, round 6, Asher: "move track
+// there as well"). Each layout in a line - its picture, its lap record and
+// who holds it, today's layout first - and the Tracks page itself, with
+// the quickest drivers on each, one tap away.
+async function loadTracks() {
+  const answer = await grab('/snapshot/tracks').catch(() => null);
+
+  if (answer === null) return;
+
+  const doc = answer.missing ? {} : answer.body.body || {};
+  const tracks = Array.isArray(doc.tracks) ? doc.tracks.slice() : [];
+
+  tracks.sort((a, b) => (b.name === doc.current) - (a.name === doc.current));
+
+  const see = newbie ? newbie.querySelector('a[href="#tracks-h"]') : null;
+  if (see) see.hidden = tracks.length === 0;
+
+  section(trackList, tracks.length === 0 ? '' : tracks.slice(0, 6).map((t) => {
+    const rec = t.record && t.record.ms > 0 ? t.record : null;
+    const facts = [
+      rec ? 'Lap record ' + lap(rec.ms) + (rec.holder ? ' &middot; ' + esc(rec.holder) : '') : '',
+      t.lengthFeet > 0 ? esc(Math.round(t.lengthFeet)) + ' ft' : '',
+    ].filter(Boolean).join(' &middot; ');
+    return '<a class="trk" href="' + BASE + '/tracks">' + img(t.image, 'trk-img', t.name) +
+      '<span class="trk-t"><b>' + esc(t.name) + '</b>' +
+      (t.name === doc.current ? ' <span class="pill running">Racing here today</span>' : '') +
+      (facts ? '<span class="trk-s">' + facts + '</span>' : '') + '</span></a>';
+  }).join('') + '<p class="lc-go"><a class="more" href="' + BASE + '/tracks">Lap records and the quickest drivers &rarr;</a></p>');
+}
+
+// "New here?" is for somebody the club does not know yet. A phone that
+// remembers a driver has its own strip instead.
+if (newbie && meCode()) newbie.hidden = true;
+
 poll(load, 15000);
+poll(loadRecap, 300000);
+poll(loadTracks, 300000);
 `;
 
 export function homePage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
   const base = `/c/${escapeHtml(club)}`;
+  const look = context.look;
   // Where else to find the club, under everything else. Nothing - not even
   // the heading - for a club that has set no links.
-  const anchors = socialAnchors(context.look.social);
+  const anchors = socialAnchors(look.social);
   const social = anchors === "" ? "" : `<div class="day">Find us</div><div class="social">${anchors}</div>`;
+
+  // NEW HERE? (30 Oct 2026, relay navigation round 6, Asher: "build it with
+  // newcomer"). Where the club races, when, and how to join, as the club
+  // typed them in the app - escaped here, on the way in. No card at all
+  // for a club that left all three blank, and the page hides it on a phone
+  // that remembers a driver, who has their own strip instead.
+  const n = look.newcomer;
+  const fact = (label: string, text: string) =>
+    text === "" ? "" : `<p class="you-l"><span class="gl-k">${label}</span><b>${escapeHtml(text)}</b></p>`;
+  const newcomer = n.where === "" && n.when === "" && n.join === ""
+    ? ""
+    : `<section class="lc newbie" id="newbie"><h3>New here?</h3>${fact("Where we race", n.where)}${fact("When we race", n.when)}`
+      + (n.join === "" ? "" : `<p class="newbie-join">${escapeHtml(n.join)}</p>`)
+      + `<p class="lc-go"><a class="more" href="#tracks-h">See our tracks</a></p></section>`;
 
   return shell({
     club,
     clubName,
     active: "home",
     heading: "Home",
-    sub: context.look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing laptop.",
-    // "mine" is Your next race (29 Oct 2026, relay navigation round 3),
-    // empty and hidden unless this phone remembers a driver with a race on.
+    sub: look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing laptop.",
+    // "mine" is Your next race (29 Oct 2026, relay navigation round 3) and
+    // "you" the driver's own strip (round 6), both empty and hidden unless
+    // this phone remembers a driver. Then what is on now - or the club's
+    // preview of the next night - and, while nothing is, the last race
+    // night (round 6: the Up next and Latest results lists went, as
+    // Schedule and Results show both in full).
     body:
       '<section class="lc" id="mine" hidden></section>' +
-      '<div id="now"><p class="note">Loading&hellip;</p></div>' +
-      // Check in from Me (30 Oct 2026, round 5): Explore's Check in and My
-      // night tiles went, and a right PIN on Me checks a driver in.
-      (context.look.checkIn
+      `<div id="now" data-when="${escapeHtml(n.when)}"><p class="note">Loading&hellip;</p></div>` +
+      // Check in from Me (30 Oct 2026, round 5): a right PIN on Me checks a
+      // driver in.
+      (look.checkIn
         ? `<p class="note"><a class="more" href="${base}/mynight">Check in: tap Me and type your PIN</a></p>`
         : "") +
-      '<div class="day">The night before</div><div id="preview" style="display:none"></div>' +
-      '<div class="day">Up next</div><div class="card" id="upnext" style="display:none"></div>' +
-      '<div class="day">Latest results</div><div class="card" id="latest" style="display:none"></div>' +
-      // No Explore (30 Oct 2026, relay navigation round 5): its tiles
-      // repeated the bar, and Standings, Tracks and Achievements are tabs
-      // under Results now.
+      '<section class="lc you" id="you" hidden></section>' +
+      newcomer +
+      '<div class="day">Last race night</div><div class="card" id="recap" style="display:none"></div>' +
+      // Tracks live on Home (30 Oct 2026, round 6), no longer a Results tab.
+      '<div class="day" id="tracks-h">Our tracks</div><div id="tracks" style="display:none"></div>' +
       social,
     script: HOME_JS + HOME_ME_JS,
   }, context);

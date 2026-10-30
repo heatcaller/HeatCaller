@@ -111,6 +111,9 @@ public sealed class RelaySettingsControl : UserControl
     private readonly Label _lblStatus = new();
     private readonly Label _lblDetail = new();
     private readonly TextBox _txtTagline = new();
+    private readonly TextBox _txtNewcomerWhere = new();
+    private readonly TextBox _txtNewcomerWhen = new();
+    private readonly TextBox _txtNewcomerJoin = new();
 
     /// <summary>One box per RelaySocial platform, keyed by its key.</summary>
     private readonly Dictionary<string, TextBox> _socialBoxes = new(StringComparer.OrdinalIgnoreCase);
@@ -399,6 +402,9 @@ public sealed class RelaySettingsControl : UserControl
         Fit(_txtClub, UiLayout.AtTextSize(ClubWidth));
         Fit(_txtToken, address);
         Fit(_txtTagline, address);
+        Fit(_txtNewcomerWhere, address);
+        Fit(_txtNewcomerWhen, address);
+        Fit(_txtNewcomerJoin, address);
 
         foreach (var box in _socialBoxes.Values)
         {
@@ -1032,6 +1038,29 @@ public sealed class RelaySettingsControl : UserControl
 
         _linedUp.Add(tagline);
 
+        // ------------------------------------------------ "New here?"
+        //
+        // 30 Oct 2026, relay navigation round 6 (Asher: "build it with
+        // newcomer"): three lines for a card on the club's home page, for
+        // somebody who has found the club but never raced there. Live like
+        // the welcome line - held as typed, saved when the box is left.
+
+        var lblNewcomer = _textSize.Wear(new Label { Text = "New here? card", AutoSize = true }, () => AppTheme.BoldFont);
+
+        var lblNewcomerHint = HintLabel(
+            "Shown on the club's home page to visitors, above the club's tracks. Leave all three empty for no card.");
+
+        var newcomer = new FieldGrid();
+
+        NewcomerBox(newcomer, _txtNewcomerWhere, "Where we race:", "Kent Hobbies, 12 Main St", 160,
+            text => _settings.RelayNewcomerWhere = text);
+        NewcomerBox(newcomer, _txtNewcomerWhen, "When we race:", "Tuesdays from 6pm", 160,
+            text => _settings.RelayNewcomerWhen = text);
+        NewcomerBox(newcomer, _txtNewcomerJoin, "How to join:", "Bring your car and a transponder - the first night is free", 300,
+            text => _settings.RelayNewcomerJoin = text);
+
+        _linedUp.Add(newcomer);
+
         // ------------------------------------------------ the club's links
 
         var lblSocial = _textSize.Wear(new Label { Text = "Club links", AutoSize = true }, () => AppTheme.BoldFont);
@@ -1093,6 +1122,9 @@ public sealed class RelaySettingsControl : UserControl
         var card = new Section("Look");
 
         card.Add(tagline, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
+        card.Add(lblNewcomer, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblNewcomerHint);
+        card.Add(newcomer, gapBelow: UiLayout.SectionGap);
         card.Add(lblSocial, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblSocialHint);
         card.Add(links, gapBelow: UiLayout.SectionGap);
@@ -1101,6 +1133,29 @@ public sealed class RelaySettingsControl : UserControl
         card.Add(lblLookHint, gapBelow: 0);
 
         return card;
+    }
+
+    /// <summary>
+    /// One of the "New here?" card's boxes, wired like the welcome line: the
+    /// setting follows the box as it is typed in, and is saved when the box
+    /// is left.
+    /// </summary>
+    private void NewcomerBox(FieldGrid grid, TextBox box, string label, string placeholder, int maxLength, Action<string> keep)
+    {
+        box.MaxLength = maxLength;
+        box.PlaceholderText = placeholder;
+
+        box.TextChanged += (_, _) =>
+        {
+            if (!_loading)
+            {
+                keep(box.Text.Trim());
+            }
+        };
+
+        box.Leave += (_, _) => _settings.Save();
+
+        grid.AddRow(label, box);
     }
 
     /// <summary>
@@ -2627,6 +2682,9 @@ public sealed class RelaySettingsControl : UserControl
             _chkRelayCaptions.Checked = _settings.RelayCaptions;
 
             _txtTagline.Text = _settings.RelayTagline;
+            _txtNewcomerWhere.Text = _settings.RelayNewcomerWhere;
+            _txtNewcomerWhen.Text = _settings.RelayNewcomerWhen;
+            _txtNewcomerJoin.Text = _settings.RelayNewcomerJoin;
 
             foreach (var (key, box) in _socialBoxes)
             {

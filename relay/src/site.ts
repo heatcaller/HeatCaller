@@ -64,6 +64,20 @@ export interface Look {
    * with a platform this file knows reach here; see socialFrom.
    */
   readonly social: readonly SocialLink[];
+  /**
+   * The "New here?" card on Home (30 Oct 2026, relay navigation round 6,
+   * asked for by Asher): where the club races, when, and how to join, as
+   * typed in the app. Plain text, each line tidied like the tagline; all
+   * three empty (an older app, or a club that left them blank) is no card.
+   */
+  readonly newcomer: Newcomer;
+}
+
+/** The three lines of Home's "New here?" card. Empty strings for any left blank. */
+export interface Newcomer {
+  readonly where: string;
+  readonly when: string;
+  readonly join: string;
 }
 
 /** One of the club's pages elsewhere. */
@@ -115,6 +129,10 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const MAX_LOGO_BYTES = 400 * 1024;
 const MAX_TAGLINE = 160;
+const MAX_NEWCOMER_LINE = 160;
+const MAX_NEWCOMER_JOIN = 300;
+
+const NO_NEWCOMER: Newcomer = Object.freeze({ where: "", when: "", join: "" });
 
 export const DEFAULT_THEME_COLOR = "#0F0722";
 
@@ -130,6 +148,7 @@ export const DEFAULT_LOOK: Look = Object.freeze({
   checkIn: false,
   listening: false,
   social: Object.freeze([]),
+  newcomer: NO_NEWCOMER,
 });
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -181,15 +200,9 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     }
   }
 
-  const rawTagline = typeof body?.["tagline"] === "string" ? (body["tagline"] as string) : "";
-
   // Control characters out, whitespace collapsed, and a hard length cap:
   // it is one line under a heading, and the page escapes it anyway.
-  const tagline = rawTagline
-    .replace(/[\u0000-\u001f\u007f]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, MAX_TAGLINE);
+  const tagline = oneLine(body?.["tagline"], MAX_TAGLINE);
 
   const logo = pngFromDataUri(body?.["logo"]);
 
@@ -220,7 +233,36 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     // look built without it.
     listening: false,
     social: socialFrom(body?.["social"]),
+    newcomer: newcomerFrom(body?.["newcomer"]),
   };
+}
+
+/** A line of a club's own text: control characters out, whitespace collapsed, capped. Anything not a string is empty. */
+function oneLine(value: unknown, max: number): string {
+  return typeof value !== "string"
+    ? ""
+    : value
+      .replace(/[\u0000-\u001f\u007f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, max);
+}
+
+/** The site document's "newcomer" object of { where, when, join }, each a line of plain text. */
+export function newcomerFrom(value: unknown): Newcomer {
+  const raw = record(value);
+
+  if (raw === undefined) {
+    return NO_NEWCOMER;
+  }
+
+  const newcomer = {
+    where: oneLine(raw["where"], MAX_NEWCOMER_LINE),
+    when: oneLine(raw["when"], MAX_NEWCOMER_LINE),
+    join: oneLine(raw["join"], MAX_NEWCOMER_JOIN),
+  };
+
+  return newcomer.where === "" && newcomer.when === "" && newcomer.join === "" ? NO_NEWCOMER : newcomer;
 }
 
 /**
