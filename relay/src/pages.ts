@@ -54,9 +54,16 @@ const STYLE = `
   --bad: #FF5C7A;
 }
 * { box-sizing: border-box; }
+/* CLEAR OF THE CLOCK (30 Oct 2026, Asher: "all the pages on the relay load
+   scrolled down a bit... hides the title of page"). viewport-fit=cover lets
+   a phone draw the page under its status bar - always on a home-screen
+   icon (black-translucent), and in some browsers too - and nothing here
+   moved the page out from under it, so the title sat behind the clock with
+   no way to scroll further up than the top. The safe-area insets are 0
+   wherever there is nothing to clear, so this changes nothing elsewhere. */
 body {
   margin: 0;
-  padding: 0 16px 64px;
+  padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px));
   background: var(--bg);
   color: var(--text);
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -357,7 +364,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
    list with one open at a time and its lap stats, lap times and lap chart
    on tabs, and the driver score beside the report card. Thumb-sized rows
    for a phone in the pits; the lap table scrolls in its own box. */
-#nj { position: sticky; top: 0; z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
+#nj { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
 .jump { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; max-width: 42rem; margin: 0 auto;
         scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
@@ -9559,9 +9566,11 @@ export function managePage(club: string, clubName: string, context: PageContext 
   :root { --on-tint: color-mix(in srgb, var(--primary) 16%, var(--surface)); }
 }
 * { box-sizing: border-box; }
+/* Clear of a phone's status bar, as on the club's pages (see CLEAR OF THE
+   CLOCK there): viewport-fit=cover draws the page under it otherwise. */
 body {
   margin: 0;
-  padding: 0 0 60px;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 60px env(safe-area-inset-left, 0px);
   background: var(--bg);
   color: var(--text);
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -9605,7 +9614,7 @@ html.light body:not(.signin) .msg { box-shadow: 0 8px 28px rgba(17, 21, 28, 0.18
                padding: 8px 14px; border: 0; background: none; box-shadow: none; }
 
 .tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border);
-        overflow-x: auto; position: sticky; top: 0; z-index: 2; }
+        overflow-x: auto; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; }
 .navbtn { flex: 1 0 auto; padding: 13px 8px; background: none; border: 0; color: var(--muted);
           font-weight: 700; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase;
           cursor: pointer; font-family: inherit; border-bottom: 2px solid transparent; white-space: nowrap; }
