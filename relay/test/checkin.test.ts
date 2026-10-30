@@ -290,14 +290,16 @@ describe("the club's look", () => {
 
   // Check in has no tab of its own since 29 Oct 2026 (relay navigation
   // round 1): it is part of Me, reached from Home's tile and from Me.
-  it("offers check-in from Home and Me only while check-in is open", async () => {
+  // Me has no link to the check-in page since 30 Oct 2026 (asked for by
+  // Asher): a right PIN there checks the driver in itself.
+  it("offers check-in from Home only while check-in is open, and never links it from Me", async () => {
     assert.equal((await call(harness, "GET", "/c/acme-rc")).text.includes('/c/acme-rc/checkin"'), false);
     assert.equal((await call(harness, "GET", "/c/acme-rc/mynight")).text.includes('/c/acme-rc/checkin"'), false);
 
     await publishCheckin(harness, checkinDoc(), 2);
 
     assert.equal((await call(harness, "GET", "/c/acme-rc")).text.includes('/c/acme-rc/checkin"'), true);
-    assert.equal((await call(harness, "GET", "/c/acme-rc/mynight")).text.includes('/c/acme-rc/checkin"'), true);
+    assert.equal((await call(harness, "GET", "/c/acme-rc/mynight")).text.includes('/c/acme-rc/checkin"'), false);
     assert.equal((await call(harness, "GET", "/c/acme-rc/results")).text.includes('/c/acme-rc/checkin"'), false, "not a tab");
   });
 
