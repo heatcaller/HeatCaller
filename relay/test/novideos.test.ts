@@ -142,13 +142,27 @@ describe("the leftovers on disk", () => {
     assert.deepEqual(said, []);
   });
 
-  it("never follows a link where the folder was", async () => {
+  it("never follows a link where the folder was", async (t) => {
     const elsewhere = join(dir, "elsewhere");
     await mkdir(elsewhere);
     await writeFile(join(elsewhere, "precious.txt"), "keep me");
     const data = join(dir, "data");
     await mkdir(data);
-    await symlink(elsewhere, join(data, ".videos"));
+
+    // Windows only lets Developer Mode or an admin make a symlink, so there
+    // the link is a junction, which any user can make and which lstat sees
+    // as a link all the same. A PC that refuses even that skips the test
+    // rather than failing a relay that is fine.
+    try {
+      await symlink(elsewhere, join(data, ".videos"), process.platform === "win32" ? "junction" : undefined);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "EPERM" || code === "EACCES" || code === "ENOSYS") {
+        t.skip(`this PC can't make a link (${code}), so there is nothing to test here`);
+        return;
+      }
+      throw err;
+    }
 
     const said: string[] = [];
     assert.deepEqual(await removeLeftoverVideos(data, (line) => said.push(line)), { files: 0, bytes: 0 });
