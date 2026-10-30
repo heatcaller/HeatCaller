@@ -19,15 +19,15 @@ Your club's address is the relay address followed by `/c/` and your club id, for
 
 | Page | Address | What it shows | Refreshes |
 |---|---|---|---|
-| Home | `/c/<club>` | What's on track now (or on now, or up next), the next few sessions, the three latest results, and tiles for every other page. | Every 15 seconds |
+| Home | `/c/<club>` | What's on track now (or on now, or up next), the next few sessions, the three latest results, and the club's links. While online check-in is open, a **Check in: tap Me and type your PIN** line points drivers to **Me**. | Every 15 seconds |
 | Live | `/c/<club>/live` | The race as it runs: state, countdown, flag, what's next, and the leaderboard, at the top of the page. Under it, a **Captions** button shows the announcer's words as text (see [Captions](#captions)), and **Lap times in my ear** reads out the laps of the driver you follow (see [Lap times in my ear](#lap-times-in-my-ear)). | Every 2 seconds (every second while lap times are being read out) |
 | Schedule | `/c/<club>/schedule` | Today's running order, each line marked Done, On track or Next. A class picker appears when there's more than one class. | Every 15 seconds |
-| Check in | `/c/<club>/checkin` | Online check-in, under the **Me** tab. Reached from the **Check in** tile on Home while online check-in is switched on. A driver with a personal PIN can also check in by typing it on **Me**. See [Online check-in](check-in.md). | Every 10 seconds |
+| Check in | `/c/<club>/checkin` | Online check-in, under the **Me** tab. Opened by the QR code on a driver's badge, and by the desk for its staff list. A driver with a personal PIN checks in by typing it on **Me**. See [Online check-in](check-in.md). | Every 10 seconds |
 | Results | `/c/<club>/results` | Finished sessions, newest first, grouped by day. Tap a session to see every finisher's grid slot, laps and time, how far behind the car in front they were, and best lap, with their best sectors under the best lap when the session had a split loop, plus **View laps** for each driver and a lap-by-lap position graph (see [Lap by lap on the results](#lap-by-lap-on-the-results)). A small chip beside a time shows time added or warnings (see [Penalties on the results](#penalties-on-the-results)). | Every 30 seconds |
 | Me | `/c/<club>/mynight` | A box for a driver's personal PIN, which opens their own night page. See [Opening your night with your PIN](#opening-your-night-with-your-pin). | When opened |
-| Standings | `/c/<club>/standings` | Championship points for each season, with a season picker when there's more than one. | Every 30 seconds |
-| Badges | `/c/<club>/badges` | "Just earned", "Most collected" and "Every badge". While you're [following a driver](#following-a-driver), a "Next for *name*" list at the top shows up to two badges they're close to, such as "2 more podiums for Podium Regular". | Every minute |
-| Tracks | `/c/<club>/tracks` | Every track layout with its picture, lap record, sector records, length, typical lap and the ten best laps on it. Today's layout comes first, marked "Racing here today". | Every 5 minutes |
+| Standings | `/c/<club>/standings` | A tab under **Results**. Championship points for each season, with a season picker when there's more than one. | Every 30 seconds |
+| Achievements | `/c/<club>/badges` | A tab under **Results**. "Just earned", "Most collected" and "Every badge". While you're [following a driver](#following-a-driver), a "Next for *name*" list at the top shows up to two badges they're close to, such as "2 more podiums for Podium Regular". | Every minute |
+| Tracks | `/c/<club>/tracks` | A tab under **Results**. Every track layout with its picture, lap record, sector records, length, typical lap and the ten best laps on it. Today's layout comes first, marked "Racing here today". | Every 5 minutes |
 
 ![The Schedule page on a phone, showing today's running order with Done, On track and Next markers](../assets/images/online-schedule-page-phone.png)
 
@@ -35,8 +35,9 @@ Your club's address is the relay address followed by `/c/` and your club id, for
 
 Since 29 October 2026:
 
-- **On a phone**, a bar along the bottom of every page has **Home**, **Live**, **Schedule**, **Results** and **Me**. It stays in place as the page scrolls. Standings, Achievements and Tracks are tiles on Home.
-- **On a laptop or tablet**, the same tabs sit in one row at the top, with **Standings**, **Achievements** and **Tracks** between **Results** and **Me**.
+- **On a phone**, a bar along the bottom of every page has **Home**, **Live**, **Schedule**, **Results** and **Me**. It stays in place as the page scrolls.
+- **On a laptop or tablet**, the same five tabs sit in one row at the top.
+- **Results** has a row of its own tabs at the top: **Sessions** (the results themselves), **Standings**, **Tracks** and **Achievements**. **Results** stays lit on all four. Since 30 October these replace the **Explore** tiles that used to sit at the bottom of Home.
 - **Live** shows a small red dot while a car is on track, so you can see a race has started from any page.
 - **Me** is a driver's own corner: the PIN box that opens their night, their night page itself, check-in and sign-up all light up **Me**. While online check-in is open, a driver's right PIN on **Me** checks them in and opens their night (since 30 October; there's no separate link to the check-in page).
 - **Me remembers you.** Once a driver's night has opened on their phone (from their badge, their night email or their PIN), the phone remembers them, and **Me** goes straight to their night from then on, whether or not online check-in is open. **Sign out on this phone**, at the bottom of their night, forgets them and signs out **Your details** too. Only the code that opens their night is kept on the phone, never their PIN.
@@ -138,7 +139,7 @@ Each driver has a page of their own on the relay, headed "Your night". It opens 
 
 #### Opening your night with your PIN
 
-Since 26 Oct 2026 the club's pages have had a way in with a PIN: the **Me** tab (called **My night** until 29 October), and a **My night** tile ("Your own races, with your PIN") on the home page while online check-in is switched on. The PIN only opens a night while online check-in is switched on. It's for a driver who doesn't have their badge or the club's email to hand.
+Since 26 Oct 2026 the club's pages have had a way in with a PIN: the **Me** tab (called **My night** until 29 October), and, until 30 October, a **My night** tile on the home page while online check-in was switched on (now Home's **Check in: tap Me and type your PIN** line). The PIN only opens a night while online check-in is switched on. It's for a driver who doesn't have their badge or the club's email to hand.
 
 1. The driver opens **Me**. The page says "Type the personal check-in PIN the club emailed you. It checks you in for tonight and opens your own night: your races, your report card and, once you are racing, your live card."
 2. They type their six-digit personal PIN into **Your personal PIN** and tap **Check in**.

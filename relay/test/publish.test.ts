@@ -329,10 +329,11 @@ describe("the public results page", () => {
       assert.equal(page.status, 200, `${path} should be served`);
       assert.match(page.text, new RegExp(`<span>${heading}</span>`));
 
-      // Every page carries the nav, so none of them is a dead end.
+      // Every page carries the nav, so none of them is a dead end. Standings
+      // is one of Results' own tabs (30 Oct 2026, relay navigation round 5).
       assert.match(page.text, /href="\/c\/acme-rc\/live"/);
       assert.match(page.text, /href="\/c\/acme-rc\/results"/);
-      assert.match(page.text, /href="\/c\/acme-rc\/standings"/);
+      if (path !== "live") assert.match(page.text, /href="\/c\/acme-rc\/standings"/);
     }
   });
 
