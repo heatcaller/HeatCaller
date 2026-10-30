@@ -347,6 +347,9 @@ public sealed partial class RaceControlControl
 
     private void OnRaceStateChanged(RaceState state)
     {
+        // Each heat on a clean screen (30 Oct 2026) - see RaceControlControl.LapWindows.
+        CloseLapWindowsForNextRace(state);
+
         // The highlight videos' pause (22 Oct 2026) - see FollowRaceLive.
         FollowRaceLive();
 

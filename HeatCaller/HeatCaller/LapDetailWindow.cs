@@ -13,7 +13,7 @@ namespace HeatCaller;
 /// actually reading a race - which lap was the best one, whether the driver
 /// is finding time or losing it, where a clean run ended.
 ///
-/// So this is a floating panel instead, drawn with the same primitives as
+/// So this is a floating card instead, drawn with the same primitives as
 /// the rest of the app (<see cref="AppTheme.DrawCard"/>, the stat tile, the
 /// pill, the micro-caption) so it belongs to HeatCaller rather than to
 /// Windows. Every lap gets its own line: the time in the display face, a
@@ -21,72 +21,222 @@ namespace HeatCaller;
 /// it was, and what the clean run stood at - with the best lap and the lap
 /// that ended a run called out in colour.
 ///
-/// It is a ToolStripDropDown rather than a Form because a dropdown already
-/// does the three things a panel like this needs and a Form does not: it
-/// floats above the window without stealing focus from the race screen, it
-/// closes when you click anywhere else or press Escape, and it never ends
-/// up behind the main window while a race is running.
+/// A WINDOW OF ITS OWN, ONE PER DRIVER (30 Oct 2026, asked for by Asher:
+/// "multiple lap detail windows open at the same time on race control...
+/// floating windows that can be dragged around"). Until then this was a
+/// drop-down, which closed on any click elsewhere - so only one could ever
+/// be open. Now each is a small borderless window owned by the main one:
+///
+/// - dragged by its header, and onto a second monitor if there is one;
+/// - made taller or shorter from its bottom edge, for more or fewer laps;
+///   the width is fixed, because the columns are laid out for it;
+/// - closed by the X in its corner or Escape - a click elsewhere no longer
+///   closes it, which is what lets several stay open side by side;
+/// - opened without taking the focus from Race Control, and passing the
+///   flag keys (F1 to F8) back to it when it has been clicked into, as the
+///   Broadcast window does;
+/// - above the main window and minimised with it, and kept off the taskbar
+///   and Alt+Tab, since it belongs to Race Control rather than standing on
+///   its own.
+///
+/// Race Control keeps them (RaceControlControl.Leaderboard): where each
+/// opens and is remembered, and closing them all when the next heat is
+/// called, so each heat starts on a clean screen.
 ///
 /// The contents update live - <see cref="Apply"/> is called from the same
-/// leaderboard refresh that redraws the grid - so it can be left open on a
+/// leaderboard refresh that redraws the grid - so one can be left open on a
 /// driver for a whole race.
 /// </summary>
-public sealed class LapDetailPopup : ToolStripDropDown
+public sealed class LapDetailWindow : Form
 {
-    private readonly LapDetailView _view;
-    private readonly ToolStripControlHost _host;
+    /// <summary>Laps shown when a window opens for the first time.</summary>
+    public const int DefaultRows = 12;
 
-    /// <summary>The driver this popup is showing, so the leaderboard can keep feeding it.</summary>
+    /// <summary>The fewest and most laps a window can be sized for.</summary>
+    public const int MinRows = 4;
+    public const int MaxRows = 40;
+
+    // Win32, for dragging by the header and sizing from the bottom edge
+    // without a title bar or a border to do it with.
+    private const int WmNcHitTest = 0x0084;
+    private const int HtTransparent = -1;
+    private const int HtCaption = 2;
+    private const int HtBottom = 15;
+    private const int WsExToolWindow = 0x00000080;
+
+    private readonly LapDetailView _view;
+    private readonly Func<Keys, bool>? _raceKey;
+
+    /// <summary>The driver this window is showing, so the leaderboard can keep feeding it.</summary>
     public string Transponder { get; }
 
-    public LapDetailPopup(string transponder, string driverName, string subtitle, int streakThreshold)
+    /// <summary>Which remembered spot it is in - see LapWindowPlacement.FreeSlot.</summary>
+    public int Slot { get; }
+
+    /// <summary>How many laps it is sized to show.</summary>
+    public int Rows => _view.Rows;
+
+    /// <summary>The text size (Ctrl +/-) it was last laid out for.</summary>
+    public float BuiltForFontScale { get; private set; }
+
+    /// <summary>Raised when it has been dragged or resized, once the mouse lets go, so the spot can be remembered.</summary>
+    public event EventHandler? Placed;
+
+    /// <param name="raceKey">
+    /// Race Control's flag keys, for a key pressed while this window has the
+    /// focus - it is a form of its own, so MainForm's keys do not reach it.
+    /// True when the key was one of them.
+    /// </param>
+    public LapDetailWindow(string transponder, string driverName, string subtitle, int streakThreshold, int slot, int rows,
+        Func<Keys, bool>? raceKey = null)
     {
         Transponder = transponder;
+        Slot = slot;
+        _raceKey = raceKey;
 
-        _view = new LapDetailView(driverName, subtitle, streakThreshold);
-
-        _host = new ToolStripControlHost(_view)
-        {
-            Margin = Padding.Empty,
-            Padding = Padding.Empty,
-            AutoSize = false,
-            Size = _view.Size,
-        };
-
-        AutoSize = false;
-        AutoClose = true;
-
-        // The system shadow is drawn around the window RECTANGLE, so with a
-        // rounded region it appears as square corners floating just outside
-        // round ones. The card's own border does the separating instead.
-        DropShadowEnabled = false;
-
-        Padding = Padding.Empty;
-        Margin = Padding.Empty;
+        Text = string.IsNullOrWhiteSpace(driverName) ? "Lap breakdown" : $"{driverName.Trim()} - lap breakdown";
+        FormBorderStyle = FormBorderStyle.None;
+        StartPosition = FormStartPosition.Manual;
+        ShowInTaskbar = false;
+        ControlBox = false;
+        MinimizeBox = false;
+        MaximizeBox = false;
         BackColor = AppTheme.Surface;
+        Padding = Padding.Empty;
 
-        Items.Add(_host);
-        Size = _view.Size;
-        ApplyRegion();
+        _view = new LapDetailView(driverName, subtitle, streakThreshold) { Dock = DockStyle.Fill };
+        // Posted, not closed here: the click is still being handled inside
+        // the card the close is about to dispose.
+        _view.CloseClicked += (_, _) => BeginInvoke(new Action(Close));
+        Controls.Add(_view);
+
+        SizeFor(rows);
+    }
+
+    /// <summary>Opened beside the race screen, not in front of its keyboard.</summary>
+    protected override bool ShowWithoutActivation => true;
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            // A tool window: no taskbar button, no Alt+Tab entry.
+            var cp = base.CreateParams;
+            cp.ExStyle |= WsExToolWindow;
+            return cp;
+        }
     }
 
     /// <summary>
-    /// Feeds the popup the driver's current standing - or null when they are
-    /// no longer in the standings, which the panel says rather than freezing
-    /// on numbers that have stopped being true.
+    /// Feeds the window the driver's current standing - or null when they
+    /// are no longer in the standings, which the card says rather than
+    /// freezing on numbers that have stopped being true.
     /// </summary>
     public void Apply(RacerStanding? standing, int position)
     {
-        _view.Apply(standing, position);
-
-        if (Size != _view.Size)
+        if (BuiltForFontScale != AppTheme.FontScale)
         {
-            _host.Size = _view.Size;
-            Size = _view.Size;
-            ApplyRegion();
+            Rescale();
         }
 
+        _view.Apply(standing, position);
+    }
+
+    /// <summary>
+    /// Laid out again at the text size in use, and in the theme's colours:
+    /// every dimension of the card follows the text size, so a window left
+    /// open across Ctrl +/- would otherwise clip its own numbers.
+    /// </summary>
+    public void Rescale()
+    {
+        BackColor = AppTheme.Surface;
+        _view.BackColor = AppTheme.Surface;
+        SizeFor(_view.Rows);
         _view.Invalidate();
+    }
+
+    /// <summary>Sized to show this many laps, within the limits, at the text size in use.</summary>
+    public void SizeFor(int rows)
+    {
+        rows = Math.Clamp(rows, MinRows, MaxRows);
+        BuiltForFontScale = AppTheme.FontScale;
+
+        var width = LapDetailView.ViewWidth;
+
+        // Limits first, or the new size is clamped to the old ones.
+        MinimumSize = Size.Empty;
+        MaximumSize = Size.Empty;
+
+        _view.Rows = rows;
+        ClientSize = new Size(width, LapDetailView.HeightFor(rows));
+
+        MinimumSize = new Size(width, LapDetailView.HeightFor(MinRows));
+        MaximumSize = new Size(width, LapDetailView.HeightFor(MaxRows));
+
+        ApplyRegion();
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+
+        // Live while the bottom edge is dragged, so the laps fill in as it
+        // grows; snapped to a whole lap when the mouse lets go.
+        _view.Rows = LapDetailView.RowsFor(ClientSize.Height);
+        ApplyRegion();
+        _view.Invalidate();
+    }
+
+    protected override void OnResizeEnd(EventArgs e)
+    {
+        base.OnResizeEnd(e);
+
+        var rows = LapDetailView.RowsFor(ClientSize.Height);
+
+        if (ClientSize.Height != LapDetailView.HeightFor(rows))
+        {
+            SizeFor(rows);
+        }
+
+        // ResizeEnd follows a drag by the header too, not only a resize.
+        Placed?.Invoke(this, EventArgs.Empty);
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        base.WndProc(ref m);
+
+        if (m.Msg != WmNcHitTest)
+        {
+            return;
+        }
+
+        var point = PointToClient(LapDetailView.PointFrom(m.LParam));
+
+        if (point.Y >= ClientSize.Height - LapDetailView.GripHeight)
+        {
+            m.Result = HtBottom;
+        }
+        else if (_view.IsDragArea(point))
+        {
+            m.Result = HtCaption;
+        }
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.Escape)
+        {
+            Close();
+            return true;
+        }
+
+        if (keyData is >= Keys.F1 and <= Keys.F8 && _raceKey?.Invoke(keyData) == true)
+        {
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     /// <summary>
@@ -108,11 +258,20 @@ public sealed class LapDetailPopup : ToolStripDropDown
         previous?.Dispose();
     }
 
-    /// <summary>The panel itself - everything below here is paint.</summary>
+    /// <summary>The card itself - everything below here is paint, and the close button.</summary>
     private sealed class LapDetailView : Control
     {
-        /// <summary>Laps shown at once. Older ones scroll off the top, because the recent end is the one being read.</summary>
-        private const int MaxRows = 12;
+        /// <summary>
+        /// Laps shown at once - as many as the window is sized for. Older
+        /// ones scroll off the top, because the recent end is the one being read.
+        /// </summary>
+        public int Rows { get; set; } = DefaultRows;
+
+        /// <summary>Raised when the X in the corner is clicked.</summary>
+        public event EventHandler? CloseClicked;
+
+        private bool _closeHot;
+        private bool _closePressed;
 
         private readonly string _driverName;
         private readonly string _subtitle;
@@ -158,7 +317,10 @@ public sealed class LapDetailPopup : ToolStripDropDown
         private static int ColumnHeaderHeight => Px(18);
         private static int RowHeight => Px(25);
         private static int FooterHeight => Px(20);
-        private static int ViewWidth => Px(470);
+        public static int ViewWidth => Px(470);
+
+        /// <summary>How close to the bottom edge the pointer has to be to make the window taller or shorter.</summary>
+        public static int GripHeight => Px(6);
 
         private static Font Display(float size, FontStyle style = FontStyle.Bold) =>
             FontLibrary.Create(AppTheme.DisplayFamily, Math.Max(5f, size * AppTheme.FontScale), style);
@@ -177,12 +339,91 @@ public sealed class LapDetailPopup : ToolStripDropDown
             DoubleBuffered = true;
             TabStop = false;
             BackColor = AppTheme.Surface;
-            Size = new Size(ViewWidth, HeightFor(0));
+            Size = new Size(ViewWidth, HeightFor(DefaultRows));
         }
 
-        private static int HeightFor(int rows) =>
-            Pad + HeaderHeight + StatsHeight + Px(10) + ColumnHeaderHeight
-            + Math.Max(1, rows) * RowHeight + Px(8) + FooterHeight + Pad;
+        public static int HeightFor(int rows) => ChromeHeight + Math.Max(1, rows) * RowHeight;
+
+        /// <summary>The laps that fit a window this tall, within the limits.</summary>
+        public static int RowsFor(int height) => Math.Clamp((height - ChromeHeight) / Math.Max(1, RowHeight), MinRows, MaxRows);
+
+        /// <summary>Everything but the lap rows: header, tiles, column titles, footer and padding.</summary>
+        private static int ChromeHeight =>
+            Pad + HeaderHeight + StatsHeight + Px(10) + ColumnHeaderHeight + Px(8) + FooterHeight + Pad;
+
+        /// <summary>The X, top right of the header.</summary>
+        private Rectangle CloseRect => new(Width - Pad - Px(26), Pad + Px(2), Px(26), Px(26));
+
+        /// <summary>The header, where the window is dragged from - all of it but the X.</summary>
+        public bool IsDragArea(Point point) =>
+            point.Y >= 0 && point.Y < Pad + HeaderHeight && !CloseRect.Contains(point);
+
+        /// <summary>The screen point a hit-test message carries.</summary>
+        public static Point PointFrom(IntPtr lParam)
+        {
+            var value = unchecked((int)(long)lParam);
+            return new Point(unchecked((short)(value & 0xFFFF)), unchecked((short)((value >> 16) & 0xFFFF)));
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            // The header and the bottom edge belong to the window under the
+            // card, which drags and sizes itself from them - see
+            // LapDetailWindow.WndProc. Told so by answering "not here".
+            if (m.Msg == WmNcHitTest && IsHandleCreated)
+            {
+                var point = PointToClient(PointFrom(m.LParam));
+
+                if (IsDragArea(point) || point.Y >= Height - GripHeight)
+                {
+                    m.Result = HtTransparent;
+                    return;
+                }
+            }
+
+            base.WndProc(ref m);
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            SetCloseHot(CloseRect.Contains(e.Location));
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _closePressed = false;
+            SetCloseHot(false);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            _closePressed = e.Button == MouseButtons.Left && CloseRect.Contains(e.Location);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+
+            var clicked = _closePressed && e.Button == MouseButtons.Left && CloseRect.Contains(e.Location);
+            _closePressed = false;
+
+            if (clicked)
+            {
+                CloseClicked?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        private void SetCloseHot(bool hot)
+        {
+            if (_closeHot != hot)
+            {
+                _closeHot = hot;
+                Invalidate(CloseRect);
+            }
+        }
 
         public void Apply(RacerStanding? standing, int position)
         {
@@ -243,13 +484,6 @@ public sealed class LapDetailPopup : ToolStripDropDown
                 _currentRun = standing.ConsecutiveValidLaps;
             }
 
-            var height = HeightFor(Math.Min(MaxRows, _lapMs.Length));
-
-            if (Width != ViewWidth || Height != height)
-            {
-                Size = new Size(ViewWidth, height);
-            }
-
             Invalidate();
         }
 
@@ -265,6 +499,7 @@ public sealed class LapDetailPopup : ToolStripDropDown
             var right = Width - Pad - Px(6);
 
             DrawHeader(g, left, right, Pad);
+            DrawClose(g);
 
             var statsTop = Pad + HeaderHeight;
             DrawStats(g, left, right - left, statsTop);
@@ -289,6 +524,9 @@ public sealed class LapDetailPopup : ToolStripDropDown
                 LineAlignment = StringAlignment.Center,
             };
 
+            // Left of the X, which takes the header's top-right corner.
+            right = Math.Min(right, CloseRect.Left - Px(6));
+
             var textRight = (float)right;
 
             if (_present && _position > 0)
@@ -303,6 +541,29 @@ public sealed class LapDetailPopup : ToolStripDropDown
 
             g.DrawString(_subtitle, AppTheme.SmallFont, subBrush,
                 new RectangleF(left, top + Px(23), textRight - left, Px(17)), trim);
+        }
+
+        /// <summary>The X: a cross in the muted text colour, on a soft tile while the pointer is over it.</summary>
+        private void DrawClose(Graphics g)
+        {
+            var rect = CloseRect;
+
+            if (_closeHot)
+            {
+                using var path = AppTheme.RoundedRect(rect, 6);
+                using var fill = new SolidBrush(AppTheme.RowAlt);
+                g.FillPath(fill, path);
+            }
+
+            var inset = Px(9);
+            using var pen = new Pen(_closeHot ? AppTheme.TextDark : AppTheme.TextMuted, Math.Max(1.5f, Px(2)))
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round,
+            };
+
+            g.DrawLine(pen, rect.Left + inset, rect.Top + inset, rect.Right - inset, rect.Bottom - inset);
+            g.DrawLine(pen, rect.Right - inset, rect.Top + inset, rect.Left + inset, rect.Bottom - inset);
         }
 
         private void DrawStats(Graphics g, int left, int innerWidth, int top)
@@ -436,7 +697,7 @@ public sealed class LapDetailPopup : ToolStripDropDown
                 return;
             }
 
-            var shown = Math.Min(MaxRows, _lapMs.Length);
+            var shown = Math.Min(Rows, _lapMs.Length);
             var first = _lapMs.Length - shown;
 
             // The pace bars are scaled across the laps actually on screen,
@@ -637,11 +898,11 @@ public sealed class LapDetailPopup : ToolStripDropDown
         private void DrawFooter(Graphics g, int left, int right, int top)
         {
             var total = _lapMs.Length;
-            var shown = Math.Min(MaxRows, total);
+            var shown = Math.Min(Rows, total);
 
             var text = total > shown
-                ? $"Last {shown} of {total} laps - updates live - click away to close"
-                : "Updates live - click away to close";
+                ? $"Last {shown} of {total} laps - updates live - drag the name to move"
+                : "Updates live - drag the name to move, Esc or X closes";
 
             if (_penaltyMs != 0)
             {

@@ -2324,6 +2324,14 @@ public sealed class AppSettings
     public List<string> RaceControlKpis { get; set; } = new();
     public List<string> PracticeKpis { get; set; } = new();
     public List<string> BigScreenKpis { get; set; } = new();
+
+    /// <summary>
+    /// Where Race Control's lap windows were last left, one per spot: the
+    /// first window open goes back where the first one was, and so on (30
+    /// Oct 2026 - see RaceControlControl.LapWindows). Screen coordinates, so
+    /// the monitor comes with them. Empty in older files.
+    /// </summary>
+    public List<LapWindowSpot> LapWindowSpots { get; set; } = new();
     public List<string> WebKpis { get; set; } = new();
 
     // Remembered chart-export choices, so the same output doesn't have to
@@ -2573,6 +2581,11 @@ public sealed class AppSettings
         // WHY (23 Oct 2026, bug hunt 10): read on every privacy change; a
         // null in the file means "none".
         PrivacyRetained = (PrivacyRetained ?? new List<PrivacyRetainedDriver>()).Where(item => item is not null).ToList();
+        LapWindowSpots = (LapWindowSpots ?? new List<LapWindowSpot>())
+            .Where(item => item is not null && item.Slot >= 0)
+            .GroupBy(item => item.Slot)
+            .Select(group => group.Last())
+            .ToList();
 
         foreach (var retained in PrivacyRetained)
         {
@@ -2817,6 +2830,22 @@ public sealed class AppSettings
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
         return SafeFile.WriteAllText(SettingsPath, json);
     }
+}
+
+/// <summary>
+/// One lap window spot's remembered place - see AppSettings.LapWindowSpots.
+/// </summary>
+public sealed class LapWindowSpot
+{
+    /// <summary>Which spot: 0 for the first window open, 1 for the second, and so on.</summary>
+    public int Slot { get; set; }
+
+    public int X { get; set; }
+
+    public int Y { get; set; }
+
+    /// <summary>How many laps it was sized to show.</summary>
+    public int Rows { get; set; } = LapDetailWindow.DefaultRows;
 }
 
 /// <summary>
