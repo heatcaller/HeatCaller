@@ -1091,7 +1091,8 @@ A refusal is JSON with a `refusal` field: `off` (no key or no model on this
 relay), `not-included` (not on this club's plan), `text` (empty, or over
 8,000 characters of prompt), `allowance` (the month's lines are spent),
 `busy`, or `upstream` (the model itself). The app treats every one the same
-way: Ollama on the race laptop writes that line instead, or the announcer's
+way: the model built into HeatCaller writes that line on the race laptop
+instead, or the announcer's
 template lines do. Commentary is the garnish, and nothing here is on the
 path of a flag call.
 
@@ -1258,7 +1259,7 @@ fly secrets set RELAY_BRAIN_KEY=sk-ant-...
 ```
 
 Without it the relay starts and says so, and clubs write commentary with
-Ollama on the race laptop or go without. Give this one a spend limit too.
+the model built into HeatCaller on the race laptop, or go without. Give this one a spend limit too.
 It is much the cheaper of the two - a race night of commentary is cents
 where a race night of speech is not - but a loop that asks for a line per
 lap would still be a bill, and the per-club line allowance is only the

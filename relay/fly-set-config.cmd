@@ -23,7 +23,8 @@ rem They are rotated on their own schedule and must never land in the file
 rem a club's token hash is pasted into - which is the file this script
 rem sends. Without either key the relay still starts and says which of
 rem them is missing; clubs then speak with their own ElevenLabs key or the
-rem Windows voice, and write commentary with Ollama or not at all.
+rem free Kokoro voice, and write commentary with the model built into
+rem HeatCaller or not at all.
 
 if not exist relay.config.json (
   echo No relay.config.json here. Run this from the relay folder, and mint a club first if you have none.

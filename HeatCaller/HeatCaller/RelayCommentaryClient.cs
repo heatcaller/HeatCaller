@@ -684,7 +684,7 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
 
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
-                StatusMessage?.Invoke("[brain] This relay is an older build that can't write commentary yet. Deploy the relay again, or use Ollama.");
+                StatusMessage?.Invoke("[brain] This relay is an older build that can't write commentary yet. Deploy the relay again - until then the model built into HeatCaller writes it.");
                 return;
             }
 
@@ -715,7 +715,7 @@ public sealed class RelayCommentaryClient : ICommentaryBrain
 
             StatusMessage?.Invoke(on
                 ? $"[brain] The relay will write commentary for this club.{catalogue}"
-                : "[brain] Commentary isn't included for this club on the relay yet - Ollama or the template lines will do it.");
+                : "[brain] Commentary isn't included for this club on the relay yet - the model built into HeatCaller or the template lines will do it.");
         }
         catch (Exception ex)
         {
