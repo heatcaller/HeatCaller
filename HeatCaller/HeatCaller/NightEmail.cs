@@ -297,7 +297,22 @@ internal static class NightEmail
         {
             text.Append("Your night page, with all of this:").Append(nl);
             text.Append($"  {link}").Append(nl);
-            text.Append("This link is yours - it can also check you in, so don't share it.").Append(nl).Append(nl);
+            text.Append("This link is yours - it can also check you in, so don't share it.").Append(nl);
+
+            // Me and the club's own page (29 Oct 2026, relay navigation round
+            // 4): the relay's Me tab remembers a phone once its night has
+            // opened there, and the club's home is where live timing, the
+            // running order and results are. Its address is the night
+            // link's own, up to /night.
+            text.Append("Open it once on your phone and Me, on the club's pages, brings you back to it from then on.").Append(nl).Append(nl);
+
+            var at = link.IndexOf("/night#d=", StringComparison.Ordinal);
+
+            if (at > 0)
+            {
+                text.Append("Live timing, the running order and results:").Append(nl);
+                text.Append($"  {link[..at]}").Append(nl).Append(nl);
+            }
         }
 
         text.Append("You're getting this because you asked for your night by email. To stop, ask at the desk.")

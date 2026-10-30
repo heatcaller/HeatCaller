@@ -4,6 +4,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The poster and emails mention Me (29 October).** The club poster's line now reads "Live timing, schedule and results - and your own races under Me." A driver's night email says that opening their night once on their phone lets **Me** bring them back to it, and gives the club's own page for live timing, the running order and results. The PIN email says the same PIN opens their own races under **Me** on race day. Update HeatCaller on the race PC; nothing changes on the relay.
 - **The help brought up to date on commentary and videos (29 October).** See [Commentary](announcer/commentary.md).
     - **The built-in model, not the old separate program.** The [Commentary](announcer/commentary.md) page now explains the model built into HeatCaller: what it is, that it needs nothing installed, that it skips a PC with under 2 GB of memory, and how it times itself and switches off on a PC too slow for it. Its troubleshooting covers the built-in model's own console lines. **What HeatCaller does**, the **FAQ** and the **Glossary** say the same.
     - **Console messages.** When the relay can't write commentary, the console and the **Test Connection** result now say the model built into HeatCaller writes instead instead.

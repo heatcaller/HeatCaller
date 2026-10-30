@@ -117,10 +117,11 @@ The email is headed "Your night at *club* - *Tuesday 22 October*" and has:
 - a greeting by first name and the night's date;
 - "YOUR RACES": the night's facts, as on their night page;
 - "YOUR REPORT CARD": the same report card as on their night page;
-- a link to their night page, with "This link is yours - it can also check you in, so don't share it.";
+- a link to their night page, with "This link is yours - it can also check you in, so don't share it." and "Open it once on your phone and Me, on the club's pages, brings you back to it from then on." (see [Getting around](index.md#getting-around));
+- "Live timing, the running order and results:" with your club's home page address;
 - "You're getting this because you asked for your night by email. To stop, ask at the desk."
 
-The link is only there while **Give each driver their own night at a private address** is ticked. The email never carries a transponder number.
+The link, the Me line and the club's home page address are only there while **Give each driver their own night at a private address** is ticked. The email never carries a transponder number.
 
 The line under the ticks says where things stand, for example "6 drivers want their night by email · 0 emailed tonight", or "Off. Nobody is emailed their night.", or "Set up the Email card below to send drivers their nights."
 
@@ -199,7 +200,7 @@ The **Share** card shows your club's home page address once an address and club 
 
 - **Open** opens it in your browser.
 - **Copy Link** copies it to the clipboard.
-- **Show Poster** opens a poster with the heading "FOLLOW THE RACING" and a QR code for the home page. **Print** prints it, and **Full screen** fills the screen with it (press <kbd>Esc</kbd> to leave full screen). The poster window stays open while you carry on working, so you can leave it on a second screen.
+- **Show Poster** opens a poster with the heading "FOLLOW THE RACING", a QR code for the home page, and the line "Scan with your phone camera. Live timing, schedule and results - and your own races under Me." **Print** prints it, and **Full screen** fills the screen with it (press <kbd>Esc</kbd> to leave full screen). The poster window stays open while you carry on working, so you can leave it on a second screen.
 
 ## Status
 
