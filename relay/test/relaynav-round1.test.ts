@@ -27,13 +27,14 @@ describe("relay navigation, round 1: the club's tabs", () => {
     await harness.close();
   });
 
-  it("has Home, Live, Schedule, Results and Me on the phone bar, and the rest only on wide screens", async () => {
+  // The same five on every screen since 30 Oct 2026 (round 5): Standings,
+  // Achievements and Tracks are Results' own tabs - relaynav-round5.test.ts.
+  it("has Home, Live, Schedule, Results and Me, and nothing else", async () => {
     const tabs = tabsOf((await call(harness, "GET", "/c/acme-rc/results")).text);
     const labels = [...tabs.matchAll(/<a href="([^"]*)"( class="([^"]*)")?[^>]*>[\s\S]*?<span>([^<]*)<\/span>/g)]
-      .map((m) => ({ href: m[1], wide: (m[3] ?? "").includes("wide"), label: m[4] }));
+      .map((m) => ({ href: m[1], label: m[4] }));
 
-    assert.deepEqual(labels.filter((t) => !t.wide).map((t) => t.label), ["Home", "Live", "Schedule", "Results", "Me"]);
-    assert.deepEqual(labels.filter((t) => t.wide).map((t) => t.label), ["Standings", "Achievements", "Tracks"]);
+    assert.deepEqual(labels.map((t) => t.label), ["Home", "Live", "Schedule", "Results", "Me"]);
     assert.equal(labels.find((t) => t.label === "Me")?.href, "/c/acme-rc/mynight");
   });
 

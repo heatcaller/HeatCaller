@@ -79,14 +79,17 @@ nav a[aria-current] { color: var(--text); border-bottom-color: var(--primary); f
 /* THE CLUB'S TABS (29 Oct 2026, relay navigation round 1). On a laptop or
    a tablet, one row across the top as before. On a phone, a bar fixed
    along the bottom with the five a driver uses on the night - Home, Live,
-   Schedule, Results, Me - in thumb reach and never scrolled out of sight;
-   Standings, Achievements and Tracks are tiles on Home there. The icons
-   only show on the phone bar. */
+   Schedule, Results, Me - in thumb reach and never scrolled out of sight.
+   The icons only show on the phone bar. Since 30 Oct 2026 (round 5) the
+   same five on every screen: Standings, Tracks and Achievements are tabs
+   under Results (nav.subtabs). */
 nav.tabs svg { display: none; }
 nav.tabs .lv { position: relative; }
 nav.tabs .dot { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--bad);
                 margin-left: 6px; vertical-align: middle; }
 nav.tabs.racing .dot { display: inline-block; }
+nav.subtabs { margin: -6px 0 18px; }
+nav.subtabs a { padding: 7px 12px; font-size: 0.85rem; }
 @media (max-width: 640px) {
   body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
   nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; margin: 0; gap: 0;
@@ -96,7 +99,6 @@ nav.tabs.racing .dot { display: inline-block; }
                min-height: 56px; padding: 8px 2px 6px; font-size: 0.72rem; border-radius: 0;
                border-bottom: 0; border-top: 2px solid transparent; margin: -1px 0 0; }
   nav.tabs a[aria-current] { border-top-color: var(--primary); background: none; }
-  nav.tabs a.wide { display: none; }
   nav.tabs svg { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8;
                  stroke-linecap: round; stroke-linejoin: round; }
   nav.tabs .dot { position: absolute; top: 6px; left: calc(50% + 8px); margin: 0; }
@@ -920,16 +922,23 @@ function shell(page: Shell, context: PageContext): string {
   // A driver's own pages - check in, the PIN box, their night, sign-up -
   // are all "Me" (29 Oct 2026, relay navigation round 1), so none of them
   // looks like a page outside the club's site.
+  // Standings, Tracks and Achievements are part of Results (30 Oct 2026,
+  // relay navigation round 5, Asher's pick: "tabs on results"), so all
+  // four light up Results and carry its row of tabs.
+  const ofResults = page.active === "results" || page.active === "standings" || page.active === "tracks" || page.active === "badges";
   const lit = page.active === "checkin" || page.active === "signup" || page.active === "night" || page.active === "mynight"
     ? "me"
-    : page.active;
+    : ofResults ? "results" : page.active;
 
-  // icon is an SVG path, drawn only on the phone bar; cls "wide" keeps a
-  // tab off the phone bar, where Home's tiles carry it instead.
+  // icon is an SVG path, drawn only on the phone bar.
   const tab = (href: string, label: string, key: string, icon: string, cls = "") =>
     `<a href="/c/${club}${href === "" ? "" : "/" + href}"${cls === "" ? "" : ` class="${cls}"`}${lit === key ? ' aria-current="page"' : ""}>`
     + (icon === "" ? "" : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg>`)
     + `<span>${label}</span>${key === "live" ? '<i class="dot" aria-hidden="true"></i>' : ""}</a>`;
+
+  // One of Results' own tabs, marked when it is the page itself.
+  const subTab = (href: string, label: string) =>
+    `<a href="/c/${club}/${href}"${page.active === href ? ' aria-current="page"' : ""}>${label}</a>`;
 
   // Only hex colours reach here (site.ts refuses anything else, the logo
   // plate included), under variable names this file chose - never a name
@@ -1038,12 +1047,15 @@ ${overrides}
       ${tab("live", "Live", "live", "M12 12h.01M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8", "lv")}
       ${tab("schedule", "Schedule", "schedule", "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0")}
       ${tab("results", "Results", "results", "M5 21V4M5 4h11l-2 4 2 4H5")}
-      ${tab("standings", "Standings", "standings", "", "wide")}
-      ${tab("badges", "Achievements", "badges", "", "wide")}
-      ${tab("tracks", "Tracks", "tracks", "", "wide")}
       ${tab("mynight", "Me", "me", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0")}
     </nav>
-  </header>
+  </header>${ofResults ? `
+  <nav class="subtabs" aria-label="Results">
+    ${subTab("results", "Sessions")}
+    ${subTab("standings", "Standings")}
+    ${subTab("tracks", "Tracks")}
+    ${subTab("badges", "Achievements")}
+  </nav>` : ""}
   ${page.body}
   <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span></footer>
 </div>
@@ -4278,7 +4290,7 @@ async function load() {
     now.innerHTML = '<div class="hero">' +
       '<span class="kicker">' + (ev && ev.name ? esc(ev.name) : 'Welcome') + '</span>' +
       '<span class="big">No racing right now</span>' +
-      '<span class="when">Results, standings, achievements and tracks are all below.</span></div>';
+      '<span class="when">Results, standings, tracks and achievements are all under Results.</span></div>';
   }
 
   // UNDER THE HERO, AND ONLY WHILE NOTHING IS RUNNING. A club racing right
@@ -4322,9 +4334,6 @@ poll(load, 15000);
 
 export function homePage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
   const base = `/c/${escapeHtml(club)}`;
-  const tile = (href: string, title: string, sub: string) =>
-    `<a class="tile" href="${base}/${href}"><b>${title}</b><span>${sub}</span></a>`;
-
   // Where else to find the club, under everything else. Nothing - not even
   // the heading - for a club that has set no links.
   const anchors = socialAnchors(context.look.social);
@@ -4341,19 +4350,17 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     body:
       '<section class="lc" id="mine" hidden></section>' +
       '<div id="now"><p class="note">Loading&hellip;</p></div>' +
+      // Check in from Me (30 Oct 2026, round 5): Explore's Check in and My
+      // night tiles went, and a right PIN on Me checks a driver in.
+      (context.look.checkIn
+        ? `<p class="note"><a class="more" href="${base}/mynight">Check in: tap Me and type your PIN</a></p>`
+        : "") +
       '<div class="day">The night before</div><div id="preview" style="display:none"></div>' +
       '<div class="day">Up next</div><div class="card" id="upnext" style="display:none"></div>' +
       '<div class="day">Latest results</div><div class="card" id="latest" style="display:none"></div>' +
-      '<div class="day">Explore</div><div class="tiles">' +
-      tile("live", "Live", "The race as it runs") +
-      tile("schedule", "Schedule", "Who's on when") +
-      (context.look.checkIn ? tile("checkin", "Check in", "Tell the desk you're here") : "") +
-      (context.look.checkIn ? tile("mynight", "My night", "Your own races, with your PIN") : "") +
-      tile("results", "Results", "Every session") +
-      tile("standings", "Standings", "The championship") +
-      tile("badges", "Achievements", "Who's earned what") +
-      tile("tracks", "Tracks", "Records and best laps") +
-      "</div>" +
+      // No Explore (30 Oct 2026, relay navigation round 5): its tiles
+      // repeated the bar, and Standings, Tracks and Achievements are tabs
+      // under Results now.
       social,
     script: HOME_JS + HOME_ME_JS,
   }, context);

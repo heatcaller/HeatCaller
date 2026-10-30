@@ -292,13 +292,16 @@ describe("the club's look", () => {
   // round 1): it is part of Me, reached from Home's tile and from Me.
   // Me has no link to the check-in page since 30 Oct 2026 (asked for by
   // Asher): a right PIN there checks the driver in itself.
-  it("offers check-in from Home only while check-in is open, and never links it from Me", async () => {
-    assert.equal((await call(harness, "GET", "/c/acme-rc")).text.includes('/c/acme-rc/checkin"'), false);
-    assert.equal((await call(harness, "GET", "/c/acme-rc/mynight")).text.includes('/c/acme-rc/checkin"'), false);
+  // Since 30 Oct 2026 (relay navigation round 5) Home points drivers at
+  // Me, where a right PIN checks them in, rather than at the check-in page.
+  it("points drivers from Home to Me only while check-in is open, and never links the check-in page", async () => {
+    assert.equal((await call(harness, "GET", "/c/acme-rc")).text.includes("Check in: tap Me"), false);
 
     await publishCheckin(harness, checkinDoc(), 2);
 
-    assert.equal((await call(harness, "GET", "/c/acme-rc")).text.includes('/c/acme-rc/checkin"'), true);
+    const home = (await call(harness, "GET", "/c/acme-rc")).text;
+    assert.match(home, /<a class="more" href="\/c\/acme-rc\/mynight">Check in: tap Me and type your PIN<\/a>/);
+    assert.equal(home.includes('/c/acme-rc/checkin"'), false);
     assert.equal((await call(harness, "GET", "/c/acme-rc/mynight")).text.includes('/c/acme-rc/checkin"'), false);
     assert.equal((await call(harness, "GET", "/c/acme-rc/results")).text.includes('/c/acme-rc/checkin"'), false, "not a tab");
   });
