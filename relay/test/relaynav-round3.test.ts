@@ -88,7 +88,9 @@ describe("relay navigation, round 3: Your next race on Home", () => {
     return page;
   }
 
-  const nightReads = (page: FakePage) => page.sent.filter((s) => s.url.endsWith("/night"));
+  // The live poll only: since round 6 (30 Oct 2026) Home also reads the
+  // driver's whole night, every five minutes, for its "You" strip.
+  const nightReads = (page: FakePage) => page.sent.filter((s) => s.url.endsWith("/night") && (s.body as { part?: string }).part === "live");
 
   it("shows their next race, with their night and Watch live, when the phone remembers them", async () => {
     const page = await openHome({ [ME]: CODE }, relay({ race: "Q2 Heat 1 (Stock Buggy)", away: 0, now: true }));
@@ -147,7 +149,7 @@ describe("relay navigation, round 3: Your next race on Home", () => {
   });
 
   it("puts it above everything else on Home, hidden until there is something to say", () => {
-    assert.match(homePage("acme-rc", "Acme RC"), /<section class="lc" id="mine" hidden><\/section><div id="now">/);
+    assert.match(homePage("acme-rc", "Acme RC"), /<section class="lc" id="mine" hidden><\/section><div id="now" data-when="">/);
   });
 });
 
