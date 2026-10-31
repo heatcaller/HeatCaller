@@ -40,8 +40,24 @@ rem The version is read from HeatCaller.csproj rather than typed, because the
 rem updater compares against that number and a release packed under a version
 rem that does not match it is a release that will never be offered to anyone.
 rem
+rem --packAuthors is HeatCaller LLC, the company the license agreement is
+rem with, and what Windows shows as the publisher. The signature still names
+rem Asher Kent: the certificate was validated for him as an individual.
+rem
 rem -i gives Setup.exe and the updater the app's own icon (the Sunset Grid,
 rem 24 Oct 2026), the same file the exe is built with.
+rem
+rem --msi also builds HeatCallerApp-beta.msi beside Setup.exe, and THE .MSI
+rem IS WHAT A CLUB GETS. It opens on a license page with the beta license
+rem agreement and the privacy notice (--instLicense, the same file the app
+rem embeds and asks for at first launch - see Terms.cs), and Next stays
+rem greyed out until "I accept" is ticked, so it cannot be installed without
+rem accepting them. Velopack's Setup.exe has no license page at all - checked
+rem in the vpk 1.2.161 source, 28 Oct 2026 - so a club given Setup.exe is
+rem asked at first launch instead, and can't use HeatCaller until it accepts.
+rem --instLocation PerUser installs it where Setup.exe does, for this Windows
+rem user under %LocalAppData%, with no administrator prompt; updates reach an
+rem .msi install exactly as they reach a Setup.exe one.
 rem
 rem -r win-x64 matches publish.cmd. Without it vpk defaults to x86 and
 rem marks an x64-only self-contained build as an x86 release - it warns, but
@@ -55,6 +71,7 @@ set "PUBDIR=%USERPROFILE%\HeatCaller-publish"
 set "RELDIR=%USERPROFILE%\HeatCaller-releases"
 set "SIGNFILE=signing-metadata.json"
 set "SIGNLABEL=Public Trust - real, clubs will trust this"
+set "TERMS=%CD%\HeatCaller\HeatCaller\Assets\Legal\HeatCaller-Terms.md"
 
 :args
 if "%~1"=="" goto :ready
@@ -109,6 +126,7 @@ if errorlevel 1 goto :novpk
 
 if not exist "%PUBDIR%\HeatCaller.exe" goto :nopublish
 if defined SIGNFILE if not exist "%SIGNFILE%" goto :nosignfile
+if not exist "%TERMS%" goto :noterms
 
 echo.
 echo === HeatCaller: pack %VER% ===
@@ -119,14 +137,17 @@ echo   signing:   %SIGNLABEL%
 echo.
 
 if defined SIGNFILE (
-  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "Asher Kent" -i "%CD%\HeatCaller\HeatCaller\Assets\HeatCaller.ico" -c beta -o "%RELDIR%" --azureTrustedSignFile "%CD%\%SIGNFILE%"
+  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "HeatCaller LLC" -i "%CD%\HeatCaller\HeatCaller\Assets\HeatCaller.ico" -c beta -o "%RELDIR%" --msi --instLocation PerUser --instLicense "%TERMS%" --azureTrustedSignFile "%CD%\%SIGNFILE%"
 ) else (
-  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "Asher Kent" -i "%CD%\HeatCaller\HeatCaller\Assets\HeatCaller.ico" -c beta -o "%RELDIR%"
+  vpk pack -u HeatCallerApp -v %VER% -r win-x64 -p "%PUBDIR%" -e HeatCaller.exe --packTitle "HeatCaller" --packAuthors "HeatCaller LLC" -i "%CD%\HeatCaller\HeatCaller\Assets\HeatCaller.ico" -c beta -o "%RELDIR%" --msi --instLocation PerUser --instLicense "%TERMS%"
 )
 if errorlevel 1 goto :fail
 
 echo.
 echo PACKED %VER% - %RELDIR%
+echo.
+echo Send clubs the .msi (HeatCallerApp-beta.msi), not Setup.exe: the .msi
+echo makes them accept the license and privacy notice before it installs.
 echo.
 if not defined SIGNFILE goto :done
 echo Check the signature took. Right-click the Setup exe in %RELDIR%,
@@ -169,6 +190,14 @@ echo.
 echo *** FAILED - %SIGNFILE% is not in this folder. It names the Azure
 echo *** signing account and certificate profile; without it nothing can be
 echo *** signed. It belongs in git - if it has gone missing, git checkout it.
+exit /b 1
+
+:noterms
+echo.
+echo *** FAILED - the license and privacy notice is not where it should be:
+echo ***   %TERMS%
+echo *** The installer shows it, and the app will not start without it. It
+echo *** belongs in git - if it has gone missing, git checkout it.
 exit /b 1
 
 :fail

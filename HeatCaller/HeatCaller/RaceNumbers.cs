@@ -102,9 +102,17 @@ internal static class RaceNumbers
     /// is the one case where the plain reading is actively wrong: nobody
     /// says "five point zero zero".
     ///
-    /// Rounded to hundredths, as the old spoken form was and for the same
-    /// reason: nobody wants to hear a thousandth. The display form keeps
-    /// the full precision.
+    /// THE THOUSANDTH IS SAID WHEN THERE IS ONE (31 Oct 2026). This used
+    /// to round to hundredths, on the reasoning that nobody wants to hear a
+    /// thousandth. But every screen shows the full time - the Big Screen,
+    /// the board and the results all read 6.935 - and a voice saying "six
+    /// ninety-four" under a screen that says 6.935 reads to the room as the
+    /// announcer getting the time wrong. A viewer of the demo video said
+    /// exactly that. So the time is read as timed, in the same rhythm: the
+    /// tenth on its own, then the last two digits as a pair - "six nine
+    /// thirty-five", "five oh oh six", "twelve three forty-one". A time
+    /// with nothing in the thousandths keeps the shorter reading ("five oh
+    /// six" for 5.060), which is still exactly the time on the screen.
     ///
     /// OUTSIDE A PLAUSIBLE LAP it falls back to <see cref="Plainly"/>. A
     /// "lap" under a second or over ninety-nine is a towed car, a decoder
@@ -114,30 +122,47 @@ internal static class RaceNumbers
     /// </summary>
     internal static string LapSpoken(long ms)
     {
-        var centiseconds = (long)Math.Round(ms / 10.0);
-        var whole = centiseconds / 100;
-        var hundredths = centiseconds % 100;
+        var whole = ms / 1000;
+        var thousandths = ms % 1000;
 
         // A MINUTE IS WHERE THE CONVENTION STOPS. "Sixty fifty" for a
         // 60.5s lap reads as six thousand and fifty, and a lap that long
         // is given in minutes by anybody saying it out loud. Under a
         // second it is a decoder fault or a session clock being read as a
         // lap, and "zero forty-five" is not a lap time in any language.
-        if (whole is <= 0 or >= 60)
+        if (ms < 0 || whole is <= 0 or >= 60)
         {
             return Plainly(ms);
         }
 
-        if (hundredths == 0)
+        if (thousandths == 0)
         {
             return $"{Words(whole)} flat";
         }
 
-        // Under ten hundredths the "oh" is doing real work: "five oh six"
-        // against "five six", which is a different lap time read aloud.
-        return hundredths < 10
-            ? $"{Words(whole)} oh {Words(hundredths)}"
-            : $"{Words(whole)} {Words(hundredths)}";
+        // Nothing in the thousandths: the hundredths say the whole time, and
+        // say it the way it has always been called.
+        if (thousandths % 10 == 0)
+        {
+            var hundredths = thousandths / 10;
+
+            // Under ten hundredths the "oh" is doing real work: "five oh six"
+            // against "five six", which is a different lap time read aloud.
+            return hundredths < 10
+                ? $"{Words(whole)} oh {Words(hundredths)}"
+                : $"{Words(whole)} {Words(hundredths)}";
+        }
+
+        // A thousandth to say: the tenth on its own, then the last two
+        // digits as a pair - "six nine thirty-five" for 6.935. The "oh"s
+        // hold every digit's place, as they do above: "five oh oh six" is
+        // 5.006 and cannot be heard as 5.06.
+        var tenth = thousandths / 100;
+        var pair = thousandths % 100;
+        var tenthSaid = tenth == 0 ? "oh" : Words(tenth);
+        var pairSaid = pair < 10 ? $"oh {Words(pair)}" : Words(pair);
+
+        return $"{Words(whole)} {tenthSaid} {pairSaid}";
     }
 
     /// <summary>

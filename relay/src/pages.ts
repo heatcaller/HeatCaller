@@ -3271,10 +3271,20 @@ const lapVoice = (function () {
 // --- The clips for each kind of words, the names lapvoice.ts makes. ---------
 // Null when there is no clip: the call is then the phone's.
 
-// A lap time in hundredths, 3.00 to 19.99.
+// A lap time, 3.000 to 19.999, never rounded (31 Oct 2026): one clip when
+// there is nothing in the thousandths ("nine forty-two"), and the two halves
+// back to back when there is ("six nine" "thirty-five") - as the app says it.
 function lvTime(ms) {
-  const cs = Math.round(ms / 10);
-  return cs >= 300 && cs <= 1999 ? ['t' + cs] : null;
+  const t = Math.round(ms);
+  if (t < 3000 || t > 19999) return null;
+  if (t % 10 === 0) return ['t' + (t / 10)];
+  return ['tt' + Math.floor(t / 100), 'tp' + (t % 100)];
+}
+
+// The same time for the phone's own voice: every digit the screen shows.
+function lvTimeText(ms) {
+  const t = Math.round(ms);
+  return (t / 1000).toFixed(t % 10 === 0 ? 2 : 3);
 }
 
 function lvLap(n) { return n >= 1 && n <= 200 ? ['lap' + n] : null; }
@@ -3312,6 +3322,8 @@ function lvAhead(lapNumber, ms) {
   const names = ['best', 'lap' + (lapNumber + 1)];
   const cs = Math.round(ms / 10);
   for (let d = -10; d <= 10; d++) names.push('t' + (cs + d));
+  const ds = Math.floor(Math.round(ms) / 100);
+  for (let d = -1; d <= 1; d++) names.push('tt' + (ds + d));
   return names;
 }
 `;
@@ -3487,7 +3499,7 @@ const lapTalk = (function () {
     const last = laps[count - 1];
     const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
     const isBest = count > 1 && last <= best;
-    const parts = [{ text: (last / 1000).toFixed(2), clips: lvTime(last) }];
+    const parts = [{ text: lvTimeText(last), clips: lvTime(last) }];
     if (isBest) parts.push({ text: 'best lap', clips: ['best'] });
 
     if (!timeOnly) {
@@ -6809,7 +6821,7 @@ const nightTalk = (function () {
 
     const last = laps[count - 1];
     const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
-    const parts = [{ text: (last / 1000).toFixed(2), clips: lvTime(last) }];
+    const parts = [{ text: lvTimeText(last), clips: lvTime(last) }];
     if (count > 1 && last <= best) parts.push({ text: 'best lap', clips: ['best'] });
     const target = targetWords(last, car && car.target);
     if (target) parts.push({ text: target, clips: lvTarget(last, car.target) });

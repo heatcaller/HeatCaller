@@ -220,6 +220,11 @@ public sealed class BackupRestoreControl : UserControl
         var btnAbout = new Button { Text = "About HeatCaller..." };
         btnAbout.Click += (_, _) => AboutForm.ShowFor(FindForm());
 
+        // The license and privacy notice the club accepted before
+        // HeatCaller first opened, to read again - see TermsForm.
+        var btnTerms = new Button { Text = "License and Privacy..." };
+        btnTerms.Click += (_, _) => TermsForm.ShowFor(FindForm());
+
         // The address the support file is for. A link rather than painted
         // text so it opens the club's email program, with Copy Address
         // beside it because a track PC often has no email program set up at
@@ -255,7 +260,7 @@ public sealed class BackupRestoreControl : UserControl
 
         var card = new Section("Getting help");
 
-        card.Add(new ButtonBar().With(btnSupport, btnAbout));
+        card.Add(new ButtonBar().With(btnSupport, btnAbout, btnTerms));
         card.Add(lblHint);
         card.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail), gapBelow: 0);
 

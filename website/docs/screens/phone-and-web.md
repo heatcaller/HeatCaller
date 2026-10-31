@@ -59,17 +59,18 @@ When the server is running, the page lists one address for each page:
 | **Live results:** | `http://<laptop address>:<port>/` | **Copy**, **QR code** |
 | **Phone remote:** | `http://<laptop address>:<port>/remote` | **Copy**, **QR code** |
 | **Driver check-in:** | `http://<laptop address>:<port>/checkin` | **Copy**, **QR code** |
+| **Driver coach:** | `http://<laptop address>:<port>/coach` | **Copy**, **QR code** |
 | **Race manager:** | `http://<laptop address>:<port>/manage` | **Copy**, **QR code** |
 | **OBS overlay:** | `http://<laptop address>:<port>/?overlay=1` | **Copy** |
 | **Broadcast graphics:** | `http://localhost:<port>/broadcast` | **Copy** |
 
-The coach page, `http://<laptop address>:<port>/coach`, isn't listed: type the live results address with `/coach` on the end, or make a QR code of it. See [Coach](#coach).
+**Driver coach** is the page a driver opens to hear their own lap times in their earbuds. See [Coach](#coach).
 
 HeatCaller works out the laptop's address on the local network for you (usually something like `192.168.1.20`). If an address says `localhost`, the laptop isn't connected to a network phones can reach.
 
 ### QR posters
 
-Click **QR code** next to an address to open a scan-to-join poster: a large QR code with a heading ("LIVE RESULTS", "RACE REMOTE", "CHECK IN" or "RACE MANAGER") and a line telling people to use the same Wi-Fi. The poster has **Print**, **Full screen** and **Close** buttons. Press <kbd>Esc</kbd> to leave full screen.
+Click **QR code** next to an address to open a scan-to-join poster: a large QR code with a heading ("LIVE RESULTS", "RACE REMOTE", "CHECK IN", "DRIVER COACH" or "RACE MANAGER") and a line telling people to use the same Wi-Fi. The poster has **Print**, **Full screen** and **Close** buttons. Press <kbd>Esc</kbd> to leave full screen.
 
 The poster opens in its own window, so you can leave it up on a second screen while you carry on racing. If the server isn't running, you'll see "Start the web server first - there's no address to put in a code until it's listening."
 

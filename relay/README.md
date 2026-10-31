@@ -1049,10 +1049,12 @@ same for every club whatever voice a club runs in its Cast tab. See
 | `GET /lap-voice` | `{ ok, voice, v, clips }`: the clips this relay has. Cached 5 minutes. |
 | `GET /lap-voice/<name>.mp3` | One clip. The page adds `?v=` from the list, so it is cached for a year. |
 
-The clips: lap times 3.00 to 19.99, "Lap one" to "Lap two hundred", "P one"
+The clips: lap times 3.00 to 19.99, the two halves of a time with a
+thousandth ("six nine" and "thirty-five", played back to back, so 3.001 to
+19.999 is never rounded), "Lap one" to "Lap two hundred", "P one"
 to "P thirty", gaps from "nothing in it" to "thirty seconds back" and "a lap
 back" to "nine laps back", the target words up to two seconds, "best lap"
-and "Lap times on". 2,193 clips, 36,946 characters: about $1.48 at Flash's
+and "Lap times on". 2,453 clips, 39,666 characters: about $1.59 at Flash's
 $0.04 per 1,000, once. A call the clips can't cover, or a clip that takes
 more than a second, is said in the phone's own voice, whole.
 
