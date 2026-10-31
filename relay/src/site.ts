@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { SUN_ICON_VERSION } from "./sun.js";
 import type { StoredDocument } from "./types.js";
 
 /**
@@ -49,11 +50,11 @@ export interface Look {
    */
   readonly logoPlate: string | undefined;
   /**
-   * The same idea for the home-screen icon, which is the logo when there is
-   * one (then this is logoVersion) and otherwise a chequered flag drawn in
-   * the look's colours (then a fingerprint of exactly the colours that
-   * decide its pixels - see flagColours). A new logo or a recoloured flag
-   * is a new icon address, so no phone or link preview keeps the old one.
+   * The same idea for the home-screen icon. Since 30 Oct 2026 (relay
+   * branding, Asher: "synthwave colors for the icon regardless of logo")
+   * that is HeatCaller's sun for every club, logo or not, so this is the
+   * sun's own version (sun.ts) - one address for every club, changed only
+   * when the drawing is.
    */
   readonly iconVersion: string;
   /** Whether online check-in is open, which decides whether its tab shows. */
@@ -144,7 +145,7 @@ export const DEFAULT_LOOK: Look = Object.freeze({
   logo: undefined,
   logoVersion: undefined,
   logoPlate: undefined,
-  iconVersion: flagVersionOf(flagColours({ light: false, vars: {} })),
+  iconVersion: SUN_ICON_VERSION,
   checkIn: false,
   listening: false,
   social: Object.freeze([]),
@@ -155,11 +156,6 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
-}
-
-/** A PNG's pixel width, read from its header. The signature has already been checked by whoever holds one. */
-export function pngWidth(png: Buffer): number {
-  return png.length >= 24 ? png.readUInt32BE(16) : 0;
 }
 
 /** A PNG from a data: URI, or undefined for anything that is not exactly that. */
@@ -225,7 +221,7 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     logo,
     logoVersion,
     logoPlate,
-    iconVersion: logoVersion ?? flagVersionOf(flagColours({ light, vars })),
+    iconVersion: SUN_ICON_VERSION,
     checkIn: record(checkin?.body)?.["enabled"] === true,
 
     // Merged in by Relay.lookFor from a document of its own, the way
@@ -339,24 +335,4 @@ export function safeLink(raw: string): string | undefined {
  */
 export function logoVersionOf(logo: Buffer): string {
   return createHash("sha256").update(logo).digest("hex").slice(0, 12);
-}
-
-/**
- * The two colours the chequered-flag icon is drawn in, for a club with no
- * logo: the flag's background is the primary colour, and the dark squares
- * come from the darkest colour the look has - its background on a dark
- * look, its text on a light one. Kept here, next to the version, so the
- * icon that is drawn and the address it is given can never disagree.
- * Literal fallbacks (not the constants above) because DEFAULT_LOOK calls
- * this while the module is still loading.
- */
-export function flagColours(look: Pick<Look, "light" | "vars">): readonly [background: string, dark: string] {
-  const primary = look.vars["--primary"] ?? "#FF2E9A";
-  const dark = look.light ? (look.vars["--text"] ?? "#11151C") : (look.vars["--bg"] ?? "#0F0722");
-  return [primary, dark];
-}
-
-/** Twelve hex digits fingerprinting the flag icon's inputs: its size and its two colours. */
-export function flagVersionOf([background, dark]: readonly [string, string]): string {
-  return createHash("sha256").update(`flag|512|${background}|${dark}`).digest("hex").slice(0, 12);
 }
