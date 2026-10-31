@@ -557,12 +557,17 @@ describe("club look and icon", () => {
       });
       assert.equal(published.status, 200);
 
-      // The publish reads the old document itself; the icon then reads the new one once.
+      // The publish reads the old document itself; the next page then reads the new one once.
       const readsBefore = siteReads;
-      const second = await fetch(`${harness.base}/c/acme-rc/icon.png`).then((r) => r.arrayBuffer());
-      await fetch(`${harness.base}/c/acme-rc/icon.png`).then((r) => r.arrayBuffer());
+      await call(harness, "GET", "/c/acme-rc/results");
+      await call(harness, "GET", "/c/acme-rc/results");
       assert.equal(siteReads, readsBefore + 1);
-      assert.notDeepEqual(Buffer.from(second), Buffer.from(first), "drawn again in the new colours");
+
+      // The icon is HeatCaller's sun whatever the club's colours (30 Oct
+      // 2026, relay branding), so it reads no look at all.
+      const second = await fetch(`${harness.base}/c/acme-rc/icon.png`).then((r) => r.arrayBuffer());
+      assert.equal(siteReads, readsBefore + 1);
+      assert.deepEqual(Buffer.from(second), Buffer.from(first), "the same sun in any colours");
 
       // Home's check-in line follows the check-in document straight away
       // (a tile until 30 Oct 2026, relay navigation round 5).

@@ -411,9 +411,11 @@ describe("bug hunt 7: the night-before preview on the home page", () => {
     runInContext(script, context);
     await settle();
 
-    const preview = byId.get("preview");
-    assert.ok(preview, "the page drew into its preview slot");
-    return preview;
+    // The preview is Home's main card since round 6 (30 Oct 2026): it is
+    // drawn into "now", where the live or up-next card goes.
+    const now = byId.get("now");
+    assert.ok(now, "the page drew into its main card");
+    return now;
   }
 
   it("shows the preview the night before, when the day's first round is only 'next'", async () => {
@@ -423,7 +425,6 @@ describe("bug hunt 7: the night-before preview on the home page", () => {
     ]);
 
     assert.match(preview.innerHTML, /Nineteen cars are entered/);
-    assert.equal(preview.style["display"], "");
   });
 
   it("still hides it while a round is running", async () => {
@@ -432,8 +433,8 @@ describe("bug hunt 7: the night-before preview on the home page", () => {
       { status: "next", className: "Modified", time: "10:20" },
     ]);
 
-    assert.equal(preview.innerHTML, "");
-    assert.equal(preview.style["display"], "none");
+    assert.doesNotMatch(preview.innerHTML, /Nineteen cars/);
+    assert.match(preview.innerHTML, /On now/);
   });
 });
 

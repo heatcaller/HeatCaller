@@ -99,13 +99,27 @@ describe("the home page's latest results (#8)", () => {
     }
   });
 
-  it("never fetches the full listing, and refetches bodies only when the newest three change", async () => {
+  // Round 6 (30 Oct 2026): Home's latest three gave way to the last race
+  // night, read from the results index. The promise is the same - no flat
+  // listing, and nothing but one small meta read while nothing changes.
+  it("never fetches the full listing, and reads the last night again only when the index changes", async () => {
     const page = scriptOf((await call(harness, "GET", "/c/acme-rc")).text);
 
     assert.ok(!/grab\('\/collection\/results'\)/.test(page), "the home page does not read the flat listing");
 
-    const helper = /let latestSig = null;[\s\S]*?\nasync function latestResults\(\) \{[\s\S]*?\n\}\n/.exec(page)?.[0];
-    assert.ok(helper, "latestResults is where the test expects it");
+    const helper = /let nightSig = null;[\s\S]*?\nasync function lastNight\(\) \{[\s\S]*?\n\}\n/.exec(page)?.[0];
+    assert.ok(helper, "lastNight is where the test expects it");
+
+    const index = (label: string) => ({
+      shape: 1, year: "2026", drivers: [], raced: [],
+      sessions: [
+        { id: "s8", day: "2026-09-19", at: "19:00", type: "Race", label: "Heat 8", won: "Sam" },
+        { id: "s9", day: "2026-09-19", at: "20:00", type: "Race", label, won: "Jo" },
+      ],
+      days: [{ day: "2026-09-19", sessions: [0, 1] }],
+    });
+
+    assert.equal(await publish(harness, "resultsindex/2026", index("A Main")), 200);
 
     const asked: string[] = [];
     const context = createContext({
@@ -116,24 +130,23 @@ describe("the home page's latest results (#8)", () => {
       },
     });
 
-    runInContext(`${helper}\nthis.latestResults = latestResults;`, context);
-    const latest = (context as { latestResults: () => Promise<any> }).latestResults;
+    runInContext(`let nightHeld = null;\n${helper}\nthis.lastNight = lastNight;`, context);
+    const lastNight = (context as { lastNight: () => Promise<any> }).lastNight;
 
-    const first = await latest();
-    assert.equal(first.body.items.length, 3);
-    assert.equal(first.body.items[0].body.label, "Heat 9");
-    assert.equal(asked.length, 2);
+    const first = await lastNight();
+    assert.equal(first.day, "2026-09-19");
+    assert.deepEqual(first.sessions.map((x: { label: string }) => x.label), ["Heat 8", "A Main"]);
+    assert.deepEqual(asked, ["/collection/resultsindex?meta=1", "/collection/resultsindex/2026", "/collection/results?ids=s8,s9"]);
 
     // Nothing new: only the small meta read.
-    await latest();
-    assert.equal(asked.length, 3);
-    assert.match(asked[2] as string, /meta=1&limit=3$/);
+    await lastNight();
+    assert.equal(asked.length, 4);
+    assert.equal(asked[3], "/collection/resultsindex?meta=1");
 
-    // A new result: the bodies are read again.
-    assert.equal(await publish(harness, "results/s10", { label: "Heat 10" }), 200);
-    const fresh = await latest();
-    assert.equal(fresh.body.items[0].body.label, "Heat 10");
-    assert.equal(asked.length, 5);
+    // The index changes: the night is read again.
+    assert.equal(await publish(harness, "resultsindex/2026", index("A Main (re-run)")), 200);
+    const fresh = await lastNight();
+    assert.equal(fresh.sessions[1].label, "A Main (re-run)");
     assert.ok(asked.every((path) => path !== "/collection/results"));
   });
 });

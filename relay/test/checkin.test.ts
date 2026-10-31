@@ -5,8 +5,19 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pinHash } from "../src/server.js";
-import { flagIcon } from "../src/icon.js";
-import { flagColours, flagVersionOf, logoVersionOf } from "../src/site.js";
+import { encodePng } from "../src/icon.js";
+import { logoVersionOf } from "../src/site.js";
+import { SUN_ICON_VERSION, sunIcon } from "../src/sun.js";
+
+/** A real 256-pixel PNG, standing in for a club's logo. */
+function plainPng(red: number): Buffer {
+  const pixels = new Uint8Array(256 * 256 * 4);
+  for (let i = 0; i < pixels.length; i += 4) {
+    pixels[i] = red;
+    pixels[i + 3] = 255;
+  }
+  return encodePng(256, 256, pixels);
+}
 import { FileStore } from "../src/store.js";
 import { ACME_TOKEN, BROOK_TOKEN, call, start, type Harness } from "./helpers.js";
 
@@ -306,13 +317,14 @@ describe("the club's look", () => {
     assert.equal((await call(harness, "GET", "/c/acme-rc/results")).text.includes('/c/acme-rc/checkin"'), false, "not a tab");
   });
 
-  it("serves a real PNG icon, and the club's logo when it has one", async () => {
-    const flag = await fetch(`${harness.base}/c/acme-rc/icon.png`);
-    const flagBytes = Buffer.from(await flag.arrayBuffer());
+  it("serves HeatCaller's sun as the icon, and the club's logo when it has one", async () => {
+    const sun = await fetch(`${harness.base}/c/acme-rc/icon.png`);
+    const flagBytes = Buffer.from(await sun.arrayBuffer());
 
-    assert.equal(flag.headers.get("content-type"), "image/png");
+    assert.equal(sun.headers.get("content-type"), "image/png");
     assert.deepEqual([...flagBytes.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     assert.equal(flagBytes.readUInt32BE(16), 512, "width");
+    assert.deepEqual(flagBytes, sunIcon());
     assert.equal((await fetch(`${harness.base}/c/acme-rc/logo.png`)).status, 404);
 
     // Only the signature is checked, so a signature and anything after it
@@ -337,6 +349,10 @@ describe("the club's look", () => {
     assert.equal(versioned.status, 200);
     assert.equal(versioned.headers.get("content-type"), "image/png");
     assert.deepEqual(Buffer.from(await versioned.arrayBuffer()), fakeLogo);
+
+    // The icon stays the sun with a logo too (30 Oct 2026, Asher:
+    // "synthwave colors for the icon regardless of logo").
+    assert.deepEqual(Buffer.from(await (await fetch(`${harness.base}/c/acme-rc/icon.png`)).arrayBuffer()), sunIcon());
 
     // In a block of its own beside the name, not squeezed into the heading.
     assert.match(home, /<div class="brand">\s*<img class="logo"/);
@@ -363,8 +379,8 @@ describe("the club's look", () => {
     assert.match(answer.body.icons[0].src, /^\/c\/acme-rc\/icon\.png\?v=[0-9a-f]{12}$/);
   });
 
-  it("reports a logo's real size to the manifest, and carries the on-primary colour", async () => {
-    const logo = flagIcon(256, "#112233", "#000000");
+  it("reports the sun's size to the manifest whatever the logo, and carries the on-primary colour", async () => {
+    const logo = plainPng(0x11);
 
     await call(harness, "POST", "/api/v1/c/acme-rc/publish/site?seq=5", {
       token: ACME_TOKEN,
@@ -375,7 +391,7 @@ describe("the club's look", () => {
     });
 
     const manifest = await call(harness, "GET", "/c/acme-rc/manifest.webmanifest");
-    assert.equal(manifest.body.icons[0].sizes, "256x256");
+    assert.equal(manifest.body.icons[0].sizes, "512x512");
 
     const page = await call(harness, "GET", "/c/acme-rc/live");
     assert.match(page.text, /--on-primary:#0B0B0C/);
@@ -447,7 +463,7 @@ describe("the club's look", () => {
     assert.match(bare, /<h1>Acme RC <span>/);
   });
 
-  it("gives the home-screen icon a new address whenever its picture changes", async () => {
+  it("gives every club the sun's one icon address, whatever its colours or logo", async () => {
     const iconLinks = async () => {
       const page = (await call(harness, "GET", "/c/acme-rc")).text;
       const manifest = await call(harness, "GET", "/c/acme-rc/manifest.webmanifest");
@@ -461,40 +477,35 @@ describe("the club's look", () => {
       return versions[0] as string;
     };
 
-    // No logo: the flag, versioned by the colours it is drawn in.
+    // HeatCaller's sun for every club since 30 Oct 2026, so one version
+    // whatever the club's colours or logo, and one picture behind it.
     await call(harness, "POST", "/api/v1/c/acme-rc/publish/site?seq=30", {
       token: ACME_TOKEN,
       json: { theme: { light: false, colors: { bg: "#101010", primary: "#AA0000" } } },
     });
-    const red = await iconLinks();
-    assert.equal(red, flagVersionOf(flagColours({ light: false, vars: { "--bg": "#101010", "--primary": "#AA0000" } })));
-
-    // A colour the flag is not drawn in changes nothing; one it is drawn in does.
-    await call(harness, "POST", "/api/v1/c/acme-rc/publish/site?seq=31", {
-      token: ACME_TOKEN,
-      json: { theme: { light: false, colors: { bg: "#101010", primary: "#AA0000", accent: "#00FF00" } } },
-    });
-    assert.equal(await iconLinks(), red);
+    assert.equal(await iconLinks(), SUN_ICON_VERSION);
 
     await call(harness, "POST", "/api/v1/c/acme-rc/publish/site?seq=32", {
       token: ACME_TOKEN,
       json: { theme: { light: false, colors: { bg: "#101010", primary: "#0000AA" } } },
     });
-    const blue = await iconLinks();
-    assert.notEqual(blue, red);
+    assert.equal(await iconLinks(), SUN_ICON_VERSION);
 
-    // A logo: the icon IS the logo, so it takes the logo's version.
-    const logo = flagIcon(256, "#112233", "#000000");
+    const logo = plainPng(0x22);
     await call(harness, "POST", "/api/v1/c/acme-rc/publish/site?seq=33", {
       token: ACME_TOKEN,
       json: { theme: { light: false, colors: { bg: "#101010", primary: "#0000AA" } }, logo: `data:image/png;base64,${logo.toString("base64")}` },
     });
-    assert.equal(await iconLinks(), logoVersionOf(logo));
+    assert.equal(await iconLinks(), SUN_ICON_VERSION);
 
     // The version is only for caches: the server serves the icon whatever it says.
-    const served = await fetch(`${harness.base}/c/acme-rc/icon.png?v=${logoVersionOf(logo)}`);
+    const served = await fetch(`${harness.base}/c/acme-rc/icon.png?v=${SUN_ICON_VERSION}`);
     assert.equal(served.status, 200);
     assert.equal(served.headers.get("content-type"), "image/png");
-    assert.deepEqual(Buffer.from(await served.arrayBuffer()), logo);
+    assert.deepEqual(Buffer.from(await served.arrayBuffer()), sunIcon());
+
+    // A link to the club's pages shows the club's logo, not the sun.
+    const page = (await call(harness, "GET", "/c/acme-rc")).text;
+    assert.ok(page.includes(`/c/acme-rc/logo.png?v=${logoVersionOf(logo)}">`) || !page.includes('property="og:image"'));
   });
 });

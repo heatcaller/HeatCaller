@@ -1903,6 +1903,19 @@ public sealed class AppSettings
     public string RelayTagline { get; set; } = string.Empty;
 
     /// <summary>
+    /// The "New here?" card on the club's home page (30 Oct 2026, relay
+    /// navigation round 6): where the club races - "Kent Hobbies, 12 Main St".
+    /// All three left empty means no card.
+    /// </summary>
+    public string RelayNewcomerWhere { get; set; } = string.Empty;
+
+    /// <summary>When the club races, for the "New here?" card - "Tuesdays from 6pm".</summary>
+    public string RelayNewcomerWhen { get; set; } = string.Empty;
+
+    /// <summary>How to join, for the "New here?" card - "Bring your car and a transponder; the first night is free".</summary>
+    public string RelayNewcomerJoin { get; set; } = string.Empty;
+
+    /// <summary>
     /// The club's pages elsewhere, keyed by platform ("facebook",
     /// "instagram" ... see RelaySocial.Platforms), each an address as typed
     /// and tidied on leaving the box. Linked from the club's online pages.

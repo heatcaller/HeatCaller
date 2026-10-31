@@ -193,6 +193,7 @@ public sealed partial class WebServerService
         <div class="bar"><h1>{{look.Logo}}MESSAGE THE ANNOUNCER</h1></div>
         <div class="wrap">
         {{content}}
+        {{HeatCallerMark.PageFooterHtml}}
         <script>{{LookWatchScript}}</script>
         </body></html>
         """;

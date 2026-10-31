@@ -229,7 +229,14 @@ public static class ResultsCardRenderer
                 y = badgeY - 20;
             }
 
-            g.DrawString("HeatCaller", footerFont, footerBrush, new PointF(32, y + 20));
+            // The relay's share cards' line beside HeatCaller's full-colour
+            // logo (31 Oct 2026), so a card from the app and one from the
+            // club's pages sign off the same way. The logo carries its own
+            // dark square, so it reads on every card style.
+            var footLine = footerFont.GetHeight(g);
+            var logo = footLine * 1.5f;
+            HeatCallerMark.DrawLogo(g, new RectangleF(32, y + 20 + (footLine - logo) / 2f, logo, logo));
+            g.DrawString(HeatCallerMark.Credit, footerFont, footerBrush, new PointF(32 + logo + 8, y + 20));
         }
 
         using (var accentPen = new Pen(accentColor, 4))

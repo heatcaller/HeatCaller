@@ -16,7 +16,8 @@
  */
 
 import type { PagePreview } from "./preview.js";
-import { DEFAULT_LOOK, pngWidth, type Look, type SocialLink } from "./site.js";
+import { DEFAULT_LOOK, type Look, type SocialLink } from "./site.js";
+import { SUN_ICON_SIZE } from "./sun.js";
 
 /** What a page needs to know beyond its club: how the club looks, and where it is being served from. */
 export interface PageContext {
@@ -35,6 +36,66 @@ export interface PageContext {
 }
 
 export const DEFAULT_CONTEXT: PageContext = Object.freeze({ look: DEFAULT_LOOK, origin: "", nonce: "" });
+
+// --------------------------------------------------------------- HeatCaller
+
+/**
+ * HeatCaller on the club's pages (30 Oct 2026, relay branding: Asher
+ * picked the footer sign-off, the byline, Live's broadcast bug, the sun
+ * on shared cards, the "What's HeatCaller?" sheet, HeatCaller's own
+ * pages and the sun as every club's icon; the mark is always on, with
+ * no switch for a club to turn it off).
+ *
+ * HC_SUN is the logo's sun over its grid in one colour, drawn in
+ * currentColor so it takes whatever the club's look is. HC_LOGO is the
+ * logo itself in HeatCaller's own colours, for the places that are
+ * HeatCaller talking rather than the club: the sheet and the relay's own
+ * notice pages. The same drawing as HeatCaller/Assets/HeatCaller.svg,
+ * with the floor's grid thinned to the lines that read at this size.
+ */
+const HC_SUN = '<svg class="hcsun" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11a8 8 0 0 1 16 0z"/>'
+  + '<path d="M4.5 12.4h15v1.3h-15zM5.4 15h13.2v1.1H5.4z"/>'
+  + '<path d="M2 18.5h20M12 18.5l-7 4M12 18.5l7 4M12 18.5v4" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
+
+const HC_LOGO = '<svg class="logo" viewBox="0 0 256 256" aria-hidden="true">'
+  + '<rect width="256" height="256" rx="56" fill="#140829"/>'
+  + '<circle cx="128" cy="118" r="72" fill="#FF5FA2"/>'
+  + '<path d="M56 118A72 72 0 0 1 200 118Z" fill="#FFB347"/>'
+  + '<path d="M68.1 78A72 72 0 0 1 187.9 78Z" fill="#FFE9A0"/>'
+  + '<path d="M40 130h176v6H40zM40 146h176v8H40zM40 163h176v10H40z" fill="#140829"/>'
+  + '<path d="M0 176H256V200A56 56 0 0 1 200 256H56A56 56 0 0 1 0 200Z" fill="#3B1063"/>'
+  + '<path d="M128 176L0 214M128 176L20 256M128 176L74 256M128 176V256M128 176L182 256M128 176L236 256M128 176L256 214'
+  + 'M0 190H256M0 206H256M0 228H256" fill="none" stroke="#FF2E9A" stroke-width="3"/>'
+  + '<path d="M0 176H256" stroke="#FFD9F0" stroke-width="4"/></svg>';
+
+const HC_WORD = '<span class="hcword">Heat<span class="hcc">Caller</span></span>';
+
+/** The grid floor under the sheet's sky, stretched to any width. */
+const HC_FLOOR = '<svg class="floor" viewBox="0 0 390 60" preserveAspectRatio="none" aria-hidden="true">'
+  + '<g fill="none" stroke="#FF2E9A" opacity="0.55"><path d="M0 1H390" stroke="#FFD9F0" stroke-width="2"/>'
+  + '<path d="M0 10H390M0 24H390M0 46H390"/>'
+  + '<path d="M195 1L-120 60M195 1L-10 60M195 1L90 60M195 1V60M195 1L300 60M195 1L400 60M195 1L510 60"/></g></svg>';
+
+/**
+ * "What's HeatCaller?" - what the footer's mark and the first-night
+ * guide's line open: who runs the timing, in HeatCaller's own look, and
+ * the way to it for anybody who runs a track of their own. Hidden until
+ * asked for; without the page's script the mark is a plain link to
+ * heatcaller.com instead. name is already escaped.
+ */
+function aboutSheet(name: string): string {
+  return `<div class="hcabout" id="hcabout" role="dialog" aria-modal="true" aria-labelledby="hcabout-title" hidden>
+<div class="sheet">
+  <div class="sky"></div>${HC_FLOOR}
+  ${HC_LOGO}
+  <p class="wordmark hcword" id="hcabout-title">Heat<span class="hcc">Caller</span></p>
+  <p class="tag">Club nights, produced like a broadcast</p>
+  <p>${name} times its races, calls them out loud and puts every lap on your phone with HeatCaller.</p>
+  <a class="go" href="https://heatcaller.com">Bring HeatCaller to your track</a>
+  <button type="button" class="close" data-hc-close>Close</button>
+</div>
+</div>`;
+}
 
 const STYLE = `
 .pinask{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65)}
@@ -95,8 +156,16 @@ nav.tabs .lv { position: relative; }
 nav.tabs .dot { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--bad);
                 margin-left: 6px; vertical-align: middle; }
 nav.tabs.racing .dot { display: inline-block; }
-nav.subtabs { margin: -6px 0 18px; }
-nav.subtabs a { padding: 7px 12px; font-size: 0.85rem; }
+/* RESULTS' OWN TABS AS BUTTONS (30 Oct 2026, round 6, Asher: "give them
+   more space and make them look more like a button"). Full-width, thumb
+   sized, the page's own one filled in. Me's race tabs and jump bar share
+   the shape (.rtab, .jump .jb), so a tab looks the same wherever it is. */
+nav.subtabs { display: flex; gap: 8px; margin: 14px 0 22px; border-bottom: 0; overflow: visible; flex-wrap: wrap; }
+nav.subtabs a { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 46px;
+                margin: 0; padding: 10px 14px; font-size: 0.95rem; font-weight: 600; color: var(--text);
+                background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+nav.subtabs a:hover { border-color: var(--primary); background: var(--surface); }
+nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var(--primary); border-color: var(--primary); }
 @media (max-width: 640px) {
   body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
   nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; margin: 0; gap: 0;
@@ -368,8 +437,8 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .jump { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; max-width: 42rem; margin: 0 auto;
         scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
-.jump .jb { flex: none; font: inherit; font-size: 0.85rem; color: var(--text); background: var(--surface);
-            border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; min-height: 44px; cursor: pointer; }
+.jump .jb { flex: none; font: inherit; font-size: 0.95rem; font-weight: 600; color: var(--text); background: var(--surface);
+            border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; min-height: 46px; cursor: pointer; }
 .glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 8px; max-width: 42rem;
           margin: 14px auto 0; text-align: left; }
 .gl { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
@@ -395,10 +464,10 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .rval.top { color: var(--good); }
 .rrow.open { border-color: var(--accent); }
 .rrow .rc { border: 0; border-top: 1px solid var(--border); border-radius: 0; margin: 0; }
-.rtabs { display: flex; gap: 4px; margin: 10px 0 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
-.rtab { flex: none; font: inherit; font-size: 0.9rem; color: var(--muted); background: none; border: 0;
-        border-bottom: 3px solid transparent; padding: 8px 12px; min-height: 44px; cursor: pointer; }
-.rtab.on { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
+.rtabs { display: flex; gap: 8px; margin: 12px 0 10px; flex-wrap: wrap; }
+.rtab { flex: 1 1 auto; font: inherit; font-size: 0.95rem; font-weight: 600; color: var(--text); background: var(--bg);
+        border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; min-height: 46px; cursor: pointer; }
+.rtab.on { color: var(--on-primary, #FFFFFF); background: var(--primary); border-color: var(--primary); }
 .sc-big b { font-size: 2rem; font-variant-numeric: tabular-nums; }
 .sc-big span { color: var(--muted); }
 .scbars { list-style: none; margin: 10px 0 6px; padding: 0; }
@@ -407,6 +476,17 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .sc-bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
 .sc-fill { display: block; height: 100%; background: var(--primary); }
 .sc-v { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.you-l { margin: 8px 0 0; }
+.you-l b { display: block; }
+.newbie { border-left-color: var(--primary); }
+.newbie-join { margin: 10px 0 0; }
+.trk { display: flex; gap: 12px; align-items: center; padding: 10px 12px; margin: 0 0 8px; color: var(--text);
+       text-decoration: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.trk:hover { border-color: var(--primary); }
+.trk-img { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; flex: none; }
+.trk-t { min-width: 0; }
+.trk-s { display: block; color: var(--muted); font-size: 0.85rem; }
+#tracks-h { scroll-margin-top: calc(16px + env(safe-area-inset-top, 0px)); }
 .lc-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0 18px; }
 .lc-pack { max-width: none; margin: 14px 0 0; gap: 8px; }
 .lc-pack h4 { margin: 0; font-size: 1rem; }
@@ -602,6 +682,61 @@ mark { background: var(--primary); color: var(--on-primary, #FFFFFF); border-rad
   #board th:last-child, #board td:last-child { padding-right: 12px; }
   #board thead th { letter-spacing: 0.02em; }
 }
+/* HEATCALLER ON THE CLUB'S PAGES (30 Oct 2026, relay branding, Asher's
+   pick of 1, 2, 3, 6, 7, 8 and 9, mark always on). Small, at the edges,
+   and in the club's own colours: the sun takes the primary, the words
+   the muted text. The one place HeatCaller's own synthwave colours show
+   is the "What's HeatCaller?" sheet, which is HeatCaller talking, not
+   the club. */
+.hcsun { width: 18px; height: 18px; flex: none; fill: currentColor; color: var(--primary); }
+.hcword { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
+          font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.hcword .hcc { color: var(--primary); }
+/* The footer's sign-off, on every page. A link to heatcaller.com that the
+   page's script turns into the sheet. */
+footer .hcmark { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); text-decoration: none;
+                 padding: 6px 0; margin-left: auto; font-size: 0.95rem; }
+footer .hcmark:hover { color: var(--text); }
+/* The byline under the club's name, on every page. */
+.hcby { display: flex; align-items: center; gap: 5px; margin-top: 4px; color: var(--muted); font-size: 0.78rem; }
+.hcby .hcsun { width: 14px; height: 14px; }
+/* Live's broadcast bug: a TV channel's corner logo, shown while a race
+   is staged, counting down or running. Room is kept for it on Live
+   whether it shows or not, so the name does not jump when a race starts. */
+header.onair-room { position: relative; }
+header.onair-room > h1, header.onair-room > .sub, header.onair-room > .hcby, header.onair-room .brand-text { padding-right: 84px; }
+.onair { display: none; position: absolute; top: 28px; right: 0; align-items: center; gap: 6px;
+         padding: 5px 10px 5px 7px; border-radius: 8px; border: 1px solid var(--primary); color: var(--primary);
+         box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 55%, transparent); }
+.onair .hcsun { width: 20px; height: 20px; }
+.onair b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
+           font-weight: 700; font-size: 0.95rem; letter-spacing: 0.08em; }
+body.on-air .onair { display: flex; animation: onair 2.4s ease-in-out infinite; }
+@keyframes onair { 50% { box-shadow: 0 0 4px color-mix(in srgb, var(--primary) 35%, transparent); } }
+@media (prefers-reduced-motion: reduce) { body.on-air .onair { animation: none; } }
+/* The first-night guide's line about who runs the timing. */
+.guide .hcline { display: flex; align-items: center; gap: 8px; margin: 12px 16px 14px; padding-top: 10px;
+                 border-top: 1px dashed var(--border); color: var(--muted); font-size: 0.85rem; }
+.guide .hcline button { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
+/* "What's HeatCaller?": HeatCaller's own look over any club's. */
+.hcabout { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center;
+           background: rgba(0, 0, 0, 0.6); }
+.hcabout[hidden] { display: none; }
+.hcabout .sheet { position: relative; width: 100%; max-width: 440px; overflow: hidden; border-radius: 22px 22px 0 0;
+                  background: #0D0820; color: #F4EDFF; text-align: center;
+                  padding: 26px 24px calc(28px + env(safe-area-inset-bottom)); }
+@media (min-width: 641px) { .hcabout { align-items: center; } .hcabout .sheet { border-radius: 22px; } }
+.hcabout .sky { position: absolute; left: 0; right: 0; top: 0; height: 118px; background: linear-gradient(#140829, #3B1063); }
+.hcabout .floor { position: absolute; left: 0; right: 0; top: 118px; width: 100%; height: 44px; }
+.hcabout .sheet > :not(.sky):not(.floor) { position: relative; }
+.hcabout .logo { display: block; width: 116px; height: 116px; margin: 0 auto; filter: drop-shadow(0 0 24px rgba(255, 46, 154, 0.45)); }
+.hcabout .wordmark { margin: 22px 0 0; font-size: 2.4rem; line-height: 1; text-shadow: 0 0 18px rgba(255, 46, 136, 0.55); }
+.hcabout .wordmark .hcc { color: #FF2E88; }
+.hcabout .tag { margin: 8px 0 14px; color: #2BE4F0; font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase; }
+.hcabout p { margin: 0 0 10px; color: #C9B8F0; font-size: 0.95rem; }
+.hcabout .go { display: block; margin: 18px 0 12px; padding: 14px; border-radius: 12px; background: #FF2E88; color: #FFFFFF;
+               font-weight: 700; text-decoration: none; box-shadow: 0 0 22px rgba(255, 46, 136, 0.45); }
+.hcabout .close { background: none; border: 0; padding: 8px 16px; font: inherit; font-size: 0.9rem; color: #8E7BB8; cursor: pointer; }
 `;
 
 /** Shared by every page: escaping, time formatting, and polling that stops when nobody is looking. */
@@ -853,6 +988,36 @@ function meForget() {
     tabs.classList.toggle('racing', !!(s && fresh && RACING.includes(String(s.state))));
   }, 30000);
 })();
+
+// "What's HeatCaller?" (30 Oct 2026, relay branding): the footer's mark,
+// and anything else marked data-hc-about, opens the sheet instead of
+// leaving for heatcaller.com. Closed by its Close button, a tap outside
+// it, or Escape, and focus goes back where it was.
+(function () {
+  const sheet = document.getElementById('hcabout');
+  if (!sheet) return;
+  let back = null;
+  const close = () => {
+    sheet.hidden = true;
+    if (back && typeof back.focus === 'function') back.focus();
+  };
+  document.addEventListener('click', (e) => {
+    const t = e.target instanceof Element ? e.target : null;
+    if (!t) return;
+    if (t.closest('[data-hc-about]')) {
+      e.preventDefault();
+      back = document.activeElement;
+      sheet.hidden = false;
+      const shut = sheet.querySelector('[data-hc-close]');
+      if (shut) shut.focus();
+      return;
+    }
+    if (!sheet.hidden && (t === sheet || t.closest('[data-hc-close]'))) close();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !sheet.hidden) close();
+  });
+})();
 `;
 
 interface Shell {
@@ -929,13 +1094,15 @@ function shell(page: Shell, context: PageContext): string {
   // A driver's own pages - check in, the PIN box, their night, sign-up -
   // are all "Me" (29 Oct 2026, relay navigation round 1), so none of them
   // looks like a page outside the club's site.
-  // Standings, Tracks and Achievements are part of Results (30 Oct 2026,
-  // relay navigation round 5, Asher's pick: "tabs on results"), so all
-  // four light up Results and carry its row of tabs.
-  const ofResults = page.active === "results" || page.active === "standings" || page.active === "tracks" || page.active === "badges";
+  // Standings and Achievements are part of Results (30 Oct 2026, relay
+  // navigation round 5, Asher's pick: "tabs on results"), so all three
+  // light up Results and carry its row of tabs. Tracks was the fourth
+  // until round 6 the same night, when it moved onto Home (Asher: "move
+  // track there as well"), so the Tracks page lights Home.
+  const ofResults = page.active === "results" || page.active === "standings" || page.active === "badges";
   const lit = page.active === "checkin" || page.active === "signup" || page.active === "night" || page.active === "mynight"
     ? "me"
-    : ofResults ? "results" : page.active;
+    : ofResults ? "results" : page.active === "tracks" ? "home" : page.active;
 
   // icon is an SVG path, drawn only on the phone bar.
   const tab = (href: string, label: string, key: string, icon: string, cls = "") =>
@@ -960,7 +1127,9 @@ function shell(page: Shell, context: PageContext): string {
     ? ""
     : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
 
+  // "on HeatCaller" under the club's name, on every page.
   const heading = `<h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
+    <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
     <div class="sub">${sub}</div>`;
 
   // The logo's address carries a fingerprint of the logo itself (hex only),
@@ -975,8 +1144,13 @@ function shell(page: Shell, context: PageContext): string {
 
   // Absolute, because a link preview is fetched by somebody else's server,
   // which has no idea what a relative address is relative to.
+  // The club's logo when it has one, and the home-screen icon (HeatCaller's
+  // sun since 30 Oct 2026) when it has not: a link to the club's pages
+  // still shows the club's own picture first.
   const origin = escapeHtml(context.origin);
-  const icon = `${origin}/c/${club}/icon.png?v=${look.iconVersion}`;
+  const icon = look.logo === undefined
+    ? `${origin}/c/${club}/icon.png?v=${look.iconVersion}`
+    : `${origin}/c/${club}/logo.png?v=${look.logoVersion ?? ""}`;
 
   // A session's own drawn card when there is one, and the club's square
   // icon for every other page. The difference is not decoration: a
@@ -1047,8 +1221,9 @@ ${overrides}
 </head>
 <body data-club="${club}" data-club-name="${name}">
 <div class="wrap">
-  <header>
-    ${brand}
+  <header${page.active === "live" ? ' class="onair-room"' : ""}>
+    ${brand}${page.active === "live" ? `
+    <span class="onair" aria-hidden="true">${HC_SUN}<b>LIVE</b></span>` : ""}
     <nav class="tabs" aria-label="${name}">
       ${tab("", "Home", "home", "M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10")}
       ${tab("live", "Live", "live", "M12 12h.01M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8", "lv")}
@@ -1060,12 +1235,12 @@ ${overrides}
   <nav class="subtabs" aria-label="Results">
     ${subTab("results", "Sessions")}
     ${subTab("standings", "Standings")}
-    ${subTab("tracks", "Tracks")}
     ${subTab("badges", "Achievements")}
   </nav>` : ""}
   ${page.body}
-  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span></footer>
+  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
 </div>
+${aboutSheet(name)}
 <div id="follow" class="follow" hidden></div>
 <script nonce="${escapeHtml(context.nonce)}">${COMMON_JS}${page.script}</script>
 </body>
@@ -3442,6 +3617,12 @@ function render(state) {
     '</tbody></table></div>';
 }
 
+// Shows or hides the broadcast bug (see load).
+function onAir(on) {
+  const body = document.body;
+  if (body && body.classList) body.classList.toggle('on-air', !!on);
+}
+
 async function load() {
   // Given up on after five seconds: read() holds the next one back until
   // this one answers, so one that never did would stop the board for good.
@@ -3456,12 +3637,21 @@ async function load() {
     bar.className = 'flagbar';
     bar.innerHTML = '<span class="state">Not racing</span>';
     board.innerHTML = '<p class="note">No race has been published yet.</p>';
+    onAir(false);
     lapTalk.show();
     touched();
     return;
   }
 
-  render(answer.body.body || {});
+  const state = answer.body.body || {};
+  render(state);
+
+  // The broadcast bug in the corner (30 Oct 2026, relay branding) while a
+  // race is staged, counting down or running - the same reading, and the
+  // same two minutes before a laptop that went quiet stops counting, as
+  // the red dot the other pages put on the Live tab.
+  const fresh = Date.now() - Date.parse(answer.body.publishedAt) < 120000;
+  onAir(fresh && ['Staging', 'Countdown', 'Racing'].includes(String(state.state)));
   touched();
 }
 
@@ -4170,13 +4360,100 @@ async function readMine() {
 }
 
 if (mine && MINE) poll(readMine, 60000);
+
+// THE "YOU" STRIP (30 Oct 2026, relay navigation round 6): for a phone
+// that remembers a driver, on every state of Home - their last night's
+// best finish, where they stand, and the newest achievement they earned,
+// with their night a tap away. Their night is the full read (the live
+// poll above carries only the next race), so it is asked for once on
+// opening and then every five minutes, well inside the relay's allowance.
+const you = document.getElementById('you');
+let youNight = null;
+
+function youLine(label, text) {
+  const p = document.createElement('p');
+  p.className = 'you-l';
+  const k = document.createElement('span');
+  k.className = 'gl-k';
+  k.textContent = label;
+  const v = document.createElement('b');
+  v.textContent = text;
+  p.appendChild(k);
+  p.appendChild(v);
+  return p;
+}
+
+function drawYou() {
+  if (!you) return;
+
+  const night = youNight;
+  const who = night && typeof night.driver === 'string' ? night.driver : '';
+
+  you.textContent = '';
+  you.hidden = night === null;
+  if (night === null) return;
+
+  const h = document.createElement('h3');
+  h.textContent = who ? 'You, ' + who : 'You';
+  you.appendChild(h);
+
+  const races = Array.isArray(night.races) ? night.races.filter((r) => r && Number(r.pos) > 0) : [];
+  const best = races.slice().sort((a, b) => Number(a.pos) - Number(b.pos))[0];
+  const when = [night.title, night.when].filter(Boolean).join(' · ');
+
+  if (best) {
+    you.appendChild(youLine('Best finish' + (when ? ', ' + when : ''), ordinal(best.pos) + (best.label ? ' · ' + best.label : '')));
+  }
+
+  const seasons = standingsDoc && Array.isArray(standingsDoc.seasons) ? standingsDoc.seasons : [];
+  for (const season of seasons) {
+    const row = (Array.isArray(season.standings) ? season.standings : []).find((r) => r && sameName(r.name, who));
+    if (row && who) {
+      you.appendChild(youLine('Standings' + (season.name ? ', ' + season.name : ''), ordinal(row.pos) + ' · ' + row.points + ' pts'));
+      break;
+    }
+  }
+
+  const recent = achievementsDoc && Array.isArray(achievementsDoc.recent) ? achievementsDoc.recent : [];
+  const earned = who ? recent.find((r) => r && sameName(r.name, who)) : null;
+  if (earned) you.appendChild(youLine('Newest achievement', badgeName(earned.id)));
+
+  const links = document.createElement('p');
+  links.className = 'lc-go';
+  links.appendChild(mineLink('Open your night', '/night#d=' + MINE));
+  you.appendChild(links);
+}
+
+async function readYou() {
+  let r = null;
+  try {
+    r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/night', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: MINE }),
+      cache: 'no-store',
+    });
+  } catch (e) { return; }
+
+  // Not found is a phone remembering a night the relay no longer has;
+  // anything else (a busy relay) keeps what is on screen.
+  if (r.status === 404) { youNight = null; drawYou(); }
+  if (r.status !== 200) return;
+
+  let body = {};
+  try { body = await r.json(); } catch (e) { return; }
+  youNight = body && body.night && typeof body.night === 'object' ? body.night : null;
+  drawYou();
+}
+
+if (you && MINE) poll(readYou, 300000);
 `;
 
 const HOME_JS = `
 const now = document.getElementById('now');
-const preview = document.getElementById('preview');
-const upnext = document.getElementById('upnext');
-const latest = document.getElementById('latest');
+const recap = document.getElementById('recap');
+const trackList = document.getElementById('tracks');
+const newbie = document.getElementById('newbie');
 const BASE = '/c/' + encodeURIComponent(CLUB);
 const LIVE = ['Staging', 'Countdown', 'Racing'];
 
@@ -4198,32 +4475,31 @@ function section(el, html) {
   if (heading && heading.classList.contains('day')) heading.style.display = html ? '' : 'none';
 }
 
-// The three newest results, without the whole listing: that is every
-// result the club has ever published, megabytes of it, and this runs on
-// every phone every fifteen seconds. The meta listing names the newest
-// three, and their bodies are only fetched again when those change.
-let latestSig = null;
-let latestRes = null;
-
-async function latestResults() {
-  const meta = await grab('/collection/results?meta=1&limit=3').catch(() => null);
-
-  if (meta === null) return null;
-  if (meta.missing || !Array.isArray(meta.body.items) || meta.body.items.length === 0) return meta.missing ? meta : { body: { items: [] } };
-
-  const ids = meta.body.items.map((item) => String(item.id));
-  const sig = meta.body.items.map((item) => item.id + '@' + item.publishedAt).join('|');
-
-  if (sig === latestSig && latestRes !== null) return latestRes;
-
-  const answer = await grab('/collection/results?ids=' + ids.map(encodeURIComponent).join(',')).catch(() => null);
-
-  if (answer === null || answer.missing || !Array.isArray(answer.body.items)) return latestRes ?? answer;
-
-  latestSig = sig;
-  latestRes = answer;
-  return answer;
+function ordinal(value) {
+  const n = Math.round(Number(value));
+  if (!(n > 0)) return '';
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  return n + (teen ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] || 'th');
 }
+
+function sameName(a, b) {
+  return String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+}
+
+// A race night as its own heading - "Tue 28 Oct" - from the index's
+// yyyy-mm-dd. Noon, so no time zone can move it to the day before.
+function nightName(iso) {
+  const d = new Date(String(iso) + 'T12:00:00');
+  return isNaN(d) ? '' : d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+// HOME CHANGES WITH THE NIGHT (30 Oct 2026, relay navigation round 6,
+// Asher's pick). Racing now: what is on track or up next, and nothing
+// that Live and Schedule already show in full. Before a night: the
+// club's own preview is the main card. In between: how the last race
+// night went. The recap only shows while nothing is on and no preview
+// is up - quiet is that, set by load() and read by drawRecap().
+let quiet = false;
 
 // THE PREVIEW, AND THE EXPIRY THE PAGE HONOURS RATHER THAN THE RELAY.
 //
@@ -4239,17 +4515,14 @@ async function latestResults() {
 // would leave the last one standing for good.
 function previewHtml(answer) {
   if (answer === null || answer.missing) return '';
-
   const b = answer.body && answer.body.body ? answer.body.body : {};
   const text = typeof b.text === 'string' ? b.text.trim() : '';
-
   if (text === '') return '';
 
   // A bad or missing date reads as expired. The other way round - treating
   // an unreadable date as "stands forever" - is how a preview from March
   // is still on a club's front page in June.
   const until = Date.parse(String(b.until || ''));
-
   if (!Number.isFinite(until) || Date.now() > until) return '';
 
   // DOUBLE-BACKSLASHED, because this lives in a template literal: one
@@ -4262,7 +4535,6 @@ function previewHtml(answer) {
   // comment broke across two lines and took the page with it. So the
   // explanation says it in words.
   const paragraphs = text.split(/\\n\\s*\\n/).map((one) => one.trim()).filter(Boolean);
-
   return '<div class="hero next" style="cursor:default">' +
     '<span class="kicker">' + esc(b.kicker || 'Coming up') + '</span>' +
     '<span class="big">' + esc(b.title || 'Next race day') + '</span>' +
@@ -4272,14 +4544,13 @@ function previewHtml(answer) {
 }
 
 async function load() {
-  const [state, prog, res, pre] = await Promise.all([
+  const [state, prog, pre] = await Promise.all([
     grab('/snapshot/state').catch(() => null),
     grab('/snapshot/programme').catch(() => null),
-    latestResults().catch(() => null),
     grab('/snapshot/preview').catch(() => null),
   ]);
 
-  if (state === null && prog === null && res === null) {
+  if (state === null && prog === null) {
     now.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
     return;
   }
@@ -4292,13 +4563,22 @@ async function load() {
   const running = lines.find((l) => l.status === 'running');
   const next = lines.find((l) => l.status === 'next');
   const ev = p && p.event ? p.event : null;
+  const live = s && fresh && LIVE.includes(String(s.state));
 
-  if (s && fresh && LIVE.includes(String(s.state))) {
+  // A line that is only 'next' is not racing: a club that has built
+  // tomorrow's rounds has a 'next' line all the night before, which is
+  // exactly when the preview is meant to show. The laptop withdraws it
+  // once the first race is filed, and its own expiry covers the rest.
+  const coming = live || running ? '' : previewHtml(pre);
+
+  if (live) {
     now.innerHTML = '<a class="hero live" href="' + BASE + '/live">' +
       '<span class="kicker">On track now</span>' +
       '<span class="big">' + esc(running ? lineTitle(running) : s.state) + '</span>' +
       '<span class="when">' + esc(s.state) + (s.countdown ? ' &middot; ' + esc(s.countdown) : '') +
       ' &middot; follow it live &rarr;</span></a>';
+  } else if (coming) {
+    now.innerHTML = coming;
   } else if (running || next) {
     const l = running || next;
     now.innerHTML = '<a class="hero next" href="' + BASE + '/schedule">' +
@@ -4306,80 +4586,275 @@ async function load() {
       '<span class="big">' + esc(lineTitle(l)) + '</span>' +
       '<span class="when">' + (l.time ? esc(l.time) + ' &middot; ' : '') + 'see the full schedule &rarr;</span></a>';
   } else {
+    const usual = now.dataset.when || '';
     now.innerHTML = '<div class="hero">' +
       '<span class="kicker">' + (ev && ev.name ? esc(ev.name) : 'Welcome') + '</span>' +
       '<span class="big">No racing right now</span>' +
-      '<span class="when">Results, standings, tracks and achievements are all under Results.</span></div>';
+      (usual ? '<span class="when">We race ' + esc(usual) + '</span>' : '') + '</div>';
   }
 
-  // UNDER THE HERO, AND ONLY WHILE NOTHING IS RUNNING. A club racing right
-  // now has a live race at the top of its own front page and a preview of
-  // the evening underneath it would be reading out the programme to people
-  // who are watching it happen. The preview is for the days in between,
-  // which is every day this page is open and no race is on.
-  //
-  // A line that is only 'next' is not racing: a club that has built
-  // tomorrow's rounds has a 'next' line all the night before, which is
-  // exactly when the preview is meant to show. The laptop withdraws it
-  // once the first race is filed, and its own expiry covers the rest.
-  section(preview, running || (s && fresh && LIVE.includes(String(s.state))) ? '' : previewHtml(pre));
-
-  const upcoming = lines.filter((l) => l.status === 'next' || l.status === 'upcoming').slice(0, 4);
-
-  section(upnext, upcoming.length === 0 ? '' : '<ul class="list">' + upcoming.map((l) =>
-    '<li><span class="tm">' + esc(l.time || '') + '</span>' +
-    '<span class="title">' + esc(lineTitle(l)) + '</span>' +
-    (l.status === 'next' ? '<span class="right"><span class="pill next">Next</span></span>' : '') +
-    '</li>').join('') +
-    '<li><a class="more" href="' + BASE + '/schedule">The whole day &rarr;</a></li></ul>');
-
-  const items = res && !res.missing && Array.isArray(res.body.items) ? res.body.items.slice() : [];
-  items.sort((a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt)));
-
-  section(latest, items.length === 0 ? '' : '<ul class="list">' + items.slice(0, 3).map((item) => {
-    const b = item.body || {};
-    const first = Array.isArray(b.results) && b.results.length > 0 ? b.results[0] : null;
-    return '<li><span class="title">' + esc(b.label || b.type || 'Session') + '</span>' +
-      (first ? '<span class="when">1st ' + nm(first.name) + '</span>' : '') +
-      '<span class="right">' + esc(ago(b.endedUtc || item.publishedAt)) + '</span></li>';
-  }).join('') +
-  '<li><a class="more" href="' + BASE + '/results">Every result &rarr;</a></li></ul>');
-
+  quiet = !live && !running && !next && !coming;
+  drawRecap();
   touched();
 }
 
+// ---------------------------------------------------------- last night
+
+// What the recap and the You strip read, held between polls.
+let nightHeld = null;
+let standingsDoc = null;
+let achievementsDoc = null;
+let badgeNames = null;
+let badgesAt = 0;
+
+// THE LAST RACE NIGHT, CHEAPLY. The results index's newest year names
+// every session of every night, newest night first, with its winner; the
+// fastest lap needs that night's own results, read once by id. All of it
+// is read again only when the newest year's index changes, so the five
+// minute poll is one small meta read on a quiet day.
+let nightSig = null;
+
+async function lastNight() {
+  const meta = await grab('/collection/resultsindex?meta=1').catch(() => null);
+
+  if (meta === null || meta.missing || !Array.isArray(meta.body.items) || meta.body.items.length === 0) return nightHeld;
+
+  const items = meta.body.items.slice().sort((a, b) => String(b.id).localeCompare(String(a.id)));
+  // Its size too: two writes inside the same second are the same time.
+  const sig = items[0].id + '@' + items[0].publishedAt + '/' + items[0].bytes;
+
+  if (sig === nightSig) return nightHeld;
+
+  const year = await grab('/collection/resultsindex/' + encodeURIComponent(items[0].id)).catch(() => null);
+
+  if (year === null || year.missing) return nightHeld;
+
+  const doc = year.body.body || {};
+  const days = Array.isArray(doc.days) ? doc.days : [];
+  const all = Array.isArray(doc.sessions) ? doc.sessions : [];
+  const first = days[0];
+
+  if (!first) {
+    nightSig = sig;
+    nightHeld = null;
+    return null;
+  }
+
+  const sessions = (Array.isArray(first.sessions) ? first.sessions : [])
+    .map((i) => all[i])
+    .filter((x) => x && typeof x === 'object');
+  const ids = sessions.map((x) => String(x.id || '')).filter(Boolean).slice(0, 50);
+  let fast = null;
+
+  if (ids.length > 0) {
+    const answer = await grab('/collection/results?ids=' + ids.map(encodeURIComponent).join(',')).catch(() => null);
+    const list = answer && !answer.missing && Array.isArray(answer.body.items) ? answer.body.items : [];
+
+    for (const item of list) {
+      const b = item && item.body || {};
+      for (const r of Array.isArray(b.results) ? b.results : []) {
+        const ms = Number(r && r.fastLapMs);
+        if (ms > 0 && r.name && (fast === null || ms < fast.ms)) fast = { ms, name: r.name, label: b.label || '' };
+      }
+    }
+  }
+
+  nightSig = sig;
+  nightHeld = { day: String(first.day || ''), sessions, fast };
+  return nightHeld;
+}
+
+// The night's finals and their winners: every race called a main or a
+// final, in the order they ran. A club that names neither gets its last
+// four races, which on most nights are the ones that decided it.
+function winners(night) {
+  const races = night.sessions.filter((x) => x.type === 'Race' && x.won)
+    .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const finals = races.filter((x) => /\\b(main|final)/i.test(String(x.label)));
+  return finals.length > 0 ? finals : races.slice(-4);
+}
+
+// Who leads each season (a club with several runs one per class), and by
+// how much - at most three, which is as many as a phone shows at a glance.
+function leaders() {
+  const seasons = standingsDoc && Array.isArray(standingsDoc.seasons) ? standingsDoc.seasons : [];
+  return seasons.map((season) => {
+    const rows = Array.isArray(season.standings) ? season.standings : [];
+    const top = rows[0];
+    if (!top || !top.name) return null;
+    const second = rows[1];
+    const clear = second ? Number(top.points) - Number(second.points) : NaN;
+    return { season: season.name || '', name: top.name, points: top.points, clear };
+  }).filter(Boolean).slice(0, 3);
+}
+
+// Achievements earned on that night: from its six in the morning to the
+// next, the same turn the laptop files a night's races by.
+function earnedThatNight(night) {
+  const recent = achievementsDoc && Array.isArray(achievementsDoc.recent) ? achievementsDoc.recent : [];
+  const start = new Date(night.day + 'T06:00:00').getTime();
+  if (isNaN(start)) return [];
+  return recent.filter((r) => {
+    const t = Date.parse(String(r && r.whenUtc || ''));
+    return r && r.name && t >= start && t < start + 86400000;
+  }).slice(0, 5);
+}
+
+function badgeName(id) {
+  return badgeNames && badgeNames.get(id) || String(id || 'Achievement');
+}
+
+function drawRecap() {
+  const night = nightHeld;
+
+  if (!quiet || night === null) {
+    section(recap, '');
+    return;
+  }
+
+  const head = recap.previousElementSibling;
+  if (head && head.classList.contains('day')) head.textContent = 'Last race night' + (nightName(night.day) ? ' \\u00b7 ' + nightName(night.day) : '');
+
+  const rows = [];
+
+  for (const x of winners(night)) {
+    rows.push('<li><span class="title">' + esc(x.label || 'Race') + '</span>' +
+      '<span class="when">1st ' + nm(x.won) + '</span></li>');
+  }
+
+  if (night.fast) {
+    rows.push('<li><span class="title">Fastest lap</span>' +
+      '<span class="when">' + lap(night.fast.ms) + ' &middot; ' + nm(night.fast.name) + '</span>' +
+      (night.fast.label ? '<span class="right">' + esc(night.fast.label) + '</span>' : '') + '</li>');
+  }
+
+  for (const l of leaders()) {
+    rows.push('<li><span class="title">Points leader' + (l.season ? ' &middot; ' + esc(l.season) : '') + '</span>' +
+      '<span class="when">' + nm(l.name) + ' &middot; ' + esc(l.points) + ' pts' +
+      (Number.isFinite(l.clear) ? ' &middot; ' + esc(l.clear) + ' clear' : '') + '</span></li>');
+  }
+
+  for (const r of earnedThatNight(night)) {
+    rows.push('<li><span class="title">New achievement</span>' +
+      '<span class="when">' + nm(r.name) + ' &middot; ' + esc(badgeName(r.id)) + '</span></li>');
+  }
+
+  section(recap, rows.length === 0 ? '' : '<ul class="list">' + rows.join('') +
+    '<li><a class="more" href="' + BASE + '/results#d=' + encodeURIComponent(night.day) + '">All of that night\\'s results &rarr;</a></li></ul>');
+}
+
+async function loadRecap() {
+  if (badgeNames === null || Date.now() - badgesAt > 600000) {
+    const badges = await grab('/snapshot/badges').catch(() => null);
+    if (badges && !badges.missing) {
+      const list = Array.isArray(badges.body.body && badges.body.body.badges) ? badges.body.body.badges : [];
+      badgeNames = new Map(list.map((b) => [b.id, b.name]));
+      badgesAt = Date.now();
+    }
+  }
+
+  const [night, standings, achievements] = await Promise.all([
+    lastNight().catch(() => nightHeld),
+    grab('/snapshot/standings').catch(() => null),
+    grab('/snapshot/achievements').catch(() => null),
+  ]);
+
+  nightHeld = night;
+  if (standings && !standings.missing) standingsDoc = standings.body.body || null;
+  if (achievements && !achievements.missing) achievementsDoc = achievements.body.body || null;
+
+  drawRecap();
+  if (typeof drawYou === 'function') drawYou();
+}
+
+// ------------------------------------------------------------- tracks
+
+// THE CLUB'S TRACKS, ON HOME (30 Oct 2026, round 6, Asher: "move track
+// there as well"). Each layout in a line - its picture, its lap record and
+// who holds it, today's layout first - and the Tracks page itself, with
+// the quickest drivers on each, one tap away.
+async function loadTracks() {
+  const answer = await grab('/snapshot/tracks').catch(() => null);
+
+  if (answer === null) return;
+
+  const doc = answer.missing ? {} : answer.body.body || {};
+  const tracks = Array.isArray(doc.tracks) ? doc.tracks.slice() : [];
+
+  tracks.sort((a, b) => (b.name === doc.current) - (a.name === doc.current));
+
+  const see = newbie ? newbie.querySelector('a[href="#tracks-h"]') : null;
+  if (see) see.hidden = tracks.length === 0;
+
+  section(trackList, tracks.length === 0 ? '' : tracks.slice(0, 6).map((t) => {
+    const rec = t.record && t.record.ms > 0 ? t.record : null;
+    const facts = [
+      rec ? 'Lap record ' + lap(rec.ms) + (rec.holder ? ' &middot; ' + esc(rec.holder) : '') : '',
+      t.lengthFeet > 0 ? esc(Math.round(t.lengthFeet)) + ' ft' : '',
+    ].filter(Boolean).join(' &middot; ');
+    return '<a class="trk" href="' + BASE + '/tracks">' + img(t.image, 'trk-img', t.name) +
+      '<span class="trk-t"><b>' + esc(t.name) + '</b>' +
+      (t.name === doc.current ? ' <span class="pill running">Racing here today</span>' : '') +
+      (facts ? '<span class="trk-s">' + facts + '</span>' : '') + '</span></a>';
+  }).join('') + '<p class="lc-go"><a class="more" href="' + BASE + '/tracks">Lap records and the quickest drivers &rarr;</a></p>');
+}
+
+// "New here?" is for somebody the club does not know yet. A phone that
+// remembers a driver has its own strip instead.
+if (newbie && meCode()) newbie.hidden = true;
+
 poll(load, 15000);
+poll(loadRecap, 300000);
+poll(loadTracks, 300000);
 `;
 
 export function homePage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
   const base = `/c/${escapeHtml(club)}`;
+  const look = context.look;
   // Where else to find the club, under everything else. Nothing - not even
   // the heading - for a club that has set no links.
-  const anchors = socialAnchors(context.look.social);
+  const anchors = socialAnchors(look.social);
   const social = anchors === "" ? "" : `<div class="day">Find us</div><div class="social">${anchors}</div>`;
+
+  // NEW HERE? (30 Oct 2026, relay navigation round 6, Asher: "build it with
+  // newcomer"). Where the club races, when, and how to join, as the club
+  // typed them in the app - escaped here, on the way in. No card at all
+  // for a club that left all three blank, and the page hides it on a phone
+  // that remembers a driver, who has their own strip instead.
+  const n = look.newcomer;
+  const fact = (label: string, text: string) =>
+    text === "" ? "" : `<p class="you-l"><span class="gl-k">${label}</span><b>${escapeHtml(text)}</b></p>`;
+  const newcomer = n.where === "" && n.when === "" && n.join === ""
+    ? ""
+    : `<section class="lc newbie" id="newbie"><h3>New here?</h3>${fact("Where we race", n.where)}${fact("When we race", n.when)}`
+      + (n.join === "" ? "" : `<p class="newbie-join">${escapeHtml(n.join)}</p>`)
+      + `<p class="lc-go"><a class="more" href="#tracks-h">See our tracks</a></p></section>`;
 
   return shell({
     club,
     clubName,
     active: "home",
     heading: "Home",
-    sub: context.look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing laptop.",
-    // "mine" is Your next race (29 Oct 2026, relay navigation round 3),
-    // empty and hidden unless this phone remembers a driver with a race on.
+    sub: look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing laptop.",
+    // "mine" is Your next race (29 Oct 2026, relay navigation round 3) and
+    // "you" the driver's own strip (round 6), both empty and hidden unless
+    // this phone remembers a driver. Then what is on now - or the club's
+    // preview of the next night - and, while nothing is, the last race
+    // night (round 6: the Up next and Latest results lists went, as
+    // Schedule and Results show both in full).
     body:
       '<section class="lc" id="mine" hidden></section>' +
-      '<div id="now"><p class="note">Loading&hellip;</p></div>' +
-      // Check in from Me (30 Oct 2026, round 5): Explore's Check in and My
-      // night tiles went, and a right PIN on Me checks a driver in.
-      (context.look.checkIn
+      `<div id="now" data-when="${escapeHtml(n.when)}"><p class="note">Loading&hellip;</p></div>` +
+      // Check in from Me (30 Oct 2026, round 5): a right PIN on Me checks a
+      // driver in.
+      (look.checkIn
         ? `<p class="note"><a class="more" href="${base}/mynight">Check in: tap Me and type your PIN</a></p>`
         : "") +
-      '<div class="day">The night before</div><div id="preview" style="display:none"></div>' +
-      '<div class="day">Up next</div><div class="card" id="upnext" style="display:none"></div>' +
-      '<div class="day">Latest results</div><div class="card" id="latest" style="display:none"></div>' +
-      // No Explore (30 Oct 2026, relay navigation round 5): its tiles
-      // repeated the bar, and Standings, Tracks and Achievements are tabs
-      // under Results now.
+      '<section class="lc you" id="you" hidden></section>' +
+      newcomer +
+      '<div class="day">Last race night</div><div class="card" id="recap" style="display:none"></div>' +
+      // Tracks live on Home (30 Oct 2026, round 6), no longer a Results tab.
+      '<div class="day" id="tracks-h">Our tracks</div><div id="tracks" style="display:none"></div>' +
       social,
     script: HOME_JS + HOME_ME_JS,
   }, context);
@@ -4852,6 +5327,23 @@ function firstNightGuide() {
   }
 
   d.appendChild(list);
+
+  // Who runs the timing, and the way to the "What's HeatCaller?" sheet
+  // (30 Oct 2026, relay branding).
+  const who = document.createElement('p');
+  who.className = 'hcline';
+  const mark = document.createElement('span');
+  mark.innerHTML = ${JSON.stringify(HC_SUN)};
+  who.appendChild(mark);
+  const words = document.createElement('span');
+  words.textContent = 'Timing and race calls by HeatCaller. ';
+  const ask = document.createElement('button');
+  ask.type = 'button';
+  ask.setAttribute('data-hc-about', '');
+  ask.textContent = "What's that?";
+  words.appendChild(ask);
+  who.appendChild(words);
+  d.appendChild(who);
   return d;
 }
 `;
@@ -6004,6 +6496,64 @@ function paint(name, fallback) {
   }
 }
 
+// HeatCaller's sun beside its name at the foot of the card (30 Oct 2026,
+// relay branding), in HeatCaller's own colours whatever the club's: the
+// logo's drawing, on its 256-unit square, scaled to size.
+function sunTile(ctx, x, y, size) {
+  const u = size / 256;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(u, u);
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(0, 0, 256, 256, 56); else ctx.rect(0, 0, 256, 256);
+  ctx.clip();
+  ctx.fillStyle = '#140829';
+  ctx.fillRect(0, 0, 256, 256);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, 256, 176);
+  ctx.clip();
+  const bands = ctx.createLinearGradient(0, 46, 0, 190);
+  bands.addColorStop(0, '#FFE9A0');
+  bands.addColorStop(0.222, '#FFE9A0');
+  bands.addColorStop(0.222, '#FFB347');
+  bands.addColorStop(0.5, '#FFB347');
+  bands.addColorStop(0.5, '#FF5FA2');
+  bands.addColorStop(1, '#FF5FA2');
+  ctx.fillStyle = bands;
+  ctx.beginPath();
+  ctx.arc(128, 118, 72, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#140829';
+  ctx.fillRect(40, 130, 176, 6);
+  ctx.fillRect(40, 146, 176, 8);
+  ctx.fillRect(40, 163, 176, 10);
+  ctx.restore();
+
+  ctx.fillStyle = '#3B1063';
+  ctx.fillRect(0, 176, 256, 80);
+  ctx.strokeStyle = '#FF2E9A';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (const end of [[0, 214], [20, 256], [74, 256], [128, 256], [182, 256], [236, 256], [256, 214]]) {
+    ctx.moveTo(128, 176);
+    ctx.lineTo(end[0], end[1]);
+  }
+  for (const level of [190, 206, 228]) {
+    ctx.moveTo(0, level);
+    ctx.lineTo(256, level);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = '#FFD9F0';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, 176);
+  ctx.lineTo(256, 176);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function picture() {
   const canvas = document.createElement('canvas');
 
@@ -6072,9 +6622,10 @@ function picture() {
     ctx.fillText('and ' + fitted.more + ' more', CARD_PAD, y + 6);
   }
 
+  sunTile(ctx, CARD_PAD, CARD_H - 66, 34);
   ctx.fillStyle = muted;
   ctx.font = '400 22px ' + face;
-  ctx.fillText('Timed and called by HeatCaller', CARD_PAD, CARD_H - 40);
+  ctx.fillText('Timed and called by HeatCaller', CARD_PAD + 46, CARD_H - 40);
 
   canvas.toBlob((blob) => {
     if (blob) hand(blob, fileName(night, 'png'));
@@ -9786,10 +10337,6 @@ ${overrides}
  * their own: its name, its icon, and opening full-screen on the club's
  * home page rather than as another browser tab.
  */
-function iconSize(look: Look): string {
-  const width = look.logo === undefined ? 512 : pngWidth(look.logo);
-  return width > 0 ? `${width}x${width}` : "any";
-}
 
 export function manifest(club: string, clubName: string, look: Look): string {
   const base = `/c/${encodeURIComponent(club)}`;
@@ -9805,12 +10352,12 @@ export function manifest(club: string, clubName: string, look: Look): string {
     display: "standalone",
     background_color: look.themeColor,
     theme_color: look.themeColor,
-    // The logo's real size when there is one - it is 384 or 256 across -
-    // and the drawn flag's 512 otherwise. A manifest that claims a size
-    // its icon is not is one a browser may refuse to install.
-    // Versioned like the pages' links (see Look.iconVersion): an installed
-    // app picks up a new logo instead of keeping the old icon.
-    icons: [{ src: `${base}/icon.png?v=${look.iconVersion}`, sizes: iconSize(look), type: "image/png", purpose: "any" }],
+    // HeatCaller's sun for every club (sun.ts), always this size. A
+    // manifest that claims a size its icon is not is one a browser may
+    // refuse to install. Versioned like the pages' links (see
+    // Look.iconVersion): an installed app picks up a redrawn icon instead
+    // of keeping the old one.
+    icons: [{ src: `${base}/icon.png?v=${look.iconVersion}`, sizes: `${SUN_ICON_SIZE}x${SUN_ICON_SIZE}`, type: "image/png", purpose: "any" }],
   });
 }
 
@@ -9849,30 +10396,71 @@ export function missingPage(club: string, clubName: string, context: PageContext
  * - there is no club to take it from - and no script.
  */
 export function relayNoticePage(heading: string, text: string): string {
+  return heatcallerNotice(`${escapeHtml(heading)} - HeatCaller`, `<p class="wordmark hcword">Heat<span class="hcc">Caller</span></p>
+  <h1>${escapeHtml(heading)}</h1>
+  <p>${escapeHtml(text)}</p>`);
+}
+
+/**
+ * HeatCaller's own pages in full synthwave (30 Oct 2026, relay branding,
+ * Asher's pick): the relay's own address, an address that is no club,
+ * and a paused club - the pages with no club's look to borrow, or none
+ * running. A sky over the logo's striped sun setting into its grid
+ * floor, and the words above it. Pure HTML and CSS, no script. title and
+ * inner are already escaped.
+ */
+function heatcallerNotice(title: string, inner: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#0F0722">
-<title>${escapeHtml(heading)} - HeatCaller</title>
+<meta name="theme-color" content="#0D0820">
+<title>${title}</title>
 <style>
   html { color-scheme: dark; }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0F0722; color: #F7F2FF;
-         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 32rem; padding: 2rem 1.5rem; text-align: center; }
-  h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
-  p { margin: 0 0 1rem; opacity: .8; }
-  a { color: #2EE6FF; }
+  body { margin: 0; min-height: 100vh; position: relative; overflow-x: hidden; background: #140829; color: #F4EDFF;
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .sky { position: absolute; left: 0; right: 0; top: 0; height: 62vh;
+         background: linear-gradient(#0D0820 0%, #241046 55%, #4A1470 100%); }
+  .sun { position: absolute; left: 50%; top: calc(62vh - min(58vw, 260px) * 0.77); width: min(58vw, 260px);
+         transform: translateX(-50%); filter: drop-shadow(0 0 30px rgba(255, 95, 162, 0.55)); }
+  .floor { position: absolute; left: 0; right: 0; top: 62vh; bottom: 0; width: 100%; height: 38vh; min-height: 200px; }
+  main { position: relative; max-width: 32rem; margin: 0 auto; padding: 10vh 24px 0; text-align: center; }
+  .hcword { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
+            font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+  .hcword .hcc { color: #FF2E88; }
+  .wordmark { margin: 0 0 18px; font-size: 2.6rem; line-height: 1; text-shadow: 0 0 18px rgba(255, 46, 136, 0.55); }
+  h1 { font-size: 1.5rem; margin: 0 0 .5rem; }
+  p { margin: 0 0 1rem; color: #C9B8F0; }
+  .home { position: absolute; left: 0; right: 0; bottom: 28px; text-align: center; }
+  a { color: #2BE4F0; font-weight: 600; text-decoration: none; }
 </style>
 </head>
 <body>
+<div class="sky"></div>
+<svg class="sun" viewBox="0 0 220 170" aria-hidden="true">
+  <defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FFE9A0"/><stop offset=".45" stop-color="#FFB347"/><stop offset=".85" stop-color="#FF5FA2"/>
+  </linearGradient></defs>
+  <circle cx="110" cy="110" r="105" fill="url(#s)"/>
+  <path d="M0 118h220v5H0zM0 134h220v7H0zM0 152h220v9H0z" fill="#3A1060"/>
+</svg>
+<svg class="floor" viewBox="0 0 380 290" preserveAspectRatio="none" aria-hidden="true">
+  <g fill="none" stroke="#FF2E9A" stroke-width="1.5">
+    <line x1="0" y1="1" x2="380" y2="1" stroke="#FFD9F0" stroke-width="3"/>
+    <line x1="0" y1="12" x2="380" y2="12"/><line x1="0" y1="30" x2="380" y2="30"/><line x1="0" y1="58" x2="380" y2="58"/>
+    <line x1="0" y1="100" x2="380" y2="100"/><line x1="0" y1="165" x2="380" y2="165"/><line x1="0" y1="260" x2="380" y2="260"/>
+    <line x1="190" y1="1" x2="-400" y2="290"/><line x1="190" y1="1" x2="-160" y2="290"/><line x1="190" y1="1" x2="20" y2="290"/>
+    <line x1="190" y1="1" x2="190" y2="290"/><line x1="190" y1="1" x2="360" y2="290"/><line x1="190" y1="1" x2="540" y2="290"/>
+    <line x1="190" y1="1" x2="780" y2="290"/>
+  </g>
+</svg>
 <main>
-  <h1>${escapeHtml(heading)}</h1>
-  <p>${escapeHtml(text)}</p>
-  <p><a href="https://heatcaller.com">heatcaller.com</a></p>
+  ${inner}
 </main>
+<p class="home"><a href="https://heatcaller.com">heatcaller.com</a></p>
 </body>
 </html>
 `;
@@ -9885,38 +10473,16 @@ export function relayNoticePage(heading: string, text: string): string {
  * Deliberately not the club's usual shell. The shell carries the tabs,
  * the live channels and the club's script, and every one of those would
  * lead somewhere that is also paused. No script at all, so the page's
- * nonce goes unused; the club's own background colour so a regular still
- * recognises whose page it is.
+ * nonce goes unused. The club's name says whose page it is; the look is
+ * HeatCaller's own since 30 Oct 2026 (see heatcallerNotice).
  */
-export function pausedPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+export function pausedPage(club: string, clubName: string, _context: PageContext = DEFAULT_CONTEXT): string {
   const name = escapeHtml(clubName.length > 0 ? clubName : club);
-  const look = context.look;
-  const background = escapeHtml(look.themeColor);
-  const ink = look.light ? "#1a1a1a" : "#f2f2f2";
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
-<meta name="theme-color" content="${background}">
-<title>${name} - paused</title>
-<style>
-  html { color-scheme: ${look.light ? "light" : "dark"}; }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: ${background}; color: ${ink};
-         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 32rem; padding: 2rem 1.5rem; text-align: center; }
-  h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
-  p { margin: 0; opacity: .8; }
-</style>
-</head>
-<body>
-<main>
+  // In HeatCaller's own look since 30 Oct 2026 (relay branding): while a
+  // club is paused there is no club running these pages to take a look
+  // from, and its name still says whose address this is.
+  return heatcallerNotice(`${name} - paused`, `<p class="wordmark hcword">Heat<span class="hcc">Caller</span></p>
   <h1>${name}</h1>
-  <p>This club's pages are paused for now. Results, schedules and live timing will be back here when the club returns.</p>
-</main>
-</body>
-</html>
-`;
+  <p>This club's pages are paused for now. Results, schedules and live timing will be back here when the club returns.</p>`);
 }
