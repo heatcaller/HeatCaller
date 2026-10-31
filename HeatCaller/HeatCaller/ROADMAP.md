@@ -4613,6 +4613,16 @@ never silent, and a warning at nine tenths. What remains is not code:
 - [ ] The **terms ElevenLabs requires** clubs to be bound by. The questions
       to put to them are in `website\legal-drafts\elevenlabs-questions.md`.
 - [ ] An hour with a lawyer on the above. Claude is not one.
+- [x] **Something in place before the lawyer** (28 Oct 2026, at Asher's
+      ask): `Assets\Legal\HeatCaller-Terms.md` - a beta license agreement
+      and the privacy notice, written from the drafts above with every
+      [CHECK] settled in plain words (operator HeatCaller LLC, New York law,
+      liability capped at US$50) - must be accepted twice: on the .msi's
+      license page (pack.cmd `--msi --instLicense`; Setup.exe has none), and
+      at first launch (TermsForm, before anything else; recorded in
+      `terms-accepted.json` with the text's hash, asked again when it
+      changes). The lawyer's version replaces that file; nothing else needs
+      to change for clubs to be asked again.
 
 ---
 

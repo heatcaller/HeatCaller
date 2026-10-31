@@ -3,7 +3,7 @@
 This page covers getting HeatCaller onto a Windows PC with its installer: what it puts where, what happens the first time it starts, where it keeps your data, and how it updates and comes off again.
 
 !!! note "Getting the installer during the beta"
-    HeatCaller's installer is a single file, **Setup.exe**. The public download page for it isn't open yet, so during the beta the installer comes to your club directly from the HeatCaller team. Ask them for the latest one. Once the download page is up, this page will link to it. Updates already know where to look (see [Updates](#updates)).
+    HeatCaller's installer is a single file, **HeatCallerApp-beta.msi**. The public download page for it isn't open yet, so during the beta the installer comes to your club directly from the HeatCaller team. Ask them for the latest one. Once the download page is up, this page will link to it. Updates already know where to look (see [Updates](#updates)).
 
 ## Before you start
 
@@ -16,10 +16,14 @@ You need:
 
 ## Install
 
-1. Copy **Setup.exe** to the race laptop and double-click it.
+1. Copy **HeatCallerApp-beta.msi** to the race laptop and double-click it.
 2. **If Windows SmartScreen says "Windows protected your PC"**, click **More info**, check that the publisher is HeatCaller's, then click **Run anyway**. The installer is signed, but SmartScreen warns about any program it hasn't seen downloaded many times yet. This goes away as more clubs install it.
-3. Wait while it installs. There are no questions to answer. It takes a minute or so.
-4. HeatCaller starts on its own when it's done. On the very first start, the **Welcome to HeatCaller** wizard opens (see below).
+3. Read the **license agreement and privacy notice**, tick the box to accept them, and click **Next**. HeatCaller can't be installed without accepting them. The privacy notice says what happens to your drivers' information, including the names sent to ElevenLabs when you use an online voice.
+4. Click **Install** and wait. It takes a minute or so. Then click **Finish**, and HeatCaller starts.
+5. The first time HeatCaller starts, it shows the same license agreement and privacy notice again, in full, with a tick for each part. Scroll to the end of the text, which unlocks the ticks, then tick both and click **Accept and Continue**. If you click **Decline**, HeatCaller closes and asks again next time. It asks again whenever the terms change, and you can read them any time from **Backup & Restore → Getting help → License and Privacy...**.
+6. The **Welcome to HeatCaller** wizard opens (see below).
+
+If your club was sent **Setup.exe** instead, it installs with no questions, and the license agreement and privacy notice are asked for when HeatCaller first starts, as in step 5.
 
 What the installer sets up:
 
