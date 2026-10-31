@@ -1,6 +1,7 @@
 @echo off
-rem Makes the lap voice's clips - every lap time from 3.00 to 19.99, the lap
-rem numbers, places, gaps and target words - in ElevenLabs' Daniel voice, on
+rem Makes the lap voice's clips - every lap time from 3.00 to 19.99 and the
+rem two halves of one with a thousandth, the lap numbers, places, gaps and
+rem target words - in ElevenLabs' Daniel voice, on
 rem YOUR ElevenLabs key, into the lap-voice folder here. See src\lapvoice.ts.
 rem
 rem   lap-voice-render.cmd count    what it would make and cost; spends nothing
