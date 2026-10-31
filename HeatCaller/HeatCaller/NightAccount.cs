@@ -359,6 +359,9 @@ internal sealed class NightAccount
             + "the Connection tab",
         BudgetRefusal.TheNightsHeadroom =>
             "the night's own budget had no room left for it - the budget is on the AI Commentary tab",
+        BudgetRefusal.BetweenRaces =>
+            "the Between races settings held it - how much the announcer says between races, how often and "
+            + "when are on the Between races card on the AI Commentary tab",
         _ => "the budget would not have it",
     };
 }

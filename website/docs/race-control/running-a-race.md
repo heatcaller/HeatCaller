@@ -25,12 +25,28 @@ The row changes with the race, so the buttons you need are the only ones there:
 |---|---|
 | Before the green: from a cold start, through On Air, a warm-up, staging and the countdown | **Stage**, **Countdown**, **Green**, **Reset**. The row doesn't change until the race goes green. |
 | Racing | **Green**, **Yellow**, **Red**, **Checkered**, **Reset**, the same five under a yellow or a red. **Green** restarts the race after a caution. |
-| After the flag (finished) | **Next Heat**, **Results**, **Edit Result**, **Reset**. **Next Heat** does what **Start Next** on the Next Up bar does — the program's next race, or the step owed first (it reads **Next Step** then). With nothing next in the program, **Stage** is there instead. **Results** opens the race just run in **Race History**; **Edit Result** opens it there with **Edit Result** open, for a penalty, a missed lap or a DNF. |
+| After the flag (finished) | **Skip**, **Hold Talk**, **Call Up**, **Edit Result**, **Reset**: the buttons for the talk between races (see [The flag row after the flag](#the-flag-row-after-the-flag)). **Edit Result** opens the race just run in **Race History** with **Edit Result** open, for a penalty, a missed lap or a DNF. The next race starts from **Start Next** on the Next Up bar. |
 | Practice | None: practice is run from the Practice page |
 
 On Air has no button on the row: <kbd>F1</kbd>, **Start Next** and the other starts go through it (see [On Air](#on-air)), and <kbd>O</kbd> starts it by hand. **Reset** takes the row back to the set before the green. A yellow or a red before the green is <kbd>F4</kbd> or <kbd>F5</kbd>.
 
 The function keys and the phone remote still reach every button, shown or not, exactly as before.
+
+### The flag row after the flag
+
+Once a race is finished, the row is for the gap before the next one: what the announcer says, and when.
+
+| Button | What it does | Key |
+|---|---|---|
+| **Skip** | A click stops the line on air and moves the show on to its next part: a recap goes on to the honours, the gap to its next line. Press and hold for a second to end the whole recap show, as the **Broadcast** window's **Skip** does. Grayed out when nothing is on air. | <kbd>F9</kbd> (a click) |
+| **Hold Talk** | Stops everything between races: the commentary's lines, sponsor reads, the hand-over, call-ups and the automatic countdown. It turns amber and reads **Resume Talk** until you press it again. The race itself is never held: flags, the countdown to green and the finish calls still play. With commentary on, it's the same hold as the **Broadcast** window's **Hold**, so either shows on both. | <kbd>F10</kbd> |
+| **Call Up** | Calls up the next race now, and the marshals with it when **Marshals to their posts** is ticked. Grayed out when the program has nothing next. Right-click it for **Push the next race back 1 minute** (its run-sheet time, the countdown and the next call-up move with it), **Call up two races out**, **Marshals only** and **Not checked in**. | <kbd>F12</kbd> |
+| **Edit Result** | Opens the race just run in **Race History** with **Edit Result** open. | |
+| **Reset** | Press and hold, as always. Takes the row back to the set before the green. | <kbd>F7</kbd> |
+
+**Next Heat** and **Results** used to be on this row. **Next Heat** did what **Start Next** on the Next Up bar does, and **Results** opened the same race as **Edit Result**, so both went on 31 Oct 2026 to make room. What the gap says, and how often, is set on the **Between races** card (see [Between races](../announcer/commentary.md#between-races)). To keep the old row (**Edit Result** and **Reset**, with **Stage** when nothing is next in the program), untick **Show Skip, Hold Talk and Call Up on the flag row after the flag** on that card. The keys work either way.
+
+The phone remote has the same three under **BETWEEN RACES**: **SKIP**, **HOLD TALK** and **CALL UP**.
 
 ### Press and hold
 

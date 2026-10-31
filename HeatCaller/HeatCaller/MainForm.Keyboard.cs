@@ -31,6 +31,16 @@ public partial class MainForm
             return true;
         }
 
+        // F10, Hold Talk (31 Oct 2026). Here rather than in KeyDown: Windows
+        // gives F10 to the menu bar, so it arrives as a system key that
+        // KeyDown would see only after the menu had taken the focus. On Race
+        // Control (or in Race Mode) only, as the flag keys are.
+        if (keyData == Keys.F10 && (_raceMode || _shownPage == "Race Control"))
+        {
+            _raceControlControl.ToggleTalkHold();
+            return true;
+        }
+
         // Not while the focused control has its own use for Escape. This
         // runs before that control sees the key, so Escape meant to cancel
         // a grid cell's edit or close an open drop-down threw the whole
@@ -236,6 +246,12 @@ public partial class MainForm
                 case Keys.F6: rc.TriggerCheckered(); e.Handled = true; return;
                 case Keys.F7: rc.TriggerResetFromKeyboard(); e.Handled = true; return;
                 case Keys.F8: rc.TriggerQuickRace(); e.Handled = true; return;
+
+                // Between races (31 Oct 2026): Skip and Call Up, the flag
+                // row's buttons after the flag. F10, Hold Talk, is taken in
+                // ProcessCmdKey - see there.
+                case Keys.F9: rc.SkipPart(); e.Handled = true; return;
+                case Keys.F12: rc.CallUpNow(); e.Handled = true; return;
             }
         }
 

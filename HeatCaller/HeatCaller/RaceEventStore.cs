@@ -105,6 +105,14 @@ public sealed class RaceEvent
     public int DriversPerHeat { get; set; }
 
     /// <summary>
+    /// The Between races preset for this day alone (GapPreset.Key), over the
+    /// club's own settings - so a monthly big event can be Big event without
+    /// changing the weekly club night. Blank uses the club's settings.
+    /// Set on Race Day -> Setup, under Building the program (31 Oct 2026).
+    /// </summary>
+    public string BetweenRacesPreset { get; set; } = string.Empty;
+
+    /// <summary>
     /// Whether building the programme counts only drivers who have checked
     /// in, or everyone entered in the class.
     ///

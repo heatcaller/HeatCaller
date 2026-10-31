@@ -61,6 +61,11 @@ internal sealed class BroadcastWindow : Form
     private readonly Label _lblVotes = new();
     private readonly Label _lblShow = new();
     private readonly Label _lblReplay = new();
+    private readonly Label _lblGap = new();
+    private readonly Button _btnSkipGap = new() { Text = "Skip Next Call-up" };
+
+    /// <summary>Race Control's Skip Next Call-up, for the button beside Between races.</summary>
+    internal Action? SkipGapLine { get; set; }
 
     /// <param name="strip">Race Control's own row of broadcast controls, moved in here.</param>
     /// <param name="raceKey">
@@ -107,6 +112,31 @@ internal sealed class BroadcastWindow : Form
             value.MaximumSize = new Size(UiLayout.AtTextSize(WindowWidth - 200), 0);
             grid.AddRow(caption, value);
         }
+
+        // BETWEEN RACES (31 Oct 2026). What the automatic caller says next
+        // and when, with the one control a race director wants from here:
+        // let the next call-up go by.
+        _lblGap.AutoSize = true;
+        _lblGap.MaximumSize = new Size(UiLayout.AtTextSize(WindowWidth - 380), 0);
+        _lblGap.Margin = new Padding(0, 4, 10, 0);
+        _btnSkipGap.AutoSize = true;
+        _btnSkipGap.Enabled = false;
+        _btnSkipGap.Click += (_, _) =>
+        {
+            SkipGapLine?.Invoke();
+            ActiveControl = _btnClose;
+        };
+        var gapRow = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = Padding.Empty,
+        };
+        gapRow.Controls.Add(_lblGap);
+        gapRow.Controls.Add(_btnSkipGap);
+        grid.AddRow("Between races:", gapRow);
+        Set(_lblGap, "Nothing waiting.");
 
         glance.Add(grid, gapBelow: 0);
 
@@ -265,6 +295,22 @@ internal sealed class BroadcastWindow : Form
     }
 
     /// <summary>
+    /// The automatic caller's next line, in a few words (GapState.DueNext) -
+    /// empty when nothing is waiting, which also greys Skip Next Call-up.
+    /// </summary>
+    internal void ShowGap(string next)
+    {
+        var waiting = !string.IsNullOrWhiteSpace(next);
+        Set(_lblGap, waiting ? next : "Nothing waiting.");
+
+        var canSkip = waiting && next.StartsWith("Call-up for", StringComparison.Ordinal);
+        if (_btnSkipGap.Enabled != canSkip)
+        {
+            _btnSkipGap.Enabled = canSkip;
+        }
+    }
+
+    /// <summary>
     /// The budget's sentence without its own "Tonight:" - the caption beside
     /// it says that (CommentaryBudget.Describe starts every reading with it).
     /// </summary>
@@ -278,12 +324,13 @@ internal sealed class BroadcastWindow : Form
     }
 
     /// <summary>
-    /// F1 to F8 on to Race Control (see the raceKey the window was built
-    /// with) - bare, as MainForm takes them. Everything else as any form.
+    /// F1 to F8, and the between-race keys F9, F10 and F12, on to Race
+    /// Control (see the raceKey the window was built with) - bare, as
+    /// MainForm takes them. Everything else as any form.
     /// </summary>
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
-        if (keyData is >= Keys.F1 and <= Keys.F8 && _raceKey?.Invoke(keyData) == true)
+        if (keyData is (>= Keys.F1 and <= Keys.F10) or Keys.F12 && _raceKey?.Invoke(keyData) == true)
         {
             return true;
         }

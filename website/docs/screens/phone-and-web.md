@@ -248,7 +248,7 @@ To leave graphics out, add `?hide=` and their names to the address, separated by
 
 ### Race remote
 
-The page at `/remote` lets you run the race from a phone at the trackside. It has buttons for **STAGE**, **COUNTDOWN**, **GREEN - START**, **YELLOW**, **RED**, **CHECKERED** and **RESET**, plus the current race state and a live standings table.
+The page at `/remote` lets you run the race from a phone at the trackside. It has buttons for **STAGE**, **COUNTDOWN**, **GREEN - START**, **YELLOW**, **RED**, **CHECKERED** and **RESET**, plus the current race state and a live standings table. Under **BETWEEN RACES** are **SKIP** (stops the line on air), **HOLD TALK** (holds or resumes the talk between races) and **CALL UP** (calls up the next race now), the same as the flag row's buttons after the flag (see [The flag row after the flag](../race-control/running-a-race.md#the-flag-row-after-the-flag)).
 
 At the top, **CONTROLLING** shows which race the buttons act on: the round selected on **Race Control** with its class, for example "Q2 Heat 1 (Stock Buggy)", or the race name typed in, **Practice** during practice, or **Freeform race** with neither. A demo race starts with "Demo:". It changes within a couple of seconds when a different round is picked on the laptop, so check it before you press **STAGE**.
 

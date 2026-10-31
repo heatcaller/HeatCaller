@@ -1113,6 +1113,13 @@ public sealed class CommentaryDirector
     private bool _forTheProgramme;
 
     /// <summary>
+    /// Why the Between races settings hold a segment of this kind now, or
+    /// null when they do not - set by the Announcer screen from GapState.
+    /// Asked of the filler between races only, never of a programme.
+    /// </summary>
+    internal Func<SegmentKind, string?>? GapRefuses { get; set; }
+
+    /// <summary>
     /// Held for the length of a pass, so there is only ever one - see
     /// ForTheProgrammeAsync, which waits for it, and NextAsync, which gives
     /// way to it.
@@ -1622,8 +1629,24 @@ public sealed class CommentaryDirector
     /// of them, which is the fastest way to make a crowd stop hearing it.
     /// Ninety seconds is longer than the longest read and shorter than a
     /// heat, so a sponsor gets one bite per gap.
+    ///
+    /// AND NO LONGER THAN THE CLUB ASKS (31 Oct 2026): Between races has
+    /// "Sponsor reads, at most one every" 1 to 10 minutes. One minute brings
+    /// this down to sixty seconds; longer spacing is the gap's own rule
+    /// (GapState, GapLine.Sponsor), which holds a read in the gap until it
+    /// is due - so a break's read is never held back by the gap's setting.
     /// </summary>
-    private static readonly TimeSpan QuietAfterRead = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan LongestQuietAfterRead = TimeSpan.FromSeconds(90);
+
+    /// <summary>See <see cref="LongestQuietAfterRead"/>.</summary>
+    private TimeSpan QuietAfterRead
+    {
+        get
+        {
+            var asked = TimeSpan.FromMinutes(Math.Clamp(_settings.BetweenRacesSponsorMinutes, 1, 10));
+            return asked < LongestQuietAfterRead ? asked : LongestQuietAfterRead;
+        }
+    }
 
     /// <summary>Breaks this director has already noticed ending - see NextAdBreakRead.</summary>
     private int _adBreaksSeen;
@@ -1910,6 +1933,26 @@ public sealed class CommentaryDirector
             // evening has a variety rule biting rather than thin results.
             Account.EveryFactSpent();
 
+            return null;
+        }
+
+        // BETWEEN RACES (31 Oct 2026): the filler between races keeps to the
+        // Between races card - its level, line count, spacing, quiet zones
+        // and ticks - by the gap Race Control keeps (GapState). Never a
+        // programme's own segment: the recap show is not filler.
+        if (!_forTheProgramme && !InRace(kind) && GapRefuses?.Invoke(kind) is { } gapWhy)
+        {
+            // Once per reason, the seconds left out so a countdown in the
+            // reason does not say it again every pass.
+            var gapKey = "gap:" + System.Text.RegularExpressions.Regex.Replace(gapWhy, "[0-9]+", "#");
+
+            if (!_refusalSaid.TryGetValue(kind, out var gapBefore) || !string.Equals(gapBefore, gapKey, StringComparison.Ordinal))
+            {
+                _refusalSaid[kind] = gapKey;
+                Say($"[brain] Held {spec.Title.ToLowerInvariant()} - {gapWhy}.");
+            }
+
+            Account.Refused(BudgetRefusal.BetweenRaces);
             return null;
         }
 

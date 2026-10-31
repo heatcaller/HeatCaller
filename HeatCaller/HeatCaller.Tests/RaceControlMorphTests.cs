@@ -31,8 +31,9 @@ public sealed class RaceControlMorphTests
         foreach (var practice in new[] { false, true })
         foreach (var warmingUp in new[] { false, true })
         foreach (var nextWaiting in new[] { false, true })
+        foreach (var talkButtons in new[] { false, true })
         {
-            var shown = RaceBar.ButtonsFor(state, flag, practice, warmingUp, nextWaiting);
+            var shown = RaceBar.ButtonsFor(state, flag, practice, warmingUp, nextWaiting, talkButtons);
             most = Math.Max(most, System.Numerics.BitOperations.PopCount((uint)shown));
         }
 
@@ -53,26 +54,43 @@ public sealed class RaceControlMorphTests
     }
 
     [Fact]
-    public void After_the_flag_the_row_is_the_mockups_next_heat_results_edit_result_and_reset()
+    public void After_the_flag_the_row_is_skip_hold_talk_call_up_edit_result_and_reset()
     {
-        // 25 Oct 2026: "the mock up had a different set up buttons for after a race".
+        // 31 Oct 2026: "you can remove the next heat button as the button
+        // above it and to the right does that now", and Results with it -
+        // Edit Result goes to the same race in Race History.
         var shown = RaceBar.ButtonsFor(RaceState.Finished, FlagState.Checkered, practice: false, warmingUp: false);
 
         Assert.Equal(
-            RaceBarButtons.NextHeat | RaceBarButtons.Results | RaceBarButtons.EditResult | RaceBarButtons.Reset,
+            RaceBarButtons.Skip | RaceBarButtons.HoldTalk | RaceBarButtons.CallUp | RaceBarButtons.EditResult | RaceBarButtons.Reset,
             shown);
+        Assert.Equal(RaceBar.AfterTheFlag, shown);
         Assert.Equal(RacePhase.Finished, RaceBar.PhaseFor(RaceState.Finished, FlagState.Checkered, false, false));
     }
 
     [Fact]
-    public void After_the_flag_with_nothing_next_in_the_program_Stage_takes_Next_Heats_place()
+    public void After_the_flag_the_talk_buttons_stay_whether_or_not_anything_is_next()
     {
-        var shown = RaceBar.ButtonsFor(RaceState.Finished, FlagState.Checkered, false, false, nextWaiting: false);
+        // Call Up greys itself when there is nothing next; the row does not move.
+        Assert.Equal(RaceBar.AfterTheFlag, RaceBar.ButtonsFor(RaceState.Finished, FlagState.Checkered, false, false, nextWaiting: false));
+    }
+
+    [Fact]
+    public void With_the_talk_buttons_switched_off_the_row_after_the_flag_is_edit_result_and_reset()
+    {
+        var shown = RaceBar.ButtonsFor(RaceState.Finished, FlagState.Checkered, false, false, nextWaiting: true, talkButtons: false);
+
+        Assert.Equal(RaceBarButtons.EditResult | RaceBarButtons.Reset, shown);
+    }
+
+    [Fact]
+    public void With_the_talk_buttons_off_and_nothing_next_Stage_is_on_the_row()
+    {
+        var shown = RaceBar.ButtonsFor(RaceState.Finished, FlagState.Checkered, false, false, nextWaiting: false, talkButtons: false);
 
         Assert.True(shown.HasFlag(RaceBarButtons.Stage));
-        Assert.False(shown.HasFlag(RaceBarButtons.NextHeat));
-        Assert.True(shown.HasFlag(RaceBarButtons.Results));
         Assert.True(shown.HasFlag(RaceBarButtons.EditResult));
+        Assert.False(shown.HasFlag(RaceBarButtons.Skip));
     }
 
     [Fact]
@@ -82,22 +100,34 @@ public sealed class RaceControlMorphTests
         {
             var shown = RaceBar.ButtonsFor(state, FlagState.Green, false, false);
 
-            Assert.False(shown.HasFlag(RaceBarButtons.NextHeat), $"Next Heat at {state}");
-            Assert.False(shown.HasFlag(RaceBarButtons.Results), $"Results at {state}");
+            Assert.False(shown.HasFlag(RaceBarButtons.Skip), $"Skip at {state}");
+            Assert.False(shown.HasFlag(RaceBarButtons.HoldTalk), $"Hold Talk at {state}");
+            Assert.False(shown.HasFlag(RaceBarButtons.CallUp), $"Call Up at {state}");
             Assert.False(shown.HasFlag(RaceBarButtons.EditResult), $"Edit Result at {state}");
         }
 
         // A warm-up between races is its own row, finished race or not.
-        Assert.False(RaceBar.ButtonsFor(RaceState.Finished, FlagState.None, false, warmingUp: true).HasFlag(RaceBarButtons.Results));
+        Assert.False(RaceBar.ButtonsFor(RaceState.Finished, FlagState.None, false, warmingUp: true).HasFlag(RaceBarButtons.Skip));
     }
 
     [Fact]
-    public void Next_Heat_does_what_Start_Next_does()
+    public void Next_Heat_and_Results_have_left_the_row()
     {
         var layout = Source("RaceControlControl.Layout.cs");
 
         Assert.Contains("_btnStartNext.Click += (_, _) => StartNext();", layout, StringComparison.Ordinal);
-        Assert.Contains("_btnBarNext.Click += (_, _) => StartNext();", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("_btnBarNext", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("_btnBarResults", layout, StringComparison.Ordinal);
+        Assert.Contains("_btnBarSkip, _btnBarHoldTalk, _btnBarCallUp, _btnBarEditResult, _btnReset", layout, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_resting_hint_after_the_flag_says_how_Skip_works()
+    {
+        var hint = RaceBar.RestingHint(RaceBar.AfterTheFlag, practice: false);
+
+        Assert.Contains("Reset: press and hold for a second.", hint, StringComparison.Ordinal);
+        Assert.Contains("Skip: click for the next part of the show, hold to end it.", hint, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -588,8 +618,9 @@ public sealed class RaceControlMorphTests
                 new FlagButton { Text = "Yellow" },
                 new FlagButton { Text = "Red" },
                 new FlagButton { Chequered = true, Text = "Checkered" },
-                new Button { Text = "Next Heat" },
-                new Button { Text = "Results" },
+                new Button { Text = "Skip" },
+                new Button { Text = "Hold Talk" },
+                new Button { Text = "Call Up" },
                 new Button { Text = "Edit Result" },
                 new Button { Text = "Reset" },
             };
@@ -618,7 +649,7 @@ public sealed class RaceControlMorphTests
                 {
                     RaceBarButtons.Stage, RaceBarButtons.Countdown, RaceBarButtons.Green,
                     RaceBarButtons.Yellow, RaceBarButtons.Red, RaceBarButtons.Checkered,
-                    RaceBarButtons.NextHeat, RaceBarButtons.Results, RaceBarButtons.EditResult, RaceBarButtons.Reset,
+                    RaceBarButtons.Skip, RaceBarButtons.HoldTalk, RaceBarButtons.CallUp, RaceBarButtons.EditResult, RaceBarButtons.Reset,
                 };
 
                 for (var i = 0; i < buttons.Length; i++)

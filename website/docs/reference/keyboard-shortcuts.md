@@ -19,6 +19,9 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 | <kbd>F6</kbd> | **Checkered** |
 | <kbd>F7</kbd> | **Reset**. If a race is staging, counting down or running, it asks first ("A race is under way. Reset it? (Undo can still bring it back.)"). |
 | <kbd>F8</kbd> | **Quick Race** |
+| <kbd>F9</kbd> | **Skip**, between races: skips the part of the recap show or the line on air. Holding the button ends the whole recap show; the key never does. |
+| <kbd>F10</kbd> | **Hold Talk** / **Resume Talk**: nothing is said between races until you press it again. |
+| <kbd>F12</kbd> | **Call Up**: calls up the next race now. |
 | <kbd>B</kbd> | **Big Screen** |
 | <kbd>R</kbd> | **Pre-race check** |
 | <kbd>A</kbd> | **Announcer Screen** |

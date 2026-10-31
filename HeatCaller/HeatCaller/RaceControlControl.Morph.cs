@@ -82,7 +82,7 @@ public partial class RaceControlControl
 
         _flagRow.SetPhase(RaceBar.Word(phase), PhaseInk(phase));
 
-        var shown = RaceBar.ButtonsFor(state, flag, practice, warmingUp, _nextWaiting);
+        var shown = RaceBar.ButtonsFor(state, flag, practice, warmingUp, _nextWaiting, _settings.BetweenRacesFlagButtons);
 
         if (_barShown == shown)
         {
@@ -97,8 +97,9 @@ public partial class RaceControlControl
         ShowOnBar(_btnYellow, shown, RaceBarButtons.Yellow);
         ShowOnBar(_btnRed, shown, RaceBarButtons.Red);
         ShowOnBar(_btnCheckered, shown, RaceBarButtons.Checkered);
-        ShowOnBar(_btnBarNext, shown, RaceBarButtons.NextHeat);
-        ShowOnBar(_btnBarResults, shown, RaceBarButtons.Results);
+        ShowOnBar(_btnBarSkip, shown, RaceBarButtons.Skip);
+        ShowOnBar(_btnBarHoldTalk, shown, RaceBarButtons.HoldTalk);
+        ShowOnBar(_btnBarCallUp, shown, RaceBarButtons.CallUp);
         ShowOnBar(_btnBarEditResult, shown, RaceBarButtons.EditResult);
         ShowOnBar(_btnReset, shown, RaceBarButtons.Reset);
 

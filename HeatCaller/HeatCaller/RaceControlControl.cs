@@ -350,28 +350,31 @@ public sealed partial class RaceControlControl : UserControl
     private readonly Button _btnStartNext = new();
     private readonly Button _btnReseed = new();
 
-    // THE FLAG ROW AFTER THE FLAG (25 Oct 2026, the mockup's After row):
-    // Next Heat, Results and Edit Result, with Reset - see RaceBar.ButtonsFor.
+    // THE FLAG ROW AFTER THE FLAG (25 Oct 2026, the mockup's After row;
+    // 31 Oct 2026, the between-race talk): Skip, Hold Talk and Call Up, Edit
+    // Result and Reset - see RaceBar.ButtonsFor. Next Heat and Results left
+    // the row: Start Next on the Next Up bar does what Next Heat did, and
+    // Edit Result opens the same race in Race History.
 
-    /// <summary>Next Heat: Start Next's own action (StartNext), on the flag row once a race is over.</summary>
-    private readonly Button _btnBarNext = new() { Text = "Next Heat" };
+    /// <summary>Skip: a click stops the line on air, a hold ends the whole recap show - see SkipPart and SkipWholeShow. F9.</summary>
+    private readonly Button _btnBarSkip = new() { Text = "Skip" };
 
-    /// <summary>Results: the race just run, in Race History - see ResultsRequested.</summary>
-    private readonly Button _btnBarResults = new() { Text = "Results" };
+    /// <summary>Hold Talk: no talk between races until pressed again ("Resume Talk") - see ToggleTalkHold. F10.</summary>
+    private readonly Button _btnBarHoldTalk = new() { Text = "Hold Talk" };
+
+    /// <summary>Call Up: the next race's drivers and marshals called now; right-click for more - see CallUpNow. F12.</summary>
+    private readonly Button _btnBarCallUp = new() { Text = "Call Up" };
 
     /// <summary>Edit Result: the race just run, in Race History, with Edit Result open - see EditResultRequested.</summary>
     private readonly Button _btnBarEditResult = new() { Text = "Edit Result" };
 
     /// <summary>
-    /// Whether the program has something for Next Heat to start - a round, or
-    /// a step owed before one. Worked out with the Next Up bar
-    /// (UpdateNextUpBar) and read by the flag row, which shows Stage in its
-    /// place when there is nothing.
+    /// Whether the program has something for Start Next to start - a round,
+    /// or a step owed before one. Worked out with the Next Up bar
+    /// (UpdateNextUpBar) and read by the flag row - Call Up is greyed when
+    /// there is nothing, and Stage stands in when the talk buttons are off.
     /// </summary>
     private bool _nextWaiting;
-
-    /// <summary>Results on the flag row after the flag: the host shows the race just run in Race History.</summary>
-    internal event Action? ResultsRequested;
 
     /// <summary>Edit Result on the flag row after the flag: the host opens Edit Result on the race just run.</summary>
     internal event Action? EditResultRequested;
@@ -747,6 +750,13 @@ public sealed partial class RaceControlControl : UserControl
                 // catching and a line takes seconds to write, so once a
                 // second is a warning rather than a record of one.
                 ShowBroadcast();
+
+                // Between races (31 Oct 2026): the automatic call-ups,
+                // marshals and countdown, and the flag row's talk buttons -
+                // on the same second, after the Next Up bar has worked out
+                // what is next. See RaceControlControl.BetweenRaces.
+                BetweenRacesTick();
+                UpdateGapButtons();
             }
         };
         _clockRefreshTimer.Start();
@@ -850,7 +860,7 @@ public sealed partial class RaceControlControl : UserControl
     /// A failure inside the command is reported to the phone and the console
     /// rather than thrown.
     /// </summary>
-    /// <param name="action">stage, countdown, green, yellow, red, checkered or reset - anything else is refused.</param>
+    /// <param name="action">stage, countdown, green, yellow, red, checkered or reset, or between races skip, holdtalk or callup - anything else is refused.</param>
     /// <param name="confirmedOverRunningRace">
     /// The phone has asked its user whether to abandon the running race and
     /// been told yes (its force=1). Without it, a Stage or Countdown over a
@@ -880,7 +890,8 @@ public sealed partial class RaceControlControl : UserControl
             return RemoteCommandOutcome.NotDelivered("The laptop could not take that command just now - it was NOT sent. Try again.");
         }
 
-        if (action is not ("stage" or "countdown" or "green" or "yellow" or "red" or "checkered" or "reset"))
+        if (action is not ("stage" or "countdown" or "green" or "yellow" or "red" or "checkered" or "reset"
+                or "skip" or "holdtalk" or "callup"))
         {
             return RemoteCommandOutcome.Refused("Unknown command.");
         }
@@ -932,6 +943,9 @@ public sealed partial class RaceControlControl : UserControl
         _runningRemoteCommand = true;
         _remoteRefusal = null;
 
+        // The between-race buttons' own answers (31 Oct 2026).
+        var talkAnswer = string.Empty;
+
         try
         {
             // The same entry points as the function keys, so the phone runs
@@ -946,6 +960,27 @@ public sealed partial class RaceControlControl : UserControl
                 case "red": TriggerRed(); break;
                 case "checkered": TriggerCheckered(); break;
                 case "reset": TriggerReset(); break;
+
+                // Between races (31 Oct 2026): the flag row's buttons after
+                // the flag. Skip is the click - the line on air - never the
+                // hold that ends the whole show.
+                case "skip":
+                    talkAnswer = SkipPart();
+
+                    if (!talkAnswer.StartsWith("Skipped", StringComparison.Ordinal))
+                    {
+                        NoteRemoteRefusal(talkAnswer);
+                    }
+
+                    break;
+
+                case "holdtalk":
+                    talkAnswer = ToggleTalkHold()
+                        ? "Talk held - nothing between races until you press it again."
+                        : "Talk resumed.";
+                    break;
+
+                case "callup": talkAnswer = CallUpNow(); break;
             }
 
             if (_remoteRefusal is { } refusal)
@@ -979,6 +1014,7 @@ public sealed partial class RaceControlControl : UserControl
                 "red" => "Red flag out.",
                 "checkered" => "Checkered flag out.",
                 "reset" => "Race reset.",
+                "skip" or "holdtalk" or "callup" => talkAnswer,
                 _ => "Done.",
             });
         }
@@ -1301,7 +1337,14 @@ public sealed partial class RaceControlControl : UserControl
 
         if (_broadcastWindow is null or { IsDisposed: true })
         {
-            _broadcastWindow = new BroadcastWindow(_announcerStrip, RaceKeyFromBroadcastWindow);
+            _broadcastWindow = new BroadcastWindow(_announcerStrip, RaceKeyFromBroadcastWindow)
+            {
+                SkipGapLine = SkipNextCallUp,
+            };
+
+            // A new window starts blank: its Between races row is filled on
+            // the next tick, not when the line next changes.
+            _gapSaid = null;
         }
 
         // The theme first - it resets every button's colours - then the row,
@@ -1316,7 +1359,8 @@ public sealed partial class RaceControlControl : UserControl
     /// The flag keys, pressed while the Broadcast window has the focus. The
     /// window is a separate form, so they would otherwise go nowhere - and a
     /// race director who has just pressed Hold must still be able to throw a
-    /// yellow with F4. The same actions MainForm's keys take (F1 to F8).
+    /// yellow with F4. The same actions MainForm's keys take (F1 to F8, and
+    /// the between-race F9 Skip, F10 Hold Talk and F12 Call Up).
     /// </summary>
     private bool RaceKeyFromBroadcastWindow(Keys key)
     {
@@ -1330,6 +1374,9 @@ public sealed partial class RaceControlControl : UserControl
             case Keys.F6: TriggerCheckered(); return true;
             case Keys.F7: TriggerResetFromKeyboard(); return true;
             case Keys.F8: TriggerQuickRace(); return true;
+            case Keys.F9: SkipPart(); return true;
+            case Keys.F10: ToggleTalkHold(); return true;
+            case Keys.F12: CallUpNow(); return true;
             default: return false;
         }
     }

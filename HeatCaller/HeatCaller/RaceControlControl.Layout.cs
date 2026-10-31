@@ -190,12 +190,13 @@ public sealed partial class RaceControlControl
         // which is always there so nothing moves when a hold starts.
         var flagBar = new ButtonBar(tight: true, sameWidth: true).With(
             _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered,
-            _btnBarNext, _btnBarResults, _btnBarEditResult, _btnReset);
+            _btnBarSkip, _btnBarHoldTalk, _btnBarCallUp, _btnBarEditResult, _btnReset);
 
-        // After the flag (25 Oct 2026): Next Heat is wired with Start Next,
-        // which it is (see StartNext); these two go to Race History.
-        _btnBarResults.Click += (_, _) => ResultsRequested?.Invoke();
+        // After the flag (25 Oct 2026): Edit Result goes to Race History.
         _btnBarEditResult.Click += (_, _) => EditResultRequested?.Invoke();
+
+        // Between races (31 Oct 2026) - see RaceControlControl.BetweenRaces.
+        BuildTalkButtons();
 
         // Double-click the On Air bar for the Broadcast window (26 Oct 2026,
         // asked for by Asher) - what Broadcast under Mission Control opens.
@@ -286,6 +287,11 @@ public sealed partial class RaceControlControl
         _announcerStrip.Visible = false;
         _announcerStrip.HoldChanged += held =>
         {
+            // One hold: the strip's own button and the flag row's Hold Talk
+            // are the same switch.
+            _talkHeld = held;
+            ShowTalkHold();
+
             if (Commentary?.Invoke() is { } director)
             {
                 director.Held = held;
@@ -408,9 +414,7 @@ public sealed partial class RaceControlControl
         // loudly, it just clips the new caption on the one screen the
         // director watches all night.
         _btnStartNext.Text = ProgramCaptions.StartNext;
-        // The flag row's Next Heat after the flag (25 Oct 2026) does exactly this - see StartNext.
         _btnStartNext.Click += (_, _) => StartNext();
-        _btnBarNext.Click += (_, _) => StartNext();
 
         // Was "Re-seed Remaining...". It rebuilds the rosters of the heats
         // that have not run yet from who is checked in now, which is what
@@ -1374,8 +1378,9 @@ public sealed partial class RaceControlControl
         shortcutTips.SetToolTip(_btnCheckered, "Press and hold for a second. Shortcut: F6");
         shortcutTips.SetToolTip(_btnReset, "Press and hold for a second. Shortcut: F7 (asks first if a race is running)");
         shortcutTips.SetToolTip(_btnQuickRace, "Shortcut: F8");
-        shortcutTips.SetToolTip(_btnBarNext, "The program's next race - the same as Start Next on the Next Up bar, so it does the step owed first when there is one.");
-        shortcutTips.SetToolTip(_btnBarResults, "The race just run, in Race History.");
+        shortcutTips.SetToolTip(_btnBarSkip, "Click to stop the line on air and go on to the next part of the show; press and hold to end the recap show. Shortcut: F9");
+        shortcutTips.SetToolTip(_btnBarHoldTalk, "No talk between races - filler, sponsor reads, call-ups and the countdown - until you press Resume Talk. Shortcut: F10");
+        shortcutTips.SetToolTip(_btnBarCallUp, "Calls the next race's drivers and marshals now. Right-click to push the race back a minute, call two races out, marshals only or who is not checked in. Shortcut: F12");
         shortcutTips.SetToolTip(_btnBarEditResult, "The race just run, in Race History, with Edit Result open - a penalty, a missed lap, a DNF.");
         shortcutTips.SetToolTip(_btnBigScreen, "Shortcut: B");
         shortcutTips.SetToolTip(_btnReadiness, "Shortcut: R");
@@ -1424,7 +1429,7 @@ public sealed partial class RaceControlControl
         // draws over a flag colour looks like a fault besides.
         AppTheme.ReleaseFocusAfterClick(
             _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered,
-            _btnBarNext, _btnBarResults, _btnBarEditResult, _btnReset);
+            _btnBarSkip, _btnBarHoldTalk, _btnBarCallUp, _btnBarEditResult, _btnReset);
 
         // The chip wraps to the card's width - the value can run long - and
         // wears the window's font.

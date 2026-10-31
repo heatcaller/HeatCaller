@@ -38,6 +38,20 @@ public partial class MainForm
         raceControl.MechanicSetupFacts = MechanicSetupFactsFor;
         raceControl.RecapCarFacts = RecapCarFactsFor;
 
+        // The Between races card (31 Oct 2026): Hear the gap plays tonight's
+        // next race in the card's wording, through the announcer, and its
+        // running order counts the sponsor reads only when the club has them
+        // read in segments.
+        commentary.TonightsGap = raceControl.TonightsGapFacts;
+        commentary.PlayGap = lines =>
+        {
+            foreach (var line in lines)
+            {
+                _announcer.SpeakReminder(line, onAir: "Hear the gap", forListeners: false);
+            }
+        };
+        commentary.SponsorReadsBetweenRaces = () => _sponsors.Current.ReadDuringSegments;
+
         // The club's own "Max spoken announcements per lap", so How chatty
         // describes what it does to their calls, not the default's (17 Oct 2026).
         commentary.MaxCallsPerLap = () => _voiceStore.Current.MaxAnnouncementsPerLap;

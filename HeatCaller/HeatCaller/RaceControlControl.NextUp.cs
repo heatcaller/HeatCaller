@@ -589,19 +589,10 @@ public sealed partial class RaceControlControl
         // race too - a second Start would start the round after it.
         _btnStartNext.Enabled = !racing && !OnAirRunning && (_barStep is not null || next is not null);
 
-        // The flag row's Next Heat after the flag (25 Oct 2026) - Stage stands
-        // in for it when there is nothing next (see RaceBar.ButtonsFor). Its
-        // caption stays short, the row's buttons being one width: "Next
-        // Step" when what Start Next would do is a step, not a race.
+        // Read by the flag row: Call Up is greyed when there is nothing next,
+        // and Stage stands in when the talk buttons are off (see
+        // RaceBar.ButtonsFor).
         _nextWaiting = _barStep is not null || next is not null;
-        _btnBarNext.Enabled = _btnStartNext.Enabled;
-
-        var barNext = _barStep is not null ? "Next Step" : "Next Heat";
-
-        if (!string.Equals(_btnBarNext.Text, barNext, StringComparison.Ordinal))
-        {
-            _btnBarNext.Text = barNext;
-        }
     }
 
     /// <summary>
