@@ -19,7 +19,7 @@ Your club's address is the relay address followed by `/c/` and your club id, for
 
 | Page | Address | What it shows | Refreshes |
 |---|---|---|---|
-| Home | `/c/<club>` | What's on track now (or on now, or up next), the next few sessions, the three latest results, and the club's links. While online check-in is open, a **Check in: tap Me and type your PIN** line points drivers to **Me**. | Every 15 seconds |
+| Home | `/c/<club>` | Changes with the night. While racing, what's on track now (or up next). Before a night, the club's preview. Between nights, "No racing right now" with when the club races, then a recap of the last race night: each final's winner, the fastest lap, the points leader and that night's new achievements, linking to that night's results. A phone that remembers its driver gets a **You** strip (best finish that night, standings place, newest achievement, **Open your night**); any other phone gets the club's **New here?** card. The club's tracks sit at the bottom, today's first. While online check-in is open, a **Check in: tap Me and type your PIN** line points drivers to **Me**. | Every 15 seconds (recap and tracks every 5 minutes) |
 | Live | `/c/<club>/live` | The race as it runs: state, countdown, flag, what's next, and the leaderboard, at the top of the page. Under it, a **Captions** button shows the announcer's words as text (see [Captions](#captions)), and **Lap times in my ear** reads out the laps of the driver you follow (see [Lap times in my ear](#lap-times-in-my-ear)). | Every 2 seconds (every second while lap times are being read out) |
 | Schedule | `/c/<club>/schedule` | Today's running order, each line marked Done, On track or Next. A class picker appears when there's more than one class. | Every 15 seconds |
 | Check in | `/c/<club>/checkin` | Online check-in, under the **Me** tab. Opened by the QR code on a driver's badge, and by the desk for its staff list. A driver with a personal PIN checks in by typing it on **Me**. See [Online check-in](check-in.md). | Every 10 seconds |
@@ -27,7 +27,7 @@ Your club's address is the relay address followed by `/c/` and your club id, for
 | Me | `/c/<club>/mynight` | A box for a driver's personal PIN, which opens their own night page. See [Opening your night with your PIN](#opening-your-night-with-your-pin). | When opened |
 | Standings | `/c/<club>/standings` | A tab under **Results**. Championship points for each season, with a season picker when there's more than one. | Every 30 seconds |
 | Achievements | `/c/<club>/badges` | A tab under **Results**. "Just earned", "Most collected" and "Every badge". While you're [following a driver](#following-a-driver), a "Next for *name*" list at the top shows up to two badges they're close to, such as "2 more podiums for Podium Regular". | Every minute |
-| Tracks | `/c/<club>/tracks` | A tab under **Results**. Every track layout with its picture, lap record, sector records, length, typical lap and the ten best laps on it. Today's layout comes first, marked "Racing here today". | Every 5 minutes |
+| Tracks | `/c/<club>/tracks` | Reached from **Our tracks** on Home (**Home** stays lit). Every track layout with its picture, lap record, sector records, length, typical lap and the ten best laps on it. Today's layout comes first, marked "Racing here today". | Every 5 minutes |
 
 ![The Schedule page on a phone, showing today's running order with Done, On track and Next markers](../assets/images/online-schedule-page-phone.png)
 
@@ -37,7 +37,8 @@ Since 29 October 2026:
 
 - **On a phone**, a bar along the bottom of every page has **Home**, **Live**, **Schedule**, **Results** and **Me**. It stays in place as the page scrolls.
 - **On a laptop or tablet**, the same five tabs sit in one row at the top.
-- **Results** has a row of its own tabs at the top: **Sessions** (the results themselves), **Standings**, **Tracks** and **Achievements**. **Results** stays lit on all four. Since 30 October these replace the **Explore** tiles that used to sit at the bottom of Home.
+- **Results** has a row of its own tabs at the top, drawn as buttons: **Sessions** (the results themselves), **Standings** and **Achievements**. **Results** stays lit on all three. Since 30 October these replace the **Explore** tiles that used to sit at the bottom of Home. **Tracks** moved to Home on 30 October.
+- **New here?** A club fills in **Where we race**, **When we race** and **How to join** in the **Look** card on HeatCaller's **Club Website** page (see [Look](setup.md#look)). Home shows them as a card to any phone that doesn't remember a driver, with **See our tracks**. Leave all three empty for no card. **When we race** also shows under "No racing right now".
 - **Live** shows a small red dot while a car is on track, so you can see a race has started from any page.
 - **Me** is a driver's own corner: the PIN box that opens their night, their night page itself, check-in and sign-up all light up **Me**. While online check-in is open, a driver's right PIN on **Me** checks them in and opens their night (since 30 October; there's no separate link to the check-in page).
 - **Me remembers you.** Once a driver's night has opened on their phone (from their badge, their night email or their PIN), the phone remembers them, and **Me** goes straight to their night from then on, whether or not online check-in is open. **Sign out on this phone**, at the bottom of their night, forgets them and signs out **Your details** too. Only the code that opens their night is kept on the phone, never their PIN.

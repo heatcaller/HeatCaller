@@ -139,11 +139,13 @@ With **Send automatically when the race day closes** ticked, the emails go by th
 
 ## Look
 
-The **Look** card holds the welcome line. Changes reach the pages within a few seconds, and there's no Save button.
+The **Look** card holds the welcome line and the **New here?** card. Changes reach the pages within a few seconds, and there's no Save button.
 
 <!-- screenshot: Club Website page, Look card with the Welcome line box and the Open Looks button -->
 
 **Welcome line:** One line of plain text, up to 160 characters, shown under the club's name on the home page, for example "Racing every Tuesday from 6pm - all welcome". It's also the description used when the pages are added to a phone's home screen. Leave it blank for the standard line.
+
+**New here? card:** three lines for somebody who has found the club but never raced there, shown as a card on the club's home page to any phone that doesn't remember a driver. **Where we race:** and **When we race:** take up to 160 characters each, **How to join:** up to 300. **When we race** also shows under "No racing right now" between nights. Leave all three empty for no card.
 
 The pages' colors and the club logo used to be set here too. Since 0.48 they're on the **Themes** page, shared with the app, the Big Screen and the Wi-Fi pages; the card says "Colours and club logo are set in the Looks card on Themes (shared with the app, Big Screen and Wi-Fi pages)." Click **Open Looks** to go there. See [Looks and the club logo](../screens/looks-and-logo.md).
 
