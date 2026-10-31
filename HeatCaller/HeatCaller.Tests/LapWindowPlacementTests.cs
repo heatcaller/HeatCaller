@@ -92,7 +92,7 @@ public sealed class LapDetailWindowTests
     [Fact]
     public void It_is_sized_in_whole_laps_and_kept_within_its_limits()
     {
-        var (asked, tooMany, tooFew, sameHeight) = StaThread.Run(() =>
+        var (asked, tooMany, tooFew, sameHeight, mostOnScreen) = StaThread.Run(() =>
         {
             using var window = new LapDetailWindow("T1", "Alice", "#7  ·  T1", 3, slot: 0, rows: 12);
             var twelve = window.Rows;
@@ -106,11 +106,15 @@ public sealed class LapDetailWindowTests
 
             window.SizeFor(12);
 
-            return (twelve, most, fewest, window.ClientSize.Height == height);
+            return (twelve, most, fewest, window.ClientSize.Height == height, LapDetailWindow.MostRows);
         }, TimeSpan.FromSeconds(30), () => "sizing a lap window");
 
         Assert.Equal(12, asked);
-        Assert.Equal(LapDetailWindow.MaxRows, tooMany);
+
+        // As many as the limit allows, or as fit on this machine's tallest
+        // screen when that is fewer - 33 on a 1080p screen with a taskbar.
+        Assert.Equal(mostOnScreen, tooMany);
+        Assert.InRange(tooMany, LapDetailWindow.MinRows, LapDetailWindow.MaxRows);
         Assert.Equal(LapDetailWindow.MinRows, tooFew);
         Assert.True(sameHeight);
     }

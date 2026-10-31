@@ -155,10 +155,33 @@ public sealed class LapDetailWindow : Form
         _view.Invalidate();
     }
 
-    /// <summary>Sized to show this many laps, within the limits, at the text size in use.</summary>
+    /// <summary>
+    /// The most laps a window can show at the text size in use: MaxRows,
+    /// or fewer when a window that tall would not fit on the tallest
+    /// screen's working area (31 Oct 2026). Windows will not make a window
+    /// taller than that - on a 1080p screen with the taskbar, 40 laps came
+    /// out as a window cut off at 33 and a bit, not whole laps.
+    /// </summary>
+    internal static int MostRows
+    {
+        get
+        {
+            var screens = Screen.AllScreens;
+
+            if (screens.Length == 0)
+            {
+                return MaxRows;
+            }
+
+            return LapDetailView.RowsFor(screens.Max(s => s.WorkingArea.Height));
+        }
+    }
+
+    /// <summary>Sized to show this many laps, within the limits and the screen, at the text size in use.</summary>
     public void SizeFor(int rows)
     {
-        rows = Math.Clamp(rows, MinRows, MaxRows);
+        var most = MostRows;
+        rows = Math.Clamp(rows, MinRows, Math.Max(MinRows, most));
         BuiltForFontScale = AppTheme.FontScale;
 
         var width = LapDetailView.ViewWidth;
@@ -171,7 +194,7 @@ public sealed class LapDetailWindow : Form
         ClientSize = new Size(width, LapDetailView.HeightFor(rows));
 
         MinimumSize = new Size(width, LapDetailView.HeightFor(MinRows));
-        MaximumSize = new Size(width, LapDetailView.HeightFor(MaxRows));
+        MaximumSize = new Size(width, LapDetailView.HeightFor(Math.Max(MinRows, most)));
 
         ApplyRegion();
     }
