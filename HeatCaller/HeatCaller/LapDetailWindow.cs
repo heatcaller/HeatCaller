@@ -631,13 +631,25 @@ public sealed class LapDetailWindow : Form
                 Alignment = StringAlignment.Center,
                 LineAlignment = StringAlignment.Center,
                 Trimming = StringTrimming.EllipsisCharacter,
-                FormatFlags = StringFormatFlags.NoWrap,
+
+                // NoClip as well: a line a pixel taller than its box, from
+                // rounding, still draws whole rather than shaved.
+                FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip,
             };
 
-            g.DrawString(AppTheme.Spaced(label.ToUpperInvariant()), AppTheme.MicroFont, labelBrush,
-                new RectangleF(bounds.Left + 3, bounds.Top + Px(5), bounds.Width - 6, Px(13)), centred);
+            // The label's box is as tall as the font's own line, measured on
+            // the surface being painted (31 Oct 2026, Asher: "tops of the
+            // kpi's on the lap detail windows is cut off"). It was a fixed
+            // 13 pixels, shorter than the caption font's line, and DrawString
+            // clips to its box - so the centred caps lost their top edge, and
+            // at a larger text size or display scale lost more of it.
+            var labelHeight = (float)Math.Ceiling(AppTheme.MicroFont.GetHeight(g));
+            var labelRect = new RectangleF(bounds.Left + 3, bounds.Top + Px(4), bounds.Width - 6, labelHeight);
 
-            var valueRect = new RectangleF(bounds.Left + 3, bounds.Top + Px(17), bounds.Width - 6, bounds.Height - Px(21));
+            g.DrawString(AppTheme.Spaced(label.ToUpperInvariant()), AppTheme.MicroFont, labelBrush, labelRect, centred);
+
+            var valueTop = labelRect.Bottom - Px(1);
+            var valueRect = new RectangleF(bounds.Left + 3, valueTop, bounds.Width - 6, Math.Max(1f, bounds.Bottom - Px(3) - valueTop));
 
             // Stepped down in whole points until it fits, the same way the
             // race stat strip does it - a lap time at a fixed size ends up
@@ -676,7 +688,10 @@ public sealed class LapDetailWindow : Form
             g.DrawString(AppTheme.Spaced("LAP"), AppTheme.MicroFont, brush, new RectangleF(left, top, Px(40), height), near);
             g.DrawString(AppTheme.Spaced("TIME"), AppTheme.MicroFont, brush, new RectangleF(TimeX(left), top, Px(76), height), near);
             g.DrawString(AppTheme.Spaced(HasSectors ? "SECTORS" : "PACE"), AppTheme.MicroFont, brush, new RectangleF(BarLeft(left), top, BarRight(right) - BarLeft(left), height), near);
-            g.DrawString(AppTheme.Spaced("OFF BEST"), AppTheme.MicroFont, brush, new RectangleF(DeltaLeft(right), top, DeltaRight(right) - DeltaLeft(right), height), far);
+            // Room to the left of the figures' column for the whole caption -
+            // in the figures' own 72 pixels it was cut to "OFF BES". Drawn
+            // from the right, so it ends over the figures as before.
+            g.DrawString(AppTheme.Spaced("OFF BEST"), AppTheme.MicroFont, brush, new RectangleF(DeltaRight(right) - Px(110), top, Px(110), height), far);
             g.DrawString(AppTheme.Spaced("RUN"), AppTheme.MicroFont, brush, new RectangleF(RunLeft(right), top, right - RunLeft(right), height), far);
 
             using var rule = new Pen(AppTheme.Border);
