@@ -437,7 +437,7 @@ public sealed class LapChartControl : UserControl
 
         // The x axis runs over the flying laps, LapTimesMs index 1 to the
         // last, so the first real lap sits on the left edge. Each is labeled
-        // index + 1, the same lap number the leaderboard and the lap popup
+        // index + 1, the same lap number the leaderboard and the lap windows
         // give it (they show index 0 as the start pass), so "lap 5" here is
         // "L5" there.
         var flyingCount = Math.Max(1, maxLaps - 1);

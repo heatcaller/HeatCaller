@@ -1,7 +1,7 @@
 namespace HeatCaller;
 
 /// <summary>
-/// The live leaderboard: drawing it, lap details and the lap popup, the
+/// The live leaderboard: drawing it, lap details and the lap windows, the
 /// right-click menu, and changing a driver's laps, penalties and name.
 ///
 /// Moved here unchanged from RaceControlControl.cs on 26 Sep 2026, when the
@@ -21,7 +21,7 @@ public sealed partial class RaceControlControl
         // Before the early return below, so an open lap breakdown still
         // updates - including to "no longer in the standings" - when the
         // board itself has nothing to draw.
-        RefreshLapPopup(ordered);
+        RefreshLapWindows(ordered);
 
         // SIDE BY SIDE WITH THEIR GHOST (22 Oct 2026): in practice, each
         // own-best ghost sits just under the driver it chases, so the two are
@@ -751,7 +751,7 @@ public sealed partial class RaceControlControl
         if (!drawerChanged)
         {
             // Under the driver's own row, which may not be the row clicked.
-            ToggleLapPopup(transponder, DriverRowIndex(transponder));
+            ToggleLapWindow(transponder, DriverRowIndex(transponder));
             return;
         }
 
@@ -767,37 +767,8 @@ public sealed partial class RaceControlControl
             }
 
             RenderLeaderboard();
-            ToggleLapPopup(transponder, DriverRowIndex(transponder));
+            ToggleLapWindow(transponder, DriverRowIndex(transponder));
         });
-    }
-
-    /// <summary>
-    /// The lap breakdown as a toggle (21 Oct 2026): open for this driver
-    /// already, it closes; otherwise it opens.
-    ///
-    /// The popup closes itself on any click outside it - and that click is
-    /// the very one on Lap breakdown or the driver's name. So a press that
-    /// meant "close it" first closed it and then, arriving a moment later,
-    /// opened it again: the button seemed to work every other time. A
-    /// popup for this driver that closed itself within a double-click's
-    /// time of this press was closed BY this press, and is left closed.
-    /// </summary>
-    private void ToggleLapPopup(string transponder, int rowIndex)
-    {
-        if (_lapPopup is { } open && string.Equals(open.Transponder, transponder, StringComparison.OrdinalIgnoreCase))
-        {
-            CloseLapPopup();
-            return;
-        }
-
-        if (string.Equals(_lapPopupClosedFor, transponder, StringComparison.OrdinalIgnoreCase)
-            && Environment.TickCount64 - _lapPopupClosedTicks <= SystemInformation.DoubleClickTime + 100)
-        {
-            _lapPopupClosedFor = null;
-            return;
-        }
-
-        ShowLapPopup(transponder, rowIndex);
     }
 
     /// <summary>
@@ -829,10 +800,6 @@ public sealed partial class RaceControlControl
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [video] Couldn't open the folder for {name}'s video ({ex.Message}). It is at {path}");
         }
     }
-
-    /// <summary>Whose lap breakdown last closed itself, and when - see ToggleLapPopup.</summary>
-    private string? _lapPopupClosedFor;
-    private long _lapPopupClosedTicks;
 
     // --- The corrections drawer ---------------------------------------------
     //
@@ -1491,7 +1458,7 @@ public sealed partial class RaceControlControl
                 break;
 
             case DrawerAction.LapBreakdown:
-                ToggleLapPopup(transponder, rowIndex);
+                ToggleLapWindow(transponder, rowIndex);
                 break;
         }
     }
@@ -1514,158 +1481,6 @@ public sealed partial class RaceControlControl
 
         RenderLeaderboard();
     }
-
-    /// <summary>
-    /// The floating lap breakdown, when one is open. One at a time - a
-    /// second popup over the first would cover the board it is describing.
-    /// </summary>
-    private LapDetailPopup? _lapPopup;
-
-    /// <summary>
-    /// Opens the custom-drawn lap breakdown for a driver, anchored under
-    /// their row so it reads as belonging to that row rather than appearing
-    /// wherever the pointer happened to be.
-    /// </summary>
-    private void ShowLapPopup(string transponder, int rowIndex)
-    {
-        CloseLapPopup();
-
-        var profile = _profiles.Get(transponder);
-        var name = string.IsNullOrWhiteSpace(profile?.DriverName) ? transponder : profile!.DriverName;
-
-        // Whatever of the car, number and class is actually filled in -
-        // an empty profile should not produce a line of stray separators.
-        var parts = new List<string>();
-
-        if (!string.IsNullOrWhiteSpace(profile?.RaceNumber))
-        {
-            parts.Add($"#{profile!.RaceNumber.Trim()}");
-        }
-
-        // The car this row's transponder is fitted to, or their active car.
-        if (_profiles.CarModelFor(transponder) is { Length: > 0 } car && car.Trim().Length > 0)
-        {
-            parts.Add(car.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(profile?.ClassName))
-        {
-            parts.Add(profile!.ClassName.Trim());
-        }
-
-        parts.Add(transponder);
-
-        var popup = new LapDetailPopup(transponder, name, string.Join("  ·  ", parts), _race.StreakThreshold);
-
-        popup.Closed += (_, _) =>
-        {
-            // Only the popup closing ITSELF - a click elsewhere, Escape -
-            // gets here still current. CloseLapPopup clears the field first
-            // and disposes the popup itself.
-            if (!ReferenceEquals(_lapPopup, popup))
-            {
-                return;
-            }
-
-            _lapPopup = null;
-
-            // Noted, so the click that closed it is not taken as asking for
-            // it again - see ToggleLapPopup.
-            _lapPopupClosedFor = popup.Transponder;
-            _lapPopupClosedTicks = Environment.TickCount64;
-
-            // A drop-down is a window of its own, and an auto-closed one was
-            // never disposed - one leaked per double-click all evening.
-            // Posted rather than disposed here, because this handler runs
-            // inside the popup's own closing.
-            if (IsHandleCreated && !IsDisposed && !Disposing)
-            {
-                BeginInvoke(new Action(() =>
-                {
-                    if (!popup.IsDisposed)
-                    {
-                        popup.Dispose();
-                    }
-                }));
-            }
-        };
-
-        _lapPopup = popup;
-
-        RefreshLapPopup(_race.GetOrderedStandings());
-
-        // Under the driver's own row, left-aligned with the grid. Falls back
-        // to the top of the grid when the row can't be located - which can
-        // happen if the board rebuilt between the click and here.
-        var y = 0;
-
-        try
-        {
-            if (rowIndex >= 0 && rowIndex < _dgvLeaderboard.Rows.Count)
-            {
-                // Under the driver's corrections drawer when it is open, not
-                // over it (21 Oct 2026) - laid over the drawer, the popup
-                // covered the very buttons that open and close it.
-                if (rowIndex + 1 < _dgvLeaderboard.Rows.Count
-                    && IsDrawerRow(rowIndex + 1)
-                    && string.Equals(TransponderForRow(rowIndex + 1), transponder, StringComparison.OrdinalIgnoreCase))
-                {
-                    rowIndex++;
-                }
-
-                var rect = _dgvLeaderboard.GetRowDisplayRectangle(rowIndex, false);
-                y = rect.Bottom;
-            }
-        }
-        catch
-        {
-            // Row scrolled out from under us - the fallback position is fine.
-        }
-
-        popup.Show(_dgvLeaderboard, new Point(0, y));
-    }
-
-    private void CloseLapPopup()
-    {
-        if (_lapPopup is not { } popup)
-        {
-            return;
-        }
-
-        _lapPopup = null;
-
-        popup.Close();
-        popup.Dispose();
-    }
-
-    /// <summary>
-    /// Feeds the open popup the driver's current standing on every board
-    /// refresh, so it updates lap by lap instead of freezing on whatever was
-    /// true when it was opened.
-    /// </summary>
-    private void RefreshLapPopup(IReadOnlyList<RacerStanding> ordered)
-    {
-        if (_lapPopup is not { } popup)
-        {
-            return;
-        }
-
-        RacerStanding? standing = null;
-        var position = 0;
-
-        for (var i = 0; i < ordered.Count; i++)
-        {
-            if (string.Equals(ordered[i].TransponderId, popup.Transponder, StringComparison.OrdinalIgnoreCase))
-            {
-                standing = ordered[i];
-                position = i + 1;
-                break;
-            }
-        }
-
-        popup.Apply(standing, position);
-    }
-
     /// <summary>
     /// The driver a row belongs to - the driver's own row, or the lap detail
     /// sitting under it, which carries the same id prefixed so it can be
@@ -1713,7 +1528,7 @@ public sealed partial class RaceControlControl
         {
             if (SelectedTransponder() is { Length: > 0 } transponder)
             {
-                ShowLapPopup(transponder, _dgvLeaderboard.CurrentRow?.Index ?? -1);
+                OpenLapWindow(transponder, _dgvLeaderboard.CurrentRow?.Index ?? -1);
             }
         };
 
@@ -1738,6 +1553,14 @@ public sealed partial class RaceControlControl
             _expandedTransponders.Clear();
             RenderLeaderboard();
         };
+
+        // The lap windows (30 Oct 2026) - see RaceControlControl.LapWindows.
+        // Shown by the Opening handler only while one is open.
+        var lineUpLapWindows = new ToolStripMenuItem("Line up lap windows");
+        lineUpLapWindows.Click += (_, _) => LineUpLapWindows();
+
+        var closeLapWindows = new ToolStripMenuItem("Close all lap windows");
+        closeLapWindows.Click += (_, _) => CloseLapWindows();
 
         // Coaching (22 Oct 2026): Coach (name), with At the split, Target
         // lap..., Consistency and Tones instead of words - one driver at a
@@ -1814,6 +1637,8 @@ public sealed partial class RaceControlControl
             editDriver,
             giveToDriver,
             lapBreakdown,
+            lineUpLapWindows,
+            closeLapWindows,
             toggleLaps,
             hideAllLaps,
             coach,
@@ -1853,6 +1678,11 @@ public sealed partial class RaceControlControl
             giveToDriver.Text = $"Give {transponder} to an existing driver...";
 
             lapBreakdown.Text = $"{name}'s lap breakdown...";
+
+            var lapWindowsOpen = _lapWindows.Count(w => !w.IsDisposed);
+            lineUpLapWindows.Visible = lapWindowsOpen > 1;
+            closeLapWindows.Visible = lapWindowsOpen > 0;
+            closeLapWindows.Text = lapWindowsOpen > 1 ? $"Close all {lapWindowsOpen} lap windows" : "Close the lap window";
 
             toggleLaps.Text = _expandedTransponders.Contains(transponder)
                 ? $"Hide {name}'s laps on the board"

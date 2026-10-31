@@ -1397,9 +1397,9 @@ public sealed partial class RaceControlControl : UserControl
             CancelWarmUp();
             UnwireRaceControl();
 
-            // A drop-down is a window of its own, not a child of this
-            // control - closing the page does not close it.
-            CloseLapPopup();
+            // The lap windows are windows of their own, not children of
+            // this control - closing the page does not close them.
+            CloseLapWindows();
 
             // Nor is the Broadcast window, which hides rather than closes.
             // It lets go of the row before it goes (BroadcastWindow.Dispose),

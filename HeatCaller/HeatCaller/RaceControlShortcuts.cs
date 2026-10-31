@@ -47,7 +47,7 @@ public sealed partial class RaceControlControl
     {
         if (HasKeyboardSelection("open a lap breakdown") && SelectedTransponder() is { Length: > 0 } transponder)
         {
-            ShowLapPopup(transponder, _dgvLeaderboard.CurrentRow?.Index ?? -1);
+            OpenLapWindow(transponder, _dgvLeaderboard.CurrentRow?.Index ?? -1);
         }
     }
 
