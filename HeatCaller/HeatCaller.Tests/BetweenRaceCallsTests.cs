@@ -660,4 +660,79 @@ public sealed class BetweenRaceCallsTests
         Assert.Equal("0:10 hand-over · 1:15 call-up", GapPreview.RunningOrder(steps));
         Assert.StartsWith("Nothing would be said", GapPreview.RunningOrder(Array.Empty<GapPreview.Step>()), StringComparison.Ordinal);
     }
+
+    // ------------------------------------------------- hold, skip, phones
+
+    [Fact]
+    public void Letting_Hold_Talk_go_waits_the_space_between_lines_before_talk_picks_up()
+    {
+        var facts = Next();
+        var gap = OpenGap(facts);
+        var resumed = T0.AddSeconds(60);
+
+        Assert.Equal("between-race talk is held", gap.WhyNot(GapLine.CallUp, GapRules.Default, resumed, facts, true, false));
+
+        gap.Resumed(resumed);
+
+        Assert.StartsWith("only", gap.WhyNot(GapLine.CallUp, GapRules.Default, resumed.AddSeconds(5), facts, false, false), StringComparison.Ordinal);
+        Assert.Null(gap.WhyNot(GapLine.CallUp, GapRules.Default, resumed.AddSeconds(GapRules.Default.SpaceSeconds), facts, false, false));
+    }
+
+    [Fact]
+    public void Resuming_counts_no_line_toward_the_gap()
+    {
+        var rules = GapRules.Default with { MostLines = 1, HandOver = true };
+        var facts = Next();
+        var gap = OpenGap(facts);
+
+        gap.Resumed(T0.AddSeconds(10));
+
+        Assert.DoesNotContain("the gap has had", gap.WhyNot(GapLine.HandOver, rules, T0.AddSeconds(60), facts, false, false) ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_On_Air_bar_names_what_Skip_would_skip_and_says_when_talk_is_held()
+    {
+        Assert.Equal("Skip: Race Recap", GapWords.SkipNote("Race Recap"));
+        Assert.Equal("Between-race talk held - press Resume Talk or F10", GapWords.TalkHeld);
+    }
+
+    [Fact]
+    public void When_the_phones_and_Start_Next_disagree_the_console_says_which_is_which()
+    {
+        Assert.Equal("the drivers' phones show Heat 4 (Stock) up next, and Start Next would start A-Main",
+            GapWords.PhoneAndPaDisagree("A-Main", "Heat 4 (Stock)"));
+        Assert.Equal("A-Main has nobody on its grid, so no phone shows it up next",
+            GapWords.PhoneAndPaDisagree("A-Main", null));
+    }
+
+    [Fact]
+    public void Call_ups_and_the_countdown_go_out_with_captions_and_to_Listen_Along()
+    {
+        // The Timetable reminders' path: shown on the screens and spoken for
+        // listeners (SpeakReminder's forListeners defaults to true).
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "HeatCaller", "HeatCaller", "RaceControlControl.BetweenRaces.cs"));
+        Assert.Contains("_announcer.SpeakReminder(text, showOnScreens: true, onAir: onAir);", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_call_up_follows_the_race_the_phones_call_up_next()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "HeatCaller", "HeatCaller", "RaceControlControl.BetweenRaces.cs"));
+        Assert.Contains("UpcomingRaces(4)", source, StringComparison.Ordinal);
+        Assert.Contains("GapWords.PhoneAndPaDisagree(", source, StringComparison.Ordinal);
+    }
+
+    private static string RepoRoot()
+    {
+        for (var folder = new DirectoryInfo(AppContext.BaseDirectory); folder is not null; folder = folder.Parent)
+        {
+            if (File.Exists(Path.Combine(folder.FullName, "check.cmd")))
+            {
+                return folder.FullName;
+            }
+        }
+
+        throw new InvalidOperationException("check.cmd not found above the test folder.");
+    }
 }

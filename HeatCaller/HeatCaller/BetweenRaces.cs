@@ -642,6 +642,22 @@ internal sealed class GapState
         }
     }
 
+    /// <summary>
+    /// Hold Talk let go: talk picks up after the Space between lines, as
+    /// though a line had just ended, rather than the instant the hold comes
+    /// off (the plan's section 8). Counts no line toward the gap's limit.
+    /// </summary>
+    public void Resumed(DateTime nowUtc)
+    {
+        lock (_gate)
+        {
+            if (_raceKey is not null)
+            {
+                _lastLineUtc = nowUtc;
+            }
+        }
+    }
+
     /// <summary>A line went out. <paramref name="manual"/> is the Call Up button, which also restarts the repeat.</summary>
     public void Said(GapLine kind, DateTime nowUtc)
     {
@@ -1051,6 +1067,18 @@ internal sealed class GapState
 /// </summary>
 internal static class GapWords
 {
+    /// <summary>The On Air bar while Hold Talk is on and nothing is going out.</summary>
+    public const string TalkHeld = "Between-race talk held - press Resume Talk or F10";
+
+    /// <summary>What Skip would skip, at the right of the On Air bar: "Skip: Race Recap".</summary>
+    public static string SkipNote(string segment) => $"Skip: {segment}";
+
+    /// <summary>Why the call-up waits when the phones and Start Next name different races - the console's words.</summary>
+    public static string PhoneAndPaDisagree(string startNext, string? phonesSay) =>
+        phonesSay is null
+            ? $"{startNext} has nobody on its grid, so no phone shows it up next"
+            : $"the drivers' phones show {phonesSay} up next, and Start Next would start {startNext}";
+
     private static readonly string[] FirstCalls =
     {
         "{race}, you're up next. Head to the drivers stand.",

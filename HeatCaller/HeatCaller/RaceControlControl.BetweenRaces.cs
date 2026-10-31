@@ -201,6 +201,33 @@ public sealed partial class RaceControlControl
             return new GapFacts();
         }
 
+        // The phone and the PA agree (the plan's section 7): the drivers'
+        // phones flash "You're up next" for the first race still to run
+        // that has cars on its grid (UpcomingRaces, PhoneFollow). When Start
+        // Next would start a different one - a main not seeded yet, a round
+        // with nobody in it - the announcer calls nothing, rather than send
+        // drivers to the stand the phone says is someone else's turn.
+        // The round just run is passed over, as NextRound passes it: its
+        // result can take a moment to be linked to it after the flag.
+        var justRun = _activeRound?.Invoke()?.Id;
+        var upcoming = UpcomingRaces(4)
+            .Where(r => !r.OnTrack && !string.Equals(r.RoundId, justRun, StringComparison.Ordinal))
+            .ToList();
+        var phoneNext = upcoming.Count > 0 ? upcoming[0].RoundId : null;
+
+        if (!string.Equals(phoneNext, next.Id, StringComparison.Ordinal))
+        {
+            var why = GapWords.PhoneAndPaDisagree(next.RoundLabel, phoneNext is null ? null : upcoming[0].Title);
+
+            if (Gap.FirstTimeTold(why))
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [gap] Call-up held - {why}.");
+            }
+
+            _gapFacts = null;
+            return new GapFacts();
+        }
+
         if (_gapFacts is { } kept && kept.NextId == next.Id && now - kept.ReadUtc < TimeSpan.FromSeconds(5))
         {
             return kept.Facts with { DueUtc = DueFor(next, now) };
@@ -218,10 +245,12 @@ public sealed partial class RaceControlControl
             ? roster.Where(t => !desk.IsCheckedIn(t)).Select(SpokenNameOf).ToList()
             : new List<string>();
 
-        var active = _activeRound?.Invoke();
-        var twoOut = OrderedProgram().FirstOrDefault(r => !r.IsRecorded
-                                                          && !string.Equals(r.Id, active?.Id, StringComparison.Ordinal)
-                                                          && !string.Equals(r.Id, next.Id, StringComparison.Ordinal));
+        // Two races out the way the phone counts it too: the race after
+        // next that has drivers ("1 race before yours" on their phones).
+        var twoOutId = upcoming.Count > 1 ? upcoming[1].RoundId : null;
+        var twoOut = twoOutId is null
+            ? null
+            : OrderedProgram().FirstOrDefault(r => string.Equals(r.Id, twoOutId, StringComparison.Ordinal));
 
         var facts = new GapFacts
         {
@@ -427,6 +456,11 @@ public sealed partial class RaceControlControl
         var hold = !TalkHeld;
         _talkHeld = hold;
 
+        if (!hold)
+        {
+            Gap.Resumed(DateTime.UtcNow);
+        }
+
         // The strip keeps a hold only while commentary is on - it lets one go
         // when it hides - so it is only told then.
         if (Commentary?.Invoke() is not null && _settings.CommentaryEnabled)
@@ -443,6 +477,7 @@ public sealed partial class RaceControlControl
             : "Between-race talk resumed."));
 
         ShowTalkHold();
+        UpdateOnAirBar();
         _nextUpDueUtc = DateTime.MinValue;
         return hold;
     }

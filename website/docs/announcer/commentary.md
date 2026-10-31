@@ -538,13 +538,19 @@ A race day can use a different preset for that day only: **Between-race talk:** 
 | **Call-ups per race, at most:** | The most times one race is called up. | 3 |
 | **Sponsor reads, at most one every:** | The least time between sponsor reads in the gap. Whether there are reads at all is on the **Sponsors** page. | 2 minutes |
 | **Quiet after the recap:** | Silence after the recap show before anything else is said. | 10 seconds |
-| **Quiet before the call:** | Nothing but the call-up in the last seconds before the next race's run-sheet time. | 20 seconds |
+| **Quiet before the call:** | Nothing new starts this close to the next race's run-sheet time, not even a call-up, so the grid call goes out clean. Only the countdown still speaks. | 20 seconds |
 | **Play call-ups after the recap when On Air opens the next race** | With **Start races On Air** ticked, call-ups still play after the recap. The hand-over and **Coming up next** stay off then, because On Air's opening says the same thing. | On |
 | **In a long break, say when racing resumes, once** | In a break longer than the minutes you set, the announcer says once when racing starts again, and the call-ups wait until racing is near. | On, 10 minutes |
 
 **What it says** has a tick box for each kind of line: **Call-up: next race to the drivers stand**, **Call-up: two races out**, **Marshals to their posts**, **Not checked in** (names only drivers the check-in list shows as missing), **Hand-over** ("That was Heat 2. Still to come, Heat 3."), **Coming up next** (written by the commentary), **Segments from Through the night**, **Club notes** and **Timetable countdown**. All are on except two races out and not checked in.
 
 **The call-up goes first.** Once the program has a next race, nothing the commentary writes is said in the gap until that race has been called up once. So a form guide never plays over a grid that hasn't been told to come to the stand.
+
+**The phone and the PA agree.** The call-up is for the same race the drivers' phones show as "You're up next". If **Start Next** would start a race with nobody on its grid yet, such as a main that hasn't been seeded, the announcer calls nothing rather than send the wrong drivers to the stand, and the console says why.
+
+**Call-ups go out with captions.** Like the Timetable's reminders, every line in the gap shows on the Big Screen and the overlay and plays on the relay's Listen Along, so a driver with earbuds in hears "you're up next" too.
+
+**The console says why a call-up didn't go**, once a gap per reason, on a line starting `[gap]`: "Call-up for Heat 3 held - inside the quiet before the call".
 
 **Start the countdown by itself from the run sheet, at** _5 min, 1 min_ calls the countdown without anyone pressing **Start** on the Timetable, from the time against the next race on **Race Day → Timetable**. Pick any of 10, 5, 2 and 1 minutes, and **time's up**. The same tick is on the Timetable's **Reminder countdown** card. Off until you tick it.
 

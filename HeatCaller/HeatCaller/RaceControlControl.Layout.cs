@@ -289,8 +289,14 @@ public sealed partial class RaceControlControl
         {
             // One hold: the strip's own button and the flag row's Hold Talk
             // are the same switch.
+            if (_talkHeld && !held)
+            {
+                Gap.Resumed(DateTime.UtcNow);
+            }
+
             _talkHeld = held;
             ShowTalkHold();
+            UpdateOnAirBar();
 
             if (Commentary?.Invoke() is { } director)
             {
