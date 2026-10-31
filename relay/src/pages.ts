@@ -167,7 +167,18 @@ nav.subtabs a { flex: 1 1 auto; display: flex; align-items: center; justify-cont
 nav.subtabs a:hover { border-color: var(--primary); background: var(--surface); }
 nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var(--primary); border-color: var(--primary); }
 @media (max-width: 640px) {
-  body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  /* A BAR THAT STAYS PUT (31 Oct 2026, Asher on iPhone Chrome: "the
+     buttons at the bottom of the relay jump up and down when selecting
+     them"). On an iPhone, Safari and Chrome tuck their toolbars away once
+     the page scrolls, and the first tap near the bottom of the screen
+     brings them back - lifting this bar about half an inch and swallowing
+     the tap - then the next page drops it again. So on a phone the page
+     scrolls inside the body rather than the window: the browser has nothing
+     of its own to scroll, keeps its toolbars where they are, and the bar
+     never moves. */
+  html { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body { height: 100%; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch;
+         padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
   nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; margin: 0; gap: 0;
              overflow: visible; border-bottom: 0; border-top: 1px solid var(--border); background: var(--bg);
              padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left)); }
