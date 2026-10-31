@@ -4044,7 +4044,10 @@ public sealed partial class WebServerService
         .legend { display:flex; flex-wrap:wrap; gap:10px; padding:8px 18px 16px; font-size:13px; }
         .legend span { display:flex; align-items:center; gap:5px; color:var(--soft); }
         .swatch { width:12px; height:3px; border-radius:2px; }
-        """;
+        """
+        // HeatCaller's sign-off at the foot of every page (31 Oct 2026),
+        // the relay pages' footer mark - see HeatCallerMark.PageFooterHtml.
+        + HeatCallerMark.PageFooterStyle;
 
     // Internal rather than private so the tests can read its script (BugHunt4WebTests).
     internal string BuildLiveResultsPage()
@@ -4169,6 +4172,7 @@ public sealed partial class WebServerService
 
         <div id="captions" aria-live="polite"></div>
         <div id="sponsor"><img id="sponsorImg" src=""><video id="sponsorVid" muted playsinline preload="auto" style="display:none"></video></div>
+        {{HeatCallerMark.PageFooterHtml}}
         <script>
         // Everything below builds rows with innerHTML, and a driver name is
         // whatever somebody typed into a profile. Without this, a driver
@@ -4968,6 +4972,7 @@ public sealed partial class WebServerService
           <div class="msg" id="msg"></div>
           <div id="list"></div>
         </div>
+        {{HeatCallerMark.PageFooterHtml}}
         <script>
         // Everything below builds rows with innerHTML, and a driver name is
         // whatever somebody typed into a profile. Without this, a driver
@@ -5237,6 +5242,7 @@ public sealed partial class WebServerService
           <table style="margin-top:18px"><thead><tr id="head"></tr></thead>
           <tbody id="rows"></tbody></table>
         </div>
+        {{HeatCallerMark.PageFooterHtml}}
         <script>
         // Everything below builds rows with innerHTML, and a driver name is
         // whatever somebody typed into a profile. Without this, a driver
@@ -5531,6 +5537,7 @@ public sealed partial class WebServerService
             <div id="resultDetail" class="detail" style="display:none"></div>
           </div>
         </div>
+        {{HeatCallerMark.PageFooterHtml}}
         <script>
         function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
           return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }

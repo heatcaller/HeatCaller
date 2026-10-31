@@ -270,5 +270,8 @@ public static class ResultsSheetRenderer
                 y += GapBelow;
             }
         }
+
+        // Under Bottom, which no row or note is drawn past.
+        HeatCallerMark.DrawPrintFooter(g, Margin, PageWidth - Margin, PageHeight - Margin + 4, footFont);
     }
 }

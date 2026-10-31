@@ -796,7 +796,8 @@ internal static class PinMailer
             .Append("approve you. Once they have, your own check-in PIN is emailed to you.").Append(nl).Append(nl);
         text.Append($"This invite works once, until {expiresUtc.ToLocalTime().ToString("dddd d MMMM", CultureInfo.CurrentCulture)}.")
             .Append(nl).Append(nl);
-        text.Append(club).Append(nl);
+        text.Append(club).Append(nl).Append(nl);
+        text.Append(HeatCallerMark.EmailLine).Append(nl);
 
         return text.ToString();
     }
@@ -834,7 +835,10 @@ internal static class PinMailer
         }
 
         text.Append("Don't share it - it checks in only you.").Append(nl).Append(nl);
-        text.Append(club).Append(nl);
+        text.Append(club).Append(nl).Append(nl);
+
+        // HeatCaller's one line at the foot, as on every email to a driver (NightEmail).
+        text.Append(HeatCallerMark.EmailLine).Append(nl);
 
         return text.ToString();
     }

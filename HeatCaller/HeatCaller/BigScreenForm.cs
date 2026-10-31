@@ -256,6 +256,11 @@ public sealed class BigScreenForm : Form
     private readonly LogoBox _logoBox = new();
     private readonly Panel _logoBalance = new();
 
+    // HeatCaller's mark, right of the countdown, as wide as the elapsed
+    // clock on its left so the countdown stays in the middle - see
+    // HeatCallerBug.
+    private readonly HeatCallerBug _hcBug = new();
+
     // Held in a field so it can be taken off the static event again when the
     // window closes - a static event would otherwise keep every Big Screen
     // ever opened alive for the rest of the day.
@@ -641,6 +646,8 @@ public sealed class BigScreenForm : Form
         _pnlCountdown.BackColor = CanvasColor;
         _lblCountdown.ForeColor = HighlightColor;
         _lblElapsed.ForeColor = AccentColor;
+        _hcBug.BackColor = CanvasColor;
+        _hcBug.SetColours(AccentColor, MutedColor);
 
         _grid.BackgroundColor = CanvasColor;
         _grid.GridColor = GridLineColor;
@@ -779,8 +786,11 @@ public sealed class BigScreenForm : Form
         _lblElapsed.Dock = DockStyle.Left;
         _lblElapsed.TextAlign = ContentAlignment.MiddleCenter;
 
+        _hcBug.Dock = DockStyle.Right;
+
         _pnlCountdown.Controls.Add(_lblCountdown);
         _pnlCountdown.Controls.Add(_lblElapsed);
+        _pnlCountdown.Controls.Add(_hcBug);
 
         // This grid is hand-styled with the Big Screen's own palette
         // rather than going through AppTheme.StyleGrid, so it needs the
@@ -984,6 +994,7 @@ public sealed class BigScreenForm : Form
 
             _pnlCountdown.Height = Sized(118);
             _lblElapsed.Width = Sized(320);
+            _hcBug.Width = _lblElapsed.Width;
 
             _grid.ColumnHeadersHeight = Math.Max(1, Sized(38));
             _grid.DefaultCellStyle.Padding = new Padding(Sized(18), Sized(4), Sized(8), Sized(4));
@@ -3229,6 +3240,59 @@ public sealed class BigScreenForm : Form
             FormBorderStyle = FormBorderStyle.None;
             WindowState = FormWindowState.Maximized;
             _isFullscreen = true;
+        }
+    }
+
+    /// <summary>
+    /// HEATCALLER ON THE BIG SCREEN (31 Oct 2026, Asher: the mark is always
+    /// on everywhere): the sun and HEATCALLER, small, in the bottom right of
+    /// the countdown band, like a TV channel's corner logo. In the look's
+    /// own colours - the sun in its primary, the word in its muted text -
+    /// so it never competes with the race, on a light look or a dark one.
+    /// Sized from the band's own height, so it grows with the screen.
+    /// </summary>
+    private sealed class HeatCallerBug : Control
+    {
+        private Color _sun = Color.White;
+        private Color _word = Color.Gray;
+
+        public HeatCallerBug()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint
+                     | ControlStyles.OptimizedDoubleBuffer
+                     | ControlStyles.UserPaint
+                     | ControlStyles.ResizeRedraw, true);
+        }
+
+        public void SetColours(Color sun, Color word)
+        {
+            _sun = sun;
+            _word = word;
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            if (Width <= 0 || Height <= 0)
+            {
+                return;
+            }
+
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+            // About a fifth of the band's height, so a 118-pixel band at the
+            // normal size gets a word a little over twenty pixels tall.
+            using var font = new Font(AppTheme.BoldFont.FontFamily, Math.Max(6f, Height * 0.15f), FontStyle.Bold, GraphicsUnit.Pixel);
+
+            var width = HeatCallerMark.MeasureSignOff(g, font);
+            var height = font.GetHeight(g);
+            var inset = Height * 0.12f;
+
+            HeatCallerMark.DrawSignOff(g, font, new PointF(Width - width - inset, Height - height - inset), _sun, _word, _sun);
         }
     }
 

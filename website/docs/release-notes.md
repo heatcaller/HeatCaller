@@ -4,6 +4,16 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **HeatCaller's mark on everything the app makes (31 October).** Everything HeatCaller makes for people to see now signs off with the small sun and the HEATCALLER wordmark, like the club's relay pages. The club's own name, logo and colors stay in charge. The mark is always on.
+    - **Highlight videos.** The end card now says "Timed and called by" over the full-color sun and HEATCALLER, in place of the small grey "Powered by HeatCaller".
+    - **Big Screen.** A small sun and HEATCALLER sit in the bottom right of the countdown band, in the club's colors, like a TV channel's corner logo. The countdown stays in the middle of the screen.
+    - **Stream graphics.** The race tower on the OBS page has a HEATCALLER credit along its foot.
+    - **Phone pages on the club Wi-Fi.** Live Results, Check In, Race Remote, Manage, Coach, Message the announcer, Who wins? and Finish Camera end with the same HEATCALLER mark as the relay pages, linking to heatcaller.com.
+    - **Printed sheets.** Heat sheets, run sheets, results sheets, report cards and QR badge sheets share one footer: a black sun, HEATCALLER and heatcaller.com. The track plan and the join poster carry the mark too.
+    - **Results picture.** The picture made for group chats says "Timed and called by HeatCaller" beside the full-color sun, the same as the relay's cards.
+    - **Emails to drivers.** Night, PIN and sign-up invite emails end with one line: "Timing by HeatCaller - heatcaller.com".
+    - **Event report.** Signed with the mark and a link to heatcaller.com.
+    - Update HeatCaller on the race PC; nothing changes on the relay.
 - **Home earns its keep (30 October).** The club's home page now changes with the night. See [Getting around](online/index.md#getting-around).
     - **Between nights** it says "No racing right now" and when the club races, then recaps the last race night: each final's winner, the fastest lap, the points leader and that night's new achievements, with a link to all of that night's results. While racing it shows what's on track; before a night, the club's preview. The old **Up next** and **Latest results** lists are gone, since Schedule and Results have them.
     - **You.** On a phone that remembers its driver, a strip shows their best finish last time, their standings place, their newest achievement and **Open your night**.
