@@ -169,6 +169,7 @@ public sealed partial class WebServerService
             <ul id="kept"></ul>
           </div>
         </div>
+        {{HeatCallerMark.PageFooterHtml}}
         <script>
         const FPS = 15, KEEP_MS = 4000, BEFORE = 1000, AFTER = 500;
         const video = document.getElementById('video');
@@ -376,6 +377,14 @@ public sealed partial class WebServerService
                       text-transform:uppercase; background:rgba(255,255,255,.04); }
         #tower .sub .mode { color:var(--accent); font-weight:700; }
         #rows { position:relative; }
+        /* HeatCaller's credit at the foot of the tower (31 Oct 2026, the mark
+           always on everywhere), the way a broadcast credits its timing. In
+           the look's accent, like the rest of the tower. */
+        #tower .hcfoot { display:flex; align-items:center; gap:.4vw; padding:.4vw 1vw; font-size:.72vw; color:#c9cdd6;
+                         border-top:1px solid rgba(255,255,255,.08); }
+        #tower .hcsun { width:1vw; height:1vw; flex:none; fill:currentColor; color:var(--accent); }
+        #tower .hcword { font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+        #tower .hcword .hcc { color:var(--accent); }
         .row { position:absolute; left:0; right:0; height:2.3vw; display:flex; align-items:center; font-size:1.15vw;
                transition:top .6s ease, background .6s; padding:0 1vw; gap:.6vw; }
         .row .p { width:1.8vw; font-weight:800; text-align:right; }
@@ -428,7 +437,7 @@ public sealed partial class WebServerService
         #captions.show { opacity:1; }
         body.cap #battle, body.cap #fastest { bottom:5.4vw; }
         </style></head><body data-look="{{look.Fingerprint}}">
-        <div id="tower" class="glass" style="opacity:0"><div class="head"><span id="title">-</span><span id="clock" class="acc"></span></div><div class="sub"><span id="mode" class="mode"></span><span id="changes"></span></div><div id="rows"></div></div>
+        <div id="tower" class="glass" style="opacity:0"><div class="head"><span id="title">-</span><span id="clock" class="acc"></span></div><div class="sub"><span id="mode" class="mode"></span><span id="changes"></span></div><div id="rows"></div><div class="hcfoot">{{HeatCallerMark.SunSvg}}{{HeatCallerMark.WordHtml}}</div></div>
         <div id="champ" class="glass"></div>
         <div id="battle" class="glass"></div>
         <div id="fastest" class="glass"><small id="fhead">FASTEST LAP</small><span id="fname"></span> <span id="ftime" class="acc"></span></div>
