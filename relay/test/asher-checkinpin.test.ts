@@ -247,12 +247,14 @@ describe("My night: a driver's own night with their PIN", () => {
 
   async function signIn(page: FakePage, pin: string) {
     page.get("mnpin").value = pin;
-    page.button(page.get("mn"), /Open my night/)!.click();
+    page.button(page.get("mn"), /^Check in$/)!.click();
     await page.settle();
   }
 
   it("opens the driver's own night, with the code only in the fragment, once the PIN passes", async () => {
-    const page = await openMyNight({ status: 200, body: { ok: true, mode: "racer", driver: { id: CODE, name: "Bill" }, pass: "ef".repeat(32) } });
+    // Already checked in, so the PIN (30 Oct 2026) sends no tap - see
+    // me-pin-checks-in.test.ts for the one that does.
+    const page = await openMyNight({ status: 200, body: { ok: true, mode: "racer", driver: { id: CODE, name: "Bill", checkedIn: true }, pass: "ef".repeat(32) } });
 
     await signIn(page, "975318");
 
@@ -315,10 +317,10 @@ describe("My night: a driver's own night with their PIN", () => {
       await harness.close();
     });
 
-    it("serves the page and shows the tab and tile while check-in is open", async () => {
+    it("serves the page under the Me tab, and the tile while check-in is open", async () => {
       const page = await call(harness, "GET", "/c/acme-rc/mynight");
       assert.equal(page.status, 200);
-      assert.match(page.text, /aria-current="page">My night</);
+      assert.match(page.text, /href="\/c\/acme-rc\/mynight" aria-current="page">[\s\S]*?<span>Me<\/span>/);
 
       const home = await call(harness, "GET", "/c/acme-rc");
       assert.match(home.text, /href="\/c\/acme-rc\/mynight"/);

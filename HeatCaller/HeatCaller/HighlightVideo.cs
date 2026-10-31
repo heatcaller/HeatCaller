@@ -1162,7 +1162,25 @@ internal static class HighlightVideo
                 Centre(handle, _display, 60, _p.Text, 1300);
             }
 
-            Centre("POWERED BY HEATCALLER", _body, 32, _p.Muted, 1400);
+            Credit(1390);
+        }
+
+        /// <summary>
+        /// HeatCaller's sign-off under the club's handle (31 Oct 2026, Asher:
+        /// the mark is always on everywhere): "Timed and called by" over the
+        /// full-colour logo and HEATCALLER, as the relay's share cards have
+        /// it. The logo carries its own dark square, so it reads on any look;
+        /// HEAT takes the look's text colour and CALLER HeatCaller's magenta,
+        /// which reads on a light look and a dark one alike.
+        /// </summary>
+        private void Credit(int y)
+        {
+            Centre("Timed and called by", _body, 30, _p.Muted, y);
+
+            using var font = new Font(_display, 48, FontStyle.Regular, GraphicsUnit.Pixel);
+            var width = HeatCallerMark.MeasureSignOff(_g, font);
+
+            HeatCallerMark.DrawSignOff(_g, font, new PointF((Width - width) / 2f, y + 52), sun: null, _p.Text, HeatCallerMark.Magenta);
         }
 
         // --- The captions --------------------------------------------------

@@ -66,7 +66,7 @@ Not to race. Timing, race control, results, the Big Screen, the Wi-Fi pages for 
 - emailing racer PINs
 - the very first build of the app
 
-AI commentary through Ollama runs on the laptop itself. See [What you need](../getting-started/index.md#internet).
+AI commentary keeps going offline too: the relay writes it when there's internet, and the small model built into HeatCaller writes it on the laptop when there isn't. See [What you need](../getting-started/index.md#internet).
 
 ### Do I have to add every driver before the first race?
 

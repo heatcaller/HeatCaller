@@ -39,8 +39,16 @@ describe("public pages", () => {
       assert.equal(answer.status, 200);
       assert.match(answer.text, /aria-current="page"/);
 
-      // Every tab on every page, so nobody is ever stranded on one.
-      for (const other of PAGES) {
+      // Every tab on every page, so nobody is ever stranded on one - and
+      // since 30 Oct 2026 (relay navigation round 5) Standings and
+      // Achievements are Results' own tabs, on Results and on each other.
+      // Tracks was one too until round 6 the same night; it is reached
+      // from Home now, which draws its link once the tracks have loaded.
+      const ofResults = ["results", "standings", "badges"];
+      const expected = (ofResults.includes(page) ? PAGES : PAGES.filter((other) => !ofResults.includes(other) || other === "results"))
+        .filter((other) => other !== "tracks");
+
+      for (const other of expected) {
         assert.ok(answer.text.includes(`href="/c/acme-rc/${other}"`), `${page} links to ${other}`);
       }
     });

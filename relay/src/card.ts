@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { encodePng } from "./icon.js";
+import { sunPixels } from "./sun.js";
 import { capCentre, drawText, ellipsize, fitSize, widthOf, type Blitter, type Weight } from "./font.js";
 import { wordyDay, type SessionPreview } from "./preview.js";
 import type { Look } from "./site.js";
@@ -69,6 +70,11 @@ const ROW_GAP = 10;
  * gold would otherwise lose the distinction entirely. Dark ink on all
  * three, because all three are light enough that white would vanish.
  */
+// HeatCaller's sun, top right of the header (30 Oct 2026, relay branding).
+const SUN_SIZE = 72;
+const SUN_TOP = 34;
+const SUN_ROOM = SUN_SIZE + 32;
+
 const MEDALS: readonly string[] = ["#F6C445", "#C2CCDA", "#D28B4E"];
 const MEDAL_INK = "#191307";
 
@@ -459,6 +465,36 @@ function footFlag(sheet: Sheet, palette: Palette): void {
   }
 }
 
+/**
+ * HeatCaller's sun in the header's top right corner, with the name under
+ * it (30 Oct 2026, relay branding, Asher's pick: "sun on share cards").
+ * In HeatCaller's own colours whatever the club's look - it is the one
+ * thing on the card that is not the club's - and small enough that the
+ * club's name and the session's stay the headline.
+ */
+let sunTile: Uint8Array | undefined;
+
+function heatcallerSun(sheet: Sheet, palette: Palette): void {
+  sunTile ??= sunPixels(SUN_SIZE, true);
+  const left = CARD_WIDTH - MARGIN - SUN_SIZE;
+
+  for (let y = 0; y < SUN_SIZE; y++) {
+    for (let x = 0; x < SUN_SIZE; x++) {
+      const i = (y * SUN_SIZE + x) * 4;
+      const alpha = (sunTile[i + 3] as number) / 255;
+
+      if (alpha > 0) {
+        sheet.blend(left + x, SUN_TOP + y, [sunTile[i] as number, sunTile[i + 1] as number, sunTile[i + 2] as number], alpha);
+      }
+    }
+  }
+
+  const word = "HEATCALLER";
+  const size = 15;
+  const width = widthOf(word, "medium", size, 2);
+  drawText(word, "medium", size, Math.round(left + (SUN_SIZE - width) / 2), SUN_TOP + SUN_SIZE + 24, sheet.blitter(palette.muted), 2);
+}
+
 /** Club name, session name, and the line of facts under them. */
 function header(sheet: Sheet, palette: Palette, clubName: string, title: string, facts: readonly string[]): void {
   sheet.fill(0, 0, CARD_WIDTH, HEADER_BOTTOM, palette.surface);
@@ -474,12 +510,17 @@ function header(sheet: Sheet, palette: Palette, clubName: string, title: string,
 
   const inner = CARD_WIDTH - MARGIN * 2;
 
+  // The club's name and the session's stop short of HeatCaller's sun in
+  // the corner; the facts run under it, full width.
+  const beside = inner - SUN_ROOM;
+  heatcallerSun(sheet, palette);
+
   // The club, set small, wide and in the club's own colour: an eyebrow
   // over the session's name rather than competing with it.
   const eyebrow = clubName.toUpperCase();
-  const eyebrowSize = fitSize(eyebrow, "medium", [27, 24, 21], inner, 3);
+  const eyebrowSize = fitSize(eyebrow, "medium", [27, 24, 21], beside, 3);
   drawText(
-    ellipsize(eyebrow, "medium", eyebrowSize, inner, 3),
+    ellipsize(eyebrow, "medium", eyebrowSize, beside, 3),
     "medium",
     eyebrowSize,
     MARGIN,
@@ -491,8 +532,8 @@ function header(sheet: Sheet, palette: Palette, clubName: string, title: string,
   // The session, as big as it will go. Three sizes rather than one and
   // an ellipsis, so "A Final" is a headline and "Round 4 Qualifying
   // Heat 2 - Stock Class" is a smaller headline instead of a stub.
-  const titleSize = fitSize(title, "bold", [58, 50, 44], inner);
-  drawText(ellipsize(title, "bold", titleSize, inner), "bold", titleSize, MARGIN, 136, sheet.blitter(palette.text));
+  const titleSize = fitSize(title, "bold", [58, 50, 44], beside);
+  drawText(ellipsize(title, "bold", titleSize, beside), "bold", titleSize, MARGIN, 136, sheet.blitter(palette.text));
 
   // The facts. Set a size smaller before anything is given up, and then
   // dropped from the RIGHT rather than cut off mid-word: losing "Winter
@@ -762,7 +803,7 @@ export function cardVersionOf(look: Look, clubName: string, session: SessionPrev
   return createHash("sha256")
     .update(
       [
-        "card2",
+        "card3",
         look.iconVersion,
         JSON.stringify(look.vars),
         look.light ? "light" : "dark",

@@ -233,6 +233,7 @@ public static class RunSheetRenderer
             g.DrawString(continuedNote, footFont, grey, Margin, y + 6);
         }
 
-        g.DrawString("HeatCaller", footFont, grey, PageWidth - Margin - 90, PageHeight - Margin + 20);
+        // Below the continued note, which can sit just under the last row.
+        HeatCallerMark.DrawPrintFooter(g, Margin, PageWidth - Margin, PageHeight - Margin + 30, footFont);
     }
 }

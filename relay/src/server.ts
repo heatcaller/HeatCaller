@@ -5,7 +5,6 @@ import { isValidItemId, StoreReadError, type Store } from "./store.js";
 import { AUTO_WHEN_USED } from "./autotopup.js";
 import { isActive, isValidClubId, type Tenant, type TenantRegistry } from "./tenancy.js";
 import { CHANNELS, channelSpec, type ChannelSpec, type StoredDocument } from "./types.js";
-import { flagIcon } from "./icon.js";
 import { cardVersionOf, clubCard, sessionCard } from "./card.js";
 import { PinGuard } from "./pinguard.js";
 import { previewCard, previewsIn, type PagePreview, type SessionPreview } from "./preview.js";
@@ -16,8 +15,10 @@ import {
   livePage,
   managePage,
   manifest,
+  missingPage,
   nightPage,
   pausedPage,
+  relayNoticePage,
   resultsPage,
   schedulePage,
   signupPage,
@@ -51,8 +52,10 @@ import {
   DRIVER_ASKS_PER_DRIVER,
   type DriverAskBody,
 } from "./driverasks.js";
-import { DEFAULT_LOOK, flagColours, lookFrom, type Look } from "./site.js";
+import { DEFAULT_LOOK, lookFrom, type Look } from "./site.js";
+import { sunIcon } from "./sun.js";
 import { BRAIN_LONG_WORDS_CEILING, BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
+import { LapVoiceLibrary } from "./lapvoice.js";
 import { VOICE_PLAN_OFF, type MeterUsage, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
@@ -823,16 +826,16 @@ interface DriverDoc {
 }
 
 /**
- * A club's look as its site document sets it, and the two pictures drawn
- * from it once somebody has asked for them: the home-screen icon, and
- * the club's generic result card. Both live here rather than in caches
- * of their own so that forgetSite throws them away along with the look
- * they were drawn from - a club that changes its colours cannot be left
- * serving either of them in the old ones.
+ * A club's look as its site document sets it, and the picture drawn from
+ * it once somebody has asked for it: the club's generic result card. It
+ * lives here rather than in a cache of its own so that forgetSite throws
+ * it away along with the look it was drawn from - a club that changes
+ * its colours cannot be left serving it in the old ones. (The home-screen
+ * icon was kept here too until 30 Oct 2026; it is HeatCaller's sun for
+ * every club now, drawn once in sun.ts.)
  */
 interface SiteEntry {
   readonly look: Look;
-  flag: Buffer | undefined;
   card: Buffer | undefined;
 }
 
@@ -984,6 +987,11 @@ export interface RelayOptions {
    * requests themselves are unaffected either way.
    */
   readonly usageLog?: UsageLog | undefined;
+  /**
+   * The lap voice's clips (29 Oct 2026) - see lapvoice.ts. Absent, the
+   * manifest lists none and the pages use the phone's own voice.
+   */
+  readonly lapVoice?: LapVoiceLibrary | undefined;
 }
 
 interface Parsed {
@@ -996,6 +1004,7 @@ const DEFAULT_MAX_BODY = 1024 * 1024;
 
 export class Relay {
   private readonly store: Store;
+  private readonly lapVoice: LapVoiceLibrary;
   private readonly tenants: TenantRegistry;
   private readonly maxBodyBytes: number;
   private readonly now: () => Date;
@@ -1318,6 +1327,7 @@ export class Relay {
     this.collectionReads = new Limiter(COLLECTION_READS_PER_ADDRESS, 60 * 1000, () => this.now().getTime());
 
     this.voice = options.voice;
+    this.lapVoice = options.lapVoice ?? new LapVoiceLibrary(new Map());
     // 22 Oct 2026, driver experience: clips and drivers' asks. See the fields.
     this.clips = options.clips;
     this.clipReads = new Limiter(900, 60 * 1000, () => this.now().getTime());
@@ -1500,7 +1510,6 @@ export class Relay {
       return await this.shared(this.siteLoads, club, () => this.siteEpochs.get(club) ?? 0, async () => {
         const entry: SiteEntry = {
           look: lookFrom(await this.store.getSnapshot(club, "site"), undefined),
-          flag: undefined,
           card: undefined,
         };
         return entry;
@@ -1508,16 +1517,16 @@ export class Relay {
     } catch {
       // Not held as the club's look: a read that failed may work next
       // time, and the next request tries it. But the entry that stands in
-      // meanwhile IS held, one per club, because the pictures drawn on it
-      // are kept on it: a fresh entry each time was a fresh icon and a
-      // fresh club card drawn for every request while the document would
+      // meanwhile IS held, one per club, because the picture drawn on it
+      // is kept on it: a fresh entry each time was a fresh club card drawn
+      // for every request while the document would
       // not read - the one path that drew a card with no budget counting
       // it. Only configured clubs get this far, so there is one of these
       // at most for each of them, and forgetSite drops it with the rest.
       let fallback = this.siteFallbacks.get(club);
 
       if (fallback === undefined) {
-        fallback = { look: DEFAULT_LOOK, flag: undefined, card: undefined };
+        fallback = { look: DEFAULT_LOOK, card: undefined };
         this.siteFallbacks.set(club, fallback);
       }
 
@@ -1896,7 +1905,7 @@ export class Relay {
 
   /**
    * The club's own card, drawn once and kept with the look it was drawn
-   * from - exactly like the flag icon beside it. Not counted against the
+   * from. Not counted against the
    * drawing budget, because it is what the budget falls back TO: counting
    * it would mean a relay under load refusing the only picture it has
    * left to send.
@@ -2089,9 +2098,11 @@ export class Relay {
             return;
           }
 
+          // HeatCaller's sun for every club, logo or not (30 Oct 2026,
+          // relay branding, Asher: "synthwave colors for the icon
+          // regardless of logo"). The club's logo stays on its pages.
           if (page === "icon.png") {
-            const site = await this.siteOf(tenant.club);
-            sendBody(response, 200, "image/png", site.look.logo ?? this.flagFor(site));
+            sendBody(response, 200, "image/png", sunIcon());
             return;
           }
 
@@ -2201,7 +2212,33 @@ export class Relay {
           await this.cardPng(request, response, tenant, segments[3] as string);
           return;
         }
+
+        // Anything else under a club (29 Oct 2026, relay navigation round
+        // 1): a page with the club's tabs on it rather than the API's line
+        // of JSON, so an old QR code or a typo is not a dead end. Still 404.
+        if (tenant !== undefined) {
+          const context = await this.contextFor(request, tenant.club);
+          sendHtml(response, 404, missingPage(tenant.club, tenant.name, context), context.nonce);
+          return;
+        }
       }
+
+      // No such club: the same in plain words, with nothing about which
+      // clubs do exist.
+      sendHtml(response, 404, relayNoticePage(
+        "No club here",
+        "There's no club at this address. Check the link on the club's poster or in their email.",
+      ), randomBytes(16).toString("base64"));
+      return;
+    }
+
+    // The relay's own address, which somebody will type sooner or later.
+    if (method === "GET" && segments.length === 0) {
+      sendHtml(response, 200, relayNoticePage(
+        "HeatCaller",
+        "This is where HeatCaller clubs put their live timing and results. Your club's own page is at the address on its poster.",
+      ), randomBytes(16).toString("base64"));
+      return;
     }
 
     // Hear it before you buy it. The one group of routes outside /api/v1
@@ -2222,6 +2259,29 @@ export class Relay {
 
     if (method === "POST" && segments.length === 2 && segments[0] === "voice" && segments[1] === "preview") {
       await this.voicePreview(request, response);
+      return;
+    }
+
+    // The lap voice (29 Oct 2026): which clips there are, and each clip.
+    // No token and nothing counted - the same stock recordings for every
+    // club, made once on the operator's own key (see lapvoice.ts).
+    if (method === "GET" && segments.length === 1 && segments[0] === "lap-voice") {
+      sendBody(response, 200, "application/json; charset=utf-8", JSON.stringify(this.lapVoice.manifest), "public, max-age=300");
+      return;
+    }
+
+    if (method === "GET" && segments.length === 2 && segments[0] === "lap-voice") {
+      const file = segments[1] as string;
+      const clip = file.endsWith(".mp3") ? this.lapVoice.clip(file.slice(0, -4)) : undefined;
+
+      if (clip === undefined) {
+        sendJson(response, 404, { ok: false, error: "There is no such clip." });
+        return;
+      }
+
+      // A year: the page asks with the library's version on the address,
+      // so clips made again are new addresses.
+      sendBody(response, 200, "audio/mpeg", clip, "public, max-age=31536000, immutable");
       return;
     }
 
@@ -4549,26 +4609,6 @@ export class Relay {
     // A fresh nonce per page: the one script each page carries names it,
     // and the content policy runs nothing that does not.
     return { look: await this.lookFor(club), origin: originOf(request), nonce: randomBytes(16).toString("base64") };
-  }
-
-  /**
-   * The home-screen icon for a club with no logo, in its own colours.
-   * Drawn once and kept with the look it was drawn from: a 512-pixel PNG
-   * is a few milliseconds of work, and the address that asks for it needs
-   * no password.
-   */
-  private flagFor(site: SiteEntry): Buffer {
-    if (site.flag !== undefined) {
-      return site.flag;
-    }
-
-    // The colours come from site.ts, which also fingerprints them for the
-    // icon's address (Look.iconVersion), so a recoloured flag is always a
-    // new address. Dark squares from the darkest colour the theme has.
-    const [primary, dark] = flagColours(site.look);
-
-    site.flag = flagIcon(512, primary, dark);
-    return site.flag;
   }
 
   // ---------------------------------------------------------- check-in
@@ -9264,12 +9304,12 @@ function sendHtml(response: ServerResponse, status: number, html: string, nonce:
 }
 
 /** Bytes of a known type - the manifest, the icon, the logo. Cached for an hour: they change when a club re-brands, not between visits. */
-function sendBody(response: ServerResponse, status: number, type: string, body: string | Buffer): void {
+function sendBody(response: ServerResponse, status: number, type: string, body: string | Buffer, cache = "public, max-age=3600"): void {
   response.writeHead(status, {
     ...BASE_HEADERS,
     "content-type": type,
     "content-length": Buffer.byteLength(body),
-    "cache-control": "public, max-age=3600",
+    "cache-control": cache,
   });
 
   response.end(body);

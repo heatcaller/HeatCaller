@@ -1036,6 +1036,41 @@ network interface, like any relay, so Windows will ask about the firewall
 the first time - "private networks" is enough, and "no" still leaves it
 working for this laptop.
 
+### The lap voice (public, no token)
+
+The spoken laps on the Live page and a driver's own night ("Lap times in my
+ear") play short clips in one ElevenLabs voice, Daniel ("Steady
+Broadcaster", voice `onwK4e9ZLuTAKqWW03F9`, model `eleven_flash_v2_5`), the
+same for every club whatever voice a club runs in its Cast tab. See
+`src/lapvoice.ts`.
+
+| Route | What it is |
+|:--|:--|
+| `GET /lap-voice` | `{ ok, voice, v, clips }`: the clips this relay has. Cached 5 minutes. |
+| `GET /lap-voice/<name>.mp3` | One clip. The page adds `?v=` from the list, so it is cached for a year. |
+
+The clips: lap times 3.00 to 19.99, the two halves of a time with a
+thousandth ("six nine" and "thirty-five", played back to back, so 3.001 to
+19.999 is never rounded), "Lap one" to "Lap two hundred", "P one"
+to "P thirty", gaps from "nothing in it" to "thirty seconds back" and "a lap
+back" to "nine laps back", the target words up to two seconds, "best lap"
+and "Lap times on". 2,453 clips, 39,666 characters: about $1.59 at Flash's
+$0.04 per 1,000, once. A call the clips can't cover, or a clip that takes
+more than a second, is said in the phone's own voice, whole.
+
+**Making them.** On your own PC, with your ElevenLabs key on the first line
+of `voice-test.key` here (the local voice test's file; a paid plan, for the
+commercial licence):
+
+    lap-voice-render.cmd count     what it would make and cost; spends nothing
+    lap-voice-render.cmd           makes the missing ones, after you type yes
+
+They land in `lap-voice/`, which git ignores. Run it again any time: clips
+already there are never asked for twice. Then `fly deploy --ha=false` carries
+the folder into the image, and the relay logs how many it has when it
+starts. Deploying from a copy without the clips puts the relay back on the
+phone's voice until you make or copy them there.
+
 ### The commentary brain (token required)
 
 ```
@@ -1058,7 +1093,8 @@ A refusal is JSON with a `refusal` field: `off` (no key or no model on this
 relay), `not-included` (not on this club's plan), `text` (empty, or over
 8,000 characters of prompt), `allowance` (the month's lines are spent),
 `busy`, or `upstream` (the model itself). The app treats every one the same
-way: Ollama on the race laptop writes that line instead, or the announcer's
+way: the model built into HeatCaller writes that line on the race laptop
+instead, or the announcer's
 template lines do. Commentary is the garnish, and nothing here is on the
 path of a flag call.
 
@@ -1225,7 +1261,7 @@ fly secrets set RELAY_BRAIN_KEY=sk-ant-...
 ```
 
 Without it the relay starts and says so, and clubs write commentary with
-Ollama on the race laptop or go without. Give this one a spend limit too.
+the model built into HeatCaller on the race laptop, or go without. Give this one a spend limit too.
 It is much the cheaper of the two - a race night of commentary is cents
 where a race night of speech is not - but a loop that asks for a line per
 lap would still be a bill, and the per-club line allowance is only the

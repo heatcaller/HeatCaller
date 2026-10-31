@@ -1,5 +1,6 @@
 import { lchown, lstat, mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { anthropicWriter, BrainService } from "./brain.js";
 import { loadConfig, redirectOriginFrom } from "./config.js";
 import { mint } from "./mint.js";
@@ -9,6 +10,7 @@ import { TenantRegistry } from "./tenancy.js";
 import { removeLeftoverVideos } from "./oldvideos.js";
 import { DiskClipVault } from "./clips.js";
 import { elevenLabsRenderer, migrateVoiceFolder, VoiceService } from "./voice.js";
+import { LAP_VOICE_DIR, LapVoiceLibrary } from "./lapvoice.js";
 import { TopUpRequests } from "./topuprequests.js";
 import { UsageLog } from "./usagelog.js";
 import { ADMIN_COMMANDS, voiceAdmin, type AdminCommand } from "./voiceadmin.js";
@@ -149,6 +151,9 @@ async function serve(): Promise<number> {
     // One line per voice and commentary request, for the relay admin app's
     // charts - see usagelog.ts.
     usageLog: new UsageLog({ dataDir: config.dataDir, log: (line) => console.log(line) }),
+    // The lap voice's clips, from relay/lap-voice beside dist/ (in the
+    // image, /app/lap-voice) - see lapvoice.ts.
+    lapVoice: LapVoiceLibrary.load(fileURLToPath(new URL(`../../${LAP_VOICE_DIR}/`, import.meta.url)), (line) => console.log(line)),
   });
 
   if (voice !== undefined) {

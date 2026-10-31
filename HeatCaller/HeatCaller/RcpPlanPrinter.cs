@@ -291,7 +291,12 @@ internal static class RcpPlanPrinter
             ? "the whole plan on one sheet"
             : $"sheet {sheet.Number} of {count} - row {sheet.Row + 1} of {down}, {Ordinal(sheet.Column + 1)} from the left of {across}";
 
-        g.DrawString(title, titleFont, ink, new RectangleF(page.Left, page.Top, page.Width, 7f));
+        // HeatCaller's mark at the right of the title line (31 Oct 2026,
+        // the mark on every printed sheet), in black like the rest.
+        var mark = HeatCallerMark.MeasureSignOff(g, font);
+        HeatCallerMark.DrawSignOff(g, font, new PointF(page.Right - mark, page.Top + 1f), Color.Black, Color.Black, Color.Black);
+
+        g.DrawString(title, titleFont, ink, new RectangleF(page.Left, page.Top, Math.Max(10f, page.Width - mark - 4f), 7f));
         g.DrawString(
             $"Track plan, {where}. Scale {RcpPrintLayout.RatioText(tileMm, mmPerTile)}: one {tileMm / 10:0} cm tile is {mmPerTile:0.#} mm.",
             font, grey, new RectangleF(page.Left, page.Top + 7f, page.Width, HeaderMm - 7f));

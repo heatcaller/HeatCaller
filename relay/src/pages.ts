@@ -16,7 +16,8 @@
  */
 
 import type { PagePreview } from "./preview.js";
-import { DEFAULT_LOOK, pngWidth, type Look, type SocialLink } from "./site.js";
+import { DEFAULT_LOOK, type Look, type SocialLink } from "./site.js";
+import { SUN_ICON_SIZE } from "./sun.js";
 
 /** What a page needs to know beyond its club: how the club looks, and where it is being served from. */
 export interface PageContext {
@@ -36,6 +37,66 @@ export interface PageContext {
 
 export const DEFAULT_CONTEXT: PageContext = Object.freeze({ look: DEFAULT_LOOK, origin: "", nonce: "" });
 
+// --------------------------------------------------------------- HeatCaller
+
+/**
+ * HeatCaller on the club's pages (30 Oct 2026, relay branding: Asher
+ * picked the footer sign-off, the byline, Live's broadcast bug, the sun
+ * on shared cards, the "What's HeatCaller?" sheet, HeatCaller's own
+ * pages and the sun as every club's icon; the mark is always on, with
+ * no switch for a club to turn it off).
+ *
+ * HC_SUN is the logo's sun over its grid in one colour, drawn in
+ * currentColor so it takes whatever the club's look is. HC_LOGO is the
+ * logo itself in HeatCaller's own colours, for the places that are
+ * HeatCaller talking rather than the club: the sheet and the relay's own
+ * notice pages. The same drawing as HeatCaller/Assets/HeatCaller.svg,
+ * with the floor's grid thinned to the lines that read at this size.
+ */
+const HC_SUN = '<svg class="hcsun" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11a8 8 0 0 1 16 0z"/>'
+  + '<path d="M4.5 12.4h15v1.3h-15zM5.4 15h13.2v1.1H5.4z"/>'
+  + '<path d="M2 18.5h20M12 18.5l-7 4M12 18.5l7 4M12 18.5v4" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
+
+const HC_LOGO = '<svg class="logo" viewBox="0 0 256 256" aria-hidden="true">'
+  + '<rect width="256" height="256" rx="56" fill="#140829"/>'
+  + '<circle cx="128" cy="118" r="72" fill="#FF5FA2"/>'
+  + '<path d="M56 118A72 72 0 0 1 200 118Z" fill="#FFB347"/>'
+  + '<path d="M68.1 78A72 72 0 0 1 187.9 78Z" fill="#FFE9A0"/>'
+  + '<path d="M40 130h176v6H40zM40 146h176v8H40zM40 163h176v10H40z" fill="#140829"/>'
+  + '<path d="M0 176H256V200A56 56 0 0 1 200 256H56A56 56 0 0 1 0 200Z" fill="#3B1063"/>'
+  + '<path d="M128 176L0 214M128 176L20 256M128 176L74 256M128 176V256M128 176L182 256M128 176L236 256M128 176L256 214'
+  + 'M0 190H256M0 206H256M0 228H256" fill="none" stroke="#FF2E9A" stroke-width="3"/>'
+  + '<path d="M0 176H256" stroke="#FFD9F0" stroke-width="4"/></svg>';
+
+const HC_WORD = '<span class="hcword">Heat<span class="hcc">Caller</span></span>';
+
+/** The grid floor under the sheet's sky, stretched to any width. */
+const HC_FLOOR = '<svg class="floor" viewBox="0 0 390 60" preserveAspectRatio="none" aria-hidden="true">'
+  + '<g fill="none" stroke="#FF2E9A" opacity="0.55"><path d="M0 1H390" stroke="#FFD9F0" stroke-width="2"/>'
+  + '<path d="M0 10H390M0 24H390M0 46H390"/>'
+  + '<path d="M195 1L-120 60M195 1L-10 60M195 1L90 60M195 1V60M195 1L300 60M195 1L400 60M195 1L510 60"/></g></svg>';
+
+/**
+ * "What's HeatCaller?" - what the footer's mark and the first-night
+ * guide's line open: who runs the timing, in HeatCaller's own look, and
+ * the way to it for anybody who runs a track of their own. Hidden until
+ * asked for; without the page's script the mark is a plain link to
+ * heatcaller.com instead. name is already escaped.
+ */
+function aboutSheet(name: string): string {
+  return `<div class="hcabout" id="hcabout" role="dialog" aria-modal="true" aria-labelledby="hcabout-title" hidden>
+<div class="sheet">
+  <div class="sky"></div>${HC_FLOOR}
+  ${HC_LOGO}
+  <p class="wordmark hcword" id="hcabout-title">Heat<span class="hcc">Caller</span></p>
+  <p class="tag">Club nights, produced like a broadcast</p>
+  <p>${name} times its races, calls them out loud and puts every lap on your phone with HeatCaller.</p>
+  <a class="go" href="https://heatcaller.com">Bring HeatCaller to your track</a>
+  <button type="button" class="close" data-hc-close>Close</button>
+</div>
+</div>`;
+}
+
 const STYLE = `
 .pinask{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65)}
 .pinask-card{width:100%;max-width:360px;background:var(--surface);color:var(--text);border-radius:14px;padding:18px}
@@ -54,9 +115,16 @@ const STYLE = `
   --bad: #FF5C7A;
 }
 * { box-sizing: border-box; }
+/* CLEAR OF THE CLOCK (30 Oct 2026, Asher: "all the pages on the relay load
+   scrolled down a bit... hides the title of page"). viewport-fit=cover lets
+   a phone draw the page under its status bar - always on a home-screen
+   icon (black-translucent), and in some browsers too - and nothing here
+   moved the page out from under it, so the title sat behind the clock with
+   no way to scroll further up than the top. The safe-area insets are 0
+   wherever there is nothing to clear, so this changes nothing elsewhere. */
 body {
   margin: 0;
-  padding: 0 16px 64px;
+  padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px));
   background: var(--bg);
   color: var(--text);
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -76,6 +144,43 @@ nav a { white-space: nowrap; flex: none;
 }
 nav a:hover { color: var(--text); background: var(--surface); }
 nav a[aria-current] { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
+/* THE CLUB'S TABS (29 Oct 2026, relay navigation round 1). On a laptop or
+   a tablet, one row across the top as before. On a phone, a bar fixed
+   along the bottom with the five a driver uses on the night - Home, Live,
+   Schedule, Results, Me - in thumb reach and never scrolled out of sight.
+   The icons only show on the phone bar. Since 30 Oct 2026 (round 5) the
+   same five on every screen: Standings, Tracks and Achievements are tabs
+   under Results (nav.subtabs). */
+nav.tabs svg { display: none; }
+nav.tabs .lv { position: relative; }
+nav.tabs .dot { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--bad);
+                margin-left: 6px; vertical-align: middle; }
+nav.tabs.racing .dot { display: inline-block; }
+/* RESULTS' OWN TABS AS BUTTONS (30 Oct 2026, round 6, Asher: "give them
+   more space and make them look more like a button"). Full-width, thumb
+   sized, the page's own one filled in. Me's race tabs and jump bar share
+   the shape (.rtab, .jump .jb), so a tab looks the same wherever it is. */
+nav.subtabs { display: flex; gap: 8px; margin: 14px 0 22px; border-bottom: 0; overflow: visible; flex-wrap: wrap; }
+nav.subtabs a { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 46px;
+                margin: 0; padding: 10px 14px; font-size: 0.95rem; font-weight: 600; color: var(--text);
+                background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+nav.subtabs a:hover { border-color: var(--primary); background: var(--surface); }
+nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var(--primary); border-color: var(--primary); }
+@media (max-width: 640px) {
+  body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; margin: 0; gap: 0;
+             overflow: visible; border-bottom: 0; border-top: 1px solid var(--border); background: var(--bg);
+             padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left)); }
+  nav.tabs a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+               min-height: 56px; padding: 8px 2px 6px; font-size: 0.72rem; border-radius: 0;
+               border-bottom: 0; border-top: 2px solid transparent; margin: -1px 0 0; }
+  nav.tabs a[aria-current] { border-top-color: var(--primary); background: none; }
+  nav.tabs svg { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8;
+                 stroke-linecap: round; stroke-linejoin: round; }
+  nav.tabs .dot { position: absolute; top: 6px; left: calc(50% + 8px); margin: 0; }
+  /* "Following Sam" sits just above the bar instead of under it. */
+  body .follow { bottom: calc(68px + env(safe-area-inset-bottom)); }
+}
 .day { color: var(--accent); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
        margin: 26px 0 10px; font-weight: 600; }
 details {
@@ -238,7 +343,10 @@ a.go { text-align: center; text-decoration: none; }
 .lc.next .lc-big { color: var(--accent); }
 .lc-eta { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
 .lc-part { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
+.lc-go { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; }
 .lc .go { margin: 12px 0 4px; max-width: none; }
+/* Lap times in my ear on their own night (29 Oct 2026). */
+.nt-short { display: inline-flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 0.95rem; }
 .lc-check { margin-top: 8px; font-weight: 600; }
 .lc-check.seen { color: var(--good); }
 .lc-check.missed { color: var(--bad); }
@@ -325,12 +433,12 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
    list with one open at a time and its lap stats, lap times and lap chart
    on tabs, and the driver score beside the report card. Thumb-sized rows
    for a phone in the pits; the lap table scrolls in its own box. */
-#nj { position: sticky; top: 0; z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
+#nj { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
 .jump { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; max-width: 42rem; margin: 0 auto;
         scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
-.jump .jb { flex: none; font: inherit; font-size: 0.85rem; color: var(--text); background: var(--surface);
-            border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; min-height: 36px; cursor: pointer; }
+.jump .jb { flex: none; font: inherit; font-size: 0.95rem; font-weight: 600; color: var(--text); background: var(--surface);
+            border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; min-height: 46px; cursor: pointer; }
 .glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 8px; max-width: 42rem;
           margin: 14px auto 0; text-align: left; }
 .gl { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
@@ -342,7 +450,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .car, #n-prog { scroll-margin-top: 60px; }
 .pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .pick .pk { font: inherit; font-size: 0.8rem; color: var(--muted); background: none; border: 1px solid var(--border);
-            border-radius: 999px; padding: 4px 10px; min-height: 32px; cursor: pointer; }
+            border-radius: 999px; padding: 4px 12px; min-height: 40px; cursor: pointer; }
 .pick .pk.on { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
 .rlist { list-style: none; margin: 0; padding: 0; }
 .rrow { border: 1px solid var(--border); border-radius: 12px; margin: 0 0 8px; background: var(--surface); overflow: hidden; }
@@ -356,10 +464,10 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .rval.top { color: var(--good); }
 .rrow.open { border-color: var(--accent); }
 .rrow .rc { border: 0; border-top: 1px solid var(--border); border-radius: 0; margin: 0; }
-.rtabs { display: flex; gap: 4px; margin: 10px 0 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
-.rtab { flex: none; font: inherit; font-size: 0.9rem; color: var(--muted); background: none; border: 0;
-        border-bottom: 3px solid transparent; padding: 8px 10px; min-height: 40px; cursor: pointer; }
-.rtab.on { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
+.rtabs { display: flex; gap: 8px; margin: 12px 0 10px; flex-wrap: wrap; }
+.rtab { flex: 1 1 auto; font: inherit; font-size: 0.95rem; font-weight: 600; color: var(--text); background: var(--bg);
+        border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; min-height: 46px; cursor: pointer; }
+.rtab.on { color: var(--on-primary, #FFFFFF); background: var(--primary); border-color: var(--primary); }
 .sc-big b { font-size: 2rem; font-variant-numeric: tabular-nums; }
 .sc-big span { color: var(--muted); }
 .scbars { list-style: none; margin: 10px 0 6px; padding: 0; }
@@ -368,7 +476,21 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .sc-bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
 .sc-fill { display: block; height: 100%; background: var(--primary); }
 .sc-v { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.you-l { margin: 8px 0 0; }
+.you-l b { display: block; }
+.newbie { border-left-color: var(--primary); }
+.newbie-join { margin: 10px 0 0; }
+.trk { display: flex; gap: 12px; align-items: center; padding: 10px 12px; margin: 0 0 8px; color: var(--text);
+       text-decoration: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.trk:hover { border-color: var(--primary); }
+.trk-img { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; flex: none; }
+.trk-t { min-width: 0; }
+.trk-s { display: block; color: var(--muted); font-size: 0.85rem; }
+#tracks-h { scroll-margin-top: calc(16px + env(safe-area-inset-top, 0px)); }
 .lc-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0 18px; }
+.lc-pack { max-width: none; margin: 14px 0 0; gap: 8px; }
+.lc-pack h4 { margin: 0; font-size: 1rem; }
+.lc-duty .when { display: inline; }
 .lc-asks { background: none; border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0; }
 .lc-asks > summary { font-weight: 600; padding: 0; }
 .nshare { display: flex; flex-wrap: wrap; gap: 8px; max-width: 42rem; margin: 22px auto 8px; }
@@ -392,6 +514,12 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .caps .lines p { margin: 8px 0 0; font-size: 1.15rem; line-height: 1.4; }
 .caps .lines p:last-child { font-weight: 600; }
 .caps button[aria-pressed=true] { background: var(--primary); color: var(--on-primary, #FFFFFF); }
+/* Lap times in my ear (29 Oct 2026): the live page's spoken laps. */
+.ears { padding: 14px 18px; }
+.ears .note { padding: 8px 0 0; text-align: left; }
+.ears label { display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; font-size: 0.95rem; }
+.ears label[hidden], .ears button[hidden] { display: none; }
+.ears button[aria-pressed=true] { background: var(--primary); color: var(--on-primary, #FFFFFF); }
 
 /* Light themes: the few colours chosen for a dark page that vanish on a pale one */
 html.light .tier-gold { color: #9A6B00; }
@@ -554,6 +682,61 @@ mark { background: var(--primary); color: var(--on-primary, #FFFFFF); border-rad
   #board th:last-child, #board td:last-child { padding-right: 12px; }
   #board thead th { letter-spacing: 0.02em; }
 }
+/* HEATCALLER ON THE CLUB'S PAGES (30 Oct 2026, relay branding, Asher's
+   pick of 1, 2, 3, 6, 7, 8 and 9, mark always on). Small, at the edges,
+   and in the club's own colours: the sun takes the primary, the words
+   the muted text. The one place HeatCaller's own synthwave colours show
+   is the "What's HeatCaller?" sheet, which is HeatCaller talking, not
+   the club. */
+.hcsun { width: 18px; height: 18px; flex: none; fill: currentColor; color: var(--primary); }
+.hcword { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
+          font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+.hcword .hcc { color: var(--primary); }
+/* The footer's sign-off, on every page. A link to heatcaller.com that the
+   page's script turns into the sheet. */
+footer .hcmark { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); text-decoration: none;
+                 padding: 6px 0; margin-left: auto; font-size: 0.95rem; }
+footer .hcmark:hover { color: var(--text); }
+/* The byline under the club's name, on every page. */
+.hcby { display: flex; align-items: center; gap: 5px; margin-top: 4px; color: var(--muted); font-size: 0.78rem; }
+.hcby .hcsun { width: 14px; height: 14px; }
+/* Live's broadcast bug: a TV channel's corner logo, shown while a race
+   is staged, counting down or running. Room is kept for it on Live
+   whether it shows or not, so the name does not jump when a race starts. */
+header.onair-room { position: relative; }
+header.onair-room > h1, header.onair-room > .sub, header.onair-room > .hcby, header.onair-room .brand-text { padding-right: 84px; }
+.onair { display: none; position: absolute; top: 28px; right: 0; align-items: center; gap: 6px;
+         padding: 5px 10px 5px 7px; border-radius: 8px; border: 1px solid var(--primary); color: var(--primary);
+         box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 55%, transparent); }
+.onair .hcsun { width: 20px; height: 20px; }
+.onair b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
+           font-weight: 700; font-size: 0.95rem; letter-spacing: 0.08em; }
+body.on-air .onair { display: flex; animation: onair 2.4s ease-in-out infinite; }
+@keyframes onair { 50% { box-shadow: 0 0 4px color-mix(in srgb, var(--primary) 35%, transparent); } }
+@media (prefers-reduced-motion: reduce) { body.on-air .onair { animation: none; } }
+/* The first-night guide's line about who runs the timing. */
+.guide .hcline { display: flex; align-items: center; gap: 8px; margin: 12px 16px 14px; padding-top: 10px;
+                 border-top: 1px dashed var(--border); color: var(--muted); font-size: 0.85rem; }
+.guide .hcline button { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
+/* "What's HeatCaller?": HeatCaller's own look over any club's. */
+.hcabout { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center;
+           background: rgba(0, 0, 0, 0.6); }
+.hcabout[hidden] { display: none; }
+.hcabout .sheet { position: relative; width: 100%; max-width: 440px; overflow: hidden; border-radius: 22px 22px 0 0;
+                  background: #0D0820; color: #F4EDFF; text-align: center;
+                  padding: 26px 24px calc(28px + env(safe-area-inset-bottom)); }
+@media (min-width: 641px) { .hcabout { align-items: center; } .hcabout .sheet { border-radius: 22px; } }
+.hcabout .sky { position: absolute; left: 0; right: 0; top: 0; height: 118px; background: linear-gradient(#140829, #3B1063); }
+.hcabout .floor { position: absolute; left: 0; right: 0; top: 118px; width: 100%; height: 44px; }
+.hcabout .sheet > :not(.sky):not(.floor) { position: relative; }
+.hcabout .logo { display: block; width: 116px; height: 116px; margin: 0 auto; filter: drop-shadow(0 0 24px rgba(255, 46, 154, 0.45)); }
+.hcabout .wordmark { margin: 22px 0 0; font-size: 2.4rem; line-height: 1; text-shadow: 0 0 18px rgba(255, 46, 136, 0.55); }
+.hcabout .wordmark .hcc { color: #FF2E88; }
+.hcabout .tag { margin: 8px 0 14px; color: #2BE4F0; font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase; }
+.hcabout p { margin: 0 0 10px; color: #C9B8F0; font-size: 0.95rem; }
+.hcabout .go { display: block; margin: 18px 0 12px; padding: 14px; border-radius: 12px; background: #FF2E88; color: #FFFFFF;
+               font-weight: 700; text-decoration: none; box-shadow: 0 0 22px rgba(255, 46, 136, 0.45); }
+.hcabout .close { background: none; border: 0; padding: 8px 16px; font: inherit; font-size: 0.9rem; color: #8E7BB8; cursor: pointer; }
 `;
 
 /** Shared by every page: escaping, time formatting, and polling that stops when nobody is looking. */
@@ -742,20 +925,105 @@ function touched() {
 // return to the tab refreshes at once rather than waiting out the gap.
 // Seven tabs do not fit across a phone, so the row scrolls - which left
 // the page you were on out of sight whenever it was one of the later ones.
+// On a phone the tabs are a bar fixed to the bottom with nothing to
+// scroll, and scrolling a fixed bar into view can move the page instead.
 const current = document.querySelector('nav a[aria-current]');
-if (current) current.scrollIntoView({ block: 'nearest', inline: 'center' });
+if (current && !(current.parentElement && getComputedStyle(current.parentElement).position === 'fixed')) {
+  current.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
 
 function poll(load, everyMs) {
   load();
   setInterval(() => { if (!document.hidden) load(); }, everyMs);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 }
+
+// ME, REMEMBERED ON THIS PHONE (29 Oct 2026, relay navigation round 2,
+// Asher's pick: "phone remembers the driver until they sign out"). The
+// code from their badge - what opens their night - kept in this phone's
+// own storage once their night has opened with it, so Me goes straight
+// there next time instead of asking for the PIN or the email again. Only
+// ever a code the relay has just answered with a night; never the PIN,
+// never the pass "Your details" earns (that stays in this tab only). Sign
+// out on this phone (on the night page) forgets it.
+const ME_KEY = 'hg-me-' + CLUB;
+
+function meCode() {
+  try {
+    const v = localStorage.getItem(ME_KEY) || '';
+    return /^[0-9a-f]{20}$/.test(v) ? v : '';
+  } catch (e) { return ''; }
+}
+
+function meRemember(code) {
+  try { if (/^[0-9a-f]{20}$/.test(String(code))) localStorage.setItem(ME_KEY, String(code)); } catch (e) { /* asked again next time */ }
+}
+
+function meForget() {
+  try { localStorage.removeItem(ME_KEY); } catch (e) { /* nothing was kept */ }
+}
+
+// The Me tab goes straight to a remembered night.
+(function () {
+  const code = meCode();
+  const me = code ? document.querySelector('nav.tabs a[href$="/mynight"]') : null;
+  if (me) me.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
+})();
+
+// The red dot on the Live tab while a car is on track (29 Oct 2026, relay
+// navigation round 1), so a driver on Results or their own night can see a
+// race has started without opening Live. The same reading Home's "On track
+// now" makes, and the same two minutes before a laptop that went quiet
+// stops counting. Not on Live itself, which says so in big letters.
+(function () {
+  const tabs = document.querySelector('nav.tabs');
+  const live = tabs ? tabs.querySelector('a.lv') : null;
+  if (!tabs || !live || live.hasAttribute('aria-current')) return;
+  const RACING = ['Staging', 'Countdown', 'Racing'];
+  poll(async () => {
+    const answer = await grab('/snapshot/state').catch(() => null);
+    const frame = answer && !answer.missing && answer.body ? answer.body : null;
+    const s = frame && frame.body ? frame.body : null;
+    const fresh = frame !== null && Date.now() - Date.parse(frame.publishedAt) < 120000;
+    tabs.classList.toggle('racing', !!(s && fresh && RACING.includes(String(s.state))));
+  }, 30000);
+})();
+
+// "What's HeatCaller?" (30 Oct 2026, relay branding): the footer's mark,
+// and anything else marked data-hc-about, opens the sheet instead of
+// leaving for heatcaller.com. Closed by its Close button, a tap outside
+// it, or Escape, and focus goes back where it was.
+(function () {
+  const sheet = document.getElementById('hcabout');
+  if (!sheet) return;
+  let back = null;
+  const close = () => {
+    sheet.hidden = true;
+    if (back && typeof back.focus === 'function') back.focus();
+  };
+  document.addEventListener('click', (e) => {
+    const t = e.target instanceof Element ? e.target : null;
+    if (!t) return;
+    if (t.closest('[data-hc-about]')) {
+      e.preventDefault();
+      back = document.activeElement;
+      sheet.hidden = false;
+      const shut = sheet.querySelector('[data-hc-close]');
+      if (shut) shut.focus();
+      return;
+    }
+    if (!sheet.hidden && (t === sheet || t.closest('[data-hc-close]'))) close();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !sheet.hidden) close();
+  });
+})();
 `;
 
 interface Shell {
   readonly club: string;
   readonly clubName: string;
-  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "mynight";
+  readonly active: "home" | "live" | "schedule" | "results" | "standings" | "badges" | "tracks" | "checkin" | "signup" | "night" | "mynight" | "missing";
   readonly heading: string;
   readonly sub: string;
   readonly body: string;
@@ -823,8 +1091,28 @@ function shell(page: Shell, context: PageContext): string {
       ? escapeHtml(page.path)
       : `/c/${club}${page.active === "home" ? "" : `/${page.active}`}`;
 
-  const tab = (href: string, label: string, key: string) =>
-    `<a href="/c/${club}${href === "" ? "" : "/" + href}"${page.active === key ? ' aria-current="page"' : ""}>${label}</a>`;
+  // A driver's own pages - check in, the PIN box, their night, sign-up -
+  // are all "Me" (29 Oct 2026, relay navigation round 1), so none of them
+  // looks like a page outside the club's site.
+  // Standings and Achievements are part of Results (30 Oct 2026, relay
+  // navigation round 5, Asher's pick: "tabs on results"), so all three
+  // light up Results and carry its row of tabs. Tracks was the fourth
+  // until round 6 the same night, when it moved onto Home (Asher: "move
+  // track there as well"), so the Tracks page lights Home.
+  const ofResults = page.active === "results" || page.active === "standings" || page.active === "badges";
+  const lit = page.active === "checkin" || page.active === "signup" || page.active === "night" || page.active === "mynight"
+    ? "me"
+    : ofResults ? "results" : page.active === "tracks" ? "home" : page.active;
+
+  // icon is an SVG path, drawn only on the phone bar.
+  const tab = (href: string, label: string, key: string, icon: string, cls = "") =>
+    `<a href="/c/${club}${href === "" ? "" : "/" + href}"${cls === "" ? "" : ` class="${cls}"`}${lit === key ? ' aria-current="page"' : ""}>`
+    + (icon === "" ? "" : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg>`)
+    + `<span>${label}</span>${key === "live" ? '<i class="dot" aria-hidden="true"></i>' : ""}</a>`;
+
+  // One of Results' own tabs, marked when it is the page itself.
+  const subTab = (href: string, label: string) =>
+    `<a href="/c/${club}/${href}"${page.active === href ? ' aria-current="page"' : ""}>${label}</a>`;
 
   // Only hex colours reach here (site.ts refuses anything else, the logo
   // plate included), under variable names this file chose - never a name
@@ -839,7 +1127,9 @@ function shell(page: Shell, context: PageContext): string {
     ? ""
     : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
 
+  // "on HeatCaller" under the club's name, on every page.
   const heading = `<h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
+    <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
     <div class="sub">${sub}</div>`;
 
   // The logo's address carries a fingerprint of the logo itself (hex only),
@@ -854,8 +1144,13 @@ function shell(page: Shell, context: PageContext): string {
 
   // Absolute, because a link preview is fetched by somebody else's server,
   // which has no idea what a relative address is relative to.
+  // The club's logo when it has one, and the home-screen icon (HeatCaller's
+  // sun since 30 Oct 2026) when it has not: a link to the club's pages
+  // still shows the club's own picture first.
   const origin = escapeHtml(context.origin);
-  const icon = `${origin}/c/${club}/icon.png?v=${look.iconVersion}`;
+  const icon = look.logo === undefined
+    ? `${origin}/c/${club}/icon.png?v=${look.iconVersion}`
+    : `${origin}/c/${club}/logo.png?v=${look.logoVersion ?? ""}`;
 
   // A session's own drawn card when there is one, and the club's square
   // icon for every other page. The difference is not decoration: a
@@ -926,23 +1221,26 @@ ${overrides}
 </head>
 <body data-club="${club}" data-club-name="${name}">
 <div class="wrap">
-  <header>
-    ${brand}
-    <nav>
-      ${tab("", "Home", "home")}
-      ${tab("live", "Live", "live")}
-      ${tab("schedule", "Schedule", "schedule")}
-      ${look.checkIn || page.active === "checkin" ? tab("checkin", "Check in", "checkin") : ""}
-      ${look.checkIn || page.active === "mynight" ? tab("mynight", "My night", "mynight") : ""}
-      ${tab("results", "Results", "results")}
-      ${tab("standings", "Standings", "standings")}
-      ${tab("badges", "Achievements", "badges")}
-      ${tab("tracks", "Tracks", "tracks")}
+  <header${page.active === "live" ? ' class="onair-room"' : ""}>
+    ${brand}${page.active === "live" ? `
+    <span class="onair" aria-hidden="true">${HC_SUN}<b>LIVE</b></span>` : ""}
+    <nav class="tabs" aria-label="${name}">
+      ${tab("", "Home", "home", "M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10")}
+      ${tab("live", "Live", "live", "M12 12h.01M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8", "lv")}
+      ${tab("schedule", "Schedule", "schedule", "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0")}
+      ${tab("results", "Results", "results", "M5 21V4M5 4h11l-2 4 2 4H5")}
+      ${tab("mynight", "Me", "me", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0")}
     </nav>
-  </header>
+  </header>${ofResults ? `
+  <nav class="subtabs" aria-label="Results">
+    ${subTab("results", "Sessions")}
+    ${subTab("standings", "Standings")}
+    ${subTab("badges", "Achievements")}
+  </nav>` : ""}
   ${page.body}
-  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span></footer>
+  <footer><span id="stamp">&nbsp;</span>${links}<span class="tip">Tap any driver's name to follow them on every page.</span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?" data-hc-about>${HC_SUN}${HC_WORD}</a></footer>
 </div>
+${aboutSheet(name)}
 <div id="follow" class="follow" hidden></div>
 <script nonce="${escapeHtml(context.nonce)}">${COMMON_JS}${page.script}</script>
 </body>
@@ -2797,9 +3095,478 @@ export function resultsPage(club: string, clubName: string, context: PageContext
 
 // ------------------------------------------------------------------- live
 
+/**
+ * The lap voice on the phone (29 Oct 2026, asked for by Asher) - the
+ * ElevenLabs clips lapvoice.ts describes, played one after another for
+ * each lap on the Live page and on a driver's own night. Shared by both:
+ * each builds its call as parts, each part its words and the clips that
+ * say them, and hands it here.
+ *
+ * NEVER HALF A CALL. Every clip a call needs is loaded first, and only then
+ * does any of it play; a clip the relay does not have (a 2.40 lap, P31), a
+ * load that fails, or one that takes longer than a second, and the phone's
+ * own voice says the whole line instead, as it did before this existed.
+ * "Phone voice" ticked, or a relay with no clips, is the phone's voice
+ * every time.
+ *
+ * A phone only plays sound once the page has been tapped, so unlock() is
+ * called from the same taps that let the phone's voice talk. Clips are
+ * kept as they came - a few kilobytes each - and decoded as they are
+ * played, so a whole night of them costs a phone a few megabytes, not the
+ * hundreds that decoded sound would.
+ */
+const LAPVOICE_JS = `
+const lapVoice = (function () {
+  const PHONE_KEY = 'hg-lapvoice-phone-' + CLUB;
+  // A call whose clips are not all here by then is said by the phone instead.
+  const LATE_MS = 1000;
+  // The breath between the parts of a call - the commas the phone voice pauses on.
+  const BREATH = 0.12;
+
+  let phone = false;
+  try { phone = localStorage.getItem(PHONE_KEY) === '1'; } catch (e) { /* the clips, then */ }
+
+  let ctx = null, asked = false, version = '', voice = '';
+  let have = null;
+  const kept = new Map();
+  let playing = 0, sources = [];
+  const waiting = [];
+
+  function load() {
+    if (asked) return;
+    asked = true;
+    try {
+      fetch('/lap-voice').then((r) => r && r.ok ? r.json() : null).then((m) => {
+        if (m && Array.isArray(m.clips) && m.clips.length > 0 && typeof m.v === 'string') {
+          have = new Set(m.clips.filter((c) => typeof c === 'string'));
+          version = m.v;
+          voice = typeof m.voice === 'string' ? m.voice : '';
+        }
+        waiting.splice(0).forEach((f) => { try { f(); } catch (e) { /* its own redraw */ } });
+      }, () => { asked = false; });
+    } catch (e) { asked = false; }
+  }
+
+  // From a tap: the sound may start, and the clip list is asked for once.
+  function unlock() {
+    load();
+    try {
+      // iPhone: play through the silent switch, as the phone's voice does.
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';
+    } catch (e) { /* an older phone */ }
+    try {
+      const Kind = window.AudioContext || window.webkitAudioContext;
+      if (!ctx && Kind) ctx = new Kind();
+      if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
+    } catch (e) { ctx = null; }
+  }
+
+  function has() { return have !== null; }
+
+  function using() { return have !== null && !phone && ctx !== null && typeof ctx.decodeAudioData === 'function'; }
+
+  function setPhone(yes) {
+    phone = !!yes;
+    try { localStorage.setItem(PHONE_KEY, phone ? '1' : '0'); } catch (e) { /* this visit only */ }
+  }
+
+  function fetchClip(name) {
+    let got = kept.get(name);
+    if (!got) {
+      got = fetch('/lap-voice/' + name + '.mp3?v=' + version)
+        .then((r) => { if (!r || !r.ok) throw new Error('no clip'); return r.arrayBuffer(); });
+      got.catch(() => { if (kept.get(name) === got) kept.delete(name); });
+      kept.set(name, got);
+    }
+    return got;
+  }
+
+  function decode(bytes) {
+    return new Promise((done, fail) => {
+      // A copy: decoding hands the bytes to the audio and empties them.
+      const p = ctx.decodeAudioData(bytes.slice(0), done, fail);
+      if (p && typeof p.then === 'function') p.then(done, fail);
+    });
+  }
+
+  // The sound of a clip without the quiet ElevenLabs leaves at each end.
+  function trim(buf) {
+    let from = 0, to = buf.duration;
+    try {
+      const data = buf.getChannelData(0);
+      const rate = buf.sampleRate;
+      let a = 0, b = data.length - 1;
+      while (a < data.length && Math.abs(data[a]) < 0.01) a++;
+      while (b > a && Math.abs(data[b]) < 0.01) b--;
+      if (b > a) { from = Math.max(0, a / rate - 0.01); to = Math.min(buf.duration, b / rate + 0.04); }
+    } catch (e) { /* the whole clip, then */ }
+    return { buf: buf, from: from, length: Math.max(0, to - from) };
+  }
+
+  function stop() {
+    playing++;
+    sources.splice(0).forEach((s) => { try { s.stop(); } catch (e) { /* finished already */ } });
+  }
+
+  // parts: [{ text, clips }] - clips null when there is none for those words.
+  function say(parts, speak) {
+    const text = parts.map((p) => p.text).join(', ');
+    const groups = parts.map((p) => p.clips);
+    if (!using() || groups.some((g) => !Array.isArray(g) || g.some((n) => !have.has(n)))) {
+      stop();
+      speak(text);
+      return;
+    }
+
+    stop();
+    const mine = playing;
+    let settled = false;
+    const late = setTimeout(() => {
+      if (settled || mine !== playing) return;
+      settled = true;
+      speak(text);
+    }, LATE_MS);
+
+    Promise.all(groups.map((g) => Promise.all(g.map((n) => fetchClip(n).then(decode)))))
+      .then((decoded) => {
+        if (settled || mine !== playing) return;
+        settled = true;
+        clearTimeout(late);
+        try { window.speechSynthesis.cancel(); } catch (e) { /* not talking */ }
+        let at = ctx.currentTime + 0.02;
+        decoded.forEach((group, i) => {
+          if (i > 0) at += BREATH;
+          group.forEach((buf) => {
+            const t = trim(buf);
+            const s = ctx.createBufferSource();
+            s.buffer = t.buf;
+            s.connect(ctx.destination);
+            s.start(at, t.from, t.length);
+            sources.push(s);
+            at += t.length;
+          });
+        });
+      }, () => {
+        if (settled || mine !== playing) return;
+        settled = true;
+        clearTimeout(late);
+        speak(text);
+      });
+  }
+
+  // The clips a coming lap is likely to want, fetched while nothing is said.
+  function warm(names) {
+    if (!using()) return;
+    names.forEach((n) => { if (have.has(n)) fetchClip(n).catch(() => {}); });
+  }
+
+  function whenReady(f) { if (asked && have === null) waiting.push(f); }
+
+  return {
+    unlock: unlock, has: has, using: using, say: say, stop: stop, warm: warm,
+    phone: () => phone, setPhone: setPhone, voice: () => voice, whenReady: whenReady,
+  };
+})();
+
+// --- The clips for each kind of words, the names lapvoice.ts makes. ---------
+// Null when there is no clip: the call is then the phone's.
+
+// A lap time, 3.000 to 19.999, never rounded (31 Oct 2026): one clip when
+// there is nothing in the thousandths ("nine forty-two"), and the two halves
+// back to back when there is ("six nine" "thirty-five") - as the app says it.
+function lvTime(ms) {
+  const t = Math.round(ms);
+  if (t < 3000 || t > 19999) return null;
+  if (t % 10 === 0) return ['t' + (t / 10)];
+  return ['tt' + Math.floor(t / 100), 'tp' + (t % 100)];
+}
+
+// The same time for the phone's own voice: every digit the screen shows.
+function lvTimeText(ms) {
+  const t = Math.round(ms);
+  return (t / 1000).toFixed(t % 10 === 0 ? 2 : 3);
+}
+
+function lvLap(n) { return n >= 1 && n <= 200 ? ['lap' + n] : null; }
+
+function lvPlace(n) { return n >= 1 && n <= 30 ? ['p' + n] : null; }
+
+// The gap to the car ahead, as RaceNumbers.GapSpoken rounds it: tenths
+// under a second, halves to ten, whole seconds to thirty; or laps.
+function lvGap(gap) {
+  const t = String(gap || '').trim();
+  const laps = /^\\+?(\\d+)\\s*L(aps?)?$/i.exec(t);
+  if (laps) { const l = Number(laps[1]); return l >= 1 && l <= 9 ? ['g-l' + l] : null; }
+  const secs = /^\\+(\\d+([.,]\\d+)?)s?$/.exec(t);
+  if (!secs) return null;
+  const g = Math.abs(Number(secs[1].replace(',', '.')));
+  if (!isFinite(g)) return null;
+  if (g < 0.05) return ['g-0'];
+  if (g < 0.95) return ['g-t' + Math.max(1, Math.round(g * 10))];
+  if (g < 1.05) return ['g-h2'];
+  if (g >= 10) { const s = Math.round(g); return s <= 30 ? ['g-s' + s] : null; }
+  const halves = Math.round(g * 2);
+  return halves >= 20 ? ['g-s10'] : ['g-h' + halves];
+}
+
+// Against a target lap: "on target", or how far and which way.
+function lvTarget(last, target) {
+  const off = last - target;
+  if (Math.abs(off) < 5) return ['tg-on'];
+  const cs = Math.max(1, Math.round(Math.abs(off) / 10));
+  return cs <= 200 ? ['tg-m' + cs, off < 0 ? 'tg-under' : 'tg-off'] : null;
+}
+
+// What the next lap may want: its number, and times near this one.
+function lvAhead(lapNumber, ms) {
+  const names = ['best', 'lap' + (lapNumber + 1)];
+  const cs = Math.round(ms / 10);
+  for (let d = -10; d <= 10; d++) names.push('t' + (cs + d));
+  const ds = Math.floor(Math.round(ms) / 100);
+  for (let d = -1; d <= 1; d++) names.push('tt' + (ds + d));
+  return names;
+}
+`;
+
 const LIVE_JS = `
 const board = document.getElementById('board');
 const bar = document.getElementById('bar');
+
+// --- Lap times in my ear (29 Oct 2026, asked for by Asher) ---------------
+// The followed driver's laps read out by the phone's own voice, as the
+// coach page and Live Results do on the club Wi-Fi: "Lap 7, 9.42, best lap,
+// P2, 0.4 seconds behind", or with Time only ticked "9.42, best lap".
+//
+// NOTHING NEW ON THE WIRE. Every row of the board the laptop sends the
+// relay already carries the driver's name (the one the Driver column
+// shows), their flying laps and their best lap; this is the first page to
+// read them out. Who is followed stays on this phone (followed(), above).
+//
+// A name on two rows - "Unnamed driver", or a name the board could not
+// tell apart - is never read out: it could be anybody's lap. Laps already
+// on the board when it was turned on, or when somebody else was followed,
+// are not said; fewer laps than last time, or a different first lap, is a
+// new race, which starts the count again quietly.
+//
+// A phone only lets a page speak once it has been tapped since it loaded,
+// so after a reload the button says "tap to resume" and the first tap
+// anywhere starts the voice again. While it is on, the page reads the
+// board every second rather than every two, and asks the phone to keep
+// the screen on - the relay is https, so the Screen Wake Lock works here
+// as it cannot on the club Wi-Fi.
+const lapTalk = (function () {
+  const box = document.getElementById('laptalk');
+  const btn = document.getElementById('lapbtn');
+  const shortBox = document.getElementById('lapshort');
+  const shortRow = document.getElementById('lapshortrow');
+  const note = document.getElementById('lapnote');
+  const phoneBox = document.getElementById('lapphone');
+  const phoneRow = document.getElementById('lapphonerow');
+  const canSpeak = typeof window.speechSynthesis === 'object' && window.speechSynthesis !== null
+    && typeof SpeechSynthesisUtterance === 'function';
+  const ON_KEY = 'hg-laptalk-' + CLUB;
+  const SHORT_KEY = 'hg-laptalk-short-' + CLUB;
+  const AUTOLOCK = ' If your screen goes dark, set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while you race.';
+
+  let on = false, timeOnly = false, unlocked = false;
+  try {
+    on = canSpeak && localStorage.getItem(ON_KEY) === '1';
+    timeOnly = localStorage.getItem(SHORT_KEY) === '1';
+  } catch (e) { /* off, and full calls */ }
+
+  // Whose laps were last counted, how many, and the first of them.
+  let heardFor = '', heardLaps = 0, firstLap = 0;
+  // The screen wake lock, and whether the phone gave one (null: not asked).
+  let lock = null, awake = null;
+
+  function save(key, yes) {
+    try { localStorage.setItem(key, yes ? '1' : '0'); } catch (e) { /* this visit only */ }
+  }
+
+  function speak(text) {
+    if (!canSpeak) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.1;
+      window.speechSynthesis.speak(u);
+    } catch (e) { /* a phone that will not talk says nothing */ }
+  }
+
+  function hush() {
+    lapVoice.stop();
+    try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+  }
+
+  // A call in the lap voice's clips, or the phone's voice - see LAPVOICE_JS.
+  function call(parts) {
+    lapVoice.say(parts, speak);
+  }
+
+  function wake() {
+    lapVoice.unlock();
+    lapVoice.whenReady(show);
+  }
+
+  function stayAwake() {
+    if (!on || !unlocked || lock !== null || document.hidden) return;
+    const wl = navigator.wakeLock;
+    if (!wl || typeof wl.request !== 'function') { awake = false; show(); return; }
+    try {
+      wl.request('screen').then((got) => {
+        if (!on) { try { got.release(); } catch (e) { /* gone already */ } return; }
+        lock = got; awake = true;
+        if (got && typeof got.addEventListener === 'function') got.addEventListener('release', () => { lock = null; });
+        show();
+      }, () => { awake = false; show(); });
+    } catch (e) { awake = false; show(); }
+  }
+
+  function letSleep() {
+    try { if (lock !== null) lock.release(); } catch (e) { /* gone already */ }
+    lock = null; awake = null;
+  }
+
+  function show() {
+    if (!box) return;
+    box.hidden = !canSpeak;
+    if (!canSpeak) return;
+    const who = memory;
+    btn.hidden = !who;
+    shortRow.hidden = !who;
+    shortBox.checked = timeOnly;
+    if (phoneRow) phoneRow.hidden = !who || !lapVoice.has();
+    if (phoneBox) phoneBox.checked = lapVoice.phone();
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.textContent = 'Lap times in my ear: ' + (!on ? 'off' : unlocked ? 'on' : 'tap to resume');
+    if (!who) {
+      note.textContent = 'Tap a driver\\u2019s name on the board to follow them, then your phone can read out each of their laps.';
+    } else if (!on) {
+      note.textContent = 'Your phone reads out each of ' + who + '\\u2019s laps. Keep this page open with the screen on.';
+    } else if (!unlocked) {
+      note.textContent = 'Tap anywhere to start the voice again.';
+    } else {
+      note.textContent = 'Reading out ' + who + '\\u2019s laps, a second or two after each one.'
+        + (awake === true ? ' Your screen stays on while this is on.' : awake === false ? AUTOLOCK : '');
+    }
+  }
+
+  function gapWords(gap) {
+    const t = String(gap || '').trim();
+    const laps = /^\\+?(\\d+)\\s*L(aps?)?$/i.exec(t);
+    if (laps) return laps[1] + (laps[1] === '1' ? ' lap' : ' laps') + ' behind';
+    const secs = /^\\+(\\d+([.,]\\d+)?)s?$/.exec(t);
+    return secs ? secs[1].replace(',', '.') + ' seconds behind' : '';
+  }
+
+  // The gap to the car ahead, as the board wrote it: the laptop's own figure on the row (a
+  // HeatCaller from 29 Oct 2026 on sends it), else the club's Interval
+  // column, or Gap to P1 for the car in second, where the two are the same.
+  function gapAhead(state, row, pos) {
+    if (typeof row.ahead === 'string' && row.ahead !== '') return row.ahead;
+    const columns = Array.isArray(state.columns) ? state.columns.map((c) => String(c)) : [];
+    let at = columns.findIndex((c) => /^interval$/i.test(c));
+    if (at < 0 && pos === 2) at = columns.findIndex((c) => /^gap/i.test(c));
+    const cell = at >= 0 && Array.isArray(row.cells) ? row.cells[at] : null;
+    return cell && typeof cell === 'object' ? String(cell.text || '') : '';
+  }
+
+  function take(state) {
+    show();
+    const who = memory;
+    if (!on || !unlocked || !who) { heardFor = ''; return; }
+
+    const rows = Array.isArray(state && state.standings) ? state.standings : [];
+    const mine = rows.filter((r) => r && typeof r === 'object' && r.name === who);
+    if (who === 'Unnamed driver' || mine.length !== 1) return;
+
+    const row = mine[0];
+    const laps = (Array.isArray(row.laps) ? row.laps : []).filter((v) => typeof v === 'number' && v > 0);
+    const count = laps.length;
+    const first = count > 0 ? laps[0] : 0;
+
+    // Somebody new, a new race, or a lap race control took away: counted
+    // from here, quietly.
+    if (heardFor !== who || count < heardLaps || (heardLaps > 0 && first !== firstLap)) {
+      heardFor = who; heardLaps = count; firstLap = first;
+      return;
+    }
+
+    if (count === heardLaps) return;
+    heardLaps = count; firstLap = first;
+
+    // Two laps in one read - the phone or the relay was slow - says the newest.
+    const last = laps[count - 1];
+    const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
+    const isBest = count > 1 && last <= best;
+    const parts = [{ text: lvTimeText(last), clips: lvTime(last) }];
+    if (isBest) parts.push({ text: 'best lap', clips: ['best'] });
+
+    if (!timeOnly) {
+      const pos = rows.indexOf(row) + 1;
+      parts.unshift({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
+      parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
+      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
+      const gap = gapWords(raw);
+      if (gap) parts.push({ text: gap, clips: lvGap(raw) });
+      lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
+    } else {
+      lapVoice.warm(lvAhead(count + 1, last));
+    }
+
+    call(parts);
+  }
+
+  if (canSpeak && btn) {
+    btn.addEventListener('click', () => {
+      // On, but waiting for a tap since a reload: this tap resumes it.
+      if (on && !unlocked) {
+        unlocked = true; heardFor = '';
+        wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); show();
+        return;
+      }
+      unlocked = true;
+      on = !on;
+      save(ON_KEY, on);
+      heardFor = '';
+      if (on) { wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); } else { hush(); letSleep(); }
+      show();
+    });
+
+    shortBox.addEventListener('change', () => {
+      timeOnly = !!shortBox.checked;
+      save(SHORT_KEY, timeOnly);
+    });
+
+    if (phoneBox) {
+      phoneBox.addEventListener('change', () => { lapVoice.setPhone(!!phoneBox.checked); });
+    }
+
+    // Any tap lets a page that was on before a reload speak again - and a
+    // tap on a name changes who is followed, so the button is redrawn
+    // once the follow has been taken.
+    document.addEventListener('click', (e) => {
+      if (on && !unlocked && !(e && e.target === btn)) {
+        unlocked = true; heardFor = '';
+        speak(' '); wake(); stayAwake();
+      }
+      setTimeout(show, 0);
+    }, true);
+
+    // A phone lets go of the wake lock when the page is hidden.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) { lock = null; stayAwake(); }
+    });
+  }
+
+  show();
+
+  return {
+    take: take,
+    show: show,
+    talking: () => on && unlocked,
+  };
+})();
 
 // Which columns read as words rather than numbers. The relay has no idea
 // what columns a club has chosen - they arrive as labels - so this is the
@@ -2824,6 +3591,7 @@ function cells(row, columns) {
 }
 
 function render(state) {
+  lapTalk.take(state);
   const flag = String(state.flag || 'None').toLowerCase();
   const running = String(state.state || 'Idle');
 
@@ -2849,8 +3617,16 @@ function render(state) {
     '</tbody></table></div>';
 }
 
+// Shows or hides the broadcast bug (see load).
+function onAir(on) {
+  const body = document.body;
+  if (body && body.classList) body.classList.toggle('on-air', !!on);
+}
+
 async function load() {
-  const answer = await grab('/snapshot/state').catch(() => null);
+  // Given up on after five seconds: read() holds the next one back until
+  // this one answers, so one that never did would stop the board for good.
+  const answer = await grab('/snapshot/state', 5000).catch(() => null);
 
   if (answer === null) {
     board.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
@@ -2861,18 +3637,45 @@ async function load() {
     bar.className = 'flagbar';
     bar.innerHTML = '<span class="state">Not racing</span>';
     board.innerHTML = '<p class="note">No race has been published yet.</p>';
+    onAir(false);
+    lapTalk.show();
     touched();
     return;
   }
 
-  render(answer.body.body || {});
+  const state = answer.body.body || {};
+  render(state);
+
+  // The broadcast bug in the corner (30 Oct 2026, relay branding) while a
+  // race is staged, counting down or running - the same reading, and the
+  // same two minutes before a laptop that went quiet stops counting, as
+  // the red dot the other pages put on the Live tab.
+  const fresh = Date.now() - Date.parse(answer.body.publishedAt) < 120000;
+  onAir(fresh && ['Staging', 'Countdown', 'Racing'].includes(String(state.state)));
   touched();
 }
 
 // Two seconds against the app's one: fast enough that the board is never
 // more than a lap behind, slow enough that a field of phones does not
-// hammer a small server.
-poll(load, 2000);
+// hammer a small server. Every second while lap times are being read out
+// (29 Oct 2026), so a lap is said about as soon as the laptop has sent it.
+// One read at a time, so an answer that comes back late cannot draw over
+// a newer one or have a lap said twice.
+let reading = false;
+let beat = 0;
+
+async function read() {
+  if (reading) return;
+  reading = true;
+  try { await load(); } finally { reading = false; }
+}
+
+read();
+setInterval(() => {
+  beat += 1;
+  if (!document.hidden && (lapTalk.talking() || beat % 2 === 0)) read();
+}, 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) read(); });
 `;
 
 /**
@@ -2895,6 +3698,23 @@ function listenControl(listening: boolean): string {
   return '<div class="card" id="listen">'
     + '<button type="button" id="listenbtn" class="btn">Listen to the announcer</button>'
     + '<p class="note" id="listennote">A few seconds behind the room. Nothing plays until you press it.</p>'
+    + "</div>";
+}
+
+/**
+ * Lap times in my ear (29 Oct 2026, asked for by Asher: the coach page's
+ * "Say my lap time" on the relay, so a driver hears their laps on any
+ * connection). Drawn for every club: it reads the public board the page
+ * already reads and talks with the phone's own voice, so it costs the club
+ * nothing and shows nothing new. The page hides it on a phone that cannot
+ * speak, and leaves only the note until somebody is followed.
+ */
+function lapTalkControl(): string {
+  return '<div class="card ears" id="laptalk">'
+    + '<button type="button" id="lapbtn" class="btn" aria-pressed="false" hidden>Lap times in my ear: off</button>'
+    + '<label id="lapshortrow" hidden><input type="checkbox" id="lapshort"> Time only</label>'
+    + '<label id="lapphonerow" hidden><input type="checkbox" id="lapphone"> Phone voice</label>'
+    + '<p class="note" id="lapnote">Tap a driver&rsquo;s name on the board to follow them, then your phone can read out each of their laps.</p>'
     + "</div>";
 }
 
@@ -3055,11 +3875,16 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     active: "live",
     heading: "Live",
     sub: "The race as it runs. Updates every couple of seconds.",
+    // The race board first, under its flag bar (29 Oct 2026, asked for by
+    // Asher: "the race board should be first"): it is what the page is
+    // for, so on a phone it is what shows without scrolling. Listen,
+    // Captions and Lap times in my ear follow it.
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
+      + '<div id="board"></div>'
       + listenControl(context.look.listening)
       + captionsControl()
-      + '<div id="board"></div>',
-    script: LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS,
+      + lapTalkControl(),
+    script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS,
   }, context);
 }
 
@@ -3450,11 +4275,185 @@ export function standingsPage(club: string, clubName: string, context: PageConte
 
 // ------------------------------------------------------------------- home
 
+/**
+ * YOUR NEXT RACE (29 Oct 2026, relay navigation round 3). When this phone
+ * remembers a driver (round 2), Home asks the relay for their live entry -
+ * the same {part:"live"} read the night page polls, once a minute here -
+ * and shows their next race above everything else, with the way to their
+ * night and, when it is on or next, to Live or the running order. Nothing
+ * at all for a phone that remembers nobody, a driver with no race in the
+ * next few, or a club that is not opening nights. Built with textContent:
+ * the race's name is the laptop's words.
+ */
+const HOME_ME_JS = `
+const mine = document.getElementById('mine');
+const MINE = meCode();
+
+function mineWords(n) {
+  if (typeof n.words === 'string' && n.words.trim() !== '') return n.words;
+  if (n.staged === true) return 'Staged - go to the driver stand';
+  if (n.now === true) return 'On track now';
+  const away = Math.max(0, Math.round(Number(n.away) || 0));
+  if (away === 0) return "You're up next";
+  return away === 1 ? '1 race before yours' : away + ' races before yours';
+}
+
+function mineLink(words, path) {
+  const a = document.createElement('a');
+  a.className = 'more';
+  a.textContent = words;
+  a.setAttribute('href', BASE + path);
+  return a;
+}
+
+function drawMine(entry) {
+  const n = entry && typeof entry === 'object' && entry.next && typeof entry.next === 'object' ? entry.next : null;
+
+  mine.textContent = '';
+  mine.hidden = n === null;
+  if (n === null) return;
+
+  const next = n.now !== true && Math.round(Number(n.away) || 0) === 0;
+  mine.className = 'lc' + (n.staged === true ? ' staged' : next ? ' next' : '');
+
+  const h = document.createElement('h3');
+  h.textContent = 'Your next race';
+  mine.appendChild(h);
+
+  const big = document.createElement('div');
+  big.className = 'lc-big';
+  big.textContent = mineWords(n);
+  mine.appendChild(big);
+
+  if (typeof n.race === 'string' && n.race !== '') {
+    const race = document.createElement('div');
+    race.textContent = n.race;
+    mine.appendChild(race);
+  }
+
+  const links = document.createElement('p');
+  links.className = 'lc-go';
+  links.appendChild(mineLink('Open your night', '/night#d=' + MINE));
+  if (n.now === true) links.appendChild(mineLink('Watch live', '/live'));
+  else if (next) links.appendChild(mineLink('See the running order', '/schedule'));
+  mine.appendChild(links);
+}
+
+async function readMine() {
+  let r = null;
+  try {
+    r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/night', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: MINE, part: 'live' }),
+      cache: 'no-store',
+    });
+  } catch (e) { return; }
+
+  // A busy relay (429) or a failed read keeps what is on screen.
+  if (r.status === 404) drawMine(null);
+  if (r.status !== 200) return;
+
+  let body = {};
+  try { body = await r.json(); } catch (e) { return; }
+  drawMine(body && body.live);
+}
+
+if (mine && MINE) poll(readMine, 60000);
+
+// THE "YOU" STRIP (30 Oct 2026, relay navigation round 6): for a phone
+// that remembers a driver, on every state of Home - their last night's
+// best finish, where they stand, and the newest achievement they earned,
+// with their night a tap away. Their night is the full read (the live
+// poll above carries only the next race), so it is asked for once on
+// opening and then every five minutes, well inside the relay's allowance.
+const you = document.getElementById('you');
+let youNight = null;
+
+function youLine(label, text) {
+  const p = document.createElement('p');
+  p.className = 'you-l';
+  const k = document.createElement('span');
+  k.className = 'gl-k';
+  k.textContent = label;
+  const v = document.createElement('b');
+  v.textContent = text;
+  p.appendChild(k);
+  p.appendChild(v);
+  return p;
+}
+
+function drawYou() {
+  if (!you) return;
+
+  const night = youNight;
+  const who = night && typeof night.driver === 'string' ? night.driver : '';
+
+  you.textContent = '';
+  you.hidden = night === null;
+  if (night === null) return;
+
+  const h = document.createElement('h3');
+  h.textContent = who ? 'You, ' + who : 'You';
+  you.appendChild(h);
+
+  const races = Array.isArray(night.races) ? night.races.filter((r) => r && Number(r.pos) > 0) : [];
+  const best = races.slice().sort((a, b) => Number(a.pos) - Number(b.pos))[0];
+  const when = [night.title, night.when].filter(Boolean).join(' · ');
+
+  if (best) {
+    you.appendChild(youLine('Best finish' + (when ? ', ' + when : ''), ordinal(best.pos) + (best.label ? ' · ' + best.label : '')));
+  }
+
+  const seasons = standingsDoc && Array.isArray(standingsDoc.seasons) ? standingsDoc.seasons : [];
+  for (const season of seasons) {
+    const row = (Array.isArray(season.standings) ? season.standings : []).find((r) => r && sameName(r.name, who));
+    if (row && who) {
+      you.appendChild(youLine('Standings' + (season.name ? ', ' + season.name : ''), ordinal(row.pos) + ' · ' + row.points + ' pts'));
+      break;
+    }
+  }
+
+  const recent = achievementsDoc && Array.isArray(achievementsDoc.recent) ? achievementsDoc.recent : [];
+  const earned = who ? recent.find((r) => r && sameName(r.name, who)) : null;
+  if (earned) you.appendChild(youLine('Newest achievement', badgeName(earned.id)));
+
+  const links = document.createElement('p');
+  links.className = 'lc-go';
+  links.appendChild(mineLink('Open your night', '/night#d=' + MINE));
+  you.appendChild(links);
+}
+
+async function readYou() {
+  let r = null;
+  try {
+    r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/night', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: MINE }),
+      cache: 'no-store',
+    });
+  } catch (e) { return; }
+
+  // Not found is a phone remembering a night the relay no longer has;
+  // anything else (a busy relay) keeps what is on screen.
+  if (r.status === 404) { youNight = null; drawYou(); }
+  if (r.status !== 200) return;
+
+  let body = {};
+  try { body = await r.json(); } catch (e) { return; }
+  youNight = body && body.night && typeof body.night === 'object' ? body.night : null;
+  drawYou();
+}
+
+if (you && MINE) poll(readYou, 300000);
+`;
+
 const HOME_JS = `
 const now = document.getElementById('now');
-const preview = document.getElementById('preview');
-const upnext = document.getElementById('upnext');
-const latest = document.getElementById('latest');
+const recap = document.getElementById('recap');
+const trackList = document.getElementById('tracks');
+const newbie = document.getElementById('newbie');
 const BASE = '/c/' + encodeURIComponent(CLUB);
 const LIVE = ['Staging', 'Countdown', 'Racing'];
 
@@ -3476,32 +4475,31 @@ function section(el, html) {
   if (heading && heading.classList.contains('day')) heading.style.display = html ? '' : 'none';
 }
 
-// The three newest results, without the whole listing: that is every
-// result the club has ever published, megabytes of it, and this runs on
-// every phone every fifteen seconds. The meta listing names the newest
-// three, and their bodies are only fetched again when those change.
-let latestSig = null;
-let latestRes = null;
-
-async function latestResults() {
-  const meta = await grab('/collection/results?meta=1&limit=3').catch(() => null);
-
-  if (meta === null) return null;
-  if (meta.missing || !Array.isArray(meta.body.items) || meta.body.items.length === 0) return meta.missing ? meta : { body: { items: [] } };
-
-  const ids = meta.body.items.map((item) => String(item.id));
-  const sig = meta.body.items.map((item) => item.id + '@' + item.publishedAt).join('|');
-
-  if (sig === latestSig && latestRes !== null) return latestRes;
-
-  const answer = await grab('/collection/results?ids=' + ids.map(encodeURIComponent).join(',')).catch(() => null);
-
-  if (answer === null || answer.missing || !Array.isArray(answer.body.items)) return latestRes ?? answer;
-
-  latestSig = sig;
-  latestRes = answer;
-  return answer;
+function ordinal(value) {
+  const n = Math.round(Number(value));
+  if (!(n > 0)) return '';
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  return n + (teen ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] || 'th');
 }
+
+function sameName(a, b) {
+  return String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+}
+
+// A race night as its own heading - "Tue 28 Oct" - from the index's
+// yyyy-mm-dd. Noon, so no time zone can move it to the day before.
+function nightName(iso) {
+  const d = new Date(String(iso) + 'T12:00:00');
+  return isNaN(d) ? '' : d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+// HOME CHANGES WITH THE NIGHT (30 Oct 2026, relay navigation round 6,
+// Asher's pick). Racing now: what is on track or up next, and nothing
+// that Live and Schedule already show in full. Before a night: the
+// club's own preview is the main card. In between: how the last race
+// night went. The recap only shows while nothing is on and no preview
+// is up - quiet is that, set by load() and read by drawRecap().
+let quiet = false;
 
 // THE PREVIEW, AND THE EXPIRY THE PAGE HONOURS RATHER THAN THE RELAY.
 //
@@ -3517,17 +4515,14 @@ async function latestResults() {
 // would leave the last one standing for good.
 function previewHtml(answer) {
   if (answer === null || answer.missing) return '';
-
   const b = answer.body && answer.body.body ? answer.body.body : {};
   const text = typeof b.text === 'string' ? b.text.trim() : '';
-
   if (text === '') return '';
 
   // A bad or missing date reads as expired. The other way round - treating
   // an unreadable date as "stands forever" - is how a preview from March
   // is still on a club's front page in June.
   const until = Date.parse(String(b.until || ''));
-
   if (!Number.isFinite(until) || Date.now() > until) return '';
 
   // DOUBLE-BACKSLASHED, because this lives in a template literal: one
@@ -3540,7 +4535,6 @@ function previewHtml(answer) {
   // comment broke across two lines and took the page with it. So the
   // explanation says it in words.
   const paragraphs = text.split(/\\n\\s*\\n/).map((one) => one.trim()).filter(Boolean);
-
   return '<div class="hero next" style="cursor:default">' +
     '<span class="kicker">' + esc(b.kicker || 'Coming up') + '</span>' +
     '<span class="big">' + esc(b.title || 'Next race day') + '</span>' +
@@ -3550,14 +4544,13 @@ function previewHtml(answer) {
 }
 
 async function load() {
-  const [state, prog, res, pre] = await Promise.all([
+  const [state, prog, pre] = await Promise.all([
     grab('/snapshot/state').catch(() => null),
     grab('/snapshot/programme').catch(() => null),
-    latestResults().catch(() => null),
     grab('/snapshot/preview').catch(() => null),
   ]);
 
-  if (state === null && prog === null && res === null) {
+  if (state === null && prog === null) {
     now.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
     return;
   }
@@ -3570,13 +4563,22 @@ async function load() {
   const running = lines.find((l) => l.status === 'running');
   const next = lines.find((l) => l.status === 'next');
   const ev = p && p.event ? p.event : null;
+  const live = s && fresh && LIVE.includes(String(s.state));
 
-  if (s && fresh && LIVE.includes(String(s.state))) {
+  // A line that is only 'next' is not racing: a club that has built
+  // tomorrow's rounds has a 'next' line all the night before, which is
+  // exactly when the preview is meant to show. The laptop withdraws it
+  // once the first race is filed, and its own expiry covers the rest.
+  const coming = live || running ? '' : previewHtml(pre);
+
+  if (live) {
     now.innerHTML = '<a class="hero live" href="' + BASE + '/live">' +
       '<span class="kicker">On track now</span>' +
       '<span class="big">' + esc(running ? lineTitle(running) : s.state) + '</span>' +
       '<span class="when">' + esc(s.state) + (s.countdown ? ' &middot; ' + esc(s.countdown) : '') +
       ' &middot; follow it live &rarr;</span></a>';
+  } else if (coming) {
+    now.innerHTML = coming;
   } else if (running || next) {
     const l = running || next;
     now.innerHTML = '<a class="hero next" href="' + BASE + '/schedule">' +
@@ -3584,84 +4586,277 @@ async function load() {
       '<span class="big">' + esc(lineTitle(l)) + '</span>' +
       '<span class="when">' + (l.time ? esc(l.time) + ' &middot; ' : '') + 'see the full schedule &rarr;</span></a>';
   } else {
+    const usual = now.dataset.when || '';
     now.innerHTML = '<div class="hero">' +
       '<span class="kicker">' + (ev && ev.name ? esc(ev.name) : 'Welcome') + '</span>' +
       '<span class="big">No racing right now</span>' +
-      '<span class="when">Results, standings, achievements and tracks are all below.</span></div>';
+      (usual ? '<span class="when">We race ' + esc(usual) + '</span>' : '') + '</div>';
   }
 
-  // UNDER THE HERO, AND ONLY WHILE NOTHING IS RUNNING. A club racing right
-  // now has a live race at the top of its own front page and a preview of
-  // the evening underneath it would be reading out the programme to people
-  // who are watching it happen. The preview is for the days in between,
-  // which is every day this page is open and no race is on.
-  //
-  // A line that is only 'next' is not racing: a club that has built
-  // tomorrow's rounds has a 'next' line all the night before, which is
-  // exactly when the preview is meant to show. The laptop withdraws it
-  // once the first race is filed, and its own expiry covers the rest.
-  section(preview, running || (s && fresh && LIVE.includes(String(s.state))) ? '' : previewHtml(pre));
-
-  const upcoming = lines.filter((l) => l.status === 'next' || l.status === 'upcoming').slice(0, 4);
-
-  section(upnext, upcoming.length === 0 ? '' : '<ul class="list">' + upcoming.map((l) =>
-    '<li><span class="tm">' + esc(l.time || '') + '</span>' +
-    '<span class="title">' + esc(lineTitle(l)) + '</span>' +
-    (l.status === 'next' ? '<span class="right"><span class="pill next">Next</span></span>' : '') +
-    '</li>').join('') +
-    '<li><a class="more" href="' + BASE + '/schedule">The whole day &rarr;</a></li></ul>');
-
-  const items = res && !res.missing && Array.isArray(res.body.items) ? res.body.items.slice() : [];
-  items.sort((a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt)));
-
-  section(latest, items.length === 0 ? '' : '<ul class="list">' + items.slice(0, 3).map((item) => {
-    const b = item.body || {};
-    const first = Array.isArray(b.results) && b.results.length > 0 ? b.results[0] : null;
-    return '<li><span class="title">' + esc(b.label || b.type || 'Session') + '</span>' +
-      (first ? '<span class="when">1st ' + nm(first.name) + '</span>' : '') +
-      '<span class="right">' + esc(ago(b.endedUtc || item.publishedAt)) + '</span></li>';
-  }).join('') +
-  '<li><a class="more" href="' + BASE + '/results">Every result &rarr;</a></li></ul>');
-
+  quiet = !live && !running && !next && !coming;
+  drawRecap();
   touched();
 }
 
+// ---------------------------------------------------------- last night
+
+// What the recap and the You strip read, held between polls.
+let nightHeld = null;
+let standingsDoc = null;
+let achievementsDoc = null;
+let badgeNames = null;
+let badgesAt = 0;
+
+// THE LAST RACE NIGHT, CHEAPLY. The results index's newest year names
+// every session of every night, newest night first, with its winner; the
+// fastest lap needs that night's own results, read once by id. All of it
+// is read again only when the newest year's index changes, so the five
+// minute poll is one small meta read on a quiet day.
+let nightSig = null;
+
+async function lastNight() {
+  const meta = await grab('/collection/resultsindex?meta=1').catch(() => null);
+
+  if (meta === null || meta.missing || !Array.isArray(meta.body.items) || meta.body.items.length === 0) return nightHeld;
+
+  const items = meta.body.items.slice().sort((a, b) => String(b.id).localeCompare(String(a.id)));
+  // Its size too: two writes inside the same second are the same time.
+  const sig = items[0].id + '@' + items[0].publishedAt + '/' + items[0].bytes;
+
+  if (sig === nightSig) return nightHeld;
+
+  const year = await grab('/collection/resultsindex/' + encodeURIComponent(items[0].id)).catch(() => null);
+
+  if (year === null || year.missing) return nightHeld;
+
+  const doc = year.body.body || {};
+  const days = Array.isArray(doc.days) ? doc.days : [];
+  const all = Array.isArray(doc.sessions) ? doc.sessions : [];
+  const first = days[0];
+
+  if (!first) {
+    nightSig = sig;
+    nightHeld = null;
+    return null;
+  }
+
+  const sessions = (Array.isArray(first.sessions) ? first.sessions : [])
+    .map((i) => all[i])
+    .filter((x) => x && typeof x === 'object');
+  const ids = sessions.map((x) => String(x.id || '')).filter(Boolean).slice(0, 50);
+  let fast = null;
+
+  if (ids.length > 0) {
+    const answer = await grab('/collection/results?ids=' + ids.map(encodeURIComponent).join(',')).catch(() => null);
+    const list = answer && !answer.missing && Array.isArray(answer.body.items) ? answer.body.items : [];
+
+    for (const item of list) {
+      const b = item && item.body || {};
+      for (const r of Array.isArray(b.results) ? b.results : []) {
+        const ms = Number(r && r.fastLapMs);
+        if (ms > 0 && r.name && (fast === null || ms < fast.ms)) fast = { ms, name: r.name, label: b.label || '' };
+      }
+    }
+  }
+
+  nightSig = sig;
+  nightHeld = { day: String(first.day || ''), sessions, fast };
+  return nightHeld;
+}
+
+// The night's finals and their winners: every race called a main or a
+// final, in the order they ran. A club that names neither gets its last
+// four races, which on most nights are the ones that decided it.
+function winners(night) {
+  const races = night.sessions.filter((x) => x.type === 'Race' && x.won)
+    .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const finals = races.filter((x) => /\\b(main|final)/i.test(String(x.label)));
+  return finals.length > 0 ? finals : races.slice(-4);
+}
+
+// Who leads each season (a club with several runs one per class), and by
+// how much - at most three, which is as many as a phone shows at a glance.
+function leaders() {
+  const seasons = standingsDoc && Array.isArray(standingsDoc.seasons) ? standingsDoc.seasons : [];
+  return seasons.map((season) => {
+    const rows = Array.isArray(season.standings) ? season.standings : [];
+    const top = rows[0];
+    if (!top || !top.name) return null;
+    const second = rows[1];
+    const clear = second ? Number(top.points) - Number(second.points) : NaN;
+    return { season: season.name || '', name: top.name, points: top.points, clear };
+  }).filter(Boolean).slice(0, 3);
+}
+
+// Achievements earned on that night: from its six in the morning to the
+// next, the same turn the laptop files a night's races by.
+function earnedThatNight(night) {
+  const recent = achievementsDoc && Array.isArray(achievementsDoc.recent) ? achievementsDoc.recent : [];
+  const start = new Date(night.day + 'T06:00:00').getTime();
+  if (isNaN(start)) return [];
+  return recent.filter((r) => {
+    const t = Date.parse(String(r && r.whenUtc || ''));
+    return r && r.name && t >= start && t < start + 86400000;
+  }).slice(0, 5);
+}
+
+function badgeName(id) {
+  return badgeNames && badgeNames.get(id) || String(id || 'Achievement');
+}
+
+function drawRecap() {
+  const night = nightHeld;
+
+  if (!quiet || night === null) {
+    section(recap, '');
+    return;
+  }
+
+  const head = recap.previousElementSibling;
+  if (head && head.classList.contains('day')) head.textContent = 'Last race night' + (nightName(night.day) ? ' \\u00b7 ' + nightName(night.day) : '');
+
+  const rows = [];
+
+  for (const x of winners(night)) {
+    rows.push('<li><span class="title">' + esc(x.label || 'Race') + '</span>' +
+      '<span class="when">1st ' + nm(x.won) + '</span></li>');
+  }
+
+  if (night.fast) {
+    rows.push('<li><span class="title">Fastest lap</span>' +
+      '<span class="when">' + lap(night.fast.ms) + ' &middot; ' + nm(night.fast.name) + '</span>' +
+      (night.fast.label ? '<span class="right">' + esc(night.fast.label) + '</span>' : '') + '</li>');
+  }
+
+  for (const l of leaders()) {
+    rows.push('<li><span class="title">Points leader' + (l.season ? ' &middot; ' + esc(l.season) : '') + '</span>' +
+      '<span class="when">' + nm(l.name) + ' &middot; ' + esc(l.points) + ' pts' +
+      (Number.isFinite(l.clear) ? ' &middot; ' + esc(l.clear) + ' clear' : '') + '</span></li>');
+  }
+
+  for (const r of earnedThatNight(night)) {
+    rows.push('<li><span class="title">New achievement</span>' +
+      '<span class="when">' + nm(r.name) + ' &middot; ' + esc(badgeName(r.id)) + '</span></li>');
+  }
+
+  section(recap, rows.length === 0 ? '' : '<ul class="list">' + rows.join('') +
+    '<li><a class="more" href="' + BASE + '/results#d=' + encodeURIComponent(night.day) + '">All of that night\\'s results &rarr;</a></li></ul>');
+}
+
+async function loadRecap() {
+  if (badgeNames === null || Date.now() - badgesAt > 600000) {
+    const badges = await grab('/snapshot/badges').catch(() => null);
+    if (badges && !badges.missing) {
+      const list = Array.isArray(badges.body.body && badges.body.body.badges) ? badges.body.body.badges : [];
+      badgeNames = new Map(list.map((b) => [b.id, b.name]));
+      badgesAt = Date.now();
+    }
+  }
+
+  const [night, standings, achievements] = await Promise.all([
+    lastNight().catch(() => nightHeld),
+    grab('/snapshot/standings').catch(() => null),
+    grab('/snapshot/achievements').catch(() => null),
+  ]);
+
+  nightHeld = night;
+  if (standings && !standings.missing) standingsDoc = standings.body.body || null;
+  if (achievements && !achievements.missing) achievementsDoc = achievements.body.body || null;
+
+  drawRecap();
+  if (typeof drawYou === 'function') drawYou();
+}
+
+// ------------------------------------------------------------- tracks
+
+// THE CLUB'S TRACKS, ON HOME (30 Oct 2026, round 6, Asher: "move track
+// there as well"). Each layout in a line - its picture, its lap record and
+// who holds it, today's layout first - and the Tracks page itself, with
+// the quickest drivers on each, one tap away.
+async function loadTracks() {
+  const answer = await grab('/snapshot/tracks').catch(() => null);
+
+  if (answer === null) return;
+
+  const doc = answer.missing ? {} : answer.body.body || {};
+  const tracks = Array.isArray(doc.tracks) ? doc.tracks.slice() : [];
+
+  tracks.sort((a, b) => (b.name === doc.current) - (a.name === doc.current));
+
+  const see = newbie ? newbie.querySelector('a[href="#tracks-h"]') : null;
+  if (see) see.hidden = tracks.length === 0;
+
+  section(trackList, tracks.length === 0 ? '' : tracks.slice(0, 6).map((t) => {
+    const rec = t.record && t.record.ms > 0 ? t.record : null;
+    const facts = [
+      rec ? 'Lap record ' + lap(rec.ms) + (rec.holder ? ' &middot; ' + esc(rec.holder) : '') : '',
+      t.lengthFeet > 0 ? esc(Math.round(t.lengthFeet)) + ' ft' : '',
+    ].filter(Boolean).join(' &middot; ');
+    return '<a class="trk" href="' + BASE + '/tracks">' + img(t.image, 'trk-img', t.name) +
+      '<span class="trk-t"><b>' + esc(t.name) + '</b>' +
+      (t.name === doc.current ? ' <span class="pill running">Racing here today</span>' : '') +
+      (facts ? '<span class="trk-s">' + facts + '</span>' : '') + '</span></a>';
+  }).join('') + '<p class="lc-go"><a class="more" href="' + BASE + '/tracks">Lap records and the quickest drivers &rarr;</a></p>');
+}
+
+// "New here?" is for somebody the club does not know yet. A phone that
+// remembers a driver has its own strip instead.
+if (newbie && meCode()) newbie.hidden = true;
+
 poll(load, 15000);
+poll(loadRecap, 300000);
+poll(loadTracks, 300000);
 `;
 
 export function homePage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
   const base = `/c/${escapeHtml(club)}`;
-  const tile = (href: string, title: string, sub: string) =>
-    `<a class="tile" href="${base}/${href}"><b>${title}</b><span>${sub}</span></a>`;
-
+  const look = context.look;
   // Where else to find the club, under everything else. Nothing - not even
   // the heading - for a club that has set no links.
-  const anchors = socialAnchors(context.look.social);
+  const anchors = socialAnchors(look.social);
   const social = anchors === "" ? "" : `<div class="day">Find us</div><div class="social">${anchors}</div>`;
+
+  // NEW HERE? (30 Oct 2026, relay navigation round 6, Asher: "build it with
+  // newcomer"). Where the club races, when, and how to join, as the club
+  // typed them in the app - escaped here, on the way in. No card at all
+  // for a club that left all three blank, and the page hides it on a phone
+  // that remembers a driver, who has their own strip instead.
+  const n = look.newcomer;
+  const fact = (label: string, text: string) =>
+    text === "" ? "" : `<p class="you-l"><span class="gl-k">${label}</span><b>${escapeHtml(text)}</b></p>`;
+  const newcomer = n.where === "" && n.when === "" && n.join === ""
+    ? ""
+    : `<section class="lc newbie" id="newbie"><h3>New here?</h3>${fact("Where we race", n.where)}${fact("When we race", n.when)}`
+      + (n.join === "" ? "" : `<p class="newbie-join">${escapeHtml(n.join)}</p>`)
+      + `<p class="lc-go"><a class="more" href="#tracks-h">See our tracks</a></p></section>`;
 
   return shell({
     club,
     clubName,
     active: "home",
     heading: "Home",
-    sub: context.look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing laptop.",
+    sub: look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing laptop.",
+    // "mine" is Your next race (29 Oct 2026, relay navigation round 3) and
+    // "you" the driver's own strip (round 6), both empty and hidden unless
+    // this phone remembers a driver. Then what is on now - or the club's
+    // preview of the next night - and, while nothing is, the last race
+    // night (round 6: the Up next and Latest results lists went, as
+    // Schedule and Results show both in full).
     body:
-      '<div id="now"><p class="note">Loading&hellip;</p></div>' +
-      '<div class="day">The night before</div><div id="preview" style="display:none"></div>' +
-      '<div class="day">Up next</div><div class="card" id="upnext" style="display:none"></div>' +
-      '<div class="day">Latest results</div><div class="card" id="latest" style="display:none"></div>' +
-      '<div class="day">Explore</div><div class="tiles">' +
-      tile("live", "Live", "The race as it runs") +
-      tile("schedule", "Schedule", "Who's on when") +
-      (context.look.checkIn ? tile("checkin", "Check in", "Tell the desk you're here") : "") +
-      (context.look.checkIn ? tile("mynight", "My night", "Your own races, with your PIN") : "") +
-      tile("results", "Results", "Every session") +
-      tile("standings", "Standings", "The championship") +
-      tile("badges", "Achievements", "Who's earned what") +
-      tile("tracks", "Tracks", "Records and best laps") +
-      "</div>" +
+      '<section class="lc" id="mine" hidden></section>' +
+      `<div id="now" data-when="${escapeHtml(n.when)}"><p class="note">Loading&hellip;</p></div>` +
+      // Check in from Me (30 Oct 2026, round 5): a right PIN on Me checks a
+      // driver in.
+      (look.checkIn
+        ? `<p class="note"><a class="more" href="${base}/mynight">Check in: tap Me and type your PIN</a></p>`
+        : "") +
+      '<section class="lc you" id="you" hidden></section>' +
+      newcomer +
+      '<div class="day">Last race night</div><div class="card" id="recap" style="display:none"></div>' +
+      // Tracks live on Home (30 Oct 2026, round 6), no longer a Results tab.
+      '<div class="day" id="tracks-h">Our tracks</div><div id="tracks" style="display:none"></div>' +
       social,
-    script: HOME_JS,
+    script: HOME_JS + HOME_ME_JS,
   }, context);
 }
 
@@ -4132,6 +5327,23 @@ function firstNightGuide() {
   }
 
   d.appendChild(list);
+
+  // Who runs the timing, and the way to the "What's HeatCaller?" sheet
+  // (30 Oct 2026, relay branding).
+  const who = document.createElement('p');
+  who.className = 'hcline';
+  const mark = document.createElement('span');
+  mark.innerHTML = ${JSON.stringify(HC_SUN)};
+  who.appendChild(mark);
+  const words = document.createElement('span');
+  words.textContent = 'Timing and race calls by HeatCaller. ';
+  const ask = document.createElement('button');
+  ask.type = 'button';
+  ask.setAttribute('data-hc-about', '');
+  ask.textContent = "What's that?";
+  words.appendChild(ask);
+  who.appendChild(words);
+  d.appendChild(who);
   return d;
 }
 `;
@@ -4390,8 +5602,11 @@ function drawOne() {
     // from here. Only drawn with a real badge in the address - a racer
     // signed in by PIN has not shown a code - and only for a club that
     // offers it.
-    (nights && BADGE
-      ? '<p class="note"><a class="more" href="/c/' + encodeURIComponent(CLUB) + '/night#d=' + encodeURIComponent(BADGE) + '">See your racing from last time</a></p>'
+    // A racer signed in by PIN has shown no code, but the relay's answer
+    // to their PIN carries it as their id (29 Oct 2026, relay navigation
+    // round 2), so they get the same link.
+    (nights && (BADGE || (racer && /^[0-9a-f]{20}$/.test(String(d.id))))
+      ? '<p class="note"><a class="more" href="/c/' + encodeURIComponent(CLUB) + '/night#d=' + encodeURIComponent(BADGE || d.id) + '">See your racing from last time</a></p>'
       : '') +
     '<p class="note">' +
     (racer
@@ -4967,6 +6182,10 @@ function drawApproved() {
       ? '<a class="go" href="' + card + '">Open my check-in card</a>' +
         '<p class="when">Keep it - add it to your home screen. It checks you in at every meeting.</p>'
       : '') +
+    // Go to Me (29 Oct 2026, relay navigation round 3): where their own
+    // nights open from here on, so a new driver learns the tab exists.
+    '<p class="when">Your own races and results open under Me, at the bottom of the page on a phone.</p>' +
+    '<a class="more" href="' + BASE + '/mynight">Go to Me</a>' +
     '</div>';
 }
 
@@ -5277,6 +6496,64 @@ function paint(name, fallback) {
   }
 }
 
+// HeatCaller's sun beside its name at the foot of the card (30 Oct 2026,
+// relay branding), in HeatCaller's own colours whatever the club's: the
+// logo's drawing, on its 256-unit square, scaled to size.
+function sunTile(ctx, x, y, size) {
+  const u = size / 256;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(u, u);
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(0, 0, 256, 256, 56); else ctx.rect(0, 0, 256, 256);
+  ctx.clip();
+  ctx.fillStyle = '#140829';
+  ctx.fillRect(0, 0, 256, 256);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, 256, 176);
+  ctx.clip();
+  const bands = ctx.createLinearGradient(0, 46, 0, 190);
+  bands.addColorStop(0, '#FFE9A0');
+  bands.addColorStop(0.222, '#FFE9A0');
+  bands.addColorStop(0.222, '#FFB347');
+  bands.addColorStop(0.5, '#FFB347');
+  bands.addColorStop(0.5, '#FF5FA2');
+  bands.addColorStop(1, '#FF5FA2');
+  ctx.fillStyle = bands;
+  ctx.beginPath();
+  ctx.arc(128, 118, 72, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#140829';
+  ctx.fillRect(40, 130, 176, 6);
+  ctx.fillRect(40, 146, 176, 8);
+  ctx.fillRect(40, 163, 176, 10);
+  ctx.restore();
+
+  ctx.fillStyle = '#3B1063';
+  ctx.fillRect(0, 176, 256, 80);
+  ctx.strokeStyle = '#FF2E9A';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (const end of [[0, 214], [20, 256], [74, 256], [128, 256], [182, 256], [236, 256], [256, 214]]) {
+    ctx.moveTo(128, 176);
+    ctx.lineTo(end[0], end[1]);
+  }
+  for (const level of [190, 206, 228]) {
+    ctx.moveTo(0, level);
+    ctx.lineTo(256, level);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = '#FFD9F0';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, 176);
+  ctx.lineTo(256, 176);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function picture() {
   const canvas = document.createElement('canvas');
 
@@ -5345,9 +6622,10 @@ function picture() {
     ctx.fillText('and ' + fitted.more + ' more', CARD_PAD, y + 6);
   }
 
+  sunTile(ctx, CARD_PAD, CARD_H - 66, 34);
   ctx.fillStyle = muted;
   ctx.font = '400 22px ' + face;
-  ctx.fillText('Timed and called by HeatCaller', CARD_PAD, CARD_H - 40);
+  ctx.fillText('Timed and called by HeatCaller', CARD_PAD + 46, CARD_H - 40);
 
   canvas.toBlob((blob) => {
     if (blob) hand(blob, fileName(night, 'png'));
@@ -5392,6 +6670,279 @@ const ci = { shown: false, on: false, busy: false, pending: null };
 let alertsOn = false;
 let audio = null;
 let lastKey = '';
+
+// --- Lap times in my ear, on their own night (29 Oct 2026, asked for by
+// Asher) -------------------------------------------------------------------
+// The Live page's spoken laps, without having to pick yourself: the laptop
+// puts the tags of the driver's own cars in their private live entry
+// (live.cars), the same tags their rows carry on the public board, so this
+// page finds their row by tag rather than by a name somebody else may
+// share. A car's target lap, when race control set one, comes with its tag:
+// "Lap 7, 9.42, best lap, 0.2 under target, P2, 0.4 seconds behind", or
+// with Time only ticked "9.42, best lap, 0.2 under target".
+//
+// Only drawn when the laptop sends the tags - an older HeatCaller does not,
+// and then there is nothing to say whose row is theirs. The rest is the
+// Live page's care: laps already on the board when it was turned on are not
+// said, fewer laps or a different first lap is a new race, two laps in one
+// read say the newest, and a phone has to be tapped after a reload before
+// it may talk. While it is on and they are racing, the board is read every
+// second and the phone is asked to keep the screen on.
+const nightTalk = (function () {
+  const canSpeak = typeof window.speechSynthesis === 'object' && window.speechSynthesis !== null
+    && typeof SpeechSynthesisUtterance === 'function';
+  const ON_KEY = 'hg-nighttalk-' + CLUB;
+  const SHORT_KEY = 'hg-nighttalk-short-' + CLUB;
+  const AUTOLOCK = ' If your screen goes dark, set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while you race.';
+
+  let on = false, timeOnly = false, unlocked = false;
+  try {
+    on = canSpeak && localStorage.getItem(ON_KEY) === '1';
+    timeOnly = localStorage.getItem(SHORT_KEY) === '1';
+  } catch (e) { /* off, and full calls */ }
+
+  // Which car's laps were last counted, how many, and the first of them.
+  let heardTag = '', heardLaps = 0, firstLap = 0;
+  // The screen wake lock: held, being asked for, and whether the phone gave one.
+  let lock = null, asking = false, awake = null;
+  let reading = false;
+
+  function save(key, yes) {
+    try { localStorage.setItem(key, yes ? '1' : '0'); } catch (e) { /* this visit only */ }
+  }
+
+  function speak(text) {
+    if (!canSpeak) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.1;
+      window.speechSynthesis.speak(u);
+    } catch (e) { /* a phone that will not talk says nothing */ }
+  }
+
+  function hush() {
+    lapVoice.stop();
+    try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+  }
+
+  // A call in the lap voice's clips, or the phone's voice - see LAPVOICE_JS.
+  function call(parts) {
+    lapVoice.say(parts, speak);
+  }
+
+  function wake() {
+    lapVoice.unlock();
+    lapVoice.whenReady(drawLive);
+  }
+
+  // Their cars as the laptop sent them, tags checked to the laptop's shape.
+  function cars() {
+    const listed = live && Array.isArray(live.cars) ? live.cars : [];
+    return listed.filter((c) => c && typeof c === 'object' && typeof c.tag === 'string' && /^[0-9a-f]{16}$/.test(c.tag));
+  }
+
+  function ready() {
+    return canSpeak && cars().length > 0;
+  }
+
+  function stayAwake() {
+    if (!on || !unlocked || lock !== null || asking || document.hidden) return;
+    const wl = navigator.wakeLock;
+    if (!wl || typeof wl.request !== 'function') { awake = false; return; }
+    asking = true;
+    try {
+      wl.request('screen').then((got) => {
+        asking = false;
+        if (!on) { try { got.release(); } catch (e) { /* gone already */ } return; }
+        lock = got; awake = true;
+        if (got && typeof got.addEventListener === 'function') got.addEventListener('release', () => { lock = null; });
+      }, () => { asking = false; awake = false; });
+    } catch (e) { asking = false; awake = false; }
+  }
+
+  function letSleep() {
+    try { if (lock !== null) lock.release(); } catch (e) { /* gone already */ }
+    lock = null; awake = null;
+  }
+
+  function gapWords(gap) {
+    const t = String(gap || '').trim();
+    const laps = /^\\+?(\\d+)\\s*L(aps?)?$/i.exec(t);
+    if (laps) return laps[1] + (laps[1] === '1' ? ' lap' : ' laps') + ' behind';
+    const secs = /^\\+(\\d+([.,]\\d+)?)s?$/.exec(t);
+    return secs ? secs[1].replace(',', '.') + ' seconds behind' : '';
+  }
+
+  // The gap to the car ahead, as the board wrote it: the laptop's own figure on the row, else the
+  // club's Interval column, else Gap to P1 for the car in second.
+  function gapAhead(state, row, pos) {
+    if (typeof row.ahead === 'string' && row.ahead !== '') return row.ahead;
+    const columns = Array.isArray(state.columns) ? state.columns.map((c) => String(c)) : [];
+    let at = columns.findIndex((c) => /^interval$/i.test(c));
+    if (at < 0 && pos === 2) at = columns.findIndex((c) => /^gap/i.test(c));
+    const cell = at >= 0 && Array.isArray(row.cells) ? row.cells[at] : null;
+    return cell && typeof cell === 'object' ? String(cell.text || '') : '';
+  }
+
+  // "0.2 under target", "0.35 off target", "on target" - or nothing with no target.
+  function targetWords(last, target) {
+    if (!(typeof target === 'number' && target > 0)) return '';
+    const off = last - target;
+    if (Math.abs(off) < 5) return 'on target';
+    const n = Number((Math.abs(off) / 1000).toFixed(2));
+    return (n >= 1 ? n.toFixed(2) : String(n)) + (off < 0 ? ' under target' : ' off target');
+  }
+
+  function take(state) {
+    if (!on || !unlocked) { heardTag = ''; return; }
+
+    const mineCars = cars();
+    const rows = Array.isArray(state && state.standings) ? state.standings : [];
+    const mine = rows.filter((r) => r && typeof r === 'object' && typeof r.tag === 'string'
+      && mineCars.some((c) => c.tag === r.tag));
+
+    // Not on track - or, somehow, two of their cars at once: says nothing.
+    if (mine.length !== 1) return;
+
+    const row = mine[0];
+    const car = mineCars.find((c) => c.tag === row.tag);
+    const laps = (Array.isArray(row.laps) ? row.laps : []).filter((v) => typeof v === 'number' && v > 0);
+    const count = laps.length;
+    const first = count > 0 ? laps[0] : 0;
+
+    if (heardTag !== row.tag || count < heardLaps || (heardLaps > 0 && first !== firstLap)) {
+      heardTag = row.tag; heardLaps = count; firstLap = first;
+      return;
+    }
+
+    if (count === heardLaps) return;
+    heardLaps = count; firstLap = first;
+
+    const last = laps[count - 1];
+    const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
+    const parts = [{ text: lvTimeText(last), clips: lvTime(last) }];
+    if (count > 1 && last <= best) parts.push({ text: 'best lap', clips: ['best'] });
+    const target = targetWords(last, car && car.target);
+    if (target) parts.push({ text: target, clips: lvTarget(last, car.target) });
+
+    if (!timeOnly) {
+      const pos = rows.indexOf(row) + 1;
+      parts.unshift({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
+      parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
+      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
+      const gap = gapWords(raw);
+      if (gap) parts.push({ text: gap, clips: lvGap(raw) });
+      lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
+    } else {
+      lapVoice.warm(lvAhead(count + 1, last));
+    }
+
+    call(parts);
+  }
+
+  async function read() {
+    if (reading) return;
+    reading = true;
+    try {
+      const a = await grab('/snapshot/state', 5000);
+      if (a && a.body && a.body.body) take(a.body.body);
+    } catch (e) {
+      // A read that failed is tried again in a second; nothing is lost,
+      // because the next one still has every lap.
+    } finally {
+      reading = false;
+    }
+  }
+
+  function tick() {
+    if (!on || !unlocked || document.hidden) return;
+    if (!ready()) { if (lock !== null) letSleep(); return; }
+    stayAwake();
+    read();
+  }
+
+  function toggle() {
+    if (on && !unlocked) {
+      unlocked = true; heardTag = '';
+      wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); drawLive();
+      return;
+    }
+    unlocked = true;
+    on = !on;
+    save(ON_KEY, on);
+    heardTag = '';
+    if (on) { wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); } else { hush(); letSleep(); }
+    drawLive();
+  }
+
+  // Its part of the Right now card, or null when there is nothing to read out.
+  function part() {
+    if (!ready()) return null;
+
+    const p = el('div', 'lc-part nt-ears');
+    p.appendChild(el('b', '', 'Lap times in my ear'));
+    const b = tapButton(!on ? 'Read out my laps' : unlocked ? 'Reading out your laps - tap to stop' : 'Tap to resume your lap times',
+      'go quiet' + (on && unlocked ? ' on' : ''), toggle);
+    b.id = 'nt-laptalk';
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    p.appendChild(b);
+
+    const row = el('label', 'nt-short');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.id = 'nt-lapshort';
+    box.checked = timeOnly;
+    box.addEventListener('change', () => { timeOnly = !!box.checked; save(SHORT_KEY, timeOnly); });
+    row.appendChild(box);
+    row.appendChild(el('span', '', 'Time only'));
+    p.appendChild(row);
+
+    // The lap voice's clips or the phone's own voice, once the relay says it has clips.
+    if (lapVoice.has()) {
+      const voiceRow = el('label', 'nt-short');
+      const phoneBox = document.createElement('input');
+      phoneBox.type = 'checkbox';
+      phoneBox.id = 'nt-lapphone';
+      phoneBox.checked = lapVoice.phone();
+      phoneBox.addEventListener('change', () => { lapVoice.setPhone(!!phoneBox.checked); });
+      voiceRow.appendChild(phoneBox);
+      voiceRow.appendChild(el('span', '', 'Phone voice'));
+      p.appendChild(voiceRow);
+    }
+
+    p.appendChild(el('div', 'when', !on
+      ? 'Your phone reads out each of your laps as you race: lap, time, best lap, your target when one is set, place and gap. Keep this page open with the screen on.'
+      : !unlocked
+        ? 'Tap anywhere to start the voice again.'
+        : 'Reading out your laps, a second or two after each one.'
+          + (awake === true ? ' Your screen stays on while this is on.' : awake === false ? AUTOLOCK : '')));
+    return p;
+  }
+
+  if (canSpeak) {
+    setInterval(tick, 1000);
+
+    // Any tap lets a page that was on before a reload speak again.
+    document.addEventListener('click', (e) => {
+      if (on && !unlocked && !(e && e.target && e.target.id === 'nt-laptalk')) {
+        unlocked = true; heardTag = '';
+        speak(' '); wake(); stayAwake();
+        setTimeout(drawLive, 0);
+      }
+    }, true);
+
+    // A phone lets go of the wake lock when the page is hidden.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) { lock = null; stayAwake(); }
+    });
+  }
+
+  return {
+    part: part,
+    talking: () => on && unlocked,
+  };
+})();
 
 // The transponder check: '' (not running), 'waiting', 'seen' or 'missed'.
 const check = { state: '', pressed: 0, baseline: '', until: 0, words: '' };
@@ -5696,6 +7247,7 @@ function liveCard() {
       const eta = el('div', 'lc-eta', n.now === true ? '' : etaWords(n.eta, relayNow()));
       eta.id = 'lc-eta';
       card.appendChild(eta);
+      const go = goLink(n); if (go) card.appendChild(go);
     } else {
       card.appendChild(el('div', '', 'None of your races is in the next few on the running order.'));
     }
@@ -5707,18 +7259,21 @@ function liveCard() {
 
     const m = live.marshal;
 
+    // On one line (29 Oct 2026, My Night's second round): the duty, the post
+    // and how far off it is.
     if (m && typeof m === 'object' && typeof m.race === 'string' && m.race !== '') {
-      const duty = el('div', 'lc-part');
-      duty.appendChild(el('b', '', 'Your marshal duty'));
-      duty.appendChild(el('div', '', m.race + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : '')));
-      duty.appendChild(el('div', 'when', marshalWhen(m.away)));
+      const duty = el('div', 'lc-part lc-duty');
+      duty.appendChild(el('b', '', 'Your marshal duty: '));
+      duty.appendChild(el('span', '', m.race + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : '')));
+      duty.appendChild(el('span', 'when', ' · ' + marshalWhen(m.away)));
       card.appendChild(duty);
     }
   }
 
-  // Check-in and the transponder side by side (28 Oct 2026, My Night laid
-  // out to be found): two race-day jobs, one row on a wide screen, one
-  // under the other on a phone.
+  // The race-day jobs in one row (28 Oct 2026, My Night laid out to be
+  // found; lap times and the battery pack joined them on 29 Oct): check-in,
+  // the transponder, lap times in my ear and the pack in the car - side by
+  // side on a wide screen, one under the other on a phone.
   const jobs = el('div', 'lc-row');
 
   if (ci.shown) {
@@ -5740,6 +7295,18 @@ function liveCard() {
     if (check.state !== '') tp.appendChild(el('div', 'lc-check ' + check.state, check.words));
     if (check.state !== 'waiting') tp.appendChild(tapButton('Check my transponder', 'go quiet', startCheck));
     jobs.appendChild(tp);
+
+    const ears = nightTalk.part();
+    if (ears) jobs.appendChild(ears);
+
+    // The pack is a race-night job, so on race night it sits here rather
+    // than in Your details. The same element every time the card redraws,
+    // so a pack half picked is still picked after the next poll.
+    const pack = asksOpen && me ? packBox() : null;
+    if (pack) {
+      pack.className = 'su lc-part lc-pack';
+      jobs.appendChild(pack);
+    }
   }
 
   if (jobs.children.length > 0) card.appendChild(jobs);
@@ -5757,7 +7324,17 @@ function drawLive() {
 
   if (live || ci.shown) lvBox.appendChild(liveCard());
   if (firstNight) lvBox.appendChild(firstNightGuide());
+
+  // The jump bar has a Right now button only while there is a card.
+  const now = !!(live || ci.shown);
+  if (now !== jumpNow) {
+    jumpNow = now;
+    drawJump();
+  }
 }
+
+// Whether the jump bar was last drawn with the Right now card there.
+let jumpNow = false;
 
 // The minutes on the card, kept counting between polls.
 function tickClock() {
@@ -6047,6 +7624,8 @@ function drawJump() {
   at.textContent = '';
   const names = { 'n-races': 'Races', 'n-how': 'Report card', 'n-score': 'Driver score', 'n-prog': 'Progress', 'n-calls': 'Race calls' };
   const list = jumps.map((id) => [id, names[id] || (carNames[id] || '')]).filter((x) => x[1] !== '');
+  // Back up to the next race, which is what race night is for (29 Oct 2026).
+  if (lvBox && lvBox.children && lvBox.children.length > 0 && (live || ci.shown)) list.unshift(['lv', 'Right now']);
   if (ydBox && ydBox.children && ydBox.children.length > 0) list.push(['yd', 'Your details']);
 
   if (list.length < 2) return;
@@ -6715,9 +8294,13 @@ function drawAsks(message) {
 
   // The battery pack first, because it changes on race night; the request
   // to change how they are called folded under it (28 Oct 2026), opened by
-  // itself when there is something to say about it.
-  const packs = packPart();
-  if (packs) sec.appendChild(packs);
+  // itself when there is something to say about it. On race night the pack
+  // is in the Right now card instead (29 Oct 2026).
+  const packs = live ? null : packBox();
+  if (packs) {
+    packs.className = 'su';
+    sec.appendChild(packs);
+  }
 
   const change = el('details', 'yd-change');
   change.open = view.details || !!message;
@@ -6986,6 +8569,21 @@ function detailsForm(message) {
   return form;
 }
 
+// The pack part, built once for the packs the desk last sent and moved
+// between the Right now card and Your details rather than built again, so
+// what they have picked and what the desk said survive a redraw.
+let packNode = null;
+let packFor = '';
+
+function packBox() {
+  const key = JSON.stringify(me && me.packs ? me.packs : null);
+  if (packNode === null || key !== packFor) {
+    packNode = packPart();
+    packFor = key;
+  }
+  return packNode;
+}
+
 // Which battery pack they are running, from the packs the desk knows are
 // theirs. The badge is enough for this one.
 function packPart() {
@@ -7206,9 +8804,58 @@ async function load() {
   refreshAsks();
   startLive();
   loadCheckIn();
+  meRemembered(CODE);
 }
 
 load();
+`;
+
+/**
+ * Remembering the driver on the night page (29 Oct 2026, relay navigation
+ * round 2): once the relay has answered this code with a night, this phone
+ * keeps it (meRemember, in the shared script) and the page offers to forget
+ * it. Kept apart from NIGHT_JS so the night itself does not change.
+ */
+const NIGHT_ME_JS = `
+function meRemembered(code) {
+  meRemember(code);
+  const out = document.getElementById('meout');
+  if (out && meCode() === code) out.hidden = false;
+}
+
+(function () {
+  const link = document.getElementById('meoutlink');
+  if (!link) return;
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    meForget();
+    // "Your details" is signed out with it, so a borrowed phone keeps nothing.
+    try { sessionStorage.removeItem('hg-night-pass-' + CLUB); } catch (err) { /* nothing was kept */ }
+    try { location.assign('/c/' + encodeURIComponent(CLUB) + '/mynight'); } catch (err) { location.href = '/c/' + encodeURIComponent(CLUB) + '/mynight'; }
+  });
+})();
+`;
+
+/**
+ * WATCH LIVE AND THE RUNNING ORDER (29 Oct 2026, relay navigation round 3).
+ * The Right now card says when their race is on track or next, but the
+ * place to watch it, or to see what runs before it, was a tab away. One
+ * link under the call-up: Watch live while their race is on track, See
+ * the running order while it is next (staged included). Nothing for a race
+ * further off. Kept apart from NIGHT_JS - liveCard calls it with one line -
+ * so the night page's own script is left as it was.
+ */
+const NIGHT_GO_JS = `
+function goLink(n) {
+  if (!n || typeof n !== 'object') return null;
+  const on = n.now === true;
+  if (!on && num(n.away) !== 0) return null;
+  const p = el('p', 'lc-go');
+  const a = el('a', 'more', on ? 'Watch live' : 'See the running order');
+  a.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + (on ? '/live' : '/schedule'));
+  p.appendChild(a);
+  return p;
+}
 `;
 
 /**
@@ -7229,8 +8876,11 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // "yd" is "Your details" (22 Oct 2026, driver experience, RP2), under
     // the night and outside it, so a redraw of the night never wipes a
     // half-typed change; empty unless the club is taking requests.
-    body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>',
-    script: LAPS_JS + NIGHT_JS,
+    // "meout" is Sign out on this phone (29 Oct 2026, relay navigation
+    // round 2), shown once this phone remembers the night it is showing.
+    body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
+      '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
+    script: LAPS_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
     noindex: true,
   }, context);
 }
@@ -7271,6 +8921,14 @@ export function nightPage(club: string, clubName: string, context: PageContext =
 const MYNIGHT_JS = `
 const box = document.getElementById('mn');
 const NIGHT_PASS_KEY = 'hg-night-pass-' + CLUB;
+
+// A driver this phone remembers goes straight to their night (29 Oct 2026,
+// relay navigation round 2). replace, so Back does not land here again.
+const REMEMBERED = meCode();
+if (REMEMBERED) {
+  const there = '/c/' + encodeURIComponent(CLUB) + '/night#d=' + REMEMBERED;
+  try { location.replace(there); } catch (e) { location.href = there; }
+}
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -7315,7 +8973,7 @@ function trouble(a) {
 function draw(message) {
   box.textContent = '';
   const part = el('div', 'su');
-  part.appendChild(el('p', 'when', 'Type the personal check-in PIN the club emailed you, and your own night opens: your races, your report card and, once you are racing, your live card.'));
+  part.appendChild(el('p', 'when', 'Type the personal check-in PIN the club emailed you. It checks you in for tonight and opens your own night: your races, your report card and, once you are racing, your live card.'));
 
   const label = el('label', 'f', 'Your personal PIN');
   const input = document.createElement('input');
@@ -7330,7 +8988,7 @@ function draw(message) {
   const said = el('p', 'note bad', message || '');
   said.setAttribute('role', 'status');
 
-  const button = el('button', 'go', 'Open my night');
+  const button = el('button', 'go', 'Check in');
   button.type = 'button';
   button.addEventListener('click', async () => {
     const p = String(input.value || '').trim();
@@ -7352,8 +9010,25 @@ function draw(message) {
     const code = b.mode === 'racer' && b.driver && typeof b.driver.id === 'string' && /^[0-9a-f]{20}$/.test(b.driver.id) ? b.driver.id : '';
 
     if (a !== null && a.status === 200 && code !== '') {
-      if (typeof b.pass === 'string' && b.pass !== '') keepPass(b.pass);
-      said.textContent = 'Opening your night\u2026';
+      const pass = typeof b.pass === 'string' ? b.pass : '';
+      if (pass !== '') keepPass(pass);
+
+      // A RIGHT PIN CHECKS THEM IN (30 Oct 2026, asked for by Asher: "On
+      // the relays me tab; entering in a correct pin should check you in.
+      // No need to link to the separate checking page"). PIN sign-in only
+      // answers while online check-in is open, so the same tap the check-in
+      // page makes goes with the pass the PIN just earned. A driver already
+      // checked in is left as they are. A tap that does not go through
+      // still opens their night, whose own Check in button can try again.
+      said.textContent = 'Checking you in\u2026';
+      let inNow = b.driver.checkedIn === true;
+      if (!inNow) {
+        let t = null;
+        try { t = await post('tap', { id: code, pass: pass, wanted: true }); } catch (e) { t = null; }
+        inNow = t !== null && t.status === 200 && t.body.checkedIn === true;
+      }
+
+      said.textContent = inNow ? 'You are checked in. Opening your night\u2026' : 'Opening your night\u2026';
       go('/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
       return;
     }
@@ -7364,10 +9039,12 @@ function draw(message) {
   part.appendChild(button);
   part.appendChild(said);
   part.appendChild(el('p', 'when', 'No personal PIN? Open your night with the link on your check-in badge or in the club\\'s email - or ask at the timing desk.'));
+  part.appendChild(el('p', 'when', 'This phone remembers you once your night opens, until you sign out at the bottom of it.'));
   box.appendChild(part);
 }
 
-draw('');
+if (REMEMBERED) box.textContent = 'Opening your night\u2026';
+else draw('');
 `;
 
 export function myNightPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
@@ -7376,7 +9053,9 @@ export function myNightPage(club: string, clubName: string, context: PageContext
     clubName,
     active: "mynight",
     heading: "My night",
-    sub: "Your own races from the timing desk - opened with your personal PIN.",
+    sub: "Check in and see your own races from the timing desk - with your personal PIN.",
+    // No link to the check-in page (30 Oct 2026, asked for by Asher): a
+    // right PIN here checks the driver in itself.
     body: '<div id="mn"><p class="note">Loading&hellip;</p></div>',
     script: MYNIGHT_JS,
     noindex: true,
@@ -8450,9 +10129,11 @@ export function managePage(club: string, clubName: string, context: PageContext 
   :root { --on-tint: color-mix(in srgb, var(--primary) 16%, var(--surface)); }
 }
 * { box-sizing: border-box; }
+/* Clear of a phone's status bar, as on the club's pages (see CLEAR OF THE
+   CLOCK there): viewport-fit=cover draws the page under it otherwise. */
 body {
   margin: 0;
-  padding: 0 0 60px;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 60px env(safe-area-inset-left, 0px);
   background: var(--bg);
   color: var(--text);
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -8496,7 +10177,7 @@ html.light body:not(.signin) .msg { box-shadow: 0 8px 28px rgba(17, 21, 28, 0.18
                padding: 8px 14px; border: 0; background: none; box-shadow: none; }
 
 .tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border);
-        overflow-x: auto; position: sticky; top: 0; z-index: 2; }
+        overflow-x: auto; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; }
 .navbtn { flex: 1 0 auto; padding: 13px 8px; background: none; border: 0; color: var(--muted);
           font-weight: 700; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase;
           cursor: pointer; font-family: inherit; border-bottom: 2px solid transparent; white-space: nowrap; }
@@ -8587,7 +10268,10 @@ ${overrides}
 <body data-club="${safeClub}">
 <div class="topbar">
   <div><span class="clubname">${name}</span><span class="clubname role">Manager</span></div>
-  <button class="linkbtn" id="btnSignOut" type="button" style="display:none">Sign out</button>
+  <div>
+    <a class="linkbtn" href="/c/${safeClub}">Club page</a>
+    <button class="linkbtn" id="btnSignOut" type="button" style="display:none">Sign out</button>
+  </div>
 </div>
 <form id="signinForm" class="wrap" method="post">
   <label for="pin">Manager PIN</label>
@@ -8653,10 +10337,6 @@ ${overrides}
  * their own: its name, its icon, and opening full-screen on the club's
  * home page rather than as another browser tab.
  */
-function iconSize(look: Look): string {
-  const width = look.logo === undefined ? 512 : pngWidth(look.logo);
-  return width > 0 ? `${width}x${width}` : "any";
-}
 
 export function manifest(club: string, clubName: string, look: Look): string {
   const base = `/c/${encodeURIComponent(club)}`;
@@ -8672,13 +10352,118 @@ export function manifest(club: string, clubName: string, look: Look): string {
     display: "standalone",
     background_color: look.themeColor,
     theme_color: look.themeColor,
-    // The logo's real size when there is one - it is 384 or 256 across -
-    // and the drawn flag's 512 otherwise. A manifest that claims a size
-    // its icon is not is one a browser may refuse to install.
-    // Versioned like the pages' links (see Look.iconVersion): an installed
-    // app picks up a new logo instead of keeping the old icon.
-    icons: [{ src: `${base}/icon.png?v=${look.iconVersion}`, sizes: iconSize(look), type: "image/png", purpose: "any" }],
+    // HeatCaller's sun for every club (sun.ts), always this size. A
+    // manifest that claims a size its icon is not is one a browser may
+    // refuse to install. Versioned like the pages' links (see
+    // Look.iconVersion): an installed app picks up a redrawn icon instead
+    // of keeping the old one.
+    icons: [{ src: `${base}/icon.png?v=${look.iconVersion}`, sizes: `${SUN_ICON_SIZE}x${SUN_ICON_SIZE}`, type: "image/png", purpose: "any" }],
   });
+}
+
+/**
+ * A club's "that page isn't here" (29 Oct 2026, relay navigation round 1).
+ *
+ * WHY: an address under a club that is not one of its pages - an old
+ * podium-video QR code, a link cut short in a chat, a typo - used to get
+ * the API's own answer, a line of JSON, with no way back. Now it is a page
+ * in the club's colours with the club's tabs, so whoever landed on it can
+ * carry on. Still a 404, and noindex, so nothing is told it exists.
+ */
+export function missingPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+  const base = `/c/${escapeHtml(club)}`;
+
+  return shell({
+    club,
+    clubName,
+    active: "missing",
+    heading: "Not found",
+    sub: "That page isn't here. It may have moved, or the link was cut short.",
+    body: '<div class="tiles">' +
+      `<a class="tile" href="${base}"><b>Home</b><span>Everything at the club</span></a>` +
+      `<a class="tile" href="${base}/live"><b>Live</b><span>The race as it runs</span></a>` +
+      `<a class="tile" href="${base}/results"><b>Results</b><span>Every session</span></a>` +
+      "</div>",
+    script: "",
+    noindex: true,
+  }, context);
+}
+
+/**
+ * The relay's own address, and a club address that is no club (29 Oct
+ * 2026, relay navigation round 1): a plain notice saying what this is and
+ * where HeatCaller lives, rather than a line of JSON. Not any club's look
+ * - there is no club to take it from - and no script.
+ */
+export function relayNoticePage(heading: string, text: string): string {
+  return heatcallerNotice(`${escapeHtml(heading)} - HeatCaller`, `<p class="wordmark hcword">Heat<span class="hcc">Caller</span></p>
+  <h1>${escapeHtml(heading)}</h1>
+  <p>${escapeHtml(text)}</p>`);
+}
+
+/**
+ * HeatCaller's own pages in full synthwave (30 Oct 2026, relay branding,
+ * Asher's pick): the relay's own address, an address that is no club,
+ * and a paused club - the pages with no club's look to borrow, or none
+ * running. A sky over the logo's striped sun setting into its grid
+ * floor, and the words above it. Pure HTML and CSS, no script. title and
+ * inner are already escaped.
+ */
+function heatcallerNotice(title: string, inner: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0D0820">
+<title>${title}</title>
+<style>
+  html { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; position: relative; overflow-x: hidden; background: #140829; color: #F4EDFF;
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .sky { position: absolute; left: 0; right: 0; top: 0; height: 62vh;
+         background: linear-gradient(#0D0820 0%, #241046 55%, #4A1470 100%); }
+  .sun { position: absolute; left: 50%; top: calc(62vh - min(58vw, 260px) * 0.77); width: min(58vw, 260px);
+         transform: translateX(-50%); filter: drop-shadow(0 0 30px rgba(255, 95, 162, 0.55)); }
+  .floor { position: absolute; left: 0; right: 0; top: 62vh; bottom: 0; width: 100%; height: 38vh; min-height: 200px; }
+  main { position: relative; max-width: 32rem; margin: 0 auto; padding: 10vh 24px 0; text-align: center; }
+  .hcword { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
+            font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+  .hcword .hcc { color: #FF2E88; }
+  .wordmark { margin: 0 0 18px; font-size: 2.6rem; line-height: 1; text-shadow: 0 0 18px rgba(255, 46, 136, 0.55); }
+  h1 { font-size: 1.5rem; margin: 0 0 .5rem; }
+  p { margin: 0 0 1rem; color: #C9B8F0; }
+  .home { position: absolute; left: 0; right: 0; bottom: 28px; text-align: center; }
+  a { color: #2BE4F0; font-weight: 600; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="sky"></div>
+<svg class="sun" viewBox="0 0 220 170" aria-hidden="true">
+  <defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FFE9A0"/><stop offset=".45" stop-color="#FFB347"/><stop offset=".85" stop-color="#FF5FA2"/>
+  </linearGradient></defs>
+  <circle cx="110" cy="110" r="105" fill="url(#s)"/>
+  <path d="M0 118h220v5H0zM0 134h220v7H0zM0 152h220v9H0z" fill="#3A1060"/>
+</svg>
+<svg class="floor" viewBox="0 0 380 290" preserveAspectRatio="none" aria-hidden="true">
+  <g fill="none" stroke="#FF2E9A" stroke-width="1.5">
+    <line x1="0" y1="1" x2="380" y2="1" stroke="#FFD9F0" stroke-width="3"/>
+    <line x1="0" y1="12" x2="380" y2="12"/><line x1="0" y1="30" x2="380" y2="30"/><line x1="0" y1="58" x2="380" y2="58"/>
+    <line x1="0" y1="100" x2="380" y2="100"/><line x1="0" y1="165" x2="380" y2="165"/><line x1="0" y1="260" x2="380" y2="260"/>
+    <line x1="190" y1="1" x2="-400" y2="290"/><line x1="190" y1="1" x2="-160" y2="290"/><line x1="190" y1="1" x2="20" y2="290"/>
+    <line x1="190" y1="1" x2="190" y2="290"/><line x1="190" y1="1" x2="360" y2="290"/><line x1="190" y1="1" x2="540" y2="290"/>
+    <line x1="190" y1="1" x2="780" y2="290"/>
+  </g>
+</svg>
+<main>
+  ${inner}
+</main>
+<p class="home"><a href="https://heatcaller.com">heatcaller.com</a></p>
+</body>
+</html>
+`;
 }
 
 /**
@@ -8688,38 +10473,16 @@ export function manifest(club: string, clubName: string, look: Look): string {
  * Deliberately not the club's usual shell. The shell carries the tabs,
  * the live channels and the club's script, and every one of those would
  * lead somewhere that is also paused. No script at all, so the page's
- * nonce goes unused; the club's own background colour so a regular still
- * recognises whose page it is.
+ * nonce goes unused. The club's name says whose page it is; the look is
+ * HeatCaller's own since 30 Oct 2026 (see heatcallerNotice).
  */
-export function pausedPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+export function pausedPage(club: string, clubName: string, _context: PageContext = DEFAULT_CONTEXT): string {
   const name = escapeHtml(clubName.length > 0 ? clubName : club);
-  const look = context.look;
-  const background = escapeHtml(look.themeColor);
-  const ink = look.light ? "#1a1a1a" : "#f2f2f2";
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
-<meta name="theme-color" content="${background}">
-<title>${name} - paused</title>
-<style>
-  html { color-scheme: ${look.light ? "light" : "dark"}; }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: ${background}; color: ${ink};
-         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 32rem; padding: 2rem 1.5rem; text-align: center; }
-  h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
-  p { margin: 0; opacity: .8; }
-</style>
-</head>
-<body>
-<main>
+  // In HeatCaller's own look since 30 Oct 2026 (relay branding): while a
+  // club is paused there is no club running these pages to take a look
+  // from, and its name still says whose address this is.
+  return heatcallerNotice(`${name} - paused`, `<p class="wordmark hcword">Heat<span class="hcc">Caller</span></p>
   <h1>${name}</h1>
-  <p>This club's pages are paused for now. Results, schedules and live timing will be back here when the club returns.</p>
-</main>
-</body>
-</html>
-`;
+  <p>This club's pages are paused for now. Results, schedules and live timing will be back here when the club returns.</p>`);
 }

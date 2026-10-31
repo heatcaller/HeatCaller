@@ -302,6 +302,12 @@ public partial class MainForm
                 : null,
             FirstNight = t => DriverIsOnFirstNight(t, nowUtc, nowLocal),
             AsksOf = asksFor,
+
+            // 29 Oct 2026, spoken laps on My Night: the driver's row tags on
+            // the public board, and their target laps, so their own page
+            // can read their laps out.
+            RowTagOf = _webServer.RelayRowTag,
+            TargetOf = DriverTargets.TargetMs,
         });
     }
 
