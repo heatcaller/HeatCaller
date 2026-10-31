@@ -274,17 +274,21 @@ describe("the night before: the home page's own slot", () => {
     await harness.close();
   });
 
-  it("carries the slot and fetches the snapshot into it", async () => {
+  // Round 6 (30 Oct 2026): the preview is Home's main card, drawn into
+  // "now" in place of "No racing right now", rather than a slot of its own.
+  it("fetches the snapshot into Home's main card", async () => {
     const html = (await call(harness, "GET", "/c/acme-rc")).text;
 
-    assert.match(html, /id="preview"/);
+    assert.match(html, /id="now"/);
     assert.match(html, /\/snapshot\/preview/);
+    assert.match(html, /else if \(coming\) \{\s*now\.innerHTML = coming;/);
   });
 
-  it("starts with the slot hidden, so a club with no preview has no empty heading", async () => {
+  it("has no heading of its own, so a club with no preview has no empty one", async () => {
     const html = (await call(harness, "GET", "/c/acme-rc")).text;
 
-    assert.match(html, /id="preview" style="display:none"/);
+    assert.doesNotMatch(html, /The night before/);
+    assert.doesNotMatch(html, /id="preview"/);
   });
 
   it("still carries exactly one script block", async () => {

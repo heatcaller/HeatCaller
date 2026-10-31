@@ -26,13 +26,13 @@ describe("relay navigation, round 5: Standings, Tracks and Achievements under Re
   const pages: [string, string, string][] = [
     ["results", resultsPage("acme-rc", "Acme RC"), "Sessions"],
     ["standings", standingsPage("acme-rc", "Acme RC"), "Standings"],
-    ["tracks", tracksPage("acme-rc", "Acme RC"), "Tracks"],
     ["badges", badgesPage("acme-rc", "Acme RC"), "Achievements"],
   ];
 
   for (const [name, html, label] of pages) {
     it(`gives ${name} Results' row of tabs, marks ${label}, and lights Results on the bar`, () => {
-      assert.deepEqual(subtabs(html), { labels: ["Sessions", "Standings", "Tracks", "Achievements"], current: label });
+      // Tracks left the row in round 6 (30 Oct 2026) for Home.
+      assert.deepEqual(subtabs(html), { labels: ["Sessions", "Standings", "Achievements"], current: label });
       assert.equal(litTab(html), "Results");
     });
   }
@@ -40,13 +40,13 @@ describe("relay navigation, round 5: Standings, Tracks and Achievements under Re
   it("links each of Results' tabs to its page, at the address it always had", () => {
     const html = resultsPage("acme-rc", "Acme RC");
 
-    for (const path of ["results", "standings", "tracks", "badges"]) {
+    for (const path of ["results", "standings", "badges"]) {
       assert.match(html, new RegExp(`<nav class="subtabs"[\\s\\S]*?href="/c/acme-rc/${path}"`));
     }
   });
 
   it("draws no Results row anywhere else", () => {
-    for (const html of [homePage("acme-rc", "Acme RC"), livePage("acme-rc", "Acme RC")]) {
+    for (const html of [homePage("acme-rc", "Acme RC"), livePage("acme-rc", "Acme RC"), tracksPage("acme-rc", "Acme RC")]) {
       assert.doesNotMatch(html, /class="subtabs"/);
     }
   });
@@ -70,7 +70,9 @@ describe("relay navigation, round 5: Home without Explore", () => {
     assert.doesNotMatch(home, /class="tile"/);
   });
 
-  it("says where results, standings, tracks and achievements are when nothing is on", () => {
-    assert.match(homePage("acme-rc", "Acme RC"), /Results, standings, tracks and achievements are all under Results\./);
+  // Round 6 (30 Oct 2026): "No racing right now" says when the club races
+  // instead, from the "New here?" lines, and the last night follows it.
+  it("no longer points away from Home when nothing is on", () => {
+    assert.doesNotMatch(homePage("acme-rc", "Acme RC"), /are all under Results/);
   });
 });
