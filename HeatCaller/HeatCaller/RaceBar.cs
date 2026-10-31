@@ -17,17 +17,26 @@ internal enum RaceBarButtons
     Checkered = 1 << 6,
     Reset = 1 << 7,
 
-    // After the flag (25 Oct 2026) - the mockup's After row. Not flags, and
-    // no key of their own: they do what the Next Up bar and Race History do.
-
-    /// <summary>The next race in the program - Start Next on the Next Up bar.</summary>
-    NextHeat = 1 << 8,
-
-    /// <summary>The race just run, in Race History.</summary>
-    Results = 1 << 9,
+    // After the flag (25 Oct 2026) - the mockup's After row. Not flags.
+    //
+    // 1 << 8 was Next Heat and 1 << 9 Results, which left the row on 31 Oct
+    // 2026 (Asher: "you can remove the next heat button as the button above
+    // it and to the right does that now", and Results went to Race History
+    // as Edit Result does). Not reused.
 
     /// <summary>The race just run, in Race History, with Edit Result open.</summary>
     EditResult = 1 << 10,
+
+    // Between races (31 Oct 2026) - the announcer's after-race talk.
+
+    /// <summary>Skip: press for the next part of the show, hold for the end of it. F9.</summary>
+    Skip = 1 << 11,
+
+    /// <summary>Hold Talk: no talk between races until it is pressed again. F10.</summary>
+    HoldTalk = 1 << 12,
+
+    /// <summary>Call Up: the next race's drivers and marshals called now. F12.</summary>
+    CallUp = 1 << 13,
 }
 
 /// <summary>Where the race is, as the flag row names it at its left.</summary>
@@ -67,11 +76,14 @@ public enum RacePhase
 ///                      the race is green the buttons change to green,
 ///                      yellow, red, checkered, reset"); Green restarts the
 ///                      race after a yellow or a red.
-///   Finished           Next Heat, Results, Edit Result, Reset - the
-///                      mockup's After row (25 Oct 2026, Asher: "the mock up
-///                      had a different set up buttons for after a race").
-///                      Stage in place of Next Heat when the program has
-///                      nothing next (a Quick Race night), so the next race
+///   Finished           Skip, Hold Talk, Call Up, Edit Result, Reset -
+///                      the after-race talk and the race just run (31 Oct
+///                      2026: Next Heat left the row, Start Next on the Next
+///                      Up bar doing the same, and Results with it, Edit
+///                      Result going to the same place). With the talk
+///                      buttons switched off on the Announcer page, Edit
+///                      Result and Reset, with Stage when the program has
+///                      nothing next (a Quick Race night) so the next race
 ///                      can still be started from the row.
 ///                      Reset goes back to the set before the green.
 ///   Practice           nothing: practice is run from the Practice page,
@@ -91,9 +103,10 @@ internal static class RaceBar
     internal const int MostShown = 5;
 
     /// <summary>The buttons to show.</summary>
-    /// <param name="nextWaiting">Whether the program has something next for Next Heat to start - see RaceControlControl.UpdateNextUpBar.</param>
+    /// <param name="nextWaiting">Whether the program has something next for Start Next to start - see RaceControlControl.UpdateNextUpBar.</param>
+    /// <param name="talkButtons">Skip, Hold Talk and Call Up after the flag - the Announcer page's Between races tick.</param>
     internal static RaceBarButtons ButtonsFor(RaceState state, FlagState flag, bool practice, bool warmingUp,
-        bool nextWaiting = true)
+        bool nextWaiting = true, bool talkButtons = true)
     {
         if (practice)
         {
@@ -118,13 +131,18 @@ internal static class RaceBar
 
             // After the flag: what is done with the race just run, and the
             // way on to the next one.
-            RaceState.Finished => (nextWaiting ? RaceBarButtons.NextHeat : RaceBarButtons.Stage)
-                                  | RaceBarButtons.Results | RaceBarButtons.EditResult | RaceBarButtons.Reset,
+            RaceState.Finished => talkButtons
+                ? AfterTheFlag
+                : (nextWaiting ? RaceBarButtons.None : RaceBarButtons.Stage) | RaceBarButtons.EditResult | RaceBarButtons.Reset,
 
             // Idle - a cold start, or after a Reset: the next race's buttons.
             _ => BeforeTheGreen,
         };
     }
+
+    /// <summary>The row after the flag: Skip, Hold Talk, Call Up, Edit Result, Reset.</summary>
+    internal const RaceBarButtons AfterTheFlag =
+        RaceBarButtons.Skip | RaceBarButtons.HoldTalk | RaceBarButtons.CallUp | RaceBarButtons.EditResult | RaceBarButtons.Reset;
 
     /// <summary>The row from a cold start until the race goes green: Stage, Countdown, Green, Reset.</summary>
     internal const RaceBarButtons BeforeTheGreen =
@@ -204,11 +222,21 @@ internal static class RaceBar
             held.Add("Reset");
         }
 
-        return held.Count switch
+        var hint = held.Count switch
         {
             0 => string.Empty,
             1 => $"{held[0]}: press and hold for a second. Everything else is one click.",
             _ => $"{string.Join(", ", held.Take(held.Count - 1))} and {held[^1]}: press and hold for a second. Everything else is one click.",
         };
+
+        // Skip is both: a click for the next part of the show, a hold for
+        // the end of it.
+        if (shown.HasFlag(RaceBarButtons.Skip))
+        {
+            hint = (hint.Length > 0 ? hint.Replace(" Everything else is one click.", string.Empty, StringComparison.Ordinal) + " " : string.Empty)
+                   + "Skip: click for the next part of the show, hold to end it.";
+        }
+
+        return hint;
     }
 }

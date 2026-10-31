@@ -82,7 +82,7 @@ public partial class RaceControlControl
 
         _flagRow.SetPhase(RaceBar.Word(phase), PhaseInk(phase));
 
-        var shown = RaceBar.ButtonsFor(state, flag, practice, warmingUp, _nextWaiting);
+        var shown = RaceBar.ButtonsFor(state, flag, practice, warmingUp, _nextWaiting, _settings.BetweenRacesFlagButtons);
 
         if (_barShown == shown)
         {
@@ -97,8 +97,9 @@ public partial class RaceControlControl
         ShowOnBar(_btnYellow, shown, RaceBarButtons.Yellow);
         ShowOnBar(_btnRed, shown, RaceBarButtons.Red);
         ShowOnBar(_btnCheckered, shown, RaceBarButtons.Checkered);
-        ShowOnBar(_btnBarNext, shown, RaceBarButtons.NextHeat);
-        ShowOnBar(_btnBarResults, shown, RaceBarButtons.Results);
+        ShowOnBar(_btnBarSkip, shown, RaceBarButtons.Skip);
+        ShowOnBar(_btnBarHoldTalk, shown, RaceBarButtons.HoldTalk);
+        ShowOnBar(_btnBarCallUp, shown, RaceBarButtons.CallUp);
         ShowOnBar(_btnBarEditResult, shown, RaceBarButtons.EditResult);
         ShowOnBar(_btnReset, shown, RaceBarButtons.Reset);
 
@@ -167,8 +168,18 @@ public partial class RaceControlControl
 
         var segment = SegmentOnAir();
 
+        // Between races, a held talk says so where the race director is
+        // looking (the plan's section 8), not only in the Broadcast window.
+        var talkHeldBetweenRaces = TalkHeld && _race.State is RaceState.Finished or RaceState.Idle;
+
         if (segment is null && playing.Length == 0 && !_onAirLive)
         {
+            if (talkHeldBetweenRaces)
+            {
+                _holdStrip.ShowWork(GapWords.TalkHeld, null, string.Empty, AppTheme.Warning);
+                return;
+            }
+
             _holdStrip.EndWork();
             return;
         }
@@ -177,8 +188,16 @@ public partial class RaceControlControl
             ? $"On air: {segment}"
             : _onAirLive ? "On air" : string.Empty;
 
-        _holdStrip.ShowWork(words, null, _onAirLive ? OnAirSkipNote : string.Empty, OnAirLiveCyan);
+        _holdStrip.ShowWork(words, null, _onAirLive ? OnAirSkipNote : SkipNote(segment), OnAirLiveCyan);
     }
+
+    /// <summary>
+    /// What Skip would skip, at the right of the On Air bar while the flag
+    /// row's Skip is showing and can act ("Skip: Race Recap") - so a click is
+    /// never a guess. Empty otherwise.
+    /// </summary>
+    private string SkipNote(string? segment) =>
+        segment is { Length: > 0 } && _btnBarSkip.Visible && _btnBarSkip.Enabled ? GapWords.SkipNote(segment) : string.Empty;
 
     /// <summary>
     /// The segment going out now, as the bar names it: the line being

@@ -378,6 +378,23 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     public event Action<bool>? HoldChanged;
 
     /// <summary>
+    /// Hold or release from somewhere other than this strip's own button -
+    /// the flag row's Hold Talk, F10 or the phone remote - so there is one
+    /// hold, not two that disagree.
+    /// </summary>
+    internal void SetHolding(bool holding)
+    {
+        if (_holding == holding)
+        {
+            return;
+        }
+
+        _holding = holding;
+        ShowHold();
+        HoldChanged?.Invoke(_holding);
+    }
+
+    /// <summary>
     /// Raised when the race director wants the last segment played again -
     /// a line talked over, a PA that cut out, a room that missed it.
     /// </summary>

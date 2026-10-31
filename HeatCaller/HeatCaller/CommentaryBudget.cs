@@ -172,6 +172,9 @@ public enum BudgetRefusal
 
     /// <summary>Not enough headroom left in the night's own budget.</summary>
     TheNightsHeadroom,
+
+    /// <summary>Held by the Between races settings - how much, how often and when (31 Oct 2026).</summary>
+    BetweenRaces,
 }
 
 /// <param name="Allowed">Whether it may be written.</param>

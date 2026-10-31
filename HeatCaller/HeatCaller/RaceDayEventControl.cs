@@ -79,6 +79,9 @@ public sealed class RaceDayEventControl : UserControl
     private readonly CheckBox _chkCheckedInOnly = new ThemedCheckBox();
     private readonly CheckBox _chkAutoAdvance = new ThemedCheckBox();
     private readonly ComboBox _cmbAutoAdvanceScope = new();
+
+    /// <summary>Between-race talk for this day: the club's Between races settings, or one of the card's presets over them (31 Oct 2026).</summary>
+    private readonly ComboBox _cmbGapPreset = new();
     private readonly Label _lblAutoAdvanceHint = new();
     private Label? _lblAutoAdvanceScope;
     private readonly AppSettings? _settings;
@@ -170,7 +173,7 @@ public sealed class RaceDayEventControl : UserControl
     /// Pieces.PickerWidth. Forgotten whenever the lists are rebuilt (see
     /// RefitFields).
     /// </summary>
-    private (Font Font, int Count, int Width)? _eventWidth, _shapeWidth, _venueWidth, _layoutWidth, _championshipWidth, _scopeWidth;
+    private (Font Font, int Count, int Width)? _eventWidth, _shapeWidth, _venueWidth, _layoutWidth, _championshipWidth, _scopeWidth, _gapPresetWidth;
 
     /// <summary>The widths the fields had at the normal text size, before any of them was measured - see SizeFields.</summary>
     private const int FieldWidth = 320;
@@ -479,6 +482,22 @@ public sealed class RaceDayEventControl : UserControl
         _lblAutoAdvanceHint.Text = "Which race it reaches for when the one that just finished is recorded.";
         programGrid.AddHint(_lblAutoAdvanceHint);
 
+        // BETWEEN-RACE TALK FOR THE DAY (31 Oct 2026): a big event can run
+        // busier than club night without the club's own settings changing.
+        // Over the Between races card on the AI Commentary tab, for this day
+        // only.
+        _cmbGapPreset.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbGapPreset.Items.Add(new GapPresetChoice(string.Empty, "The club's Between races settings"));
+
+        foreach (var preset in GapPreset.All)
+        {
+            _cmbGapPreset.Items.Add(new GapPresetChoice(preset.Key, preset.Name));
+        }
+
+        _cmbGapPreset.SelectedIndex = 0;
+        programGrid.AddRow("Between-race talk:", _cmbGapPreset);
+        programGrid.AddHint("How much the announcer says between races tonight. A preset here is for this day only - the club's own settings are on the AI Commentary tab.");
+
         var program = new Section("Building the program");
 
         program.Add(programGrid, gapBelow: 0);
@@ -573,6 +592,7 @@ public sealed class RaceDayEventControl : UserControl
         Fit(_lstClasses, wide, _lstClasses.Font.Height * 5 + 12);
         Fit(_numHeatSize, number);
         Fit(_cmbAutoAdvanceScope, Math.Max(UiLayout.AtTextSize(ScopePickerWidth), Pieces.PickerWidth(_cmbAutoAdvanceScope, ref _scopeWidth)));
+        Fit(_cmbGapPreset, Math.Max(wide, Pieces.PickerWidth(_cmbGapPreset, ref _gapPresetWidth)));
 
         // Only when it changed: a new size lays the grid out again.
         static void Fit(Control field, int width, int? height = null)
@@ -674,6 +694,7 @@ public sealed class RaceDayEventControl : UserControl
             CommitNow();
         };
         _cmbAutoAdvanceScope.SelectedIndexChanged += (_, _) => CommitNow();
+        _cmbGapPreset.SelectedIndexChanged += (_, _) => CommitNow();
 
         _lstClasses.ItemCheck += (_, _) =>
         {
@@ -869,6 +890,11 @@ public sealed class RaceDayEventControl : UserControl
             target.CheckedInDriversOnly = onScreen.CheckedInDriversOnly;
         }
 
+        if (onScreen.BetweenRacesPreset != baseline.BetweenRacesPreset)
+        {
+            target.BetweenRacesPreset = onScreen.BetweenRacesPreset;
+        }
+
         // A day that had never set this (null, following the club-wide
         // setting) reads as the club default on the page, so every save
         // used to write that default onto it. That still happens - it is
@@ -1047,6 +1073,28 @@ public sealed class RaceDayEventControl : UserControl
         public override string ToString() => Label;
     }
 
+    /// <summary>One entry in Between-race talk: a preset's key (empty for the club's own settings) and its name.</summary>
+    private sealed record GapPresetChoice(string Key, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
+    /// <summary>Picks the day's preset in Between-race talk - the club's settings for one it does not know.</summary>
+    private void ShowGapPreset(string? key)
+    {
+        for (var i = 0; i < _cmbGapPreset.Items.Count; i++)
+        {
+            if (_cmbGapPreset.Items[i] is GapPresetChoice choice
+                && string.Equals(choice.Key, key ?? string.Empty, StringComparison.Ordinal))
+            {
+                _cmbGapPreset.SelectedIndex = i;
+                return;
+            }
+        }
+
+        _cmbGapPreset.SelectedIndex = 0;
+    }
+
     /// <summary>
     /// "Next race is:" open only while the next race starts by itself, on a
     /// race day that can be changed (<paramref name="editable"/>) - and its caption goes quiet with it, so
@@ -1192,6 +1240,7 @@ public sealed class RaceDayEventControl : UserControl
         // of the day's fields - the same number, so nothing moves.
         _numHeatSize.Value = _events.HeatSizeFor(raceEvent);
         _chkCheckedInOnly.Checked = raceEvent.CheckedInDriversOnly;
+        ShowGapPreset(raceEvent.BetweenRacesPreset);
 
         // The club-wide setting is the answer for a day that never said -
         // which is every day written before this moved here. Shown, not
@@ -1245,6 +1294,7 @@ public sealed class RaceDayEventControl : UserControl
         _lstClasses.Enabled = editable;
         _numHeatSize.Enabled = editable;
         _chkCheckedInOnly.Enabled = editable;
+        _cmbGapPreset.Enabled = editable;
         _chkAutoAdvance.Enabled = editable;
         FollowAutoAdvance(editable);
         _btnCloseDay.Enabled = editable;
@@ -1509,6 +1559,7 @@ public sealed class RaceDayEventControl : UserControl
         // sign-on desk must be able to say so without the next keystroke
         // undoing it.
         raceEvent.CheckedInDriversOnly = _chkCheckedInOnly.Checked;
+        raceEvent.BetweenRacesPreset = _cmbGapPreset.SelectedItem is GapPresetChoice gap ? gap.Key : string.Empty;
 
         // Written onto the DAY, which is what takes it out of the club-wide
         // setting it used to be. Once written it is never null again for
@@ -1575,6 +1626,7 @@ public sealed class RaceDayEventControl : UserControl
                     current.QualifyingRounds = old.QualifyingRounds;
                     current.DriversPerHeat = old.DriversPerHeat;
                     current.CheckedInDriversOnly = old.CheckedInDriversOnly;
+                    current.BetweenRacesPreset = old.BetweenRacesPreset;
                     current.ClassNames = (old.ClassNames ?? new List<string>()).ToList();
                     current.ChampionshipId = old.ChampionshipId;
 
@@ -1605,6 +1657,7 @@ public sealed class RaceDayEventControl : UserControl
         && a.QualifyingRounds == b.QualifyingRounds
         && a.DriversPerHeat == b.DriversPerHeat
         && a.CheckedInDriversOnly == b.CheckedInDriversOnly
+        && a.BetweenRacesPreset == b.BetweenRacesPreset
         && (a.ClassNames ?? new List<string>()).SequenceEqual(b.ClassNames ?? new List<string>(), StringComparer.Ordinal)
         && a.ChampionshipId == b.ChampionshipId
         && a.AutoAdvanceRounds == b.AutoAdvanceRounds

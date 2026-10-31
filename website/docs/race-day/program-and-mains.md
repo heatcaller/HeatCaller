@@ -434,6 +434,8 @@ The time you started from is written back to the race day's **First race at:**, 
 
 The **Reminder countdown** card beside the grid announces a countdown to the **Up Next** line through the announcer. Set **Minutes until start:** (1–120) and click **Start**. The announcer calls out at 5 minutes, 1 minute and when time's up, using the line's class and description ("5 minutes to Stock Q1 Heat 2."). **Stop** cancels it quietly.
 
+Tick **Count down by itself from the run sheet** on the card and the announcer counts down to each race on its own, from the time against it in the grid, without anyone pressing **Start**. Which calls it makes (10, 5, 2 or 1 minutes, and time's up) are set on the **Between races** card on **Voice → AI Commentary**, which has the same tick (see [Between races](../announcer/commentary.md#between-races)). **Hold Talk** on Race Control holds it too.
+
 A countdown started at 5 minutes or less skips the "5 minutes" call, and one started at 1 minute skips the "1 minute" call. The countdown follows the clock, so it stays accurate even if the laptop is busy or a dialog is open.
 
 <!-- TODO: confirm whether a running reminder countdown carries on after the Timetable window is closed. The page is kept (not rebuilt) when the window closes, so its timer probably keeps running, but nothing on screen shows it until the window is opened again. -->

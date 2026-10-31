@@ -4860,11 +4860,15 @@ public sealed class CommentaryService
             }
         }
 
+        // BETWEEN RACES (31 Oct 2026): the card's Line length, for the filler
+        // in the gap - nothing for the recap show or a race (GapState.LengthFor).
+        var (gapLength, gapExtraWords) = GapState.Shared.LengthFor(kind);
+
         var body =
             FactsOpen + "\n" +
             facts.Text + "\n" +
             FactsClose +
-            "\n\n" + InstructionFor(kind) + HostBrief(kind)
+            "\n\n" + InstructionFor(kind) + HostBrief(kind) + gapLength
             // THE CREDIT IS HEATCALLER'S, ON THE END (21 Oct 2026). The model
             // used to be asked to end with it - but the sponsor's tagline
             // goes after the credit now, and a model asked to say a tagline
@@ -4876,7 +4880,7 @@ public sealed class CommentaryService
                 : string.Empty);
 
         var writing = Ask(Client,
-            BuildSegmentSystemPrompt(), body, maxTokens: MaxTokensForWordLimit(), temperature: Variety, ct: ct);
+            BuildSegmentSystemPrompt(gapExtraWords), body, maxTokens: MaxTokensForWordLimit(gapExtraWords), temperature: Variety, ct: ct);
 
         // On the recap show the credit goes in front, before the line is
         // recorded, so the line held (and compared by ForgetLine) is the one

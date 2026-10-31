@@ -188,6 +188,10 @@ public partial class AnnouncerControl
             _director = new CommentaryDirector(_commentary, _settings);
             _director.NameFor = NameFor;
 
+            // BETWEEN RACES (31 Oct 2026): the filler keeps to the Between
+            // races card, by the gap Race Control keeps - see GapState.
+            _director.GapRefuses = kind => GapState.Shared.WhyNotForTheDirector(GapState.LineFor(kind), DateTime.UtcNow);
+
             // THE PACE DETECTOR'S HISTORY, WHICH WAS NEVER WIRED
             // (15 Oct 2026). PaceWatch takes its history as three
             // callbacks so the detector is a table test, and all three
@@ -2213,6 +2217,10 @@ public partial class AnnouncerControl
 
             await SpeakAsync(said, director).ConfigureAwait(true);
 
+            // Booked with the gap Race Control keeps, so the director's line
+            // and Race Control's calls count toward one cap and one spacing.
+            GapState.Shared.SaidByTheDirector(GapState.LineFor(said.Kind), DateTime.UtcNow);
+
             // It went out. A block the race overtook before a word of it was
             // queued has already said Dropped (RunAsShowAsync), and then
             // this does nothing.
@@ -2339,6 +2347,14 @@ public partial class AnnouncerControl
             return;
         }
 
+        // BETWEEN RACES (31 Oct 2026): the hand-over keeps to the card - its
+        // tick, the level, the spacing. Before _handedOver is marked, so one
+        // held for spacing still goes once the space is there.
+        if (GapState.Shared.WhyNotForTheDirector(GapLine.HandOver, DateTime.UtcNow) is not null)
+        {
+            return;
+        }
+
         // Marked BEFORE the block runs, not after. The tick does not wait
         // for this method, so a block that takes twenty seconds would
         // otherwise be started again by every tick inside it. Marked even
@@ -2351,6 +2367,8 @@ public partial class AnnouncerControl
         {
             return;
         }
+
+        GapState.Shared.SaidByTheDirector(GapLine.HandOver, DateTime.UtcNow);
 
         try
         {
@@ -2714,6 +2732,14 @@ public partial class AnnouncerControl
         // limit otherwise, where the read's own 25-second cap still applies.
         var gap = director.Upcoming?.Invoke().InAbout ?? SponsorCopy.NoLimit;
 
+        // BETWEEN RACES (31 Oct 2026): a read in the gap keeps to the card's
+        // sponsor spacing, its level and its line count. Asked before the
+        // read is taken, so one held stays owed.
+        if (GapState.Shared.WhyNotForTheDirector(GapLine.Sponsor, DateTime.UtcNow) is not null)
+        {
+            return false;
+        }
+
         var paid = director.NextAdBreakRead(gap) ?? director.NextSegmentRead(gap);
 
         if (paid is null)
@@ -2745,6 +2771,7 @@ public partial class AnnouncerControl
         }
 
         _announcer.SpeakReminder(paid.Text, showOnScreens: true);
+        GapState.Shared.SaidByTheDirector(GapLine.Sponsor, DateTime.UtcNow);
 
         return true;
     }

@@ -1892,7 +1892,7 @@ public sealed partial class WebServerService
         var query = context.Request.QueryString;
         var action = query["action"];
 
-        var allowed = new[] { "stage", "countdown", "green", "yellow", "red", "checkered", "reset" };
+        var allowed = new[] { "stage", "countdown", "green", "yellow", "red", "checkered", "reset", "skip", "holdtalk", "callup" };
         if (action is null || !allowed.Contains(action))
         {
             context.Response.StatusCode = 400;
@@ -5217,6 +5217,10 @@ public sealed partial class WebServerService
                padding:3px 4px; font-weight:700; line-height:1.2; min-height:calc(2.4em + 6px); }
         .msg .why { font-weight:400; }
         .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        /* The between-race talk (31 Oct 2026): Skip, Hold Talk and Call Up,
+           as the laptop's flag row has them after the flag. */
+        .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+        .grid3 button { padding:16px 6px; font-size:16px; }
         /* Which race the buttons act on (27 Sep 2026). One line, always
            there - a line that appeared, or grew, would move every button
            under the thumb. A long name ends in an ellipsis instead. */
@@ -5239,6 +5243,12 @@ public sealed partial class WebServerService
           </div>
           <button class="checkered" onclick="go('checkered')">CHECKERED</button>
           <button class="reset" onclick="if(confirm('Reset the race?'))go('reset')">RESET</button>
+          <div class="race" style="padding-top:14px"><span class="lbl">BETWEEN RACES</span></div>
+          <div class="grid3">
+            <button onclick="go('skip')">SKIP</button>
+            <button onclick="go('holdtalk')">HOLD TALK</button>
+            <button onclick="go('callup')">CALL UP</button>
+          </div>
           <table style="margin-top:18px"><thead><tr id="head"></tr></thead>
           <tbody id="rows"></tbody></table>
         </div>
@@ -5299,7 +5309,7 @@ public sealed partial class WebServerService
         // so it can only abandon that race - if another has gone green since,
         // the laptop asks again.
         async function go(a, force, race){
-          const name = a.toUpperCase();
+          const name = ({ holdtalk: 'HOLD TALK', callup: 'CALL UP' })[a] || a.toUpperCase();
           const press = ++lastPress;
           show(press, 'Sending ' + name + '…', '', 'busy');
           let r, d = null;

@@ -241,7 +241,6 @@ public partial class MainForm
         // page rather than leaving a heat showing "Scheduled" until the user
         // happens to navigate away and back.
         // The flag row's Results and Edit Result after the flag (25 Oct 2026).
-        raceControl.ResultsRequested += () => ShowLatestRaceInHistory(edit: false);
         raceControl.EditResultRequested += () => ShowLatestRaceInHistory(edit: true);
 
         raceControl.SessionSaved += () =>
@@ -515,7 +514,7 @@ public partial class MainForm
         // thrown away - the same fault the scrutineering log was fixed for.
         // It is parented into the drawer's window on the way in and taken
         // back out in FormClosed, or that window would dispose it.
-        var daySchedule = new DayScheduleControl(_daySchedule, _raceClasses, _announcer, _undo, _rounds, _raceEvents) { Dock = DockStyle.Fill };
+        var daySchedule = new DayScheduleControl(_daySchedule, _raceClasses, _announcer, _undo, _rounds, _raceEvents) { Dock = DockStyle.Fill, Settings = _settings };
         _daySchedulePage = daySchedule;
 
         // Who's Racing IS the merged roster: present, tech and inspect

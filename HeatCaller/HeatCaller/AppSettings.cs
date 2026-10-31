@@ -591,6 +591,84 @@ public sealed class AppSettings
     /// </summary>
     public string CommentaryChatter { get; set; } = string.Empty;
 
+    // --- Between races (31 Oct 2026) ---
+    //
+    // ASKED FOR BY ASHER: "plan on adding more control to the reminder calls
+    // that come after the show recap and before the next heat/main. there
+    // should be options to control how much it talk, how frequently, when it
+    // does, what it says". Voice -> AI Commentary -> Between races. Read as
+    // one value by GapRules.From, which also clamps every number, and the
+    // defaults are the card's Race day preset: the gap as it always was,
+    // plus automatic call-ups. See BetweenRaces.cs.
+
+    /// <summary>quiet, light, normal or busy (GapLevel). Blank is Normal.</summary>
+    public string BetweenRacesLevel { get; set; } = string.Empty;
+
+    /// <summary>short, medium or long (GapLineLength) - how long a written line in the gap may run. Blank is Medium.</summary>
+    public string BetweenRacesLineLength { get; set; } = string.Empty;
+
+    /// <summary>Most lines in one gap, 1 to 10. Call-ups always get through and count toward it.</summary>
+    public int BetweenRacesMostLines { get; set; } = 4;
+
+    /// <summary>Least time between two lines in the gap, 10 to 120 seconds.</summary>
+    public int BetweenRacesSpaceSeconds { get; set; } = 30;
+
+    /// <summary>How often the next race's call-up is repeated, 30 to 300 seconds; 0 is Never.</summary>
+    public int BetweenRacesCallUpRepeatSeconds { get; set; } = 120;
+
+    /// <summary>Call-ups per race at most, 1 to 6.</summary>
+    public int BetweenRacesCallUpsPerRace { get; set; } = 3;
+
+    /// <summary>Sponsor reads between races at most one every this many minutes, 1 to 10. Was a fixed 90 seconds.</summary>
+    public int BetweenRacesSponsorMinutes { get; set; } = 2;
+
+    /// <summary>A breather after the recap's last line before anything else, 0 to 60 seconds.</summary>
+    public int BetweenRacesQuietAfterRecapSeconds { get; set; } = 10;
+
+    /// <summary>Nothing new starts this close to the next race's run-sheet time, 0 to 60 seconds.</summary>
+    public int BetweenRacesQuietBeforeCallSeconds { get; set; } = 20;
+
+    /// <summary>
+    /// Call-ups, marshal calls and the club's notices still go out after the
+    /// recap when On Air will open the next race. The hand-over and Coming up
+    /// next stay off then either way, as On Air's opening says the same thing.
+    /// On by default - Asher, 31 Oct 2026: "that's ok as long as it's
+    /// configerable by the end user".
+    /// </summary>
+    public bool BetweenRacesCallUpsWithOnAir { get; set; } = true;
+
+    /// <summary>In a long break (by the run sheet) the announcer says when racing resumes, once, then waits.</summary>
+    public bool BetweenRacesLongBreakNotice { get; set; } = true;
+
+    /// <summary>How long a gap has to be to count as a long break, in minutes.</summary>
+    public int BetweenRacesLongBreakMinutes { get; set; } = 10;
+
+    /// <summary>The countdown calls its marks by itself from the run sheet. Mirrored on the Timetable's Reminder countdown card.</summary>
+    public bool BetweenRacesAutoCountdown { get; set; }
+
+    /// <summary>Which marks the automatic countdown calls, minutes, comma separated - any of 10, 5, 2 and 1.</summary>
+    public string BetweenRacesCountdownMarks { get; set; } = "5,1";
+
+    /// <summary>The automatic countdown also says "Time's up". Off by default: the grid call does that job.</summary>
+    public bool BetweenRacesCountdownTimesUp { get; set; }
+
+    // The kinds of line, each its own box - separate from what plays during races.
+    public bool BetweenRacesCallUps { get; set; } = true;
+    public bool BetweenRacesTwoOut { get; set; }
+    public bool BetweenRacesMarshals { get; set; } = true;
+    public bool BetweenRacesNotCheckedIn { get; set; }
+    public bool BetweenRacesHandOver { get; set; } = true;
+    public bool BetweenRacesComingUpNext { get; set; } = true;
+    public bool BetweenRacesSegments { get; set; } = true;
+    public bool BetweenRacesClubNotes { get; set; } = true;
+    public bool BetweenRacesCountdown { get; set; } = true;
+
+    /// <summary>The club's own lines for the gap, one per line - see GapWords.Sort for which becomes what.</summary>
+    public string BetweenRacesCustomLines { get; set; } = string.Empty;
+
+    /// <summary>Skip, Hold Talk and Call Up on the flag row after the flag. Their keys (F9, F10, F12) work either way.</summary>
+    public bool BetweenRacesFlagButtons { get; set; } = true;
+
     /// <summary>
     /// How much room the announcer leaves between the calls it makes off
     /// the timing loop - the key of one of

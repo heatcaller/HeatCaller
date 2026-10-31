@@ -511,6 +511,61 @@ The booth interview and the sign-off are written straight after the recap, while
 - If the next race is called to the grid, whatever hasn't been spoken yet is dropped.
 - If the model's interview can't be split into its two voices' lines, it isn't used.
 
+### Between races
+
+The **Between races** card, under **Recap show**, decides what the announcer says after the recap show and before the next race is called: the call-ups, the marshal call, the countdown, the hand-over, sponsor reads, the club's notices and whatever the commentary writes to fill the gap. Before 31 Oct 2026 the gap had no settings of its own, so a club got whatever the segment list happened to have due, and no call-up at all unless someone started the Timetable's countdown.
+
+**It works with commentary off.** Call-ups, the marshal call, the countdown, the hand-over and your own lines are written by HeatCaller, cost nothing and need no model. Only **Coming up next** and the segments need commentary to be able to write.
+
+**Preset:** sets everything on the card in one pick. Your own lines and the flag row's buttons are yours and no preset touches them. Change anything by hand and it reads **Custom**.
+
+| Preset | What it is |
+|---|---|
+| **Club night** | Light, call-ups every 2 minutes, no segments in the gap. |
+| **Race day** | Normal, every default on the card. |
+| **Big event** | Busy, segments and sponsor reads on, two-races-out call-up on. |
+| **Just the call-ups** | Quiet, call-ups and marshals only. |
+
+A race day can use a different preset for that day only: **Between-race talk:** on **Race Day → Setup** (see [Building the program](../race-day/events-and-entries.md#building-the-program)).
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Between races:** | **Quiet** is call-ups, marshals and the countdown only. **Light** adds the hand-over and your own notices. **Normal** is everything ticked under **What it says**. **Busy** is Normal with two more lines a gap and sponsor reads twice as often. **How chatty** still sets the races themselves. | Normal |
+| **Longest a line can run:** | How long a line the commentary writes in the gap may be. **Short** is one sentence; **Long** lets a form guide run three or four. Call-ups are always short. It only applies once the recap show is over: the show's own parts keep their length. | Medium |
+| **Most lines in one gap:** | The most lines between one race and the next. Call-ups always get through, and count toward it. | 4 |
+| **Space between lines:** | The least time between two lines in the gap. | 30 seconds |
+| **Repeat the call-up every:** | How often the call-up is said again while the next race waits, or **Never**. | 2 minutes |
+| **Call-ups per race, at most:** | The most times one race is called up. | 3 |
+| **Sponsor reads, at most one every:** | The least time between sponsor reads in the gap. Whether there are reads at all is on the **Sponsors** page. | 2 minutes |
+| **Quiet after the recap:** | Silence after the recap show before anything else is said. | 10 seconds |
+| **Quiet before the call:** | Nothing new starts this close to the next race's run-sheet time, not even a call-up, so the grid call goes out clean. Only the countdown still speaks. | 20 seconds |
+| **Play call-ups after the recap when On Air opens the next race** | With **Start races On Air** ticked, call-ups still play after the recap. The hand-over and **Coming up next** stay off then, because On Air's opening says the same thing. | On |
+| **In a long break, say when racing resumes, once** | In a break longer than the minutes you set, the announcer says once when racing starts again, and the call-ups wait until racing is near. | On, 10 minutes |
+
+**What it says** has a tick box for each kind of line: **Call-up: next race to the drivers stand**, **Call-up: two races out**, **Marshals to their posts**, **Not checked in** (names only drivers the check-in list shows as missing), **Hand-over** ("That was Heat 2. Still to come, Heat 3."), **Coming up next** (written by the commentary), **Segments from Through the night**, **Club notes** and **Timetable countdown**. All are on except two races out and not checked in.
+
+**The call-up goes first.** Once the program has a next race, nothing the commentary writes is said in the gap until that race has been called up once. So a form guide never plays over a grid that hasn't been told to come to the stand.
+
+**The phone and the PA agree.** The call-up is for the same race the drivers' phones show as "You're up next". If **Start Next** would start a race with nobody on its grid yet, such as a main that hasn't been seeded, the announcer calls nothing rather than send the wrong drivers to the stand, and the console says why.
+
+**Call-ups go out with captions.** Like the Timetable's reminders, every line in the gap shows on the Big Screen and the overlay and plays on the relay's Listen Along, so a driver with earbuds in hears "you're up next" too.
+
+**The console says why a call-up didn't go**, once a gap per reason, on a line starting `[gap]`: "Call-up for Heat 3 held - inside the quiet before the call".
+
+**Start the countdown by itself from the run sheet, at** _5 min, 1 min_ calls the countdown without anyone pressing **Start** on the Timetable, from the time against the next race on **Race Day → Timetable**. Pick any of 10, 5, 2 and 1 minutes, and **time's up**. The same tick is on the Timetable's **Reminder countdown** card. Off until you tick it.
+
+#### Your own lines
+
+Type one line per row. A line with `{round}`, `{class}` or `{drivers}` in it becomes the call-up, in place of HeatCaller's; one with `{marshals}` becomes the marshal call; any other line is a notice, said once a gap, in turn. `{minutes}` is the minutes until the next race and `{track}` the track's name. **Put in Examples** adds a few to start from.
+
+#### Hear the gap
+
+**Hear the Gap** plays a sample gap with these settings in under a minute, using tonight's next race if there is one, and writes down underneath what would be said when, so you can see the running order a real gap would have without waiting through one.
+
+#### On the flag row
+
+After the checkered flag, Race Control's flag row shows **Skip**, **Hold Talk**, **Call Up**, **Edit Result** and **Reset** (see [The flag row after the flag](../race-control/running-a-race.md#the-flag-row-after-the-flag)). Untick **Show Skip, Hold Talk and Call Up on the flag row after the flag** to keep the old row. <kbd>F9</kbd>, <kbd>F10</kbd> and <kbd>F12</kbd> work either way.
+
 ### Writing style
 
 These apply to every line the model writes - intros, recaps, segments and talking points alike. They change the words, not the voice; how it sounds is set on **Voice → Cast**.
@@ -1323,7 +1378,7 @@ The console notes what happened, for example "[commentary] No recap - no comment
 
 Everything else in the commentary layer reports to the developer console, which nobody has open during a race. The **Broadcast** window gathers the state worth knowing and the buttons to do something about it. Open it with **Broadcast** on **Race Control**, under **Mission Control**, or double-click the On Air bar under the flag row. Until 25 Oct 2026 these buttons were a row under the Next Up bar; they're now in a window of their own, with more said about each.
 
-The window stays open beside Race Control while you work, and closing it only hides it: a hold you put on stays on. While a hold is on, the **Broadcast** button on Race Control reads **Broadcast · HELD** in amber, and when notes from the room are waiting it reads **Broadcast · 3 notes**, so neither is missed with the window shut. The flag keys, <kbd>F1</kbd> to <kbd>F8</kbd>, still work while the window has the focus.
+The window stays open beside Race Control while you work, and closing it only hides it: a hold you put on stays on. While a hold is on, the **Broadcast** button on Race Control reads **Broadcast · HELD** in amber, and when notes from the room are waiting it reads **Broadcast · 3 notes**, so neither is missed with the window shut. The flag keys, <kbd>F1</kbd> to <kbd>F10</kbd> and <kbd>F12</kbd>, still work while the window has the focus.
 
 Across the top is what's on air now, or the last segment that went out. The level meters are on Race Control's flag row, not here (see [Level meters](../race-control/running-a-race.md#level-meters)).
 
@@ -1339,6 +1394,7 @@ Under that, **Controls** has the buttons in the table below, and **At a glance**
 | **Room vote** | How many votes are in so far. |
 | **Recap show** | Whether the recap show is running. |
 | **Replay Moment** | Whether there's a moment ready to play again. |
+| **Between races** | What the gap will say next and when: "Call-up for Heat 3 in 40s", "Between-race talk held" or "Nothing waiting". **Skip Next Call-up** beside it skips that one call-up: it counts as said, so the next waits a full repeat. |
 
 **What went out last is named by its segment**, not the line itself - "Last: Race Recap", "Last: Club Honours", "Last: Cold Open". Until 11 Oct 2026 the row printed the first ninety characters of what had just been said, in quotes, and that was the wrong thing: a race director does not read a quote - they heard the line, or they were busy, and a wall of text in a strip is not how anybody catches up. It also pushed the buttons about on the row as it grew and shrank. What is actually wanted is which part of the programme just went out, because that is what says where the show is up to. A two-voice segment says so: "Last: Form Guide (two voices)".
 

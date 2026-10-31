@@ -43,6 +43,35 @@ public sealed class DayScheduleControl : UserControl
     private readonly Button _btnStartCountdown = new();
     private readonly Button _btnStopCountdown = new();
 
+    /// <summary>
+    /// The Between races card's "Start the countdown by itself from the run sheet"
+    /// (31 Oct 2026), here too, beside the countdown it does for you.
+    /// Hidden until the host hands over the settings.
+    /// </summary>
+    private readonly CheckBox _chkAutoCountdown = new ThemedCheckBox
+    {
+        Text = "Count down by itself from the run sheet",
+        AutoSize = true,
+        Visible = false,
+    };
+
+    private AppSettings? _settings;
+
+    /// <summary>
+    /// The settings the automatic countdown tick reads and writes - the same
+    /// one as Between races on the AI Commentary tab.
+    /// </summary>
+    internal AppSettings? Settings
+    {
+        get => _settings;
+        set
+        {
+            _settings = value;
+            _chkAutoCountdown.Visible = value is not null;
+            _chkAutoCountdown.Checked = value?.BetweenRacesAutoCountdown ?? false;
+        }
+    }
+
     /// <summary>Opens the one list of what can be done to this sheet. See BuildLineMenu.</summary>
     private readonly Button _btnMore = new();
 
@@ -328,9 +357,23 @@ public sealed class DayScheduleControl : UserControl
 
         var reminder = new Section("Reminder countdown");
 
+        // With it ticked, Race Control says the marks itself between races,
+        // from the next race's time on this sheet - see Between races.
+        _chkAutoCountdown.CheckedChanged += (_, _) =>
+        {
+            if (_settings is null || _settings.BetweenRacesAutoCountdown == _chkAutoCountdown.Checked)
+            {
+                return;
+            }
+
+            _settings.BetweenRacesAutoCountdown = _chkAutoCountdown.Checked;
+            _settings.Save();
+        };
+
         reminder.Add(lblFor);
         reminder.Add(minutesRow);
         reminder.Add(countdownButtons);
+        reminder.Add(_chkAutoCountdown);
         reminder.Add(_lblCountdown, gapBelow: 0);
 
         _reminderCard = reminder;
@@ -381,7 +424,9 @@ public sealed class DayScheduleControl : UserControl
             UiLayout.AtTextSize(ReminderLeastWidth),
             Math.Max(
                 _reminderCard?.CaptionWidth ?? 0,
-                Math.Max(_minutesRow?.GetPreferredSize(Size.Empty).Width ?? 0, _countdownButtons?.OneLineWidth ?? 0))
+                Math.Max(
+                    Math.Max(_minutesRow?.GetPreferredSize(Size.Empty).Width ?? 0, _countdownButtons?.OneLineWidth ?? 0),
+                    _settings is null ? 0 : _chkAutoCountdown.GetPreferredSize(Size.Empty).Width))
             + Section.Inset.Horizontal);
 
     /// <summary>

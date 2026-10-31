@@ -295,6 +295,15 @@ public sealed class CommentaryControl : UserControl
     /// </summary>
     public event Action<string>? ClientStatusMessage;
 
+    /// <summary>Tonight's next race for Hear the gap (Between races) - null, or one with no race, uses sample names.</summary>
+    internal Func<GapFacts?>? TonightsGap { get; set; }
+
+    /// <summary>Speaks Hear the gap's lines back to back, through the announcer.</summary>
+    public Action<IReadOnlyList<string>>? PlayGap { get; set; }
+
+    /// <summary>Whether the Sponsors page puts reads on rotation between races - for Hear the gap.</summary>
+    public Func<bool>? SponsorReadsBetweenRaces { get; set; }
+
     public CommentaryControl(AppSettings settings, CommentaryService commentary)
     {
         _settings = settings;
@@ -1288,6 +1297,13 @@ public sealed class CommentaryControl : UserControl
         page.Add(segments);
         page.Add(after);
         page.Add(recap);
+
+        // --- Between races (31 Oct 2026): the gap after the recap and before
+        // the next race is called - see BetweenRacesCard.
+        var (betweenRaces, betweenGrids) = BetweenRacesCard.Build(_settings, _textSize,
+            () => TonightsGap?.Invoke(), lines => PlayGap?.Invoke(lines), () => _settings.CommentaryEnabled,
+            () => SponsorReadsBetweenRaces?.Invoke() ?? false);
+        page.Add(betweenRaces);
         page.Add(style, gapBelow: 0);
 
         Controls.Add(page);
@@ -1311,7 +1327,7 @@ public sealed class CommentaryControl : UserControl
         {
             connectionGrid, introsGrid, driverIntrosGrid, summariesGrid, talkingGrid, styleGrid,
             pauseGrid, teaserGrid, showGrid, chatterGrid,
-        }));
+        }.Concat(betweenGrids).ToArray()));
 
         _textSize.Keep(SizeFields);
 
