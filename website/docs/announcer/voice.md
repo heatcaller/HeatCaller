@@ -348,7 +348,7 @@ To hear them, press **Test Voice** beside **ElevenLabs voice:** at the top of **
 | **Playback volume (%):** | How loud the announcer plays on this laptop. The same setting as the **Announcements** fader on **Sounds → Mixer**. | 100 |
 | **Max spoken announcements per lap:** | 1 to 5. When one lap triggers several routine announcements (say a fast lap, a streak and a lead change), only this many are spoken. The ones with the highest weight win. | 2 |
 
-Lap times are always spoken as words, for example "5 point eight eight seconds", so the voice doesn't read them as "eighty-eight". Screens show the numbers as digits. In lines written by the local model and in the reminders from the race day's Timetable, only a number with a unit ("6.9s", "6.9 seconds") is read as a time; other numbers are left as they are.
+Lap times are always spoken as words, the way a race caller says them, so the voice doesn't misread the digits: 6.935 is "six nine thirty-five", 5.060 is "five oh six" and 5.000 is "five flat". The voice says the same time the screens show, down to the thousandth, with nothing rounded. Screens show the numbers as digits. In lines written by the local model and in the reminders from the race day's Timetable, only a number with a unit ("6.9s", "6.9 seconds") is read as a time; other numbers are left as they are.
 
 ## Saved voice lines
 
@@ -565,7 +565,7 @@ Reminders from the race day's **Timetable** ("5 minutes to Stock Buggy A-Main") 
 | **Consistency streak** | **Announce every** _n_ **lap(s) in races,** _n_ **in practice** | 1 to 20 each. Counted from the streak threshold on **Sounds → Effects**: with a threshold of 3 and every 3, a driver is called at 3, 6, 9 and so on. |
 | **Consistency streak** | **Only the longest streak in the field** | Only the driver on the longest clean run is called. |
 | **Consistency streak** | **Mention the runner-up** | Adds the next-best streak to the line. |
-| **Position report** | **Read every** _n_ **lap(s) of the LEADER, down to P** _n_ | Every 1 to 50 leader laps (default 5), reading from 2 to 10 places deep (default 3). |
+| **Position report** | **Read every** _n_ **lap(s) of the LEADER, down to P** _n_ | Every 1 to 50 leader laps (default 5), reading from 2 to 10 places deep (default 3). A report that has to wait more than 3 seconds behind another line isn't said, so the order you hear is never older than the one on the screen; the next one comes round as usual. |
 | **Minutes left** | **Only the last** _n_ **minutes (untick to call every minute)** | 2 to 60 (default 5): with 5, a ten-minute race hears five, four, three and two minutes to go. Untick it to hear every minute. One minute to go is always **Final minute**'s, so it's never said twice. |
 
 The streak threshold (how many clean laps count as a streak) is set on **Sounds → Effects** and applies to both the voice and the sound effect. See [Sounds and music](sounds-and-music.md#effects).
