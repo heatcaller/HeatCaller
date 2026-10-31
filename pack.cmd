@@ -125,15 +125,7 @@ where vpk >nul 2>&1
 if errorlevel 1 goto :novpk
 
 if not exist "%PUBDIR%\HeatCaller.exe" goto :nopublish
-if defined SIGNFILE if not exist "%SIGNFILE%" goto :noterms
-echo.
-echo *** FAILED - the license and privacy notice is not where it should be:
-echo ***   %TERMS%
-echo *** The installer shows it, and the app will not start without it. It
-echo *** belongs in git - if it has gone missing, git checkout it.
-exit /b 1
-
-:nosignfile
+if defined SIGNFILE if not exist "%SIGNFILE%" goto :nosignfile
 if not exist "%TERMS%" goto :noterms
 
 echo.
@@ -198,6 +190,14 @@ echo.
 echo *** FAILED - %SIGNFILE% is not in this folder. It names the Azure
 echo *** signing account and certificate profile; without it nothing can be
 echo *** signed. It belongs in git - if it has gone missing, git checkout it.
+exit /b 1
+
+:noterms
+echo.
+echo *** FAILED - the license and privacy notice is not where it should be:
+echo ***   %TERMS%
+echo *** The installer shows it, and the app will not start without it. It
+echo *** belongs in git - if it has gone missing, git checkout it.
 exit /b 1
 
 :fail

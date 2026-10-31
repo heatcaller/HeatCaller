@@ -221,4 +221,27 @@ public sealed class TermsTests : IDisposable
         Assert.Contains(@"HeatCaller\HeatCaller\Assets\Legal\HeatCaller-Terms.md", pack, StringComparison.Ordinal);
         Assert.True(File.Exists(TermsFile));
     }
+
+    [Fact]
+    public void Every_goto_in_pack_cmd_lands_on_a_label_that_is_there_once()
+    {
+        // The terms check went in with a goto to a label that was never
+        // written and a second :nosignfile, so a signed pack fell straight
+        // into "the license is not where it should be" and stopped. cmd
+        // only finds that out when the line runs.
+        var lines = File.ReadAllLines(Path.Combine(RepoRoot, "pack.cmd"));
+        var labels = lines.Where(line => line.StartsWith(':') && !line.StartsWith("::"))
+            .Select(line => line[1..].Trim().ToLowerInvariant())
+            .ToList();
+        var targets = lines
+            .SelectMany(line => System.Text.RegularExpressions.Regex.Matches(line, @"goto\s+:?([A-Za-z_][\w]*)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            .Select(match => match.Groups[1].Value.ToLowerInvariant())
+            .Where(target => target != "eof")
+            .Distinct()
+            .ToList();
+
+        Assert.Equal(labels.Count, labels.Distinct().Count());
+        Assert.All(targets, target => Assert.Contains(target, labels));
+    }
 }
