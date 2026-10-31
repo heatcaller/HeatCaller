@@ -291,9 +291,7 @@ public static class HeatSheetRenderer
             g.DrawString(continuedNote, footFont, grey, Margin, y);
         }
 
-        using var footerPen = new Pen(Color.FromArgb(200, 200, 200));
-        g.DrawLine(footerPen, Margin, PageHeight - Margin, PageWidth - Margin, PageHeight - Margin);
-        g.DrawString("HeatCaller", footFont, grey, Margin, PageHeight - Margin + 8);
+        HeatCallerMark.DrawPrintFooter(g, Margin, PageWidth - Margin, PageHeight - Margin, footFont);
     }
 
     private static string Truncate(string text, int max) =>

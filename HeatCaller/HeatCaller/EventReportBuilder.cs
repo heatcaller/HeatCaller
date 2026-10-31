@@ -96,7 +96,10 @@ public static class EventReportBuilder
             WriteLapDetail(sb, sessions, profiles);
         }
 
-        sb.AppendLine($"<p class=\"footer\">Generated {Esc(AppTime.DateAndTime(DateTime.Now))} by HeatCaller.</p>");
+        // Signed with HeatCaller's mark and a link to its site (31 Oct 2026,
+        // the mark on everything the app makes).
+        sb.AppendLine($"<p class=\"footer\">Generated {Esc(AppTime.DateAndTime(DateTime.Now))} by "
+                      + $"<a class=\"hcmark\" href=\"https://heatcaller.com\">{HeatCallerMark.SunSvg}{HeatCallerMark.WordHtml}</a></p>");
         sb.AppendLine("</body></html>");
         return sb.ToString();
     }
@@ -205,6 +208,10 @@ h3 { margin-top: 24px; font-size: 16px; color: #444; }
 .sub { color: #666; margin-top: 0; }
 .empty { color: #888; font-style: italic; }
 .footer { margin-top: 48px; color: #888; font-size: 12px; border-top: 1px solid #ddd; padding-top: 12px; }
+.hcmark { display: inline-flex; align-items: center; gap: 5px; color: #1a1a1a; text-decoration: none; vertical-align: -3px; }
+.hcsun { width: 16px; height: 16px; fill: currentColor; }
+.hcword { font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.hcword .hcc { color: #FF2E88; }
 table { border-collapse: collapse; width: 100%; margin: 12px 0 24px; font-size: 14px; }
 th { text-align: left; background: #f2f2f2; padding: 7px 10px; border-bottom: 2px solid #ddd; }
 td { padding: 6px 10px; border-bottom: 1px solid #eee; }

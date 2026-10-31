@@ -4,6 +4,16 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **HeatCaller's mark on everything the app makes (31 October).** Everything HeatCaller makes for people to see now signs off with the small sun and the HEATCALLER wordmark, like the club's relay pages. The club's own name, logo and colors stay in charge. The mark is always on.
+    - **Highlight videos.** The end card now says "Timed and called by" over the full-color sun and HEATCALLER, in place of the small grey "Powered by HeatCaller".
+    - **Big Screen.** A small sun and HEATCALLER sit in the bottom right of the countdown band, in the club's colors, like a TV channel's corner logo. The countdown stays in the middle of the screen.
+    - **Stream graphics.** The race tower on the OBS page has a HEATCALLER credit along its foot.
+    - **Phone pages on the club Wi-Fi.** Live Results, Check In, Race Remote, Manage, Coach, Message the announcer, Who wins? and Finish Camera end with the same HEATCALLER mark as the relay pages, linking to heatcaller.com.
+    - **Printed sheets.** Heat sheets, run sheets, results sheets, report cards and QR badge sheets share one footer: a black sun, HEATCALLER and heatcaller.com. The track plan and the join poster carry the mark too.
+    - **Results picture.** The picture made for group chats says "Timed and called by HeatCaller" beside the full-color sun, the same as the relay's cards.
+    - **Emails to drivers.** Night, PIN and sign-up invite emails end with one line: "Timing by HeatCaller - heatcaller.com".
+    - **Event report.** Signed with the mark and a link to heatcaller.com.
+    - Update HeatCaller on the race PC; nothing changes on the relay.
 - **Club pages clear of the phone's clock (30 October).** On some phones, and always from a home-screen icon, the club's pages drew under the status bar, so each page looked scrolled down a little, the title sat behind the clock and scrolling up only bounced. The pages now start below the status bar, and the bars that stay at the top while you scroll (My Night's jump bar, the Manager's tabs) stop below it too. Redeploy the relay (`fly deploy --ha=false`); nothing changes on the race PC.
 - **Standings, Tracks and Achievements under Results (30 October).** On the club's pages, **Results** now has a row of tabs at the top: **Sessions**, **Standings**, **Tracks** and **Achievements**, with **Results** lit on all four. The **Explore** tiles at the bottom of Home are gone, since most repeated the bar; while online check-in is open, Home has a **Check in: tap Me and type your PIN** line instead. On a laptop the top row is now the same five tabs as the phone bar. Page addresses don't change. See [Getting around](online/index.md#getting-around). Redeploy the relay (`fly deploy --ha=false`); nothing changes on the race PC.
 - **The poster and emails mention Me (29 October).** The club poster's line now reads "Live timing, schedule and results - and your own races under Me." A driver's night email says that opening their night once on their phone lets **Me** bring them back to it, and gives the club's own page for live timing, the running order and results. The PIN email says the same PIN opens their own races under **Me** on race day. Update HeatCaller on the race PC; nothing changes on the relay.

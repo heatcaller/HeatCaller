@@ -317,7 +317,12 @@ internal static class NightEmail
 
         text.Append("You're getting this because you asked for your night by email. To stop, ask at the desk.")
             .Append(nl).Append(nl);
-        text.Append(club).Append(nl);
+        text.Append(club).Append(nl).Append(nl);
+
+        // HeatCaller's one line at the foot (31 Oct 2026, the mark on
+        // everything the app makes). Plain words, no link, so the email
+        // still reads as the club's.
+        text.Append(HeatCallerMark.EmailLine).Append(nl);
 
         return text.ToString();
     }
