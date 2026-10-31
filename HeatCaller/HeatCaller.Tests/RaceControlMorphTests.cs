@@ -207,7 +207,9 @@ public sealed class RaceControlMorphTests
         // The show itself since 26 Oct 2026: the bar stays up while anything
         // is going out and names the segment on air (UpdateOnAirBar).
         Assert.Contains("_onAirLive = live;", onAir, StringComparison.Ordinal);
-        Assert.Contains("_holdStrip.ShowWork(words, null, _onAirLive ? OnAirSkipNote : string.Empty, OnAirLiveCyan);",
+        // Its right-hand note: On Air's skip hint while On Air is live, else
+        // what the flag row's Skip would skip ("Skip: Race Recap", 31 Oct 2026).
+        Assert.Contains("_holdStrip.ShowWork(words, null, _onAirLive ? OnAirSkipNote : SkipNote(segment), OnAirLiveCyan);",
             Source("RaceControlControl.Morph.cs"), StringComparison.Ordinal);
     }
 
