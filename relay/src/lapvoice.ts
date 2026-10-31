@@ -9,7 +9,8 @@ import type { CatalogueVoice } from "./voice.js";
  * ElevenLabs voice instead of the phone's own.
  *
  * NOT A LINE PER LAP. ElevenLabs records a fixed set of short clips ONCE -
- * every lap time from 3.00 to 19.99, "Lap 1" to "Lap 200", "P1" to "P30",
+ * every lap time from 3.00 to 19.99 (and the two halves of one with a
+ * thousandth, "six nine" and "thirty-five"), "Lap 1" to "Lap 200", "P1" to "P30",
  * the gaps, "best lap" and the target words - and the phone plays the ones a
  * lap needs, one after the other. Made by lapvoicerender.ts on a key the
  * operator gives it, on their own PC; nothing on the relay ever calls
@@ -106,6 +107,28 @@ export function lapTimeWords(cs: number): string {
   return hundredths < 10 ? `${words(whole)} oh ${words(hundredths)}` : `${words(whole)} ${words(hundredths)}`;
 }
 
+/**
+ * RaceNumbers.LapSpoken for a time in milliseconds (31 Oct 2026): the full
+ * time the screen shows. "six nine thirty-five" for 6.935, "five oh oh six"
+ * for 5.006; a time with nothing in the thousandths is lapTimeWords, "nine
+ * oh six".
+ */
+export function lapTimeWordsMs(ms: number): string {
+  if (ms % 10 === 0) return lapTimeWords(ms / 10);
+  return `${tenthWords(Math.floor(ms / 100))} ${pairWords(ms % 100)}`;
+}
+
+/** The first half of a time with a thousandth: whole seconds and the tenth, "six nine", "six oh". */
+export function tenthWords(ds: number): string {
+  const tenth = ds % 10;
+  return `${words(Math.floor(ds / 10))} ${tenth === 0 ? "oh" : SMALL[tenth]}`;
+}
+
+/** The second half: the last two digits as a pair, "thirty-five", "oh six". */
+export function pairWords(pair: number): string {
+  return pair < 10 ? `oh ${SMALL[pair]}` : words(pair);
+}
+
 /** The hundredths after "point", digit by digit: "three five", "three", "oh five". */
 function pointDigits(h: number): string {
   if (h < 10) return `oh ${SMALL[h]}`;
@@ -134,6 +157,18 @@ export function lapClips(): LapClip[] {
 
   for (let cs = LAP_TIME_MIN_CS; cs <= LAP_TIME_MAX_CS; cs++) {
     clips.push({ name: `t${cs}`, text: lapTimeWords(cs) });
+  }
+
+  // A time with a thousandth (31 Oct 2026, asked for by Asher: "make the
+  // relay read sound the same" as the app). Not a clip per time - that is
+  // seventeen thousand clips, ten times the cost and the image - but the
+  // two halves the app says it in, played back to back with no breath:
+  // "six nine" and "thirty-five". 170 + 90 clips.
+  for (let ds = LAP_TIME_MIN_CS / 10; ds <= Math.floor(LAP_TIME_MAX_CS / 10); ds++) {
+    clips.push({ name: `tt${ds}`, text: tenthWords(ds) });
+  }
+  for (let pair = 1; pair <= 99; pair++) {
+    if (pair % 10 !== 0) clips.push({ name: `tp${pair}`, text: pairWords(pair) });
   }
 
   for (let n = 1; n <= LAP_NUMBER_MAX; n++) {

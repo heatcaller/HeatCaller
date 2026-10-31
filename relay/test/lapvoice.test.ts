@@ -4,7 +4,7 @@ import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { LAP_VOICE, LapVoiceLibrary, lapClipCost, lapClips, lapTimeWords, marginWords } from "../src/lapvoice.js";
+import { LAP_VOICE, LapVoiceLibrary, lapClipCost, lapClips, lapTimeWords, lapTimeWordsMs, marginWords } from "../src/lapvoice.js";
 import { renderLapClips } from "../src/lapvoicerender.js";
 import { DEFAULT_CONTEXT, livePage, nightPage } from "../src/pages.js";
 import { Relay } from "../src/server.js";
@@ -42,6 +42,23 @@ describe("lap voice: the clips", () => {
     assert.equal(NAMES.filter((n) => /^t\d+$/.test(n)).length, 1700);
   });
 
+  it("has the two halves of every time with a thousandth, as the app says it (31 Oct 2026)", () => {
+    assert.equal(TEXT.get("tt30"), "three oh");
+    assert.equal(TEXT.get("tt69"), "six nine");
+    assert.equal(TEXT.get("tt199"), "nineteen nine");
+    assert.equal(TEXT.has("tt29"), false);
+    assert.equal(TEXT.has("tt200"), false);
+    assert.equal(TEXT.get("tp35"), "thirty-five");
+    assert.equal(TEXT.get("tp5"), "oh five");
+    assert.equal(TEXT.has("tp10"), false, "a pair ending in nought is a time with no thousandth - one clip");
+    assert.equal(NAMES.filter((n) => /^tt\d+$/.test(n)).length, 170);
+    assert.equal(NAMES.filter((n) => /^tp\d+$/.test(n)).length, 90);
+    assert.equal(lapTimeWordsMs(6935), "six nine thirty-five");
+    assert.equal(lapTimeWordsMs(5006), "five oh oh six");
+    assert.equal(lapTimeWordsMs(9060), "nine oh six");
+    assert.equal(lapTimeWordsMs(5000), "five flat");
+  });
+
   it("says the numbers in words the way the app does, with no digits for ElevenLabs to read two ways", () => {
     for (const [name, text] of TEXT) {
       assert.doesNotMatch(text, /\d/, `${name}: ${text}`);
@@ -65,9 +82,9 @@ describe("lap voice: the clips", () => {
 
   it("costs about a dollar and a half to make once", () => {
     const cost = lapClipCost();
-    assert.equal(cost.clips, 2193);
-    assert.equal(cost.chars, 36946);
-    assert.equal(cost.dollars, 1.48);
+    assert.equal(cost.clips, 2453);
+    assert.equal(cost.chars, 39666);
+    assert.equal(cost.dollars, 1.59);
   });
 });
 
@@ -375,6 +392,21 @@ describe("lap voice: the Live page", () => {
     assert.deepEqual(l.played.slice(4), ["lap6", "t941", "best", "p2", "g-l1"]);
   });
 
+  it("says a time with a thousandth in full, in the two halves the app says it in", async () => {
+    const l = await livePageWith(field([9500, 9600, 9450]), {});
+    l.set(field([9500, 9600, 9450, 9525]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap5", "tt95", "tp25", "p2", "g-t4"]);
+    assert.deepEqual(l.played.map((n) => TEXT.get(n)), ["Lap five", "nine five", "twenty-five", "P two", "four tenths back"]);
+  });
+
+  it("gives the phone's voice every digit of a time with a thousandth", async () => {
+    const l = await livePageWith(field([9500, 9600]), null);
+    l.set(field([9500, 9600, 9525]));
+    await l.p.advance(1000);
+    assert.equal(l.said.at(-1), "Lap 4, 9.525, P2, 0.41 seconds behind");
+  });
+
   it("says the whole line in the phone's voice when a clip is missing - never half of each", async () => {
     const l = await livePageWith(field([2500, 2600]), {});
     l.set(field([2500, 2600, 2400]));
@@ -450,7 +482,12 @@ describe("lap voice: the Live page", () => {
     assert.equal(words("lvGap('+3L')"), "three laps back");
     assert.equal(pick("lvGap('+31.00')"), null);
     assert.equal(pick("lvGap('+12L')"), null);
-    assert.equal(words("lvTime(9425)"), "nine forty-three");
+    assert.equal(words("lvTime(9420)"), "nine forty-two");
+    assert.equal(words("lvTime(9425)"), "nine four twenty-five", "never rounded: the screen says 9.425");
+    assert.equal(words("lvTime(6935)"), "six nine thirty-five");
+    assert.equal(words("lvTime(5006)"), "five oh oh six");
+    assert.equal(words("lvTime(19999)"), "nineteen nine ninety-nine");
+    assert.equal(pick("lvTime(20001)"), null);
     assert.equal(pick("lvTime(2990)"), null);
     assert.equal(words("lvTarget(9400, 9600)"), "point two under target");
     assert.equal(words("lvTarget(9950, 9600)"), "point three five off target");
@@ -461,7 +498,7 @@ describe("lap voice: the Live page", () => {
     const all = pick(`(function () {
       const out = [];
       const add = (g) => { if (g) out.push.apply(out, g); };
-      for (let ms = 2900; ms <= 20100; ms += 5) add(lvTime(ms));
+      for (let ms = 2900; ms <= 20100; ms += 1) add(lvTime(ms));
       for (let n = 0; n <= 210; n++) { add(lvLap(n)); add(lvPlace(n)); }
       for (let c = 0; c <= 3500; c++) add(lvGap('+' + (c / 100).toFixed(2)));
       for (let l = 0; l <= 12; l++) add(lvGap('+' + l + 'L'));

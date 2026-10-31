@@ -212,7 +212,7 @@ describe("My Night lap times: what is said", () => {
 
     n.set(field([9500, 9600, 9400, 9950, 9602]));
     await n.p.advance(1000);
-    assert.equal(n.said.at(-1), "Lap 6, 9.60, on target, P2, 0.41 seconds behind");
+    assert.equal(n.said.at(-1), "Lap 6, 9.602, on target, P2, 0.41 seconds behind", "the time as the screen shows it, never rounded");
   });
 
   it("with Time only ticked says the time, best lap and the target", async () => {
