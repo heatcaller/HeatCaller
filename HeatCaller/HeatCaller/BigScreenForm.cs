@@ -89,8 +89,9 @@ public sealed class BigScreenForm : Form
     private bool _showingRead;
     private readonly Panel _pnlLeaderboardArea = new();
 
-    /// <summary>The podium's videos: a QR code to download them, after a race (21 Oct 2026). See PodiumVideoQr.</summary>
-    private readonly PodiumVideoQr _podiumQr = new();
+    // The podium videos' QR code strip (21 Oct 2026, PodiumVideoQr) is gone:
+    // 28 Oct 2026, asked for by Asher, the videos stay on the laptop and are
+    // no longer on the club's page for a phone to download.
     private readonly System.Windows.Forms.Timer _sponsorTimer = new();
     private int _sponsorIndex = -1;
     private bool _showingSponsor;
@@ -255,6 +256,11 @@ public sealed class BigScreenForm : Form
     private readonly LogoBox _logoBox = new();
     private readonly Panel _logoBalance = new();
 
+    // HeatCaller's mark, right of the countdown, as wide as the elapsed
+    // clock on its left so the countdown stays in the middle - see
+    // HeatCallerBug.
+    private readonly HeatCallerBug _hcBug = new();
+
     // Held in a field so it can be taken off the static event again when the
     // window closes - a static event would otherwise keep every Big Screen
     // ever opened alive for the rest of the day.
@@ -410,17 +416,7 @@ public sealed class BigScreenForm : Form
         // lambda can't be unsubscribed - these two were left attached when
         // the window closed, so a reopened-and-closed Big Screen accumulated
         // dead handlers that still fired against a disposed form.
-        _stateChangedHandler = state => SafeInvoke(() =>
-        {
-            // The podium's code comes down as the next race is called -
-            // see ShowPodiumVideos.
-            if (state is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
-            {
-                _podiumQr.HideCode();
-            }
-
-            RefreshAll();
-        });
+        _stateChangedHandler = _ => SafeInvoke(RefreshAll);
         _flagChangedHandler = _ => SafeInvoke(RefreshAll);
 
         _race.LapProcessed += OnRaceEvent;
@@ -650,6 +646,8 @@ public sealed class BigScreenForm : Form
         _pnlCountdown.BackColor = CanvasColor;
         _lblCountdown.ForeColor = HighlightColor;
         _lblElapsed.ForeColor = AccentColor;
+        _hcBug.BackColor = CanvasColor;
+        _hcBug.SetColours(AccentColor, MutedColor);
 
         _grid.BackgroundColor = CanvasColor;
         _grid.GridColor = GridLineColor;
@@ -788,8 +786,11 @@ public sealed class BigScreenForm : Form
         _lblElapsed.Dock = DockStyle.Left;
         _lblElapsed.TextAlign = ContentAlignment.MiddleCenter;
 
+        _hcBug.Dock = DockStyle.Right;
+
         _pnlCountdown.Controls.Add(_lblCountdown);
         _pnlCountdown.Controls.Add(_lblElapsed);
+        _pnlCountdown.Controls.Add(_hcBug);
 
         // This grid is hand-styled with the Big Screen's own palette
         // rather than going through AppTheme.StyleGrid, so it needs the
@@ -866,10 +867,6 @@ public sealed class BigScreenForm : Form
         // Added last, so it takes its strip down the right before the board
         // fills what is left.
         _pnlLeaderboardArea.Controls.Add(_mapView);
-
-        // The podium's code, the same way - outside the map, at the very edge.
-        _podiumQr.Dock = DockStyle.Right;
-        _pnlLeaderboardArea.Controls.Add(_podiumQr);
 
         // On-deck bar: what's coming up next, for calling racers to the table.
         _pnlOnDeck.Dock = DockStyle.Bottom;
@@ -997,6 +994,7 @@ public sealed class BigScreenForm : Form
 
             _pnlCountdown.Height = Sized(118);
             _lblElapsed.Width = Sized(320);
+            _hcBug.Width = _lblElapsed.Width;
 
             _grid.ColumnHeadersHeight = Math.Max(1, Sized(38));
             _grid.DefaultCellStyle.Padding = new Padding(Sized(18), Sized(4), Sized(8), Sized(4));
@@ -2347,22 +2345,6 @@ public sealed class BigScreenForm : Form
         return who;
     }
 
-    /// <summary>
-    /// Puts up the QR code to a race's podium videos (21 Oct 2026) - from
-    /// any thread, as each video lands on the club's page. Taken down when
-    /// the next race stages. Ignored while a race is on: a video finishing
-    /// late must not put a code over the next race's board.
-    /// </summary>
-    public void ShowPodiumVideos(string url, string label) => SafeInvoke(() =>
-    {
-        if (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
-        {
-            return;
-        }
-
-        _podiumQr.ShowCode(url, label);
-    });
-
     private void SafeInvoke(Action action)
     {
         if (IsDisposed || Disposing)
@@ -3258,6 +3240,59 @@ public sealed class BigScreenForm : Form
             FormBorderStyle = FormBorderStyle.None;
             WindowState = FormWindowState.Maximized;
             _isFullscreen = true;
+        }
+    }
+
+    /// <summary>
+    /// HEATCALLER ON THE BIG SCREEN (31 Oct 2026, Asher: the mark is always
+    /// on everywhere): the sun and HEATCALLER, small, in the bottom right of
+    /// the countdown band, like a TV channel's corner logo. In the look's
+    /// own colours - the sun in its primary, the word in its muted text -
+    /// so it never competes with the race, on a light look or a dark one.
+    /// Sized from the band's own height, so it grows with the screen.
+    /// </summary>
+    private sealed class HeatCallerBug : Control
+    {
+        private Color _sun = Color.White;
+        private Color _word = Color.Gray;
+
+        public HeatCallerBug()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint
+                     | ControlStyles.OptimizedDoubleBuffer
+                     | ControlStyles.UserPaint
+                     | ControlStyles.ResizeRedraw, true);
+        }
+
+        public void SetColours(Color sun, Color word)
+        {
+            _sun = sun;
+            _word = word;
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            if (Width <= 0 || Height <= 0)
+            {
+                return;
+            }
+
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+            // About a fifth of the band's height, so a 118-pixel band at the
+            // normal size gets a word a little over twenty pixels tall.
+            using var font = new Font(AppTheme.BoldFont.FontFamily, Math.Max(6f, Height * 0.15f), FontStyle.Bold, GraphicsUnit.Pixel);
+
+            var width = HeatCallerMark.MeasureSignOff(g, font);
+            var height = font.GetHeight(g);
+            var inset = Height * 0.12f;
+
+            HeatCallerMark.DrawSignOff(g, font, new PointF(Width - width - inset, Height - height - inset), _sun, _word, _sun);
         }
     }
 

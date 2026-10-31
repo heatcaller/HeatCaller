@@ -269,7 +269,7 @@ internal static class DriverNight
 
         if (races is not null && races.Any(r => r.LapsMs is not null))
         {
-            races = races.Select(r => r with { LapsMs = null }).ToList();
+            races = races.Select(r => r with { LapsMs = null, PosAt = null, StartMs = null }).ToList();
             document = JsonSerializer.Serialize(Built(races, cars));
 
             if (Fits(document))

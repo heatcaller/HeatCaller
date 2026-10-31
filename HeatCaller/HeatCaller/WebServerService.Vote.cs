@@ -268,6 +268,7 @@ public sealed partial class WebServerService
           the room reckoned after the race - it never says who you picked. Nothing you tap here reaches the timing
           or the results.</p>
         </div>
+        {{HeatCallerMark.PageFooterHtml}}
         <script>
         var list = document.getElementById('list');
         var race = document.getElementById('race');

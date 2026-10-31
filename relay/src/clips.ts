@@ -10,17 +10,23 @@ import { writeFileAtomically } from "./voice.js";
  * driver who raced it here - so the driver can play it, and keep it, from
  * their own night page.
  *
- * A COPY OF videos.ts, ON PURPOSE. The vault, its folder outside the
- * club's published tree, the atomic writes and the "oldest go first" rule
- * are the podium videos' own, which have already been through two bug
- * hunts. What differs is only what a clip is: an mp3 of a few megabytes,
- * always one driver's, and many more of them - so the caps are per driver
- * as well as per club.
+ * COPIED FROM THE OLD PODIUM VIDEO VAULT, ON PURPOSE. The vault, its
+ * folder outside the club's published tree, the atomic writes and the
+ * "oldest go first" rule came from the podium videos' own, which had
+ * already been through two bug hunts. What differs is only what a clip
+ * is: an mp3 of a few megabytes, always one driver's, and many more of
+ * them - so the caps are per driver as well as per club.
+ *
+ * 28 Oct 2026, asked for by Asher: the podium videos themselves no longer
+ * come to the relay at all ("Remove the podium videos for downloading from
+ * the relay and just have locally") - they stay on the laptop. Clips stay:
+ * they are the race call's audio for a driver's own night, not the podium
+ * videos, and nothing about them depended on the videos.
  *
  * PRIVATE TO THE BADGE. A clip is listed only in the answer to that
  * driver's own night (readOneNight), which needs the badge code; and its
  * own address is 128 random bits from the laptop, so the link is the
- * credential, as a podium video's is. Nothing lists a club's clips.
+ * credential. Nothing lists a club's clips.
  *
  * KEPT FOR A WEEK, eight per driver, and never more than the club's share;
  * all of them go the moment the club closes drivers' nights, and with the
@@ -140,7 +146,7 @@ export function asClipMeta(value: unknown): ClipMeta | undefined {
  * week; then, per driver, any past their eight (counting the incoming one
  * for its driver); then, once the club is full, everything older than that
  * point. The newest are never the ones thrown away - the same "once full,
- * everything older goes too" rule videosToDrop learned in Bug Hunt 9.
+ * everything older goes too" rule the podium videos learned in Bug Hunt 9.
  */
 export function clipsToDrop(
   held: readonly ClipMeta[],
@@ -234,7 +240,7 @@ export class MemoryClipVault implements ClipVault {
 
 /**
  * The clips on disk: dataDir/.clips/<club>/<id>.mp3 beside <id>.json.
- * Written atomically, as the videos are, so a crash mid-upload leaves no
+ * Written atomically, as the voice cache is, so a crash mid-upload leaves no
  * half a clip for a phone to choke on.
  */
 export class DiskClipVault implements ClipVault {

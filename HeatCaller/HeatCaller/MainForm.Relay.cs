@@ -1480,6 +1480,49 @@ public partial class MainForm
     /// `sectorsMs` is still written as null without a split loop, so a
     /// clean row is byte for byte what it was.
     /// </summary>
+    /// <summary>
+    /// One session's public result, as the relay keeps it. A class rather
+    /// than the anonymous object it was (28 Oct 2026) so the race's length
+    /// can be left out of a race that had none, and a result sent from here
+    /// is still byte for byte what an older one was where nothing is new.
+    /// </summary>
+    private sealed class RelayResultDocument
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; init; } = string.Empty;
+
+        [JsonPropertyName("type")]
+        public string Type { get; init; } = string.Empty;
+
+        [JsonPropertyName("label")]
+        public string Label { get; init; } = string.Empty;
+
+        [JsonPropertyName("track")]
+        public string Track { get; init; } = string.Empty;
+
+        [JsonPropertyName("roundId")]
+        public string? RoundId { get; init; }
+
+        [JsonPropertyName("startedUtc")]
+        public DateTime StartedUtc { get; init; }
+
+        [JsonPropertyName("endedUtc")]
+        public DateTime EndedUtc { get; init; }
+
+        /// <summary>The race's time limit in seconds, for "Length: 3:00 Timed" and pace. Left out for a race without one.</summary>
+        [JsonPropertyName("lengthS")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? LengthS { get; init; }
+
+        /// <summary>The race's lap limit, for "Length: 20 Laps". Left out for a race without one.</summary>
+        [JsonPropertyName("lapLimit")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? LapLimit { get; init; }
+
+        [JsonPropertyName("results")]
+        public List<RelayResultRow> Results { get; init; } = new();
+    }
+
     private sealed class RelayResultRow
     {
         [JsonPropertyName("pos")]
@@ -1521,6 +1564,31 @@ public partial class MainForm
         [JsonPropertyName("jump")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? Jump { get; init; }
+
+        // 28 Oct 2026 (asked for by Asher, matching LiveRC): the race lap
+        // by lap. Each is left out when there is nothing to say, so a
+        // result with no laps recorded is the shape it always was and the
+        // page simply shows no graph or lap list for it.
+
+        /// <summary>Where they started - the grid, from qualifying - for the Qual column. Left out when the grid was not known.</summary>
+        [JsonPropertyName("qual")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? Qual { get; init; }
+
+        /// <summary>The start-lap slot: green flag to the line, before lap 1. Needed to know when each lap was crossed, for pace.</summary>
+        [JsonPropertyName("startMs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public long? StartMs { get; init; }
+
+        /// <summary>Every flying lap, in order - the start-lap slot left out, as everywhere else a lap is shown.</summary>
+        [JsonPropertyName("lapsMs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<long>? LapsMs { get; init; }
+
+        /// <summary>Their position after each of those laps (LapByLap), in step with LapsMs. Races only.</summary>
+        [JsonPropertyName("posAt")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int[]? PosAt { get; init; }
     }
 
     /// <summary>
@@ -1742,16 +1810,23 @@ public partial class MainForm
                 abbreviate,
                 session.Results.Select(r => (string?)r.Transponder).ToList());
 
-            var document = JsonSerializer.Serialize(new
+            // Where everybody was after each lap - races only: practice is
+            // everybody on track at once, not a race for places.
+            var isRace = session.SessionType == RaceSessionType.Race;
+            var positions = isRace ? LapByLap.Positions(session.Results) : null;
+
+            var document = JsonSerializer.Serialize(new RelayResultDocument
             {
-                id = session.Id,
-                type = session.SessionType.ToString(),
-                label = session.Label,
-                track = session.TrackLayoutName,
-                roundId = session.RoundId,
-                startedUtc = session.StartedAtUtc,
-                endedUtc = session.EndedAtUtc,
-                results = session.Results.Select((r, i) => new RelayResultRow
+                Id = session.Id,
+                Type = session.SessionType.ToString(),
+                Label = session.Label,
+                Track = session.TrackLayoutName,
+                RoundId = session.RoundId,
+                StartedUtc = session.StartedAtUtc,
+                EndedUtc = session.EndedAtUtc,
+                LengthS = session.TimeLimitSeconds is > 0 ? session.TimeLimitSeconds : null,
+                LapLimit = session.LapLimit is > 0 ? session.LapLimit : null,
+                Results = session.Results.Select((r, i) => new RelayResultRow
                 {
                     Pos = r.Position,
                     Name = names[i],
@@ -1783,6 +1858,11 @@ public partial class MainForm
                     PenLaps = r.LapPenalty > 0 ? r.LapPenalty : (int?)null,
                     Warn = r.Warnings is { Count: > 0 } ? r.Warnings.Count : (int?)null,
                     Jump = r.JumpStarted ? true : (bool?)null,
+
+                    Qual = r.StartPosition > 0 ? r.StartPosition : null,
+                    StartMs = r.LapTimesMs is { Count: > 1 } ? r.LapTimesMs[0] : null,
+                    LapsMs = r.LapTimesMs is { Count: > 1 } ? r.LapTimesMs.Skip(1).ToList() : null,
+                    PosAt = positions is not null && positions[i].Length > 0 ? positions[i] : null,
                 }).ToList(),
             });
 

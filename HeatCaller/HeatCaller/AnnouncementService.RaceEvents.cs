@@ -755,8 +755,9 @@ public sealed partial class AnnouncementService
             : transponder;
 
         // WHY (23 Oct 2026, bug hunt 10): a car with no announcer name is said by
-        // its number, which must stay in the room - noted, so listen-along,
-        // the public captions and the podium videos leave the line out. See
+        // its number, which must stay in the room - noted, so listen-along
+        // and the public captions leave the line out (the podium videos did
+        // too, until 28 Oct 2026, when they stopped going online). See
         // NoteSpokenAsNumber.
         NoteSpokenAsNumber(transponder, saidAs);
 
@@ -1153,6 +1154,66 @@ public sealed partial class AnnouncementService
     /// <summary>A timed race has one minute left - fired once by the session.</summary>
     public void NotifyFinalMinute() =>
         EnqueueVoice(AnnouncementEventType.FinalMinute, null, null);
+
+    /// <summary>
+    /// How long after its mark a minutes-left call is still worth saying.
+    /// Said twenty seconds late, "five minutes to go" is near enough; later
+    /// than that the clock has moved on from it.
+    /// </summary>
+    internal const long MinutesLeftSayWithinMs = 20_000;
+
+    /// <summary>
+    /// The same for a last-minute call: "thirty seconds" said at twenty-two
+    /// is wrong, and the next call is only fifteen seconds behind it.
+    /// </summary>
+    internal const long FinalSecondsSayWithinMs = 6_000;
+
+    /// <summary>
+    /// A timed race has just reached <paramref name="secondsLeft"/> - a whole
+    /// minute from two up, or 45, 30 or 15 in the last minute (28 Oct 2026,
+    /// asked for by Asher). Sent by the window as the clock passes each mark
+    /// (see TimeLeftCalls); one minute is NotifyFinalMinute's, and anything
+    /// else is ignored.
+    ///
+    /// Each is a race moment, so it waits its turn rather than being dropped
+    /// for a line already playing (IsWorthWaitingFor) - but a newer time
+    /// call replaces one still waiting, and one that waited past the point
+    /// where it was true is not said at all, rather than telling the room
+    /// thirty seconds when there are twenty left.
+    /// </summary>
+    public void NotifyTimeLeft(int secondsLeft)
+    {
+        if (secondsLeft >= 120 && secondsLeft % 60 == 0)
+        {
+            var minutes = secondsLeft / 60;
+
+            if (_voiceStore.Current.Events.TryGetValue(nameof(AnnouncementEventType.MinutesLeft), out var config)
+                && config is not null
+                && !config.SaysMinutesLeft(minutes))
+            {
+                StatusMessage?.Invoke($"[voice] MinutesLeft skipped - {minutes} minutes is more than the last {config.MinutesLeftFrom} it is set to call.");
+                return;
+            }
+
+            EnqueueVoice(AnnouncementEventType.MinutesLeft, null, null,
+                extras: new Dictionary<string, (string Spoken, string Display)>
+                {
+                    ["minutes"] = (RaceNumbers.Words(minutes), minutes.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                },
+                sayByMs: TimingClock.NowMs + MinutesLeftSayWithinMs);
+            return;
+        }
+
+        if (secondsLeft is 45 or 30 or 15)
+        {
+            EnqueueVoice(AnnouncementEventType.FinalSeconds, null, null,
+                extras: new Dictionary<string, (string Spoken, string Display)>
+                {
+                    ["seconds"] = (RaceNumbers.Words(secondsLeft), secondsLeft.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                },
+                sayByMs: TimingClock.NowMs + FinalSecondsSayWithinMs);
+        }
+    }
 
     /// <summary>
     /// Calls a round to the grid as it starts - the spoken half of the Next

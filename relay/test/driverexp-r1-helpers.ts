@@ -3,20 +3,19 @@ import assert from "node:assert/strict";
 import { Relay, racerPinHash } from "../src/server.js";
 import { MemoryStore, type Store } from "../src/store.js";
 import { MemoryClipVault, type ClipVault } from "../src/clips.js";
-import { MemoryVideoVault, type VideoVault } from "../src/videos.js";
 import { ACME_TOKEN, call, tenants, type Answer } from "./helpers.js";
 
 /**
  * A relay for the driver-experience tests (22 Oct 2026, R1): the shared
- * helpers' start() predates the clip vault, so this builds one with both
- * vaults and a clock the test can move.
+ * helpers' start() predates the clip vault, so this builds one with it
+ * and a clock the test can move. (It held a podium video vault too until
+ * 28 Oct 2026, when the videos stopped coming to the relay.)
  */
 export interface DriverHarness {
   readonly base: string;
   readonly store: Store;
   readonly relay: Relay;
   readonly clips: MemoryClipVault;
-  readonly videos: MemoryVideoVault;
   /** Moves the relay's clock on. */
   advance(ms: number): void;
   close(): Promise<void>;
@@ -31,19 +30,17 @@ export const OFF = "aaaaaaaaaaaaaaaaaaaa";
 export const SAM_PIN = "123456";
 
 export async function startDriver(
-  options: { store?: Store; clips?: ClipVault; videos?: VideoVault } = {},
+  options: { store?: Store; clips?: ClipVault } = {},
 ): Promise<DriverHarness> {
   let clock = Date.parse("2026-10-22T19:00:00.000Z");
   const store = options.store ?? new MemoryStore();
   const clips = (options.clips as MemoryClipVault | undefined) ?? new MemoryClipVault();
-  const videos = (options.videos as MemoryVideoVault | undefined) ?? new MemoryVideoVault();
   const relay = new Relay({
     store,
     tenants: tenants(),
     now: () => new Date(clock),
     log: () => {},
     clips,
-    videos,
   });
 
   const server: Server = relay.listen(0, "127.0.0.1");
@@ -59,7 +56,6 @@ export async function startDriver(
     store,
     relay,
     clips,
-    videos,
     advance: (ms) => {
       clock += ms;
     },

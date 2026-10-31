@@ -32,6 +32,6 @@ internal static partial class WindowCatalog
         ("Scan to join (club website)", () => new JoinPosterForm(
             "https://results.example-club.org/c/springfield-mini-z-racing-club-tuesday-nights",
             "FOLLOW THE RACING",
-            "Scan with your phone camera. Live timing, schedule and results - from anywhere, on any network.")),
+            "Scan with your phone camera. Live timing, schedule and results - and your own races under Me.")),
     };
 }

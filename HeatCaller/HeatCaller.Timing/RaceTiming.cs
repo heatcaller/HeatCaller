@@ -2236,9 +2236,11 @@ internal sealed class FinishedRace
 {
     private readonly HashSet<string> _jumpStarted;
 
-    private FinishedRace(IReadOnlyList<RacerStanding> standings, DateTime? raceStartUtc, bool isPracticeMode, int sessionGeneration, HashSet<string> jumpStarted)
+    private FinishedRace(IReadOnlyList<RacerStanding> standings, DateTime? raceStartUtc, bool isPracticeMode, int sessionGeneration, HashSet<string> jumpStarted, TimeSpan? timeLimit, int? lapLimit)
     {
         Standings = standings;
+        TimeLimit = timeLimit;
+        LapLimit = lapLimit;
         RaceStartUtc = raceStartUtc;
         IsPracticeMode = isPracticeMode;
         SessionGeneration = sessionGeneration;
@@ -2256,6 +2258,12 @@ internal sealed class FinishedRace
 
     /// <summary>As the race's SessionGeneration read.</summary>
     public int SessionGeneration { get; }
+
+    /// <summary>As the race's TimeLimit read - filed with the result so its length can be shown (28 Oct 2026).</summary>
+    public TimeSpan? TimeLimit { get; }
+
+    /// <summary>As the race's LapLimit read.</summary>
+    public int? LapLimit { get; }
 
     /// <summary>As the race's HasJumpStarted answered, for every car in <see cref="Standings"/>; false for any other.</summary>
     public bool HasJumpStarted(string transponderId) => _jumpStarted.Contains(transponderId);
@@ -2277,6 +2285,6 @@ internal sealed class FinishedRace
             }
         }
 
-        return new FinishedRace(standings, engine.RaceStartUtc, engine.IsPracticeMode, engine.SessionGeneration, jumpStarted);
+        return new FinishedRace(standings, engine.RaceStartUtc, engine.IsPracticeMode, engine.SessionGeneration, jumpStarted, engine.TimeLimit, engine.LapLimit);
     }
 }

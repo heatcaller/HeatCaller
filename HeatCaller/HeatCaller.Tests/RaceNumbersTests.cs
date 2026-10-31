@@ -47,12 +47,44 @@ public sealed class RaceNumbersTests
         Assert.Equal("five sixty", RaceNumbers.LapSpoken(5600));
     }
 
-    [Fact]
-    public void A_lap_is_rounded_to_hundredths_the_way_the_old_reading_was()
+    [Theory]
+    [InlineData(6935, "six nine thirty-five")]
+    [InlineData(5006, "five oh oh six")]
+    [InlineData(5065, "five oh sixty-five")]
+    [InlineData(5901, "five nine oh one")]
+    [InlineData(12341, "twelve three forty-one")]
+    [InlineData(9999, "nine nine ninety-nine")]
+    [InlineData(59999, "fifty-nine nine ninety-nine")]
+    public void A_lap_is_said_to_the_thousandth_the_screen_shows(long ms, string expected)
     {
-        // Nobody wants to hear a thousandth. The display form keeps the
-        // full precision; this one never did and still does not.
-        Assert.Equal("six ninety-four", RaceNumbers.LapSpoken(6935));
+        // 31 Oct 2026: this used to round to hundredths, so 6.935 on the
+        // screen was "six ninety-four" from the speaker, and a viewer of the
+        // demo heard the announcer get the time wrong. The tenth on its own,
+        // then the last two digits as a pair - the same rhythm as before,
+        // with nothing rounded away.
+        Assert.Equal(expected, RaceNumbers.LapSpoken(ms));
+    }
+
+    [Fact]
+    public void A_lap_with_nothing_in_the_thousandths_keeps_the_short_reading()
+    {
+        // 5.060 on the screen is "five oh six", exactly - there is no
+        // thousandth to say, so nothing changes for it.
+        Assert.Equal("five oh six", RaceNumbers.LapSpoken(5060));
+        Assert.Equal("six ninety-four", RaceNumbers.LapSpoken(6940));
+    }
+
+    [Fact]
+    public void A_lap_said_to_the_thousandth_is_never_rounded()
+    {
+        // Every millisecond in a plausible lap reads differently from its
+        // neighbours - no two times on the screen share one reading.
+        var seen = new HashSet<string>();
+
+        for (var ms = 1000L; ms < 60000L; ms++)
+        {
+            Assert.True(seen.Add(RaceNumbers.LapSpoken(ms)), $"{ms}ms reads the same as another time");
+        }
     }
 
     [Fact]

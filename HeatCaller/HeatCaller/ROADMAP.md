@@ -245,6 +245,23 @@ in a chat is a request that is lost when the chat is.
 
 ### Built since it was asked for
 
+- **Podium videos off the relay** (asked 28 Oct 2026, **built 28 Oct 2026,
+  not yet compiled on Windows**). "Remove the podium videos for downloading
+  from the relay and just have locally." The highlight videos are still
+  made after every race and stay in the night's Highlights folder (Share
+  video in a driver's drawer as before). Gone on the laptop:
+  `RelayPublisher.Videos.cs` (the upload), `PodiumVideoQr.cs` (the Big
+  Screen's QR strip), `RelayPublisher.Privacy.cs` (forget-media), the
+  Recording tick "Put the podium's videos on the club's page...",
+  `RaceAudioStore.SharePodiumVideos` (an old race-audio.json still loads),
+  `HighlightShare` and the night email's podium note; what the drivers'
+  clips still use moved to `RelayPublisher.Uploads.cs`. Gone on the relay:
+  `src/videos.ts`, its upload, race page, Videos tab, mp4 route,
+  forget-media and the 1 GB a club; old addresses answer as unknown ones,
+  and `src/oldvideos.ts` deletes `/data/.videos` once at start-up. Clips
+  (`/clip/`) unchanged. Relay redeploy needed. Left as is: the profile's
+  "No podium videos of them" tick, now always met.
+
 - **Race-night bug list, and My night** (asked 26 Oct 2026, **built 26 Oct
   2026, not yet compiled on Windows**). Asher's list: heat reminders not
   heard through Listen Along; relay captions stopping; the Big Screen not
@@ -3414,7 +3431,9 @@ Oct) turns it off once. Credits read naturally with the sponsor's tagline.
   `RelayPublisher.Videos` uploads 1st to 3rd to the relay, the relay refuses
   anything else, and the **Big Screen** shows a QR code to the race's page
   once the first lands, taken down when the next race stages. The driver's
-  own night lists theirs. Kept a week. See the relay README's Podium videos.
+  own night lists theirs. Kept a week. **Removed 28 Oct 2026** (asked for by
+  Asher): every video now stays on this PC - see "Podium videos off the
+  relay" above.
 
 ### The voice (21 Oct)
 
@@ -5079,7 +5098,7 @@ rivalries, analytics, ghost cars, demo mode.
 **Announcer and sound:** ElevenLabs with the club's own key, the
 HeatCaller voice (ElevenLabs through the relay), and the Windows voice as a
 stand-in; lines prepared before the night; commentary written by a local
-model (Ollama); five sound packs, ambience, music, soundscapes, a mixer and
+model (built into HeatCaller since 14 Oct 2026); five sound packs, ambience, music, soundscapes, a mixer and
 lap beeps. The recap can run as a small broadcast (27 Sep 2026): a TV-style
 opening and sign-off, and after a main a pit-lane interview with the
 winner's mechanic in a second voice, who talks from the setup changes the
@@ -5107,7 +5126,7 @@ comes in on its ring-out afterwards, re-establishing the theme after a
 20-minute quiet spell. `CommentaryContinuity` writes the lines that join
 the parts - look-backs, still-to-come, first-up, that-is-the-lot - on the
 laptop, out of a shuffled bag, with no model and no allowance, so they
-survive a dead Ollama. `CommentaryExchange` gives a change of voice a
+survive a local model that can't write. `CommentaryExchange` gives a change of voice a
 450 ms beat and nudges the bed 1.15x. The Big Screen carries an **ON AIR**
 band with the segment's caption (`OnAirTreatment`, `ShowBlock.CaptionFor`
 - one table, after two disagreed on seven of eleven segments), toggled

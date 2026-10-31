@@ -3,7 +3,8 @@ namespace HeatCaller.Tests;
 /// <summary>
 /// Driver experience PV (22 Oct 2026): the pure parts of MainForm.Privacy -
 /// when the register needs rebuilding, who is owed a republish, which saved
-/// sessions go again, and whose podium videos come down.
+/// sessions go again. (Whose podium videos came down too, until 28 Oct
+/// 2026, when the videos stopped going online.)
 /// </summary>
 public sealed class DriverExp_PV_PrivacyRepublishTests
 {
@@ -70,28 +71,10 @@ public sealed class DriverExp_PV_PrivacyRepublishTests
         Assert.Equal(new[] { "early", "late" }, again.Select(s => s.Id));
     }
 
-    [Fact]
-    public void Videos_come_down_for_a_flag_turned_on_and_never_without_a_badge_key()
-    {
-        const string secret = "0123456789abcdef0123456789abcdef";
-
-        var photo = PublicPrivacy.From(new[] { Sam(noPhoto: true), Alex() });
-        Assert.Equal(new[] { RelayCheckIn.IdFor("T1", secret) }, MainForm.PrivacyBadgesToForget(new[] { "T1", "T2" }, photo, secret));
-
-        var video = PublicPrivacy.From(new[] { Sam(noVideo: true) });
-        Assert.Single(MainForm.PrivacyBadgesToForget(new[] { "t1" }, video, secret));
-
-        // Initials only too: their name is drawn into their own videos.
-        var initials = PublicPrivacy.From(new[] { Sam(initials: true) });
-        Assert.Single(MainForm.PrivacyBadgesToForget(new[] { "T1" }, initials, secret));
-
-        // A flag turned OFF has nothing to take down.
-        var none = PublicPrivacy.From(new[] { Sam() });
-        Assert.Empty(MainForm.PrivacyBadgesToForget(new[] { "T1" }, none, secret));
-
-        // No badge key: no video was ever filed under a badge.
-        Assert.Empty(MainForm.PrivacyBadgesToForget(new[] { "T1" }, photo, ""));
-    }
+    // Videos_come_down_for_a_flag_turned_on_and_never_without_a_badge_key
+    // (PrivacyBadgesToForget) went on 28 Oct 2026 with forget-media: the
+    // podium videos stay on the laptop now, so there is nothing online to
+    // take down.
 
     [Fact]
     public void A_flag_change_is_owed_for_every_transponder_the_driver_has()

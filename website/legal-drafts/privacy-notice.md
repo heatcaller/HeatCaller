@@ -31,12 +31,12 @@ On the club's race laptop:
 - Transponder numbers and email addresses are **never** published.
 - The roster and heat line-ups only if the club turns them on **and** the relay allows it.
 - Driver photos only in the online check-in list, only if the club turns them on, and only visible to someone with a check-in code or PIN.
-- Highlight videos for the **top three in a race only**, so they can watch and download them.
+- A driver's own race clip (audio only) on their private night page, only if the club turns it on. Highlight videos are never put online: they stay on the club's laptop.
 - Online check-ins and sign-ups people make from their phones.
 
 **ElevenLabs** (a speech service), only if the club chooses the HeatCaller voice or its own ElevenLabs account: each announcer line is sent to be spoken. A line that names a driver carries that name, in the short form while "Shorten published names" is on. The free Kokoro voice runs on the laptop and sends nothing anywhere.
 
-**Anthropic** (an AI model provider), only if the club switches on AI commentary through the relay: the race facts the commentary is written from - including drivers' names, positions and lap times - are sent through the relay to Anthropic's model. Commentary written by a model on the laptop itself (Ollama) sends nothing. [CHECK: whether names are shortened in what is sent to the model; Anthropic's retention and training terms for API data.]
+**Anthropic** (an AI model provider), only if the club switches on AI commentary through the relay: the race facts the commentary is written from - including drivers' names, positions and lap times - are sent through the relay to Anthropic's model. Commentary written by the model built into HeatCaller, on the laptop itself, sends nothing. [CHECK: whether names are shortened in what is sent to the model; Anthropic's retention and training terms for API data.]
 
 **Email.** Check-in PIN emails are sent from the club's own mailbox, not by HeatCaller.
 
@@ -44,7 +44,7 @@ On the club's race laptop:
 
 | What | Where | How long |
 |---|---|---|
-| Podium highlight videos | Relay | One week, then deleted |
+| A driver's race clip on their night page | Relay | One week, then deleted |
 | Highlight videos and race recordings | Laptop | The last N race nights the club chooses on **Club Website → Recording**; older nights' folders are removed |
 | Online check-in taps | Relay | Ignored after 12 hours [CHECK: when they are actually deleted] |
 | Online sign-ups | Relay | Forgotten after 14 days, transponder number and all; the club's own record stays on the laptop |

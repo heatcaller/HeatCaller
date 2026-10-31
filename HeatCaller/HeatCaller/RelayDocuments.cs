@@ -669,7 +669,31 @@ internal static class RelayDocuments
             document["social"] = social;
         }
 
+        // The "New here?" card (30 Oct 2026, relay navigation round 6). Left
+        // out when all three lines are empty, like the links.
+        if (Newcomer(settings.RelayNewcomerWhere, settings.RelayNewcomerWhen, settings.RelayNewcomerJoin) is { } newcomer)
+        {
+            document["newcomer"] = newcomer;
+        }
+
         return JsonSerializer.Serialize(document);
+    }
+
+    /// <summary>
+    /// The site document's "newcomer" part - where the club races, when, and
+    /// how to join - each trimmed, or null when all three are empty. The
+    /// relay tidies and caps them again before they reach a page.
+    /// </summary>
+    internal static Dictionary<string, string>? Newcomer(string? where, string? when, string? join)
+    {
+        var lines = new Dictionary<string, string>
+        {
+            ["where"] = (where ?? string.Empty).Trim(),
+            ["when"] = (when ?? string.Empty).Trim(),
+            ["join"] = (join ?? string.Empty).Trim(),
+        };
+
+        return lines.Values.All(v => v.Length == 0) ? null : lines;
     }
 
     // ------------------------------------------------------------ check-in

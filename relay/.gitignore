@@ -6,3 +6,8 @@ data-voice-test/
 relay.config.voice-test.json
 voice-test.key
 relay-backups/
+
+# The lap voice's clips: made on somebody's own ElevenLabs key by
+# lap-voice-render.cmd, and carried to the relay by fly deploy, not by git.
+lap-voice/*.mp3
+lap-voice/*.part

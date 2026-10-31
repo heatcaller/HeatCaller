@@ -1536,23 +1536,23 @@ public sealed partial class RelayPublisher : IDisposable
     public async Task QuiesceAsync()
     {
         CancellationTokenSource? pass;
-        CancellationTokenSource? videos;
+        CancellationTokenSource? uploads;
 
         lock (_gate)
         {
             _quiesced = true;
             pass = _pass;
 
-            // A podium upload on its way is stopped too (22 Oct 2026) - see
-            // RelayPublisher.Videos.cs, _videoUploadStop. Never disposed:
-            // an upload may still be linking to it.
-            videos = _videoUploadStop;
-            _videoUploadStop = null;
+            // An upload on its way - a driver's clip - is stopped too (22 Oct
+            // 2026) - see RelayPublisher.Uploads.cs, _uploadStop. Never
+            // disposed: an upload may still be linking to it.
+            uploads = _uploadStop;
+            _uploadStop = null;
         }
 
         try
         {
-            videos?.Cancel();
+            uploads?.Cancel();
         }
         catch (AggregateException)
         {

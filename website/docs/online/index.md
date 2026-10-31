@@ -15,22 +15,39 @@ The relay is a small server your club (or whoever looks after your IT) hosts on 
 
 ## Your club's pages
 
-Your club's address is the relay address followed by `/c/` and your club id, for example `https://your-relay.fly.dev/c/your-club`. That address is the one to hand out. It's the home page, and every page has the same row of tabs, so nobody hits a dead end. The club name in the heading of every page is the name the relay admin gave your club.
+Your club's address is the relay address followed by `/c/` and your club id, for example `https://your-relay.fly.dev/c/your-club`. That address is the one to hand out. It's the home page, and every page has the same tabs, so nobody hits a dead end. See [Getting around](#getting-around). The club name in the heading of every page is the name the relay admin gave your club.
 
 | Page | Address | What it shows | Refreshes |
 |---|---|---|---|
-| Home | `/c/<club>` | What's on track now (or on now, or up next), the next few sessions, the three latest results, and tiles for every other page. | Every 15 seconds |
-| Live | `/c/<club>/live` | The race as it runs: state, countdown, flag, what's next, and the leaderboard. A **Captions** button shows the announcer's words as text (see [Captions](#captions)). | Every 2 seconds |
+| Home | `/c/<club>` | Changes with the night. While racing, what's on track now (or up next). Before a night, the club's preview. Between nights, "No racing right now" with when the club races, then a recap of the last race night: each final's winner, the fastest lap, the points leader and that night's new achievements, linking to that night's results. A phone that remembers its driver gets a **You** strip (best finish that night, standings place, newest achievement, **Open your night**); any other phone gets the club's **New here?** card. The club's tracks sit at the bottom, today's first. While online check-in is open, a **Check in: tap Me and type your PIN** line points drivers to **Me**. | Every 15 seconds (recap and tracks every 5 minutes) |
+| Live | `/c/<club>/live` | The race as it runs: state, countdown, flag, what's next, and the leaderboard, at the top of the page. Under it, a **Captions** button shows the announcer's words as text (see [Captions](#captions)), and **Lap times in my ear** reads out the laps of the driver you follow (see [Lap times in my ear](#lap-times-in-my-ear)). | Every 2 seconds (every second while lap times are being read out) |
 | Schedule | `/c/<club>/schedule` | Today's running order, each line marked Done, On track or Next. A class picker appears when there's more than one class. | Every 15 seconds |
-| Check in | `/c/<club>/checkin` | Online check-in. The tab only appears while online check-in is switched on. See [Online check-in](check-in.md). | Every 10 seconds |
-| Results | `/c/<club>/results` | Finished sessions, newest first, grouped by day. Tap a session to see every finisher's laps, best lap and time, with their best sectors under the best lap when the session had a split loop. A small chip beside a time shows time added or warnings (see [Penalties on the results](#penalties-on-the-results)). | Every 30 seconds |
-| My night | `/c/<club>/mynight` | A box for a driver's personal PIN, which opens their own night page. The tab only appears while online check-in is switched on. See [Opening your night with your PIN](#opening-your-night-with-your-pin). | When opened |
-| Videos | `/c/<club>/videos` | **Podium videos**: every race of the last week that has podium videos, newest first, with 1st, 2nd and 3rd and a **Download** button for each. See [Podium videos](#podium-videos). | When opened |
-| Standings | `/c/<club>/standings` | Championship points for each season, with a season picker when there's more than one. | Every 30 seconds |
-| Badges | `/c/<club>/badges` | "Just earned", "Most collected" and "Every badge". While you're [following a driver](#following-a-driver), a "Next for *name*" list at the top shows up to two badges they're close to, such as "2 more podiums for Podium Regular". | Every minute |
-| Tracks | `/c/<club>/tracks` | Every track layout with its picture, lap record, sector records, length, typical lap and the ten best laps on it. Today's layout comes first, marked "Racing here today". | Every 5 minutes |
+| Check in | `/c/<club>/checkin` | Online check-in, under the **Me** tab. Opened by the QR code on a driver's badge, and by the desk for its staff list. A driver with a personal PIN checks in by typing it on **Me**. See [Online check-in](check-in.md). | Every 10 seconds |
+| Results | `/c/<club>/results` | Finished sessions, newest first, grouped by day. Tap a session to see every finisher's grid slot, laps and time, how far behind the car in front they were, and best lap, with their best sectors under the best lap when the session had a split loop, plus **View laps** for each driver and a lap-by-lap position graph (see [Lap by lap on the results](#lap-by-lap-on-the-results)). A small chip beside a time shows time added or warnings (see [Penalties on the results](#penalties-on-the-results)). | Every 30 seconds |
+| Me | `/c/<club>/mynight` | A box for a driver's personal PIN, which opens their own night page. See [Opening your night with your PIN](#opening-your-night-with-your-pin). | When opened |
+| Standings | `/c/<club>/standings` | A tab under **Results**. Championship points for each season, with a season picker when there's more than one. | Every 30 seconds |
+| Achievements | `/c/<club>/badges` | A tab under **Results**. "Just earned", "Most collected" and "Every badge". While you're [following a driver](#following-a-driver), a "Next for *name*" list at the top shows up to two badges they're close to, such as "2 more podiums for Podium Regular". | Every minute |
+| Tracks | `/c/<club>/tracks` | Reached from **Our tracks** on Home (**Home** stays lit). Every track layout with its picture, lap record, sector records, length, typical lap and the ten best laps on it. Today's layout comes first, marked "Racing here today". | Every 5 minutes |
 
 ![The Schedule page on a phone, showing today's running order with Done, On track and Next markers](../assets/images/online-schedule-page-phone.png)
+
+### Getting around
+
+Since 29 October 2026:
+
+- **On a phone**, a bar along the bottom of every page has **Home**, **Live**, **Schedule**, **Results** and **Me**. It stays in place as the page scrolls.
+- **On a laptop or tablet**, the same five tabs sit in one row at the top.
+- **Results** has a row of its own tabs at the top, drawn as buttons: **Sessions** (the results themselves), **Standings** and **Achievements**. **Results** stays lit on all three. Since 30 October these replace the **Explore** tiles that used to sit at the bottom of Home. **Tracks** moved to Home on 30 October.
+- **New here?** A club fills in **Where we race**, **When we race** and **How to join** in the **Look** card on HeatCaller's **Club Website** page (see [Look](setup.md#look)). Home shows them as a card to any phone that doesn't remember a driver, with **See our tracks**. Leave all three empty for no card. **When we race** also shows under "No racing right now".
+- **Live** shows a small red dot while a car is on track, so you can see a race has started from any page.
+- **Me** is a driver's own corner: the PIN box that opens their night, their night page itself, check-in and sign-up all light up **Me**. While online check-in is open, a driver's right PIN on **Me** checks them in and opens their night (since 30 October; there's no separate link to the check-in page).
+- **Me remembers you.** Once a driver's night has opened on their phone (from their badge, their night email or their PIN), the phone remembers them, and **Me** goes straight to their night from then on, whether or not online check-in is open. **Sign out on this phone**, at the bottom of their night, forgets them and signs out **Your details** too. Only the code that opens their night is kept on the phone, never their PIN.
+- **Your next race on Home.** On a phone that remembers its driver, Home opens with **Your next race**: how far off it is ("2 races before yours", "You're up next", "On track now") and the race's name, with **Open your night**. It checks once a minute, and only shows while the timing laptop has one of their races in the next few.
+- **Watch live** and **See the running order.** On a driver's night, the **Right now** card has **Watch live** while their race is on track and **See the running order** (the Schedule page) while it's next. Home's **Your next race** has the same links.
+- **Go to Me** sits under **You are in!** once the desk has accepted a sign-up, so new drivers learn where their own races open.
+- **Following** a driver: the "Following *name*" chip sits just above the phone bar.
+- **A wrong address** under your club (an old podium-video QR code, a link cut short) shows "That page isn't here" with your club's tabs and tiles for Home, Live and Results. An address with no club at it says "No club here", and the relay's own address says what it is, with a link to heatcaller.com.
+- The manager page has a **Club page** link at the top.
 
 Pages only refresh while someone is looking at them. A phone left in a pocket with the page open stops asking, and catches up as soon as it's looked at again. Each page shows "Updated" with the time of its last refresh at the bottom.
 
@@ -56,6 +73,50 @@ Captions are switched on with **Captions on the club's live page** on the Club W
 
 The Big Screen and the Wi-Fi pages have captions of their own, in the room; see [Captions on the Big Screen](../screens/big-screen.md#captions) and [Captions on the overlay and broadcast pages](../screens/phone-and-web.md#captions).
 
+### Lap times in my ear
+
+The **Live** page can read out the laps of the driver you follow, in your phone's own voice, the way the coach page and the live results do on the club's Wi-Fi. It works on any connection, at the track or away from it.
+
+- Tap a driver's name on the board to follow them (see [Following a driver](#following-a-driver)). A **Lap times in my ear: off** button appears under the captions.
+- Tap it and it changes to "on". The phone says "Lap times on", then after each new lap of that driver: "Lap 7, 9.42, best lap, P2, 0.4 seconds behind". The gap is to the car ahead. HeatCaller from 29 October 2026 sends it with every row of the board. With an older version it's read from the board's **Interval** column (or **Gap to P1** for the car in second), so it's only said when the club shows one of them.
+- Tick **Time only** for just the time, and "best lap" on a new best: "9.42, best lap".
+- A lap is said a second or two after the car crosses the line. While it's on, the page reads the board every second.
+- It stays quiet for laps already run when you turn it on or follow someone new, and starts again from the next one. A new race starts the count again.
+- Put earbuds in and you can hear your own laps from the driver's stand.
+
+Keep the page open with the screen on: a phone stops a page talking when its screen locks or the browser goes to the background. While it's on, the page asks the phone to keep the screen on. If your phone won't, the page says so: set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while you race.
+
+If the page reloads, the button reads "Lap times in my ear: tap to resume" until you tap anywhere on the page, since phones only let a page speak after a tap. The phone remembers both settings. A driver whose name is on the board twice, or an **Unnamed driver**, is never read out, since it could be anyone's lap.
+
+It reads only what the live board already has: the laps, and the gap to the car ahead, which anyone could work out from the board.
+
+#### The HeatCaller lap voice
+
+When the relay has the lap voice's clips, the laps are read out in one ElevenLabs voice, **Daniel** (a steady broadcaster), the same for every club whatever announcer a club picked in its Cast tab. The phone joins short recorded clips together: "Lap seven, nine forty-two, best lap, P two, four tenths back". Gaps are said the way the announcer says them: "half a second back", "a second and a half back", "a lap back". The time is said in full, the way the announcer says it and the screen shows it, with nothing rounded: 6.935 is "six nine thirty-five". The clips cover lap times from 3.000 to 19.999 seconds, laps 1 to 200, places 1 to 30, gaps up to 30 seconds or 9 laps, and up to 2 seconds under or off a target lap.
+
+- If a lap needs a clip there isn't one for (a 2.40 lap, P31), or a clip doesn't arrive within a second, the phone's own voice says the whole line instead. You never hear half of each.
+- Tick **Phone voice** to always use the phone's own voice. It only shows when the relay has the clips.
+- The clips are recorded once, so a race night costs nothing, however many drivers listen. Nothing about any driver is sent to ElevenLabs.
+- A relay without the clips reads every lap in the phone's own voice, as before.
+
+The relay owner makes the clips once with `lap-voice-render.cmd` in the relay folder, on their own ElevenLabs key (about 37,000 characters, roughly $1.50 on ElevenLabs' Flash pricing, on a paid plan), then redeploys the relay. See the relay's README.
+
+On a driver's own night, the same voice reads out their own laps with no one to pick, and their target lap too. See [Right now](#right-now).
+
+### Lap by lap on the results
+
+Each race on the **Results** page is laid out the way LiveRC lays out a heat:
+
+- **Length**: "3:00 Timed" for a timed race, or "20 Laps" for a race to a lap count.
+- **Pos**, the driver and their car, and **Qual**: where they started on the grid. **Qual** is empty when the grid wasn't known.
+- **Laps/Time**: laps and the time they took, for example "20/3:10.513", or DNF, DNS or DQ.
+- **Behind**: how far behind the car in front they finished, as a time ("0.342") or in laps ("2 Laps").
+- **Best**: their best lap, with their best sectors under it on a split loop.
+- **View laps**, under each driver: their lap stats (as on their own night, see [Race cards](#race-cards)) and every lap with its **Pace**, and in a race their **Pos** after that lap. Their best lap is highlighted. Pace is the laps and time they'd have done at their average so far, for example "18/3:02.034", and is only shown for a timed race.
+- **Lap-by-lap position graph**, under the table: a coloured line for each driver showing where they were running after every lap, starting from their grid slot, with a key of names under it. Practice and qualifying have no graph.
+
+Results published by an older version of HeatCaller have no laps, so they show without **View laps**, **Qual** or the graph.
+
 ### Penalties on the results
 
 On the **Results** page, a driver who had time added or a warning in a session has a small chip beside their time, for example "+5s", "1 warning" or "+10s · 2 warnings". Hold a finger or the mouse on it for "Time added or warnings from race control".
@@ -64,41 +125,27 @@ The chip has numbers only, never the reason. Race control's reasons ("Blocking",
 
 ### Podium videos
 
-After a race, the top three's [highlight videos](../announcer/sounds-and-music.md#highlight-videos) can go on a page of their own, `/c/<club>/videos/<race>`, headed with the race's name ("A-Main podium") and "The announcer's call of the top three, to watch and keep. Kept for a week." Each video has its place and the driver's name, a player, and **Download video**, which saves it to the phone as a file named for the race and the driver.
+The top three's [highlight videos](../announcer/sounds-and-music.md#highlight-videos) aren't on the club's pages. From 21 to 28 October 2026 they were: a page per race from a QR code on the Big Screen, a **Videos** tab, and **Your podium videos** on a driver's night. Now every video stays on the race PC, in the night's **Highlights** folder, and **Share video** in a driver's drawer on Race Control opens theirs to send.
 
-- Nobody types that address: it's the QR code the Big Screen shows after the race (see [The podium's videos](../screens/big-screen.md#the-podiums-videos)), and every race's page is listed on the **Videos** tab (below). The address itself can't be guessed.
-- Only 1st, 2nd and 3rd are ever put there, and only the ones a video was made for. The relay refuses anything else, whatever sends it.
-- A video has the music and crowd that were playing under the call, as the room heard them. If your between-race music is commercial tracks that aren't licensed for posting online, untick **Put the music and crowd under the highlight videos** on **Club Website → Recording** and the videos have the announcer only.
-- A driver on the podium also finds their video on their own night page (the link with the code from their check-in badge), under **Your podium videos**, with the same **Download video**.
-- If the page is opened before the videos are up, or after the week, it says "These videos have gone - they are kept for a week - or they are still on their way. Try again in a minute."
-
-It's switched on with **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** on **Club Website → Recording**, and only works while the club's page is switched on (see [Setting up the Club Website page](setup.md)).
-
-#### The Videos tab
-
-Since 26 Oct 2026 the club's pages have a **Videos** tab (and a **Podium videos** tile, "Watch and download the top three", on the home page), so a driver who missed the QR code, or a parent at home, can still find the top three's videos. It's at `/c/<club>/videos`, headed "Podium videos" with "The announcer's call of every race's top three, to watch and download. Kept for a week."
-
-- Each race of the last week that has podium videos is listed, newest first, with its name, its day, **Watch the podium** (which opens that race's page with the players) and, for 1st, 2nd and 3rd, the driver's name and **Download 1st** (**Download 2nd**, **Download 3rd**), which saves the video to the phone.
-- It only lists videos the race pages already show, by the same names. A driver who asked for **Leave me out of podium videos online** never has a video sent, and if they ask later their videos are taken down and drop off this list too. A video sent for a driver HeatCaller couldn't give a QR check-in code (no driver profile, or online check-in never set up) is never listed here, because it couldn't be taken down that way; it's only on its race's page, from the Big Screen's QR code. A driver shown by initials only is listed by their initials, and a video whose sound names a driver shown by initials only never goes up (see [Online privacy](../race-day/drivers-and-classes.md#online-privacy)).
-- With nothing from the last week it says "No podium videos this week. After a race the top three's videos appear here - they are kept for a week."
-- Search engines are asked to leave it out, like the race pages.
-
-The **Videos** tab needs the relay redeployed (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)). Until it is, the club's pages have no **Videos** tab, and the race pages from the Big Screen's QR code work as before.
+- An old QR code, link or bookmark to a podium video or the **Videos** tab opens the relay's "That page isn't here" page, with the club's tabs.
+- Once the relay is redeployed (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)), it deletes the podium videos it was still holding the first time it starts.
+- A driver's own race calls on their night page are separate and unchanged; see [A driver's own night](#race-cards).
 
 ### A driver's own night
 
-Each driver has a page of their own on the relay, headed "Your night". It opens from a link that carries the code from their check-in badge: **See your racing from last time** on their own check-in card, or the link in their [night email](setup.md#drivers-nights-by-email). A driver who has a personal PIN can also open it from the club's **My night** tab (see [Opening your night with your PIN](#opening-your-night-with-your-pin)). Nobody without that code or that PIN can find or open it. It's switched on with **Give each driver their own night at a private address** on the Club Website page, which is off by default and needs online check-in set up (see [What gets published](setup.md#what-gets-published)).
+Each driver has a page of their own on the relay, headed "Your night". It opens from a link that carries the code from their check-in badge: **See your racing from last time** on their own check-in card, or the link in their [night email](setup.md#drivers-nights-by-email). A driver who has a personal PIN can also open it from the club's **Me** tab (see [Opening your night with your PIN](#opening-your-night-with-your-pin)). Nobody without that code or that PIN can find or open it. It's switched on with **Give each driver their own night at a private address** on the Club Website page, which is off by default and needs online check-in set up (see [What gets published](setup.md#what-gets-published)).
 
 !!! warning "The night link is private - don't share it"
     The link is the driver's own, like a door key. Anyone holding it can see when and where that driver races next, their marshal duty and their transponder, and send requests to the desk in their name. For a driver without a personal PIN it also checks them in or out; a driver with one is asked for it first (see [Checking in or out needs the driver's own PIN](check-in.md#checking-in-or-out-needs-the-drivers-own-pin)). Don't post it in a group chat, a social media post or a screenshot. To show someone how the night went, use **Make a picture to share** at the bottom of the page instead: the picture has no code in it. If a link has got out, **Reissue All QR Check-ins** on the Club Website page changes every driver's code (see [Reissue all QR check-ins](check-in.md#reissue-all-qr-check-ins)).
 
 #### Opening your night with your PIN
 
-Since 26 Oct 2026 the club's pages have a **My night** tab, and a **My night** tile ("Your own races, with your PIN") on the home page, while online check-in is switched on. It's for a driver who doesn't have their badge or the club's email to hand.
+Since 26 Oct 2026 the club's pages have had a way in with a PIN: the **Me** tab (called **My night** until 29 October), and, until 30 October, a **My night** tile on the home page while online check-in was switched on (now Home's **Check in: tap Me and type your PIN** line). The PIN only opens a night while online check-in is switched on. It's for a driver who doesn't have their badge or the club's email to hand.
 
-1. The driver opens **My night**. The page says "Type the personal check-in PIN the club emailed you, and your own night opens: your races, your report card and, once you are racing, your live card."
-2. They type their six-digit personal PIN into **Your personal PIN** and tap **Open my night**.
-3. Their own night page opens - the same page their badge link opens. On a race night that's tonight: the live card, and their races as each one is filed (before their first race it says "Nothing is filed for you yet tonight."). Between race nights it's their most recent night. **Your details** on that page is already signed in for as long as the tab is open.
+1. The driver opens **Me**. The page says "Type the personal check-in PIN the club emailed you. It checks you in for tonight and opens your own night: your races, your report card and, once you are racing, your live card."
+2. They type their six-digit personal PIN into **Your personal PIN** and tap **Check in**.
+3. Since 30 October a right PIN checks them in, just as the check-in page would, and says "You are checked in. Opening your night...". A driver who's already checked in is left as they are. If the check-in doesn't go through (the desk's queue is full, say), their night still opens and its own **Check in** button can try again.
+4. Their own night page opens - the same page their badge link opens. On a race night that's tonight: the live card, and their races as each one is filed (before their first race it says "Nothing is filed for you yet tonight."). Between race nights it's their most recent night. **Your details** on that page is already signed in for as long as the tab is open.
 
 - There's no list of names to pick from: each racer's PIN is their own, so the PIN alone says who they are. A wrong PIN always gets the same answer ("That PIN is not right."), so the page never shows who is on the club's books.
 - The PIN is checked exactly as on the check-in page, with the same [lockouts](check-in.md#lockouts): ten wrong from one connection, or fifty across the club, close PIN sign-in for a while. It's sent once, never put in the page's address, and never kept on the phone; only the sign-in it earns is kept, and only until the tab is closed.
@@ -113,12 +160,13 @@ From top to bottom, the page shows:
 
 1. **Right now**, a live card for the evening as it happens (see below).
 2. **Your first night - what happens**, a short guide, on a driver's first night only.
-3. The night itself: the night's facts, **Your report card**, a card for each race, how the night went, their race calls and their podium videos.
-4. **Your details**, where they ask the desk for changes, when the club takes requests (see [Driver requests](driver-requests.md)).
+3. The night itself: a bar of buttons that jumps to each part, the night at a glance, the night's facts, **Your races**, **Your report card**, **Driver score**, progress and their race calls (see [Finding your way round](#finding-your-way-round)).
+4. **Make a picture to share** and **Save as a text file**, side by side.
+5. **Your details**, with their battery pack (in **Right now** on race night) and, folded under it, the request to change how they're called and shown, when the club takes requests (see [Driver requests](driver-requests.md)).
 
 Before their first race of the night, the night part says "Nothing is filed for you yet tonight. Your races show here after each one." The live card above it still works.
 
-Everything on this page except the night's facts, the report card and the podium videos needs the relay redeployed after 22 Oct 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)). Until it is, the night page looks as it did before.
+Everything on this page except the night's facts and the report card needs the relay redeployed after 22 Oct 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)). Until it is, the night page looks as it did before.
 
 #### Right now
 
@@ -127,10 +175,22 @@ The **Right now** card is at the top of the page while HeatCaller is sending the
 - **The call-up**, in large type: "You're up next", "2 races before yours", "Staged - go to the driver stand" or "On track now". Under it, the race and their grid slot, for example "Q2 Heat 1 (Stock Buggy) · grid slot 3". When none of their races is coming up soon: "None of your races is in the next few on the running order."
 - **When it should start**, for example "about 7 min (19:42)", counting down between refreshes. It says "due now (19:42)" once the time has come, and "at about 21:10" for a race more than an hour and a half away. HeatCaller works it out from the time on the day's timetable plus how late the night is running, or, where the timetable has no time it can read, from how long tonight's races have been taking. With neither, no time is shown. The page goes by the relay's clock, so a phone whose clock is wrong still counts down to the right minute.
 - **Turn on alerts**, with "Two beeps and a buzz when your race is next, and again when it is staged." Tap it and the phone beeps once to show it works, and says "Alerts on. Keep this page open on your screen." The button then reads **Alerts on - tap to turn off**. A phone only lets a page beep after a tap, and only while the page is open with the screen on. An iPhone can't buzz for a web page, so it only beeps.
-- **Your marshal duty**, when they marshal one of the coming races: the race and their post, for example "Q2 Heat 2 (Stock Buggy) - Turn 3", with "1 race before it." or "That race is next - head to your post." It's the same duty the announcer calls; see [Corner marshals](../race-day/program-and-mains.md#corner-marshals).
+- **Lap times in my ear**, with **Read out my laps**. Tap it and the phone says "Lap times on", then reads out each of the driver's own laps as they race, a second or two after the line: "Lap 7, 9.42, best lap, 0.2 under target, P2, 0.4 seconds behind". The target part is only said when race control has set them a target lap, as "under target", "off target" or "on target". Tick **Time only** for just the time, "best lap" and the target: "9.42, best lap, 0.2 under target". There's no one to pick: the page finds their own row on the live board, under any of their transponders, even if somebody else on the board has the same name. The button then reads **Reading out your laps - tap to stop**. While it's on and they're racing, the page reads the live board every second and asks the phone to keep the screen on. After a reload it reads **Tap to resume your lap times** until they tap anywhere. The rest works as it does on the Live page, in the HeatCaller lap voice when the relay has it, with the target as "point two under target" (see [Lap times in my ear](#lap-times-in-my-ear) and [The HeatCaller lap voice](#the-heatcaller-lap-voice)). It needs HeatCaller from 29 October 2026 on the race PC; with an older version the button isn't shown. A car on a club rental transponder isn't read out.
+- **Your marshal duty**, when they marshal one of the coming races, on one line: the race, their post and how far off it is, for example "Your marshal duty: Q2 Heat 2 (Stock Buggy) - Turn 3 · 1 race before it." or "... · That race is next - head to your post." It's the same duty the announcer calls; see [Corner marshals](../race-day/program-and-mains.md#corner-marshals).
 - **Check in**, while online check-in is open and they're on tonight's list: "One tap and the timing desk knows you are here." After the tap it reads **Checked in ✓**, with "Tap again if you need to check out." It works exactly like the button on their check-in card (see [Online check-in](check-in.md)). If check-in has closed, the phone says "Online check-in is closed just now - check in at the desk."
 - **Your transponder**, with when the timing line last heard it and a **Check my transponder** button (see below).
-- **Your requests to the desk**, once they've sent one, with how each is getting on (see [What the driver sees](driver-requests.md#what-the-driver-sees)).
+- **Your battery pack**, when the club takes requests and the desk has packs on file for them: pick the pack in the car and tap **Tell the desk**. On race night it's here rather than in **Your details**, and a pack they've picked stays picked when the card refreshes.
+- The race-day jobs, **Check in**, **Your transponder**, **Lap times in my ear** and **Your battery pack**, sit side by side on a wide screen and one under the other on a phone.
+- **Your requests to the desk (2, 1 answered)**, once they've sent one: tap it to see how each is getting on (see [What the driver sees](driver-requests.md#what-the-driver-sees)). It stays open across the card's refreshes once tapped.
+
+#### Finding your way round
+
+The night is laid out so a driver at the track finds what they want in a tap or two:
+
+- **The jump bar.** A row of buttons under the driver's name, **Right now**, **Races**, **Report card**, **Driver score**, **Progress**, **Race calls** and **Your details**, each going straight to that part. **Right now** goes back up to the live card, and is only there while the card is. Only the parts with something in them get a button. It stays at the top of the screen as they scroll. On a night of two cars it has a button for each car instead.
+- **At a glance.** Four numbers above the night's facts: their **Best finish** and **Best lap**, each with the race it came in, and how many **Races** and **Laps** they did.
+- **One race open at a time.** **Your races** is a list, one row per race: its name and time, where it left them ("3rd of 8"), its laps, and a red **Penalty** tag if it had one. Their latest race is open when the page opens. Tap another row to open it instead, or the open one to close it. What they opened stays open when new results come in.
+- **Line the races up by a stat.** With more than one race, the buttons over the list (**Best lap**, **Avg. lap**, **Top 3 consec.**, **Consistency**) change the number at the end of every row, and the night's best of it is in green. Quicker is best for the lap times; higher is best for consistency.
 
 #### Check my transponder
 
@@ -174,7 +234,7 @@ The same guide is on their check-in card when they open it from their QR check-i
 
 A driver who races a second transponder as a car of its own gets one night page, not two. HeatCaller times a driver's other transponder as a separate row in the results when another of their cars is already on track in that race; otherwise its laps go in their main row. See [Alternate transponder](../timing/transponders.md#alternate-transponder).
 
-When that happens, the night page splits into a section for each car, headed with the car and its name from the results, for example **Main car · B6.4** and **Second car · RC10 B7**. Each section has that car's own facts, report card, races, improvement tonight and progress. Nothing is added up across the two cars: a place, a best lap or an improvement only means something for one car. Badges within reach and the first-night guide are the driver's, so they appear once.
+When that happens, the night page splits into a section for each car, headed with the car and its name from the results, for example **Main car · B6.4** and **Second car · RC10 B7**. Each section has that car's own glance, facts, races, report card, improvement tonight, driver score and progress, and the jump bar has a button for each car. Nothing is added up across the two cars: a place, a best lap or an improvement only means something for one car. Badges within reach and the first-night guide are the driver's, so they appear once.
 
 - **A race where the second transponder was merged** into the main row counts as the main car's, as it does on the result sheet.
 - **Both cars in the same race** shows that race once in each car's section. **Something wrong?** under either one names the car in the message to the desk.
@@ -187,38 +247,48 @@ The sections need the relay redeployed after 22 Oct 2026 (see [Updating the rela
 
 #### Race cards
 
-Under the report card, **Your races** (or **Your race**) has a card for each race they ran tonight, in order:
+**Your races** (or **Your race**) lists each race they ran tonight, in order. The open race shows:
 
-- The race's name and when it ran.
 - How it went, for example "2nd of 8 · started 4th · 12 laps · best 9.214", or "Disqualified" or "Did not finish". Ghost cars aren't counted in "of 8".
-- **A lap chart**: one line across the card, a point for each lap, left to right, with quicker laps higher and the best lap marked. Under it: "Each lap, left to right - higher is quicker. Best 9.214 on lap 7." A lap far slower than the rest, such as a crash or a flipped car, is drawn along the bottom edge so the rest of the line isn't squashed flat. A race with fewer than two laps has no chart.
+- Three tabs, as LiveRC's driver window has them:
+    - **Lap stats**, first: **Fast lap**, **Avg. lap**, **Top 3 consec.** and **Consistency**, then **More stats** for **Avg. top 5**, **Avg. top 10** and **Avg. top 15** (the average of their quickest 5, 10 or 15 laps), **Top 2 consec.** (their quickest 2 laps in a row, added up) and **Std. deviation** (how far their laps strayed from their average). **Consistency** is 100% when every lap is the same. A figure needs enough laps: **Avg. top 10** needs 10.
+    - **Lap times (12)**: every lap with its time, **Pace** in a timed race, and **Pos**, where they were running after that lap, in a race. Their best lap is highlighted. On a narrow phone the table scrolls sideways in its own box.
+    - **Lap chart**: one line, a point for each lap, left to right, with quicker laps higher and the best lap marked. Under it: "Each lap, left to right - higher is quicker. Best 9.214 on lap 7." A lap far slower than the rest, such as a crash or a flipped car, is drawn along the bottom edge so the rest of the line isn't squashed flat. A race with fewer than two laps has no chart.
+- A race filed before lap data was sent has no tabs, only how it went.
 - **Penalties**, in red, one line each, with race control's reason: "Warning 1 - Blocking", "+5 s - Blocking (warning 2)", "+5 s - jump start", "Jump start (no time added)", or a change made after the race with the reason given for it. A penalty with no reason typed reads "no reason given". These lines are only ever on the driver's own night; the public results show numbers only (see [Penalties on the results](#penalties-on-the-results)).
 - **The call of this race**, when the club shares drivers' clips: the announcer's call of that driver in that race, with a player and **Download the call (mp3)**.
 - **Something wrong?**, when the club takes requests: a way to ask the desk to look at that result (see [Querying a result](driver-requests.md#querying-a-result)).
 
 #### How the night went
 
-After the race cards, as much of this as there's something to say about:
+After the races, as much of this as there's something to say about:
 
-- **Your improvement tonight**: their middle lap against their first race tonight, for example "Your middle lap is 0.40 s quicker than in your first race tonight (Q1 Heat 2)", or slower, or "the same pace as". It needs two races, and never compares them with anyone else.
+- **Your improvement tonight**, under the report card: their middle lap against their first race tonight, for example "Your middle lap is 0.40 s quicker than in your first race tonight (Q1 Heat 2)", or slower, or "the same pace as". It needs two races, and never compares them with anyone else.
 - **Your progress on** *layout*: up to six bars, their best lap on each of their last nights on the layout of their latest race tonight, with tonight last and marked **Tonight**. A quicker night stands taller. Under it, when it applies, "Your best on Club Oval since 3 September 2026" or "Your best ever on Club Oval". Demo races and ghost cars don't count, and a personal best reset hides laps from before it.
 - **Achievements in reach**: up to three badges they're close to, for example "2 more podiums for Podium Regular".
-- **Your race calls**: any of the driver's clips that didn't go with a race card.
-- **Your podium videos**: see [Podium videos](#podium-videos).
+- **Your race calls**: any of the driver's clips that didn't go with a race.
 
 The driver's clips go online only when **Put each driver's clip on their own night on the club's page** is ticked on **Club Website → Recording** (see [Highlight videos](../announcer/sounds-and-music.md#highlight-videos)). It's off by default. A clip is only ever on that driver's own night, never on a public page. Clips are kept for a week, and the relay keeps a driver's eight most recent.
 
 #### The report card
 
-The night has **Your report card**: a few lines of arithmetic about their laps tonight. See [The report card](../screens/phone-and-web.md#the-report-card) for what each line says.
+Under the races, **Your report card**: a few lines of arithmetic about their laps tonight. See [The report card](../screens/phone-and-web.md#the-report-card) for what each line says. When the **Driver score** is shown just below it, the card leaves out its own driver rating line, which says the same.
 
 - This page is the driver's own, so it's the one online place the card includes the **setup line**, what a setup change logged tonight did to their pace.
 - The driver they're compared with in the last line is named the way your public pages name people, shortened to a first name and initial when **Shorten published names** is ticked.
 - The card needs the relay updated. On a relay that hasn't been redeployed since 22 Oct 2026, the night page simply shows no card.
 
+#### Driver score
+
+Under the report card, **Driver score** is their driver rating for the night, out of 150: the same rating as the report card's line, Driver Hub and the leaderboard. Each race is rated from where they finished, a win, laps led, their best lap against the quickest in the race, the fastest lap, laps completed and places gained, less 5 for each warning.
+
+- One race: its rating, for example "104.5 out of 150".
+- More than one: the average, the best and which race it came in ("Average of 3 races. Best 118.5, in A-Main."), and a bar for each race.
+- A race needs at least two cars to be rated. A night filed by an older HeatCaller has no **Driver score**; its report card still has the driver rating line.
+
 #### Your details
 
-When the club has ticked **Let drivers send changes from their phone**, a **Your details** card at the foot of the page lets the driver ask the desk to change how they're called and shown, to keep them more private online, or to change the battery pack in their car. Nothing changes until the desk approves it. See [Driver requests](driver-requests.md).
+When the club has ticked **Let drivers send changes from their phone**, a **Your details** card at the foot of the page has the driver's battery pack, and under it **Change how you are called and shown**, which opens the form to ask the desk to change how they're called and shown or to keep them more private online. Nothing changes until the desk approves it. See [Driver requests](driver-requests.md).
 
 ### Following a driver
 
@@ -299,13 +369,12 @@ When the app starts, or when you change the address, club, token or short-name s
 
 ## How long results stay online
 
-The relay keeps every result you publish, so drivers can look back through past seasons on the **Results** page. There's no limit on how many, only on space (below), and a session is only a kilobyte or two. The laptop still keeps every result it has ever recorded, so it stays the record.
+The relay keeps every result you publish, so drivers can look back through past seasons on the **Results** page. There's no limit on how many, only on space (below). A session with every driver's laps is about 3 to 6 KB: a heat of 8 drivers over 20 laps is about 3 KB, a 12-car main of 35 laps about 6 KB. The laptop still keeps every result it has ever recorded, so it stays the record.
 
-Each club can hold 50 MB on the relay in total. If results would take the club past that, the oldest results are dropped to make room.
+Each club can hold 50 MB on the relay in total. If results would take the club past that, the oldest results are dropped to make room. A club racing one night a week keeps about three years of results; a very busy club racing three nights a week, with 40 heats and 20 practices a night, keeps about a year.
 
 The race-day manager's traffic over the relay doesn't count toward those 50 MB. It has an allowance of its own: about 1 MB of requests waiting for the laptop, and 4 MB of answers waiting for phones to collect them. So however busy the manager is, it can't make results fail to publish or push old results off. When too many requests are waiting for the laptop, the manager's page says "The race-day manager is busy - the laptop has not caught up with recent requests yet. Try again shortly."
 
-Podium videos are kept apart from results and don't count toward the 50 MB. Each one is removed after a week, and the relay holds at most 120 videos and 1 GB per club, dropping the oldest first. One video can be at most 48 MB.
 
 ## Children and privacy
 
@@ -314,7 +383,7 @@ Many clubs race juniors, so the defaults are cautious, and it's worth deciding e
 - **Leave short names on** unless you're sure every family is happy with full names on a public page.
 - **Leave the roster off** unless you need heat line-ups online. With it on, anyone with the address can see which children are entered and in which heat.
 - **Leave photos off** unless you're sure. Photos are only visible behind a PIN or QR check-in, but anyone with the staff PIN sees every driver's face next to their name.
-- **One driver can ask for more.** Each driver profile has three **Online privacy** ticks: leave their photo out, no podium videos of them, and initials only. They cover everything the relay shows, captions included, and nothing in the room. A driver or a parent can ask for them from the night page; only the desk can turn one off. See [Online privacy](../race-day/drivers-and-classes.md#online-privacy).
+- **One driver can ask for more.** Each driver profile has three **Online privacy** ticks: leave their photo out, no podium videos of them (always met now, since no podium video goes online), and initials only. They cover everything the relay shows, captions included, and nothing in the room. A driver or a parent can ask for them from the night page; only the desk can turn one off. See [Online privacy](../race-day/drivers-and-classes.md#online-privacy).
 - **Night links are private.** A driver's night link opens their next race, their marshal post and their check-in. Tell drivers and families not to share it (see [A driver's own night](#a-drivers-own-night)).
 - **Club ids aren't secret.** They go on posters. Treat the club address as public, and assume anything published can be seen by anyone.
 - **Staff PIN.** Share it with the people running the desk, not with the paddock. Racers get their own PINs, which only check in themselves.

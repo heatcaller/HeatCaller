@@ -110,6 +110,16 @@ public static class JoinPosterRenderer
         g.DrawString(string.IsNullOrWhiteSpace(url) ? "-" : url, urlFont, black, urlRect, centred);
         g.DrawString(subtitle, subFont, grey, subRect, centred);
 
+        // HeatCaller's mark, small and black, centred in the bottom margin
+        // (31 Oct 2026, the mark on everything the app prints).
+        using (var markFont = new Font(AppTheme.BoldFont.FontFamily, Math.Max(6f, subSize * 0.8f), FontStyle.Bold))
+        {
+            var markWidth = HeatCallerMark.MeasureSignOff(g, markFont);
+            var markHeight = markFont.GetHeight(g);
+            HeatCallerMark.DrawSignOff(g, markFont, new PointF((size - markWidth) / 2f, size - margin + (margin - markHeight) / 2f),
+                Color.Black, Color.Black, Color.Black);
+        }
+
         return bitmap;
     }
 }

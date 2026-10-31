@@ -509,7 +509,7 @@ Your between-race soundtrack and the crowd are **not** in the race's mp3 or the 
 
 The [highlight videos](#highlight-videos) are different: they **do** have the music and the crowd under the call, at the level the room heard them - quieter under the announcer where the [ducking](#ducking) brought them down. While a race is recorded for videos, HeatCaller keeps the music and crowd in a second file beside the recording, and mixes each video's moments of it under the call.
 
-That's most of the answer to "can we post this": no track from the club's music library is in the mp3s. Check two things before you put anything somewhere public: the show treatment's opener and music bed, which play through the recorded output, so whatever you pointed those at is in every file; and the highlight videos, which have whatever music was playing in them - including the podium's videos that go on the club's page - unless you untick **Put the music and crowd under the highlight videos** on **Club Website → Recording**.
+That's most of the answer to "can we post this": no track from the club's music library is in the mp3s. Check two things before you put anything somewhere public: the show treatment's opener and music bed, which play through the recorded output, so whatever you pointed those at is in every file; and the highlight videos, which have whatever music was playing in them - drivers often post theirs - unless you untick **Put the music and crowd under the highlight videos** on **Club Website → Recording**.
 
 ### Where the files go
 
@@ -550,7 +550,6 @@ After a race HeatCaller can turn a driver's clip into a short upright video for 
 | **Highlight videos:** | Who gets one: **Off**, **The winner**, **The podium** or **Every driver**. | Every driver |
 | **Club handle:** | Your club's social handle, for example `@yourclub`, shown at the end of each video. | Blank |
 | **Put the music and crowd under the highlight videos** | The music and crowd the room heard go under the call in every video. Untick it if your music isn't licensed for posting online: the videos then have the announcer only, and no music is kept for them at all. Your music at the track isn't affected. | On |
-| **Put the podium's videos on the club's page, with a QR code on the Big Screen to download them** | Puts 1st, 2nd and 3rd's videos online for a week, with a QR code on the Big Screen after the race. See [Podium videos](../online/index.md#podium-videos). | On |
 | **Put each driver's clip on their own night on the club's page** | Puts each driver's mp3 clip on their own private night page, which only their badge code opens, with a player and a download link. Never on a public page. Needs **Give each driver their own night at a private address** on the Club Website page; kept online for a week. See [A driver's own night](../online/index.md#race-cards). | Off |
 
 - A video is made from the driver's clip, so it needs **A clip for each driver as well as the race's own recording** ticked too.
@@ -558,8 +557,7 @@ After a race HeatCaller can turn a driver's clip into a short upright video for 
 - Videos are made a minute or so after the race, on a background thread, after every driver's mp3 clip is saved. A video that fails costs the night nothing: the clip and the race are untouched.
 - Each runs for 55 seconds at most. When a clip is longer, the earliest stretches go first, because the finish is the part worth keeping.
 - **Share video** in a driver's drawer on **Race Control** opens their video in File Explorer, ready to send. See [The drawer](../race-control/corrections-and-recovery.md).
-- Only 1st to 3rd are ever put online, and only the ones a video was made for: with **The winner** chosen, only the winner's. Every other video stays on this PC.
-- A driver who asked for **No podium videos of them** on their profile never has a video put online (see [Online privacy](../race-day/drivers-and-classes.md#online-privacy)).
+- Every video stays on this PC, in the night's **Highlights** folder. None is put on the club's page: since 28 October 2026 the podium's videos aren't uploaded to the relay either, and the Big Screen shows no QR code for them.
 - Drivers' clips go to their nights after every clip and video is saved, and the race log says, for example, "[audio] 8 driver clips put on the drivers' own nights." Like the videos, they need **A clip for each driver as well as the race's own recording** ticked.
 - Windows makes the video itself, with nothing extra installed. An "N" edition of Windows without the Media Feature Pack can't, and the race log says so; the clips are unaffected.
 
@@ -567,10 +565,7 @@ The race log says what happened:
 
 ```text
 [video] 3 highlight videos saved in C:\Users\...\2026-10-10\Highlights - press Share video in a driver's drawer on Race Control to find theirs.
-[video] Dave Smith's video is on the club's page: https://your-relay.fly.dev/c/your-club/videos/...
 ```
-
-If it says `[video] The relay does not take highlight videos yet - redeploy it (fly deploy --ha=false).`, whoever runs your relay needs to update it; see [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
 
 ### What isn't recorded
 

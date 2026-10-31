@@ -173,6 +173,9 @@ public static class QrBadgeRenderer
                 DrawCentered(g, "Scan with your phone camera to check in", detailFont, greyBrush, cellX, textY + 48, cellWidth);
             }
         }
+
+        // The shared foot of every printed sheet, in the margin under the badges.
+        HeatCallerMark.DrawPrintFooter(g, MarginX, PageWidth - MarginX, PageHeight - MarginY + 10, detailFont);
     }
 
     private static void DrawCentered(Graphics g, string text, Font font, Brush brush, int cellX, int y, int cellWidth)

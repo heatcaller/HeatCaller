@@ -195,6 +195,7 @@ public sealed partial class WebServerService
           <div class="bnote" id="bNote" aria-live="polite"></div>
         </div>
         <div id="boardTap" hidden>Tap anywhere to start the pit board</div>
+        {{HeatCallerMark.PageFooterHtml}}
         <script>
         // The same remembered pick as Live Results' Follow - see FOLLOW_KEY there.
         const FOLLOW_KEY = 'hcFollow';

@@ -273,32 +273,20 @@ describe("what it draws", () => {
   async function drawing() {
     const box = { innerHTML: "" };
 
-    const run = lifted((await page()).text, ["lines", "nothing", "ownPath", "videoList", "draw"], {
+    const run = lifted((await page()).text, ["lines", "nothing", "draw"], {
       box,
       document: { getElementById: () => null },
     });
 
-    return (night: unknown, videos: unknown[] = []) => {
-      run("draw()", { night, videos });
+    return (night: unknown) => {
+      run("draw()", { night });
       return box.innerHTML;
     };
   }
 
-  it("draws their podium videos, and only the relay's own", async () => {
-    const draw = await drawing();
-    const id = "11111111111111111111111111111111";
-
-    const html = draw({ driver: "Bill", lines: ["A win."] }, [
-      { url: `/c/acme-rc/video/${id}.mp4`, download: `/c/acme-rc/video/${id}.mp4?download=1`, label: "A-Main", position: 1 },
-      { url: "https://evil.example/x.mp4", download: "https://evil.example/x.mp4", label: "Bad", position: 2 },
-    ]);
-
-    assert.match(html, /Your podium videos/);
-    assert.match(html, /A-Main · 1st/);
-    assert.match(html, /download=1/);
-    assert.doesNotMatch(html, /evil/);
-    assert.doesNotMatch(draw({ driver: "Bill", lines: ["A win."] }), /podium videos/);
-  });
+  // "draws their podium videos, and only the relay's own" went on 28 Oct
+  // 2026 with the videos themselves (they stay on the laptop) - see
+  // novideos.test.ts, which checks a night no longer draws any.
 
   it("shows the name, the day and every line of it", async () => {
     const draw = await drawing();
@@ -480,13 +468,18 @@ describe("a driver is offered their night where they check in", () => {
     assert.doesNotMatch(draw({ drivers: [bill], nights: false }), /\/night/);
   });
 
-  it("no link for somebody who signed in by PIN rather than by badge", async () => {
-    // A racer behind their own PIN has not shown a badge code, so there is
-    // no code to build the address from - and guessing one is the whole
-    // thing that must never happen.
+  it("links somebody who signed in by PIN to their night by the code their PIN's answer carried, and nobody else", async () => {
+    // Since 29 Oct 2026 (relay navigation round 2). A racer behind their own
+    // PIN has shown no badge, but the relay answers their PIN with their own
+    // driver, whose id is their code - exactly what My night opens the night
+    // with. Never a code guessed or taken from anywhere else: no racer, or
+    // an id that is not a code, and there is no link.
     const draw = await drawingCheckin({ BADGE: "" });
 
-    assert.doesNotMatch(draw({ drivers: [bill], nights: true, racer: true }), /\/night/);
+    assert.match(draw({ drivers: [bill], nights: true, racer: true }), new RegExp(`/night#d=${bill.id}`));
+    assert.doesNotMatch(draw({ drivers: [bill], nights: true, racer: false }), /\/night/);
+    assert.doesNotMatch(draw({ drivers: [{ ...bill, id: "not-a-code" }], nights: true, racer: true }), /\/night/);
+    assert.doesNotMatch(draw({ drivers: [bill], nights: false, racer: true }), /\/night/);
   });
 
   it("still offers the full list and the check-in button", async () => {

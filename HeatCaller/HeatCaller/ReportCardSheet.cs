@@ -96,6 +96,9 @@ internal static class ReportCardSheet
 
                 TextRenderer.DrawText(g, foot, footFont, new Rectangle(Margin, PageHeight - Margin - 20, width, footFont.Height + 4), Color.DimGray,
                     TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
+
+                // The shared foot of every printed sheet, in the margin below.
+                HeatCallerMark.DrawPrintFooter(g, Margin, PageWidth - Margin, PageHeight - Margin + 10, footFont);
             }
 
             bitmap.SetResolution(PrintDpi, PrintDpi);

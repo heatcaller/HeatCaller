@@ -306,6 +306,24 @@ public sealed partial class WebServerService
         return new RosterView(roster, ids, byId);
     }
 
+    /// <summary>
+    /// The key the public board's row tags are made with (29 Oct 2026,
+    /// spoken laps on My Night). Its own key, not the roster's, so a tag on
+    /// the public board can never be matched against a check-in id. Made
+    /// once per run, so a driver's tag holds all evening.
+    /// </summary>
+    private readonly byte[] _relayRowKey = RandomNumberGenerator.GetBytes(32);
+
+    /// <summary>
+    /// The tag a car's row carries on the relay's public board: sixteen hex
+    /// characters that say nothing about the transponder. The driver's own
+    /// night page gets the same tags in their private live entry
+    /// (DriverLive), which is how it finds their row on the board without
+    /// going by name. Null for a blank transponder.
+    /// </summary>
+    public string? RelayRowTag(string? transponder) =>
+        string.IsNullOrWhiteSpace(transponder) ? null : RosterId(_relayRowKey, transponder);
+
     /// <summary>Sixteen hex characters of HMAC. Case and spacing in the transponder do not change it.</summary>
     private static string RosterId(byte[] key, string transponder)
     {
@@ -3277,11 +3295,43 @@ public sealed partial class WebServerService
             standings,
         };
 
-        // The relay's copy stays exactly as it was: it is a public document
-        // with a format the relay knows.
+        // The relay's copy keeps the format the relay knows, with two things
+        // added to each row (29 Oct 2026, spoken laps on My Night):
+        //  - "tag", the car's opaque row tag (RelayRowTag), so a driver's own
+        //    night page can find their row without going by name. Never on a
+        //    ghost, which is nobody's car;
+        //  - "ahead", the gap to the car in front in the board's own words
+        //    ("+0.41", "+1L"), so the gap can be read out even when the club
+        //    doesn't show an Interval column. Anyone can already work it out
+        //    from the board. Not on the leader.
         if (forRelay)
         {
-            return JsonSerializer.Serialize(document);
+            var relayNode = JsonSerializer.SerializeToNode(document)!.AsObject();
+
+            if (relayNode["standings"] is System.Text.Json.Nodes.JsonArray rows)
+            {
+                for (var i = 0; i < ordered.Count && i < rows.Count; i++)
+                {
+                    if (rows[i] is not System.Text.Json.Nodes.JsonObject row)
+                    {
+                        continue;
+                    }
+
+                    var car = ordered[i];
+
+                    if (!Ghosts.IsGhost(car.TransponderId) && RelayRowTag(car.TransponderId) is { } tag)
+                    {
+                        row["tag"] = tag;
+                    }
+
+                    if (i > 0 && RaceGaps.Format(RaceGaps.Between(car, ordered[i - 1])) is var ahead && ahead != "-")
+                    {
+                        row["ahead"] = ahead;
+                    }
+                }
+            }
+
+            return relayNode.ToJsonString();
         }
 
         // The LAN copy also says which race Race Control has in hand, for
@@ -3994,7 +4044,10 @@ public sealed partial class WebServerService
         .legend { display:flex; flex-wrap:wrap; gap:10px; padding:8px 18px 16px; font-size:13px; }
         .legend span { display:flex; align-items:center; gap:5px; color:var(--soft); }
         .swatch { width:12px; height:3px; border-radius:2px; }
-        """;
+        """
+        // HeatCaller's sign-off at the foot of every page (31 Oct 2026),
+        // the relay pages' footer mark - see HeatCallerMark.PageFooterHtml.
+        + HeatCallerMark.PageFooterStyle;
 
     // Internal rather than private so the tests can read its script (BugHunt4WebTests).
     internal string BuildLiveResultsPage()
@@ -4119,6 +4172,7 @@ public sealed partial class WebServerService
 
         <div id="captions" aria-live="polite"></div>
         <div id="sponsor"><img id="sponsorImg" src=""><video id="sponsorVid" muted playsinline preload="auto" style="display:none"></video></div>
+        {{HeatCallerMark.PageFooterHtml}}
         <script>
         // Everything below builds rows with innerHTML, and a driver name is
         // whatever somebody typed into a profile. Without this, a driver
@@ -4918,6 +4972,7 @@ public sealed partial class WebServerService
           <div class="msg" id="msg"></div>
           <div id="list"></div>
         </div>
+        {{HeatCallerMark.PageFooterHtml}}
         <script>
         // Everything below builds rows with innerHTML, and a driver name is
         // whatever somebody typed into a profile. Without this, a driver
@@ -5187,6 +5242,7 @@ public sealed partial class WebServerService
           <table style="margin-top:18px"><thead><tr id="head"></tr></thead>
           <tbody id="rows"></tbody></table>
         </div>
+        {{HeatCallerMark.PageFooterHtml}}
         <script>
         // Everything below builds rows with innerHTML, and a driver name is
         // whatever somebody typed into a profile. Without this, a driver
@@ -5481,6 +5537,7 @@ public sealed partial class WebServerService
             <div id="resultDetail" class="detail" style="display:none"></div>
           </div>
         </div>
+        {{HeatCallerMark.PageFooterHtml}}
         <script>
         function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
           return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }

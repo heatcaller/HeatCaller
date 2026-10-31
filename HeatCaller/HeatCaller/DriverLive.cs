@@ -92,6 +92,12 @@ internal static class DriverLive
 
         /// <summary>The desk's answers for a badge id (MainForm._askAnswersFor) - the last 24 hours' worth.</summary>
         public Func<string, IReadOnlyList<DriverAskAnswer>>? AsksOf { get; init; }
+
+        /// <summary>The tag a transponder's row carries on the relay's public board (WebServerService.RelayRowTag), or null.</summary>
+        public Func<string, string?>? RowTagOf { get; init; }
+
+        /// <summary>The target lap race control set for a transponder tonight, in ms (DriverTargets.TargetMs), or null.</summary>
+        public Func<string, long?>? TargetOf { get; init; }
     }
 
     /// <summary>
@@ -298,6 +304,11 @@ internal static class DriverLive
                 entry["asks"] = answered;
             }
 
+            if (CarsOf(main, profileOf, inputs.RowTagOf, inputs.TargetOf) is { Count: > 0 } cars)
+            {
+                entry["cars"] = cars;
+            }
+
             // Measured one by one, so the cap drops whole drivers - the
             // least relevant, last in the list - rather than the document.
             var bytes = Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(entry)) + badge.Length + 4;
@@ -365,6 +376,54 @@ internal static class DriverLive
     /// a kind and a state the page knows), the newest <see cref="MostAsks"/>,
     /// with what the desk said only when it said something.
     /// </summary>
+    /// <summary>
+    /// The driver's own cars as the public board knows them (29 Oct 2026,
+    /// spoken laps on My Night): each transponder's row tag, and its target
+    /// lap when race control set one. The night page finds the driver's row
+    /// on the board by tag, so it never has to go by a name somebody else
+    /// may share, and says how the lap went against the target.
+    ///
+    /// Only the tags are sent, never a transponder, and only here, behind
+    /// the driver's own badge code. Retired transponders are left out: they
+    /// are not on track. Empty when the laptop has no tags to give.
+    /// </summary>
+    internal static List<Dictionary<string, object?>> CarsOf(
+        string main,
+        Func<string, DriverProfile?> profileOf,
+        Func<string, string?>? rowTagOf,
+        Func<string, long?>? targetOf)
+    {
+        var cars = new List<Dictionary<string, object?>>();
+
+        if (rowTagOf is null)
+        {
+            return cars;
+        }
+
+        var profile = profileOf(main);
+        IEnumerable<string> ids = profile is null ? new[] { main } : profile.AllTransponderIds.Where(t => !profile.IsRetired(t));
+        var tags = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var id in ids)
+        {
+            if (GhostService.IsGhost(id) || rowTagOf(id) is not { Length: > 0 } tag || !tags.Add(tag))
+            {
+                continue;
+            }
+
+            var car = new Dictionary<string, object?> { ["tag"] = tag };
+
+            if (targetOf?.Invoke(id) is long target && target > 0)
+            {
+                car["target"] = target;
+            }
+
+            cars.Add(car);
+        }
+
+        return cars;
+    }
+
     private static List<Dictionary<string, object?>> AsksFor(string badge, Func<string, IReadOnlyList<DriverAskAnswer>>? asksOf)
     {
         var list = new List<Dictionary<string, object?>>();

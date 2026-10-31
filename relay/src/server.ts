@@ -5,7 +5,6 @@ import { isValidItemId, StoreReadError, type Store } from "./store.js";
 import { AUTO_WHEN_USED } from "./autotopup.js";
 import { isActive, isValidClubId, type Tenant, type TenantRegistry } from "./tenancy.js";
 import { CHANNELS, channelSpec, type ChannelSpec, type StoredDocument } from "./types.js";
-import { flagIcon } from "./icon.js";
 import { cardVersionOf, clubCard, sessionCard } from "./card.js";
 import { PinGuard } from "./pinguard.js";
 import { previewCard, previewsIn, type PagePreview, type SessionPreview } from "./preview.js";
@@ -16,20 +15,18 @@ import {
   livePage,
   managePage,
   manifest,
+  missingPage,
   nightPage,
   pausedPage,
+  relayNoticePage,
   resultsPage,
   schedulePage,
   signupPage,
   standingsPage,
   tracksPage,
-  videosPage,
-  podiumVideosIndexPage,
   myNightPage,
-  type PodiumRace,
   type PageContext,
 } from "./pages.js";
-import { VIDEO_ID, VIDEO_MAX_BYTES, videosToDrop, type VideoMeta, type VideoVault } from "./videos.js";
 import {
   CLIP_DRIVER_ID,
   CLIP_ID,
@@ -55,8 +52,10 @@ import {
   DRIVER_ASKS_PER_DRIVER,
   type DriverAskBody,
 } from "./driverasks.js";
-import { DEFAULT_LOOK, flagColours, lookFrom, type Look } from "./site.js";
+import { DEFAULT_LOOK, lookFrom, type Look } from "./site.js";
+import { sunIcon } from "./sun.js";
 import { BRAIN_LONG_WORDS_CEILING, BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
+import { LapVoiceLibrary } from "./lapvoice.js";
 import { VOICE_PLAN_OFF, type MeterUsage, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
@@ -827,16 +826,16 @@ interface DriverDoc {
 }
 
 /**
- * A club's look as its site document sets it, and the two pictures drawn
- * from it once somebody has asked for them: the home-screen icon, and
- * the club's generic result card. Both live here rather than in caches
- * of their own so that forgetSite throws them away along with the look
- * they were drawn from - a club that changes its colours cannot be left
- * serving either of them in the old ones.
+ * A club's look as its site document sets it, and the picture drawn from
+ * it once somebody has asked for it: the club's generic result card. It
+ * lives here rather than in a cache of its own so that forgetSite throws
+ * it away along with the look it was drawn from - a club that changes
+ * its colours cannot be left serving it in the old ones. (The home-screen
+ * icon was kept here too until 30 Oct 2026; it is HeatCaller's sun for
+ * every club now, drawn once in sun.ts.)
  */
 interface SiteEntry {
   readonly look: Look;
-  flag: Buffer | undefined;
   card: Buffer | undefined;
 }
 
@@ -965,11 +964,6 @@ export interface RelayOptions {
    */
   readonly voice?: VoiceService | undefined;
   /**
-   * Where the podium's highlight videos are kept (21 Oct 2026) - see
-   * videos.ts. Absent, the relay does not take them, and says so.
-   */
-  readonly videos?: VideoVault | undefined;
-  /**
    * Where drivers' own race clips are kept (22 Oct 2026, driver
    * experience) - see clips.ts. Absent, the relay does not take them, and
    * says so.
@@ -993,6 +987,11 @@ export interface RelayOptions {
    * requests themselves are unaffected either way.
    */
   readonly usageLog?: UsageLog | undefined;
+  /**
+   * The lap voice's clips (29 Oct 2026) - see lapvoice.ts. Absent, the
+   * manifest lists none and the pages use the phone's own voice.
+   */
+  readonly lapVoice?: LapVoiceLibrary | undefined;
 }
 
 interface Parsed {
@@ -1005,6 +1004,7 @@ const DEFAULT_MAX_BODY = 1024 * 1024;
 
 export class Relay {
   private readonly store: Store;
+  private readonly lapVoice: LapVoiceLibrary;
   private readonly tenants: TenantRegistry;
   private readonly maxBodyBytes: number;
   private readonly now: () => Date;
@@ -1061,45 +1061,22 @@ export class Relay {
   /** The two open voice-sample routes, per address - nobody is signed in, so that is all there is. See VOICE_SAMPLES_PER_ADDRESS. */
   private readonly voiceSamples: Limiter;
   private readonly voice: VoiceService | undefined;
-  private readonly videos: VideoVault | undefined;
-  /** Phones fetching a video, per address: a player asks in many small ranges, so this is generous. */
-  private readonly videoReads: Limiter;
-  /** One laptop sending the podium's videos: three a race. */
-  private readonly videoUploads: Limiter;
-  /** Uploads being read right now, across every club. */
-  private videoUploadsInFlight = 0;
-  /**
-   * How many times each club has deleted everything (22 Oct 2026, Bug Hunt
-   * 9): an upload that started before a delete and finishes after it sees
-   * the count has moved and keeps nothing. See receiveVideo and deleteClub.
-   */
-  private readonly videoWipes = new Map<string, number>();
-  /**
-   * How many times each driver's podium videos have been taken down, keyed
-   * `${club}|${badge id}` (see forgetDriverMedia and receiveVideo).
-   *
-   * WHY (23 Oct 2026, bug hunt 10): forget-media only deleted the videos
-   * already stored, so an upload whose body was still arriving when it ran
-   * was saved afterwards - against the driver's "no video online" - and
-   * nothing ever asked again. Now an upload notes this count before its
-   * body is read and keeps nothing if it has moved, as videoWipes does for
-   * a deleted club. Emptied whenever no upload is waiting to be saved.
-   */
-  private readonly videoForgets = new Map<string, number>();
-  /** Uploads that have noted their start counts and not yet finished saving - wider than videoUploadsInFlight, which ends once the body is in. */
-  private videoSavesPending = 0;
+  // 28 Oct 2026, asked for by Asher ("Remove the podium videos for
+  // downloading from the relay and just have locally"): the podium video
+  // vault, its upload, its pages and forget-media are gone. The videos stay
+  // on the laptop. See removeLeftoverVideos (oldvideos.ts) for the disk.
   /** Drivers' own race clips - see clips.ts (22 Oct 2026, driver experience). */
   private readonly clips: ClipVault | undefined;
   /** Phones fetching a clip, per club and address - an audio player asks in ranges too. */
   private readonly clipReads: Limiter;
-  /** One laptop sending clips: one per driver per race, so far more than videos. */
+  /** One laptop sending clips: one per driver per race. */
   private readonly clipUploads: Limiter;
   /** Clip uploads being read right now, across every club. */
   private clipUploadsInFlight = 0;
   /**
    * How many times each club's clips have been wiped - by closing nights or
    * deleting everything. An upload that started before and finishes after
-   * sees the count has moved and keeps nothing, as videoWipes does.
+   * sees the count has moved and keeps nothing.
    */
   private readonly clipWipes = new Map<string, number>();
   /**
@@ -1350,9 +1327,7 @@ export class Relay {
     this.collectionReads = new Limiter(COLLECTION_READS_PER_ADDRESS, 60 * 1000, () => this.now().getTime());
 
     this.voice = options.voice;
-    this.videos = options.videos;
-    this.videoReads = new Limiter(900, 60 * 1000, () => this.now().getTime());
-    this.videoUploads = new Limiter(30, 60 * 1000, () => this.now().getTime());
+    this.lapVoice = options.lapVoice ?? new LapVoiceLibrary(new Map());
     // 22 Oct 2026, driver experience: clips and drivers' asks. See the fields.
     this.clips = options.clips;
     this.clipReads = new Limiter(900, 60 * 1000, () => this.now().getTime());
@@ -1535,7 +1510,6 @@ export class Relay {
       return await this.shared(this.siteLoads, club, () => this.siteEpochs.get(club) ?? 0, async () => {
         const entry: SiteEntry = {
           look: lookFrom(await this.store.getSnapshot(club, "site"), undefined),
-          flag: undefined,
           card: undefined,
         };
         return entry;
@@ -1543,16 +1517,16 @@ export class Relay {
     } catch {
       // Not held as the club's look: a read that failed may work next
       // time, and the next request tries it. But the entry that stands in
-      // meanwhile IS held, one per club, because the pictures drawn on it
-      // are kept on it: a fresh entry each time was a fresh icon and a
-      // fresh club card drawn for every request while the document would
+      // meanwhile IS held, one per club, because the picture drawn on it
+      // is kept on it: a fresh entry each time was a fresh club card drawn
+      // for every request while the document would
       // not read - the one path that drew a card with no budget counting
       // it. Only configured clubs get this far, so there is one of these
       // at most for each of them, and forgetSite drops it with the rest.
       let fallback = this.siteFallbacks.get(club);
 
       if (fallback === undefined) {
-        fallback = { look: DEFAULT_LOOK, flag: undefined, card: undefined };
+        fallback = { look: DEFAULT_LOOK, card: undefined };
         this.siteFallbacks.set(club, fallback);
       }
 
@@ -1931,7 +1905,7 @@ export class Relay {
 
   /**
    * The club's own card, drawn once and kept with the look it was drawn
-   * from - exactly like the flag icon beside it. Not counted against the
+   * from. Not counted against the
    * drawing budget, because it is what the budget falls back TO: counting
    * it would mean a relay under load refusing the only picture it has
    * left to send.
@@ -1975,31 +1949,31 @@ export class Relay {
     // hold a small machine's sockets open indefinitely. Nothing honest
     // takes more than a few seconds to send a result or ask for a page.
     //
-    // WHY (22 Oct 2026, Bug Hunt 9): a podium video (POST .../video/<id>)
-    // is the exception - up to 48 MB over a track's uplink, which the
-    // laptop gives five minutes (RelayPublisher.Videos.cs). The old 30 s
-    // server-wide ceiling covered the whole body, so on a 5 Mbps line
-    // every winner's clip was cut off with a 408. The server-wide ceiling
-    // is now the laptop's five minutes; handle() puts the 30-second
-    // ceiling back on every request, receiveVideo lifts it only for an
-    // upload that passed its checks and gives that an idle timeout
-    // instead, so a slow but steady upload finishes and a stalled one is
-    // still dropped.
+    // WHY (22 Oct 2026, Bug Hunt 9): an upload from the laptop is the
+    // exception - it was first the podium video, up to 48 MB; since 28 Oct
+    // 2026 (the videos stay on the laptop) it is a driver's clip (POST
+    // .../clip/<id>), up to 4 MB over a track's uplink, which the laptop
+    // gives five minutes (RelayPublisher.Uploads.cs). A 30 s server-wide
+    // ceiling would cover the whole body, so a slow line would cut it off
+    // with a 408. The server-wide ceiling is the laptop's five minutes;
+    // handle() puts the 30-second ceiling back on every request,
+    // receiveClip lifts it only for an upload that passed its checks and
+    // gives that an idle timeout instead, so a slow but steady upload
+    // finishes and a stalled one is still dropped.
     server.headersTimeout = 15_000;
     server.requestTimeout = 300_000;
     server.keepAliveTimeout = 5_000;
     server.maxHeadersCount = 100;
 
-    // WHY (22 Oct 2026, Bug Hunt 9): videos past their week used to be
+    // WHY (22 Oct 2026, Bug Hunt 9): uploads past their week used to be
     // deleted only when the same club uploaded again, so a club that
-    // stopped sending kept its last night's videos - drivers' names and
+    // stopped sending kept its last night's files - drivers' names and
     // all - on the disk for good. A sweep now runs a minute after start
     // and then every hour. Both timers are unref'd so they never hold the
-    // process open, and they stop when the server closes.
-    // 22 Oct 2026, driver experience: drivers' clips are swept on the same
-    // timers, for the same reason.
+    // process open, and they stop when the server closes. It swept the
+    // podium videos too until 28 Oct 2026, when they stopped coming here;
+    // now only drivers' clips.
     const sweep = (): void => {
-      void this.sweepVideos().catch(() => 0);
       void this.sweepClips().catch(() => 0);
     };
     const firstSweep = setTimeout(sweep, 60_000);
@@ -2026,12 +2000,12 @@ export class Relay {
     const { segments } = parsed;
 
     // WHY (22 Oct 2026, Bug Hunt 9): the server-wide requestTimeout is now
-    // five minutes for the podium video (see listen()), so every request
+    // five minutes for the laptop's uploads (see listen()), so every request
     // gets the old 30-second ceiling back here: a body still arriving after
-    // 30 s is cut off. Only receiveVideo lifts it (liftCeiling), and only
-    // once an upload has passed every check - so a video POST with no
-    // token, or one refused as busy, still cannot trickle for minutes
-    // while it is drained. The upload then gets an idle timeout instead.
+    // 30 s is cut off. Only receiveClip lifts it (liftCeiling), and only
+    // once an upload has passed every check - so a POST with no token, or
+    // one refused as busy, still cannot trickle for minutes while it is
+    // drained. The upload then gets an idle timeout instead.
     const cut = setTimeout(() => {
       if (!request.complete) {
         request.destroy();
@@ -2124,9 +2098,11 @@ export class Relay {
             return;
           }
 
+          // HeatCaller's sun for every club, logo or not (30 Oct 2026,
+          // relay branding, Asher: "synthwave colors for the icon
+          // regardless of logo"). The club's logo stays on its pages.
           if (page === "icon.png") {
-            const site = await this.siteOf(tenant.club);
-            sendBody(response, 200, "image/png", site.look.logo ?? this.flagFor(site));
+            sendBody(response, 200, "image/png", sunIcon());
             return;
           }
 
@@ -2139,13 +2115,10 @@ export class Relay {
             }
           }
 
-          // Every race's podium videos (26 Oct 2026, asked for by Asher -
-          // see podiumVideosIndexPage). Not in PAGES: it is drawn from the
-          // video vault, not from a published document a script reads.
-          if (page === "videos") {
-            await this.podiumVideosIndex(request, response, tenant);
-            return;
-          }
+          // The club's podium videos tab (26 Oct 2026),
+          // is gone with the videos (28 Oct 2026, asked for by Asher: they
+          // stay on the laptop). It is not in PAGES, so an old bookmark
+          // gets the relay's ordinary "not found" below.
 
           // Not in PAGES on purpose: this is the race-day manager's own
           // page, not one of the club's public tabs, so it never appears
@@ -2220,21 +2193,13 @@ export class Relay {
         // (see cardVersionOf) and is deliberately ignored here - the
         // answer is always the current card, whatever version was asked
         // for, so a stale link is never a stale picture.
-        // THE PODIUM'S VIDEOS (21 Oct 2026). A race's page - what the Big
-        // Screen's QR code opens - and the video itself. Both are named
-        // by 128 random bits from the laptop. Since 26 Oct 2026 the
-        // club's Videos tab (/c/<club>/videos, podiumVideosIndex) lists the
-        // week's podiums too - Asher asked for a place to download them.
-        // See videos.ts.
-        if (tenant !== undefined && segments.length === 4 && segments[2] === "videos") {
-          await this.videosForRace(request, response, tenant, segments[3] as string);
-          return;
-        }
-
-        if (tenant !== undefined && segments.length === 4 && segments[2] === "video") {
-          await this.videoFile(request, response, tenant.club, segments[3] as string, parsed.query);
-          return;
-        }
+        // THE PODIUM'S VIDEOS (21 Oct to 28 Oct 2026) had two routes here,
+        // a race's page (what the Big Screen's QR code opened) and the mp4
+        // itself.
+        // Both are gone - 28 Oct 2026, asked for by Asher: "Remove the
+        // podium videos for downloading from the relay and just have
+        // locally." An old QR code or link falls through to the ordinary
+        // "not found".
 
         // A driver's own race clip (22 Oct 2026, driver experience) - named
         // by 128 random bits, listed only on that driver's night. See clips.ts.
@@ -2247,7 +2212,33 @@ export class Relay {
           await this.cardPng(request, response, tenant, segments[3] as string);
           return;
         }
+
+        // Anything else under a club (29 Oct 2026, relay navigation round
+        // 1): a page with the club's tabs on it rather than the API's line
+        // of JSON, so an old QR code or a typo is not a dead end. Still 404.
+        if (tenant !== undefined) {
+          const context = await this.contextFor(request, tenant.club);
+          sendHtml(response, 404, missingPage(tenant.club, tenant.name, context), context.nonce);
+          return;
+        }
       }
+
+      // No such club: the same in plain words, with nothing about which
+      // clubs do exist.
+      sendHtml(response, 404, relayNoticePage(
+        "No club here",
+        "There's no club at this address. Check the link on the club's poster or in their email.",
+      ), randomBytes(16).toString("base64"));
+      return;
+    }
+
+    // The relay's own address, which somebody will type sooner or later.
+    if (method === "GET" && segments.length === 0) {
+      sendHtml(response, 200, relayNoticePage(
+        "HeatCaller",
+        "This is where HeatCaller clubs put their live timing and results. Your club's own page is at the address on its poster.",
+      ), randomBytes(16).toString("base64"));
+      return;
     }
 
     // Hear it before you buy it. The one group of routes outside /api/v1
@@ -2268,6 +2259,29 @@ export class Relay {
 
     if (method === "POST" && segments.length === 2 && segments[0] === "voice" && segments[1] === "preview") {
       await this.voicePreview(request, response);
+      return;
+    }
+
+    // The lap voice (29 Oct 2026): which clips there are, and each clip.
+    // No token and nothing counted - the same stock recordings for every
+    // club, made once on the operator's own key (see lapvoice.ts).
+    if (method === "GET" && segments.length === 1 && segments[0] === "lap-voice") {
+      sendBody(response, 200, "application/json; charset=utf-8", JSON.stringify(this.lapVoice.manifest), "public, max-age=300");
+      return;
+    }
+
+    if (method === "GET" && segments.length === 2 && segments[0] === "lap-voice") {
+      const file = segments[1] as string;
+      const clip = file.endsWith(".mp3") ? this.lapVoice.clip(file.slice(0, -4)) : undefined;
+
+      if (clip === undefined) {
+        sendJson(response, 404, { ok: false, error: "There is no such clip." });
+        return;
+      }
+
+      // A year: the page asks with the library's version on the address,
+      // so clips made again are new addresses.
+      sendBody(response, 200, "audio/mpeg", clip, "public, max-age=31536000, immutable");
       return;
     }
 
@@ -2445,11 +2459,10 @@ export class Relay {
       return;
     }
 
-    // A podium video from the laptop - see videos.ts and receiveVideo.
-    if (method === "POST" && rest.length === 2 && rest[0] === "video") {
-      await this.receiveVideo(request, response, club, rest[1] as string, parsed.query, liftCeiling);
-      return;
-    }
+    // The podium video upload from the laptop is gone (28 Oct
+    // 2026, asked for by Asher: the videos stay on the laptop). An older
+    // laptop that still sends one is refused like any unknown address, and
+    // the video simply stays on that PC.
 
     // A driver's own race clip from the laptop (22 Oct 2026, driver
     // experience) - see clips.ts and receiveClip.
@@ -2461,8 +2474,8 @@ export class Relay {
     // A DRIVER ASKING THE DESK (22 Oct 2026, driver experience): the phone
     // sends an ask with its badge code, the laptop collects and confirms
     // with its token - the notes shape - and opens or closes the whole
-    // thing. forget-media takes a driver's podium videos down when they
-    // turn on "no photo" or "no video". See driverasks.ts.
+    // thing. See driverasks.ts. (driver/forget-media, which took a
+    // driver's podium videos down, went with the videos on 28 Oct 2026.)
     if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "ask") {
       await this.driverAsk(request, response, club);
       return;
@@ -2480,11 +2493,6 @@ export class Relay {
 
     if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "open") {
       await this.setDriverAsksOpen(request, response, club);
-      return;
-    }
-
-    if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "forget-media") {
-      await this.forgetDriverMedia(request, response, club);
       return;
     }
 
@@ -4559,23 +4567,14 @@ export class Relay {
       // 17 Oct 2026, Bug Hunt 8, A19-3: a club set up again starts fresh.
       this.lastStaffPin.delete(club);
       this.lastManagePin.delete(club);
-      // Its podium videos, kept outside the club's folder (videos.ts).
+      // Its drivers' clips, kept outside the club's folder (clips.ts).
       //
       // WHY (22 Oct 2026, Bug Hunt 9): an upload whose body was still
-      // arriving when Delete was pressed took its own lock after this wipe
-      // and wrote the video - a named driver's - straight back. The wipe
-      // count goes up first, so any upload already on its way keeps
-      // nothing, and the wipe itself takes the videos lock, so it waits for
-      // a save already writing instead of racing it.
-      this.videoWipes.set(club, (this.videoWipes.get(club) ?? 0) + 1);
-      const vault = this.videos;
-
-      if (vault !== undefined) {
-        await this.withLock(`${club}|videos`, () => vault.removeClub(club).catch(() => {}));
-      }
-
-      // And its drivers' clips, the same way and for the same reason
-      // (22 Oct 2026, driver experience) - see clips.ts.
+      // arriving when Delete was pressed took its own lock after the wipe
+      // and wrote the file - a named driver's - straight back. wipeClips
+      // moves the wipe count first, so any upload already on its way keeps
+      // nothing. (The podium videos were wiped here the same way until 28
+      // Oct 2026, when they stopped coming to the relay.)
       await this.wipeClips(club);
       this.forgetDriverDoc(club, DRIVER_LIVE_CHANNEL);
       this.forgetDriverDoc(club, DRIVER_ME_CHANNEL);
@@ -4610,26 +4609,6 @@ export class Relay {
     // A fresh nonce per page: the one script each page carries names it,
     // and the content policy runs nothing that does not.
     return { look: await this.lookFor(club), origin: originOf(request), nonce: randomBytes(16).toString("base64") };
-  }
-
-  /**
-   * The home-screen icon for a club with no logo, in its own colours.
-   * Drawn once and kept with the look it was drawn from: a 512-pixel PNG
-   * is a few milliseconds of work, and the address that asks for it needs
-   * no password.
-   */
-  private flagFor(site: SiteEntry): Buffer {
-    if (site.flag !== undefined) {
-      return site.flag;
-    }
-
-    // The colours come from site.ts, which also fingerprints them for the
-    // icon's address (Look.iconVersion), so a recoloured flag is always a
-    // new address. Dark squares from the darkest colour the theme has.
-    const [primary, dark] = flagColours(site.look);
-
-    site.flag = flagIcon(512, primary, dark);
-    return site.flag;
   }
 
   // ---------------------------------------------------------- check-in
@@ -6242,364 +6221,13 @@ export class Relay {
   }
 
   /**
-   * A podium video from the laptop (21 Oct 2026). The bytes are the body
-   * (video/mp4); what it is comes in the query: race, position, driver,
-   * name, label. ONLY 1ST TO 3RD - anything else is refused before a byte
-   * is kept. See videos.ts.
-   */
-  private async receiveVideo(
-    request: IncomingMessage,
-    response: ServerResponse,
-    club: string,
-    id: string,
-    query: URLSearchParams,
-    liftCeiling: () => void = () => {},
-  ): Promise<void> {
-    const who = this.authorise(request, club);
-
-    if (who === "no-token") {
-      await discardRest(request, response);
-      sendJson(response, 401, { ok: false, error: "A publish token is required." });
-      return;
-    }
-
-    if (who === "wrong-club") {
-      await discardRest(request, response);
-      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
-      return;
-    }
-
-    if (this.videos === undefined) {
-      await discardRest(request, response);
-      sendJson(response, 404, { ok: false, error: "This relay does not keep highlight videos." });
-      return;
-    }
-
-    // Never more than two uploads held in memory at once, across every
-    // club (22 Oct 2026, bug hunt): each can be 48 MB, and the limiter
-    // below counts starts, not uploads still arriving.
-    if (this.videoUploadsInFlight >= 2) {
-      await discardRest(request, response);
-      sendJson(response, 429, { ok: false, error: "Busy with other videos. Try again in a minute." });
-      return;
-    }
-
-    if (this.videoUploads.blocked(club)) {
-      await discardRest(request, response);
-      sendJson(response, 429, { ok: false, error: "Too many videos at once. Try again in a minute." });
-      return;
-    }
-
-    this.videoUploads.hit(club);
-
-    const position = Number(query.get("position"));
-    const race = (query.get("race") ?? "").toLowerCase();
-    const driver = (query.get("driver") ?? "").toLowerCase();
-    const name = (query.get("name") ?? "").trim().slice(0, 80);
-    const label = (query.get("label") ?? "").trim().slice(0, 80);
-
-    if (!Number.isInteger(position) || position < 1 || position > 3) {
-      await discardRest(request, response);
-      sendJson(response, 400, { ok: false, error: "Only the podium's videos are taken - 1st, 2nd and 3rd." });
-      return;
-    }
-
-    if (!VIDEO_ID.test(id) || !VIDEO_ID.test(race) || (driver.length > 0 && !DRIVER_ID.test(driver))) {
-      await discardRest(request, response);
-      sendJson(response, 400, { ok: false, error: "That video's details could not be read." });
-      return;
-    }
-
-    const declared = Number(request.headers["content-length"] ?? "0");
-
-    if (Number.isFinite(declared) && declared > VIDEO_MAX_BYTES) {
-      await discardRest(request, response);
-      sendJson(response, 413, { ok: false, error: "That video is too big." });
-      return;
-    }
-
-    // Taken before the body is read: a delete while it arrives moves it.
-    const wipesAtStart = this.videoWipes.get(club) ?? 0;
-    // And a take-down of this driver's videos, the same way (23 Oct 2026,
-    // bug hunt 10 - see videoForgets). Noted in the same step as the count
-    // of saves pending goes up, so forgetDriverMedia never empties the map
-    // under an upload holding a start value.
-    const forgetsAtStart = driver.length > 0 ? (this.videoForgets.get(`${club}|${driver}`) ?? 0) : 0;
-    this.videoSavesPending += 1;
-
-    try {
-      this.videoUploadsInFlight += 1;
-      let bytes: Buffer | "too-big" | "unreadable";
-
-      // WHY (22 Oct 2026, Bug Hunt 9): an upload that got this far loses the
-      // 30-second ceiling on the whole body (see listen() and handle()), so a
-      // stall is caught instead - thirty seconds with no bytes at all drops
-      // the upload, while a slow but steady one gets the five minutes the
-      // laptop allows. Every chunk that arrives restarts the timer. It is
-      // switched off again once the body is in, so a kept-alive socket does
-      // not carry it on.
-      liftCeiling();
-      request.setTimeout(30_000, () => request.destroy());
-
-      try {
-        bytes = await readRawBody(request, response, VIDEO_MAX_BYTES);
-      } finally {
-        if (!request.destroyed) {
-          request.setTimeout(0);
-        }
-        this.videoUploadsInFlight -= 1;
-      }
-
-      if (bytes === "too-big") {
-        sendJson(response, 413, { ok: false, error: "That video is too big." });
-        return;
-      }
-
-      // An mp4 opens with its "ftyp" box. Anything else is not a video this
-      // relay will hand to a phone as one.
-      if (bytes === "unreadable" || bytes.length < 12 || bytes.toString("latin1", 4, 8) !== "ftyp") {
-        sendJson(response, 400, { ok: false, error: "That is not an mp4 video." });
-        return;
-      }
-
-      const meta: VideoMeta = {
-        id,
-        race,
-        position,
-        name,
-        label,
-        at: this.now().toISOString(),
-        bytes: bytes.length,
-        ...(driver.length > 0 ? { driver } : {}),
-      };
-
-      const vault = this.videos;
-
-      const kept = await this.withLock(`${club}|videos`, async () => {
-        // The club deleted everything while this was on its way: keep none of it.
-        if ((this.videoWipes.get(club) ?? 0) !== wipesAtStart) {
-          return false;
-        }
-
-        // Or this driver's videos were taken down while it was on its way
-        // (23 Oct 2026, bug hunt 10 - see videoForgets): keep none of it.
-        if (driver.length > 0 && (this.videoForgets.get(`${club}|${driver}`) ?? 0) !== forgetsAtStart) {
-          return false;
-        }
-
-        // Room first: the oldest go, never the newest. See videosToDrop.
-        for (const old of videosToDrop(await vault.list(club), this.now().getTime(), bytes.length)) {
-          await vault.remove(club, old.id);
-        }
-
-        await vault.put(club, meta, bytes);
-        return true;
-      });
-
-      if (!kept) {
-        sendJson(response, 410, { ok: false, error: "This video was taken down while it was on its way." });
-        return;
-      }
-
-      sendJson(response, 200, { ok: true, page: `/c/${club}/videos/${race}`, video: `/c/${club}/video/${id}.mp4` });
-    } finally {
-      this.videoSavesPending -= 1;
-    }
-  }
-
-  /**
-   * Deletes every club's videos past their week (22 Oct 2026, Bug Hunt 9).
-   * The upload's own clear-out only runs for a club that keeps uploading,
-   * so this runs on a timer from listen(). It drops exactly what
-   * videosHeld already hides (videosToDrop with nothing incoming), so it
-   * never takes a video a phone can still see, and it holds each club's
-   * videos lock so it cannot race an upload.
-   *
-   * The clubs come from the caller, or from the vault's listClubs().
-   */
-  async sweepVideos(clubs?: Iterable<string>): Promise<number> {
-    const vault = this.videos as (VideoVault & { listClubs?: () => Promise<string[]> }) | undefined;
-
-    if (vault === undefined) {
-      return 0;
-    }
-
-    const names =
-      clubs !== undefined
-        ? [...clubs]
-        : typeof vault.listClubs === "function"
-          ? await vault.listClubs().catch(() => [] as string[])
-          : [];
-    let dropped = 0;
-
-    for (const club of names) {
-      if (!isValidClubId(club)) {
-        continue;
-      }
-
-      await this.withLock(`${club}|videos`, async () => {
-        const held = await vault.list(club);
-
-        for (const old of videosToDrop(held, this.now().getTime())) {
-          await vault.remove(club, old.id);
-          dropped += 1;
-        }
-      }).catch(() => {});
-    }
-
-    return dropped;
-  }
-
-  /** A club's videos still held - anything past its week dropped from the answer, whether or not it has been swept yet. */
-  private async videosHeld(club: string): Promise<VideoMeta[]> {
-    if (this.videos === undefined) {
-      return [];
-    }
-
-    const now = this.now().getTime();
-    const held = await this.videos.list(club).catch(() => [] as VideoMeta[]);
-    const stale = new Set(videosToDrop(held, now).map((v) => v.id));
-
-    return held.filter((v) => !stale.has(v.id));
-  }
-
-  /** One driver's podium videos, newest first, as the night page shows them. */
-  private async videosOfDriver(club: string, driver: string): Promise<{ url: string; download: string; label: string; position: number }[]> {
-    return (await this.videosHeld(club))
-      .filter((v) => v.driver === driver)
-      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-      .slice(0, 12)
-      .map((v) => ({
-        url: `/c/${club}/video/${v.id}.mp4`,
-        download: `/c/${club}/video/${v.id}.mp4?download=1`,
-        label: v.label,
-        position: v.position,
-      }));
-  }
-
-  /**
-   * The club's Videos tab: every race of the last week that has podium
-   * videos, newest race first, each with 1st to 3rd to download (26 Oct
-   * 2026, asked for by Asher: "I don't see a spot on the relay to down load
-   * the top three place recordings."). Only what videosHeld already serves
-   * - the week's videos the relay still holds, which never includes a
-   * driver who asked for no videos online (the laptop does not send theirs,
-   * and forget-media takes down any already sent) - by the same public
-   * name the race's own page shows. Limited per address with the video
-   * reads, since it reads the club's whole vault listing.
-   */
-  private async podiumVideosIndex(request: IncomingMessage, response: ServerResponse, tenant: Tenant): Promise<void> {
-    const address = `${tenant.club}|${clientAddress(request)}`;
-
-    if (this.videoReads.blocked(address)) {
-      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
-      return;
-    }
-
-    this.videoReads.hit(address);
-
-    const context = await this.contextFor(request, tenant.club);
-    const byRace = new Map<string, VideoMeta[]>();
-
-    for (const v of await this.videosHeld(tenant.club)) {
-      // WHY (26 Oct 2026, review): a video sent without the driver's badge
-      // id - a driver with no profile or no badge key - is one forget-media
-      // can never find, so a driver who later asks for no videos online
-      // could not have it taken down. It stays where it always was, on its
-      // race's own page by the QR link, and is never listed here.
-      if (v.driver === undefined) {
-        continue;
-      }
-
-      const list = byRace.get(v.race);
-
-      if (list === undefined) {
-        byRace.set(v.race, [v]);
-      } else {
-        list.push(v);
-      }
-    }
-
-    const races: PodiumRace[] = [...byRace.entries()]
-      .map(([race, list]) => {
-        const sorted = [...list].sort((a, b) => a.position - b.position);
-        const newest = list.reduce((best, v) => (Date.parse(v.at) > Date.parse(best.at) ? v : best));
-
-        return {
-          race,
-          label: sorted.find((v) => v.label !== "")?.label ?? "",
-          at: newest.at,
-          videos: sorted.map((v) => ({ id: v.id, position: v.position, name: v.name, label: v.label })),
-        };
-      })
-      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-      .slice(0, 60);
-
-    sendHtml(response, 200, podiumVideosIndexPage(tenant.club, tenant.name, context, races), context.nonce);
-  }
-
-  /** The page a race's QR code opens: its podium videos, to watch and to keep. */
-  private async videosForRace(request: IncomingMessage, response: ServerResponse, tenant: Tenant, race: string): Promise<void> {
-    const context = await this.contextFor(request, tenant.club);
-    const wanted = race.toLowerCase();
-
-    const videos = VIDEO_ID.test(wanted)
-      ? (await this.videosHeld(tenant.club))
-        .filter((v) => v.race === wanted)
-        .sort((a, b) => a.position - b.position)
-      : [];
-
-    sendHtml(response, 200, videosPage(tenant.club, tenant.name, context, videos, VIDEO_ID.test(wanted) ? wanted : ""), context.nonce);
-  }
-
-  /**
-   * One video's bytes - in ranges, because a phone's player asks for them
-   * that way and will not play (or seek) a video served whole without
-   * them. ?download=1 hands it over as a file to keep.
-   */
-  private async videoFile(
-    request: IncomingMessage,
-    response: ServerResponse,
-    club: string,
-    file: string,
-    query: URLSearchParams,
-  ): Promise<void> {
-    const address = `${club}|${clientAddress(request)}`;
-
-    if (this.videoReads.blocked(address)) {
-      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
-      return;
-    }
-
-    this.videoReads.hit(address);
-
-    const id = file.endsWith(".mp4") ? file.slice(0, -4).toLowerCase() : "";
-    const meta = VIDEO_ID.test(id) ? (await this.videosHeld(club)).find((v) => v.id === id) : undefined;
-
-    if (this.videos === undefined || meta === undefined || meta.bytes === 0) {
-      sendJson(response, 404, { ok: false, error: "That video has gone - they are kept for a week." });
-      return;
-    }
-
-    const download = query.get("download") === "1";
-    const fileName = `${[meta.label, meta.name].filter((s) => s.length > 0).join(" - ") || "Highlight"}`
-      .replace(/[^A-Za-z0-9 ._-]/g, "")
-      .trim()
-      .slice(0, 80) || "Highlight";
-    const vault = this.videos;
-
-    await this.sendRanged(request, response, meta.bytes, "video/mp4", `${fileName}.mp4`, download, (start, end) =>
-      vault.read(club, id, start, end),
-    );
-  }
-
-  /**
-   * Bytes held outside the store - a podium video or a driver's clip - in
-   * ranges, because a phone's player asks for them that way and will not
-   * play (or seek) them served whole without. ?download=1 (download here)
-   * hands it over as a file to keep. Factored out of videoFile (22 Oct
-   * 2026, driver experience) so the clips are served by the very same
-   * code, its two bug-hunt fixes included.
+   * Bytes held outside the store - a driver's clip - in ranges, because a
+   * phone's player asks for them that way and will not play (or seek) them
+   * served whole without. ?download=1 (download here) hands it over as a
+   * file to keep. Factored out of the podium video route (22 Oct 2026,
+   * driver experience) so the clips were served by the very same code,
+   * its two bug-hunt fixes included; kept when that route went (28 Oct
+   * 2026).
    */
   private async sendRanged(
     request: IncomingMessage,
@@ -6658,7 +6286,7 @@ export class Relay {
       return;
     }
 
-    // A megabyte at a time, so a whole video is never in memory at once.
+    // A megabyte at a time, so a whole file is never in memory at once.
     const chunk = 1024 * 1024;
 
     for (let at = start; at <= end; at += chunk) {
@@ -6861,11 +6489,10 @@ export class Relay {
       return;
     }
 
-    // And their podium videos, when they have any (21 Oct 2026) - matched
-    // on the same badge id, which is already the credential for this.
-    const videos = await this.videosOfDriver(club, id);
-
-    // Their own race clips, the same way (22 Oct 2026, driver experience).
+    // Their own race clips (22 Oct 2026, driver experience) - matched on
+    // the same badge id, which is already the credential for this. (Their
+    // podium videos were listed here too until 28 Oct 2026; those now stay
+    // on the laptop.)
     const clips = await this.clipsOfDriver(club, id);
 
     // What they can ask the desk to change, and whether they can ask at
@@ -6880,7 +6507,6 @@ export class Relay {
     sendJson(response, 200, {
       ok: true,
       night: doc === undefined ? null : doc.body,
-      ...(videos.length > 0 ? { videos } : {}),
       ...(clips.length > 0 ? { clips } : {}),
       ...liveField,
       ...me,
@@ -7028,8 +6654,9 @@ export class Relay {
     this.clipUploadsInFlight += 1;
     let bytes: Buffer | "too-big" | "unreadable";
 
-    // The idle timeout the podium video has, and for its reason: four
-    // megabytes over a track's uplink can take longer than thirty seconds.
+    // An idle timeout instead of the 30-second ceiling (see listen()):
+    // four megabytes over a track's uplink can take longer than thirty
+    // seconds.
     liftCeiling();
     request.setTimeout(30_000, () => request.destroy());
 
@@ -7101,7 +6728,7 @@ export class Relay {
   /**
    * Deletes every club's clips past their week, or past a driver's or a
    * club's share - exactly what clipsHeld already hides, so it never takes
-   * a clip a phone can still see. On the videos' timers (see listen()).
+   * a clip a phone can still see. On the hourly timers (see listen()).
    */
   async sweepClips(clubs?: Iterable<string>): Promise<number> {
     const vault = this.clips;
@@ -7158,7 +6785,7 @@ export class Relay {
       }));
   }
 
-  /** One clip's bytes, in ranges, as a video's are - see sendRanged. */
+  /** One clip's bytes, in ranges - see sendRanged. */
   private async clipFile(
     request: IncomingMessage,
     response: ServerResponse,
@@ -7471,80 +7098,6 @@ export class Relay {
     }
 
     sendJson(response, 200, { ok: true, open });
-  }
-
-  /**
-   * Takes down a driver's podium videos at once (22 Oct 2026, driver
-   * experience), when the desk has turned on "no photo online" or "no
-   * video online" for them. Body {id} or {ids:[...]}, badge ids. Their
-   * clips stay: those are private to their own badge, and these flags are
-   * about what the public sees.
-   */
-  private async forgetDriverMedia(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
-    const who = this.authorise(request, club);
-
-    if (who === "no-token") {
-      sendJson(response, 401, { ok: false, error: "A publish token is required." });
-      return;
-    }
-
-    if (who === "wrong-club") {
-      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
-      return;
-    }
-
-    const body = await readBody(request, response, NOTES_COLLECT_MAX_BODY);
-
-    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
-      sendJson(response, 400, { ok: false, error: "That could not be read." });
-      return;
-    }
-
-    const asked = [
-      ...(typeof body["id"] === "string" ? [body["id"]] : []),
-      ...(Array.isArray(body["ids"]) ? (body["ids"] as unknown[]) : []),
-    ];
-    const drivers = new Set(
-      asked
-        .filter((id): id is string => typeof id === "string")
-        .map((id) => id.trim().toLowerCase())
-        .filter((id) => DRIVER_ID.test(id))
-        .slice(0, 100),
-    );
-
-    if (drivers.size === 0) {
-      sendJson(response, 400, { ok: false, error: "Say whose videos to take down." });
-      return;
-    }
-
-    const vault = this.videos;
-    let forgotten = 0;
-
-    if (vault !== undefined) {
-      await this.withLock(`${club}|videos`, async () => {
-        // WHY (23 Oct 2026, bug hunt 10): an upload still arriving for one
-        // of these drivers used to be saved after this ran. Counting the
-        // take-down first makes it keep nothing (see videoForgets). With no
-        // upload waiting to be saved, nothing holds an old count, so the
-        // map is emptied first and never grows past what is in flight.
-        if (this.videoSavesPending === 0) {
-          this.videoForgets.clear();
-        }
-
-        for (const d of drivers) {
-          this.videoForgets.set(`${club}|${d}`, (this.videoForgets.get(`${club}|${d}`) ?? 0) + 1);
-        }
-
-        for (const video of await vault.list(club)) {
-          if (video.driver !== undefined && drivers.has(video.driver)) {
-            await vault.remove(club, video.id);
-            forgotten += 1;
-          }
-        }
-      });
-    }
-
-    sendJson(response, 200, { ok: true, forgotten });
   }
 
   /**
@@ -9442,9 +8995,10 @@ const DRAIN_MAX_MS = 2_000;
  */
 /**
  * A request's body as bytes, up to <paramref name="limit"/> - for the one
- * route that takes something that is not JSON, a podium video. Same
- * shape as readBody: "too-big" once past the limit (the rest discarded),
- * "unreadable" for nothing at all.
+ * route that takes something that is not JSON, a driver's clip (the
+ * podium video, until 28 Oct 2026). Same shape as readBody: "too-big"
+ * once past the limit (the rest discarded), "unreadable" for nothing at
+ * all.
  */
 function readRawBody(
   request: IncomingMessage,
@@ -9491,7 +9045,7 @@ function readRawBody(
     request.on("error", () => finish("unreadable"));
     request.on("aborted", () => finish("unreadable"));
     // WHY (22 Oct 2026, Bug Hunt 9): a stalled upload is now destroyed by
-    // the relay itself (receiveVideo's idle timeout), and a destroyed
+    // the relay itself (receiveClip's idle timeout), and a destroyed
     // request is not sure to say "aborted" - "close" always comes, and
     // after "end" it changes nothing because the answer is already settled.
     request.on("close", onClose);
@@ -9750,12 +9304,12 @@ function sendHtml(response: ServerResponse, status: number, html: string, nonce:
 }
 
 /** Bytes of a known type - the manifest, the icon, the logo. Cached for an hour: they change when a club re-brands, not between visits. */
-function sendBody(response: ServerResponse, status: number, type: string, body: string | Buffer): void {
+function sendBody(response: ServerResponse, status: number, type: string, body: string | Buffer, cache = "public, max-age=3600"): void {
   response.writeHead(status, {
     ...BASE_HEADERS,
     "content-type": type,
     "content-length": Buffer.byteLength(body),
-    "cache-control": "public, max-age=3600",
+    "cache-control": cache,
   });
 
   response.end(body);
