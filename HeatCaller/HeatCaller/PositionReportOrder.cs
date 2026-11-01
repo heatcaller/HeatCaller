@@ -22,10 +22,12 @@ internal static class PositionReportOrder
     /// <summary>One car in the running order, with the gap said for it.</summary>
     /// <param name="Standing">The car, as the board had it when the order was read.</param>
     /// <param name="Gap">
-    /// What is said for it: laps down to the leader when it is down a lap,
-    /// otherwise the time to the car directly in front. Nothing for the leader.
+    /// What is said for it: how far it is behind the LEADER - laps down when
+    /// it is down a lap, otherwise the time from the leader crossing the
+    /// lap to this car crossing the same lap. The board's "Gap to P1" is the
+    /// same figure. Nothing for the leader.
     /// </param>
-    /// <param name="VsLeader">The gap back to the leader, for the laps-down wording.</param>
+    /// <param name="VsLeader">The gap back to the leader (the same as Gap since 1 Nov 2026; kept for the laps-down wording).</param>
     internal readonly record struct Row(RaceStanding Standing, RaceGap Gap, RaceGap VsLeader);
 
     /// <summary>
@@ -59,13 +61,15 @@ internal static class PositionReportOrder
                 continue;
             }
 
-            // Laps down is measured against the LEADER, at the line. Down a
-            // lap, that IS the whole answer; on the lead lap, the gap to the
-            // car directly ahead, measured when each crossed the same lap.
+            // Measured to the LEADER, at the line - the same gap the board
+            // shows in its "Gap to P1" column (1 Nov 2026). It used to be
+            // the time to the car directly ahead for third place and on,
+            // so the voice gave P3 a different figure from the one on the
+            // screen and it was heard as the wrong time. Down a lap, the
+            // laps down is the whole answer.
             var vsLeader = Between(named[i], named[0], crossingMs);
-            var gap = vsLeader.LapsDown > 0 ? vsLeader : Between(named[i], named[i - 1], crossingMs);
 
-            rows.Add(new Row(named[i], gap, vsLeader));
+            rows.Add(new Row(named[i], vsLeader, vsLeader));
         }
 
         return rows;
@@ -100,6 +104,80 @@ internal static class PositionReportOrder
 
         return false;
     }
+
+    /// <summary>
+    /// How many of <paramref name="rows"/>, from the top, have a gap that
+    /// is up to date for the leader's lap <paramref name="leaderLap"/>: the
+    /// leader, then each car that has crossed that lap too, or that is a
+    /// lap or more down (its laps down is already the answer, and it will
+    /// not cross that lap for a while). Stops at the first car still on its
+    /// way to the line - its gap would be a lap old, and nothing after it
+    /// can be read without skipping a place.
+    /// </summary>
+    /// <remarks>
+    /// WHY (1 Nov 2026): the report was read the instant the leader crossed,
+    /// when every car behind was still on the previous lap, so each gap it
+    /// gave was measured a lap earlier. It now waits until all the cars it
+    /// names are over the line - this says when they are.
+    /// </remarks>
+    internal static int SettledCount(IReadOnlyList<Row> rows, int leaderLap)
+    {
+        var settled = 0;
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+
+            if (i > 0 && row.Standing.Laps < leaderLap && row.VsLeader.LapsDown < 1)
+            {
+                break;
+            }
+
+            settled++;
+        }
+
+        return settled;
+    }
+
+    /// <summary>
+    /// The longest a report waits for the cars it names to cross the line,
+    /// in milliseconds, given the leader's last lap time (0 when it is not
+    /// known). A car on the lead lap crosses within about one of its own
+    /// laps of the leader; half as long again covers a slower car, and past
+    /// that the car has stopped or gone off - the report is read without
+    /// it rather than not at all.
+    /// </summary>
+    internal static long WaitLimitMs(long leaderLapMs) =>
+        leaderLapMs > 0
+            ? Math.Clamp(leaderLapMs * 3 / 2, MinWaitMs, MaxWaitMs)
+            : DefaultWaitMs;
+
+    /// <summary>
+    /// The places a report can name before waiting for the last of them is
+    /// worth a word next to the setting. Three is the default.
+    /// </summary>
+    internal const int DepthWithoutWarning = 3;
+
+    /// <summary>
+    /// The note shown under the "down to P" setting, and whether it is a
+    /// warning. The report waits for the last car it names to cross the
+    /// line (see SettledCount), so the deeper it reads, the later after the
+    /// leader it is heard - with a big gap back to P8 that can be most of a
+    /// lap. Past <see cref="DepthWithoutWarning"/> places that is said as a
+    /// warning; up to it, as a plain note of when the report is read.
+    /// </summary>
+    internal static (string Text, bool Warn) DepthNote(int depth)
+    {
+        var place = "P" + depth.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        return depth > DepthWithoutWarning
+            ? ($"Waits for {place} to cross too, so it's heard well after the leader.", true)
+            : ($"Read once {place} has crossed the line too.", false);
+    }
+
+    internal const long MinWaitMs = 3_000;
+    internal const long MaxWaitMs = 60_000;
+    internal const long DefaultWaitMs = 15_000;
 
     private static RaceGap Between(RaceStanding car, RaceStanding ahead, Func<string, int, long?> crossingMs) =>
         RaceGaps.Compute(car.Laps, car.ElapsedMs, ahead.Laps, ahead.ElapsedMs, lap => crossingMs(ahead.Transponder, lap));

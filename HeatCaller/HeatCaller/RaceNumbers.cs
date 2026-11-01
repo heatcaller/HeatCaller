@@ -327,6 +327,58 @@ internal static class RaceNumbers
     }
 
     /// <summary>
+    /// A gap EXACTLY as timed, to the thousandth, in words: "one point two
+    /// three four", "point three oh five", "two point three", "a second",
+    /// "four seconds". For the running order, where the figure is the one
+    /// the board shows and has to match it.
+    ///
+    /// WHY (1 Nov 2026): the position report gave its gaps the way a gap is
+    /// called (GapSpoken) - tenths under a second, halves above, whole
+    /// seconds past ten - so 2.361 was "two and a half seconds" under a
+    /// board that said +2.36, and a club heard it as the voice getting the
+    /// gap wrong. The digits after the point are said one at a time, an
+    /// "oh" for a nought, with any noughts at the end left off - 2.300 is
+    /// "two point three", which is the same gap. Words only, for the reason
+    /// at the top of this class. Nothing (an exact tie) is "nothing".
+    /// </summary>
+    internal static string GapExactly(long ms)
+    {
+        ms = Math.Abs(ms);
+
+        if (ms == 0)
+        {
+            return "nothing";
+        }
+
+        var whole = ms / 1000;
+        var digits = (ms % 1000)
+            .ToString("000", System.Globalization.CultureInfo.InvariantCulture)
+            .TrimEnd('0');
+
+        if (digits.Length == 0)
+        {
+            return whole == 1 ? "a second" : $"{Words(whole)} seconds";
+        }
+
+        var after = string.Join(" ", digits.Select(ch => ch == '0' ? "oh" : Small[ch - '0']));
+
+        return whole == 0 ? $"point {after}" : $"{Words(whole)} point {after}";
+    }
+
+    /// <summary>
+    /// <see cref="GapExactly"/> with the direction on it - "one point two
+    /// three four back" - for the chasing car. A tie to the thousandth is
+    /// said as exactly that, "level to the thousandth", not "nothing in it",
+    /// which is the rounded call this replaced.
+    /// </summary>
+    internal static string BehindExactly(long ms)
+    {
+        var gap = GapExactly(ms);
+
+        return gap == "nothing" ? "level to the thousandth" : $"{gap} back";
+    }
+
+    /// <summary>
     /// A gap with the direction on it - "half a second back", "nothing in
     /// it" - for the chasing car.
     /// </summary>
