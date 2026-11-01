@@ -25,9 +25,10 @@ namespace HeatCaller;
 /// then covered over. WM_ERASEBKGND is swallowed for the same reason, and
 /// the frame is composed in a bitmap and blitted once.
 ///
-/// Only DropDownList combos are skinned. An editable one has a real child
-/// edit window with a caret and a selection, and painting over it would
-/// leave you typing into something you cannot see.
+/// An editable combo's text is left to its real child edit window, which
+/// has a caret and a selection - painting over it would leave you typing
+/// into something you cannot see. The skin draws the field around it and
+/// tells the edit which colours to paint itself in (EditColours).
 /// </summary>
 internal sealed class ComboBoxSkin : NativeWindow
 {
@@ -35,6 +36,7 @@ internal sealed class ComboBoxSkin : NativeWindow
     private const int WM_ERASEBKGND = 0x0014;
     private const int WM_PRINT = 0x0317;
     private const int WM_PRINTCLIENT = 0x0318;
+    private const int WM_CTLCOLORSTATIC = 0x0138;
 
     /// <summary>
     /// Keyed weakly so a skin never keeps a disposed page's combo alive, and
@@ -250,6 +252,20 @@ internal sealed class ComboBoxSkin : NativeWindow
 
                 break;
 
+            // The colours an editable combo's own text box asks for when it
+            // is switched off. A disabled edit asks its parent - the combo -
+            // with WM_CTLCOLORSTATIC rather than the WM_CTLCOLOREDIT WinForms
+            // answers with BackColor, and nothing answered it, so Windows
+            // gave it its own white. That is how Venue and Track layout on
+            // Race Day > Setup went to two bright white boxes on a closed
+            // day: deleting the last race day left the page on the old
+            // "Before events" entry, which can't be edited (Asher, 1 Nov).
+            // Answered with the same fill the skin draws the field in, so
+            // the box and the field around it are one colour in every theme.
+            case WM_CTLCOLORSTATIC when Skinnable && _combo.DropDownStyle != ComboBoxStyle.DropDownList && m.WParam != IntPtr.Zero:
+                m.Result = EditColours(m.WParam);
+                return;
+
             // A picture of the window (Control.DrawToBitmap - the layout
             // test's pictures) asks each control to draw itself into the
             // picture rather than to paint. Answered with this picture, not
@@ -354,7 +370,7 @@ internal sealed class ComboBoxSkin : NativeWindow
         var radius = Math.Max(1, Math.Min(7, height / 2));
 
         using (var path = AppTheme.RoundedRect(bounds, radius))
-        using (var fill = new SolidBrush(enabled ? AppTheme.Surface : AppTheme.Background))
+        using (var fill = new SolidBrush(FieldFill(_combo)))
         using (var pen = new Pen(border, active ? 1.4f : 1f))
         {
             g.FillPath(fill, path);
@@ -400,6 +416,68 @@ internal sealed class ComboBoxSkin : NativeWindow
             enabled ? AppTheme.TextDark : AppTheme.TextMuted,
             TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
     }
+
+    /// <summary>
+    /// The colour a combo's closed field is filled with: the surface while it
+    /// can be used, the page's own background once it is switched off. The
+    /// skin draws the field in it, and an editable combo's text box is
+    /// given it too (EditColours), so the two always match.
+    /// </summary>
+    internal static Color FieldFill(ComboBox combo) => combo.Enabled ? AppTheme.Surface : AppTheme.Background;
+
+    /// <summary>The colour of the words in a switched-off editable combo's text box - muted, as a switched-off drop-down list's are.</summary>
+    internal static Color DisabledInk => AppTheme.TextMuted;
+
+    /// <summary>
+    /// One solid brush per colour, made the first time it is asked for and
+    /// kept for the life of the app. Windows uses the brush a WM_CTLCOLOR
+    /// answer hands back after the answer returns, so it cannot be made and
+    /// thrown away per message; and a handful of colours (a fill per theme)
+    /// is all there will ever be.
+    /// </summary>
+    private static readonly Dictionary<int, IntPtr> FillBrushes = new();
+
+    private static IntPtr BrushFor(Color colour)
+    {
+        var win32 = ColorTranslator.ToWin32(colour);
+
+        lock (FillBrushes)
+        {
+            if (!FillBrushes.TryGetValue(win32, out var brush) || brush == IntPtr.Zero)
+            {
+                brush = CreateSolidBrush(win32);
+                FillBrushes[win32] = brush;
+            }
+
+            return brush;
+        }
+    }
+
+    /// <summary>Sets up the text box's device context in the theme's colours and hands back the brush its background is painted with.</summary>
+    private IntPtr EditColours(IntPtr hdc)
+    {
+        var fill = FieldFill(_combo);
+
+        SetBkMode(hdc, OPAQUE);
+        SetBkColor(hdc, ColorTranslator.ToWin32(fill));
+        SetTextColor(hdc, ColorTranslator.ToWin32(_combo.Enabled ? AppTheme.TextDark : DisabledInk));
+
+        return BrushFor(fill);
+    }
+
+    private const int OPAQUE = 2;
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateSolidBrush(int colour);
+
+    [DllImport("gdi32.dll")]
+    private static extern int SetBkColor(IntPtr hdc, int colour);
+
+    [DllImport("gdi32.dll")]
+    private static extern int SetTextColor(IntPtr hdc, int colour);
+
+    [DllImport("gdi32.dll")]
+    private static extern int SetBkMode(IntPtr hdc, int mode);
 
     /// <summary>
     /// Where the native control keeps its arrow button, in its own
