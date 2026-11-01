@@ -895,6 +895,13 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // A battle line still being said about two cars that have just
+        // swapped is cut off here, and the pass called in its place (1 Nov
+        // 2026) - see AnnouncementService.BattleLines. Before the lead
+        // change call, because for a fight for the lead the pass call IS
+        // the lead change call, and one crossing must not queue both.
+        var passCalledTheLead = CallTheBattlePass(ordered);
+
         // In a most-laps qualifier the lead IS provisional pole, called from
         // the same crossing (CallProvisionalPoleIfTaken). Saying both put two
         // lines in the queue for one pass, so the lead change keeps its chime
@@ -925,7 +932,7 @@ public sealed partial class AnnouncementService
             }
 
             var voiceCfg = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.LeaderChange));
-            if (!poleSaysIt && VoiceCandidateCanSpeak(AnnouncementEventType.LeaderChange, voiceCfg))
+            if (!poleSaysIt && !passCalledTheLead && VoiceCandidateCanSpeak(AnnouncementEventType.LeaderChange, voiceCfg))
             {
                 // The detail a broadcast booth gives with a lead change -
                 // who it was taken from, how long they had it, and how
