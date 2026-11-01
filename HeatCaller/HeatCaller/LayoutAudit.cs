@@ -244,6 +244,9 @@ internal static class LayoutAudit
         // A car's inspection against its class's checklist, new or edited (TechInspectionEditForm, titled "New Tech Inspection" / "Edit Inspection - <driver>").
         "Tech Inspection",
 
+        // One inspection for several cars picked on Who's Racing (BulkInspectionForm, titled "Log Inspection for <n> Drivers").
+        "Log Inspection for Several Drivers",
+
         // The rest of race night, and its paperwork (30 Sep).
 
         // The live qualifying order while a heat runs, or the note that none is (QualifyingProjectionForm, from Race Control's Qualifying Projection).
