@@ -799,8 +799,11 @@ public static class CommentaryFacts
     /// which is the sum stated rather than a claim made. Nothing here says
     /// who will win, and the instruction for the segment says not to.
     ///
-    /// An estimated road says so ("about four laps, going by the clock"),
-    /// so the model has no reason to be more definite than the race is.
+    /// WHAT IS LEFT IS GIVEN IN THE RACE'S OWN TERMS (1 Nov 2026). A race
+    /// the clock ends is handed the time left and told it is timed; it
+    /// used to be handed "About four laps left, going by the clock", and
+    /// the model said "four circuits to run" in a race with no lap count.
+    /// Only a race a lap count ends is handed laps. See RaceHorizon.Remaining.
     ///
     /// Keyed on the race and the pair, like a battle, and THEMED on the
     /// pair - which is what makes it a promise: NightPromises reads the
@@ -825,9 +828,8 @@ public static class CommentaryFacts
 
         var where = horizon.Position == 1 ? "the lead" : Ordinal(horizon.Position);
         var rate = Math.Abs(horizon.PerLap);
-        var laps = horizon.Estimated
-            ? $"About {Plural.Of(horizon.LapsLeft, "lap")} left, going by the clock."
-            : $"{Plural.Of(horizon.LapsLeft, "lap")} left.";
+        var laps = RoadFact(horizon);
+        var sum = horizon.Estimated ? "what is left of the race adds up" : "the laps left add up";
 
         var text = new StringBuilder();
 
@@ -837,12 +839,12 @@ public static class CommentaryFacts
         {
             case HorizonKind.WithinReach:
                 text.Append($"The gap is coming down by {Invariant(rate, "0.00")}s a lap. {laps} ");
-                text.Append($"At that rate the laps left add up to {Invariant(horizon.Buys, "0.00")}s - enough to cover the gap, if the rate holds.");
+                text.Append($"At that rate {sum} to {Invariant(horizon.Buys, "0.00")}s - enough to cover the gap, if the rate holds.");
                 break;
 
             case HorizonKind.Closing:
                 text.Append($"The gap is coming down by {Invariant(rate, "0.00")}s a lap. {laps} ");
-                text.Append($"At that rate the laps left add up to {Invariant(horizon.Buys, "0.00")}s - not yet enough to cover it.");
+                text.Append($"At that rate {sum} to {Invariant(horizon.Buys, "0.00")}s - not yet enough to cover it.");
                 break;
 
             case HorizonKind.SlippingAway:
@@ -858,6 +860,37 @@ public static class CommentaryFacts
             $"horizon:{raceKey}:{Pair(horizon.AheadId, horizon.BehindId)}:{horizon.Kind}",
             text.ToString().TrimEnd(),
             FactTheme.Rivalry(horizon.AheadId, horizon.BehindId));
+    }
+
+    /// <summary>
+    /// How much of the race is left, as a fact - in time for a race the
+    /// clock ends, in laps for one a lap count ends, and saying which, so
+    /// the model has no reason to say it the other way (1 Nov 2026).
+    /// </summary>
+    internal static string RoadFact(Horizon horizon)
+    {
+        if (!horizon.Estimated)
+        {
+            return $"This race is run to a lap count: {Plural.Of(horizon.LapsLeft, "lap")} left. Say what is left in laps.";
+        }
+
+        const string timedRule = "Say what is left as time, never as a count of laps.";
+
+        if (horizon.TimeLeft is not { } left)
+        {
+            return $"This is a timed race - the clock ends it, not a lap count. {timedRule}";
+        }
+
+        if (left <= TimeSpan.Zero)
+        {
+            return "This is a timed race and the clock has run out: this is the final lap, and the leader takes the flag "
+                   + "next time across the line. Do not give a number of laps.";
+        }
+
+        var clock = $"{(int)left.TotalMinutes}:{left.Seconds:00}";
+
+        return $"This is a timed race - the clock ends it, not a lap count. About {clock} left on the clock "
+               + $"({RaceNumbers.TimeLeftSpoken(left)}). {timedRule}";
     }
 
     /// <summary>A lap worth stopping for, as PaceWatch found it.</summary>

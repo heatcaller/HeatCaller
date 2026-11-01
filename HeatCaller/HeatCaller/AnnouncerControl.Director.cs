@@ -1922,7 +1922,33 @@ public partial class AnnouncerControl
     /// same laps the session counts for best lap (IsPaceLap), so a start
     /// lap or a lap through a crash recovery cannot shrink the estimate.
     /// </summary>
-    private RoadLeft? RoadFor(IReadOnlyList<RacerStanding> ordered)
+    private RoadLeft? RoadFor(IReadOnlyList<RacerStanding> ordered) =>
+        LeaderClock(ordered) is { } at
+            ? RaceHorizon.LapsLeftIn(_race.LapLimit, at.Laps, _race.TimeLimit, at.Elapsed, at.Pace, at.Since)
+            : null;
+
+    /// <summary>
+    /// Whether the clock is what ends the race on track (1 Nov 2026) - for
+    /// the time-left calls, so "two minutes to go" is not said in a race
+    /// whose lap limit will end it first. True for any timed race; for a
+    /// race with both limits, unless the lap limit is known to come first.
+    /// See RaceHorizon.ClockEndsIt.
+    /// </summary>
+    internal bool ClockEndsTheRace()
+    {
+        var at = LeaderClock(RacingField(_race.GetOrderedStandings()));
+
+        return RaceHorizon.ClockEndsIt(
+            _race.LapLimit,
+            at?.Laps ?? 0,
+            _race.TimeLimit,
+            at?.Elapsed ?? _race.ElapsedRaceTime,
+            at?.Pace,
+            at?.Since ?? TimeSpan.Zero);
+    }
+
+    /// <summary>The leader's laps, recent pace and place in the lap in progress - what RaceHorizon reads the road from.</summary>
+    private (int Laps, double? Pace, TimeSpan Elapsed, TimeSpan Since)? LeaderClock(IReadOnlyList<RacerStanding> ordered)
     {
         if (ordered.Count == 0)
         {
@@ -1951,13 +1977,7 @@ public partial class AnnouncerControl
         var crossedAt = TimeSpan.FromMilliseconds(Math.Max(0, leader.ElapsedMs - leader.PenaltyMs));
         var since = elapsed > crossedAt ? elapsed - crossedAt : TimeSpan.Zero;
 
-        return RaceHorizon.LapsLeftIn(
-            _race.LapLimit,
-            leader.Laps,
-            _race.TimeLimit,
-            elapsed,
-            RaceHorizon.RecentPace(pace),
-            since);
+        return (leader.Laps, RaceHorizon.RecentPace(pace), elapsed, since);
     }
 
     /// <summary>

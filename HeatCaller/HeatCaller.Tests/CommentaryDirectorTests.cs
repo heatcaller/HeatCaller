@@ -665,14 +665,42 @@ public sealed class CommentaryDirectorTests : IDisposable
     }
 
     [Fact]
-    public void An_estimated_road_is_given_to_the_writer_as_one()
+    public void A_timed_road_is_given_to_the_writer_as_time_and_never_as_laps()
     {
-        var horizon = new Horizon("A", "B", 2, 0.6, 0.2, 4, 0.8, HorizonKind.WithinReach, 3, Estimated: true);
+        // Was "About 4 laps left, going by the clock" - and the writer said
+        // "four circuits to run" in a race that was only timed (1 Nov 2026).
+        var horizon = new Horizon("A", "B", 2, 0.6, 0.2, 4, 0.8, HorizonKind.WithinReach, 3, Estimated: true, TimeLeft: TimeSpan.FromSeconds(80));
 
         var fact = CommentaryFacts.Horizon(horizon, id => id == "A" ? "Sam" : "Bill", "heat-1");
 
-        Assert.Contains("About 4 laps left, going by the clock.", fact.Text);
+        Assert.Contains("This is a timed race", fact.Text);
+        Assert.Contains("About 1:20 left on the clock", fact.Text);
+        Assert.Contains("never as a count of laps", fact.Text);
+        Assert.DoesNotContain("4 laps", fact.Text);
+        Assert.DoesNotContain("laps left", fact.Text);
         Assert.Contains("fighting for 2nd", fact.Text);
+    }
+
+    [Fact]
+    public void A_timed_road_reaches_the_horizon_with_its_time_left()
+    {
+        var gaps = new[] { 1.0, 0.8, 0.6 };
+
+        for (var lap = 0; lap < gaps.Length; lap++)
+        {
+            _rig.Director.Standings(
+                new[] { new PairGap("A", "B", 1, gaps[lap], 0) },
+                leaderLaps: 10 + lap,
+                new RoadLeft(5 - lap, true, TimeSpan.FromSeconds(30 - (lap * 6))));
+
+            _rig.Clock.Advance(TimeSpan.FromSeconds(6));
+        }
+
+        var horizon = _rig.Director.Horizons.Pick();
+
+        Assert.NotNull(horizon);
+        Assert.True(horizon!.Estimated);
+        Assert.Equal(TimeSpan.FromSeconds(18), horizon.TimeLeft);
     }
 
     [Fact]

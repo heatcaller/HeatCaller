@@ -866,7 +866,74 @@ public sealed class CommentaryService
 
                // The stock phrases never wanted, and the ones tonight has
                // already used (16 Oct 2026) - see WornPhrases.
-               WornPhrases.PromptLine();
+               WornPhrases.PromptLine() +
+
+               // Whether the race on track is timed or run to a lap count
+               // (1 Nov 2026) - see RaceTermsLine.
+               RaceTermsNowLine();
+    }
+
+    /// <summary>
+    /// The lap limit and time limit of the race being called to the grid or
+    /// on track right now, or null between races and in practice. Read as
+    /// every line is written - see <see cref="RaceTermsLine"/>.
+    /// </summary>
+    public Func<(int? LapLimit, TimeSpan? TimeLimit)?>? RaceLimitsNow { get; set; }
+
+    private string RaceTermsNowLine()
+    {
+        try
+        {
+            return RaceLimitsNow?.Invoke() is { } limits
+                ? " " + RaceTermsLine(limits.LapLimit, limits.TimeLimit)
+                : string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// What ends the race on track, as a line every live prompt carries
+    /// (1 Nov 2026).
+    ///
+    /// WHY. Asher heard "X circuits to run" called in a race that was only
+    /// timed. The segment that said it was handed laps (fixed at the source,
+    /// in CommentaryFacts.RoadFact), but no live line was ever told what
+    /// KIND of race it was writing about, so any of them was free to reach
+    /// for "five laps to go" on its own. This tells every one of them -
+    /// timed, run to a lap count, or whichever of the two comes first - and
+    /// says how "what is left" may be said, so a line never counts laps in a
+    /// race the clock ends, or minutes in one a lap count ends.
+    /// </summary>
+    internal static string RaceTermsLine(int? lapLimit, TimeSpan? timeLimit)
+    {
+        var laps = lapLimit is > 0 ? lapLimit : null;
+        var time = timeLimit is { } t && t > TimeSpan.Zero ? timeLimit : null;
+
+        return (laps, time) switch
+        {
+            (null, { } clock) =>
+                $"The race on track is a timed race ({Duration(clock)}): the clock ends it, not a lap count. "
+                + "If you say how much of it is left, say it as time, never as a number of laps or circuits to go.",
+
+            ({ } count, null) =>
+                $"The race on track is run to a lap count ({Plural.Of(count, "lap")}), not a clock. "
+                + "If you say how much of it is left, say it in laps, never as time on the clock.",
+
+            ({ } count, { } clock) =>
+                $"The race on track ends at {Plural.Of(count, "lap")} or {Duration(clock)}, whichever comes first. "
+                + "Only say how much of it is left when the facts give it, and in the same terms they use.",
+
+            _ =>
+                "The race on track has no lap count and no clock to run down - never say how much of it is left.",
+        };
+
+        static string Duration(TimeSpan clock) =>
+            clock.Seconds == 0 && clock.TotalMinutes >= 1
+                ? Plural.Of((int)clock.TotalMinutes, "minute")
+                : $"{(int)clock.TotalMinutes}:{clock.Seconds:00}";
     }
 
     /// <summary>
@@ -5215,9 +5282,14 @@ public sealed class CommentaryService
         // The facts are a sum - the gap, the rate, the laps - and the
         // instruction is to hand the room the sum and stop. See
         // RaceHorizon.Say, which is the same sentence written by hand.
+        //
+        // AND IN THE RACE'S OWN TERMS (1 Nov 2026): this asked for "how
+        // many laps are left" in every race, and a timed race came back as
+        // "four circuits to run". See CommentaryFacts.RoadFact.
         SegmentKind.Horizon =>
             "Point the crowd at what is still to be decided, in one sentence: the gap, how fast it is changing and "
-            + "how many laps are left. Build the anticipation, but do not say who will win, whether the gap will close "
+            + "how much of the race is left - as time if the facts say the race is timed, as laps only if they say it "
+            + "is run to a lap count. Build the anticipation, but do not say who will win, whether the gap will close "
             + "or whether anyone will get there - let the crowd do the sum.",
 
         SegmentKind.ComingUpNext =>

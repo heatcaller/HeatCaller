@@ -282,8 +282,10 @@ The function keys work only while the **Race Control** page is showing, and only
 
 - **Lap limit:** The clock's progress ring and the text under the clock count laps: "5 LAPS TO GO", then "1 LAP TO GO". The announcer calls the last lap when the leader starts it.
 - **Time limit:** The ring and the text count down the time, for example "02:30 REMAINING". The announcer calls the final minute. Tick **Minutes left** and **Last minute countdown** on **Voice → Announcements** to also hear the minutes left (the last five, unless you change it) and every 15 seconds of the last minute: see [Every announcement](../announcer/voice.md#every-announcement).
-- **Both:** The race ends at whichever limit is reached first, and the clock shows the laps remaining.
+- **Both:** The race ends at whichever limit is reached first, and the clock shows the laps remaining. The announcer's time calls (final minute, minutes left, last minute countdown) are only made while the clock is set to end the race first. Once the leader's pace shows the lap limit will come first, they stay quiet rather than call "two minutes to go" in a race that's three laps from the flag.
 - **Neither:** The race runs until you press **Checkered**.
+
+Everything the announcer says about how much of a race is left follows what ends it. A timed race is talked about in time ("about a minute and a half left"), never as a number of laps, and a race run to a lap count is talked about in laps. The AI commentary is told which kind of race is on track before it writes each line.
 
 The clock always shows elapsed racing time. Time under a red flag isn't counted.
 
