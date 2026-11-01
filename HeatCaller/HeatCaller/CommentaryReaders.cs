@@ -502,7 +502,7 @@ public static partial class CommentaryReaders
 
         return all
             .Where(record => record.SessionType != RaceSessionType.Practice)
-            .Where(record => !record.IsDemoSession())
+            .Where(record => !record.IsNotScored())
             .Where(record => string.IsNullOrEmpty(exceptSessionId)
                              || !string.Equals(record.Id, exceptSessionId, StringComparison.Ordinal))
             .Where(record => roundIds is null || (record.RoundId is { } id && roundIds.Contains(id)))
@@ -2158,7 +2158,7 @@ public static partial class CommentaryReaders
         foreach (var record in history.All)
         {
             if (record.SessionType == RaceSessionType.Practice
-                || record.IsDemoSession()
+                || record.IsNotScored()
                 || !string.Equals(Typed(record.TrackLayoutName), wanted, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
@@ -2522,7 +2522,7 @@ public static partial class CommentaryReaders
         foreach (var session in history.All)
         {
             if (session.SessionType == RaceSessionType.Practice
-                || session.IsDemoSession()
+                || session.IsNotScored()
                 || !string.Equals(Typed(session.TrackLayoutName), wanted, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
@@ -2914,7 +2914,7 @@ public static partial class CommentaryReaders
         foreach (var session in history.All)
         {
             if (session.SessionType == RaceSessionType.Practice
-                || session.IsDemoSession()
+                || session.IsNotScored()
                 || session.RoundId is not { } id
                 || !tiers.TryGetValue(id, out var tier)
                 || !string.Equals(Typed(session.TrackLayoutName), layout, StringComparison.OrdinalIgnoreCase))
@@ -3585,7 +3585,7 @@ public static partial class CommentaryReaders
         foreach (var record in history.All)
         {
             if (record.SessionType == RaceSessionType.Practice
-                || record.IsDemoSession()
+                || record.IsNotScored()
                 || record.Results.Count == 0)
             {
                 continue;
@@ -3748,7 +3748,7 @@ public static partial class CommentaryReaders
         foreach (var record in history.All)
         {
             if (record.SessionType == RaceSessionType.Practice
-                || record.IsDemoSession()
+                || record.IsNotScored()
                 || record.Results.Count == 0)
             {
                 continue;
@@ -4182,7 +4182,7 @@ public static partial class CommentaryReaders
         foreach (var record in history.All)
         {
             if (record.SessionType == RaceSessionType.Practice
-                || record.IsDemoSession()
+                || record.IsNotScored()
                 || record.Results.Count == 0)
             {
                 continue;

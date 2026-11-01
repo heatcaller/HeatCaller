@@ -175,7 +175,7 @@ public partial class MainForm
             var tonight = TonightAtTheTrack.NightOf(DateTime.Now);
 
             var drivers = _sessionHistory.All
-                .Where(s => !s.IsDemoSession() && TonightAtTheTrack.NightOf(s.StartedAtUtc.ToLocalTime()) == tonight)
+                .Where(s => !s.IsNotScored() && TonightAtTheTrack.NightOf(s.StartedAtUtc.ToLocalTime()) == tonight)
                 .SelectMany(s => s.Results)
                 .Select(r => (r.Transponder ?? string.Empty).Trim())
                 .Where(t => t.Length > 0 && !GhostService.IsGhost(t))

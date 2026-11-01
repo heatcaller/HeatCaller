@@ -127,7 +127,7 @@ public static class EventReportBuilder
     private static List<SessionRecord> SessionsFor(
         Options options, SessionHistoryStore history, RoundDefinitionStore rounds, RaceEventStore? events)
     {
-        var real = history.All.Where(s => !s.IsDemoSession()).ToList();
+        var real = history.All.Where(s => !s.IsNotScored()).ToList();
 
         if (ReportEvent(options) is not { } raceEvent)
         {

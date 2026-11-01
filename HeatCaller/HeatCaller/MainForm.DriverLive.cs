@@ -403,7 +403,7 @@ public partial class MainForm
             _driverLiveRacedStale = false;
             _driverLiveRacedReadUtc = nowUtc;
             _driverLiveRaced = RacesTonight()
-                .Where(race => race is not null && !race.IsDemoSession())
+                .Where(race => race is not null && !race.IsNotScored())
                 .SelectMany(DriversIn)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();

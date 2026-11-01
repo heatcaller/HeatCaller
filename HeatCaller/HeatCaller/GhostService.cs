@@ -770,7 +770,7 @@ public sealed class GhostService : IDisposable
         // Saved demo races are left out: their laps are invented, and a
         // ghost built on one would be chasing a lap nobody ever drove.
         var best = _history.All
-            .Where(s => !s.IsDemoSession())
+            .Where(s => !s.IsNotScored())
             .Where(s => trackLayoutName is null
                         || string.Equals(s.TrackLayoutName, trackLayoutName, StringComparison.OrdinalIgnoreCase))
             .Where(s => fromUtc is not { } from || s.StartedAtUtc >= from)
@@ -818,7 +818,7 @@ public sealed class GhostService : IDisposable
         // The Personal Bests page's resets are honoured here too, as
         // BestLapFor does: a best retired earlier tonight is not chased.
         var savedTonight = _history.All
-            .Where(s => !s.IsDemoSession())
+            .Where(s => !s.IsNotScored())
             .Where(s => CutoffAllows(driverName, s))
             .Where(s => trackLayoutName is null
                         || string.Equals(s.TrackLayoutName, trackLayoutName, StringComparison.OrdinalIgnoreCase))
@@ -1048,7 +1048,7 @@ public sealed class GhostService : IDisposable
         // demo races don't count - their times are invented. One with no
         // timed lap to average (only the start lap) is passed over too.
         return _history.All
-            .Where(s => !s.IsDemoSession())
+            .Where(s => !s.IsNotScored())
             .OrderByDescending(s => s.StartedAtUtc)
             .SelectMany(s => s.Results)
             .Where(r => string.Equals(r.Transponder, transponder, StringComparison.OrdinalIgnoreCase)

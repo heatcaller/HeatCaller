@@ -269,6 +269,11 @@ public sealed class RaceHistoryControl : UserControl
         var btnEditResult = new Button { Text = "Edit Result..." };
         btnEditResult.Click += (_, _) => EditSelectedResult();
 
+        // A result copied off another timing program's results page, put
+        // in as an imported race that never scores (PasteResultForm).
+        var btnPasteResult = new Button { Text = "Paste a Result..." };
+        btnPasteResult.Click += (_, _) => PasteResult();
+
         // Ordered by how often a race director reaches for them, not by
         // the order they were written. Delete goes last because it is the
         // one that cannot be taken back from here - Edit Result sits just
@@ -276,7 +281,7 @@ public sealed class RaceHistoryControl : UserControl
         // wraps onto more lines when the card is too narrow for them.
         var actions = new ButtonBar().With(
             btnReplay, btnPace, btnShareCard, btnEventReport,
-            btnExportSession, btnExportAll, btnPrintResults, btnEditResult, btnDelete);
+            btnExportSession, btnExportAll, btnPrintResults, btnPasteResult, btnEditResult, btnDelete);
 
         var results = new Section("Results");
 
@@ -320,9 +325,11 @@ public sealed class RaceHistoryControl : UserControl
     /// </summary>
     /// <param name="full">The longer wording, for the detail title - the list's Type column is too narrow for it.</param>
     private static string TypeText(SessionRecord session, bool full = false) =>
-        session.IsDemoSession()
-            ? (full ? "Demo race (not scored)" : "Demo")
-            : session.SessionType.ToString();
+        session.IsImported()
+            ? (full ? $"Imported from {session.ImportedFrom} (not scored)" : "Imported")
+            : session.IsDemoSession()
+                ? (full ? "Demo race (not scored)" : "Demo")
+                : session.SessionType.ToString();
 
     private void RefreshList()
     {
@@ -1157,12 +1164,101 @@ public sealed class RaceHistoryControl : UserControl
             return "Correcting saved results is switched off on the laptop. Turn on \"Allow corrections to saved results\" on the Local Screens page to use it.";
         }
 
+        if (session.IsImported())
+        {
+            return ResultEditor.ImportedProblem;
+        }
+
         if (session.SessionType != RaceSessionType.Race || session.IsDemoSession())
         {
             return "Only a real race's result can be corrected - not practice, and not a demo race.";
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Paste a Result: the race result on the clipboard - copied off
+    /// LiveRC's results page, or another program's - previewed in
+    /// PasteResultForm and put into the history as an imported race. Only
+    /// the clipboard is read; nothing is fetched. Undo takes it out again.
+    /// </summary>
+    private void PasteResult()
+    {
+        string? html = null;
+        string? text = null;
+
+        try
+        {
+            if (Clipboard.ContainsText(TextDataFormat.Html))
+            {
+                html = Clipboard.GetText(TextDataFormat.Html);
+            }
+
+            if (Clipboard.ContainsText(TextDataFormat.UnicodeText))
+            {
+                text = Clipboard.GetText(TextDataFormat.UnicodeText);
+            }
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or ThreadStateException)
+        {
+            // Another program holding the clipboard open as it is read.
+            AppDialog.Show(this, $"Couldn't read the clipboard just now ({ex.Message}). Try Paste a Result again.",
+                "Paste a result", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        if (PastedTable.Read(html, text) is not { } table || PastedResult.Read(table) is not { } race)
+        {
+            AppDialog.Show(this,
+                "There's no race result on the clipboard.\n\n"
+                + "On the results page, select the whole result - its headings (Pos, Driver, Laps) and every driver's row - "
+                + "and copy it (Ctrl+C). Then press Paste a Result here.",
+                "Nothing to paste", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var profiles = _profiles?.All ?? Array.Empty<DriverProfile>();
+        var classNames = _classes?.All.Select(c => c.Name).ToList() ?? new List<string>();
+
+        using var form = new PasteResultForm(
+            race,
+            PastedResult.SourceName(html),
+            PastedResult.TitleFrom(text),
+            classNames,
+            name => PastedResult.MatchByName(profiles, name),
+            DateTime.Now);
+
+        if (form.ShowDialog(this) != DialogResult.OK || form.Session is not { } session)
+        {
+            return;
+        }
+
+        if (!_history.Add(session))
+        {
+            // Taken straight back out, rather than left listed and held for
+            // a retry: pressing Paste a Result again makes a new session, and
+            // the two would both be filed once the file could be written.
+            _history.Delete(session.Id);
+
+            AppDialog.Show(this,
+                "The race couldn't be written to the race history file - something may have it open, or the disk may be full. "
+                + "Nothing was added. Try Paste a Result again in a moment.",
+                "Paste a result", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            RefreshList();
+            return;
+        }
+
+        var history = _history;
+        var id = session.Id;
+
+        _undo.Capture($"Paste result '{session.Label}'", () =>
+        {
+            history.Delete(id);
+            RefreshList();
+        });
+
+        RefreshListAndSelect(id);
     }
 
     /// <summary>Rebuilds the list and re-selects one session by id - so correcting a result doesn't leave the page looking blank.</summary>

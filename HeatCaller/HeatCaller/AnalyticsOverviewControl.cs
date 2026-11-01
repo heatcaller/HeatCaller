@@ -161,7 +161,7 @@ public sealed class AnalyticsOverviewControl : UserControl
         // simulated, so counting them would pad the race and lap totals
         // and could put an invented lap at the top of the records.
         var everything = _history.All
-            .Where(s => !s.IsDemoSession())
+            .Where(s => !s.IsNotScored())
             .ToList();
 
         var races = everything

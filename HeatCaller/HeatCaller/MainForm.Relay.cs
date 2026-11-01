@@ -1628,7 +1628,7 @@ public partial class MainForm
             // changing its ids, and nothing else republished it - the
             // re-sent result could not be found from the archive.
             var now = _sessionHistory.Saved
-                .Where(s => !s.IsDemoSession())
+                .Where(s => !s.IsNotScored())
                 .Where(s => _relayPublisher.ResultIsOnRelay(s.Id, RelayResultsIndex.EffectiveStart(s)))
                 .GroupBy(s => RelayResultsIndex.YearOf(s), StringComparer.Ordinal)
                 .ToDictionary(
@@ -1682,7 +1682,7 @@ public partial class MainForm
     /// <summary>Republishes the index for the year one session belongs to. A demo race is not in it, so it changes nothing.</summary>
     private void PublishResultsIndexFor(SessionRecord session)
     {
-        if (session.IsDemoSession())
+        if (session.IsNotScored())
         {
             return;
         }
@@ -1785,7 +1785,7 @@ public partial class MainForm
     {
         // A demo race is a rehearsal, not a result - it never goes on the
         // club's public results page.
-        if (session.IsDemoSession())
+        if (session.IsNotScored())
         {
             return;
         }
@@ -1960,7 +1960,7 @@ public partial class MainForm
         // A demo race is a rehearsal rather than a result, exactly as
         // PublishSessionToRelay has it: it never reaches the club's public
         // results and it must not reach a driver's night either.
-        if (!session.IsDemoSession())
+        if (!session.IsNotScored())
         {
             PublishNightsFor(DriversIn(session));
         }
@@ -1986,7 +1986,7 @@ public partial class MainForm
     /// </summary>
     private void ResendDriverNights() =>
         PublishNightsFor(RacesTonight()
-            .Where(race => race is not null && !race.IsDemoSession())
+            .Where(race => race is not null && !race.IsNotScored())
             .SelectMany(DriversIn)
             .Distinct(StringComparer.OrdinalIgnoreCase));
 

@@ -1230,7 +1230,7 @@ public sealed partial class RaceControlControl
 
         // Never a saved demo: its grid is the simulator's made-up cars.
         var lastRace = _sessionHistory.All
-            .FirstOrDefault(r => r.SessionType == RaceSessionType.Race && !r.IsDemoSession() && r.Results.Count > 0);
+            .FirstOrDefault(r => r.SessionType == RaceSessionType.Race && !r.IsNotScored() && r.Results.Count > 0);
 
         // Only the same kind of race: a race run from a round was a class's
         // own field, not the one at a freeform start, so it is no grid for

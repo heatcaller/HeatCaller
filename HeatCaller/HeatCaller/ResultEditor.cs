@@ -89,6 +89,14 @@ public static class ResultEditor
         new(entry.Transponder, entry.AddedLaps, entry.TimePenaltyMs, entry.LapPenalty, NormaliseOutcome(entry.Outcome) ?? string.Empty);
 
     /// <summary>
+    /// Why an imported result can't be corrected: its drivers are matched by
+    /// name, many with no transponder, and the corrections are kept by
+    /// transponder. Pasting it again is the fix.
+    /// </summary>
+    public const string ImportedProblem =
+        "An imported result can't be corrected here. Delete it and paste the result again.";
+
+    /// <summary>
     /// Why these adjustments cannot be applied to this session, or null
     /// when they can. Checked by both callers before anything changes.
     /// </summary>
@@ -104,6 +112,11 @@ public static class ResultEditor
         Func<SessionResultEntry, string>? nameOf = null)
     {
         Func<SessionResultEntry, string> name = nameOf ?? (e => NameOf(e));
+
+        if (record.IsImported())
+        {
+            return ImportedProblem;
+        }
 
         if (record.SessionType != RaceSessionType.Race || record.IsDemoSession())
         {

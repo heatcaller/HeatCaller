@@ -37,6 +37,7 @@ public sealed partial class RaceDayService
             label = session.Label,
             type = session.SessionType == RaceSessionType.Race ? "race" : "practice",
             demo = session.IsDemoSession(),
+            imported = session.IsImported(),
             startedUtc = session.StartedAtUtc,
             endedUtc = session.EndedAtUtc,
             track = session.TrackLayoutName,
@@ -60,9 +61,9 @@ public sealed partial class RaceDayService
             return EditingOff;
         }
 
-        if (session.SessionType != RaceSessionType.Race || session.IsDemoSession())
+        if (session.SessionType != RaceSessionType.Race || session.IsNotScored())
         {
-            return "Only a real race's result can be corrected - not practice, and not a demo race.";
+            return "Only a real race's result can be corrected - not practice, a demo race or one pasted in from another program.";
         }
 
         return null;
@@ -166,6 +167,11 @@ public sealed partial class RaceDayService
     private OpResult ResultsPublish(OpContext context)
     {
         var session = RequireSession(context);
+
+        if (session.IsImported())
+        {
+            throw new OpRefused("A race pasted in from another program is never published - it is kept on the laptop for the record.");
+        }
 
         if (session.IsDemoSession())
         {

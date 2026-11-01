@@ -278,6 +278,31 @@ public sealed class SessionRecord
     public bool IsDemoSession() =>
         IsDemo || (Label?.StartsWith(DemoLabelPrefix, StringComparison.OrdinalIgnoreCase) ?? false);
 
+    /// <summary>
+    /// Where a result pasted in from another timing program's results page
+    /// came from - "LiveRC", or "another results page" - and empty for
+    /// every race HeatCaller timed itself (1 Nov 2026, asked for by Asher).
+    ///
+    /// An imported race was run on another track layout, on another
+    /// timing system, often years ago, so like a demo race it never
+    /// scores: no championship points, no personal bests, no records, no
+    /// badges, no commentary facts, and nothing published to the relay. It
+    /// is kept to be looked at in Race History. See <see cref="IsNotScored"/>.
+    /// </summary>
+    public string ImportedFrom { get; set; } = string.Empty;
+
+    /// <summary>Whether this is a result pasted in from elsewhere (<see cref="ImportedFrom"/>).</summary>
+    public bool IsImported() => !string.IsNullOrWhiteSpace(ImportedFrom);
+
+    /// <summary>
+    /// Whether this session must never count for anything: a saved demo race
+    /// (<see cref="IsDemoSession"/>) or a result imported from another
+    /// program (<see cref="IsImported"/>). Every place that leaves demo races
+    /// out of points, bests, records, badges, commentary and the relay asks
+    /// this. A method, like IsDemoSession, so it is never written to the file.
+    /// </summary>
+    public bool IsNotScored() => IsDemoSession() || IsImported();
+
     /// <summary>Freeform notes about this session - weather, track surface, incidents, whatever's worth remembering later. Edited from the Race History tab.</summary>
     public string Notes { get; set; } = string.Empty;
 

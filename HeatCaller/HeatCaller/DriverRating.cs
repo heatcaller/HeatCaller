@@ -143,7 +143,7 @@ public static class DriverRating
     /// </summary>
     public static IReadOnlyDictionary<string, double> ForSession(SessionRecord session)
     {
-        if (session is null || session.SessionType != RaceSessionType.Race || session.IsDemoSession())
+        if (session is null || session.SessionType != RaceSessionType.Race || session.IsNotScored())
         {
             return new Dictionary<string, double>();
         }

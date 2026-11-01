@@ -73,7 +73,7 @@ public partial class MainForm
         }
 
         var tonight = RacesTonight()
-            .Where(race => race is not null && !race.IsDemoSession())
+            .Where(race => race is not null && !race.IsNotScored())
             .ToList();
 
         if (tonight.Count == 0)

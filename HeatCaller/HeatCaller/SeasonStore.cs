@@ -226,7 +226,7 @@ public sealed class SeasonStore
 
         foreach (var session in sessions)
         {
-            if (session.IsDemoSession())
+            if (session.IsNotScored())
             {
                 continue;
             }

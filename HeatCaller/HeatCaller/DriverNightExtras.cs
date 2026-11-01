@@ -61,7 +61,7 @@ internal static class DriverNightExtras
         var races = new List<NightRace>();
 
         foreach (var session in tonight
-            .Where(s => s is not null && !s.IsDemoSession() && s.SessionType != RaceSessionType.Practice)
+            .Where(s => s is not null && !s.IsNotScored() && s.SessionType != RaceSessionType.Practice)
             .OrderBy(RelayResultsIndex.EffectiveStart))
         {
             var results = session.Results ?? new List<SessionResultEntry>();
@@ -142,7 +142,7 @@ internal static class DriverNightExtras
         }
 
         return tonight
-            .Where(s => s is not null && !s.IsDemoSession() && s.SessionType != RaceSessionType.Practice)
+            .Where(s => s is not null && !s.IsNotScored() && s.SessionType != RaceSessionType.Practice)
             .Where(s => (s.Results ?? new List<SessionResultEntry>()).Any(r => r is not null && SameDriver(r.Transponder, who)))
             .OrderBy(RelayResultsIndex.EffectiveStart)
             .LastOrDefault();
@@ -272,7 +272,7 @@ internal static class DriverNightExtras
         foreach (var session in history)
         {
             if (session is null
-                || session.IsDemoSession()
+                || session.IsNotScored()
                 || !string.Equals((session.TrackLayoutName ?? string.Empty).Trim(), track, StringComparison.OrdinalIgnoreCase))
             {
                 continue;

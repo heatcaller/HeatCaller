@@ -465,7 +465,7 @@ public sealed class HandicapStore
     /// </summary>
     internal static IEnumerable<SessionRecord> SessionsFor(SessionHistoryStore history, RoundDefinitionStore? rounds, string? className)
     {
-        var sessions = history.All.Where(s => !s.IsDemoSession());
+        var sessions = history.All.Where(s => !s.IsNotScored());
 
         if (rounds is null || string.IsNullOrWhiteSpace(className))
         {

@@ -157,7 +157,7 @@ internal static class DriverCut
         var theirs = tonight
             .Where(race => race is not null
                            && race.SessionType == RaceSessionType.Race
-                           && !race.IsDemoSession()
+                           && !race.IsNotScored()
                            && Rowed(race, who) is not null)
             .OrderBy(race => race.StartedAtUtc)
             .ToList();

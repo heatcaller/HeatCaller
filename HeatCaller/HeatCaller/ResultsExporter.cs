@@ -172,6 +172,7 @@ public static class ResultsExporter
                 // Said outright, so a tool reading the file can leave out
                 // simulated races without having to parse the label.
                 isDemo = session.IsDemoSession(),
+                importedFrom = session.IsImported() ? session.ImportedFrom : null,
                 round = round?.RoundLabel,
                 className = round?.ClassName,
                 track = session.TrackLayoutName,

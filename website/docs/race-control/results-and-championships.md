@@ -26,7 +26,7 @@ Corrections made on the **Race Control** board after the checkered flag change t
 
 The **Race History** page lists every saved session on the left, with **Date**, **Type**, **Track** and **Label**. Click a session to see its results on the right: **Pos**, **Driver**, **Car**, **Laps**, **Fastest Lap** and **Warnings**, plus **Handicap Pos** when the class uses handicaps, and **Best Sectors** and **Ideal Lap** when the session was run with a [split loop](../timing/decoders.md#a-split-loop). **Warnings** shows "-", the number of warnings a driver was given in the race (for example "⚠ 2"), or "Black flag" with the count when one of them was a black flag; hover over it to see each warning.
 
-A saved demo race shows **Demo** as its type, and its detail title reads "Demo race (not scored)".
+A saved demo race shows **Demo** as its type, and its detail title reads "Demo race (not scored)". A race brought in with **Paste a Result** shows **Imported**, and its detail title reads "Imported from LiveRC (not scored)".
 
 Use Ctrl+click or Shift+click to select several sessions, for exporting or deleting.
 
@@ -43,6 +43,7 @@ Below the results is a notes box, for the weather, the track surface, incidents 
 | **Export Session** | Saves the selected session as a CSV file. |
 | **Export Results** | Exports results or laps for many sessions, as CSV or JSON. |
 | **Print Results...** | Prints the selected races' results, with a preview first. See [Printing results](#printing-results). |
+| **Paste a Result...** | Brings in a race result copied from another timing program's results page, such as LiveRC. See [Pasting a result from LiveRC](#pasting-a-result-from-liverc). You can undo this. |
 | **Edit Result** | Corrects a saved race: laps, time and lap penalties, or an outcome such as DNF or DQ, with a reason. Needs **Allow corrections to saved results** ticked on **Local Screens**. You can undo this. See [Correcting a saved result](corrections-and-recovery.md#correcting-a-saved-result). |
 | **Delete Session** | Deletes the selected sessions after you confirm. You can undo this. |
 
@@ -98,6 +99,23 @@ All CSV exports are:
 ### Printing results
 
 Select one race, or several with Ctrl or Shift, and press **Print Results...**. Pick the printer, check the preview, and print from the preview's toolbar. The races print oldest first on letter-size pages, black on white, with **Pos**, **Driver**, **Car**, **Laps**, **Best lap**, **Total** and **Status**. A race that would fit on a fresh page starts on one rather than being split; a race too long for any page carries on with "(continued)". With nothing selected, it says so.
+
+### Pasting a result from LiveRC
+
+Races run before your club used HeatCaller can be brought into Race History from their results page on LiveRC, or from another timing program that shows results as a table.
+
+1. On the results page, select the whole result, from the **Pos** heading down to the last driver, and copy it (<kbd>Ctrl</kbd>+<kbd>C</kbd>). Taking in the race's name above the table ("Race 33: Stock Buggy A-Main") lets HeatCaller fill in the class and round for you.
+2. On **Race History**, press **Paste a Result...**.
+3. Check **Class**, **Round** and **Run on** (the day and time the race was run), and look over the drivers as they'll come in: **Pos**, **Driver**, **Laps**, **Time** and **Fast lap**. **Profile** says whether each driver was matched to one of your driver profiles by name.
+4. Press **Import**.
+
+What to know:
+
+- **It never scores.** A pasted race is kept for the record only. It doesn't count towards personal bests, track records, badges, championships or qualifying, the commentary never talks about it, and it isn't sent to the online results. It isn't linked to a round on **Race Day** either, so no round is marked as run.
+- **Drivers are matched by name.** A driver whose name is exactly the same as one profile's gets that profile's name and transponder. One with no profile, or a name two profiles share, comes in by name alone. Names in capitals ("COLTON FURNARI") are written the usual way, and a car number in front of the name is left off.
+- **What comes in.** Finishing order, laps, total time and fast lap. Lap-by-lap times and transponders aren't in LiveRC's results table, so they don't come in.
+- **It can't be corrected with Edit Result.** To change a pasted race, delete it and paste it again.
+- **Nothing is fetched.** HeatCaller only reads what you copied. It never opens LiveRC or signs in to it.
 
 ### Laps counted by hand
 

@@ -90,7 +90,7 @@ public static class Championship
     {
         // A demo race scores nothing (see SeasonStore.ComputeStandings), so
         // it can never have moved a championship.
-        if (seasons is null || rounds is null || session.Results.Count == 0 || session.IsDemoSession())
+        if (seasons is null || rounds is null || session.Results.Count == 0 || session.IsNotScored())
         {
             return null;
         }
@@ -100,7 +100,7 @@ public static class Championship
             // Demo races taken out here as well as inside ComputeStandings,
             // so the "rounds counted" figure below does not include them.
             var counted = EventSpine.SessionsFor(season, events, rounds, history)
-                .Where(s => !s.IsDemoSession())
+                .Where(s => !s.IsNotScored())
                 .ToList();
 
             // Only a championship this race actually counts towards. A club

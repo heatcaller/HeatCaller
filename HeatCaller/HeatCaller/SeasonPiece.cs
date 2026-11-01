@@ -165,7 +165,7 @@ internal static class SeasonPiece
         TrackLayoutStore? layouts = null)
     {
         var ran = (races ?? System.Array.Empty<SessionRecord>())
-            .Where(race => race is not null && !race.IsDemoSession())
+            .Where(race => race is not null && !race.IsNotScored())
             .OrderBy(race => race.StartedAtUtc)
             .ToList();
 

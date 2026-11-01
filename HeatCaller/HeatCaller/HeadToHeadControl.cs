@@ -222,7 +222,7 @@ public sealed class HeadToHeadControl : UserControl
         // still carry them, and a ghost is a pace reference, not a driver
         // anyone can be compared against.
         var drivers = _history.All
-            .Where(s => !s.IsDemoSession())
+            .Where(s => !s.IsNotScored())
             .SelectMany(s => s.Results)
             .Where(r => !GhostService.IsGhost(r.Transponder))
             .Select(r => r.DriverName)
@@ -322,7 +322,7 @@ public sealed class HeadToHeadControl : UserControl
         // Oldest first, so the session list and form guide read chronologically.
         foreach (var session in _history.All.Reverse())
         {
-            if (session.IsDemoSession())
+            if (session.IsNotScored())
             {
                 continue;
             }

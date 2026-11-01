@@ -296,7 +296,7 @@ internal static class RaceDayDeleter
             .Where(id => !string.IsNullOrEmpty(id))
             .Select(id => id!)
             .Concat(history.Saved
-                .Where(s => s.RoundId is not null && dayRoundIds.Contains(s.RoundId) && !s.IsDemoSession())
+                .Where(s => s.RoundId is not null && dayRoundIds.Contains(s.RoundId) && !s.IsNotScored())
                 .Select(s => s.Id))
             .Distinct(StringComparer.Ordinal)
             .ToList();

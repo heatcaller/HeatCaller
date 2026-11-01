@@ -1129,6 +1129,15 @@ public partial class MainForm : Form
         // time round.
         _sessionHistory.SessionAdded += record =>
         {
+            // A result pasted in from another program's results page (1 Nov
+            // 2026) is history to look at, not a race run tonight: nothing
+            // below may follow from it - no relay page, no standings, no
+            // intro written ahead, no night-before preview taken down.
+            if (record.IsImported())
+            {
+                return;
+            }
+
             PublishSessionToRelay(record, firstPublish: true);
             PublishResultsIndexFor(record);
             PublishStandingsToRelay();

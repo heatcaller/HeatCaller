@@ -110,7 +110,7 @@ public sealed class DriverStatsSnapshot
                     // ToRelay): which races count is EventSpine's answer,
                     // the points are SeasonStore's. Nothing re-scored here.
                     var counted = EventSpine.SessionsFor(season, sources.Events, sources.Rounds, sources.History)
-                        .Where(s => !s.IsDemoSession())
+                        .Where(s => !s.IsNotScored())
                         .ToList();
 
                     var table = SeasonStore.ComputeStandings(season, counted, profiles);
@@ -426,7 +426,7 @@ public sealed class DriverStats
 
         foreach (var session in snapshot.Sessions)
         {
-            if (session.IsDemoSession())
+            if (session.IsNotScored())
             {
                 continue;
             }
@@ -972,7 +972,7 @@ public sealed class DriverStats
 
             foreach (var session in snapshot.Sessions)
             {
-                if (session.IsDemoSession() || !string.Equals(session.TrackLayoutName?.Trim(), layout, StringComparison.OrdinalIgnoreCase))
+                if (session.IsNotScored() || !string.Equals(session.TrackLayoutName?.Trim(), layout, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -1025,7 +1025,7 @@ public sealed class DriverStats
 
         foreach (var session in snapshot.Sessions)
         {
-            if (session.IsDemoSession())
+            if (session.IsNotScored())
             {
                 continue;
             }
