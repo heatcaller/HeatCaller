@@ -49,14 +49,18 @@ describe("the club pages' bottom bar on a phone", () => {
     }
   });
 
-  it("lets a home-screen icon scroll the window again, so no band is left under the bar", () => {
-    // 1 Nov 2026, Asher from his iPhone's home screen: "It now has a chin under the tabs".
+  it("keeps a home-screen icon's bar flush to the bottom without letting the window scroll", () => {
+    // 1 Nov 2026, Asher from his iPhone's home screen: "It now has a chin under the tabs",
+    // then "band is gone but the jumping is back".
     for (const [, html] of pages) {
       const at = html.indexOf("@media (max-width: 640px) and (display-mode: standalone), (max-width: 640px) and (display-mode: fullscreen) {");
       assert.ok(at > html.indexOf("@media (max-width: 640px) {"), "after the phone rules, so it wins");
       const block = html.slice(at, html.indexOf("\n}", at));
-      assert.match(block, /html \{ height: auto; overflow: visible; \}/);
-      assert.match(block, /body \{ height: auto; overflow-y: visible; \}/);
+      assert.match(block, /html \{ height: 100vh; height: 100lvh; \}/);
+      assert.match(block, /nav\.tabs \{ bottom: auto; top: 100vh; top: 100lvh; transform: translateY\(-100%\); \}/);
+      // The window never scrolls here either: no rule in it undoes the phone rules' overflow.
+      assert.doesNotMatch(block, /overflow/);
+      assert.doesNotMatch(block, /height: auto/);
     }
   });
 });
