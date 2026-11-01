@@ -17,7 +17,7 @@ HeatCaller is a Windows app for running an RC car race night from one laptop. It
 
 **A big screen.** A separate leaderboard window you can drag onto a TV, with sponsor slides between views. See [Big Screen](../screens/big-screen.md).
 
-**Phones on the club Wi-Fi.** HeatCaller can serve five pages to phones and tablets on the same Wi-Fi: live results, a phone remote for throwing flags, a self check-in page, a race-day manager for running entries, the programme and results, and a transparent overlay for streaming with OBS. See [Local Screens](../screens/phone-and-web.md).
+**Phones on the club Wi-Fi.** HeatCaller can serve five pages to phones and tablets on the same Wi-Fi: live results, a phone remote for throwing flags, a self check-in page, a race-day manager for running entries, the program and results, and a transparent overlay for streaming with OBS. See [Local Screens](../screens/phone-and-web.md).
 
 **Online pages and check-in.** HeatCaller can also publish to a small online server called the relay. It gives your club a public web address for results, standings, the live race, and online check-in from racers' own phones. See [Online](../online/index.md).
 

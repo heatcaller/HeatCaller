@@ -36,7 +36,7 @@ Beside it, the free Kokoro voice's model:
 %LocalAppData%\HeatCaller\Kokoro
 ```
 
-`kokoro.onnx` (about 310 MB) goes here when you download it from **Voice → Voice Settings**. The installer ships a copy beside `HeatCaller.exe` as well, and that one is used when it's there, so on a normal install this folder is empty or absent. Like the saved voice lines, it's this PC's own: it isn't part of backups and isn't copied to a new laptop, because it can be downloaded again. See [What the Kokoro voice uses](../announcer/voice.md#what-the-kokoro-voice-uses).
+`kokoro.onnx` (about 310 MB) goes here when you download it from **Voice → Voice**. The installer ships a copy beside `HeatCaller.exe` as well, and that one is used when it's there, so on a normal install this folder is empty or absent. Like the saved voice lines, it's this PC's own: it isn't part of backups and isn't copied to a new laptop, because it can be downloaded again. See [What the Kokoro voice uses](../announcer/voice.md#what-the-kokoro-voice-uses).
 
 And the console logs:
 
@@ -75,7 +75,7 @@ All data files are plain JSON text, except where noted.
 | `setup-log.json` | Car setups logged in the **Garage** (the page was called **Setup Log** in earlier versions). |
 | `chassis-templates.json` | Chassis templates used by the setup log. Their pictures are in the `ChassisImages` folder. |
 | `ghosts.json` | Ghost car settings (**Ghost Cars** page). |
-| `rivalries.json` | Rivalries for the announcer (**Voice → Rivalries**). |
+| `rivalries.json` | Rivalries for the announcer (**Voice → Race Calls**). |
 | `signups.json` | Online driver sign-up: whether it's on, and the invites made. The invite codes are sealed; see [Secrets](#secrets). See [Driver sign-up](../online/sign-up.md). |
 
 ### Tracks and venues
@@ -90,7 +90,7 @@ All data files are plain JSON text, except where noted.
 
 | File or folder | What it holds |
 |---|---|
-| `voice-settings.json` | Announcer voice settings (**Voice → Voice Settings**, the announcer's voice at the top of **Voice → Cast**, and **Voice → Announcements**): which voice speaks (the HeatCaller voice, ElevenLabs or the free Kokoro voice, and which announcer, ElevenLabs voice or Kokoro voice within it), the announcements and tuning, and the ElevenLabs API key, sealed. See [Secrets](#secrets). The HeatCaller voice needs no secret of its own: it speaks through the relay, using the publish token in `settings.json`. Two keys are older than they look: see [After the Windows voice was retired](#after-the-windows-voice-was-retired). |
+| `voice-settings.json` | Announcer voice settings (**Voice → Voice**, the announcer's voice at the top of **Voice → Cast**, and **Voice → Race Calls**): which voice speaks (the HeatCaller voice, ElevenLabs or the free Kokoro voice, and which announcer, ElevenLabs voice or Kokoro voice within it), the announcements and tuning, and the ElevenLabs API key, sealed. See [Secrets](#secrets). The HeatCaller voice needs no secret of its own: it speaks through the relay, using the publish token in `settings.json`. Two keys are older than they look: see [After the Windows voice was retired](#after-the-windows-voice-was-retired). |
 | `sound-effects.json` | Sound effect settings (**Sounds → Effects**). |
 | `ambience.json` | Ambience settings (**Sounds → Ambience**). |
 | `music.json` | Music settings and the track list (**Sounds → Music**). |
@@ -124,6 +124,7 @@ There is nothing underneath Kokoro: it is both the free voice a club can choose 
 | `settings.json` | App settings: connection, race defaults, web server, online relay, email, backup schedule, leaderboard columns and more. All secrets in it are sealed. See [Secrets](#secrets). |
 | `big-screen.json` | The Big Screen's own switch, held apart from the rest of the settings because the key that sets it is on the screen itself: one setting, `OnAir`, for whether the **ON AIR** band shows while the announcer's show is on air (<kbd>O</kbd> on the Big Screen). Safe to delete, and safe to be missing: the band is on, as it is on a fresh install. A damaged one is written over rather than kept as an `.unreadable-` copy — there's one setting in it, so there's nothing of yours to lose. See [When the show is on air](../screens/big-screen.md#when-the-show-is-on-air). |
 | `race-audio.json` | Whether races are recorded as mp3s, the driver clips and highlight videos, the club handle, whether the music and crowd go under the videos, whether drivers' clips go on their night pages, how many nights are kept, where the recordings go, and the limits that keep a recording off a full disk. Written by **Club Website → Recording**. Safe to delete: the defaults come back, and recording is on by default. See [Turning it off](../announcer/sounds-and-music.md#turning-it-off). |
+| `terms-accepted.json` | When the license agreement and privacy notice were accepted on this PC, by which Windows user, on which HeatCaller version and which edition of the text, with a fingerprint of the text. HeatCaller asks again when the text changes, or if this file is deleted. |
 | `crash.log` | Details of any unexpected errors. When it passes 5 MB it's renamed to `crash.old.log` and a new one is started. |
 | `crash.old.log` | The previous crash log. |
 | `heatcaller-migrated.txt` | Marks that saved paths and settings from before the rename to HeatCaller have been brought up to date. Safe to delete: HeatCaller checks again on the next start. |
@@ -140,7 +141,7 @@ There is nothing underneath Kokoro: it is both the free voice a club can choose 
 Some settings are secrets: anyone who has them could act as your club. HeatCaller never writes them to disk in plain text. They are:
 
 - The **Local Screens** remote, check-in and manager PINs.
-- The online relay token (and the last one that worked), and the **Token:** for a voice relay on **Voice → Voice Settings**, if one is typed in.
+- The online relay token (and the last one that worked), and the **Token:** for a voice relay on **Voice → Voice**, if one is typed in.
 - The online check-in staff PIN and the key used for QR check-ins.
 - Each racer's personal check-in PIN.
 - The email password used to send racer PINs.
@@ -209,7 +210,7 @@ Close HeatCaller first. Then you can delete:
 | `*.tmp` | Left over from an interrupted save. |
 | `%LocalAppData%\HeatCaller\Logs` | Console logs and freeze dumps. Safe to delete; keep them if you're reporting a problem. |
 | `Documents\HeatCaller Race Audio` | Recordings and highlight videos of past races. Only the last few nights are kept (**Keep the last:** on **Club Website → Recording**, 6 by default); copy a night's folder elsewhere to keep it longer. |
-| `%LocalAppData%\HeatCaller\VoiceLibrary` | Saved voice lines. Safe to delete, but each line is then rendered, and paid for, again the next time it's spoken. **Forget All** on the **Saved voice lines** card of **Voice → Voice Settings** does the same without closing HeatCaller. |
+| `%LocalAppData%\HeatCaller\VoiceLibrary` | Saved voice lines. Safe to delete, but each line is then rendered, and paid for, again the next time it's spoken. **Forget All** on the **Saved voice lines** card of **Voice → Voice** does the same without closing HeatCaller. |
 
 Don't delete or edit anything else by hand. In particular:
 

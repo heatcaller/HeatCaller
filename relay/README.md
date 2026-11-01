@@ -226,21 +226,29 @@ finished last.
 ## Pages
 
 ```
-/c/:club                     home: on track now, up next, latest results, links
+/c/:club                     home: changes with the night - Your next race and You for a
+                             remembered driver, on track now or the preview or "No racing
+                             right now", the New here? card, last race night, Our tracks
 /c/:club/live                the race as it runs, refreshed every 2s
 /c/:club/schedule            today's running order, heat line-ups when published
-/c/:club/checkin             online check-in (tab shown only while it is open)
+/c/:club/checkin             online check-in (lights the Me tab; no tab of its own)
+/c/:club/mynight             Me: a remembered driver's night, or the personal PIN box
+/c/:club/night               a driver's own night, opened by its private link
+/c/:club/signup              the sign-up page an invite opens
+/c/:club/app                 the home-screen app: one bar along the bottom, the club's
+                             pages in a frame above it; a phone opened from the icon
+                             is sent to /app#<path>
 /c/:club/results             finished sessions, newest first, grouped by day
 /c/:club/results/:sessionId  the same page, opened at one session - and the one
                              address a shared result can carry its own preview
                              card on (built from the index, never from a result)
-/c/:club/standings           championship points, with a season picker
-/c/:club/badges              recent unlocks, most collected, every badge
-/c/:club/tracks              layouts, lap records, best laps
+/c/:club/standings           championship points, with a season picker (a tab under Results)
+/c/:club/badges              recent unlocks, most collected, every badge (a tab under Results)
+/c/:club/tracks              layouts, lap records, best laps (reached from Home)
 /c/:club/results/:sessionId/card.png
                              the drawn 1200x630 picture that goes with that link
 /c/:club/manifest.webmanifest   makes "Add to Home Screen" install the pages as an app
-/c/:club/icon.png            the club's logo, or a chequered flag in its colours
+/c/:club/icon.png            HeatCaller's sun, the same for every club (src/sun.ts)
 /c/:club/logo.png            the club's logo (404 if it has none)
 ```
 
@@ -251,11 +259,10 @@ The pages ask for it as `logo.png?v=<12 hex digits of its SHA-256>`: the
 image is cached for an hour, and a new logo is a new address, so it shows
 at once. The query string is ignored when serving.
 
-`icon.png` (the page icon, the home-screen icon in the manifest and the
-link-preview image) is versioned the same way: with the logo's
-fingerprint when the club has a logo, otherwise with a fingerprint of the
-two colours the chequered flag is drawn in (see `flagColours` in
-`src/site.ts`). A new logo or a recoloured flag is a new icon address.
+`icon.png` (the page icon and the home-screen icon in the manifest) is
+HeatCaller's sun for every club since 30 Oct 2026, logo or not, and is
+versioned with `SUN_ICON_VERSION` from `src/sun.ts`. A club with a logo
+still uses `logo.png` as its link-preview image.
 
 ### The card a shared result arrives with
 
@@ -437,8 +444,7 @@ that is not held wait for a single build of it, and builds take turns
 across clubs, one at a time. Together these keep a 256 MB machine from
 running out of memory however many phones ask at once.
 
-The pages' look - the `site` document, and the chequered-flag icon drawn
-from it - is also held in memory and read again only when the club
+The pages' look - the `site` document - is also held in memory and read again only when the club
 publishes `site`; so is the `checkin` document, read again only when it is
 written. Requests that arrive together for one that is not held share a
 single read of it - which matters when the machine wakes and every request
@@ -1550,7 +1556,9 @@ src/pinguard.ts  the club-wide wrong-PIN count and its escalating lockout, kept 
                  manager's
 src/pages.ts     every public page, the manifest
 src/site.ts      the club's look, read narrowly from its site document
-src/icon.ts      a PNG encoder, and the chequered-flag home-screen icon
+src/icon.ts      a PNG encoder
+src/sun.ts       HeatCaller's sun as pixels: every club's home-screen icon and the corner
+                 of a shared result card
 src/card.ts      the drawn 1200x630 results card a shared link carries
 src/font.ts      setting type from the pre-rendered atlas: metrics, scaling, ellipsis
 src/font-data.ts GENERATED - Poppins as packed alpha coverage. tools/build-font.py makes it
@@ -1558,6 +1566,10 @@ src/voice.ts     the HeatCaller voice: the catalogue, the ElevenLabs call, the s
                  per-club caches, the monthly allowance with its reserve and refund, and
                  hearing a voice before choosing it - the open samples and the Preview
                  button's own daily allowance
+src/lapvoice.ts  the lap voice: the fixed set of short clips "Lap times in my ear" is
+                 joined from, and serving them
+src/lapvoicerender.ts makes the lap voice's clips on an ElevenLabs key, on your own PC
+                 (lap-voice-render.cmd), never on the relay
 src/preview.ts   the link-preview card for one session, read narrowly out of the club's
                  results index - the second and last document the relay reads itself
 src/config.ts    config loading, and refusing to start rather than starting wrong

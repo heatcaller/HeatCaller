@@ -38,7 +38,7 @@ The installer changes your PATH, and only **new** terminal windows see the chang
 fly version
 ```
 
-If `fly` isn't recognised but `flyctl` is, use `flyctl` wherever this page says `fly`; they are the same program. The `fly-set-config.cmd` script finds whichever one is installed.
+If `fly` isn't recognized but `flyctl` is, use `flyctl` wherever this page says `fly`; they are the same program. The `fly-set-config.cmd` script finds whichever one is installed.
 
 Sign in once:
 
@@ -335,7 +335,7 @@ Without the secret the relay starts and simply does not offer the voice, whateve
 
 ```
 [relay] HeatCaller voice: 4 voice(s), 7 club(s) included
-[relay] HeatCaller voice: a catalogue is configured but RELAY_VOICE_KEY is not set, so it is switched off
+[relay] HeatCaller voice: a catalog is configured but RELAY_VOICE_KEY is not set, so it is switched off
 ```
 
 ### Hearing a voice before choosing it
@@ -709,7 +709,7 @@ voice-test.cmd
 
 The first run builds, writes `relay.config.voice-test.json` with a catalog made from the voices that ElevenLabs account already has, mints a club token, and prints the three values to paste into HeatCaller. Later runs just start it.
 
-Those three go into **Voice → Voice Settings**, in the **Voice relay:**, **Club:** and **Token:** boxes under the HeatCaller voice — not the **Club Website** page. Only the voice moves; results, check-in and the race-day manager keep going to the hosted relay. See [Sending the voice to a different relay](../announcer/voice.md#sending-the-voice-to-a-different-relay).
+Those three go into **Voice → Voice**, in the **Voice relay:**, **Club:** and **Token:** boxes under the HeatCaller voice — not the **Club Website** page. Only the voice moves; results, check-in and the race-day manager keep going to the hosted relay. See [Sending the voice to a different relay](../announcer/voice.md#sending-the-voice-to-a-different-relay).
 
 Three things it's careful about, because it's your own credits:
 
@@ -777,7 +777,7 @@ The relay would rather not start than start wrong. You'll see one of these in `f
 | `Voice ... needs an "id" of lower-case letters, digits and hyphens, up to 24 characters.` | Correct the catalog entry's `id`. |
 | `Voice "..." in ... needs the ElevenLabs "voiceId".` | Add the ElevenLabs voice id to that catalog entry. |
 | `Voice "..." is listed twice in ...` | Remove the duplicate catalog entry. |
-| `Club "..." in ... names a voice "..." that the catalogue does not have.` | Correct that club's `voice.voices`, or add the voice to the catalogue. |
+| `Club "..." in ... names a voice "..." that the catalog does not have.` | Correct that club's `voice.voices`, or add the voice to the catalog. |
 | `"voice" in ... must be an object.` / `"voice.voices" in ... must be a list.` / the same for a club | Correct the shape of the block. A club's `voice.voices` is a list of ids, not of objects. |
 | `"voice.previewDailyChars" in ... must be a whole number from 0 to 1000000` / `"voice.previewMaxChars" in ... must be a whole number from 40 to 600` | Correct or remove that number. |
 

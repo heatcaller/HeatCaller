@@ -26,14 +26,14 @@ The laptop is a client of the relay in both directions: it publishes by sending 
 
 Flags, starts and stops only happen on the laptop, or from the phone remote on the venue's own Wi-Fi. The relay has an explicit refusal built in: any request to a club's `command` address is answered with HTTP 403 and the message `Race control is never available over the relay. Flags stay on the venue's own network.` A stolen publish token can change what the club's pages show; it can't touch a race.
 
-This held before the race-day manager could be reached through the relay, and it still does. Starting or stopping a race, or throwing a flag, is refused by the laptop itself whenever it arrives from anywhere but the venue's own Wi-Fi, whatever asks for it - and the relay's own manager page doesn't offer those buttons in the first place. Over the relay, the manager can touch entries, the programme and saved results, if the club turns that on; it can never touch a race in progress.
+This held before the race-day manager could be reached through the relay, and it still does. Starting or stopping a race, or throwing a flag, is refused by the laptop itself whenever it arrives from anywhere but the venue's own Wi-Fi, whatever asks for it - and the relay's own manager page doesn't offer those buttons in the first place. Over the relay, the manager can touch entries, the program and saved results, if the club turns that on; it can never touch a race in progress.
 
 ## Secrets on the laptop
 
 ### What counts as a secret
 
 - The ElevenLabs API key (your own; the HeatCaller voice has no key on the laptop at all — it uses the publish token)
-- The relay publish token (and the last token that tested clean), and the token for a voice relay typed in on **Voice → Voice Settings**, if any
+- The relay publish token (and the last token that tested clean), and the token for a voice relay typed in on **Voice → Voice**, if any
 - The QR check-in key, which the online check-in ids on printed QR check-ins are made from
 - The Local Screens remote, check-in and manager PINs
 - The online staff PIN and every racer's personal PIN
@@ -133,7 +133,7 @@ This is entirely separate from the Wi-Fi manager page's own PIN limits, describe
 
 ### Driver sign-up codes
 
-An invite to [sign up online](../online/sign-up.md) is an eight-digit code that works once, for 14 days. The laptop keeps the codes in a file of their own, sealed with Windows DPAPI like its other secrets, and publishes only a hash of each (salted and slow like the PIN hashes, with its own prefix, so a code can never match a check-in, racer or manager PIN). Wrong codes have their own limits - ten per connection in ten minutes, and fifty across the club before code sign-in closes, for longer each time - kept apart from check-in's and the manager's, so guessing at one never closes the others. Cancelling every open invite and making new ones reopens it at once.
+An invite to [sign up online](../online/sign-up.md) is an eight-digit code that works once, for 14 days. The laptop keeps the codes in a file of their own, sealed with Windows DPAPI like its other secrets, and publishes only a hash of each (salted and slow like the PIN hashes, with its own prefix, so a code can never match a check-in, racer or manager PIN). Wrong codes have their own limits - ten per connection in ten minutes, and fifty across the club before code sign-in closes, for longer each time - kept apart from check-in's and the manager's, so guessing at one never closes the others. Canceling every open invite and making new ones reopens it at once.
 
 A sign-up does nothing by itself: the desk approves every one. Until it does, the relay holds what the driver typed - including a transponder number, the one place the relay ever holds one - and forgets it once the laptop has answered, or after 14 days.
 
@@ -141,8 +141,8 @@ A sign-up does nothing by itself: the desk approves every one. Until it does, th
 
 - **Every club is separate.** Every address and every stored file is under a club id, and the id is checked in one place before it is used. Three voice routes are the only ones outside `/api/v1/c/<club>/`, and they are the only exceptions: the two that serve [voice samples](relay-hosting.md#hearing-a-voice-before-choosing-it) take no token and name no club, and they read nothing a club published and write nothing — the words they speak are one fixed line built into the relay. **Preview** names no club in its address either, but it carries the club's publish token, so the token *is* the club: there is nothing in the address that could name a different one, and the only thing it writes is that club's own count of previews for the day.
 - **Private check-in list.** The check-in document (names, photos if enabled, PIN hashes) is published like any other but never served whole. Asking for it gets the same answer as a channel that doesn't exist. The relay hands out one driver to a QR check-in, or the list to the staff PIN.
-- **Content Security Policy** on every page, with a fresh random nonce per response: only the page's own script runs, data is fetched only from the relay, images only from the relay or as embedded pictures, and nothing may frame the page.
-- **Security headers** on every answer: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Strict-Transport-Security`, a strict referrer policy, a permissions policy that turns off camera, microphone, location and payment, and `Cross-Origin-Opener-Policy: same-origin`.
+- **Content Security Policy** on every page, with a fresh random nonce per response: only the page's own script runs, data is fetched only from the relay, images only from the relay or as embedded pictures, and the page can be framed only by the relay's own pages (the home-screen app's bar holds the club's pages in a frame, since 1 November).
+- **Security headers** on every answer: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Strict-Transport-Security`, a strict referrer policy, a permissions policy that turns off camera, microphone, location and payment, and `Cross-Origin-Opener-Policy: same-origin`.
 - **Check-in actions are POST only**, so nothing that merely loads a link can change a check-in.
 - **Timeouts for slow clients**: 15 seconds to send headers, 30 seconds for the whole request, 5 seconds keep-alive, at most 100 headers.
 - **Request limits**: bodies over the configured size are refused (see [Limits](relay-hosting.md#limits)), check-in requests are capped at 4 KB, and paths that try to climb out of a folder are refused.
@@ -179,7 +179,7 @@ The **Local Screens** server lets phones on the venue Wi-Fi see live results, ch
 
 - **The remote needs a PIN.** Without a **Remote PIN** of four or more digits, the remote refuses every command. The server still starts, so live results and check-in work, and it warns you.
 - **The check-in PIN is separate.** **Check-in PIN (optional)** protects the phone check-in page. It's kept separate so the PIN on the wall for drivers can't throw a red flag. HeatCaller warns you if both PINs are the same. With no check-in PIN, the check-in page is open to anyone on the Wi-Fi.
-- **The manager PIN is separate again.** **Manager PIN**, set on the same page, guards the race-day manager - entries, the programme and saved results. Blank, or shorter than six digits, and the manager refuses every request instead of opening up, unlike a blank check-in PIN. If the club also turns on **Let the race-day manager be reached through the relay** on the **Club Website** page, the same PIN guards it there too, with its own separate limits - see [Race-day manager PIN](#race-day-manager-pin).
+- **The manager PIN is separate again.** **Manager PIN**, set on the same page, guards the race-day manager - entries, the program and saved results. Blank, or shorter than six digits, and the manager refuses every request instead of opening up, unlike a blank check-in PIN. If the club also turns on **Let the race-day manager be reached through the relay** on the **Club Website** page, the same PIN guards it there too, with its own separate limits - see [Race-day manager PIN](#race-day-manager-pin).
 - **Wrong PINs are limited.** Ten wrong PINs from one device in five minutes locks that device out for a while (`Too many wrong PINs. Wait a few minutes.`). Each device is counted by its full address, IPv6 included. The remote, the check-in page and the manager count separately, so a driver fumbling the check-in PIN can't lock you out of the remote or the manager.
 - **Guessing from many devices is limited too.** Fifty wrong tries at the remote or manager PIN (200 at the check-in PIN, which is on the wall) in five minutes, from anywhere, and that PIN is refused for five minutes on every device that hasn't entered it yet (`Too many wrong PINs on this Wi-Fi. The PIN is not being accepted for five minutes.`). A device that entered it correctly in the last 12 hours keeps working. The console shows a `[web] WARNING: ...` line.
 - **Check-in changes are limited** to 30 a minute per device, and 120 a minute from every device together. Scanning a QR check-in counts even when the driver is already checked in, so the page can't be used to test, for free, whether a given car is here tonight.
@@ -220,7 +220,7 @@ Pictures are sized from their header before they're ever opened, so a picture to
 A backup can't carry your secrets onto the laptop that made it without the backup password, but it does carry plain addresses: the relay's, the voice relay's and the mail server's. Restoring a backup whose address this laptop wasn't already using would have sent this laptop's own sealed token, or mailbox password and racers' PINs, to that address. So after a restore, a new address is held back until you check it on the page where it's shown:
 
 - **The relay:** the **Club Website** page shows **Check these settings** and publishes nothing until you press **Save** or **Test Connection**.
-- **The voice relay:** nothing is asked of it until you click in its address box on **Voice → Voice Settings** and press <kbd>Enter</kbd>.
+- **The voice relay:** nothing is asked of it until you click in its address box on **Voice → Voice** and press <kbd>Enter</kbd>.
 - **The mail server:** nothing is emailed until **Send Test Email** goes through, or you choose or type the server again. Gmail, iCloud and Outlook.com are never held back.
 
 Restoring your own backup on your own laptop, with the same addresses, asks nothing. The console log says what's held back when HeatCaller starts.

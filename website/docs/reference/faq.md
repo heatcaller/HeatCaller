@@ -27,7 +27,7 @@ Yes. **Demo Mode** runs a fake race through the same race logic, announcer and s
 
 ### Do I need an ElevenLabs account?
 
-No, and most clubs won't want one. **Voice → Voice Settings** offers three voices:
+No, and most clubs won't want one. **Voice → Voice** offers three voices:
 
 - **The HeatCaller voice** — natural announcer voices that come with HeatCaller, spoken through your club's relay. No account, no key, no bill. It needs the club set up on the **Club Website** page and internet at the track, it has a monthly allowance of characters, and the wording it speaks is the standard set of lines.
 - **Your own ElevenLabs account** — your key and your credits, and complete control of the voice, the tuning and every word.
@@ -52,7 +52,7 @@ Most fixed lines cost nothing in the first place: a line with no driver's name i
 
 ### Can I write my own announcer lines on the HeatCaller voice?
 
-No. That voice speaks the standard announcer lines and nothing else, because the ElevenLabs account behind it is HeatCaller's rather than your club's. The lines boxes on **Voice → Announcements** and the **Rivalries** phrasing box are read-only, and a soundscape applied on **Sounds → Soundscapes** brings its sounds but not its wording.
+No. That voice speaks the standard announcer lines and nothing else, because the ElevenLabs account behind it is HeatCaller's rather than your club's. The lines boxes on **Voice → Race Calls** and the **Rivalries** phrasing box are read-only, and a soundscape applied on **Sounds → Soundscapes** brings its sounds but not its wording.
 
 To write your own, choose your own ElevenLabs key or the free Kokoro voice under **Speak with** — both are yours to spend. Switching to the HeatCaller voice while you have your own wording asks first, and answering **No** leaves everything as it was. See [What's fixed while it's chosen](../announcer/voice.md#whats-fixed-while-its-chosen).
 
@@ -88,7 +88,7 @@ Each class chooses how qualifying is scored: **total laps**, or the quickest run
 
 ### Can I start and flag races from the keyboard, or from my phone?
 
-Keyboard: on **Race Control**, <kbd>F1</kbd> Stage, <kbd>F2</kbd> Countdown, <kbd>F3</kbd> Green, <kbd>F4</kbd> Yellow, <kbd>F5</kbd> Red, <kbd>F6</kbd> Checkered. See [Keyboard shortcuts](keyboard-shortcuts.md).
+Keyboard: on **Race Control**, <kbd>F1</kbd> starts the race (through **On Air** when **Start races On Air** is ticked, otherwise **Stage**), <kbd>0</kbd> On Air (hold it while On Air runs to skip to staging), <kbd>F2</kbd> Countdown, <kbd>F3</kbd> Green, <kbd>F4</kbd> Yellow, <kbd>F5</kbd> Red, <kbd>F6</kbd> Checkered. See [Keyboard shortcuts](keyboard-shortcuts.md).
 
 Phone: start the server on **Local Screens**, set a **Remote PIN:** of at least four digits, and open the **Phone remote:** address on a phone on the same Wi-Fi. See [Local Screens](../screens/phone-and-web.md).
 
@@ -115,7 +115,7 @@ Check these in order:
 1. The mute icon at the bottom of the sidebar is red, or hovering it shows **Unmute Announcer**. If so, the announcer is muted. Click it.
 2. ElevenLabs is chosen, and it has no API key or voice, has run out of credit, or can't be reached, while the Kokoro voice isn't standing in (its box under the ElevenLabs choice is unticked).
 3. The HeatCaller voice is chosen with no announcer voice picked, or the relay is refusing, on a PC that hasn't got Kokoro's voice file to stand in. On any PC that has it, this shows up as the whole night in the Kokoro voice rather than silence.
-4. Kokoro's own voice file isn't on this PC, or it's there and won't load. Kokoro is the bottom of the ladder and nothing stands in underneath it, so this is the one state where the announcer has nothing at all to speak with. Open **Voice → Voice Settings** and press **Download (about 310 MB)** under the Kokoro choice in **Speak with**. See [When nothing can speak](../announcer/voice.md#when-nothing-can-speak).
+4. Kokoro's own voice file isn't on this PC, or it's there and won't load. Kokoro is the bottom of the ladder and nothing stands in underneath it, so this is the one state where the announcer has nothing at all to speak with. Open **Voice → Voice** and press **Download (about 310 MB)** under the Kokoro choice in **Speak with**. See [When nothing can speak](../announcer/voice.md#when-nothing-can-speak).
 
 **Sounds → Mixer** shows "NO VOICE:" and the reason when the announcer can't speak, and **Voice Settings** shows a red "NOTHING CAN SPEAK -" line when there's no Kokoro voice file either. The Developer Console on the **Connection** page tells you more: choose the **Voice** filter and look for lines like "Skipped announcement - ElevenLabs API key or voice not configured." or "NO VOICE -" and a reason. See [Voice announcements](../announcer/voice.md).
 
@@ -197,7 +197,7 @@ No. Your data isn't kept with the app, so replacing the app leaves it alone. Sti
 
 Email **support@heatcaller.com**, and include these:
 
-- The version, from the title bar, the startup screen or **About HeatCaller...** (for example **BETA 0.60.0**).
+- The version, from the title bar, the startup screen or **About HeatCaller** (for example **BETA 0.60.0**).
 - What you were doing.
 - The support file: **Save Support Info** on the **Getting help** card of the **Backup & Restore** page. It has the console, the crash log, the version and the PC in it already, with driver names and email addresses taken out. See [Save Support Info](../admin/backups.md#save-support-info).
 
@@ -207,4 +207,4 @@ See [Troubleshooting](../admin/troubleshooting.md).
 
 ### What other software is inside HeatCaller?
 
-**About HeatCaller...** on the **Getting help** card of the **Backup & Restore** page lists every third-party component HeatCaller ships with and the licence it is under — the audio playback, the decoder connections, the QR codes, the free on-PC voice and the two typefaces. All of it is free to use and redistribute, and the font licence files travel with the fonts as those licences require.
+**About HeatCaller** on the **Getting help** card of the **Backup & Restore** page lists every third-party component HeatCaller ships with and the license it is under — the audio playback, the decoder connections, the QR codes, the free on-PC voice and the two typefaces. All of it is free to use and redistribute, and the font license files travel with the fonts as those licenses require. Its **License and privacy notice** link opens the terms you accepted.

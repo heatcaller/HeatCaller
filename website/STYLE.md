@@ -28,7 +28,7 @@ Race Control, Race Day (tabs: Next Steps, Setup, Who's Racing), Championship (ta
 Driver Hub, Classes, Rentals, Handicaps, Batteries, Track Layouts, Race History,
 Race Analytics (Overview, Personal Bests, Lap Times, Head to Head, Trends, Pace), Achievements, Garage,
 Practice, Ghost Cars, Demo Mode, Venues, Themes (no tabs: Looks, Club logo and Appearance cards), Sponsors, Local Screens, Club Website,
-Voice (Voice Settings, Announcements, Commentary, Rivalries), Sounds (Mixer, Soundscapes, Effects, Ambience, Music, Lap Beeps),
+Voice (Voice, Cast, Race Calls with Rivalries at its end, AI Commentary), Sounds (Mixer, Soundscapes, Imaging, Effects, Ambience, Music, Lap Beeps),
 Connection, Backup & Restore. There's a "Search pages..." box and "Manage Navigation..." to reorder/hide pages.
 (Checked against the code on 30 Sep 2026: MainForm.Pages.cs `_navItems` and each page's TabPages. "Voice Announcements"
 was renamed "Voice", "Setup Log" became "Garage", Themes' Announcer Style became Sounds → Soundscapes.)

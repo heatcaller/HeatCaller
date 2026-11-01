@@ -1,6 +1,6 @@
 # Local Screens
 
-HeatCaller has a small web server built in. Turn it on from the **Local Screens** page and any phone, tablet or computer on the same Wi-Fi as the laptop can open five pages: live results, a transparent overlay for streaming, a race remote for throwing flags from the trackside, a self check-in page for drivers, and a race-day manager for running entries, the programme and results from a phone.
+HeatCaller has a small web server built in. Turn it on from the **Local Screens** page and any phone, tablet or computer on the same Wi-Fi as the laptop can open five pages: live results, a transparent overlay for streaming, a race remote for throwing flags from the trackside, a self check-in page for drivers, and a race-day manager for running entries, the program and results from a phone.
 
 These pages work only on the venue's own network, with no internet needed. To publish results and check-in to the internet, use the online relay instead; see [The online relay](../online/index.md). The race-day manager can also be reached over the relay if the club turns that on - see [Race-day manager](#race-day-manager) below.
 
@@ -39,14 +39,14 @@ All three PINs are hidden. Tick **Show PINs**, under the check-in PIN, to see th
 
 A new PIN that's already a racer's personal PIN isn't saved. HeatCaller says so, for example "The Remote PIN you typed can't be used - it is already in use elsewhere in HeatCaller. Choose another.", and puts the box back to what was saved. The other PINs are saved as usual.
 
-Never make the check-in PIN the same as the remote PIN or the Manager PIN. The check-in PIN is meant to go on the wall for drivers, and anyone who reads it could throw flags (if it matches the remote PIN) or edit entries, the programme and saved results (if it matches the Manager PIN).
+Never make the check-in PIN the same as the remote PIN or the Manager PIN. The check-in PIN is meant to go on the wall for drivers, and anyone who reads it could throw flags (if it matches the remote PIN) or edit entries, the program and saved results (if it matches the Manager PIN).
 
 If there's a problem with the PINs when you click **Start Server**, the server still starts, and HeatCaller shows a warning titled "Server started - check the PINs":
 
 - "The phone remote will refuse every command until its PIN is four or more digits (numbers only). Stop the server, set the Remote PIN, and start it again."
 - "The check-in PIN is the same as the remote PIN. The check-in PIN goes on the wall for drivers, so anyone who reads it could throw flags too. Stop the server and change one of them."
 - "The race-day manager will refuse every request until its PIN is six or more digits (numbers only). Stop the server, fix the Manager PIN, and start it again."
-- "The check-in PIN is the same as the manager PIN. The check-in PIN goes on the wall for drivers, so anyone who reads it could edit entries, the programme, and saved results too. Stop the server and change one of them."
+- "The check-in PIN is the same as the manager PIN. The check-in PIN goes on the wall for drivers, so anyone who reads it could edit entries, the program, and saved results too. Stop the server and change one of them."
 
 The PINs are stored encrypted on the laptop. See [Where HeatCaller keeps your data](../admin/data-files.md).
 
@@ -163,7 +163,7 @@ The follow view is only on the club Wi-Fi page, not on your club's online pages,
 
 ### Coach
 
-The page at `/coach` is for one driver to watch their own laps on their phone while they practise, or for whoever is coaching them in the pits. It needs no PIN.
+The page at `/coach` is for one driver to watch their own laps on their phone while they practice, or for whoever is coaching them in the pits. It needs no PIN.
 
 - **Pick your driver...** at the top chooses who it's for. The phone remembers the choice, and it's the same choice as following a driver on the live results page, so a phone already following somebody opens on them.
 - **Last lap** shows their latest lap and how far it was off their best, or **Best lap** when it was their best.
@@ -271,7 +271,7 @@ Each button does exactly what the same button on the **Race Control** page does,
 The remote asks before doing anything that would wipe a race in progress:
 
 - **RESET** always asks "Reset the race?"
-- **STAGE** or **COUNTDOWN** while a race is running: the laptop doesn't act on it. The phone asks "A race is running - this would wipe its standings. Carry on?" (over a demo, "A demo is running - this would end it. Carry on?"), and sends the command again only on a "yes". A "no" shows "STAGE cancelled. Nothing was changed." The question comes from the laptop, so it is asked about the race as it is at that moment - including one that went green while the command was on its way.
+- **STAGE** or **COUNTDOWN** while a race is running: the laptop doesn't act on it. The phone asks "A race is running - this would wipe its standings. Carry on?" (over a demo, "A demo is running - this would end it. Carry on?"), and sends the command again only on a "yes". A "no" shows "STAGE canceled. Nothing was changed." The question comes from the laptop, so it is asked about the race as it is at that moment - including one that went green while the command was on its way.
 - During practice nothing is asked: the laptop refuses **STAGE** and **COUNTDOWN** with "Practice is running - stop it on the Practice page first."
 
 The laptop carries out one command at a time. A second press while one is still going out - two marshals pressing **RED** together, say - is answered "NOT sent - the laptop is still carrying out RED." Check the flag, and press again if it's still needed. Each phone can send 20 commands a minute and all phones together 60; past that, the phone shows "NOT sent - too many commands in the last minute."
@@ -309,7 +309,7 @@ The check-in page doesn't offer camera scanning of QR check-ins on the local net
 
 ### Race-day manager
 
-The page at `/manage` lets a second phone or tablet run entries, the programme and results, so a helper in the paddock or at the grid can work alongside whoever is at race control on the laptop.
+The page at `/manage` lets a second phone or tablet run entries, the program and results, so a helper in the paddock or at the grid can work alongside whoever is at race control on the laptop.
 
 1. Set a **Manager PIN** of six or more digits on this page, and start the server.
 2. Open the **Race manager:** address (or scan its QR poster), and type in the Manager PIN. It shows as dots, and it's tried as soon as you've typed it: press Enter or tap out of the box. The phone remembers it.
