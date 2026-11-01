@@ -265,7 +265,7 @@ If a picture can't be used, a **Photo not added** message says **Couldn't use th
 
 ### Online privacy
 
-Under the profile's fields, the **ONLINE PRIVACY** group has three ticks on its **Online:** row. They're for a driver, or a parent, who wants less of them on the internet. All three start unticked.
+Under the profile's fields, the **PRIVACY** group has three ticks on its **Online:** row. They're for a driver, or a parent, who wants less of them on the internet. All three start unticked.
 
 | Tick | What it changes online |
 |---|---|
@@ -273,11 +273,19 @@ Under the profile's fields, the **ONLINE PRIVACY** group has three ticks on its 
 | **No podium videos of them** | Always met: since 28 October 2026 no podium video goes on the club's page - they all stay on this PC. The tick is kept so a driver's ask still has somewhere to go. Their own race calls on their private night page aren't affected. |
 | **Initials only ("Sam Parker" shows as "S.P.")** | Everywhere on the club's pages - live, results, standings, schedule, badges, tracks and check-in - they're shown by their initials. Lines the announcer says about them are left out of the captions on the club's page and aren't sent to people listening along from home. Their own night page still uses their full name. |
 
-The hint under them says: "Only what goes on the internet: the club's relay pages. In the room nothing changes - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. A driver can ask for these from their phone; only the desk can turn one off."
+The hint under them says: "Online is only what goes on the internet: the club's relay pages. In the room those change nothing - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. A driver can ask for them from their phone; only the desk can turn one off." The **Big Screen:** row under them is the one switch in the group that changes the room; see [Keeping a photo off the Big Screen](#keeping-a-photo-off-the-big-screen).
 
 - **A driver can turn them on from their phone; only the desk can turn them off.** From their night page, a driver can ask for any of the three (see [Driver requests](../online/driver-requests.md)). Nothing changes until the desk approves it. A phone can never untick one: to turn one off, untick it here and click **Save**.
 - **It's quick, but not instant.** Once the profile is saved, the club's live pages follow within a few seconds. HeatCaller then re-sends every saved result the driver is in, a few at a time so results from tonight aren't held up. For a driver with a long history this takes a few minutes, and it carries on after a restart if HeatCaller is closed first. The console says "[privacy] A driver's online privacy changed - the club's page is being brought in line." and then "[privacy] The club's page now shows the drivers' latest privacy choices."
 - **Lines about them are matched widely.** A line is left out of the club's captions and kept from listeners at home when it has any of the driver's names in it, or any word of one, so a line about another driver with the same first name may be held back too.
+
+### Keeping a photo off the Big Screen
+
+The same **PRIVACY** group has a **Big Screen:** row with one tick, **Keep their photo off it (a young driver, say)**. It starts unticked.
+
+- **What it changes.** During the [driver introductions](../screens/big-screen.md#driver-introductions), the Big Screen shows this driver's name, grid spot, number and home club as usual, with their initials in a colored disc where the photo would be. Their name is never hidden.
+- **What it doesn't.** It's for the driver introductions on the Big Screen. Their photo stays everywhere else in the room as before, and the online ticks above are separate.
+- **Only the desk sets it.** It isn't one of the requests a driver can make from their phone.
 
 ### Import drivers from a spreadsheet
 

@@ -1043,6 +1043,14 @@ public sealed partial class RaceControlControl
                 // it is heard.
                 if (said.Introductions is { } saidIntroductions)
                 {
+                    // The Big Screen's cards for them (1 Nov 2026) - the
+                    // field read again, quietly, as the line is handed over:
+                    // the same grid they were written from. See IntroOnAir.
+                    if (round is not null && ReadIntroductionFacts(round, null, quiet: true) is { } introFacts)
+                    {
+                        ArmIntroCards(introFacts.Grid, saidIntroductions.Text);
+                    }
+
                     if (introductionsAudio is not null)
                     {
                         _announcer.SpeakPrepared(introductionsAudio, onAir: OnAirParts.DriverIntros);
