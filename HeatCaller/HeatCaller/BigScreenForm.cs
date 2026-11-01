@@ -280,6 +280,26 @@ public sealed class BigScreenForm : Form
     /// <summary>When the roll call now showing began, less its grace - passes from before it don't count. Null while it isn't showing.</summary>
     private DateTime? _rollCallSinceUtc;
 
+    /// <summary>
+    /// The driver introductions' card (1 Nov 2026, asked for by Asher): the
+    /// driver being introduced, name and photo, over whatever the board area
+    /// holds - the roll call, as a rule, since the introductions are said at
+    /// staging - for exactly as long as the voice is on them (IntroOnAir).
+    /// See UpdateIntroCard.
+    /// </summary>
+    private readonly IntroCardView _introCard = new();
+
+    /// <summary>Whether the introductions' card is up.</summary>
+    private bool _introShowing;
+
+    /// <summary>
+    /// Looks for the next driver card several times a second - the board's
+    /// half-second tick would put each face up to half a second behind the
+    /// voice. Asks one locked question per tick and does nothing more unless
+    /// the driver changed.
+    /// </summary>
+    private readonly System.Windows.Forms.Timer _introTimer = new() { Interval = 100 };
+
     // The live track map (TrackMapView) down the right of the board, when
     // the layout being raced on has a plan with a racing line. M shows and
     // hides it. Null source - the Big Screen opened from Practice - and it
@@ -446,6 +466,9 @@ public sealed class BigScreenForm : Form
         _refreshTimer.Tick += (_, _) => RefreshCountdownOnly();
         _refreshTimer.Start();
 
+        _introTimer.Tick += (_, _) => UpdateIntroCard();
+        _introTimer.Start();
+
         StartSponsorRotationIfConfigured();
 
         KeyDown += (_, e) =>
@@ -495,6 +518,8 @@ public sealed class BigScreenForm : Form
             // timer still holds its native handle each time.
             _refreshTimer.Stop();
             _refreshTimer.Dispose();
+            _introTimer.Stop();
+            _introTimer.Dispose();
             _sponsorTimer.Stop();
             _sponsorTimer.Dispose();
 
@@ -852,6 +877,9 @@ public sealed class BigScreenForm : Form
         _rollCall.Dock = DockStyle.Fill;
         _rollCall.Visible = false;
 
+        _introCard.Dock = DockStyle.Fill;
+        _introCard.Visible = false;
+
         _mapView.Dock = DockStyle.Right;
         _mapView.Visible = false;
         _mapView.Source = _trackMap;
@@ -860,6 +888,10 @@ public sealed class BigScreenForm : Form
         _attractBoard.Visible = false;
         _attractBoard.Source = _attract;
 
+        // In front of everything else in the area: while a driver is being
+        // introduced, their card is the screen. Nothing else's visibility is
+        // touched to put it up, so whatever was there is there again after.
+        _pnlLeaderboardArea.Controls.Add(_introCard);
         _pnlLeaderboardArea.Controls.Add(_attractBoard);
         _pnlLeaderboardArea.Controls.Add(_rollCall);
         _pnlLeaderboardArea.Controls.Add(_lblSponsorRead);
@@ -2722,6 +2754,71 @@ public sealed class BigScreenForm : Form
         }
     }
 
+    /// <summary>
+    /// Puts the driver introductions' card up while a driver is being
+    /// introduced, changes it as the voice moves on to the next, and takes it
+    /// down when they are done (1 Nov 2026, asked for by Asher). Switched off
+    /// on the AI Commentary tab (AppSettings.BigScreenIntroCards) - asked
+    /// here too, so switching it off takes a card already up straight down.
+    ///
+    /// OVER THE ROLL CALL. The introductions are said while the race is
+    /// staged, which is when the roll call has the board; for the few seconds
+    /// a driver is being introduced, their card is what the room wants to
+    /// see, and the roll call is back the moment the introductions end.
+    ///
+    /// NOT OVER A SPONSOR'S VIDEO, the one thing every other part of this
+    /// screen also leaves alone: cutting an advert off part way is worse for
+    /// the sponsor than a card missed. In practice the two never meet - the
+    /// roll call stops a video at staging.
+    ///
+    /// A card that fails must not take the Big Screen with it: it comes down.
+    /// </summary>
+    private void UpdateIntroCard()
+    {
+        if (IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        IntroCard? driver;
+
+        try
+        {
+            driver = _settings?.BigScreenIntroCards != false
+                     && !(_video is not null && _video.View.Visible)
+                ? IntroOnAir.Shared.Current()
+                : null;
+        }
+        catch
+        {
+            driver = null;
+        }
+
+        if (driver is null)
+        {
+            if (_introShowing)
+            {
+                _introShowing = false;
+                _introCard.Visible = false;
+                _introCard.Reset();
+                UpdateTrackMap();
+            }
+
+            return;
+        }
+
+        _introCard.Show(driver);
+
+        if (!_introShowing)
+        {
+            _introShowing = true;
+            ColourRollCall();
+            _introCard.Visible = true;
+            _introCard.BringToFront();
+            UpdateTrackMap();
+        }
+    }
+
     private void HideRollCall()
     {
         if (_rollCallSinceUtc is null)
@@ -2752,6 +2849,7 @@ public sealed class BigScreenForm : Form
             // read's picture sits in front of the map, so what showed was
             // the map round the edges of somebody's logo.
             show = _trackMap is not null && _mapWanted && _rollCallSinceUtc is null && !_attractShowing
+                   && !_introShowing
                    && !_showingRead
                    && !(_showingSponsor && _race.State is not (RaceState.Staging or RaceState.Countdown or RaceState.Racing))
                    && _trackMap().Line is not null;
@@ -3193,6 +3291,15 @@ public sealed class BigScreenForm : Form
     /// <summary>Whether a sponsor slide or video is on the screen - the same test's proof that the break actually took it.</summary>
     internal bool SponsorUpForTests => _showingSponsor;
 
+    /// <summary>Whether the driver introductions' card is up - for the tests.</summary>
+    internal bool IntroCardUpForTests => _introShowing;
+
+    /// <summary>The name on the driver introductions' card, or null - for the tests.</summary>
+    internal string? IntroCardNameForTests => _introShowing ? _introCard.Driver?.ScreenName : null;
+
+    /// <summary>Runs the driver card's tick now - for the tests.</summary>
+    internal void TickIntroCardForTests() => UpdateIntroCard();
+
     /// <summary>The roll call in the look's colours - called as it opens, and whenever the look changes.</summary>
     private void ColourRollCall()
     {
@@ -3202,6 +3309,13 @@ public sealed class BigScreenForm : Form
         _rollCall.Muted = MutedColor;
         _rollCall.Highlight = HighlightColor;
         _rollCall.Invalidate();
+
+        _introCard.Canvas = CanvasColor;
+        _introCard.Card = PanelColor;
+        _introCard.Ink = TextColor;
+        _introCard.Muted = MutedColor;
+        _introCard.Highlight = HighlightColor;
+        _introCard.Invalidate();
 
         _mapView.Canvas = CanvasColor;
         _mapView.Track = PanelColor == CanvasColor ? GridLineColor : PanelColor;

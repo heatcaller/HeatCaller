@@ -89,6 +89,38 @@ internal static class RaceNumbers
     }
 
     /// <summary>
+    /// Time left on a race clock, the way an announcer says it (1 Nov 2026):
+    /// "forty-five seconds", "a minute and a half", "three minutes".
+    ///
+    /// ROUNDED, because the clock moves while the line is written and
+    /// said. Under a minute to the nearest five seconds (never below five);
+    /// from a minute up to the nearest half minute. The caller puts "about"
+    /// in front where the figure is the clock's rather than a moment's.
+    /// </summary>
+    internal static string TimeLeftSpoken(TimeSpan left)
+    {
+        var seconds = Math.Max(0, left.TotalSeconds);
+
+        if (seconds < 57.5)
+        {
+            var fives = Math.Max(5, (int)Math.Round(seconds / 5, MidpointRounding.AwayFromZero) * 5);
+
+            return $"{Words(fives)} seconds";
+        }
+
+        var halves = (int)Math.Round(seconds / 30, MidpointRounding.AwayFromZero);
+        var minutes = halves / 2;
+        var half = halves % 2 == 1;
+
+        if (minutes == 1)
+        {
+            return half ? "a minute and a half" : "a minute";
+        }
+
+        return half ? $"{Words(minutes)} and a half minutes" : $"{Words(minutes)} minutes";
+    }
+
+    /// <summary>
     /// A lap time the way it gets called: "five oh six", "five sixty",
     /// "twelve thirty-four", "five flat".
     ///

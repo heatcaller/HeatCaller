@@ -237,6 +237,10 @@ public sealed partial class RaceControlControl
                             return;
                         }
 
+                        // The Big Screen's cards, armed as the line is
+                        // handed over - see IntroOnAir.
+                        ArmIntroCards(grid, line);
+
                         _announcer.SpeakReminder(line!);
 
                         // WHY (20 Oct 2026): held introductions were written
@@ -269,6 +273,34 @@ public sealed partial class RaceControlControl
         });
 
         return IntroWait(grid.Count, qualifying is not null);
+    }
+
+    /// <summary>
+    /// Arms the Big Screen's driver cards for the introductions about to be
+    /// handed to the announcer (1 Nov 2026, asked for by Asher) - each
+    /// driver's name and photo, up as the voice reaches them (IntroOnAir).
+    /// Switched off on the AI Commentary tab (AppSettings.BigScreenIntroCards);
+    /// a driver whose profile keeps their photo off the Big Screen gets their
+    /// name with their initials. Never the reason the introductions go unsaid.
+    /// </summary>
+    private void ArmIntroCards(IReadOnlyList<IntroDriver> grid, string? words)
+    {
+        try
+        {
+            if (!_settings.BigScreenIntroCards || grid is not { Count: > 0 })
+            {
+                IntroOnAir.Shared.Clear();
+                return;
+            }
+
+            IntroOnAir.Shared.Arm(grid
+                .Select(d => IntroCardsFromProfiles.CardFor(d, _profiles.Get(d.Transponder)))
+                .ToList(), words);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [commentary] No Big Screen cards for the driver introductions: {ex.Message}");
+        }
     }
 
     /// <summary>What the introductions are written from: the grid, what qualifying decided, and the race's name.</summary>

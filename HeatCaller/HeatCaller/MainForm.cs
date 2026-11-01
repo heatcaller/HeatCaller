@@ -384,6 +384,24 @@ public partial class MainForm : Form
 
     /// <summary>When the clock of a timed race passes a mark worth calling - see TimeLeftCalls.</summary>
     private readonly TimeLeftCalls _timeLeftCalls = new();
+
+    /// <summary>
+    /// Whether the race on track is one the clock ends, for the time-left
+    /// calls (1 Nov 2026) - see AnnouncerControl.ClockEndsTheRace. Before
+    /// the announcer's page is built there is nothing to read the leader
+    /// from, and the session's own rule (a time limit is set) stands.
+    /// </summary>
+    private bool ClockEndsTheRace()
+    {
+        try
+        {
+            return _announcerControl?.ClockEndsTheRace() ?? true;
+        }
+        catch
+        {
+            return true;
+        }
+    }
     private readonly System.Windows.Forms.Timer _autoBackupCheckTimer = new() { Interval = (int)TimeSpan.FromHours(1).TotalMilliseconds };
 
     /// <summary>True while an automatic backup is being made in the background - see CheckAutoBackup.</summary>
@@ -982,6 +1000,15 @@ public partial class MainForm : Form
         // effect immediately rather than needing a restart.
         _commentary.VoiceSupportsAudioTagsProvider = () => _voiceStore.Current.SupportsAudioTags;
 
+        // Whether the race being called is timed or run to a lap count, so
+        // no live line counts laps in a race the clock ends (1 Nov 2026).
+        // From the grid to the flag only - between races there is no race
+        // to describe, and practice runs a clock only for its ring.
+        _commentary.RaceLimitsNow = () =>
+            (_race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing) && !_race.IsPracticeMode
+                ? (_race.LapLimit, _race.TimeLimit)
+                : null;
+
         _relayPublisher = new RelayPublisher(_settings);
 
         // From the publisher's own thread; OnClientRawMessage takes lines
@@ -1535,10 +1562,13 @@ public partial class MainForm : Form
             _announcer.NotifyLastLap(standing.TransponderId);
         };
 
+        // Only when the clock is what ends the race (1 Nov 2026): in a race
+        // with a lap limit too, "one minute to go" is wrong when the laps
+        // will run out first - see ClockEndsTheRace.
         _race.FinalMinute += () =>
         {
-            if (InvokeRequired) { TryPost(() => _announcer.NotifyFinalMinute()); return; }
-            _announcer.NotifyFinalMinute();
+            if (InvokeRequired) { TryPost(() => { if (ClockEndsTheRace()) _announcer.NotifyFinalMinute(); }); return; }
+            if (ClockEndsTheRace()) _announcer.NotifyFinalMinute();
         };
 
         // Lets the announcer hold routine lines and lap chimes while a
@@ -1963,7 +1993,8 @@ public partial class MainForm : Form
                     _race.RaceStartUtc,
                     _race.TimeLimit,
                     _race.ElapsedRaceTime,
-                    timedRace: _race.State == RaceState.Racing && !_race.IsPracticeMode && _race.Flag != FlagState.Red) is { } secondsLeft)
+                    timedRace: _race.State == RaceState.Racing && !_race.IsPracticeMode && _race.Flag != FlagState.Red) is { } secondsLeft
+                && ClockEndsTheRace())
             {
                 _announcer.NotifyTimeLeft(secondsLeft);
             }

@@ -254,6 +254,7 @@ In the order the room hears them, after the show open and before staging. These 
 | **Driver introductions - each driver on the grid, in order** | Grid position, racing number and home club from each driver's profile, with a line of form. The automatic start waits for them before the countdown. | On |
 | **Only for a main** | A step in under the driver introductions. Keeps them to the mains. | Off |
 | **Before a main, open with what qualifying decided** | A step in under the driver introductions: the qualifying recap that opens a main's introductions, so it needs them on and is grayed out with them. Uses tonight's qualifying, ranked as the grid sheet ranks it. | On |
+| **Show each driver's name and photo on the Big Screen as they're introduced** | A step in under the driver introductions. As the announcer reaches each driver, the Big Screen shows a card with their photo, name, grid spot, number and home club. A driver whose profile keeps their photo off the Big Screen gets their initials instead, with their name. See [Driver introductions](../screens/big-screen.md#driver-introductions). | On |
 | **Throw to pit lane - the co-host's word with a Team Principal** | The announcer throws down to the co-host in pit lane for two questions with the Team Principal of the driver with most riding on it: how the team is feeling and what it is hoping for. Each driver's principal once a night. The countdown waits for it, and it's skipped when the night is running ten minutes or more behind. The same setting as **Before a race, a quick word with a Team Principal** on **Cast**. | Off |
 
 Names, voices and which races get them are set on **Voice → Cast** - see [Technical Lead and Team Principal](#technical-lead-and-team-principal).
@@ -294,6 +295,7 @@ The rest of the card is the segments. They come switched on, and they're grouped
 | Tick box | What it does |
 |---|---|
 | **Battle watch** | Calls a fight when two cars have been locked together for a while. |
+| **What's still to decide** | Points the room at a gap that's coming down, or going out, and how much of the race is left to settle it. A timed race gets the time left ("about a minute and a half"), never a count of laps; a race run to a lap count gets the laps left; a race with both gets whichever ends it first. It gives the gap and the rate, never who will win. |
 | **Record laps** | Calls a lap when a record falls - the race's, the night's or the layout's. |
 | **Coming up next** | Says what is on next, in the gap between races. |
 | **Championship check** | Where the season stands, after a class's last main. |
