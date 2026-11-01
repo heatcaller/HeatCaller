@@ -107,6 +107,16 @@ The headline counts them in, for example "ROLL CALL - 6 OF 8 CARS HEARD", and re
 
 The roll call doesn't run in practice or Demo Mode, or on a Big Screen opened from the **Practice** page.
 
+## Driver introductions
+
+While the announcer introduces the drivers on the grid, the Big Screen shows each one as they're named: their photo, their name, where they start ("POLE", "STARTING 2ND"), and their number and home club. The card slides in as the voice reaches that driver and stays until the next one, so the room sees the face that goes with the name.
+
+- **It follows the voice.** Each card goes up at its driver's place in the spoken line, timed from the real length of the audio, so it keeps pace with the announcer even on a long grid. A driver the announcer doesn't name gets no card.
+- **It leaves when the line does.** When the introductions end, the last driver stays up for two seconds and then the [grid roll call](#grid-roll-call) comes back. A flag, the countdown or **Reset** that cuts the announcer off takes the card down at once.
+- **It covers the roll call, not the race.** The card takes the leaderboard area for the length of the introductions, the roll call and track map included. A sponsor video that's playing isn't covered: the card waits.
+- **No photo, or a photo kept off.** A driver with no photo, or whose profile has **Keep their photo off it** ticked (see [Keeping a photo off the Big Screen](../race-day/drivers-and-classes.md#keeping-a-photo-off-the-big-screen)), gets the initials disc in their usual color. Their name shows either way.
+- **Turning it off.** Untick **Show each driver's name and photo on the Big Screen as they're introduced** under the driver introductions on **Voice → AI Commentary** (see [Before the start](../announcer/commentary.md#before-the-start)). It's on by default, and works the same whether the introductions come from **Stage** or from On Air.
+
 ## Between races
 
 With no race on, and once a finished race's result has been on screen for 45 seconds, the Big Screen turns over a card every 8 seconds instead of showing the board. A card slides in, and dots in the top-right corner show which card of how many it is.

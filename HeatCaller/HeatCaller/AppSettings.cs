@@ -990,6 +990,14 @@ public sealed class AppSettings
     public bool CommentaryDriverIntrosMainsOnly { get; set; }
 
     /// <summary>
+    /// During the driver introductions, the Big Screen shows each driver's
+    /// name and photo as the voice reaches them (1 Nov 2026, asked for by
+    /// Asher) - see IntroOnAir. On by default. A driver's photo can be kept
+    /// off it on their profile (DriverProfile.NoPhotoOnBigScreen).
+    /// </summary>
+    public bool BigScreenIntroCards { get; set; } = true;
+
+    /// <summary>
     /// The qualifying recap (18 Oct 2026): before a main, the driver
     /// introductions open with what qualifying decided. Its own tick on the
     /// AI Commentary tab's Segments, under the introductions it is part of.
