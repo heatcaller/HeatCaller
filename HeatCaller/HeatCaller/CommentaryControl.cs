@@ -352,6 +352,9 @@ public sealed class CommentaryControl : UserControl
     /// what it needs and the master switch, then a card for each part of the
     /// job, in the order someone setting this up needs them:
     ///
+    ///   How it's written   how every line is WORDED - first, since it covers
+    ///                      everything below it (1 Nov 2026; it was the last
+    ///                      card, "Writing style", until then).
     ///   Who writes it      the relay, the model on this PC, the month's lines,
     ///                      and Test Connection right under what it checks.
     ///   Before the start   race intros, driver introductions (with the
@@ -362,7 +365,7 @@ public sealed class CommentaryControl : UserControl
     ///                      Lead, the teasers and the commercial break.
     ///   Recap show         the recap, its opening, the booth interview, the
     ///                      sign-off and the show's name.
-    ///   Writing style      how every line is WORDED.
+    ///   Between races      call-ups and what is said in the gap.
     ///
     /// In the order the night happens since 22 Oct 2026 (page tidy) - see
     /// the note above the cards in BuildLayout.
@@ -785,7 +788,8 @@ public sealed class CommentaryControl : UserControl
         // what the room hears at that point.
 
         // ------------------------------------------------------------------
-        // Writing style - the WORDS
+        // How it's written - the WORDS (called "Writing style", and the last
+        // card on the page, until 1 Nov 2026)
         // ------------------------------------------------------------------
 
         var toneItems = new[]
@@ -849,7 +853,7 @@ public sealed class CommentaryControl : UserControl
         Flush(styleGrid.AddRow("Max length:", Line(_numMaxWords, Suffix("words - 30 is about a sentence, 70 is two"))));
         Flush(styleGrid.AddRow("Phrasing variety:", Line(_numVariety, Suffix("low is steady, high is livelier but now and then odd"))));
 
-        var style = new Section("Writing style");
+        var style = new Section("How it's written");
 
         style.Add(Hint("How every line is worded. How it sounds is set on the Cast tab."));
         style.Add(styleGrid, gapBelow: 0);
@@ -1149,6 +1153,9 @@ public sealed class CommentaryControl : UserControl
         // the start, through the night, after the flag, the recap show -
         // then the wording, which covers all of them. Every setting, switch
         // and rule is the same; only where it sits and what it says changed.
+        //
+        // Since 1 Nov 2026 the wording comes FIRST, as "How it's written",
+        // and Between races (31 Oct 2026) is the last card.
         // ------------------------------------------------------------------
 
         // A tick and its one line of explanation, as every card below has them.
@@ -1292,6 +1299,10 @@ public sealed class CommentaryControl : UserControl
 
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.Add(_chkEnabled, stretch: false);
+
+        // How it's written first (1 Nov 2026): the wording covers every card
+        // below it, so it is set before the night is.
+        page.Add(style);
         page.Add(connection);
         page.Add(before);
         page.Add(segments);
@@ -1303,8 +1314,7 @@ public sealed class CommentaryControl : UserControl
         var (betweenRaces, betweenGrids) = BetweenRacesCard.Build(_settings, _textSize,
             () => TonightsGap?.Invoke(), lines => PlayGap?.Invoke(lines), () => _settings.CommentaryEnabled,
             () => SponsorReadsBetweenRaces?.Invoke() ?? false);
-        page.Add(betweenRaces);
-        page.Add(style, gapBelow: 0);
+        page.Add(betweenRaces, gapBelow: 0);
 
         Controls.Add(page);
 

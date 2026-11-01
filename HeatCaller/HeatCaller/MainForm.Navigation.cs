@@ -305,7 +305,7 @@ public partial class MainForm
             {
                 "ai commentary", "commentary", "commentator", "llm", "ai", "ollama", "narration", "local model",
                 "relay", "recap", "teaser", "sign-off", "show name", "segments", "how chatty", "pacing",
-                "writing style", "tone", "commercial break", "talking points", "intros",
+                "writing style", "how it's written", "tone", "commercial break", "talking points", "intros",
             }),
             ("Cast", new[]
             {

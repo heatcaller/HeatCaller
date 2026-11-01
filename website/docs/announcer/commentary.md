@@ -213,9 +213,24 @@ The model takes a few seconds to load into memory the first time it's used. Heat
 
 ## Settings
 
-The settings are on cards down the **Voice → AI Commentary** tab, in the order the night happens: **Who writes it**, **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Writing style**. Above them is the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
+The settings are on cards down the **Voice → AI Commentary** tab, **How it's written** first, since it covers every line, then the rest in the order the night happens: **Who writes it**, **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Between races**. Above them is the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
 
 Who speaks - the announcer's and the recap host's names, the co-host, the Technical Lead, the Team Principal and the achievements reader, with their voices - is on **Voice → Cast**. One **Load Voices**, on the **Voices** card at the top, fills every voice list on the tab. Under it, every speaker has a card laid out the same way: their name first, then their voice with **Test Voice**, then what they do and the settings for it - the **Announcer** card first. The show's music is on **Sounds → Imaging**, and recording the night is on **Club Website → Recording**. The sections below still describe those settings here, where they're explained.
+
+### How it's written
+
+The first card on the page. These apply to every line the model writes - intros, recaps, segments and talking points alike. They change the words, not the voice; how it sounds is set on **Voice → Cast**.
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Writing tone:** | **Enthusiastic - trackside hype**, **Neutral - calm play-by-play** or **Dry - understated, deadpan**. | Enthusiastic |
+| **Mark the lines excited when they're spoken** | Marks the recap and the segments as excited, and opens the cold open and sign-off on a shout. Needs an ElevenLabs v3 voice and the **Enthusiastic** tone. | On |
+| **Max length:** | 8 to 300 words. Up to 30 gives one sentence, up to 70 gives two, beyond that a full paragraph. It's spoken aloud, so a long one takes a while. The recap is allowed a little more than this, and more again for a broadcast opening or sign-off. If the model still runs long, the answer is trimmed back to its last complete sentence, so a recap is never cut off mid-sentence, and the console says "[llm] The answer ran past its length limit - kept it up to the last complete sentence." | 45 |
+| **Phrasing variety:** | 0.2 to 1.3. Low is consistent, safe wording. High is more varied, with the occasional odd sentence. | 0.7 |
+
+Whatever the tone, the model is told to write for the ear: contractions ("he's", "they're") and, where they fit, short commentator fragments ("Into the hairpin. Side by side."). **Max length:** still decides how much it writes.
+
+With **Mark the lines excited when they're spoken** ticked, the **Enthusiastic** tone and an `eleven_v3` voice, the recap is delivered with the `[excited]` audio tag on each sentence so the energy holds to the end. With the Kokoro voice chosen, the recap gets no audio tags, since that voice can't use them. See [Audio tags](voice.md#audio-tags).
 
 ### Who writes it
 
@@ -566,21 +581,6 @@ Type one line per row. A line with `{round}`, `{class}` or `{drivers}` in it bec
 
 After the checkered flag, Race Control's flag row shows **Skip**, **Hold Talk**, **Call Up**, **Edit Result** and **Reset** (see [The flag row after the flag](../race-control/running-a-race.md#the-flag-row-after-the-flag)). Untick **Show Skip, Hold Talk and Call Up on the flag row after the flag** to keep the old row. <kbd>F9</kbd>, <kbd>F10</kbd> and <kbd>F12</kbd> work either way.
 
-### Writing style
-
-These apply to every line the model writes - intros, recaps, segments and talking points alike. They change the words, not the voice; how it sounds is set on **Voice → Cast**.
-
-| Setting | What it does | Default |
-|---|---|---|
-| **Writing tone:** | **Enthusiastic - trackside hype**, **Neutral - calm play-by-play** or **Dry - understated, deadpan**. | Enthusiastic |
-| **Mark the lines excited when they're spoken** | Marks the recap and the segments as excited, and opens the cold open and sign-off on a shout. Needs an ElevenLabs v3 voice and the **Enthusiastic** tone. | On |
-| **Max length:** | 8 to 300 words. Up to 30 gives one sentence, up to 70 gives two, beyond that a full paragraph. It's spoken aloud, so a long one takes a while. The recap is allowed a little more than this, and more again for a broadcast opening or sign-off. If the model still runs long, the answer is trimmed back to its last complete sentence, so a recap is never cut off mid-sentence, and the console says "[llm] The answer ran past its length limit - kept it up to the last complete sentence." | 45 |
-| **Phrasing variety:** | 0.2 to 1.3. Low is consistent, safe wording. High is more varied, with the occasional odd sentence. | 0.7 |
-
-Whatever the tone, the model is told to write for the ear: contractions ("he's", "they're") and, where they fit, short commentator fragments ("Into the hairpin. Side by side."). **Max length:** still decides how much it writes.
-
-With **Mark the lines excited when they're spoken** ticked, the **Enthusiastic** tone and an `eleven_v3` voice, the recap is delivered with the `[excited]` audio tag on each sentence so the energy holds to the end. With the Kokoro voice chosen, the recap gets no audio tags, since that voice can't use them. See [Audio tags](voice.md#audio-tags).
-
 ### The show's music
 
 The segments that open and close the evening can be scored: a piece of music in front of the voice, another running underneath it, and a short mark between one part of the show and the next. It's your club's own music, so your broadcast sounds like yours and not like every other club's.
@@ -819,7 +819,7 @@ It is the one thing HeatCaller makes that somebody outside the building would ch
 
 **It is not the sign-off, and the difference is the whole point.** The sign-off is twenty seconds said to a room that was there, so it refers to things. This explains them: the model is told who it is for, told to move through the evening roughly in order rather than listing the highlights, and told that "the A-main" means nothing to somebody who was not watching, so it has to say what it was. It is also allowed to repeat what the room already heard — the result the sign-off mentioned in passing is exactly what somebody at home wants — so its facts are gathered with the "already said" filter switched off entirely. Without that, a club that had a good sign-off would get an empty recap.
 
-It is **four hundred words**, and the same four hundred whatever you have set **Max length:** to under *Writing style*. That setting is about one spoken line; somebody who wanted terse race calls did not thereby ask for a one-paragraph summary of their evening. If you have set a limit *longer* than the piece, you keep it.
+It is **four hundred words**, and the same four hundred whatever you have set **Max length:** to under *How it's written*. That setting is about one spoken line; somebody who wanted terse race calls did not thereby ask for a one-paragraph summary of their evening. If you have set a limit *longer* than the piece, you keep it.
 
 **Why it plays in the hall rather than being rendered silently.** A piece read to nobody and written straight to a file is the purer idea, but it would need a second route from a written line to audio — bypassing the voice queue, the music bed and the ducking — and a second way to produce the show is a second way for it to sound wrong. So this is a real broadcast with a recorder round it: your opener in front of it, the bed under it, the playout at the end, and a file that cannot disagree with what the room heard. It costs nothing to let the room hear it while people are packing up, and a club that would rather not simply doesn't press the button.
 
