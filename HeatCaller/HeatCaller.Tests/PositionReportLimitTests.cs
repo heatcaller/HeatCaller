@@ -42,11 +42,16 @@ public sealed class PositionReportLimitTests
 
         var built = report.IndexOf("var builtAtMs = TimingClock.NowMs;", StringComparison.Ordinal);
         var check = report.IndexOf("PositionReportStillTrue(builtAtMs, TimingClock.NowMs)", StringComparison.Ordinal);
-        var spoken = report.IndexOf("await SynthesizeAndPlayAsync(text, \"[voice] Position report\"", StringComparison.Ordinal);
+        var reread = report.IndexOf("RunningOrderNow(depth)", StringComparison.Ordinal);
+        var spoken = report.IndexOf("await SynthesizeAndPlayAsync(said, \"[voice] Position report\"", StringComparison.Ordinal);
 
         Assert.True(built >= 0, "the report no longer records when it was built");
         Assert.True(check > built, "the report no longer checks how long it waited");
         Assert.True(spoken > check, "the report is spoken before its wait is checked");
+
+        // 1 Nov 2026: and the order is read again, after the wait and
+        // before the words go to the voice - see PositionReportOrderTests.
+        Assert.True(reread > check && spoken > reread, "the running order is no longer read again just before it is spoken");
     }
 
     // ------------------------------------------------------------------

@@ -343,41 +343,14 @@ public sealed partial class AnnouncementService
         }
 
         var depth = Math.Clamp(config.PositionReportDepth, 1, 10);
-        var named = ordered.Take(depth).ToList();
-        if (named.Count < 2)
+        var rows = PositionReportOrder.Read(ordered, depth, CrossingMs);
+        if (rows.Count < 2)
         {
             // A running order of one is not a running order.
             return;
         }
 
         _lastPositionReportLap = leader.Laps;
-
-        // Same resolution order the other announcements use: the profile's
-        // driver name, falling back to the standing's own display name
-        // (which itself falls back to the transponder ID).
-        // Spoken as commentary, not read as a table.
-        //
-        // "P1 Bill, P2 Phantom, P3 Skywalker" is a data readout - there's
-        // no shape in it for a voice to perform, so it lands flat however
-        // it's tagged. Describing the RELATIONSHIPS between drivers gives
-        // the read something to do, and the gaps supply the drama that a
-        // list of row labels can't.
-        string SpokenNameFor(RaceStanding s)
-        {
-            var profile = _profiles.Get(s.Transponder);
-            var saidAs = profile is not null && !string.IsNullOrWhiteSpace(profile.SpokenName)
-                ? profile.SpokenName
-                : s.DisplayName;
-
-            // WHY (23 Oct 2026, bug hunt 10): a car with no announcer name is said by
-            // its number, which must stay in the room - noted, so listen-along
-            // and the public captions leave the line out (the podium videos did
-            // too, until 28 Oct 2026, when they stopped going online). See
-            // NoteSpokenAsNumber.
-            NoteSpokenAsNumber(s.Transponder, saidAs);
-
-            return saidAs;
-        }
 
         // The line is picked BEFORE the order is worded, because what the
         // club asked for changes how the list reads. Still one line per
@@ -392,103 +365,7 @@ public sealed partial class AnnouncementService
         var sayGaps = config.PositionReportSayGaps
             && template.Contains("{gaps}", StringComparison.OrdinalIgnoreCase);
 
-        var parts = new List<string>();
-
-        // Each car read out with how far back it is, leader first - what
-        // {gaps} is worded from. See AnnouncementText.SpokenGaps, which
-        // drops the leader and anything that could not be measured.
-        var order = new List<(string Name, RaceGap Gap)>();
-
-        for (var i = 0; i < named.Count; i++)
-        {
-            var name = SpokenNameFor(named[i]);
-
-            if (i == 0)
-            {
-                // Nobody is in front of the leader, so there is no gap to
-                // give for them. Measured against themselves it is zero,
-                // and a voice reading "nought point nought" over the car
-                // winning the race sounds like a dead heat.
-                parts.Add($"{name} leads");
-                order.Add((name, new RaceGap(0, null)));
-                continue;
-            }
-
-            // Laps down is measured against the LEADER, at the line. This
-            // report fires the instant the leader crosses, when everyone
-            // behind still has one lap fewer on the counter - comparing lap
-            // counts called nearly the whole field "a lap down", and said
-            // "a lap" whatever the real difference was.
-            var vsLeader = GapBetween(named[i], named[0]);
-
-            // Down a lap, that IS the whole answer: the seconds between the
-            // two cars' last crossings are an accident of where each
-            // happens to be on track, and reading them out would tell a
-            // spectator a lapped car was four seconds off the lead. On the
-            // lead lap: the gap to the car directly ahead, measured when
-            // each of them crossed the same lap.
-            var gap = vsLeader.LapsDown > 0 ? vsLeader : GapBetween(named[i], named[i - 1]);
-
-            order.Add((name, gap));
-
-            if (sayGaps)
-            {
-                // Everything about how far back this car is goes into
-                // {gaps}, so the order itself reads as places. Said in
-                // both, the announcer gave every interval twice in one
-                // breath, and "a lap down" twice for a lapped car.
-                parts.Add($"{name} {Ordinal(i + 1)}");
-                continue;
-            }
-
-            if (vsLeader.LapsDown == 1)
-            {
-                parts.Add($"then {name}, a lap down");
-                continue;
-            }
-
-            if (vsLeader.LapsDown > 1)
-            {
-                parts.Add($"then {name}, {RaceNumbers.Words(vsLeader.LapsDown)} laps down");
-                continue;
-            }
-
-            var gapMs = gap.GapMs;
-
-            if (gapMs is > 0 and < 1500)
-            {
-                // On the tail of the car in front - "her tail" when that
-                // driver's profile says she/her (21 Oct 2026); "his", as it
-                // always was, when it says nothing.
-                var ahead = Pronouns.For(_profiles.Get(named[i - 1].Transponder)?.Pronouns);
-                parts.Add($"{name} right on {ahead.Possessive} tail");
-            }
-            else if (gapMs is > 0)
-            {
-                // "a second and a half back", not "1.5 back" - the gap the
-                // way it is called, in words, which also means a
-                // comma-decimal PC can no longer turn it into "one, five".
-                // See RaceNumbers.Behind.
-                parts.Add($"{name} {RaceNumbers.Behind(gapMs.Value / 1000.0)}");
-            }
-            else
-            {
-                parts.Add($"{name} {Ordinal(i + 1)}");
-            }
-        }
-
-        var positions = string.Join(", ", parts);
-        var gaps = sayGaps ? AnnouncementText.SpokenGaps(order) : string.Empty;
-
-        // TidyTemplate rather than the plain .Trim() this used to end with:
-        // with the gaps off, or with nothing measurable to say, {gaps}
-        // leaves a marker behind and the clause the club wrote around it
-        // has to go with it. That is the same tidy every other announcement
-        // line gets, and the reason it replaced .Trim() everywhere else.
-        var text = template
-            .Replace("{positions}", positions, StringComparison.OrdinalIgnoreCase)
-            .WithPositionGaps(gaps)
-            .TidyTemplate();
+        var text = WordRunningOrder(rows, template, sayGaps);
 
         if (text.Length == 0)
         {
@@ -545,7 +422,33 @@ public sealed partial class AnnouncementService
                         return;
                     }
 
-                    await SynthesizeAndPlayAsync(text, "[voice] Position report", speedOverride: reportSpeed,
+                    // Read again just before it is said (1 Nov 2026). The
+                    // words were written the instant the leader crossed, and
+                    // the cars behind keep crossing while the report waits
+                    // for the speaker - a car that passed second place on
+                    // track can be over the line and second on the screen
+                    // before the voice gets to second place. When anything
+                    // in the order has moved, it is worded again from the
+                    // board as it stands, in the same line the club wrote,
+                    // and the screens are given the new words. See
+                    // PositionReportOrder.
+                    var said = text;
+
+                    if (RunningOrderNow(depth) is { Count: >= 2 } now && PositionReportOrder.Moved(rows, now))
+                    {
+                        var reworded = WordRunningOrder(now, template, sayGaps);
+
+                        if (reworded.Length > 0)
+                        {
+                            said = (reworded + sponsorTag).Trim();
+                            StatusMessage?.Invoke(
+                                "[voice] Position report worded again - the order moved while it waited for the speaker (\""
+                                + text + "\" is now \"" + said + "\").");
+                            RaiseAnnouncementText(said, now[0].Standing.Transponder);
+                        }
+                    }
+
+                    await SynthesizeAndPlayAsync(said, "[voice] Position report", speedOverride: reportSpeed,
                         spoken: () =>
                         {
                             heard = true;
@@ -567,6 +470,146 @@ public sealed partial class AnnouncementService
         {
             releaseMention?.Invoke();
         }
+    }
+
+    /// <summary>
+    /// The words of a running order: the club's <paramref name="template"/>
+    /// with {positions} - and {gaps}, when <paramref name="sayGaps"/> - filled
+    /// in from <paramref name="rows"/>, leader first. Empty when the line
+    /// comes to nothing.
+    /// </summary>
+    /// <remarks>
+    /// Its own method (1 Nov 2026) so one line can be worded twice: when the
+    /// leader crosses, and again from the board as it stands when the order
+    /// moved while the report waited for the speaker. See PositionReportOrder.
+    /// </remarks>
+    private string WordRunningOrder(IReadOnlyList<PositionReportOrder.Row> rows, string template, bool sayGaps)
+    {
+        var parts = new List<string>();
+
+        // Each car read out with how far back it is, leader first - what
+        // {gaps} is worded from. See AnnouncementText.SpokenGaps, which
+        // drops the leader and anything that could not be measured.
+        var order = new List<(string Name, RaceGap Gap)>();
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var name = SpokenNameFor(rows[i].Standing);
+
+            if (i == 0)
+            {
+                // Nobody is in front of the leader, so there is no gap to
+                // give for them. Measured against themselves it is zero,
+                // and a voice reading "nought point nought" over the car
+                // winning the race sounds like a dead heat.
+                parts.Add($"{name} leads");
+                order.Add((name, new RaceGap(0, null)));
+                continue;
+            }
+
+            // Laps down is measured against the LEADER, at the line. This
+            // report fires the instant the leader crosses, when everyone
+            // behind still has one lap fewer on the counter - comparing lap
+            // counts called nearly the whole field "a lap down", and said
+            // "a lap" whatever the real difference was.
+            //
+            // Down a lap, that IS the whole answer: the seconds between the
+            // two cars' last crossings are an accident of where each
+            // happens to be on track, and reading them out would tell a
+            // spectator a lapped car was four seconds off the lead. On the
+            // lead lap: the gap to the car directly ahead, measured when
+            // each of them crossed the same lap. Both are worked out in
+            // PositionReportOrder.Read.
+            var vsLeader = rows[i].VsLeader;
+            var gap = rows[i].Gap;
+
+            order.Add((name, gap));
+
+            if (sayGaps)
+            {
+                // Everything about how far back this car is goes into
+                // {gaps}, so the order itself reads as places. Said in
+                // both, the announcer gave every interval twice in one
+                // breath, and "a lap down" twice for a lapped car.
+                parts.Add($"{name} {Ordinal(i + 1)}");
+                continue;
+            }
+
+            if (vsLeader.LapsDown == 1)
+            {
+                parts.Add($"then {name}, a lap down");
+                continue;
+            }
+
+            if (vsLeader.LapsDown > 1)
+            {
+                parts.Add($"then {name}, {RaceNumbers.Words(vsLeader.LapsDown)} laps down");
+                continue;
+            }
+
+            var gapMs = gap.GapMs;
+
+            if (gapMs is > 0 and < 1500)
+            {
+                // On the tail of the car in front - "her tail" when that
+                // driver's profile says she/her (21 Oct 2026); "his", as it
+                // always was, when it says nothing.
+                var ahead = Pronouns.For(_profiles.Get(rows[i - 1].Standing.Transponder)?.Pronouns);
+                parts.Add($"{name} right on {ahead.Possessive} tail");
+            }
+            else if (gapMs is > 0)
+            {
+                // "a second and a half back", not "1.5 back" - the gap the
+                // way it is called, in words, which also means a
+                // comma-decimal PC can no longer turn it into "one, five".
+                // See RaceNumbers.Behind.
+                parts.Add($"{name} {RaceNumbers.Behind(gapMs.Value / 1000.0)}");
+            }
+            else
+            {
+                parts.Add($"{name} {Ordinal(i + 1)}");
+            }
+        }
+
+        var positions = string.Join(", ", parts);
+        var gaps = sayGaps ? AnnouncementText.SpokenGaps(order) : string.Empty;
+
+        // TidyTemplate rather than the plain .Trim() this used to end with:
+        // with the gaps off, or with nothing measurable to say, {gaps}
+        // leaves a marker behind and the clause the club wrote around it
+        // has to go with it. That is the same tidy every other announcement
+        // line gets, and the reason it replaced .Trim() everywhere else.
+        return template
+            .Replace("{positions}", positions, StringComparison.OrdinalIgnoreCase)
+            .WithPositionGaps(gaps)
+            .TidyTemplate();
+    }
+
+    // Same resolution order the other announcements use: the profile's
+    // driver name, falling back to the standing's own display name
+    // (which itself falls back to the transponder ID).
+    // Spoken as commentary, not read as a table.
+    //
+    // "P1 Bill, P2 Phantom, P3 Skywalker" is a data readout - there's
+    // no shape in it for a voice to perform, so it lands flat however
+    // it's tagged. Describing the RELATIONSHIPS between drivers gives
+    // the read something to do, and the gaps supply the drama that a
+    // list of row labels can't.
+    private string SpokenNameFor(RaceStanding s)
+    {
+        var profile = _profiles.Get(s.Transponder);
+        var saidAs = profile is not null && !string.IsNullOrWhiteSpace(profile.SpokenName)
+            ? profile.SpokenName
+            : s.DisplayName;
+
+        // WHY (23 Oct 2026, bug hunt 10): a car with no announcer name is said by
+        // its number, which must stay in the room - noted, so listen-along
+        // and the public captions leave the line out (the podium videos did
+        // too, until 28 Oct 2026, when they stopped going online). See
+        // NoteSpokenAsNumber.
+        NoteSpokenAsNumber(s.Transponder, saidAs);
+
+        return saidAs;
     }
 
     /// <summary>
@@ -619,6 +662,35 @@ public sealed partial class AnnouncementService
         }
 
         laps[standing.Laps] = standing.ElapsedMs;
+    }
+
+    /// <summary>Race time at which a car completed a lap, from the crossings seen this session, or null.</summary>
+    private long? CrossingMs(string transponder, int lap) =>
+        _lapCrossings.TryGetValue(transponder, out var laps) && laps.TryGetValue(lap, out var t) ? t : null;
+
+    /// <summary>
+    /// The top <paramref name="depth"/> of the running order as the board
+    /// has it right now, for a position report about to be spoken - or null
+    /// if the standings changed under it while it was being read, in which
+    /// case the report is said as it was worded.
+    /// </summary>
+    private List<PositionReportOrder.Row>? RunningOrderNow(int depth)
+    {
+        try
+        {
+            // The same field the report was built from: no muted ghosts.
+            Func<string, bool>? leaveOut = AnnounceGhostsProvider?.Invoke() == false
+                ? transponder => MutedGhost(transponder)
+                : null;
+
+            var ranked = PositionReportOrder.Rank(_standings.Values.ToList(), leaveOut);
+
+            return PositionReportOrder.Read(ranked, depth, CrossingMs);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private RaceGap GapBetween(RaceStanding car, RaceStanding ahead)
