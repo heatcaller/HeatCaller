@@ -21,31 +21,87 @@ public sealed class BulkTechTests
 
     // --- Which rows a double-click means ---
 
+    private static readonly int[] None = Array.Empty<int>();
+
     [Fact]
     public void A_double_click_on_one_of_several_picked_rows_means_all_of_them_in_list_order()
     {
-        var rows = BulkTech.RowsToActOn(new[] { 7, 2, 4 }, clickedRow: 4);
+        // Picked 2, 4 and 7 - not next to each other - and double-clicked 4.
+        // Its first click has narrowed the list's selection to 4 by now.
+        var rows = BulkTech.RowsToActOn(new[] { 7, 2, 4 }, selectedNow: new[] { 4 }, clickedRow: 4);
 
         Assert.Equal(new[] { 2, 4, 7 }, rows);
     }
 
     [Fact]
+    public void A_ctrl_double_click_on_one_of_the_picked_rows_still_means_all_of_them()
+    {
+        // Ctrl's first click took 4 out of the selection.
+        var rows = BulkTech.RowsToActOn(new[] { 2, 4, 7 }, selectedNow: new[] { 2, 7 }, clickedRow: 4, ctrl: true);
+
+        Assert.Equal(new[] { 2, 4, 7 }, rows);
+    }
+
+    [Fact]
+    public void A_ctrl_double_click_on_a_row_not_picked_yet_adds_it_to_the_picked_ones()
+    {
+        // Ctrl-picked 2 and 7, then Ctrl+double-clicked 9. That used to
+        // inspect 9 alone.
+        var rows = BulkTech.RowsToActOn(new[] { 2, 7 }, selectedNow: new[] { 2, 7, 9 }, clickedRow: 9, ctrl: true);
+
+        Assert.Equal(new[] { 2, 7, 9 }, rows);
+    }
+
+    [Fact]
+    public void A_shift_double_click_means_the_run_it_picks()
+    {
+        var rows = BulkTech.RowsToActOn(new[] { 1 }, selectedNow: new[] { 3, 4, 5 }, clickedRow: 5, shift: true);
+
+        Assert.Equal(new[] { 3, 4, 5 }, rows);
+    }
+
+    [Fact]
     public void A_double_click_on_a_row_outside_the_picked_ones_means_just_that_row()
     {
-        Assert.Equal(new[] { 9 }, BulkTech.RowsToActOn(new[] { 2, 4 }, clickedRow: 9));
+        Assert.Equal(new[] { 9 }, BulkTech.RowsToActOn(new[] { 2, 4 }, new[] { 9 }, clickedRow: 9));
     }
 
     [Fact]
     public void A_double_click_with_one_row_picked_means_just_that_row_as_it_always_did()
     {
-        Assert.Equal(new[] { 3 }, BulkTech.RowsToActOn(new[] { 3 }, clickedRow: 3));
-        Assert.Equal(new[] { 3 }, BulkTech.RowsToActOn(Array.Empty<int>(), clickedRow: 3));
+        Assert.Equal(new[] { 3 }, BulkTech.RowsToActOn(new[] { 3 }, new[] { 3 }, clickedRow: 3));
+        Assert.Equal(new[] { 3 }, BulkTech.RowsToActOn(None, new[] { 3 }, clickedRow: 3));
+        Assert.Equal(new[] { 3 }, BulkTech.RowsToActOn(None, new[] { 3 }, clickedRow: 3, ctrl: true));
     }
 
     [Fact]
     public void A_double_click_on_the_headings_means_no_rows()
     {
-        Assert.Empty(BulkTech.RowsToActOn(new[] { 1, 2 }, clickedRow: -1));
+        Assert.Empty(BulkTech.RowsToActOn(new[] { 1, 2 }, new[] { 1, 2 }, clickedRow: -1));
+        Assert.Empty(BulkTech.RowsToActOn(new[] { 1, 2 }, new[] { 1, 2 }, clickedRow: -1, ctrl: true));
+    }
+
+    // --- Telling a double-click's second press from a new click ---
+
+    private static readonly Size DoubleClickSize = new(4, 4);
+
+    [Fact]
+    public void A_press_counted_as_a_double_click_is_its_second_press()
+    {
+        Assert.True(BulkTech.IsSecondPress(2, msSinceLastPress: 5000, new Point(10, 10), new Point(300, 300), 500, DoubleClickSize));
+    }
+
+    [Fact]
+    public void A_quick_press_in_the_same_place_is_the_second_press_even_when_it_says_one_click()
+    {
+        Assert.True(BulkTech.IsSecondPress(1, msSinceLastPress: 200, new Point(11, 10), new Point(10, 11), 500, DoubleClickSize));
+    }
+
+    [Fact]
+    public void A_slow_press_or_one_somewhere_else_is_a_new_click()
+    {
+        Assert.False(BulkTech.IsSecondPress(1, msSinceLastPress: 900, new Point(10, 10), new Point(10, 10), 500, DoubleClickSize));
+        Assert.False(BulkTech.IsSecondPress(1, msSinceLastPress: 200, new Point(10, 60), new Point(10, 10), 500, DoubleClickSize));
     }
 
     // --- Which of today's inspections the desk edits ---
