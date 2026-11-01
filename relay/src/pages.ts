@@ -192,16 +192,22 @@ nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var
   /* "Following Sam" sits just above the bar instead of under it. */
   body .follow { bottom: calc(68px + env(safe-area-inset-bottom)); }
 }
-/* NO CHIN ON A HOME-SCREEN ICON (1 Nov 2026, Asher, added to the home
-   screen from Chrome on his iPhone: "It now has a chin under the tabs").
-   Opened from its own icon, an iPhone makes the page as tall as the screen
-   less the status bar, and a page that doesn't scroll by itself leaves that
-   much empty under a bar fixed to the bottom. There are no browser toolbars
-   on a home-screen icon to jump the bar about, so there the window scrolls
-   again, as it did before, and the bar sits on the bottom of the screen. */
+/* FLUSH AND STEADY ON A HOME-SCREEN ICON (1 Nov 2026, Asher, added to the
+   home screen from Chrome on his iPhone: "It now has a chin under the tabs",
+   then with the window scrolling again: "band is gone but the jumping is
+   back"). Opened from its own icon, an iPhone reports the page as tall as the
+   screen less the status bar (100%, innerHeight, dvh), while the screen it
+   draws on is the full height (vh, lvh). So the page keeps scrolling inside
+   the body, which keeps the bar still, and the page, the bar, the "Following"
+   pill and the About sheet are measured from the top of the full screen
+   instead of the bottom of the short one. Where the two heights agree this
+   lands in exactly the same place as the phone rules above. */
 @media (max-width: 640px) and (display-mode: standalone), (max-width: 640px) and (display-mode: fullscreen) {
-  html { height: auto; overflow: visible; }
-  body { height: auto; overflow-y: visible; }
+  html { height: 100vh; height: 100lvh; }
+  nav.tabs { bottom: auto; top: 100vh; top: 100lvh; transform: translateY(-100%); }
+  body .follow { bottom: auto; top: calc(100vh - 68px - env(safe-area-inset-bottom));
+                 top: calc(100lvh - 68px - env(safe-area-inset-bottom)); transform: translate(-50%, -100%); }
+  .hcabout { bottom: auto; height: 100vh; height: 100lvh; }
 }
 .day { color: var(--accent); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
        margin: 26px 0 10px; font-weight: 600; }
