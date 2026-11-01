@@ -21,7 +21,7 @@ namespace HeatCaller;
 /// prompt, and kept short because it can only ever be a pronoun.
 ///
 /// BLANK CHANGES NOTHING. The few sentences the app writes about a driver
-/// itself (the team principal's facts, "right on his tail" in a position
+/// itself (the team principal's facts, and so on in a position
 /// report) read exactly as they always did for a driver with nothing set -
 /// see <see cref="For"/>. Only a driver whose pronouns have been filled in
 /// is described differently.

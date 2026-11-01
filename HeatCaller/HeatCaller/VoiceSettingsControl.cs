@@ -222,6 +222,8 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly CheckBox _chkMentionStreakChaser = new ThemedCheckBox();
     private readonly NumericUpDown _numPositionEveryLaps = new();
     private readonly NumericUpDown _numPositionDepth = new();
+    private readonly Label _lblPositionDepthWait = new();
+    private bool _positionDepthWaitHooked;
     private readonly CheckBox _chkPositionGaps = new ThemedCheckBox();
     private readonly CheckBox _chkLeadChangeCount = new ThemedCheckBox();
     private readonly NumericUpDown _numLapTimeEveryN = new();
@@ -4400,8 +4402,10 @@ public sealed partial class VoiceSettingsControl : UserControl
             .Replace("{time}", "6.92 seconds", StringComparison.OrdinalIgnoreCase)
             .Replace("{laptime}", "6.92 seconds", StringComparison.OrdinalIgnoreCase)
             .Replace("{gate}", "1", StringComparison.OrdinalIgnoreCase)
-            .Replace("{positions}", "P1 Sam, P2 Bill, P3 Frank", StringComparison.OrdinalIgnoreCase)
-            .Replace("{gaps}", "Bill 1.5 back and Frank 2.3 back", StringComparison.OrdinalIgnoreCase)
+            // The running order as a race says it (1 Nov 2026): every gap to
+            // the leader, exactly - see AnnouncementService.WordRunningOrder.
+            .Replace("{positions}", "Sam leads, Bill one point two three four back, Frank two point three oh five back", StringComparison.OrdinalIgnoreCase)
+            .Replace("{gaps}", "Bill one point two three four back and Frank two point three oh five back", StringComparison.OrdinalIgnoreCase)
             .Replace("{round}", "Heat 2", StringComparison.OrdinalIgnoreCase)
             .Replace("{class}", "Stock Buggy", StringComparison.OrdinalIgnoreCase)
             .Replace("{marshals}", "Sam, Bill and Frank", StringComparison.OrdinalIgnoreCase)
