@@ -298,9 +298,17 @@ public sealed partial class AnnouncementService
     /// transponder passes from anyone on track - on a full grid those are
     /// wildly different things, and a per-pass trigger would fire the
     /// report constantly.
+    ///
+    /// The leader's crossing STARTS the report; it is read once every car
+    /// it names is over the line too (1 Nov 2026) - see
+    /// SayWaitingPositionReport.
     /// </summary>
     private void MaybeAnnouncePositions(List<RaceStanding> ordered, RaceStanding leader)
     {
+        // A report already waiting for the cars it names: this crossing may
+        // be the last of them.
+        SayWaitingPositionReport();
+
         var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PositionReport));
         if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.Templates.Count == 0)
         {
@@ -343,14 +351,177 @@ public sealed partial class AnnouncementService
         }
 
         var depth = Math.Clamp(config.PositionReportDepth, 1, 10);
-        var rows = PositionReportOrder.Read(ordered, depth, CrossingMs);
-        if (rows.Count < 2)
+        if (PositionReportOrder.Read(ordered, depth, CrossingMs).Count < 2)
         {
             // A running order of one is not a running order.
             return;
         }
 
         _lastPositionReportLap = leader.Laps;
+
+        // Not read yet (1 Nov 2026). The leader is over the line, but every
+        // car behind is still on the previous lap: read now, the gap given
+        // for each was measured a whole lap earlier, and on a five-second
+        // Mini-Z lap a place can change hands before the voice gets to it.
+        // The report waits until the last car it names has crossed this lap
+        // too, then reads the order and the gaps as the board has them -
+        // the same figures as its "Gap to P1" column. A car that never comes
+        // round (stopped, off, in the pits) holds it up for half a lap more
+        // than the leader's last lap at most; it is then read without that
+        // car and anyone behind it. See PositionReportOrder.SettledCount.
+        long leaderLapMs = 0;
+
+        if (CrossingMs(leader.Transponder, leader.Laps) is { } crossed
+            && CrossingMs(leader.Transponder, leader.Laps - 1) is { } before)
+        {
+            leaderLapMs = crossed - before;
+        }
+        else if (leader.Laps > 0)
+        {
+            leaderLapMs = leader.ElapsedMs / leader.Laps;
+        }
+
+        var waitMs = PositionReportOrder.WaitLimitMs(leaderLapMs);
+        WaitingPositionReport waiting;
+        WaitingPositionReport? stale;
+
+        lock (_positionReportLock)
+        {
+            // Still waiting on the last report when the next one is due (a
+            // report every lap, and a car that has stopped): the new one
+            // reads the order as it is now, so the old one goes.
+            stale = _waitingPositionReport;
+            waiting = new WaitingPositionReport(leader.Laps, depth, TimingClock.NowMs + waitMs, ++_positionReportsStarted);
+            _waitingPositionReport = waiting;
+        }
+
+        if (stale is not null)
+        {
+            StatusMessage?.Invoke(
+                $"[voice] Dropped the lap {stale.Lap} position report - a car it names never crossed the line before the next report was due.");
+        }
+
+        // Read anyway once the wait is up, even if no car crosses again to
+        // set it off.
+        _ = SayPositionReportWhenWaitIsUpAsync(waiting, waitMs);
+
+        // Every car it names may already be over (the cars behind a lap or
+        // more down): then it is read straight away.
+        SayWaitingPositionReport();
+    }
+
+    /// <summary>A position report started by the leader's crossing and waiting for the cars it names.</summary>
+    private sealed record WaitingPositionReport(int Lap, int Depth, long ReadByMs, int Id);
+
+    /// <summary>The report waiting for its cars, if any. Under _positionReportLock.</summary>
+    private WaitingPositionReport? _waitingPositionReport;
+
+    /// <summary>Numbers each report started, so a wait that ran out after its report was read does nothing.</summary>
+    private int _positionReportsStarted;
+
+    /// <summary>
+    /// Taken around _waitingPositionReport: it is checked on the timing
+    /// thread as cars cross and on a timer when the wait is up.
+    /// </summary>
+    private readonly object _positionReportLock = new();
+
+    private async Task SayPositionReportWhenWaitIsUpAsync(WaitingPositionReport waiting, long waitMs)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(waitMs + 50));
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        lock (_positionReportLock)
+        {
+            if (!ReferenceEquals(_waitingPositionReport, waiting))
+            {
+                return;
+            }
+        }
+
+        SayWaitingPositionReport();
+    }
+
+    /// <summary>
+    /// Reads the waiting position report if every car it names is over the
+    /// line, or its wait is up - otherwise leaves it waiting.
+    /// </summary>
+    private void SayWaitingPositionReport()
+    {
+        WaitingPositionReport waiting;
+        List<PositionReportOrder.Row> rows;
+        int named;
+
+        lock (_positionReportLock)
+        {
+            if (_waitingPositionReport is not { } pending)
+            {
+                return;
+            }
+
+            if (RunningOrderNow(pending.Depth) is not { } now)
+            {
+                // The board changed under the read; the next crossing, or
+                // the end of the wait, reads it again.
+                return;
+            }
+
+            var settled = PositionReportOrder.SettledCount(now, pending.Lap);
+            var waitIsUp = TimingClock.NowMs >= pending.ReadByMs;
+
+            if (settled < now.Count && !waitIsUp)
+            {
+                return;
+            }
+
+            _waitingPositionReport = null;
+            waiting = pending;
+            named = now.Count;
+            rows = now.Take(settled).ToList();
+        }
+
+        if (rows.Count < named)
+        {
+            var missing = named - rows.Count;
+            StatusMessage?.Invoke(rows.Count < 2
+                ? $"[voice] Dropped the lap {waiting.Lap} position report - the cars behind the leader had not crossed the line in time."
+                : $"[voice] Position report read without the last {Plural.Of(missing, "car")} - not over the line in time.");
+        }
+
+        if (rows.Count < 2)
+        {
+            return;
+        }
+
+        SayPositionReport(rows);
+    }
+
+    /// <summary>
+    /// Words and queues a running order that is ready to be read: every car
+    /// in <paramref name="rows"/> is over the line on the leader's lap.
+    /// </summary>
+    private void SayPositionReport(List<PositionReportOrder.Row> rows)
+    {
+        // Looked up again: the club may have switched it off, or a caution
+        // come out, while it waited for the cars.
+        var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PositionReport));
+        if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.Templates.Count == 0)
+        {
+            return;
+        }
+
+        if (HeldByCaution(AnnouncementEventType.PositionReport, config))
+        {
+            return;
+        }
+
+        var depth = rows.Count;
+        var leader = rows[0].Standing;
 
         // The line is picked BEFORE the order is worded, because what the
         // club asked for changes how the list reads. Still one line per
@@ -423,11 +594,10 @@ public sealed partial class AnnouncementService
                     }
 
                     // Read again just before it is said (1 Nov 2026). The
-                    // words were written the instant the leader crossed, and
-                    // the cars behind keep crossing while the report waits
-                    // for the speaker - a car that passed second place on
-                    // track can be over the line and second on the screen
-                    // before the voice gets to second place. When anything
+                    // words were written when the last car named crossed,
+                    // and the board can still move while the report waits
+                    // for the speaker - a penalty, or a car further back
+                    // getting by and over the line. When anything
                     // in the order has moved, it is worded again from the
                     // board as it stands, in the same line the club wrote,
                     // and the screens are given the new words. See
@@ -517,8 +687,8 @@ public sealed partial class AnnouncementService
             // two cars' last crossings are an accident of where each
             // happens to be on track, and reading them out would tell a
             // spectator a lapped car was four seconds off the lead. On the
-            // lead lap: the gap to the car directly ahead, measured when
-            // each of them crossed the same lap. Both are worked out in
+            // lead lap: the gap to the leader, measured when each of them
+            // crossed the same lap. Both are worked out in
             // PositionReportOrder.Read.
             var vsLeader = rows[i].VsLeader;
             var gap = rows[i].Gap;
@@ -547,23 +717,15 @@ public sealed partial class AnnouncementService
                 continue;
             }
 
-            var gapMs = gap.GapMs;
-
-            if (gapMs is > 0 and < 1500)
+            // Exactly, to the thousandth, and to the LEADER (1 Nov 2026):
+            // the same figure as the board's "Gap to P1" column. Rounded
+            // the way a gap is called - "a second and a half back", or
+            // "right on his tail" for anything under a second and a half -
+            // it was heard as the wrong gap under a screen that showed it.
+            // See RaceNumbers.GapExactly.
+            if (gap.GapMs is { } gapMs and >= 0)
             {
-                // On the tail of the car in front - "her tail" when that
-                // driver's profile says she/her (21 Oct 2026); "his", as it
-                // always was, when it says nothing.
-                var ahead = Pronouns.For(_profiles.Get(rows[i - 1].Standing.Transponder)?.Pronouns);
-                parts.Add($"{name} right on {ahead.Possessive} tail");
-            }
-            else if (gapMs is > 0)
-            {
-                // "a second and a half back", not "1.5 back" - the gap the
-                // way it is called, in words, which also means a
-                // comma-decimal PC can no longer turn it into "one, five".
-                // See RaceNumbers.Behind.
-                parts.Add($"{name} {RaceNumbers.Behind(gapMs.Value / 1000.0)}");
+                parts.Add($"{name} {RaceNumbers.BehindExactly(gapMs)}");
             }
             else
             {

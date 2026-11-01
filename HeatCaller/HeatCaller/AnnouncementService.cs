@@ -1690,6 +1690,13 @@ public sealed partial class AnnouncementService
             // would still hold the last race's lap number.
             _lastPositionReportLap = -1;
 
+            // And a report still waiting for its cars is not read into the
+            // next session.
+            lock (_positionReportLock)
+            {
+                _waitingPositionReport = null;
+            }
+
             // Same reasoning: a driver mid-cycle at the flag would start the
             // next race offset, hearing their time on laps 2, 5, 8 instead
             // of 3, 6, 9.
