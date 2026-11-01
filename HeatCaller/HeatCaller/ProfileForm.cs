@@ -92,6 +92,9 @@ public sealed class ProfileForm : Form
     private readonly CheckBox _chkNoPhotoOnline = new ThemedCheckBox();
     private readonly CheckBox _chkNoVideoOnline = new ThemedCheckBox();
     private readonly CheckBox _chkInitialsOnline = new ThemedCheckBox();
+
+    /// <summary>Keep their photo off the Big Screen - DriverProfile.NoPhotoOnBigScreen.</summary>
+    private readonly CheckBox _chkNoPhotoBigScreen = new ThemedCheckBox();
     /// <summary>The driver's other transponders, and the main one's Retire - see TransponderChoice.</summary>
     private readonly ComboBox _cmbTransponders = new();
 
@@ -474,7 +477,7 @@ public sealed class ProfileForm : Form
         // Screen to change too.
         var privacyHeading = new Label
         {
-            Text = "ONLINE PRIVACY",
+            Text = "PRIVACY",
             AutoSize = true,
             Font = AppTheme.MicroFont,
             ForeColor = AppTheme.Primary,
@@ -497,13 +500,23 @@ public sealed class ProfileForm : Form
         _chkInitialsOnline.Checked = Result.InitialsOnline;
         privacy.AddField(_chkInitialsOnline);
 
+        // THE ROOM (1 Nov 2026, asked for by Asher: a kid's photo kept off
+        // the Big Screen's driver introduction card). A row of its own under
+        // the online ones, because it is the one switch here that changes
+        // what the room sees. Their name still shows.
+        _chkNoPhotoBigScreen.Text = "Keep their photo off it (a young driver, say)";
+        _chkNoPhotoBigScreen.AutoSize = true;
+        _chkNoPhotoBigScreen.Checked = Result.NoPhotoOnBigScreen;
+        captions.Add(privacy.AddRow("Big Screen:", _chkNoPhotoBigScreen));
+
         // "and podium videos" went from this hint on 28 Oct 2026: the videos
         // stay on this PC now (asked for by Asher), so none goes online.
         // "No podium videos of them" is kept - it is the driver's own ask,
         // they can still make it from their phone, and it is already met.
-        privacy.AddHint("Only what goes on the internet: the club's relay pages. In the room nothing "
-                        + "changes - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. "
-                        + "A driver can ask for these from their phone; only the desk can turn one off.");
+        privacy.AddHint("Online is only what goes on the internet: the club's relay pages. In the room those "
+                        + "change nothing - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. "
+                        + "A driver can ask for them from their phone; only the desk can turn one off. "
+                        + "Big Screen keeps their photo off the driver introductions; their name still shows.");
 
         // The fields on the left and the strip down the right, as tall as
         // the taller of the two. The strip is as wide as SizeStrip works
@@ -637,6 +650,7 @@ public sealed class ProfileForm : Form
             _chkNoPhotoOnline.GetPreferredSize(Size.Empty).Width,
             _chkNoVideoOnline.GetPreferredSize(Size.Empty).Width,
             _chkInitialsOnline.GetPreferredSize(Size.Empty).Width,
+            _chkNoPhotoBigScreen.GetPreferredSize(Size.Empty).Width,
 
             // Hear It, measured as the bar it sits in measures it, and zero
             // when there is none. It is narrower than the boxes at every
@@ -1244,6 +1258,7 @@ public sealed class ProfileForm : Form
             NoPhotoOnline = _chkNoPhotoOnline.Checked,
             NoVideoOnline = _chkNoVideoOnline.Checked,
             InitialsOnline = _chkInitialsOnline.Checked,
+            NoPhotoOnBigScreen = _chkNoPhotoBigScreen.Checked,
             EmailMyNight = _chkEmailMyNight.Checked,
             AboutLine = string.Equals(_txtAboutLine.Text, Result.AboutLine ?? string.Empty, StringComparison.Ordinal)
                 ? Result.AboutLine ?? string.Empty

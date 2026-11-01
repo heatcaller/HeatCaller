@@ -113,6 +113,9 @@ public sealed class CommentaryControl : UserControl
     /// <summary>The qualifying recap that opens a main's driver introductions - AppSettings.CommentaryQualifyingRecap.</summary>
     private readonly CheckBox _chkQualifyingRecap = new ThemedCheckBox();
 
+    /// <summary>Each driver's name and photo on the Big Screen during the driver introductions - AppSettings.BigScreenIntroCards.</summary>
+    private readonly CheckBox _chkIntroCards = new ThemedCheckBox();
+
     // AFTER THE FLAG (18 Oct 2026) - the race announcer's segments between
     // the finish call and the break, and the recap show's booth interview.
     // The two interviews are the Cast tab's switches too, shown here with
@@ -666,8 +669,24 @@ public sealed class CommentaryControl : UserControl
 
         Stepped(driverIntrosGrid.AddRow(string.Empty, _chkDriverIntrosMains));
         Stepped(driverIntrosGrid.AddRow(string.Empty, _chkQualifyingRecap));
+
+        // THE BIG SCREEN'S CARDS (1 Nov 2026, asked for by Asher): each
+        // driver's name and photo up on the Big Screen as the voice reaches
+        // them. A step in under the introductions, because they ARE the
+        // introductions on the wall and grey with them. A driver's own photo
+        // is kept off it on their profile.
+        Check(_chkIntroCards, "Show each driver's name and photo on the Big Screen as they're introduced");
+        _chkIntroCards.Checked = _settings.BigScreenIntroCards;
+        _chkIntroCards.CheckedChanged += (_, _) =>
+        {
+            _settings.BigScreenIntroCards = _chkIntroCards.Checked;
+            _settings.Save();
+        };
+
+        Stepped(driverIntrosGrid.AddRow(string.Empty, _chkIntroCards));
         driverIntrosGrid.AddHint(
-            "Grid spot, number, home club and a line of form for each driver. The automatic start waits for them.");
+            "Grid spot, number, home club and a line of form for each driver. The automatic start waits for them. "
+            + "To keep a young driver's photo off the Big Screen, tick that on their profile - their name still shows.");
 
         // THE PIT LANE AND THE QUALIFYING RECAP (18 Oct 2026) - ticks of their
         // own, on the Before the start card with the driver introductions,
@@ -1587,6 +1606,7 @@ public sealed class CommentaryControl : UserControl
         _chkDriverIntros.Enabled = on;
         _chkDriverIntrosMains.Enabled = on && _chkDriverIntros.Checked;
         _chkQualifyingRecap.Enabled = on && _chkDriverIntros.Checked;
+        _chkIntroCards.Enabled = on && _chkDriverIntros.Checked;
         _chkPitLane.Enabled = on;
         _chkFlagTechLead.Enabled = on && _chkSummaries.Checked;
         _chkBoothPrincipal.Enabled = on && _chkSummaries.Checked;

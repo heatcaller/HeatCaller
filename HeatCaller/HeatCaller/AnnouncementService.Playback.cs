@@ -364,6 +364,12 @@ public sealed partial class AnnouncementService
     {
         byte[] paddedPcm;
 
+        // The line's lead-in silence and its voice, as lengths, for the Big
+        // Screen's driver cards (IntroOnAir) - known exactly here and nowhere
+        // else.
+        TimeSpan leadFor;
+        TimeSpan spokenFor;
+
         {
             // Whole sample frames only. A pad that isn't a multiple of the
             // frame size (2 bytes for 16-bit mono) shifts every sample after
@@ -381,6 +387,10 @@ public sealed partial class AnnouncementService
             pcm.Write(pcmBytes, 0, pcmBytes.Length);
             pcm.Write(trailingBytes, 0, trailingBytes.Length);
             paddedPcm = pcm.ToArray();
+
+            var bytesPerSecond = Math.Max(1, format.AverageBytesPerSecond);
+            leadFor = TimeSpan.FromSeconds(leadingBytes.Length / (double)bytesPerSecond);
+            spokenFor = TimeSpan.FromSeconds(pcmBytes.Length / (double)bytesPerSecond);
         }
 
         using var pcmStream = new MemoryStream(paddedPcm);
@@ -400,6 +410,10 @@ public sealed partial class AnnouncementService
 
         // Whether the line played to its end, for the captions below.
         var heardToTheEnd = false;
+
+        // The driver introductions' cards, when this line is them - 0 for
+        // any other line. See IntroOnAir.
+        var introCards = 0;
 
         try
         {
@@ -429,6 +443,20 @@ public sealed partial class AnnouncementService
             ISampleProvider source = started is null
                 ? rawReader.ToSampleProvider()
                 : new FirstReadSampleProvider(rawReader.ToSampleProvider(), started);
+
+            // WHY (1 Nov 2026, asked for by Asher): the Big Screen puts each
+            // driver's name and photo up as the introductions reach them, and
+            // this is the one place the line's real length is known - so the
+            // cards are timed by the audio rather than by a guess at how fast
+            // the voice reads. Nothing here can throw into the voice.
+            try
+            {
+                introCards = IntroOnAir.Shared.Playing(leadFor, spokenFor);
+            }
+            catch
+            {
+                // A card is never worth a line of the broadcast.
+            }
 
             // voice: on the VOICE level meter, not SFX (26 Oct 2026 - see AudioLevels).
             await AudioBus.PlayAsync(source, (float)Math.Clamp(volume, 0.0, AudioBus.MaxBoost), stop.Token, allowBoost: true, voice: true);
@@ -464,6 +492,20 @@ public sealed partial class AnnouncementService
             else
             {
                 CaptionLog.Shared.Unsaid();
+            }
+
+            // The driver cards the same way: the last one held a moment once
+            // the line is said, all of them down at once when it is cut off.
+            if (introCards != 0)
+            {
+                try
+                {
+                    IntroOnAir.Shared.Stopped(introCards, heardToTheEnd);
+                }
+                catch
+                {
+                    // As above.
+                }
             }
         }
 

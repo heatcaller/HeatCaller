@@ -97,6 +97,18 @@ public partial class MainForm
             {
                 // A caption is never worth a line of the broadcast.
             }
+
+            // The driver introductions' Big Screen cards (1 Nov 2026) hear
+            // every line too, to know the introductions when they come -
+            // see IntroOnAir.
+            try
+            {
+                IntroOnAir.Shared.Heard(text);
+            }
+            catch
+            {
+                // Nor is a card.
+            }
         };
 
         _captionsForgotUtc = DateTime.UtcNow;

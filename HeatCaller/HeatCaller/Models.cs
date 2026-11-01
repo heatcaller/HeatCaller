@@ -460,6 +460,16 @@ public sealed class DriverProfile
     public string PhotoFileName { get; set; } = string.Empty;
 
     /// <summary>
+    /// Keep their photo off the Big Screen (1 Nov 2026, asked for by Asher:
+    /// "on a driver by driver basis if it's a kid"). Their name still goes up
+    /// on the driver introductions' card, with their initials where the photo
+    /// would be - the name is already said over the PA and on the board, and
+    /// the photo is the part a parent asks about. Set at the desk on the
+    /// driver's profile. Online photos have their own switch, NoPhotoOnline.
+    /// </summary>
+    public bool NoPhotoOnBigScreen { get; set; }
+
+    /// <summary>
     /// Who backs them - "Kyosho, PN Racing, Dad". Shown on the driver
     /// card, ready for the announcer's intros: the field that makes a
     /// club racer feel like a works driver, which is its entire job.
