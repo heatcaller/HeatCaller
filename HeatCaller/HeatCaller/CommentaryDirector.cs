@@ -1031,7 +1031,7 @@ public sealed class CommentaryDirector
 
         Battles.Observe(pairs);
 
-        Horizons.Observe(pairs, leaderLaps, road?.Laps ?? 0, road?.Estimated ?? false);
+        Horizons.Observe(pairs, leaderLaps, road?.Laps ?? 0, road?.Estimated ?? false, road?.TimeLeft);
     }
 
     /// <summary>A lap has come in. See PaceWatch.</summary>

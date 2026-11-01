@@ -526,9 +526,9 @@ Defaults are for a new install. The **Practice** tick starts the same as the **R
 | **Achievement unlocked** | A driver earns a badge. Spoken after the race once the result is saved. | `{driver}` `{car}` `{team}` `{sponsors}` `{badge}` | Yes | – |
 | **On record pace** | A driver laps within two percent of the track record without beating it. Needs a layout selected with a record on it. At most once per driver per race, never before their third counted lap. | `{driver}` `{car}` `{team}` `{sponsors}` `{laptime}` (this lap), `{time}` (their best) | No | – |
 | **Last lap** | The leader starts the final lap of a lap-limited race. Fires once. | `{driver}` `{car}` `{team}` `{sponsors}` | Yes | – |
-| **Minutes left** | A timed race's time left at each whole minute from two up, "Four minutes to go". By default only the last five minutes; see [Extra settings on some rows](#extra-settings-on-some-rows). | `{minutes}` | No | – |
-| **Final minute** | A timed race has one minute left. Fires once. | none | Yes | – |
-| **Last minute countdown** | Through a timed race's last minute, the time left every 15 seconds: 45, 30 and 15 seconds. | `{seconds}` | No | – |
+| **Minutes left** | A timed race's time left at each whole minute from two up, "Four minutes to go". By default only the last five minutes; see [Extra settings on some rows](#extra-settings-on-some-rows). In a race with a lap limit too, only when the clock will end it first. | `{minutes}` | No | – |
+| **Final minute** | A timed race has one minute left. Fires once. In a race with a lap limit too, only when the clock will end it first. | none | Yes | – |
+| **Last minute countdown** | Through a timed race's last minute, the time left every 15 seconds: 45, 30 and 15 seconds. In a race with a lap limit too, only when the clock will end it first. | `{seconds}` | No | – |
 | **Provisional pole (qualifying)** | The top of the qualifying order changes hands. Qualifiers only. | `{driver}` `{car}` `{team}` `{sponsors}` `{time}` | Yes | – |
 | **Qualifying improvement** | A driver improves their own best in a qualifier without taking provisional pole. | `{driver}` `{car}` `{team}` `{sponsors}` `{time}` | No | – |
 | **Grid call** | A round is called to the grid as it starts. | `{class}` `{round}` `{marshals}` | Yes | – |

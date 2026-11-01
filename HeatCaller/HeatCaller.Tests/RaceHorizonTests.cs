@@ -392,7 +392,7 @@ public sealed class RaceHorizonTests
         // they still finish, because the flag waits for the next crossing.
         var road = RaceHorizon.LapsLeftIn(null, 30, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(288), 5.0);
 
-        Assert.Equal(new RoadLeft(3, Estimated: true), road);
+        Assert.Equal(new RoadLeft(3, Estimated: true, TimeLeft: TimeSpan.FromSeconds(12)), road);
     }
 
     [Fact]
@@ -405,7 +405,7 @@ public sealed class RaceHorizonTests
 
         // The other way round: the clock ends it first, and is an estimate.
         Assert.Equal(
-            new RoadLeft(2, Estimated: true),
+            new RoadLeft(2, Estimated: true, TimeLeft: TimeSpan.FromSeconds(10)),
             RaceHorizon.LapsLeftIn(40, 10, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(290), 6.0));
     }
 
@@ -424,7 +424,7 @@ public sealed class RaceHorizonTests
         // The flag waits for the leader's next crossing, so the last lap is
         // still one lap of road - the answer a lap-limited race gives too.
         Assert.Equal(
-            new RoadLeft(1, Estimated: true),
+            new RoadLeft(1, Estimated: true, TimeLeft: TimeSpan.Zero),
             RaceHorizon.LapsLeftIn(null, 50, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5.1), 5.0));
     }
 
@@ -435,23 +435,31 @@ public sealed class RaceHorizonTests
         // fifteen seconds of laps from the line, so three crossings to go.
         // Counted from now it would have been two.
         Assert.Equal(
-            new RoadLeft(3, Estimated: true),
+            new RoadLeft(3, Estimated: true, TimeLeft: TimeSpan.FromSeconds(12)),
             RaceHorizon.LapsLeftIn(null, 30, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(288), 5.0, TimeSpan.FromSeconds(3)));
     }
 
     [Fact]
-    public void An_estimated_road_is_said_as_about_so_many_laps()
+    public void A_timed_road_is_said_as_about_so_much_time_and_never_as_laps()
     {
+        // Was "about three laps" (15 Oct 2026) - and a timed race heard
+        // "three circuits to run" from the commentary (1 Nov 2026). A race
+        // the clock ends is said in time.
         var watch = Watching();
 
-        watch.Observe(new[] { Pair("carl", "dave", 0.80) }, 5, 4, estimated: true);
-        watch.Observe(new[] { Pair("carl", "dave", 0.60) }, 6, 3, estimated: true);
+        watch.Observe(new[] { Pair("carl", "dave", 0.80) }, 5, 4, estimated: true, timeLeft: TimeSpan.FromSeconds(20));
+        watch.Observe(new[] { Pair("carl", "dave", 0.60) }, 6, 3, estimated: true, timeLeft: TimeSpan.FromSeconds(15));
 
         var horizon = watch.Pick();
 
         Assert.NotNull(horizon);
         Assert.True(horizon!.Estimated);
-        Assert.Contains("about three laps", RaceHorizon.Say(horizon, "Carl", "Dave"));
+        Assert.Equal(TimeSpan.FromSeconds(15), horizon.TimeLeft);
+
+        var line = RaceHorizon.Say(horizon, "Carl", "Dave");
+
+        Assert.Contains("about fifteen seconds", line);
+        Assert.DoesNotContain("three laps", line);
     }
 
     [Fact]

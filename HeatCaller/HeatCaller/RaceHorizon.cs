@@ -43,10 +43,16 @@ public enum HorizonKind
 /// <param name="Kind">What the gap is doing.</param>
 /// <param name="Samples">How many samples the rate was taken over.</param>
 /// <param name="Estimated">
-/// The laps left were WORKED OUT from the clock rather than known - a
-/// timed race. See <see cref="RaceHorizon.LapsLeftIn"/>, and Say, which
-/// softens the wording to "about four laps" so the sentence still claims
-/// nothing it cannot stand behind.
+/// The CLOCK ends this race, not a lap count - a timed race, or a race
+/// with both limits where the clock comes first. The laps left were then
+/// worked out from the clock rather than known, and they are for the sum
+/// only: a timed race is never told how many laps it has left (1 Nov 2026,
+/// see <see cref="RaceHorizon.Remaining"/>). It is told the time.
+/// </param>
+/// <param name="TimeLeft">
+/// The time left on the clock when <paramref name="Estimated"/> - nought
+/// once it has run out and the leader is on the lap that takes the flag.
+/// Null in a race a lap count ends.
 /// </param>
 public sealed record Horizon(
     string AheadId,
@@ -58,15 +64,21 @@ public sealed record Horizon(
     double Buys,
     HorizonKind Kind,
     int Samples,
-    bool Estimated = false);
+    bool Estimated = false,
+    TimeSpan? TimeLeft = null);
 
 /// <summary>
 /// How much road is left in a race, and whether that figure is known or
 /// worked out - see <see cref="RaceHorizon.LapsLeftIn"/>.
 /// </summary>
 /// <param name="Laps">Laps left for the leader, counting the one they are on.</param>
-/// <param name="Estimated">True when it came off the clock rather than a lap limit.</param>
-public readonly record struct RoadLeft(int Laps, bool Estimated);
+/// <param name="Estimated">True when it came off the clock rather than a lap limit - the clock ends this race.</param>
+/// <param name="TimeLeft">
+/// When the clock ends the race, the time left on it - nought once it has
+/// run out. Null when a lap count ends it. What a timed race's lines are
+/// said in: see <see cref="RaceHorizon.Remaining"/>.
+/// </param>
+public readonly record struct RoadLeft(int Laps, bool Estimated, TimeSpan? TimeLeft = null);
 
 /// <summary>
 /// Watches a gap's RATE and what is left of the race, so the announcer can
@@ -138,6 +150,8 @@ public sealed class RaceHorizon
 
     private bool _estimated;
 
+    private TimeSpan? _timeLeft;
+
     public RaceHorizon(Func<DateTime>? clock = null) => _clock = clock ?? (() => DateTime.Now);
 
     /// <summary>
@@ -195,10 +209,15 @@ public sealed class RaceHorizon
     /// limit. Carried onto every Horizon so the wording can say "about".
     /// See <see cref="LapsLeftIn"/>.
     /// </param>
-    public void Observe(IReadOnlyList<PairGap> pairs, int lapsRun, int lapsLeft, bool estimated = false)
+    /// <param name="timeLeft">
+    /// The time left on the clock when it is the clock that ends the race -
+    /// what an estimated road is SAID in. See <see cref="Remaining"/>.
+    /// </param>
+    public void Observe(IReadOnlyList<PairGap> pairs, int lapsRun, int lapsLeft, bool estimated = false, TimeSpan? timeLeft = null)
     {
         _lapsLeft = lapsLeft;
         _estimated = estimated;
+        _timeLeft = estimated && timeLeft is { } left ? (left < TimeSpan.Zero ? TimeSpan.Zero : left) : null;
 
         if (pairs is null)
         {
@@ -383,7 +402,8 @@ public sealed class RaceHorizon
             buys,
             kind,
             trail.Seen.Count,
-            _estimated);
+            _estimated,
+            _timeLeft);
     }
 
     /// <summary>This pair has been talked about - start their cooldown.</summary>
@@ -402,6 +422,7 @@ public sealed class RaceHorizon
         _saidAt.Clear();
         _lapsLeft = 0;
         _estimated = false;
+        _timeLeft = null;
     }
 
     /// <summary>
@@ -472,21 +493,34 @@ public sealed class RaceHorizon
             : null;
 
         RoadLeft? byClock = null;
+        var timed = timeLimit is { } limitSet && limitSet > TimeSpan.Zero;
 
-        if (timeLimit is { } time && time > TimeSpan.Zero && leaderLapSeconds is > 0 and var pace)
+        if (timed && leaderLapSeconds is > 0 and var pace)
         {
-            var remaining = (time - elapsed).TotalSeconds;
+            var time = timeLimit!.Value;
+            var left = time - elapsed;
+            var remaining = left.TotalSeconds;
             var fromTheLine = remaining + Math.Max(0, sinceLeaderCrossed.TotalSeconds);
 
             byClock = remaining <= 0
-                ? new RoadLeft(1, true)
-                : new RoadLeft(Math.Max(1, (int)Math.Ceiling(fromTheLine / pace)), true);
+                ? new RoadLeft(1, true, TimeSpan.Zero)
+                : new RoadLeft(Math.Max(1, (int)Math.Ceiling(fromTheLine / pace)), true, left);
         }
 
         if (byLaps is { } laps && byClock is { } clock)
         {
             // The nearer end. On a tie the lap limit, which is exact.
             return clock.Laps < laps.Laps ? clock : laps;
+        }
+
+        // A CLOCK AND NO PACE YET (1 Nov 2026). With both limits set and the
+        // leader's pace not known, nobody can say which end comes first - a
+        // club that sets "5 minutes, 99 laps" as a ceiling would otherwise
+        // have heard "ninety-seven laps left" in what is a timed race. No
+        // road, no line, until there is a lap to go on.
+        if (timed && byClock is null)
+        {
+            return null;
         }
 
         return byLaps ?? byClock;
@@ -500,16 +534,78 @@ public sealed class RaceHorizon
         string.CompareOrdinal(a, b) <= 0 ? $"{a}|{b}" : $"{b}|{a}";
 
     /// <summary>
+    /// How much of the race is left, in the terms that END it (1 Nov 2026).
+    ///
+    /// WHY THIS EXISTS. A timed race was called as "about four laps left",
+    /// because the road was counted in laps whatever ended the race, and
+    /// the built-in commentary turned that into "four circuits to run" in
+    /// a race nobody had set a lap count for. The room hears the clock, so a
+    /// race the clock ends is spoken in time - "about a minute and a half
+    /// left" - and only a race a lap count ends is spoken in laps. The laps
+    /// a clock leaves are still worked out, for the sum behind
+    /// <see cref="HorizonKind.WithinReach"/>, but they are never said.
+    /// </summary>
+    /// <returns>
+    /// The amount alone, ready to follow "with" or "has": "three laps",
+    /// "about a minute and a half", or, once the clock has run out, "the
+    /// final lap". A timed race whose time left is not known comes back as
+    /// "what is left of the clock" - still never a count of laps.
+    /// </returns>
+    internal static string Remaining(Horizon horizon)
+    {
+        if (!horizon.Estimated)
+        {
+            return $"{RaceNumbers.Words(horizon.LapsLeft)} {Plural.Word(horizon.LapsLeft, "lap")}";
+        }
+
+        if (horizon.TimeLeft is not { } left)
+        {
+            return "what is left of the clock";
+        }
+
+        return left <= TimeSpan.Zero ? "the final lap" : $"about {RaceNumbers.TimeLeftSpoken(left)}";
+    }
+
+    /// <summary>
+    /// Whether the clock is what ends this race, for the time-left calls
+    /// (1 Nov 2026). True for a timed race, and for a race with both limits
+    /// unless the lap limit is known to come first - "two minutes to go" in
+    /// a race that will be over in three laps is the announcer getting the
+    /// race wrong. When the leader's pace is not known yet, nobody can say,
+    /// and the clock - which is set, and is running - is given the benefit.
+    /// </summary>
+    public static bool ClockEndsIt(int? lapLimit, int leaderLaps, TimeSpan? timeLimit, TimeSpan elapsed, double? leaderLapSeconds, TimeSpan sinceLeaderCrossed = default)
+    {
+        if (timeLimit is not { } time || time <= TimeSpan.Zero)
+        {
+            return false;
+        }
+
+        if (lapLimit is not > 0)
+        {
+            return true;
+        }
+
+        var road = LapsLeftIn(lapLimit, leaderLaps, timeLimit, elapsed, leaderLapSeconds, sinceLeaderCrossed);
+
+        return road is not { Estimated: false };
+    }
+
+    /// <summary>
     /// The line itself, kept here so the wording cannot drift - the
     /// argument DriverCut.Describe makes for itself.
     ///
     /// READ EVERY ONE OF THESE AGAINST THE NO-PREDICTION RULE at the top of
-    /// this class. Each gives the room the gap, the rate and the laps, and
-    /// stops. None of them says who gets there. "He has three laps to find
-    /// half a second, and he is taking two tenths a lap out of it" is a
+    /// this class. Each gives the room the gap, the rate and what is left,
+    /// and stops. None of them says who gets there. "He has three laps to
+    /// find half a second, and he is taking two tenths a lap out of it" is a
     /// sentence that is still true if the car spins on the next corner;
     /// "he is going to catch him" is not, and is the sentence this app
     /// must never say about somebody standing in the room.
+    ///
+    /// WHAT IS LEFT IS SAID IN THE RACE'S OWN TERMS (1 Nov 2026) - laps
+    /// for a race a lap count ends, time for one the clock ends. See
+    /// <see cref="Remaining"/>.
     /// </summary>
     internal static string Say(Horizon horizon, string aheadNamed, string behindNamed)
     {
@@ -518,23 +614,19 @@ public sealed class RaceHorizon
         // "closing at nothing a lap". From a tenth up the two read the same.
         var gap = RaceNumbers.MarginSpoken(horizon.GapSeconds);
         var rate = RaceNumbers.MarginSpoken(Math.Abs(horizon.PerLap));
-
-        // In words, like every other figure the voice is handed (see
-        // RaceNumbers) - and with "about" in front when the laps came off
-        // the clock, which is the whole of what makes an estimate safe to
-        // say. See LapsLeftIn.
-        var laps = $"{(horizon.Estimated ? "about " : string.Empty)}{RaceNumbers.Words(horizon.LapsLeft)} "
-            + Plural.Word(horizon.LapsLeft, "lap");
+        var left = Remaining(horizon);
+        var finalLap = horizon.Estimated && horizon.TimeLeft is { } clock && clock <= TimeSpan.Zero;
         var place = horizon.Position == 1 ? "the lead" : RaceNumbers.PositionSpoken(horizon.Position);
 
         return horizon.Kind switch
         {
             HorizonKind.WithinReach =>
-                $"{behindNamed} has {laps} to find {gap} on {aheadNamed}, and is taking {rate} a lap out of "
+                $"{behindNamed} has {left} to find {gap} on {aheadNamed}, and is taking {rate} a lap out of "
                 + $"it - that puts {place} on the line.",
 
-            HorizonKind.Closing =>
-                $"{behindNamed} is {gap} behind {aheadNamed} and closing at {rate} a lap, with {laps} left.",
+            HorizonKind.Closing => finalLap
+                ? $"{behindNamed} is {gap} behind {aheadNamed} and closing at {rate} a lap, on the final lap."
+                : $"{behindNamed} is {gap} behind {aheadNamed} and closing at {rate} a lap, with {left} left.",
 
             HorizonKind.SlippingAway =>
                 $"{aheadNamed} is pulling away from {behindNamed} - {gap} now, and going out {rate} a lap.",
