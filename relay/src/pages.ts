@@ -192,6 +192,17 @@ nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var
   /* "Following Sam" sits just above the bar instead of under it. */
   body .follow { bottom: calc(68px + env(safe-area-inset-bottom)); }
 }
+/* NO CHIN ON A HOME-SCREEN ICON (1 Nov 2026, Asher, added to the home
+   screen from Chrome on his iPhone: "It now has a chin under the tabs").
+   Opened from its own icon, an iPhone makes the page as tall as the screen
+   less the status bar, and a page that doesn't scroll by itself leaves that
+   much empty under a bar fixed to the bottom. There are no browser toolbars
+   on a home-screen icon to jump the bar about, so there the window scrolls
+   again, as it did before, and the bar sits on the bottom of the screen. */
+@media (max-width: 640px) and (display-mode: standalone), (max-width: 640px) and (display-mode: fullscreen) {
+  html { height: auto; overflow: visible; }
+  body { height: auto; overflow-y: visible; }
+}
 .day { color: var(--accent); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
        margin: 26px 0 10px; font-weight: 600; }
 details {

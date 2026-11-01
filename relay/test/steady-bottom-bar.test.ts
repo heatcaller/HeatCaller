@@ -48,4 +48,15 @@ describe("the club pages' bottom bar on a phone", () => {
       assert.doesNotMatch(html, /window\.scroll(To|By|Y)\b|pageYOffset|scrollingElement/);
     }
   });
+
+  it("lets a home-screen icon scroll the window again, so no band is left under the bar", () => {
+    // 1 Nov 2026, Asher from his iPhone's home screen: "It now has a chin under the tabs".
+    for (const [, html] of pages) {
+      const at = html.indexOf("@media (max-width: 640px) and (display-mode: standalone), (max-width: 640px) and (display-mode: fullscreen) {");
+      assert.ok(at > html.indexOf("@media (max-width: 640px) {"), "after the phone rules, so it wins");
+      const block = html.slice(at, html.indexOf("\n}", at));
+      assert.match(block, /html \{ height: auto; overflow: visible; \}/);
+      assert.match(block, /body \{ height: auto; overflow-y: visible; \}/);
+    }
+  });
 });
