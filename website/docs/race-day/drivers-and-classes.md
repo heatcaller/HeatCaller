@@ -292,10 +292,20 @@ If you have your drivers in a spreadsheet, or in the timing software your club u
 
 **From a web page or a spreadsheet, without a file:** if your old timing software only shows its driver list on a web page, select the whole table there and copy it (Ctrl+C), or copy the rows out of a spreadsheet. Then click **Paste a Table...**. HeatCaller reads the table from the clipboard and opens the same preview as a CSV file, so steps 2 to 4 are the same. A few things it does for you:
 
-- If the copy took in more than one table, the biggest one is used.
+- If the copy took in more than one table, the biggest one is used, along with every other table that has the same headings (a page with one table per class).
 - Links, bold and line breaks inside a cell become plain words.
 - Blank rows, a heading row repeated part way down, and a one-cell class title across the table ("Stock - A-Main") are skipped.
+- A class title with an entry count ("10th Scale Entries: 16") isn't thrown away: when the table has no class column of its own, a **Class** column is added with the class each driver was listed under.
 - The first row is used as headings when it looks like headings. Otherwise the columns are called "Column 1", "Column 2" and so on, and you pick each one from its list.
+
+**From your LiveRC entry list:** if your club posts to LiveRC, open one of your own events there, go to its **Entry List**, select everything from the first class's title to the last driver, and copy it. **Paste a Table...** reads every class on the page in one go:
+
+- Each driver's class comes from the title over their table, and **Transponder #** is picked as the transponder.
+- LiveRC has each name in the page twice ("BLACK, KALEB" and "KALEB BLACK"), so a copy reads "BLACK, KALEBKALEB BLACK". HeatCaller puts it back to one name, written the usual way: **Kaleb Black**.
+- The **#** column only counts the drivers in each class, so it's called **Row count** and set to **(ignore)**, not taken for race numbers.
+- A driver entered in two classes comes in once, in both classes.
+
+You can also copy one class tab at a time. Only copy your own track's lists, and check the preview before you click **Import**. LiveRC's numbers are MyLaps transponder numbers, so they match laps once HeatCaller reads your MyLaps decoder; with EasyLap or I-Lap, change each driver's transponder after the import.
 
 If nothing usable is on the clipboard, a **Nothing to paste** message says how to copy the list.
 
