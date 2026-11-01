@@ -107,7 +107,7 @@ describe("relay navigation, round 2: Me goes straight to a remembered night", ()
   it("points the Me tab at the remembered night on every page", () => {
     const html = resultsPage("acme-rc", "Acme RC");
 
-    assert.match(html, /document\.querySelector\('nav\.tabs a\[href\$="\/mynight"\]'\)/);
+    assert.match(html, /document\.querySelector\('nav\.tabs a\[href\$="\/mynight"\], nav\.tabs a\[href\*="\/night#d="\]'\)/);
     assert.match(html, /me\.setAttribute\('href', '\/c\/' \+ encodeURIComponent\(CLUB\) \+ '\/night#d=' \+ code\)/);
   });
 });

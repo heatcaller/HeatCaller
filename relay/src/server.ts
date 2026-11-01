@@ -13,6 +13,7 @@ import {
   checkinPage,
   homePage,
   livePage,
+  appShellPage,
   managePage,
   manifest,
   missingPage,
@@ -2124,6 +2125,15 @@ export class Relay {
           // page, not one of the club's public tabs, so it never appears
           // in shell()'s nav bar. The manager PIN and the pass it earns
           // are the real lock; this is only obscurity on top of that.
+          // The home-screen icon's one bar (1 Nov 2026, see appShellPage).
+          // Not in PAGES either: it is never a tab, only what every page
+          // opened from the icon goes through first.
+          if (page === "app") {
+            const context = await this.contextFor(request, tenant.club);
+            sendHtml(response, 200, appShellPage(tenant.club, tenant.name, context), context.nonce);
+            return;
+          }
+
           if (page === "manage") {
             const context = await this.contextFor(request, tenant.club);
             sendHtml(response, 200, managePage(tenant.club, tenant.name, context), context.nonce);
@@ -9199,7 +9209,7 @@ const ALLOWED_METHODS = "GET, HEAD, POST, DELETE, OPTIONS";
 
 const BASE_HEADERS: Readonly<Record<string, string>> = Object.freeze({
   "x-content-type-options": "nosniff",
-  "x-frame-options": "DENY",
+  "x-frame-options": "SAMEORIGIN",
   "referrer-policy": "strict-origin-when-cross-origin",
   "strict-transport-security": "max-age=31536000",
   "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
@@ -9289,7 +9299,12 @@ function sendHtml(response: ServerResponse, status: number, html: string, nonce:
     "manifest-src 'self'",
     "base-uri 'none'",
     "form-action 'self'",
-    "frame-ancestors 'none'",
+    // FRAMED BY ITS OWN PAGES ONLY (1 Nov 2026). The home-screen icon's
+    // one bar shows the club's pages in a frame of its own (appShellPage),
+    // so a page here may be framed by another page here and by nothing
+    // else, and may frame only pages here.
+    "frame-src 'self'",
+    "frame-ancestors 'self'",
   ].join("; ");
 
   response.writeHead(status, {
