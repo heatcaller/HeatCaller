@@ -209,6 +209,21 @@ nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var
                  top: calc(100lvh - 68px - env(safe-area-inset-bottom)); transform: translate(-50%, -100%); }
   .hcabout { bottom: auto; height: 100vh; height: 100lvh; }
 }
+/* A STEADY SWITCH BETWEEN PAGES (1 Nov 2026, Asher on his iPhone's
+   home-screen icon: "it flickers when hitting each tab and the content above
+   it flashes into place. can we make it more stable when navigating?").
+   Each tab is its own page, so the phone blanked the screen while the next
+   one loaded. Now the page being left stays on screen until the next one is
+   ready, the bar is carried across as it is, and only the page above it
+   fades in - quickly, or at once for anyone who asks their phone for less
+   motion. A phone or browser too old for this simply loads pages as before. */
+@view-transition { navigation: auto; }
+nav.tabs { view-transition-name: hc-tabs; }
+::view-transition-group(hc-tabs), ::view-transition-old(hc-tabs), ::view-transition-new(hc-tabs) { animation: none; }
+::view-transition-old(root) { animation: none; }
+::view-transition-new(root) { animation: hc-page-in 140ms ease-out both; }
+@keyframes hc-page-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { ::view-transition-new(root) { animation: none; } }
 .day { color: var(--accent); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
        margin: 26px 0 10px; font-weight: 600; }
 details {
