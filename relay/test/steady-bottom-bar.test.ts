@@ -31,7 +31,7 @@ describe("the club pages' bottom bar on a phone", () => {
     it(`gives the browser nothing of its own to scroll on ${name}`, () => {
       const phone = phoneRules(html);
       assert.match(phone, /html \{ height: 100%; overflow: hidden; overscroll-behavior: none; \}/);
-      assert.match(phone, /body \{ height: 100%; overflow-y: auto;[^}]*padding-bottom: calc\(76px \+ env\(safe-area-inset-bottom\)\); \}/);
+      assert.match(phone, /body \{ height: 100%; overflow-y: auto;[^}]*padding-bottom: calc\(76px \+ var\(--sa-b\)\); \}/);
       assert.match(phone, /nav\.tabs \{ position: fixed; left: 0; right: 0; bottom: 0;/);
     });
   }
