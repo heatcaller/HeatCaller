@@ -20,7 +20,8 @@ public sealed class BigScreenForm : Form
     //   panel      = Surface                 (the on-deck bar)
     //   text       = Text                    (announcement, leaderboard)
     //   race state = Primary                 (state line, elapsed clock)
-    //   highlight  = Accent                  (countdown, on-deck, fast laps)
+    //   highlight  = Accent                  (countdown, on-deck, quickest of anyone)
+    //   own best   = Good                    (a driver's own best, streaks, up at the split)
     //   hairlines  = Border, hints = Muted
     // A look is checked for exactly these pairings (text on background,
     // primary and accent on a card), so a light look reads as well as a
@@ -33,6 +34,7 @@ public sealed class BigScreenForm : Form
     private Color TextColor => _look.Text;
     private Color AccentColor => _look.Primary;
     private Color HighlightColor => _look.Accent;
+    private Color GoodColor => _look.Good;
 
     // Hairlines, not gridlines. At this size a visible grid reads as a
     // spreadsheet; the rows need separating, not boxing.
@@ -2439,20 +2441,33 @@ public sealed class BigScreenForm : Form
                 // Only the positive highlights carry over here - a big
                 // screen read from across the room wants the fast lap to
                 // stand out, not a wall of red warnings.
-                if (values[col].Emphasis is KpiEmphasis.Good or KpiEmphasis.Highlight)
+                if (EmphasisColour(values[col].Emphasis) is { } colour)
                 {
                     // The selection colour too: the grid selects its first
                     // row on its own, and the leader's fast lap was painted
                     // in plain text colour because of it.
                     var style = _grid.Rows[rowIndex].Cells[col].Style;
-                    style.ForeColor = HighlightColor;
-                    style.SelectionForeColor = HighlightColor;
+                    style.ForeColor = colour;
+                    style.SelectionForeColor = colour;
                 }
             }
         }
 
         RefreshCountdownOnly();
     }
+
+    /// <summary>
+    /// The colour a board cell is painted on the Big Screen, or null for
+    /// the plain text colour. The quickest of anyone in the look's accent,
+    /// a driver's own good news in its green - the same two colours Race
+    /// Control and the online board use. Warnings stay plain.
+    /// </summary>
+    /// <remarks>
+    /// WHY (1 Nov 2026): both used to be the accent, so with sector columns
+    /// on the board a driver's own best sector was the same blue as the
+    /// session's quickest, and two drivers looked like they held it.
+    /// </remarks>
+    private Color? EmphasisColour(KpiEmphasis emphasis) => BigScreenEmphasis.Colour(emphasis, HighlightColor, GoodColor);
 
     /// <summary>
     /// The announcement banner previously held a static "Waiting for the
