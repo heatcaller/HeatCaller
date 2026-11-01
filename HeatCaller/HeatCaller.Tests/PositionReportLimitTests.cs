@@ -54,6 +54,47 @@ public sealed class PositionReportLimitTests
         Assert.True(reread > check && spoken > reread, "the running order is no longer read again just before it is spoken");
     }
 
+    [Fact]
+    public void The_running_order_has_no_rounded_or_vague_gap_wording()
+    {
+        // 1 Nov 2026: "right on his tail" for anything under a second and a
+        // half, and "a second and a half back" for the rest, under a board
+        // that showed the gap to the hundredth. Every gap the report says
+        // is now the exact one - see RaceNumbers.GapExactly.
+        var wording = Between(
+            Source("AnnouncementService.LapCalls.cs"),
+            "private string WordRunningOrder(",
+            "private string SpokenNameFor(");
+        var code = string.Join("\n", wording.Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+
+        Assert.DoesNotContain("tail", code, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GapSpoken", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("RaceNumbers.Behind(", code, StringComparison.Ordinal);
+        Assert.Contains("RaceNumbers.BehindExactly(", code, StringComparison.Ordinal);
+
+        var gap = Between(Source("AnnouncementText.cs"), "internal static string SpokenGap(", "internal static string SpokenGaps(");
+        var gapCode = string.Join("\n", gap.Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+
+        Assert.DoesNotContain("GapSpoken", gapCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("under a tenth", gapCode, StringComparison.Ordinal);
+        Assert.Contains("RaceNumbers.BehindExactly(", gapCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_report_waits_for_the_cars_it_names_before_it_is_worded()
+    {
+        var report = Between(
+            Source("AnnouncementService.LapCalls.cs"),
+            "private void SayWaitingPositionReport()",
+            "private void SayPositionReport(");
+
+        var settled = report.IndexOf("PositionReportOrder.SettledCount(", StringComparison.Ordinal);
+        var said = report.IndexOf("SayPositionReport(rows)", StringComparison.Ordinal);
+
+        Assert.True(settled >= 0, "the report no longer checks that the cars it names are over the line");
+        Assert.True(said > settled, "the report is worded before its cars are over the line");
+    }
+
     // ------------------------------------------------------------------
     //  Reading the source
 

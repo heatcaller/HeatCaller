@@ -195,25 +195,16 @@ internal static class AnnouncementText
     }
 
     /// <summary>
-    /// How far one car is behind the one in front of it, said rather than
-    /// shown.
+    /// How far a car is behind the leader (the board's "Gap to P1"), said
+    /// rather than shown.
     ///
-    /// IN WORDS AND IN TENTHS (15 Oct 2026: "three tenths back", "a second
-    /// and a half back" - see RaceNumbers.GapSpoken), not the hundredths
-    /// the leaderboard shows (RaceGaps.Format), and not "1.5 back" either,
-    /// which a voice read as "one point five back". A figure on the board is read at a glance and a
-    /// hundredth can decide a qualifying order, so the board keeps them. A
-    /// figure in the ear has to be spoken through: "two point three five"
-    /// takes half again as long to say as "two point three", and the
-    /// position report is already the longest line the announcer reads -
-    /// over as many places as the club asked for, that difference is
-    /// whether the report still fits between two laps.
-    ///
-    /// Under a tenth is said as "under a tenth" rather than rounded. At
-    /// tenths that gap formats as "0.0", which a voice reads as "nought
-    /// point nought" - a listener hears nothing between the two cars, which
-    /// is a dead heat, and a dead heat that isn't one sounds like a broken
-    /// timing system.
+    /// IN WORDS AND EXACTLY (1 Nov 2026): "one point two three four back",
+    /// to the thousandth, never rounded - see RaceNumbers.GapExactly. From
+    /// 15 Oct it was rounded the way a gap is called ("three tenths back",
+    /// "a second and a half back"), to keep the report short; clubs heard
+    /// the rounding as the voice getting the gap wrong under a board that
+    /// shows it to the hundredth. Never "1.5 back" in digits, which a voice
+    /// reads its own way.
     ///
     /// A car down a lap is NEVER given in seconds. It is not "four point
     /// two seconds behind"; it is a lap behind, and the seconds between
@@ -252,17 +243,13 @@ internal static class AnnouncementText
             return string.Empty;
         }
 
-        if (ms < 100)
-        {
-            return "under a tenth";
-        }
-
-        // SAID THE WAY A GAP IS CALLED (15 Oct 2026) - "a second and a
-        // half back", "three tenths back" - and not "1.5 back", which a
-        // voice reads as "one point five back". See RaceNumbers.GapSpoken,
-        // which also keeps the tenths this summary argues for, and is all
-        // words, so a comma-decimal PC cannot turn it into "one, five".
-        return RaceNumbers.GapSpoken(ms / 1000.0) + " back";
+        // EXACTLY AS TIMED (1 Nov 2026) - "one point two three four back",
+        // "point oh four back" - the figure the board shows, to the
+        // thousandth. It was rounded the way a gap is called ("a second and
+        // a half back", "under a tenth"), and a club heard the rounding as
+        // the voice getting the gap wrong. Still all words: see
+        // RaceNumbers.GapExactly.
+        return RaceNumbers.BehindExactly(ms);
     }
 
     /// <summary>

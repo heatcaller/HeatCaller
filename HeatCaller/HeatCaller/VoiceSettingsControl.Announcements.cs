@@ -1358,7 +1358,7 @@ public sealed partial class VoiceSettingsControl
             // tick box names {time}: a tick that quietly needs a word
             // typed into the box above it reads as a tick that does
             // nothing.
-            _chkPositionGaps.Text = "Say the gaps between them (put {gaps} in the line)";
+            _chkPositionGaps.Text = "Say each car's gap to the leader (put {gaps} in the line)";
             _chkPositionGaps.AutoSize = true;
             _chkPositionGaps.Checked = config.PositionReportSayGaps;
 
@@ -1366,12 +1366,29 @@ public sealed partial class VoiceSettingsControl
             var lblSuffix = new Label { Text = "lap(s) of the LEADER,", AutoSize = true };
             var lblDepth = new Label { Text = "down to P", AutoSize = true };
 
+            // The report waits for the last car it names to cross the line
+            // (1 Nov 2026), so a deep one is heard later - said next to the
+            // setting, and kept up to date as the number changes.
+            _lblPositionDepthWait.AutoSize = true;
+            ShowPositionDepthNote();
+
+            if (!_positionDepthWaitHooked)
+            {
+                _positionDepthWaitHooked = true;
+                _numPositionDepth.ValueChanged += (_, _) =>
+                {
+                    ShowPositionDepthNote();
+                    _annRows?.PerformLayout();
+                };
+            }
+
             rows.Controls.Add(lblEvery);
             rows.Controls.Add(_numPositionEveryLaps);
             rows.Controls.Add(lblSuffix);
             rows.Controls.Add(lblDepth);
             rows.Controls.Add(_numPositionDepth);
             rows.Controls.Add(_chkPositionGaps);
+            rows.Controls.Add(_lblPositionDepthWait);
 
             lines.Add(Line(
                 UiLayout.RowGap,
@@ -1381,10 +1398,24 @@ public sealed partial class VoiceSettingsControl
                 (lblDepth, apart),
                 (_numPositionDepth, caption)));
 
+            lines.Add(Line(UiLayout.RowGap, (_lblPositionDepthWait, 0)));
             lines.Add(Line(UiLayout.RowGap, (_chkPositionGaps, 0)));
         }
 
         return lines;
+    }
+
+    /// <summary>
+    /// When the running order is read for the depth set - in the warning
+    /// colour once it reads deep enough to be heard well after the leader.
+    /// See PositionReportOrder.DepthNote.
+    /// </summary>
+    private void ShowPositionDepthNote()
+    {
+        var (text, warn) = PositionReportOrder.DepthNote((int)_numPositionDepth.Value);
+
+        _lblPositionDepthWait.Text = text;
+        _lblPositionDepthWait.ForeColor = warn ? AppTheme.Warning : AppTheme.TextMuted;
     }
 
     /// <summary>
@@ -1751,7 +1782,7 @@ public sealed partial class VoiceSettingsControl
                      _chkSayLapTimeLabel, _chkIncludeDriverNameInLapTime,
                      _numStreakEveryN, _numStreakEveryNPractice,
                      _chkOnlyLongestStreak, _chkMentionStreakChaser,
-                     _numPositionEveryLaps, _numPositionDepth, _chkPositionGaps, _numLapTimeEveryN, _numSplitTimeEveryN,
+                     _numPositionEveryLaps, _numPositionDepth, _chkPositionGaps, _lblPositionDepthWait, _numLapTimeEveryN, _numSplitTimeEveryN,
                      _numTargetPaceEveryN, _numConsistencyEveryLaps,
                      _chkMinutesLeftOnlyLast, _numMinutesLeftFrom,
                      _chkLeadChangeCount,
