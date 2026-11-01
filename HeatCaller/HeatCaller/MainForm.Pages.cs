@@ -974,11 +974,7 @@ public partial class MainForm
             // record picked from its list. "Today" also takes in the last
             // few hours, so a club night running past midnight still edits
             // the inspection made before twelve rather than starting over.
-            var existing = latest is not null
-                           && (latest.InspectedAtUtc.ToLocalTime().Date == DateTime.Now.Date
-                               || DateTime.UtcNow - latest.InspectedAtUtc < TimeSpan.FromHours(6))
-                ? latest
-                : null;
+            var existing = BulkTech.EditableToday(latest, DateTime.UtcNow);
 
             using var form = existing is not null
                 ? new TechInspectionEditForm(existing, _profiles, _raceClasses)
@@ -1012,6 +1008,87 @@ public partial class MainForm
             // Both pages show tech state, so both need to pick up the change
             // immediately rather than whichever one you happen to revisit -
             // the log only when it is actually open behind this dialog.
+            techLog?.RefreshAll();
+            checkIn.RefreshAll();
+        };
+
+        // One inspection for several cars at once (1 Nov 2026): the drivers
+        // picked on Who's Racing with Ctrl or Shift. Each car is inspected in
+        // the class its Tech cell shows, and today's inspection of it, when
+        // there is one, is updated as the one-car Inspect above would - see
+        // BulkTech.Build.
+        checkIn.InspectManyRequested += drivers =>
+        {
+            var nowUtc = DateTime.UtcNow;
+            var cars = drivers
+                .Select(profile =>
+                {
+                    var className = checkIn.InspectClassFor(profile);
+                    return new BulkTech.Car(profile, className,
+                        BulkTech.EditableToday(_techInspections.Today(profile.Transponder, className), nowUtc));
+                })
+                .ToList();
+
+            var names = drivers
+                .Select(p => string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName.Trim())
+                .ToList();
+
+            using var form = new BulkInspectionForm(names, cars.Count(car => car.Existing is not null));
+
+            if (form.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            var records = BulkTech.Build(
+                cars,
+                form.Result,
+                form.Inspector,
+                form.Notes,
+                className => _raceClasses.All
+                    .FirstOrDefault(c => string.Equals(c.Name, className, StringComparison.OrdinalIgnoreCase))?.TechCheckItems
+                    ?? new List<string>(),
+                DateTime.UtcNow);
+
+            if (records.Count == 0)
+            {
+                return;
+            }
+
+            // Just these records, not the whole log: undoing them must not
+            // also throw away inspections recorded since. One undo step for
+            // the lot, as they were one press.
+            var befores = records.Select(record => (record.Id, Before: _techInspections.CopyOf(record.Id))).ToList();
+
+            _undo.Capture($"Record tech inspection for {Plural.Of(records.Count, "driver")}", () =>
+            {
+                var gone = 0;
+
+                foreach (var (id, before) in Enumerable.Reverse(befores))
+                {
+                    if (!_techInspections.UndoUpsert(id, before))
+                    {
+                        gone++;
+                    }
+                }
+
+                techLog?.RefreshAll();
+                checkIn.RefreshAll();
+
+                if (gone > 0)
+                {
+                    throw new InvalidOperationException(
+                        $"{Plural.Of(gone, "of those inspections has", "of those inspections have")} been deleted since, so there is nothing to put back for {(gone == 1 ? "it" : "them")}.");
+                }
+            });
+
+            foreach (var record in records)
+            {
+                _techInspections.Upsert(record);
+            }
+
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [tech] Recorded \"{records[0].ResultText}\" for {Plural.Of(records.Count, "driver")} at once.");
+
             techLog?.RefreshAll();
             checkIn.RefreshAll();
         };
