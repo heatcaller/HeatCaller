@@ -193,6 +193,8 @@ When a driver opens their card from their QR check-in on their first night at th
 - **Marshal after your race**: stand at your post beside the track and put back any car that flips or gets stuck. Everybody takes a turn.
 - **Questions**: "Ask at the timing desk. Everybody was new once."
 
+Under the guide, "Timing and race calls by HeatCaller." with **What's that?**, which opens a short card about HeatCaller.
+
 The guide only shows on a card opened from a QR check-in, not from a personal PIN, and only on their first night. The same guide is on their night page, where it also shows before they've checked in (see [Your first night](index.md#your-first-night)). It needs the relay redeployed since 22 Oct 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)).
 
 !!! tip
@@ -203,15 +205,15 @@ Messages a racer might see:
 | Message | What it means |
 |---|---|
 | "That PIN is not right." | Wrong PIN. |
-| "Type your own check-in PIN (the one the club emailed you) to check in or out." | A tap from a QR check-in or a night page, for a driver who has a personal PIN, was sent without it. The page asks for the PIN; this shows if the question was cancelled on an older page. |
-| "Not changed - your own check-in PIN is needed to check in or out from a phone." | The PIN question was cancelled. Nothing changed. |
+| "Type your own check-in PIN (the one the club emailed you) to check in or out." | A tap from a QR check-in or a night page, for a driver who has a personal PIN, was sent without it. The page asks for the PIN; this shows if the question was canceled on an older page. |
+| "Not changed - your own check-in PIN is needed to check in or out from a phone." | The PIN question was canceled. Nothing changed. |
 | "That PIN has changed - check your latest email." | The PIN worked on this phone before, but a new set has been made since. |
 | "Too many wrong PINs from this connection. Try again in a few minutes." | Too many wrong PINs from this connection; see [Lockouts](#lockouts). The page keeps what it was showing and tries again by itself. |
 | "Too many wrong PINs have been tried for this club, so PIN sign-in is closed for about *time*. ..." | The club-wide lockout; see [Lockouts](#lockouts). Phones already signed in keep working, and so do QR check-ins, with the driver's own PIN when they have one. |
 | "Too many wrong PINs for this driver. Wait ten minutes, or check in at the desk." | Five wrong PINs were typed into this driver's card in ten minutes. |
 | "Too many attempts from this connection. Wait a few minutes - this page will try again by itself." | Shown when the relay gives no reason of its own. |
 | **Check-in is closed** | "Online check-in opens when the timing desk switches it on. Try again closer to the start, or check in at the desk." |
-| **QR check-in not recognised** | "That driver is not on today's check-in list." The driver's profile may have been deleted, or the QR check-in was printed before **Reissue All QR Check-ins** was used. |
+| **QR check-in not recognized** | "That driver is not on today's check-in list." The driver's profile may have been deleted, or the QR check-in was printed before **Reissue All QR Check-ins** was used. |
 | "Check-in is busy - the timing desk has not collected recent taps yet. Try again in a minute, or check in at the desk." | The laptop hasn't collected taps for a while; see [Troubleshooting](#troubleshooting). |
 | "Could not reach the relay. This page will keep trying." | The phone can't reach the relay. |
 
@@ -257,7 +259,7 @@ Online check-in is off, or publishing is off. Check the state line in the **Onli
 **QR check-ins don't open anything on a phone camera.**
 They were printed while online check-in was off, so they're the Wi-Fi-only kind. Turn online check-in on, make sure publishing works, and print them again.
 
-**An old QR check-in says "QR check-in not recognised", or "That QR check-in is out of date - print a new one." at the desk.**
+**An old QR check-in says "QR check-in not recognized", or "That QR check-in is out of date - print a new one." at the desk.**
 The QR check-ins were reissued after it was printed (or it was printed on another laptop's QR check-in key). Print that driver a new QR check-in.
 
 **Taps show on the phone but not on the laptop.**

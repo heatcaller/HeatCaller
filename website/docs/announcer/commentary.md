@@ -31,7 +31,7 @@ Every figure carries the scope it was counted over, and the model is told to kee
 
 Commentary is never used for live lap-by-lap calls. A lap takes a few seconds and a local model usually takes longer than that to answer, so the line would describe a moment that had already passed.
 
-Intros and summaries are spoken by the announcer, in the voice chosen under **Speak with** on **Voice → Voice Settings**: the HeatCaller voice, your own ElevenLabs account, or the free Kokoro voice. See [Voice announcements](voice.md). On the HeatCaller voice they count against the club's monthly allowance like any other line, and, being different every time, they're among the more expensive things it says.
+Intros and summaries are spoken by the announcer, in the voice chosen under **Speak with** on **Voice → Voice**: the HeatCaller voice, your own ElevenLabs account, or the free Kokoro voice. See [Voice announcements](voice.md). On the HeatCaller voice they count against the club's monthly allowance like any other line, and, being different every time, they're among the more expensive things it says.
 
 ## Using the relay
 
@@ -348,7 +348,7 @@ So you pick a disposition, and it goes into the same request that already carrie
 | Choice | What it does |
 |---|---|
 | **Even-handed** | No particular point of view. The second voice exactly as it was before this setting existed. |
-| **Backs the underdog** | Pulls for whoever is further down the order, and is never that impressed by the favourite winning. |
+| **Backs the underdog** | Pulls for whoever is further down the order, and is never that impressed by the favorite winning. |
 | **Takes nothing on one lap** | Wants to see it twice before it counts — *"let's see him do that again"*. |
 | **Remembers everything** | Reaches for the night this happened before, and the number behind what just happened. |
 | **Winds up the front-runner** | Gently ribs whoever is dominating, and enjoys it when the order gets shaken up. |
@@ -358,7 +358,7 @@ So you pick a disposition, and it goes into the same request that already carrie
 Two rules hold whichever you pick, and neither is optional:
 
 - **Nobody is ever unkind about a driver.** No mocking, no doubting anyone's ability, nothing a driver would mind hearing over a PA with their family in the room. The edge is always about the racing, never the person. The needling choice is held to this as firmly as the others.
-- **A point of view is never a licence to invent.** Each disposition is a way of *reacting* to the facts the announcer was given, and the last thing the model is told is still that neither of them invents a result, a lap time or a prediction. A co-host who "remembers everything" and is given no history to remember has nothing to reach for, and simply answers.
+- **A point of view is never a license to invent.** Each disposition is a way of *reacting* to the facts the announcer was given, and the last thing the model is told is still that neither of them invents a result, a lap time or a prediction. A co-host who "remembers everything" and is given no history to remember has nothing to reach for, and simply answers.
 
 If you pick nothing, nothing is added to the request at all — a club on **Even-handed** gets exactly the show it had.
 
@@ -368,11 +368,11 @@ The race announcer, from the finish call to the break, in the order the room hea
 
 This is the whole of what a club hears after a flag:
 
-**finish call → badge calls → unofficial result → pit lane with the Technical Lead → teaser → commercial break → recap → honours → colour → Team Principal in the booth → sign-off**
+**finish call → badge calls → unofficial result → pit lane with the Technical Lead → teaser → commercial break → recap → honors → color → Team Principal in the booth → sign-off**
 
 The full running order, with the music and the bumpers either side of the break, is on **Sounds → Imaging → Run of show**. The pit lane comes at the flag, before the break, so the interview is about the race the room has just watched rather than one that finished several minutes ago.
 
-The badge calls go out at the flag as they always have, unless **After a race, a third voice reads out the achievements it unlocked** (on **Voice → Cast**) is ticked - that *moves* them into the recap as the honours rather than adding to them.
+The badge calls go out at the flag as they always have, unless **After a race, a third voice reads out the achievements it unlocked** (on **Voice → Cast**) is ticked - that *moves* them into the recap as the honors rather than adding to them.
 
 The recap is a short segment rather than a one-line call, so it has its own timing:
 
@@ -474,7 +474,7 @@ Both are on **Voice → Cast**, a card each. The Technical Lead has the car; the
 
 The two pit-lane tick boxes and the booth tick box are also on the AI Commentary tab - the Team Principal's throw on **Before the start**, the Technical Lead's on **After the flag** and the booth on **Recap show**; ticking either copy ticks both.
 
-**How many the announcer promises.** The throw to the reader says how many honours are coming - "three to hand out" - and that count is the number of **distinct badges** the reader is about to name, not the number of awards. Those differ whenever one badge goes to more than one driver, which the date-based badges do constantly: Weekend Warrior and Back to Back fire for everybody who raced both days. Until 11 Oct 2026 the throw counted awards, so a race where two drivers both took Weekend Warrior had the announcer promise three and the room then hear two badge names.
+**How many the announcer promises.** The throw to the reader says how many honors are coming - "three to hand out" - and that count is the number of **distinct badges** the reader is about to name, not the number of awards. Those differ whenever one badge goes to more than one driver, which the date-based badges do constantly: Weekend Warrior and Back to Back fire for everybody who raced both days. Until 11 Oct 2026 the throw counted awards, so a race where two drivers both took Weekend Warrior had the announcer promise three and the room then hear two badge names.
 
 The read itself is capped at **four drivers** and **three badges each**, and where the cap bites the console says both figures - "5 badges held back ... the read names 3 badges" - so a read that comes out shorter than the log has an explanation. The rest are still earned, still on the driver's record, still on the results card and still in the log; they are just not read out.
 
@@ -493,7 +493,7 @@ A voice is kept for each engine, so if you switch engine on **Voice Settings**, 
 
 ### Recap show
 
-The recap, and what dresses it up as a TV broadcast. The model writes each part from the race's facts, like the recap itself, so they need commentary to be able to write - the relay or the built-in model - except the honours, which are built from the badges and need no model at all.
+The recap, and what dresses it up as a TV broadcast. The model writes each part from the race's facts, like the recap itself, so they need commentary to be able to write - the relay or the built-in model - except the honors, which are built from the badges and need no model at all.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -501,7 +501,7 @@ The recap, and what dresses it up as a TV broadcast. The model writes each part 
 | **Mention up to:** _n_ **finishers in the recap** | 1 to 20. How many finishers the recap names. | 5 |
 | **Also mention the fastest lap of the race** | Includes the fastest lap in the recap. Turn it off if it feels repetitive, since the fastest lap is already called live. | On |
 | **Open the recap like a TV broadcast coming back on air** | The recap starts with a big "welcome back", naming the show if there is one. | Off |
-| **Booth interview - the winner's Team Principal on the recap show** | On the recap show, after the night's colour, the recap host has the winner's Team Principal in the booth for two questions on what the win means to the team. Needs race recaps on. The same setting as **On the recap show, the winner's Team Principal in the booth** on **Cast**. | Off |
+| **Booth interview - the winner's Team Principal on the recap show** | On the recap show, after the night's color, the recap host has the winner's Team Principal in the booth for two questions on what the win means to the team. Needs race recaps on. The same setting as **On the recap show, the winner's Team Principal in the booth** on **Cast**. | Off |
 | **End with a TV-style sign-off that tees up what's next on the program** | The recap ends with a flashy sign-off that names the show and the next race on the program that hasn't been run. With the booth interview on, the sign-off comes last, after it, as a line of its own. | Off |
 | **Show name:** | Your show's name, said in the openings and sign-offs: for example "Friday Night Thunder". Leave it blank for none; the model is told not to make one up. | Blank |
 
@@ -514,15 +514,15 @@ How the recap sounds is set on other pages:
 | **Style:** | Higher is more dramatic; past about 0.6 it can distort. | 0.15 |
 | **Duck music and crowd further during the recap, down to** _n_ **%** | While the recap plays, music and ambience drop to this level instead of the normal announcement duck. It stays down through the interview and the sign-off. | On, 20% |
 
-**The colour is inside the programme.** The form guide, the grid history and anything else the segment list has due after a race are spoken as part of the recap's own show — straight after the honours, with the same mark between them that a show puts between its own parts. Before 11 Oct 2026 they arrived *after* the programme had signed off, each opening a show of its own with its own opener and bed, so a club heard one recap and then two more short broadcasts. At most two per programme: past that, a show about a ninety-second heat is what makes the next one late. They are written while the recap is being spoken, so they add no silence, and a race called to the grid drops them.
+**The color is inside the program.** The form guide, the grid history and anything else the segment list has due after a race are spoken as part of the recap's own show — straight after the honors, with the same mark between them that a show puts between its own parts. Before 11 Oct 2026 they arrived *after* the program had signed off, each opening a show of its own with its own opener and bed, so a club heard one recap and then two more short broadcasts. At most two per program: past that, a show about a ninety-second heat is what makes the next one late. They are written while the recap is being spoken, so they add no silence, and a race called to the grid drops them.
 
 This changes nothing about **segments during a race or before one**. A battle call over a running race, a pace note, a round intro on the grid — all exactly where they were. It is only the ones that would have landed after the flag that have moved inside.
 
-**The sign-off is always the last thing.** Where anything follows the recap - the honours, the Team Principal, or both - the sign-off is held back and spoken on its own at the end, rather than being written into the end of the recap. Before 11 Oct 2026 only the *mechanic* was taken into account, so on every heat the recap signed the programme off itself and the honours were then read out afterwards: from the floor it sounded like the badges arriving after the show had finished. Nothing to set - it follows from what else you have switched on.
+**The sign-off is always the last thing.** Where anything follows the recap - the honors, the Team Principal, or both - the sign-off is held back and spoken on its own at the end, rather than being written into the end of the recap. Before 11 Oct 2026 only the *mechanic* was taken into account, so on every heat the recap signed the program off itself and the honors were then read out afterwards: from the floor it sounded like the badges arriving after the show had finished. Nothing to set - it follows from what else you have switched on.
 
 #### When each part plays
 
-The booth interview and the sign-off are written straight after the recap, while the teaser and the recap play, and each line is turned into speech ahead of time. So are the unofficial result (while the finish call is still being said), the hand-overs, and every colour segment - including one said in a single voice, which until 26 Oct 2026 was still made as it was spoken. Each part only starts once the one before it has finished:
+The booth interview and the sign-off are written straight after the recap, while the teaser and the recap play, and each line is turned into speech ahead of time. So are the unofficial result (while the finish call is still being said), the hand-overs, and every color segment - including one said in a single voice, which until 26 Oct 2026 was still made as it was spoken. Each part only starts once the one before it has finished:
 
 - If a part isn't ready within 15 seconds of the one before it ending, it's skipped rather than leaving a long silence, and the console says so.
 - If the next race is called to the grid, whatever hasn't been spoken yet is dropped.
@@ -638,7 +638,7 @@ Beside each one HeatCaller says what it made of the file — how long it is, how
 !!! tip
     You can also just drop the files in yourself. They live in `%AppData%\HeatCaller\ShowMusic` as `opener.mp3`, `bed.mp3` and `sting.mp3` — any of `.mp3`, `.wav`, `.m4a`, `.aac`, `.wma`, `.flac` or `.ogg` works.
 
-**Your own file always wins.** Press **Choose...** on a row and that file is what plays for that part, whatever the drop-down says — the drop-down greys out to show you it is not in use. **Remove** takes your file away and puts you back on the shipped piece rather than on silence, so trying one of your own costs nothing. A club who had already dropped their own `opener.*` or `bed.*` into `%AppData%\HeatCaller\ShowMusic` before the library existed is left exactly as they were, and told so in the console on the first start.
+**Your own file always wins.** Press **Choose...** on a row and that file is what plays for that part, whatever the drop-down says — the drop-down grays out to show you it is not in use. **Remove** takes your file away and puts you back on the shipped piece rather than on silence, so trying one of your own costs nothing. A club who had already dropped their own `opener.*` or `bed.*` into `%AppData%\HeatCaller\ShowMusic` before the library existed is left exactly as they were, and told so in the console on the first start.
 
 If a shipped piece you had chosen disappears — an update that renamed it, a damaged install — the row says so and nothing plays for that part. It does **not** quietly fall back to a different piece: you chose that one, and a different bed appearing under your broadcast without being asked for would be worse than a quiet one.
 
@@ -731,7 +731,7 @@ The set pieces — the moments where filling time is the point. **Cold open** an
 | The commercial break, if you've ticked it | the sponsors have the crowd's screen; no show music |
 | **The opener** | once the recap is written and rendered, in what's left of the gap |
 | The recap | over the opener's tail |
-| The honours, if a third voice reads the badges | under the bed |
+| The honors, if a third voice reads the badges | under the bed |
 | The Team Principal in the booth, if it's on | under the bed |
 | The sign-off | under the bed |
 | | the bed lifts, then ends on its own fade |
@@ -740,7 +740,7 @@ The opener goes *after* the teaser, not in front of it, because the teaser is th
 
 It also waits for the model: the opener starts once the recap is written and turned into speech, not while it's still being written. Otherwise a club whose model takes forty seconds hears the opener land, ring out, and then half a minute of bed with nobody talking over it.
 
-**Badges earned** is on the list for a reason worth knowing. The honours are a segment *of* the recap, so on an ordinary night they play under the recap's own music and this tick box changes nothing. Tick it and they also get a show of their own on a night with **no** recap — the AI switched off, the allowance spent, or the model with nothing to say — which is the night they're the whole program.
+**Badges earned** is on the list for a reason worth knowing. The honors are a segment *of* the recap, so on an ordinary night they play under the recap's own music and this tick box changes nothing. Tick it and they also get a show of their own on a night with **no** recap — the AI switched off, the allowance spent, or the model with nothing to say — which is the night they're the whole program.
 
 If the next race is called to the grid partway through, the music is wound up with the rest of the sequence.
 
@@ -802,7 +802,7 @@ Capped at **two and a half minutes** per driver: somebody who passed a car on ev
 
 #### The night's top and tail
 
-Every race is recorded through its own broadcast, so a recap, the honours, the interview and the colour are all in that race's mp3. The two parts of the evening that aren't in any race are the **cold open** before the first one and the **sign-off** after the last — and those are the two set pieces about the *night* rather than about one heat, which makes them the two you'd actually post.
+Every race is recorded through its own broadcast, so a recap, the honors, the interview and the color are all in that race's mp3. The two parts of the evening that aren't in any race are the **cold open** before the first one and the **sign-off** after the last — and those are the two set pieces about the *night* rather than about one heat, which makes them the two you'd actually post.
 
 They now get a recording of their own, in the same night's folder, named `Cold Open` and `Sign-Off`. It's the real broadcast with a recorder round it: your own opener in front of it, the bed under it, the playout at the end. Nothing is written twice and no model is asked anything, so the file can't disagree with what the room heard.
 
@@ -837,7 +837,7 @@ Each piece queues like any other spoken line, which means **a flag call still ju
 |---|---|
 | There is nothing filed for tonight yet | No races have been run. This is for after the last one. |
 | The announcer is muted | Nobody would hear it and the recording would be silent. Unmute it on the **Mixer**. |
-| Something else is on air | A programme, a break or another show has the broadcast. Wait for it. |
+| Something else is on air | A program, a break or another show has the broadcast. Wait for it. |
 | The commentary isn't set up on this PC | No model is configured — see [Who writes it](#who-writes-it). |
 
 Nothing is written until it has the broadcast floor, because writing takes the best part of a minute and a segment that started in the middle of that would be talking over the recap's own opener by the time it arrived. The recorder starts *after* the writing, so the file doesn't open with a minute of silence.
@@ -858,7 +858,7 @@ Beyond the result itself, the announcer has seven kinds of record about a race t
 | **The layout's lap record** | Race intros | The layout to hold a record with a holder's name and a date on it, and the club to have run at least **3** races on that layout. A record set earlier tonight is tonight's news rather than the venue's history, so it's left out. "Nobody has beaten it since" is only added once **3** races have run on that layout since it was set. |
 | **How strong the field is** | Race intros | At least **4** cars out, and at least **4** of that class's races on file to compare with. "The biggest since last week" says nothing, so a "biggest since" claim also needs **3** of the class's races to have run since. A separate line about how many of the grid have won a main in this class this year needs at least **2** of them. |
 | **What the night has done to a driver's pace** | Race intros | The driver to have been out at least **twice** tonight, with their middle lap having moved by at least **0.15s** either way. Below that it's traffic and tire pickup rather than a driver finding the track. |
-| **What a driver has found since practice** | Race intros | The driver to have both **practised** and **raced** tonight, with at least 3 flying laps in each, and their middle lap having moved by at least **0.15s** either way. Scoped as "in practice tonight" and never to a class - see below. |
+| **What a driver has found since practice** | Race intros | The driver to have both **practiced** and **raced** tonight, with at least 3 flying laps in each, and their middle lap having moved by at least **0.15s** either way. Scoped as "in practice tonight" and never to a class - see below. |
 | **The car a finisher raced** | Race recaps | The **Garage** to know exactly one car as theirs for the day. A car has to have been in the garage **2 months** before it's "had"; a car added at the sign-up desk this evening isn't club history. Moving class needs at least **4** earlier starts here, all in one other class. |
 | **A driver's own best lap on this layout** | Race intros | The driver to have raced on that layout at least **4** times, and to have a name on their profile. Laps set earlier tonight don't count — the figure is what they had to beat when they walked in. |
 | **Who has been winning on this layout** | Race intros | One driver to have won the last **3** or more races the club filed on that layout, and at least **3** races on it in all. A race with fewer than **3** real cars out neither counts as a win nor breaks a run. |
@@ -878,7 +878,7 @@ This is the pace figure that fills the gap the race-to-race one cannot. **What t
 
 Where a club has both, the race-to-race figure wins the room. It is the stronger claim: both sides of it are races of the same class.
 
-**Why it says "in practice" and never names a class.** A practice session has no round, and so no class. That means HeatCaller genuinely does not know whether the driver practised the car they are now racing - somebody who shook a buggy down and then raced a touring car is being compared across two different cars, and nothing in the app can tell. So the line says what is true and no more. That is a fair thing for a commentator to say out loud; it would not be a fair thing to dress up as a per-class figure.
+**Why it says "in practice" and never names a class.** A practice session has no round, and so no class. That means HeatCaller genuinely does not know whether the driver practiced the car they are now racing - somebody who shook a buggy down and then raced a touring car is being compared across two different cars, and nothing in the app can tell. So the line says what is true and no more. That is a fair thing for a commentator to say out loud; it would not be a fair thing to dress up as a per-class figure.
 
 **Practice is still not a race.** It is read through a helper of its own, and nothing else in HeatCaller has started counting it: not the field strength, not the form guide, not the championship, not "their first Open race here", and not a start in anybody's career. That separation is the whole reason this took as long to build as it did - letting practice through the helper the rest of the commentary layer uses would have been one call site away from a practice run turning up in somebody's record.
 
@@ -894,7 +894,7 @@ A club that doesn't run its practice through HeatCaller hears nothing about prac
 >
 > "Dave is back after missing the club's last three Box Stock nights - their last was 22 August."
 
-The form guide reads a driver's recent placings out in order — *"fourth, second, first, sixth"*. That's a results sheet read aloud. This is the other half, and the difference isn't detail, it's the **unit**: a club member's memory is organised by nights, not races. *"He's been on the podium three weeks running"* is a thing a regular says to another regular in the pits.
+The form guide reads a driver's recent placings out in order — *"fourth, second, first, sixth"*. That's a results sheet read aloud. This is the other half, and the difference isn't detail, it's the **unit**: a club member's memory is organized by nights, not races. *"He's been on the podium three weeks running"* is a thing a regular says to another regular in the pits.
 
 One line per driver, and it's the best thing that's true of them — a driver on a podium run who also hasn't missed a night gets the run, because two sentences about one person in one segment is repetition. At most **two** of these go into a form guide, and the strongest claims win the places rather than whoever was first on the grid.
 
@@ -1147,7 +1147,7 @@ Most of the care in this feature is in the silence, because a claim about what "
 | No result has been filed yet | A verdict before the result would be predicting something that already happened |
 | It has already been said | Once, like every other segment |
 
-**Keyed to the round, not its name.** A club running Stock and Mod has two rounds both labelled "A-Main". Matched on the label, the room's Stock prediction would be read out over the Mod A-main — a verdict about the wrong race, said with complete confidence. The vote carries the round's own id so that cannot happen.
+**Keyed to the round, not its name.** A club running Stock and Mod has two rounds both labeled "A-Main". Matched on the label, the room's Stock prediction would be read out over the Mod A-main — a verdict about the wrong race, said with complete confidence. The vote carries the round's own id so that cannot happen.
 
 **It closes itself twice over**: when the result comes in, and in any case twenty minutes after it opened, whatever anybody pressed. A poll left open through two more heats would be collecting votes for a race that had already been run and then telling the room what it "predicted".
 
@@ -1161,7 +1161,7 @@ It never says who any individual picked, because it is never told.
 
 ### It's a two-hander
 
-The only Colour segment that is, and deliberately: the room being wrong is something for two commentators to enjoy at each other. That's the opposite of a club note, where a second voice would be actively unwelcome.
+The only Color segment that is, and deliberately: the room being wrong is something for two commentators to enjoy at each other. That's the opposite of a club note, where a second voice would be actively unwelcome.
 
 Once per class, too. The vote is opened per race, and a club that voted on every heat would turn the best line of the night into a running feature.
 
@@ -1303,7 +1303,7 @@ The last race on the program still gets its extra at every volume: a Standard he
 
 Two things worth knowing before you decide the setting is broken:
 
-- **It can't silence a race.** Intros and recaps are essential and are never refused for airtime at all. On **Sparing** you still hear every race introduced and every result called; what you lose is the colour around them.
+- **It can't silence a race.** Intros and recaps are essential and are never refused for airtime at all. On **Sparing** you still hear every race introduced and every result called; what you lose is the color around them.
 - **It can't make the club talk more than it can afford.** Every money gate sits in *front* of the airtime ceiling, so **Non-stop** at a club with a small monthly allowance buys very little — the ceiling goes up and the headroom is what actually decides.
 
 Leave it on **Standard** and nothing changes: that's the pacing exactly as it shipped.
@@ -1368,7 +1368,7 @@ When there's nothing else worth saying between two races — nothing came back f
 
 Commentary is best-effort. If the relay can't be reached and the model on this PC can't run here, is switched off, or doesn't answer in time, HeatCaller just carries on:
 
-- The normal announcement lines from **Voice → Announcements** play as usual. Commentary never replaces them.
+- The normal announcement lines from **Voice → Race Calls** play as usual. Commentary never replaces them.
 - No race intro is spoken.
 - After a race, the teaser is still spoken, but no recap follows. The line into the commercial break falls back to one HeatCaller writes itself.
 - No suggested line appears on the Announcer screen; the other talking points still do.
@@ -1389,7 +1389,7 @@ Under that, **Controls** has the buttons in the table below, and **At a glance**
 | Line | What it says |
 |---|---|
 | **Announcer** | Ready, writing a line, speaking, muted on the Mixer, or held until you press **Release**. |
-| **Last segment** | The last part of the programme that went out, and whether it was two voices. |
+| **Last segment** | The last part of the program that went out, and whether it was two voices. |
 | **Tonight** | How many lines the announcer has written tonight, and what the budget is letting through. |
 | **This race** | How many of its timing calls the announcer made this race, and how many it lost or held back. |
 | **Club notes** | How many notes are waiting for you to approve. |
@@ -1398,18 +1398,18 @@ Under that, **Controls** has the buttons in the table below, and **At a glance**
 | **Replay Moment** | Whether there's a moment ready to play again. |
 | **Between races** | What the gap will say next and when: "Call-up for Heat 3 in 40s", "Between-race talk held" or "Nothing waiting". **Skip Next Call-up** beside it skips that one call-up: it counts as said, so the next waits a full repeat. |
 
-**What went out last is named by its segment**, not the line itself - "Last: Race Recap", "Last: Club Honours", "Last: Cold Open". Until 11 Oct 2026 the row printed the first ninety characters of what had just been said, in quotes, and that was the wrong thing: a race director does not read a quote - they heard the line, or they were busy, and a wall of text in a strip is not how anybody catches up. It also pushed the buttons about on the row as it grew and shrank. What is actually wanted is which part of the programme just went out, because that is what says where the show is up to. A two-voice segment says so: "Last: Form Guide (two voices)".
+**What went out last is named by its segment**, not the line itself - "Last: Race Recap", "Last: Milestones", "Last: Cold Open". Until 11 Oct 2026 the row printed the first ninety characters of what had just been said, in quotes, and that was the wrong thing: a race director does not read a quote - they heard the line, or they were busy, and a wall of text in a strip is not how anybody catches up. It also pushed the buttons about on the row as it grew and shrank. What is actually wanted is which part of the program just went out, because that is what says where the show is up to. A two-voice segment says so: "Last: Form Guide (two voices)".
 
 | Button | What it does |
 |---|---|
 | **Hold** / **HELD · Release** | Stops the **next** thing. While it's on the button reads **HELD · Release**, so a held show can't be mistaken for a quiet one; press it to let the show carry on. Nothing is written or said while it's on - a prize giving, a crash to talk through, a word with a driver. Nothing is lost by holding: a fight is still a fight when it comes off, and a fact that went unsaid is unspent. |
-| **Play again** | Puts the **last** segment out again, with its show round it where that segment is scored. For a line talked over by the room, a PA that cut out, or a club owner who missed the honours. |
+| **Play again** | Puts the **last** segment out again, with its show round it where that segment is scored. For a line talked over by the room, a PA that cut out, or a club owner who missed the honors. |
 | **Skip** | Stops the show that is on air: the bed rides down and whatever the running order had left is dropped. |
 | **Replay Moment** | Plays the last 20 seconds the room heard again - the call, the crowd and the music - marked in and out with the show's sting. **Skip** stops it. Shown once there's something to replay; it needs **Record each race, and cut each driver their own clip** ticked on **Club Website → Recording**. |
 
 **Play again costs nothing.** Nothing goes to the model and nothing is spent - it is the line HeatCaller already holds, so it works with the AI switched off at the wall, which is exactly when somebody is most likely to want it. It isn't budgeted either: the budget is there to stop the *room* hearing too much, and a line the room asked to hear again is not the budget's business. A two-voice segment goes out as two voices, in the right voices, rather than as one voice reading a transcript of two people talking.
 
-**Skip lets the current sentence finish**, and that is deliberate. Cutting a line off mid-word would mean clearing the voice queue, and the voice queue is where the checkered flag, the countdown, the green and a driver's release call all sit - every one of them marked so that colour commentary cannot bin them. A Skip button that could swallow a release call and leave a car sitting on the line would be worse than no Skip button. In the hall it is the better behaviour anyway: a segment stopped mid-word sounds like a fault, where one that finishes its sentence and hands back sounds like a programme moving on.
+**Skip lets the current sentence finish**, and that is deliberate. Cutting a line off mid-word would mean clearing the voice queue, and the voice queue is where the checkered flag, the countdown, the green and a driver's release call all sit - every one of them marked so that color commentary cannot bin them. A Skip button that could swallow a release call and leave a car sitting on the line would be worse than no Skip button. In the hall it is the better behavior anyway: a segment stopped mid-word sounds like a fault, where one that finishes its sentence and hands back sounds like a program moving on.
 
 The buttons drop focus the moment they're clicked, for the same reason the flag buttons do: a button that keeps focus keeps answering to Space and Enter, and on this row a stray keypress would put the last segment out over a live PA. Both report what they did to the console on a line starting `[show]`.
 
@@ -1436,11 +1436,11 @@ None of this touches the pads on an ordinary announcement, which are doing a rea
 
 ## One show at a time
 
-Two separate chains stage shows: **Race Control's** post-flag sequence (teaser, recap, honours, booth interview, sign-off), which runs for minutes, and the **Announcer screen's** director, which asks for a segment twice a second to fill the gaps between races.
+Two separate chains stage shows: **Race Control's** post-flag sequence (teaser, recap, honors, booth interview, sign-off), which runs for minutes, and the **Announcer screen's** director, which asks for a segment twice a second to fill the gaps between races.
 
-Until 11 Oct 2026 nothing held them apart, and on a club night both ran at once: the recap opened its show - opener, then a bed looping under it - and nine seconds later the director independently decided the night's sign-off was due and opened a **second** show on top. Another opener, another bed, both mixed together, with the programme signing off before the honours it had not read out yet.
+Until 11 Oct 2026 nothing held them apart, and on a club night both ran at once: the recap opened its show - opener, then a bed looping under it - and nine seconds later the director independently decided the night's sign-off was due and opened a **second** show on top. Another opener, another bed, both mixed together, with the program signing off before the honors it had not read out yet.
 
-The post-race sequence now **claims the broadcast floor** for its whole length, and the director's filler stands down while it is held. Nothing is lost by standing down - a segment not said is unspent, and the gap after a recap is long. The floor is given back after the recap's bed has finished fading, so a filler segment can't play its own opener across the end of the programme. Paid sponsor reads respect it too: a read dropped into one of the quiet stretches between the recap's lines is still a read over the programme.
+The post-race sequence now **claims the broadcast floor** for its whole length, and the director's filler stands down while it is held. Nothing is lost by standing down - a segment not said is unspent, and the gap after a recap is long. The floor is given back after the recap's bed has finished fading, so a filler segment can't play its own opener across the end of the program. Paid sponsor reads respect it too: a read dropped into one of the quiet stretches between the recap's lines is still a read over the program.
 
 If a claim is ever still held after six minutes it is let go and the console says so - a claim that was never released would leave the night with no filler at all and nobody able to tell why.
 
@@ -1474,7 +1474,7 @@ See [Security and privacy](../admin/security-and-privacy.md).
 | No interview after a main | The round isn't set up as a main, the model didn't answer in time, or its answer couldn't be split into two voices. | Check the console lines starting `[commentary]` after the race. The interview only follows a race run as a main from the race program. |
 | The Technical Lead or Team Principal sounds like the announcer | No voice is picked for them for the voice engine in use. | Pick one under **Technical Lead's voice:** or **Team Principal's voice:** on **Voice → Cast**, after choosing the engine on **Voice Settings**. |
 | The Technical Lead never talks about the car | No setup is logged for the winning car on the day. | Log the setup against the car in the **Garage** before the main. |
-| **Play It** does nothing | No opener or bed has been chosen yet. | Choose at least one of those two. The button is greyed out until there's something to play, and a sting on its own isn't enough. |
+| **Play It** does nothing | No opener or bed has been chosen yet. | Choose at least one of those two. The button is grayed out until there's something to play, and a sting on its own isn't enough. |
 | **Play It** says the announcer is muted | Sound is muted on the **Mixer**. | Unmute it. The test needs a real voice to judge the bed against. |
 | The music plays but nobody talks over it | The announcer was muted after the show started, or the voice couldn't be fetched. | Check the console lines starting `[voice]`. |
 | The bed fights the announcer | **Bed level:** is too high — the usual cause, since music is mastered loud. | Turn **Bed level:** down to around 20%, then adjust **and drops to:** if you still need more. |
