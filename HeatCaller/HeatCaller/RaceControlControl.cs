@@ -819,9 +819,6 @@ public sealed partial class RaceControlControl : UserControl
     public void TriggerStart(bool confirmedOverRunningRace = false, Action? restoreHostOnUndo = null) =>
         StartThroughOnAir(confirmedOverRunningRace, restoreHostOnUndo);
 
-    /// <summary>The On Air button, from the keyboard (O) - see RaceControlControl.OnAir.cs.</summary>
-    public void TriggerOnAir() => PressOnAir();
-
     /// <param name="confirmedOverRunningRace">As for <see cref="TriggerStage"/>.</param>
     public void TriggerCountdown(bool confirmedOverRunningRace = false) => _actCountdown?.Invoke(confirmedOverRunningRace);
     public void TriggerGreen() => _actGreen?.Invoke();

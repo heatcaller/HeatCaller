@@ -685,6 +685,11 @@ public partial class MainForm : Form
 
         KeyPreview = true;
         KeyDown += MainForm_KeyDown;
+        KeyUp += MainForm_KeyUp;
+
+        // Another window taking the keyboard mid-hold is a let-go: its KeyUp
+        // goes there, not here (1 Nov 2026 - see MainForm_KeyUp).
+        Deactivate += (_, _) => _raceControlControl?.OnAirKeyUp();
 
         _profiles = ProfileStore.Load();
 

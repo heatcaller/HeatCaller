@@ -27,7 +27,7 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 
 | Term | Meaning |
 |---|---|
-| **On Air** | The normal start on **Race Control**: the soundscape's jingle, the race intro, the pit lane throw and the driver introductions, a bumper, and then **Stage**. It has no button: <kbd>F1</kbd> and **Start Next** start races through it, and <kbd>O</kbd> starts it by hand or, pressed again, skips to **Stage**. |
+| **On Air** | The normal start on **Race Control**: the soundscape's jingle, the race intro, the pit lane throw and the driver introductions, a bumper, and then **Stage**. It has no button: <kbd>F1</kbd> and **Start Next** start races through it, and <kbd>0</kbd> starts it by hand or, held for a second while it runs, skips to **Stage**. |
 | **Highlight video** | A short upright video of a driver's race, made after the flag from the announcer's calls, with captions. Every video stays on the race PC, in the night's **Highlights** folder; none goes on the club's page. |
 | **Stage / Countdown / Green** | The start sequence on **Race Control**. **Stage** calls the grid, **Countdown** counts down, and **Green** starts the race. By default each step follows on from the last once the announcer has finished speaking. |
 | **Yellow flag** | A caution. The race carries on and laps still count. |

@@ -34,8 +34,8 @@ namespace HeatCaller;
 /// NO BUTTON OF ITS OWN (25 Oct 2026, asked for by Asher: "use the press
 /// and hold animation to denote the writing and voicing delay instead of
 /// the on air button which you can remove"). On Air is started by every
-/// start that goes through it (above) and by its key, O, which pressed again
-/// skips to Stage. While the opening is written and voiced, the strip under
+/// start that goes through it (above) and by its key - O then, 0 since 1 Nov
+/// 2026, held to skip to Stage (see OnAirKey). While the opening is written and voiced, the strip under
 /// the flag row shows it the way it shows a hold - what is being done, a bar
 /// filling, and how long is left (ShowOnAirWork); while the show is out it
 /// says so in cyan (ShowOnAirLive).
@@ -97,7 +97,82 @@ public sealed partial class RaceControlControl
     private const string OnAirHoldsTheFloor = "On Air opening the next race";
 
     /// <summary>What the strip says at its right while On Air works: how On Air is skipped, now there is no button.</summary>
-    private const string OnAirSkipNote = "press O to skip to Stage";
+    internal const string OnAirSkipNote = "hold 0 to skip to Stage";
+
+    /// <summary>What holding 0 does, as the strip finishes "Keep holding to …".</summary>
+    internal const string OnAirHoldDoing = "skip On Air and stage now";
+
+    /// <summary>
+    /// The 0 key (1 Nov 2026, asked for by Asher: "i prefer it to be 0
+    /// instead of o as that's confusing and I think you should have to press
+    /// and hold to skip"). Made on first use - see OnAirKey.
+    /// </summary>
+    private KeyHoldToAct? _onAirKey;
+
+    /// <summary>
+    /// ON AIR'S KEY IS 0, AND SKIPPING IT IS A HOLD (1 Nov 2026). It was O,
+    /// which was confusing - the Big Screen's own O switches its ON AIR band
+    /// - and a second tap skipped the whole opening, so a stray press cut the
+    /// show short. Now a tap of 0 starts On Air, as O did, and while On Air
+    /// runs 0 has to be held for a second (HoldToAct.HoldFor, the same as
+    /// Red, Checkered and Reset) to skip to Stage: the On Air bar fills as it
+    /// is held, and says so if it is let go too soon. The press that starts
+    /// On Air never becomes the skip, however long it is held - the skip
+    /// takes a fresh press (KeyHoldGesture ignores Windows' repeats).
+    /// </summary>
+    private KeyHoldToAct OnAirKey => _onAirKey ??= MakeOnAirKey();
+
+    private KeyHoldToAct MakeOnAirKey()
+    {
+        var key = new KeyHoldToAct(OnAirHoldDoing, () => _onAirCts is not null && !IsDisposed && !Disposing,
+            SkipOnAirToStage, Keys.D0, Keys.NumPad0);
+
+        key.Changed += h => _holdStrip.Follow(h);
+        key.CalledOff += _ => _holdStrip.CalledOff();
+        return key;
+    }
+
+    /// <summary>0 came down (MainForm.Keyboard): a tap starts On Air; while it runs, the start of a hold to skip it. See OnAirKey.</summary>
+    internal void OnAirKeyDown()
+    {
+        var running = _onAirCts is not null;
+
+        // False for Windows repeating a key already down.
+        if (!OnAirKey.KeyDown(hold: running))
+        {
+            return;
+        }
+
+        if (!running)
+        {
+            PressOnAir();
+        }
+    }
+
+    /// <summary>0 came up, or the window lost the keyboard: a hold let go early does nothing. Safe at any time.</summary>
+    internal void OnAirKeyUp() => _onAirKey?.KeyUp();
+
+    /// <summary>
+    /// 0 held for long enough: On Air's second press, which skips to Stage.
+    /// Nothing when On Air has finished in the meantime - a press then would
+    /// start a new one.
+    /// </summary>
+    private void SkipOnAirToStage()
+    {
+        if (_onAirCts is null || IsDisposed || Disposing)
+        {
+            return;
+        }
+
+        PressOnAir();
+    }
+
+    /// <summary>
+    /// F1 pressed while On Air runs (1 Nov 2026). It used to skip to Stage, a
+    /// tap doing what 0 now has to be held for - so now it only says how.
+    /// </summary>
+    internal void HintHoldToSkip() =>
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [imaging] On Air is going out - hold 0 for a second to skip to Stage.");
 
     /// <summary>Wires On Air's switch and timers. Called from BuildLayout. The button went on 25 Oct 2026.</summary>
     private void BuildOnAirButton()
@@ -111,8 +186,8 @@ public sealed partial class RaceControlControl
         AppTheme.StyleToolTip(tip, keep: true);
         tip.SetToolTip(_chkStartWithOnAir,
             "Ticked, Start Next, the program's Start, F1, the phone and the day schedule all go through On Air first: "
-            + "the soundscape's jingle or sweeper, the opening, a bumper, then Stage. O starts it by hand, and skips it "
-            + "while it runs. Unticked, they stage straight away. The Stage button always stages straight away.");
+            + "the soundscape's jingle or sweeper, the opening, a bumper, then Stage. 0 starts it by hand; while it runs, "
+            + "hold 0 for a second to skip to Stage. Unticked, they stage straight away. The Stage button always stages straight away.");
 
         // The strip's bar and countdown while the opening is got ready.
         _onAirProgressTimer.Interval = 150;
@@ -219,7 +294,7 @@ public sealed partial class RaceControlControl
     /// <summary>
     /// What On Air has put on air stops NOW, because On Air is being cut
     /// short (1 Nov 2026, asked for by Asher: "hitting o during voice still
-    /// doesnt end the voice it keeps talking").
+    /// doesnt end the voice it keeps talking" - On Air's key is 0 since).
     ///
     /// WHY IT KEPT TALKING. On Air hands its run to the announcer's queue as
     /// it goes - the opening, the driver introductions, the throw to pit lane
@@ -240,8 +315,8 @@ public sealed partial class RaceControlControl
     /// last sentence, the grid call), which On Air waits for before its
     /// jingle: skipping On Air skips that wait too.
     ///
-    /// Called by every way On Air is cut short - O pressed again (and the
-    /// phone's Stage, which comes the same way), a flag or Stage during a
+    /// Called by every way On Air is cut short - 0 held (and the phone's
+    /// Stage pressed again, which comes the same way), a flag or Stage during a
     /// demo's On Air (SkipOnAirToTheDemo), and Stage, Countdown, Green, the
     /// checkered, Reset or a warm-up by hand (CancelAutoStart) - and always
     /// BEFORE the Stage that follows, so the staging call is queued after the
@@ -635,7 +710,7 @@ public sealed partial class RaceControlControl
         return await _announcer.PrepareReminderAsync(text);
     }
 
-    /// <summary>The On Air button, pressed - by a click or the O key.</summary>
+    /// <summary>The On Air button, pressed - by the 0 key (a tap to start, a hold to skip) or the phone.</summary>
     private async void PressOnAir() => await RunOnAirAsync();
 
     /// <summary>
@@ -751,7 +826,7 @@ public sealed partial class RaceControlControl
             // And what On Air has already queued stops with it - see
             // SilenceOnAir. Before the hand-over's Stage, which runs once
             // On Air's own continuation sees the cancel.
-            SilenceOnAir("On Air skipped to Stage (O pressed again)");
+            SilenceOnAir("On Air skipped to Stage");
             return;
         }
 
@@ -998,8 +1073,8 @@ public sealed partial class RaceControlControl
 
             // LIVE, AND SAYS SO (21 Oct 2026): the jingle, the opening, the
             // introductions and the Team Principal are a minute or more, and
-            // the race is still to be staged. O skips the rest, which the
-            // strip says too.
+            // the race is still to be staged. Holding 0 skips the rest, which
+            // the strip says too.
             ShowOnAirLive(true);
 
             // 2. The jingle, to its post.

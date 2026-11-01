@@ -236,9 +236,16 @@ public partial class MainForm
                 // THROUGH ON AIR (17 Oct 2026) when Race Control's "Start
                 // races On Air" is ticked - the normal start - and straight
                 // to Stage when it is not, or when On Air cannot open this
-                // race. Pressed again while On Air runs, it skips to Stage.
-                // The Stage button itself still stages directly.
-                case Keys.F1: rc.TriggerStart(); e.Handled = true; return;
+                // race. The Stage button itself still stages directly.
+                //
+                // NOT A SKIP ANY MORE (1 Nov 2026). Pressed again while On
+                // Air ran, it skipped to Stage; skipping is now a hold of 0
+                // (asked for by Asher: "you should have to press and hold to
+                // skip"), so F1 only says so.
+                case Keys.F1:
+                    if (rc.OnAirRunning) rc.HintHoldToSkip(); else rc.TriggerStart();
+                    e.Handled = true;
+                    return;
                 case Keys.F2: rc.TriggerCountdown(); e.Handled = true; return;
                 case Keys.F3: rc.TriggerGreen(); e.Handled = true; return;
                 case Keys.F4: rc.TriggerYellow(); e.Handled = true; return;
@@ -291,9 +298,15 @@ public partial class MainForm
             case Keys.A when !e.Shift: rc.TriggerAnnouncerScreen(); break;
 
             // On Air itself (17 Oct 2026), whatever "Start races On Air" is
-            // set to - a letter rather than Shift+F1, since the F-keys stay
-            // bare (see the top of this method).
-            case Keys.O when !e.Shift: rc.TriggerOnAir(); break;
+            // set to - a key rather than Shift+F1, since the F-keys stay bare
+            // (see the top of this method). 0 since 1 Nov 2026 (it was O,
+            // which was confusing beside the Big Screen's own O): a tap
+            // starts On Air, and while it runs 0 is HELD for a second to skip
+            // to Stage - the KeyUp below lets go. Either 0, the top row's or
+            // the keypad's. Shift+0 is ")" and does nothing here. The
+            // warning menu's own 0 (W, then 0 for another reason) is the
+            // menu's: while a menu is open it has the keyboard, not the form.
+            case Keys.D0 or Keys.NumPad0 when !e.Shift: rc.OnAirKeyDown(); break;
 
             default:
                 handled = false;
@@ -303,6 +316,20 @@ public partial class MainForm
         if (handled)
         {
             MarkHandled(e);
+        }
+    }
+
+    /// <summary>
+    /// A key let go (1 Nov 2026): 0, On Air's key, is held to skip On Air,
+    /// so its let-go is passed on - early, it calls the skip off. Wherever
+    /// the focus is and whatever page is showing: a let-go is always safe,
+    /// and one missed would leave the next press taken for a repeat.
+    /// </summary>
+    private void MainForm_KeyUp(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode is Keys.D0 or Keys.NumPad0)
+        {
+            _raceControlControl?.OnAirKeyUp();
         }
     }
 

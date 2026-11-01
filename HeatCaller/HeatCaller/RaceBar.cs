@@ -91,7 +91,7 @@ public enum RacePhase
 ///
 /// On Air has no button on the row (25 Oct 2026, and again on 26 Oct after
 /// it came back for an hour): its writing, voicing and show are on the strip
-/// under the row, and O starts and skips it.
+/// under the row, and 0 starts it (held, skips it).
 /// </summary>
 internal static class RaceBar
 {

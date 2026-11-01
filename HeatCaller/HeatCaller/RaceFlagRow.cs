@@ -513,7 +513,7 @@ internal sealed class HoldStrip : Control
 
     private readonly System.Windows.Forms.Timer _calledOffTimer = new();
     private string _resting = string.Empty;
-    private HoldToAct? _holding;
+    private IShownHold? _holding;
     private long _calledOffUntil;
 
     // WORK UNDER WAY (25 Oct 2026, asked for by Asher: "use the press and
@@ -646,7 +646,7 @@ internal sealed class HoldStrip : Control
     internal string? WorkText => _work;
 
     /// <summary>A hold has moved on, or ended.</summary>
-    public void Follow(HoldToAct hold)
+    public void Follow(IShownHold hold)
     {
         _holding = hold.Progress is null ? (ReferenceEquals(_holding, hold) ? null : _holding) : hold;
 
