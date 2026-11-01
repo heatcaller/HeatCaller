@@ -217,13 +217,28 @@ public static class Looks
     /// 7:1 on its background, hints 4:1, the primary colour at least 3:1 as
     /// text on a card, and the text on a primary button at least 3:1 (the
     /// button caption is bold).
+    ///
+    /// And every one keeps its accent and its "good" colour well apart
+    /// (<see cref="LookAlike"/>): the boards mark the quickest of anyone
+    /// in the accent and a driver's own best in green, and two cells in
+    /// one colour read as two bests.
     /// </summary>
+    /// <remarks>
+    /// WHY (1 Nov 2026): Synthwave's "good" was #2EE6C4, a cyan a shade off
+    /// its #2EE6FF accent, so on its boards a driver's own best sector read
+    /// as the same blue as the session's quickest and two drivers looked
+    /// like they held it. It now takes the green its online pages already
+    /// used (#3DD68C) - the one colour of the original three modes to
+    /// change. British Racing Green (mint accent on a green "good") and Ice
+    /// (teal accent on a teal-green "good") had the same flaw; their accents
+    /// are now a pale brass and an indigo.
+    /// </remarks>
     public static IReadOnlyList<Look> BuiltIn { get; } = CreateBuiltIns();
 
     private static List<Look> CreateBuiltIns()
     {
         var synthwave = Make(SynthwaveKey, "Synthwave", "Neon pink and cyan on deep violet, with the animated sunset header.", Look.FamilySynthwave,
-            "#0F0722", "#1A0F3A", "#150B2E", "#FF2E9A", "#FFFFFF", "#2EE6FF", "#F7F2FF", "#9E8AC7", "#33215C", "#2EE6C4", "#FF4D6A");
+            "#0F0722", "#1A0F3A", "#150B2E", "#FF2E9A", "#FFFFFF", "#2EE6FF", "#F7F2FF", "#9E8AC7", "#33215C", "#3DD68C", "#FF4D6A");
         synthwave.Colors.PrimaryDark = "#D01B7C";
         synthwave.Colors.PrimaryTint = "#331545";
         synthwave.Colors.BadDark = "#CC2E4D";
@@ -274,11 +289,11 @@ public static class Looks
             Make("rosso", "Rosso", "Racing red on charcoal.", Look.FamilyDark,
                 "#120A0A", "#1E1212", "#180E0E", "#E10600", "#FFFFFF", "#FF9A52", "#F8F1F0", "#A8908E", "#3A2222", "#3DD68C", "#FF6B6B"),
             Make("british-green", "British Racing Green", "Deep green with a brass accent.", Look.FamilyDark,
-                "#07140F", "#0F2219", "#0B1B14", "#D4A537", "#07140F", "#7FD1AE", "#EEF5F0", "#8FA89B", "#1E3A2D", "#5BD99A", "#FF6B6B"),
+                "#07140F", "#0F2219", "#0B1B14", "#D4A537", "#07140F", "#F2D48A", "#EEF5F0", "#8FA89B", "#1E3A2D", "#5BD99A", "#FF6B6B"),
             Make("gulf", "Gulf", "Powder blue and orange - the classic endurance livery.", Look.FamilyLight,
                 "#EAF4FA", "#FFFFFF", "#F4F9FC", "#E8741C", "#FFFFFF", "#2E86C1", "#0F1F2A", "#5A7383", "#D3E5EF", "#138A5C", "#C73E3A"),
             Make("ice", "Ice", "Cool blues on white - crisp and calm.", Look.FamilyLight,
-                "#F2F7FB", "#FFFFFF", "#F7FAFD", "#0077C8", "#FFFFFF", "#00A3A3", "#0E1A24", "#5E7384", "#DCE6EE", "#0F8A5F", "#C9372C"),
+                "#F2F7FB", "#FFFFFF", "#F7FAFD", "#0077C8", "#FFFFFF", "#5B5BD6", "#0E1A24", "#5E7384", "#DCE6EE", "#0F8A5F", "#C9372C"),
 
             // New in 0.48.
             Make("race-wall", "Race Wall", "Electric lime and cyan on near-black - the classic Big Screen look, now everywhere.", Look.FamilyDark,
@@ -740,7 +755,52 @@ public static class Looks
         Check(colors.Good, colors.Surface, 3.0, "The \"good\" color is hard to see on cards");
         Check(colors.Bad, colors.Surface, 3.0, "The \"bad\" color is hard to see on cards");
 
+        if (TryParse(colors.Accent, out var accent) && TryParse(colors.Good, out var good) && LookAlike(accent, good))
+        {
+            warnings.Add("The accent and \"good\" colors look alike. The boards mark the quickest of anyone in the accent and a driver's own best in the good color, so the two would look the same.");
+        }
+
         return warnings;
+    }
+
+    /// <summary>
+    /// The smallest difference (CIE76 delta E, in Lab) for two colours that
+    /// have to mean different things side by side on a board. Every built-in
+    /// pair of accent and "good" is at least 47 apart; the ones that read as
+    /// one colour were 20 to 33.
+    /// </summary>
+    public const double LookAlikeBelow = 40.0;
+
+    /// <summary>Whether two colours are too close to tell apart at a glance on a board.</summary>
+    public static bool LookAlike(Color a, Color b) => DeltaE(a, b) < LookAlikeBelow;
+
+    /// <summary>CIE76 colour difference: straight-line distance in CIE Lab (D65). About 2 is just visible; 40 is plainly a different colour.</summary>
+    public static double DeltaE(Color a, Color b)
+    {
+        var (l1, a1, b1) = ToLab(a);
+        var (l2, a2, b2) = ToLab(b);
+        return Math.Sqrt(Math.Pow(l1 - l2, 2) + Math.Pow(a1 - a2, 2) + Math.Pow(b1 - b2, 2));
+    }
+
+    private static (double L, double A, double B) ToLab(Color c)
+    {
+        static double Linear(int v)
+        {
+            var s = v / 255.0;
+            return s <= 0.04045 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4);
+        }
+
+        static double F(double t) => t > 0.008856 ? Math.Cbrt(t) : 7.787 * t + 16.0 / 116.0;
+
+        var r = Linear(c.R);
+        var g = Linear(c.G);
+        var b = Linear(c.B);
+
+        var x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047;
+        var y = r * 0.2126 + g * 0.7152 + b * 0.0722;
+        var z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
+
+        return (116 * F(y) - 16, 500 * (F(x) - F(y)), 200 * (F(y) - F(z)));
     }
 
     /// <summary>WCAG contrast ratio, 1 to 21.</summary>
