@@ -22,19 +22,31 @@ describe("relay pages clear a phone's status bar", () => {
     ["my night", myNightPage("acme-rc", "Acme RC")],
   ];
 
-  for (const [name, html] of [...club, ["manager", managePage("acme-rc", "Acme RC")] as [string, string]]) {
+  for (const [name, html] of club) {
     it(`starts ${name} below the status bar it asks to be drawn under`, () => {
       assert.match(html, /viewport-fit=cover/);
-      assert.match(bodyRule(html), /padding:\s*env\(safe-area-inset-top/);
+      // By name since 1 Nov 2026, so a page under the home-screen icon's
+      // one bar can be handed the insets of the screen it is really on.
+      assert.match(html, /--sa-t: env\(safe-area-inset-top, 0px\);/);
+      assert.match(bodyRule(html), /padding:\s*var\(--sa-t\)/);
     });
   }
 
+  it("starts the manager below the status bar it asks to be drawn under", () => {
+    const html = managePage("acme-rc", "Acme RC");
+    assert.match(html, /viewport-fit=cover/);
+    assert.match(bodyRule(html), /padding:\s*env\(safe-area-inset-top/);
+  });
+
   it("keeps the club pages' side gutter of at least 16px", () => {
-    assert.match(bodyRule(homePage("acme-rc", "Acme RC")), /max\(16px, env\(safe-area-inset-right[^)]*\)\) 64px max\(16px, env\(safe-area-inset-left/);
+    const html = homePage("acme-rc", "Acme RC");
+    assert.match(bodyRule(html), /max\(16px, var\(--sa-r\)\) 64px max\(16px, var\(--sa-l\)\)/);
+    assert.match(html, /--sa-r: env\(safe-area-inset-right, 0px\);/);
+    assert.match(html, /--sa-l: env\(safe-area-inset-left, 0px\);/);
   });
 
   it("stops My Night's jump bar and the Manager's tabs below the status bar, not under it", () => {
-    assert.match(myNightPage("acme-rc", "Acme RC"), /#nj \{ position: sticky; top: env\(safe-area-inset-top, 0px\)/);
+    assert.match(myNightPage("acme-rc", "Acme RC"), /#nj \{ position: sticky; top: var\(--sa-t\)/);
     assert.match(managePage("acme-rc", "Acme RC"), /position: sticky; top: env\(safe-area-inset-top, 0px\); z-index: 2;/);
     for (const [, html] of club) assert.doesNotMatch(html, /position: sticky; top: 0[;\s]/);
   });

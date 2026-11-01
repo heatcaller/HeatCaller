@@ -47,7 +47,9 @@ describe("response hardening", () => {
     assert.ok(nonce, "the policy names a nonce");
     assert.match(first.text, new RegExp(`<script nonce="${nonce.replace(/[+/=]/g, "\\$&")}">`));
     assert.match(policy, /default-src 'none'/);
-    assert.match(policy, /frame-ancestors 'none'/);
+    // Framed by the relay's own pages only (1 Nov 2026, the home-screen icon's one bar).
+    assert.match(policy, /frame-ancestors 'self'/);
+    assert.match(policy, /frame-src 'self'/);
     assert.equal(policy.includes("unsafe-eval"), false);
     assert.notEqual(second.headers["content-security-policy"], policy, "a new nonce every time");
   });
@@ -57,7 +59,7 @@ describe("response hardening", () => {
       const answer = await call(harness, "GET", path);
 
       assert.equal(answer.headers["x-content-type-options"], "nosniff", path);
-      assert.equal(answer.headers["x-frame-options"], "DENY", path);
+      assert.equal(answer.headers["x-frame-options"], "SAMEORIGIN", path);
       assert.match(answer.headers["strict-transport-security"] ?? "", /max-age=\d+/, path);
     }
   });

@@ -113,6 +113,13 @@ const STYLE = `
   --border: #33215C;
   --good: #3DD68C;
   --bad: #FF5C7A;
+  /* The screen's safe-area insets, by name (1 Nov 2026), so that a page
+     shown inside the home-screen icon's one bar (see ONE BAR below) can be
+     handed the insets of the screen it is really on. */
+  --sa-t: env(safe-area-inset-top, 0px);
+  --sa-r: env(safe-area-inset-right, 0px);
+  --sa-b: env(safe-area-inset-bottom, 0px);
+  --sa-l: env(safe-area-inset-left, 0px);
 }
 * { box-sizing: border-box; }
 /* CLEAR OF THE CLOCK (30 Oct 2026, Asher: "all the pages on the relay load
@@ -124,7 +131,7 @@ const STYLE = `
    wherever there is nothing to clear, so this changes nothing elsewhere. */
 body {
   margin: 0;
-  padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px));
+  padding: var(--sa-t) max(16px, var(--sa-r)) 64px max(16px, var(--sa-l));
   background: var(--bg);
   color: var(--text);
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -183,10 +190,10 @@ nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var
      never moves. */
   html { height: 100%; overflow: hidden; overscroll-behavior: none; }
   body { height: 100%; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch;
-         padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+         padding-bottom: calc(76px + var(--sa-b)); }
   nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; margin: 0; gap: 0;
              overflow: visible; border-bottom: 0; border-top: 1px solid var(--border); background: var(--bg);
-             padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left)); }
+             padding: 0 max(4px, var(--sa-r)) var(--sa-b) max(4px, var(--sa-l)); }
   nav.tabs a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
                min-height: 56px; padding: 8px 2px 6px; font-size: 0.72rem; border-radius: 0;
                border-bottom: 0; border-top: 2px solid transparent; margin: -1px 0 0; }
@@ -195,7 +202,7 @@ nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var
                  stroke-linecap: round; stroke-linejoin: round; }
   nav.tabs .dot { position: absolute; top: 6px; left: calc(50% + 8px); margin: 0; }
   /* "Following Sam" sits just above the bar instead of under it. */
-  body .follow { bottom: calc(68px + env(safe-area-inset-bottom)); }
+  body .follow { bottom: calc(68px + var(--sa-b)); }
 }
 /* FLUSH AND STEADY ON A HOME-SCREEN ICON (1 Nov 2026, Asher, added to the
    home screen from Chrome on his iPhone: "It now has a chin under the tabs",
@@ -210,8 +217,8 @@ nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var
 @media (max-width: 640px) and (display-mode: standalone), (max-width: 640px) and (display-mode: fullscreen) {
   html { height: 100vh; height: 100lvh; }
   nav.tabs { bottom: auto; top: 100vh; top: 100lvh; transform: translateY(-100%); }
-  body .follow { bottom: auto; top: calc(100vh - 68px - env(safe-area-inset-bottom));
-                 top: calc(100lvh - 68px - env(safe-area-inset-bottom)); transform: translate(-50%, -100%); }
+  body .follow { bottom: auto; top: calc(100vh - 68px - var(--sa-b));
+                 top: calc(100lvh - 68px - var(--sa-b)); transform: translate(-50%, -100%); }
   .hcabout { bottom: auto; height: 100vh; height: 100lvh; }
 }
 /* A STEADY SWITCH BETWEEN PAGES (1 Nov 2026, Asher on his iPhone's
@@ -228,6 +235,39 @@ nav.tabs { view-transition-name: hc-tabs; }
 ::view-transition-group(hc-tabs), ::view-transition-old(hc-tabs), ::view-transition-new(hc-tabs) { animation: none; }
 ::view-transition-old(root) { animation: none; }
 ::view-transition-new(root) { animation: none; }
+/* ONE BAR ON THE HOME-SCREEN ICON (1 Nov 2026, Asher on his iPhone, after
+   the pages above the bar stopped flashing: "the nav buttons continue to
+   flicker when navigating to different pages"). Every tab is its own page,
+   and the phone throws the whole screen away on each tap, bar included, and
+   draws the next page's bar from scratch. However alike the two bars are,
+   that hand-over is a redraw, and no rule on the bar can stop it. So opened
+   from its icon, the club's pages run inside one page that holds the bar
+   (appShellPage below): the bar is drawn once and stays, and only the page
+   above it changes. Each page inside it (html.framed) hides its own bar and
+   keeps room for the real one. In a browser tab nothing changes. */
+html.framed nav.tabs { display: none; }
+html.framed body { padding-bottom: calc(76px + var(--sa-b)); }
+html.framed .hcabout .sheet { padding-bottom: calc(28px + 58px + var(--sa-b)); }
+html.hcleaving body { visibility: hidden; }
+html.hcshell { height: 100vh; height: 100lvh; overflow: hidden; overscroll-behavior: none; }
+html.hcshell body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+.hcstage { position: fixed; left: 0; top: 0; width: 100%; height: 100vh; height: 100lvh; }
+.hcstage iframe { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: 0; display: block;
+                  background: var(--bg); z-index: 1; }
+.hcstage iframe.hcnext { z-index: 0; }
+.hcprobe { position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none;
+           padding: var(--sa-t) var(--sa-r) var(--sa-b) var(--sa-l); }
+html.hcshell nav.tabs { position: fixed; left: 0; right: 0; bottom: auto; top: 100vh; top: 100lvh; transform: translateY(-100%);
+                        z-index: 15; margin: 0; gap: 0; overflow: visible; border-bottom: 0; border-top: 1px solid var(--border);
+                        background: var(--bg); padding: 0 max(4px, var(--sa-r)) var(--sa-b) max(4px, var(--sa-l)); }
+html.hcshell nav.tabs a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+                          min-height: 56px; padding: 8px 2px 6px; font-size: 0.72rem; border-radius: 0;
+                          border-bottom: 0; border-top: 2px solid transparent; margin: -1px 0 0; }
+html.hcshell nav.tabs a[aria-current] { border-top-color: var(--primary); background: none; }
+html.hcshell nav.tabs svg { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8;
+                            stroke-linecap: round; stroke-linejoin: round; }
+html.hcshell nav.tabs .dot { position: absolute; top: 6px; left: calc(50% + 8px); margin: 0; }
+html.hcshell nav.tabs a.lv[aria-current] .dot { display: none; }
 .day { color: var(--accent); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
        margin: 26px 0 10px; font-weight: 600; }
 details {
@@ -293,7 +333,7 @@ footer .links a:hover { text-decoration: underline; }
 /* Following a driver */
 .nm { cursor: pointer; text-decoration: underline dotted transparent; text-underline-offset: 3px; }
 .nm:hover { text-decoration-color: var(--muted); }
-.follow { position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+.follow { position: fixed; left: 50%; bottom: max(14px, var(--sa-b)); transform: translateX(-50%);
           display: flex; gap: 6px; align-items: center; max-width: calc(100% - 32px);
           background: var(--surface); color: var(--text); border: 1px solid var(--accent); border-radius: 999px;
           padding: 6px 6px 6px 16px; font-size: 0.85rem; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); z-index: 10; }
@@ -302,7 +342,7 @@ footer .links a:hover { text-decoration: underline; }
 .follow span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .follow button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 1.2rem;
                  line-height: 1; cursor: pointer; padding: 4px 10px; }
-.toast { position: fixed; left: 50%; top: max(14px, env(safe-area-inset-top)); transform: translateX(-50%);
+.toast { position: fixed; left: 50%; top: max(14px, var(--sa-t)); transform: translateX(-50%);
          background: var(--text); color: var(--bg); border-radius: 10px; padding: 10px 16px; font-size: 0.9rem;
          font-weight: 600; z-index: 20; max-width: calc(100% - 32px); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); }
 
@@ -480,7 +520,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
    list with one open at a time and its lap stats, lap times and lap chart
    on tabs, and the driver score beside the report card. Thumb-sized rows
    for a phone in the pits; the lap table scrolls in its own box. */
-#nj { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
+#nj { position: sticky; top: var(--sa-t); z-index: 3; background: var(--bg); margin: 8px -16px 0; padding: 0 16px; }
 .jump { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; max-width: 42rem; margin: 0 auto;
         scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
@@ -533,7 +573,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .trk-img { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; flex: none; }
 .trk-t { min-width: 0; }
 .trk-s { display: block; color: var(--muted); font-size: 0.85rem; }
-#tracks-h { scroll-margin-top: calc(16px + env(safe-area-inset-top, 0px)); }
+#tracks-h { scroll-margin-top: calc(16px + var(--sa-t)); }
 .lc-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0 18px; }
 .lc-pack { max-width: none; margin: 14px 0 0; gap: 8px; }
 .lc-pack h4 { margin: 0; font-size: 1rem; }
@@ -771,7 +811,7 @@ body.on-air .onair { display: flex; animation: onair 2.4s ease-in-out infinite; 
 .hcabout[hidden] { display: none; }
 .hcabout .sheet { position: relative; width: 100%; max-width: 440px; overflow: hidden; border-radius: 22px 22px 0 0;
                   background: #0D0820; color: #F4EDFF; text-align: center;
-                  padding: 26px 24px calc(28px + env(safe-area-inset-bottom)); }
+                  padding: 26px 24px calc(28px + var(--sa-b)); }
 @media (min-width: 641px) { .hcabout { align-items: center; } .hcabout .sheet { border-radius: 22px; } }
 .hcabout .sky { position: absolute; left: 0; right: 0; top: 0; height: 118px; background: linear-gradient(#140829, #3B1063); }
 .hcabout .floor { position: absolute; left: 0; right: 0; top: 118px; width: 100%; height: 44px; }
@@ -794,6 +834,40 @@ const CLUB = document.body.dataset.club;
 // own script because the shell is what knows it.
 const CLUB_NAME = document.body.dataset.clubName || '';
 const stamp = document.getElementById('stamp');
+// THE HOME-SCREEN ICON'S ONE BAR (1 Nov 2026, see ONE BAR in the style).
+// SHELL: this is the page holding the bar. FRAMED: this page is shown under
+// it, so it takes the screen's insets from the bar's page (a page in a
+// frame may be told none). Neither, on a phone, opened from the icon: go
+// to the bar's page, which shows this one under it - before this page is
+// first drawn, since this runs as its markup finishes.
+const SHELL = (function () { try { return document.documentElement.classList.contains('hcshell'); } catch (e) { return false; } })();
+const FRAMED = (function () {
+  const d = document.documentElement;
+  if (SHELL) return false;
+  try {
+    if (window.top !== window) {
+      if (!parent.document.documentElement.classList.contains('hcshell')) return false;
+      d.classList.add('framed');
+      const probe = parent.document.getElementById('hcprobe');
+      if (probe) {
+        const cs = parent.getComputedStyle(probe);
+        d.style.setProperty('--sa-t', cs.paddingTop);
+        d.style.setProperty('--sa-r', cs.paddingRight);
+        d.style.setProperty('--sa-b', cs.paddingBottom);
+        d.style.setProperty('--sa-l', cs.paddingLeft);
+      }
+      return true;
+    }
+    const m = (q) => typeof window.matchMedia === 'function' && window.matchMedia(q).matches;
+    const app = m('(display-mode: standalone)') || m('(display-mode: fullscreen)') || navigator.standalone === true;
+    if (app && m('(max-width: 640px)') && CLUB) {
+      d.classList.add('hcleaving');
+      setTimeout(() => d.classList.remove('hcleaving'), 3000);
+      location.replace('/c/' + encodeURIComponent(CLUB) + '/app#' + encodeURIComponent(location.pathname + location.search + location.hash));
+    }
+  } catch (e) { /* the page as it is */ }
+  return false;
+})();
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -1146,6 +1220,19 @@ function meForget() {
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     light(a);
     const page = pageOf(a);
+    if (SHELL) {
+      // The bar stays; only the page under it changes. The page already
+      // showing goes back to its top instead.
+      e.preventDefault();
+      if (page === location.pathname) { ahead = null; hcTop(); return; }
+      const u = new URL(a.href, location.href);
+      const waiting = ahead && page === aheadFor ? ahead : null;
+      ahead = null;
+      let sent = false;
+      const send = () => { if (!sent) { sent = true; hcGo(u.pathname + u.search + u.hash); } };
+      if (waiting) { waiting.then(send, send); setTimeout(send, 300); } else send();
+      return;
+    }
     if (!ahead || page !== aheadFor || page === location.pathname) return;
     e.preventDefault();
     const waiting = ahead;
@@ -1155,15 +1242,45 @@ function meForget() {
     waiting.then(go, go);
     setTimeout(go, 300);
   });
-  addEventListener('pageshow', (e) => { if (e.persisted) { ahead = null; light(own); } });
+  addEventListener('pageshow', (e) => { if (e.persisted && !SHELL) { ahead = null; light(own); } });
 })();
 
-// The Me tab goes straight to a remembered night.
-(function () {
+// The Me tab goes straight to a remembered night. Again whenever the
+// home-screen icon's bar changes page, since signing in or out happens on
+// the page under it.
+function meTab() {
+  const me = document.querySelector('nav.tabs a[href$="/mynight"], nav.tabs a[href*="/night#d="]');
+  if (!me) return;
   const code = meCode();
-  const me = code ? document.querySelector('nav.tabs a[href$="/mynight"]') : null;
-  if (me) me.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
-})();
+  if (code) me.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/night#d=' + code);
+  else me.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/mynight');
+}
+meTab();
+
+// A page under the home-screen icon's bar hands its links to the club's
+// other pages up to the bar's page, which loads them the same way as a tab
+// (behind the page on screen, swapped in once drawn), so the bar stays put
+// for those too. Last in line, so a link some other script has already
+// dealt with is left alone; a link elsewhere, a file, or the same page
+// again is the browser's as before.
+if (FRAMED) {
+  addEventListener('click', (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target instanceof Element ? e.target.closest('a[href]') : null;
+    if (!a || (a.target !== '' && a.target !== '_self') || a.hasAttribute('download')) return;
+    let url = null;
+    try { url = new URL(a.href, location.href); } catch (err) { return; }
+    const home = '/c/' + encodeURIComponent(CLUB);
+    if (url.origin !== location.origin || (url.pathname !== home && url.pathname.indexOf(home + '/') !== 0)) return;
+    if (/\.[A-Za-z0-9]+$/.test(url.pathname) || url.pathname.indexOf(home + '/clip/') === 0) return;
+    if (url.pathname === location.pathname && url.search === location.search) return;
+    let go = null;
+    try { go = parent.hcGo; } catch (err) { return; }
+    if (typeof go !== 'function') return;
+    e.preventDefault();
+    go(url.pathname + url.search + url.hash);
+  });
+}
 
 // The red dot on the Live tab while a car is on track (29 Oct 2026, relay
 // navigation round 1), so a driver on Results or their own night can see a
@@ -1258,6 +1375,27 @@ function socialAnchors(links: readonly SocialLink[]): string {
     .join("");
 }
 
+/**
+ * The club's five tabs. club and name are already escaped; lit is the key
+ * of the tab to mark as the page's own, or "" for none (the home-screen
+ * icon's bar, which marks one once it knows the page under it). icon is an
+ * SVG path, drawn only on the phone bar.
+ */
+function tabsNav(club: string, name: string, lit: string): string {
+  const tab = (href: string, label: string, key: string, icon: string, cls = "") =>
+    `<a href="/c/${club}${href === "" ? "" : "/" + href}"${cls === "" ? "" : ` class="${cls}"`}${lit === key ? ' aria-current="page"' : ""}>`
+    + (icon === "" ? "" : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg>`)
+    + `<span>${label}</span>${key === "live" ? '<i class="dot" aria-hidden="true"></i>' : ""}</a>`;
+
+  return `<nav class="tabs" aria-label="${name}">
+      ${tab("", "Home", "home", "M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10")}
+      ${tab("live", "Live", "live", "M12 12h.01M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8", "lv")}
+      ${tab("schedule", "Schedule", "schedule", "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0")}
+      ${tab("results", "Results", "results", "M5 21V4M5 4h11l-2 4 2 4H5")}
+      ${tab("mynight", "Me", "me", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0")}
+    </nav>`;
+}
+
 function shell(page: Shell, context: PageContext): string {
   const club = escapeHtml(page.club);
   const name = escapeHtml(page.clubName);
@@ -1298,12 +1436,6 @@ function shell(page: Shell, context: PageContext): string {
   const lit = page.active === "checkin" || page.active === "signup" || page.active === "night" || page.active === "mynight"
     ? "me"
     : ofResults ? "results" : page.active === "tracks" ? "home" : page.active;
-
-  // icon is an SVG path, drawn only on the phone bar.
-  const tab = (href: string, label: string, key: string, icon: string, cls = "") =>
-    `<a href="/c/${club}${href === "" ? "" : "/" + href}"${cls === "" ? "" : ` class="${cls}"`}${lit === key ? ' aria-current="page"' : ""}>`
-    + (icon === "" ? "" : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg>`)
-    + `<span>${label}</span>${key === "live" ? '<i class="dot" aria-hidden="true"></i>' : ""}</a>`;
 
   // One of Results' own tabs, marked when it is the page itself.
   const subTab = (href: string, label: string) =>
@@ -1419,13 +1551,7 @@ ${overrides}
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
     ${brand}${page.active === "live" ? `
     <span class="onair" aria-hidden="true">${HC_SUN}<b>LIVE</b></span>` : ""}
-    <nav class="tabs" aria-label="${name}">
-      ${tab("", "Home", "home", "M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10")}
-      ${tab("live", "Live", "live", "M12 12h.01M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8", "lv")}
-      ${tab("schedule", "Schedule", "schedule", "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0")}
-      ${tab("results", "Results", "results", "M5 21V4M5 4h11l-2 4 2 4H5")}
-      ${tab("mynight", "Me", "me", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0")}
-    </nav>
+    ${tabsNav(club, name, lit)}
   </header>${ofResults ? `
   <nav class="subtabs" aria-label="Results">
     ${subTab("results", "Sessions")}
@@ -10533,6 +10659,129 @@ ${overrides}
  * their own: its name, its icon, and opening full-screen on the club's
  * home page rather than as another browser tab.
  */
+
+/**
+ * The page that holds the home-screen icon's one bar (1 Nov 2026, see ONE
+ * BAR in the style). Opened from the icon, every club page comes here first
+ * (oneBarHead) with its own address after the "#", and is then shown under
+ * the bar in a frame. A tap on a tab, or on a link to another of the club's
+ * pages, loads that page in a second frame behind the one on screen and
+ * swaps the two once it has loaded, so the screen never goes blank and the
+ * bar is never redrawn. The address shown is the page's own, so a reload or
+ * a shared link opens that page.
+ */
+export function appShellPage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+  const safeClub = escapeHtml(club);
+  const name = escapeHtml(clubName);
+  const look = context.look;
+  const variables = Object.entries(look.vars);
+  const overrides = variables.length === 0
+    ? ""
+    : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
+
+  return `<!doctype html>
+<html lang="en" class="hcshell ${look.light ? "light" : "dark"}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="${look.light ? "light" : "dark"}">
+<meta name="theme-color" content="${look.themeColor}">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="${look.light ? "default" : "black-translucent"}">
+<meta name="apple-mobile-web-app-title" content="${name}">
+<link rel="manifest" href="/c/${safeClub}/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/c/${safeClub}/icon.png?v=${look.iconVersion}">
+<link rel="apple-touch-icon" href="/c/${safeClub}/icon.png?v=${look.iconVersion}">
+<title>${name}</title>
+<style>${STYLE}</style>
+${overrides}
+</head>
+<body data-club="${safeClub}" data-club-name="${name}">
+<div class="hcstage" id="hcstage"></div>
+${tabsNav(safeClub, name, "")}
+<div class="hcprobe" id="hcprobe" aria-hidden="true"></div>
+<script nonce="${escapeHtml(context.nonce)}">${COMMON_JS}${APP_SHELL_JS}</script>
+</body>
+</html>
+`;
+}
+
+const APP_SHELL_JS = `
+const stage = document.getElementById('hcstage');
+const HOME = '/c/' + encodeURIComponent(CLUB);
+// Only the club's own pages are ever shown under the bar.
+function hcInside(path) {
+  return typeof path === 'string' && (path === HOME || ['/', '?', '#'].indexOf(path.charAt(HOME.length)) >= 0)
+    && path.indexOf(HOME) === 0 && path.indexOf('//') < 0 && path.indexOf('\\\\') < 0;
+}
+let shown = null;
+let coming = null;
+function frameFor(path) {
+  const f = document.createElement('iframe');
+  f.className = 'hcnext';
+  f.title = CLUB_NAME;
+  f.addEventListener('load', () => landed(f));
+  f.src = path;
+  stage.appendChild(f);
+  // A page slow to load is shown as it is rather than never.
+  setTimeout(() => { if (coming === f) landed(f); }, 4000);
+  return f;
+}
+function landed(f) {
+  if (f === coming) {
+    coming = null;
+    const old = shown;
+    shown = f;
+    f.className = '';
+    // The old page stays underneath for two more frames, so there is never
+    // a frame with neither.
+    if (old) requestAnimationFrame(() => requestAnimationFrame(() => old.remove()));
+  } else if (f !== shown) {
+    return;
+  }
+  hcSync();
+}
+// The page under the bar loads another page itself (signing in on Me, say):
+// the bar follows it, marking its tab and showing its address.
+function hcSync() {
+  let doc = null;
+  let path = '';
+  try { doc = shown.contentDocument; path = shown.contentWindow.location.pathname + shown.contentWindow.location.search + shown.contentWindow.location.hash; } catch (e) { return; }
+  if (!doc) return;
+  if (hcInside(path)) history.replaceState(null, '', path);
+  if (doc.title) document.title = doc.title;
+  const theirs = Array.from(doc.querySelectorAll('nav.tabs a'));
+  const lit = doc.querySelector('nav.tabs a[aria-current]');
+  const at = lit ? theirs.indexOf(lit) : -1;
+  document.querySelectorAll('nav.tabs a').forEach((a, i) => {
+    if (i === at) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  meTab();
+}
+function hcGo(path) {
+  if (!hcInside(path)) return;
+  if (coming) coming.remove();
+  coming = frameFor(path);
+}
+window.hcGo = hcGo;
+function hcTop() {
+  try {
+    const doc = shown.contentDocument;
+    doc.body.scrollTo({ top: 0, behavior: 'smooth' });
+    doc.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (e) { /* nothing to scroll */ }
+}
+(function () {
+  let first = HOME;
+  try {
+    const asked = decodeURIComponent(location.hash.slice(1));
+    if (hcInside(asked)) first = asked;
+  } catch (e) { /* the club's home page */ }
+  history.replaceState(null, '', first);
+  coming = frameFor(first);
+})();
+`;
 
 export function manifest(club: string, clubName: string, look: Look): string {
   const base = `/c/${encodeURIComponent(club)}`;
