@@ -212,7 +212,46 @@ public sealed partial class RaceControlControl
 
         _onAirStageNow = true;
         running.Cancel();
+        SilenceOnAir($"On Air skipped to the demo ({flag} pressed)");
         return true;
+    }
+
+    /// <summary>
+    /// What On Air has put on air stops NOW, because On Air is being cut
+    /// short (1 Nov 2026, asked for by Asher: "hitting o during voice still
+    /// doesnt end the voice it keeps talking").
+    ///
+    /// WHY IT KEPT TALKING. On Air hands its run to the announcer's queue as
+    /// it goes - the opening, the driver introductions, the throw to pit lane
+    /// and the Team Principal - and every one of them is a Reminder, which the
+    /// queue treats as priority. Cancelling On Air only stopped it adding more;
+    /// everything already queued played on, and the Stage it handed over to
+    /// queued the staging call behind the lot (NotifyRaceStaging only adds to
+    /// the back, and staging's purge keeps priority lines). So O, which the
+    /// strip says skips to Stage, left the room hearing the rest of the
+    /// opening, the introductions and pit lane before the staging call.
+    ///
+    /// THE SAME CUT AS RESET (AnnouncementService.SilenceNow): the line in
+    /// the speakers, every queued line and sound, a line still being written
+    /// or voiced, and the long reads' feeders. Safe here because On Air only
+    /// runs between races, or over a demo it is replacing - there is no flag
+    /// call or release in the queue for it to swallow. It also takes what
+    /// the announcer was still finishing when On Air started (the recap's
+    /// last sentence, the grid call), which On Air waits for before its
+    /// jingle: skipping On Air skips that wait too.
+    ///
+    /// Called by every way On Air is cut short - O pressed again (and the
+    /// phone's Stage, which comes the same way), a flag or Stage during a
+    /// demo's On Air (SkipOnAirToTheDemo), and Stage, Countdown, Green, the
+    /// checkered, Reset or a warm-up by hand (CancelAutoStart) - and always
+    /// BEFORE the Stage that follows, so the staging call is queued after the
+    /// cut and is the next thing heard. Not by On Air ending normally: its
+    /// hand-over runs once _onAirCts is cleared, with nothing of its own left
+    /// to say.
+    /// </summary>
+    private void SilenceOnAir(string why)
+    {
+        _announcer.SilenceNow(why);
     }
 
 
@@ -708,6 +747,11 @@ public sealed partial class RaceControlControl
             // Pressed again: the rest of it is skipped and the race staged now.
             _onAirStageNow = true;
             running.Cancel();
+
+            // And what On Air has already queued stops with it - see
+            // SilenceOnAir. Before the hand-over's Stage, which runs once
+            // On Air's own continuation sees the cancel.
+            SilenceOnAir("On Air skipped to Stage (O pressed again)");
             return;
         }
 
