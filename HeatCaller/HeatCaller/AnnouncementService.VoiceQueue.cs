@@ -1457,6 +1457,14 @@ public sealed partial class AnnouncementService
                     // everything still talking. Read under the same lock
                     // CutForCountdown bumps it under.
                     countdownGeneration = Volatile.Read(ref _countdownCutGeneration);
+
+                    // So a pass seen after a flag has cut this battle line
+                    // does not stop the flag call instead - see CutSinceTaken.
+                    if (battle is not null)
+                    {
+                        battle.TakenUnderInterrupt = Volatile.Read(ref _interruptGeneration);
+                        battle.TakenUnderCountdown = countdownGeneration;
+                    }
                 }
                 else
                 {

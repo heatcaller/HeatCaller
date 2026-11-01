@@ -24,6 +24,14 @@ internal sealed class BattleLine
 
     public BattlePair Pair { get; }
 
+    /// <summary>
+    /// The flag and countdown generations the voice loop took it off the
+    /// queue under - see AnnouncementService.CutSinceTaken. Null until then.
+    /// </summary>
+    public int? TakenUnderInterrupt { get; set; }
+
+    public int? TakenUnderCountdown { get; set; }
+
     public bool Overtaken => Volatile.Read(ref _overtaken) == 1;
 
     /// <summary>True the first time only, so one pass is called once.</summary>
@@ -193,11 +201,18 @@ public sealed partial class AnnouncementService
 
         lock (_voiceQueueLock)
         {
+            line.TakenUnderInterrupt = Volatile.Read(ref _interruptGeneration);
+            line.TakenUnderCountdown = Volatile.Read(ref _countdownCutGeneration);
             _battleOnAir = line;
         }
 
         return line;
     }
+
+    /// <summary>True when a flag, the countdown or Reset has cut everything since the voice loop took this line.</summary>
+    private bool CutSinceTaken(BattleLine line) =>
+        (line.TakenUnderInterrupt is int interrupt && interrupt != Volatile.Read(ref _interruptGeneration))
+        || (line.TakenUnderCountdown is int countdown && countdown != Volatile.Read(ref _countdownCutGeneration));
 
     /// <summary>True when the line being produced is a battle line the board has overruled since it was queued.</summary>
     private bool IsOvertakenOnTrack() => _dequeuedBattle.Value is { Overtaken: true };
@@ -222,8 +237,13 @@ public sealed partial class AnnouncementService
                 return false;
             }
 
+            // A line a flag, the countdown or Reset has already overtaken is
+            // not in the speaker any more - and something else may be, a
+            // flag call played outside the queue, which must not be cut.
+            var onAir = _battleOnAir is { } line && !CutSinceTaken(line) ? line : null;
+
             verdict = JudgeBattleLines(
-                _battleOnAir,
+                onAir,
                 _voiceQueue.Select(item => item.Battle).OfType<BattleLine>(),
                 transponder => _standings.TryGetValue(transponder, out var standing) ? standing : null);
 

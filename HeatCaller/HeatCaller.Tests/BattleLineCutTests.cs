@@ -216,6 +216,25 @@ public sealed class BattleLineCutTests : IDisposable
         Assert.Empty(shown);
     }
 
+    [Fact]
+    public void A_battle_line_already_cut_by_a_flag_or_reset_is_not_cut_again()
+    {
+        var (announcer, shown, log) = Announcer();
+
+        announcer.OnStandingUpdated(Car("102", 4, 40_000));
+        announcer.OnStandingUpdated(Car("101", 4, 40_400));
+        announcer.PutBattleLineOnAir(SamChasingBill);
+
+        // Everything cut - whatever is in the speaker now is not the battle line.
+        announcer.SilenceNow("test");
+
+        announcer.OnStandingUpdated(Car("101", 5, 50_100));
+        announcer.Muted = true;
+
+        Assert.DoesNotContain(log, line => line.StartsWith("[voice] Battle line ", StringComparison.Ordinal));
+        Assert.DoesNotContain(shown, text => text.Contains("takes the lead", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
