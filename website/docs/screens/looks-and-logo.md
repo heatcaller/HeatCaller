@@ -53,7 +53,7 @@ HeatCaller comes with 18 looks. Built-in looks can't be changed or deleted, but 
 | **Heritage Stripes** | Light | Navy with a red stripe on white - old-school race livery. |
 | **Chequered** | Light | Black and white with a red flash - as plain as a flag. |
 
-**Daylight**, **Midnight** and **Synthwave** are the app's old Light, Dark and Synthwave modes, color for color. **Pit Lane** to **Ice** are the looks the online pages offered before 0.48.
+**Daylight**, **Midnight** and **Synthwave** are the app's old Light, Dark and Synthwave modes, color for color, except that **Synthwave**'s green is now a real green rather than a cyan, so a driver's own best can't be taken for the quickest of anyone. **Pit Lane** to **Ice** are the looks the online pages offered before 0.48.
 
 Only looks with Synthwave effects get the animated sunset header in the sidebar and the neon race clock.
 
@@ -142,6 +142,7 @@ Under **Readability**, the editor lists color pairs that may be hard to read, ea
 | The accent colour is hard to see on cards | 3:1 or more |
 | The "good" colour is hard to see on cards | 3:1 or more |
 | The "bad" colour is hard to see on cards | 3:1 or more |
+| The accent and "good" colors look alike | Two plainly different colors. The boards mark the quickest of anyone in the accent and a driver's own best in the good color. |
 
 These are only warnings: "You can still save it - these are only warnings." The same list shows on the **Themes** page when you select one of your looks ("Reads comfortably." when there are none). Built-in looks show no warnings.
 

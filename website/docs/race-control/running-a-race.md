@@ -141,10 +141,10 @@ On Air is the normal start. With **Start races On Air** ticked at the foot of th
 
 While On Air gets the opening ready, the strip under the flag row shows it the way it shows a press and hold: the step it's on ("On Air: writing the opening…", "On Air: voicing the opening…", "On Air: voicing the driver intros…"), a red bar filling from left to right, and the seconds it expects to need, learned from your last few openings, for example "about 12s · press O to skip to Stage". The first few times there's no countdown yet, just the step. Once the show is live the strip turns cyan and reads "On air - the show is going out".
 
-- **Press <kbd>O</kbd> again** while it runs to skip the rest and stage straight away.
-- **Anything else that moves the race on** (Stage, Countdown, Green or Reset) calls On Air off, and your press wins.
+- **Press <kbd>O</kbd> again** while it runs to skip the rest and stage straight away. The announcer stops at once, even mid-word, and the staging call is the next thing heard. The opening, the driver introductions and pit lane are all dropped, and so is anything the announcer was still finishing when On Air started, such as the last line of the recap.
+- **Anything else that moves the race on** (Stage, Countdown, Green or Reset) calls On Air off, and your press wins. The announcer stops at once here too.
 - **Yellow or Red between races** doesn't call On Air off; it only stops the automatic start.
-- **During a demo's On Air**, a flag press skips the rest of the opening and starts the demo, which stages and goes green by itself.
+- **During a demo's On Air**, a flag press skips the rest of the opening and starts the demo, which stages and goes green by itself. The opening stops at once.
 
 Between races, HeatCaller writes the next opening and voices it ahead, so On Air usually starts the jingle at once. If you change the voice in between, the lines voiced ahead are dropped and voiced again.
 
