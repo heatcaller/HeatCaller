@@ -202,6 +202,17 @@ internal static partial class WindowCatalog
             ("Tech Inspection (a short checklist, every check passed)", () => Open(AllPassed())),
             ("Tech Inspection (a class with no checklist, failed by hand)", () => Open(FailedByHand())),
             ("Tech Inspection (its class since deleted)", () => Open(ClassDeleted())),
+
+            // One inspection for several cars picked on Who's Racing: two, a
+            // dozen with the longest names (six named, "and 6 more"), and a
+            // dozen some of whom were inspected today already, which makes
+            // the line about them the longest it gets.
+            ("Log Inspection for Several Drivers", () => new BulkInspectionForm(
+                Drivers(40).Take(2).Select(d => d.DriverName).ToList())),
+            ("Log Inspection for Several Drivers (a dozen, long names)", () => new BulkInspectionForm(
+                Drivers(40).OrderByDescending(d => d.DriverName.Length).Take(12).Select(d => d.DriverName).ToList())),
+            ("Log Inspection for Several Drivers (some inspected today)", () => new BulkInspectionForm(
+                Drivers(40).Skip(5).Take(12).Select(d => d.DriverName).ToList(), alreadyToday: 3)),
         };
     }
 }

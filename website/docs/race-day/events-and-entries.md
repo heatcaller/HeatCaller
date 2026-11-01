@@ -157,6 +157,17 @@ Each row is a driver profile. The class shown is the class on the driver's profi
 
 A single click on a checkbox ticks or unticks it straight away. Check-ins are kept per race day, so a new race day starts with an empty sheet.
 
+### Several drivers at once
+
+Pick more than one driver, then double-click any of them to deal with them all together:
+
+1. Hold <kbd>Ctrl</kbd> and click each driver you want, or click one and hold <kbd>Shift</kbd> as you click another to pick everyone in between. <kbd>Ctrl</kbd>+<kbd>A</kbd> picks the whole list. While <kbd>Ctrl</kbd> or <kbd>Shift</kbd> is held, a click only picks the row: it doesn't tick **Checked In** or open the **Pack** menu.
+2. Double-click any of the picked rows. A menu opens with:
+    - **Check In *n* Drivers** ticks them all in. Drivers already checked in stay checked in, and the line under **Scan to Check In** says how many were new.
+    - **Log Inspection for *n* Drivers...** records one inspection for all their cars. See [Inspect several cars at once](#inspect-several-cars-at-once). It's only there when you run scrutineering.
+
+The drivers stay picked afterwards, so you can check them in and then log their inspection with two double-clicks. A double-click on a driver who isn't one of the picked ones works as it always has: on their **Tech** cell it inspects that one car.
+
 Above the list:
 
 - The **Class:** filter shows one class at a time, or **(all classes)**. HeatCaller remembers your choice.
@@ -168,7 +179,7 @@ The buttons under the list:
 - **Add Driver** opens the **Add a driver** window for someone who isn't on file yet: **Name**, **Transponder** and **Class**. Click **Add Driver** and they're saved with the drivers on file and checked in straight away.
 - **Check In All Shown** ticks in every driver currently in the list (so it respects the filters).
 - **Check Out Everyone** clears all check-ins for the current race day, after you confirm. You can undo it with **Undo**: the drivers are checked back in to the race day they were checked out of, and anyone who checked in since stays checked in. You don't normally need it — a new race day already starts with an empty sheet.
-- **Inspect Selected Car** opens a tech inspection for the selected driver. See [Inspect a car](#inspect-a-car).
+- **Inspect Selected Car** opens a tech inspection for the selected driver. See [Inspect a car](#inspect-a-car). With more than one driver picked it reads **Inspect Selected Cars** and logs one inspection for all of them. See [Inspect several cars at once](#inspect-several-cars-at-once).
 - **Scrutineering Log** opens the full list of inspections. See [The Scrutineering log](#the-scrutineering-log).
 - **Online Sign-ups** opens the drivers who have signed up online, waiting to be approved. The button shows how many are waiting, for example **Online Sign-ups (3)**. See [Driver sign-up](../online/sign-up.md).
 - **Driver Requests** opens the changes drivers have asked for from their phones, and their result queries, waiting for the desk. The button shows how many are waiting, for example **Driver Requests (2)**. It's only there while the club takes requests, or while some are still waiting. See [Driver requests](../online/driver-requests.md).
@@ -266,6 +277,24 @@ If a check has since been taken off the class's checklist, older inspections sti
 A driver who runs two classes is inspected separately in each, because they may have two cars.
 
 Recording or editing an inspection can be undone with **Undo**. **Cancel** in the inspection window leaves the inspection as it was. Changing only the notes, the inspector or the car doesn't change the inspection's time.
+
+### Inspect several cars at once
+
+When a line of cars goes through tech together, or a batch is turned back for the same reason, record them in one go:
+
+1. On **Who's Racing**, pick the drivers with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click. See [Several drivers at once](#several-drivers-at-once).
+2. Double-click one of them and choose **Log Inspection for *n* Drivers...**, or click **Inspect Selected Cars**.
+3. The **Log Inspection for *n* Drivers** window names who it's for. Choose the **Result:** (**Passed**, **Passed with a note** or **FAILED**), and enter the **Inspector:** and any **Notes:**.
+4. Click **Save *n* Inspections**.
+
+One inspection is filed for each car, with the same result, inspector and notes:
+
+- Each car is inspected in the class its **Tech** cell shows, the same class **Inspect Selected Car** would open.
+- **Passed** marks every check on that class's checklist **OK**, so the inspection reads "All checks passed" if you open it later. **Passed with a note** and **FAILED** mark no checks, because nothing says which one it was. Open a car's inspection afterwards to mark the check that failed.
+- A car already inspected today (or in the last 6 hours) has that inspection updated, as **Inspect Selected Car** would, rather than a second one filed beside it. The window says how many that is.
+- Leave **Inspector:** or **Notes:** blank to keep what an inspection already says, so a quick pass doesn't wipe notes made at the bench.
+
+The whole batch is one step for **Undo**.
 
 <a id="whos-outstanding"></a>
 

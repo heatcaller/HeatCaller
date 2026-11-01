@@ -76,6 +76,14 @@ public sealed class CheckInControl : UserControl
     public event Action<DriverProfile>? InspectRequested;
 
     /// <summary>
+    /// Raised when the user asks to log one inspection for several drivers at
+    /// once - picked with Ctrl or Shift, then a double-click on one of them or
+    /// Inspect Selected Cars (1 Nov 2026). In list order. The host owns the
+    /// window and filing the inspections, as it does for one.
+    /// </summary>
+    public event Action<IReadOnlyList<DriverProfile>>? InspectManyRequested;
+
+    /// <summary>
     /// Raised for each driver whose check-in was changed HERE, at the desk -
     /// a tick, a scan, a bulk button, an undo.
     ///
@@ -133,7 +141,20 @@ public sealed class CheckInControl : UserControl
     private readonly UndoService _undo;
 
     private readonly ComboBox _cmbClassFilter = new();
-    private readonly DataGridView _grid = new();
+    private readonly RosterGrid _grid = new();
+
+    /// <summary>Inspect Selected Car, held so its caption can say "Cars" while more than one row is picked.</summary>
+    private readonly Button _btnInspect = new() { Text = InspectOne };
+
+    private const string InspectOne = "Inspect Selected Car...";
+    private const string InspectMany = "Inspect Selected Cars...";
+
+    /// <summary>
+    /// The driver under the first click of the latest click or double-click,
+    /// and whether they were checked in before it - see <see cref="ActOnMany"/>,
+    /// which puts the tick back when that click landed on a Checked In cell.
+    /// </summary>
+    private (string Transponder, bool WasIn)? _tickBeforeClick;
 
     /// <summary>
     /// The count, and the rule the heats are built by - see UpdateSummary.
@@ -317,7 +338,14 @@ public sealed class CheckInControl : UserControl
         _grid.AllowUserToResizeRows = false;
         _grid.RowHeadersVisible = false;
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _grid.MultiSelect = false;
+
+        // Ctrl+click adds a driver to the selection and Shift+click a run of
+        // them, so a double-click on any of the picked rows can check them
+        // all in, or log one inspection for all of them (1 Nov 2026). With
+        // Ctrl or Shift held, a click only picks - see Grid_CellClick.
+        _grid.MultiSelect = true;
+        _grid.ClickStarting += OnGridClickStarting;
+        _grid.SelectionChanged += (_, _) => ShowInspectCaption();
         _grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _grid.Columns.AddRange(
             new DataGridViewCheckBoxColumn { Name = "checkedIn", HeaderText = "Checked In", FillWeight = 30 },
@@ -346,6 +374,16 @@ public sealed class CheckInControl : UserControl
         {
             if (_grid.IsCurrentCellDirty && _grid.CurrentCell is DataGridViewCheckBoxCell)
             {
+                // A Ctrl or Shift click on the box itself only picks the row,
+                // as anywhere else in the cell does (Grid_CellClick): the
+                // box's own toggle is thrown away rather than saved.
+                if ((ModifierKeys & (Keys.Control | Keys.Shift)) != 0)
+                {
+                    _grid.CancelEdit();
+                    _grid.RefreshEdit();
+                    return;
+                }
+
                 _grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
             }
         };
@@ -365,8 +403,10 @@ public sealed class CheckInControl : UserControl
         // "Inspect...", sitting next to "Check In All Shown" and "Check Out
         // Everyone" - both of which say their scope - and leaving the one
         // button that works on a single row the only one that did not.
-        var btnInspect = new Button { Text = "Inspect Selected Car..." };
-        btnInspect.Click += (_, _) => RequestInspection();
+        //
+        // "Cars" while more than one row is picked: then it logs one
+        // inspection for all of them - see RequestInspection.
+        _btnInspect.Click += (_, _) => RequestInspection();
 
         _btnTechLog.Click += (_, _) => TechLogRequested?.Invoke();
         btnCheckOutAll.Click += (_, _) =>
@@ -428,7 +468,7 @@ public sealed class CheckInControl : UserControl
 
         if (_tech is not null)
         {
-            actions.With(btnInspect, _btnTechLog);
+            actions.With(_btnInspect, _btnTechLog);
         }
 
         actions.With(_btnSignups, _btnDriverRequests);
@@ -1143,7 +1183,24 @@ public sealed class CheckInControl : UserControl
 
     private void Grid_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (_tech is null || e.RowIndex < 0 || e.ColumnIndex != _grid.Columns["tech"]?.Index)
+        if (e.RowIndex < 0)
+        {
+            return;
+        }
+
+        // A double-click on one of several picked rows is about all of them -
+        // see BulkTech.RowsToActOn - whichever column it lands in.
+        var rows = BulkTech.RowsToActOn(_grid.SelectedBeforeClick, e.RowIndex);
+
+        if (rows.Count > 1)
+        {
+            ActOnMany(rows);
+            return;
+        }
+
+        // One row: as it always was - the Tech cell inspects, anywhere else
+        // does nothing.
+        if (_tech is null || e.ColumnIndex != _grid.Columns["tech"]?.Index)
         {
             return;
         }
@@ -1154,10 +1211,139 @@ public sealed class CheckInControl : UserControl
         }
     }
 
-    /// <summary>Fires the inspect request for whichever row is selected.</summary>
+    /// <summary>Remembers who the first click of a click or double-click lands on, and their tick - see _tickBeforeClick.</summary>
+    private void OnGridClickStarting(int rowIndex)
+    {
+        _tickBeforeClick = rowIndex >= 0 && rowIndex < _grid.Rows.Count && _grid.Rows[rowIndex].Tag is DriverProfile profile
+            ? (profile.Transponder, _checkIns.IsCheckedIn(profile.Transponder))
+            : null;
+    }
+
+    /// <summary>
+    /// A double-click on one of several picked drivers: the picked rows
+    /// selected again - the double-click's own first click narrowed the
+    /// selection to its row - and a menu at the pointer offering what can be
+    /// done to all of them.
+    /// </summary>
+    private void ActOnMany(IReadOnlyList<int> rows)
+    {
+        // The first click of the double-click is an ordinary click, and on a
+        // Checked In cell an ordinary click ticks or unticks. Whatever it did
+        // is put back: the double-click was about the picked drivers, not
+        // that one tick.
+        if (_tickBeforeClick is { } before
+            && _checkIns.IsCheckedIn(before.Transponder) != before.WasIn
+            && CheckInStore.ClosedCurrentDay(_events) is null)
+        {
+            _checkIns.SetCheckedIn(before.Transponder, before.WasIn);
+            CheckInChangedAtDesk?.Invoke(before.Transponder);
+            RefreshCheckInMarks();
+        }
+
+        _grid.ClearSelection();
+
+        foreach (var index in rows)
+        {
+            if (index < _grid.Rows.Count)
+            {
+                _grid.Rows[index].Selected = true;
+            }
+        }
+
+        var drivers = rows
+            .Where(index => index < _grid.Rows.Count)
+            .Select(index => _grid.Rows[index].Tag)
+            .OfType<DriverProfile>()
+            .ToList();
+
+        if (drivers.Count == 0)
+        {
+            return;
+        }
+
+        var menu = new ContextMenuStrip();
+
+        var checkIn = new ToolStripMenuItem($"Check In {Plural.Of(drivers.Count, "Driver")}");
+        checkIn.Click += (_, _) => CheckInDrivers(drivers);
+        menu.Items.Add(checkIn);
+
+        if (_tech is not null)
+        {
+            var inspect = new ToolStripMenuItem($"Log Inspection for {Plural.Of(drivers.Count, "Driver")}...");
+            inspect.Click += (_, _) => InspectManyRequested?.Invoke(drivers);
+            menu.Items.Add(inspect);
+        }
+
+        AppTheme.StyleContextMenu(menu);
+
+        // Let go once it has closed and its click has run.
+        menu.Closed += (_, _) => BeginInvoke(new Action(menu.Dispose));
+
+        menu.Show(_grid, _grid.PointToClient(Cursor.Position));
+    }
+
+    /// <summary>
+    /// Checks in the drivers picked, timed like every other desk change (see
+    /// CheckInChangedAtDesk). The rows stay as they are, still picked, so the
+    /// next thing - an inspection for the same cars - is one double-click
+    /// away.
+    /// </summary>
+    internal void CheckInDrivers(IReadOnlyList<DriverProfile> drivers)
+    {
+        // Not onto a closed day - see CheckInStore.ClosedCurrentDay.
+        if (RefusedOnClosedDay())
+        {
+            return;
+        }
+
+        var transponders = drivers.Select(p => p.Transponder).ToList();
+        var newlyIn = transponders.Count(t => !_checkIns.IsCheckedIn(t));
+
+        _checkIns.CheckInAll(transponders);
+        RaiseDeskChanges(transponders);
+        RefreshCheckInMarks();
+
+        SetScanStatus(
+            newlyIn == transponders.Count
+                ? $"Checked in {Plural.Of(newlyIn, "driver")}."
+                : $"Checked in {Plural.Of(newlyIn, "driver")} ({transponders.Count - newlyIn} already were).",
+            AppTheme.Success);
+    }
+
+    /// <summary>The drivers picked in the list, in list order.</summary>
+    private List<DriverProfile> SelectedDrivers() =>
+        _grid.SelectedRows
+            .Cast<DataGridViewRow>()
+            .OrderBy(row => row.Index)
+            .Select(row => row.Tag)
+            .OfType<DriverProfile>()
+            .ToList();
+
+    /// <summary>Inspect Selected Car says "Cars" while more than one row is picked.</summary>
+    private void ShowInspectCaption()
+    {
+        var text = _grid.SelectedRows.Count > 1 ? InspectMany : InspectOne;
+
+        if (!string.Equals(_btnInspect.Text, text, StringComparison.Ordinal))
+        {
+            _btnInspect.Text = text;
+        }
+    }
+
+    /// <summary>
+    /// Fires the inspect request for whichever row is selected - or, with
+    /// more than one picked, the request to log one inspection for all of
+    /// them.
+    /// </summary>
     private void RequestInspection()
     {
-        if (_grid.CurrentRow?.Tag is DriverProfile profile)
+        var picked = SelectedDrivers();
+
+        if (picked.Count > 1)
+        {
+            InspectManyRequested?.Invoke(picked);
+        }
+        else if (_grid.CurrentRow?.Tag is DriverProfile profile)
         {
             InspectRequested?.Invoke(profile);
         }
@@ -1169,6 +1355,14 @@ public sealed class CheckInControl : UserControl
 
     private void Grid_CellClick(object? sender, DataGridViewCellEventArgs e)
     {
+        // Ctrl or Shift held: the click picks the row, nothing more. Without
+        // this, Ctrl+clicking down the Checked In column to pick drivers
+        // ticked each one as it went, and a Pack cell opened its menu.
+        if (e.RowIndex >= 0 && (ModifierKeys & (Keys.Control | Keys.Shift)) != 0)
+        {
+            return;
+        }
+
         if (e.RowIndex >= 0 && _batteries is not null && e.ColumnIndex == _grid.Columns["pack"]?.Index)
         {
             PickPack(e.RowIndex);
@@ -1384,5 +1578,37 @@ public sealed class CheckInControl : UserControl
 
         var cell = _grid.GetCellDisplayRectangle(_grid.Columns["pack"]!.Index, rowIndex, cutOverflow: true);
         menu.Show(_grid, new Point(cell.Left, cell.Bottom));
+    }
+}
+
+/// <summary>
+/// The Who's Racing roster's grid: a DataGridView that remembers which rows
+/// were selected just before each click (1 Nov 2026).
+///
+/// A double-click is two clicks, and the first is an ordinary one: it narrows
+/// the selection to its row, or with Ctrl held takes its row out. So by the
+/// time the double-click is raised, the drivers it was about are no longer
+/// picked. The selection is read here, before the grid's own handling of the
+/// press changes it - which a MouseDown handler cannot promise to do.
+/// </summary>
+internal sealed class RosterGrid : DataGridView
+{
+    /// <summary>The rows selected just before the latest single click - and so before the first click of a double-click.</summary>
+    public IReadOnlyCollection<int> SelectedBeforeClick { get; private set; } = Array.Empty<int>();
+
+    /// <summary>Raised on the first press of a click or double-click, before the selection changes, with the row under the pointer (-1 for none).</summary>
+    public event Action<int>? ClickStarting;
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        // Only the first press: the second press of a double-click must not
+        // overwrite what the first one found.
+        if (e.Clicks == 1)
+        {
+            SelectedBeforeClick = SelectedRows.Cast<DataGridViewRow>().Select(row => row.Index).ToList();
+            ClickStarting?.Invoke(HitTest(e.X, e.Y).RowIndex);
+        }
+
+        base.OnMouseDown(e);
     }
 }
