@@ -50,7 +50,7 @@ What follows from that:
 | Version | 0.60.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.60.0 was cut on 22 Oct 2026 from everything since 0.59.0 (28 Sep); its notes are in `website\docs\release-notes.md`, with a fresh empty "Unreleased" above it. **Not yet packed or uploaded** - that needs `publish.cmd`, `pack.cmd` and the releases repo (Beta readiness 3, Feed) |
 | App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 362 source files, ~259k lines with the tests, 25 pages |
 | Tests | `HeatCaller.Tests`: **3,710 tests, measured** (`check.cmd`, 22 Oct 2026 - 3,710 passed, 0 failed, 0 warnings; 12 to 23 minutes on the dev laptop, the layout sweep being most of it), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes and once with the text size changed while the window is up (`LayoutTests`, `WindowLayoutTests`). **Only ever write a figure `check.cmd` has actually measured, with its date**: the row carried 1,921 for a day after the suite had grown, and a number nobody measured is worse than an old one, because it reads as current |
-| Relay | TypeScript on Fly.io (`relay\`), **770 tests, measured 22 Oct 2026** (770 passed, 0 failed). **Deployed 22 Oct 2026** (`fly deploy --ha=false`) with everything to date - the nights, the night-before preview, the voice samples and Preview, the usage and top-up routes, the podium videos and the 22 Oct bug-hunt fixes. **Undeployed: the known-issues round's re-roll (`fresh` takes), the `previewDailyChars` comment, and the coaching round's report card on a driver's night page** - relay tests 772, measured 22 Oct 2026 in the container, not yet by `check.cmd`. The rule still stands: a relay change does nothing for a club until it is deployed, and the laptop's console says "redeploy it" when it meets a route the relay doesn't have |
+| Relay | TypeScript on Fly.io (`relay\`), **770 tests, measured 22 Oct 2026** (770 passed, 0 failed). **Deployed 22 Oct 2026** (`fly deploy --ha=false`) with everything to date - the nights, the night-before preview, the voice samples and Preview, the usage and top-up routes, the podium videos (since removed, #3) and the 22 Oct bug-hunt fixes. **Changed since and needing a redeploy each time:** #3, #7 to #13, #15, #17, #19 to #21, #23, #28 and #39 to #44 (28 Oct to 1 Nov 2026); test count not measured again here. **Undeployed: the known-issues round's re-roll (`fresh` takes), the `previewDailyChars` comment, and the coaching round's report card on a driver's night page** - relay tests 772, measured 22 Oct 2026 in the container, not yet by `check.cmd`. The rule still stands: a relay change does nothing for a club until it is deployed, and the laptop's console says "redeploy it" when it meets a route the relay doesn't have |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
 | Real use | Four solo rehearsal nights at home; rehearsal 4 (4-5 Oct) called clean. The I-Lap is proven on real hardware, split times and all. No club has run a night on it yet |
@@ -148,7 +148,7 @@ in a chat is a request that is lost when the chat is.
 - **Cast tab: Voices card to the top, one Load Voices** (asked 25 Oct 2026: "move the voice card to the top and remove the load voices button next to announcer. it's redudant now"; **built 25 Oct 2026, not yet compiled on Windows**). The Voices card is first; its Load Voices also fills the announcer's ElevenLabs list (`CastControl.LoadAnnouncerVoices` → `VoiceSettingsControl.LoadAnnouncerElevenLabsVoicesAsync`, while that row would show), and is never greyed. The announcer's own Load Voices is gone.
 - **Cast tab: one order on every card** (asked 25 Oct 2026: "for all members the first thing on the card is their name, then the voice, then the selections below. make unifiorm for all cast memebers"; **built 25 Oct 2026, not yet compiled on Windows**). Name, voice with Test Voice, then the card's description and switches, on all six cards. The name and voice rows are no longer stepped in under a switch (they sit above it now); the co-host's are a grid of their own (`coHostVoiceGrid`). The announcer's voice rows are hosted under the name (`_announcerName`). "Achievements reader:" is captioned "Reader's name:".
 - **The flag row after the flag, as mocked up** (asked 25 Oct 2026: "the mock up had a different set up buttons for after a race"; **built 25 Oct 2026, not yet compiled on Windows**). Finished shows Next Heat (`_btnBarNext` -> `StartNext`, shared with Start Next; "Next Step" when a step is owed; Stage in its place with nothing next, `_nextWaiting`), Results and Edit Result (`ResultsRequested`/`EditResultRequested` -> `MainForm.ShowLatestRaceInHistory` -> `RaceHistoryControl.ShowSession`), and Reset. On Air only while its show runs. Tests in `RaceControlMorphTests`.
-- **On Air's wait on the hold strip; the On Air button removed** (asked 25 Oct 2026: "use the press and hold animation to denote the writting and voicing delay instead of the on air button whcih you can remove"; **built 25 Oct 2026, not yet compiled on Windows**). `HoldStrip.ShowWork`/`EndWork` draw work under way in the hold's card (`PaintCard`); On Air's steps, fill and countdown go there (`PaintOnAirProgress`, red) and the live show (`ShowOnAirLive`, cyan, no bar). `_btnOnAir`, `OnAirLeastWidth` and `RaceBarButtons.OnAir` are gone; `RaceBar.ButtonsFor` lost `onAirRunning`, `MostShown` is 6. F1, Start Next etc. still go through On Air; O starts/skips it.
+- **On Air's wait on the hold strip; the On Air button removed** (asked 25 Oct 2026: "use the press and hold animation to denote the writting and voicing delay instead of the on air button whcih you can remove"; **built 25 Oct 2026, not yet compiled on Windows**). `HoldStrip.ShowWork`/`EndWork` draw work under way in the hold's card (`PaintCard`); On Air's steps, fill and countdown go there (`PaintOnAirProgress`, red) and the live show (`ShowOnAirLive`, cyan, no bar). `_btnOnAir`, `OnAirLeastWidth` and `RaceBarButtons.OnAir` are gone; `RaceBar.ButtonsFor` lost `onAirRunning`, `MostShown` is 6. F1, Start Next etc. still go through On Air. Since 1 Nov 2026 (#45, #47) a tap of 0 starts it and holding 0 for a second skips to Stage; F1 no longer skips it, and O does nothing on Race Control (it still switches the Big Screen's ON AIR band).
 
 - **The Track Designer, made better** (asked 25 Oct 2026, planned, not started): "plan on how we can make it better", straight after the overhaul. Seven phases in `plans\track-designer-next-plan.md`: prove it on the floor first, then faster drawing, corner tiles as printed, a lap per class, the plan on race night, sharing and the 3D lap, and the hall's real shape. The order after the first is Asher's choice.
 
@@ -245,6 +245,30 @@ in a chat is a request that is lost when the chat is.
 
 ### Built since it was asked for
 
+- **28 Oct to 1 Nov 2026, merged as pull requests** (each has its entry in
+  `website\docs\release-notes.md` under Unreleased, and the help pages were
+  brought up to date on 1 Nov 2026):
+  - Announcer and Race Control: #2 time-left calls in a timed race; #22,
+    #26, #30 lap breakdowns as their own windows; #25 lap times said to the
+    thousandth; #27 between races: call-ups, gap presets, new flag buttons;
+    #32 "How it's written" first on AI Commentary; #43, #48 the position
+    report waits for every car it names and gives exact gaps; #45, #47 On
+    Air on 0, hold to skip, F1 no longer skips; #46 blue splits only for
+    the quickest of anyone, own best green; #49 driver intro cards on the
+    Big Screen, with a per-driver photo switch; #50 timed races called in
+    time, not laps.
+  - Relay pages: #5, #15 My night layout; #7, #11, #12 lap times in my ear
+    (the Daniel lap voice); #8, #9, #10 the bottom bar, Me, Watch live and
+    Your next race; #13 Live's board first; #17 a PIN on Me checks in; #19
+    Standings and Achievements under Results; #20, #28, #39 to #42, #44 the
+    phone's bars, tabs and one bar from a home-screen icon; #21 Home
+    changes with the night; #23 HeatCaller branding and the sun icon.
+  - App: #1 license and privacy notice at install and first launch; #6
+    coach page on Local Screens; #14 the poster and emails mention Me; #24
+    HeatCaller's mark on everything the app makes; #33, #35 Who's Racing
+    multi-select; #34 race-day lists stay themed; #37 paste a LiveRC entry
+    list; #38 paste a LiveRC race result.
+
 - **Podium videos off the relay** (asked 28 Oct 2026, **built 28 Oct 2026,
   not yet compiled on Windows**). "Remove the podium videos for downloading
   from the relay and just have locally." The highlight videos are still
@@ -279,7 +303,7 @@ in a chat is a request that is lost when the chat is.
   BuildHandOffAsync, voiced-ahead flag/pre-race/honours hand-offs and long
   reads (AnnouncerControl.Director FeedTheReadAsync, AnnouncementService.
   Silenced/MutedGeneration); Wi-Fi check-in X-Racer-Pin with lockouts,
-  relay tap needPin with a per-badge PIN, /c/<club>/videos and
+  relay tap needPin with a per-badge PIN, /c/<club>/videos (removed 28 Oct 2026, #3) and
   /c/<club>/mynight; RecapBed.cs and RaceAudioStore.MusicUnderVideos;
   Recording on Club Website (_tabClubWebsiteSubNav). Relay redeploy needed.
 
@@ -2890,7 +2914,10 @@ clocks.
 thing converted; these still read like a computer and now do not:
 
 - The running order's gaps: "Bill 1.5 back" (said "one point five back")
-  is now "Bill a second and a half back"; "3 laps down" is "three laps
+  became "Bill a second and a half back" (superseded 1 Nov 2026, #43 and
+  #48: the position report waits for every car it names and gives each its
+  exact gap to the leader, "one point two three four back", with `{gaps}`
+  and "Say each car's gap to the leader (put {gaps} in the line)"); "3 laps down" is "three laps
   down"; a place past tenth is "P eleven". `AnnouncementText.SpokenGap`
   and `MaybeAnnouncePositions`, both through `RaceNumbers`.
 - The split-loop calls' `{gap}`: "point two seconds" is now "two tenths"
@@ -3011,6 +3038,9 @@ costs a record lap its slot.
 `Horizon.Estimated` carries the estimate onto the record, `Say` softens it
 to "about three laps", and the facts the model is handed say "going by the
 clock". The sum stays a sum.
+**Superseded 1 Nov 2026 (#50):** a race the clock ends is now talked about
+in time left, laps only for a race to a lap count, and the time calls go
+quiet once the lap limit will end the race first.
 
 **And the pay-off.** A horizon is a promise like any other segment about a
 named pair, with ONE exception to the green-flag rule in
@@ -3169,9 +3199,10 @@ With that in place:
     (10 Oct). `RacingWordsForm` turned out to be the glossary, not this.
 11. ~~A clock with stakes~~ - **done** (checked 22 Oct 2026): the horizon
     (`RaceHorizon`, `SegmentKind.Horizon`, wired 15 Oct) says what a gap
-    needs over the road left, estimated from the clock in a timed race,
-    and the **Final minute** call exists. A literal "two minutes to go"
-    call is not a separate event; add one only if a club asks.
+    needs over the road left, and the **Final minute** call exists. The
+    literal "two minutes to go" call came 28 Oct 2026 (#2): **Minutes
+    left** and **Last minute countdown** on Race Calls. Since 1 Nov 2026
+    (#50) a timed race is talked about in time, not estimated laps.
 12. ~~Contractions and fragments in the model instructions~~ - **done 22
     Oct 2026**: `CommentaryService.SpokenStyleLine`, in the base system
     prompt for every tone and segment.
@@ -4231,7 +4262,10 @@ what changed and apply with no admin prompt, because it installs for the
 current Windows user. Not MSIX: a packaged app's `%AppData%` writes are
 redirected into a private folder that uninstalling deletes - the club's
 data would go with the app. Not Inno Setup: no updater, so that would be a
-second project. Not WiX/MSI: too heavy.
+second project. Not WiX/MSI on its own: too heavy. Since 28 Oct 2026 (#1)
+`pack.cmd` also has Velopack build `HeatCallerApp-beta.msi` (`--msi
+--instLocation PerUser --instLicense`), which shows the license agreement
+and privacy notice before installing.
 
 **Packaging**
 - [x] **Self-contained build** - **set up 5 Oct 2026.** `publish.cmd` runs
@@ -5243,9 +5277,9 @@ fits.
   any soundscape is applied (Soundscapes page, venue, wizard). It adds no
   new lines on air, so the "Nothing new on air" rule is not touched. Keep what's
   set now is the default, so a club that ignores the row changes nothing.
-- **Only the podium's videos go online** (21 Oct 2026); every driver's is
-  made on the PC. Enforced in three places: the share (`HighlightShare.Wants`),
-  the upload, and the relay.
+- ~~**Only the podium's videos go online**~~ (21 Oct 2026). Superseded
+  28 Oct 2026 (#3): no video goes online; every driver's is made on the PC
+  and stays there, and `HighlightShare` is gone.
 - **Stage stages; On Air does the show** (18 Oct 2026).
 - **Sponsor reads belong in the commercial break**; between races is opt-in
   (21 Oct 2026).

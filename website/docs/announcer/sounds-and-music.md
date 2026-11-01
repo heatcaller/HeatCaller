@@ -19,7 +19,7 @@ The list has a heading over each column: **Race**, **Practice**, **Sound**, **Pa
 - **Pack**: the built-in sound this row plays, **Classic tones** or a pack.
 - **Your own file (optional)**: shows **(optional own file)** until you choose one. Once set, the box shows just the file's name; hover over it to see the full path. Click into the box and it shows the full path, so you can type or paste one.
 - **Browse** picks a `.wav` or `.mp3` file for the row.
-- **Remove** stops using your own file, so the row goes back to its pack sound. It's saved straight away, and the page says, for example: Fast lap is back to the Podium sound. "horn.wav" is no longer used - the file itself is untouched. Only the setting is cleared; your file isn't deleted. **Remove** is greyed out while the row has no file of its own.
+- **Remove** stops using your own file, so the row goes back to its pack sound. It's saved straight away, and the page says, for example: Fast lap is back to the Podium sound. "horn.wav" is no longer used - the file itself is untouched. Only the setting is cleared; your file isn't deleted. **Remove** is grayed out while the row has no file of its own.
 - **Test** plays the row as a race would (your own file if it's set, otherwise the pack sound) at the current volume.
 - **Weight** (per-lap sounds only): which sounds win when several fire on the same lap.
 - **Caution** (per-lap sounds only): lets the sound play while a yellow or red flag is out. Otherwise per-lap sounds are held during a caution. Race-moment sounds always play.
@@ -165,7 +165,7 @@ A track that won't play, stops part-way with an error, or has no sound in it is 
 1. Press **Add Track** and choose one or more `.wav` or `.mp3` files.
 2. The files are copied into HeatCaller's music folder, so they keep working if you move or delete the originals.
 
-The list on the **Library** card shows each **Track**, its **Source** ("Included" or "Yours"), whether it's ticked for **My music** ("Yes" or "No"), and the **File**. The applied soundscape's tracks have "• theme" after their source, whichever choice is playing. The track that's playing is shown in bold with "(now playing)" after its name. Tracks that aren't in what's playing now are greyed. Double-click a track to play it.
+The list on the **Library** card shows each **Track**, its **Source** ("Included" or "Yours"), whether it's ticked for **My music** ("Yes" or "No"), and the **File**. The applied soundscape's tracks have "• theme" after their source, whichever choice is playing. The track that's playing is shown in bold with "(now playing)" after its name. Tracks that aren't in what's playing now are grayed. Double-click a track to play it.
 
 Double-clicking a track that isn't in what's playing now plays it once without adding it, and the page says: "*name*" is excluded from My music - playing it once. With **Theme music** playing, any track that isn't the theme's plays once the same way, and the page says: "*name*" isn't part of the theme music - playing it once, then back to the theme. The music then carries on from the top, reshuffled if **Shuffle** is on. If the track won't play, the page says: Couldn't play "*name*" - the console says why.
 
@@ -179,9 +179,9 @@ The status line under the page counts your ticks, for example "9 of 15 tracks in
 | **Restore Included Tracks** | Puts the included tracks back if they're missing. |
 | **Clear Library** | Removes every track. It then asks whether to delete the files too; choose No to keep them (the clear can be undone), Yes to delete them for good (that can't be undone). |
 
-### Behaviour settings
+### Behavior settings
 
-These are on the **Behaviour** card, under the library.
+These are on the **Behavior** card, under the library.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -203,8 +203,8 @@ The recap can still be speaking when the next heat is staged. If that heat has b
 ### What a soundscape holds
 
 - **The sound effects.** Everything on **Sounds → Effects**: which sounds are on for races and for practice, the pack or your own file on each row, the weights and **Caution** ticks, the streak thresholds and **Max sounds per lap (good / invalid / fast / streak / leader change):**. Not the **Sound effects volume (%):**.
-- **The announcer's words.** Everything on **Voice → Announcements**: the lines, the **Race** and **Practice** ticks, the weights, speeds and **Caution** ticks, and the extra settings on some rows.
-- **The announcer's delivery.** The tuning on **Voice → Voice Settings**: **Stability:**, **Similarity boost:**, **Style:**, **Speed:**, **Speaker boost**, **Text normalize:** and **Max spoken announcements per lap:**. The HeatCaller voice's own sound is set on the relay, so most of this tuning only changes your own ElevenLabs voice; the Kokoro voice uses **Speed:** and **Playback volume (%):**, and every voice uses **Max spoken announcements per lap:**. See [What the Kokoro voice uses](voice.md#what-the-kokoro-voice-uses).
+- **The announcer's words.** Everything on **Voice → Race Calls**: the lines, the **Race** and **Practice** ticks, the weights, speeds and **Caution** ticks, and the extra settings on some rows.
+- **The announcer's delivery.** The tuning on **Voice → Voice**: **Stability:**, **Similarity boost:**, **Style:**, **Speed:**, **Speaker boost**, **Text normalize:** and **Max spoken announcements per lap:**. The HeatCaller voice's own sound is set on the relay, so most of this tuning only changes your own ElevenLabs voice; the Kokoro voice uses **Speed:** and **Playback volume (%):**, and every voice uses **Max spoken announcements per lap:**. See [What the Kokoro voice uses](voice.md#what-the-kokoro-voice-uses).
 - **What plays underneath**, if it has any: a crowd for **Ambience** and theme music for **Music**. See [Soundscape crowd and music](#soundscape-crowd-and-music).
 - **An ElevenLabs voice, model and language**, only for a soundscape of your own that was saved with them. The built-in soundscapes carry none of these.
 
@@ -260,7 +260,7 @@ The card is marked **LAST APPLIED**, the line above the cards says "Applied "*na
 - **The language.** Kept, unless the soundscape sets one of its own. The built-in soundscapes don't.
 - **What plays underneath.** The soundscape's crowd goes into **Ambience**, and its music becomes what **Theme music** plays. Whether music plays at all stays as you have it. See [Soundscape crowd and music](#soundscape-crowd-and-music).
 - **This PC's setup is left as it is:** the voice and sound effects volumes, the **Output format:**, and the **Speak with** choice: which of the three voices speaks, which Kokoro voice, which HeatCaller announcer voice, and the stand-in box.
-- **On the HeatCaller voice, a soundscape's lines aren't applied**, and neither is anything else on **Voice → Announcements** (the ticks, weights and speeds stay as you have them). Its sounds are. The wording stays the standard announcer lines, because those are the only lines that voice speaks. See [What's fixed while it's chosen](voice.md#whats-fixed-while-its-chosen).
+- **On the HeatCaller voice, a soundscape's lines aren't applied**, and neither is anything else on **Voice → Race Calls** (the ticks, weights and speeds stay as you have them). Its sounds are. The wording stays the standard announcer lines, because those are the only lines that voice speaks. See [What's fixed while it's chosen](voice.md#whats-fixed-while-its-chosen).
 
 The confirmation spells it out. For a built-in soundscape it ends: "Not affected: your ElevenLabs API key, voice and model, the voice and sound volumes, the output format, the language, and which voice speaks - ElevenLabs, the HeatCaller voice or the Kokoro voice."
 
@@ -291,7 +291,7 @@ The choice is applied when you move off the step, and stays until you change it,
 - No soundscape card is marked **LAST APPLIED**.
 - The **Unofficial result** at the flag isn't said while lap times only is on, whatever its tick box says. That tick box itself isn't changed, so it's back when lap times only ends.
 
-Whether the lap time includes the driver's name, and how often it's read, stay as you set them on the **Lap time only** row of **Voice → Announcements**.
+Whether the lap time includes the driver's name, and how often it's read, stay as you set them on the **Lap time only** row of **Voice → Race Calls**.
 
 Applying a soundscape later (here, from a venue or from a wizard) leaves lap times only: the announcements it switched, the **Bring up:** ticks and the commentary ticks go back to how they were before.
 
@@ -344,7 +344,7 @@ Voice lines are a soundscape's fixed race calls (staging, the countdown, the sta
 | **Delete the *n* recorded lines** | Deletes the recordings, after asking. Those lines go back to being spoken live. Only there once some are recorded. |
 | **What are voice lines?** | Explains them. |
 
-1. Choose your own ElevenLabs key or the HeatCaller voice under **Speak with** on **Voice → Voice Settings**. With the Kokoro voice chosen, HeatCaller records nothing and says why: "Voice lines are recorded with ElevenLabs - your own key, or the HeatCaller voice through your relay. This PC speaks with the Kokoro voice, which already says these lines for free. Switch the voice on Voice Settings to record them, then switch back if you like: the recordings keep playing."
+1. Choose your own ElevenLabs key or the HeatCaller voice under **Speak with** on **Voice → Voice**. With the Kokoro voice chosen, HeatCaller records nothing and says why: "Voice lines are recorded with ElevenLabs - your own key, or the HeatCaller voice through your relay. This PC speaks with the Kokoro voice, which already says these lines for free. Switch the voice on Voice Settings to record them, then switch back if you like: the recordings keep playing."
 2. Press **Voice Lines** on the card and choose **Record *n* voice lines (about *x* characters)...**.
 3. HeatCaller asks how many lines it will record and about how many characters that is, for example "Record *n* lines for "Podium" with Rachel? That's about *x* characters, once." Click **Yes**.
 
@@ -468,7 +468,7 @@ The **When a session starts** card brings audio up automatically, so you don't h
 | **Bring up:** **Music** | Starts the music. This works even if **Enable music** is off. | On |
 | **Bring up:** **Ambience** | Starts the ambience. This works even if **Enable ambience** is off. | On |
 | **Bring up:** **Unmute announcer** | Unmutes the announcer (and everything the sidebar mute silenced) if it was left muted. | On |
-| **At the flag, stop:** **Music** | Stops the music as soon as the race ends (at the checkered flag, or when the race is stopped), before the recap. While it's ticked, **Music after the recap:** is greyed out. | Off |
+| **At the flag, stop:** **Music** | Stops the music as soon as the race ends (at the checkered flag, or when the race is stopped), before the recap. While it's ticked, **Music after the recap:** is grayed out. | Off |
 | **At the flag, stop:** **Ambience** | Stops the ambience when the session ends, after the finish celebration has played out. | On |
 | **Music after the recap:** | **Keep playing**, **Fade out** (over the number of seconds you set, 0.5 to 30, default 6) or **Stop**. It acts after races only, so it applies only while **Start for:** **Races** is ticked, and is grayed out otherwise. | Keep playing |
 
@@ -543,7 +543,7 @@ Clips are only cut for a race that was saved to **Race History**: they're named 
 
 ### Highlight videos
 
-After a race HeatCaller can turn a driver's clip into a short upright video for their phone: the announcer calling them, the race drawn underneath in your club's look, and the words on screen as captions, since most videos on a phone are watched with the sound off. It opens on a title card (the club, the race, the driver) and ends on the result, the top five and your club's handle.
+After a race HeatCaller can turn a driver's clip into a short upright video for their phone: the announcer calling them, the race drawn underneath in your club's look, and the words on screen as captions, since most videos on a phone are watched with the sound off. It opens on a title card (the club, the race, the driver) and ends on the result, the top five, your club's handle, and "Timed and called by" over HeatCaller's sun and HEATCALLER.
 
 | Setting (on **Club Website → Recording**) | What it does | Default |
 |---|---|---|

@@ -28,7 +28,7 @@ The roster is down the left and the driver you pick is beside it.
 
 The driver has six tabs:
 
-- **Profile**: when they were added and first timed, tonight's race day (check-in, tech, handicap), their honours, and what's on their profile — car, number, class, team, sponsors, home track, skill level, transponders — and notes. Empty fields are left out.
+- **Profile**: when they were added and first timed, tonight's race day (check-in, tech, handicap), their honors, and what's on their profile — car, number, class, team, sponsors, home track, skill level, transponders — and notes. Empty fields are left out.
   - **Track records** lists each layout whose lap record is theirs now, with the lap and when it was set, and the layouts they've held it on before.
   - **Sector records** lists the [sector records](#track-layouts) they hold now, layout by layout, for example "S1 3.41".
   - **Badges** shows every badge they've earned as medallions, then the latest twelve with what each was for and when; the rest are on the **Achievements** page.
@@ -273,7 +273,7 @@ Under the profile's fields, the **PRIVACY** group has three ticks on its **Onlin
 | **No podium videos of them** | Always met: since 28 October 2026 no podium video goes on the club's page - they all stay on this PC. The tick is kept so a driver's ask still has somewhere to go. Their own race calls on their private night page aren't affected. |
 | **Initials only ("Sam Parker" shows as "S.P.")** | Everywhere on the club's pages - live, results, standings, schedule, badges, tracks and check-in - they're shown by their initials. Lines the announcer says about them are left out of the captions on the club's page and aren't sent to people listening along from home. Their own night page still uses their full name. |
 
-The hint under them says: "Online is only what goes on the internet: the club's relay pages. In the room those change nothing - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. A driver can ask for them from their phone; only the desk can turn one off." The **Big Screen:** row under them is the one switch in the group that changes the room; see [Keeping a photo off the Big Screen](#keeping-a-photo-off-the-big-screen).
+The hint under them says: "Online is only what goes on the internet: the club's relay pages. In the room those change nothing - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. A driver can ask for them from their phone; only the desk can turn one off. Big Screen keeps their photo off the driver introductions; their name still shows." The **Big Screen:** row under them is the one switch in the group that changes the room; see [Keeping a photo off the Big Screen](#keeping-a-photo-off-the-big-screen).
 
 - **A driver can turn them on from their phone; only the desk can turn them off.** From their night page, a driver can ask for any of the three (see [Driver requests](../online/driver-requests.md)). Nothing changes until the desk approves it. A phone can never untick one: to turn one off, untick it here and click **Save**.
 - **It's quick, but not instant.** Once the profile is saved, the club's live pages follow within a few seconds. HeatCaller then re-sends every saved result the driver is in, a few at a time so results from tonight aren't held up. For a driver with a long history this takes a few minutes, and it carries on after a restart if HeatCaller is closed first. The console says "[privacy] A driver's online privacy changed - the club's page is being brought in line." and then "[privacy] The club's page now shows the drivers' latest privacy choices."
@@ -313,7 +313,7 @@ If you have your drivers in a spreadsheet, or in the timing software your club u
 - The **#** column only counts the drivers in each class, so it's called **Row count** and set to **(ignore)**, not taken for race numbers.
 - A driver entered in two classes comes in once, in both classes.
 
-You can also copy one class tab at a time. Only copy your own track's lists, and check the preview before you click **Import**. LiveRC's numbers are MyLaps transponder numbers, so they match laps once HeatCaller reads your MyLaps decoder; with EasyLap or I-Lap, change each driver's transponder after the import.
+You can also copy one class tab at a time. Only copy your own track's lists, and check the preview before you click **Import**. LiveRC's numbers are MyLaps transponder numbers. HeatCaller reads EasyLap and I-Lap decoders, not MyLaps, so after the import change each driver's transponder to the one your decoder reads.
 
 If nothing usable is on the clipboard, a **Nothing to paste** message says how to copy the list.
 
@@ -470,7 +470,7 @@ For what each start type looks like on race day, see [Running a race](../race-co
 
 Click **Tech Checklist** to set what a scrutineer checks for this class. Each item becomes an OK / FAIL / not-checked row when a car is [inspected](events-and-entries.md#inspect-a-car).
 
-Use **Add**, **Rename**, **Remove**, **Move Up** and **Move Down** to build the list. **Add Common** adds six starting suggestions you can edit: "Body secure and undamaged", "Motor legal for class", "Tyres legal for class", "Ride height", "Transponder fitted and working" and "No loose parts". An empty checklist means you don't run tech for this class.
+Use **Add**, **Rename**, **Remove**, **Move Up** and **Move Down** to build the list. **Add Common** adds six starting suggestions you can edit: "Body secure and undamaged", "Motor legal for class", "Tires legal for class", "Ride height", "Transponder fitted and working" and "No loose parts". An empty checklist means you don't run tech for this class.
 
 If you do run tech for the class, **Warn when a driver in a heat hasn't passed tech today** in the class settings makes Race Control point out drivers who haven't been through tech yet. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control).
 
@@ -481,7 +481,7 @@ Click **Warnings...** to set the class's warning ladder: what a driver's first, 
 - **Warning only**: logged, announced and shown, nothing more.
 - **Time penalty**, with the number of **seconds** (1 to 600) added to the driver's time.
 - **Black flag (DQ)**: announced as a black flag, and the saved result is marked DQ.
-- **(end)**: the ladder stops here. Rows after it are greyed out.
+- **(end)**: the ladder stops here. Rows after it are grayed out.
 
 After the last step, that step repeats for any further warning. The first row must have an action. **Use Default** puts the class back on the default ladder (warning, +5s, +10s, black flag), and **Save** keeps your ladder. Like the other sub-editors, it's saved when you click **Save** on the class.
 

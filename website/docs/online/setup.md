@@ -77,7 +77,7 @@ Test results you might see:
 | `Connected as <name>.` | Everything works. |
 | `Could not reach <address>. ...` | The address is wrong, the laptop is offline, or the relay is down. |
 | `Reached <address>, but it does not look like a relay (HTTP <code>).` | Something answered at that address, but not a relay. Check the address. |
-| `The relay does not recognise that token.` | The token is wrong or has been replaced. Check for missing characters, or ask for a new one. |
+| `The relay does not recognize that token.` | The token is wrong or has been replaced. Check for missing characters, or ask for a new one. |
 | `That token belongs to a different club. Check the club id.` | The token is real, but for another club id. |
 | `The relay has no club called "<club>".` | The relay doesn't know that club id. Check the spelling with the relay admin. |
 | `This relay is running an older build that has no /whoami. ...` | The relay needs updating. Pass this to your relay admin. |
@@ -120,6 +120,7 @@ The email is headed "Your night at *club* - *Tuesday 22 October*" and has:
 - a link to their night page, with "This link is yours - it can also check you in, so don't share it." and "Open it once on your phone and Me, on the club's pages, brings you back to it from then on." (see [Getting around](index.md#getting-around));
 - "Live timing, the running order and results:" with your club's home page address;
 - "You're getting this because you asked for your night by email. To stop, ask at the desk."
+- a last line, "Timing by HeatCaller - heatcaller.com".
 
 The link, the Me line and the club's home page address are only there while **Give each driver their own night at a private address** is ticked. The email never carries a transponder number.
 
@@ -147,10 +148,10 @@ The **Look** card holds the welcome line and the **New here?** card. Changes rea
 
 **New here? card:** three lines for somebody who has found the club but never raced there, shown as a card on the club's home page to any phone that doesn't remember a driver. **Where we race:** and **When we race:** take up to 160 characters each, **How to join:** up to 300. **When we race** also shows under "No racing right now" between nights. Leave all three empty for no card.
 
-The pages' colors and the club logo used to be set here too. Since 0.48 they're on the **Themes** page, shared with the app, the Big Screen and the Wi-Fi pages; the card says "Colours and club logo are set in the Looks card on Themes (shared with the app, Big Screen and Wi-Fi pages)." Click **Open Looks** to go there. See [Looks and the club logo](../screens/looks-and-logo.md).
+The pages' colors and the club logo used to be set here too. Since 0.48 they're on the **Themes** page, shared with the app, the Big Screen and the Wi-Fi pages; the card says "Colors and club logo are set in the Looks card on the Themes page (shared with the app, Big Screen and Wi-Fi pages)." Click **Open Looks** to go there. See [Looks and the club logo](../screens/looks-and-logo.md).
 
 - **Colors:** the online pages use the crowd-screen look, set in **Crowd screens:**. Any look works, including the ones you make yourself. The choice you'd made here before 0.48 carries over.
-- **Logo:** choose it with **Choose Logo** in the **Club logo** card. The online pages always show it, in a block of its own beside the club's name, drawn between 72 and 180 pixels across depending on the screen, and on a plate if it would vanish on the page background. It's also the icon when someone adds the pages to their home screen. A new logo shows straight away. Without a logo, the icon is a checkered flag in the look's colors.
+- **Logo:** choose it with **Choose Logo** in the **Club logo** card. The online pages always show it, in a block of its own beside the club's name, drawn between 72 and 180 pixels across depending on the screen, and on a plate if it would vanish on the page background. Link previews use it too. A new logo shows straight away. The home-screen icon is HeatCaller's sun for every club, logo or not (see [Add to Home Screen](index.md#add-to-home-screen)).
 
 !!! note
     The larger logo, its plate and the instant logo change need the relay updated for 0.48. See [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
@@ -159,7 +160,7 @@ The pages' colors and the club logo used to be set here too. Since 0.48 they're 
 
 Once the **Relay** card is filled in and testing clean, the same address, club id and token give the laptop the [HeatCaller voice](../announcer/voice.md#the-heatcaller-voice): natural announcer voices on HeatCaller's own ElevenLabs account, so your club needs no account, no key and no bill.
 
-There's nothing to set up here for it. Choose it under **Speak with** on **Voice → Voice Settings**, pick an announcer voice in **HeatCaller voice:** at the top of **Voice → Cast**, and **Voice Settings** shows your club's allowance for the month. Until the **Relay** card is filled in, **Voice Settings** says "Set the club up on the Club Website page first - the HeatCaller voice speaks through the same relay, with the same token."
+There's nothing to set up here for it. Choose it under **Speak with** on **Voice → Voice**, pick an announcer voice in **HeatCaller voice:** at the top of **Voice → Cast**, and **Voice Settings** shows your club's allowance for the month. Until the **Relay** card is filled in, **Voice Settings** says "Set the club up on the Club Website page first - the HeatCaller voice speaks through the same relay, with the same token."
 
 A few things follow from sharing the relay:
 
@@ -179,7 +180,7 @@ These three cards set up drivers checking themselves in from their own phones:
 
 ## Race-day manager
 
-The race-day manager - entries, the programme and results, run from a phone - lives on the **Local Screens** page; see [Race-day manager](../screens/phone-and-web.md#race-day-manager). This card on the **Club Website** page is only about reaching that same page through the relay, from off the venue's Wi-Fi.
+The race-day manager - entries, the program and results, run from a phone - lives on the **Local Screens** page; see [Race-day manager](../screens/phone-and-web.md#race-day-manager). This card on the **Club Website** page is only about reaching that same page through the relay, from off the venue's Wi-Fi.
 
 - **Let the race-day manager be reached through the relay** is off by default. It needs **Publish to the relay** on too, and a Manager PIN set on **Local Screens** - without one, the manager refuses every request rather than opening to anyone.
 - **Set Manager PIN** jumps to the **Local Screens** page, since one PIN guards the manager on both the Wi-Fi page and the relay.
@@ -221,7 +222,7 @@ The line under it gives the detail, for example "Last published 12 seconds ago."
 
 | Error | What to do |
 |---|---|
-| "The relay does not recognise this token." | Paste the token again, or ask for a new one. |
+| "The relay does not recognize this token." | Paste the token again, or ask for a new one. |
 | "This token belongs to a different club." | Check the club id. |
 | "The relay has no club called "*club*". Check the club id." | Check the club id with the relay admin. |
 | "The relay is an older build that cannot take this. Redeploy it." or "The relay has no "*channel*" channel - it may need updating." | Ask the relay admin to update the relay. |

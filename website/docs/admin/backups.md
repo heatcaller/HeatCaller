@@ -98,7 +98,7 @@ Under the tick boxes is a light that says whether your backups are really reachi
 
 | Light | What it means | What to do |
 |---|---|---|
-| Grey - **Off** | No cloud service is ticked. Backups stay on this laptop only. | Nothing, if that is what you want. Otherwise tick a service above. |
+| Gray - **Off** | No cloud service is ticked. Backups stay on this laptop only. | Nothing, if that is what you want. Otherwise tick a service above. |
 | Green - **Up to date** | The last backup reached every service you ticked, and recently. | Nothing. |
 | Amber - **Not yet** | The services are ticked but no backup has gone up yet. | Wait for the next automatic backup, or press **Back Up Now**. |
 | Amber - **Out of date** | A copy did reach the cloud, but over two weeks ago. | Check backups are still being made, then press **Back Up Now**. |
@@ -124,7 +124,7 @@ The **Backup password** card decides whether backups carry your keys, tokens and
 - **With a password set**, the status line says `Keys and tokens travel with backups, locked with this password.` Each backup made from then on includes those secrets, encrypted with the password.
 - **With no password**, it says `No backup password: backups don't carry keys - after restoring on another PC you'd re-enter them and reprint QR check-ins.`
 
-The secrets a backup carries are: the ElevenLabs key, the relay publish token, the voice relay's token (if one is typed in on **Voice → Voice Settings**), the QR check-in key, the Local Screens PINs, the online staff PIN, every racer's personal PIN, and the email app password.
+The secrets a backup carries are: the ElevenLabs key, the relay publish token, the voice relay's token (if one is typed in on **Voice → Voice**), the QR check-in key, the Local Screens PINs, the online staff PIN, every racer's personal PIN, and the email app password.
 
 The QR check-in key matters most. Every printed online QR check-in's QR code is made from it. Lose it, and every online QR check-in in every driver's box stops working and has to be reprinted.
 
@@ -192,8 +192,8 @@ If the password is wrong, the dialog says so and how many tries are left. You ge
 HeatCaller tells you, once, what needs entering again:
 
 - the relay token, for online results and check-in (**Club Website** page)
-- the voice relay's own token, if you gave the voice a relay of its own (**Voice → Voice Settings**, under **Voice relay:**)
-- the ElevenLabs key (**Voice → Voice Settings**)
+- the voice relay's own token, if you gave the voice a relay of its own (**Voice → Voice**, under **Voice relay:**)
+- the ElevenLabs key (**Voice → Voice**)
 - the email app password for racer PINs (**Club Website** page)
 - the Local Screens remote, check-in and manager PINs (**Local Screens** page)
 - racers' personal check-in PINs: make a new set (**Club Website** page)

@@ -1,4 +1,6 @@
-# HeatCaller - Roadmap
+# HeatCaller - Roadmap (archived snapshot)
+
+> **Archived snapshot of 27 Sep 2026 (0.58.0), not maintained.** The live roadmap is `ROADMAP.md` beside this file.
 
 *(Storage lives in `%AppData%\HeatCaller`. Older installs are moved there
 once, on first launch, by AppDataMigration - see that file before touching

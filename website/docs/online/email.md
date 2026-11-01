@@ -55,7 +55,7 @@ The page's own hint: "Gmail/iCloud need an app password (Google Account → Secu
 1. Sign in to the club's Google Account in a web browser.
 2. Go to **Security**. App passwords need **2-Step Verification** turned on, so turn it on first if it isn't.
 3. Still in **Security**, open **App passwords**. If you can't find it, search the account settings for "App passwords".
-4. Give the app password a name you'll recognise, such as "HeatCaller", and create it.
+4. Give the app password a name you'll recognize, such as "HeatCaller", and create it.
 5. Google shows a 16-letter password in four groups. Copy it into **App password:** on the Club Website page. You won't be able to see it again in Google, but you can always create a new one.
 6. Click **Send Test Email**.
 
@@ -108,6 +108,8 @@ This PIN works until <weekday day month>. You'll be sent a new one after that.
 Don't share it - it checks in only you.
 
 <club>
+
+Timing by HeatCaller - heatcaller.com
 ```
 
 - *club* is the **From name**, or your club id made readable if that's blank.

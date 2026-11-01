@@ -29,7 +29,7 @@ The window can stay open while you work. A sign-up made while it's open appears 
 
 Tick **Let new drivers sign up online with an invite**. The line under it should say "Open", with how many invites are waiting to be used.
 
-Unticking it closes the sign-up page and takes every code off the relay. Invites you've already made aren't cancelled; they work again when you tick it again, as long as they haven't expired.
+Unticking it closes the sign-up page and takes every code off the relay. Invites you've already made aren't canceled; they work again when you tick it again, as long as they haven't expired.
 
 ## Invite drivers by email
 
@@ -79,7 +79,7 @@ When you approve, HeatCaller:
 - Adds their driver profile, marked "Signed up online." (or "Signed up online by a parent or guardian.") in **Notes**.
 - Checks them in, if you said **Yes**.
 - Gives them their own check-in PIN and emails it to them, if online check-in and personal PINs are on and the club mailbox is set up. This happens even if **Email automatically when PINs change** is off, because the sign-up page told them it would come.
-- Tells their phone. It shows "You are in!" and, when online check-in is on, a button to open their own check-in card, which checks them in at every meeting.
+- Tells their phone. It shows "You are in!" and, when online check-in is on, **Open my check-in card**, which checks them in at every meeting. Under it, "Your own races and results open under Me, at the bottom of the page on a phone." with **Go to Me**.
 
 A transponder that already belongs to another driver is refused, with the same message as adding a driver by hand. Change it, or click **Not Yet**.
 
@@ -97,7 +97,7 @@ Select it, click **Turn Down**, optionally type why or what to do instead, and c
 | Not emailed yet | Made, but the email didn't go. Select it and click **Email Again**. |
 | Signed up | Used, and you approved the sign-up. |
 | Turned down | Used, and you turned the sign-up down. |
-| Cancelled | Cancelled before it was used. |
+| Canceled | Canceled before it was used. |
 | Expired | Not used within 14 days. |
 
 - **Show Code** shows the selected invite's code, for reading it out.
@@ -110,7 +110,7 @@ Select it, click **Turn Down**, optionally type why or what to do instead, and c
 It says what's wrong. "Publishing to the relay is off" means the relay isn't set up on the **Club Website** page. A "not found" message means the relay needs redeploying.
 
 **A driver says their code doesn't work.**
-Check the invite under **Invites**. If it says "Expired" or "Cancelled", make them a new one. If sign-up is switched off, their phone says "Sign-up is not open right now."
+Check the invite under **Invites**. If it says "Expired" or "Canceled", make them a new one. If sign-up is switched off, their phone says "Sign-up is not open right now."
 
 **"The sign-up invites file (signups.json) couldn't be read".**
 Another program, usually a backup or sync tool, had the file open when HeatCaller started. So that the invites in it aren't lost, nothing on **Online Sign-ups** can be changed until HeatCaller is restarted: the tick box, **Invite Drivers** and **Code for Someone Here** are grayed out. Invites you've already made keep working, and sign-ups made with them wait on the relay. Close anything that might have the file open and restart HeatCaller.
