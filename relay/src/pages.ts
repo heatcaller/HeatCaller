@@ -142,7 +142,10 @@ nav a { white-space: nowrap; flex: none;
   color: var(--muted); text-decoration: none; padding: 9px 14px; font-size: 0.9rem;
   border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 6px 6px 0 0;
 }
-nav a:hover { color: var(--text); background: var(--surface); }
+/* Only with a real mouse (1 Nov 2026, Asher: "nav tabs still flicker when
+   clicking"). An iPhone counts a tap as hovering, so the tapped tab lit up
+   grey until the next page loaded and then went dark again. */
+@media (hover: hover) { nav a:hover { color: var(--text); background: var(--surface); } }
 nav a[aria-current] { color: var(--text); border-bottom-color: var(--primary); font-weight: 600; }
 /* THE CLUB'S TABS (29 Oct 2026, relay navigation round 1). On a laptop or
    a tablet, one row across the top as before. On a phone, a bar fixed
@@ -152,6 +155,8 @@ nav a[aria-current] { color: var(--text); border-bottom-color: var(--primary); f
    same five on every screen: Standings, Tracks and Achievements are tabs
    under Results (nav.subtabs). */
 nav.tabs svg { display: none; }
+/* No grey flash of the phone's own under a tapped tab either. */
+nav a { -webkit-tap-highlight-color: transparent; }
 nav.tabs .lv { position: relative; }
 nav.tabs .dot { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--bad);
                 margin-left: 6px; vertical-align: middle; }
@@ -164,7 +169,7 @@ nav.subtabs { display: flex; gap: 8px; margin: 14px 0 22px; border-bottom: 0; ov
 nav.subtabs a { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 46px;
                 margin: 0; padding: 10px 14px; font-size: 0.95rem; font-weight: 600; color: var(--text);
                 background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-nav.subtabs a:hover { border-color: var(--primary); background: var(--surface); }
+@media (hover: hover) { nav.subtabs a:hover { border-color: var(--primary); background: var(--surface); } }
 nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var(--primary); border-color: var(--primary); }
 @media (max-width: 640px) {
   /* A BAR THAT STAYS PUT (31 Oct 2026, Asher on iPhone Chrome: "the
@@ -214,16 +219,15 @@ nav.subtabs a[aria-current] { color: var(--on-primary, #FFFFFF); background: var
    it flashes into place. can we make it more stable when navigating?").
    Each tab is its own page, so the phone blanked the screen while the next
    one loaded. Now the page being left stays on screen until the next one is
-   ready, the bar is carried across as it is, and only the page above it
-   fades in - quickly, or at once for anyone who asks their phone for less
-   motion. A phone or browser too old for this simply loads pages as before. */
+   ready, the bar is carried across as it is, and the new page takes the
+   old one's place at once (a fade, tried first, only blended the old page
+   into an empty one). A phone or browser too old for this simply loads
+   pages as before. */
 @view-transition { navigation: auto; }
 nav.tabs { view-transition-name: hc-tabs; }
 ::view-transition-group(hc-tabs), ::view-transition-old(hc-tabs), ::view-transition-new(hc-tabs) { animation: none; }
 ::view-transition-old(root) { animation: none; }
-::view-transition-new(root) { animation: hc-page-in 140ms ease-out both; }
-@keyframes hc-page-in { from { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { ::view-transition-new(root) { animation: none; } }
+::view-transition-new(root) { animation: none; }
 .day { color: var(--accent); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase;
        margin: 26px 0 10px; font-weight: 600; }
 details {
@@ -816,19 +820,120 @@ function clock(ms) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
+// LAST SEEN, DRAWN AT ONCE (1 Nov 2026, Asher on his iPhone: "nav tabs still
+// flicker when clicking", "the content above it flashes into place"). Every
+// tab is its own page, and every page used to open as an empty frame saying
+// Loading... until its first read of the club's data came back. Now each
+// read that comes back is kept on the phone (sessionStorage: this window
+// only, gone when it is closed), and a page that opens answers its first
+// reads from those copies, so it is drawn before it is first shown. A fresh
+// read follows at once (readFirst() below), as it always did. Copies over ten
+// minutes old are not used, the race state's not over thirty seconds, the
+// captions' never, and nothing over a megabyte is kept. "Nothing published
+// yet" (404) is kept as such; a busy or broken relay is not.
+const SEEN = 'hc-seen-' + CLUB + ':';
+const SEEN_FOR_MS = 600000;
+const STATE_FOR_MS = 30000;
+const SEEN_FRESH_MS = 2000;
+const SEEN_MAX_CHARS = 1000000;
+// True only while the page is first being drawn: the script and the reads
+// that answer from copies, which all finish before the timer fires.
+let warm = true;
+let warmed = 0;
+let warmAt = 0;
+setTimeout(() => { warm = false; }, 0);
+
+function seenFor(path) {
+  if (path.indexOf('/snapshot/captions') === 0) return 0;
+  return path === '/snapshot/state' ? STATE_FOR_MS : SEEN_FOR_MS;
+}
+
+function seenRead(path) {
+  const forMs = seenFor(path);
+  if (forMs === 0) return null;
+  try {
+    const kept = JSON.parse(sessionStorage.getItem(SEEN + path) || 'null');
+    if (!kept || typeof kept.at !== 'number' || kept.at > Date.now() || Date.now() - kept.at > forMs) return null;
+    return kept;
+  } catch (e) { return null; }
+}
+
+function seenKeep(path, body, missing) {
+  if (seenFor(path) === 0) return;
+  let raw = '';
+  try { raw = JSON.stringify(missing ? { at: Date.now(), missing: true } : { at: Date.now(), body: body }); } catch (e) { return; }
+  try {
+    if (raw.length > SEEN_MAX_CHARS) { sessionStorage.removeItem(SEEN + path); return; }
+    sessionStorage.setItem(SEEN + path, raw);
+  } catch (e) {
+    // Full: start again with only this one rather than keep stale copies.
+    try {
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
+        if (key && key.indexOf(SEEN) === 0) sessionStorage.removeItem(key);
+      }
+      sessionStorage.setItem(SEEN + path, raw);
+    } catch (again) { /* the page still works, it just draws after its read */ }
+  }
+}
+
+// Which reads a page makes, kept per page so that touching its tab can make
+// them ahead (see the tab bar below).
+const READS = 'hc-reads-' + CLUB + ':';
+function readsOf(page) {
+  try {
+    const list = JSON.parse(sessionStorage.getItem(READS + page) || '[]');
+    return Array.isArray(list) ? list.filter((p) => typeof p === 'string').slice(0, 8) : [];
+  } catch (e) { return []; }
+}
+function noteRead(path) {
+  if (seenFor(path) === 0) return;
+  const list = readsOf(location.pathname);
+  if (list.indexOf(path) >= 0) return;
+  list.push(path);
+  try { sessionStorage.setItem(READS + location.pathname, JSON.stringify(list.slice(-8))); } catch (e) { /* no reading ahead */ }
+}
+
+// Runs a page's first read, and once more straight after if it was drawn
+// from a copy, so the copy is on screen only as long as one read takes.
+function readFirst(load) {
+  const before = warmed;
+  const done = load();
+  if (warmed > before) setTimeout(load, 0);
+  return done;
+}
+
 // waitMs (26 Oct 2026): give up after that long, for a view that waits
 // for one read to answer before it asks again (the live page's captions).
 // A read that never came back - a phone moving between networks, venue
 // Wi-Fi dropping - left that view waiting on it for good, so it stopped
 // updating. Without waitMs, or AbortController, a read is as it was.
 async function grab(path, waitMs) {
+  if (warm) {
+    const kept = seenRead(path);
+    if (kept) {
+      // A copy read ahead a moment ago is as good as a new read.
+      if (Date.now() - kept.at > SEEN_FRESH_MS) warmed += 1;
+      if (warmAt === 0 || kept.at < warmAt) warmAt = kept.at;
+      noteRead(path);
+      return kept.missing ? { missing: true, status: 404, seen: true } : { body: kept.body, seen: true };
+    }
+  }
   const stop = waitMs && typeof AbortController === 'function' ? new AbortController() : null;
   const timer = stop ? setTimeout(() => stop.abort(), waitMs) : 0;
   try {
     const response = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + path,
       stop ? { cache: 'no-store', signal: stop.signal } : { cache: 'no-store' });
-    if (!response.ok) return { missing: true, status: response.status };
-    return { body: await response.json() };
+    if (!response.ok) {
+      // Nothing published yet is an answer worth keeping too; busy or
+      // broken is not.
+      if (response.status === 404) { seenKeep(path, undefined, true); noteRead(path); }
+      return { missing: true, status: response.status };
+    }
+    const body = await response.json();
+    seenKeep(path, body);
+    noteRead(path);
+    return { body: body };
   } finally {
     if (stop) clearTimeout(timer);
   }
@@ -959,7 +1064,9 @@ paintFollow();
 
 function touched() {
   if (stamp) {
-    stamp.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // While a page is drawn from copies, the time they were read.
+    const at = warm && warmAt > 0 ? new Date(warmAt) : new Date();
+    stamp.textContent = 'Updated ' + at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 }
 
@@ -976,7 +1083,7 @@ if (current && !(current.parentElement && getComputedStyle(current.parentElement
 }
 
 function poll(load, everyMs) {
-  load();
+  readFirst(load);
   setInterval(() => { if (!document.hidden) load(); }, everyMs);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 }
@@ -1005,6 +1112,51 @@ function meRemember(code) {
 function meForget() {
   try { localStorage.removeItem(ME_KEY); } catch (e) { /* nothing was kept */ }
 }
+
+// THE TAPPED TAB LIGHTS AT ONCE, AND ITS PAGE IS READ AHEAD (1 Nov 2026,
+// Asher: "nav tabs still flicker when clicking"). The line over the current
+// tab used to stay on the old tab until the next page arrived and then jump,
+// so the tap shows where it is going straight away. A finger landing on a
+// tab starts that page's reads (the ones it made last time on this phone),
+// and the tap waits for them, a third of a second at most, so the next page
+// opens drawn with what is new rather than what was last seen. Back to the
+// page's own tab if the phone brings this page back from its history.
+(function () {
+  const tabs = document.querySelector('nav.tabs');
+  if (!tabs) return;
+  const own = tabs.querySelector('a[aria-current]');
+  const light = (a) => {
+    tabs.querySelectorAll('a[aria-current]').forEach((x) => { if (x !== a) x.removeAttribute('aria-current'); });
+    if (a) a.setAttribute('aria-current', 'page');
+  };
+  const pageOf = (a) => { try { return new URL(a.href, location.href).pathname; } catch (e) { return ''; } };
+  let ahead = null;
+  let aheadFor = '';
+  tabs.addEventListener('pointerdown', (e) => {
+    const a = e.target instanceof Element ? e.target.closest('a') : null;
+    if (!a || e.button !== 0) return;
+    const page = pageOf(a);
+    if (page === '' || page === location.pathname) return;
+    const list = readsOf(page);
+    aheadFor = page;
+    ahead = list.length === 0 ? null : Promise.all(list.map((p) => grab(p).catch(() => null)));
+  });
+  tabs.addEventListener('click', (e) => {
+    const a = e.target instanceof Element ? e.target.closest('a') : null;
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    light(a);
+    const page = pageOf(a);
+    if (!ahead || page !== aheadFor || page === location.pathname) return;
+    e.preventDefault();
+    const waiting = ahead;
+    ahead = null;
+    let gone = false;
+    const go = () => { if (!gone) { gone = true; location.assign(a.href); } };
+    waiting.then(go, go);
+    setTimeout(go, 300);
+  });
+  addEventListener('pageshow', (e) => { if (e.persisted) { ahead = null; light(own); } });
+})();
 
 // The Me tab goes straight to a remembered night.
 (function () {
@@ -3633,8 +3785,9 @@ function cells(row, columns) {
   }).join('');
 }
 
-function render(state) {
-  lapTalk.take(state);
+function render(state, seen) {
+  // A copy's laps are not news: only a fresh read is counted for speaking.
+  if (!seen) lapTalk.take(state);
   const flag = String(state.flag || 'None').toLowerCase();
   const running = String(state.state || 'Idle');
 
@@ -3687,7 +3840,7 @@ async function load() {
   }
 
   const state = answer.body.body || {};
-  render(state);
+  render(state, answer.seen === true);
 
   // The broadcast bug in the corner (30 Oct 2026, relay branding) while a
   // race is staged, counting down or running - the same reading, and the
@@ -3713,7 +3866,7 @@ async function read() {
   try { await load(); } finally { reading = false; }
 }
 
-read();
+readFirst(read);
 setInterval(() => {
   beat += 1;
   if (!document.hidden && (lapTalk.talking() || beat % 2 === 0)) read();
