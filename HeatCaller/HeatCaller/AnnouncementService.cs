@@ -103,6 +103,19 @@ public sealed partial class AnnouncementService
     /// towards this and are never dropped by it.
     /// </summary>
     private const int MaxQueuedPerLapSounds = 3;
+
+    /// <summary>The Voice tab's Race calls switch for a race or for practice (VoiceProfile.RaceCallsInRaces / RaceCallsInPractice).</summary>
+    private bool RaceCallsOn(bool practice) =>
+        practice ? _voiceStore.Current.RaceCallsInPractice : _voiceStore.Current.RaceCallsInRaces;
+
+    /// <summary>
+    /// Whether a race call is on now: its own row ticked for a race or for
+    /// practice, AND the Voice tab's Race calls switch on for that. Every
+    /// race call asks this rather than the row alone - the switch is a gate
+    /// over the rows, so the rows keep their ticks while it is off.
+    /// </summary>
+    private bool CallOn(AnnouncementEventConfig? config) =>
+        config is not null && config.IsEnabledFor(IsPracticeMode) && RaceCallsOn(IsPracticeMode);
     private readonly SemaphoreSlim _soundQueueSignal = new(0);
 
     /// <summary>

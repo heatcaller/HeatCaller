@@ -359,21 +359,26 @@ public sealed class RelaySettingsControl : UserControl
 
         var page = new PageStack();
 
+        // Simple mode (1 Nov 2026) keeps the Relay card (club and token),
+        // Online check-in, Share and Status; what gets published, the look,
+        // personal PINs, email, the race-day manager and Room & Web are
+        // Advanced. See SimpleMode.
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.Add(BuildRelayCard());
-        page.Add(BuildPublishCard());
-        page.Add(BuildLookCard());
+        page.Add(SimpleMode.Hide(BuildPublishCard()));
+        page.Add(SimpleMode.Hide(BuildLookCard()));
         page.Add(BuildCheckInCard());
-        page.Add(BuildPinsCard());
-        page.Add(BuildMailCard());
-        page.Add(BuildManagerCard());
+        page.Add(SimpleMode.Hide(BuildPinsCard()));
+        page.Add(SimpleMode.Hide(BuildMailCard()));
+        page.Add(SimpleMode.Hide(BuildManagerCard()));
         page.Add(BuildShareCard());
 
         // ROOM & WEB (17 Oct 2026): what the room and the people at home can
         // send in or hear through the club's pages - from the Commentary
         // page. After Share, which is the address they use to get there.
-        page.Add(_roomAndWeb.Card);
+        page.Add(SimpleMode.Hide(_roomAndWeb.Card));
         page.Add(BuildStatusCard(), gapBelow: 0);
+        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
         Controls.Add(page);
 
@@ -544,6 +549,10 @@ public sealed class RelaySettingsControl : UserControl
         KeepLines(_lblLastGood);
 
         var card = new Section("Relay");
+
+        // The relay's address is Advanced (1 Nov 2026, Simple mode); the club
+        // and token are not.
+        SimpleMode.HideRow(fields, _txtBaseUrl);
 
         card.Add(_chkEnabled, stretch: false);
         card.Add(fields);
@@ -1401,7 +1410,7 @@ public sealed class RelaySettingsControl : UserControl
         card.Add(_chkCheckIn, stretch: false);
         card.Add(pin, gapBelow: UiLayout.HintGap);
         card.Add(lblHint);
-        card.Add(_chkCheckInPhotos, stretch: false);
+        card.Add(SimpleMode.Hide(_chkCheckInPhotos), stretch: false);
         card.Add(_lblCheckInState, gapBelow: UiLayout.HintGap);
         card.Add(new ButtonBar().With(_btnOpenCheckIn, _btnReissueBadges), gapBelow: 0);
 

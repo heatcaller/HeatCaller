@@ -233,7 +233,9 @@ public sealed partial class RaceControlControl
         // race format in force, and which columns the board shows.
         board.Add(_lblFormat, gapBelow: UiLayout.HintGap);
 
-        var footer = new ButtonBar().With(_chkStartWithOnAir, _btnFormat, btnColumns);
+        // Simple mode (1 Nov 2026) keeps Race Format; Start races On Air and
+        // the Columns button are Advanced - see SimpleMode.
+        var footer = new ButtonBar().With(SimpleMode.Hide(_chkStartWithOnAir), _btnFormat, SimpleMode.Hide(btnColumns));
 
         // The tick box is shorter than the buttons beside it; the bar lines
         // everything up along the top, so it is brought down to their middle.

@@ -322,7 +322,9 @@ public sealed class LooksControl : UserControl
         var looks = new Section("Looks");
 
         looks.Add(band);
-        looks.Add(new ButtonBar().With(_btnUseApp, _btnUseScreens, _btnNew, _btnEdit, _btnDelete), gapBelow: UiLayout.SectionGap);
+        // New Look and Edit (the color editor) are Advanced (1 Nov 2026,
+        // Simple mode) - picking a look is not.
+        looks.Add(new ButtonBar().With(_btnUseApp, _btnUseScreens, SimpleMode.Hide(_btnNew), SimpleMode.Hide(_btnEdit), _btnDelete), gapBelow: UiLayout.SectionGap);
         looks.Add(screens, gapBelow: UiLayout.HintGap);
         looks.Add(lblScreensHint, gapBelow: 0);
 
@@ -528,8 +530,9 @@ public sealed class LooksControl : UserControl
 
         var card = new Section("Appearance");
 
-        card.Add(_chkAnimate, stretch: false, gapBelow: UiLayout.HintGap);
-        card.Add(lblAnimateHint);
+        // The animated header is Advanced (1 Nov 2026, Simple mode); 24-hour time is not.
+        card.Add(SimpleMode.Hide(_chkAnimate), stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(SimpleMode.Hide(lblAnimateHint));
         card.Add(_chk24Hour, stretch: false, gapBelow: 0);
 
         return card;

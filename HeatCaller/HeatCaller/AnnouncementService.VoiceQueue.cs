@@ -99,7 +99,7 @@ public sealed partial class AnnouncementService
         }
 
         var profile = _voiceStore.Current;
-        if (!profile.Events.TryGetValue(type.ToString(), out var config) || !config.IsEnabledFor(IsPracticeMode))
+        if (!profile.Events.TryGetValue(type.ToString(), out var config) || !CallOn(config))
         {
             // Says which event was skipped and why - a silent announcement
             // is otherwise indistinguishable from one that never fired.

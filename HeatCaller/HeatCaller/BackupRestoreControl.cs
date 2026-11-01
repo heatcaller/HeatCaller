@@ -50,6 +50,16 @@ public sealed class BackupRestoreControl : UserControl
     /// </summary>
     public Func<bool>? IsRaceUnderWay { get; set; }
 
+    /// <summary>
+    /// Raised by the Settings mode card's button (1 Nov 2026): the host
+    /// (MainForm) turns Advanced mode on behind its warning, or goes back to
+    /// Simple, and calls <see cref="ShowMode"/> with the result.
+    /// </summary>
+    public event Action? SettingsModeToggleRequested;
+
+    private readonly Label _lblMode = new();
+    private readonly Button _btnMode = new();
+
     private readonly Button _btnBackupNow = new();
 
     private readonly Label _lblLastBackup = new();
@@ -192,6 +202,7 @@ public sealed class BackupRestoreControl : UserControl
         page.Add(BuildManualCard());
         page.Add(BuildAutoCard());
         page.Add(BuildPasswordCard());
+        page.Add(BuildModeCard());
         page.Add(BuildSupportCard());
 
         // The list stays the last card on the page: it grows and shrinks
@@ -204,6 +215,47 @@ public sealed class BackupRestoreControl : UserControl
         // Once the fields are on the page and wear its face - what they are
         // measured in.
         _textSize.Keep(SizeFields);
+    }
+
+    /// <summary>
+    /// SETTINGS MODE (1 Nov 2026, Simple and Advanced mode, round 1): where
+    /// Advanced mode is turned on - here rather than a switch in the
+    /// sidebar's footer, which Asher found too much for something a
+    /// volunteer should not stumble on. What mode this PC is in, and one
+    /// button for the other. The host does the asking (SettingsModeToggleRequested).
+    /// </summary>
+    private Section BuildModeCard()
+    {
+        _lblMode.AutoSize = true;
+
+        _btnMode.Click += (_, _) => SettingsModeToggleRequested?.Invoke();
+
+        var lblHint = new Label
+        {
+            Text = SettingsModes.CardHint,
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblHint, () => AppTheme.SmallFont);
+
+        var card = new Section("Settings mode");
+
+        card.Add(_lblMode, gapBelow: UiLayout.LabelGap);
+        card.Add(new ButtonBar().With(_btnMode));
+        card.Add(lblHint, gapBelow: 0);
+
+        ShowMode(_settings.SettingsMode);
+
+        return card;
+    }
+
+    /// <summary>The Settings mode card brought up to date with the mode this PC is in. UI thread.</summary>
+    public void ShowMode(SettingsMode mode)
+    {
+        // The bar sizes the button to its new words by itself.
+        _lblMode.Text = SettingsModes.CardStatus(mode);
+        _btnMode.Text = SettingsModes.CardButton(mode);
     }
 
     /// <summary>

@@ -898,11 +898,17 @@ public sealed class MixerControl : UserControl
         page.Add(lblIntro, gapBelow: UiLayout.HintGap);
         page.Add(warningLine, gapBelow: UiLayout.RowGap);
         page.Add(strips);
-        page.Add(imagingCard);
-        page.Add(duckCard);
-        page.Add(startCard);
-        page.Add(endCard);
+
+        // Simple mode (1 Nov 2026) shows the four faders and mute; the
+        // levels, ducking and session cards, and Reset to Defaults, are
+        // Advanced - see SimpleMode.
+        page.Add(SimpleMode.Hide(imagingCard));
+        page.Add(SimpleMode.Hide(duckCard));
+        page.Add(SimpleMode.Hide(startCard));
+        page.Add(SimpleMode.Hide(endCard));
         page.Add(auditionCard, gapBelow: 0);
+        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
+        SimpleMode.Hide(btnReset);
 
         Controls.Add(page);
 

@@ -156,7 +156,11 @@ public partial class MainForm
         // Essentials and club tools, each under a quiet heading - see NavTiers.
         // Asked per row on every repaint, so it has to read the same flag the
         // ordering above does - see _navRaceNight.
-        lstNav.SectionOf = name => NavTiers.SectionOf(name, _navRaceNight);
+        // In Simple mode, what a search turns up that is hidden goes under
+        // its own heading at the foot - see AdvancedMatching.
+        lstNav.SectionOf = name => !SimpleMode.ShowAll && (name == SimpleMode.SearchRow || SimpleMode.HiddenPages.Contains(name))
+            ? SimpleMode.SearchHeading
+            : NavTiers.SectionOf(name, _navRaceNight);
 
         // Before the first build, not after: a club that closed the app
         // mid-race-day reopens it with that day still current, and the sidebar
@@ -1926,6 +1930,10 @@ public partial class MainForm
         // "AI Commentary" is the longest caption the row has had.
         AppTheme.SizeTabsToCaptions(_tabVoiceSubNav);
 
+        // Simple mode (1 Nov 2026) hides Race Calls; the Race calls switches
+        // on the Voice tab turn them all on or off (VoiceProfile.RaceCallsInRaces).
+        SimpleMode.HideTab(_tabVoiceSubNav, subPageAnnouncements);
+
         // The rivalries: the last section of Race Calls since 17 Oct 2026,
         // put there below once the announcement rows exist. Built here and
         // kept for the life of the app - the Race Calls page around them is
@@ -2043,7 +2051,15 @@ public partial class MainForm
             Activate();
         };
 
-        var commentary = new CommentaryControl(_settings, _commentary) { Dock = DockStyle.Fill, OpenThisMonth = ShowThisMonth };
+        var commentary = new CommentaryControl(_settings, _commentary)
+        {
+            Dock = DockStyle.Fill,
+            OpenThisMonth = ShowThisMonth,
+
+            // Whether a Cast voice is set, for the Simple view's section
+            // switches (1 Nov 2026 - see CommentarySections).
+            AnnouncerEngine = () => _voiceStore.Current.EffectiveEngine,
+        };
         _commentaryControl = commentary;
         subPageCommentary.Controls.Add(commentary);
 
@@ -2277,6 +2293,14 @@ public partial class MainForm
         // 1280 wide and at 200% text - see AppTheme.SizeTabsToCaptions.
         AppTheme.SizeTabsToCaptions(_tabSoundSubNav);
 
+        // Simple mode (1 Nov 2026) keeps Mixer, Soundscapes and Music. The
+        // ambience and effects still play as the soundscape sets them - only
+        // their tuning tabs go. See SimpleMode.
+        SimpleMode.HideTab(_tabSoundSubNav, subPageImaging);
+        SimpleMode.HideTab(_tabSoundSubNav, subPageEffects);
+        SimpleMode.HideTab(_tabSoundSubNav, subPageAmbience);
+        SimpleMode.HideTab(_tabSoundSubNav, subPageLapBeeps);
+
         // Lap Beeps lists driver profiles, so it needs refreshing when the
         // tab is opened rather than only at construction.
         _tabSoundSubNav.SelectedIndexChanged += (_, _) =>
@@ -2440,6 +2464,9 @@ public partial class MainForm
         _tabClubWebsiteSubNav.TabPages.Add(subPageWebsite);
         _tabClubWebsiteSubNav.TabPages.Add(_recordingSubPage);
         AppTheme.StyleTabControl(_tabClubWebsiteSubNav);
+
+        // Recording is Advanced (1 Nov 2026, Simple mode).
+        SimpleMode.HideTab(_tabClubWebsiteSubNav, _recordingSubPage);
 
         // Back on Website, the boxes show what settings hold now - the same
         // re-read the page gets on entry (the refresh hook at the end).
@@ -2674,6 +2701,11 @@ public partial class MainForm
     private void BuildBackupPage()
     {
         var backupRestore = new BackupRestoreControl(_settings, _undo) { Dock = DockStyle.Fill };
+
+        // The Settings mode card: Advanced behind its warning, or back to
+        // Simple - see MainForm.SettingsMode.
+        _backupRestore = backupRestore;
+        backupRestore.SettingsModeToggleRequested += ToggleSettingsMode;
 
         // A restore restarts the app, which would end a race or practice
         // mid-session - the page asks first when this says one is on.
