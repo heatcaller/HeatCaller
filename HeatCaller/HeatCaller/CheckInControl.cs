@@ -146,8 +146,11 @@ public sealed class CheckInControl : UserControl
     /// <summary>Inspect Selected Car, held so its caption can say "Cars" while more than one row is picked.</summary>
     private readonly Button _btnInspect = new() { Text = InspectOne };
 
-    private const string InspectOne = "Inspect Selected Car...";
-    private const string InspectMany = "Inspect Selected Cars...";
+    // No "..." on the end: the button layer takes it off every caption
+    // (AppTheme.Caption), so with it these never matched what the button
+    // said and each change of selection set the caption again.
+    private const string InspectOne = "Inspect Selected Car";
+    private const string InspectMany = "Inspect Selected Cars";
 
     /// <summary>
     /// The driver under the first click of the latest click or double-click,

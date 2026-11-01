@@ -140,7 +140,8 @@ public sealed class CheckInMultiSelectTests : IDisposable
                 page.InspectManyRequested += drivers => asked = drivers;
                 page.InspectRequested += profile => Assert.Fail($"Only {profile.DriverName} was sent to be inspected.");
 
-                var button = Assert.Single(Everything(page).OfType<Button>(), b => b.Text == "Inspect Selected Cars...");
+                // As the button reads: the button layer drops a trailing "..." (AppTheme.Caption).
+                var button = Assert.Single(Everything(page).OfType<Button>(), b => b.Text == "Inspect Selected Cars");
                 button.PerformClick();
 
                 Assert.NotNull(asked);
