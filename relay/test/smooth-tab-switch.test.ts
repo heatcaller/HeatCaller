@@ -28,8 +28,10 @@ describe("switching tabs on the club pages", () => {
     });
   }
 
-  it("fades the page in at once for anyone who asks for less motion", () => {
+  it("swaps the page at once, with no fade into a page still loading", () => {
+    // 1 Nov 2026, Asher: "i see the fade I think but it's not really helping".
     const html = homePage("acme-rc", "Acme RC");
-    assert.match(html, /@media \(prefers-reduced-motion: reduce\) \{ ::view-transition-new\(root\) \{ animation: none; \} \}/);
+    assert.match(html, /::view-transition-new\(root\) \{ animation: none; \}/);
+    assert.doesNotMatch(html, /hc-page-in/);
   });
 });
