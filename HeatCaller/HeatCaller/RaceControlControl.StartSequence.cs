@@ -664,6 +664,11 @@ public sealed partial class RaceControlControl
             {
                 // On Air had already finished.
             }
+
+            // And what it had queued stops now (1 Nov 2026), or the staging
+            // call this press is about to queue waits behind the rest of the
+            // opening - see SilenceOnAir.
+            SilenceOnAir("On Air called off");
         }
     }
 
