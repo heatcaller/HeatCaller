@@ -87,7 +87,7 @@ internal sealed class HoldGesture
 /// holding, and a bar along its foot while it is held. The strip under the
 /// row says the rest - see <see cref="HoldStrip"/>.
 /// </summary>
-internal sealed class HoldToAct : IDisposable
+internal sealed class HoldToAct : IDisposable, IShownHold
 {
     /// <summary>How long a hold takes.</summary>
     internal static readonly TimeSpan HoldFor = TimeSpan.FromSeconds(1);

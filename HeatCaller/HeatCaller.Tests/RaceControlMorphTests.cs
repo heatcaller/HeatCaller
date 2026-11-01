@@ -222,7 +222,7 @@ public sealed class RaceControlMorphTests
             using var strip = new HoldStrip();
 
             strip.SetResting("Reset: press and hold for a second. Everything else is one click.");
-            strip.ShowWork("On Air: voicing the opening…", 0.6f, "about 8s · press O to skip to Stage", Color.Red);
+            strip.ShowWork("On Air: voicing the opening…", 0.6f, "about 8s · hold 0 to skip to Stage", Color.Red);
 
             if (strip.WorkText != "On Air: voicing the opening…")
             {

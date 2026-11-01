@@ -252,5 +252,9 @@ public partial class RaceControlControl
         }
 
         _holds.Clear();
+
+        // And 0's hold, On Air's key - see OnAirKey.
+        _onAirKey?.Dispose();
+        _onAirKey = null;
     }
 }

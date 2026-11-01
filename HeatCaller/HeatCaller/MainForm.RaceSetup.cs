@@ -244,7 +244,7 @@ public partial class MainForm
         // desk callers do not show the reason.
         if (_raceControlControl.OnAirRunning)
         {
-            const string busy = "On Air is opening a race - wait for it, or press On Air or F1 again to stage it now.";
+            const string busy = "On Air is opening a race - wait for it, or hold 0 for a second to skip to Stage now.";
             OnClientRawMessage($"{AppTime.LogStampNow()}  [program] {busy}");
             return busy;
         }
