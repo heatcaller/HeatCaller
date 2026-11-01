@@ -194,7 +194,9 @@ internal sealed class UsageMeters
     private readonly TimeSpan _saveDelay;
 
     private readonly string? _folder;
-    private readonly Func<DateTime> _utcNow;
+
+    /// <summary>Not readonly only so UseClockForTests can point Shared at a test's clock. Read without the lock: a delegate is swapped whole.</summary>
+    private Func<DateTime> _utcNow;
 
     private readonly object _gate = new();
     private readonly object _saveGate = new();
@@ -230,6 +232,20 @@ internal sealed class UsageMeters
         _utcNow = utcNow;
         _saveDelay = TimeSpan.Zero;
     }
+
+    /// <summary>
+    /// For the tests that drive Shared through the clients that report to it
+    /// (CommentarySwitchOverTests): the clock it reads, set to the same one
+    /// as the client under test. Null puts the real clock back. The app
+    /// never sets it.
+    ///
+    /// Without it (1 Nov 2026) the client ran on the test's 19 October while
+    /// Shared ran on the real clock, so the moment the real month passed the
+    /// test's 1 November reset, Shared called the test's spent October "last
+    /// month's figure" and three tests failed on every run from then on.
+    /// </summary>
+    internal void UseClockForTests(Func<DateTime>? utcNow) =>
+        _utcNow = utcNow ?? (() => DateTime.UtcNow);
 
     /// <summary>Raised on whatever thread made the change, after any change to a figure, a note or the requests. Marshal before touching a control.</summary>
     public event Action? Changed;

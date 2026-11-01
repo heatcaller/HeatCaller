@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 
@@ -27,7 +28,16 @@ public sealed class CommentarySwitchOverTests : IDisposable
 
     private DateTime _now = new(2026, 10, 19, 20, 0, 0, DateTimeKind.Utc);
 
-    public CommentarySwitchOverTests() => UsageMeters.Shared.Forget(MeterKind.Commentary);
+    public CommentarySwitchOverTests()
+    {
+        // The store and the client read one clock: this test's. Left on the
+        // real one, the store judged the test's spent October by today's
+        // date - fine until the real clock passed 1 November, after which it
+        // called it "last month's figure" and three of these failed on every
+        // run (1 Nov 2026).
+        UsageMeters.Shared.UseClockForTests(() => _now);
+        UsageMeters.Shared.Forget(MeterKind.Commentary);
+    }
 
     public void Dispose()
     {
@@ -36,6 +46,7 @@ public sealed class CommentarySwitchOverTests : IDisposable
         // The store is one per process, so a spent month would follow this
         // class into the next test.
         UsageMeters.Shared.Forget(MeterKind.Commentary);
+        UsageMeters.Shared.UseClockForTests(null);
         _data.Dispose();
     }
 
@@ -354,13 +365,52 @@ public sealed class CommentarySwitchOverTests : IDisposable
     {
         var client = Client();
 
-        // An older relay's figure, with no resetsAt.
+        // An older relay's figure, with no resetsAt, heard in the last
+        // minute of October UTC - 7:59pm in New York.
+        _now = new DateTime(2026, 10, 31, 23, 59, 0, DateTimeKind.Utc);
         UsageMeters.Shared.Report(MeterKind.Commentary, 400, 400, null);
 
-        _now = DateTime.UtcNow;
         Assert.True(client.MonthSpent);
 
-        _now = DateTime.UtcNow.AddDays(40);
+        // The relay's months turn at midnight UTC.
+        _now = new DateTime(2026, 11, 1, 0, 0, 1, DateTimeKind.Utc);
+        Assert.False(client.MonthSpent);
+    }
+
+    [Theory]
+    [InlineData("2026-11-01T00:00:00.000Z")] // the 1st at midnight UTC: a US club's evening of the 31st
+    [InlineData("2027-01-01T00:00:00.000Z")] // across the year end
+    [InlineData("2027-03-01T00:00:00.000Z")] // after a 28-day February
+    [InlineData("2028-03-01T00:00:00.000Z")] // after a leap-year February
+    [InlineData("2027-07-01T00:00:00.000Z")] // after a 30-day month, in summer time
+    public async Task A_spent_month_holds_right_up_to_its_reset_and_not_a_moment_after(string resetsAt)
+    {
+        var resets = DateTime.Parse(resetsAt, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal);
+        var spent = SpentBody.Replace("2026-11-01T00:00:00.000Z", resetsAt, StringComparison.Ordinal);
+
+        var relay = Serving(HttpStatusCode.TooManyRequests, spent);
+        var client = Client();
+        var local = new Brain("Written on this PC.");
+        var brain = new FallbackCommentaryBrain(client, local, onAnyFailure: false);
+
+        // The last race night of the month, two hours before the reset.
+        _now = resets.AddHours(-2);
+
+        Assert.Equal("Written on this PC.", await brain.GenerateAsync("system", "facts", 40));
+        Assert.True(client.MonthSpent);
+        Assert.Equal(400, client.MonthAllowance);
+
+        _now = resets.AddSeconds(-1);
+        Assert.True(client.MonthSpent);
+
+        // The new month: back to the relay at once, not after a probe.
+        _now = resets;
+        relay.Answer(HttpStatusCode.OK, $"{{\"ok\":true,\"text\":\"{RelayLine}\",\"used\":1,\"allowance\":400}}");
+
+        Assert.False(client.MonthSpent);
+        Assert.Equal(RelayLine, await brain.GenerateAsync("system", "facts", 40));
+        Assert.Equal(2, relay.Asked);
+        Assert.Equal(1, local.Asked);
         Assert.False(client.MonthSpent);
     }
 
