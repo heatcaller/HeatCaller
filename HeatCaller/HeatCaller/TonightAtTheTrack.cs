@@ -151,7 +151,7 @@ public static class TonightAtTheTrack
         var tonight = NightOf(nowLocal);
 
         return history
-            .Where(s => !s.IsDemoSession() && s.SessionType != RaceSessionType.Practice)
+            .Where(s => !s.IsNotScored() && s.SessionType != RaceSessionType.Practice)
             .Where(s => NightOf(s.StartedAtUtc.ToLocalTime()) == tonight)
             .Select(s => (Session: s, Round: string.IsNullOrEmpty(s.RoundId) ? null : roundOf(s.RoundId)))
             .Where(x => x.Round is not null && !string.IsNullOrWhiteSpace(x.Round.ClassName))
@@ -356,7 +356,7 @@ public static class TonightAtTheTrack
         var tonight = NightOf(nowLocal);
 
         return history
-            .Where(s => !s.IsDemoSession() && s.SessionType == RaceSessionType.Practice)
+            .Where(s => !s.IsNotScored() && s.SessionType == RaceSessionType.Practice)
             .Where(s => NightOf(s.StartedAtUtc.ToLocalTime()) == tonight)
             .OrderBy(s => s.StartedAtUtc)
             .ToList();

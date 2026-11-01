@@ -79,7 +79,7 @@ public static partial class AchievementEvaluator
     private static List<SessionRecord> EarlierSessions(IReadOnlyList<SessionRecord> history, SessionRecord record) =>
         history
             .Where(r => r.SessionType is RaceSessionType.Race or RaceSessionType.Practice
-                        && !r.IsDemoSession()
+                        && !r.IsNotScored()
                         && !string.Equals(r.Id, record.Id, StringComparison.Ordinal))
             .OrderByDescending(r => r.StartedAtUtc)
             .ToList();
@@ -197,7 +197,7 @@ public static partial class AchievementEvaluator
         var unlocks = new List<AchievementUnlock>();
         var lapsAdded = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-        if (!context.AtHome || record.SessionType != RaceSessionType.Practice || record.IsDemoSession())
+        if (!context.AtHome || record.SessionType != RaceSessionType.Practice || record.IsNotScored())
         {
             return unlocks;
         }

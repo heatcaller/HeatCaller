@@ -97,7 +97,7 @@ internal static class CoachReport
         }
 
         var sessions = input.History
-            .Where(s => s is not null && !s.IsDemoSession())
+            .Where(s => s is not null && !s.IsNotScored())
             .ToList();
 
         var tonight = sessions

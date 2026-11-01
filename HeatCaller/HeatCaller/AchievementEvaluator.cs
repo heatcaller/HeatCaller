@@ -66,7 +66,7 @@ public static partial class AchievementEvaluator
         // Nor is a saved demo race: every lap in it was made up by the
         // simulator, so a win, a fast lap or a streak there was earned by
         // nobody.
-        if (record.IsDemoSession())
+        if (record.IsNotScored())
         {
             return unlocks;
         }
@@ -127,7 +127,7 @@ public static partial class AchievementEvaluator
             // Demo races are left out for the same reason - a simulated lap
             // must not stand as the track record a real one has to beat.
             .Where(r => r.SessionType == RaceSessionType.Race
-                        && !r.IsDemoSession()
+                        && !r.IsNotScored()
                         && !string.Equals(r.Id, record.Id, StringComparison.Ordinal))
             .ToList();
 

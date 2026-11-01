@@ -592,7 +592,7 @@ public sealed class SeasonsControl : UserControl
                 .Select(x => x.Id)
                 .ToHashSet(StringComparer.Ordinal);
 
-            var raceSessions = _history.All.Where(s => s.SessionType == RaceSessionType.Race && !s.IsDemoSession()).ToList();
+            var raceSessions = _history.All.Where(s => s.SessionType == RaceSessionType.Race && !s.IsNotScored()).ToList();
 
             foreach (var session in raceSessions)
             {

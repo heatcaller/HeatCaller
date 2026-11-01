@@ -47,7 +47,7 @@ public static class HeatSeeding
 
         foreach (var session in history)
         {
-            if (session.IsDemoSession() || session.StartedAtUtc < sinceUtc || string.IsNullOrEmpty(session.RoundId))
+            if (session.IsNotScored() || session.StartedAtUtc < sinceUtc || string.IsNullOrEmpty(session.RoundId))
             {
                 continue;
             }

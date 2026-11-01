@@ -167,7 +167,7 @@ internal static class NightMoments
         // that these are things that really happened.
         if (record is null
             || record.SessionType != RaceSessionType.Race
-            || record.IsDemoSession()
+            || record.IsNotScored()
             || record.Results.Count == 0)
         {
             return found;

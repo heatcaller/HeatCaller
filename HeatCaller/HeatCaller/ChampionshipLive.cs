@@ -88,7 +88,7 @@ public static class ChampionshipLive
             // A round being run again replaces the race it was filed under
             // before, so that one is left out of both tables.
             var counted = EventSpine.SessionsFor(season, events, rounds, history)
-                .Where(s => !s.IsDemoSession())
+                .Where(s => !s.IsNotScored())
                 .Where(s => round is null || !string.Equals(s.RoundId, round.Id, StringComparison.Ordinal))
                 .ToList();
 

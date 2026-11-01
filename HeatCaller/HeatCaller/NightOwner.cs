@@ -80,7 +80,7 @@ internal static class NightOwner
         var heard = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var session in (tonight ?? Enumerable.Empty<SessionRecord>())
-                     .Where(s => s is not null && !s.IsDemoSession() && s.SessionType != RaceSessionType.Practice)
+                     .Where(s => s is not null && !s.IsNotScored() && s.SessionType != RaceSessionType.Practice)
                      .OrderBy(RelayResultsIndex.EffectiveStart))
         {
             foreach (var row in session.Results ?? new List<SessionResultEntry>())

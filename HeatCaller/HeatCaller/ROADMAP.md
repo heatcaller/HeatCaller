@@ -4663,8 +4663,13 @@ from. Ranked by what decides whether a club switches, and stays.
      LiveTime track's drivers and transponders already sit, so this is the
      LiveTime route too. Plan and legal read:
      plans/livetime-liverc-import-plan.md in the project files.
-   - **Season points as a starting number** - built 27 Sep 2026. Past race
-     results are not imported. A "Points so far" column carries each
+   - **A race result pasted from LiveRC** - built 1 Nov 2026
+     (`PastedResult`, `PasteResultForm`, **Paste a Result...** on Race
+     History): finishing order, laps, total time and fast lap from a copied
+     results table, filed as imported (`SessionRecord.ImportedFrom`) so it
+     never scores. Lap-by-lap times and transponders aren't in the table.
+   - **Season points as a starting number** - built 27 Sep 2026. Past races
+     never score, pasted or not. A "Points so far" column carries each
      driver's points into a championship (`Season.CarriedPoints`), added
      after the best-rounds rule; typed in or changed on the Championship
      page with Points Carried In.

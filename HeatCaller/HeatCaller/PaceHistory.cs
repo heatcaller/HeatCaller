@@ -114,7 +114,7 @@ internal static class PaceHistory
         foreach (var race in tonight)
         {
             if (race is null
-                || race.IsDemoSession()
+                || race.IsNotScored()
                 || !string.Equals(race.TrackLayoutName?.Trim(), wanted, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
@@ -193,7 +193,7 @@ internal static class PaceHistory
         foreach (var race in sessions)
         {
             if (race is null
-                || race.IsDemoSession()
+                || race.IsNotScored()
                 || !string.Equals(race.TrackLayoutName?.Trim(), wanted, StringComparison.OrdinalIgnoreCase)
                 // WHY (22 Oct 2026): was >= night, which dropped tonight's earlier
                 // heats; > keeps them and still drops anything dated after tonight.

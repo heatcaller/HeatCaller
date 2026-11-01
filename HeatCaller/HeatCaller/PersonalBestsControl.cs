@@ -261,7 +261,7 @@ public sealed class PersonalBestsControl : UserControl
         {
             // A saved demo race's lap times are invented, so it can never
             // set or beat anybody's personal best.
-            if (session.IsDemoSession() || string.IsNullOrWhiteSpace(session.TrackLayoutName))
+            if (session.IsNotScored() || string.IsNullOrWhiteSpace(session.TrackLayoutName))
             {
                 continue;
             }

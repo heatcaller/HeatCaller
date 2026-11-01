@@ -324,7 +324,7 @@ public static class EventSpine
             // results are invented, and a championship that counted it
             // would show it in "rounds counted" even though it scores
             // nothing.
-            if (history.Get(sessionId) is { } session && !session.IsDemoSession())
+            if (history.Get(sessionId) is { } session && !session.IsNotScored())
             {
                 byId[sessionId] = session;
             }
@@ -357,7 +357,7 @@ public static class EventSpine
                 // The race in hand, rather than looked up again by its id:
                 // a lookup that walks the whole history, for every race in
                 // it, every time a table is worked out.
-                if (!session.IsDemoSession())
+                if (!session.IsNotScored())
                 {
                     byId.TryAdd(session.Id, session);
                 }
@@ -421,7 +421,7 @@ public static class EventSpine
         RaceEventStore? events)
     {
         // A saved demo race is simulated, so no rule ever takes it.
-        if (session.SessionType != RaceSessionType.Race || session.IsDemoSession())
+        if (session.SessionType != RaceSessionType.Race || session.IsNotScored())
         {
             return false;
         }

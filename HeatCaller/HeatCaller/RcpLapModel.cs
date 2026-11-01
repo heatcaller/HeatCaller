@@ -259,7 +259,7 @@ public static class RcpLapModel
         var laps = sessions
             .Where(s => s is not null
                         && string.Equals(s.TrackLayoutName?.Trim(), layoutName.Trim(), StringComparison.OrdinalIgnoreCase)
-                        && !s.IsDemoSession()
+                        && !s.IsNotScored()
                         && (sinceUtc is null || s.StartedAtUtc >= sinceUtc))
             .SelectMany(s => s.Results ?? new List<SessionResultEntry>())
             .Where(r => r is not null)

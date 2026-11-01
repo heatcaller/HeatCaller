@@ -95,7 +95,7 @@ internal static class RaceFiling
 
         // A link pointing at a session that is no longer there is not a real
         // result - it is a stale link, and ClearRecorded exists for it.
-        if (history.Get(round.LinkedSessionId) is not { } already || already.IsDemoSession())
+        if (history.Get(round.LinkedSessionId) is not { } already || already.IsNotScored())
         {
             return false;
         }

@@ -140,7 +140,7 @@ internal static class RelayResultsIndex
 
         foreach (var session in sessions)
         {
-            if (!session.IsDemoSession())
+            if (!session.IsNotScored())
             {
                 years.Add(YearOf(session));
             }
@@ -178,7 +178,7 @@ internal static class RelayResultsIndex
         Func<SessionRecord, bool>? onRelay = null)
     {
         var mine = all
-            .Where(s => !s.IsDemoSession() && YearOf(s) == year)
+            .Where(s => !s.IsNotScored() && YearOf(s) == year)
             .Where(s => from is null || EffectiveStart(s) >= from.Value)
             .Where(s => onRelay is null || onRelay(s))
 

@@ -377,7 +377,7 @@ public partial class MainForm
         Func<SessionRecord, bool> onRelay)
     {
         return saved
-            .Where(s => s is not null && !s.IsDemoSession())
+            .Where(s => s is not null && !s.IsNotScored())
             .Where(s => s.Results.Any(r => transponders.Contains((r.Transponder ?? string.Empty).Trim())))
             .Where(onRelay)
             .OrderBy(RelayResultsIndex.EffectiveStart)

@@ -117,7 +117,7 @@ public sealed class EventReportForm : Form
         // Only days that have sessions - an empty report helps nobody.
         // Demo races are left out of the report, so they don't count here.
         var days = _history.All
-            .Where(s => !s.IsDemoSession())
+            .Where(s => !s.IsNotScored())
             .Select(s => s.StartedAtUtc.ToLocalTime().Date)
             .Distinct()
             .OrderByDescending(d => d)
@@ -125,7 +125,7 @@ public sealed class EventReportForm : Form
 
         foreach (var day in days)
         {
-            _cmbDay.Items.Add(new DayItem(day, _history.All.Count(s => !s.IsDemoSession() && s.StartedAtUtc.ToLocalTime().Date == day)));
+            _cmbDay.Items.Add(new DayItem(day, _history.All.Count(s => !s.IsNotScored() && s.StartedAtUtc.ToLocalTime().Date == day)));
         }
 
         if (_cmbDay.Items.Count > 0)

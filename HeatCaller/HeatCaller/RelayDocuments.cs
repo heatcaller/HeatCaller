@@ -386,7 +386,7 @@ internal static class RelayDocuments
 
         var sessions = history.All
             .Where(s => !string.IsNullOrWhiteSpace(s.TrackLayoutName)
-                        && !s.IsDemoSession())
+                        && !s.IsNotScored())
             .ToList();
 
         var json = string.Empty;

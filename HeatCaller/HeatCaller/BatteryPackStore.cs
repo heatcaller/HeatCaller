@@ -616,7 +616,7 @@ public sealed class BatteryPackStore
     /// </summary>
     public int AutoTag(SessionRecord session, ProfileStore? profiles)
     {
-        if (session.IsDemoSession())
+        if (session.IsNotScored())
         {
             return 0;
         }
@@ -814,7 +814,7 @@ public sealed class BatteryPackStore
         {
             // A saved demo race's lap times are invented, so they say
             // nothing about how a real pack performs.
-            if (session.IsDemoSession() || PackIdFor(session.Id, key) is not { } packId)
+            if (session.IsNotScored() || PackIdFor(session.Id, key) is not { } packId)
             {
                 continue;
             }

@@ -204,7 +204,7 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void ApplyBlackFlags(SessionRecord record)
     {
-        if (record.IsDemoSession())
+        if (record.IsNotScored())
         {
             return;
         }

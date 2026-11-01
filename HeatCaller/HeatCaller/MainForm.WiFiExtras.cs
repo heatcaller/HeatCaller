@@ -123,7 +123,7 @@ public partial class MainForm
         var byDriver = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
         var races = history
-            .Where(s => s is not null && !s.IsDemoSession())
+            .Where(s => s is not null && !s.IsNotScored())
             .Where(s => TonightAtTheTrack.NightOf(s.StartedAtUtc.ToLocalTime()) == tonight)
             .OrderBy(s => s.StartedAtUtc);
 

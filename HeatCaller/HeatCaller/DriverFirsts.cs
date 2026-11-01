@@ -35,7 +35,7 @@ internal static class DriverFirsts
 
         foreach (var session in history ?? Enumerable.Empty<SessionRecord>())
         {
-            if (session is null || session.IsDemoSession())
+            if (session is null || session.IsNotScored())
             {
                 continue;
             }

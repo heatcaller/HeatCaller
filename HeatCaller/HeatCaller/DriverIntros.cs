@@ -133,7 +133,7 @@ internal static class DriverIntros
         var races = (history ?? Enumerable.Empty<SessionRecord>())
             .Where(s => s is not null
                 && s.SessionType == RaceSessionType.Race
-                && !s.IsDemoSession()
+                && !s.IsNotScored()
                 && s.StartedAtUtc < beforeUtc
                 && s.Results.Any(r => string.Equals(r.Transponder, transponder, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(s => s.StartedAtUtc)

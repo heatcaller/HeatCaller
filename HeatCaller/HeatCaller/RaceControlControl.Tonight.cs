@@ -224,7 +224,7 @@ public sealed partial class RaceControlControl
 
         var candidates = _seasons.All
             .Select(s => (Season: s, Sessions: EventSpine.SessionsFor(s, _events, _rounds, _sessionHistory)
-                .Where(x => !x.IsDemoSession())
+                .Where(x => !x.IsNotScored())
                 .ToList()))
             .Where(c => c.Sessions.Count > 0)
             .ToList();

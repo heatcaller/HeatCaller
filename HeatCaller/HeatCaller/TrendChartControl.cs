@@ -161,7 +161,7 @@ public sealed class TrendChartControl : UserControl
         // same test every other page uses, because a ghost can be given
         // any name - including a real driver's.
         var drivers = _history.All
-            .Where(s => !s.IsDemoSession())
+            .Where(s => !s.IsNotScored())
             .SelectMany(s => s.Results)
             .Where(r => !GhostService.IsGhost(r.Transponder))
             .Select(r => r.DriverName)
@@ -178,7 +178,7 @@ public sealed class TrendChartControl : UserControl
         }
 
         var tracks = _history.All
-            .Where(s => !s.IsDemoSession())
+            .Where(s => !s.IsNotScored())
             .Select(s => s.TrackLayoutName)
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -223,7 +223,7 @@ public sealed class TrendChartControl : UserControl
         // Oldest first so the line reads left-to-right chronologically.
         foreach (var session in _history.All.Reverse())
         {
-            if (session.IsDemoSession())
+            if (session.IsNotScored())
             {
                 continue;
             }
