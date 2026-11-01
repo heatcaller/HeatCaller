@@ -4656,6 +4656,13 @@ from. Ranked by what decides whether a club switches, and stays.
      **Paste a Table...** on Driver Profiles): the clipboard's HTML table,
      or tab-separated text from a spreadsheet, into the same mapping form
      and import.
+   - **A LiveRC entry list** - built 1 Nov 2026 (`PastedTable`): every
+     class table on the page at once, the class from each table's title
+     ("10th Scale Entries: 16"), the doubled name cell put back to one, and
+     the "#" row count not taken for race numbers. LiveRC is where every
+     LiveTime track's drivers and transponders already sit, so this is the
+     LiveTime route too. Plan and legal read:
+     plans/livetime-liverc-import-plan.md in the project files.
    - **Season points as a starting number** - built 27 Sep 2026. Past race
      results are not imported. A "Points so far" column carries each
      driver's points into a championship (`Season.CarriedPoints`), added

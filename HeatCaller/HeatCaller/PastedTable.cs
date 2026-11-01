@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -95,7 +96,12 @@ internal static class PastedTable
             return null;
         }
 
-        var delimiter = DriverImport.DetectDelimiter(lines[0].Text);
+        // A title on the first line ("10th Scale" over a class's rows) has
+        // no separator in it, so the separator is found from the first line
+        // with a tab when there is one near the top - a browser or a
+        // spreadsheet copy is always tab-separated.
+        var tabbed = lines.Take(10).ToList().FindIndex(line => line.Text.Contains('\t'));
+        var delimiter = DriverImport.DetectDelimiter(lines[Math.Max(tabbed, 0)].Text);
         var grid = lines.Select(line => DriverImport.ParseLine(line.Text, delimiter).Select(Tidy).ToList()).ToList();
         var marked = new bool[grid.Count];
 
@@ -140,6 +146,8 @@ internal static class PastedTable
 
     private sealed class TableBuilder
     {
+        /// <summary>Where the table opened in the page, so tables joined together keep the page's order.</summary>
+        public int Order { get; init; }
         public List<RowBuilder> Rows { get; } = new();
         public bool InHead { get; set; }
         public RowBuilder? Row { get; set; }
@@ -159,6 +167,7 @@ internal static class PastedTable
         var open = new Stack<TableBuilder>();
         var skipping = (string?)null;
         var at = 0;
+        var opened = 0;
 
         void AddText(string raw)
         {
@@ -202,7 +211,7 @@ internal static class PastedTable
             switch (name)
             {
                 case "table" when !closing:
-                    open.Push(new TableBuilder());
+                    open.Push(new TableBuilder { Order = opened++ });
                     break;
 
                 case "table":
@@ -288,10 +297,20 @@ internal static class PastedTable
             return null;
         }
 
+        // WHY (1 Nov 2026, asked for by Asher): a LiveRC entry list is one
+        // table per class, each with the same headings. Taking only the
+        // biggest brought in one class of eleven. Every table with the
+        // biggest one's headings is read with it, in the page's order; a
+        // menu or sidebar table has other headings and is still left out.
+        var signature = HeadingSignature(best);
+        var chosen = signature is null
+            ? new List<TableBuilder> { best }
+            : finished.Where(t => t == best || HeadingSignature(t) == signature).OrderBy(t => t.Order).ToList();
+
         var grid = new List<List<string>>();
         var marked = new List<bool>();
 
-        foreach (var row in best.Rows)
+        foreach (var row in chosen.SelectMany(t => t.Rows))
         {
             var cells = new List<string>();
 
@@ -312,6 +331,31 @@ internal static class PastedTable
         var numbers = Enumerable.Range(1, grid.Count).ToList();
 
         return Shape(grid, marked.ToArray(), numbers, fromWebPage: true);
+    }
+
+    /// <summary>
+    /// A table's headings as they are compared with another table's: its
+    /// first row of two or more cells with words in, when that row is
+    /// headings. Null when the table has no such row, so it is never joined
+    /// to another.
+    /// </summary>
+    private static string? HeadingSignature(TableBuilder table)
+    {
+        foreach (var row in table.Rows)
+        {
+            var cells = row.Cells.Select(c => Tidy(WebUtility.HtmlDecode(c.Text.ToString()))).ToList();
+
+            if (cells.Count(c => c.Length > 0) < 2)
+            {
+                continue;
+            }
+
+            return row.IsHeadings || LooksLikeHeadings(cells)
+                ? string.Join("|", cells.Where(c => c.Length > 0).Select(DriverImport.Normalise))
+                : null;
+        }
+
+        return null;
     }
 
     // ------------------------------------------------------------------
@@ -363,10 +407,16 @@ internal static class PastedTable
 
         // A class title across a wide table ("Mini-Z Stock - A-Main") before
         // the headings - skip past it to the headings, the same as any lone
-        // cell further down.
+        // cell further down. A title that is a class with its entry count
+        // ("10th Scale Entries: 16", as LiveRC heads each class) is kept
+        // for the rows under it.
         var start = 0;
+        var classTitle = (string?)null;
+        var lastTitle = (string?)null;
         while (start < kept.Count - 1 && IsTitleRow(kept[start].Cells, width))
         {
+            classTitle = ClassFromTitle(kept[start].Cells, lastTitle) ?? classTitle;
+            lastTitle = kept[start].Cells.First(c => c.Length > 0);
             start++;
         }
 
@@ -379,6 +429,7 @@ internal static class PastedTable
 
         var rows = new List<List<string>>();
         var rowNumbers = new List<int>();
+        var rowClasses = new List<string?>();
 
         for (var i = hasHeadings ? start + 1 : start; i < kept.Count; i++)
         {
@@ -386,8 +437,12 @@ internal static class PastedTable
 
             if (IsTitleRow(cells, width))
             {
+                classTitle = ClassFromTitle(cells, lastTitle) ?? (classTitle is null ? null : string.Empty);
+                lastTitle = cells.First(c => c.Length > 0);
                 continue;
             }
+
+            lastTitle = null;
 
             // The headings again, part way down - a results page repeats
             // them for every class - or another row marked as headings.
@@ -398,9 +453,242 @@ internal static class PastedTable
 
             rows.Add(cells);
             rowNumbers.Add(number);
+            rowClasses.Add(classTitle);
         }
 
-        return rows.Count == 0 ? null : new Table(headers, rows, rowNumbers, fromWebPage);
+        if (rows.Count == 0)
+        {
+            return null;
+        }
+
+        if (rowClasses.Any(c => !string.IsNullOrEmpty(c)))
+        {
+            TidyClassList(headers, rows, rowClasses);
+        }
+
+        return new Table(headers, rows, rowNumbers, fromWebPage);
+    }
+
+    // ------------------------------------------------------------------
+    //  A LiveRC entry list (1 Nov 2026, asked for by Asher): one table per
+    //  class headed "10th Scale Entries: 16", columns "#", "Driver" and
+    //  "Transponder #", and each name in the page twice - "BLACK, KALEB"
+    //  and "KALEB BLACK" side by side in one cell, so a copy reads as
+    //  "BLACK, KALEBKALEB BLACK". Nothing here names LiveRC: any list laid
+    //  out the same way is read the same way.
+    // ------------------------------------------------------------------
+
+    private static readonly Regex EntryCount = new(
+        @"^(?<name>.*?)\s*[-–(]?\s*(?:(?:entries|entry|drivers|racers|entrants)\s*[:\-]?\s*\d+|\d+\s+(?:entries|entry|drivers|racers|entrants))\s*\)?\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(1));
+
+    /// <summary>
+    /// The class a title row names, when it is a class with its entry count:
+    /// "10th Scale Entries: 16" is "10th Scale", "Stock (12 entries)" is
+    /// "Stock". A title that is only the count ("Entries: 16", as a copy
+    /// made as plain text puts it on a line of its own) names the title
+    /// just above it, <paramref name="titleAbove"/>. Null for any other
+    /// title - "Mini-Z Stock - A-Main" is a race, not a class list.
+    /// </summary>
+    internal static string? ClassFromTitle(IReadOnlyList<string> cells, string? titleAbove = null)
+    {
+        var title = cells.FirstOrDefault(c => c.Length > 0);
+
+        if (title is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var match = EntryCount.Match(title);
+            if (!match.Success)
+            {
+                return null;
+            }
+
+            var name = match.Groups["name"].Value.Trim().TrimEnd('-', '–', ':', ',').Trim();
+
+            if (name.Length > 0)
+            {
+                return name;
+            }
+
+            return string.IsNullOrWhiteSpace(titleAbove) ? null : titleAbove.Trim();
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A list read class by class: the class each row sat under becomes a
+    /// Class column (when the table has none of its own), the doubled names
+    /// are put back to one, and a "#" column that only counts the rows of
+    /// each class is renamed so it isn't taken for race numbers.
+    /// </summary>
+    private static void TidyClassList(List<string> headers, List<List<string>> rows, List<string?> rowClasses)
+    {
+        var nameColumn = headers.FindIndex(h => DriverImport.Guess(h) == ImportColumn.DriverName);
+
+        if (nameColumn >= 0)
+        {
+            foreach (var row in rows)
+            {
+                if (UndoubledName(row[nameColumn]) is { } name)
+                {
+                    row[nameColumn] = name;
+                }
+            }
+        }
+
+        var countColumn = headers.FindIndex(h => DriverImport.Guess(h) == ImportColumn.RaceNumber);
+
+        if (countColumn >= 0 && OnlyCountsRows(rows.Select(r => r[countColumn]).ToList()))
+        {
+            headers[countColumn] = RowCountHeading;
+        }
+
+        if (!headers.Any(h => DriverImport.Guess(h) == ImportColumn.ClassName))
+        {
+            headers.Add(ClassHeading);
+
+            for (var i = 0; i < rows.Count; i++)
+            {
+                rows[i].Add(rowClasses[i] ?? string.Empty);
+            }
+        }
+    }
+
+    /// <summary>The heading of the Class column made from the tables' titles.</summary>
+    internal const string ClassHeading = "Class";
+
+    /// <summary>What a "#" column that only counts rows is renamed - nothing the import guesses.</summary>
+    internal const string RowCountHeading = "Row count";
+
+    /// <summary>Whether a column is 1, 2, 3 ... starting again at 1 for each class - a count, not race numbers.</summary>
+    private static bool OnlyCountsRows(IReadOnlyList<string> cells)
+    {
+        var previous = 0;
+
+        foreach (var cell in cells)
+        {
+            if (!int.TryParse(cell, NumberStyles.None, CultureInfo.InvariantCulture, out var n))
+            {
+                return false;
+            }
+
+            if (n != 1 && n != previous + 1)
+            {
+                return false;
+            }
+
+            previous = n;
+        }
+
+        return cells.Count > 0;
+    }
+
+    /// <summary>
+    /// One name from a cell that has it twice, "Last, First" then "First
+    /// Last" ("BLACK, KALEBKALEB BLACK" or "BLACK, KALEB KALEB BLACK"), as
+    /// "First Last" - in ordinary capitals when the page had it all in
+    /// capitals ("Kaleb Black"). Null when the cell isn't that shape, so
+    /// "Smith, Jr." and every ordinary name are left as they are.
+    /// </summary>
+    internal static string? UndoubledName(string cell)
+    {
+        var comma = cell.IndexOf(", ", StringComparison.Ordinal);
+
+        if (comma <= 0)
+        {
+            return null;
+        }
+
+        var last = cell[..comma].Trim();
+        var rest = cell[(comma + 2)..].Trim();
+        var suffix = " " + last;
+
+        if (last.Length == 0 || !rest.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var middle = rest[..^suffix.Length].Trim();
+        string? first = null;
+
+        if (middle.Length >= 2 && middle.Length % 2 == 0
+            && string.Equals(middle[..(middle.Length / 2)], middle[(middle.Length / 2)..], StringComparison.OrdinalIgnoreCase))
+        {
+            first = middle[..(middle.Length / 2)];
+        }
+        else if (middle.Length >= 3 && middle.Length % 2 == 1 && middle[middle.Length / 2] == ' '
+                 && string.Equals(middle[..(middle.Length / 2)], middle[(middle.Length / 2 + 1)..], StringComparison.OrdinalIgnoreCase))
+        {
+            first = middle[..(middle.Length / 2)];
+        }
+
+        if (string.IsNullOrWhiteSpace(first))
+        {
+            return null;
+        }
+
+        var name = first.Trim() + " " + last;
+        return name.Any(char.IsLower) ? name : OrdinaryCapitals(name);
+    }
+
+    /// <summary>
+    /// A name in capitals as a name is usually written: "KALEB BLACK" is
+    /// "Kaleb Black", "MARY-ANN O'BRIEN" is "Mary-Ann O'Brien", "MCDONALD"
+    /// is "McDonald", and "JR", "II", "III" and "IV" keep their usual form.
+    /// The announcer reads either the same; this is for the screens.
+    /// </summary>
+    internal static string OrdinaryCapitals(string name)
+    {
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        for (var w = 0; w < words.Length; w++)
+        {
+            var word = words[w];
+            var bare = word.TrimEnd('.', ',');
+
+            if (bare is "II" or "III" or "IV")
+            {
+                continue;
+            }
+
+            var chars = word.ToLowerInvariant().ToCharArray();
+            var startOfPart = true;
+
+            for (var i = 0; i < chars.Length; i++)
+            {
+                if (char.IsLetter(chars[i]))
+                {
+                    if (startOfPart)
+                    {
+                        chars[i] = char.ToUpperInvariant(chars[i]);
+                        startOfPart = false;
+                    }
+                }
+                else
+                {
+                    startOfPart = chars[i] is '-' or '\'';
+                }
+            }
+
+            var result = new string(chars);
+
+            if (result.Length > 2 && result.StartsWith("Mc", StringComparison.Ordinal) && char.IsLetter(result[2]))
+            {
+                result = "Mc" + char.ToUpperInvariant(result[2]) + result[3..];
+            }
+
+            words[w] = result;
+        }
+
+        return string.Join(" ", words);
     }
 
     /// <summary>One cell with words in it across a table three or more wide: a title, not a driver.</summary>
