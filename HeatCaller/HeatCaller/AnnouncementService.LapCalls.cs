@@ -2043,6 +2043,10 @@ public sealed partial class AnnouncementService
 
         if (gate.Fast)
         {
+            // Whatever happens to this lap's own call, one still waiting
+            // about the lap it beat is no longer true - see BinWaitingFastLaps.
+            BinWaitingFastLaps();
+
             var fastLapSoundCfg = sounds.Effects.GetValueOrDefault(nameof(SoundEffectKind.FastLap));
             if (SoundCandidateCanPlay(SoundEffectKind.FastLap, fastLapSoundCfg))
             {
