@@ -1190,7 +1190,7 @@ public sealed class CheckInControl : UserControl
 
         // A double-click on one of several picked rows is about all of them -
         // see BulkTech.RowsToActOn - whichever column it lands in.
-        var rows = BulkTech.RowsToActOn(_grid.SelectedBeforeClick, e.RowIndex);
+        var rows = RowsForDoubleClick(e.RowIndex, ModifierKeys);
 
         if (rows.Count > 1)
         {
@@ -1210,6 +1210,52 @@ public sealed class CheckInControl : UserControl
             InspectRequested?.Invoke(profile);
         }
     }
+
+    /// <summary>
+    /// The rows a double-click on <paramref name="rowIndex"/> acts on, with
+    /// <paramref name="modifiers"/> held: the picked rows as they stood before
+    /// its first click, and what Ctrl or Shift added - see BulkTech.RowsToActOn.
+    /// </summary>
+    internal IReadOnlyList<int> RowsForDoubleClick(int rowIndex, Keys modifiers) =>
+        BulkTech.RowsToActOn(
+            _grid.SelectedBeforeClick,
+            _grid.SelectedRows.Cast<DataGridViewRow>().Select(row => row.Index).ToList(),
+            rowIndex,
+            ctrl: (modifiers & Keys.Control) != 0,
+            shift: (modifiers & Keys.Shift) != 0);
+
+    /// <summary>
+    /// The drivers a double-click on <paramref name="rowIndex"/> acts on, in
+    /// list order, and those rows picked again - what the menu it opens is
+    /// for. For the tests, which cannot double-click.
+    /// </summary>
+    internal IReadOnlyList<DriverProfile> PickForDoubleClick(int rowIndex, Keys modifiers)
+    {
+        var rows = RowsForDoubleClick(rowIndex, modifiers);
+        Reselect(rows);
+        return DriversIn(rows);
+    }
+
+    /// <summary>Picks exactly these rows.</summary>
+    private void Reselect(IReadOnlyList<int> rows)
+    {
+        _grid.ClearSelection();
+
+        foreach (var index in rows)
+        {
+            if (index < _grid.Rows.Count)
+            {
+                _grid.Rows[index].Selected = true;
+            }
+        }
+    }
+
+    private List<DriverProfile> DriversIn(IReadOnlyList<int> rows) =>
+        rows
+            .Where(index => index < _grid.Rows.Count)
+            .Select(index => _grid.Rows[index].Tag)
+            .OfType<DriverProfile>()
+            .ToList();
 
     /// <summary>Remembers who the first click of a click or double-click lands on, and their tick - see _tickBeforeClick.</summary>
     private void OnGridClickStarting(int rowIndex)
@@ -1240,21 +1286,9 @@ public sealed class CheckInControl : UserControl
             RefreshCheckInMarks();
         }
 
-        _grid.ClearSelection();
+        Reselect(rows);
 
-        foreach (var index in rows)
-        {
-            if (index < _grid.Rows.Count)
-            {
-                _grid.Rows[index].Selected = true;
-            }
-        }
-
-        var drivers = rows
-            .Where(index => index < _grid.Rows.Count)
-            .Select(index => _grid.Rows[index].Tag)
-            .OfType<DriverProfile>()
-            .ToList();
+        var drivers = DriversIn(rows);
 
         if (drivers.Count == 0)
         {
@@ -1599,16 +1633,31 @@ internal sealed class RosterGrid : DataGridView
     /// <summary>Raised on the first press of a click or double-click, before the selection changes, with the row under the pointer (-1 for none).</summary>
     public event Action<int>? ClickStarting;
 
+    /// <summary>When and where the last press was, to tell the second press of a double-click from a new click - see BulkTech.IsSecondPress.</summary>
+    private long _lastPressAt = long.MinValue / 2;
+    private Point _lastPressPoint = Point.Empty;
+
     protected override void OnMouseDown(MouseEventArgs e)
     {
+        var now = Environment.TickCount64;
+        var second = BulkTech.IsSecondPress(e.Clicks, now - _lastPressAt, e.Location, _lastPressPoint,
+            SystemInformation.DoubleClickTime, SystemInformation.DoubleClickSize);
+
+        _lastPressAt = second ? long.MinValue / 2 : now;
+        _lastPressPoint = e.Location;
+
         // Only the first press: the second press of a double-click must not
         // overwrite what the first one found.
-        if (e.Clicks == 1)
+        if (!second)
         {
-            SelectedBeforeClick = SelectedRows.Cast<DataGridViewRow>().Select(row => row.Index).ToList();
+            RememberSelection();
             ClickStarting?.Invoke(HitTest(e.X, e.Y).RowIndex);
         }
 
         base.OnMouseDown(e);
     }
+
+    /// <summary>Takes the selection as it stands as the one before the click. OnMouseDown calls it; the tests call it to stand in for a press.</summary>
+    internal void RememberSelection() =>
+        SelectedBeforeClick = SelectedRows.Cast<DataGridViewRow>().Select(row => row.Index).ToList();
 }

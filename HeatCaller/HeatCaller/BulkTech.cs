@@ -24,24 +24,57 @@ internal static class BulkTech
     /// The selection the double-click is ABOUT is the one standing before its
     /// first click: that click is an ordinary click, and an ordinary click
     /// narrows the selection to its own row - or, with Ctrl held, takes its
-    /// row out. So a double-click on a row that was part of a selection of two
-    /// or more means all of them, in the order they sit in the list. Anywhere
-    /// else it means the row clicked, as it always did.
+    /// row out or puts it in. So:
+    ///
+    /// - With Ctrl held, it means the drivers picked before it and the row
+    ///   double-clicked, whether that row was one of them or not: Ctrl-picking
+    ///   three and Ctrl+double-clicking a fourth means all four. (It used to
+    ///   mean the fourth alone, and open its one-car inspection.)
+    /// - With Shift held, it means the run its Shift+click picks, as the list
+    ///   shows it now, and the row double-clicked.
+    /// - With neither, a double-click on one of two or more picked rows means
+    ///   all of them, and anywhere else the row clicked, as it always did.
+    ///
+    /// In the order they sit in the list.
     /// </summary>
-    public static IReadOnlyList<int> RowsToActOn(IReadOnlyCollection<int> selectedBeforeClick, int clickedRow)
+    public static IReadOnlyList<int> RowsToActOn(
+        IReadOnlyCollection<int> selectedBeforeClick,
+        IReadOnlyCollection<int> selectedNow,
+        int clickedRow,
+        bool ctrl = false,
+        bool shift = false)
     {
         if (clickedRow < 0)
         {
             return Array.Empty<int>();
         }
 
-        if (selectedBeforeClick.Count > 1 && selectedBeforeClick.Contains(clickedRow))
-        {
-            return selectedBeforeClick.Distinct().Order().ToList();
-        }
+        IEnumerable<int> rows = ctrl ? selectedBeforeClick.Append(clickedRow)
+            : shift ? selectedNow.Append(clickedRow)
+            : selectedBeforeClick.Count > 1 && selectedBeforeClick.Contains(clickedRow) ? selectedBeforeClick
+            : new[] { clickedRow };
 
-        return new[] { clickedRow };
+        return rows.Where(row => row >= 0).Distinct().Order().ToList();
     }
+
+    /// <summary>
+    /// Whether a press on the roster is the second press of a double-click.
+    ///
+    /// The press's own click count is not relied on alone. A second press
+    /// taken for a new click remembers the selection its first press has just
+    /// narrowed to one row, and a double-click on one of several picked
+    /// drivers then acts on that driver alone - the likeliest way a bulk
+    /// inspection came out for one driver on 1 Nov 2026. So a press that
+    /// comes within the double-click time of the last one, and near it,
+    /// counts as its second press too - the same test Windows makes - and the
+    /// press after that starts afresh.
+    /// </summary>
+    public static bool IsSecondPress(int clicks, long msSinceLastPress, Point at, Point lastAt, int doubleClickMs, Size doubleClickSize) =>
+        clicks > 1
+        || (msSinceLastPress >= 0
+            && msSinceLastPress <= doubleClickMs
+            && Math.Abs(at.X - lastAt.X) <= doubleClickSize.Width / 2
+            && Math.Abs(at.Y - lastAt.Y) <= doubleClickSize.Height / 2);
 
     /// <summary>
     /// The inspection the desk opens to edit rather than filing a new one:
