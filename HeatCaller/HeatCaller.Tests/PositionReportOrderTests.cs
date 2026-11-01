@@ -2,7 +2,8 @@ namespace HeatCaller.Tests;
 
 /// <summary>
 /// The running order a position report reads, and the time it gives second
-/// place (1 Nov 2026).
+/// place (1 Nov 2026). Then that it waits for every car it names to cross
+/// the line, and times each of them to the leader as the board does.
 ///
 /// The report is worded the instant the leader crosses and then waits for
 /// the speaker. On a short Mini-Z lap the cars behind cross in that time, so
@@ -113,15 +114,114 @@ public sealed class PositionReportOrderTests
     }
 
     [Fact]
-    public void Second_place_is_timed_to_the_leader_and_third_to_second()
+    public void Every_place_is_timed_to_the_leader_as_the_board_shows_it()
     {
+        // Third place was timed to second (1.3s) while the board's Gap to
+        // P1 said 2.3 - heard as the wrong time for P3 (1 Nov 2026).
         FourLapsOfTheScrap();
         Cross("Ann", 5, 30.0);
+        Cross("Bob", 5, 31.0);
+        Cross("Cal", 5, 32.3);
         var rows = ReadTop();
 
         Assert.Equal(new RaceGap(0, null), rows[0].Gap);
         Assert.Equal(1_000, rows[1].Gap.GapMs);
-        Assert.Equal(1_300, rows[2].Gap.GapMs);
+        Assert.Equal(2_300, rows[2].Gap.GapMs);
+        Assert.Equal(rows[2].VsLeader, rows[2].Gap);
+    }
+
+    [Fact]
+    public void The_gaps_are_the_board_gap_to_P1_to_the_millisecond()
+    {
+        FourLapsOfTheScrap();
+        Cross("Ann", 5, 30.0);
+        Cross("Bob", 5, 31.234);
+        Cross("Cal", 5, 32.305);
+        var rows = ReadTop();
+
+        Assert.Equal(1_234, rows[1].Gap.GapMs);
+        Assert.Equal(2_305, rows[2].Gap.GapMs);
+    }
+
+    [Fact]
+    public void A_report_is_not_ready_while_a_car_it_names_is_still_on_the_last_lap()
+    {
+        FourLapsOfTheScrap();
+
+        // The leader crosses the fifth lap: Bob and Cal are still on lap four.
+        Cross("Ann", 5, 30.0);
+        Assert.Equal(1, PositionReportOrder.SettledCount(ReadTop(), 5));
+
+        Cross("Bob", 5, 31.0);
+        Assert.Equal(2, PositionReportOrder.SettledCount(ReadTop(), 5));
+
+        // Ready once the last car named is over.
+        Cross("Cal", 5, 32.3);
+        var rows = ReadTop();
+        Assert.Equal(rows.Count, PositionReportOrder.SettledCount(rows, 5));
+    }
+
+    [Fact]
+    public void A_car_further_back_than_the_report_reads_does_not_hold_it_up()
+    {
+        FourLapsOfTheScrap();
+        Cross("Dee", 4, 26.5);
+        Cross("Ann", 5, 30.0);
+        Cross("Bob", 5, 31.0);
+        Cross("Cal", 5, 32.3);
+
+        // Dee is fourth and still on lap four; a top-three report is ready.
+        var rows = ReadTop(depth: 3);
+        Assert.Equal(3, PositionReportOrder.SettledCount(rows, 5));
+    }
+
+    [Fact]
+    public void A_lapped_car_does_not_hold_the_report_up()
+    {
+        FourLapsOfTheScrap();
+        Cross("Ed", 3, 23.5);
+        Cross("Ann", 5, 30.0);
+        Cross("Bob", 5, 31.0);
+        Cross("Cal", 5, 32.3);
+
+        var rows = ReadTop(depth: 4);
+        Assert.Equal("Ed", rows[3].Standing.Transponder);
+        Assert.Equal(4, PositionReportOrder.SettledCount(rows, 5));
+    }
+
+    [Fact]
+    public void A_car_still_to_cross_stops_the_count_so_no_place_is_skipped()
+    {
+        FourLapsOfTheScrap();
+        Cross("Ann", 5, 30.0);
+        Cross("Cal", 5, 31.2);
+
+        // Cal got by Bob and is over; Bob is still to cross, but the board
+        // has Cal second and Bob third, so the two read are Ann and Cal.
+        var rows = ReadTop();
+        Assert.Equal(new[] { "Ann", "Cal", "Bob" }, Names(rows));
+        Assert.Equal(2, PositionReportOrder.SettledCount(rows, 5));
+    }
+
+    [Fact]
+    public void The_wait_is_half_a_lap_longer_than_the_leaders_lap()
+    {
+        Assert.Equal(9_000, PositionReportOrder.WaitLimitMs(6_000));
+        Assert.Equal(PositionReportOrder.MinWaitMs, PositionReportOrder.WaitLimitMs(1_000));
+        Assert.Equal(PositionReportOrder.MaxWaitMs, PositionReportOrder.WaitLimitMs(120_000));
+        Assert.Equal(PositionReportOrder.DefaultWaitMs, PositionReportOrder.WaitLimitMs(0));
+    }
+
+    [Fact]
+    public void Past_P3_the_setting_warns_the_report_comes_later()
+    {
+        var (three, warnThree) = PositionReportOrder.DepthNote(3);
+        Assert.False(warnThree);
+        Assert.Contains("P3", three);
+
+        var (eight, warnEight) = PositionReportOrder.DepthNote(8);
+        Assert.True(warnEight);
+        Assert.Contains("P8", eight);
     }
 
     [Fact]

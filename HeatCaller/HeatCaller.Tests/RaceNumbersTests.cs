@@ -194,6 +194,32 @@ public sealed class RaceNumbersTests
         Assert.Equal(RaceNumbers.GapSpoken(0.4), RaceNumbers.GapSpoken(-0.4));
     }
 
+    [Theory]
+    [InlineData(1_234, "one point two three four")]
+    [InlineData(2_300, "two point three")]
+    [InlineData(2_050, "two point oh five")]
+    [InlineData(1_005, "one point oh oh five")]
+    [InlineData(312, "point three one two")]
+    [InlineData(40, "point oh four")]
+    [InlineData(1, "point oh oh one")]
+    [InlineData(1_000, "a second")]
+    [InlineData(4_000, "four seconds")]
+    [InlineData(12_345, "twelve point three four five")]
+    public void An_exact_gap_is_said_to_the_thousandth(long ms, string said)
+    {
+        // The position report's gaps (1 Nov 2026): never rounded, the
+        // noughts at the end left off because they change nothing.
+        Assert.Equal(said, RaceNumbers.GapExactly(ms));
+        Assert.DoesNotMatch("[0-9]", RaceNumbers.GapExactly(ms));
+    }
+
+    [Fact]
+    public void An_exact_gap_carries_its_direction()
+    {
+        Assert.Equal("one point five two three back", RaceNumbers.BehindExactly(1_523));
+        Assert.Equal("level to the thousandth", RaceNumbers.BehindExactly(0));
+    }
+
     // ------------------------------------------------------------------
     //  Positions
     // ------------------------------------------------------------------
