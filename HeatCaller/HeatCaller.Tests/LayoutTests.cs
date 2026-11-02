@@ -111,7 +111,10 @@ public sealed partial class LayoutTests
     public void NextStepsKeepsTheProgramsButtonsInViewAtEverySize()
     {
         var wrong = new List<string>();
-        var looked = new List<string>();
+
+        // Sizes, not looks: the page is looked at twice at each since Simple
+        // mode hides a row on it (1 Nov 2026 - LayoutSweep.MeasurePages).
+        var looked = new HashSet<string>(StringComparer.Ordinal);
 
         var sweep = LayoutSweep.Run(
             LayoutView.ForPages,
@@ -388,6 +391,12 @@ internal static class LayoutSweep
             HasCompletedFirstRun = true,
             HasSeenRaceDaySetup = true,
             AutoBackupEnabled = false,
+
+            // Advanced first - every card shown, the most there is to fit -
+            // then Simple, for the pages that hide something (1 Nov 2026,
+            // Simple and Advanced mode - see MeasurePages).
+            SettingsMode = SettingsMode.Advanced,
+            SettingsModeDecided = true,
         }.Save();
 
         _now = $"{view.Name}: building the window";
@@ -425,56 +434,16 @@ internal static class LayoutSweep
                 Directory.CreateDirectory(viewPictures);
             }
 
-            foreach (var (name, page) in window.LayoutCheckPages)
-            {
-                if (!result.AllPages.Contains(name))
-                {
-                    result.AllPages.Add(name);
-                }
+            MeasurePages(window, view, onlyPages, viewPictures, alsoCheck, result, simple: false);
 
-                if (onlyPages is not null && !onlyPages.Contains(name))
-                {
-                    continue;
-                }
+            // And again in Simple mode, each page that hides something in it:
+            // a card gone can leave a gap, an empty bar, a line with nothing
+            // over it. Same window - the switch is live, as it is in the app.
+            _now = $"{view.Name}: switching to Simple mode";
+            window.SetSettingsModeForLayoutCheck(SettingsMode.Simple);
+            Settle();
 
-                if (!result.Pages.Contains(name))
-                {
-                    result.Pages.Add(name);
-                }
-
-                _now = $"{view.Name}: {name}";
-
-                try
-                {
-                    window.ShowPageForLayoutCheck(name);
-                }
-                catch (Exception ex)
-                {
-                    result.Problem(_now, ex, "opening the page threw ");
-                    continue;
-                }
-
-                try
-                {
-                    var found = LayoutAudit.Check(page, name, Settle, where =>
-                    {
-                        _now = $"{view.Name}: {where}";
-
-                        if (viewPictures is not null)
-                        {
-                            Picture(page, where, viewPictures, result);
-                        }
-                    });
-
-                    result.Findings.AddRange(found.Select(finding => new SweepFinding(view, name, finding)));
-
-                    alsoCheck?.Invoke(view, name, page);
-                }
-                catch (Exception ex)
-                {
-                    result.Problem(_now, ex, "measuring threw ");
-                }
-            }
+            MeasurePages(window, view, onlyPages, viewPictures, alsoCheck, result, simple: true);
         }
         finally
         {
@@ -493,6 +462,83 @@ internal static class LayoutSweep
             Settle();
 
             result.Timings[view] = clock.Elapsed;
+        }
+    }
+
+    /// <summary>
+    /// Opens each page and measures it. In Simple mode, only the pages with
+    /// something tagged (SimpleMode.Tags), and each finding says "(Simple
+    /// mode)" at the end of where it is - the page's own name kept, so the
+    /// report and the converted-pages list still know it.
+    /// </summary>
+    private static void MeasurePages(
+        MainForm window,
+        LayoutView view,
+        IReadOnlySet<string>? onlyPages,
+        string? viewPictures,
+        Action<LayoutView, string, Control>? alsoCheck,
+        SweepResult result,
+        bool simple)
+    {
+        const string SimpleSuffix = " (Simple mode)";
+
+        foreach (var (name, page) in window.LayoutCheckPages)
+        {
+            if (simple && !SimpleMode.Tags(page))
+            {
+                continue;
+            }
+
+            if (!result.AllPages.Contains(name))
+            {
+                result.AllPages.Add(name);
+            }
+
+            if (onlyPages is not null && !onlyPages.Contains(name))
+            {
+                continue;
+            }
+
+            if (!result.Pages.Contains(name))
+            {
+                result.Pages.Add(name);
+            }
+
+            _now = $"{view.Name}: {name}{(simple ? SimpleSuffix : string.Empty)}";
+
+            try
+            {
+                window.ShowPageForLayoutCheck(name);
+            }
+            catch (Exception ex)
+            {
+                result.Problem(_now, ex, "opening the page threw ");
+                continue;
+            }
+
+            try
+            {
+                var found = LayoutAudit.Check(page, name, Settle, where =>
+                {
+                    _now = $"{view.Name}: {where}{(simple ? SimpleSuffix : string.Empty)}";
+
+                    if (viewPictures is not null)
+                    {
+                        Picture(page, simple ? where + SimpleSuffix : where, viewPictures, result);
+                    }
+                });
+
+                result.Findings.AddRange(found.Select(finding => new SweepFinding(
+                    view,
+                    name,
+                    simple ? finding with { Where = finding.Where + SimpleSuffix } : finding)));
+
+                alsoCheck?.Invoke(view, name, page);
+            }
+            catch (Exception ex)
+            {
+                result.Problem(_now, ex, "measuring threw ");
+            }
         }
     }
 

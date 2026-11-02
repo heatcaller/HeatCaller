@@ -9,7 +9,9 @@ relay.config.json
 # ElevenLabs key it reads. None of it has any business in a deployed image.
 relay.config.voice-test.json
 data-voice-test
-voice-test.key
+# With anything after the name too: Windows Notepad saves it as
+# voice-test.key.txt unless told otherwise (1 Nov 2026).
+voice-test.key*
 voice-test-setup.mjs
 
 *.cmd

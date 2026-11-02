@@ -56,6 +56,40 @@ public sealed class OutputBrandingTests : IDisposable
         AssertNear(Color.White, bitmap.GetPixel(1, 1));
     }
 
+    // 1 Nov 2026, Asher: "when classic theme is selected the sun should be
+    // yellow and orange not pink". Classic wears Synthwave, whose primary
+    // the Big Screen hands the sun.
+    [Fact]
+    public void On_Synthwave_the_one_colour_sun_is_a_yellow_to_orange_sunset_over_a_pink_floor()
+    {
+        var pink = ColorTranslator.FromHtml(Looks.Find(Looks.SynthwaveKey)!.Colors.Primary);
+        Assert.True(HeatCallerMark.IsSunset(pink));
+        Assert.False(HeatCallerMark.IsSunset(ColorTranslator.FromHtml(Looks.Find(Looks.MidnightKey)!.Colors.Primary)));
+
+        using var bitmap = new Bitmap(96, 96);
+
+        using (var g = Graphics.FromImage(bitmap))
+        {
+            g.Clear(Color.Black);
+            HeatCallerMark.DrawSun(g, new RectangleF(0, 0, 96, 96), pink);
+        }
+
+        // Yellow near the top of the sun, orange at its lower band, and no
+        // pink in the sun at all; the horizon (y = 18.5 of 24) keeps the pink.
+        var top = bitmap.GetPixel(48, 16);
+        var band = bitmap.GetPixel(48, 62);
+        Assert.True(top.R > 240 && top.G > 200 && top.B < 190, $"Top of the sun {top}");
+        Assert.True(band.R > 240 && band.G is > 120 and < 190 && band.B < 90, $"Lower band {band}");
+
+        for (var y = 12; y < 66; y++)
+        {
+            var c = bitmap.GetPixel(48, y);
+            Assert.False(c.B > c.G && c.R > 200, $"Pink in the sun at y = {y}: {c}");
+        }
+
+        AssertNear(pink, bitmap.GetPixel(48, 74));
+    }
+
     // --- Printed sheets ---------------------------------------------------------------
 
     [Fact]
@@ -178,6 +212,32 @@ public sealed class OutputBrandingTests : IDisposable
             Assert.Contains(".hcmark {", page);
             Assert.Contains("href=\"https://heatcaller.com\"", page);
             Assert.Single(Occurrences(page, "class=\"hcfoot\""));
+            Assert.Contains("--hcsun:currentColor;", page);
+        }
+    }
+
+    [Fact]
+    public void On_Synthwave_the_WiFi_pages_draw_the_sun_as_the_relays_sunset()
+    {
+        var server = new WebServerService(new RaceTiming(new RaceControlSession()), ProfileStore.Load(),
+            settings: new AppSettings { DisplayLook = Looks.SynthwaveKey });
+
+        var page = server.BuildLiveResultsPage();
+
+        Assert.Contains("--hcsun:" + HeatCallerMark.SunsetFill + ";", page);
+        Assert.Contains("fill:var(--hcsun, currentColor)", page);
+        Assert.Contains(HeatCallerMark.SunsetSvg + HeatCallerMark.SunSvg, page);
+
+        // Word for word the relay's gradient, so the Wi-Fi and the relay match.
+        var relay = File.ReadAllText(Path.Combine(RepoRoot, "relay", "src", "pages.ts"));
+        Assert.Contains("const SYNTHWAVE_PRIMARY = \"" + Looks.Find(Looks.SynthwaveKey)!.Colors.Primary + "\";", relay);
+        Assert.Contains("<style>.hcsun{fill:" + HeatCallerMark.SunsetFill + "}</style>", relay);
+
+        foreach (var piece in new[] { "<linearGradient id=\"hcsunset\" gradientUnits=\"userSpaceOnUse\" x1=\"0\" y1=\"3\" x2=\"0\" y2=\"16.1\">",
+                     "<stop offset=\"0\" stop-color=\"#FFE9A0\"/><stop offset=\".55\" stop-color=\"#FFB347\"/><stop offset=\"1\" stop-color=\"#FF8A2A\"/>" })
+        {
+            Assert.Contains(piece, HeatCallerMark.SunsetSvg);
+            Assert.Contains(piece, relay);
         }
     }
 
