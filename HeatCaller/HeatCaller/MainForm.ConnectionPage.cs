@@ -55,6 +55,7 @@ public partial class MainForm
     private (Font Font, int Count, int Width)? _baudPickerWidth;
     private (Font Font, int Count, int Width)? _consolePresetWidth;
     private (Font Font, int Count, int Width)? _splitPickerWidth;
+    private (Font Font, int Count, int Width)? _streamSourcePickerWidth;
 
     /// <summary>The text size the console's type was last made for - 0 before it has been.</summary>
     private float _consoleFontScale;
@@ -111,6 +112,9 @@ public partial class MainForm
         var grid = decoder.Add(new FieldGrid(), gapBelow: 0);
 
         grid.AddRow("Connect via:", FieldGrid.Inline(cmbConnectionType, btnConnect, btnDisconnect));
+
+        // The decoders from 3 up: where each is reached - see MainForm.StreamDecoders.
+        BuildStreamDecoderRows(grid);
 
         serialPortRow = FieldGrid.Inline(cmbSerialPort, btnRefreshPorts);
         lblSerialPort = grid.AddRow("COM port:", serialPortRow);
@@ -295,6 +299,7 @@ public partial class MainForm
         FitWidth(cmbSerialPort, Math.Max(UiLayout.AtTextSize(SerialPickerWidth), Pieces.PickerWidth(cmbSerialPort, ref _serialPickerWidth)));
         FitWidth(cmbBaud, Math.Max(UiLayout.AtTextSize(SerialPickerWidth), Pieces.PickerWidth(cmbBaud, ref _baudPickerWidth)));
         FitWidth(cmbSplitLoop, Math.Max(UiLayout.AtTextSize(ConnectionPickerWidth), Pieces.PickerWidth(cmbSplitLoop, ref _splitPickerWidth)));
+        FitWidth(cmbStreamSource, Math.Max(UiLayout.AtTextSize(SerialPickerWidth), Pieces.PickerWidth(cmbStreamSource, ref _streamSourcePickerWidth)));
 
         // Its own face, which nothing else hands it: a monospaced log reads
         // in columns. Made again only for a new text size.

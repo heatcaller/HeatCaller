@@ -82,6 +82,34 @@ public sealed class AppSettings
     public int ILapBaud { get; set; } = 9600;
 
     /// <summary>
+    /// How each decoder from 3 up (MyLaps P3, ZRound, Cano, OpenStint,
+    /// EasyLap serial) was last reached, by its DecoderConnection number -
+    /// each keeps its own, so switching between them and back loses nothing.
+    /// Read through <see cref="StreamDecoder"/>, which fills in the defaults.
+    /// </summary>
+    public Dictionary<int, StreamDecoderSettings> StreamDecoders { get; set; } = new();
+
+    /// <summary>The saved connection for <paramref name="decoder"/>, made with its defaults the first time it is asked for.</summary>
+    public StreamDecoderSettings StreamDecoder(int decoder)
+    {
+        StreamDecoders ??= new();
+
+        if (!StreamDecoders.TryGetValue(decoder, out var saved) || saved is null)
+        {
+            saved = new StreamDecoderSettings
+            {
+                Transport = DecoderProtocols.Transports(decoder)[0],
+                Port = DecoderProtocols.DefaultPort(decoder),
+                Baud = DecoderProtocols.DefaultBaud(decoder),
+            };
+
+            StreamDecoders[decoder] = saved;
+        }
+
+        return saved;
+    }
+
+    /// <summary>
     /// Whether the decoder that ISN'T the start/finish line (LastConnectionType)
     /// is connected too, as a split loop partway round the track - an I-Lap
     /// beside an EasyLap line, or the other way about. Its passes never count
@@ -3037,4 +3065,24 @@ public sealed class NightBeforePreviewUp
 
     /// <summary>The script as written, before PublicPrivacy.Redact.</summary>
     public string? Script { get; set; }
+}
+
+/// <summary>
+/// How one decoder from 3 up is reached (AppSettings.StreamDecoders). The
+/// transport is saved as DecoderTransport's number, so that enum's order is
+/// a storage format: add to its end, never reorder.
+/// </summary>
+public sealed class StreamDecoderSettings
+{
+    public DecoderTransport Transport { get; set; }
+
+    /// <summary>The decoder's IP address or name, for a network connection.</summary>
+    public string Host { get; set; } = string.Empty;
+
+    public int Port { get; set; }
+
+    /// <summary>The COM port it was last connected on, for a serial connection.</summary>
+    public string ComPort { get; set; } = string.Empty;
+
+    public int Baud { get; set; }
 }

@@ -23,6 +23,11 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+
+    <!-- A real ZeroMQ publisher, for checking HeatCaller's own ZeroMQ
+         subscriber (ZmtpSubscriber, for OpenStint) against something other
+         than itself. Tests only: it never ships with the app (1 Nov 2026). -->
+    <PackageReference Include="NetMQ" Version="4.0.4.5" />
   </ItemGroup>
 
   <ItemGroup>

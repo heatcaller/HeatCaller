@@ -128,7 +128,7 @@ public partial class MainForm
             return;
         }
 
-        var remembered = Array.FindIndex(ports, p => string.Equals(p, _settings.ILapPort, StringComparison.OrdinalIgnoreCase));
+        var remembered = Array.FindIndex(ports, p => string.Equals(p, RememberedComPort(), StringComparison.OrdinalIgnoreCase));
         cmbSerialPort.SelectedIndex = remembered >= 0 ? remembered : ports.Length - 1;
     }
 
@@ -169,7 +169,26 @@ public partial class MainForm
         // mistaken for the user choosing a rate.
         cmbBaud.SelectedIndexChanged += (_, _) =>
         {
-            if (cmbBaud.SelectedItem is not int rate || rate == _settings.ILapBaud)
+            if (cmbBaud.SelectedItem is not int chosen)
+            {
+                return;
+            }
+
+            // A decoder from 3 up keeps its own rate.
+            if (LineIsStream)
+            {
+                var saved = _settings.StreamDecoder(SelectedDecoder);
+
+                if (saved.Baud != chosen)
+                {
+                    saved.Baud = chosen;
+                    _settings.Save();
+                }
+
+                return;
+            }
+
+            if (chosen is var rate && rate == _settings.ILapBaud)
             {
                 return;
             }
@@ -361,7 +380,12 @@ public partial class MainForm
         // the offset still the old way round - every split out by twice the
         // offset, in sectors that still added up to the lap and so were
         // believed, and saved as records.
-        if (_lineDecoderKnown && decoder != _lineDecoder && _settings.SplitLoopOffsetMs != 0)
+        //
+        // Only between the EasyLap and the I-Lap, the two the offset can be
+        // measured between (1 Nov 2026): a decoder from 3 up as the line in
+        // the meantime leaves it as it was, rather than turning it round on
+        // the way there and again on the way back to the same one.
+        if (!DecoderConnection.IsStream(decoder) && _classicLine is { } classic && classic != decoder && _settings.SplitLoopOffsetMs != 0)
         {
             _settings.SplitLoopOffsetMs = -_settings.SplitLoopOffsetMs;
 
@@ -373,6 +397,21 @@ public partial class MainForm
 
         _lineDecoder = decoder;
         _lineDecoderKnown = true;
+
+        var lineIsStream = DecoderConnection.IsStream(decoder);
+
+        if (!lineIsStream)
+        {
+            _classicLine = decoder;
+        }
+
+        // A decoder from 3 up can't have a split loop beside it yet (see
+        // MainForm.StreamDecoders): the split loop is turned off, and said so.
+        if (lineIsStream && _settings.SplitLoopEnabled)
+        {
+            _settings.SplitLoopEnabled = false;
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [split] Split loop turned off - it works with the EasyLap and I-Lap only. Turn it on again after switching back to one of them.");
+        }
 
         // The decoders' threads and the timing thread read these copies,
         // never the settings (24 Oct 2026, timing layer, P8) - see
@@ -394,14 +433,30 @@ public partial class MainForm
         // few seconds.
         chkAutoConnect.Visible = isEasyLap;
 
+        // A decoder from 3 up: its source, and its address when on the
+        // network - filled from what it last used.
+        if (lineIsStream)
+        {
+            FillStreamDecoderFields(decoder);
+        }
+        else if (cmbBaud.Items.Contains(_settings.ILapBaud))
+        {
+            cmbBaud.SelectedItem = _settings.ILapBaud;
+        }
+
+        ShowStreamSourceRows(lineIsStream);
+
+        // The COM port rows for the I-Lap, and for a decoder from 3 up on a serial port.
+        var serialRows = isILap || (lineIsStream && SelectedStreamTransport == DecoderTransport.Serial);
+
         // The port picker's whole row, with its Rescan button, rather than
         // the two in it: an emptied row would keep its place in the card.
-        lblSerialPort.Visible = isILap;
-        serialPortRow.Visible = isILap;
-        lblBaud.Visible = isILap;
-        cmbBaud.Visible = isILap;
+        lblSerialPort.Visible = serialRows;
+        serialPortRow.Visible = serialRows;
+        lblBaud.Visible = serialRows;
+        cmbBaud.Visible = serialRows;
 
-        if (isILap)
+        if (serialRows)
         {
             RefreshSerialPorts();
         }
@@ -429,11 +484,21 @@ public partial class MainForm
             _ilapClient.Disconnect();
         }
 
+        // One decoder from 3 up at a time, and only while it is the line.
+        if (_streamClient.Decoder != decoder && _streamClient.State is not DecoderConnectionState.Disconnected)
+        {
+            _streamClient.Disconnect();
+        }
+
         // The chosen decoder's ACTUAL state, rather than leaving the other
         // one's showing - switching from a connected EasyLap to I-Lap
         // should show I-Lap's own (probably disconnected) state, not a
         // stale green light.
-        if (lineIsILap)
+        if (lineIsStream)
+        {
+            RenderDecoderStatus(StreamStateOf(decoder), StreamStateOf(decoder).ToString());
+        }
+        else if (lineIsILap)
         {
             RenderDecoderStatus(_ilapClient.State, _ilapClient.State.ToString());
         }
@@ -549,6 +614,49 @@ public partial class MainForm
             return;
         }
 
+        // A decoder from 3 up, as it was last reached. Its own client keeps
+        // trying when the link drops, so one go is all this needs - but a
+        // serial one waits for its port, as the I-Lap does.
+        if (LineIsStream)
+        {
+            if (_streamClient.State is not (DecoderConnectionState.Disconnected or DecoderConnectionState.Error))
+            {
+                _startupConnectPending = false;
+                return;
+            }
+
+            var saved = _settings.StreamDecoder(SelectedDecoder);
+
+            if (saved.Transport == DecoderTransport.Serial
+                && !ILapClient.AvailablePorts().Contains(saved.ComPort.Trim(), StringComparer.OrdinalIgnoreCase))
+            {
+                if (firstTry)
+                {
+                    OnClientRawMessage(saved.ComPort.Trim().Length == 0
+                        ? $"{AppTime.LogStampNow()}  [auto-connect] No port remembered for the {DecoderConnection.ShortName(SelectedDecoder)} decoder yet - pick it and press Connect once."
+                        : $"{AppTime.LogStampNow()}  [auto-connect] Waiting for the {DecoderConnection.ShortName(SelectedDecoder)} decoder on {saved.ComPort} - it connects as soon as the port appears.");
+                }
+
+                if (saved.ComPort.Trim().Length == 0)
+                {
+                    _startupConnectPending = false;
+                }
+
+                return;
+            }
+
+            _startupConnectPending = false;
+
+            if (saved.Transport == DecoderTransport.Serial)
+            {
+                RefreshSerialPorts();
+            }
+
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [auto-connect] Connecting the {DecoderConnection.ShortName(SelectedDecoder)} decoder.");
+            ConnectLine();
+            return;
+        }
+
         if (SelectedDecoder == DecoderConnection.ILap)
         {
             if (_ilapClient.State is not (DecoderConnectionState.Disconnected or DecoderConnectionState.Error))
@@ -614,6 +722,13 @@ public partial class MainForm
     /// <param name="userChose">True from the Connect button - see ConnectSplitLoop.</param>
     private void ConnectLine(bool userChose = false)
     {
+        // A decoder from 3 up: no split loop beside it.
+        if (LineIsStream)
+        {
+            ConnectStreamDecoder(quiet: !userChose);
+            return;
+        }
+
         if (SelectedDecoder == DecoderConnection.ILap)
         {
             if (cmbSerialPort.SelectedItem is not string ilapPort)
@@ -687,6 +802,14 @@ public partial class MainForm
         if (SelectedDecoder == DecoderConnection.ILap)
         {
             _ilapClient.Disconnect();
+            btnConnect.Enabled = true;
+            btnDisconnect.Enabled = false;
+            return;
+        }
+
+        if (LineIsStream)
+        {
+            _streamClient.Disconnect();
             btnConnect.Enabled = true;
             btnDisconnect.Enabled = false;
             return;

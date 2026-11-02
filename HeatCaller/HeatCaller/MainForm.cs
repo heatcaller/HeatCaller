@@ -354,6 +354,7 @@ public partial class MainForm : Form
     private readonly CommentaryService _commentary;
     private readonly DirectDecoderClient _decoderClient = new();
     private readonly ILapClient _ilapClient = new(AppPaths.Root);
+    private readonly StreamDecoderClient _streamClient = new(AppPaths.Root);
     private readonly System.Windows.Forms.Timer _decoderAutoConnectRetryTimer = new() { Interval = 3000 };
     private readonly AnnouncementService _announcer;
 
@@ -1852,6 +1853,12 @@ public partial class MainForm : Form
         _ilapClient.RawMessage += OnClientRawMessage;
         _ilapClient.LapEventReceived += OnILapPass;
 
+        // The decoders from 3 up (MyLaps P3, ZRound, Cano, OpenStint, EasyLap
+        // serial) - always the line, see MainForm.StreamDecoders.
+        _streamClient.StatusChanged += OnStreamStatusChanged;
+        _streamClient.RawMessage += OnClientRawMessage;
+        _streamClient.LapEventReceived += OnStreamPass;
+
         WireSplitLoop();
 
         // Watches for timing going quietly wrong mid-race - a decoder gone
@@ -2186,7 +2193,8 @@ public partial class MainForm : Form
                 RefreshSerialPorts();
             }
 
-            if (cmbBaud.Items.Contains(_settings.ILapBaud))
+            // A decoder from 3 up keeps its own rate, put back by UpdateConnectionModeUi.
+            if (!LineIsStream && cmbBaud.Items.Contains(_settings.ILapBaud))
             {
                 cmbBaud.SelectedItem = _settings.ILapBaud;
             }
@@ -2480,6 +2488,7 @@ public partial class MainForm : Form
             _relayPublisher.Dispose();
             _decoderClient.Dispose();
             _ilapClient.Dispose();
+            _streamClient.Dispose();
 
             // The timing thread, last of the timing (23 Oct 2026, timing
             // layer, P4): after practice was stopped and filed, the journal

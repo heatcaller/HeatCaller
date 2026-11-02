@@ -535,12 +535,7 @@ internal static class SupportBundle
 
         // Worked out first rather than inside the lines below: a switch or a
         // pattern in an interpolation hole is harder to read than it's worth.
-        var decoder = s.LastConnectionType switch
-        {
-            DecoderConnection.EasyLap => "EasyLap",
-            DecoderConnection.ILap => "I-Lap",
-            var other => "(" + other + ")",
-        };
+        var decoder = DecoderConnection.ShortName(s.LastConnectionType);
 
         var lastBackup = s.LastAutoBackupUtc is { } last
             ? last.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
