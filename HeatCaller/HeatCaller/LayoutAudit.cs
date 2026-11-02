@@ -470,6 +470,9 @@ internal static class LayoutAudit
         // and the tick box and the count beside Say It, Say the Next One and
         // Close (10 Oct).
         "Check How Names Are Read",
+
+        // The warning before Advanced mode, with its tick box (AdvancedModeForm, 1 Nov 2026).
+        "Turn on Advanced mode?",
     };
 
     /// <summary>

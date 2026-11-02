@@ -431,6 +431,18 @@ public sealed class RaceFormatForm : Form
         _chkFinishOnCrossing.Checked = seed.FinishOnNextCrossing;
         _fields.AddWide(_chkFinishOnCrossing, stretch: false);
 
+        // Simple mode (1 Nov 2026) keeps the lap and time limits and the
+        // start type; the rest is Advanced - see SimpleMode. Each keeps its
+        // value, and Collect reads it, either way.
+        SimpleMode.HideRow(_fields, _numMinLap);
+        SimpleMode.HideRow(_fields, _numStreakWindow);
+        SimpleMode.HideRow(_fields, _numStaggerGap);
+        SimpleMode.HideRow(_fields, _numWarmUp);
+        SimpleMode.HideRow(_fields, _chkAutoAdvance);
+        SimpleMode.HideRow(_fields, _numStaging);
+        SimpleMode.HideRow(_fields, _numCountdown);
+        SimpleMode.HideRow(_fields, _chkFinishOnCrossing);
+
         // Last in the body whenever it shows - the sentence above it is
         // hidden then.
         body.Add(_fields, gapBelow: 0);

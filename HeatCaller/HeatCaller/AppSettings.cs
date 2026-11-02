@@ -16,6 +16,13 @@ public enum PinRotation
     Monthly = 3,
 }
 
+/// <summary>Which settings the app shows - see AppSettings.SettingsMode. Saved as its number.</summary>
+public enum SettingsMode
+{
+    Simple = 0,
+    Advanced = 1,
+}
+
 /// <summary>
 /// The app's own settings - the decoder, backups, race defaults, the web
 /// server, the relay and the rest.
@@ -370,6 +377,14 @@ public sealed class AppSettings
     /// have their own boxes under "What it writes".
     /// </summary>
     public string CommentarySegmentsOff { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What each of AI Commentary's Simple-mode section switches had on when
+    /// it was turned off, by section, so turning it on again puts exactly
+    /// that back (1 Nov 2026, round 3 - see CommentarySections). Empty for a
+    /// section that is on, or was never turned off from Simple mode.
+    /// </summary>
+    public Dictionary<string, List<string>> CommentarySectionsRemembered { get; set; } = new();
 
     // --- The show's own music (ShowTreatment) ---
     //
@@ -1698,6 +1713,25 @@ public sealed class AppSettings
     /// </summary>
     public bool HideUntestedPages { get; set; }
 
+    /// <summary>
+    /// SIMPLE AND ADVANCED MODE (1 Nov 2026, round 1 of the plan): Simple
+    /// shows what a race night needs, Advanced shows every setting. A view,
+    /// never a behaviour - a setting hidden in Simple keeps its value and
+    /// keeps working (SettingsTable). Per PC, because this file is.
+    ///
+    /// Simple by default. An install from before this existed is put in one
+    /// or the other once, by SettingsModes.Decide, the first time this
+    /// version opens - see <see cref="SettingsModeDecided"/>.
+    /// </summary>
+    public SettingsMode SettingsMode { get; set; } = SettingsMode.Simple;
+
+    /// <summary>
+    /// Whether SettingsModes.Decide has looked at this file yet. False in
+    /// every file from before Simple mode, so an update is decided once from
+    /// what the club has changed; a new install is decided as Simple.
+    /// </summary>
+    public bool SettingsModeDecided { get; set; }
+
     // Track Layouts page - which track was last viewed, so its photo/details show automatically on returning to that page.
     public string LastViewedTrackLayoutName { get; set; } = string.Empty;
 
@@ -2662,6 +2696,11 @@ public sealed class AppSettings
         // An empty teaser list is fine: EffectiveTeaserLines falls back to
         // SummaryTeaserText.
         SummaryTeaserLines = Clean(SummaryTeaserLines);
+
+        // A null in the file, or a section saved with a null list, means nothing remembered.
+        CommentarySectionsRemembered = (CommentarySectionsRemembered ?? new Dictionary<string, List<string>>())
+            .Where(pair => pair.Key is not null && pair.Value is not null)
+            .ToDictionary(pair => pair.Key, pair => Clean(pair.Value));
         HiddenTabs = Clean(HiddenTabs);
         NavOrder = Clean(NavOrder);
         LastDemoCheckedDrivers = Clean(LastDemoCheckedDrivers);

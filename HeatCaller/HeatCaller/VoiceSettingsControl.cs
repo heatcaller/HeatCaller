@@ -216,6 +216,11 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly TextBox _txtLanguageCode = new();
     private readonly TextBox _txtOutputFormat = new();
     private readonly CheckBox _chkWirelessSpeaker = new ThemedCheckBox();
+
+    /// <summary>The Race calls switches on Speak with - see VoiceProfile.RaceCallsInRaces.</summary>
+    private readonly CheckBox _chkRaceCallsRaces = new ThemedCheckBox();
+
+    private readonly CheckBox _chkRaceCallsPractice = new ThemedCheckBox();
     private readonly NumericUpDown _numMaxPerLap = new();
     private readonly NumericUpDown _numStreakEveryN = new();
     private readonly CheckBox _chkOnlyLongestStreak = new ThemedCheckBox();
@@ -586,8 +591,13 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         page.Add(speak);
         page.Add(connection);
-        page.Add(parameters);
-        page.Add(library, gapBelow: 0);
+
+        // Simple mode (1 Nov 2026): the voice parameters and the saved lines
+        // are Advanced, as are the voice relay and consent rows on Speak with
+        // (BuildEngineCard). See SimpleMode.
+        page.Add(SimpleMode.Hide(parameters));
+        page.Add(SimpleMode.Hide(library), gapBelow: 0);
+        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
         // The save line lives in its own docked strip rather than at the
         // bottom of the cards, so it is on screen however far down the page
@@ -1372,7 +1382,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(_rdoHeatCaller, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(_lblHeatCallerStatus);
         card.Add(_usageHeatCaller);
-        Indented(card.Add(relay, gapBelow: UiLayout.SectionGap));
+        Indented(card.Add(SimpleMode.Hide(relay), gapBelow: UiLayout.SectionGap));
 
         card.Add(_rdoElevenLabs, stretch: false, gapBelow: UiLayout.HintGap);
         Indented(card.Add(_usageElevenLabs));
@@ -1387,6 +1397,28 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(_lblKokoroStatus, gapBelow: UiLayout.HintGap);
         card.Add(_lblSpeakingStatus, gapBelow: UiLayout.HintGap);
         card.Add(lblHint, gapBelow: UiLayout.SectionGap);
+
+        // RACE CALLS ON OR OFF (1 Nov 2026, asked for by Asher: "race calls
+        // should have an on off switch"), here rather than on Race Calls,
+        // which Simple mode hides: every race call at once, for races and
+        // for practice. A gate over the rows - see VoiceProfile.RaceCallsInRaces.
+        // Saved with the rest of the page (WireAutoSave, BuildProfileFromControls).
+        _chkRaceCallsRaces.Text = "In races";
+        _chkRaceCallsRaces.AutoSize = true;
+        _chkRaceCallsRaces.Checked = current.RaceCallsInRaces;
+
+        _chkRaceCallsPractice.Text = "In practice";
+        _chkRaceCallsPractice.AutoSize = true;
+        _chkRaceCallsPractice.Checked = current.RaceCallsInPractice;
+
+        var raceCalls = new FieldGrid();
+
+        raceCalls.AddRow("Race calls:", FieldGrid.Inline(_chkRaceCallsRaces, _chkRaceCallsPractice));
+        raceCalls.AddHint(
+            "Every call on the Race Calls tab, on or off at once. Off keeps each call's own ticks as they are, ready for "
+            + "when it's on again. Sound effects and the AI commentary aren't race calls.");
+
+        card.Add(raceCalls, gapBelow: UiLayout.SectionGap);
 
         // THE CONSENT BEHIND THE CLUB'S OWN VOICE, on this card rather
         // than a card of its own: it belongs beside the voice it is about,
@@ -1441,8 +1473,8 @@ public sealed partial class VoiceSettingsControl : UserControl
             "Only needed for a voice recorded from a real person, such as your own announcer; HeatCaller keeps just "
             + "the name and the date. Until a consent is recorded, the free voice reads every line.");
 
-        card.Add(consent);
-        card.Add(_lblConsent, gapBelow: 0);
+        card.Add(SimpleMode.Hide(consent));
+        card.Add(SimpleMode.Hide(_lblConsent), gapBelow: 0);
 
         ShowConsent();
 
@@ -3259,6 +3291,9 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(lblUsedWhen);
         card.Add(fields, gapBelow: 0);
 
+        // Simple mode (1 Nov 2026) keeps the API key; the model is Advanced.
+        SimpleMode.HideRow(fields, _cmbModel);
+
         return (card, fields);
     }
 
@@ -4225,6 +4260,8 @@ public sealed partial class VoiceSettingsControl : UserControl
             Volume = _store.Current.Volume,
             WirelessSpeaker = _chkWirelessSpeaker.Checked,
             MaxAnnouncementsPerLap = (int)_numMaxPerLap.Value,
+            RaceCallsInRaces = _chkRaceCallsRaces.Checked,
+            RaceCallsInPractice = _chkRaceCallsPractice.Checked,
 
             // The Speak With card. Built field by field like everything
             // here, so leaving one out would reset it on the next save.

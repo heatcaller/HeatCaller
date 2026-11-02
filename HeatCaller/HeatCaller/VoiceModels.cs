@@ -972,6 +972,19 @@ public sealed class VoiceProfile
     // and were never the source of the pile-up.
     public int MaxAnnouncementsPerLap { get; set; } = 2;
 
+    /// <summary>
+    /// RACE CALLS ON OR OFF (1 Nov 2026, asked for by Asher: "race calls
+    /// should have an on off switch"): every race call in a race - the rows
+    /// on Voice → Race Calls - at once, from the Voice tab. A gate over the
+    /// rows, not a change to them: off silences them all, and on again they
+    /// are exactly as each row was ticked. Sound effects and the AI
+    /// commentary are not race calls and are not touched. On by default.
+    /// </summary>
+    public bool RaceCallsInRaces { get; set; } = true;
+
+    /// <summary>The same, for practice - see <see cref="RaceCallsInRaces"/>.</summary>
+    public bool RaceCallsInPractice { get; set; } = true;
+
     public Dictionary<string, AnnouncementEventConfig> Events { get; set; } = new();
 
     /// <summary>

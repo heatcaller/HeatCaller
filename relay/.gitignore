@@ -4,7 +4,9 @@ data/
 relay.config.json
 data-voice-test/
 relay.config.voice-test.json
-voice-test.key
+# With anything after the name too: Windows Notepad saves it as
+# voice-test.key.txt unless told otherwise (1 Nov 2026).
+voice-test.key*
 relay-backups/
 
 # The lap voice's clips: made on somebody's own ElevenLabs key by
