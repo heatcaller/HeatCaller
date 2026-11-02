@@ -66,6 +66,11 @@ public sealed class BackupRestoreControl : UserControl
     private readonly Label _lblMode = new();
     private readonly Button _btnMode = new();
 
+    /// <summary>"Ask for the manager PIN to turn on Advanced mode" (round 5) - AppSettings.AdvancedNeedsManagerPin.</summary>
+    private readonly CheckBox _chkAdvancedPin = new ThemedCheckBox();
+
+    private readonly Label _lblAdvancedPinHint = new();
+
     private readonly Button _btnBackupNow = new();
 
     private readonly Label _lblLastBackup = new();
@@ -263,11 +268,42 @@ public sealed class BackupRestoreControl : UserControl
 
         _textSize.Wear(lblRestoreHint, () => AppTheme.SmallFont);
 
+        // ASKING FOR THE MANAGER PIN (round 5), for a PC volunteers run: in
+        // Advanced mode only, so nobody in Simple can untick it - and greyed
+        // until the club has a manager PIN to ask for.
+        _chkAdvancedPin.Text = "Ask for the manager PIN to turn on Advanced mode";
+        _chkAdvancedPin.AutoSize = true;
+        _chkAdvancedPin.Checked = _settings.AdvancedNeedsManagerPin;
+        _chkAdvancedPin.CheckedChanged += (_, _) =>
+        {
+            if (_settings.AdvancedNeedsManagerPin != _chkAdvancedPin.Checked)
+            {
+                _settings.AdvancedNeedsManagerPin = _chkAdvancedPin.Checked;
+                _settings.Save();
+            }
+        };
+
+        _lblAdvancedPinHint.AutoSize = true;
+        _lblAdvancedPinHint.ForeColor = AppTheme.TextMuted;
+        _textSize.Wear(_lblAdvancedPinHint, () => AppTheme.SmallFont);
+
         var card = new Section("Settings mode");
 
         card.Add(_lblMode, gapBelow: UiLayout.LabelGap);
         card.Add(new ButtonBar().With(_btnMode));
-        card.Add(lblHint, gapBelow: UiLayout.SectionGap);
+        card.Add(lblHint, gapBelow: UiLayout.RowGap);
+        card.Add(SimpleMode.Hide(_chkAdvancedPin), stretch: false, gapBelow: 0);
+        card.Add(SimpleMode.Hide(_lblAdvancedPinHint), gapBelow: UiLayout.SectionGap);
+
+        // The manager PIN is set on Local Screens, so it is read again each
+        // time this page is shown.
+        VisibleChanged += (_, _) =>
+        {
+            if (Visible)
+            {
+                ShowAdvancedPin();
+            }
+        };
         card.Add(new ButtonBar().With(btnRestore, btnPutBack));
         card.Add(lblRestoreHint, gapBelow: 0);
 
@@ -282,6 +318,19 @@ public sealed class BackupRestoreControl : UserControl
         // The bar sizes the button to its new words by itself.
         _lblMode.Text = SettingsModes.CardStatus(mode);
         _btnMode.Text = SettingsModes.CardButton(mode);
+
+        ShowAdvancedPin();
+    }
+
+    /// <summary>The manager PIN tick: greyed, and the hint says why, until the club has a manager PIN to ask for.</summary>
+    private void ShowAdvancedPin()
+    {
+        var hasPin = RaceDayService.IsUsableManagerPin(_settings.ManagerPin);
+
+        _chkAdvancedPin.Enabled = hasPin;
+        _lblAdvancedPinHint.Text = hasPin
+            ? "For a PC volunteers run: Advanced mode then needs the PIN the race-day manager's phone page asks for."
+            : "Set a manager PIN first, on Local Screens in the Race-day manager card (six digits or more).";
     }
 
     /// <summary>

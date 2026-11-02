@@ -67,6 +67,23 @@ public sealed class SettingsTableTests
     }
 
     [Fact]
+    public void The_manager_pin_lock_survives_a_restore()
+    {
+        Assert.Equal(SettingGroup.KeptOnRestore, SettingsTable.App[nameof(AppSettings.AdvancedNeedsManagerPin)]);
+        Assert.False(new AppSettings().AdvancedNeedsManagerPin);
+    }
+
+    [Fact]
+    public void Only_the_manager_pin_itself_opens_advanced_mode()
+    {
+        Assert.True(ManagerPinForm.Matches("482913", "482913"));
+        Assert.True(ManagerPinForm.Matches(" 482913 ", "482913"));
+        Assert.False(ManagerPinForm.Matches("482914", "482913"));
+        Assert.False(ManagerPinForm.Matches("48291", "482913"));
+        Assert.False(ManagerPinForm.Matches(string.Empty, string.Empty));
+    }
+
+    [Fact]
     public void Keys_accounts_and_the_decoder_port_are_kept()
     {
         foreach (var name in new[]

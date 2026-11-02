@@ -98,6 +98,14 @@ public partial class MainForm
 
         var raceRunning = _race.IsPracticeMode || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
 
+        // The manager PIN first, when the club has asked for it (round 5) -
+        // and only while there is a usable one, so a club can never lock
+        // itself out with the tick on and no PIN set.
+        if (AdvancedPinAsked() && !ManagerPinForm.Ask(this, _settings.ManagerPin))
+        {
+            return;
+        }
+
         if (!AdvancedModeForm.Ask(this, raceRunning))
         {
             return;
@@ -105,6 +113,10 @@ public partial class MainForm
 
         SetSettingsMode(SettingsMode.Advanced);
     }
+
+    /// <summary>Whether turning Advanced on asks for the manager PIN: ticked, and a usable PIN to ask for.</summary>
+    private bool AdvancedPinAsked() =>
+        _settings.AdvancedNeedsManagerPin && RaceDayService.IsUsableManagerPin(_settings.ManagerPin);
 
     /// <summary>
     /// Back to Simple mode, with no warning - nothing is lost going this way.

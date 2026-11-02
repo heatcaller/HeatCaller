@@ -15,7 +15,7 @@ The sidebar is always dark, whatever look you use. From top to bottom it has:
 1. The **HEATCALLER** header, or your club logo if you've set one. With a look that has Synthwave effects, such as **Synthwave**, it's animated (unless the logo is showing).
 2. The **Search pages...** box, with a chevron beside it that narrows the sidebar to just its icons (see [Just the icons](#just-the-icons)).
 3. The list of pages. Click one to open it.
-4. Three icon buttons at the bottom: **Manage Navigation**, the announcer mute, and **Undo**. They have no text on them - hover over one to see its name. They're described below.
+4. Icon buttons at the bottom: **Manage Navigation** (in Advanced mode only), the announcer mute, and **Undo**. They have no text on them - hover over one to see its name. They're described below. In Advanced mode an amber **Advanced** sits above them; see [Simple and Advanced mode](simple-and-advanced-mode.md).
 
 HeatCaller opens on the **Race Control** page.
 
@@ -172,11 +172,11 @@ Press <kbd>?</kbd> at any time you're not typing in a box to see a sheet of the 
 
 ## The sidebar buttons
 
-Three icon buttons, with no text on them - hover over one to see its name.
+Icon buttons, with no text on them - hover over one to see its name. **Manage Navigation** is there in Advanced mode only.
 
 | Button | What it does |
 |---|---|
-| **Manage Navigation** | Opens the dialog for hiding and reordering pages (see above). |
+| **Manage Navigation** | Opens the dialog for hiding and reordering pages (see above). Advanced mode only. |
 | **Mute Announcer** / **Unmute Announcer** | Silences the announcer (anything already queued is dropped), stops the crowd ambience and pauses the music. Unmuting brings back the ambience and music that were playing. The mute is remembered between sessions. The icon turns red while muted. <kbd>M</kbd> does the same (except while you're typing in a box). |
 | **Undo** | Undoes the last change you made (<kbd>Ctrl</kbd>+<kbd>Z</kbd> does the same, except while you're typing in a box). A count badge appears on the icon while there's anything to undo; hover over it to see the whole list, in order. To undo several steps at once, right-click the button (or click the small arrow on it) and pick a step: it's undone along with everything newer. HeatCaller keeps the last 25 undoable changes. With nothing to undo, there's no badge and the tooltip reads "Nothing to undo." |
 

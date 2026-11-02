@@ -166,6 +166,10 @@ internal static class SettingsModes
 
     internal const string ChipTooltip = "Advanced mode is on: every setting is shown.\r\nClick to go back to Simple mode.";
 
+    /// <summary>The welcome wizard's last step (round 5).</summary>
+    internal const string WizardLine =
+        "HeatCaller starts in Simple mode. Turn on Advanced mode on Backup & Restore when you want every setting.";
+
     /// <summary>The note on going back to Simple when something about to be hidden is not at its default.</summary>
     internal const string HidingChangedNote =
         "Some settings you're hiding were changed from their defaults. They keep working while hidden.\r\n\r\n"
