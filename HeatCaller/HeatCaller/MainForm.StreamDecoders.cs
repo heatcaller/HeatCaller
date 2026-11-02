@@ -167,7 +167,15 @@ public partial class MainForm
             _streamClient.Disconnect();
         }
 
+        // Refilling the page reloads the saved address; an address typed
+        // but not yet connected with is kept, not lost to a change of source.
+        var typedHost = txtStreamHost.Text;
+        var typedPort = txtStreamPort.Text;
+
         UpdateConnectionModeUi();
+
+        txtStreamHost.Text = typedHost;
+        txtStreamPort.Text = typedPort;
     }
 
     /// <summary>
