@@ -563,10 +563,17 @@ public sealed partial class AnnouncementService
         var (sponsorTag, countMention, releaseMention) = SponsorTag(AnnouncementEventType.PositionReport);
         text = (text + sponsorTag).Trim();
 
-        // The order as it stands NOW, and how long it stays true enough to
-        // read - see PositionReportSayWithinMs.
-        var builtAtMs = TimingClock.NowMs;
-
+        // Not dropped for how long it waits for the speaker (1 Nov 2026).
+        // It used to be, past three seconds, because its words were written
+        // here and could be out of date by the time they were said. They
+        // are read against the board again just before they are spoken
+        // (below), so a wait no longer makes them wrong - and since the
+        // report waits for the last car it names, it is queued the moment
+        // that car crosses, right behind that car's own lap call, streak or
+        // fast lap: it nearly always waited longer than three seconds, and
+        // was hardly ever heard. A newer report still replaces one waiting
+        // (EnqueueVoiceWork), so they cannot pile up.
+        //
         // The text goes up only if the report is accepted - see
         // EnqueueVoiceWork. A report turned down (or kept and then lost)
         // gives the sponsor's ration back (20 Oct 2026, Bug Hunt 8).
@@ -581,18 +588,6 @@ public sealed partial class AnnouncementService
 
                 try
                 {
-                    // Waited behind another line for too long: the order it
-                    // reads may not be the order on the screen any more. Not
-                    // said - the reservation goes back in the finally, as for
-                    // any line that is not heard.
-                    if (!PositionReportStillTrue(builtAtMs, TimingClock.NowMs))
-                    {
-                        StatusMessage?.Invoke(
-                            $"[voice] Dropped PositionReport - it waited {((TimingClock.NowMs - builtAtMs) / 1000.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}s behind another line, "
-                            + "so the order may have changed (\"" + text + "\").");
-                        return;
-                    }
-
                     // Read again just before it is said (1 Nov 2026). The
                     // words were written when the last car named crossed,
                     // and the board can still move while the report waits
@@ -774,30 +769,6 @@ public sealed partial class AnnouncementService
         return saidAs;
     }
 
-    /// <summary>
-    /// How long a running order may wait for the speaker and still be read.
-    /// </summary>
-    /// <remarks>
-    /// WHY (31 Oct 2026): the running order is one of the calls that waits
-    /// its turn rather than being dropped (IsWorthWaitingFor), and it was
-    /// the only one with no limit on the wait. Its words are written the
-    /// moment it is built, so behind a long line it read out an order the
-    /// screen had already changed - on a five-second Mini-Z lap a place can
-    /// change hands in the time one line takes to say. Three seconds
-    /// outlasts a lap call or a lap time, which is what it usually waits
-    /// behind; past that it is dropped, and the next interval reads the
-    /// order as it is then. The time-left calls already work this way
-    /// (MinutesLeftSayWithinMs, FinalSecondsSayWithinMs).
-    /// </remarks>
-    internal const long PositionReportSayWithinMs = 3_000;
-
-    /// <summary>
-    /// Whether a running order built at <paramref name="builtAtMs"/> is
-    /// still fresh enough to read at <paramref name="nowMs"/> (TimingClock
-    /// milliseconds). Pure, so the limit can be tested without a voice.
-    /// </summary>
-    internal static bool PositionReportStillTrue(long builtAtMs, long nowMs) =>
-        nowMs - builtAtMs <= PositionReportSayWithinMs;
 
     /// <summary>Leader lap the last report was read on, so it fires once per interval rather than once per car.</summary>
     private int _lastPositionReportLap = -1;
