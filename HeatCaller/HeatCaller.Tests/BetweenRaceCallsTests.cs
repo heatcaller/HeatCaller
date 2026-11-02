@@ -325,6 +325,57 @@ public sealed class BetweenRaceCallsTests
             gap.WhyNot(GapLine.CallUp, GapRules.Default with { CallUpRepeatSeconds = 0 }, T0.AddMinutes(5), facts, false, false));
     }
 
+    /// <summary>
+    /// 1 Nov 2026, Asher: three A-Main call-ups 7 s apart, the second and
+    /// third from Call Up pressed again while the first was still on its way.
+    /// </summary>
+    [Fact]
+    public void Call_Up_pressed_again_straight_after_a_call_up_is_answered_not_said()
+    {
+        var gap = OpenGap(Next());
+        gap.Said(GapLine.CallUp, T0.AddSeconds(10));
+
+        Assert.Equal("Already called up A-Main 7s ago.", gap.WhyNotCallUpAgain("A-Main", T0.AddSeconds(17)));
+        Assert.NotNull(gap.WhyNotCallUpAgain("A-Main", T0.AddSeconds(39)));
+    }
+
+    [Fact]
+    public void Call_Up_pressed_deliberately_after_thirty_seconds_still_calls()
+    {
+        var gap = OpenGap(Next());
+        gap.Said(GapLine.CallUp, T0.AddSeconds(10));
+
+        Assert.Null(gap.WhyNotCallUpAgain("A-Main", T0.AddSeconds(10 + GapState.CallUpAgainAfterSeconds)));
+        Assert.Null(gap.WhyNotCallUpAgain("A-Main", T0));
+    }
+
+    [Fact]
+    public void Call_Up_waits_while_the_last_call_up_is_still_queued()
+    {
+        var gap = OpenGap(Next());
+        gap.Said(GapLine.CallUp, T0);
+        gap.CallUpQueued(T0);
+
+        // Stuck behind a long line, past the thirty seconds.
+        Assert.Equal("Already called up A-Main - it's still waiting to be said.",
+            gap.WhyNotCallUpAgain("A-Main", T0.AddSeconds(45)));
+
+        gap.CallUpDequeued();
+
+        Assert.Null(gap.WhyNotCallUpAgain("A-Main", T0.AddSeconds(45)));
+    }
+
+    [Fact]
+    public void A_call_up_the_queue_binned_stops_counting_as_waiting()
+    {
+        var gap = OpenGap(Next());
+        gap.Said(GapLine.CallUp, T0);
+        gap.CallUpQueued(T0);
+
+        // Never taken - a flag cleared the decks - so nothing dequeues it.
+        Assert.Null(gap.WhyNotCallUpAgain("A-Main", T0 + GapState.CallUpLongestWait));
+    }
+
     [Fact]
     public void A_new_next_race_starts_its_call_ups_from_nothing()
     {
@@ -712,7 +763,7 @@ public sealed class BetweenRaceCallsTests
         // The Timetable reminders' path: shown on the screens and spoken for
         // listeners (SpeakReminder's forListeners defaults to true).
         var source = File.ReadAllText(Path.Combine(RepoRoot(), "HeatCaller", "HeatCaller", "RaceControlControl.BetweenRaces.cs"));
-        Assert.Contains("_announcer.SpeakReminder(text, showOnScreens: true, onAir: onAir);", source, StringComparison.Ordinal);
+        Assert.Contains("_announcer.SpeakReminder(text, showOnScreens: true, onAir: onAir, dequeued: dequeued);", source, StringComparison.Ordinal);
     }
 
     [Fact]

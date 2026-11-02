@@ -156,7 +156,17 @@ public sealed partial class RaceControlControl
     /// <summary>A line of the gap, out through the announcer with the captions on - the Timetable reminders' path.</summary>
     private void SayGapLine(string text, string onAir)
     {
-        _announcer.SpeakReminder(text, showOnScreens: true, onAir: onAir);
+        // A call-up is booked as waiting until the announcer takes it, so
+        // Call Up pressed meanwhile doesn't stack another (WhyNotCallUpAgain).
+        Action? dequeued = null;
+
+        if (onAir == "Call-up")
+        {
+            Gap.CallUpQueued(DateTime.UtcNow);
+            dequeued = Gap.CallUpDequeued;
+        }
+
+        _announcer.SpeakReminder(text, showOnScreens: true, onAir: onAir, dequeued: dequeued);
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [gap] {onAir}: \"{text}\"");
     }
 
@@ -354,7 +364,8 @@ public sealed partial class RaceControlControl
     /// Counted toward Call-ups per race and restarting the repeat, so the
     /// next automatic one is a full repeat away. Said whatever the caps and
     /// quiet zones - the race director asked for it - but not while muted,
-    /// and not over a race on track.
+    /// not over a race on track, and not as a second call-up while the last
+    /// is still waiting or under GapState.CallUpAgainAfterSeconds old.
     /// </summary>
     internal string CallUpNow(CallUpChoice choice = CallUpChoice.Next)
     {
@@ -410,6 +421,16 @@ public sealed partial class RaceControlControl
         {
             return Refuse("The program has nothing next to call up.");
         }
+
+        // The same press again, not a second call - see WhyNotCallUpAgain.
+        if (Gap.WhyNotCallUpAgain(facts.Round, now) is { } again)
+        {
+            return Refuse(again);
+        }
+
+        // Said in the console, so a call-up somebody pressed can be told
+        // from the automatic one (both are "[gap] Call-up:" lines).
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [gap] Call Up pressed{(_runningRemoteCommand ? " on the phone" : string.Empty)} - calling up {facts.Round}.");
 
         var repeat = Gap.CallUps > 0;
         Gap.Said(GapLine.CallUp, now);
