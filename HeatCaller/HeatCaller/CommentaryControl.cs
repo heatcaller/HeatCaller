@@ -1324,10 +1324,11 @@ public sealed class CommentaryControl : UserControl
         // every card below - see BuildSectionsCard and CommentarySections.
         page.Add(SimpleMode.ShowInSimpleOnly(BuildSectionsCard(Hint, Check)));
 
-        // How it's written first (1 Nov 2026): the wording covers every card
-        // below it, so it is set before the night is. All of them Advanced.
-        page.Add(SimpleMode.Hide(style));
+        // Who writes it first (1 Nov 2026, asked for by Asher: "move who
+        // writes it card to the top"), then How it's written, whose wording
+        // covers every card below. All of them Advanced.
         page.Add(SimpleMode.Hide(connection));
+        page.Add(SimpleMode.Hide(style));
         page.Add(SimpleMode.Hide(before));
         page.Add(SimpleMode.Hide(segments));
         page.Add(SimpleMode.Hide(after));

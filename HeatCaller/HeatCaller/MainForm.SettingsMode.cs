@@ -128,7 +128,14 @@ public partial class MainForm
                 _ambienceStore.Current,
                 BroadcastImaging.SettingsCopy()).Count > 0)
         {
-            AppDialog.Show(this, SettingsModes.HidingChangedNote, "Simple mode", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            // OK last: Escape and a stray Enter land on the one that changes nothing.
+            var answer = AppDialog.Choose(this, SettingsModes.HidingChangedNote, "Simple mode", MessageBoxIcon.Information,
+                defaultIndex: 1, new[] { "Restore Defaults...", "OK" });
+
+            if (answer == 0)
+            {
+                RestoreDefaultSettings();
+            }
         }
     }
 
@@ -150,6 +157,118 @@ public partial class MainForm
         RebuildNav();
 
         ShowSettingsMode();
+    }
+
+    /// <summary>A race, or practice, under way - when a restore, which restarts, is not offered.</summary>
+    private bool RaceUnderWayForRestore() =>
+        _race.IsPracticeMode || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
+
+    /// <summary>
+    /// Restore Default Settings (round 4): asks (RestoreDefaultsForm), saves
+    /// what every store holds so the copy is current, zips the settings files
+    /// into Settings Backups, puts back what Simple hides in the files
+    /// themselves (SettingsRestore) and restarts - frozen first, so nothing
+    /// the running app holds is saved back over it on the way out. UI thread.
+    /// </summary>
+    internal void RestoreDefaultSettings()
+    {
+        if (_settings.LoadedUnreadable)
+        {
+            AppDialog.Show(this, "HeatCaller couldn't read its settings file this time, so it won't change it. Restart HeatCaller first.",
+                SettingsRestore.ConfirmTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        bool alsoShown;
+
+        using (var form = new RestoreDefaultsForm(RaceUnderWayForRestore()))
+        {
+            if (form.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            alsoShown = form.AlsoShown;
+        }
+
+        SaveEverySettingsStore();
+
+        try
+        {
+            var copy = SettingsRestore.SaveCopy(AppPaths.Root, DateTime.Now);
+            var changed = SettingsRestore.ResetFiles(AppPaths.Root, alsoShown);
+
+            SessionLog.Write($"[settings] Restored default settings{(alsoShown ? ", with what Simple mode shows" : string.Empty)}: "
+                + $"{changed.Count} changed. Copy saved as {Path.GetFileName(copy)}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            AppDialog.Show(this, "HeatCaller couldn't save a copy of the settings, so nothing was changed.\r\n\r\n" + ex.Message,
+                SettingsRestore.ConfirmTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        RestartForRestoredSettings();
+    }
+
+    /// <summary>
+    /// Put Back Earlier Settings (round 4): the copies, newest first; the one
+    /// picked goes back after the settings as they are now are saved as a
+    /// copy too, and HeatCaller restarts. UI thread.
+    /// </summary>
+    internal void PutBackEarlierSettings()
+    {
+        string? picked;
+
+        using (var form = new PutBackSettingsForm(SettingsRestore.Copies(AppPaths.Root), RaceUnderWayForRestore()))
+        {
+            if (form.ShowDialog(this) != DialogResult.OK || form.Picked is not { } path)
+            {
+                return;
+            }
+
+            picked = path;
+        }
+
+        SaveEverySettingsStore();
+
+        try
+        {
+            // The settings as they are now, first - this is reversible too.
+            SettingsRestore.SaveCopy(AppPaths.Root, DateTime.Now);
+            SettingsRestore.PutBack(AppPaths.Root, picked);
+
+            SessionLog.Write($"[settings] Put back the settings saved in {Path.GetFileName(picked)}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            AppDialog.Show(this, "HeatCaller couldn't put those settings back.\r\n\r\n" + ex.Message,
+                "Put back earlier settings", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        RestartForRestoredSettings();
+    }
+
+    /// <summary>Every store's settings written as they stand, so a copy taken now is the settings in use.</summary>
+    private void SaveEverySettingsStore()
+    {
+        _settings.Save();
+        _voiceStore.Save(_voiceStore.Current);
+        _musicStore.Save();
+        _ambienceStore.Save();
+    }
+
+    /// <summary>
+    /// The files are written: freeze every write the closing app would make
+    /// over them, and start again - as a backup restore does
+    /// (BackupRestoreControl.RestoreCompleted).
+    /// </summary>
+    private void RestartForRestoredSettings()
+    {
+        SafeFile.Freeze();
+        Application.Restart();
+        Environment.Exit(0);
     }
 
     /// <summary>

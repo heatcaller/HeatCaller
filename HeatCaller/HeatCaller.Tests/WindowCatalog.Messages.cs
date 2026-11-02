@@ -36,6 +36,18 @@ internal static partial class WindowCatalog
         ("Turn on Advanced mode?", () => new AdvancedModeForm(raceRunning: false)),
         ("Turn on Advanced mode? (race running)", () => new AdvancedModeForm(raceRunning: true)),
 
+        // Restore default settings (round 4): between races, and greyed with
+        // its line while one runs. Put back earlier settings: ten copies, the
+        // most kept, and none yet.
+        ("Restore default settings?", () => new RestoreDefaultsForm(raceRunning: false)),
+        ("Restore default settings? (race running)", () => new RestoreDefaultsForm(raceRunning: true)),
+        ("Put back earlier settings", () => new PutBackSettingsForm(
+            Enumerable.Range(0, SettingsRestore.CopiesKept)
+                .Select(i => ($"settings {i}.zip", new DateTime(2026, 11, 1, 21, 30, 0).AddDays(-i * 3)))
+                .ToList(),
+            raceRunning: false)),
+        ("Put back earlier settings (none yet)", () => new PutBackSettingsForm(new List<(string, DateTime)>(), raceRunning: false)),
+
         ("Message (no icon)", () => AppDialog.BuildForLayoutCheck(
             "Every driver ticked here is added to the round, in the order they are ticked.",
             string.Empty,
