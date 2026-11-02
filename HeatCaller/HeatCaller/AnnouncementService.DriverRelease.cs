@@ -251,7 +251,7 @@ public sealed partial class AnnouncementService
             cursor = isLast ? end : end + ReleaseBatchSeparator.Trim().Length;
         }
 
-        var (pcm, format) = DecodeMp3(timed.Audio);
+        var (pcm, format, skipped) = DecodeMp3Trimmed(timed.Audio);
         var bytesPerSecond = format.AverageBytesPerSecond;
         var block = Math.Max(1, format.BlockAlign);
 
@@ -259,10 +259,11 @@ public sealed partial class AnnouncementService
         {
             var (startIndex, endIndex) = bounds[i];
 
-            // DecodeMp3 threw away the first DecodeSkipSeconds, so the PCM
-            // runs that much ahead of the reported times.
-            var startSeconds = Math.Max(0, timed.StartSeconds[startIndex] - DecodeSkipSeconds);
-            var endSeconds = Math.Max(startSeconds, timed.EndSeconds[Math.Min(endIndex, timed.EndSeconds.Count) - 1] - DecodeSkipSeconds);
+            // DecodeMp3Trimmed threw away the quiet start (up to
+            // DecodeSkipSeconds), so the PCM runs that much ahead of the
+            // reported times.
+            var startSeconds = Math.Max(0, timed.StartSeconds[startIndex] - skipped);
+            var endSeconds = Math.Max(startSeconds, timed.EndSeconds[Math.Min(endIndex, timed.EndSeconds.Count) - 1] - skipped);
 
             var startByte = AlignDown((long)(startSeconds * bytesPerSecond), block);
             var endByte = AlignDown((long)(endSeconds * bytesPerSecond), block);

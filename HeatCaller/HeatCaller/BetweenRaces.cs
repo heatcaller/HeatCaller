@@ -439,6 +439,7 @@ internal sealed class GapState
     private string? _nextId;
     private int _callUps;
     private DateTime? _lastCallUpUtc;
+    private DateTime? _callUpWaitingSinceUtc;
     private DateTime? _callUpsNotBeforeUtc;
     private bool _marshalsSaid;
     private bool _notCheckedInSaid;
@@ -534,6 +535,7 @@ internal sealed class GapState
             _callUps = 0;
             _lastCallUpUtc = null;
             _callUpsNotBeforeUtc = null;
+            _callUpWaitingSinceUtc = null;
             _marshalsSaid = false;
             _notCheckedInSaid = false;
             _marksSaid.Clear();
@@ -740,6 +742,70 @@ internal sealed class GapState
         {
             _callUps++;
             _lastCallUpUtc = nowUtc;
+        }
+    }
+
+    /// <summary>
+    /// How soon after a call-up a press of Call Up is taken as the same
+    /// press again rather than a second call - see <see cref="WhyNotCallUpAgain"/>.
+    /// </summary>
+    public const int CallUpAgainAfterSeconds = 30;
+
+    /// <summary>How long a queued call-up counts as still waiting, at most - see WhyNotCallUpAgain.</summary>
+    public static readonly TimeSpan CallUpLongestWait = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// A call-up went to the announcer and has not been taken off its queue
+    /// yet - so a press now would only stack a second one behind it.
+    /// </summary>
+    public void CallUpQueued(DateTime nowUtc)
+    {
+        lock (_gate)
+        {
+            _callUpWaitingSinceUtc = nowUtc;
+        }
+    }
+
+    /// <summary>The announcer took a queued call-up - see <see cref="CallUpQueued"/>.</summary>
+    public void CallUpDequeued()
+    {
+        lock (_gate)
+        {
+            _callUpWaitingSinceUtc = null;
+        }
+    }
+
+    /// <summary>
+    /// Why Call Up (the button, F12, the phone) should not call the next
+    /// race up again now, or null when it may.
+    ///
+    /// WHY (1 Nov 2026, Asher: three A-Main call-ups 7 s apart): Call Up says
+    /// the call-up whatever the caps and spacing, as the race director asked
+    /// for it - but the voice takes a second or two to start, so a press
+    /// looks like it did nothing, and pressing again called the race again.
+    /// Now a press while a call-up is still waiting to be said, or within
+    /// <see cref="CallUpAgainAfterSeconds"/> of the last one (Call Up's own
+    /// or the automatic one), is answered instead. A press after that still
+    /// goes, whatever the caps, as before.
+    /// </summary>
+    public string? WhyNotCallUpAgain(string round, DateTime nowUtc)
+    {
+        lock (_gate)
+        {
+            // Bounded, because the queue can bin a line without ever running it
+            // (a flag clears the decks) and then nothing says it was taken.
+            if (_callUpWaitingSinceUtc is { } since && nowUtc - since < CallUpLongestWait)
+            {
+                return $"Already called up {round} - it's still waiting to be said.";
+            }
+
+            if (_lastCallUpUtc is { } last && nowUtc >= last
+                && nowUtc - last < TimeSpan.FromSeconds(CallUpAgainAfterSeconds))
+            {
+                return $"Already called up {round} {(nowUtc - last).TotalSeconds:0}s ago.";
+            }
+
+            return null;
         }
     }
 
