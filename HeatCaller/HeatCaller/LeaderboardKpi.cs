@@ -165,10 +165,15 @@ public static class RaceGaps
         return upTo + (elapsedMs - all);
     }
 
-    /// <summary>"+1L", "+3L" or "+2.35" - or "-" when there's nothing reliable to show.</summary>
+    /// <summary>
+    /// "+1L", "+3L" or "+2.345" - or "-" when there's nothing reliable to show.
+    /// To the thousandth (1 Nov 2026, asked for by Asher: "the gap to p1 ...
+    /// should be to the thousandth like everything else"), as the lap times
+    /// are and as the running order says it.
+    /// </summary>
     public static string Format(RaceGap gap) =>
         gap.LapsDown > 0 ? $"+{gap.LapsDown}L"
-        : gap.GapMs is { } ms ? $"+{ms / 1000.0:0.00}"
+        : gap.GapMs is { } ms ? "+" + (ms / 1000.0).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)
         : "-";
 
     /// <summary>

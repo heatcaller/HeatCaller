@@ -2706,6 +2706,8 @@ public partial class MainForm
         // Simple - see MainForm.SettingsMode.
         _backupRestore = backupRestore;
         backupRestore.SettingsModeToggleRequested += ToggleSettingsMode;
+        backupRestore.RestoreDefaultsRequested += RestoreDefaultSettings;
+        backupRestore.PutBackSettingsRequested += PutBackEarlierSettings;
 
         // A restore restarts the app, which would end a race or practice
         // mid-session - the page asks first when this says one is on.

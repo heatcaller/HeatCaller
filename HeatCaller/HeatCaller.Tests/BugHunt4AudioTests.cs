@@ -16,7 +16,21 @@ public sealed class BugHunt4AudioTests : IDisposable
 {
     private readonly TempAppData _data = new();
 
-    public void Dispose() => _data.Dispose();
+    // VoiceLibrary.Shared is one folder for the whole run, fixed the first
+    // time anything touches it - TempAppData does not move it. A take left
+    // there turns up in later tests: the layout test failed on 1 Nov 2026
+    // when this class's lines filled the Voice page's saved-lines list.
+    private readonly List<(VoiceProfile Profile, string Text)> _saved = new();
+
+    public void Dispose()
+    {
+        foreach (var (profile, text) in _saved)
+        {
+            VoiceLibrary.Shared.Forget(profile, text);
+        }
+
+        _data.Dispose();
+    }
 
     // --- music.json and ambience.json locked at startup ---------------------
 
@@ -186,7 +200,7 @@ public sealed class BugHunt4AudioTests : IDisposable
     /// is one HttpClient refuses to send, so any render fails right here
     /// without a request going anywhere.
     /// </summary>
-    private static async Task<(AnnouncementService Announcer, byte[] SavedTake)> AnnouncerWithSavedTakeAsync(string text)
+    private async Task<(AnnouncementService Announcer, byte[] SavedTake)> AnnouncerWithSavedTakeAsync(string text)
     {
         var voices = VoiceSettingsStore.Load();
         voices.Current.Engine = VoiceEngine.ElevenLabs;
@@ -211,6 +225,7 @@ public sealed class BugHunt4AudioTests : IDisposable
 
         var profile = voices.Current.CloneForDelivery(TakeStability, TakeStyle);
         VoiceLibrary.Shared.Save(profile, text, take);
+        _saved.Add((profile, text));
 
         // Saved in the background.
         for (var i = 0; i < 100 && !VoiceLibrary.Shared.Contains(profile, text); i++)

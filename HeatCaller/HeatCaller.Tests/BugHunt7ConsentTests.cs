@@ -15,7 +15,21 @@ public sealed class BugHunt7ConsentTests : IDisposable
 {
     private readonly TempAppData _data = new();
 
-    public void Dispose() => _data.Dispose();
+    // VoiceLibrary.Shared is one folder for the whole run, fixed the first
+    // time anything touches it - TempAppData does not move it. A take left
+    // there turns up in later tests: the layout test failed on 1 Nov 2026
+    // when this class's lines filled the Voice page's saved-lines list.
+    private readonly List<(VoiceProfile Profile, string Text)> _saved = new();
+
+    public void Dispose()
+    {
+        foreach (var (profile, text) in _saved)
+        {
+            VoiceLibrary.Shared.Forget(profile, text);
+        }
+
+        _data.Dispose();
+    }
 
     private const string Clone = "acme-dave";
 
@@ -47,7 +61,7 @@ public sealed class BugHunt7ConsentTests : IDisposable
     /// No relay is set up, so anything that is not the saved take comes
     /// back as no take at all.
     /// </summary>
-    private static async Task<(AnnouncementService Announcer, byte[] SavedTake)> AnnouncerWithSavedTakeAsync(
+    private async Task<(AnnouncementService Announcer, byte[] SavedTake)> AnnouncerWithSavedTakeAsync(
         string text, AppSettings settings)
     {
         var voices = VoiceSettingsStore.Load();
@@ -68,6 +82,7 @@ public sealed class BugHunt7ConsentTests : IDisposable
 
         var profile = voices.Current.CloneForDelivery(TakeStability, TakeStyle);
         VoiceLibrary.Shared.Save(profile, text, take);
+        _saved.Add((profile, text));
 
         // Saved in the background.
         for (var i = 0; i < 100 && !VoiceLibrary.Shared.Contains(profile, text); i++)

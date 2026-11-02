@@ -473,6 +473,10 @@ internal static class LayoutAudit
 
         // The warning before Advanced mode, with its tick box (AdvancedModeForm, 1 Nov 2026).
         "Turn on Advanced mode?",
+
+        // Restore default settings and the copies it saves (RestoreDefaultsForm, PutBackSettingsForm, 1 Nov 2026).
+        "Restore default settings?",
+        "Put back earlier settings",
     };
 
     /// <summary>

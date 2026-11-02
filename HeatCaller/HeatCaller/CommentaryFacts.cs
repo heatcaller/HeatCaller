@@ -833,7 +833,7 @@ public static class CommentaryFacts
 
         var text = new StringBuilder();
 
-        text.Append($"{behind} is {Invariant(horizon.GapSeconds, "0.00")}s behind {ahead}, fighting for {where}. ");
+        text.Append($"{behind} is {Invariant(horizon.GapSeconds, "0.000")}s behind {ahead}, fighting for {where}. ");
 
         switch (horizon.Kind)
         {

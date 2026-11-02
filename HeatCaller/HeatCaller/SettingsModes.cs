@@ -169,7 +169,7 @@ internal static class SettingsModes
     /// <summary>The note on going back to Simple when something about to be hidden is not at its default.</summary>
     internal const string HidingChangedNote =
         "Some settings you're hiding were changed from their defaults. They keep working while hidden.\r\n\r\n"
-        + "To see them again, turn on Advanced mode on the Backup & Restore page.";
+        + "Restore Defaults puts them back.";
 
     /// <summary>The one-time note for an update, or null for none (a new install, or decided before).</summary>
     internal static string? UpdateNote(Decision decision) => decision switch

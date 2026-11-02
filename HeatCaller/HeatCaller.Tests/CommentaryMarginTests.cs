@@ -32,13 +32,15 @@ public sealed class CommentaryMarginTests
         Assert.DoesNotContain("0.00s", text);
     }
 
+    // Every margin to the thousandth since 1 Nov 2026, as the board's Gap
+    // to P1 shows it - it was hundredths and tenths above a tenth.
     [Fact]
-    public void A_close_finish_over_a_tenth_keeps_hundredths()
+    public void A_close_finish_over_a_tenth_is_given_in_thousandths()
     {
         var text = CommentaryService.DescribeMargin(new List<SessionResultEntry> { Finisher(1, 6_000), Finisher(2, 6_300) });
 
         Assert.StartsWith("a photo finish", text);
-        Assert.Contains("0.30s", text);
+        Assert.Contains("0.300s", text);
     }
 
     [Fact]
@@ -47,6 +49,6 @@ public sealed class CommentaryMarginTests
         var text = CommentaryService.DescribeMargin(new List<SessionResultEntry> { Finisher(1, 6_000), Finisher(2, 14_000) });
 
         Assert.StartsWith("comfortable", text);
-        Assert.Contains("8.0s", text);
+        Assert.Contains("8.000s", text);
     }
 }

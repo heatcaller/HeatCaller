@@ -57,6 +57,12 @@ public sealed class BackupRestoreControl : UserControl
     /// </summary>
     public event Action? SettingsModeToggleRequested;
 
+    /// <summary>Raised by Restore Default Settings (round 4): the host asks, saves a copy, resets and restarts - see MainForm.RestoreDefaultSettings.</summary>
+    public event Action? RestoreDefaultsRequested;
+
+    /// <summary>Raised by Put Back Earlier Settings (round 4): the host lists the copies - see MainForm.PutBackEarlierSettings.</summary>
+    public event Action? PutBackSettingsRequested;
+
     private readonly Label _lblMode = new();
     private readonly Button _btnMode = new();
 
@@ -239,11 +245,31 @@ public sealed class BackupRestoreControl : UserControl
 
         _textSize.Wear(lblHint, () => AppTheme.SmallFont);
 
+        // RESTORE DEFAULT SETTINGS (round 4), in both modes: the way a Simple
+        // user undoes settings changed in Advanced, and the copies it saves.
+        var btnRestore = new Button { Text = "Restore Default Settings..." };
+        btnRestore.Click += (_, _) => RestoreDefaultsRequested?.Invoke();
+
+        var btnPutBack = new Button { Text = "Put Back Earlier Settings..." };
+        btnPutBack.Click += (_, _) => PutBackSettingsRequested?.Invoke();
+
+        var lblRestoreHint = new Label
+        {
+            Text = "Restore Default Settings puts every setting Simple mode hides back to how HeatCaller ships, after saving a "
+                   + "copy. Your drivers, classes, tracks, results and keys are never touched.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblRestoreHint, () => AppTheme.SmallFont);
+
         var card = new Section("Settings mode");
 
         card.Add(_lblMode, gapBelow: UiLayout.LabelGap);
         card.Add(new ButtonBar().With(_btnMode));
-        card.Add(lblHint, gapBelow: 0);
+        card.Add(lblHint, gapBelow: UiLayout.SectionGap);
+        card.Add(new ButtonBar().With(btnRestore, btnPutBack));
+        card.Add(lblRestoreHint, gapBelow: 0);
 
         ShowMode(_settings.SettingsMode);
 
