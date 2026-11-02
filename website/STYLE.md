@@ -24,18 +24,27 @@ file names of source code, or implementation details a user can't see — except
 names/paths/commands are what the reader needs.
 
 ## Navigation (exact sidebar page names in the app, in order)
-Race Control, Race Day (tabs: Next Steps, Setup, Who's Racing), Championship (tabs include Standings and Calendar),
-Driver Hub, Classes, Rentals, Handicaps, Batteries, Track Layouts, Race History,
+Race Control, Race Day (tabs: Next Steps, Setup, Who's Racing), Championship (tabs: Standings, Calendar),
+Driver Hub, Classes, Rentals, Handicaps, Track Layouts, Race History,
 Race Analytics (Overview, Personal Bests, Lap Times, Head to Head, Trends, Pace), Achievements, Garage,
-Practice, Ghost Cars, Demo Mode, Venues, Themes (no tabs: Looks, Club logo and Appearance cards), Sponsors, Local Screens, Club Website,
-Voice (Voice, Cast, Race Calls with Rivalries at its end, AI Commentary), Sounds (Mixer, Soundscapes, Imaging, Effects, Ambience, Music, Lap Beeps),
-Connection, Backup & Restore. There's a "Search pages..." box and "Manage Navigation..." to reorder/hide pages.
-(Checked against the code on 30 Sep 2026: MainForm.Pages.cs `_navItems` and each page's TabPages. "Voice Announcements"
-was renamed "Voice", "Setup Log" became "Garage", Themes' Announcer Style became Sounds → Soundscapes.)
+Practice, Ghost Cars, Demo Mode, Venues, Themes (no tabs: Looks, Club logo and Appearance cards), Sponsors, Local Screens,
+Club Website (Website, Recording), Voice (Voice, Cast, Race Calls with Rivalries at its end, AI Commentary),
+Sounds (Mixer, Soundscapes, Imaging, Effects, Ambience, Music, Lap Beeps), Connection, Backup & Restore.
+There's a "Search pages..." box and "Manage Navigation..." to reorder/hide pages (Advanced mode only).
+The sidebar shows the pages in groups: ESSENTIALS, then CLUB TOOLS (Race Day, Championship, Rentals, Handicaps, Venues,
+Sponsors, Local Screens, Club Website), each in the order above; while a race day is open, TONIGHT (Race Day, Race Control,
+Championship) sits on top. Simple mode leaves out Venues and hides the Race Calls, Imaging, Effects, Ambience, Lap Beeps
+and Recording tabs; the "not yet tested" tick keeps Championship, Garage, Handicaps, Rentals and Venues out of the sidebar.
+Batteries is not a page: a driver's packs are on Driver Hub, the club's on Garage (Club Batteries).
+(Checked against the code on 2 Nov 2026: MainForm.Pages.cs `_navItems`, NavTiers.cs, SimpleMode.cs and each page's
+TabPages. "Voice Announcements" was renamed "Voice", "Setup Log" became "Garage", Themes' Announcer Style became
+Sounds → Soundscapes, and Recording moved from Sounds to Club Website on 26 Oct 2026.)
 Some things are windows, not tabs: the **Timetable** (the race day's run sheet, from the program's **Timetable** button),
 the **Scrutineering log** (from **Scrutineering Log** on Who's Racing), the **Announcer screen** (from **Announcer
-Screen** on Race Control) and the **Broadcast** window (from **Broadcast** on Race Control: Hold, Play again, Skip,
-Notes and Votes, which were a row under the Next Up bar until 25 Oct 2026).
+Screen** on Race Control), the **Broadcast** window (from **Broadcast** on Race Control: Hold, Play again, Skip,
+Notes and Votes, which were a row under the Next Up bar until 25 Oct 2026), **Mission Control** (Race Control and
+Connection), **Photo Finish** (Connection), **This Month** (the allowance chip at the foot of the sidebar) and
+**Driver Requests**.
 Refer to pages as **Race Control** page, and paths as **Race Day → Entries** (bold, with →).
 
 ## Voice and style
@@ -61,20 +70,21 @@ Refer to pages as **Race Control** page, and paths as **Race Day → Entries** (
 docs/index.md                                  (owner: lead)
 docs/getting-started/index.md                  What HeatCaller does, what you need (hardware, decoders, Windows)
 docs/getting-started/install.md                Installing/running, updates, where data lives, first-run wizard
-docs/getting-started/tour.md                   Tour of the window: sidebar, pages, search, Manage Navigation, themes, console
+docs/getting-started/tour.md                   Tour of the window: sidebar, pages, search, Manage Navigation, themes, console, tray icon
 docs/getting-started/first-race-night.md       A walkthrough from empty install to first race (links out)
-docs/race-day/drivers-and-classes.md           Driver Hub, Classes, Rentals, Batteries, Venues, Track Layouts, Garage
+docs/getting-started/simple-and-advanced-mode.md  Simple and Advanced mode: the switch, what Simple hides, race calls on/off, AI commentary's section switches, Restore default settings, the manager-PIN lock
+docs/race-day/drivers-and-classes.md           Driver Hub (incl. a driver's batteries), Classes, Rentals, Venues, Track Layouts, Garage (incl. club batteries)
 docs/race-day/track-designer.md               The Track Designer: drawing, lanes, the lap, stock, Build me a track, print and share, the angled view
 docs/race-day/events-and-entries.md            Race Day → Setup, Who's Racing, Calendar; the set-up wizard; check-in desk; Scrutineering log; readiness check; QR check-ins
 docs/race-day/program-and-mains.md             Race Day → Next Steps and its program, the Timetable window, rounds, heats, qualifying, mains, bump-ups, marshals, heat sheets
-docs/race-control/running-a-race.md            Race Control page: staging → countdown → green → flags → checkered; start types; limits
+docs/race-control/running-a-race.md            Race Control page: On Air → staging → countdown → green → flags → checkered; press and hold; start types; limits; Mission Control; photo finish
 docs/race-control/corrections-and-recovery.md  Lap adjust, penalties, undo, crash recovery journal, closing mid-race, restarts
 docs/race-control/practice-and-ghosts.md       Practice, Ghost Cars, Demo Mode, Handicaps
 docs/race-control/results-and-championships.md Race History, exports, event report, results card, Championship (incl. DNF), Race Analytics, Achievements, tonight's standings
-docs/announcer/voice.md                        Voice → Voice Settings (Speak with: ElevenLabs, the HeatCaller voice or the free Kokoro voice), Announcements, Rivalries; the Announcer screen; hearing a voice first (Hear It, Preview), the Kokoro voice and its download, ElevenLabs setup, templates, events
-docs/announcer/commentary.md                   Commentary (the relay, and the model built into HeatCaller); the mechanic's own Kokoro voice
-docs/announcer/sounds-and-music.md             Sounds → Mixer, Soundscapes, Effects, Ambience, Music, Lap Beeps; audio auto-start
-docs/timing/decoders.md                        Connection page: direct EasyLap, I-Lap; auto-connect; troubleshooting (Next Level Timing retired in 0.50.0)
+docs/announcer/voice.md                        Voice → Voice (Speak with: ElevenLabs, the HeatCaller voice or the free Kokoro voice), Cast, Race Calls, Rivalries; the Announcer screen; hearing a voice first (Hear It, Preview), the Kokoro voice and its download, ElevenLabs setup, templates, events
+docs/announcer/commentary.md                   Voice → AI Commentary (the relay, and the model built into HeatCaller); allowances and the This Month window; the show's music; the Broadcast window; the mechanic's own Kokoro voice
+docs/announcer/sounds-and-music.md             Sounds → Mixer, Soundscapes, Effects, Ambience, Music, Lap Beeps; audio auto-start; race recordings (Club Website → Recording)
+docs/timing/decoders.md                        Connection page: direct EasyLap, I-Lap, the Beta decoders; auto-connect; split loop; Developer Console; troubleshooting (Next Level Timing retired in 0.50.0)
 docs/timing/transponders.md                    Transponder handling, unknown transponders, rentals, signal/readiness, minimum lap time
 docs/screens/big-screen.md                     Big Screen window, leaderboard columns (KPIs), Sponsors
 docs/screens/phone-and-web.md                  Local Screens page: LAN server, live page, overlay, remote, check-in page, PINs, firewall/URL ACL

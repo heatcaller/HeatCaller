@@ -157,7 +157,7 @@ Automatic sends report to the console, for example "[pins] Emailed 3 racers thei
 
 ### Sending pace
 
-Emails go one at a time, about a second and a half apart, so the provider doesn't take a sudden burst for spam. A club of 100 racers takes a few minutes. Racing and everything else carry on while it sends. Only one send runs at a time: if you try **Send Test Email** during a send, it says "PINs are being emailed right now - try the test once that has finished."
+Emails go one at a time, about a second and a half apart, so the provider doesn't take a sudden burst for spam. A club of 100 racers takes a few minutes. Racing and everything else carry on while it sends. Only one send runs at a time: if you try **Send Test Email** during a send, it says "Emails are being sent right now - try the test once that has finished."
 ## When sending fails
 
 | Message | What it means | What to do |

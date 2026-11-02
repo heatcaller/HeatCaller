@@ -59,9 +59,12 @@ Bump-ups come *before* starting the next round on purpose: once the upper main h
 
 The card is only a shortcut. Every program command it offers is also on the program's buttons or its right-click menu, so you can build or seed at any time, not only when the card suggests it.
 
+!!! tip
+    A helper can run the program from a phone or tablet too: the race-day manager's **Program** tab builds the finals, applies bump-ups, moves drivers between heats and reorders or deletes rounds. See [Race-day manager](../screens/phone-and-web.md#race-day-manager).
+
 ### Ready to race
 
-The **Ready to race** card beside it shows how ready the day is, as a bar and a count such as "3 of 6 ready". Under the bar, **Still to do:** lists what's left: open tonight's race day, add your classes, choose tonight's classes, check drivers in (or add drivers to tonight's classes), build the program, and connect the timer.
+The **Ready to race** card beside it shows how ready the day is, as a bar and a count such as "3 of 6 ready". Under the bar, **Still to do:** lists what's left: open tonight's race day (or start a new one, when this one is closed), add your classes, choose tonight's classes, check drivers in (or add drivers to tonight's classes), build the program (build the races, on a club night), and connect the timer.
 
 **Finish Setting Up** opens the Set Up Tonight wizard at the first step that isn't done (see [The Set Up Tonight wizard](events-and-entries.md#the-set-up-tonight-wizard)). When only the timer is left, the button is **Connect Timer**, which opens the **Connection** page. Once everything is done, the card says **All set**.
 
@@ -100,7 +103,7 @@ Everything else is on the round menu. Right-click the list to open it: on a roun
 | Menu item | What it does |
 |---|---|
 | **Start This Round** | Same as **Start Selected**. |
-| **Start as Demo...** | Runs the round as a simulated race, with no timing hardware. Nothing is recorded against the round unless **Let a demo fill in the race program** is ticked on Demo Mode; then the demo marks it as run. See [Practice, ghosts and demo mode](../race-control/practice-and-ghosts.md). |
+| **Start as Demo...** | Runs the round as a simulated race, with no timing hardware. Nothing is recorded against the round unless **Let a demo fill in the race program (rehearse a whole night)** is ticked on **Demo Mode**; then the demo marks it as run. See [Practice, ghosts and demo mode](../race-control/practice-and-ghosts.md). |
 | **Edit Drivers...** | Changes who's in the round. |
 | **Move Drivers Between Heats...** | Opens the class's heats side by side. See [Balance heats](#balance-heats). |
 | **Move Up** / **Move Down** | Moves the round one place in the running order. |
@@ -121,12 +124,12 @@ HeatCaller builds every planned qualifying round for every class that's racing a
 
 - **Heats per round.** Each class's drivers are split into as few heats as the **Drivers per heat:** setting allows. For example, 13 drivers with 8 per heat makes 2 heats (7 and 6). Drivers are dealt into the heats in turn, so heats come out within one driver of each other.
 - **Drivers in more than one class** are dealt into each class's heats. See [A driver in more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class).
-- **Rotation.** In each new round, the starting point in the driver list moves on by one heat's worth, so the same drivers aren't first out on a cold track every round.
+- **Rotation.** In each new round, the starting point in the driver list moves on by one heat's worth, so the same drivers aren't first out on a cold track every round. When the heats divide the class exactly (16 drivers in two heats of 8, say), the groups are mixed as well from Q2 on, so the same drivers don't share a heat every round.
 - **Names.** Heats are called "Heat 1", "Heat 2" and so on when there's one qualifying round, or "Q1 Heat 1", "Q2 Heat 3" and so on when there's more than one. On a club night they're races: "Race 1", "Race 2", or "Race 1 Heat 2" when a class is split into groups.
 - **Order.** All classes' Q1 heats come first, then all Q2 heats, and so on.
 - **Track.** Every heat starts on the race day's **Track layout:**.
 
-Rebuilding replaces any of today's qualifiers for those classes that haven't been run yet. Recorded rounds, and rounds from earlier race days, are never touched. A heat that's out on track can't be replaced: the build is refused until it has been recorded. You can undo the build with **Undo**.
+Rebuilding replaces any of today's qualifiers for those classes that haven't been run yet. Recorded rounds, and rounds from earlier race days, are never touched. A qualifying round that already has a recorded heat isn't built again, and its heats still to run stay as they are, so a rebuild after Q1 has started builds only the rounds after it; the summary marks those rounds "already run". If every planned round has already been run, the build is refused with **Qualifying already run**: to fit a driver into a heat still to run, use [Move Drivers Between Heats...](#balance-heats). A heat that's out on track can't be replaced: the build is refused until it has been recorded. You can undo the build with **Undo**.
 
 If some of the new heats have been run by the time you undo, they're kept with their results, and the rest of the build is undone. A heat that's on track right now is kept too. A **Some rounds were kept** box lists them.
 
@@ -154,7 +157,7 @@ For a no-show or a late entry across every heat still to run, **Redo Remaining H
 - Drag a driver from one heat to another, or up and down within a heat to change the order.
 - Drag a driver onto **NOT IN A HEAT**, or select them and press <kbd>Delete</kbd>, to take them out. That column lists the class's drivers who aren't in any heat, and drivers who are missing from one of the qualifying rounds, marked with the rounds they're missing, for example "(not in Q2, Q3)". Drag from it to put someone in.
 - A driver can only be in one heat of each qualifying round. Dropping a driver on a heat they're already in, or on a heat in a qualifying round they already have a heat in, is refused with a message saying where they are. That includes a heat they've already raced tonight ("... has already raced ..., which is in the same round as ..."). Mains aren't limited this way.
-- Rounds that have already been recorded are marked "recorded, locked" and can't be changed.
+- Rounds that have already been recorded are marked "recorded, locked", and the one on track "on track, locked". Neither can be changed.
 - The line at the bottom shows the spread, for example "3 heats, between 6 and 7 drivers each."
 - **Group by pace** and **Spread by pace** re-sort every qualifying round's heats by pace. See [Heats by pace](#heats-by-pace).
 
@@ -193,7 +196,7 @@ If a race is already running on **Race Control**, HeatCaller asks "Abandon the r
 
 ### Which round a race counts for
 
-A race started from the program is recorded against its round. A race run without a round picked on **Race Control** (a race started by hand, for example) is handled by **Start the next race automatically** on **Race Day → Setup** (on by default): HeatCaller records it against the next round that hasn't run yet, so you work through the program without picking each round by hand. **Next race is:** sets which round it picks:
+A race started from the program is recorded against its round. A race run without a round picked on **Race Control** (a race started by hand, for example) is handled by **Start the next race automatically** on **Race Day → Setup** (on by default): HeatCaller records it against the next round that hasn't run yet, so you work through the program without picking each round by hand. **Next race is:** (in Advanced mode) sets which round it picks:
 
 - **the class that was racing** (the default) — the unrun heat whose drivers were the ones on track: the one that holds the most of them, the earliest in the program on a tie. If no unrun heat has them, the next round for the class most of the drivers on track belong to.
 - **any class, in program order** — the next unrun round overall.
@@ -216,6 +219,8 @@ Each heat is scored on laps completed; ties are broken by the lower total time. 
 ### Best consecutive laps
 
 Each heat is scored on the driver's quickest unbroken run of N laps (N is **Consecutive laps to count:**). The run from the start to the car's first crossing of the line isn't a lap and is never part of a run. A driver who didn't complete N laps in a heat has no valid run for that heat.
+
+Penalties count. A time penalty, whether given during the race or afterwards in the result, is added to the run's time, and each lap of a lap penalty adds one average lap of the run. The lap times themselves are left alone, so a penalized run comes to more than its laps add up to.
 
 With **Heats that count:** at 2 or more, a driver's best heats' runs are added together. Drivers are then ranked:
 
@@ -282,7 +287,7 @@ If the class has no recorded qualifying yet, seeding offers to add a main by han
 
 ### Add a main by hand
 
-For a one-off main, right-click the list and choose **Add a Main by Hand...**. In the **Add Main** window, enter a **Round Label:** (it suggests the next letter, "A-Main", then "B-Main", "C-Main" and so on, based on the mains already in today's program), pick a **Track Layout:**, and tick the drivers under **Drivers in this main:**. **Top:** with **from Qualifying** ticks the top N qualifiers; **All** and **None** tick or clear everyone.
+For a one-off main, right-click the list and choose **Add a Main by Hand...**. In the **Add Main** window, enter a **Round Label:** (it suggests the first letter not already used by the class's mains in today's program: "A-Main", then "B-Main", "C-Main" and so on), pick a **Track Layout:**, and tick the drivers under **Drivers in this main:**. **Top:** with **from Qualifying** ticks the top N qualifiers; **All** and **None** tick or clear everyone.
 
 A hand-added main takes part in bump-ups only if its label names a tier — "A-Main", "B Main", "A Final", "C" and so on. A label like "Consolation" isn't treated as a tier, and shows as **Main (no tier)** in the **Kind** column.
 
@@ -324,12 +329,12 @@ The number of posts comes from the track layout's **Corner marshal posts:** sett
 
 <!-- screenshot: Corner Marshals window with one round highlighted for an uncovered post -->
 
-For each round, the **Corner Marshals** window lists **Round**, **Marshalled By**, **Post** and **Marshal**:
+For each round, the **Corner Marshals** window lists **Round**, **Marshaled By**, **Post** and **Marshal**:
 
 - Each round is marshalled by the drivers of the class's previous round, one per post in order.
 - **A driver who's racing in the round is never assigned to marshal it** — for example a late addition or a driver in back-to-back heats. They're skipped, and the next driver from the previous round takes the post.
 - The first round has no previous heat, so its posts are left for you to assign by hand.
-- If there aren't enough free drivers, the uncovered posts are shown and the round is highlighted, for example "Heat 2 has 3 drivers free for 4 posts - 1 corner uncovered. (1 more is driving in Q2 Heat 1.)"
+- If there aren't enough free drivers, the uncovered posts are shown and the round is highlighted, for example "Q1 Heat 2 has 3 drivers free for 4 posts - 1 corner uncovered. (1 more is driving in Q2 Heat 1.)"
 
 **Copy as Text** copies the whole roster as plain text, ready to print or paste into a group chat.
 
@@ -350,7 +355,7 @@ A heat sheet is a printable page for the pit table: the current race day's round
 2. Choose where to save the PNG.
 3. Open it and print it at full page size.
 
-The sheet is black on white for easy reading, with a band of the class's color across the top and beside each round, so you can sort a pile of sheets by class at a glance. It's letter-size; if a class's rounds don't all fit, the sheet ends with a note to print one class at a time.
+The sheet is black on white for easy reading, with a band of the class's color across the top and beside each round, so you can sort a pile of sheets by class at a glance. It's letter-size. A class with more rounds than fit on one page runs onto as many pages as it needs, each marked "page 1 of 2" and so on. Saved, the first page goes to the file you chose and the others beside it with "-page2", "-page3" added to the name; HeatCaller asks before replacing pages already in that folder.
 
 ## The Timetable
 
@@ -367,7 +372,7 @@ You don't need to build the timetable. As soon as the open race day has a progra
 A round's line looks after itself:
 
 - Starting the round stamps the line with the actual start time.
-- Recording the round ticks the line off.
+- Recording the round ticks the line off. If that race is deleted, the line goes back to not done.
 - A class rename or a rebuilt final updates its wording.
 - A time you set against it, its tick and its start time survive the program changing around it.
 
@@ -398,7 +403,7 @@ Everything else is on the **More** button, which opens the same menu as right-cl
 
 | Menu item | What it does |
 |---|---|
-| **Edit...** | Changes the selected line in **Edit Schedule Entry**. On a round's line, only the time can be changed: its class and wording come from the program, so HeatCaller keeps your time and puts the rest back ("That belongs to the program"). To rename a round, rename it on **Next Steps**. |
+| **Edit...** | Changes the selected line in **Edit Schedule Entry**. On a round's line, only the time can be changed: its class and wording come from the program, so HeatCaller keeps your time and puts the rest back ("That belongs to the program"). |
 | **Move Up** / **Move Down** | Moves the selected line one place. On a round's line this moves the round itself in the program, and both lists follow. On your own line it moves just that line. |
 | **Fill In the Times...** | Stamps a time on every line. See below. |
 | **Fill from the Program** | Puts the program's rounds back on the sheet, in program order, after asking. Rounds already there keep their time and tick, and your own lines stay where they are. You only need it after **Clear Schedule**. |
@@ -428,14 +433,14 @@ The time you started from is written back to the race day's **First race at:**, 
 
 ### Print the run sheet
 
-**Print Run Sheet...** saves the sheet as a black-on-white PNG for the drivers' stand, with a tick box, time, class and description for each line. Lines already done are ticked and struck through, and started lines show their start time. It's one letter-size page; a longer day ends with a note that the rest didn't fit. Open it and print at full page size.
+**Print Run Sheet...** saves the sheet as a black-on-white PNG for the drivers' stand, with a tick box, time, class and description for each line. Lines already done are ticked and struck through, and started lines show their start time. It's letter-size, and a long day runs onto more pages, saved beside the first as for the heat sheet. Open each one and print it at full page size.
 
 ### Reminder countdown
 
 The **Reminder countdown** card beside the grid announces a countdown to the **Up Next** line through the announcer. Set **Minutes until start:** (1–120) and click **Start**. The announcer calls out at 5 minutes, 1 minute and when time's up, using the line's class and description ("5 minutes to Stock Q1 Heat 2."). **Stop** cancels it quietly.
 
-Tick **Count down by itself from the run sheet** on the card and the announcer counts down to each race on its own, from the time against it in the grid, without anyone pressing **Start**. Which calls it makes (10, 5, 2 or 1 minutes, and time's up) are set on the **Between races** card on **Voice → AI Commentary**, which has the same tick (see [Between races](../announcer/commentary.md#between-races)). **Hold Talk** on Race Control holds it too.
+Tick **Count down by itself from the run sheet** on the card and the announcer counts down to each race on its own, from the time against it in the grid, without anyone pressing **Start**. Which calls it makes (10, 5, 2 or 1 minutes, and time's up) are set on the **Between races** card on **Voice → AI Commentary**, in Advanced mode, where the same setting is **Start the countdown by itself from the run sheet, at** (see [Between races](../announcer/commentary.md#between-races)). **Hold Talk** on Race Control holds it too.
 
 A countdown started at 5 minutes or less skips the "5 minutes" call, and one started at 1 minute skips the "1 minute" call. The countdown follows the clock, so it stays accurate even if the laptop is busy or a dialog is open.
 
-<!-- TODO: confirm whether a running reminder countdown carries on after the Timetable window is closed. The page is kept (not rebuilt) when the window closes, so its timer probably keeps running, but nothing on screen shows it until the window is opened again. -->
+A countdown you started carries on after you close the **Timetable** window, though nothing on screen shows it. Open the window again to see it or **Stop** it.

@@ -4,7 +4,9 @@ This walkthrough takes a new club from a fresh install to a first finished heat,
 
 Set aside an hour before your first real night to go through it. Doing it once with a couple of cars on a quiet evening is the best rehearsal there is.
 
-This walkthrough uses a direct **EasyLap** or **I-Lap** connection, where HeatCaller runs the race. See [Decoders](../timing/decoders.md).
+This walkthrough uses a direct **EasyLap** or **I-Lap** connection. HeatCaller also reads several other decoders, still marked Beta (see [The Beta decoders](../timing/decoders.md#the-beta-decoders)); with any of them, HeatCaller runs the race itself. See [Decoders](../timing/decoders.md).
+
+A new install is in Simple mode, which shows what a race night needs and hides the tuning. Everything in this walkthrough is there in Simple mode except where it says otherwise. See [Simple and Advanced mode](simple-and-advanced-mode.md).
 
 ## Before you start
 
@@ -23,7 +25,7 @@ If you ran the first-run wizard, you may already have a track, a class and one d
     - **I-Lap Decoder (Serial)**. Pick the **COM port:** and the **Baud:** rate your decoder uses (usually 9600). Use **Rescan** if you plugged it in after opening the page.
 3. Click **Connect**.
 4. Check that the **Status:** line and dot turn green.
-5. Drive a car over the loop. You should see its crossing in the Developer Console at the bottom of the page.
+5. Drive a car over the loop. In Advanced mode you'll see its crossing in the Developer console at the bottom of the page. In Simple mode the console is hidden; the **Pre-race check** in step 7 tells you whether each car is being heard.
 
 Full detail and troubleshooting: [Decoders](../timing/decoders.md).
 
@@ -52,7 +54,7 @@ Every driver needs a profile with a **transponder** and a **class**. That's how 
 2. Fill in one row per driver. **Transponder** is required. Everything else is optional.
 3. Click **Import from CSV** and choose your file.
 
-**Or let them appear.** Drivers you haven't added yet can still race. When an unknown transponder crosses the line, HeatCaller notes it. When the session ends, it asks: "New transponder detected: ... Assign a driver name and car to it now?"
+**Or let them appear.** Drivers you haven't added yet can still race. A transponder nobody owns is timed under its number, and once the session ends it's listed in a banner on **Driver Hub** (and on **Race Control** between races), with **Belongs To**, **New Driver** and **Club Rental** to say whose it is. HeatCaller never interrupts a race to ask.
 
 Full detail: [Drivers and classes](../race-day/drivers-and-classes.md) and [Transponders](../timing/transponders.md).
 
@@ -108,10 +110,10 @@ If no round is picked, the check uses whoever is already on the leaderboard.
 ## Step 8: Run the first heat
 
 1. On **Race Day → Next Steps**, the card now reads "Next up: ..." (for example, the first qualifying heat) with a **Start** button for it, such as **Start Q1 Heat 1**. Click it. Or select a round in the program and click **Start Selected**.
-2. HeatCaller switches to **Race Control** and runs the start sequence: **Stage**, then **Countdown**, then **Green**. By default each step follows on from the last once the announcer has finished speaking.
+2. HeatCaller switches to **Race Control** and starts the race. With **Start races On Air** ticked, as it is on a new install, it goes **On Air** first: the soundscape's jingle or sweeper, the opening and a bumper. Then it runs the start sequence: **Stage**, then **Countdown**, then **Green**. By default each step follows on from the last once the announcer has finished speaking. See [On Air](../race-control/running-a-race.md#on-air).
 3. Race. Laps appear on the leaderboard as cars cross the line.
-4. Use the flag buttons if you need them: **Yellow**, **Red**, and **Green** to resume. You can also use <kbd>F1</kbd> to <kbd>F6</kbd> (see [Keyboard shortcuts](../reference/keyboard-shortcuts.md)).
-5. The race ends by itself at its lap or time limit. With no limit, click **Checkered**.
+4. Use the flag buttons if you need them: **Yellow**, **Red**, and **Green** to resume. **Red** has to be pressed and held for about a second, so a stray click can't stop the race. You can also use <kbd>F1</kbd> to <kbd>F6</kbd>, which act on a single press (see [Keyboard shortcuts](../reference/keyboard-shortcuts.md)).
+5. The race ends by itself at its lap or time limit. With no limit, press and hold **Checkered** (or press <kbd>F6</kbd>).
 
 After the first heat, the **Next Up** bar on **Race Control** shows what's next. Its **Start Next** button starts the next heat without leaving the page.
 
@@ -126,7 +128,7 @@ The announcer calls the grid, the start, fast laps, lead changes and the finish 
 
 - **Announcer Screen** on **Race Control** (or <kbd>A</kbd>) opens the Announcer screen, a window with talking points for whoever is on the mic. It can sit beside the main window or on a second monitor, and its **Race Control** button brings the main window forward.
 - **Mute Announcer** at the bottom of the sidebar silences it instantly.
-- If nothing is heard, look at **Sounds → Mixer**, which shows "NO VOICE:" and the reason when the announcer can't speak, and at the Developer Console on the **Connection** page. Lines starting `[voice]` say why an announcement was skipped.
+- If nothing is heard, look at **Sounds → Mixer**, which shows "NO VOICE:" and the reason when the announcer can't speak, and, in Advanced mode, at the Developer Console on the **Connection** page. Lines starting `[voice]` say why an announcement was skipped.
 
 Full detail: [Voice announcements](../announcer/voice.md), [Commentary](../announcer/commentary.md) and [Sounds and music](../announcer/sounds-and-music.md).
 
@@ -153,11 +155,11 @@ See [Big Screen](../screens/big-screen.md).
 
 ## Optional: phones in the pits
 
-1. Open **Local Screens** and click **Start Server**.
+1. Open **Local Screens**. The first time, click **Set up phone pages** and approve the Windows prompt, so phones are allowed to connect. Then click **Start Server**.
 2. Use the **QR code** buttons to put the **Live results:** or **Driver check-in:** address on screen for people to scan. Phones must be on the same Wi-Fi as the laptop.
 3. To throw flags from your phone, set a **Remote PIN:** of four or more digits first, then open the **Phone remote:** address.
 
-If phones can't connect, Windows is probably blocking the app. There's a one-time fix on [Local Screens](../screens/phone-and-web.md).
+If phones still can't connect, see [If the server won't start](../screens/phone-and-web.md#if-the-server-wont-start) and check that the phones are on the same Wi-Fi, not mobile data.
 
 ## Optional: online results
 
@@ -173,7 +175,7 @@ For your first nights on HeatCaller, keep your club's current timing system read
 If HeatCaller misbehaves during a race:
 
 1. **Finish the race on the old system**, and run the rest of the night there if you need to. The drivers come first.
-2. **Don't lose what HeatCaller has.** Every finished race is already saved in **Race History**. A race that was running when the app stopped is kept on disk and offered back the next time HeatCaller opens (see [Crash recovery](../race-control/corrections-and-recovery.md#crash-recovery)), so you can still save it later. A wrong lap count in a saved race can be fixed afterwards with **Edit Result**, once **Allow corrections to saved results** is ticked on **Local Screens** (see [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result)).
+2. **Don't lose what HeatCaller has.** Every finished race is already saved in **Race History**. A race that was running when the app stopped is kept on disk and offered back the next time HeatCaller opens (see [Crash recovery](../race-control/corrections-and-recovery.md#crash-recovery)), so you can still save it later. A wrong lap count in a saved race can be fixed afterwards with **Edit Result**, once **Allow corrections to saved results** is ticked on the **Race-day manager (phone)** card of **Local Screens**, which is shown in Advanced mode (see [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result)).
 3. **Save the evidence before you close anything.** On **Backup & Restore**, click **Save Support Info**. It saves one `.zip` with the last few runs' console, the crash log and the version, with driver names and email addresses taken out. Note roughly when it happened and what you were doing.
 
 ## Who to call

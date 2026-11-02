@@ -6,7 +6,7 @@ Short answers to the questions race directors and club admins ask most, with lin
 
 ### Does HeatCaller run on a Mac or Linux?
 
-No. HeatCaller is a Windows desktop app. It needs Windows 11 (or Windows 10) with .NET 10. See [What you need](../getting-started/index.md#what-you-need).
+No. HeatCaller is a Windows desktop app. It needs a 64-bit Windows 11 (or Windows 10) PC; the installer brings everything else it needs. See [What you need](../getting-started/index.md#what-you-need).
 
 ### Which timing systems does it work with?
 
@@ -15,11 +15,19 @@ Two decoders, read directly:
 - **Direct EasyLap Decoder (USB)**
 - **I-Lap Decoder (Serial)**
 
-HeatCaller runs race control itself. See [Decoders](../timing/decoders.md).
+Five more are offered in Beta. They're written from each decoder's published format but haven't yet been tested on a real one, so run your usual timing alongside the first time:
+
+- **MyLaps / AMB P3 (Beta)**
+- **ZRound open protocol / RiCino (Beta)**
+- **Cano / RCHourglass (Beta)**
+- **OpenStint (Beta)**
+- **EasyLap / Robitronic Serial (Beta)**
+
+Whichever you use, HeatCaller runs race control itself. See [Decoders](../timing/decoders.md) and [The Beta decoders](../timing/decoders.md#the-beta-decoders).
 
 ### We already use Next Level Timing. Can HeatCaller just be the announcer?
 
-Not any more. Earlier versions could listen to Next Level Timing through its Neon API, with NLT running the race; that connection was retired in 0.50.0. HeatCaller now reads your EasyLap or I-Lap decoder directly and runs the race itself, so close NLT before you connect - only one program can use the decoder at a time. Sessions saved from NLT in earlier versions stay in **Race History**. See [Decoders](../timing/decoders.md).
+Not any more. Earlier versions could listen to Next Level Timing through its Neon API, with NLT running the race; that connection was retired in 0.50.0. HeatCaller now reads your decoder directly and runs the race itself, so close NLT before you connect - only one program can use the decoder at a time. Sessions saved from NLT in earlier versions stay in **Race History**. See [Decoders](../timing/decoders.md).
 
 ### Can I try it without a decoder?
 
@@ -64,9 +72,15 @@ Not to race. Timing, race control, results, the Big Screen, the Wi-Fi pages for 
 - the ElevenLabs voice, if you use your own account
 - publishing to your online relay
 - emailing racer PINs
-- the very first build of the app
+- checking for and downloading updates
 
 AI commentary keeps going offline too: the relay writes it when there's internet, and the small model built into HeatCaller writes it on the laptop when there isn't. See [What you need](../getting-started/index.md#internet).
+
+### I can't find a setting these pages mention. Where is it?
+
+It's probably hidden by Simple mode, which a new install starts in. Type it in the **Search pages...** box: if Simple mode hides it, an **Advanced mode settings** row appears under **IN ADVANCED MODE**. To see every setting, open **Backup & Restore** and click **Turn On Advanced Mode** on the **Settings mode** card. Hidden settings keep working either way. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
+
+If it's a whole page, such as **Championship** or **Rentals**, it may be kept out of the sidebar as not yet tested at a real event. A sidebar search still finds it. See [Reordering and hiding pages](../getting-started/tour.md#reordering-and-hiding-pages).
 
 ### Do I have to add every driver before the first race?
 
@@ -76,7 +90,7 @@ No. A car with an unknown transponder can still race. It's listed on a banner at
 
 ### How do I set how long a race is?
 
-Races follow a *race format*: lap limit, time limit, minimum lap time, start type and so on. On a new install there's no lap or time limit, so a race runs until you click **Checkered**. Set the app default with **Race Format** on **Race Control**, give a class its own format on the **Classes** page (with a separate one for qualifiers if you like), or override a single round. See [Running a race](../race-control/running-a-race.md).
+Races follow a *race format*: lap limit, time limit, minimum lap time, start type and so on. On a new install there's no lap or time limit, so a race runs until you throw the checkered flag (press and hold **Checkered**, or press <kbd>F6</kbd>). Set the app default with **Race Format** on **Race Control**, give a class its own format on the **Classes** page (with a separate one for qualifiers if you like), or override a single round. See [Running a race](../race-control/running-a-race.md).
 
 ### Can I run more than one class on the same night?
 
@@ -88,7 +102,7 @@ Each class chooses how qualifying is scored: **total laps**, or the quickest run
 
 ### Can I start and flag races from the keyboard, or from my phone?
 
-Keyboard: on **Race Control**, <kbd>F1</kbd> starts the race (through **On Air** when **Start races On Air** is ticked, otherwise **Stage**), <kbd>0</kbd> On Air (hold it while On Air runs to skip to staging), <kbd>F2</kbd> Countdown, <kbd>F3</kbd> Green, <kbd>F4</kbd> Yellow, <kbd>F5</kbd> Red, <kbd>F6</kbd> Checkered. See [Keyboard shortcuts](keyboard-shortcuts.md).
+Keyboard: on **Race Control**, <kbd>F1</kbd> starts the race (through **On Air** when **Start races On Air** is ticked, otherwise **Stage**), <kbd>0</kbd> On Air (hold it while On Air runs to skip to staging), <kbd>F2</kbd> Countdown, <kbd>F3</kbd> Green, <kbd>F4</kbd> Yellow, <kbd>F5</kbd> Red, <kbd>F6</kbd> Checkered. The keys act on a single press; the **Red**, **Checkered** and **Reset** buttons have to be held for about a second. See [Keyboard shortcuts](keyboard-shortcuts.md).
 
 Phone: start the server on **Local Screens**, set a **Remote PIN:** of at least four digits, and open the **Phone remote:** address on a phone on the same Wi-Fi. See [Local Screens](../screens/phone-and-web.md).
 
@@ -117,7 +131,7 @@ Check these in order:
 3. The HeatCaller voice is chosen with no announcer voice picked, or the relay is refusing, on a PC that hasn't got Kokoro's voice file to stand in. On any PC that has it, this shows up as the whole night in the Kokoro voice rather than silence.
 4. Kokoro's own voice file isn't on this PC, or it's there and won't load. Kokoro is the bottom of the ladder and nothing stands in underneath it, so this is the one state where the announcer has nothing at all to speak with. Open **Voice → Voice** and press **Download (about 310 MB)** under the Kokoro choice in **Speak with**. See [When nothing can speak](../announcer/voice.md#when-nothing-can-speak).
 
-**Sounds → Mixer** shows "NO VOICE:" and the reason when the announcer can't speak, and **Voice Settings** shows a red "NOTHING CAN SPEAK -" line when there's no Kokoro voice file either. The Developer Console on the **Connection** page tells you more: choose the **Voice** filter and look for lines like "Skipped announcement - ElevenLabs API key or voice not configured." or "NO VOICE -" and a reason. See [Voice announcements](../announcer/voice.md).
+**Sounds → Mixer** shows "NO VOICE:" and the reason when the announcer can't speak, and **Voice → Voice** shows a red "NOTHING CAN SPEAK -" line when there's no Kokoro voice file either. In Advanced mode, the Developer Console on the **Connection** page tells you more: choose the **Voice** filter and look for lines like "Skipped announcement - ElevenLabs API key or voice not configured." or "NO VOICE -" and a reason. See [Voice announcements](../announcer/voice.md).
 
 ### Where do I find the results?
 
@@ -131,7 +145,7 @@ Yes. On **Race Day → Next Steps**, right-click the program list and choose **S
 
 ### Phones on the Wi-Fi can't open the pages. What's wrong?
 
-Usually Windows is blocking the app from accepting connections, and HeatCaller shows a message saying so. It's a one-time fix: run two `netsh` commands from an administrator Command Prompt, and set the venue's Wi-Fi as a **Private** network. Also check that the phones are on the same Wi-Fi as the laptop, not mobile data or a guest network. See [Local Screens](../screens/phone-and-web.md) and [Troubleshooting](../admin/troubleshooting.md).
+Usually Windows is blocking the app from accepting connections, and HeatCaller shows a message saying so. It's a one-time fix: click **Set up phone pages** on the **Local Screens** page and approve the Windows prompt (or run the two `netsh` commands from the message yourself, in an administrator Command Prompt), and set the venue's Wi-Fi as a **Private** network. Also check that the phones are on the same Wi-Fi as the laptop, not mobile data or a guest network. See [Local Screens](../screens/phone-and-web.md) and [Troubleshooting](../admin/troubleshooting.md).
 
 ### How do I put the leaderboard on a TV?
 
@@ -191,7 +205,7 @@ No. Only one copy of HeatCaller can run on a PC at a time ("HeatCaller is alread
 
 ### Will updating lose my drivers or results?
 
-No. Your data isn't kept with the app, so replacing the app leaves it alone. Still, make a backup before updating. See [Installing and running](../getting-started/install.md#updating-to-a-new-version).
+No. Your data isn't kept with the app, so replacing the app leaves it alone. HeatCaller also makes a backup before it installs an update, and doesn't install it if the backup fails. Updates are never offered while a race day is open or a race is on, and **After tonight** holds one until the next start. See [Updates](../getting-started/install.md#updates).
 
 ### How do I report a problem?
 

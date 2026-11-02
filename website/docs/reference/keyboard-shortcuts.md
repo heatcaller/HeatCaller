@@ -28,9 +28,11 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 
 Each key does what clicking its button does (except <kbd>F1</kbd>, described above, and <kbd>F7</kbd>, which asks first while a race is under way; the button doesn't), including the automatic follow-on from Stage to Countdown to Green when the race format has that turned on. See [Running a race](../race-control/running-a-race.md).
 
+The **Red**, **Checkered** and **Reset** buttons have to be pressed and held for about a second, so a stray click can't stop or end a race. Their keys, <kbd>F5</kbd>, <kbd>F6</kbd> and <kbd>F7</kbd>, act on a single press. See [Press and hold](../race-control/running-a-race.md#press-and-hold).
+
 **Only the bare key counts.** If you hold <kbd>Alt</kbd>, <kbd>Ctrl</kbd> or <kbd>Shift</kbd>, the F-keys do nothing. For example, <kbd>Alt</kbd>+<kbd>F4</kbd> closes the window as usual and never throws a yellow flag on its way out.
 
-The F-keys work even while you're typing in a box on the page. The letter keys and <kbd>0</kbd> don't: while a text box, a number box, a drop-down list or a grid cell you're editing has the focus, a letter is typing, not a shortcut. None of them work on any other page, or while a dialog is open.
+The F-keys work even while you're typing in a box on the page. The letter keys and <kbd>0</kbd> don't: while a text box, a number box, a drop-down list or a grid cell you're editing has the focus, a letter is typing, not a shortcut. None of them work on any other page, or while a dialog is open. Two windows pass the F-keys on to Race Control: the **Broadcast** window takes <kbd>F1</kbd> to <kbd>F10</kbd> and <kbd>F12</kbd>, and a driver's lap breakdown window takes <kbd>F1</kbd> to <kbd>F8</kbd>, so you can throw a flag without clicking back to the main window first.
 
 !!! tip "Flag buttons and the Space bar"
     After you click a flag button, the focus moves off it. So a stray <kbd>Space</kbd> or <kbd>Enter</kbd> can't press the same flag again, and restart a race that's already running.
@@ -103,6 +105,19 @@ This covers the "scan to join" posters opened from **Local Screens** (**QR code*
 | <kbd>Enter</kbd> | Presses the dialog's main button, usually **Save**, **OK** or **Close**. |
 | <kbd>Esc</kbd> | Cancels or closes the dialog. On a Yes/No question, <kbd>Esc</kbd> answers **No**. |
 
+## Other windows and lists
+
+| Where | Key | What it does |
+|---|---|---|
+| The app tour | <kbd>→</kbd> / <kbd>←</kbd> | Next stop, or back one. <kbd>Esc</kbd> is **Skip tour**. See [The app tour](../getting-started/install.md#the-app-tour). |
+| A driver's lap breakdown window | <kbd>Esc</kbd> | Closes it. <kbd>F1</kbd> to <kbd>F8</kbd> go to Race Control (see above). |
+| **Photo Finish** | <kbd>←</kbd> / <kbd>→</kbd> | Steps back or forward one frame, unless the list of shots or the night list has the focus. See [Photo finish](../race-control/running-a-race.md#photo-finish). |
+| A sponsor video's **Preview** window | <kbd>Space</kbd> | **Pause**, and again to play on. |
+| **Themes**, the list of looks | <kbd>Delete</kbd> | Deletes the selected look, if it's one you made, after asking. Built-in looks can't be deleted. |
+| **Manage Navigation** | <kbd>Space</kbd> | Ticks or unticks the selected page. |
+| **Suggest Handicaps** | <kbd>Space</kbd> | Ticks or unticks **Apply** on the selected row. |
+| **Tonight's club notes** | <kbd>Enter</kbd> | Adds the note you've typed. |
+
 ## Race Day → Who's Racing: scanning QR check-ins
 
 Click the box in the **Scan to Check In** card, then scan a driver's QR check-in. A USB barcode scanner types the code and then presses <kbd>Enter</kbd>, which checks the driver in. You can also type a code and press <kbd>Enter</kbd> yourself. See [Events and entries](../race-day/events-and-entries.md).
@@ -149,7 +164,9 @@ With the mouse:
 - **Ctrl+click** or **right-click** erases with any tool.
 - **Ctrl-drag** with the Floor tool takes floor tiles back off.
 - With the Route tool, right-click removes a point.
+- Dragging with the **middle button**, or with **Shift** and the right button, moves the view, like <kbd>Space</kbd> + drag.
 - The **mouse wheel** zooms. With the Photo tool, it resizes the traced photo instead.
+- Clicking the zoom readout in the corner of the plan goes back to 100%.
 
 ### Picking part of a plan up
 
@@ -162,7 +179,7 @@ Then:
 | Arrow keys | Nudges what's picked one tile |
 | <kbd>]</kbd> | Turns it a quarter clockwise, where it stands |
 | <kbd>[</kbd> | Turns it a quarter the other way |
-| <kbd>Delete</kbd> | Takes it off the plan |
+| <kbd>Delete</kbd> or <kbd>Backspace</kbd> | Takes it off the plan |
 | <kbd>Esc</kbd> | Drops it - nothing is picked any more |
 | <kbd>Ctrl</kbd>+<kbd>A</kbd> | Picks up the whole plan |
 | <kbd>Ctrl</kbd>+<kbd>C</kbd> | Copies it |

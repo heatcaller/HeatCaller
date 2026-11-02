@@ -4,7 +4,9 @@ The **Club Website** page is where you point the laptop at your club's relay, ch
 
 You can also reach this page from **Local Screens**, which shows a one-line relay status and a **Club Website Settings** button.
 
-The page has two tabs. Everything below is on the first, **Website**. The second, **Recording**, holds the race recordings, the drivers' clips and their highlight videos - it moved here from **Sounds** on 26 October 2026; see [Race recordings](../announcer/sounds-and-music.md#race-recordings).
+The page has two tabs. Everything below is on the first, **Website**. The second, **Recording**, holds the race recordings, the drivers' clips and their highlight videos on the **Recording the night** card, and the pieces the commentary writes from the evening on the **Written from the night** card. It moved here from **Sounds** on 26 October 2026; see [Race recordings](../announcer/sounds-and-music.md#race-recordings) and [Written from the night](../announcer/commentary.md#written-from-the-night).
+
+In Simple mode, the **Recording** tab, the relay **Address:** row and the **What gets published**, **Look**, **Personal PINs**, **Email (for racer PINs)**, **Race-day manager** and **Room & Web** cards are hidden, along with **Include photos** on the **Online check-in** card. They keep their settings and go on working; turn on Advanced mode to change them. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
 ![Club Website page, Website tab: the Relay card filled in with the address, Club id and a hidden Publish token, and What gets published below](../assets/images/club-website.png)
 
@@ -140,15 +142,17 @@ With **Send automatically when the race day closes** ticked, the emails go by th
 
 ## Look
 
-The **Look** card holds the welcome line and the **New here?** card. Changes reach the pages within a few seconds, and there's no Save button.
+The **Look** card holds the welcome line, the **New here?** card and the club's links. Changes reach the pages within a few seconds, and there's no Save button.
 
-<!-- screenshot: Club Website page, Look card with the Welcome line box and the Open Looks button -->
+<!-- screenshot: Club Website page, Look card with the Welcome line box, Club links and the Open Themes button -->
 
 **Welcome line:** One line of plain text, up to 160 characters, shown under the club's name on the home page, for example "Racing every Tuesday from 6pm - all welcome". It's also the description used when the pages are added to a phone's home screen. Leave it blank for the standard line.
 
 **New here? card:** three lines for somebody who has found the club but never raced there, shown as a card on the club's home page to any phone that doesn't remember a driver. **Where we race:** and **When we race:** take up to 160 characters each, **How to join:** up to 300. **When we race** also shows under "No racing right now" between nights. Leave all three empty for no card.
 
-The pages' colors and the club logo used to be set here too. Since 0.48 they're on the **Themes** page, shared with the app, the Big Screen and the Wi-Fi pages; the card says "Colors and club logo are set in the Looks card on the Themes page (shared with the app, Big Screen and Wi-Fi pages)." Click **Open Looks** to go there. See [Looks and the club logo](../screens/looks-and-logo.md).
+**Club links:** a box each for **Website:**, **Facebook:**, **Instagram:**, **YouTube:**, **TikTok:**, **X / Twitter:**, **Discord:** and **WhatsApp:**. They're shown under "Find us" on the club's home page and at the foot of every other page. Paste the full address, or just `@yourclub` for Instagram, YouTube, TikTok and X; an address without `https://` gets it added. Leave a box empty to leave that one off. A link that can't be used is named in red under the boxes, with "It won't be shown until it's fixed.", and isn't published meanwhile.
+
+The pages' colors and the club logo used to be set here too. Since 0.48 they're on the **Themes** page, shared with the app, the Big Screen and the Wi-Fi pages; the card says "Colors and club logo are set in the Looks card on the Themes page (shared with the app, Big Screen and Wi-Fi pages)." Click **Open Themes** to go there. See [Looks and the club logo](../screens/looks-and-logo.md).
 
 - **Colors:** the online pages use the crowd-screen look, set in **Crowd screens:**. Any look works, including the ones you make yourself. The choice you'd made here before 0.48 carries over.
 - **Logo:** choose it with **Choose Logo** in the **Club logo** card. The online pages always show it, in a block of its own beside the club's name, drawn between 72 and 180 pixels across depending on the screen, and on a plate if it would vanish on the page background. Link previews use it too. A new logo shows straight away. The home-screen icon is HeatCaller's sun for every club, logo or not (see [Add to Home Screen](index.md#add-to-home-screen)).
@@ -204,6 +208,22 @@ The **Share** card shows your club's home page address once an address and club 
 - **Open** opens it in your browser.
 - **Copy Link** copies it to the clipboard.
 - **Show Poster** opens a poster with the heading "FOLLOW THE RACING", a QR code for the home page, and the line "Scan with your phone camera. Live timing, schedule and results - and your own races under Me." **Print** prints it, and **Full screen** fills the screen with it (press <kbd>Esc</kbd> to leave full screen). The poster window stays open while you carry on working, so you can leave it on a second screen.
+
+## Room & Web
+
+The **Room & Web** card, under **Share**, holds what the people in the room, and people at home, can send in or hear through the club's Wi-Fi and web page. Everything on it is off until you switch it on, and none of it needs AI commentary: with commentary off, you read the notes and the vote out yourself.
+
+| Part | Switches | See |
+|---|---|---|
+| **Club notes** | **Take them from phones on the club's Wi-Fi** (the `/shoutout` page on the laptop) and **Take them from the club's own web page**. A dedication, a birthday or the raffle, said once between races. Every one waits on Race Control until you approve it. | [Club notes](../announcer/commentary.md#club-notes-the-things-the-timing-cant-know) |
+| **The room's vote** | **Let phones on the club's Wi-Fi vote** (the `/vote` page on the laptop) and **Let the club's own web page vote**. The room picks who wins; after the race the announcer says how it did. No running tally is ever shown to a phone. | [The room's vote](../announcer/commentary.md#the-rooms-vote) |
+| **Listening along** | **Let people listen along on the club's web page**. A **Listen to the announcer** button on the club's **Live** page plays the race call a few seconds behind the room, in the voice you've chosen. It needs **Publish to the relay** on too. | [Your club's pages](index.md#your-clubs-pages) |
+
+<!-- TODO: confirm where on the club's relay pages people send a note or vote: the relay takes them, but no relay page seems to offer a form for either -->
+
+A line under each part says where things stand, for example "Messages can come in on the club Wi-Fi at /shoutout under this PC's own address. Every one waits on Race Control until you approve it." Switching a web-page route off tells the relay straight away: it stops taking notes or votes, or stops offering the announcer, and throws away what it was holding.
+
+Listening along puts your chosen voice, even one cloned from somebody at the club, on an address anyone with the link can play. Switch it off and the button goes.
 
 ## Status
 

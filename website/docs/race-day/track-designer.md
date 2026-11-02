@@ -15,7 +15,7 @@ The toolbar tools are **Floor**, **Lane**, **Rails**, **Turns**, **Corners**, **
 - **Undo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd>), **Redo** (<kbd>Ctrl</kbd>+<kbd>Y</kbd>), **Fit** (<kbd>F</kbd>) and **Clear**.
 - **Turn**, **Flip across**, **Flip down**, **Duplicate** and **Remove** act on whatever you've picked up with the **Select** tool, and are grayed out while nothing is picked.
 - **View** (<kbd>V</kbd>) shows the track tipped and turned, in 3D (see [The angled view](#the-angled-view)). It's lit while it shows.
-- **Export** opens a menu to save or copy a picture of the plan, print it to scale with its parts list, or save it as a plan file (see [Print and share a plan](#print-and-share)).
+- **Export** opens a menu to save or copy a picture of the plan, print it to scale with its parts list, or save it as a plan file (see [Print and share a plan](#print-and-share-a-plan)).
 - **Panel** hides the panel on the right so the drawing gets the whole width, and brings it back (<kbd>P</kbd>). It's lit while the panel shows.
 
 The drawing area is a dark floor, whatever look HeatCaller is in, so the tiles and rails always look the same. Its top-left corner shows how big the plan is, in feet or meters (whichever you gave the room in), and the lap length with its lap time (see [The lap time](#the-lap-time)). Each tile is drawn with the seven T-shaped teeth a real RCP tile locks to the next with; zoomed out, the joints are a plain line. Hold <kbd>Space</kbd> and drag to move the view with any tool (the middle button and <kbd>Shift</kbd>+right-drag do the same), and use the mouse wheel to zoom. The zoom shows in the bottom-right corner; click it to go back to 100%.
@@ -70,7 +70,7 @@ Click the lap in the corner of the drawing to see where its time comes from and,
 
 ## Build me a track
 
-On the **Plan** tab, click **Build me a track...** for layouts made to fit your room. First enter the room's size on the **Room** tab. It offers:
+On the **Plan** tab, click **Build me a track** for layouts made to fit your room. First enter the room's size on the **Room** tab. It offers:
 
 - **RCP's own** layouts that fit the room, in the plan's tile size;
 - layouts worked out for the room: an **Oval**, an **L**, a **U hairpin**, a **T**, an **S-bend** and a **Serpentine**, longest lap first.
@@ -83,7 +83,7 @@ Each card shows the layout's picture, its lap length and size, and the tiles and
 
 ## What the club owns
 
-The **Stock** tab checks the plan against the track your club actually has. Click **Edit what we own...** and enter it once:
+The **Stock** tab checks the plan against the track your club actually has. Click **Edit what we own** and enter it once:
 
 - **Boxed sets:** how many of each of RCP's sets.
 - **Loose parts:** plain tiles, outer curve tiles, inner corner tiles, straight rails, turn rails, inner corner pieces and end caps. 30 cm and 50 cm parts are entered separately, because the two sizes don't mix.
@@ -107,9 +107,9 @@ RCP's turn rails stand on tiles of their own. A bend uses an **outer curve tile*
 - **Save picture**: **Small**, **Medium**, **Large** or **Poster** (32, 64, 128 or 256 pixels a tile). Each says how big the picture comes out; one over 12,000 pixels across is grayed out.
 - **Copy picture**: copies the plan, to paste into an email, a post or a document.
 - **Print track and parts list...**: prints the plan to scale. Pick **1:10**, **1:20**, **1:25** or **1:50**, or **Fit on one sheet**. Each choice says how big a tile comes out and how many sheets it takes. Then pick the printer and see every sheet in the preview before printing. A big plan prints over several sheets, each labeled with where it goes ("sheet 2 of 4 - row 1 of 2, 2nd from the left of 2"), with the columns lettered along the top and the rows numbered down the side. Every sheet has a scale bar that says how long it should measure. If it doesn't, the printer has shrunk the page: turn off "fit to page" in the printer's settings. A plan that would take more than 60 sheets at a scale can't be printed at that scale.
-- **Save plan file...**: saves the plan as a **.hctrack** file.
+- **Save plan file...**: saves the plan as a **.hctrack** file. The **Plan** tab has a **Save plan file** button too.
 
-With **Print track and parts list** ticked to include it, the plan is followed by the parts it takes, against what the club owns when that's entered on the **Stock** tab (anything short is in red), and then the order to build it in:
+With **Then the parts list and how to build it, row by row** ticked (it is unless you untick it), the plan is followed by the parts it takes, against what the club owns when that's entered on the **Stock** tab (anything short is in red), and then the order to build it in:
 
 1. **Lay the floor**, row by row from the top, for example "Row 4: A to B, K to L - 4 tiles (outer curve at A)".
 2. **Put the rails round it**, with the end caps.
@@ -121,7 +121,7 @@ Tiles are named by the grid printed on the plan: columns lettered from the plan'
 
 ## Plan files
 
-A **.hctrack** file holds the whole plan (floor, rails, lanes, markings, racing line, tile size and kit) for another club's HeatCaller to open. It doesn't hold the traced photo, which stays on your PC. On the **Plan** tab, **Open plan file...** opens one in place of what's drawn, asking first if there's anything on the board; <kbd>Ctrl</kbd>+<kbd>Z</kbd> puts your plan back. Your room and your track's name stay as they were; if you hadn't entered a room, the file's room comes with it. The status line says what the file called the track. Laps already raced on this layout stop counting towards its lap time, since it's a different track now. A file that isn't a plan, or was saved by a newer HeatCaller, isn't opened, and HeatCaller says why: "That plan was saved by a newer HeatCaller. Update HeatCaller to open it."
+A **.hctrack** file holds the whole plan (floor, rails, lanes, markings, racing line, tile size and kit) for another club's HeatCaller to open. It doesn't hold the traced photo, which stays on your PC. On the **Plan** tab, **Open plan file** opens one in place of what's drawn, asking first if there's anything on the board; <kbd>Ctrl</kbd>+<kbd>Z</kbd> puts your plan back. Your room and your track's name stay as they were; if you hadn't entered a room, the file's room comes with it. The status line says what the file called the track. Laps already raced on this layout stop counting towards its lap time, since it's a different track now. A file that isn't a plan, or was saved by a newer HeatCaller, isn't opened, and HeatCaller says why: "That plan was saved by a newer HeatCaller. Update HeatCaller to open it."
 
 ## Pick part of the plan up
 

@@ -24,7 +24,7 @@ The roster is down the left and the driver you pick is beside it.
 
 - Under the roster: **Add Driver** (see [Add a driver](#add-a-driver)) and **Delete**, for the drivers selected.
 - Under the driver: **Edit Profile**, which opens the profile form (double-clicking a driver in the roster does the same), and **Photo**.
-- On the right, for the whole list: **Import from CSV**, **Paste a Table...** and **Download Template** (see [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet)), and **Check Names**, which reads the roster's names out loud in the club's announcer voice so you can hear what will be said tonight (see [Check how names are read](#check-how-names-are-read)).
+- On the right, for the whole list: **Import from CSV**, **Paste a Table** and **Download Template** (see [Import drivers from a spreadsheet](#import-drivers-from-a-spreadsheet)), and **Check Names**, which reads the roster's names out loud in the club's announcer voice so you can hear what will be said tonight (see [Check how names are read](#check-how-names-are-read)).
 
 The driver has six tabs:
 
@@ -178,7 +178,7 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 | **Email them their night** | When the club sends night emails, this driver is sent their races, their report card and a link to their night page after racing. It's grayed out until **Email:** has an address. See [Drivers' nights by email](../online/setup.md#drivers-nights-by-email). |
 | **Transponders:** | The driver's other transponders: a second car's, a spare, a replacement. Type a number and click **Add**. Pick one and click **Retire** when it's no longer used (what was timed on it stays theirs), or **Remove** for one added by mistake. The main transponder is listed first and can be retired too. See [Alternate transponder](../timing/transponders.md#alternate-transponder). |
 | **Class:** | The driver's main class, or **(none)**: the one their card, the check-in sheet, results and badges give as their class. Click **Manage** to open the class list if the class you need doesn't exist yet. |
-| **Also races:** | Any other classes the driver races besides their main one. Click **Choose...** and tick them. See [A driver in more than one class](#a-driver-in-more-than-one-class). |
+| **Also races:** | Any other classes the driver races besides their main one. Click **Choose** and tick them. See [A driver in more than one class](#a-driver-in-more-than-one-class). |
 | **Setup configuration:** | Free-text notes about the car's setup. For structured setup sheets, log setups against the car in the [Garage](#garage). |
 | **Rental / loaner transponder** | Marks this transponder as a club loaner. |
 | **Exclude from track records and points** | Keeps the driver out of all-time records and championship points. Use it for guests, staff cars and loaners. |
@@ -298,7 +298,7 @@ If you have your drivers in a spreadsheet, or in the timing software your club u
 
 <!-- screenshot: the import preview with a list above each column and Points so far go into -->
 
-**From a web page or a spreadsheet, without a file:** if your old timing software only shows its driver list on a web page, select the whole table there and copy it (Ctrl+C), or copy the rows out of a spreadsheet. Then click **Paste a Table...**. HeatCaller reads the table from the clipboard and opens the same preview as a CSV file, so steps 2 to 4 are the same. A few things it does for you:
+**From a web page or a spreadsheet, without a file:** if your old timing software only shows its driver list on a web page, select the whole table there and copy it (Ctrl+C), or copy the rows out of a spreadsheet. Then click **Paste a Table**. HeatCaller reads the table from the clipboard and opens the same preview as a CSV file, so steps 2 to 4 are the same. A few things it does for you:
 
 - If the copy took in more than one table, the biggest one is used, along with every other table that has the same headings (a page with one table per class).
 - Links, bold and line breaks inside a cell become plain words.
@@ -306,7 +306,7 @@ If you have your drivers in a spreadsheet, or in the timing software your club u
 - A class title with an entry count ("10th Scale Entries: 16") isn't thrown away: when the table has no class column of its own, a **Class** column is added with the class each driver was listed under.
 - The first row is used as headings when it looks like headings. Otherwise the columns are called "Column 1", "Column 2" and so on, and you pick each one from its list.
 
-**From your LiveRC entry list:** if your club posts to LiveRC, open one of your own events there, go to its **Entry List**, select everything from the first class's title to the last driver, and copy it. **Paste a Table...** reads every class on the page in one go:
+**From your LiveRC entry list:** if your club posts to LiveRC, open one of your own events there, go to its **Entry List**, select everything from the first class's title to the last driver, and copy it. **Paste a Table** reads every class on the page in one go:
 
 - Each driver's class comes from the title over their table, and **Transponder #** is picked as the transponder.
 - LiveRC has each name in the page twice ("BLACK, KALEB" and "KALEB BLACK"), so a copy reads "BLACK, KALEBKALEB BLACK". HeatCaller puts it back to one name, written the usual way: **Kaleb Black**.
@@ -382,7 +382,7 @@ A driver who races two cars in two classes, a stock car and a modified one, say,
 
 1. In **Driver Hub**, pick the driver and click **Edit Profile**.
 2. Pick their main class in **Class:**.
-3. Click **Choose...** beside **Also races:**. The **Other Classes** window lists the club's classes except the main one: tick the others they race and click **Save**.
+3. Click **Choose** beside **Also races:**. The **Other Classes** window lists the club's classes except the main one: tick the others they race and click **Save**.
 4. Click **Save** on the profile.
 
 From then on:
@@ -424,7 +424,7 @@ The **Add Class** / **Edit Class** dialog has these settings:
 | **A jump start also costs the lap** | When on, a car that jumps the start loses the lap it jumped on as well as any time penalty. When off, it's credited with the start lap at the green like everyone else. | Off |
 | **Warn when a driver in a heat hasn't passed tech today** | When a heat is staged, Race Control warns about drivers in it who haven't been cleared by scrutineering today. It never stops the race. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control). | On |
 
-The row of buttons under the settings opens the class's sub-editors: **Tech Checklist**, **Race Format**, **Qualifier Format**, **Color...**, **Sanctioning Preset** and **Warnings**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change.
+The row of buttons under the settings opens the class's sub-editors: **Tech Checklist**, **Race Format**, **Qualifier Format**, **Color**, **Sanctioning Preset** and **Warnings**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change. **Tech Checklist**, **Qualifier Format** and **Warnings** are shown in Advanced mode only; in Simple mode they're hidden but keep working (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
 
 !!! note
     Classes don't have a points scale. Points are set per championship — see [Results and championships](../race-control/results-and-championships.md).
@@ -476,7 +476,7 @@ If you do run tech for the class, **Warn when a driver in a heat hasn't passed t
 
 ### Warnings
 
-Click **Warnings...** to set the class's warning ladder: what a driver's first, second, third (and so on) warning in a race costs them. There are five rows, **1st warning:** to **5th warning:**. For each one, pick:
+Click **Warnings** to set the class's warning ladder: what a driver's first, second, third (and so on) warning in a race costs them. There are five rows, **1st warning:** to **5th warning:**. For each one, pick:
 
 - **Warning only**: logged, announced and shown, nothing more.
 - **Time penalty**, with the number of **seconds** (1 to 600) added to the driver's time.
@@ -491,7 +491,7 @@ Giving and taking back warnings on the night is covered in [Driver warnings](../
 
 Every class has a color, used on its name in lists and as a band on its printed heat sheets, so you can tell class sheets apart on the pit table. By default the color is worked out from the class name, so the same class is the same color on every computer at the club.
 
-Click **Color...** (or the square next to the name) and choose **Choose a Color...** to pick your own, or **Use the Color from the Name** to go back to the automatic color.
+Click **Color** (or the square next to the name) and choose **Choose a Color...** to pick your own, or **Use the Color from the Name** to go back to the automatic color.
 
 ### Sanctioning presets
 
@@ -542,7 +542,7 @@ Tick **Retired (out of service - keeps its history)** on a unit that's damaged o
 
 When it comes back, select it and click **Check In** (or double-click it). The prompt reminds you what deposit to give back and asks for any notes on the unit's condition. Click **OK** to file the loan.
 
-A unit that's already out can't be checked out again — issuing one transponder to two drivers would mix their laps. **Loan History** lists every completed loan for the selected unit. Check-outs, check-ins and edits to a unit can be undone with **Undo**.
+**Edit** changes the selected unit's asset tag, notes and **Retired** tick. A unit that's already out can't be checked out again — issuing one transponder to two drivers would mix their laps. **Loan History** lists every completed loan for the selected unit. Check-outs, check-ins and edits to a unit can be undone with **Undo**.
 
 !!! note
     The Rentals page is separate from the **Rental / loaner transponder** checkbox on a driver profile. The checkbox is what keeps a loaner out of track records; the Rentals page is for tracking the hardware.
@@ -552,6 +552,8 @@ The event report also lists any units still out. See [Results and championships]
 ## Venues
 
 A venue saves everything specific to one physical track so you can switch it all over with one click — useful if your club races at more than one place.
+
+The **Venues** page is in the sidebar in Advanced mode only. In Simple mode a button that would open it asks to turn on Advanced mode first. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
 ![The Venues page: two venues listed, and Venue settings for Home Track with its decoder, preferred soundscape and race defaults, and Apply This Venue](../assets/images/venues.png)
 
@@ -576,6 +578,8 @@ To use a venue, select it and click **Apply This Venue**, then confirm. HeatCall
 - writes the race defaults into the **app default** race format.
 
 Because the race defaults go into the app default, a class or round with its own format still uses its own settings.
+
+A venue can't be applied while a race or practice is running, since switching the decoder would disconnect the one timing it: a **Race running** message says to apply it once the race has finished. **Undo** puts the decoder, track, soundscape and race defaults back as they were (again, not while a race or practice is running).
 
 ## Track Layouts
 
@@ -621,7 +625,15 @@ The **Garage** page shows the club's cars as cards, grouped under their class. A
 
 Click a car to open it: its photos (**Photos**), its details (**Edit**), **Lend Out**, **Transfer** (see [Transfer a car](#transfer-a-car)), **Retire** and **Delete**, and every setup logged for it.
 
-<!-- TODO: confirm and document the car window's details, Lend Out and Chassis Types in full; this section only covers setups in detail. -->
+- **Photos** adds pictures with **Add a Photo**, takes one off with **Remove**, and **Make it First** makes the selected one the car's main picture. Pictures are copied into HeatCaller, so they stay with the car.
+- **Edit** (or **Add a Car**) has the car's **Name:**, **Owner:**, **Class:**, **Chassis:**, **Shell:**, **Race number:** and **Notes:**. **Owner:** can only be picked when the car is added.
+- **Lend Out** lends the car to another driver for the race day you have open, in **Lend it to:**. The loan is for that day only: the car goes back to its owner when the day ends, and **Nobody - it stays with its owner** takes it back sooner. It's grayed out while no race day is open. The car shows who has it as **On loan to:**.
+- **Retire** keeps a car you no longer run out of the way without losing it; on a retired car it reads **Put Back**.
+- **Delete** asks first. Setups logged against the car stay in the log, without the car.
+
+Each of these can be undone.
+
+**Chassis Types** on the **Garage** page is the club's list of chassis a car can be. Each has a **Name**, a **Maker** and a **Setup sheet to use**: logging a setup for a car on that chassis opens on that sheet. **Add** makes a new one, **Save Changes** keeps your edits, **Retire** keeps one nobody runs any more, and **Delete** removes it.
 
 Setups are logged against a car: open a car, and its setups are listed under **Setups logged for this car**. A setup records what was in the car and can be linked to the session it ran in, so the session's best lap shows right next to it. Over time it shows which changes actually made the car quicker.
 
@@ -644,7 +656,7 @@ The same changes are what the winner's Technical Lead talks about in pit lane at
 
 Most changes are small tweaks, so **Duplicate** copies the selected setup as a starting point for the next one. The copy keeps the driver, track, car, chassis sheet and values, but not the date or the session link. **Delete** removes the selected setups (you can select several); **Undo** brings them back.
 
-Setups saved before chassis sheets existed show as **(legacy entry)**. When you open one, its old values are copied into the matching fields of the sheet.
+Setups saved before chassis sheets existed show **(older entry)** in the **Chassis Sheet** column. When you open one, its old values are copied into the matching fields of the sheet.
 
 ### Setups without a car
 

@@ -6,7 +6,7 @@ A backup is a single `.zip` file holding everything HeatCaller has saved: driver
 
 ## What's in a backup
 
-A backup is a zip of the whole HeatCaller data folder, `%AppData%\HeatCaller`, with every file and subfolder in it. That includes your music library and photos, so a backup can be large. The finish camera's pictures (the `photo-finish` folder) are left out: they pile up quickly and would make every backup bigger, so copy that folder yourself if you want to keep them. See [Data files](data-files.md) for what each file is.
+A backup is a zip of the whole HeatCaller data folder, `%AppData%\HeatCaller`, with every file and subfolder in it. That includes your music library and photos, so a backup can be large. The finish camera's pictures (the `photo-finish` folder) are left out: they pile up quickly and would make every backup bigger, so copy that folder yourself if you want to keep them. The `undo-holding` folder, where files wait for a week in case you press **Undo**, is left out too. See [Data files](data-files.md) for what each file is.
 
 Music tracks inside the data folder's music library are remembered by their place in that folder, so the library still works after a restore onto another PC or another Windows account.
 
@@ -151,7 +151,7 @@ Restoring replaces your current data with the backup's. HeatCaller protects you 
 
 - **It checks the file first.** It must be a HeatCaller backup (it has settings or driver profiles in it), every file in it must belong inside the data folder, and it must not unpack to an unreasonable size (over 2 GB). If any check fails, nothing is restored, and the message says why.
 - **It takes a safety backup first.** Your current data is backed up into the `Pre-Restore Safety Backups` subfolder of your backup folder, so a restore can be undone by restoring that.
-- **It stops music, ambience and the I-Lap decoder first**, so the files they have open can be replaced.
+- **It stops music, ambience and an I-Lap or Beta decoder first**, so the files they have open (the decoders' raw capture files among them) can be replaced.
 - **It unpacks to a separate folder, then moves the files into place**, so a damaged backup can't leave you with half the old data and half the new.
 - **It keeps going if a file is locked.** A music, audio or log file that's in use is left as it was, and the `Restore complete.` message lists it. If some data files couldn't be replaced, a **Restore incomplete** message lists them and names the safety backup, and HeatCaller still restarts.
 - **It clears the crash-recovery copy** of an unfinished race, unless the backup has one of its own, so a race from before the restore isn't offered back afterwards.
@@ -166,7 +166,7 @@ Restoring replaces your current data with the backup's. HeatCaller protects you 
 
 A restore is refused while a race or practice is running ("A race or practice is running. Restore a backup once it has finished - restoring restarts the app, which would end it.") and while a backup is being written ("A backup is being written - try again in a moment.").
 
-The list on the **Existing backups** card shows backups in the current folder, newest first, with their date, size and name. It doesn't list the pre-restore safety backups or any other zips in the folder; use **Restore from File** for those. **Delete Selected** deletes the selected backup after you confirm; this can't be undone.
+The list on the **Existing backups** card shows backups in the current folder, newest first, with their date, size and name. It doesn't list the pre-restore safety backups or any other zips in the folder; use **Restore from File** for those. **Delete Selected** deletes the selected backup after you confirm. **Undo** can bring it back for the next week, except for a backup on a different drive from HeatCaller's data folder, which is deleted outright; the confirmation says which.
 
 ## Restoring on a new PC
 
@@ -219,9 +219,16 @@ The console says so, for example: `[storage] Couldn't read "profiles.json" (...)
 
 Without that copy, the next save would write the empty defaults over your data. With it, nothing is lost. An earlier copy is never overwritten; a second one on the same second gets `-2` added.
 
+When the file couldn't be opened at all (a sync or backup tool had it locked), or no copy could be kept, HeatCaller goes further and saves nothing over that file until it's restarted and can read it. The console says `Nothing will be saved to it until HeatCaller is restarted and can read it`. Close whatever had it open and restart. See [Unreadable files](data-files.md#unreadable-files).
+
 You'll also see a `settings.json.unreadable-...` copy after restoring onto a new PC. That one is expected: it's the settings file as it arrived, with keys only the old PC can open.
 
 To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of the data folder, then rename the copy back to the original file name, replacing the default one. <!-- TODO: confirm this recovery procedure is the recommended one --> If it still won't load, keep the copy and contact support with it.
+
+## The other cards on the page
+
+- **Settings mode** switches between Simple and Advanced mode, and has **Restore Default Settings** and **Put Back Earlier Settings**, which reset the settings Simple mode hides without touching your drivers, results or keys. Each saves a copy of your settings first, in the `Settings Backups` folder in the data folder, so it travels in your backups. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md#restore-default-settings).
+- **Getting help** has **Save Support Info** (below), **About HeatCaller** (the version, and the licenses of the components HeatCaller ships) and **License and Privacy** (the license agreement and privacy notice you accepted).
 
 ## Save Support Info
 
@@ -238,7 +245,7 @@ The card says where to send it: **support@heatcaller.com**. Clicking the address
 | `summary.txt` | The HeatCaller version, the PC (Windows version, memory, screens, free disk space) and the settings that help work out a problem. Keys, tokens, PINs and passwords never go in: it only says whether each one is set. |
 | `logs` | The console from the last few times HeatCaller ran: up to 5 runs from the last 3 days, newest first. The newest always goes in. |
 | `crash` | `crash.log` and `crash.old.log`, if there are any. |
-| `decoder` | With an I-Lap decoder, its raw capture from the last 3 days (up to 3 files). |
+| `decoder` | With an I-Lap decoder, its raw capture from the last 3 days (up to 3 files). A Beta decoder's `decoder-raw-*.log` files aren't included: attach them from the data folder yourself. |
 | `README.txt` | What's in the file and what was changed. |
 
 Before anything goes in, HeatCaller replaces:

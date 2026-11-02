@@ -29,6 +29,17 @@ Your club's address is the relay address followed by `/c/` and your club id, for
 | Achievements | `/c/<club>/badges` | A tab under **Results**. "Just earned", "Most collected" and "Every badge". While you're [following a driver](#following-a-driver), a "Next for *name*" list at the top shows up to two badges they're close to, such as "2 more podiums for Podium Regular". | Every minute |
 | Tracks | `/c/<club>/tracks` | Reached from **Our tracks** on Home (**Home** stays lit). Every track layout with its picture, lap record, sector records, length, typical lap and the ten best laps on it. Today's layout comes first, marked "Racing here today". | Every 5 minutes |
 
+A few more pages are never in the tabs, because each is for one person:
+
+| Page | Address | What it's for |
+|---|---|---|
+| A driver's night | `/c/<club>/night` | One driver's own evening, opened only with the code from their badge, their night email or their personal PIN. See [A driver's own night](#a-drivers-own-night). |
+| Sign-up | `/c/<club>/signup` | A new driver, invited by the desk, signing themselves up. See [Driver sign-up](sign-up.md). |
+| Manager | `/c/<club>/manage` | The race-day manager, behind the Manager PIN, when the club has let it be reached through the relay. See [Race-day manager](setup.md#race-day-manager). |
+| One result | `/c/<club>/results/<session>` | The **Results** page opened on one session: the address **Share** hands out (see [Sharing a result](#sharing-a-result)). |
+
+The club's links from the **Look** card (website, Facebook, Instagram and so on) are under "Find us" on Home and at the foot of every other page (see [Look](setup.md#look)).
+
 ![The Schedule page on a phone, showing today's running order with Done, On track and Next markers](../assets/images/online-schedule-page-phone.png)
 
 ### Getting around
@@ -118,6 +129,12 @@ Each race on the **Results** page is laid out the way LiveRC lays out a heat:
 - **Lap-by-lap position graph**, under the table: a colored line for each driver showing where they were running after every lap, starting from their grid slot, with a key of names under it. Practice and qualifying have no graph.
 
 Results published by an older version of HeatCaller have no laps, so they show without **View laps**, **Qual** or the graph.
+
+### Sharing a result
+
+Each session on the **Results** page, and each day's heading, has a **Share** button. On a phone it opens the phone's own share sheet, with a line saying what the race was, at which club and when, but not who won, so a group chat isn't spoiled for anyone who hasn't looked. Where there's no share sheet, the link is copied ("Link copied."), or shown in a **Copy this link** box to copy by hand.
+
+A shared session's link opens the **Results** page on that session. In a chat app, its preview is a picture of the podium in the club's colors. A session that's no longer on the relay still opens the page, which says "That result is not on the relay any more."
 
 ### Penalties on the results
 

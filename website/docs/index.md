@@ -20,19 +20,19 @@ HeatCaller runs RC race nights from one Windows laptop. It times the laps from y
 
 ## What's in these docs
 
-**Getting started** — what you need, installing, a tour of the window, and a first-night walkthrough.
+**Getting started** — what you need, installing, a tour of the window, Simple and Advanced mode, and a first-night walkthrough.
 
-**Race day** — drivers, classes and venues; race days, check-in and scrutineering at the desk; building the program, qualifying, mains and the timetable.
+**Race day** — drivers, classes and venues; the track designer; race days, check-in and scrutineering at the desk; building the program, qualifying, mains and the timetable.
 
 **Race control** — running a race, fixing mistakes, practice, ghost cars and handicaps, and results and championships.
 
-**Announcer** — the voice (the HeatCaller voice, your own ElevenLabs account, or the free Kokoro voice), local AI commentary, and sound effects, ambience and music.
+**Announcer** — the voice (the HeatCaller voice, your own ElevenLabs account, or the free Kokoro voice), AI commentary (written by your club's relay or by a model built into HeatCaller), and sound effects, ambience and music.
 
-**Timing** — connecting an EasyLap or I-Lap decoder, and how transponders are handled.
+**Timing** — connecting an EasyLap or I-Lap decoder, or one of the decoders in Beta (MyLaps P3, ZRound/RiCino, Cano/RCHourglass, OpenStint, EasyLap serial), and how transponders are handled.
 
-**Screens** — the big screen for the pits, and phones on the club Wi-Fi.
+**Screens** — the big screen for the pits, phones on the club Wi-Fi, and the looks and club logo.
 
-**Club Website** — your club's public pages, online check-in with QR check-ins and personal PINs, and emailing PINs to racers.
+**Online** — your club's public pages, set up on the **Club Website** page; online check-in with QR check-ins and personal PINs; driver sign-up; and emailing PINs to racers.
 
 **Administration** — hosting the relay on Fly.io, security and privacy, backups, where data lives, and troubleshooting.
 

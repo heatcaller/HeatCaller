@@ -24,7 +24,7 @@ The **Practice** page is for open lapping with no staging, flags or finish. Ever
 !!! note "Practice and races share the timing session"
     Practice and races use the same timing session, so HeatCaller keeps them apart:
 
-    - **Start Practice** is refused while a race is staged, counting down or running: "Finish the race or reset it on Race Control first". If a finished race is still showing on the **Race Control** board, it asks before clearing it.
+    - **Start Practice** is refused while a race is staged, counting down or running: "Finish the race (checkered flag) or reset it on Race Control first, then start practice." It's refused during a race's warm-up too: press **Reset** on Race Control to cancel the warm-up first. If a finished race is still showing on the **Race Control** board, it asks before clearing it.
     - While practice is running, **Stage**, **Countdown**, **Green**, **Yellow**, **Red**, **Checkered**, **Reset**, starting a round from the program or the Next Up bar, **Start as Demo...** and Demo Mode's start are all refused: "Stop practice first on the Practice page".
     - **Start automatically when a car crosses the gate** only starts practice when nothing else is going on.
     - When practice stops, the next race goes back to its own lap or time limit and start type.
@@ -42,6 +42,8 @@ The **Practice** page is for open lapping with no staging, flags or finish. Ever
 | **Rolling average over:** | How many recent laps the **Rolling Avg** column averages (2 to 50). This isn't remembered between sessions. | 5 |
 
 The **This session** table is sorted by best lap, fastest first, and its columns share its width. By default it shows **Driver**, **Laps**, **Last Lap**, **vs Best**, **Best Lap**, **Rolling Avg**, **Std Dev**, **Streak**, **Best Streak**, **Streak Pace**, **Trend** and **PBs**.
+
+**Choose Columns** and **Rolling average over:** are shown in Advanced mode only. In Simple mode the table keeps the columns last chosen and the average stays at 5 laps. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
 Practice uses the minimum lap time from the race format that's currently in force on **Race Control**. It always uses a standard start, even if that format has a staggered or qualifying start. Its clean runs use the practice streak threshold, which is set separately from races on **Sounds → Effects**.
 
@@ -111,12 +113,12 @@ The **Your ghosts** list shows **On**, **Name**, **Car**, **Pace from**, **Adjus
 |---|---|
 | **A fixed lap time** | The **Lap time:** you enter, in seconds. |
 | **A driver's personal best on this track** | That driver's best saved lap on the track in **Track:** on the Race Control **Session** row, or on any track if none is selected. It respects personal-best resets. |
+| **A driver's best tonight (or ever, before tonight's)** | That driver's best lap tonight on this layout, from the session running and anything saved tonight, or their best ever on it before they've set one tonight. Fixed for the run: unlike the live pace, it doesn't speed up the moment they beat it. It respects personal-best resets. This is what **Chase a Best Lap** sets up (below). |
 | **A driver's personal best within a date range** | That driver's best lap set between the two dates in **Laps set between:**. |
 | **A driver's recent average pace** | That driver's average lap from the most recent session they raced in. The lap from the start to their first crossing, and stops such as a battery change, are left out. |
 | **The track record for this layout** | The all-time record on the track layout in **Track:** on the Race Control **Session** row. |
 | **Live: a driver's pace in this session** | The driver's pace in the session that's running, re-read every lap. **Follows:** picks their best lap so far or their recent average. The ghost gets faster as the driver does. |
 | **Live: whatever the leader is running** | The pace of the leading real car, re-read every lap. |
-| **A driver's best tonight (or ever, before tonight's)** | That driver's best lap tonight on this layout, from the session running and anything saved tonight, or their best ever on it before they've set one tonight. Fixed for the run: unlike the live pace, it doesn't speed up the moment they beat it. It respects personal-best resets. This is what **Chase a Best Lap...** sets up (below). |
 
 During practice, ghosts take their track from the Practice page's own **Track:** instead, and in a demo from the Demo Mode page's **Track layout:**. The speed columns and the live track map use the same track.
 
@@ -139,11 +141,11 @@ Ghosts from the previous race stop as soon as you stage the next race. If you un
 
 ### Chase your own best
 
-**Chase a Best Lap...**, on the Practice page's ghost cars card, puts a ghost of a driver's own best lap into practice, so they can see on every lap whether they're gaining on it. It's also on Race Control's right-click: **Coach *name*** → **Chase *name*'s best (ghost)**.
+**Chase a Best Lap**, on the Practice page's ghost cars card, puts a ghost of a driver's own best lap into practice, so they can see on every lap whether they're gaining on it. It's also on Race Control's right-click: **Coach *name*** → **Chase *name*'s best (ghost)**.
 
 In practice, the ghost's row sits just under its driver on the board, wherever it is in the order, so the two are read side by side, and the ghost's gap column shows its gap to them. In a race nothing is moved: the board is the running order. **Coach *name*** → **Gap to their ghost** has the announcer say where the ghost is on the track each time the driver crosses the line.
 
-1. Click **Chase a Best Lap...** and pick the driver from **Whose best lap should the ghost run at?** Drivers on the board are listed first.
+1. Click **Chase a Best Lap** and pick the driver from **Whose best lap should the ghost run at?** Drivers on the board are listed first.
 2. Click **Chase**. A ghost called, for example, "Sam's best" joins the practice at their best tonight on this layout, or their best ever on it before they've set one tonight. Ghost racing is switched on with it, and in a running practice it goes straight on track.
 3. When they beat it, pick the same driver again: the ghost is brought up to their new best from its next lap, rather than a second ghost being added.
 

@@ -8,6 +8,8 @@ HeatCaller has one main window with a sidebar of pages on the left and the curre
 
 The title bar shows the app name and version, for example **HeatCaller - BETA 0.60.0**. Quote this version in any bug report.
 
+While HeatCaller runs, its icon is also in the Windows system tray, by the clock. Double-click it, or right-click it and choose **Show HeatCaller**, to bring the window to the front. **Exit** closes HeatCaller just as the window's X does, asking first if a race is running. Closing the window never leaves it running in the tray.
+
 ## The sidebar
 
 The sidebar is always dark, whatever look you use. From top to bottom it has:
@@ -15,7 +17,7 @@ The sidebar is always dark, whatever look you use. From top to bottom it has:
 1. The **HEATCALLER** header, or your club logo if you've set one. With a look that has Synthwave effects, such as **Synthwave**, it's animated (unless the logo is showing).
 2. The **Search pages...** box, with a chevron beside it that narrows the sidebar to just its icons (see [Just the icons](#just-the-icons)).
 3. The list of pages. Click one to open it.
-4. Icon buttons at the bottom: **Manage Navigation** (in Advanced mode only), the announcer mute, and **Undo**. They have no text on them - hover over one to see its name. They're described below. In Advanced mode an amber **Advanced** sits above them; see [Simple and Advanced mode](simple-and-advanced-mode.md).
+4. Icon buttons at the bottom: **Manage Navigation** (in Advanced mode only), the announcer mute, and **Undo**. They have no text on them - hover over one to see its name. They're described below. In Advanced mode an amber **Advanced** sits above them; see [Simple and Advanced mode](simple-and-advanced-mode.md). When your club uses the HeatCaller voice, the AI commentary through the relay or ElevenLabs, a small line above them shows how much of this month's allowance is used, for example "AI 47% · Voice 34%". Click it for the **This Month** window; see [The chip in the sidebar](../announcer/commentary.md#the-chip-in-the-sidebar).
 
 HeatCaller opens on the **Race Control** page.
 
@@ -27,13 +29,18 @@ While a race day is open, a third group, **TONIGHT**, sits at the top with the t
 
 You can reorder pages within a group, or hide them (see [Reordering and hiding pages](#reordering-and-hiding-pages)), but a page stays in its own group.
 
+Not every page below may be in your sidebar:
+
+- **Venues** isn't shown in Simple mode, the mode a new install starts in. A sidebar search still finds it, under **IN ADVANCED MODE**. See [Simple and Advanced mode](simple-and-advanced-mode.md).
+- If you finished the first-run wizard with **Keep pages not yet tested at a real event out of the sidebar for now** ticked (it starts ticked for a new club), **Championship**, **Garage**, **Handicaps**, **Rentals** and **Venues** are kept out of the sidebar too. A search still finds them, under **NOT YET TESTED**. See [Reordering and hiding pages](#reordering-and-hiding-pages).
+
 ### Just the icons
 
 On a laptop at the track, the sidebar's 220 pixels is a column of the leaderboard. Click the chevron beside the **Search pages...** box, or press <kbd>Ctrl</kbd>+<kbd>B</kbd>, and the sidebar narrows to a rail of its icons - about a quarter of the width, with the rest going to the page beside it. Click the chevron again, or press <kbd>Ctrl</kbd>+<kbd>B</kbd> again, to open it.
 
-Nothing is hidden by this. Every page is still there, in the same order and in the same groups, and the page you were on stays on screen. What goes is the words: the page names, the group headings, the **Search pages...** box and the **HEATCALLER** header, which becomes **HC** (your club logo, if you've set one, is still drawn). Hover over an icon to see its page's name, and its count if it has one - the **Rentals** count, for example, becomes a dot in the corner of the icon with the number in the tooltip.
+Nothing is hidden by this. Every page is still there, in the same order and in the same groups, and the page you were on stays on screen. What goes is the words: the page names, the group headings, the **Search pages...** box and the **HEATCALLER** header, which becomes **HC**. The club logo and the Synthwave scene go from the header too, since neither reads at that width; they come back when you open the sidebar. Hover over an icon to see its page's name, and its count if it has one - the **Rentals** count, for example, becomes a dot in the corner of the icon with the number in the tooltip.
 
-The three buttons at the bottom stack into a column instead of sitting in a row. Dragging a page up or down still reorders it, and <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> still open pages by position. <kbd>Ctrl</kbd>+<kbd>F</kbd> opens the sidebar and puts the cursor in the search box, since the box isn't there to type in.
+The buttons at the bottom stack into a column instead of sitting in a row, and the allowance line and the amber **Advanced** become dots. Dragging a page up or down still reorders it, and <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> still open pages by position. <kbd>Ctrl</kbd>+<kbd>F</kbd> opens the sidebar and puts the cursor in the search box, since the box isn't there to type in.
 
 How you leave it is remembered, so a club that prefers the rail gets it at every start.
 
@@ -58,8 +65,8 @@ How you leave it is remembered, so a club that prefers the rail gets it at every
 | **Themes** | How the app looks: the app's colors, the crowd screens' colors, the club logo and the **Appearance** options. See [Looks and the club logo](../screens/looks-and-logo.md). |
 | **Voice** | Everything the app says, in tabs: **Voice**, **Cast**, **Race Calls** (with **Rivalries** at its end) and **AI Commentary**. The announcer's own screen is a window, opened from **Race Control**. See [Voice announcements](../announcer/voice.md). |
 | **Sounds** | Everything else you hear, in tabs: **Mixer**, **Soundscapes** (voice and sound presets you can switch between), **Imaging**, **Effects**, **Ambience**, **Music** and **Lap Beeps**. See [Sounds and music](../announcer/sounds-and-music.md). |
-| **Connection** | Connecting to your decoder, and the Developer Console. See [Decoders](../timing/decoders.md). |
-| **Backup & Restore** | Manual and automatic backups. See [Backups](../admin/backups.md). |
+| **Connection** | Connecting to your decoder, **Mission Control**, the finish camera and, in Advanced mode, the split loop and the Developer Console. See [Decoders](../timing/decoders.md). |
+| **Backup & Restore** | Manual and automatic backups, the **Settings mode** card (Simple and Advanced mode, and **Restore Default Settings**), and the **Getting help** card. See [Backups](../admin/backups.md) and [Simple and Advanced mode](simple-and-advanced-mode.md). |
 
 #### Club Tools
 
@@ -69,12 +76,12 @@ How you leave it is remembered, so a club that prefers the rail gets it at every
 | **Championship** | The season, in two tabs: **Standings** (championships, points and results) and **Calendar** (events and their rounds). See [Results and championships](../race-control/results-and-championships.md). |
 | **Rentals** | Club transponders on loan. The sidebar shows a count next to **Rentals** while any are still out. |
 | **Handicaps** | Time or lap credits to even out a mixed-ability grid. See [Practice, ghosts and demo](../race-control/practice-and-ghosts.md). |
-| **Venues** | Save a track's connection settings, layout, soundscape and race defaults, and apply them all in one click. |
+| **Venues** | Save a track's connection settings, layout, soundscape and race defaults, and apply them all in one click. In the sidebar in Advanced mode only. See [Venues](../race-day/drivers-and-classes.md#venues). |
 | **Sponsors** | Sponsor slides that rotate on the Big Screen. See [Big Screen](../screens/big-screen.md). |
 | **Local Screens** | The Wi-Fi web server for phones: live results, phone remote, self check-in and OBS overlay. See [Local Screens](../screens/phone-and-web.md). |
 | **Club Website** | Publishing to your club's online relay, online check-in, racer PINs and email, on its **Website** tab. Its **Recording** tab has the race recordings, the drivers' clips and highlight videos (it was on **Sounds** until 26 October 2026). See [Online setup](../online/setup.md) and [Race recordings](../announcer/sounds-and-music.md#race-recordings). |
 
-Some pages have tabs along the top. Race Day, Championship, Race Analytics, Voice, Sounds and Club Website all do. The tabs refresh when you open them, so they always show the latest data.
+Some pages have tabs along the top. Race Day, Championship, Race Analytics, Voice, Sounds and Club Website all do. The tabs refresh when you open them, so they always show the latest data. In Simple mode a few tabs are hidden: **Race Calls** on **Voice**, **Imaging**, **Effects**, **Ambience** and **Lap Beeps** on **Sounds**, and **Recording** on **Club Website**. They keep working; see [What Simple mode hides](simple-and-advanced-mode.md#what-simple-mode-hides).
 
 ## Page headers
 
@@ -88,14 +95,15 @@ Type in the **Search pages...** box to filter the sidebar (<kbd>Ctrl</kbd>+<kbd>
 |---|---|
 | `transponder` | Driver Hub, Rentals |
 | `flag`, `min lap`, `f11` | Race Control |
-| `heat`, `badge`, `scan`, `schedule` | Race Day |
-| `tech`, `qualifying` | Race Day, Classes |
+| `heat`, `scan`, `schedule` | Race Day |
+| `scrutineering`, `qualifying` | Race Day, Classes |
 | `bump up` | Race Day, Classes |
 | `sanctioning` | Classes |
 | `decoder`, `easylap`, `console` | Connection |
-| `elevenlabs`, `commentary`, `ai` | Voice |
+| `elevenlabs`, `commentary` | Voice |
 | `beep`, `music`, `crowd` | Sounds |
-| `token`, `relay`, `club id` | Club Website |
+| `token`, `club id` | Club Website |
+| `advanced`, `simple mode`, `default settings` | Backup & Restore |
 | `obs`, `overlay` | Local Screens |
 | `look`, `dark mode`, `24-hour` | Themes |
 | `logo` | Themes, Sponsors |
@@ -116,21 +124,23 @@ Short keywords filed under a tab, such as `vs`, work the same way.
 
 If nothing matches, the full list stays in place, so the sidebar never goes blank. Clear the box to see every page again.
 
+A search also turns up pages that are kept out of the sidebar, at the foot of the list: the pages not yet tested at a real event, under **NOT YET TESTED**, and in Simple mode the **Venues** page, under **IN ADVANCED MODE**. In Simple mode, typing a setting that Simple mode hides, such as `ducking` or `split loop`, adds an **Advanced mode settings** row there too. Picking an **IN ADVANCED MODE** row offers to turn on Advanced mode.
+
 ## Reordering and hiding pages
 
 You can put the pages you use most at the top, and hide the ones you never use.
 
 **To reorder by dragging:** drag a page up or down in the sidebar list. The new order is saved straight away. A page stays in its own group (Essentials or Club Tools); drop it in the other group and it moves back into its own.
 
-**To reorder or hide with Manage Navigation:**
+**To reorder or hide with Manage Navigation** (in Advanced mode; Simple mode keeps the sidebar as it ships and has no **Manage Navigation** button):
 
 1. Click **Manage Navigation** at the bottom of the sidebar.
 2. In the **Manage Navigation** dialog:
-    - Untick a page to hide it.
+    - Untick a page to hide it (or select it and press <kbd>Space</kbd>).
     - Select a page and use **Move Up** or **Move Down** to change its position.
     - **Show All** ticks every page again.
     - **While a race day is open, bring Race Day, Race Control and Championship to the top** turns the **TONIGHT** group on or off. It's on by default.
-    - **Keep pages not yet tested at a real event out of the sidebar (Championship, Garage, Handicaps, Rentals, Venues) - a search still finds them** hides the pages that haven't yet been used at a real race night. A sidebar search still lists them, last, under **NOT YET TESTED**, and they show "(not yet tested at an event)" in this list. **Restore Defaults** leaves this tick alone. It's off unless you ticked it in the first-run wizard.
+    - **Keep pages not yet tested at a real event out of the sidebar (Championship, Garage, Handicaps, Rentals, Venues) - a search still finds them** hides the pages that haven't yet been used at a real race night. A sidebar search still lists them, last, under **NOT YET TESTED**, and they show "(not yet tested at an event)" in this list. **Restore Defaults** leaves this tick alone. It's the same tick as the one on the first-run wizard's last step, which starts ticked for a new club: if you pressed **Finish** without unticking it, it's on. **Skip setup** leaves it off.
     - **Restore Defaults** puts the default order back, shows every page and turns the **TONIGHT** group back on.
 3. Click **OK**.
 
@@ -185,7 +195,7 @@ Icon buttons, with no text on them - hover over one to see its name. **Manage Na
 
 ## The Developer Console
 
-The **Connection** page has a **Developer console** card at the bottom. Despite the name, it's the app's running log, and it's useful to anyone. Every page writes to it: decoder messages, laps, flags, what the announcer said or skipped and why, backups, sessions saved, and warnings.
+The **Connection** page has a **Developer console** card at the bottom, in Advanced mode (Simple mode hides it). Despite the name, it's the app's running log, and it's useful to anyone. Every page writes to it: decoder messages, laps, flags, what the announcer said or skipped and why, backups, sessions saved, and warnings. It keeps logging while it's hidden, and **Save Support Info** on **Backup & Restore** includes it either way.
 
 | Control | What it does |
 |---|---|
@@ -193,7 +203,7 @@ The **Connection** page has a **Developer console** card at the bottom. Despite 
 | **Filter:** | Shows only lines containing the text you type. |
 | Preset list | Fills the filter for common topics: **All**, **Audio timing**, **Voice**, **Sound**, **Race**, **Decoder**, **Storage**, **Hide raw HID**. |
 | **Exclude matches** | Hides matching lines instead of showing only them. **Hide raw HID** ticks this for you, to hide the EasyLap decoder's raw data. |
-| **Copy** | Copies the console text, for pasting into a bug report. |
+| **Copy** | Copies the lines shown (after filtering), for pasting into a bug report. |
 | **Clear** | Empties the console. |
 
 The filter only changes what you see. Nothing is thrown away, so you can widen the filter again. The console keeps roughly the last 5,000 lines.
@@ -210,6 +220,8 @@ HeatCaller doesn't use pop-up notifications. Status is shown in these places:
 - **The Next Up bar** on **Race Control**: what's running **NOW**, what's **NEXT**, and how the **DAY** is going. During a race it also shows **TIMING** warnings, in red, when laps may not be being counted. See [Timing warnings](../race-control/running-a-race.md#timing-warnings).
 - **The next-step card** on **Race Day → Next Steps**, which tells you the next step and gives you a button for it, and banners such as "No race day is open." on **Race Day → Who's Racing**.
 - **The Rentals count** in the sidebar, while any rental transponder is still out.
+- **The Driver Hub count** in the sidebar, and a banner on **Driver Hub** (and on **Race Control** between races), when a transponder no driver owns has crossed the line. See [Unknown transponders](../timing/transponders.md#unknown-transponders).
+- **The allowance line** at the foot of the sidebar, which turns amber and then red as a monthly allowance runs down.
 - **The Developer Console**, for everything else.
 
 ## Selecting several rows
@@ -230,4 +242,4 @@ Most dialogs follow the same rules:
 
 If something goes badly wrong, you'll see a plain Windows error box instead. It gives the file where the full details were written (`crash.log`). The same error isn't shown again within 30 seconds, so a repeating fault can't bury you in dialogs. See [Troubleshooting](../admin/troubleshooting.md).
 
-Some windows aren't dialogs and stay open alongside the main window. These are the **Big Screen**, the Announcer screen, the **Qualifying Projection**, and the QR posters. You can keep using the app while they're open. The **Timetable** and the **Scrutineering log** are windows too, but the main window waits while they're open: close them with **Close** or <kbd>Esc</kbd>.
+Some windows aren't dialogs and stay open alongside the main window. These include the **Big Screen**, the Announcer screen, the **Broadcast** window, **Mission Control**, the **Qualifying Projection**, a driver's lap breakdown, **Photo Finish**, **Driver Requests**, **This Month** and the QR posters. You can keep using the app while they're open. The **Timetable** and the **Scrutineering log** are windows too, but the main window waits while they're open: close them with **Close** or <kbd>Esc</kbd>.

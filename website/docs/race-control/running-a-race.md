@@ -14,8 +14,8 @@ From top to bottom, the page has:
 - **The Session row.** Choose the round, the track and the session name.
 - **The Next Up bar.** Shows what's running now, what's next, and how the day is going.
 - **The Race Control card.** Holds one row of flag buttons, all the same width and centered over the On Air bar under them, with the level meters at the right, reaching from the card's title down to the foot of the On Air bar (see [Level meters](#level-meters)). The lit flag button and the board show where the race is. Only the buttons that mean something at that moment are shown (see [The flag row](#the-flag-row)). The lit button shows the flag in effect. **Red**, **Checkered** and **Reset** have to be pressed and held for a second (see [Press and hold](#press-and-hold)); the line under the row says so, and shows the hold as it fills. The same line is the **On Air bar** while anything is going out (see [The On Air bar](#the-on-air-bar)).
-- **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, the **Start races On Air** tick box, **Race Format...** and **Columns...**.
-- **The clock column** on the right. It holds the race clock, then **Quick Race**, **Big Screen**, **Announcer Screen**, **Qualifying Projection**, **Pre-race check...**, **Mission Control** and **Broadcast**.
+- **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, the **Start races On Air** tick box, **Race Format** and **Columns**. **Start races On Air** and **Columns** are shown in Advanced mode only (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
+- **The clock column** on the right. It holds the race clock, then **Quick Race**, **Big Screen**, **Announcer Screen**, **Qualifying Projection**, **Pre-race check**, **Mission Control** and **Broadcast**.
 
 ## The flag row
 
@@ -40,7 +40,7 @@ Once a race is finished, the row is for the gap before the next one: what the an
 |---|---|---|
 | **Skip** | A click stops the line on air and moves the show on to its next part (the On Air bar names it at its right, for example "Skip: Race Recap"): a recap goes on to the honors, the gap to its next line. Press and hold for a second to end the whole recap show, as the **Broadcast** window's **Skip** does. Grayed out when nothing is on air. | <kbd>F9</kbd> (a click) |
 | **Hold Talk** | Stops everything between races: the commentary's lines, sponsor reads, the hand-over, call-ups and the automatic countdown. It turns amber and reads **Resume Talk** until you press it again, and the On Air bar says "Between-race talk held - press Resume Talk or F10". Let go, talk picks up after the **Space between lines**, not the instant it comes off. The race itself is never held: flags, the countdown to green and the finish calls still play. With commentary on, it's the same hold as the **Broadcast** window's **Hold**, so either shows on both. | <kbd>F10</kbd> |
-| **Call Up** | Calls up the next race now, and the marshals with it when **Marshals to their posts** is ticked. Grayed out when the program has nothing next. Right-click it for **Push the next race back 1 minute** (its run-sheet time, the countdown and the next call-up move with it), **Call up two races out**, **Marshals only** and **Not checked in**. | <kbd>F12</kbd> |
+| **Call Up** | Calls up the next race now, and the marshals with it when **Marshals to their posts** is ticked. Grayed out when the program has nothing next. A second press while the last call-up is still waiting to be said, or within 30 seconds of it, says nothing: the console answers, for example, "Already called up A-Main 7s ago." Right-click it for **Push the next race back 1 minute** (its run-sheet time, the countdown and the next call-up move with it), **Call up two races out**, **Marshals only** and **Not checked in**. | <kbd>F12</kbd> |
 | **Edit Result** | Opens the race just run in **Race History** with **Edit Result** open. | |
 | **Reset** | Press and hold, as always. Takes the row back to the set before the green. | <kbd>F7</kbd> |
 
@@ -50,7 +50,7 @@ The phone remote has the same three under **BETWEEN RACES**: **SKIP**, **HOLD TA
 
 ### Press and hold
 
-**Red**, **Checkered** and **Reset** can't be taken back in the middle of a race, so a click on them does nothing: press and hold the button for about a second. Each of them has a small clock beside its caption. While you hold, a bar fills along the foot of the button and the line under the row says "Keep holding to throw the red flag…" (or "to end the race", "to reset the race") with "let go to cancel". Let go before it fills, or slide off the button, and nothing happens: the line says "Let go too soon - nothing was done." for a moment.
+**Red**, **Checkered** and **Reset** can't be taken back in the middle of a race, so a click on them does nothing: press and hold the button for about a second. Each of them has a small clock beside its caption, and the line under the row names the ones on the row, for example "Red, Checkered and Reset: press and hold." While you hold, a bar fills along the foot of the button and the line under the row says "Keep holding to throw the red flag…" (or "to end the race", "to reset the race") with "let go to cancel". Let go before it fills, or slide off the button, and nothing happens: the line says "Let go too soon - nothing was done." for a moment.
 
 **Yellow**, and every other button, is still one click.
 
@@ -124,6 +124,8 @@ HeatCaller uses the first of these that exists:
 | **Leader takes the flag, others finish their lap** | Changes how a race ends. See [Finishing](#finishing). | Ticked |
 
 For a class or a round, untick **Use a custom format (untick to follow the app default)** to go back to the app default.
+
+In Simple mode the format shows only the lap limit, the time limit and **Start:**. The rest keep their values and keep working; turn on Advanced mode to see them (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
 
 ## Start the race
 
@@ -240,7 +242,7 @@ A car left sitting on the loop isn't a jump start. The decoder keeps reporting a
 When a car jumps the start:
 
 - The announcer calls it.
-- Its row on the leaderboard is tinted red for the rest of the race. Hover over the first cell to see "Jump start - crossed before the green."
+- Its row on the leaderboard is tinted red for the rest of the race.
 - If the class sets a penalty, it's added to the driver's time on their first counted lap. It shows in the **Penalty** column, and **Clear Penalties** removes it like any other penalty.
 
 You set the jump-start rules on the class:
@@ -339,7 +341,7 @@ The board orders drivers by most laps, then by lowest total time. Total time inc
 
 ### Columns
 
-Press **Columns...**, at the foot of the leaderboard, to choose the columns and their order. In the dialog, click the left edge of a row to show or hide that column, and use **Move Up** and **Move Down** to reorder them. **Restore Defaults** puts back **Pos**, **Driver**, **Car**, **Laps**, **Best Lap**, **Gap to P1** and **Streak**.
+Press **Columns**, at the foot of the leaderboard, to choose the columns and their order. In the dialog, click the left edge of a row to show or hide that column, and use **Move Up** and **Move Down** to reorder them. **Restore Defaults** puts back **Pos**, **Driver**, **Car**, **Laps**, **Best Lap**, **Gap to P1** and **Streak**.
 
 | Column | Shows |
 |---|---|
@@ -356,10 +358,10 @@ Press **Columns...**, at the foot of the leaderboard, to choose the columns and 
 | **S1 mph**, **S2 mph**, **S3 mph**, **S4 mph** | Average speed through each sector on the last lap. Needs the split loops placed on the layout's plan in the Track Designer, so the sectors' lengths are known. |
 | **Top Speed** | The fastest the driver has gone through any sector this session, in mph. Highlighted for the fastest on the board. With the split loop a few feet past the line, this is a speed trap. |
 | **At Split** | Live, the moment a car crosses the split loop: how far up (green, −0.08) or down (red, +0.12) it is on its own best lap to that point. |
-| **Badges** | How many achievement badges this driver has earned. |
+| **Achievements** | How many achievement badges this driver has earned. |
 | **vs Best** | How far the last lap was off this driver's own best. Shows **BEST** when it was their best. |
 | **Qual** | During a qualifying round: where this driver would qualify overall if the heat ended now, and how many places this heat has moved them. |
-| **Gap to P1** | Time or laps behind the leader, for example +2.35 or +1L. |
+| **Gap to P1** | Time or laps behind the leader, for example +2.345 or +1L. |
 | **Interval** | Gap to the car directly ahead. |
 | **Best Pace Gap** | How far this driver's best lap is off the quickest lap of the session. |
 | **Average** | Mean of every counted lap after the start lap. |
@@ -373,8 +375,10 @@ Press **Columns...**, at the foot of the leaderboard, to choose the columns and 
 | **Gained** | Places made up (+) or lost (−) since the grid. Shows a dash when the grid wasn't known. |
 | **Clean %** | Share of this driver's passes that counted as laps. |
 | **Led** | Laps completed while leading. |
+| **Rating** | The driver rating for this race, 0 to 150: finish, laps led, pace against the race's best lap, the fastest lap, distance and places gained, less 5 a warning. Live until the flag. |
 | **PBs** | How many times this driver has beaten their own best this session. |
 | **Penalty** | Time penalties applied. |
+| **Warnings** | Warnings from race control this race: ⚠ and the count, or the count and **⚑ BLACK** after a black flag. See [Driver warnings](corrections-and-recovery.md#driver-warnings). |
 | **Total Time** | Elapsed race time for this driver. |
 
 The same column list is available for the Big Screen and web pages. See [Big Screen](../screens/big-screen.md).
@@ -406,7 +410,7 @@ Right-click a driver on the board and open **Coach *name*** to coach them while 
 | **Consistency** | Every five clean laps, how far apart those laps were: "Last five within a tenth - that's your rhythm.", "Last five within three tenths." or "Spread's six tenths over the last five - settle it down.", with "tighter than the five before" or "looser than the five before" when it changed by a tenth or more. |
 | **Tones instead of words** | A short, quiet tone at the line instead of the target words: a high note when the lap was quicker than the target, a middle note when it was on it, a low note when it was slower, and two rising notes for a new best lap. Without a target, the tone is against their best lap. With **At the split** ticked, the split gets a tone too. The consistency line is still spoken. |
 | **Gap to their ghost** | Once they have their own-best ghost on track: at the line, where the ghost is on the track - "Two tenths behind your ghost.", "A tenth ahead of your ghost." or "Level with your ghost." Every lap. Only shown while their ghost is running. |
-| **Chase *name*'s best (ghost)** | Puts on a ghost of their own best lap, "Sam's best" - the same as **Chase a Best Lap...** on the Practice page (see [Chase your own best](practice-and-ghosts.md#chase-your-own-best)). Pick it again once they've beaten it and the ghost comes up to their new best. One **Undo** takes it back off. |
+| **Chase *name*'s best (ghost)** | Puts on a ghost of their own best lap, "Sam's best" - the same as **Chase a Best Lap** on the Practice page (see [Chase your own best](practice-and-ghosts.md#chase-your-own-best)). Pick it again once they've beaten it and the ghost comes up to their new best. One **Undo** takes it back off. |
 | **Stop coaching *name*** | Ends the coaching. Only shown while they're being coached. |
 
 - **One driver at a time.** None of these lines says whose lap it was, so coaching a second driver moves the coaching to them, and the console says so.
@@ -468,7 +472,7 @@ The headline over the tiles sums it up: "All clear. Ready to race.", "Ready to r
 | Tile | Green | Amber | Red |
 |---|---|---|---|
 | **Decoder** | Connected. | Still connecting. | Not connected, or an error: no laps are being counted. |
-| **Heartbeat** | The EasyLap's once-a-second signal is arriving. | | Nothing for 5 seconds or more: check the USB cable. The I-Lap sends no heartbeat, so this tile is dimmed for it. |
+| **Heartbeat** | The EasyLap's once-a-second signal is arriving. | | Nothing for 5 seconds or more: check the USB cable. Only the EasyLap sends a heartbeat, so this tile is dimmed for any other decoder. |
 | **Split loop** | Connected. | Not connected: laps are still timed, sectors aren't. | |
 | **Cars heard** | How many transponders the decoder has heard in the last 12 minutes, and when the last pass was. | Some of them were only just caught. | |
 | **Next race** | Every car in the next race has been heard ("8 of 8"). | Names the cars not heard yet. | |
@@ -477,6 +481,7 @@ The headline over the tiles sums it up: "All clear. Ready to race.", "Ready to r
 | **Website** | Online and up to date, or updates on their way. | Switched on but not set up, or offline with results waiting. | |
 | **Sound** | The announcer will be heard. | The announcer is muted. | |
 | **Cloud backup** | The last backup reached every cloud service you ticked. | No copy has gone up yet, the last one is over two weeks old, or one of several services isn't signed in. | No service is signed in here, or the last copy failed - the tile says which and what to do. Dimmed when you keep no cloud copies. See [Copies in the cloud](../admin/backups.md#copies-in-the-cloud). |
+| **Allowances** | How much of this month's allowances is used, for example "AI 42%". | One is running low (80% or more), or the AI commentary's lines are used up and the model on this PC is writing instead. | The HeatCaller voice or your own ElevenLabs key is used up, or the commentary's lines are gone with no model on this PC to take over. Dimmed when nothing on this PC is metered. See [This month](../announcer/commentary.md#this-month-every-allowance-in-one-place). |
 
 **Next race** uses the same drivers as the pre-race check: the selected round's roster, or the drivers on the leaderboard when no round is selected.
 ## Photo finish
@@ -506,7 +511,7 @@ Practice and Demo Mode don't keep shots.
 - **Big Screen** (<kbd>B</kbd>) opens the audience display. See [Big Screen](../screens/big-screen.md).
 - **Announcer Screen** (<kbd>A</kbd>) opens the Announcer screen in a window of its own, beside this one or on a second monitor. Its **Race Control** button brings the main window back to the front. See [Announcer screen](../announcer/voice.md#announcer-screen).
 - **Qualifying Projection** opens or closes a window that shows where the class would qualify if the running heat ended now. See [Program and mains](../race-day/program-and-mains.md#qualifying-projection).
-- **Pre-race check...** (<kbd>R</kbd>) checks which cars in the round (or on the board) the decoder has heard. Its **Mission Control** button opens [Mission Control](#mission-control). See [Pre-race check](../race-day/events-and-entries.md#pre-race-check) and [Transponders](../timing/transponders.md).
+- **Pre-race check** (<kbd>R</kbd>) checks which cars in the round (or on the board) the decoder has heard. Its **Mission Control** button opens [Mission Control](#mission-control). See [Pre-race check](../race-day/events-and-entries.md#pre-race-check) and [Transponders](../timing/transponders.md).
 - **Mission Control** opens [Mission Control](#mission-control).
 - **Broadcast** opens the broadcast's controls in a window of their own: **Hold**, **Play again**, **Replay Moment**, **Skip**, **Notes** and **Votes**, with what the announcer is doing said in full under them. The button reads **Broadcast · HELD** in amber while a hold is on, and **Broadcast · 3 notes** when notes from the room are waiting for you, so neither is missed with the window shut. See [The Broadcast window](../announcer/commentary.md#the-broadcast-window).
 

@@ -43,6 +43,8 @@ New drivers who aren't on your books yet can sign themselves up with an invite; 
 5. Click **Open Check-in Page** to see the page as drivers will.
 6. Print QR check-ins: go to **Race Day → Who's Racing** and click **Print QR Check-ins** (see [QR check-ins](#qr-check-ins)).
 
+In Simple mode, **Include photos** and the **Personal PINs** and **Email (for racer PINs)** cards are hidden; they keep working as set. Turn on Advanced mode to change them (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
+
 While online check-in is on, the home page shows **Check in: tap Me and type your PIN** (a **Check in** tile until 30 October), and a driver who types their personal PIN on the **Me** tab is checked in there and then (see [Opening your night with your PIN](index.md#opening-your-night-with-your-pin)). (Until 29 October 2026 check-in had a tab of its own, and until 30 October **Me** linked to this page instead.)
 
 When you untick **Let drivers check in from their own phones**, the check-in page says it's closed and the list of names is taken back off the relay.
@@ -98,7 +100,7 @@ What changes:
 - The check-in list goes to the relay again straight away, with the new codes.
 - **Undo** in the sidebar puts the old QR check-in key back, so the old QR check-ins work again. Only use it before you print new QR check-ins: QR check-ins printed with the new key stop working if you undo.
 
-When it's done, HeatCaller says "Done. Print new QR check-ins on Race Day → Entries with Print QR Check-ins, and hand them out - the old ones no longer work." (the message still uses the tab's old name: it's **Race Day → Who's Racing** now), and the console notes "[relay] Reissued all QR check-ins: ...".
+When it's done, HeatCaller says "Done. Print new QR check-ins with Print QR Check-ins on Race Day → Who's Racing, and hand them out - the old ones no longer work.", and the console notes "[relay] Reissued all QR check-ins: ...".
 
 !!! warning
     Make a fresh backup straight afterwards. Restoring a backup made before the reissue puts the old QR check-in key back: QR check-ins printed since won't scan, and the old ones work again. See [Backups](../admin/backups.md#the-backup-password).

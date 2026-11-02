@@ -14,13 +14,16 @@ On a typical laptop this is `C:\Users\<your name>\AppData\Roaming\HeatCaller`. T
 
 Each Windows user account has its own data folder. If two people log in to the same laptop under different accounts, they see different drivers and settings.
 
-HeatCaller also uses two folders in your **Documents** folder:
+HeatCaller also uses these folders in your **Documents** folder:
 
 | Folder | What's in it |
 |---|---|
 | `Documents\HeatCaller Backups` | Backups, unless you choose another folder on the **Backup & Restore** page. Includes a `Pre-Restore Safety Backups` subfolder. See [Backups](backups.md). |
 | `Documents\HeatCaller Results` | The shareable results card image HeatCaller saves automatically each time a race from the **Race Control** page is saved to **Race History**. |
 | `Documents\HeatCaller Race Audio` | An mp3 of each race, in a folder per night, with a clip for each driver in a `Highlights` subfolder, and each driver's highlight video (`.mp4`) beside their clip. While a race is on, its working `.recording.wav` sits in the night folder, with a `.bed.wav` beside it (the music and crowd for the videos) when it gets videos; both are removed once the mp3 and the videos are made. Not part of backups. Only the last 6 nights are kept unless **Keep the last:** on **Club Website → Recording** says otherwise; older nights' folders, videos and all, are removed after a race. **Folder:** on the same tab can point it somewhere else. See [Race recordings](../announcer/sounds-and-music.md#race-recordings). |
+| `Documents\HeatCaller Previews` | The race-day previews written with **Write The Preview** on **Club Website → Recording**, one text file each, named like `2026-11-06 - Friday Club Night - preview.txt`. Not part of backups. |
+
+In a [rehearsal](#the-rehearsal-copy), all of these go to the rehearsal's own folder instead.
 
 And one outside both, for saved voice lines:
 
@@ -45,6 +48,15 @@ And the console logs:
 ```
 
 HeatCaller writes the **Developer Console** to a file here as it goes, one file per run (`console-YYYY-MM-DD_HH-MM-SS.log`), and keeps the last 20. If HeatCaller stops responding for 10 seconds, the log says so, and a freeze dump (`freeze-YYYY-MM-DD_HH-MM-SS.dmp`, a copy of the app's memory at that moment) is saved here too: at most one per run, the last 2 kept. Neither is part of backups. In a rehearsal they go to the `Logs` folder in `%LocalAppData%\HeatCaller Rehearsal` instead. To send them for help, use [Save Support Info](backups.md#save-support-info).
+
+Three more folders sit beside these, none of them part of backups:
+
+| Folder | What's in it |
+|---|---|
+| `%LocalAppData%\HeatCaller\timing-recordings` | The files **Record every pass to a file** on the **Connection** page writes, one per run (`passes-YYYYMMDD-HHMMSS.jsonl`), kept 30 days. See [Record every pass to a file](../timing/decoders.md#record-every-pass-to-a-file). |
+| `%LocalAppData%\HeatCaller\undo-holding` | Saved voice lines set aside so **Undo** can bring them back. Cleared after 7 days. |
+| `%LocalAppData%\HeatCaller\LocalModel` | Only for a portable copy, or a commentary model you put there yourself (`commentary.gguf`). The installer puts the model beside `HeatCaller.exe`. See [Commentary](../announcer/commentary.md). |
+
 
 ## What each file holds
 
@@ -77,13 +89,14 @@ All data files are plain JSON text, except where noted.
 | `ghosts.json` | Ghost car settings (**Ghost Cars** page). |
 | `rivalries.json` | Rivalries for the announcer (**Voice → Race Calls**). |
 | `signups.json` | Online driver sign-up: whether it's on, and the invites made. The invite codes are sealed; see [Secrets](#secrets). See [Driver sign-up](../online/sign-up.md). |
+| `driver-requests.json` | What drivers have asked the desk for from their phones (a change to their details, their battery pack, a query about a result) and what the desk answered. See [Driver requests](../online/driver-requests.md). |
 
 ### Tracks and venues
 
 | File or folder | What it holds |
 |---|---|
 | `track-layouts.json` | Track layouts and their records (**Track Layouts** page). |
-| `TrackAttachments\` | A photo or drawing of each track, one subfolder per track. The `_deleted` subfolder keeps attachments you removed so the removal can be undone. |
+| `TrackAttachments\` | A photo or drawing of each track, one subfolder per track. Attachments you remove are set aside in `undo-holding` so the removal can be undone. A `_deleted` subfolder is left from older versions. |
 | `venues.json` | Venues and their connection and race defaults (**Venues** page). |
 
 ### Voice, sound and look
@@ -96,14 +109,21 @@ All data files are plain JSON text, except where noted.
 | `music.json` | Music settings and the track list (**Sounds → Music**). |
 | `Music\` | Music files you've added. HeatCaller copies them in, so they keep playing if the original is moved or deleted. |
 | `lap-beeps.json` | Per-driver lap beep choices (**Sounds → Lap Beeps**). |
+| `imaging.json` | Station imaging settings (**Sounds → Imaging**). |
+| `Imaging\` | Imaging pieces you've added yourself, one folder per soundscape. The ones HeatCaller ships aren't stored here. |
+| `ShowMusic\` | The club's own show music (opener, bed and sting) from the **Show treatment** card on **Sounds → Imaging**. |
+| `club-notes.json` | Tonight's notes for the announcer (a birthday, the raffle closing), from **Notes** in the **Broadcast** window. Cleared when the race day changes. |
+| `room-vote.json` | Tonight's vote on who will win a race, from **Votes** in the **Broadcast** window, and the votes cast. |
+| `principal-diary.json` | What each team principal said on air in the booth, so the host can put it back to them next time. Up to 200 teams are remembered. |
+| `usage-meters.json` | The latest figures for each monthly allowance (AI commentary, the HeatCaller voice, your own ElevenLabs plan), and which 80% and 100% warning emails have gone this month, so a restart doesn't send them again. |
 | `voice-allowance.json` | What HeatCaller remembers about the HeatCaller voice's monthly allowance between runs, so the warning comes once a month and a spent allowance stays spent after a restart. |
 | `themes.json` | Soundscapes (**Sounds → Soundscapes**), built-in and your own. They never contain the ElevenLabs key. |
 | `soundscape-active.txt` | Which soundscape was applied last, for its card's **LAST APPLIED** mark and for **Theme music**. |
 | `VoiceLines\` | Soundscape voice lines you've recorded with **Voice Lines** on **Sounds → Soundscapes**, with an `index.json` listing them. Unlike the saved voice lines below, these are part of backups. See [Voice lines](../announcer/sounds-and-music.md#voice-lines). |
 | `looks.json` | Looks you've made yourself (**Themes** page). The built-in looks aren't stored here. |
 | `sponsors.json` | Sponsor slide settings (**Sponsors** page). |
-| `Sponsors\` | Sponsor slide images. The `_removed` subfolder keeps slides you removed so the removal can be undone. |
-| `DriverPhotos\` | Driver photos, resized when you added them. |
+| `Sponsors\` | Sponsor slide images. Slides you remove are set aside in `undo-holding` so the removal can be undone. A `_removed` subfolder is left from older versions. |
+| `DriverPhotos\` | Driver photos, resized when you added them. Replaced or removed photos wait in its `Retired` subfolder so **Undo** can put them back: the last 60, for up to 7 days. |
 | `photo-finish\` | The finish camera's pictures: a folder for each night, and in it one for each shot, with its frames as JPEG files named by how long before (-) or after (+) the line counted the car, in milliseconds. Not part of backups, so they don't come across to a new laptop. Safe to delete. See [Photo finish](../race-control/running-a-race.md#photo-finish). |
 | `club-logo-*.png` | The club logo (**Themes** page), used in the app, on the Big Screen, the Wi-Fi pages and the online pages. Only a logo file HeatCaller made itself is used. |
 
@@ -121,7 +141,7 @@ There is nothing underneath Kokoro: it is both the free voice a club can choose 
 
 | File | What it holds |
 |---|---|
-| `settings.json` | App settings: connection, race defaults, web server, online relay, email, backup schedule, leaderboard columns and more. All secrets in it are sealed. See [Secrets](#secrets). |
+| `settings.json` | App settings: Simple or Advanced mode, connection (each Beta decoder's source, port and address included), race defaults, web server, online relay, email, backup schedule, leaderboard columns and more. All secrets in it are sealed. See [Secrets](#secrets). |
 | `big-screen.json` | The Big Screen's own switch, held apart from the rest of the settings because the key that sets it is on the screen itself: one setting, `OnAir`, for whether the **ON AIR** band shows while the announcer's show is on air (<kbd>O</kbd> on the Big Screen). Safe to delete, and safe to be missing: the band is on, as it is on a fresh install. A damaged one is written over rather than kept as an `.unreadable-` copy — there's one setting in it, so there's nothing of yours to lose. See [When the show is on air](../screens/big-screen.md#when-the-show-is-on-air). |
 | `race-audio.json` | Whether races are recorded as mp3s, the driver clips and highlight videos, the club handle, whether the music and crowd go under the videos, whether drivers' clips go on their night pages, how many nights are kept, where the recordings go, and the limits that keep a recording off a full disk. Written by **Club Website → Recording**. Safe to delete: the defaults come back, and recording is on by default. See [Turning it off](../announcer/sounds-and-music.md#turning-it-off). |
 | `terms-accepted.json` | When the license agreement and privacy notice were accepted on this PC, by which Windows user, on which HeatCaller version and which edition of the text, with a fingerprint of the text. HeatCaller asks again when the text changes, or if this file is deleted. |
@@ -130,9 +150,16 @@ There is nothing underneath Kokoro: it is both the free voice a club can choose 
 | `heatcaller-migrated.txt` | Marks that saved paths and settings from before the rename to HeatCaller have been brought up to date. Safe to delete: HeatCaller checks again on the next start. |
 | `transponder-health.json` | How strongly each transponder has been read, night by night, for the last 20 nights it raced. Used to spot a transponder that is fading. Safe to delete: the record starts again, and transponders can't be called fading until they have a few nights again. See [Signal over time](../timing/transponders.md#signal-over-time). |
 | `ilap-raw-YYYY-MM-DD.log` | Everything an I-Lap decoder sent, one file per day. Deleted automatically after 14 days, and capped at 20 MB a day. See [Connecting your decoder](../timing/decoders.md#the-raw-capture-log). |
+| `decoder-raw-NAME-YYYY-MM-DD.log` | The same for a Beta decoder, where NAME is the decoder (for example `mylaps-p3`). Deleted after 14 days, capped at 20 MB a day. See [The raw capture files](../timing/decoders.md#the-raw-capture-files). |
+| `relay-results.json` | An index of the results published to the relay, so phones can browse the club's results by day and season, and the results this laptop still has to send. |
+| `relay-manage-ran.json` | Race-day manager requests from the relay that have already been carried out, so one isn't run twice after a restart. Each is forgotten after a few minutes. |
+| `Settings Backups\` | The copies of your settings saved before each **Restore Default Settings** or **Put Back Earlier Settings**, as `settings YYYY-MM-DD HH-MM-SS.zip`. The last 10 are kept. See [Restore default settings](../getting-started/simple-and-advanced-mode.md#restore-default-settings). |
+| `undo-holding\` | Files set aside so **Undo** can bring them back: removed music, recorded voice lines, a club logo, track photos, sponsor slides, a deleted backup. Each is cleared after 7 days. Not part of backups. |
 | `*.unreadable-YYYYMMDD-HHMMSS` | A copy of a file HeatCaller couldn't read. See [Unreadable files](#unreadable-files). |
 | `race-in-progress-discarded.json` | The last unfinished race you chose not to restore. |
 | `race-in-progress-cleared.json` | A finished race's journal that couldn't be deleted. |
+| `race-in-progress-filed.txt` | Appears beside a journal that couldn't be deleted or moved, to mark that its race was saved, so it isn't offered back at the next start. |
+| `race-in-progress-unread-YYYYMMDD-HHMMSS.json` | A race journal that couldn't be read at start-up, kept before the next race wrote over it. To be offered that race again, close HeatCaller and rename it back to `race-in-progress.json`. |
 | `secrets.hgk` | Appears only after restoring a backup that carries password-locked secrets, until HeatCaller has unlocked them. See [Backups](backups.md). |
 | `restored-settings.json` | Appears after restoring a backup that sends to a relay, voice relay or mail server this laptop wasn't using. It holds those addresses back until you confirm them. Never taken from a backup. See [Addresses in a restored backup](security-and-privacy.md#addresses-in-a-restored-backup). |
 
@@ -175,6 +202,14 @@ If a file can't be read when HeatCaller starts (it's damaged, locked, or was sav
 
 The copy is never overwritten, so the data in it can be recovered. Close HeatCaller, then either restore a backup or ask for help putting the copy back. HeatCaller tries a few times before deciding a file is unreadable, so a file that's only briefly locked isn't treated as damaged. See [Backups](backups.md) and [Troubleshooting](troubleshooting.md).
 
+A file that couldn't be opened at all (usually held open by a backup or sync tool as HeatCaller started), or one it couldn't keep a copy of, is treated more carefully: HeatCaller saves nothing over it until it's restarted and can read it, so what's in it can't be lost. The console says:
+
+"[storage] Couldn't read "race-history.json" (...). Nothing will be saved to it until HeatCaller is restarted and can read it, so what is in it cannot be written over. Close anything that might have it open (a backup or sync tool is the usual cause) and restart."
+
+Changes made to that part of the app in the meantime aren't kept. Close whatever had the file open and restart HeatCaller.
+
+A file that's there but empty has nothing to copy. The console then says "the file is empty, so there was nothing to keep a copy of and HeatCaller started with defaults", and suggests restoring it from a backup before the next save writes over it.
+
 ### The race journal
 
 While a race runs, HeatCaller writes the whole race to `race-in-progress.json` after every crossing, flag and correction. The file is deleted as soon as the race is saved to **Race History**, and when you press **Reset** or **Reset Round**. Practice and demos are never written to it. If it's there when HeatCaller starts, the last race didn't finish, and HeatCaller offers to restore it, unless it was written while a race was still staging or counting down (it then only held the previous race's laps). See [Corrections and recovery](../race-control/corrections-and-recovery.md).
@@ -194,7 +229,7 @@ Use **Backup & Restore**, not a manual copy:
 3. Install HeatCaller on the new laptop and restore the backup.
 4. When HeatCaller restarts, enter the backup password to bring the keys, tokens and PINs across.
 
-A backup is a zip of the entire data folder, plus the password-locked secrets. Without the backup password, the secrets can't be moved: you'd have to enter the relay token, email password and PINs again, and reprint QR check-ins. Saved voice lines don't come across either; they're made again, and paid for once more, as they're spoken. Soundscape voice lines you recorded (the `VoiceLines` folder) do come across, since they're in the data folder. Photo-finish pictures and race recordings don't: both are left out of backups, and the recordings aren't in the data folder at all. See [Backups](backups.md) for the full steps.
+A backup is a zip of the data folder (all but `undo-holding` and `photo-finish`), plus the password-locked secrets. Without the backup password, the secrets can't be moved: you'd have to enter the relay token, email password and PINs again, and reprint QR check-ins. Saved voice lines don't come across either; they're made again, and paid for once more, as they're spoken. Soundscape voice lines you recorded (the `VoiceLines` folder) do come across, since they're in the data folder. Photo-finish pictures and race recordings don't: both are left out of backups, and the recordings aren't in the data folder at all. See [Backups](backups.md) for the full steps.
 
 ## What's safe to delete
 
@@ -202,7 +237,8 @@ Close HeatCaller first. Then you can delete:
 
 | File | Notes |
 |---|---|
-| `ilap-raw-*.log` | Only used to diagnose I-Lap problems. Old ones are deleted automatically. |
+| `ilap-raw-*.log`, `decoder-raw-*.log` | Only used to diagnose decoder problems. Old ones are deleted automatically. Keep a Beta decoder's if you're reporting a problem with it. |
+| `%LocalAppData%\HeatCaller\timing-recordings` | Pass recordings. Old ones are deleted automatically after 30 days. |
 | `crash.old.log` | Keep it if you're reporting a problem. |
 | `crash.log` | Keep it if you're reporting a problem. A new one starts when needed. |
 | `*.unreadable-*` | Only once you've recovered anything you need from it. |
@@ -216,6 +252,21 @@ Don't delete or edit anything else by hand. In particular:
 
 - Don't delete `race-in-progress.json` unless you're sure you don't want the unfinished race back.
 - Don't edit the `Secrets` value in `settings.json` or `ApiKeySealed` in `voice-settings.json`. A damaged sealed value can't be opened, and the secrets would need entering again.
-- Leave the `_deleted` and `_removed` subfolders alone; they're what makes undo work for removed track pictures and sponsor slides.
+- Leave the `undo-holding` folders and the `Retired` subfolder of `DriverPhotos` alone; they're what makes **Undo** work for removed files. HeatCaller clears them itself after a week.
 
 To start completely fresh, make a backup first, then close HeatCaller and move the whole folder somewhere else. HeatCaller creates a new, empty one the next time it opens.
+
+## The rehearsal copy
+
+**HeatCaller Rehearsal**, the Start menu shortcut (see [Install](../getting-started/install.md#install)), runs HeatCaller on a copy of your data, in its own folder:
+
+```text
+%LocalAppData%\HeatCaller Rehearsal
+```
+
+- The first rehearsal copies `%AppData%\HeatCaller` into its `Data` subfolder, and every later one carries on from that copy. It leaves out the `undo-holding` folder, `crash.log` and an unfinished race's journal. To start again from the club's data as it is now, delete the `Data` folder.
+- Publishing to the club website is switched off in the copy each time a rehearsal starts. Nothing is emailed.
+- Its backups, results cards, previews and console logs go in the rehearsal folder too, never in your Documents folders or the club's own `Logs`.
+- Saved voice lines and the Kokoro voice are shared with the real app, so a rehearsal doesn't pay for lines again.
+
+The club's real data is never touched by a rehearsal.

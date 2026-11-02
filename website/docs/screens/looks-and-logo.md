@@ -5,9 +5,11 @@ A look is the set of colors HeatCaller paints with. You choose one look for the 
 You can open the page in two ways:
 
 - Click **Themes** in the sidebar.
-- Click **Open Looks** on the **Look** card of the **Club Website** page.
+- Click **Open Themes** on the **Look** card of the **Club Website** page (Advanced mode).
 
-Typing `look`, `colour`, `color`, `dark mode`, `light mode`, `synthwave`, `logo` or `24-hour` in the **Search pages...** box also opens it.
+Typing `look`, `theme`, `colour`, `color`, `dark mode`, `light mode`, `synthwave`, `logo`, `appearance`, `24-hour` or `military time` in the **Search pages...** box also opens it.
+
+In Simple mode, **New Look**, **Edit** and **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** are hidden. Everything else on the page works the same in both modes. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
 How the app sounds, rather than how it looks, is on **Sounds → Soundscapes**, which was the **Announcer Style** tab on this page before 0.56. See [Soundscapes](../announcer/sounds-and-music.md#soundscapes).
 
@@ -73,10 +75,11 @@ Select a look to see a preview of the app wearing it beside the list, with its n
 3. HeatCaller asks, for example, 'Use "Paddock" for the app? The app needs to restart for this to take effect.' If the crowd screens are set to match the app, it adds that they will change with it.
 4. Click **Yes**. HeatCaller saves the choice, closes and reopens in the new look.
 
-!!! warning
-    Changing the app's look restarts the app. Don't do it while a race is running.
+If a race or practice is running, HeatCaller doesn't restart, since that would end it. It asks instead: 'A race or practice is running, so the app won't restart now - that would end it. Use "Paddock" for the app from the next time HeatCaller starts?' Click **Yes** and the app switches to the look the next time it starts.
 
-**Use for the App** is grayed out for the look the app is already using. A new install starts on **Daylight**.
+**Use for the App** is grayed out for the look the app is already using. While a new look is waiting for a restart, clicking **Use for the App** on the look the app is running keeps it, with no restart.
+
+A new install starts on the look picked on the **Look** step of the **Welcome to HeatCaller** wizard, **Daylight** unless you pick another. Applying a soundscape on **Sounds → Soundscapes** can change the app's look too, because each soundscape wears a look (**Classic** wears **Synthwave**). See [What applying a soundscape changes](../announcer/sounds-and-music.md#what-applying-a-soundscape-changes).
 
 ## Choose the crowd screens' look
 
@@ -90,6 +93,8 @@ The change can be undone with **Undo** in the sidebar.
     For a TV or projector in a bright room, try a light look such as **Daylight** or **Checkered**. For the dark Big Screen of earlier versions, choose **Race Wall**.
 
 ## Make your own look
+
+**New Look** and **Edit** are only shown in Advanced mode.
 
 1. Select the look you want to start from. Any look will do, built in or your own.
 2. Click **New Look**. The **New Look** window opens with a copy of it, named, for example, "Race Wall (copy)".
@@ -172,6 +177,7 @@ The **Club logo** card sets one logo for the whole app. It shows:
 - **On the Big Screen**, in the top-left corner.
 - **On the Wi-Fi pages**, in the header.
 - **On your club's online pages**, always: in a block of its own beside the club's name on every page, and in link previews.
+- **On highlight videos**, on the title card at the start.
 
 ### Choose or remove the logo
 
@@ -180,7 +186,9 @@ The **Club logo** card sets one logo for the whole app. It shows:
 
 The status line says "Logo changed. The Big Screen shows it straight away, the Wi-Fi and online pages within a few seconds."
 
-**Remove Logo** asks first: "Remove the club logo? It comes off the app, the Big Screen, the Wi-Fi pages and the online pages. You can choose it again at any time." There's no undo for this, so to get it back you choose the picture again.
+**Remove Logo** asks first: "Remove the club logo? It comes off the app, the Big Screen, the Wi-Fi pages and the online pages. Undo puts it back, or you can choose it again at any time."
+
+Choosing, changing and removing the logo can all be undone with **Undo** in the sidebar, which puts the earlier logo back. HeatCaller keeps the old logo file for a week for this.
 
 About the logo file:
 
@@ -228,7 +236,7 @@ Everything HeatCaller makes for people to see ends with a small sun and the HEAT
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** | Animates the sidebar header. Only for looks with Synthwave effects, and not while the club logo is shown there. Turn it off for a still image if you'd rather avoid the motion. | On |
+| **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** | Animates the sidebar header. Only for looks with Synthwave effects, and not while the club logo is shown there. Turn it off for a still image if you'd rather avoid the motion. Advanced mode only. | On |
 | **Use 24-hour (military) time** | Shows times as 24-hour instead of AM/PM. Lists and pickers already open update as they refresh. | Off |
 
 ## After updating from 0.47
@@ -251,6 +259,8 @@ Everything HeatCaller makes for people to see ends with a small sun and the HEAT
 | **Choose Logo** says "That picture is *W* x *H* pixels, too big to use as a logo. ..." | The picture is over 20000 pixels across or down, or over 64 million pixels in all. | Save a smaller copy of it and choose that. A logo ends up 384 pixels across, so it needs nothing like that many. |
 | **Choose Logo** says "That file isn't a picture HeatCaller can use as a logo. Choose a PNG, JPEG, GIF or BMP picture." | The file is another kind of picture (such as TIFF or an icon) or not a picture at all. | Save it as a PNG, JPEG, GIF or BMP, and choose that. |
 | **Edit** and **Delete** are grayed out | A built-in look is selected. | Click **New Look** to make a copy you can change. |
+| There's no **New Look** or **Edit** button | HeatCaller is in Simple mode. | Turn on Advanced mode. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md). |
+| **Use for the App** didn't restart the app | A race or practice is running. | The app switches to the look the next time it starts. |
 
 ## Related pages
 
