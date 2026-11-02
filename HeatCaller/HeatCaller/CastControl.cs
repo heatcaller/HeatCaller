@@ -265,6 +265,13 @@ public sealed class CastControl : UserControl
             _chkPrincipalAfter.Checked = _settings.PrincipalAfterRace;
         }
 
+        // And the achievements, which AI Commentary's After the flag switch
+        // turns on and off in Simple mode (1 Nov 2026 - CommentarySections).
+        if (_chkBadgeHonours.Checked != _settings.RecapBadgeHonours)
+        {
+            _chkBadgeHonours.Checked = _settings.RecapBadgeHonours;
+        }
+
         RefreshEnabledState();
     }
 
@@ -776,14 +783,22 @@ public sealed class CastControl : UserControl
         // every list on the page, the announcer's included since that list's
         // own Load Voices went, so it goes above all of them. Then the
         // announcer, the voice everyone hears all night (22 Oct 2026).
+        // Simple mode (1 Nov 2026, Asher's pick): Voices, the Announcer and the
+        // Co-host's tick, name, voice and "in the heats too"; the rest of the
+        // cast, and what the co-host is like and how much they talk, are
+        // Advanced. See SimpleMode.
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.Add(voices);
         page.Add(announcer);
-        page.Add(recapHost);
+        page.Add(SimpleMode.Hide(recapHost));
         page.Add(coHost);
-        page.Add(mechanic);
-        page.Add(principal);
-        page.Add(honours, gapBelow: 0);
+        page.Add(SimpleMode.Hide(mechanic));
+        page.Add(SimpleMode.Hide(principal));
+        page.Add(SimpleMode.Hide(honours), gapBelow: 0);
+        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
+
+        SimpleMode.HideRow(coHostGrid, _cmbCoHostStance);
+        SimpleMode.HideRow(coHostGrid, _cmbExchangeTurns);
 
         Controls.Add(page);
 

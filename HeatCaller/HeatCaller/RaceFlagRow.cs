@@ -214,6 +214,13 @@ internal sealed class FlagRow : Panel
 
     private const int Gap = 12;
 
+    /// <summary>
+    /// Between the buttons and the On Air bar under them when the row has no
+    /// title to match (see Arrange) - 4 (UiLayout.HintGap) until 1 Nov 2026,
+    /// then 10, then 20.
+    /// </summary>
+    private const int StripGap = 20;
+
     /// <summary>The most lines of buttons the row stacks to keep the meters beside them; past that they give way (see Arrange).</summary>
     internal const int MostLinesWithMeters = 2;
 
@@ -296,10 +303,17 @@ internal sealed class FlagRow : Panel
         var captionHeight = _caption.Length > 0 ? TextRenderer.MeasureText(_caption, micro).Height : 0;
         var captionBlock = captionHeight > 0 ? captionHeight + UiLayout.HeadingGap : 0;
 
-        // The On Air bar under the buttons, when the row holds it, with the
-        // gap the card used to leave between the two.
+        // The On Air bar under the buttons, when the row holds it, a little
+        // way under them (1 Nov 2026, asked for by Asher: "add a little bit
+        // of space above the on air bar"). The meters grow with it, so their
+        // foot stays on the bar's - see metersFit. With a title, as far under
+        // the buttons as the card's top edge is above them (1 Nov 2026: "there
+        // should be same amount of space above them and below them on the
+        // card") - the card's inset, the title and its gap; less the pixel the
+        // bar's card is drawn down from its top (HoldStrip.PaintCard).
         var stripHeight = _strip is null ? 0 : _strip.GetPreferredSize(new Size(Math.Max(1, middle), 0)).Height;
-        var stripBlock = stripHeight > 0 ? UiLayout.HintGap + stripHeight : 0;
+        var stripGap = captionBlock > 0 ? Section.Inset.Top + captionBlock - 1 : StripGap;
+        var stripBlock = stripHeight > 0 ? stripGap + stripHeight : 0;
 
         // The meters fitted to the row's whole height (ChannelStrips.
         // FitHeight) - from the top of the title to the foot of the strip -

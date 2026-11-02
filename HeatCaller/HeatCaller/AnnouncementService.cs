@@ -48,7 +48,7 @@ public sealed partial class AnnouncementService
     /// room is hearing - and on a night with a flag call cutting in, those
     /// are different lines.
     /// </param>
-    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work, string? OnAir = null);
+    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work, string? OnAir = null, BattleLine? Battle = null);
 
     private readonly List<QueuedVoiceItem> _voiceQueue = new();
     private readonly object _voiceQueueLock = new();
@@ -103,6 +103,19 @@ public sealed partial class AnnouncementService
     /// towards this and are never dropped by it.
     /// </summary>
     private const int MaxQueuedPerLapSounds = 3;
+
+    /// <summary>The Voice tab's Race calls switch for a race or for practice (VoiceProfile.RaceCallsInRaces / RaceCallsInPractice).</summary>
+    private bool RaceCallsOn(bool practice) =>
+        practice ? _voiceStore.Current.RaceCallsInPractice : _voiceStore.Current.RaceCallsInRaces;
+
+    /// <summary>
+    /// Whether a race call is on now: its own row ticked for a race or for
+    /// practice, AND the Voice tab's Race calls switch on for that. Every
+    /// race call asks this rather than the row alone - the switch is a gate
+    /// over the rows, so the rows keep their ticks while it is off.
+    /// </summary>
+    private bool CallOn(AnnouncementEventConfig? config) =>
+        config is not null && config.IsEnabledFor(IsPracticeMode) && RaceCallsOn(IsPracticeMode);
     private readonly SemaphoreSlim _soundQueueSignal = new(0);
 
     /// <summary>
@@ -1337,6 +1350,13 @@ public sealed partial class AnnouncementService
                 if (IsCutByCountdown())
                 {
                     StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - the countdown started while it waited for the speaker.");
+                    return;
+                }
+
+                // A battle line whose two cars swapped - see AnnouncementService.BattleLines.
+                if (IsOvertakenOnTrack())
+                {
+                    StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - the two cars it is about swapped while it waited for the speaker.");
                     return;
                 }
 

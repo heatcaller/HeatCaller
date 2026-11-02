@@ -116,7 +116,7 @@ public sealed partial class AnnouncementService
     /// </summary>
     private bool VoiceCandidateCanSpeak(AnnouncementEventType type, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] AnnouncementEventConfig? config) =>
         config is not null
-        && config.IsEnabledFor(IsPracticeMode)
+        && CallOn(config)
         && !HeldByCaution(type, config)
         // The dial too, and for the reason this method exists at all: a
         // call EnqueueVoice is going to hold must not first take a per-lap
@@ -310,7 +310,7 @@ public sealed partial class AnnouncementService
         SayWaitingPositionReport();
 
         var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PositionReport));
-        if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.Templates.Count == 0)
+        if (config is null || !CallOn(config) || config.Templates.Count == 0)
         {
             return;
         }
@@ -510,7 +510,7 @@ public sealed partial class AnnouncementService
         // Looked up again: the club may have switched it off, or a caution
         // come out, while it waited for the cars.
         var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PositionReport));
-        if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.Templates.Count == 0)
+        if (config is null || !CallOn(config) || config.Templates.Count == 0)
         {
             return;
         }
@@ -895,12 +895,19 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // A battle line still being said about two cars that have just
+        // swapped is cut off here, and the pass called in its place (1 Nov
+        // 2026) - see AnnouncementService.BattleLines. Before the lead
+        // change call, because for a fight for the lead the pass call IS
+        // the lead change call, and one crossing must not queue both.
+        var passCalledTheLead = CallTheBattlePass(ordered);
+
         // In a most-laps qualifier the lead IS provisional pole, called from
         // the same crossing (CallProvisionalPoleIfTaken). Saying both put two
         // lines in the queue for one pass, so the lead change keeps its chime
         // and leaves the words to the pole call while that is switched on.
         var poleSaysIt = IsQualifyingMode && _qualifyingMethod == QualifyingMethod.TotalLaps
-            && _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.ProvisionalPole))?.IsEnabledFor(IsPracticeMode) == true;
+            && CallOn(_voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.ProvisionalPole)));
 
         // Counted whatever the call does - the broadcast tower shows the
         // count even with the voice switched off. See LeadTracker.
@@ -925,7 +932,7 @@ public sealed partial class AnnouncementService
             }
 
             var voiceCfg = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.LeaderChange));
-            if (!poleSaysIt && VoiceCandidateCanSpeak(AnnouncementEventType.LeaderChange, voiceCfg))
+            if (!poleSaysIt && !passCalledTheLead && VoiceCandidateCanSpeak(AnnouncementEventType.LeaderChange, voiceCfg))
             {
                 // The detail a broadcast booth gives with a lead change -
                 // who it was taken from, how long they had it, and how
@@ -1052,7 +1059,7 @@ public sealed partial class AnnouncementService
             // live profile, since the settings may have been replaced since
             // the crossing.
             var live = profile.Events.GetValueOrDefault(nameof(AnnouncementEventType.Streak));
-            if (live is null || !live.IsEnabledFor(IsPracticeMode))
+            if (live is null || !CallOn(live))
             {
                 StatusMessage?.Invoke($"[voice] Streak call for {DisplayNameFor(transponder)} dropped - switched off before it could be spoken.");
                 return;
@@ -1228,7 +1235,7 @@ public sealed partial class AnnouncementService
 
         var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.StreakLead));
 
-        if (Muted || config is null || !config.IsEnabledFor(IsPracticeMode) || config.EffectiveTemplates.Count == 0
+        if (Muted || config is null || !CallOn(config) || config.EffectiveTemplates.Count == 0
             || HeldByCaution(AnnouncementEventType.StreakLead, config))
         {
             return;
@@ -1544,7 +1551,7 @@ public sealed partial class AnnouncementService
 
         var config = _voiceStore.Current.Events.GetValueOrDefault(type.ToString());
 
-        if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.EffectiveTemplates.Count == 0)
+        if (config is null || !CallOn(config) || config.EffectiveTemplates.Count == 0)
         {
             return false;
         }
@@ -1957,7 +1964,7 @@ public sealed partial class AnnouncementService
             {
                 if (streakVoiceCfg is not null && due)
                 {
-                    var reason = !streakVoiceCfg.IsEnabledFor(IsPracticeMode)
+                    var reason = !CallOn(streakVoiceCfg)
                         ? $"switched off for {(IsPracticeMode ? "practice" : "races")}"
                         : streakVoiceCfg.EffectiveTemplates.Count == 0
                             ? "no lines configured"
@@ -2043,6 +2050,10 @@ public sealed partial class AnnouncementService
 
         if (gate.Fast)
         {
+            // Whatever happens to this lap's own call, one still waiting
+            // about the lap it beat is no longer true - see BinWaitingFastLaps.
+            BinWaitingFastLaps();
+
             var fastLapSoundCfg = sounds.Effects.GetValueOrDefault(nameof(SoundEffectKind.FastLap));
             if (SoundCandidateCanPlay(SoundEffectKind.FastLap, fastLapSoundCfg))
             {

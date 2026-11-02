@@ -396,7 +396,7 @@ public sealed partial class AnnouncementService
     /// AsyncLocal and so flow into the awaited playback call.
     /// </summary>
     private Func<bool> StillWantedUnlessOvertaken(bool honourMute) =>
-        () => !IsSupersededByInterrupt() && !IsCutByCountdown() && !(honourMute && Muted);
+        () => !IsSupersededByInterrupt() && !IsCutByCountdown() && !IsOvertakenOnTrack() && !(honourMute && Muted);
 
     /// <summary>Plays already-decoded audio, padded the way every line is.</summary>
     /// <param name="stillWanted">

@@ -296,15 +296,21 @@ public sealed class WebServerControl : UserControl
 
         var page = new PageStack();
 
+        // Simple mode (1 Nov 2026) keeps the server's start, stop and PINs and
+        // the addresses; the port, the race-day manager (result editing with
+        // it) and the column choosers are Advanced. See SimpleMode.
+        SimpleMode.HideRow(serverGrid, _numPort);
+
         page.Add(lblIntro);
         page.Add(server);
-        page.Add(manager);
+        page.Add(SimpleMode.Hide(manager));
         page.Add(urls);
-        page.Add(new ButtonBar().With(btnWebColumns, btnBigScreenColumns, btnOpenBigScreen), gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar().With(SimpleMode.Hide(btnWebColumns), SimpleMode.Hide(btnBigScreenColumns), btnOpenBigScreen), gapBelow: UiLayout.RowGap);
         page.Add(lblLooksNote, gapBelow: UiLayout.HintGap);
-        page.Add(lblColumnsHint);
+        page.Add(SimpleMode.Hide(lblColumnsHint));
         page.Add(_lblRelay, gapBelow: UiLayout.HintGap);
         page.Add(new ButtonBar().With(btnOnline), gapBelow: 0);
+        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
         Controls.Add(page);
 

@@ -10,6 +10,9 @@ public sealed record SpokenSegment(SegmentKind Kind, string Text, IReadOnlyList<
 {
     /// <summary>True when this should be spoken in two voices. See CommentaryExchange.</summary>
     public bool IsExchange => Turns.Count > 0;
+
+    /// <summary>The two cars a Battle watch line is about, or null. See AnnouncementService.BattleLines.</summary>
+    public BattlePair? About { get; init; }
 }
 
 /// <summary>
@@ -2088,6 +2091,16 @@ public sealed class CommentaryDirector
             var paceCalling = _paceCalling;
             var horizonCalling = _horizonCalling;
             _marks.TryGetValue(kind, out var mark);
+
+            // A battle line carries the two cars it is about, so the
+            // announcer can cut it off if they swap while it is said (1 Nov
+            // 2026) - see AnnouncementService.BattleLines. Before anything
+            // below keeps hold of it: the awaiting list is keyed by it.
+            if (kind == SegmentKind.BattleWatch && calling is { } fight)
+            {
+                written = written with { About = BattlePair.Of(fight) };
+            }
+
             SpokenSegment spokenLine = written;
 
             void Commit()

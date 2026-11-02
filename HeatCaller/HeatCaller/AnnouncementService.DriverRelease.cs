@@ -35,7 +35,7 @@ public sealed partial class AnnouncementService
         var type = AnnouncementEventType.DriverRelease;
         var config = _voiceStore.Current.Events.GetValueOrDefault(type.ToString());
 
-        if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.EffectiveTemplates.Count == 0)
+        if (config is null || !CallOn(config) || config.EffectiveTemplates.Count == 0)
         {
             StatusMessage?.Invoke($"[voice] {type} skipped for {transponderId} - no lines configured, or switched off.");
             return;
@@ -334,7 +334,7 @@ public sealed partial class AnnouncementService
 
         var config = profile.Events.GetValueOrDefault(nameof(AnnouncementEventType.DriverRelease));
 
-        if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.EffectiveTemplates.Count == 0)
+        if (config is null || !CallOn(config) || config.EffectiveTemplates.Count == 0)
         {
             return;
         }

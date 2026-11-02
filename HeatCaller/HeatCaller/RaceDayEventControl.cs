@@ -482,6 +482,10 @@ public sealed class RaceDayEventControl : UserControl
         _lblAutoAdvanceHint.Text = "Which race it reaches for when the one that just finished is recorded.";
         programGrid.AddHint(_lblAutoAdvanceHint);
 
+        // Which race it reaches for is Advanced (1 Nov 2026, Simple mode);
+        // the tick above stays.
+        SimpleMode.HideRow(programGrid, _cmbAutoAdvanceScope);
+
         // BETWEEN-RACE TALK FOR THE DAY (31 Oct 2026): a big event can run
         // busier than club night without the club's own settings changing.
         // Over the Between races card on the AI Commentary tab, for this day
