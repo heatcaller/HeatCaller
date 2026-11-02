@@ -651,7 +651,7 @@ public sealed class CommentaryDirectorTests : IDisposable
 
         var fact = CommentaryFacts.Horizon(horizon, id => id == "A" ? "Sam" : "Bill", "heat-1");
 
-        Assert.Contains("Bill is 0.60s behind Sam, fighting for the lead", fact.Text);
+        Assert.Contains("Bill is 0.600s behind Sam, fighting for the lead", fact.Text);
         Assert.Contains("if the rate holds", fact.Text);
 
         foreach (var forecast in new[] { "will win", "will catch", "going to", "is set to" })

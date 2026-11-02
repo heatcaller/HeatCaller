@@ -205,7 +205,7 @@ public sealed partial class WebServerService
         const pick = document.getElementById('pick');
         const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const secs = ms => (ms / 1000).toFixed(3);
-        const gap = ms => (ms < 0 ? '-' : '+') + (Math.abs(ms) / 1000).toFixed(2) + 's';
+        const gap = ms => (ms < 0 ? '-' : '+') + (Math.abs(ms) / 1000).toFixed(3) + 's';
 
         let shownFor = '', lapsSeen = 0, bestSeen = 0, firstSeen = 0;
 

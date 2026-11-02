@@ -603,7 +603,7 @@ public sealed partial class WebServerService
             // never runs into the fastest-lap box beside it.
             const meta = trend + together + (by ? '<span class="trend">' + esc(by.toUpperCase()) + '</span>' : '');
             battle.innerHTML = (close.pos === 1 ? 'BATTLE FOR THE LEAD' : 'BATTLE FOR P' + close.pos) + ' &nbsp; ' + esc(close.a.name) + ' <span class="acc">vs</span> ' + esc(close.b.name) +
-              '<span class="gap">' + close.g.toFixed(2) + 's</span>' + (meta ? '<span class="meta">' + meta + '</span>' : '');
+              '<span class="gap">' + close.g.toFixed(3) + 's</span>' + (meta ? '<span class="meta">' + meta + '</span>' : '');
             battle.classList.add('show');
           } else battle.classList.remove('show');
 

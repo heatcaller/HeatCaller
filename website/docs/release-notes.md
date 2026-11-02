@@ -4,6 +4,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Gap to P1 to the thousandth (1 November).** The **Gap to P1** and **Interval** columns now show the gap to the thousandth ("+2.345", was "+2.35"), on Race Control, the Big Screen, the Wi-Fi pages and the club's pages, matching the lap times and the running order, which says the gap to the thousandth. The AI recap is given the winning margin to the thousandth too, and the Announcer screen's talking points show it that way. Update HeatCaller on the race PC; nothing changes on the relay.
 - **Simple mode hides the tuning (1 November).** In Simple mode, the tabs, cards and rows that are tuning are now hidden, and Advanced mode shows them all again at once, each in its usual place, with no restart. Hidden isn't off: every hidden setting keeps its value and keeps working. A page with something hidden ends with a grey **More settings in Advanced mode** line, which opens the Advanced warning. Searching the sidebar for something hidden (try "ducking" or "split loop") lists **Advanced mode settings** under **IN ADVANCED MODE**. Going back to Simple with hidden settings changed from their defaults says so, once. What Simple hides:
     - **Sidebar:** the **Venues** page and the **Manage Navigation** button.
     - **Race Control:** **Start races On Air** and **Columns**. In **Race Format**, only the lap limit, time limit and start type show.

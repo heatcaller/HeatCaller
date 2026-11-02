@@ -625,7 +625,7 @@ public sealed partial class AnnouncerControl : UserControl
     {
         ("pos", "99"),
         ("laps", "999"),
-        ("gap", "+99.99"),
+        ("gap", "+99.999"),
         ("last", "99.999"),
     };
 
@@ -1058,7 +1058,8 @@ public sealed partial class AnnouncerControl : UserControl
         // counts - which differ for everyone the moment the leader crosses.
         if (ordered.Count >= 2 && RaceGaps.Between(ordered[1], ordered[0]) is { LapsDown: 0, GapMs: { } leadGapMs } && leadGapMs < 2000)
         {
-            points.Add($"{NameFor(ordered[0].TransponderId)} leads {NameFor(ordered[1].TransponderId)} by only {leadGapMs / 1000.0:0.00}s");
+            // To the thousandth, as the board's Gap to P1 shows it (1 Nov 2026).
+            points.Add($"{NameFor(ordered[0].TransponderId)} leads {NameFor(ordered[1].TransponderId)} by only {leadGapMs / 1000.0:0.000}s");
         }
 
         // Anyone actually lapped.
@@ -1085,7 +1086,7 @@ public sealed partial class AnnouncerControl : UserControl
             var gap = battleGapMs / 1000.0;
             if (gap < 1.0)
             {
-                points.Add($"P{i + 1} battle: {NameFor(ordered[i].TransponderId)} and {NameFor(ordered[i + 1].TransponderId)} split by {gap:0.00}s");
+                points.Add($"P{i + 1} battle: {NameFor(ordered[i].TransponderId)} and {NameFor(ordered[i + 1].TransponderId)} split by {gap:0.000}s");
             }
         }
 

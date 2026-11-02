@@ -5468,21 +5468,25 @@ public sealed class CommentaryService
 
         var gapSeconds = gapMs / 1000.0;
 
-        // Thousandths below a tenth. Two decimals turned a 4ms win into
-        // "0.00s", and the model read that as a dead heat - rehearsal 1's
-        // Q2 recap called a race with a clear winner a tie.
+        // To the thousandth, always (1 Nov 2026, asked for by Asher: "the
+        // gap to p1 ... should be to the thousandth like everything else") -
+        // the board's Gap to P1 shows it so. It was thousandths only below a
+        // tenth, where two decimals had turned a 4ms win into "0.00s" and the
+        // model called it a dead heat (rehearsal 1's Q2 recap).
+        var exactly = Invariant(gapSeconds, "0.000");
+
         if (gapSeconds < 0.1)
         {
-            return $"a photo finish - {Invariant(gapSeconds, "0.000")}s between first and second. "
+            return $"a photo finish - {exactly}s between first and second. "
                 + "Incredibly close, but NOT a tie - there is a clear winner, so never call it a dead heat";
         }
 
         return gapSeconds switch
         {
-            < 0.5 => $"a photo finish - {Invariant(gapSeconds, "0.00")}s between first and second. This one genuinely was close",
-            < 2.0 => $"close - {Invariant(gapSeconds, "0.0")}s covered the top two",
-            < 6.0 => $"a steady win - {Invariant(gapSeconds, "0.0")}s back to second",
-            _ => $"comfortable - {Invariant(gapSeconds, "0.0")}s clear. Do NOT describe this as a close race",
+            < 0.5 => $"a photo finish - {exactly}s between first and second. This one genuinely was close",
+            < 2.0 => $"close - {exactly}s covered the top two",
+            < 6.0 => $"a steady win - {exactly}s back to second",
+            _ => $"comfortable - {exactly}s clear. Do NOT describe this as a close race",
         };
     }
 

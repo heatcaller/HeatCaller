@@ -27,6 +27,24 @@ namespace HeatCaller.Tests;
 public sealed class PositionGapTests
 {
     [Fact]
+    public void The_board_shows_the_gap_to_the_thousandth_as_the_voice_says_it()
+    {
+        // 1 Nov 2026: "+2.35" on the board under "two point three four
+        // five back" in the room.
+        Assert.Equal("+2.345", RaceGaps.Format(new RaceGap(0, 2_345)));
+        Assert.Equal("+0.007", RaceGaps.Format(new RaceGap(0, 7)));
+        Assert.Equal("+12.300", RaceGaps.Format(new RaceGap(0, 12_300)));
+        Assert.Equal("+1L", RaceGaps.Format(new RaceGap(1, 400)));
+        Assert.Equal("-", RaceGaps.Format(new RaceGap(0, null)));
+    }
+
+    [Fact]
+    public void The_board_gap_is_written_the_same_in_any_language_windows_is_set_to()
+    {
+        InCommaDecimal(() => Assert.Equal("+2.345", RaceGaps.Format(new RaceGap(0, 2_345))));
+    }
+
+    [Fact]
     public void A_gap_under_a_second_is_said_to_the_thousandth()
     {
         Assert.Equal("point three one two back", AnnouncementText.SpokenGap(new RaceGap(0, 312)));
