@@ -774,10 +774,15 @@ public sealed class FirstRunWizard : Form
         // boundary. The page that plans a night was reachable only by
         // clicking the sidebar out of curiosity.
         _lblRaceNight.AutoSize = true;
+        // And that the app opens in Simple mode (1 Nov 2026, Simple and
+        // Advanced mode, round 5), so a club that goes looking for a tuning
+        // setting knows where the rest are.
         _lblRaceNight.Text = string.Join(Environment.NewLine,
             "On race night: open Connection and press Connect, then go to Race Day.",
             "Its Next Steps tab says the one next thing to do and has the button that does it.",
-            "No decoder here yet? Open Demo Mode and start a simulated race.");
+            "No decoder here yet? Open Demo Mode and start a simulated race.",
+            string.Empty,
+            SettingsModes.WizardLine);
 
         _chkTour.Text = "Show me around the app now (about two minutes)";
         _chkTour.AutoSize = true;

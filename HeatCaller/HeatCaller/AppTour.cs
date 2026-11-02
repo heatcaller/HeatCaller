@@ -69,9 +69,9 @@ public sealed class AppTour : Form
 
         new("Sounds", "Sounds",
             "Soundscapes set the mood in one click: sound effects, a crowd that reacts to the racing, music "
-            + "between races and the app's look. Imaging is each soundscape's radio side - jingles, sweepers, "
-            + "bumpers, stingers and beds in a run of show, with Post and Out marks so the voice hits the post. "
-            + "The Mixer balances them all, and each part can be tuned on its own tab."),
+            + "between races and the app's look. The Mixer balances them all. In Advanced mode each part can be "
+            + "tuned on its own tab, and Imaging is each soundscape's radio side - jingles, sweepers, bumpers, "
+            + "stingers and beds in a run of show."),
 
         new("Local Screens", "Local Screens",
             "Screens and phones at the track, over the laptop's own Wi-Fi - no internet needed. Live results on "
@@ -79,8 +79,8 @@ public sealed class AppTour : Form
 
         new("Club Website", "Club Website",
             "Your club's pages on the internet: live results, schedule and standings anyone can open, plus online "
-            + "check-in and driver sign-up. Set up once with an address and token. Its Recording tab keeps an mp3 "
-            + "of each race, a clip for each driver and their highlight videos."),
+            + "check-in and driver sign-up. Set up once with a club name and token. In Advanced mode, its Recording "
+            + "tab keeps an mp3 of each race, a clip for each driver and their highlight videos."),
 
         new("Themes", "Themes",
             "The look of the app and of everything racers see - colors, and your club logo on screens, pages and "
@@ -92,6 +92,14 @@ public sealed class AppTour : Form
 
         new("Backup & Restore", "Backup & Restore",
             "Automatic and manual backups of everything. Moving to a new laptop is a restore away."),
+
+        // SIMPLE AND ADVANCED MODE (1 Nov 2026, round 5): where the switch is,
+        // on the page it lives on.
+        new("Backup & Restore", "Simple and Advanced mode",
+            "HeatCaller opens in Simple mode, which shows what a race night needs. The Settings mode card here "
+            + "turns on Advanced mode, which shows every setting: timing, voice tuning, sound levels and more. "
+            + "Hidden settings keep working either way. If a change ever breaks something, Restore Default "
+            + "Settings on the same card puts them back."),
 
         new("Demo Mode", "Try it now",
             "Demo Mode runs a simulated race with pretend drivers - the best way to see the announcer, the "

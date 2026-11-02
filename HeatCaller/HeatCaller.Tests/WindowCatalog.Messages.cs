@@ -48,6 +48,9 @@ internal static partial class WindowCatalog
             raceRunning: false)),
         ("Put back earlier settings (none yet)", () => new PutBackSettingsForm(new List<(string, DateTime)>(), raceRunning: false)),
 
+        // The manager PIN before Advanced mode (round 5).
+        ("Manager PIN", () => new ManagerPinForm("482913")),
+
         ("Message (no icon)", () => AppDialog.BuildForLayoutCheck(
             "Every driver ticked here is added to the round, in the order they are ticked.",
             string.Empty,

@@ -477,6 +477,9 @@ internal static class LayoutAudit
         // Restore default settings and the copies it saves (RestoreDefaultsForm, PutBackSettingsForm, 1 Nov 2026).
         "Restore default settings?",
         "Put back earlier settings",
+
+        // The manager PIN before Advanced mode, when a club asks for it (ManagerPinForm, round 5).
+        "Manager PIN",
     };
 
     /// <summary>

@@ -417,6 +417,9 @@ internal static class SettingsTable
             nameof(AppSettings.SettingsMode),
             nameof(AppSettings.SettingsModeDecided),
 
+            // A lock, not tuning: a restore must not take it off.
+            nameof(AppSettings.AdvancedNeedsManagerPin),
+
             // Retired, kept only so older files still load.
             nameof(AppSettings.DarkMode),
             nameof(AppSettings.ShowIdentLine),

@@ -1732,6 +1732,15 @@ public sealed class AppSettings
     /// </summary>
     public bool SettingsModeDecided { get; set; }
 
+    /// <summary>
+    /// Ask for the manager PIN (<see cref="ManagerPin"/>) before Advanced mode
+    /// turns on (1 Nov 2026, round 5): for a club whose PC is run by
+    /// volunteers who should stay in Simple mode. Off by default, and it does
+    /// nothing while there is no usable manager PIN to ask for. Set from the
+    /// Settings mode card, in Advanced mode only.
+    /// </summary>
+    public bool AdvancedNeedsManagerPin { get; set; }
+
     // Track Layouts page - which track was last viewed, so its photo/details show automatically on returning to that page.
     public string LastViewedTrackLayoutName { get; set; } = string.Empty;
 
