@@ -212,7 +212,7 @@ On the online pages the logo is drawn between 72 and 180 pixels across, dependin
 
 ## HeatCaller's mark
 
-Everything HeatCaller makes for people to see ends with a small sun and the HEATCALLER wordmark. Your club's name, logo and colors stay in charge: the mark is small, at the edge, in your look's colors (black on paper). It's always on; there's no setting for it.
+Everything HeatCaller makes for people to see ends with a small sun and the HEATCALLER wordmark. Your club's name, logo and colors stay in charge: the mark is small, at the edge, in your look's colors (black on paper). On **Synthwave**, the look the **Classic** soundscape wears, the sun is a yellow-to-orange sunset like HeatCaller's logo instead of the look's pink. It's always on; there's no setting for it.
 
 - **Big Screen:** a small sun and HEATCALLER in the bottom right of the countdown band, like a TV channel's corner logo.
 - **Highlight videos:** the end card says "Timed and called by" over the sun and HEATCALLER.

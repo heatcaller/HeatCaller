@@ -57,6 +57,35 @@ const HC_SUN = '<svg class="hcsun" viewBox="0 0 24 24" aria-hidden="true"><path 
   + '<path d="M4.5 12.4h15v1.3h-15zM5.4 15h13.2v1.1H5.4z"/>'
   + '<path d="M2 18.5h20M12 18.5l-7 4M12 18.5l7 4M12 18.5v4" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>';
 
+/**
+ * The sun on Synthwave (1 Nov 2026, Asher: "when classic theme is selected
+ * the sun should be yellow and orange not pink"). Classic wears the
+ * Synthwave look, whose primary is pink, so HC_SUN came out pink. On that
+ * look the sun itself is a yellow-to-orange sunset, the logo's own yellow
+ * and orange, and only the horizon and floor keep the pink, as the logo
+ * draws them.
+ *
+ * The relay is sent a look's colours, never its name, so Synthwave is told
+ * by its primary - and no look at all is the default look, which is
+ * Synthwave too. The app makes the same call (HeatCallerMark.IsSunset).
+ * HC_SUNSET is the gradient, once a page, in an SVG of no size rather than
+ * one that is hidden: a gradient inside display:none is not drawn.
+ */
+const SYNTHWAVE_PRIMARY = "#FF2E9A";
+
+const HC_SUNSET = '<svg class="hcdefs" aria-hidden="true" focusable="false">'
+  + '<linearGradient id="hcsunset" gradientUnits="userSpaceOnUse" x1="0" y1="3" x2="0" y2="16.1">'
+  + '<stop offset="0" stop-color="#FFE9A0"/><stop offset=".55" stop-color="#FFB347"/><stop offset="1" stop-color="#FF8A2A"/>'
+  + '</linearGradient></svg>';
+
+const HC_SUNSET_STYLE = "<style>.hcsun{fill:url(#hcsunset) #FFB347}</style>";
+
+/** Whether a look is Synthwave's, whose sun is the sunset rather than its primary. */
+export function sunsetLook(look: Look): boolean {
+  const primary = look.vars["--primary"];
+  return primary === undefined || primary === SYNTHWAVE_PRIMARY;
+}
+
 const HC_LOGO = '<svg class="logo" viewBox="0 0 256 256" aria-hidden="true">'
   + '<rect width="256" height="256" rx="56" fill="#140829"/>'
   + '<circle cx="128" cy="118" r="72" fill="#FF5FA2"/>'
@@ -776,6 +805,7 @@ mark { background: var(--primary); color: var(--on-primary, #FFFFFF); border-rad
    is the "What's HeatCaller?" sheet, which is HeatCaller talking, not
    the club. */
 .hcsun { width: 18px; height: 18px; flex: none; fill: currentColor; color: var(--primary); }
+.hcdefs { position: absolute; width: 0; height: 0; overflow: hidden; }
 .hcword { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
           font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
 .hcword .hcc { color: var(--primary); }
@@ -1454,6 +1484,8 @@ function shell(page: Shell, context: PageContext): string {
     ? ""
     : `<style>:root{${variables.map(([k, v]) => `${k}:${v}`).join(";")}}</style>`;
 
+  const sunset = sunsetLook(look);
+
   // "on HeatCaller" under the club's name, on every page.
   const heading = `<h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
     <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
@@ -1544,9 +1576,9 @@ ${preview}${twitter}
 <link rel="apple-touch-icon" href="/c/${club}/icon.png?v=${look.iconVersion}">
 <title>${title}</title>
 <style>${STYLE}</style>
-${overrides}
+${overrides}${sunset ? HC_SUNSET_STYLE : ""}
 </head>
-<body data-club="${club}" data-club-name="${name}">
+<body data-club="${club}" data-club-name="${name}">${sunset ? HC_SUNSET : ""}
 <div class="wrap">
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
     ${brand}${page.active === "live" ? `
