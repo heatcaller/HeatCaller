@@ -3958,6 +3958,10 @@ public sealed partial class WebServerService
         Var("glass-p1", Rgba(Looks.Mix(look.Background, look.Primary, 0.12), "0.82"));
         Var("glass-surface", Rgba(look.Surface, "0.86"));
 
+        // HeatCaller's sun in the footer: the look's primary, or on Synthwave
+        // (Classic's look) the yellow-to-orange sunset - see HeatCallerMark.IsSunset.
+        Var("hcsun", HeatCallerMark.IsSunset(look.Primary) ? HeatCallerMark.SunsetFill : "currentColor");
+
         var logo = string.Empty;
 
         // Read once: the setting can be changed on the UI thread while this
