@@ -159,11 +159,27 @@ public sealed partial class AnnouncementService
         lead == SpeechLead.FollowsOn ? 0.0 : CurrentLeadingSilence;
 
     /// <summary>
-    /// How much of the decoded start is thrown away, and therefore how far
-    /// the decoded audio runs AHEAD of any timings the API reported for it.
-    /// Anything cutting that audio by time has to allow for this.
+    /// The MOST of the decoded start that is thrown away. Less goes when the
+    /// words begin sooner - see <see cref="QuietStartToSkip"/> - so anything
+    /// cutting the audio by the API's timings takes the amount actually
+    /// skipped from <see cref="DecodeMp3Trimmed"/>, not this.
     /// </summary>
     public const double DecodeSkipSeconds = 0.08;
+
+    /// <summary>
+    /// How loud a 16-bit sample has to be to count as the words starting,
+    /// for <see cref="QuietStartToSkip"/> - about -30 dBFS. The decoder's
+    /// own run-in is digital silence and a breath before a line peaks in the
+    /// low hundreds; the first consonant of a word is well over this.
+    /// </summary>
+    public const int SpeechOnsetLevel = 1000;
+
+    /// <summary>
+    /// How much is kept in front of the first sample that loud: the very
+    /// start of a consonant ("Q", "K") builds up below the level for a few
+    /// milliseconds, and cutting on the loud sample itself would still clip it.
+    /// </summary>
+    public const double SpeechOnsetGuardSeconds = 0.02;
 
     /// <summary>
     /// Decodes an MP3 to raw PCM.
@@ -173,9 +189,31 @@ public sealed partial class AnnouncementService
     /// </summary>
     public static (byte[] Pcm, WaveFormat Format) DecodeMp3(byte[] mp3Bytes)
     {
+        var (pcm, format, _) = DecodeMp3Trimmed(mp3Bytes);
+        return (pcm, format);
+    }
+
+    /// <summary>
+    /// <see cref="DecodeMp3"/>, with how much of the start it threw away -
+    /// for a caller lining the audio up against timings the API reported
+    /// for the untrimmed render (the batched release calls).
+    /// </summary>
+    public static (byte[] Pcm, WaveFormat Format, double SkippedSeconds) DecodeMp3Trimmed(byte[] mp3Bytes)
+    {
         using var mp3Stream = new MemoryStream(mp3Bytes);
         using var mp3Reader = new Mp3FileReader(mp3Stream);
         var format = mp3Reader.WaveFormat;
+
+        using var pcm = new MemoryStream();
+        var buffer = new byte[format.AverageBytesPerSecond];
+        int bytesRead;
+
+        while ((bytesRead = mp3Reader.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            pcm.Write(buffer, 0, bytesRead);
+        }
+
+        var whole = pcm.ToArray();
 
         // Many MP3 encoders prepend a LAME/Xing "header frame" that isn't
         // real audio - it's encoder metadata shaped like an MP3 frame for
@@ -187,35 +225,47 @@ public sealed partial class AnnouncementService
         // fix. Discarding a small slice of decoded audio here - not just
         // padding around it - actually removes it from the stream.
         //
-        // Read until that much has gone, or the line has: one Read may hand
-        // back less than was asked for (CA2022), and what it left would be
-        // heard.
-        var skip = (int)(format.AverageBytesPerSecond * DecodeSkipSeconds);
-        var skipBuffer = new byte[Math.Max(1, skip)];
-        var skipped = 0;
+        // WHY (1 Nov 2026, Asher: "when the after race call ups fire the very
+        // beginning of the audio sounds clipped"): the slice was a flat 80 ms
+        // whatever was in it. Most lines don't start speaking until 85-120 ms
+        // into the decode, so the cut only took silence. A line that opens on
+        // a hard word starts much sooner: "Q2 Heat 1 for Stock is next" is
+        // speaking from 35 ms and "A-Main for Stock is next" from 50 ms (the
+        // saved ElevenLabs takes in the voice library), so the cut took the
+        // start of the first word. Now it stops where the words begin.
+        var skip = QuietStartToSkip(whole, format);
 
-        while (skipped < skip)
+        return (whole[skip..], format, skip / (double)Math.Max(1, format.AverageBytesPerSecond));
+    }
+
+    /// <summary>
+    /// How many bytes to throw away from the front of decoded audio: up to
+    /// <see cref="DecodeSkipSeconds"/>, but never into the words - stopping
+    /// <see cref="SpeechOnsetGuardSeconds"/> short of the first sample at
+    /// <see cref="SpeechOnsetLevel"/>. Whole sample frames, so what is left
+    /// still starts on a sample.
+    /// </summary>
+    public static int QuietStartToSkip(ReadOnlySpan<byte> pcm, WaveFormat format)
+    {
+        var block = Math.Max(1, format.BlockAlign);
+        var most = (int)AlignDown(Math.Min(pcm.Length, (long)(format.AverageBytesPerSecond * DecodeSkipSeconds)), block);
+
+        // An MP3 always decodes to 16-bit PCM; anything else is skipped as before.
+        if (format.Encoding != WaveFormatEncoding.Pcm || format.BitsPerSample != 16)
         {
-            var read = mp3Reader.Read(skipBuffer, 0, skip - skipped);
+            return most;
+        }
 
-            if (read <= 0)
+        for (var i = 0; i + 1 < most; i += 2)
+        {
+            if (Math.Abs((int)BitConverter.ToInt16(pcm[i..])) >= SpeechOnsetLevel)
             {
-                break;
+                var guard = (long)(format.AverageBytesPerSecond * SpeechOnsetGuardSeconds);
+                return (int)AlignDown(Math.Max(0, i - guard), block);
             }
-
-            skipped += read;
         }
 
-        using var pcm = new MemoryStream();
-        var buffer = new byte[format.AverageBytesPerSecond];
-        int bytesRead;
-
-        while ((bytesRead = mp3Reader.Read(buffer, 0, buffer.Length)) > 0)
-        {
-            pcm.Write(buffer, 0, bytesRead);
-        }
-
-        return (pcm.ToArray(), format);
+        return most;
     }
 
     /// <summary>
