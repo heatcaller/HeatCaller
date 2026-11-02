@@ -513,6 +513,13 @@ public sealed partial class AnnouncementService
             return;
         }
 
+        // A battle line whose two cars have swapped - see AnnouncementService.BattleLines.
+        if (IsOvertakenOnTrack())
+        {
+            StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the two cars it is about swapped before it spoke.");
+            return;
+        }
+
         if (honourMute && Muted)
         {
             StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the announcer is muted.");
@@ -561,6 +568,13 @@ public sealed partial class AnnouncementService
             if (IsCutByCountdown())
             {
                 StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the countdown started while it was being synthesized.");
+                return;
+            }
+
+            // And for a battle line whose two cars swapped meanwhile.
+            if (IsOvertakenOnTrack())
+            {
+                StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the two cars it is about swapped while it was being synthesized.");
                 return;
             }
 
@@ -1040,6 +1054,17 @@ public sealed partial class AnnouncementService
             return false;
         }
 
+        // A battle line (1 Nov 2026) - see AnnouncementService.BattleLines.
+        // One whose two cars swapped while it was being written would
+        // contradict the board from its first word.
+        var battle = BattleLineBeingQueued();
+
+        if (battle is { Overtaken: true })
+        {
+            StatusMessage?.Invoke("[voice] Dropped a battle line - the two cars swapped while it was being written.");
+            return false;
+        }
+
         // A call about a lap the window was told of too late (23 Oct 2026,
         // timing layer, P4b) - see WhileLapCallsAreStale. Only ever true on
         // the thread handling that lap, so a line coming back from being kept
@@ -1190,7 +1215,7 @@ public sealed partial class AnnouncementService
             // the line it waited on was still speaking.
             var at = heldOver ? HeldOverSlot(_voiceQueue.Select(waiting => waiting.Type).ToList()) : _voiceQueue.Count;
 
-            var queued = new QueuedVoiceItem(type, transponder, OnAir: onAir, Work: async () =>
+            var queued = new QueuedVoiceItem(type, transponder, OnAir: onAir, Battle: battle, Work: async () =>
             {
                 try
                 {
@@ -1436,6 +1461,9 @@ public sealed partial class AnnouncementService
             // What the line runs if it is never said - for the mute below.
             Action? lostIfUnsaid = null;
 
+            // The fight a battle line is about, so the board can cut it off.
+            BattleLine? battle = null;
+
             lock (_voiceQueueLock)
             {
                 if (_voiceQueue.Count > 0)
@@ -1444,6 +1472,8 @@ public sealed partial class AnnouncementService
                     work = item.Work;
                     onAirCall = item.Type;
                     onAirNamed = item.OnAir;
+                    battle = item.Battle;
+                    _battleOnAir = battle;
                     _voiceQueue.RemoveAt(0);
 
                     if (_lostIfBinned is { } table && table.TryGetValue(item, out var lost))
@@ -1467,6 +1497,14 @@ public sealed partial class AnnouncementService
                     // everything still talking. Read under the same lock
                     // CutForCountdown bumps it under.
                     countdownGeneration = Volatile.Read(ref _countdownCutGeneration);
+
+                    // So a pass seen after a flag has cut this battle line
+                    // does not stop the flag call instead - see CutSinceTaken.
+                    if (battle is not null)
+                    {
+                        battle.TakenUnderInterrupt = Volatile.Read(ref _interruptGeneration);
+                        battle.TakenUnderCountdown = countdownGeneration;
+                    }
                 }
                 else
                 {
@@ -1480,6 +1518,7 @@ public sealed partial class AnnouncementService
             // iteration so nothing leaks from one line to the next.
             _dequeuedUnderGeneration.Value = generation;
             _dequeuedUnderCountdown.Value = countdownGeneration;
+            _dequeuedBattle.Value = battle;
 
             // Mute can land between an item being queued and it being
             // played, so check again here rather than trusting the
@@ -1492,6 +1531,17 @@ public sealed partial class AnnouncementService
                 if (lostIfUnsaid is not null)
                 {
                     GiveBackLost(new[] { lostIfUnsaid });
+                }
+
+                if (battle is not null)
+                {
+                    lock (_voiceQueueLock)
+                    {
+                        if (ReferenceEquals(_battleOnAir, battle))
+                        {
+                            _battleOnAir = null;
+                        }
+                    }
                 }
 
                 continue;
@@ -1524,6 +1574,17 @@ public sealed partial class AnnouncementService
                 Interlocked.Decrement(ref _voiceInFlight);
                 _isVoiceSpeaking = false;
                 EndSpeaking();
+
+                if (battle is not null)
+                {
+                    lock (_voiceQueueLock)
+                    {
+                        if (ReferenceEquals(_battleOnAir, battle))
+                        {
+                            _battleOnAir = null;
+                        }
+                    }
+                }
             }
 
             // The line has ended, so the one call kept for its end - if a

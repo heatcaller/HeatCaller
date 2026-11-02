@@ -48,7 +48,7 @@ public sealed partial class AnnouncementService
     /// room is hearing - and on a night with a flag call cutting in, those
     /// are different lines.
     /// </param>
-    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work, string? OnAir = null);
+    private sealed record QueuedVoiceItem(AnnouncementEventType Type, string? Transponder, Func<Task> Work, string? OnAir = null, BattleLine? Battle = null);
 
     private readonly List<QueuedVoiceItem> _voiceQueue = new();
     private readonly object _voiceQueueLock = new();
@@ -1350,6 +1350,13 @@ public sealed partial class AnnouncementService
                 if (IsCutByCountdown())
                 {
                     StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - the countdown started while it waited for the speaker.");
+                    return;
+                }
+
+                // A battle line whose two cars swapped - see AnnouncementService.BattleLines.
+                if (IsOvertakenOnTrack())
+                {
+                    StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - the two cars it is about swapped while it waited for the speaker.");
                     return;
                 }
 
