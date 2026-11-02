@@ -1,57 +1,61 @@
 namespace HeatCaller.Tests;
 
 /// <summary>
-/// The running order is not read once it has waited too long (31 Oct 2026).
+/// How long a running order may wait for the speaker.
 ///
-/// It is one of the calls that waits its turn behind a line already being
-/// spoken rather than being dropped, and it was the only one of them with no
-/// limit on the wait. Its words are written when it is built, so behind a
-/// long line it read out an order the screen had already changed.
+/// 31 Oct 2026: it was dropped once it had waited three seconds, because its
+/// words were written when it was built and behind a long line they read out
+/// an order the screen had already changed.
+///
+/// 1 Nov 2026: the order is now read again from the board just before it is
+/// spoken, and the report waits for the last car it names - so it is queued
+/// the moment that car crosses, right behind that car's own calls. Asher had
+/// it set every 4 laps and never heard it: on the demo heats that afternoon
+/// four of the six that came due in racing were dropped after waiting 3.7 to
+/// 10.4 seconds, and the only one in the last heat was among them. A wait no
+/// longer drops it; a newer report queued behind it still replaces it.
 /// </summary>
 public sealed class PositionReportLimitTests
 {
     [Fact]
-    public void A_running_order_said_within_the_limit_is_still_read()
+    public void A_newer_report_still_replaces_one_waiting_for_the_speaker()
     {
-        Assert.True(AnnouncementService.PositionReportStillTrue(10_000, 10_000));
-        Assert.True(AnnouncementService.PositionReportStillTrue(10_000, 10_000 + AnnouncementService.PositionReportSayWithinMs));
+        // With no wait limit, this is what stops reports piling up.
+        var queue = Source("AnnouncementService.VoiceQueue.cs");
+
+        Assert.Contains("BinQueuedLocked(item => item.Type == AnnouncementEventType.PositionReport", queue, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void A_running_order_that_waited_past_the_limit_is_dropped()
-    {
-        Assert.False(AnnouncementService.PositionReportStillTrue(10_000, 10_001 + AnnouncementService.PositionReportSayWithinMs));
-        Assert.False(AnnouncementService.PositionReportStillTrue(10_000, 60_000));
-    }
-
-    [Fact]
-    public void The_limit_outlasts_a_lap_call_but_not_a_short_lap()
-    {
-        // Long enough to wait out the lap call it usually sits behind, short
-        // enough that a five-second Mini-Z lap has not gone by.
-        Assert.InRange(AnnouncementService.PositionReportSayWithinMs, 2_000, 5_000);
-    }
-
-    [Fact]
-    public void The_report_checks_the_limit_before_it_is_spoken()
+    public void The_report_is_not_dropped_for_how_long_it_waited()
     {
         var report = Between(
             Source("AnnouncementService.LapCalls.cs"),
             "private void MaybeAnnouncePositions(",
-            "internal const long PositionReportSayWithinMs");
+            "private string WordRunningOrder(");
+        var code = string.Join("\n", report.Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
 
-        var built = report.IndexOf("var builtAtMs = TimingClock.NowMs;", StringComparison.Ordinal);
-        var check = report.IndexOf("PositionReportStillTrue(builtAtMs, TimingClock.NowMs)", StringComparison.Ordinal);
+        Assert.DoesNotContain("PositionReportStillTrue", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("builtAtMs", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_report_reads_the_board_again_before_it_is_spoken()
+    {
+        var report = Between(
+            Source("AnnouncementService.LapCalls.cs"),
+            "private void MaybeAnnouncePositions(",
+            "private string WordRunningOrder(");
+
+        var queued = report.IndexOf("EnqueueVoiceWork(AnnouncementEventType.PositionReport", StringComparison.Ordinal);
         var reread = report.IndexOf("RunningOrderNow(depth)", StringComparison.Ordinal);
         var spoken = report.IndexOf("await SynthesizeAndPlayAsync(said, \"[voice] Position report\"", StringComparison.Ordinal);
 
-        Assert.True(built >= 0, "the report no longer records when it was built");
-        Assert.True(check > built, "the report no longer checks how long it waited");
-        Assert.True(spoken > check, "the report is spoken before its wait is checked");
-
-        // 1 Nov 2026: and the order is read again, after the wait and
-        // before the words go to the voice - see PositionReportOrderTests.
-        Assert.True(reread > check && spoken > reread, "the running order is no longer read again just before it is spoken");
+        // The words it was queued with may be out of date after the wait;
+        // they are checked against the board once the voice reaches them -
+        // see PositionReportOrderTests.
+        Assert.True(queued >= 0, "the report is no longer queued for the voice");
+        Assert.True(reread > queued && spoken > reread, "the running order is no longer read again just before it is spoken");
     }
 
     [Fact]
