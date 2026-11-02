@@ -2732,12 +2732,12 @@ public partial class MainForm
         // Windows will not replace a file that is open, so everything this
         // app holds open in the data folder is let go just before the
         // restore starts putting files back: the music track, the ambience
-        // loops and the I-Lap raw capture log. Each on its own, so one that
+        // loops and the decoders' raw capture logs. Each on its own, so one that
         // fails does not leave the others open. Nothing is started again -
         // the app restarts after a restore.
         backupRestore.ReleaseFilesForRestore += () =>
         {
-            foreach (var release in new Action[] { _music.Stop, _ambience.Stop, _ilapClient.Disconnect })
+            foreach (var release in new Action[] { _music.Stop, _ambience.Stop, _ilapClient.Disconnect, _streamClient.Disconnect })
             {
                 try
                 {

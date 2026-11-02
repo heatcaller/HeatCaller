@@ -99,13 +99,13 @@ public partial class MainForm
     /// <summary>Everything Mission Control judges, read now. UI thread.</summary>
     private MissionControl.Inputs MissionControlInputs()
     {
-        var iLap = SelectedDecoder == DecoderConnection.ILap;
-        var lineState = iLap ? _ilapClient.State : _decoderClient.State;
+        var lineState = StateOf(SelectedDecoder);
 
         TimeSpan? heartbeat = null;
         var lastBeat = Interlocked.Read(ref _lastHeartbeatTicks);
 
-        if (!iLap && lineState == DecoderConnectionState.Connected)
+        // The heartbeat is the USB EasyLap's alone.
+        if (SelectedDecoder == DecoderConnection.EasyLap && lineState == DecoderConnectionState.Connected)
         {
             // Since its last heartbeat - or, if none has come yet, since it
             // connected, once that is longer than a heartbeat can be late.
@@ -154,7 +154,7 @@ public partial class MainForm
             .ToList();
 
         return new MissionControl.Inputs(
-            LineDecoder: iLap ? "I-Lap" : "EasyLap",
+            LineDecoder: DecoderConnection.ShortName(SelectedDecoder),
             LineState: lineState,
             HeartbeatAge: heartbeat,
             LastPassAge: heard.Count > 0 ? heard[0].Ago : null,

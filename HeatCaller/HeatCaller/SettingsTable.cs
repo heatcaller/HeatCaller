@@ -332,10 +332,12 @@ internal static class SettingsTable
             nameof(AppSettings.Port),
             nameof(AppSettings.ApiKey),
 
-            // The decoder setup: connect via, COM port, baud.
+            // The decoder setup: connect via, COM port, baud - and each Beta
+            // decoder's source, address and port (1 Nov 2026).
             nameof(AppSettings.LastConnectionType),
             nameof(AppSettings.ILapPort),
             nameof(AppSettings.ILapBaud),
+            nameof(AppSettings.StreamDecoders),
 
             // Backup settings.
             nameof(AppSettings.AutoBackupEnabled),

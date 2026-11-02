@@ -2,12 +2,19 @@
 
 The **Connection** page is where HeatCaller gets its timing data. You choose how the laptop hears the cars, connect, and watch what the hardware is saying in the Developer Console. Come here first on every race night, and whenever laps stop arriving.
 
-HeatCaller reads your decoder directly and runs the race itself, on the **Race Control** page. It works with two decoders:
+HeatCaller reads your decoder directly and runs the race itself, on the **Race Control** page. It works with these decoders:
 
 | Connect via | What it is |
 |---|---|
 | Direct EasyLap Decoder (USB) | HeatCaller reads an EasyLap USB decoder directly. |
 | I-Lap Decoder (Serial) | HeatCaller reads an I-Lap decoder through its serial (COM) port. |
+| MyLaps / AMB P3 (Beta) | MyLaps and AMB decoders that speak the P3 protocol (AMBrc, RC4 and others), over the network or a COM port. |
+| ZRound open protocol / RiCino (Beta) | RiCino and other decoders that use ZRound's open protocol, over a COM port or the network. |
+| Cano / RCHourglass (Beta) | Howard Cano's DIY decoder, and RCHourglass in its Cano or RCHourglass mode, over a COM port. |
+| OpenStint (Beta) | The open-source OpenStint decoder, over the network. |
+| EasyLap / Robitronic Serial (Beta) | An EasyLap or Robitronic decoder on a serial port instead of USB. |
+
+The five marked **(Beta)** were written from each decoder's published format and haven't yet been tested on a real decoder. See [The Beta decoders](#the-beta-decoders).
 
 The line at the top of the page says the same: "Choose your timing decoder and connect to it. Its laps feed the Race Control page, which runs the race."
 
@@ -142,6 +149,74 @@ While connected, HeatCaller writes every line the I-Lap decoder sends to a file 
 
 See [Where HeatCaller keeps your data](../admin/data-files.md) for the folder location.
 
+## The Beta decoders
+
+**MyLaps / AMB P3**, **ZRound open protocol / RiCino**, **Cano / RCHourglass**, **OpenStint** and **EasyLap / Robitronic Serial** are marked **(Beta)**. HeatCaller reads them from each decoder's published format, and they're tested against records built from those formats, but none has yet timed a real session on the real hardware. Until one has:
+
+- Run your usual timing system alongside HeatCaller the first time.
+- Every time you connect one, the console says "BETA: HeatCaller's ... support was written from the published format and has not yet been tested on a real decoder."
+- Keep the day's raw capture file (see below) and send it with any report. It's what turns Beta into tested.
+
+They can be the start/finish line, but not a split loop. Choosing one turns **Split loop:** off, and the console says "Split loop turned off - it works with the EasyLap and I-Lap only."
+
+### Connect
+
+1. In **Connect via:**, choose the decoder.
+2. In **Source:**, choose how the laptop reaches it:
+
+    | Source | What to fill in |
+    |---|---|
+    | Serial (COM port) | **COM port:** and **Baud:**, as for the I-Lap. |
+    | Network (TCP) | **Address:**, the decoder's IP address, and **Port:**. |
+    | Network (ZeroMQ) | OpenStint only: the address of the PC running OpenStint, and **Port:**. |
+    | Simulated - rehearse without a decoder | Nothing. See [Rehearsing without a decoder](#rehearsing-without-a-decoder). |
+
+3. Click **Connect**.
+
+![The Connection page with MyLaps / AMB P3 (Beta) chosen, Source set to Network (TCP), and the decoder's address 192.168.1.50 and port 5403 filled in](../assets/images/connection-beta-decoder-network.png)
+
+Each decoder remembers its own source, port, address and baud rate, so switching between decoders and back loses nothing.
+
+| Decoder | Sources | Usual settings |
+|---|---|---|
+| MyLaps / AMB P3 | Network, Serial | Port 5403. Some newer MyLaps decoders ship with P3 switched off; turn it on in the decoder's own settings. |
+| ZRound open protocol / RiCino | Serial, Network | 19200 baud. On the network, the decoder's own port (5001 for OpenStint's ZRound bridge). |
+| Cano / RCHourglass | Serial | 57600 baud for RCHourglass's serial port. |
+| OpenStint | Network | Port 5556. |
+| EasyLap / Robitronic Serial | Serial | 38400 baud. |
+
+When you connect a ZRound decoder, HeatCaller sends the handshake and the race start (`%C&%I&`). The race start sets the decoder's clock to zero, which is harmless: HeatCaller keeps its own clock.
+
+### Confirm it's working
+
+| Dot | Status message | Meaning |
+|---|---|---|
+| Amber | "Connecting to the ... decoder on ..." | Opening the port or connection. |
+| Green | "Connected to the ... decoder on .... Every byte it sends is also captured to decoder-raw-*name*-*date*.log." | Connected. |
+| Red | "The ... decoder on ...: ... Trying again every 3 seconds - press Disconnect to stop." | It couldn't connect, or the connection dropped. It keeps trying by itself. |
+| Gray | "Disconnected." | You disconnected. |
+
+The console says "[decoder] The ... decoder is talking." when the first data arrives, and every pass appears as `[LAP EVENT] transponder=...`. If nothing arrives in 10 seconds, the console says so once. A Cano sends nothing until a car crosses, so drive one over the loop.
+
+Things to know about these decoders:
+
+- **Transponder numbers** are shown in decimal for P3, ZRound, Cano and OpenStint, which is the number printed on the transponder. A serial EasyLap's are six hex digits, as over USB.
+- **Lap times** come from the decoder's own clock, matched to the laptop's. Until HeatCaller has learned the decoder's clock (its first few readings), a pass is timed when it arrives. If the decoder restarts, the console says so and HeatCaller learns its clock again.
+- **Repeated reads** of the same transponder within 0.8 seconds are treated as one pass. The console shows "[decoder] Suppressed repeat of ...".
+- **Hits** are read from P3, RCHourglass, OpenStint and the serial EasyLap. A plain Cano sends none.
+
+### The raw capture files
+
+While connected, HeatCaller writes every byte the decoder sends to `decoder-raw-NAME-YYYY-MM-DD.log` in the HeatCaller data folder, where NAME is the decoder (for example `decoder-raw-mylaps-p3-2026-11-01.log`). Text decoders are kept as text, the others as hex. As with the I-Lap's, files older than 14 days are deleted when you next connect, and each day's file stops at 20 MB.
+
+### Rehearsing without a decoder
+
+Choose **Simulated - rehearse without a decoder** in **Source:** and click **Connect**. HeatCaller makes up a decoder of that type, speaking its real format, with up to eight cars lapping every 11 to 17 seconds. The cars use your drivers' transponders where the format can carry them, so their laps land on real drivers. Otherwise they're numbered 1001 to 1004.
+
+The console says "A simulated ... decoder - its cars are made up, laps from it are not real. Disconnect it before racing."
+
+![A simulated MyLaps P3 decoder connected: the status is green and the Developer Console shows its cars' passes as LAP EVENT lines](../assets/images/connection-beta-decoder-simulated.png)
+
 ## A split loop
 
 With both an EasyLap and an I-Lap, the one in **Connect via:** is the start/finish line, and the other can read cars partway round the track. Choose it in **Split loop:** (it lists the decoder that isn't the line).
@@ -198,8 +273,8 @@ A lap gets no sectors when the split loop didn't read the car, when it's the sta
 
 The decoder chosen in **Connect via:** is the line; with **Split loop:** on, the other one is the split loop. Any other connection is disconnected. When you change **Connect via:**:
 
-- Any EasyLap or I-Lap connection that is neither the new line nor the split loop is disconnected. With the split loop on, the two decoders swap roles.
-- The Line Up measurement is turned round to match, whether or not the split loop is on at the time. Run Line Up again when you can, to be sure.
+- Any connection that is neither the new line nor the split loop is disconnected. With the split loop on, the EasyLap and I-Lap swap roles. Choosing a Beta decoder turns the split loop off.
+- Between the EasyLap and the I-Lap, the Line Up measurement is turned round to match, whether or not the split loop is on at the time. Run Line Up again when you can, to be sure.
 - The **Status:** line switches to the new choice's own state (usually "Disconnected"). Click **Connect** to connect it.
 
 HeatCaller remembers your choice and uses it next time it opens.
@@ -207,7 +282,7 @@ HeatCaller remembers your choice and uses it next time it opens.
 **Not during a race.** **Connect via:**, **Split loop:** and Line Up can't be changed while a race or practice is running, since a change would disconnect the decoder timing it. The choice jumps back, and a **Race under way** message says to finish or reset the session first.
 
 !!! note
-    The first-run wizard offers both decoders, including I-Lap with its COM port and baud rate. Whatever you choose there is set on this page straight away. See [The first-run wizard](../getting-started/install.md#the-first-run-wizard).
+    The first-run wizard offers every decoder, including I-Lap with its COM port and baud rate. For a Beta decoder, choose its source and address or port here on the Connection page afterwards. Whatever you choose there is set on this page straight away. See [The first-run wizard](../getting-started/install.md#the-first-run-wizard).
 
 ## If the connection drops during a race
 

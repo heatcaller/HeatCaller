@@ -24,9 +24,11 @@ namespace HeatCaller;
 /// two, while both read and wrote the same integer, and a venue set up for
 /// I-Lap came back as EasyLap the next time anybody opened it.
 ///
-/// Adding a decoder: give it the next unused number (3), add it to
-/// <see cref="Offered"/>, and handle it wherever EasyLap and I-Lap are
-/// handled.
+/// Adding a decoder: give it the next unused number (8) and add it to
+/// <see cref="Offered"/>. One that talks over a serial port, the network or
+/// ZeroMQ then needs only a protocol in DecoderProtocols: StreamDecoderClient
+/// runs every decoder from 3 up. Anything else is handled wherever EasyLap
+/// and I-Lap are.
 /// </summary>
 internal static class DecoderConnection
 {
@@ -40,11 +42,72 @@ internal static class DecoderConnection
     internal const int EasyLap = 1;
     internal const int ILap = 2;
 
+    /// <summary>
+    /// MyLaps / AMB decoders speaking P3 (AMBrc, RC4, TranX3, ChipX), over
+    /// the network or a serial port. Added on 1 Nov 2026 with the four below,
+    /// all written from published formats and none yet run on a real decoder
+    /// - all five are <see cref="Beta"/>.
+    /// </summary>
+    internal const int MyLapsP3 = 3;
+
+    /// <summary>The ZRound open protocol: RiCino, and anything else ZRound lists as using it.</summary>
+    internal const int ZRound = 4;
+
+    /// <summary>Howard Cano's DIY decoder, and RCHourglass in its Cano or RCHourglass mode.</summary>
+    internal const int Cano = 5;
+
+    /// <summary>OpenStint, the open-source decoder for RC3 and OpenStint transponders, over ZeroMQ.</summary>
+    internal const int OpenStint = 6;
+
+    /// <summary>
+    /// An EasyLap or Robitronic decoder on a serial port rather than USB. The
+    /// USB box carries a 38400 8N1 UART stream inside HID (see EasyLapFramer),
+    /// so the serial models very likely send the same bytes. No owner has
+    /// confirmed it yet.
+    /// </summary>
+    internal const int EasyLapSerial = 7;
+
     /// <summary>What the pickers list, in order, and the saved number each one stands for.</summary>
     private static readonly (int Value, string Label)[] Offered =
     {
         (EasyLap, "Direct EasyLap Decoder (USB)"),
         (ILap, "I-Lap Decoder (Serial)"),
+        (MyLapsP3, "MyLaps / AMB P3 (Beta)"),
+        (ZRound, "ZRound open protocol / RiCino (Beta)"),
+        (Cano, "Cano / RCHourglass (Beta)"),
+        (OpenStint, "OpenStint (Beta)"),
+        (EasyLapSerial, "EasyLap / Robitronic Serial (Beta)"),
+    };
+
+    /// <summary>
+    /// Decoders written from published formats and never yet run against a
+    /// real one at a track. Labelled "(Beta)" in every picker, and
+    /// the console says so each time one connects. Take a decoder out of
+    /// here - and "(Beta)" off its label - only once it has timed a
+    /// real session on the real hardware and its raw capture has been read.
+    /// </summary>
+    private static readonly HashSet<int> Beta = new() { MyLapsP3, ZRound, Cano, OpenStint, EasyLapSerial };
+
+    /// <summary>True for a decoder not yet proven on real hardware - see <see cref="Beta"/>.</summary>
+    internal static bool IsBeta(int value) => Beta.Contains(value);
+
+    /// <summary>
+    /// True for the decoders StreamDecoderClient runs (3 and up) rather than
+    /// a client of their own. They can be the line, but not a split loop.
+    /// </summary>
+    internal static bool IsStream(int value) => value is MyLapsP3 or ZRound or Cano or OpenStint or EasyLapSerial;
+
+    /// <summary>A short name for the console and the support bundle.</summary>
+    internal static string ShortName(int value) => value switch
+    {
+        EasyLap => "EasyLap",
+        ILap => "I-Lap",
+        MyLapsP3 => "MyLaps P3",
+        ZRound => "ZRound",
+        Cano => "Cano",
+        OpenStint => "OpenStint",
+        EasyLapSerial => "EasyLap serial",
+        _ => "(" + value + ")",
     };
 
     /// <summary>

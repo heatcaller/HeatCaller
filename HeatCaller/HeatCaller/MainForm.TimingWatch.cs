@@ -132,11 +132,7 @@ public partial class MainForm
                      && !_race.IsPracticeMode
                      && !_race.IsDemoMode;
 
-        var iLap = SelectedDecoder == DecoderConnection.ILap;
-
-        var connected = iLap
-            ? _ilapClient.State == DecoderConnectionState.Connected
-            : _decoderClient.State == DecoderConnectionState.Connected;
+        var connected = StateOf(SelectedDecoder) == DecoderConnectionState.Connected;
 
         if (!racing)
         {
@@ -189,7 +185,7 @@ public partial class MainForm
             })
             .ToList();
 
-        return new TimingWatch.Situation(true, _race.IsFinishing, connected, cars, HeartbeatsExpected: !iLap);
+        return new TimingWatch.Situation(true, _race.IsFinishing, connected, cars, HeartbeatsExpected: SelectedDecoder == DecoderConnection.EasyLap);
     }
 
     /// <summary>

@@ -109,6 +109,22 @@ internal sealed class EasyLapFramer
         ProcessBuffer(ct);
     }
 
+    /// <summary>
+    /// Takes bytes of the UART stream itself, with no HID report around
+    /// them - an EasyLap or Robitronic on a serial port (1 Nov 2026, see
+    /// DecoderConnection.EasyLapSerial). Framed exactly as a report's data.
+    /// Not echoed to the log: StreamDecoderClient captures the raw bytes.
+    /// </summary>
+    public void AddBytes(ReadOnlySpan<byte> bytes, CancellationToken ct = default)
+    {
+        foreach (var b in bytes)
+        {
+            _buffer.Add(b);
+        }
+
+        ProcessBuffer(ct);
+    }
+
     /// <summary>Throws away any partial message - after a report that could not be handled.</summary>
     public void Clear()
     {

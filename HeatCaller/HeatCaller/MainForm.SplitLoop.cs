@@ -51,6 +51,13 @@ public partial class MainForm
     /// <summary>False until UpdateConnectionModeUi has first set _lineDecoder from the saved choice - so starting up on I-Lap isn't taken for a switch.</summary>
     private bool _lineDecoderKnown;
 
+    /// <summary>
+    /// The EasyLap or I-Lap, whichever was the line last - what the Line Up
+    /// offset was measured with. Kept past a decoder from 3 up as the line,
+    /// so the offset is turned round only for a real swap between the two.
+    /// </summary>
+    private int? _classicLine;
+
     /// <summary>A message for the split loop's line that stays until its decoder's state changes - see RenderSplitStatus.</summary>
     private (string Text, DecoderConnectionState State)? _splitNote;
 
@@ -79,24 +86,29 @@ public partial class MainForm
         Split,
     }
 
-    /// <summary>The decoder that isn't <paramref name="line"/>.</summary>
+    /// <summary>
+    /// The decoder that could be the split loop beside <paramref name="line"/>:
+    /// the EasyLap and the I-Lap for each other, and none (0) beside a
+    /// decoder from 3 up, which can't have a split loop yet.
+    /// </summary>
     private static int OtherDecoder(int line) =>
-        line == DecoderConnection.ILap ? DecoderConnection.EasyLap : DecoderConnection.ILap;
+        DecoderConnection.IsStream(line) ? 0
+        : line == DecoderConnection.ILap ? DecoderConnection.EasyLap : DecoderConnection.ILap;
 
     /// <summary>What a decoder is for right now. UI thread.</summary>
     private DecoderRole RoleOf(int decoder) =>
         decoder == SelectedDecoder ? DecoderRole.Line
-        : _settings.SplitLoopEnabled && decoder == OtherDecoder(SelectedDecoder) ? DecoderRole.Split
+        : _settings.SplitLoopEnabled && decoder != 0 && decoder == OtherDecoder(SelectedDecoder) ? DecoderRole.Split
         : DecoderRole.None;
 
     /// <summary>Whether the LINE decoder is connected - whichever it is.</summary>
-    private bool LineDecoderConnected() =>
-        _lineDecoder == DecoderConnection.ILap
-            ? _ilapClient.State == DecoderConnectionState.Connected
-            : _decoderClient.State == DecoderConnectionState.Connected;
+    private bool LineDecoderConnected() => StateOf(_lineDecoder) == DecoderConnectionState.Connected;
 
     private DecoderConnectionState StateOf(int decoder) =>
-        decoder == DecoderConnection.ILap ? _ilapClient.State : _decoderClient.State;
+        DecoderConnection.IsStream(decoder) ? StreamStateOf(decoder)
+        : decoder == DecoderConnection.ILap ? _ilapClient.State
+        : decoder == 0 ? DecoderConnectionState.Disconnected
+        : _decoderClient.State;
 
     /// <summary>Makes the split loop and hooks it to the decoders. Called once, from the constructor, after both exist.</summary>
     private void WireSplitLoop()
@@ -289,7 +301,6 @@ public partial class MainForm
     private void FillSplitLoopChoices()
     {
         var other = OtherDecoder(SelectedDecoder);
-        var label = DecoderConnection.Items()[DecoderConnection.IndexOf(other)];
 
         _fillingSplitChoices = true;
 
@@ -297,8 +308,14 @@ public partial class MainForm
         {
             cmbSplitLoop.Items.Clear();
             cmbSplitLoop.Items.Add("None");
-            cmbSplitLoop.Items.Add(label);
-            cmbSplitLoop.SelectedIndex = _settings.SplitLoopEnabled ? 1 : 0;
+
+            // Nothing to offer beside a decoder from 3 up - see OtherDecoder.
+            if (other != 0)
+            {
+                cmbSplitLoop.Items.Add(DecoderConnection.Items()[DecoderConnection.IndexOf(other)]);
+            }
+
+            cmbSplitLoop.SelectedIndex = _settings.SplitLoopEnabled && other != 0 ? 1 : 0;
         }
         finally
         {

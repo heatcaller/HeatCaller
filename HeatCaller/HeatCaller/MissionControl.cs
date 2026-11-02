@@ -35,7 +35,7 @@ internal static class MissionControl
     /// <summary>One tile: what it is about, its headline value, a line of detail and how worried to be.</summary>
     public sealed record Tile(string Key, string Title, string Value, string Detail, Level Level);
 
-    /// <param name="LineDecoder">The line decoder's name, "EasyLap" or "I-Lap".</param>
+    /// <param name="LineDecoder">The line decoder's short name (DecoderConnection.ShortName) - "EasyLap", "I-Lap", "MyLaps P3" and so on.</param>
     /// <param name="LineState">Its connection.</param>
     /// <param name="HeartbeatAge">Since the line decoder's last heartbeat; null when it sends none (I-Lap) or has sent none yet.</param>
     /// <param name="LastPassAge">Since any car was last heard at the line; null when none has been heard lately.</param>
@@ -140,7 +140,12 @@ internal static class MissionControl
         if (i.HeartbeatAge is not { } age)
         {
             return new("heartbeat", "Heartbeat", "None",
-                i.LineDecoder == "I-Lap" ? "The I-Lap sends none - passes are the only sign of life." : "None yet since connecting.",
+                i.LineDecoder switch
+                {
+                    "EasyLap" => "None yet since connecting.",
+                    "I-Lap" => "The I-Lap sends none - passes are the only sign of life.",
+                    var other => $"Not watched for the {other} - passes are the only sign of life.",
+                },
                 Level.Off);
         }
 

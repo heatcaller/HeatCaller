@@ -4669,9 +4669,13 @@ from. Ranked by what decides whether a club switches, and stays.
 
 ### What stops a club switching
 
-1. **MyLaps / AMB decoders.** Most clubs time with MyLaps (RC4 and older),
-   and HeatCaller reads only EasyLap and I-Lap. Every other item here
-   matters less for a club that can't plug in. (Also Beta readiness 1.)
+1. **MyLaps / AMB decoders.** Most clubs time with MyLaps (RC4 and older).
+   Every other item here matters less for a club that can't plug in. (Also
+   Beta readiness 1.) **Built 1 Nov 2026, Beta** (plans/decoder-support-plan.md):
+   P3 over the network or serial, written from the published format and
+   checked against real captured records, beside ZRound, Cano / RCHourglass,
+   OpenStint and serial EasyLap. Still needed: an evening on a club's RC4
+   with its raw capture read, before it loses "(Beta)" - DecoderConnection.Beta.
 2. **Importing from the club's current software.** There is a CSV driver
    import (Driver Profiles), which recognises its own column names. A club
    switching mid-season also has classes, transponder lists and season
