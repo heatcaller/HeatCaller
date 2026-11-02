@@ -294,7 +294,7 @@ The rest of the card is the segments. They come switched on, and they're grouped
 
 | Tick box | What it does |
 |---|---|
-| **Battle watch** | Calls a fight when two cars have been locked together for a while. |
+| **Battle watch** | Calls a fight when two cars have been locked together for a while. If the car behind gets past while the line is being said, the line stops and the announcer calls the pass instead: "And Sam takes the lead!", or "And Sam is through, up into third!" for any other place. |
 | **What's still to decide** | Points the room at a gap that's coming down, or going out, and how much of the race is left to settle it. A timed race gets the time left ("about a minute and a half"), never a count of laps; a race run to a lap count gets the laps left; a race with both gets whichever ends it first. It gives the gap and the rate, never who will win. |
 | **Record laps** | Calls a lap when a record falls - the race's, the night's or the layout's. |
 | **Coming up next** | Says what is on next, in the gap between races. |
