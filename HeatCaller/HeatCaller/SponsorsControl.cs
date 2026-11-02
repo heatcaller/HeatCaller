@@ -434,9 +434,13 @@ public sealed class SponsorsControl : UserControl
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.Add(_chkEnabled, stretch: false);
         page.AddFill(slidesCard, slidesCard.LeastHeight);
-        page.Add(timingCard);
-        page.Add(videoCard);
+
+        // The rotation timing and the video's sound are Advanced (1 Nov
+        // 2026, Simple mode); the slides and the reads are the sponsors.
+        page.Add(SimpleMode.Hide(timingCard));
+        page.Add(SimpleMode.Hide(videoCard));
         page.Add(readsCard, gapBelow: 0);
+        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
         Controls.Add(page);
 

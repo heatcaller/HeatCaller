@@ -92,7 +92,7 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 |---|---|
 | **Local Screens server** | The web server built into HeatCaller that serves pages to phones and tablets on the same Wi-Fi as the laptop. See [Local Screens](../screens/phone-and-web.md). |
 | **Remote PIN** | The PIN (four or more digits) that the phone remote on the Wi-Fi server asks for before it lets anyone throw flags. The remote doesn't work without one. |
-| **Manager PIN** | The PIN (six or more digits) that the race-day manager asks for before it lets anyone touch entries, the programme or saved results - on the Wi-Fi server or, if turned on, through the relay. The manager doesn't work without one. See [Race-day manager](../screens/phone-and-web.md#race-day-manager). |
+| **Manager PIN** | The PIN (six or more digits) that the race-day manager asks for before it lets anyone touch entries, the program or saved results - on the Wi-Fi server or, if turned on, through the relay. The manager doesn't work without one. See [Race-day manager](../screens/phone-and-web.md#race-day-manager). |
 | **Relay** | A small online server, usually hosted on Fly.io, that the laptop publishes to. It gives your club a public web address for results, standings, the live race and online check-in. The laptop only ever sends to the relay. Nothing connects in to the laptop. See [Online](../online/index.md). |
 | **Club id** | Your club's short name on the relay, for example `your-club`. It's part of every page address, such as `/c/your-club`. |
 | **Publish token** | The secret that lets your laptop publish to your club on the relay. It starts with `hg_` and names exactly one club. Treat it like a password. See [Security and privacy](../admin/security-and-privacy.md). |

@@ -2583,7 +2583,8 @@ public partial class AnnouncerControl
                 run,
                 said.Kind,
                 opening: at == 0,
-                prepared: at >= 0 && at < _renderedTurns.Count ? _renderedTurns[at] : null);
+                prepared: at >= 0 && at < _renderedTurns.Count ? _renderedTurns[at] : null,
+                about: said.About);
         }
 
         // A race moved on and took the block with it. The segment is then
@@ -2829,7 +2830,15 @@ public partial class AnnouncerControl
             // Named as it goes out, so the strip says "Form Guide" rather
             // than the kind of call this happens to be queued as. See
             // AnnouncementService.OnAirNow.
-            _announcer.SpeakReminder(spoken, showOnScreens: true, onAir: ShowBlock.NameFor(said.Kind));
+            //
+            // A battle line goes out tagged with its two cars, so the
+            // announcer can cut it off if they swap while it is being said.
+            // See AnnouncementService.BattleLines.
+            using (_announcer.AboutBattle(said.About))
+            {
+                _announcer.SpeakReminder(spoken, showOnScreens: true, onAir: ShowBlock.NameFor(said.Kind));
+            }
+
             return;
         }
 
@@ -2840,7 +2849,8 @@ public partial class AnnouncerControl
                 CommentaryExchange.ExchangeRun.At(at, said.Turns.Count),
                 said.Kind,
                 opening: at == 0,
-                prepared: at < _renderedTurns.Count ? _renderedTurns[at] : null);
+                prepared: at < _renderedTurns.Count ? _renderedTurns[at] : null,
+                about: said.About);
         }
     }
 
@@ -2923,17 +2933,22 @@ public partial class AnnouncerControl
     /// through to synthesising as it is spoken, which is what used to put a
     /// network round trip in the middle of the conversation.
     /// </param>
+    /// <param name="about">The two cars, when the segment is a battle line. See AnnouncementService.BattleLines.</param>
     private void SpeakTurnPlainly(
         ExchangeTurn turn,
         CommentaryExchange.ExchangeRun run,
         SegmentKind kind,
         bool opening,
-        AnnouncementService.PreparedSpeech? prepared = null)
+        AnnouncementService.PreparedSpeech? prepared = null,
+        BattlePair? about = null)
     {
         if (_settings is null)
         {
             return;
         }
+
+        // Tagged with its two cars when it is a battle line - see SpeakPlainly.
+        using var battle = _announcer.AboutBattle(about);
 
         // As in SpeakPlainly: tagged at the last moment, and only when the
         // service says tags are wanted at all.

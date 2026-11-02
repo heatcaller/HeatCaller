@@ -49,9 +49,9 @@ HeatCaller comes with 18 looks. Built-in looks can't be changed or deleted, but 
 | **Racing Blue** | Dark | Bold blue with a red flash on deep navy. |
 | **Podium Gold** | Dark | Gold and silver on black - trophy night. |
 | **Desert Rally** | Light | Burnt orange and teal on warm sand. |
-| **Paddock** | Light | Fresh green and amber on light grey - a sunny club day. |
+| **Paddock** | Light | Fresh green and amber on light gray - a sunny club day. |
 | **Heritage Stripes** | Light | Navy with a red stripe on white - old-school race livery. |
-| **Chequered** | Light | Black and white with a red flash - as plain as a flag. |
+| **Checkered** | Light | Black and white with a red flash - as plain as a flag. |
 
 **Daylight**, **Midnight** and **Synthwave** are the app's old Light, Dark and Synthwave modes, color for color, except that **Synthwave**'s green is now a real green rather than a cyan, so a driver's own best can't be taken for the quickest of anyone. **Pit Lane** to **Ice** are the looks the online pages offered before 0.48.
 
@@ -87,7 +87,7 @@ The first choice in the list is **Match the app**, with the name of the look the
 The change can be undone with **Undo** in the sidebar.
 
 !!! tip
-    For a TV or projector in a bright room, try a light look such as **Daylight** or **Chequered**. For the dark Big Screen of earlier versions, choose **Race Wall**.
+    For a TV or projector in a bright room, try a light look such as **Daylight** or **Checkered**. For the dark Big Screen of earlier versions, choose **Race Wall**.
 
 ## Make your own look
 
@@ -98,7 +98,7 @@ The change can be undone with **Undo** in the sidebar.
 
 The new look appears under **Your looks**, selected. It isn't used anywhere yet: click **Use for the App** or **Use for Crowd Screens** to put it to work.
 
-<!-- screenshot: New Look window with the colour rows on the left and the preview and Readability list on the right -->
+<!-- screenshot: New Look window with the color rows on the left and the preview and Readability list on the right -->
 
 ### The look editor
 
@@ -108,7 +108,7 @@ The new look appears under **Your looks**, selected. It isn't used anywhere yet:
 | **Description:** | Optional, up to 200 characters. Shown under the preview on the **Themes** page. |
 | **Style:** | **Light**, **Dark** or **Synthwave effects**. Light or Dark sets how phones and the online pages treat the page. **Synthwave effects** is a dark page that also gets the animated sunset header and the neon race clock. |
 
-Under **Colours** there are eleven colors:
+Under **Colors** there are eleven colors:
 
 | Color | Where it's used |
 |---|---|
@@ -126,7 +126,7 @@ Under **Colours** there are eleven colors:
 
 For each color, either click the swatch to pick from the Windows color picker, or type a code in the box beside it, like `#1A2B3C`. You can leave out the `#`; it's added when you leave the box. In the color picker, the custom colors are this look's own colors, so you can match one color to another with a click.
 
-A box that doesn't hold a color yet turns red, and the preview keeps showing its last good color. You can't save until every box holds a color: "*name* needs a colour code like #1A2B3C, or pick one with the swatch beside it."
+A box that doesn't hold a color yet turns red, and the preview keeps showing its last good color. You can't save until every box holds a color: "*name* needs a color code like #1A2B3C, or pick one with the swatch beside it."
 
 ### Readability warnings
 
@@ -137,11 +137,11 @@ Under **Readability**, the editor lists color pairs that may be hard to read, ea
 | Text is hard to read on the page background | 7:1 or more |
 | Text is hard to read on cards | 7:1 or more |
 | Hint text is hard to read on cards | 4:1 or more |
-| Button text is hard to read on the primary colour | 2.5:1 or more |
-| The primary colour is hard to see on cards (it's used for headings) | 2.5:1 or more |
-| The accent colour is hard to see on cards | 3:1 or more |
-| The "good" colour is hard to see on cards | 3:1 or more |
-| The "bad" colour is hard to see on cards | 3:1 or more |
+| Button text is hard to read on the primary color | 2.5:1 or more |
+| The primary color is hard to see on cards (it's used for headings) | 2.5:1 or more |
+| The accent color is hard to see on cards | 3:1 or more |
+| The "good" color is hard to see on cards | 3:1 or more |
+| The "bad" color is hard to see on cards | 3:1 or more |
 | The accent and "good" colors look alike | Two plainly different colors. The boards mark the quickest of anyone in the accent and a driver's own best in the good color. |
 
 These are only warnings: "You can still save it - these are only warnings." The same list shows on the **Themes** page when you select one of your looks ("Reads comfortably." when there are none). Built-in looks show no warnings.
@@ -171,7 +171,7 @@ The **Club logo** card sets one logo for the whole app. It shows:
 - **In the app's top-left corner**, in place of the **HEATCALLER** title (or the Synthwave scene). The header grows taller to give it room.
 - **On the Big Screen**, in the top-left corner.
 - **On the Wi-Fi pages**, in the header.
-- **On your club's online pages**, always: in a block of its own beside the club's name on every page, and as the icon when someone adds the pages to a phone's home screen.
+- **On your club's online pages**, always: in a block of its own beside the club's name on every page, and in link previews.
 
 ### Choose or remove the logo
 
@@ -197,7 +197,7 @@ About the logo file:
 | **Show the logo in the app's top-left corner** | Shows the logo in the sidebar header instead of the **HEATCALLER** title. Changes straight away. | On |
 | **Show the logo on the Big Screen and Wi-Fi pages** | Shows the logo on the Big Screen and in the Wi-Fi pages' header. | On |
 
-The online pages always show the logo when there is one. Without a logo, their home-screen icon is a chequered flag in the look's colors.
+The online pages always show the logo when there is one. Their home-screen icon is HeatCaller's sun, logo or not.
 
 ### The plate behind the logo
 
@@ -205,10 +205,24 @@ A logo with a transparent background can vanish on a background of the same colo
 
 ### On the online pages
 
-On the online pages the logo is drawn between 72 and 180 pixels across, depending on the width of the screen. On a narrow phone the club's name wraps underneath it. A new logo shows straight away, including the home-screen icon, instead of phones keeping the old one for up to an hour.
+On the online pages the logo is drawn between 72 and 180 pixels across, depending on the width of the screen. On a narrow phone the club's name wraps underneath it. A new logo shows straight away, instead of phones keeping the old one for up to an hour.
 
 !!! note
     The larger logo, the plate and the instant change need the relay updated for 0.48. With an older relay, the online pages still show your logo and colors, the way they did before. See [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
+
+## HeatCaller's mark
+
+Everything HeatCaller makes for people to see ends with a small sun and the HEATCALLER wordmark. Your club's name, logo and colors stay in charge: the mark is small, at the edge, in your look's colors (black on paper). On **Synthwave**, the look the **Classic** soundscape wears, the sun is a yellow-to-orange sunset like HeatCaller's logo instead of the look's pink. It's always on; there's no setting for it.
+
+- **Big Screen:** a small sun and HEATCALLER in the bottom right of the countdown band, like a TV channel's corner logo.
+- **Highlight videos:** the end card says "Timed and called by" over the sun and HEATCALLER.
+- **Results card:** "Timed and called by HeatCaller" beside the sun.
+- **Stream graphics:** a HEATCALLER credit along the foot of the OBS race tower.
+- **Phone pages on the club Wi-Fi:** the same mark as the online pages at the foot of each page, linking to heatcaller.com.
+- **Printed sheets:** heat sheets, run sheets, results sheets, report cards and QR badge sheets share one footer with the sun, HEATCALLER and heatcaller.com. The track plan and the join poster carry the mark too.
+- **Event report:** signed with the mark and a link to heatcaller.com.
+- **Emails to drivers:** night, PIN and sign-up invite emails end with "Timing by HeatCaller - heatcaller.com".
+- **Online pages:** see [Looks and sharing links](../online/index.md#looks-and-sharing-links).
 
 ## Appearance
 

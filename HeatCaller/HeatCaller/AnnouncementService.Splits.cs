@@ -177,7 +177,8 @@ public sealed partial class AnnouncementService
         if (Muted
             || !_voiceStore.Current.Events.TryGetValue(nameof(AnnouncementEventType.SectorsRecap), out var config)
             || config is null
-            || !config.IsEnabledFor(practice: false))
+            || !config.IsEnabledFor(practice: false)
+            || !RaceCallsOn(practice: false))
         {
             return null;
         }

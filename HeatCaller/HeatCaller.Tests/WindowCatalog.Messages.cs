@@ -31,6 +31,11 @@ internal static partial class WindowCatalog
             MessageBoxButtons.OK,
             MessageBoxIcon.Error)),
 
+        // The warning before Advanced mode (1 Nov 2026): as it opens between
+        // races, and with the race line under it while one is running.
+        ("Turn on Advanced mode?", () => new AdvancedModeForm(raceRunning: false)),
+        ("Turn on Advanced mode? (race running)", () => new AdvancedModeForm(raceRunning: true)),
+
         ("Message (no icon)", () => AppDialog.BuildForLayoutCheck(
             "Every driver ticked here is added to the round, in the order they are ticked.",
             string.Empty,

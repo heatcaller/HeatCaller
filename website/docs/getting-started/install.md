@@ -20,7 +20,7 @@ You need:
 2. **If Windows SmartScreen says "Windows protected your PC"**, click **More info**, check that the publisher is HeatCaller's, then click **Run anyway**. The installer is signed, but SmartScreen warns about any program it hasn't seen downloaded many times yet. This goes away as more clubs install it.
 3. Read the **license agreement and privacy notice**, tick the box to accept them, and click **Next**. HeatCaller can't be installed without accepting them. The privacy notice says what happens to your drivers' information, including the names sent to ElevenLabs when you use an online voice.
 4. Click **Install** and wait. It takes a minute or so. Then click **Finish**, and HeatCaller starts.
-5. The first time HeatCaller starts, it shows the same license agreement and privacy notice again, in full, with a tick for each part. Scroll to the end of the text, which unlocks the ticks, then tick both and click **Accept and Continue**. If you click **Decline**, HeatCaller closes and asks again next time. It asks again whenever the terms change, and you can read them any time from **Backup & Restore → Getting help → License and Privacy...**.
+5. The first time HeatCaller starts, it shows the same license agreement and privacy notice again, in full, with a tick for each part. Scroll to the end of the text, which unlocks the ticks, then tick both and click **Accept and Continue**. If you click **Decline**, HeatCaller closes and asks again next time. It asks again whenever the terms change, and you can read them any time from **Backup & Restore → Getting help → License and Privacy**.
 6. The **Welcome to HeatCaller** wizard opens (see below).
 
 If your club was sent **Setup.exe** instead, it installs with no questions, and the license agreement and privacy notice are asked for when HeatCaller first starts, as in step 5.
@@ -31,7 +31,7 @@ What the installer sets up:
 |---|---|
 | The program | `%LocalAppData%\HeatCallerApp`. Paste that into the File Explorer address bar to open it. You never need to go in there. |
 | A **HeatCaller** shortcut | The Start menu and the desktop. |
-| A **HeatCaller Rehearsal** shortcut | The Start menu. It opens HeatCaller on a copy of your club's data, so you can practise a race night without touching the real results. The copy lives in `%LocalAppData%\HeatCaller Rehearsal`. |
+| A **HeatCaller Rehearsal** shortcut | The Start menu. It opens HeatCaller on a copy of your club's data, so you can practice a race night without touching the real results. The copy lives in `%LocalAppData%\HeatCaller Rehearsal`. |
 | The natural voice (Kokoro) | Inside the program folder. It's ready the first time you choose it on **Voice Settings**, with no download. |
 
 Windows shows the program as **HeatCaller** in Task Manager and in **Settings → Apps**.
@@ -82,7 +82,7 @@ The first time HeatCaller starts, the **Welcome to HeatCaller** wizard walks you
 | Step | What you enter | Where it goes |
 |---|---|---|
 | **Welcome** | Nothing. Press **Get started**. Moving from another laptop? Press **Restore a backup instead**, and HeatCaller opens **Backup & Restore**. | |
-| **Look and sound** | The app's colours, with a preview, and whether times show on a 24-hour clock. Then **Sound:**: **Keep what's set now**, one of the soundscapes, or **Lap times only**. See [Choosing the sound in the setup wizards](../announcer/sounds-and-music.md#choosing-the-sound-in-the-setup-wizards). | **Themes**. A new look is applied when HeatCaller restarts at the end of setup. The sound is applied as you leave the step, the same as **Apply** on **Sounds → Soundscapes**. |
+| **Look and sound** | The app's colors, with a preview, and whether times show on a 24-hour clock. Then **Sound:**: **Keep what's set now**, one of the soundscapes, or **Lap times only**. See [Choosing the sound in the setup wizards](../announcer/sounds-and-music.md#choosing-the-sound-in-the-setup-wizards). | **Themes**. A new look is applied when HeatCaller restarts at the end of setup. The sound is applied as you leave the step, the same as **Apply** on **Sounds → Soundscapes**. |
 | **Timing** | The direct EasyLap decoder or an I-Lap decoder. For I-Lap, also pick its COM port (use **Rescan** if it isn't listed) and baud rate. | The **Connection** page, straight away. |
 | **Track** | A track layout name, such as "Garage Oval". Then **Where do you race?**: **At a club**, or **At home, with family or friends**. | The **Track Layouts** page. It's also selected as the current layout. Where you race is the setting on the **Achievements** page. See [At a club or at home](../race-control/results-and-championships.md#at-a-club-or-at-home). |
 | **Classes** | One class per line, or press the quick-add buttons (Stock, Modified, Open, Novice, Spec). | The **Classes** page. |

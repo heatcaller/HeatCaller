@@ -11,7 +11,7 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 | Key | Does the same as |
 |---|---|
 | <kbd>0</kbd> | **On Air** (it has no button on the flag row). Hold it for a second while On Air runs to skip straight to staging; let go early and nothing happens. Either <kbd>0</kbd>, the top row's or the keypad's. |
-| <kbd>F1</kbd> | Starts the race the normal way: through **On Air** when **Start races On Air** is ticked (press it again to skip to staging), otherwise **Stage**. The **Stage** button itself always stages straight away. |
+| <kbd>F1</kbd> | Starts the race the normal way: through **On Air** when **Start races On Air** is ticked, otherwise **Stage**. Pressed while On Air runs it does nothing except remind you, in the log, to hold <kbd>0</kbd> to skip. The **Stage** button itself always stages straight away. |
 | <kbd>F2</kbd> | **Countdown** |
 | <kbd>F3</kbd> | **Green**. It also resumes the race after a yellow or red. |
 | <kbd>F4</kbd> | **Yellow** |
@@ -30,7 +30,7 @@ Each key does what clicking its button does (except <kbd>F1</kbd>, described abo
 
 **Only the bare key counts.** If you hold <kbd>Alt</kbd>, <kbd>Ctrl</kbd> or <kbd>Shift</kbd>, the F-keys do nothing. For example, <kbd>Alt</kbd>+<kbd>F4</kbd> closes the window as usual and never throws a yellow flag on its way out.
 
-The F-keys work even while you're typing in a box on the page. The letter keys don't: while a text box, a number box, a drop-down list or a grid cell you're editing has the focus, a letter is typing, not a shortcut. None of them work on any other page, or while a dialog is open.
+The F-keys work even while you're typing in a box on the page. The letter keys and <kbd>0</kbd> don't: while a text box, a number box, a drop-down list or a grid cell you're editing has the focus, a letter is typing, not a shortcut. None of them work on any other page, or while a dialog is open.
 
 !!! tip "Flag buttons and the Space bar"
     After you click a flag button, the focus moves off it. So a stray <kbd>Space</kbd> or <kbd>Enter</kbd> can't press the same flag again, and restart a race that's already running.

@@ -42,8 +42,8 @@ Below the results is a notes box, for the weather, the track surface, incidents 
 | **Event Report** | Builds a one-page report for a whole race day. |
 | **Export Session** | Saves the selected session as a CSV file. |
 | **Export Results** | Exports results or laps for many sessions, as CSV or JSON. |
-| **Print Results...** | Prints the selected races' results, with a preview first. See [Printing results](#printing-results). |
-| **Paste a Result...** | Brings in a race result copied from another timing program's results page, such as LiveRC. See [Pasting a result from LiveRC](#pasting-a-result-from-liverc). You can undo this. |
+| **Print Results** | Prints the selected races' results, with a preview first. See [Printing results](#printing-results). |
+| **Paste a Result** | Brings in a race result copied from another timing program's results page, such as LiveRC. See [Pasting a result from LiveRC](#pasting-a-result-from-liverc). You can undo this. |
 | **Edit Result** | Corrects a saved race: laps, time and lap penalties, or an outcome such as DNF or DQ, with a reason. Needs **Allow corrections to saved results** ticked on **Local Screens**. You can undo this. See [Correcting a saved result](corrections-and-recovery.md#correcting-a-saved-result). |
 | **Delete Session** | Deletes the selected sessions after you confirm. You can undo this. |
 
@@ -63,12 +63,12 @@ Races saved before lap-by-lap times were recorded can't be replayed.
 
 ### Results card
 
-**Share Results Card** makes an image of the result: title, date, track and the top eight finishers, with **POS**, **DRIVER**, **LAPS** and **FASTEST LAP**. It's ready to paste into a group chat or a social post.
+**Share Results Card** makes an image of the result: title, date, track and the top eight finishers, with **POS**, **DRIVER**, **LAPS** and **FASTEST LAP**. At the foot it says "Timed and called by HeatCaller" beside HeatCaller's sun. It's ready to paste into a group chat or a social post.
 
 1. Select a session and press **Share Results Card**.
 2. Choose a **Style:**:
     - **Print friendly - white background, dark ink**
-    - **Monochrome - white background, grey lines (mono printers)**
+    - **Monochrome - white background, gray lines (mono printers)**
     - **Match the app's look - as shown on screen**
 3. Check the **Preview:** and press **Save**.
 4. Choose where to save the PNG file.
@@ -98,14 +98,14 @@ All CSV exports are:
 
 ### Printing results
 
-Select one race, or several with Ctrl or Shift, and press **Print Results...**. Pick the printer, check the preview, and print from the preview's toolbar. The races print oldest first on letter-size pages, black on white, with **Pos**, **Driver**, **Car**, **Laps**, **Best lap**, **Total** and **Status**. A race that would fit on a fresh page starts on one rather than being split; a race too long for any page carries on with "(continued)". With nothing selected, it says so.
+Select one race, or several with Ctrl or Shift, and press **Print Results**. Pick the printer, check the preview, and print from the preview's toolbar. The races print oldest first on letter-size pages, black on white, with **Pos**, **Driver**, **Car**, **Laps**, **Best lap**, **Total** and **Status**. A race that would fit on a fresh page starts on one rather than being split; a race too long for any page carries on with "(continued)". With nothing selected, it says so.
 
 ### Pasting a result from LiveRC
 
 Races run before your club used HeatCaller can be brought into Race History from their results page on LiveRC, or from another timing program that shows results as a table.
 
 1. On the results page, select the whole result, from the **Pos** heading down to the last driver, and copy it (<kbd>Ctrl</kbd>+<kbd>C</kbd>). Taking in the race's name above the table ("Race 33: Stock Buggy A-Main") lets HeatCaller fill in the class and round for you.
-2. On **Race History**, press **Paste a Result...**.
+2. On **Race History**, press **Paste a Result**.
 3. Check **Class**, **Round** and **Run on** (the day and time the race was run), and look over the drivers as they'll come in: **Pos**, **Driver**, **Laps**, **Time** and **Fast lap**. **Profile** says whether each driver was matched to one of your driver profiles by name.
 4. Press **Import**.
 
@@ -306,7 +306,7 @@ Drivers earn badges for what they do on track. Badges are worked out once each r
 
 On the **Achievements** page:
 
-1. Choose a **Driver:** to see their badges. Earned badges are shown in color. Badges not yet earned are greyed out, with the rule that earns them.
+1. Choose a **Driver:** to see their badges. Earned badges are shown in color. Badges not yet earned are grayed out, with the rule that earns them.
 2. Tick **Earned only** to hide the rest.
 3. **Where you race:** is **Club** or **At home**. See [At a club or at home](#at-a-club-or-at-home).
 4. Double-click a badge to see who else has it. In that window, double-click a driver to see their badges.
@@ -337,7 +337,7 @@ A badge a driver has earned always shows, whichever you choose. To see the ones 
 | Progress | **Ghost Buster** | Silver | Beat a ghost running your own best lap at full pace or quicker. In a race, finish ahead of it; in practice, set a quicker best lap. |
 | In a race | **Shadow Boxer** | Silver | Finish a race ahead of a live-pace ghost (one whose pace moves as the race goes). |
 | Career | **Practice Makes Perfect** | Silver | A hundred laps in one practice session. At home only. |
-| Career | **Regular at the Track** | Gold | Practised on ten different days. At home only. |
+| Career | **Regular at the Track** | Gold | Practiced on ten different days. At home only. |
 | Progress | **Dialled In** | Silver | A personal best within three sessions of logging a setup on that car in the **Garage**. |
 | Progress | **Fresh Legs** | Bronze | A personal best on a pack other than the one you run most (run at least three times). |
 | Progress | **Garage Tour** | Gold | Personal bests in three different cars. |
@@ -388,7 +388,7 @@ Some notes on how badges are earned:
 - **Record Holder follows Track Layouts.** It goes to the driver whose lap is the record shown on **Track Layouts**, so a lap Race Control refused as a phantom never earns it, and after **Reset Record** the next record does. The first race on a new layout doesn't earn it.
 - **Some badges need newer races.** **Spotless**, **Wire to Wire**, **Through the Field**, **Converted**, **Late Show**, **Quick and Tidy**, **Grand Slam** and **Clean Slate** need data that only races saved by newer versions carry (rejected passes, laps led and grid positions).
 - **Some badges need a grid.** Badges about where a driver started (**Through the Field**, **Converted**, **Through the Pack**, **Rocket Start**, **Comeback Kid**, **Grand Slam**) need a known grid, which comes from the round's roster or the previous race's result.
-- **Rivals** for **Bragging Rights** are set on **Voice → Rivalries**. See [Voice announcements](../announcer/voice.md).
+- **Rivals** for **Bragging Rights** are set on **Voice → Race Calls**. See [Voice announcements](../announcer/voice.md).
 - **The rarest badges are announced first.** When a race earns several, Race Control reads out the rarest.
 - **Earned before you updated?** Badges aren't worked out again for old races. Most of the career badges (such as **Globetrotter**, **Car Collector** and **Old Friends**) count your earlier races, so they arrive at your next race that qualifies.
 - **Badges are tied to the transponder.** They follow the transponder, not the name on the profile.

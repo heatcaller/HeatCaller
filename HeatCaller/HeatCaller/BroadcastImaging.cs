@@ -360,6 +360,19 @@ internal static class BroadcastImaging
         Changed?.Invoke();
     }
 
+    /// <summary>
+    /// A copy of the settings as they stand, for reading only - the Simple
+    /// mode update check compares them with the defaults (SettingsModes).
+    /// A copy, so nothing outside the lock holds the live ones.
+    /// </summary>
+    internal static ImagingSettings SettingsCopy()
+    {
+        lock (Gate)
+        {
+            return JsonSerializer.Deserialize<ImagingSettings>(JsonSerializer.Serialize(Loaded(), Json), Json) ?? new ImagingSettings();
+        }
+    }
+
     /// <summary>The master switch.</summary>
     internal static bool Enabled
     {

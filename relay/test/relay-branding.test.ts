@@ -61,6 +61,36 @@ describe("relay branding: HeatCaller on every club page", () => {
     }
   });
 
+  // 1 Nov 2026, Asher: "when classic theme is selected the sun should be
+  // yellow and orange not pink". Classic wears Synthwave, the default look.
+  it("draws the sun as a yellow-to-orange sunset on Synthwave, and in the primary on any other look", async () => {
+    const sunset = (page: string) =>
+      /<style>\.hcsun\{fill:url\(#hcsunset\) #FFB347\}<\/style>/.test(page)
+      && /<body[^>]*><svg class="hcdefs" aria-hidden="true" focusable="false"><linearGradient id="hcsunset"/.test(page);
+
+    const publish = async (seq: number, theme: unknown) => {
+      const response = await call(harness, "POST", `/api/v1/c/acme-rc/publish/site?seq=${seq}`, { token: ACME_TOKEN, json: { theme } });
+      assert.equal(response.status, 200);
+    };
+
+    try {
+      await publish(100, {});
+      for (const path of PAGES) assert.equal(sunset((await call(harness, "GET", path)).text), true, `default ${path}`);
+
+      await publish(101, { colors: { primary: "#ff2e9a", bg: "#0F0722" } });
+      assert.equal(sunset((await call(harness, "GET", "/c/acme-rc")).text), true, "Synthwave sent");
+
+      await publish(102, { colors: { primary: "#FFD400", bg: "#0B0B0C" } });
+      for (const path of PAGES) {
+        const page = (await call(harness, "GET", path)).text;
+        assert.equal(sunset(page), false, `Pit Lane ${path}`);
+        assert.equal(page.includes("hcsunset"), false, `Pit Lane ${path}`);
+      }
+    } finally {
+      await publish(103, {});
+    }
+  });
+
   it("ships scripts that still parse", async () => {
     for (const path of PAGES) {
       const page = (await call(harness, "GET", path)).text;

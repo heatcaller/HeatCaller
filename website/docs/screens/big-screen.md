@@ -24,7 +24,7 @@ From top to bottom:
 - **Announcement banner.** Each line the announcer picks is shown here for about six seconds. The line appears even when the announcer can't speak or is muted, as long as the announcement is switched on. The rest of the time the banner describes the race: "RACE IN PROGRESS", "YELLOW FLAG — CAUTION", "RED FLAG — RACE STOPPED", "STAGING — GET READY", "COUNTDOWN — STAND BY", "RACE COMPLETE", or "Waiting for the race to start..." when nothing is running.
 - **Banner across the screen**, under the announcement banner, for eight seconds when race control warns a driver or somebody sets the quickest sector of the session. Nothing is there the rest of the time. See [The banner across the screen](#the-banner-across-the-screen).
 - **Elapsed race time** on the left, counting from the green flag. Under a red flag it shows "(PAUSED)" after the time.
-- **Countdown** on the right, when the race has a limit: "5 LAPS TO GO" (counted on the leader's laps) for a lap race, or "03:12 REMAINING" for a timed race. It's blank when there's no limit.
+- **Countdown** in the middle of the band, when the race has a limit: "5 LAPS TO GO" (counted on the leader's laps) for a lap race, or "03:12 REMAINING" for a timed race. It's blank when there's no limit. HeatCaller's mark, a small sun and HEATCALLER in the look's colors, sits in the bottom right of the same band (see [HeatCaller's mark](looks-and-logo.md#heatcallers-mark)).
 - **Leaderboard**, with the columns you've chosen for the Big Screen (see below). Good news is in color: the quickest of anyone, such as the session's fastest lap or sector, in the look's accent color, and a driver's own good news, such as their own best sector, in its green, the same as on Race Control. A driver's warnings are never picked out in color on the leaderboard rows, where Race Control shows them in red, so the board stays readable from across the room. A warning gets a banner of its own instead. See [The banner across the screen](#the-banner-across-the-screen).
 - **ON DECK:** bar at the bottom: the next unfinished line on the day's timetable, with its time, class and description. See [The Timetable](../race-day/program-and-mains.md#the-timetable). During a race that counts towards a championship, the bar shows the championship instead. See [If it ended now](#if-it-ended-now).
 - **ON AIR band** across the very foot of the window, under the ON DECK bar, while the announcer's show is on air. See [When the show is on air](#when-the-show-is-on-air).
@@ -180,11 +180,11 @@ The caption is the crowd's name for the segment, in capitals. Which segments get
 | **Cold open** | COLD OPEN |
 | **Race intros** | ROUND INTRO |
 | **Race recaps** | RACE RECAP |
-| **Badges earned** | BADGES EARNED |
+| **Achievements earned** | ACHIEVEMENTS EARNED |
 | **Sign-off numbers** | SIGN-OFF |
 | **Halfway standings** | STANDINGS SO FAR |
 | **Championship check** | CHAMPIONSHIP CHECK |
-| **Milestones** | CLUB HONOURS |
+| **Milestones** | MILESTONES |
 | **Qualifying report** | QUALIFYING REPORT |
 | **Form guide** | FORM GUIDE |
 | **Grid history** | THE GRID |
@@ -306,7 +306,7 @@ Race Control and Practice update as soon as you press **OK**. The web page updat
 | **Laps** | Laps completed. |
 | **Last Lap** | Most recent counted lap. |
 | **Best Lap** | Fastest lap this session. Highlighted when it's the quickest of anyone. |
-| **S1**, **S2**, **S3**, **S4** | With a split loop: each sector of the last lap. Highlighted when it's the quickest of anyone this session. |
+| **S1**, **S2**, **S3**, **S4** | With a split loop: each sector of the last lap. In the look's accent color when it's the quickest of anyone this session, and green when it's the driver's own best. |
 | **Ideal Lap** | The driver's best sectors added up. |
 | **S1 mph** to **S4 mph**, **Top Speed** | Speeds through the sectors, in mph, when the split loops are placed on the layout's plan. |
 | **At Split** | Live at the split loop: how far up or down the car is on its own best lap to that point. |
@@ -442,7 +442,7 @@ A slide is a picture. A video is a picture that moves. The **read** — the part
 Now the sponsor goes up for the length of the read:
 
 - **A picture, where they have one.** Set it per sponsor with **Picture for their read:**. Choose one the club already uploaded, or upload one — an uploaded picture joins the slides at the top of the page, so you can see it and remove it there rather than it sitting in a folder you can't reach.
-- **Their name, where they don't.** Large, centred, spelt as in **Name, as it's said:**. That's the answer for every sponsor until somebody uploads something, and it's most of what a slide was doing for them anyway. A picture you've since removed from the slides falls back to the name too.
+- **Their name, where they don't.** Large, centered, spelled as in **Name, as it's said:**. That's the answer for every sponsor until somebody uploads something, and it's most of what a slide was doing for them anyway. A picture you've since removed from the slides falls back to the name too.
 
 It holds the screen for about as long as the words take and then the standings come back. The slide rotation waits while a read is on air rather than moving on mid-sentence, and a video — if one is somehow still up — keeps the screen, because cutting an advert off part way is worse than a read going out over the standings.
 

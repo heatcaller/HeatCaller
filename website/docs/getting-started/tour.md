@@ -56,8 +56,8 @@ How you leave it is remembered, so a club that prefers the rail gets it at every
 | **Ghost Cars** | Virtual opponents to race when you're on track alone. |
 | **Demo Mode** | A fake race through the real race logic, announcer and sounds. It needs no decoder. You can choose to save it, but a saved demo is marked Demo and never counts toward points, records or stats. |
 | **Themes** | How the app looks: the app's colors, the crowd screens' colors, the club logo and the **Appearance** options. See [Looks and the club logo](../screens/looks-and-logo.md). |
-| **Voice** | Everything the app says, in tabs: **Voice Settings**, **Announcements**, **Commentary** and **Rivalries**. The announcer's own screen is a window, opened from **Race Control**. See [Voice announcements](../announcer/voice.md). |
-| **Sounds** | Everything else you hear, in tabs: **Mixer**, **Soundscapes** (voice and sound presets you can switch between), **Effects**, **Ambience**, **Music** and **Lap Beeps**. See [Sounds and music](../announcer/sounds-and-music.md). |
+| **Voice** | Everything the app says, in tabs: **Voice**, **Cast**, **Race Calls** (with **Rivalries** at its end) and **AI Commentary**. The announcer's own screen is a window, opened from **Race Control**. See [Voice announcements](../announcer/voice.md). |
+| **Sounds** | Everything else you hear, in tabs: **Mixer**, **Soundscapes** (voice and sound presets you can switch between), **Imaging**, **Effects**, **Ambience**, **Music** and **Lap Beeps**. See [Sounds and music](../announcer/sounds-and-music.md). |
 | **Connection** | Connecting to your decoder, and the Developer Console. See [Decoders](../timing/decoders.md). |
 | **Backup & Restore** | Manual and automatic backups. See [Backups](../admin/backups.md). |
 

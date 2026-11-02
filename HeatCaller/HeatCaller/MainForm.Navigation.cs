@@ -489,10 +489,65 @@ public partial class MainForm
         // A page not yet tested at a real event is left out too while the
         // club hides those (22 Oct 2026) - RebuildNav still lets a search
         // turn one up, under its own heading. See NavTiers.UntestedPages.
+        // And a page Simple mode hides (1 Nov 2026 - SimpleMode.HiddenPages),
+        // which a search turns up under "In Advanced mode".
         return ordered
             .Where(n => n == "Connection" || !_settings.HiddenTabs.Contains(n))
             .Where(n => !(NavTiers.HidingUntested && NavTiers.IsUntested(n)))
+            .Where(n => SimpleMode.ShowAll || !SimpleMode.HiddenPages.Contains(n))
             .ToList();
+    }
+
+    /// <summary>
+    /// What a search turns up that Simple mode hides, for the foot of the
+    /// list under "In Advanced mode": the hidden pages it matches, then the
+    /// one Advanced mode settings row when it matches a hidden tab, card or
+    /// setting (SimpleMode.SearchWords). Empty in Advanced.
+    /// </summary>
+    private List<string> AdvancedMatching(string query)
+    {
+        var found = new List<string>();
+
+        if (SimpleMode.ShowAll || query.Length == 0)
+        {
+            return found;
+        }
+
+        found.AddRange(SimpleMode.HiddenPages.Where(n => !_settings.HiddenTabs.Contains(n) && MatchesNavSearch(n, query)));
+
+        if (SimpleMode.SearchFindsHidden(query))
+        {
+            found.Add(SimpleMode.SearchRow);
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// A row under "In Advanced mode" picked: the Advanced warning, and the
+    /// page once it is on. True when the pick was one of those rows - the
+    /// caller shows nothing else then.
+    /// </summary>
+    private bool PickedAdvancedRow(string name)
+    {
+        if (SimpleMode.ShowAll || (name != SimpleMode.SearchRow && !SimpleMode.HiddenPages.Contains(name)))
+        {
+            return false;
+        }
+
+        // After this pick has finished: the warning is modal, and turning
+        // Advanced on rebuilds this list.
+        BeginInvoke(new Action(() =>
+        {
+            TurnOnAdvancedMode();
+
+            if (SimpleMode.ShowAll && name != SimpleMode.SearchRow)
+            {
+                GoToPage(name);
+            }
+        }));
+
+        return true;
     }
 
     /// <summary>
@@ -526,6 +581,7 @@ public partial class MainForm
         {
             var matched = names.Where(n => MatchesNavSearch(n, query))
                 .Concat(UntestedPagesMatching(query))
+                .Concat(AdvancedMatching(query))
                 .ToList();
             // Never filter down to nothing - an empty sidebar looks broken
             // and leaves no way back, so a query with no hits just shows
@@ -1120,6 +1176,11 @@ public partial class MainForm
 
         if (lstNav.SelectedItem is string name)
         {
+            if (PickedAdvancedRow(name))
+            {
+                return;
+            }
+
             ShowPage(name);
             SelectSearchedTab(name);
         }
@@ -1128,6 +1189,9 @@ public partial class MainForm
     /// <summary>Persists a new nav order after a drag-and-drop reorder in the sidebar.</summary>
     private void LstNav_ItemsReordered(List<string> newOrder)
     {
+        // The Advanced mode settings row a search adds is not a page.
+        newOrder = newOrder.Where(n => n != SimpleMode.SearchRow).ToList();
+
         // Persist the FULL order, hidden items included, so hiding/showing
         // later doesn't lose this arrangement.
         //

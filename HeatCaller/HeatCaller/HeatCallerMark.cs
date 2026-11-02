@@ -58,14 +58,36 @@ internal static class HeatCallerMark
     private static readonly Color SunMiddle = Color.FromArgb(0xFF, 0xB3, 0x47);
     private static readonly Color SunBottom = Color.FromArgb(0xFF, 0x5F, 0xA2);
 
+    // The one-colour sun on Synthwave (1 Nov 2026, Asher: "when classic theme
+    // is selected the sun should be yellow and orange not pink"): Classic
+    // wears Synthwave, whose primary is pink, so on that look the sun is a
+    // sunset from the logo's yellow to its orange instead, and only the
+    // horizon and floor keep the primary. The relay's HC_SUNSET, colour for
+    // colour.
+    private static readonly Color SunsetTop = SunTop;
+    private static readonly Color SunsetMiddle = SunMiddle;
+    private static readonly Color SunsetBottom = Color.FromArgb(0xFF, 0x8A, 0x2A);
+    private static readonly Color SynthwavePrimary = Color.FromArgb(0xFF, 0x2E, 0x9A);
+
+    /// <summary>
+    /// Whether the sun drawn in <paramref name="primary"/> should be the
+    /// sunset instead: the look is Synthwave's. Told by its primary, as the
+    /// relay has to (it is sent a look's colours, never its name).
+    /// </summary>
+    public static bool IsSunset(Color primary) => primary.ToArgb() == SynthwavePrimary.ToArgb();
+
     /// <summary>
     /// The sun over its horizon in one colour, fitted into a square in the
     /// middle of <paramref name="box"/>. The relay's HC_SUN: the top half of
     /// the sun, two bands of its lower half, and the horizon with three
-    /// lines of the floor running away from it.
+    /// lines of the floor running away from it. In Synthwave's primary the
+    /// sun itself is the sunset instead (<see cref="IsSunset"/>), and only
+    /// the horizon and floor take <paramref name="colour"/>.
     /// </summary>
     public static void DrawSun(Graphics g, RectangleF box, Color colour)
     {
+        var sunset = IsSunset(colour);
+
         var size = Math.Min(box.Width, box.Height);
 
         if (size <= 0)
@@ -84,7 +106,19 @@ internal static class HeatCallerMark
 
         try
         {
-            using var brush = new SolidBrush(colour);
+            // The relay's gradient runs from y = 3 to y = 16.1 on the 24-unit
+            // square, the top of the sun to the foot of its lower band.
+            using Brush brush = sunset
+                ? new LinearGradientBrush(P(0, 2.99f), P(0, 16.1f), SunsetTop, SunsetBottom)
+                {
+                    InterpolationColors = new ColorBlend
+                    {
+                        Colors = new[] { SunsetTop, SunsetMiddle, SunsetBottom },
+                        Positions = new[] { 0f, 0.55f, 1f },
+                    },
+                    WrapMode = WrapMode.TileFlipX,
+                }
+                : new SolidBrush(colour);
             using var pen = new Pen(colour, 1.1f * u);
 
             // "M4 11a8 8 0 0 1 16 0z" - the sun's top half, centred on (12, 11).
@@ -307,6 +341,21 @@ internal static class HeatCallerMark
         + "<path d=\"M4.5 12.4h15v1.3h-15zM5.4 15h13.2v1.1H5.4z\"/>"
         + "<path d=\"M2 18.5h20M12 18.5l-7 4M12 18.5l7 4M12 18.5v4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\"/></svg>";
 
+    /// <summary>
+    /// The Synthwave sunset for <see cref="SunSvg"/>, word for word the
+    /// relay's HC_SUNSET: the gradient once a page, in an SVG of no size
+    /// rather than a hidden one (a gradient inside display:none is not
+    /// drawn). A page's --hcsun is <see cref="SunsetFill"/> on Synthwave.
+    /// </summary>
+    public const string SunsetSvg =
+        "<svg class=\"hcdefs\" aria-hidden=\"true\" focusable=\"false\">"
+        + "<linearGradient id=\"hcsunset\" gradientUnits=\"userSpaceOnUse\" x1=\"0\" y1=\"3\" x2=\"0\" y2=\"16.1\">"
+        + "<stop offset=\"0\" stop-color=\"#FFE9A0\"/><stop offset=\".55\" stop-color=\"#FFB347\"/><stop offset=\"1\" stop-color=\"#FF8A2A\"/>"
+        + "</linearGradient></svg>";
+
+    /// <summary>The sun's fill on Synthwave: the sunset, or plain orange where the gradient can't be found.</summary>
+    public const string SunsetFill = "url(#hcsunset) #FFB347";
+
     /// <summary>The wordmark as the relay writes it: Heat, then Caller in the look's primary.</summary>
     public const string WordHtml = "<span class=\"hcword\">Heat<span class=\"hcc\">Caller</span></span>";
 
@@ -317,11 +366,12 @@ internal static class HeatCallerMark
     /// </summary>
     public const string PageFooterHtml =
         "<footer class=\"hcfoot\"><a class=\"hcmark\" href=\"https://heatcaller.com\" target=\"_blank\" rel=\"noopener\">"
-        + SunSvg + WordHtml + "</a></footer>";
+        + SunsetSvg + SunSvg + WordHtml + "</a></footer>";
 
     /// <summary>The style <see cref="PageFooterHtml"/> needs, from the page's look variables.</summary>
     public const string PageFooterStyle = """
-        .hcsun { width:18px; height:18px; flex:none; fill:currentColor; color:var(--primary); }
+        .hcsun { width:18px; height:18px; flex:none; fill:var(--hcsun, currentColor); color:var(--primary); }
+        .hcdefs { position:absolute; width:0; height:0; overflow:hidden; }
         .hcword { font-family:var(--cond, 'Bahnschrift','Roboto Condensed',sans-serif); font-stretch:condensed;
                   font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
         .hcword .hcc { color:var(--primary); }

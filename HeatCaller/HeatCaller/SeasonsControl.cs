@@ -200,7 +200,8 @@ public sealed class SeasonsControl : UserControl
 
         scheme.Add(schemeHint);
         scheme.AddFill(_dgvPointsScheme, SchemeHeight);
-        scheme.Add(new ButtonBar().With(btnResetScheme, btnRules), gapBelow: 0);
+        // Custom scoring rules are Advanced (1 Nov 2026, Simple mode).
+        scheme.Add(new ButtonBar().With(btnResetScheme, SimpleMode.Hide(btnRules)), gapBelow: 0);
 
         // --- The races that count ---
         _clbSessions.CheckOnClick = true;

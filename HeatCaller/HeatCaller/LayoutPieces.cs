@@ -1118,6 +1118,49 @@ internal sealed class FieldGrid : TableLayoutPanel
     }
 
     /// <summary>
+    /// Everything that makes up the row <paramref name="field"/> is on, for
+    /// hiding the row whole (SimpleMode.HideRow): its caption, the field -
+    /// or the inline row it is in, a control of this grid's own - and the
+    /// hints under it. Empty when the field is not in this grid.
+    /// </summary>
+    internal IReadOnlyList<Control> RowParts(Control field)
+    {
+        // A field in an Inline row is the row's; the row is this grid's.
+        var own = field;
+
+        while (own.Parent is not null && !ReferenceEquals(own.Parent, this))
+        {
+            own = own.Parent;
+        }
+
+        if (own.Parent is null)
+        {
+            return Array.Empty<Control>();
+        }
+
+        // By the row each control was put in, not GetControlFromPosition,
+        // which leaves out a control that is hidden.
+        Control? At(int column, int row) =>
+            Controls.Cast<Control>().FirstOrDefault(c => GetRow(c) == row && GetColumn(c) == column);
+
+        var row = GetRow(own);
+        var parts = Controls.Cast<Control>().Where(c => GetRow(c) == row).ToList();
+
+        for (var next = row + 1; next < RowCount; next++)
+        {
+            if (At(1, next) is Label hint && _hints.Contains(hint))
+            {
+                parts.Add(hint);
+                continue;
+            }
+
+            break;
+        }
+
+        return parts;
+    }
+
+    /// <summary>
     /// A line of help under the field above, in the field's column, in the
     /// small muted type the app's hints use, wrapping to the room there is.
     /// </summary>

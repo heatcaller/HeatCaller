@@ -513,14 +513,18 @@ public partial class MainForm
     {
         var on = _settings.SplitLoopEnabled;
 
-        if (lblSplitStatusCaption is not null && lblSplitStatusCaption.Visible != on)
+        // The status row only in Advanced mode, where the split loop's own
+        // row is (1 Nov 2026 - see SimpleMode). The loop runs either way.
+        var rowShown = on && SimpleMode.ShowAll;
+
+        if (lblSplitStatusCaption is not null && lblSplitStatusCaption.Visible != rowShown)
         {
-            lblSplitStatusCaption.Visible = on;
+            lblSplitStatusCaption.Visible = rowShown;
         }
 
-        if (splitStatusLine is not null && splitStatusLine.Visible != on)
+        if (splitStatusLine is not null && splitStatusLine.Visible != rowShown)
         {
-            splitStatusLine.Visible = on;
+            splitStatusLine.Visible = rowShown;
         }
 
         btnConnectSplit.Visible = on;

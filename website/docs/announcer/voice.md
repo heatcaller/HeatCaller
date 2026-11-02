@@ -10,11 +10,10 @@ Everything to do with the announcer speaking is on the **Voice** page (called **
 
 | Tab | What's on it |
 |---|---|
-| **Voice Settings** | Which voice speaks, your own ElevenLabs connection, the voice's tuning, and the lines saved on the laptop. Covered from [Choose the voice](#choose-the-voice) down to [Saved voice lines](#saved-voice-lines). |
+| **Voice** | Which voice speaks, your own ElevenLabs connection, the voice's tuning, and the lines saved on the laptop. Covered from [Choose the voice](#choose-the-voice) down to [Saved voice lines](#saved-voice-lines). (Called **Voice Settings** before 17 October.) |
 | **Cast** | **Load Voices** at the top, which fills every voice list on the tab, then the announcer's voice with **Test Voice**, and everyone else on the show below it. See [Choose the voice](#choose-the-voice) for the announcer, and [Commentary](commentary.md#technical-lead-and-team-principal) for the rest. |
-| **Announcements** | One row for each moment the announcer can call: whether it's on for races and for practice, and the lines it picks from. See [Announcements](#announcements). |
-| **Commentary** | Race intros and recaps written by a local AI model. It has [its own page](commentary.md). |
-| **Rivalries** | Lines for two particular drivers swapping places. See [Rivalries](#rivalries). |
+| **Race Calls** | One row for each moment the announcer can call: whether it's on for races and for practice, and the lines it picks from (called **Announcements** before 17 October). See [Announcements](#announcements). Its last section, **Rivalries**, holds lines for two particular drivers swapping places; see [Rivalries](#rivalries). |
+| **AI Commentary** | Race intros, recaps and talking points, written through your club's relay or by the small model built into HeatCaller. It has [its own page](commentary.md). |
 
 This page also covers the [Announcer screen](#announcer-screen), a window for whoever is on the microphone, opened from **Race Control**. How the whole race night sounds, the announcer's words included, can be set in one go with a [soundscape](sounds-and-music.md#soundscapes).
 
@@ -30,7 +29,7 @@ This page also covers the [Announcer screen](#announcer-screen), a window for wh
 
 ## Choose the voice
 
-The **Speak with** card at the top of **Voice → Voice Settings** decides what speaks every announcement. Like everything on this tab, the choice saves as you make it. Its first line says where the rest is: "Choose what speaks here. The announcer's voice, and Test Voice, are at the top of the Cast tab."
+The **Speak with** card at the top of **Voice → Voice** decides what speaks every announcement. Like everything on this tab, the choice saves as you make it. Its first line says where the rest is: "Choose what speaks here. The announcer's voice, and Test Voice, are at the top of the Cast tab."
 
 The announcer's voice itself is picked on **Voice → Cast**, on the **Announcer** card under the **Voices** card at the top of the tab, under its first line ("The voice carrying the whole program, from the engine chosen on the Voice tab."). The card shows the picker and the test for each voice that can speak, given the choice made here:
 
@@ -58,7 +57,7 @@ Kokoro is the bottom of the ladder, and nothing stands in for it. On a PC that h
 
 ### Pick a HeatCaller voice
 
-1. On **Voice → Voice Settings**, choose **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** under **Speak with**.
+1. On **Voice → Voice**, choose **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** under **Speak with**.
 2. Open **Voice → Cast** and pick one of the announcer voices in **HeatCaller voice:**, at the top of the **Announcer** card. Each is listed as its name and a short description, for example "Clubhouse - Warm and clear, easy over a PA". The first one is chosen for you if you've never picked one, so the announcer works without another decision.
 3. Press **Hear It** beside the list to listen to the voice you've highlighted, and **Preview** to hear it say words of your own. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it).
 4. Back on **Voice Settings**, read the line under the HeatCaller choice, which says where your allowance stands.
@@ -101,7 +100,7 @@ The line under the two buttons says what the last press did, and begins as a rem
 
 Kokoro is the free voice: natural-sounding, running on the laptop's own processor, and costing nothing however much the announcer talks. A new install speaks with it, and it's what stands in whenever the voice you chose can't.
 
-1. On **Voice → Voice Settings**, choose **Kokoro voice - free, natural-sounding, runs on this PC. No account, no internet, nothing billed** in **Speak with**.
+1. On **Voice → Voice**, choose **Kokoro voice - free, natural-sounding, runs on this PC. No account, no internet, nothing billed** in **Speak with**.
 2. Open **Voice → Cast** and pick a voice in **Kokoro voice:**, at the top of the **Announcer** card. **Michael (American, male)** is chosen to begin with. There are American and British voices, women and men.
 3. Press **Test Voice** beside it. You should hear "This is HeatCaller, testing the Kokoro voice. Green flag, green flag!" The first test after starting HeatCaller takes a few seconds while Kokoro loads. The line under it says what the test did, for example "Done - that was Michael (American, male)."
 
@@ -267,10 +266,10 @@ If you run the relay yourself, [Hosting a relay](../admin/relay-hosting.md#tryin
 
 ## Set up your own ElevenLabs account
 
-The key and the model are on the **ElevenLabs connection** card on **Voice → Voice Settings**; the voice, with **Test Voice**, is at the top of **Voice → Cast**, filled by **Load Voices** on the **Voices** card there. The connection card can be filled in whichever voice is speaking. Its first line says so: "Used when ElevenLabs is chosen above, and for the saved voice lines - it can be set up whichever voice is speaking." The one exception is the HeatCaller voice: the whole card is switched off while that's chosen, because the account behind that voice isn't yours, and the **ElevenLabs voice:** row on **Cast** isn't shown. Choose ElevenLabs or the Kokoro voice under **Speak with** first, then fill the box in.
+The key and the model are on the **ElevenLabs connection** card on **Voice → Voice**; the voice, with **Test Voice**, is at the top of **Voice → Cast**, filled by **Load Voices** on the **Voices** card there. The connection card can be filled in whichever voice is speaking. Its first line says so: "Used when ElevenLabs is chosen above, and for the saved voice lines - it can be set up whichever voice is speaking." The one exception is the HeatCaller voice: the whole card is switched off while that's chosen, because the account behind that voice isn't yours, and the **ElevenLabs voice:** row on **Cast** isn't shown. Choose ElevenLabs or the Kokoro voice under **Speak with** first, then fill the box in.
 
 1. Get an API key from your ElevenLabs account. <!-- TODO: confirm the exact steps/menu names on the ElevenLabs website for creating an API key, and which key permissions HeatCaller needs (it lists voices and synthesizes speech). -->
-2. In HeatCaller, open **Voice → Voice Settings**.
+2. In HeatCaller, open **Voice → Voice**.
 3. On the **ElevenLabs connection** card, paste the key into **API Key:**. Tick **Show** if you want to check what you pasted. With the Kokoro voice chosen, the **ElevenLabs voice:** row appears on **Cast** once a key is typed.
 4. Pick a model from **Model:** (see [Choosing a model](#choosing-a-model)).
 5. Open **Voice → Cast** and press **Load Voices** on the **Voices** card at the top. HeatCaller asks ElevenLabs for the voices on your account and fills every voice list on the tab, **ElevenLabs voice:** on the **Announcer** card included. The line under it says, for example, "Loaded 24 voices."
@@ -348,7 +347,7 @@ To hear them, press **Test Voice** beside **ElevenLabs voice:** at the top of **
 | **Playback volume (%):** | How loud the announcer plays on this laptop. The same setting as the **Announcements** fader on **Sounds → Mixer**. | 100 |
 | **Max spoken announcements per lap:** | 1 to 5. When one lap triggers several routine announcements (say a fast lap, a streak and a lead change), only this many are spoken. The ones with the highest weight win. | 2 |
 
-Lap times are always spoken as words, the way a race caller says them, so the voice doesn't misread the digits: 6.935 is "six nine thirty-five", 5.060 is "five oh six" and 5.000 is "five flat". The voice says the same time the screens show, down to the thousandth, with nothing rounded. Screens show the numbers as digits. In lines written by the local model and in the reminders from the race day's Timetable, only a number with a unit ("6.9s", "6.9 seconds") is read as a time; other numbers are left as they are.
+Lap times are always spoken as words, the way a race caller says them, so the voice doesn't misread the digits: 6.935 is "six nine thirty-five", 5.060 is "five oh six" and 5.000 is "five flat". The voice says the same time the screens show, down to the thousandth, with nothing rounded. Screens show the numbers as digits. In lines written by the commentary model and in the reminders from the race day's Timetable, only a number with a unit ("6.9s", "6.9 seconds") is read as a time; other numbers are left as they are.
 
 ## Saved voice lines
 
@@ -422,7 +421,7 @@ In `%LocalAppData%\HeatCaller\VoiceLibrary` on the laptop, up to about 500 MB. P
 
 ## Announcements
 
-**Voice → Announcements** has one row for each moment the announcer can call, under column headings that stay in view as the rows scroll: **Race**, **Practice**, **Announcement**, **Phrasing**, **Weight**, **Speed** and **Caution**. Each row has:
+**Voice → Race Calls** has one row for each moment the announcer can call, under column headings that stay in view as the rows scroll: **Race**, **Practice**, **Announcement**, **Phrasing**, **Weight**, **Speed** and **Caution**. Each row has:
 
 - **Race** and **Practice** tick boxes: whether the announcement speaks in races, and in practice. See [Race and practice](#race-and-practice).
 - **Announcement**: its name.
@@ -469,7 +468,8 @@ Placeholders are words in curly brackets that are filled in when the line is spo
 | `{streak}` | The length of a clean-lap streak. |
 | `{rival}` | The other driver in a two-driver moment (close battle, lapping, ghost passes, streak takeovers). |
 | `{rivalstreak}` | The streak of the driver who was passed (**Longest streak taken over** only). |
-| `{positions}` | The running order, "P1 Dana, P2 Bill, P3 Frank" (**Position report** only). |
+| `{positions}` | The running order with each car's gap to the leader, "Sam leads, Bill one point two three four back, Frank two point oh five back". With **Say each car's gap to the leader** ticked, places only: "Sam leads, Bill second, Frank third" (**Position report** only). |
+| `{gaps}` | Each car's gap to the leader, "Bill one point two three four back and Frank two point oh five back", or "a lap down". Filled only with **Say each car's gap to the leader** ticked (**Position report** only). |
 | `{badge}` | The badge just earned (**Achievement unlocked** only). |
 | `{class}` | The class being called (**Grid call** only). |
 | `{round}` | The round being called (**Grid call** only). |
@@ -556,7 +556,7 @@ Reminders from the race day's **Timetable** ("5 minutes to Stock Buggy A-Main") 
 | **Fast lap (race best)** | **Include lap time (auto-appended if the chosen line doesn't already say {time})** | Adds "New fastest time: ..." to the end of the line. |
 | **Every lap completed** | **Include lap time** | Adds "Lap time: ..." unless the chosen line already has `{laptime}`. |
 | **Every lap completed** | **Only announce best lap** | Restricts the call to new best laps. |
-| **Lap time only** | **Say "lap time" (untick to just speak the number)** | "Lap time: 5 point two three seconds." or just "5 point two three seconds." |
+| **Lap time only** | **Say "lap time" (untick to just speak the number)** | "Lap time: five twenty-three." or just "five twenty-three." |
 | **Lap time only** | **Say the driver's name first (e.g. "Sam, 5 point 23 seconds")** | Useful once more than one car is on track. |
 | **Lap time only** | **Announce every** _n_ **lap(s) per driver (1 = every lap)** | 1 to 20. Counted per driver: 3 means each driver hears their own time every third lap, and the laps in between are skipped. |
 | **Split time** | **Read every** _n_ **split crossing(s) per driver (1 = every one)** | 1 to 20. Counted per driver, like **Announce every** on **Lap time only**, and starting again with each race. |
@@ -566,6 +566,7 @@ Reminders from the race day's **Timetable** ("5 minutes to Stock Buggy A-Main") 
 | **Consistency streak** | **Only the longest streak in the field** | Only the driver on the longest clean run is called. |
 | **Consistency streak** | **Mention the runner-up** | Adds the next-best streak to the line. |
 | **Position report** | **Read every** _n_ **lap(s) of the LEADER, down to P** _n_ | Every 1 to 50 leader laps (default 5), reading from 2 to 10 places deep (default 3). The report waits until the last car it names has crossed the line on the leader's lap (a car a lap or more down doesn't hold it up), then gives each car its gap to the leader exactly, to the thousandth, the same as the board's **Gap to P1**: "Bill one point two three four back". A car that never comes round holds it up for half a lap longer than the leader's last lap at most; it's then read without that car and anyone behind it. The line under the setting says when it's read, and turns into a warning past P3, since a deeper report is heard well after the leader crosses. If it has to wait behind other lines, it waits its turn: just before it's spoken the board is read again, and if anything in it has changed, it's said from the order as it stands then. A newer report replaces one still waiting. |
+| **Position report** | **Say each car's gap to the leader (put {gaps} in the line)** | Reads the order as places and says the gaps where you put `{gaps}` in the line, so no gap is said twice. Off by default. |
 | **Minutes left** | **Only the last** _n_ **minutes (untick to call every minute)** | 2 to 60 (default 5): with 5, a ten-minute race hears five, four, three and two minutes to go. Untick it to hear every minute. One minute to go is always **Final minute**'s, so it's never said twice. |
 
 The streak threshold (how many clean laps count as a streak) is set on **Sounds → Effects** and applies to both the voice and the sound effect. See [Sounds and music](sounds-and-music.md#effects).
@@ -576,7 +577,7 @@ There are no **Test** buttons with the HeatCaller voice chosen — not the per-r
 
 To hear a HeatCaller voice, use **Hear It** and **Preview** beside **HeatCaller voice:** at the top of **Voice → Cast** instead: both are meant for exactly this, and neither touches your race-night allowance. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it). Pressing **Test** on the **Announcements** channel of **Sounds → Mixer** also speaks a level-check line in whichever voice is chosen, and a [demo race](../race-control/practice-and-ghosts.md) gives you a fuller listen — but those two do spend a little of the allowance.
 
-Each row's **Test** button on the **Announcements** tab speaks a random line from that row, using what's on screen rather than what was last saved, in the voice chosen under **Speak with**. It fills in sample values: Sam for `{driver}`, Bill for `{rival}`, "Mini-Z MR03" for `{car}`, lap 7, "6.92 seconds" for `{time}` and `{laptime}`, gate 1 and "P1 Sam, P2 Bill, P3 Frank" for `{positions}`. `{round}`, `{class}` and `{marshals}` are filled with sample values too, so you can hear a whole grid call, and "four" for `{minutes}` and "thirty" for `{seconds}`. Other placeholders aren't filled in during a test.
+Each row's **Test** button on the **Announcements** tab speaks a random line from that row, using what's on screen rather than what was last saved, in the voice chosen under **Speak with**. It fills in sample values: Sam for `{driver}`, Bill for `{rival}`, "Mini-Z MR03" for `{car}`, lap 7, "6.92 seconds" for `{time}` and `{laptime}`, gate 1, "Sam leads, Bill one point two three four back, Frank two point three oh five back" for `{positions}` and "Bill one point two three four back and Frank two point three oh five back" for `{gaps}`. `{round}`, `{class}` and `{marshals}` are filled with sample values too, so you can hear a whole grid call, and "four" for `{minutes}` and "thirty" for `{seconds}`. Other placeholders aren't filled in during a test.
 
 The status line at the foot of the **Announcements** tab shows what was spoken, or the reason a test failed — the error message from ElevenLabs, or, with Kokoro chosen and nothing to speak with, "Kokoro can't speak yet - ..." and the reason. While the **ElevenLabs voice:** row is showing, the line under its **Test Voice** at the top of **Voice → Cast** says the same.
 
@@ -663,7 +664,7 @@ The page shows:
 - **ON DECK:** the next unfinished line on the race day's **Timetable**.
 - **Running order**: position, **Driver**, **Laps**, **Gap** and **Last** lap for everyone on track.
 - **Talking points**: things worth saying, newest first:
-    - A suggested line in quotes at the top, written by the local model when [Commentary](commentary.md) talking points are on.
+    - A suggested line in quotes at the top, written by the commentary model (the relay's, or the one built into HeatCaller) when [Commentary](commentary.md) talking points are on.
     - Lines starting with `*`, worked out from the live standings: a close fight for the lead (under 2 seconds), anyone laps down, who holds the fastest lap, and battles under a second further down the order.
     - A time-stamped record of every announcement the announcer has made (the same lines it spoke), plus jump starts. Up to 40 are kept.
 - **Spotlight**: pick any driver to follow a story. It shows their position, laps and best this race, their last three laps, their all-time personal best from saved sessions and how far off it they are today, their car and class, and any notes on their profile.
@@ -685,7 +686,7 @@ By default the announcer is unmuted automatically when a session starts, so a mu
 
 ## Rivalries
 
-**Voice → Rivalries** lets you give two particular drivers their own lines. Whenever those two swap places in the standings, in either direction, the announcer speaks one of the pair's lines.
+**Voice → Race Calls** lets you give two particular drivers their own lines. Whenever those two swap places in the standings, in either direction, the announcer speaks one of the pair's lines.
 
 1. Make sure both drivers have profiles with a driver name. You need at least two named driver profiles before you can add a rivalry.
 2. Press **Add Rivalry**.
@@ -705,7 +706,7 @@ Things to know:
 - Rivalry lines count as routine lines: they're skipped under a yellow or red, and when the announcer is busy.
 - If you rename a driver on their profile, re-pick them in the rivalry.
 
-Rivalries are also given to the local model for race intros and recaps. See [Commentary](commentary.md).
+Rivalries are also given to the commentary model (the relay's, or the one built into HeatCaller) for race intros and recaps. See [Commentary](commentary.md).
 
 ## Troubleshooting
 
