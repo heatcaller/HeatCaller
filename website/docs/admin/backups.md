@@ -2,7 +2,7 @@
 
 A backup is a single `.zip` file holding everything HeatCaller has saved: driver profiles, classes, race history, championships, track layouts, sounds, soundscapes and their recorded voice lines, your own looks, the club logo, all your settings, and the Big Screen's own ON AIR switch. Use the **Backup & Restore** page to make one by hand, to have HeatCaller make them automatically, and to restore one, including onto a new laptop.
 
-<!-- screenshot: Backup & Restore page, its five cards -->
+![The Backup & Restore page: Manual backup and restore, Automatic backups copying to OneDrive and up to date, and the Backup password card](../assets/images/backup-restore.png)
 
 ## What's in a backup
 

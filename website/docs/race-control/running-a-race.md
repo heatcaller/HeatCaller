@@ -5,7 +5,7 @@ The **Race Control** page is where you run every race: you pick what's about to 
 !!! note
     HeatCaller runs its own race control, reading the decoder (EasyLap or I-Lap) directly. See [Decoders](../timing/decoders.md).
 
-<!-- screenshot: Race Control page during a race, flag buttons, clock column and leaderboard visible -->
+![The Race Control page during a demo race: the flag buttons, the clock at 01:22 under GREEN FLAG, the buttons down the clock column, and the leaderboard with seven drivers](../assets/images/race-control-racing.png)
 
 ## The page at a glance
 
@@ -461,7 +461,7 @@ Mission Control puts every check that matters before a green flag in one window,
 
 Open it with the **Mission Control** button at the bottom of the clock column, from **Connection → Mission Control**, or from **Mission Control** in the **Pre-race check** window. It isn't a dialog: it can stay open beside Race Control, or on a second screen, all night. It checks everything again once a second. Opening it again brings the open one to the front.
 
-<!-- screenshot: Mission Control with all tiles green except an amber "Next race 7 of 8" tile -->
+![Mission Control reading "1 problem to fix before the green, and 1 to keep an eye on.": the Decoder tile red for a decoder that is not connected, Next race amber at 0 of 7 heard, and the Timing, Transponders, Website, Sound, Cloud Backup and Allowances tiles green](../assets/images/mission-control.png)
 
 The headline over the tiles sums it up: "All clear. Ready to race.", "Ready to race - 2 to keep an eye on." or "1 problem to fix before the green."
 

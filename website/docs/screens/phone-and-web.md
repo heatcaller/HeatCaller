@@ -4,7 +4,7 @@ HeatCaller has a small web server built in. Turn it on from the **Local Screens*
 
 These pages work only on the venue's own network, with no internet needed. To publish results and check-in to the internet, use the online relay instead; see [The online relay](../online/index.md). The race-day manager can also be reached over the relay if the club turns that on - see [Race-day manager](#race-day-manager) below.
 
-<!-- screenshot: Local Screens page with the server running, the five addresses filled in -->
+![The Local Screens page with the server stopped: Port and PINs, Start Server, the Race-day manager card, and the addresses waiting to be filled in](../assets/images/local-screens.png)
 
 ## Before you start
 

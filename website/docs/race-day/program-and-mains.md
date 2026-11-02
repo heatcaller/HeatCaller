@@ -29,7 +29,7 @@ Each class also needs drivers: a driver is in a class when their profile says so
 
 Drag the bar between the two halves to give either more room. HeatCaller remembers where you leave it. The bottom half never gets so short that its buttons go out of sight; on a small screen the top half scrolls instead.
 
-<!-- screenshot: Race Day Next Steps tab with the next-step card, Ready to race, the day so far tiles and Tonight's program below -->
+![Race Day, Next Steps tab: the ALL DONE card saying the program is complete, Ready to race at 5 of 6, the day so far tiles, and Tonight's program listing recorded heats](../assets/images/race-day-next-steps.png)
 
 At the top, under the day's name, a line gives the date, whether it's a race day or a club night, the venue, the track layout, "closed" if the day is closed, and "running 12 min late" (or early) once the day is 5 minutes or more off the timetable. With no race day open it says "No race day is open".
 

@@ -10,7 +10,7 @@ HeatCaller also records each race as it goes out and saves it as an mp3, with a 
 
 **Sounds → Effects** plays short cues like Next Level Timing's own: a chime per lap plus sounds for race moments. Each sound plays **Classic tones** (tones HeatCaller generates itself) or one of the built-in sound packs: **Podium**, **Arcade**, **Broadcast**, **Synthwave** or **Pit Lane**. You can point any of them at your own audio file instead, and your file wins over both.
 
-<!-- screenshot: Sounds > Effects tab with the Race, Practice, Sound, Pack, Your own file (optional) and Weight columns -->
+![Sounds, Effects tab: each sound with its Race and Practice ticks, Pack, Your own file (optional), Browse, Remove, Test and Weight](../assets/images/sounds-effects.png)
 
 The list has a heading over each column: **Race**, **Practice**, **Sound**, **Pack**, **Your own file (optional)** and **Weight**. Hover over most things on a row for a tip saying what they do. Each row has:
 
@@ -116,7 +116,7 @@ The list on the **Layers** card shows each **Layer**, its **Source** (**Soundsca
 
 The layers on the other side stay in the list and keep their settings; they show "(not playing)" after their name. The sentence under the choice says what it means for what you have set up, for example "Only the layers you added. A soundscape's crowd beds stay listed, and applying another soundscape still replaces them - they are just not playing." The line under the list counts what will actually be heard, for example "3 of 4 layers ready to play."
 
-<!-- screenshot: Sounds > Ambience tab with two layers and the live state panel -->
+![Sounds, Ambience tab: the state panel, and four layers - two from the soundscape and two of the club's own - with their levels from Idle to Peak](../assets/images/sounds-ambience.png)
 
 ### Reactions and ducking
 
@@ -198,7 +198,7 @@ The recap can still be speaking when the next heat is staged. If that heat has b
 
 **Sounds → Soundscapes** sets up how a race night sounds in one go: a sound for every moment, and the announcer's words and delivery to match. As the tab puts it, "A soundscape is the whole sound of race day". Until 0.56 this was the **Announcer Style** tab on the **Themes** page. Soundscapes were called announcer styles before 0.54, and themes before 0.48. Searching for "announcer style" in the **Search pages...** box still finds it.
 
-<!-- screenshot: Sounds > Soundscapes tab with the soundscape cards, one marked LAST APPLIED -->
+![Sounds, Soundscapes tab: the soundscape cards with Preview, Apply, Customize and Voice Lines, Classic marked LAST APPLIED](../assets/images/sounds-soundscapes.png)
 
 ### What a soundscape holds
 
@@ -410,7 +410,7 @@ When you customize a soundscape, **No music of its own** gives it no theme music
 
 The **Ambience** fader changes how loud the ambience is, not what mood it's in: moving it doesn't change the crowd's race state.
 
-<!-- screenshot: Sounds > Mixer tab with the four channel faders -->
+![Sounds, Mixer tab: the Announcements, Sound effects, Ambience and Music faders, with Imaging levels and Ducking below](../assets/images/sounds-mixer.png)
 
 ### Channels
 

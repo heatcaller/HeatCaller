@@ -740,12 +740,16 @@ public sealed class SidebarNavList : Panel, IMessageFilter
         // The name gets what is left of the plate, and ends in "..." when
         // that is not enough - the sidebar keeps its width at every text
         // size, so at the larger ones the longer names are shortened.
+        //
+        // NoPrefix, as the headings have: without it the "&" in "Backup &
+        // Restore" is read as a shortcut-key marker, and the page was drawn
+        // as "Backup _Restore" (2 Nov 2026).
         var textLeft = iconBounds.Right + UiLayout.AtDpi(12);
         var textRect = new Rectangle(textLeft, bounds.Top,
             Math.Max(10, plate.Right - textLeft - endGap - pillWidth), bounds.Height);
 
         TextRenderer.DrawText(g, name, AppTheme.NavFont, textRect, textColor,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)

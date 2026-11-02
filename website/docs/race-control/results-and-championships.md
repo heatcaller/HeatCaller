@@ -32,7 +32,7 @@ Use Ctrl+click or Shift+click to select several sessions, for exporting or delet
 
 Below the results is a notes box, for the weather, the track surface, incidents or anything else worth remembering. Notes are saved when you click away from the box.
 
-<!-- screenshot: Race History page with a session selected and the action buttons visible -->
+![Race History with a demo race selected: its results with laps, fastest laps, best sectors and ideal laps, and the action buttons below](../assets/images/race-history.png)
 
 | Button | What it does |
 |---|---|
@@ -302,7 +302,7 @@ Hover over a column heading for an explanation.
 
 Drivers earn badges for what they do on track. Badges are worked out once each race is saved, and the announcer calls up to three of them at the end of the race. Any more are still awarded and listed in the console, but not announced. Each badge can be earned once per driver.
 
-<!-- screenshot: Achievements page showing a driver's badge wall -->
+![The Achievements page for one driver: 0 of 84 earned, and the In a race badges such as Metronome, Wire to Wire and Photo Finish, still locked](../assets/images/achievements.png)
 
 On the **Achievements** page:
 

@@ -11,7 +11,7 @@ Typing `look`, `colour`, `color`, `dark mode`, `light mode`, `synthwave`, `logo`
 
 How the app sounds, rather than how it looks, is on **Sounds → Soundscapes**, which was the **Announcer Style** tab on this page before 0.56. See [Soundscapes](../announcer/sounds-and-music.md#soundscapes).
 
-<!-- screenshot: Themes page with the Looks card (the list of looks beside the preview) and the Club logo card -->
+![The Themes page: the Looks card with Synthwave in use for the app and the crowd screens, its preview beside the list, and Crowd screens below](../assets/images/themes.png)
 
 ## Where a look applies
 

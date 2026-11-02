@@ -41,9 +41,9 @@ The announcer's voice itself is picked on **Voice → Cast**, on the **Announcer
 
 The **Announcer's name:** is on the same card, under the voice.
 
-<!-- screenshot: Cast tab, Announcer card with the HeatCaller voice picker, Hear It and Preview -->
+![Voice, Cast tab: the Voices card with Load Voices, the Announcer card with the announcer's name, an ElevenLabs voice and a Kokoro voice, and the Recap host card](../assets/images/voice-cast.png)
 
-<!-- screenshot: Voice Settings tab, Speak with card with the HeatCaller voice chosen and its allowance line -->
+![Voice tab, Speak with card: ElevenLabs chosen, with the Kokoro voice ready on this PC and standing by](../assets/images/voice-voice.png)
 
 | Choice | What it is |
 |---|---|
@@ -435,7 +435,7 @@ Above the rows are the placeholders you can use ("Placeholders you can use in a 
 
 With the HeatCaller voice chosen, the lines boxes are read-only, the **Speed** boxes are switched off and the **Test** buttons aren't shown. The **Race** and **Practice** ticks, **Caution**, **Weight** and the per-row extras all still work. See [What's fixed while it's chosen](#whats-fixed-while-its-chosen).
 
-<!-- screenshot: Announcements tab showing the Fast lap row with its Race and Practice ticks, lines, Weight, Speed, Caution and Test -->
+![Voice, Race Calls tab: rows for Race staging, Countdown started, Race started and Fast lap, each with Race and Practice ticks, its lines, Weight, Speed, Caution and Test](../assets/images/voice-race-calls.png)
 
 ### Race and practice
 
@@ -656,7 +656,7 @@ The same two-at-once limit and the same 30-second give-up apply to the relay.
 
 The Announcer screen is a window for whoever is on the microphone. It's not another leaderboard. It gives you things to say. Open it with **Announcer Screen** on **Race Control** (shortcut <kbd>A</kbd>). The first time, it opens beside the main window when there's room, so the director keeps **Race Control** while you keep the Announcer; you can also put it on a second monitor. Closing it only hides it: open it again and everything is still on it. The **Race Control** button in the window brings the main window forward on **Race Control** without closing the Announcer.
 
-<!-- screenshot: Announcer screen during a race, talking points list and spotlight filled in -->
+![The Announcer screen during a demo race: the running order, talking points with the last AI line and who is a lap down, and the Spotlight on the leader](../assets/images/announcer-screen.png)
 
 The page shows:
 

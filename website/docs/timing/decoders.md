@@ -18,7 +18,7 @@ The five marked **(Beta)** were written from each decoder's published format and
 
 The line at the top of the page says the same: "Choose your timing decoder and connect to it. Its laps feed the Race Control page, which runs the race."
 
-<!-- screenshot: Connection page with "Connect via:" set to Direct EasyLap Decoder (USB), status dot green, Developer Console below -->
+![The Connection page with Direct EasyLap Decoder (USB) chosen and not yet connected, the Mission Control and finish camera buttons, and the Developer Console below](../assets/images/connection.png)
 
 ## Choosing a connection type
 

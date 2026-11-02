@@ -49,7 +49,8 @@ Refer to pages as **Race Control** page, and paths as **Race Day → Entries** (
 - Use MkDocs Material admonitions sparingly: `!!! tip`, `!!! note`, `!!! warning` (4-space indented body).
 - Tables for option/setting lists (Setting | What it does | Default).
 - Keyboard keys as <kbd>F5</kbd>.
-- Screenshots: we can't capture the app yet. Where a screenshot would help, put an HTML comment placeholder on its
+- Screenshots: real captures of the app, 1280x800 for a page, in `docs/assets/images/`, with alt text that says what
+  the picture actually shows. Where one would help but hasn't been taken, put an HTML comment placeholder on its
   own line: `<!-- screenshot: Race Control page during a race, flag buttons visible -->`. Never embed a fake image.
 - Links between pages: relative Markdown links to other .md files (e.g. `[Online check-in](../online/check-in.md)`).
   Only link to pages that exist in the site map below; if you need a page that isn't listed, mention it in your report.

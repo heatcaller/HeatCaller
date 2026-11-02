@@ -2,7 +2,7 @@
 
 HeatCaller has one main window with a sidebar of pages on the left and the current page on the right. This page shows you how to move around, find a setting, tidy the sidebar, change the app's look, and read the app's log.
 
-<!-- screenshot: the main window with the sidebar, Race Control page showing -->
+![The HeatCaller window between races: the sidebar on the left with Race Control selected, and the Race Control page with its Session, Race Control and Leaderboard cards and the clock column on the right](../assets/images/race-control-idle.png)
 
 ## The title bar
 

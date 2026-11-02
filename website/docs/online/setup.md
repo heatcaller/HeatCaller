@@ -6,7 +6,7 @@ You can also reach this page from **Local Screens**, which shows a one-line rela
 
 The page has two tabs. Everything below is on the first, **Website**. The second, **Recording**, holds the race recordings, the drivers' clips and their highlight videos - it moved here from **Sounds** on 26 October 2026; see [Race recordings](../announcer/sounds-and-music.md#race-recordings).
 
-<!-- screenshot: Club Website page, Relay card filled in with a test result reading "Connected as ..." -->
+![Club Website page, Website tab: the Relay card filled in with the address, Club id and a hidden Publish token, and What gets published below](../assets/images/club-website.png)
 
 ## Before you start
 

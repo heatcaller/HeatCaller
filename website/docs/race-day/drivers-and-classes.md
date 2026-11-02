@@ -8,7 +8,7 @@ The pages covered here are all in the sidebar: **Driver Hub**, **Classes**, **Re
 
 A driver profile ties a transponder to a person. When the decoder reports a transponder, HeatCaller looks up its profile to get the name the announcer says, the class the driver races in, and everything shown on screens and results.
 
-<!-- screenshot: Driver Hub page with the roster on the left and a driver card on the right -->
+![Driver Hub: the roster on the left with Ella Vator selected, and her card on the right with class badges, Checked in, and the Profile tab's race-day and profile details](../assets/images/driver-hub.png)
 
 The page has two views. **Drivers** and **Garage** in the upper left switch between them, and the page opens on the one you used last. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is across the top of both.
 
@@ -360,7 +360,7 @@ A **Points so far** column brings each driver's championship points in with them
 
 A class is the rulebook a group of drivers races under: how qualifying is scored, how many heats count, how big a main is, whether bump-ups happen, what a scrutineer checks, and how the races are run. Every setting is per class, because clubs rarely run two classes the same way.
 
-<!-- screenshot: Classes page grid showing several classes with their qualifying, mains and format columns -->
+![The Classes page listing four classes with their Qualifying, Mains, Race Format and Tech columns](../assets/images/classes.png)
 
 The **Classes** page lists every class in a grid, so you can compare them side by side:
 
@@ -518,7 +518,7 @@ To apply one:
 
 The **Rentals** page keeps track of the club's loaner transponders — who has each one, what deposit you're holding, and above all what hasn't come back yet.
 
-<!-- screenshot: Rentals page with the "2 UNITS STILL OUT" banner and the units grid -->
+![The Rentals page with the ALL UNITS RETURNED banner and one transponder listed as Available](../assets/images/rentals.png)
 
 A large banner at the top shows **ALL UNITS RETURNED**, or how many are still out (for example **2 UNITS STILL OUT**) with a slow pulse. The sidebar shows the same count as a badge on **Rentals**, so you can see it from any page. Check it before you pack up.
 
@@ -553,7 +553,7 @@ The event report also lists any units still out. See [Results and championships]
 
 A venue saves everything specific to one physical track so you can switch it all over with one click — useful if your club races at more than one place.
 
-<!-- screenshot: Venues page with the Venues card beside the Venue settings card -->
+![The Venues page: two venues listed, and Venue settings for Home Track with its decoder, preferred soundscape and race defaults, and Apply This Venue](../assets/images/venues.png)
 
 Click **New Venue**, then fill in **Venue settings**, beside the list. Changes save as you go (the status line shows **Saved.**).
 
@@ -581,7 +581,7 @@ Because the race defaults go into the app default, a class or round with its own
 
 Mini-Z and RC tracks are rebuilt often, so HeatCaller lets you name and describe each layout. The track layout also holds the all-time lap record for that layout and how many corner marshal posts it needs.
 
-<!-- screenshot: Track Layouts page with the layout list and the Selected Track preview -->
+![The Track Layouts page with one layout listed and the Selected Track card beside it, with Add, Edit, Delete, Reset Record and Track Designer below](../assets/images/track-layouts.png)
 
 The list shows **Name**, **Record**, **Attachment** and **Plan** (how many tiles the drawn plan has). Selecting a layout shows its name and picture beside the list, under **Selected track**.
 

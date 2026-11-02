@@ -11,7 +11,7 @@ This page covers four features that sit around racing:
 
 The **Practice** page is for open lapping with no staging, flags or finish. Every transponder that crosses the line is timed, and the table shows live lap stats instead of a finishing order. It's the quickest way to run an open practice night or a tuning session.
 
-<!-- screenshot: Practice page with a session running and the This session table filled in -->
+![The Practice page before a session starts: the Setup card, the Ghost Cars card with three ghosts to pick from, the clock reading IDLE, and the empty This session table](../assets/images/practice.png)
 
 ### Run a practice session
 
@@ -76,7 +76,7 @@ Ghosts run in any session once it's racing, whether that's practice or a race, a
 
     When a race is saved, the console confirms how many ghost cars were left out.
 
-<!-- screenshot: Ghost Cars page with two ghosts in the list -->
+![The Ghost Cars page with four ghosts listed, each with its pace and consistency, all switched off](../assets/images/ghost-cars.png)
 
 ### Set up a ghost
 
@@ -153,7 +153,7 @@ It's a ghost like any other: it's on the board and the Big Screen, it can be edi
 
 **Demo Mode** runs a fake race through the same race logic as a real one, with no decoder needed. Announcements, sound effects, the leaderboard and the clock all work for real, so it's a full rehearsal of your setup before race day. Switch to the **Race Control** page to watch it.
 
-<!-- screenshot: Demo Mode page with the Settings and Log cards beside the Racers card -->
+![The Demo Mode page: Start Demo Race, the Settings and Log cards, and the Racers card with three drivers ticked](../assets/images/demo-mode.png)
 
 ### Run a demo
 
@@ -198,7 +198,7 @@ So you can use real driver profiles in a demo without affecting anyone's records
 
 The **Handicaps** page evens out a grid where drivers have very different pace. A handicap is a scoring decision, not a measurement. Recorded lap times, personal bests and track records are never changed. The handicap is applied when results are shown.
 
-<!-- screenshot: Handicaps page with a class selected and time credits in the grid -->
+![The Handicaps page with a class selected and handicaps off, listing its six drivers with no credits yet](../assets/images/handicaps.png)
 
 ### Set up handicaps for a class
 

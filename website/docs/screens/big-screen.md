@@ -14,7 +14,7 @@ This page also covers choosing which columns each leaderboard shows, and the **S
 
 A small reminder of the keys, "F11: toggle fullscreen     M: track map     O: on air     C: captions     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Each press of the button opens another window, so you can run more than one if you have the screens.
 
-<!-- screenshot: Big Screen during a race, full screen, showing the banner, clock, countdown, leaderboard and ON DECK bar -->
+![The Big Screen in a window during a demo race: RACING - GREEN FLAG, the race clock and the leaderboard with laps, best laps and gaps](../assets/images/big-screen-racing.png)
 
 ## What it shows
 
