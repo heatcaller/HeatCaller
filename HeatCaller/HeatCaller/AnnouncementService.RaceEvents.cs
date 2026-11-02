@@ -210,7 +210,7 @@ public sealed partial class AnnouncementService
     public bool WillCall(AnnouncementEventType type) =>
         !Muted
         && _voiceStore.Current.Events.TryGetValue(type.ToString(), out var config)
-        && config.IsEnabledFor(IsPracticeMode)
+        && CallOn(config)
         && !HeldByCaution(type, config);
 
     /// <summary>A driver crossed the split loop up on their own best lap by <paramref name="upMs"/>.</summary>
@@ -270,7 +270,7 @@ public sealed partial class AnnouncementService
         // Said in the log, though, when the club has switched the line on:
         // the settings still offer it, test it and record it, and it used to
         // go unsaid every race with nothing anywhere to say why.
-        if (!Muted && _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.CountdownStarted))?.IsEnabledFor(IsPracticeMode) == true)
+        if (!Muted && CallOn(_voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.CountdownStarted))))
         {
             StatusMessage?.Invoke("[voice] CountdownStarted not spoken - the countdown is sound only, so the green is not held behind a spoken line. Put the words in Race staging instead.");
         }
@@ -598,7 +598,7 @@ public sealed partial class AnnouncementService
 
         var config = _voiceStore.Current.Events.GetValueOrDefault(type.ToString());
 
-        if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.Templates.Count == 0)
+        if (config is null || !CallOn(config) || config.Templates.Count == 0)
         {
             return;
         }
@@ -670,7 +670,7 @@ public sealed partial class AnnouncementService
         var type = AnnouncementEventType.AchievementUnlocked;
         var config = _voiceStore.Current.Events.GetValueOrDefault(type.ToString());
 
-        if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.EffectiveTemplates.Count == 0)
+        if (config is null || !CallOn(config) || config.EffectiveTemplates.Count == 0)
         {
             return;
         }
@@ -1007,7 +1007,7 @@ public sealed partial class AnnouncementService
         PlaySound(SoundEffectKind.JumpStart, ToneGenerator.PlayJumpStartAsync, "jump start sound");
 
         var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.JumpStart));
-        if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.Templates.Count == 0)
+        if (config is null || !CallOn(config) || config.Templates.Count == 0)
         {
             return;
         }
@@ -1126,7 +1126,7 @@ public sealed partial class AnnouncementService
         }
 
         var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PersonalBestLap));
-        if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.Templates.Count == 0)
+        if (config is null || !CallOn(config) || config.Templates.Count == 0)
         {
             return;
         }

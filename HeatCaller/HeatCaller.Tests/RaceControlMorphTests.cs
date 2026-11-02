@@ -126,7 +126,9 @@ public sealed class RaceControlMorphTests
     {
         var hint = RaceBar.RestingHint(RaceBar.AfterTheFlag, practice: false);
 
-        Assert.Contains("Reset: press and hold for a second.", hint, StringComparison.Ordinal);
+        Assert.Contains("Reset: press and hold.", hint, StringComparison.Ordinal);
+        Assert.DoesNotContain("for a second", hint, StringComparison.Ordinal);
+        Assert.DoesNotContain("Everything else is one click", hint, StringComparison.Ordinal);
         Assert.Contains("Skip: click for the next part of the show, hold to end it.", hint, StringComparison.Ordinal);
     }
 
@@ -221,7 +223,7 @@ public sealed class RaceControlMorphTests
             var found = new List<string>();
             using var strip = new HoldStrip();
 
-            strip.SetResting("Reset: press and hold for a second. Everything else is one click.");
+            strip.SetResting("Reset: press and hold.");
             strip.ShowWork("On Air: voicing the opening…", 0.6f, "about 8s · hold 0 to skip to Stage", Color.Red);
 
             if (strip.WorkText != "On Air: voicing the opening…")

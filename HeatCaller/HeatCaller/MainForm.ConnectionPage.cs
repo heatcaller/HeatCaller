@@ -253,11 +253,21 @@ public partial class MainForm
             ForeColor = AppTheme.TextMuted,
         };
 
+        // Simple mode (1 Nov 2026): the decoder, its port, Connect, status,
+        // Before a race and the finish camera. The timing thread, pass
+        // recording, the split loop and the console are Advanced - the split
+        // status row follows the split loop's own switch as well
+        // (RenderSplitStatus). See SimpleMode.
+        SimpleMode.HideRow(grid, chkTimingThread);
+        SimpleMode.HideRow(grid, chkRecordPasses);
+        SimpleMode.HideRow(grid, cmbSplitLoop);
+
         var page = new FillPage();
 
         page.Add(intro);
         page.Add(decoder);
-        page.AddFill(console, console.LeastHeight, gapBelow: 0);
+        page.Add(SimpleMode.MoreLine(), stretch: false);
+        page.AddFill(SimpleMode.Hide(console), console.LeastHeight, gapBelow: 0);
 
         // The hint's face and the fields' widths follow the text size. The
         // page wears the window's font, so a new text size reaches it as a

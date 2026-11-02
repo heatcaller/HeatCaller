@@ -487,6 +487,8 @@ public sealed class ThemeStore
                 voice.CopyApiKeyFrom(now);
                 voice.Volume = now.Volume;
                 voice.WirelessSpeaker = now.WirelessSpeaker;
+                voice.RaceCallsInRaces = now.RaceCallsInRaces;
+                voice.RaceCallsInPractice = now.RaceCallsInPractice;
                 voice.OutputFormat = now.OutputFormat;
                 voice.Engine = now.Engine;
 
@@ -599,6 +601,8 @@ public sealed class ThemeStore
         // speakers here are set up.
         voiceCopy.Volume = current.Volume;
         voiceCopy.WirelessSpeaker = current.WirelessSpeaker;
+        voiceCopy.RaceCallsInRaces = current.RaceCallsInRaces;
+        voiceCopy.RaceCallsInPractice = current.RaceCallsInPractice;
         voiceCopy.OutputFormat = current.OutputFormat;
 
         // The language follows the same rule as the voice: kept, unless the

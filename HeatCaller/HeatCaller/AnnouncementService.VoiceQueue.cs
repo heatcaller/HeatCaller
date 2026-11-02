@@ -99,7 +99,7 @@ public sealed partial class AnnouncementService
         }
 
         var profile = _voiceStore.Current;
-        if (!profile.Events.TryGetValue(type.ToString(), out var config) || !config.IsEnabledFor(IsPracticeMode))
+        if (!profile.Events.TryGetValue(type.ToString(), out var config) || !CallOn(config))
         {
             // Says which event was skipped and why - a silent announcement
             // is otherwise indistinguishable from one that never fired.
@@ -913,6 +913,14 @@ public sealed partial class AnnouncementService
         AnnouncementEventType.MinutesLeft or
         AnnouncementEventType.FinalSeconds or
 
+        // The race's fastest lap (1 Nov 2026). Dropped while another line
+        // played, the last one said was often not the one on the board: in
+        // the 15:40 race Annie Wayout's 13.992 was called, then Dee Ploy's
+        // 12.754 was thrown away behind it and stood unsaid to the flag. A
+        // newer one replaces any still waiting, whoever set it (see
+        // EnqueueVoiceWork and BinWaitingFastLaps), so only the current
+        // holder is ever said.
+        AnnouncementEventType.FastLap or
 
         // The running order. It rations itself to once every N leader laps
         // and uses up that interval the moment it is built, so dropping it
@@ -1136,6 +1144,13 @@ public sealed partial class AnnouncementService
                 BinQueuedLocked(item => item.Type == AnnouncementEventType.PositionReport, ref giveBack);
             }
 
+            // The race's fastest lap the same way (1 Nov 2026): a newer one
+            // means the one waiting is no longer the fastest, whoever set it.
+            if (type == AnnouncementEventType.FastLap)
+            {
+                BinQueuedLocked(item => item.Type == AnnouncementEventType.FastLap, ref giveBack);
+            }
+
             // The same for the clock (28 Oct 2026): a newer time-left call
             // replaces an older one still waiting, so a busy announcer says
             // the time as it is now rather than every mark it missed.
@@ -1229,6 +1244,31 @@ public sealed partial class AnnouncementService
     /// line said or binned takes its entry with it.
     /// </summary>
     private System.Runtime.CompilerServices.ConditionalWeakTable<QueuedVoiceItem, Action>? _lostIfBinned;
+
+    /// <summary>
+    /// Throws away any fastest-lap call still waiting, on a crossing that has
+    /// just beaten it (1 Nov 2026). EnqueueVoiceWork does the same when the
+    /// new lap's own call is queued, but that call can be turned down before
+    /// it gets there - the per-lap limit, the club's dial, switched off - and
+    /// the old holder's line would then be said over the new holder's lap.
+    /// </summary>
+    private void BinWaitingFastLaps()
+    {
+        List<Action>? giveBack = null;
+        int binned;
+
+        lock (_voiceQueueLock)
+        {
+            binned = BinQueuedLocked(item => item.Type == AnnouncementEventType.FastLap, ref giveBack);
+        }
+
+        GiveBackLost(giveBack);
+
+        if (binned > 0)
+        {
+            StatusMessage?.Invoke("[voice] Dropped a waiting FastLap - a quicker lap has just beaten it.");
+        }
+    }
 
     /// <summary>
     /// Removes the queued lines that match, as List.RemoveAll does, and adds

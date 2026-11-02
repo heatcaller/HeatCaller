@@ -222,18 +222,21 @@ internal static class RaceBar
             held.Add("Reset");
         }
 
+        // "Press and hold" and no more (1 Nov 2026, asked for by Asher:
+        // "press and hold is plenty") - not "for a second. Everything else
+        // is one click."
         var hint = held.Count switch
         {
             0 => string.Empty,
-            1 => $"{held[0]}: press and hold for a second. Everything else is one click.",
-            _ => $"{string.Join(", ", held.Take(held.Count - 1))} and {held[^1]}: press and hold for a second. Everything else is one click.",
+            1 => $"{held[0]}: press and hold.",
+            _ => $"{string.Join(", ", held.Take(held.Count - 1))} and {held[^1]}: press and hold.",
         };
 
         // Skip is both: a click for the next part of the show, a hold for
         // the end of it.
         if (shown.HasFlag(RaceBarButtons.Skip))
         {
-            hint = (hint.Length > 0 ? hint.Replace(" Everything else is one click.", string.Empty, StringComparison.Ordinal) + " " : string.Empty)
+            hint = (hint.Length > 0 ? hint + " " : string.Empty)
                    + "Skip: click for the next part of the show, hold to end it.";
         }
 

@@ -112,7 +112,7 @@ public sealed partial class AnnouncementService
 
         var config = profile.Events.GetValueOrDefault(type.ToString());
 
-        if (config is null || !config.IsEnabledFor(IsPracticeMode) || config.EffectiveTemplates.Count == 0)
+        if (config is null || !CallOn(config) || config.EffectiveTemplates.Count == 0)
         {
             return;
         }
