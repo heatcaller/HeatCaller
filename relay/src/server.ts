@@ -1490,9 +1490,29 @@ export class Relay {
       // than no button.
     }
 
+    // The club's notes and the room's vote from its own pages (2 Nov 2026,
+    // docs audit: the app offered both and no page sent either). The same
+    // rule again: a switch that cannot be read is off, and Live then offers
+    // no form rather than one that answers nothing.
+    let notes = false;
+    let vote = false;
+
+    try {
+      notes = await this.notesOpenFor(club);
+    } catch {
+      // Off.
+    }
+
+    try {
+      vote = (await this.roomBallotFor(club)) !== undefined;
+    } catch {
+      // Off.
+    }
+
     return checkIn === site.look.checkIn && listening === site.look.listening
+      && notes === site.look.notes && vote === site.look.vote
       ? site.look
-      : { ...site.look, checkIn, listening };
+      : { ...site.look, checkIn, listening, notes, vote };
   }
 
   /**
