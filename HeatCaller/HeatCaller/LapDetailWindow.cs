@@ -30,6 +30,11 @@ namespace HeatCaller;
 /// - dragged by its header, and onto a second monitor if there is one;
 /// - made taller or shorter from its bottom edge, for more or fewer laps;
 ///   the width is fixed, because the columns are laid out for it;
+/// - scrolled back through every lap when they do not all fit (2 Nov 2026,
+///   Asher: "lap breakdown should scroll in it's window to see all laps") -
+///   by the wheel, the scrollbar on the right, or the arrow, Page and
+///   Home/End keys. Scrolled to the bottom it follows the newest lap; scrolled
+///   back it stays on the laps being read as new ones come in;
 /// - closed by the X in its corner or Escape - a click elsewhere no longer
 ///   closes it, which is what lets several stay open side by side;
 /// - opened without taking the focus from Race Control, and passing the
@@ -259,6 +264,11 @@ public sealed class LapDetailWindow : Form
             return true;
         }
 
+        if (_view.ScrollKey(keyData))
+        {
+            return true;
+        }
+
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
@@ -289,6 +299,20 @@ public sealed class LapDetailWindow : Form
         /// ones scroll off the top, because the recent end is the one being read.
         /// </summary>
         public int Rows { get; set; } = DefaultRows;
+
+        // How many laps back from the newest the list is scrolled: 0 follows
+        // the newest lap live. Counted from that end rather than the start,
+        // so it means the same thing as laps are added - see Apply.
+        private int _scrollBack;
+
+        // The scrollbar thumb being dragged: where the pointer went down and
+        // which lap was at the top then. Null when it is not.
+        private int? _thumbDragY;
+        private int _thumbDragFirst;
+
+        private int MaxScrollBack => Math.Max(0, _lapMs.Length - Rows);
+
+        private int ScrollBack => Math.Clamp(_scrollBack, 0, MaxScrollBack);
 
         /// <summary>Raised when the X in the corner is clicked.</summary>
         public event EventHandler? CloseClicked;
@@ -374,6 +398,75 @@ public sealed class LapDetailWindow : Form
         private static int ChromeHeight =>
             Pad + HeaderHeight + StatsHeight + Px(10) + ColumnHeaderHeight + Px(8) + FooterHeight + Pad;
 
+        /// <summary>Where the first lap row is drawn.</summary>
+        private static int ListTop => Pad + HeaderHeight + StatsHeight + Px(10) + ColumnHeaderHeight;
+
+        /// <summary>
+        /// The scrollbar's track: beside the lap rows, in the margin right of
+        /// the Run column, as tall as the rows on screen.
+        /// </summary>
+        private Rectangle ScrollTrack => new(Width - Pad - Px(1), ListTop, Px(6), Rows * RowHeight);
+
+        /// <summary>The thumb, or empty when every lap fits and there is nothing to scroll.</summary>
+        private Rectangle ScrollThumb
+        {
+            get
+            {
+                var total = _lapMs.Length;
+
+                if (!_present || total <= Rows)
+                {
+                    return Rectangle.Empty;
+                }
+
+                var track = ScrollTrack;
+                var height = Math.Max(Px(20), track.Height * Rows / total);
+                var first = total - Rows - ScrollBack;
+                var top = track.Top + (int)Math.Round((track.Height - height) * first / (double)(total - Rows));
+
+                return new Rectangle(track.Left, top, track.Width, height);
+            }
+        }
+
+        /// <summary>Scrolled by this many laps - positive towards the older end.</summary>
+        private void ScrollBy(int laps) => ScrollTo(ScrollBack + laps);
+
+        private void ScrollTo(int back)
+        {
+            back = Math.Clamp(back, 0, MaxScrollBack);
+
+            if (back != _scrollBack)
+            {
+                _scrollBack = back;
+                Invalidate();
+            }
+        }
+
+        /// <summary>The arrow, Page and Home/End keys, while the window has the focus. True when it was one of them.</summary>
+        public bool ScrollKey(Keys key)
+        {
+            switch (key)
+            {
+                case Keys.Up: ScrollBy(1); return true;
+                case Keys.Down: ScrollBy(-1); return true;
+                case Keys.PageUp: ScrollBy(Math.Max(1, Rows - 1)); return true;
+                case Keys.PageDown: ScrollBy(-Math.Max(1, Rows - 1)); return true;
+                case Keys.Home: ScrollTo(MaxScrollBack); return true;
+                case Keys.End: ScrollTo(0); return true;
+                default: return false;
+            }
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            base.OnMouseWheel(e);
+
+            // Three laps a notch, as a list box scrolls three lines. Wheel up
+            // goes back towards the start of the race.
+            var notches = e.Delta / 120;
+            ScrollBy((notches == 0 ? Math.Sign(e.Delta) : notches) * 3);
+        }
+
         /// <summary>The X, top right of the header.</summary>
         private Rectangle CloseRect => new(Width - Pad - Px(26), Pad + Px(2), Px(26), Px(26));
 
@@ -411,6 +504,18 @@ public sealed class LapDetailWindow : Form
         {
             base.OnMouseMove(e);
             SetCloseHot(CloseRect.Contains(e.Location));
+
+            if (_thumbDragY is { } startY)
+            {
+                var total = _lapMs.Length;
+                var room = ScrollTrack.Height - ScrollThumb.Height;
+
+                if (total > Rows && room > 0)
+                {
+                    var first = _thumbDragFirst + (int)Math.Round((e.Y - startY) * (total - Rows) / (double)room);
+                    ScrollTo(total - Rows - first);
+                }
+            }
         }
 
         protected override void OnMouseLeave(EventArgs e)
@@ -424,11 +529,46 @@ public sealed class LapDetailWindow : Form
         {
             base.OnMouseDown(e);
             _closePressed = e.Button == MouseButtons.Left && CloseRect.Contains(e.Location);
+
+            var thumb = ScrollThumb;
+
+            if (e.Button != MouseButtons.Left || thumb.IsEmpty)
+            {
+                return;
+            }
+
+            // A few pixels either side of the track count, since it is thin.
+            var track = ScrollTrack;
+            track.Inflate(Px(4), 0);
+
+            if (!track.Contains(e.Location))
+            {
+                return;
+            }
+
+            if (e.Y >= thumb.Top && e.Y < thumb.Bottom)
+            {
+                _thumbDragY = e.Y;
+                _thumbDragFirst = _lapMs.Length - Rows - ScrollBack;
+                Invalidate(ScrollTrack);
+            }
+            else
+            {
+                // Above or below the thumb: a page that way, as a scrollbar does.
+                var page = Math.Max(1, Rows - 1);
+                ScrollBy(e.Y < thumb.Top ? page : -page);
+            }
         }
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
+
+            if (_thumbDragY is not null)
+            {
+                _thumbDragY = null;
+                Invalidate(ScrollTrack);
+            }
 
             var clicked = _closePressed && e.Button == MouseButtons.Left && CloseRect.Contains(e.Location);
             _closePressed = false;
@@ -453,8 +593,11 @@ public sealed class LapDetailWindow : Form
             _present = standing is not null;
             _position = position;
 
+            var lapsBefore = _lapMs.Length;
+
             if (standing is null)
             {
+                _scrollBack = 0;
                 _lapMs = Array.Empty<long>();
                 _streakAtLap = Array.Empty<int>();
                 _recoveryLaps = new HashSet<int>();
@@ -505,6 +648,15 @@ public sealed class LapDetailWindow : Form
                 _bestMs = standing.FastestLapMs;
                 _penaltyMs = standing.PenaltyMs;
                 _currentRun = standing.ConsecutiveValidLaps;
+
+                // Scrolled back to read older laps, a new one coming in moves
+                // the count along with it, so the same laps stay on screen
+                // instead of the list creeping a row a lap. At the bottom it
+                // stays at 0 and follows the newest lap.
+                if (_scrollBack > 0 && _lapMs.Length > lapsBefore)
+                {
+                    _scrollBack += _lapMs.Length - lapsBefore;
+                }
             }
 
             Invalidate();
@@ -736,7 +888,8 @@ public sealed class LapDetailWindow : Form
             }
 
             var shown = Math.Min(Rows, _lapMs.Length);
-            var first = _lapMs.Length - shown;
+            var first = _lapMs.Length - shown - ScrollBack;
+            var last = first + shown;
 
             // The pace bars are scaled across the laps actually on screen,
             // and across flying laps only: the green-to-line pass is not a
@@ -748,7 +901,7 @@ public sealed class LapDetailWindow : Form
             long fastest = 0;
             long slowest = 0;
 
-            for (var i = Math.Max(first, 1); i < _lapMs.Length; i++)
+            for (var i = Math.Max(first, 1); i < last; i++)
             {
                 if (_recoveryLaps.Contains(i))
                 {
@@ -774,6 +927,29 @@ public sealed class LapDetailWindow : Form
             {
                 DrawLapRow(g, left, right, top + row * RowHeight, first + row, fastest, span);
             }
+
+            DrawScrollbar(g);
+        }
+
+        /// <summary>A slim track and thumb beside the rows, only when there are more laps than fit.</summary>
+        private void DrawScrollbar(Graphics g)
+        {
+            var thumb = ScrollThumb;
+
+            if (thumb.IsEmpty)
+            {
+                return;
+            }
+
+            using (var trackPath = AppTheme.RoundedRect(ScrollTrack, 3))
+            using (var trackFill = new SolidBrush(AppTheme.RowAlt))
+            {
+                g.FillPath(trackFill, trackPath);
+            }
+
+            using var thumbPath = AppTheme.RoundedRect(thumb, 3);
+            using var thumbFill = new SolidBrush(_thumbDragY is null ? AppTheme.Border : AppTheme.TextMuted);
+            g.FillPath(thumbFill, thumbPath);
         }
 
         private void DrawLapRow(Graphics g, int left, int right, int top, int lapIndex, long fastest, long span)
@@ -937,10 +1113,13 @@ public sealed class LapDetailWindow : Form
         {
             var total = _lapMs.Length;
             var shown = Math.Min(Rows, total);
+            var back = ScrollBack;
 
-            var text = total > shown
-                ? $"Last {shown} of {total} laps - updates live - drag the name to move"
-                : "Updates live - drag the name to move, Esc or X closes";
+            var text = total <= shown
+                ? "Updates live - drag the name to move, Esc or X closes"
+                : back > 0
+                    ? $"Laps {total - shown - back + 1}-{total - back} of {total} - scroll down for the latest"
+                    : $"Last {shown} of {total} laps - scroll up for earlier ones - updates live";
 
             if (_penaltyMs != 0)
             {
