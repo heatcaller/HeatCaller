@@ -2104,6 +2104,18 @@ public partial class MainForm
         _announcer.SendToListeners = (said, mp3) =>
             _relayPublisher.OfferToListeners(_raceEvents.Active?.Id, said, mp3, DateTime.UtcNow);
 
+        // And the whole room rather than only the announcer (2 Nov 2026):
+        // the music, the crowd and the imaging under the lines, as one
+        // stream. While it is running a line is not sent on its own - it is
+        // heard in the stream, or kept off it - and only its words go across
+        // for the page to show. See ListenStream.
+        _listenStream ??= new ListenStream(
+            () => _settings.ListenAlongOnTheRelay && _settings.RelayEnabled,
+            segment => _relayPublisher.OfferStreamToListeners(_raceEvents.Active?.Id, segment),
+            OnClientRawMessage);
+        _announcer.StreamingToListeners = () => _listenStream.Streaming;
+        _announcer.CaptionToListeners = _listenStream.Caption;
+
         // And a club who has never been asked is put onto the show music
         // that ships with the app - once, here, where the app is known to
         // be starting rather than a page being previewed. See

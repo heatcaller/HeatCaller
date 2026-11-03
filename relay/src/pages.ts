@@ -636,6 +636,28 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .ears label { display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; font-size: 0.95rem; }
 .ears label[hidden], .ears button[hidden] { display: none; }
 .ears button[aria-pressed=true] { background: var(--primary); color: var(--on-primary, #FFFFFF); }
+/* Message the announcer and Who wins? (2 Nov 2026): the live page's two
+   ways into the room from outside it, when the club has them switched on.
+   Every field full width and 16px text, as sign-up's are, so a phone does
+   not zoom in on the one being typed in. */
+.shout, .vote { padding: 14px 18px; }
+.shout[hidden], .vote[hidden] { display: none; }
+.shout h3, .vote h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.shout .note, .vote .note { padding: 8px 0 0; text-align: left; }
+.shout textarea, .shout input {
+  display: block; width: 100%; margin: 8px 0 0; padding: 12px; font: inherit; font-size: 1rem; font-weight: 400;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.shout textarea { min-height: 88px; resize: vertical; }
+.shout .left { text-align: right; color: var(--muted); font-size: 0.8rem; margin: 4px 0 0; }
+.shout .go, .vote .go { margin: 12px auto 0; }
+.shout .said, .vote .said { margin: 10px 0 0; font-weight: 600; text-align: center; min-height: 1.3em; }
+.vote .race { font-weight: 700; margin: 0 0 8px; }
+.vote .pick { display: block; width: 100%; margin: 0 0 8px; padding: 14px 16px; font: inherit; font-size: 1.05rem;
+              text-align: left; border-radius: 10px; border: 1px solid var(--border); background: var(--bg);
+              color: var(--text); cursor: pointer; }
+.vote .pick.mine { background: var(--primary); border-color: var(--primary); color: var(--on-primary, #FFFFFF);
+                   font-weight: 700; }
+.vote .pick:disabled { opacity: 0.6; cursor: default; }
 
 /* Light themes: the few colours chosen for a dark page that vanish on a pale one */
 html.light .tier-gold { color: #9A6B00; }
@@ -4050,10 +4072,284 @@ function listenControl(listening: boolean): string {
   }
 
   return '<div class="card" id="listen">'
-    + '<button type="button" id="listenbtn" class="btn">Listen to the announcer</button>'
+    + '<button type="button" id="listenbtn" class="btn">Listen live</button>'
     + '<p class="note" id="listennote">A few seconds behind the room. Nothing plays until you press it.</p>'
     + "</div>";
 }
+
+/**
+ * The longest message, matching NOTE_MAX_CHARS on the relay and
+ * ClubNotes.MostChars on the laptop. If one moves, all three have to.
+ */
+const NOTE_MOST_CHARS = 200;
+
+/** And the longest name, matching NOTE_MAX_NAME and ClubNote.From's 40. */
+const NOTE_MOST_NAME = 40;
+
+/**
+ * MESSAGE THE ANNOUNCER (2 Nov 2026, docs audit). The app's "Take them
+ * from the club's own web page" had a route on this relay (notes/send) and
+ * no page that called it, so ticking it did nothing anybody could see.
+ * This is the laptop's own /shoutout page on Live, in the same words.
+ *
+ * ONLY WHERE THE CLUB HAS TURNED IT ON, for the reason Listen gives: a
+ * form for a club that has not is a form that sends into nothing.
+ *
+ * Nothing it sends is said until the race director approves it on the
+ * laptop, and the card says so - see NOTES_CHANNEL on the relay.
+ */
+function noteControl(notes: boolean): string {
+  if (!notes) {
+    return "";
+  }
+
+  return '<div class="card shout" id="shout">'
+    + "<h3>Message the announcer</h3>"
+    + '<p class="note">A birthday, a dedication, somebody&rsquo;s first race, the raffle closing - whatever the '
+    + "announcer would not otherwise know. Keep it short and it may get read out between races.</p>"
+    + `<textarea id="shouttext" maxlength="${NOTE_MOST_CHARS}" aria-label="Your message" `
+    + 'placeholder="It&rsquo;s Jack&rsquo;s first race since his operation - good to have him back"></textarea>'
+    + '<p class="left" id="shoutleft"></p>'
+    + `<input id="shoutwho" maxlength="${NOTE_MOST_NAME}" aria-label="Your name" placeholder="Your name (optional)" autocomplete="name">`
+    + '<button type="button" class="go" id="shoutsend">Send it</button>'
+    + '<p class="said" id="shoutsaid" role="status"></p>'
+    + '<p class="note">The race director reads every message before the announcer says anything, so this is not '
+    + "a promise that it goes out - and nothing you send here reaches the timing or the results.</p>"
+    + "</div>";
+}
+
+const NOTE_JS = `
+(function () {
+  const text = document.getElementById('shouttext');
+  const who = document.getElementById('shoutwho');
+  const send = document.getElementById('shoutsend');
+  const said = document.getElementById('shoutsaid');
+  const left = document.getElementById('shoutleft');
+
+  if (!text || !who || !send || !said || !left) {
+    return;
+  }
+
+  const MOST = ${NOTE_MOST_CHARS};
+
+  function count() {
+    left.textContent = (MOST - text.value.length) + ' left';
+  }
+
+  text.addEventListener('input', count);
+  count();
+
+  send.addEventListener('click', async () => {
+    const message = text.value.trim();
+
+    if (!message) {
+      said.textContent = 'Type something first.';
+      return;
+    }
+
+    send.disabled = true;
+    said.textContent = 'Sending\\u2026';
+
+    let r = null;
+    let d = {};
+
+    try {
+      r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/notes/send', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ m: message, n: who.value.trim() }),
+        cache: 'no-store',
+      });
+      d = await r.json().catch(() => ({}));
+    } catch (e) {
+      said.textContent = 'Could not reach the relay.';
+      send.disabled = false;
+      return;
+    }
+
+    send.disabled = false;
+
+    if (r.ok && d && d.ok) {
+      said.textContent = 'Sent to the race director. Thanks!';
+      text.value = '';
+      count();
+      return;
+    }
+
+    // 404 is the club having switched this off since the page was drawn.
+    said.textContent = r.status === 404
+      ? 'Messages to the announcer aren\\u2019t being taken right now.'
+      : (d && typeof d.error === 'string' && d.error) || 'Could not send that.';
+  });
+})();
+`;
+
+/**
+ * WHO WINS? (2 Nov 2026, docs audit). The room's vote from the club's own
+ * page - the laptop's /vote page on Live, for the same reason as the note
+ * form above: "Let the club's own web page vote" had routes on this relay
+ * and no page that used them.
+ *
+ * Drawn for a club that has the vote switched on, and HIDDEN until a vote
+ * is open: the page asks for the ballot every five seconds, as the
+ * laptop's own page does, so a phone left on Live through two races is
+ * never offering the wrong grid and a closed vote stops taking taps.
+ *
+ * NO TALLY, as on the laptop's page: the ballot route sends none. The
+ * relay does not say who this phone picked either, so the page remembers
+ * its own pick for as long as it shows the same ballot.
+ */
+function voteControl(vote: boolean): string {
+  if (!vote) {
+    return "";
+  }
+
+  return '<div class="card vote" id="vote" hidden>'
+    + "<h3>Who wins?</h3>"
+    + '<p class="race" id="voterace"></p>'
+    + '<div id="votelist"></div>'
+    + '<p class="said" id="votesaid" role="status"></p>'
+    + '<p class="note">Tap a name. You can change your mind while voting is open, and the announcer says what '
+    + "the room reckoned after the race - it never says who you picked. Nothing you tap here reaches the timing "
+    + "or the results.</p>"
+    + "</div>";
+}
+
+const VOTE_JS = `
+(function () {
+  const box = document.getElementById('vote');
+  const race = document.getElementById('voterace');
+  const list = document.getElementById('votelist');
+  const said = document.getElementById('votesaid');
+
+  if (!box || !race || !list || !said) {
+    return;
+  }
+
+  const API = '/api/v1/c/' + encodeURIComponent(CLUB) + '/vote';
+
+  // Which ballot is showing: the race and its grid. A new one is a new
+  // race, and this phone has picked nobody in it yet. (The relay keeps
+  // the laptop's own race id to itself; two classes' A-mains have the
+  // same label but never the same grid.)
+  let ballotKey = '';
+  let mine = null;
+  let mineName = '';
+  let shown = null;
+
+  function draw(d) {
+    const drivers = Array.isArray(d.drivers) ? d.drivers.filter((one) => one
+      && typeof one.id === 'string' && typeof one.name === 'string') : [];
+    const key = String(d.race || '') + '|' + drivers.map((one) => one.id).join(',');
+
+    if (key !== ballotKey) {
+      ballotKey = key;
+      mine = null;
+      mineName = '';
+      shown = null;
+    }
+
+    const open = d.open === true;
+
+    // Only while a vote is open - or just closed on one this phone voted
+    // in, so the pick it made does not vanish under its thumb.
+    if (!open && mine === null) {
+      box.hidden = true;
+      shown = null;
+      return;
+    }
+
+    box.hidden = false;
+    race.textContent = d.race || 'Tonight';
+    list.textContent = '';
+
+    for (const one of drivers) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pick' + (one.id === mine ? ' mine' : '');
+      b.textContent = one.name;
+      b.disabled = !open;
+      b.addEventListener('click', () => cast(one.id, one.name));
+      list.appendChild(b);
+    }
+
+    // Only rewritten when what it says has changed, so an error from the
+    // last tap is not wiped by the next poll.
+    const now = (open ? 'open' : 'closed') + '|' + (mine || '');
+    if (now === shown) return;
+    shown = now;
+
+    if (!open) said.textContent = 'Voting has closed. Your pick is in.';
+    else if (mine) said.textContent = 'You have ' + mineName + '. Good luck.';
+    else said.textContent = 'Tap who you reckon wins.';
+  }
+
+  async function ballot() {
+    let r = null;
+
+    try {
+      r = await fetch(API + '/ballot', { cache: 'no-store' });
+    } catch (e) {
+      return;
+    }
+
+    // Switched off since the page was drawn.
+    if (r.status === 404) {
+      box.hidden = true;
+      ballotKey = '';
+      mine = null;
+      shown = null;
+      return;
+    }
+
+    // Busy or broken keeps what is on screen.
+    if (!r.ok) return;
+
+    const d = await r.json().catch(() => null);
+    if (d && d.ok) draw(d);
+  }
+
+  async function cast(id, name) {
+    said.textContent = 'Sending\\u2026';
+
+    let r = null;
+    let d = {};
+
+    try {
+      r = await fetch(API + '/send', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ d: id }),
+        cache: 'no-store',
+      });
+      d = await r.json().catch(() => ({}));
+    } catch (e) {
+      said.textContent = 'Could not reach the relay.';
+      return;
+    }
+
+    if (r.ok && d && d.ok) {
+      mine = id;
+      mineName = name;
+      shown = null;
+      ballot();
+      return;
+    }
+
+    said.textContent = (d && typeof d.error === 'string' && d.error) || 'Could not send that.';
+
+    // Closed or moved on while it was being tapped: show what is true now.
+    if (r.status === 409 || r.status === 404) {
+      shown = null;
+      ballot();
+    }
+  }
+
+  ballot();
+  setInterval(() => { if (!document.hidden) ballot(); }, 5000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) ballot(); });
+})();
+`;
 
 /**
  * Lap times in my ear (29 Oct 2026, asked for by Asher: the coach page's
@@ -4232,29 +4528,54 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     // The race board first, under its flag bar (29 Oct 2026, asked for by
     // Asher: "the race board should be first"): it is what the page is
     // for, so on a phone it is what shows without scrolling. Listen,
-    // Captions and Lap times in my ear follow it.
+    // Captions and Lap times in my ear follow it. Who wins? sits straight
+    // under the board while a vote is open, since it only matters before
+    // the race; Message the announcer goes with Listen (2 Nov 2026).
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
       + '<div id="board"></div>'
+      + voteControl(context.look.vote)
       + listenControl(context.look.listening)
+      + noteControl(context.look.notes)
       + captionsControl()
       + lapTalkControl(),
-    script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS,
+    script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS
+      + (context.look.notes ? NOTE_JS : "") + (context.look.vote ? VOTE_JS : ""),
   }, context);
 }
 
 /**
  * The player.
  *
- * NOT A STREAM. Each line is a finished piece of audio the announcer
- * already spoke, so this is a queue rather than a buffer: fetch what is
- * new, play it in order, play the next one when the last one ends. There
- * is nothing to resynchronise and nothing to drop frames from.
+ * THE WHOLE ROOM, NOT ONLY THE VOICE (2 Nov 2026, asked for by Asher:
+ * "listen in on the relay should include all audio. not just the voice.
+ * imaging, ambiance, music, etc."). The laptop now sends the room's mix as
+ * one mp3 stream, cut into segments of about three seconds on frame
+ * boundaries (ListenStream on the laptop). A segment says kind "mix", and
+ * carries a few frames from the one before it ("lead"): the whole thing is
+ * decoded, and only the segment's own frames - the last frames*spf samples
+ * - are played, so the decoder starts each one warmed up and the joins are
+ * seamless. That needs Web Audio rather than one media element: an element
+ * swapping its source every three seconds leaves a gap at every join, which
+ * a voice hides and music does not. A document without a kind is a single
+ * line of the announcer's, from a laptop sending lines (an older version,
+ * or one whose encoder will not stream); it is played whole, after whatever
+ * is already playing.
  *
  * IT JOINS WHERE THE EVENING IS. On the first poll it marks everything it
- * finds as already heard and plays none of it, so pressing Listen does not
- * replay the last three minutes before catching up - somebody opening the
- * page joins the room as it is, which is what they would do walking in. On
- * every poll after that, anything new is played.
+ * finds as already heard - except the newest stretch of the stream, which it
+ * plays at once - so pressing Listen does not replay the last two minutes
+ * before catching up. On every poll after that, anything new is played.
+ *
+ * IT NEVER FALLS BEHIND (2 Nov 2026, asked for by Asher: "if you go to
+ * another app on ios then comeback the audio is way behind realtime. it
+ * should drop evertyhing and pick up from where it left off."). A phone that
+ * puts the page in the background stops its timers and its audio, and on
+ * coming back the player used to work through everything it had missed, a
+ * line at a time, and stay that far behind the room for the rest of the
+ * night. Now, coming back, it drops whatever it had waiting and starts again
+ * from the newest stretch, as it does when Listen is first pressed. The same
+ * happens whenever it finds more than three new documents at once, or more
+ * than MOST_BEHIND_S seconds waiting to be played.
  *
  * THE RELAY NEVER DECODES THE AUDIO, so this does. The bytes arrive as
  * base64 inside the club's own document - see the media-src note on the
@@ -4270,10 +4591,11 @@ const LISTEN_JS = `
     return;
   }
 
-  // A twentieth of a second of silence, as an mp3. Played inside the press
-  // to unlock the one element every line then plays through: iPhone Safari
-  // only lets a media element make a sound if it was first started by a
-  // tap, and a line arrives from a timer seconds later, never from a tap.
+  // A twentieth of a second of silence, as an mp3, looped on a media
+  // element started inside the press. iPhone Safari plays Web Audio as if it
+  // were a ringtone - so the silent switch mutes it - unless a media element
+  // is playing too; this is that element. (navigator.audioSession, where
+  // there is one, says the same thing more directly.)
   const SILENCE = 'data:audio/mpeg;base64,//sQxAADwAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xLEKYPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEU4PAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==';
 
   // A line the laptop sent again because its answer was lost lands a
@@ -4287,21 +4609,43 @@ const LISTEN_JS = `
   const WAIT_MS = 10000;
   const MOST_TRIES = 3;
 
+  // How far ahead of now a stretch is started when it does not follow on
+  // from the one before, so a slow decode cannot open a hole at its start.
+  const START_AHEAD_S = 0.3;
+
+  // Past this much waiting to be played, the player is not listening along
+  // any more but listening back: it drops what it has and starts again now.
+  const MOST_BEHIND_S = 9;
+
   // Id to the time the relay had it, for every line already heard.
   const heard = new Map();
 
   // Id to how many times fetching it has failed - see sweepOnce.
   const tries = new Map();
-  const queue = [];
   let on = false;
-  let playing = false;
   let started = false;
   let timer = null;
-  let player = null;
-  let current = null;
+  let ctx = null;
+  let keepAlive = null;
 
-  // Moved on by every press, so a sweep still waiting on the relay when
-  // Stop is pressed cannot queue lines into the next Listen.
+  // When the next sound starts, on the audio clock, and which stretch of
+  // which run of the stream was scheduled last - so the next one is joined
+  // straight on to it only when it really is the next one.
+  let nextAt = 0;
+  let lastRun = null;
+  let lastN = -1;
+
+  // Everything scheduled and not yet finished, and the captions waiting to
+  // be shown, so Stop and a catch-up can take them all back.
+  let playing = [];
+  let captions = [];
+
+  // Decodes run one after another, so a short stretch decoded quickly
+  // cannot be scheduled ahead of a longer one before it.
+  let chain = Promise.resolve();
+
+  // Moved on by every press and every catch-up, so a sweep or a decode
+  // still in flight from before cannot schedule anything into what follows.
   let turn = 0;
 
   // One sweep at a time. The timer starts one every two seconds whatever
@@ -4311,6 +4655,9 @@ const LISTEN_JS = `
   // now - see sweepOnce - and this still keeps two sweeps from fetching,
   // and queueing, the same line.)
   let sweeping = false;
+
+  // When the page was hidden, for the catch-up on coming back.
+  let hiddenAt = 0;
 
   function say(text) {
     note.textContent = text;
@@ -4379,18 +4726,35 @@ const LISTEN_JS = `
 
       const items = Array.isArray(body.items) ? body.items : [];
 
-      // Oldest first, so the announcer is played in the order it spoke.
-      const lines = items
+      // Oldest first, so the room is played in the order it was heard.
+      let lines = items
         .filter((one) => one && typeof one.id === 'string')
         .map((one) => ({ id: one.id, at: Date.parse(one.publishedAt) || 0 }))
         .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-      // THE FIRST SWEEP ONLY MARKS. See the remarks above.
+      // THE FIRST SWEEP MARKS, and plays only the newest - see the remarks
+      // above. The newest is fetched like any other; if it turns out to be a
+      // line rather than a stretch of the stream it is not played (a line
+      // can be minutes old, where the stream's newest is seconds).
+      let joining = false;
+
       if (!started) {
         started = true;
-        lines.forEach((one) => heard.set(one.id, one.at));
-        say(lines.length > 0 ? 'Listening. You will hear the next thing said.' : 'Listening. Nothing being said just now.');
-        return;
+        joining = lines.length > 0;
+        lines.slice(0, -1).forEach((one) => heard.set(one.id, one.at));
+        lines = lines.slice(-1);
+        say(lines.length > 0 ? 'Listening.' : 'Listening. Nothing to hear just now.');
+      }
+
+      // Too many new at once is a page that was asleep: all but the newest
+      // is let go rather than played late.
+      const fresh = lines.filter((one) => isNew(one.id, one.at));
+
+      if (fresh.length > 3) {
+        fresh.slice(0, -1).forEach((one) => heard.set(one.id, one.at));
+        lines = fresh.slice(-1);
+        joining = true;
+        dropAll();
       }
 
       for (const one of lines) {
@@ -4431,12 +4795,14 @@ const LISTEN_JS = `
         const doc = got && got.ok ? got.body : null;
         const said = doc && doc.body ? doc.body : {};
 
-        if (typeof said.audio === 'string' && said.audio.length > 0) {
-          queue.push({ audio: said.audio, said: typeof said.said === 'string' ? said.said : '' });
+        if (typeof said.audio !== 'string' || said.audio.length === 0 || (joining && said.kind !== 'mix')) {
+          continue;
         }
+
+        chain = chain.then(() => play(said, mine)).catch(() => {});
       }
 
-      playNext();
+      await chain;
     } catch (err) {
       // A sweep that failed is one sweep. The next one is in two seconds,
       // and a race night is not the moment to put an error on a page
@@ -4444,42 +4810,174 @@ const LISTEN_JS = `
     }
   }
 
-  function playNext() {
-    if (playing || queue.length === 0 || !on || player === null) {
+  function bytesOf(base64) {
+    const text = atob(base64);
+    const bytes = new Uint8Array(text.length);
+
+    for (let i = 0; i < text.length; i++) {
+      bytes[i] = text.charCodeAt(i);
+    }
+
+    return bytes.buffer;
+  }
+
+  // decodeAudioData as a promise, for the Safari that only takes callbacks.
+  function decode(bytes) {
+    return new Promise((done, fail) => {
+      const promised = ctx.decodeAudioData(bytes, done, fail);
+
+      if (promised && typeof promised.then === 'function') {
+        promised.then(done, fail);
+      }
+    });
+  }
+
+  async function play(said, mine) {
+    if (!on || mine !== turn || ctx === null) {
       return;
     }
 
-    const next = queue.shift();
-    const line = {};
+    const buffer = await decode(bytesOf(said.audio));
 
-    playing = true;
-    current = line;
-    say(next.said.length > 0 ? next.said : 'Playing...');
-
-    // ENDED AND ERROR BOTH MOVE ON. A line whose audio will not decode
-    // must not stop everything behind it: the room has moved on, and so
-    // should this. Only once per line, and not at all for a line Stop has
-    // already ended: an error and a refused play() can both report the
-    // same line, and the second must not cut off the one after it.
-    const done = () => {
-      if (current !== line) {
-        return;
-      }
-
-      current = null;
-      playing = false;
-      playNext();
-    };
-
-    player.onended = done;
-    player.onerror = done;
-    player.src = 'data:audio/mpeg;base64,' + next.audio;
-
-    const playing_ = player.play();
-
-    if (playing_ && typeof playing_.catch === 'function') {
-      playing_.catch(() => done());
+    if (!on || mine !== turn) {
+      return;
     }
+
+    const now = ctx.currentTime;
+    let offset = 0;
+    let length = buffer.duration;
+    let at;
+
+    if (said.kind === 'mix' && said.frames > 0 && said.spf > 0 && said.rate > 0) {
+      // Only the segment's own frames: the lead is decoded to warm the
+      // decoder up and is not played. Taken from the END, which is right
+      // whether or not this browser trims the decoder's delay from the front.
+      const own = Math.min(buffer.length, Math.round(said.frames * said.spf * buffer.sampleRate / said.rate));
+      offset = (buffer.length - own) / buffer.sampleRate;
+      length = own / buffer.sampleRate;
+
+      const follows = said.run === lastRun && said.n === lastN + 1 && nextAt > now;
+      lastRun = said.run;
+      lastN = said.n;
+      at = follows ? nextAt : now + START_AHEAD_S;
+    } else {
+      lastRun = null;
+      lastN = -1;
+      at = Math.max(nextAt, now + START_AHEAD_S);
+    }
+
+    if (at - now > MOST_BEHIND_S) {
+      dropAll();
+      at = now + START_AHEAD_S;
+    }
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.onended = () => {
+      playing = playing.filter((one) => one !== source);
+    };
+    source.start(at, offset, length);
+    playing.push(source);
+    nextAt = at + length;
+
+    // The words, shown as they are heard: a line's at its start, the
+    // stream's where each one falls in its stretch.
+    const shown = said.kind === 'mix'
+      ? (Array.isArray(said.captions) ? said.captions : [])
+      : [{ text: typeof said.said === 'string' ? said.said : '', at: 0 }];
+
+    shown.forEach((one) => {
+      if (one && typeof one.text === 'string' && one.text.length > 0) {
+        const wait = Math.max(0, (at - now + (Number(one.at) || 0)) * 1000);
+        captions.push(setTimeout(() => say(one.text), wait));
+      }
+    });
+  }
+
+  // Everything scheduled stops, and nothing waiting is shown.
+  function dropAll() {
+    playing.forEach((source) => {
+      try {
+        source.onended = null;
+        source.stop();
+      } catch (err) {
+        // Already ended.
+      }
+    });
+
+    playing = [];
+    captions.forEach((one) => clearTimeout(one));
+    captions = [];
+    nextAt = 0;
+    lastRun = null;
+    lastN = -1;
+  }
+
+  // Back from the background: drop it all and join the room again from the
+  // newest stretch. Moving the turn on throws away any sweep or decode still
+  // in flight from before.
+  function rejoin() {
+    turn += 1;
+    dropAll();
+    chain = Promise.resolve();
+    started = false;
+    sweeping = false;
+
+    if (ctx !== null && ctx.state !== 'running' && typeof ctx.resume === 'function') {
+      const resumed = ctx.resume();
+
+      if (resumed && typeof resumed.catch === 'function') {
+        resumed.catch(() => {});
+      }
+    }
+
+    if (keepAlive !== null) {
+      const going = keepAlive.play();
+
+      if (going && typeof going.catch === 'function') {
+        going.catch(() => {});
+      }
+    }
+
+    sweep();
+  }
+
+  function cameBack() {
+    if (!on) {
+      return;
+    }
+
+    // Back within a moment and still on time - a tab flicked away and back
+    // on a computer, where the sound carried on - is left alone.
+    const away = Date.now() - hiddenAt;
+    const onTime = ctx !== null && ctx.state === 'running' && nextAt > ctx.currentTime && nextAt - ctx.currentTime < MOST_BEHIND_S;
+
+    if (away < 2000 && onTime) {
+      return;
+    }
+
+    rejoin();
+  }
+
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        hiddenAt = Date.now();
+      } else {
+        cameBack();
+      }
+    });
+  }
+
+  if (typeof window.addEventListener === 'function') {
+    // Back from the browser's page cache, which an iPhone often does
+    // instead of firing visibilitychange.
+    window.addEventListener('pageshow', (event) => {
+      if (event && event.persisted) {
+        cameBack();
+      }
+    });
   }
 
   btn.addEventListener('click', () => {
@@ -4490,28 +4988,62 @@ const LISTEN_JS = `
       btn.textContent = 'Stop listening';
       say('Listening...');
 
-      // Inside the press, which is the only place this is allowed. See
-      // SILENCE.
-      if (player === null) {
-        player = new Audio();
+      // All of this inside the press, which is the only place a phone lets
+      // sound start.
+      try {
+        if (typeof navigator !== 'undefined' && navigator.audioSession) {
+          navigator.audioSession.type = 'playback';
+        }
+      } catch (err) {
+        // Not this browser.
       }
 
-      player.onended = null;
-      player.onerror = null;
-      player.src = SILENCE;
+      if (ctx === null) {
+        const Context = window.AudioContext || window.webkitAudioContext;
 
-      const unlocked = player.play();
+        if (typeof Context !== 'function') {
+          on = false;
+          btn.textContent = 'Listen live';
+          say('This browser cannot play it.');
+          return;
+        }
+
+        // The stream's own rate where the browser allows it, so nothing is
+        // resampled a segment at a time.
+        try {
+          ctx = new Context({ sampleRate: 44100 });
+        } catch (err) {
+          ctx = new Context();
+        }
+      }
+
+      if (typeof ctx.resume === 'function') {
+        const resumed = ctx.resume();
+
+        if (resumed && typeof resumed.catch === 'function') {
+          resumed.catch(() => {});
+        }
+      }
+
+      if (keepAlive === null) {
+        keepAlive = new Audio();
+        keepAlive.loop = true;
+        keepAlive.src = SILENCE;
+      }
+
+      const unlocked = keepAlive.play();
 
       if (unlocked && typeof unlocked.catch === 'function') {
         unlocked.catch(() => {});
       }
 
+      started = false;
       sweep();
       timer = window.setInterval(sweep, 2000);
       return;
     }
 
-    btn.textContent = 'Listen to the announcer';
+    btn.textContent = 'Listen live';
     say('Stopped. Nothing plays until you press it.');
 
     if (timer !== null) {
@@ -4519,18 +5051,23 @@ const LISTEN_JS = `
       timer = null;
     }
 
-    // Stop means stop: the line playing now as well as the ones waiting.
+    // Stop means stop: what is playing now as well as what is waiting.
     // And the next Listen joins where the evening is then, like the first
     // one did, rather than playing back everything said in between.
-    queue.length = 0;
+    dropAll();
+    chain = Promise.resolve();
     started = false;
-    playing = false;
-    current = null;
 
-    if (player !== null) {
-      player.onended = null;
-      player.onerror = null;
-      player.pause();
+    if (keepAlive !== null) {
+      keepAlive.pause();
+    }
+
+    if (ctx !== null && typeof ctx.suspend === 'function') {
+      const suspended = ctx.suspend();
+
+      if (suspended && typeof suspended.catch === 'function') {
+        suspended.catch(() => {});
+      }
     }
   });
 })();

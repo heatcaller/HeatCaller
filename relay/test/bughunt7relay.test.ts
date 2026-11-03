@@ -9,6 +9,7 @@ import { BrainService, type BrainConfig, type BrainPlan } from "../src/brain.js"
 import { MemoryStore } from "../src/store.js";
 import { VoiceService, type CatalogueVoice } from "../src/voice.js";
 import { ACME_TOKEN, BROOK_TOKEN, call, start, tenants, type Harness } from "./helpers.js";
+import { FakeAudioWorld } from "./listen-fake-audio.js";
 
 /**
  * BUG HUNT 7, THE RELAY (13 Oct 2026).
@@ -92,39 +93,16 @@ function slowPost(
 
 // ------------------------------------------------------------ the player
 
-/** One media element as the page sees it, and every play() it was asked for. */
-class FakeAudio {
-  static made: FakeAudio[] = [];
-  static plays: { element: FakeAudio; src: string; inPress: boolean }[] = [];
-  static inPress = false;
-
-  src = "";
-  paused = true;
-  onended: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-
-  constructor() {
-    FakeAudio.made.push(this);
-  }
-
-  play(): Promise<void> {
-    FakeAudio.plays.push({ element: this, src: this.src, inPress: FakeAudio.inPress });
-    this.paused = false;
-    return Promise.resolve();
-  }
-
-  pause(): void {
-    this.paused = true;
-  }
-
-  addEventListener(): void {}
-}
-
 interface Held {
   id: string;
   publishedAt: string;
   audio: string;
+  /** A stretch of the room's stream rather than a line (2 Nov 2026). */
+  mix?: { run: string; n: number; captions?: { text: string; at: number }[] };
 }
+
+/** Frames and samples per frame for a stretch: 2 seconds' worth of its own, in a 1-second-longer buffer. */
+const MIX_FRAMES = 2 * 44100 / 1152;
 
 function listenPage(script: string, held: Held[]) {
   const from = script.indexOf("(function () {\n  const btn = document.getElementById('listenbtn');");
@@ -133,27 +111,41 @@ function listenPage(script: string, held: Held[]) {
 
   const listeners: (() => void)[] = [];
   const intervals: (() => void)[] = [];
+  const documentListeners = new Map<string, (() => void)[]>();
   const note = { textContent: "" };
   const btn = {
     textContent: "",
     addEventListener: (_type: string, run: () => void) => listeners.push(run),
   };
+  const sound = new FakeAudioWorld();
+  const { AudioContext, Audio, atob } = sound.globals();
+  const doc = {
+    hidden: false,
+    getElementById: (id: string) => (id === "listenbtn" ? btn : id === "listennote" ? note : null),
+    addEventListener: (type: string, run: () => void) => documentListeners.set(type, [...(documentListeners.get(type) ?? []), run]),
+  };
 
-  FakeAudio.made = [];
-  FakeAudio.plays = [];
+  // Three seconds of audio decoded for a stretch whose own frames are two.
+  sound.bufferLength = 3 * 44100;
 
   const reply = (body: unknown) => ({ ok: true, json: async () => body });
 
   const context = createContext({
     CLUB: "acme-rc",
-    Audio: FakeAudio,
-    document: { getElementById: (id: string) => (id === "listenbtn" ? btn : id === "listennote" ? note : null) },
+    Audio,
+    atob,
+    document: doc,
     window: {
+      AudioContext,
       setInterval: (run: () => void) => intervals.push(run),
       clearInterval: () => {
         intervals.length = 0;
       },
+      addEventListener() {},
     },
+    setTimeout: (run: () => void, ms: number) => setTimeout(run, ms >= 5000 ? ms : 0),
+    clearTimeout,
+    Date,
     fetch: async (url: string) => {
       if (url.endsWith("/collection/listen?meta=1")) {
         // One document per id, as the relay holds them: a line published
@@ -169,7 +161,26 @@ function listenPage(script: string, held: Held[]) {
       const id = decodeURIComponent(url.slice(url.lastIndexOf("/") + 1));
       const one = [...held].reverse().find((line) => line.id === id);
 
-      return one === undefined ? { ok: false, json: async () => ({}) } : reply({ id, body: { audio: one.audio, said: id } });
+      if (one === undefined) {
+        return { ok: false, json: async () => ({}) };
+      }
+
+      const body = one.mix === undefined
+        ? { audio: one.audio, said: id }
+        : {
+            kind: "mix",
+            audio: one.audio,
+            said: "",
+            lead: 4,
+            frames: MIX_FRAMES,
+            spf: 1152,
+            rate: 44100,
+            run: one.mix.run,
+            n: one.mix.n,
+            captions: one.mix.captions ?? [],
+          };
+
+      return reply({ id, body });
     },
   });
 
@@ -177,14 +188,15 @@ function listenPage(script: string, held: Held[]) {
 
   return {
     note,
+    sound,
     /** The tap, which is the only moment a phone lets audio start. */
     async press(): Promise<void> {
-      FakeAudio.inPress = true;
+      sound.inPress = true;
 
       try {
         listeners.forEach((run) => run());
       } finally {
-        FakeAudio.inPress = false;
+        sound.inPress = false;
       }
 
       await settle();
@@ -193,14 +205,21 @@ function listenPage(script: string, held: Held[]) {
       [...intervals].forEach((run) => run());
       await settle();
     },
-    /** The line now playing reaching its end. */
-    async ended(): Promise<void> {
-      FakeAudio.made[0]?.onended?.();
+    /** The page going to the background, and the audio clock running on (or not) while it is there. */
+    async away(seconds: number): Promise<void> {
+      doc.hidden = true;
+      documentListeners.get("visibilitychange")?.forEach((run) => run());
+      sound.now += seconds;
       await settle();
     },
-    /** What was played after the press, as the audio each line carried. */
+    async back(): Promise<void> {
+      doc.hidden = false;
+      documentListeners.get("visibilitychange")?.forEach((run) => run());
+      await settle();
+    },
+    /** What was played after the press, as the audio each document carried. */
     played(): string[] {
-      return FakeAudio.plays.filter((one) => !one.inPress).map((one) => one.src.slice(one.src.indexOf(",") + 1));
+      return sound.played();
     },
   };
 }
@@ -217,28 +236,33 @@ describe("bug hunt 7: the listen-along player", () => {
 
   const at = (minutes: number) => new Date(Date.UTC(2026, 9, 13, 19, 0, 0) + minutes * 60_000).toISOString();
 
-  it("starts its one element inside the press, and plays every line through that element", async () => {
+  it("unlocks its sound inside the press, and plays every line after it", async () => {
     const held: Held[] = [{ id: "L000001", publishedAt: at(0), audio: "one" }];
     const page = listenPage(await liveScript(), held);
 
     await page.press();
 
-    // iPhone Safari only lets an element make a sound once a tap has
-    // started it, and lines arrive from a timer, never from a tap.
-    assert.equal(FakeAudio.made.length, 1);
-    assert.equal(FakeAudio.plays.length, 1);
-    assert.equal(FakeAudio.plays[0]?.inPress, true);
+    // iPhone Safari only lets sound start inside a tap, and lines arrive
+    // from a timer, never from a tap.
+    assert.equal(page.sound.contexts.length, 1);
+    assert.equal(page.sound.contexts[0]?.resumedInPress, true);
+    assert.equal(page.sound.elements.length, 1);
+    assert.equal(page.sound.elements[0]?.playedInPress, true, "the keep-alive element is started in the press");
+    assert.equal(page.sound.elements[0]?.loop, true);
 
     held.push({ id: "L000002", publishedAt: at(1), audio: "two" });
     await page.poll();
-    await page.ended();
 
     held.push({ id: "L000003", publishedAt: at(2), audio: "three" });
     await page.poll();
 
     assert.deepEqual(page.played(), ["two", "three"]);
-    assert.equal(FakeAudio.made.length, 1, "no new element per line");
-    assert.ok(FakeAudio.plays.every((one) => one.element === FakeAudio.made[0]));
+    assert.equal(page.sound.contexts.length, 1, "no new context per line");
+
+    // One after the other, not on top of each other.
+    const [two, three] = page.sound.starts;
+    assert.ok(two !== undefined && three !== undefined);
+    assert.ok(three.at >= two.at + two.length);
   });
 
   it("plays the laptop's count starting again after a restart, but not a line sent twice", async () => {
@@ -249,7 +273,6 @@ describe("bug hunt 7: the listen-along player", () => {
 
     held.push({ id: "L000002", publishedAt: at(1), audio: "first-run-2" });
     await page.poll();
-    await page.ended();
 
     // The laptop's answer was lost and it sent the same line again a few
     // seconds later. Heard once already.
@@ -261,7 +284,6 @@ describe("bug hunt 7: the listen-along player", () => {
     // An hour on, the laptop restarts and counts from L000001 again.
     held.push({ id: "L000001", publishedAt: at(60), audio: "second-run-1" });
     await page.poll();
-    await page.ended();
 
     held.push({ id: "L000002", publishedAt: at(61), audio: "second-run-2" });
     await page.poll();
@@ -269,7 +291,7 @@ describe("bug hunt 7: the listen-along player", () => {
     assert.deepEqual(page.played(), ["first-run-2", "second-run-1", "second-run-2"]);
   });
 
-  it("Stop stops the line playing, and Listen again joins where the evening is", async () => {
+  it("Stop stops what is playing, and Listen again joins where the evening is", async () => {
     const held: Held[] = [{ id: "L000001", publishedAt: at(0), audio: "one" }];
     const page = listenPage(await liveScript(), held);
 
@@ -278,11 +300,11 @@ describe("bug hunt 7: the listen-along player", () => {
     held.push({ id: "L000002", publishedAt: at(1), audio: "two" });
     await page.poll();
 
-    assert.equal(FakeAudio.made[0]?.paused, false);
+    assert.equal(page.sound.starts[0]?.stopped, false);
 
     await page.press();
 
-    assert.equal(FakeAudio.made[0]?.paused, true, "the line playing at Stop is stopped");
+    assert.equal(page.sound.starts[0]?.stopped, true, "the line playing at Stop is stopped");
 
     // Said while nobody was listening.
     held.push({ id: "L000003", publishedAt: at(2), audio: "three" });
@@ -297,6 +319,134 @@ describe("bug hunt 7: the listen-along player", () => {
     await page.poll();
 
     assert.deepEqual(page.played(), ["two", "five"]);
+  });
+});
+
+describe("listening along to the whole room (2 Nov 2026)", () => {
+  async function liveScript(): Promise<string> {
+    harness = await start(new MemoryStore());
+
+    const opened = await call(harness, "POST", "/api/v1/c/acme-rc/listen/open", { token: ACME_TOKEN, json: { open: true } });
+    assert.equal(opened.status, 200);
+
+    return scriptOf((await call(harness, "GET", "/c/acme-rc/live")).text);
+  }
+
+  const at = (seconds: number) => new Date(Date.UTC(2026, 10, 2, 19, 0, 0) + seconds * 1000).toISOString();
+  const mix = (n: number, run = "R1"): Held => ({ id: `L${run}-${String(n).padStart(6, "0")}`, publishedAt: at(n * 2), audio: `mix-${n}`, mix: { run, n } });
+
+  it("starts with the newest stretch at once, rather than waiting for the next", async () => {
+    const held: Held[] = [mix(1), mix(2), mix(3)];
+    const page = listenPage(await liveScript(), held);
+
+    await page.press();
+
+    assert.deepEqual(page.played(), ["mix-3"]);
+  });
+
+  it("joins stretch after stretch with no gap, playing only each one's own frames", async () => {
+    const held: Held[] = [mix(1)];
+    const page = listenPage(await liveScript(), held);
+
+    await page.press();
+
+    held.push(mix(2));
+    await page.poll();
+    held.push(mix(3));
+    await page.poll();
+
+    const [one, two, three] = page.sound.starts;
+    assert.ok(one !== undefined && two !== undefined && three !== undefined);
+    assert.deepEqual(page.played(), ["mix-1", "mix-2", "mix-3"]);
+
+    // The last two seconds of a three-second decode: the lead is not played.
+    assert.ok(Math.abs(one.offset - 1) < 0.001, `offset ${one.offset}`);
+    assert.ok(Math.abs(one.length - 2) < 0.001, `length ${one.length}`);
+
+    // Back to back, to the sample.
+    assert.ok(Math.abs(two.at - (one.at + one.length)) < 1e-9);
+    assert.ok(Math.abs(three.at - (two.at + two.length)) < 1e-9);
+  });
+
+  it("does not join a stretch on to one it does not follow", async () => {
+    const held: Held[] = [mix(1)];
+    const page = listenPage(await liveScript(), held);
+
+    await page.press();
+
+    // A silent stretch was never sent, so 2 is missing.
+    held.push(mix(3));
+    await page.poll();
+
+    const [one, three] = page.sound.starts;
+    assert.ok(one !== undefined && three !== undefined);
+    assert.notEqual(three.at, one.at + one.length);
+  });
+
+  it("back from another app, drops what it had and picks up the room where it is now", async () => {
+    const held: Held[] = [mix(1)];
+    const page = listenPage(await liveScript(), held);
+
+    await page.press();
+    held.push(mix(2));
+    await page.poll();
+
+    // Away for a minute: the phone stops the page, and the laptop goes on.
+    await page.away(60);
+
+    for (let n = 3; n <= 30; n++) {
+      held.push(mix(n));
+    }
+
+    await page.back();
+
+    assert.deepEqual(page.played(), ["mix-1", "mix-2", "mix-30"], "nothing missed is played late");
+    assert.ok(page.sound.starts.slice(0, 2).every((one) => one.stopped), "what was waiting is dropped");
+
+    held.push(mix(31));
+    await page.poll();
+
+    assert.deepEqual(page.played(), ["mix-1", "mix-2", "mix-30", "mix-31"]);
+  });
+
+  it("left behind for any other reason, lets the backlog go and plays the newest", async () => {
+    const held: Held[] = [mix(1)];
+    const page = listenPage(await liveScript(), held);
+
+    await page.press();
+
+    for (let n = 2; n <= 8; n++) {
+      held.push(mix(n));
+    }
+
+    await page.poll();
+
+    assert.deepEqual(page.played(), ["mix-1", "mix-8"]);
+  });
+
+  it("shows each line's words where they fall in the stretch", async () => {
+    const held: Held[] = [mix(1)];
+    const page = listenPage(await liveScript(), held);
+
+    await page.press();
+
+    held.push({ ...mix(2), mix: { run: "R1", n: 2, captions: [{ text: "Green flag!", at: 0.5 }] } });
+    await page.poll();
+    await new Promise((done) => setTimeout(done, 5));
+
+    assert.equal(page.note.textContent, "Green flag!");
+  });
+
+  it("plays a laptop that still sends lines one by one", async () => {
+    const held: Held[] = [mix(1)];
+    const page = listenPage(await liveScript(), held);
+
+    await page.press();
+
+    held.push({ id: "LR1-000002", publishedAt: at(4), audio: "a-line" });
+    await page.poll();
+
+    assert.deepEqual(page.played(), ["mix-1", "a-line"]);
   });
 });
 

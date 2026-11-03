@@ -290,12 +290,12 @@ public sealed class AudioLevelsTests
     {
         var bus = Source("AudioBus.cs");
         Assert.Contains("new(AudioLevels.Effects, MixSampleRate, MixChannels, OutputLatencyMs, OutputBuffers)", bus);
-        Assert.Contains("bool allowBoost = false, bool voice = false)", bus);
-        Assert.Contains("Tapped.Heard(_voice, buffer, offset, read);", bus);
+        Assert.Contains("bool allowBoost = false, bool voice = false", bus);
+        Assert.Contains("Tapped.Heard(_voice, _offAir, buffer, offset, read);", bus);
 
         // The announcer's lines; nothing else says it is voice, so everything
         // else is SFX - recordings played back included.
-        Assert.Contains("allowBoost: true, voice: true)", Source("AnnouncementService.Playback.cs"));
+        Assert.Contains("allowBoost: true, voice: true,", Source("AnnouncementService.Playback.cs"));
         Assert.DoesNotContain("voice: true", Source("AnnouncerControl.Director.cs"));
     }
 

@@ -165,7 +165,7 @@ internal static class SupportInfo
 
         if (outcome.DecoderLogs.Count > 0)
         {
-            inside.Add("- what the I-Lap decoder sent over the last few days");
+            inside.Add("- what the decoder sent over the last few days");
         }
 
         var notes = string.Empty;

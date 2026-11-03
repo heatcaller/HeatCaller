@@ -1377,7 +1377,7 @@ public sealed partial class RaceControlControl
         // straight away, as it always has. See TriggerStart.
         shortcutTips.SetToolTip(_btnStage,
             "Stages the race now, without On Air. F1 is the normal start: through On Air when "
-            + "Start races On Air is ticked (press F1 again to skip to Stage).");
+            + "Start races On Air is ticked (" + OnAirSkipNote + ").");
         shortcutTips.SetToolTip(_holdStrip, "Double-click for the Broadcast window.");
         shortcutTips.SetToolTip(_btnCountdown, "Shortcut: F2");
         shortcutTips.SetToolTip(_btnGreen, "Shortcut: F3");

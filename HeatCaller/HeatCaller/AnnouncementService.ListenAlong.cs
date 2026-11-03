@@ -60,6 +60,26 @@ public sealed partial class AnnouncementService
     public Action<string, byte[]>? SendToListeners { get; set; }
 
     /// <summary>
+    /// Whether listeners are being sent the whole mix rather than the
+    /// announcer's lines one at a time (2 Nov 2026 - see ListenStream). While
+    /// it is, a line is not encoded and sent on its own: it is cleared or
+    /// kept off air as it plays, and only its caption goes to
+    /// <see cref="CaptionToListeners"/>. False, or unwired, is the line-by-line
+    /// route, which a PC without an mp3 encoder for the stream still has.
+    /// </summary>
+    public Func<bool>? StreamingToListeners { get; set; }
+
+    /// <summary>
+    /// Where the words of a line cleared for the stream go, for the listen
+    /// page to show as it plays. Must not block: it is called on the way to
+    /// the speaker.
+    /// </summary>
+    public Action<string>? CaptionToListeners { get; set; }
+
+    /// <summary>Whether a line's audio reaches listeners through the stream - see <see cref="StreamingToListeners"/>.</summary>
+    private bool StreamingTheMix => ListenersWanted?.Invoke() == true && StreamingToListeners?.Invoke() == true;
+
+    /// <summary>
     /// Raised with a line's words (no [audio tags]) the moment it is about to
     /// be heard - every voice, every kind of line. For the highlight videos'
     /// captions. On whatever thread the line plays from: a handler must be
@@ -255,7 +275,8 @@ public sealed partial class AnnouncementService
     /// cannot tell. Only matters while the club shortens published names -
     /// see OfferToListenersOnly.
     /// </param>
-    private void OfferLineToListeners(string text, byte[]? audio, bool? audioShortened = null)
+    /// <returns>Whether the line is heard on the listen stream - PlayPcmAsync's onAir. See <see cref="OfferToListenersOnly"/>.</returns>
+    private bool OfferLineToListeners(string text, byte[]? audio, bool? audioShortened = null)
     {
         // THE CAPTIONS FIRST (21 Oct 2026), and whether or not anyone is
         // listening from home: this is the one point where a line is
@@ -263,7 +284,7 @@ public sealed partial class AnnouncementService
         // video's caption should start. See RaceAudioRecorder.NoteLine.
         NoteHeard(text);
 
-        OfferToListenersOnly(text, audio, audioShortened);
+        return OfferToListenersOnly(text, audio, audioShortened);
     }
 
     /// <summary>
@@ -293,32 +314,68 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>The listeners' half of <see cref="OfferLineToListeners"/>, without the caption.</summary>
-    private void OfferToListenersOnly(string text, byte[]? audio, bool? audioShortened = null)
+    /// <returns>
+    /// Whether the line's audio is heard on the listen stream (2 Nov 2026 -
+    /// see ListenStream). False whenever the whole mix is not being streamed,
+    /// as nothing is heard on a stream that is not running; the line-by-line
+    /// route sends the line itself.
+    /// </returns>
+    private bool OfferToListenersOnly(string text, byte[]? audio, bool? audioShortened = null)
     {
-        if (SendToListeners is null || audio is null || audio.Length == 0)
-        {
-            return;
-        }
-
         // The cheapest check first, and before the Task.Run rather than
         // inside it: a club with this off should not even be scheduling
         // work, and most clubs have it off.
         if (ListenersWanted?.Invoke() != true)
         {
-            return;
+            return false;
         }
 
         // Without the [excited]-style tags a v3 voice keeps in the text it
         // is given: they are directions to the voice, and the page shows
         // these words as the caption.
         var words = VoiceProfile.StripAudioTags(text);
-        var bytes = audio;
 
         // The privacy register as it is the moment the line is heard - read
         // here, a volatile field read, so a register swapped while this one
         // is encoding can't let it through half-checked (22 Oct 2026, driver
         // experience, item 12).
         var privacy = PublicPrivacy.Current;
+
+        if (StreamingToListeners?.Invoke() == true)
+        {
+            // WHY HERE AND NOT ON A POOL THREAD (2 Nov 2026): the audio
+            // goes out as the room hears it, so whether it is muted from
+            // the stream has to be known before the speaker starts. The
+            // same checks as below - a few regex passes over one line,
+            // where the slow part the pool thread exists for is the encode,
+            // which the stream does elsewhere. Off air if anything fails:
+            // it errs on the private side, as the rule does.
+            try
+            {
+                if (CaptionIfCleared(words, audioShortened, privacy) is not { } cleared)
+                {
+                    return false;
+                }
+
+                if (cleared.Length > 0)
+                {
+                    CaptionToListeners?.Invoke(cleared);
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        if (SendToListeners is null || audio is null || audio.Length == 0)
+        {
+            return false;
+        }
+
+        var bytes = audio;
 
         // Fire and forget, on purpose, with its own catch: this is a
         // courtesy to people who are not at the track, and nothing it can
@@ -328,43 +385,10 @@ public sealed partial class AnnouncementService
         {
             try
             {
-                // WITHHELD, NOT REDACTED (22 Oct 2026, driver experience,
-                // item 12). A driver who asked to be initials-only online
-                // can't be bleeped out of audio, so a line that mentions
-                // them - by any name, or any word of one - is not sent to
-                // listeners at home at all. The room still hears it; the
-                // public captions leave it out too. Checked on this pool
-                // thread, not before Task.Run, because it is a regex pass
-                // and nothing slow happens on the way to the speaker. It
-                // errs on the private side: another driver who shares that
-                // first name is withheld too. Race control's warning and
-                // black-flag calls are withheld as well (22 Oct 2026,
-                // security review): they say the penalty's reason aloud, and
-                // reasons stay in the room and the driver's own night.
-                if (WithheldFromListeners(words, privacy))
-                {
-                    return;
-                }
-
-                // WHY (23 Oct 2026, bug hunt 10): a line naming a car by its
-                // transponder number - a car nobody named - went to the
-                // public page as words and audio. Withheld, not rewritten,
-                // because the audio says the number. See NoteSpokenAsNumber.
-                if (NamesACarByNumber(words))
-                {
-                    return;
-                }
-
-                // WHY (23 Oct 2026, bug hunt 10): "Shorten published names"
-                // (on by default) never reached this page - the caption was
-                // the line as written, full names and all, and with Kokoro the
-                // audio said them too. The caption is now the shortened line,
-                // and a line whose names it shortens goes out only when its
-                // audio was rendered from the shortened words; otherwise it is
-                // withheld, the way an initials-only line is.
-                var caption = TextForPublicPages(words);
-
-                if (!string.Equals(caption, words, StringComparison.Ordinal) && audioShortened != true)
+                // Checked on this pool thread, not before Task.Run, because
+                // it is a regex pass and nothing slow happens on the way to
+                // the speaker.
+                if (CaptionIfCleared(words, audioShortened, privacy) is not { } caption)
                 {
                     return;
                 }
@@ -386,6 +410,56 @@ public sealed partial class AnnouncementService
                 ComplainAboutListenAudioOnce(ex.Message);
             }
         });
+
+        return false;
+    }
+
+    /// <summary>
+    /// What listeners at home may be shown for a line - or null when the line
+    /// must not reach them at all, words or audio. The one rule for both the
+    /// line-by-line route and the stream.
+    /// </summary>
+    internal string? CaptionIfCleared(string words, bool? audioShortened, PublicPrivacy privacy)
+    {
+        // WITHHELD, NOT REDACTED (22 Oct 2026, driver experience, item 12).
+        // A driver who asked to be initials-only online can't be bleeped out
+        // of audio, so a line that mentions them - by any name, or any word
+        // of one - is not sent to listeners at home at all. The room still
+        // hears it; the public captions leave it out too. It errs on the
+        // private side: another driver who shares that first name is
+        // withheld too. Race control's warning and black-flag calls are
+        // withheld as well (22 Oct 2026, security review): they say the
+        // penalty's reason aloud, and reasons stay in the room and the
+        // driver's own night.
+        if (WithheldFromListeners(words, privacy))
+        {
+            return null;
+        }
+
+        // WHY (23 Oct 2026, bug hunt 10): a line naming a car by its
+        // transponder number - a car nobody named - went to the public page
+        // as words and audio. Withheld, not rewritten, because the audio says
+        // the number. See NoteSpokenAsNumber.
+        if (NamesACarByNumber(words))
+        {
+            return null;
+        }
+
+        // WHY (23 Oct 2026, bug hunt 10): "Shorten published names" (on by
+        // default) never reached this page - the caption was the line as
+        // written, full names and all, and with Kokoro the audio said them
+        // too. The caption is now the shortened line, and a line whose names
+        // it shortens goes out only when its audio was rendered from the
+        // shortened words; otherwise it is withheld, the way an initials-only
+        // line is.
+        var caption = TextForPublicPages(words);
+
+        if (!string.Equals(caption, words, StringComparison.Ordinal) && audioShortened != true)
+        {
+            return null;
+        }
+
+        return caption;
     }
 
     /// <summary>

@@ -1151,7 +1151,9 @@ public partial class AnnouncerControl
                 return;
             }
 
-            await AudioBus.PlayAsync(new DriversOwnClip.Excerpt(clip), DriversOwnClip.Level, stop.Token).ConfigureAwait(true);
+            // Off air (2 Nov 2026): it is the race's own recorded call, which
+            // can carry lines that were kept from listeners at home.
+            await AudioBus.PlayAsync(new DriversOwnClip.Excerpt(clip), DriversOwnClip.Level, stop.Token, offAir: true).ConfigureAwait(true);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

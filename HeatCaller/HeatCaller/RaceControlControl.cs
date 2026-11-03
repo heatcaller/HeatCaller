@@ -1363,7 +1363,12 @@ public sealed partial class RaceControlControl : UserControl
     {
         switch (key)
         {
-            case Keys.F1: TriggerStart(); return true;
+            // As MainForm's F1: while On Air runs, a press only says to hold 0.
+            // This window passed it straight to TriggerStart, so a second
+            // press here still skipped On Air after 1 Nov made that a hold.
+            case Keys.F1:
+                if (OnAirRunning) HintHoldToSkip(); else TriggerStart();
+                return true;
             case Keys.F2: TriggerCountdown(); return true;
             case Keys.F3: TriggerGreen(); return true;
             case Keys.F4: TriggerYellow(); return true;

@@ -647,7 +647,7 @@ public sealed class RaceHistoryControl : UserControl
         {
             using var preview = ResultsCardRenderer.Render(session, palette);
             g.DrawImage(preview, FitInto(preview.Size, bounds));
-        });
+        }, chooseSize: false);
 
         if (optionsForm.ShowDialog(this) != DialogResult.OK)
         {

@@ -1025,7 +1025,7 @@ internal sealed class RaceDaySetupWizard : Form
 
         AppDialog.Show(this,
             $"\"{day.DisplayName}\" is closed, so its check-in sheet can't be changed - it is the record of who was there that day.\r\n\r\n"
-            + "For tonight, start a new race day on \"The day\" step. To change that day's sheet, reopen it on The Day first.",
+            + "For tonight, start a new race day on \"The day\" step. To change that day's sheet, reopen it on Race Day > Setup first.",
             "This day is closed", MessageBoxButtons.OK, MessageBoxIcon.Information);
         return true;
     }

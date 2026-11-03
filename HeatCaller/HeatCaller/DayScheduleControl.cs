@@ -987,7 +987,7 @@ public sealed class DayScheduleControl : UserControl
                 AppDialog.Show(this,
                     $"\"{DescribeEntry(form.Result)}\" is a round on the program, so its class and its wording come from there "
                     + "- an edit to them here would be written back over the next time the program changed.\r\n\r\n"
-                    + "Rename the round on Next Steps and its line follows. The time you set here has been kept.",
+                    + "Its line follows whatever the program says. The time you set here has been kept.",
                     "That belongs to the program", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
 

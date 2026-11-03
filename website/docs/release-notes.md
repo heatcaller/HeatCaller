@@ -4,6 +4,22 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Listen live hears the whole room (2 November).** Listening along on the club's **Live** page used to play only the announcer's lines, one after another, in silence. Now it plays everything the room hears: the announcer, the show music, the crowd, the stingers and beds, and the tones, as one continuous stream a few seconds behind. The button is now called **Listen live**. Lines that never went to listeners still don't: penalty calls, and lines naming a driver who is shown by initials online, are taken out of the stream while the music carries on under them. If the page goes to the background, for example when you switch to another app on an iPhone, coming back no longer plays everything you missed, a long way behind: it drops it and picks up the room where it is now. Update HeatCaller on the race PC and redeploy the relay (`fly deploy --ha=false`). A race PC that hasn't been updated still sends the announcer's lines, and the new page still plays them.
+
+- **Small fixes found checking the user guide (2 November).**
+    - **Save Support Info** now includes the Beta decoders' raw capture files (`decoder-raw-*.log`), which their console message asks you to send.
+    - <kbd>F1</kbd> in the **Broadcast** window or a lap breakdown window no longer skips On Air when it's already running: like the main window, it says to hold <kbd>0</kbd>.
+    - The welcome wizard's Timing step no longer tells you to plug in an EasyLap when a Beta decoder is picked.
+    - **Test** on **Voice → Race Calls** fills in every placeholder, and never reads one out in braces.
+    - A setup whose chassis sheet was deleted shows "(sheet deleted)" instead of a blank sheet.
+    - **Share Results Card** no longer shows a **Size:** list that did nothing and changed the charts' saved size.
+    - **Pace** no longer lists pasted results, which have no lap times.
+    - In Simple mode, double-clicking one of your own looks no longer opens the editor, and Themes has the **More settings in Advanced mode** line.
+    - Messages that named old places now name the current ones: the Broadcast window for Notes and Votes, **Race Day → Setup** to reopen a day, **Voice → Race Calls**, and the **Who writes it** card.
+
+    Update HeatCaller on the race PC; nothing changes on the relay.
+
+- **Notes and votes from the club's own page (2 November).** **Take them from the club's own web page** and **Let the club's own web page vote**, on the **Room & Web** card, did nothing anybody could see: the relay could take a note or a vote, but none of the club's pages offered a way to send one. Now the club's **Live** page has a **Message the announcer** card while the notes switch is on, and a **Who wins?** card while the vote switch is on and a vote is open. They work like the `/shoutout` and `/vote` pages on the club's Wi-Fi: same words, same limits, every note still waits on Race Control for your approval, and no tally is shown. See [Room & Web](online/setup.md#room-web). Redeploy the relay (`fly deploy --ha=false`); nothing changes in HeatCaller on the race PC.
 - **"Backup & Restore" in the sidebar (2 November).** The sidebar showed the page as "Backup _Restore": the "&" was read as a keyboard-shortcut marker. It now reads **Backup & Restore**. The user guide also has screenshots now, on most pages. Update HeatCaller on the race PC; nothing changes on the relay.
 
 - **Five more decoders, in Beta (1 November).** **Connect via:** now also offers **MyLaps / AMB P3 (Beta)** (AMBrc, RC4 and others, over the network or a COM port), **ZRound open protocol / RiCino (Beta)**, **Cano / RCHourglass (Beta)**, **OpenStint (Beta)** and **EasyLap / Robitronic Serial (Beta)**. A new **Source:** row picks a COM port, the network or a simulated decoder, and each decoder remembers its own settings. They're written from each decoder's published format and haven't yet been tested on a real one, so they stay marked Beta until they have, and the console says so each time one connects. Run your usual timing alongside the first time, and keep the raw capture file. The simulated source plays a decoder of that type with your own drivers' transponders, so you can rehearse with it at home. They can be the line but not a split loop yet. See [The Beta decoders](timing/decoders.md#the-beta-decoders). Update HeatCaller on the race PC; nothing changes on the relay.

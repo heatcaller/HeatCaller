@@ -62,6 +62,9 @@ internal static class SupportBundle
 
     internal const long MaxDecoderLogBytes = 40L * 1024 * 1024;
 
+    /// <summary>The I-Lap's capture, and the Beta decoders' (decoder-raw-NAME-YYYY-MM-DD.log) - up to MaxDecoderLogs of each.</summary>
+    internal static readonly string[] DecoderLogPatterns = { "ilap-raw-*.log", "decoder-raw-*.log" };
+
     internal sealed class Inputs
     {
         /// <summary>Where the console logs are (SessionLog.Folder).</summary>
@@ -105,9 +108,13 @@ internal static class SupportBundle
     {
         var (logs, logsLeftOut) = PickLogs(inputs.LogFolder, inputs.Now);
         var crashLogs = inputs.CrashLogPaths.Where(File.Exists).ToList();
-        var (decoderLogs, _) = inputs.DecoderLogFolder is { } decoderFolder
-            ? PickRecent(decoderFolder, "ilap-raw-*.log", inputs.Now, MaxDecoderLogs, MaxDecoderLogBytes, alwaysNewest: false)
-            : (new List<FileInfo>(), new List<FileInfo>());
+        // The Beta decoders' captures too (decoder-raw-*.log, 2 Nov 2026): the
+        // console asks for them with every report, and they were left out.
+        var decoderLogs = inputs.DecoderLogFolder is { } decoderFolder
+            ? DecoderLogPatterns
+                .SelectMany(pattern => PickRecent(decoderFolder, pattern, inputs.Now, MaxDecoderLogs, MaxDecoderLogBytes, alwaysNewest: false).Picked)
+                .ToList()
+            : new List<FileInfo>();
         var dumps = FilesIn(inputs.LogFolder, "freeze-*.dmp").OrderByDescending(f => f.LastWriteTimeUtc).ToList();
 
         var partPath = zipPath + ".part";

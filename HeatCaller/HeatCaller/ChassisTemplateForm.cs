@@ -631,7 +631,7 @@ internal sealed class ChassisSheetsForm : Form
             if (Selected() is not { } t) { return; }
 
             if (AppDialog.Show(this,
-                    $"Delete the '{t.Name}' sheet?\r\n\r\nSetup entries that used it are kept, but will show as legacy entries. This can be reversed with Undo.",
+                    $"Delete the '{t.Name}' sheet?\r\n\r\nSetup entries that used it are kept, but their sheet will show as \"(sheet deleted)\". This can be reversed with Undo.",
                     "Confirm delete", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
             {
                 // The template carries every section, field and option, so

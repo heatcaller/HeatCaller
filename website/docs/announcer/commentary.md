@@ -1068,7 +1068,9 @@ Two switches under **Club notes** on the **Room & Web** card, on **Club Website 
 | Switch | Who can send | Where from |
 |---|---|---|
 | **Take them from phones on the club's Wi-Fi** | Anybody in the building | `/shoutout` on this PC's own address — the same one the live results are on |
-| **Take them from the club's own web page** | Anybody with the link, including the people who couldn't make it | Your club's relay address |
+| **Take them from the club's own web page** | Anybody with the link, including the people who couldn't make it | The **Message the announcer** card on your club's **Live** page on the relay |
+
+On the club's page the card has a box for the message, an optional name, and **Send it**. It's only there while the switch is on. A sender is told "Sent to the race director. Thanks!", or why not: too many sent already, tonight's list full, or messages not being taken right now.
 
 Both land in the same list, and **nothing from either is ever said until you have read it and approved it.** That gate is what makes a public route to a PA something that can exist at all: anonymous text from a crowd going straight to a voice wired to the speakers isn't a feature with a risk to manage, it's a prank waiting for the first person who finds the address. The worst a stranger can do here is give you something to delete.
 
@@ -1129,13 +1131,15 @@ Two switches, under **The room's vote** on the same **Room & Web** card on **Clu
 | Switch | Who it lets in |
 |---|---|
 | **Let phones on the club's Wi-Fi vote** | Everybody in the building, at `/vote` on this PC's own address |
-| **Let the club's own web page vote** | The people who aren't — a driver's family at home, the member who couldn't make it |
+| **Let the club's own web page vote** | The people who aren't — a driver's family at home, the member who couldn't make it — on a **Who wins?** card on your club's **Live** page on the relay |
+
+The **Who wins?** card shows only while a vote is open: the race, and a button for each driver on the ballot. It checks every five seconds, so it appears when you open voting and goes when you close it. A phone that voted keeps its pick on show, grayed, with "Voting has closed. Your pick is in."
 
 They're genuinely different groups, which is the same argument the shout-outs make for having both routes. A prediction from somebody watching the live results at home is as good as one from the bank, and the announcer's line is better the more of the room is in it.
 
 **There is no approval list, and there doesn't need to be.** A club note is a stranger's *words*, which is why that route has a gate in front of it. A vote is a tap on one of the names your club put on the ballot — nothing a phone sends here can become a word the announcer says. The worst a stranger on your Wi-Fi can achieve is being wrong about who wins.
 
-- **One vote per phone.** A second vote replaces the first, so somebody who tapped the wrong name on a phone screen can fix it and nobody gets two.
+- **One vote per phone.** A second vote replaces the first, so somebody who tapped the wrong name on a phone screen can fix it and nobody gets two. On the club's web page it's one vote per internet connection, so two phones on the same home Wi-Fi share one.
 - **No running tally is ever shown to a phone.** A room that can see what it's voting for is a bandwagon, not a prediction — and the announcer's line is only worth anything if each vote was that person's own guess.
 - **Nothing is stored about who voted.** The phone is the voter; there's no name, no sign-in, and nothing kept beyond the fact that it has voted once.
 - The page redraws itself every few seconds, so a phone left on it through two races is never offering the wrong grid.

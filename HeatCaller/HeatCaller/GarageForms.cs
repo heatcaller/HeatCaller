@@ -1674,7 +1674,9 @@ internal sealed class CarDetailForm : Form
                 AppTime.DateAndTime(entry.RecordedAtUtc.ToLocalTime()),
                 entry.DriverName,
                 entry.TrackLayoutName,
-                template?.Name ?? (entry.IsLegacy ? "(older entry)" : string.Empty),
+                // A sheet deleted since says so, rather than leaving the cell
+                // blank - the delete asks with exactly these words.
+                template?.Name ?? (entry.IsLegacy ? "(older entry)" : entry.ChassisTemplateId is not null ? "(sheet deleted)" : string.Empty),
                 entry.IsLegacy ? string.Empty : entry.FilledCount.ToString(),
                 BestLapFor(entry),
                 changed,

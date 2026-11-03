@@ -259,6 +259,42 @@ public sealed class SupportBundleTests : IDisposable
         Assert.DoesNotContain(zip.Entries, e => e.FullName.Contains("2026-09-01", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The Beta decoders' captures go in too. The console asks for
+    /// decoder-raw-*.log with every report, and Save Support Info used to
+    /// collect only the I-Lap's (2 Nov 2026).
+    /// </summary>
+    [Fact]
+    public void Recent_Beta_decoder_captures_go_in_beside_the_I_Lap_one()
+    {
+        var folder = LogFolder();
+        WriteLog(folder, "console-2026-09-27_20-00-00.log", Now);
+
+        var dataFolder = Path.Combine(_data.Folder, "Data");
+        Directory.CreateDirectory(dataFolder);
+        WriteLog(dataFolder, "ilap-raw-2026-09-27.log", Now.AddHours(-1), "#1234 5678 1.234");
+        WriteLog(dataFolder, "decoder-raw-p3-2026-09-27.log", Now.AddHours(-1), "8E 02 33 00");
+        WriteLog(dataFolder, "decoder-raw-p3-2026-09-01.log", Now.AddDays(-26), "8E 02 33 00");
+
+        var zipPath = Path.Combine(_data.Folder, "support.zip");
+
+        var outcome = SupportBundle.Write(new SupportBundle.Inputs
+        {
+            LogFolder = folder,
+            CrashLogPaths = Array.Empty<string>(),
+            DecoderLogFolder = dataFolder,
+            Summary = string.Empty,
+            Redactor = Redactor.None,
+            Now = Now,
+        }, zipPath);
+
+        Assert.Equal(new[] { "ilap-raw-2026-09-27.log", "decoder-raw-p3-2026-09-27.log" }, outcome.DecoderLogs);
+
+        using var zip = ZipFile.OpenRead(zipPath);
+        Assert.Contains(zip.Entries, e => e.FullName == "decoder/decoder-raw-p3-2026-09-27.log");
+        Assert.DoesNotContain(zip.Entries, e => e.FullName.Contains("2026-09-01", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void A_file_that_cannot_be_read_is_left_out_and_named_not_the_end_of_the_file()
     {

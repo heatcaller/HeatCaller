@@ -377,15 +377,17 @@ public sealed partial class AnnouncementService
     /// together remove the timing dependency that caused it.
     /// </summary>
     /// <param name="stillWanted">See <see cref="PlayPcmAsync"/>.</param>
+    /// <param name="onAir">See <see cref="PlayPcmAsync"/>.</param>
     public static Task PlayAsync(
         byte[] mp3Bytes,
         double volume,
         double trailingSilenceSeconds = DefaultTrailingSilenceSeconds,
         double leadingSilenceSeconds = DefaultLeadingSilenceSeconds,
-        Func<bool>? stillWanted = null)
+        Func<bool>? stillWanted = null,
+        bool onAir = false)
     {
         var (pcm, format) = DecodeAudio(mp3Bytes);
-        return PlayPcmAsync(pcm, format, volume, trailingSilenceSeconds, leadingSilenceSeconds, stillWanted: stillWanted);
+        return PlayPcmAsync(pcm, format, volume, trailingSilenceSeconds, leadingSilenceSeconds, stillWanted: stillWanted, onAir: onAir);
     }
 
     /// <summary>
@@ -403,6 +405,12 @@ public sealed partial class AnnouncementService
     /// Asked once more AFTER the line is registered as the one playing, and
     /// the line is dropped unheard if it says no. See the WHY at the check.
     /// </param>
+    /// <param name="onAir">
+    /// Whether anyone listening along from home hears this line too (2 Nov
+    /// 2026 - see ListenStream). Off unless a caller has cleared the line
+    /// for the public page (OfferLineToListeners), so a test pressed by hand
+    /// or a line nobody checked stays in the room.
+    /// </param>
     public static async Task PlayPcmAsync(
         byte[] pcmBytes,
         WaveFormat format,
@@ -410,7 +418,8 @@ public sealed partial class AnnouncementService
         double trailingSilenceSeconds = DefaultTrailingSilenceSeconds,
         double leadingSilenceSeconds = DefaultLeadingSilenceSeconds,
         Action? started = null,
-        Func<bool>? stillWanted = null)
+        Func<bool>? stillWanted = null,
+        bool onAir = false)
     {
         byte[] paddedPcm;
 
@@ -509,7 +518,7 @@ public sealed partial class AnnouncementService
             }
 
             // voice: on the VOICE level meter, not SFX (26 Oct 2026 - see AudioLevels).
-            await AudioBus.PlayAsync(source, (float)Math.Clamp(volume, 0.0, AudioBus.MaxBoost), stop.Token, allowBoost: true, voice: true);
+            await AudioBus.PlayAsync(source, (float)Math.Clamp(volume, 0.0, AudioBus.MaxBoost), stop.Token, allowBoost: true, voice: true, offAir: !onAir);
 
             // Cancelling completes the bus's task exactly as a natural end
             // does (see _activeLine), so a line cut off is told apart here.

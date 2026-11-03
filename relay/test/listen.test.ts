@@ -385,7 +385,7 @@ describe("listening along from home", () => {
     // Not drawn and disabled - not drawn at all. A Listen button for a
     // club that has not turned it on answers nothing.
     assert.doesNotMatch(page.text, /listenbtn/);
-    assert.doesNotMatch(page.text, /Listen to the announcer/);
+    assert.doesNotMatch(page.text, /Listen live/);
   });
 
   it("the live page offers the announcer once the club has", async () => {
@@ -395,7 +395,7 @@ describe("listening along from home", () => {
 
     assert.equal(page.status, 200);
     assert.match(page.text, /listenbtn/);
-    assert.match(page.text, /Listen to the announcer/);
+    assert.match(page.text, /Listen live/);
 
     // A button, not autoplay: browsers refuse to start audio unasked, and
     // a page that starts talking at whoever opens it is a page people

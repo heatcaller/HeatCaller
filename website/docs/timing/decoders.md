@@ -157,7 +157,7 @@ See [Where HeatCaller keeps your data](../admin/data-files.md) for the folder lo
 
 - Run your usual timing system alongside HeatCaller the first time.
 - Every time you connect one, the console says "BETA: HeatCaller's ... support was written from the published format and has not yet been tested on a real decoder."
-- Keep the day's raw capture file (see below) and send it with any report. It's what turns Beta into tested. **Save Support Info** doesn't pick it up, so attach it yourself.
+- Keep the day's raw capture file (see below) and send it with any report. It's what turns Beta into tested. **Save Support Info** includes the last few days' capture files.
 
 They can be the start/finish line, but not a split loop. Choosing one turns **Split loop:** off, and the console says "Split loop turned off - it works with the EasyLap and I-Lap only. Turn it on again after switching back to one of them."
 
