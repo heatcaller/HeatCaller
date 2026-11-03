@@ -24,6 +24,20 @@ export interface Look {
    * it on would be offering something that answers nothing.
    */
   readonly listening: boolean;
+  /**
+   * The club takes messages for the announcer from its own pages (2 Nov
+   * 2026), so Live offers the form - see Relay.notesOpenFor. Merged in by
+   * Relay.lookFor, as `listening` is, and for the same reason: a form for a
+   * club that has not switched it on would send into nothing.
+   */
+  readonly notes: boolean;
+  /**
+   * The club lets its own pages vote in the room's vote (2 Nov 2026), so
+   * Live asks for the ballot and shows the grid while a vote is open - see
+   * Relay.roomBallotFor. Whether a vote is open right now is the page's to
+   * ask: it changes every race, and the page is drawn once.
+   */
+  readonly vote: boolean;
   /** Light-on-dark or dark-on-light, for color-scheme and a few contrast fixes. */
   readonly light: boolean;
   /** CSS custom properties to override, name to value. Empty for the default look. */
@@ -148,6 +162,8 @@ export const DEFAULT_LOOK: Look = Object.freeze({
   iconVersion: SUN_ICON_VERSION,
   checkIn: false,
   listening: false,
+  notes: false,
+  vote: false,
   social: Object.freeze([]),
   newcomer: NO_NEWCOMER,
 });
@@ -228,6 +244,8 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     // checkIn's own flag is above. False here is the honest default for a
     // look built without it.
     listening: false,
+    notes: false,
+    vote: false,
     social: socialFrom(body?.["social"]),
     newcomer: newcomerFrom(body?.["newcomer"]),
   };

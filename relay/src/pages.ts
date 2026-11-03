@@ -636,6 +636,28 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .ears label { display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; font-size: 0.95rem; }
 .ears label[hidden], .ears button[hidden] { display: none; }
 .ears button[aria-pressed=true] { background: var(--primary); color: var(--on-primary, #FFFFFF); }
+/* Message the announcer and Who wins? (2 Nov 2026): the live page's two
+   ways into the room from outside it, when the club has them switched on.
+   Every field full width and 16px text, as sign-up's are, so a phone does
+   not zoom in on the one being typed in. */
+.shout, .vote { padding: 14px 18px; }
+.shout[hidden], .vote[hidden] { display: none; }
+.shout h3, .vote h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.shout .note, .vote .note { padding: 8px 0 0; text-align: left; }
+.shout textarea, .shout input {
+  display: block; width: 100%; margin: 8px 0 0; padding: 12px; font: inherit; font-size: 1rem; font-weight: 400;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.shout textarea { min-height: 88px; resize: vertical; }
+.shout .left { text-align: right; color: var(--muted); font-size: 0.8rem; margin: 4px 0 0; }
+.shout .go, .vote .go { margin: 12px auto 0; }
+.shout .said, .vote .said { margin: 10px 0 0; font-weight: 600; text-align: center; min-height: 1.3em; }
+.vote .race { font-weight: 700; margin: 0 0 8px; }
+.vote .pick { display: block; width: 100%; margin: 0 0 8px; padding: 14px 16px; font: inherit; font-size: 1.05rem;
+              text-align: left; border-radius: 10px; border: 1px solid var(--border); background: var(--bg);
+              color: var(--text); cursor: pointer; }
+.vote .pick.mine { background: var(--primary); border-color: var(--primary); color: var(--on-primary, #FFFFFF);
+                   font-weight: 700; }
+.vote .pick:disabled { opacity: 0.6; cursor: default; }
 
 /* Light themes: the few colours chosen for a dark page that vanish on a pale one */
 html.light .tier-gold { color: #9A6B00; }
@@ -4056,6 +4078,280 @@ function listenControl(listening: boolean): string {
 }
 
 /**
+ * The longest message, matching NOTE_MAX_CHARS on the relay and
+ * ClubNotes.MostChars on the laptop. If one moves, all three have to.
+ */
+const NOTE_MOST_CHARS = 200;
+
+/** And the longest name, matching NOTE_MAX_NAME and ClubNote.From's 40. */
+const NOTE_MOST_NAME = 40;
+
+/**
+ * MESSAGE THE ANNOUNCER (2 Nov 2026, docs audit). The app's "Take them
+ * from the club's own web page" had a route on this relay (notes/send) and
+ * no page that called it, so ticking it did nothing anybody could see.
+ * This is the laptop's own /shoutout page on Live, in the same words.
+ *
+ * ONLY WHERE THE CLUB HAS TURNED IT ON, for the reason Listen gives: a
+ * form for a club that has not is a form that sends into nothing.
+ *
+ * Nothing it sends is said until the race director approves it on the
+ * laptop, and the card says so - see NOTES_CHANNEL on the relay.
+ */
+function noteControl(notes: boolean): string {
+  if (!notes) {
+    return "";
+  }
+
+  return '<div class="card shout" id="shout">'
+    + "<h3>Message the announcer</h3>"
+    + '<p class="note">A birthday, a dedication, somebody&rsquo;s first race, the raffle closing - whatever the '
+    + "announcer would not otherwise know. Keep it short and it may get read out between races.</p>"
+    + `<textarea id="shouttext" maxlength="${NOTE_MOST_CHARS}" aria-label="Your message" `
+    + 'placeholder="It&rsquo;s Jack&rsquo;s first race since his operation - good to have him back"></textarea>'
+    + '<p class="left" id="shoutleft"></p>'
+    + `<input id="shoutwho" maxlength="${NOTE_MOST_NAME}" aria-label="Your name" placeholder="Your name (optional)" autocomplete="name">`
+    + '<button type="button" class="go" id="shoutsend">Send it</button>'
+    + '<p class="said" id="shoutsaid" role="status"></p>'
+    + '<p class="note">The race director reads every message before the announcer says anything, so this is not '
+    + "a promise that it goes out - and nothing you send here reaches the timing or the results.</p>"
+    + "</div>";
+}
+
+const NOTE_JS = `
+(function () {
+  const text = document.getElementById('shouttext');
+  const who = document.getElementById('shoutwho');
+  const send = document.getElementById('shoutsend');
+  const said = document.getElementById('shoutsaid');
+  const left = document.getElementById('shoutleft');
+
+  if (!text || !who || !send || !said || !left) {
+    return;
+  }
+
+  const MOST = ${NOTE_MOST_CHARS};
+
+  function count() {
+    left.textContent = (MOST - text.value.length) + ' left';
+  }
+
+  text.addEventListener('input', count);
+  count();
+
+  send.addEventListener('click', async () => {
+    const message = text.value.trim();
+
+    if (!message) {
+      said.textContent = 'Type something first.';
+      return;
+    }
+
+    send.disabled = true;
+    said.textContent = 'Sending\\u2026';
+
+    let r = null;
+    let d = {};
+
+    try {
+      r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/notes/send', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ m: message, n: who.value.trim() }),
+        cache: 'no-store',
+      });
+      d = await r.json().catch(() => ({}));
+    } catch (e) {
+      said.textContent = 'Could not reach the relay.';
+      send.disabled = false;
+      return;
+    }
+
+    send.disabled = false;
+
+    if (r.ok && d && d.ok) {
+      said.textContent = 'Sent to the race director. Thanks!';
+      text.value = '';
+      count();
+      return;
+    }
+
+    // 404 is the club having switched this off since the page was drawn.
+    said.textContent = r.status === 404
+      ? 'Messages to the announcer aren\\u2019t being taken right now.'
+      : (d && typeof d.error === 'string' && d.error) || 'Could not send that.';
+  });
+})();
+`;
+
+/**
+ * WHO WINS? (2 Nov 2026, docs audit). The room's vote from the club's own
+ * page - the laptop's /vote page on Live, for the same reason as the note
+ * form above: "Let the club's own web page vote" had routes on this relay
+ * and no page that used them.
+ *
+ * Drawn for a club that has the vote switched on, and HIDDEN until a vote
+ * is open: the page asks for the ballot every five seconds, as the
+ * laptop's own page does, so a phone left on Live through two races is
+ * never offering the wrong grid and a closed vote stops taking taps.
+ *
+ * NO TALLY, as on the laptop's page: the ballot route sends none. The
+ * relay does not say who this phone picked either, so the page remembers
+ * its own pick for as long as it shows the same ballot.
+ */
+function voteControl(vote: boolean): string {
+  if (!vote) {
+    return "";
+  }
+
+  return '<div class="card vote" id="vote" hidden>'
+    + "<h3>Who wins?</h3>"
+    + '<p class="race" id="voterace"></p>'
+    + '<div id="votelist"></div>'
+    + '<p class="said" id="votesaid" role="status"></p>'
+    + '<p class="note">Tap a name. You can change your mind while voting is open, and the announcer says what '
+    + "the room reckoned after the race - it never says who you picked. Nothing you tap here reaches the timing "
+    + "or the results.</p>"
+    + "</div>";
+}
+
+const VOTE_JS = `
+(function () {
+  const box = document.getElementById('vote');
+  const race = document.getElementById('voterace');
+  const list = document.getElementById('votelist');
+  const said = document.getElementById('votesaid');
+
+  if (!box || !race || !list || !said) {
+    return;
+  }
+
+  const API = '/api/v1/c/' + encodeURIComponent(CLUB) + '/vote';
+
+  // Which ballot is showing: the race and its grid. A new one is a new
+  // race, and this phone has picked nobody in it yet. (The relay keeps
+  // the laptop's own race id to itself; two classes' A-mains have the
+  // same label but never the same grid.)
+  let ballotKey = '';
+  let mine = null;
+  let mineName = '';
+  let shown = null;
+
+  function draw(d) {
+    const drivers = Array.isArray(d.drivers) ? d.drivers.filter((one) => one
+      && typeof one.id === 'string' && typeof one.name === 'string') : [];
+    const key = String(d.race || '') + '|' + drivers.map((one) => one.id).join(',');
+
+    if (key !== ballotKey) {
+      ballotKey = key;
+      mine = null;
+      mineName = '';
+      shown = null;
+    }
+
+    const open = d.open === true;
+
+    // Only while a vote is open - or just closed on one this phone voted
+    // in, so the pick it made does not vanish under its thumb.
+    if (!open && mine === null) {
+      box.hidden = true;
+      shown = null;
+      return;
+    }
+
+    box.hidden = false;
+    race.textContent = d.race || 'Tonight';
+    list.textContent = '';
+
+    for (const one of drivers) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pick' + (one.id === mine ? ' mine' : '');
+      b.textContent = one.name;
+      b.disabled = !open;
+      b.addEventListener('click', () => cast(one.id, one.name));
+      list.appendChild(b);
+    }
+
+    // Only rewritten when what it says has changed, so an error from the
+    // last tap is not wiped by the next poll.
+    const now = (open ? 'open' : 'closed') + '|' + (mine || '');
+    if (now === shown) return;
+    shown = now;
+
+    if (!open) said.textContent = 'Voting has closed. Your pick is in.';
+    else if (mine) said.textContent = 'You have ' + mineName + '. Good luck.';
+    else said.textContent = 'Tap who you reckon wins.';
+  }
+
+  async function ballot() {
+    let r = null;
+
+    try {
+      r = await fetch(API + '/ballot', { cache: 'no-store' });
+    } catch (e) {
+      return;
+    }
+
+    // Switched off since the page was drawn.
+    if (r.status === 404) {
+      box.hidden = true;
+      ballotKey = '';
+      mine = null;
+      shown = null;
+      return;
+    }
+
+    // Busy or broken keeps what is on screen.
+    if (!r.ok) return;
+
+    const d = await r.json().catch(() => null);
+    if (d && d.ok) draw(d);
+  }
+
+  async function cast(id, name) {
+    said.textContent = 'Sending\\u2026';
+
+    let r = null;
+    let d = {};
+
+    try {
+      r = await fetch(API + '/send', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ d: id }),
+        cache: 'no-store',
+      });
+      d = await r.json().catch(() => ({}));
+    } catch (e) {
+      said.textContent = 'Could not reach the relay.';
+      return;
+    }
+
+    if (r.ok && d && d.ok) {
+      mine = id;
+      mineName = name;
+      shown = null;
+      ballot();
+      return;
+    }
+
+    said.textContent = (d && typeof d.error === 'string' && d.error) || 'Could not send that.';
+
+    // Closed or moved on while it was being tapped: show what is true now.
+    if (r.status === 409 || r.status === 404) {
+      shown = null;
+      ballot();
+    }
+  }
+
+  ballot();
+  setInterval(() => { if (!document.hidden) ballot(); }, 5000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) ballot(); });
+})();
+`;
+
+/**
  * Lap times in my ear (29 Oct 2026, asked for by Asher: the coach page's
  * "Say my lap time" on the relay, so a driver hears their laps on any
  * connection). Drawn for every club: it reads the public board the page
@@ -4232,13 +4528,18 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     // The race board first, under its flag bar (29 Oct 2026, asked for by
     // Asher: "the race board should be first"): it is what the page is
     // for, so on a phone it is what shows without scrolling. Listen,
-    // Captions and Lap times in my ear follow it.
+    // Captions and Lap times in my ear follow it. Who wins? sits straight
+    // under the board while a vote is open, since it only matters before
+    // the race; Message the announcer goes with Listen (2 Nov 2026).
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
       + '<div id="board"></div>'
+      + voteControl(context.look.vote)
       + listenControl(context.look.listening)
+      + noteControl(context.look.notes)
       + captionsControl()
       + lapTalkControl(),
-    script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS,
+    script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS
+      + (context.look.notes ? NOTE_JS : "") + (context.look.vote ? VOTE_JS : ""),
   }, context);
 }
 
