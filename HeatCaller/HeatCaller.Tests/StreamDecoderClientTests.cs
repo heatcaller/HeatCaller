@@ -54,6 +54,19 @@ public sealed class StreamDecoderClientTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A capture file read the way anything else can read it while the
+    /// decoder still has it open. File.ReadAllText refuses a file somebody is
+    /// writing, and Disconnect closes the capture in the background, so the
+    /// test failed whenever it read first (2 Nov 2026).
+    /// </summary>
+    private static string ReadShared(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
     private static (TcpListener Listener, int Port) Listen()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -222,8 +235,8 @@ public sealed class StreamDecoderClientTests : IDisposable
         _client.Disconnect();
 
         var file = Path.Combine(_captures, $"decoder-raw-zround-{DateTime.Now:yyyy-MM-dd}.log");
-        WaitFor(() => File.Exists(file) && File.ReadAllText(file).Contains("%L1F4,7D0&\\r\\n"), "the capture");
-        Assert.Contains("sent: %C&%I&", File.ReadAllText(file));
+        WaitFor(() => File.Exists(file) && ReadShared(file).Contains("%L1F4,7D0&\\r\\n"), "the capture");
+        Assert.Contains("sent: %C&%I&", ReadShared(file));
     }
 
     [Fact]
