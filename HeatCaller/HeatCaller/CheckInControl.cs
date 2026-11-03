@@ -1027,6 +1027,14 @@ public sealed class CheckInControl : UserControl
         _tech?.TechClassForDriver(profile, JudgesTechFor) ?? profile.ClassName;
 
     /// <summary>
+    /// The classes a bulk log inspects a driver in: every one the Tech
+    /// column is waiting on (TechInspectionStore.TechClassesForDriver), so
+    /// the column reads cleared afterwards rather than moving on to the next.
+    /// </summary>
+    public IReadOnlyList<string> InspectClassesFor(DriverProfile profile) =>
+        _tech?.TechClassesForDriver(profile, JudgesTechFor) ?? new[] { profile.ClassName };
+
+    /// <summary>
     /// Only the classes racing tonight, and only the one picked in Class:
     /// when one is - see RaceControlControl.DeskJudgesTechFor.
     /// </summary>

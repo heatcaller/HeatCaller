@@ -32,7 +32,7 @@ What the installer sets up:
 | The program | `%LocalAppData%\HeatCallerApp`. Paste that into the File Explorer address bar to open it. You never need to go in there. |
 | A **HeatCaller** shortcut | The Start menu and the desktop. |
 | A **HeatCaller Rehearsal** shortcut | The Start menu. It opens HeatCaller on a copy of your club's data, so you can practice a race night without touching the real results. The copy lives in `%LocalAppData%\HeatCaller Rehearsal`. |
-| The natural voice (Kokoro) | Inside the program folder. It's ready the first time you choose it on **Voice Settings**, with no download. |
+| The natural voice (Kokoro) | Inside the program folder. It's what a new install speaks with, and it's ready with no download. You choose the voice under **Speak with** on **Voice → Voice**. |
 
 Windows shows the program as **HeatCaller** in Task Manager and in **Settings → Apps**.
 
@@ -49,7 +49,7 @@ If the source folder is at `C:\HeatCaller`, open **PowerShell** and run:
 dotnet run --project "C:\HeatCaller\HeatCaller\HeatCaller\HeatCaller.csproj"
 ```
 
-If you put it somewhere else, use the full path to the `HeatCaller.csproj` in its `HeatCaller\HeatCaller` folder in place of the one above. The first build downloads packages and takes a minute or two. Later starts are much quicker. A source build looks for the natural voice in `%LocalAppData%\HeatCaller\Kokoro`, and **Voice Settings** offers to download it there.
+If you put it somewhere else, use the full path to the `HeatCaller.csproj` in its `HeatCaller\HeatCaller` folder in place of the one above. The first build downloads packages and takes a minute or two. Later starts are much quicker. A source build looks for the natural voice in `%LocalAppData%\HeatCaller\Kokoro`, and **Voice → Voice** offers to download it there.
 
 ## The startup screen
 
@@ -83,11 +83,11 @@ The first time HeatCaller starts, the **Welcome to HeatCaller** wizard walks you
 |---|---|---|
 | **Welcome** | Nothing. Press **Get started**. Moving from another laptop? Press **Restore a backup instead**, and HeatCaller opens **Backup & Restore**. | |
 | **Look and sound** | The app's colors, with a preview, and whether times show on a 24-hour clock. Then **Sound:**: **Keep what's set now**, one of the soundscapes, or **Lap times only**. See [Choosing the sound in the setup wizards](../announcer/sounds-and-music.md#choosing-the-sound-in-the-setup-wizards). | **Themes**. A new look is applied when HeatCaller restarts at the end of setup. The sound is applied as you leave the step, the same as **Apply** on **Sounds → Soundscapes**. |
-| **Timing** | The direct EasyLap decoder or an I-Lap decoder. For I-Lap, also pick its COM port (use **Rescan** if it isn't listed) and baud rate. | The **Connection** page, straight away. |
+| **Timing** | Your decoder, from the same list as **Connect via:** on the **Connection** page: the direct EasyLap decoder, an I-Lap decoder, or one of the Beta decoders. For I-Lap, also pick its COM port (use **Rescan** if it isn't listed) and baud rate. A Beta decoder's port or address is set on the **Connection** page afterwards (see [The Beta decoders](../timing/decoders.md#the-beta-decoders)). | The **Connection** page, straight away. Nothing connects from the wizard. |
 | **Track** | A track layout name, such as "Garage Oval". Then **Where do you race?**: **At a club**, or **At home, with family or friends**. | The **Track Layouts** page. It's also selected as the current layout. Where you race is the setting on the **Achievements** page. See [At a club or at home](../race-control/results-and-championships.md#at-a-club-or-at-home). |
 | **Classes** | One class per line, or press the quick-add buttons (Stock, Modified, Open, Novice, Spec). | The **Classes** page. |
 | **Drivers** | Up to six drivers, each with a name and transponder number, and the class they race in. | The **Driver Hub** page. |
-| **All set** | A summary of what was set up, including the sound, a box to start the app tour, and **Keep pages not yet tested at a real event out of the sidebar for now**, ticked for a new club. | The tick is the same one as in **Manage Navigation** (see [Reordering and hiding pages](tour.md#reordering-and-hiding-pages)). It's saved when you press **Finish**. |
+| **All set** | A summary of what was set up, including the sound, what to do on race night, a line saying HeatCaller starts in Simple mode (see [Simple and Advanced mode](simple-and-advanced-mode.md)), a box to start the app tour, and **Keep pages not yet tested at a real event out of the sidebar for now**, ticked for a new club. | The tick is the same one as in **Manage Navigation** (see [Reordering and hiding pages](tour.md#reordering-and-hiding-pages)). It's saved when you press **Finish**. |
 
 Press **Finish** on the last step.
 
@@ -98,7 +98,7 @@ A few details:
 - A track or class with the same name as an existing one isn't added twice.
 - The wizard appears once. Closing it with the X counts as done, and it won't come back on the next start.
 
-You don't have to add every driver now. When an unknown transponder crosses the line during a race, HeatCaller asks you to name it when the session ends.
+You don't have to add every driver now. A transponder nobody owns still gets timed, and once the session ends it's listed in a banner on **Driver Hub** (and on **Race Control** between races), where you can give it to a driver. See [Unknown transponders](../timing/transponders.md#unknown-transponders).
 
 <!-- screenshot: first-run wizard, "Timing" step -->
 
@@ -119,7 +119,7 @@ The tour is a short look around the app. A small card in the bottom-right corner
 
 **A request for your backup password.** If you restored a backup onto a different PC, HeatCaller may ask for the backup's password so it can unlock your saved keys (ElevenLabs, relay token and PINs). See [Backups](../admin/backups.md).
 
-**A tip in the console.** The Developer console on the **Connection** page shows "F11 toggles Race Mode - full screen, no sidebar, just the race." See [Keyboard shortcuts](../reference/keyboard-shortcuts.md).
+**A tip in the console.** The Developer console on the **Connection** page (in Advanced mode) shows "F11 toggles Race Mode - full screen, no sidebar, just the race." See [Keyboard shortcuts](../reference/keyboard-shortcuts.md).
 
 ## Where your data lives
 

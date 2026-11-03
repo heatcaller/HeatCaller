@@ -1,6 +1,6 @@
 # Hosting the relay on Fly.io
 
-The relay is the small server that gives your club a stable `https://` address for its results, standings, live race and online check-in — and, if you want it, the [HeatCaller voice](#the-heatcaller-voice), so clubs get a natural announcer with no ElevenLabs account of their own. This page takes you from nothing to a working relay on Fly.io, using a Windows PC, and then covers the day-to-day jobs: adding clubs, replacing a leaked token, updating, and moving to a new address.
+The relay is the small server that gives your club a stable `https://` address for its results, standings, live race and online check-in — and, if you want them, the [HeatCaller voice](#the-heatcaller-voice), so clubs get a natural announcer with no ElevenLabs account of their own, and [AI commentary](#ai-commentary). This page takes you from nothing to a working relay on Fly.io, using a Windows PC, and then covers the day-to-day jobs: adding clubs, replacing a leaked token, updating, and moving to a new address.
 
 You only need this page if you run the relay yourself. If someone else hosts it for your club, all you need from them is the address, your club id and a publish token; see [Setting up online publishing](../online/setup.md).
 
@@ -13,7 +13,7 @@ You only need this page if you run the relay yourself. If someone else hosts it 
 - A 1 GB volume called `relay_data`, mounted at `/data`, holding everything the clubs have published. It survives restarts and redeploys.
 - The club list and token hashes stored as a Fly secret, never in the image or on the volume.
 - A machine that stops when nobody is using it and starts again on the next request.
-- Optionally, an ElevenLabs key as a second Fly secret, so the clubs you switch on can use the HeatCaller voice.
+- Optionally, an ElevenLabs key as a second Fly secret, so the clubs you switch on can use the HeatCaller voice, and an Anthropic key as a third, for AI commentary.
 
 ## Before you start
 
@@ -392,6 +392,55 @@ Renders are capped at six at once across the whole relay, and a club may ask 300
 
 Every refusal has the same effect on the night: the free Kokoro voice says that line, on the club's own laptop, so a flag call is never silent. The app names the reason in its console and on **Sounds → Mixer**. The ones you can fix from here are "the HeatCaller voice isn't included for this club" (no `"enabled": true`), "the HeatCaller voice isn't switched on for this relay" (no `RELAY_VOICE_KEY`), "that HeatCaller voice isn't available any more" (a voice taken out of the catalog that a club had chosen) and "the relay didn't accept this club's token" (a token replaced but not yet pasted into the club's **Club Website** page).
 
+## AI commentary
+
+The relay can also write the announcer's commentary lines, with Claude on your Anthropic account, so the clubs you switch on need no account or key of their own. The laptop sends the facts it has already worked out (positions, gaps, rivalries) and the model only phrases them. The clubs' side is in [Commentary](../announcer/commentary.md#using-the-relay).
+
+Like the voice, it's optional. A relay without it starts as normal, and each club's laptop writes with the model built into HeatCaller instead, or goes without.
+
+Add a `"brain"` block beside `"clubs"` in `relay.config.json`:
+
+```json
+"brain": {
+  "model": "claude-haiku-4-5-20251001",
+  "monthlyLines": 1000
+}
+```
+
+Leave out `model` and the relay uses `claude-haiku-4-5-20251001`. With no `"brain"` block at all, the relay doesn't offer commentary. Then switch each club on in its own entry, as with the voice:
+
+```json
+"brain": { "enabled": true }
+```
+
+A club's own `monthlyLines` is optional and falls back to the block's. Then run `fly-set-config.cmd`.
+
+The Anthropic key is a Fly secret of its own, never written into the config:
+
+```
+fly secrets set RELAY_BRAIN_KEY=sk-ant-...
+```
+
+Give the key a spend limit in Anthropic's console. A race night of commentary costs cents, but the limit is what stops a mistake. The startup log says which you have:
+
+```
+[relay] commentary brain: claude-haiku-4-5-20251001, 3 club(s) included
+[relay] commentary brain: a model is configured but RELAY_BRAIN_KEY is not set, so it is switched off
+```
+
+Lines are counted per club, a calendar month (UTC) at a time, in `dataDir/.brain/usage/<club>.json`. A line is taken off the month before the model is asked and given back if nothing came of it. Each club may have two lines being written at once. Whatever the relay refuses, the laptop's own model writes that line instead, so commentary never holds up a flag call. See [Monthly allowances and top-ups](#monthly-allowances-and-top-ups).
+
+## The lap voice
+
+**Lap times in my ear**, on the club's **Live** page and a driver's own night (see [Lap times in my ear](../online/index.md#lap-times-in-my-ear)), plays short clips in one ElevenLabs voice for every club. The clips aren't rendered on the fly: you make them once, on your own PC, and they go into the relay's image.
+
+1. Put an ElevenLabs key (on a paid plan, for the commercial license) on the first line of `voice-test.key` in the relay folder.
+2. `lap-voice-render.cmd count` says what it would make and what it would cost, and spends nothing.
+3. `lap-voice-render.cmd` makes the missing clips, after you type `yes`. They land in the `lap-voice` folder. Clips already there are never asked for twice.
+4. `fly deploy --ha=false` carries the folder into the image.
+
+The relay's start-up log says how many it has: `[lap voice] N of M clips in the Daniel voice.` Without them it says `... so spoken laps use the phone's voice.`, and phones read the laps in their own voice. Deploying from a copy of the relay folder without the clips does the same, so keep the clips in the `lap-voice` folder safe (Git leaves them out).
+
 ## Day to day
 
 ### Adding a club
@@ -439,13 +488,27 @@ Ask the club to click **Delete Everything Published** on its **Club Website** pa
 
 <!-- TODO: confirm whether there is a supported way to delete a removed club's files from the volume without its token -->
 
+### Pausing a club
+
+To switch a club off for a while without losing anything, pause it instead: add `"active": false` to its entry in `relay.config.json`, then run `fly-set-config.cmd`. While it's paused:
+
+- every page of the club's shows a "paused" notice, and every request to its addresses is refused, whatever token or PIN it carries;
+- its token doesn't work anywhere, the voice preview included; the club's laptop says `This club is paused on the HeatCaller relay. Ask HeatCaller to switch it back on.`;
+- its results, roster, usage and top-ups stay on the volume untouched.
+
+Take the line out, or set it to `true`, to switch the club back on with the same token. Anything but `true` or `false` stops the relay at start-up, so a hand-typed `"false"` can't quietly read as on.
+
 ### Monthly allowances and top-ups
 
 Each club's AI commentary is counted in lines and its HeatCaller voice in characters, a calendar month (UTC) at a time. The clubs see their own figures in HeatCaller's **This Month** window, on the pages that use them and on the manager's phone page, and can press **Ask for More** when one runs low. See [This month: every allowance in one place](../announcer/commentary.md#this-month-every-allowance-in-one-place). Those figures come from routes a relay only has once it has been deployed again; until then a laptop's This Month window says "This relay can't show the monthly allowances yet."
 
-Three commands, run from the relay folder, look after the commentary side and the requests. Like the voice's `voice-usage.cmd` and `voice-topup.cmd`, each runs the relay's own code on the Fly machine through `fly ssh console`, so all it needs is flyctl signed in to the account that runs the relay. It wakes the machine first if it has stopped itself. There's deliberately no web address for any of them: every other route names one club and answers only that club's token.
+These commands, run from the relay folder, look after the allowances and the requests. Each runs the relay's own code on the Fly machine through `fly ssh console`, so all it needs is flyctl signed in to the account that runs the relay. It wakes the machine first if it has stopped itself. There's deliberately no web address for any of them: every other route names one club and answers only that club's token.
 
 ```
+voice-usage.cmd                    every club with the voice: this month so far, and the three before
+voice-usage.cmd --json             every club and its whole history, as JSON
+voice-topup.cmd acme-rc 50000      50,000 more characters for acme-rc, this month only
+voice-topup.cmd acme-rc -20000     takes 20,000 of that back (never below no top-up)
 brain-usage.cmd                    every club with AI commentary: this month so far, and the three before
 brain-usage.cmd --json             the same with every club's whole history, as JSON
 brain-topup.cmd acme-rc 200        200 more lines for acme-rc, this month only
@@ -489,6 +552,17 @@ A top-up lasts the month it's given in, on top of the club's plan (`brain.monthl
 
 **The relay never sends email.** A request is only noted on the relay. The person is told by the club's own HeatCaller, which emails support@heatcaller.com from the club's mailbox, or opens the club's email program with the request written out; the manager's phone page offers a ready-made email link beside its **Ask for More**. So `topup-requests.cmd` is the list to work from, and the emails are only a nudge. A club may make at most 10 requests a month, and a second request for the same allowance while one is still open is answered with the open one rather than stored again.
 
+To turn a request down without giving anything, run `fly ssh console -C "node /app/dist/src/index.js topup-decline <club> <voice|commentary>"`. It marks the club's open request for that allowance answered.
+
+**Automatic top-ups.** A club's entry can let the relay answer its requests by itself, up to a limit, so a club that runs out on a race night isn't left waiting on you:
+
+```json
+"autoTopUp": { "voice": { "amount": 25000, "perMonth": 2 },
+               "commentary": { "amount": 200, "perMonth": 1 } }
+```
+
+When the club asks for more having used 90% or more of that allowance, the relay gives `amount` for the month at once, at most `perMonth` times a calendar month, and only when that allowance is switched on for the club. Requests after that wait for you as before. A rule outside 1 to 10 a month, or bigger than one top-up may give, stops the relay at start-up. What it gives is kept in `.requests/<club>.auto.json`, apart from your own top-ups.
+
 The data, all under the relay's data folder:
 
 | Path | What it holds | Written by |
@@ -497,7 +571,9 @@ The data, all under the relay's data folder:
 | `.brain/topups/<club>.json` | Commentary lines given on top of the plan, by month. | `brain-topup` only. The relay only reads it. |
 | `.voice/topups/<club>.json` | Voice characters given on top of the plan, by month. | `voice-topup` only. |
 | `.requests/<club>.json` | The club's requests for more, by month (kept for a year). | The relay only. |
-| `.requests/done/<club>.json` | Which of those requests have been answered. | `brain-topup` and `voice-topup` only. |
+| `.requests/done/<club>.json` | Which of those requests have been answered. | `brain-topup`, `voice-topup` and `topup-decline` only. |
+| `.requests/<club>.auto.json` | What automatic top-ups have given, by month. | The relay only. |
+| `.usage-log/<YYYY-MM>.jsonl` | One line per voice and commentary request: the club, what it cost, how it went. No words, names or facts are ever kept. Kept 24 months. | The relay only. |
 | `.clips/<club>/` | A driver's own race calls for their private night page: `<id>.mp3` beside `<id>.json`. Each is removed after 7 days. | The relay only. |
 
 Each file has one writer, so the running relay and a command run at the same moment can never save over each other. Run through ssh, the commands run as root; they hand every file and folder they make to the relay's own user, and refuse to run without `RELAY_DATA`, which is where the relay's data really is.
@@ -512,7 +588,7 @@ npm test
 fly deploy --ha=false
 ```
 
-The volume, and every published result on it, survives the deploy. Since 28 Oct 2026 the relay takes no podium videos: they stay on the club's laptop. The first start of that build deletes any it kept before, the whole `/data/.videos` folder, once, and says so in `fly logs` (`[relay] removed the old podium videos: ...`). If the laptop reports `The relay is an older build that cannot take this. Redeploy it.`, this is the fix.
+The volume, and every published result on it, survives the deploy. The lap voice's clips in the `lap-voice` folder go into the image with every deploy (see [The lap voice](#the-lap-voice)). Since 28 Oct 2026 the relay takes no podium videos: they stay on the club's laptop. The first start of that build deletes any it kept before, the whole `/data/.videos` folder, once, and says so in `fly logs` (`[relay] removed the old podium videos: ...`). If the laptop reports `The relay is an older build that cannot take this. Redeploy it.`, this is the fix.
 
 !!! note "HeatCaller 0.59.0: redeploy the relay first"
     Deploy the relay before any laptop runs 0.59.0: the new relay reads both the old and the new, salted PIN hashes, and the old one can't read the new ones. It also brings driver sign-up, limits on bulk result reads, per-club voice limits and tighter file permissions, and it signs every check-in, manager and sign-up pass with a secret of its own - so check-in desks, race-day managers and drivers waiting on a sign-up enter their PIN or invite code once more afterwards. It also adds the two open voice-sample routes and the **Preview** button's own daily allowance, so **Hear It** and **Preview** at the top of **Voice → Cast** do nothing until it is deployed — see [Hearing a voice before choosing it](#hearing-a-voice-before-choosing-it). A relay still on an older Fly app name moves first: see [Moving to a new app name](#moving-to-a-new-app-name). From the relay folder, run `npm test`, then `fly deploy --ha=false`. See [0.59.0](../release-notes.md#0590) in the release notes.
@@ -550,8 +626,11 @@ fly status
 | `[relay] "x": the check-in queue is full; a tap was refused.` | 500 check-in taps are waiting and the laptop isn't collecting them. |
 | `[relay] "x": the manager's request queue is full; a request was refused.` | The race-day manager's requests are waiting and the laptop isn't collecting them (see [Limits](#limits)). |
 | `[relay] "x": 50 wrong check-in PINs - the PIN list is closed for N minutes (lockout N in a row).` | Someone is guessing PINs; the club's PIN sign-in is closed. Changing the staff PIN in HeatCaller reopens it. See [Security and privacy](security-and-privacy.md#online-check-in-pins). |
+| `[relay] WARNING "x": 150 wrong check-in PINs in a day, paced to stay under the ten-minute limit - ...` | Someone is guessing slowly on purpose. PIN sign-in is closed for 12 hours, and again after each wrong PIN until the day's guesses age out. Changing the staff PIN reopens it. |
 | `[relay] "x": the staff PIN changed, so its wrong-PIN count starts again.` | A new staff PIN was published; any lockout is lifted. |
 | `[relay] "x": could not save the wrong-PIN count (...)` | The volume is full or unwritable. The count is kept in memory until the relay restarts. |
+| `[relay] HeatCaller voice: ...` / `[relay] commentary brain: ...` | Whether the voice and AI commentary are on, and for how many clubs. See [The key](#the-key) and [AI commentary](#ai-commentary). |
+| `[lap voice] ...` | How many lap voice clips the relay has. See [The lap voice](#the-lap-voice). |
 | `[relay] forwarding every request to https://...` | This app is a forwarder (see below). |
 
 ### The machine sleeps when idle
@@ -568,7 +647,7 @@ One relay serves every club; each one is a separate folder on the volume and a s
 2. **Probe** it from outside: `probe.cmd hg_THE_TOKEN <club-id> https://heatcaller-relay.fly.dev`.
 3. **Hand over the token** without putting it in an email - see [Handing a club its token](#handing-a-club-its-token).
 4. **Decide the roster**: leave `publishRoster` off unless the club has decided to publish names (see [Turning on a club's public roster](#turning-on-a-clubs-public-roster)).
-5. **Set its allowances** if it isn't on the defaults (`voice.monthlyChars`, `brain.monthlyLines`), then `fly-set-config.cmd`.
+5. **Switch on what it gets** (`"voice": { "enabled": true }`, `"brain": { "enabled": true }`), and **set its allowances** if it isn't on the defaults (`voice.monthlyChars`, `brain.monthlyLines`, `autoTopUp`), then `fly-set-config.cmd`.
 6. **Take a backup** (below), so the first copy with the new club in it exists before its first night.
 7. **Note it down**: club id, name, contact, the date minted. The config holds the id and name; who to call when it breaks is yours to keep.
 
@@ -732,6 +811,10 @@ To throw it away: <kbd>Ctrl</kbd>+<kbd>C</kbd>, then delete `relay.config.voice-
 | `clubs[].name` | The club's name, for page headings. | The club id |
 | `clubs[].tokenSha256` | SHA-256 of the club's publish token, as 64 hex characters. Written by mint. | (required) |
 | `clubs[].publishRoster` | Whether the club's roster and heat line-ups may be served publicly. | `false` |
+| `clubs[].active` | `false` pauses the club. See [Pausing a club](#pausing-a-club). | `true` |
+| `clubs[].brain.enabled` | Whether this club may use AI commentary on the relay. | `false` |
+| `clubs[].brain.monthlyLines` | This club's commentary lines a calendar month. 0 to 1,000,000. | `brain.monthlyLines` |
+| `clubs[].autoTopUp` | Automatic top-ups: `voice` and/or `commentary`, each an `amount` and a `perMonth` from 1 to 10. See [Monthly allowances and top-ups](#monthly-allowances-and-top-ups). | none |
 | `clubs[].voice.enabled` | Whether this club may use the HeatCaller voice. | `false` |
 | `clubs[].voice.monthlyChars` | This club's characters a calendar month. 0 to 100,000,000. | `voice.monthlyChars` |
 | `clubs[].voice.voices` | Catalog ids this club may use. Omitted or empty means the whole catalog. Every id must be in it. | all of them |
@@ -740,6 +823,10 @@ To throw it away: <kbd>Ctrl</kbd>+<kbd>C</kbd>, then delete `relay.config.voice-
 | `voice.maxChars` | Longest line the relay will speak at once. 40 to 5,000. | `600` |
 | `voice.previewDailyChars` | Characters one club may spend on **Preview** in a day (UTC), kept apart from its month. 0 to 1,000,000; `0` switches previews off and leaves the samples working. | `3000` |
 | `voice.previewMaxChars` | Longest one preview may be. 40 to 600. The relay uses this or `maxChars`, whichever is smaller. | `200` |
+| `brain.model` | The Anthropic model that writes commentary. With no `"brain"` block, the relay offers no commentary. | `claude-haiku-4-5-20251001` |
+| `brain.monthlyLines` | The default commentary allowance per club, a calendar month. 0 to 1,000,000. | `1000` |
+| `brain.maxWords` | Longest ordinary line, in words. 10 to 500. | `120` |
+| `brain.maxLongWords` | Longest recap or preview, in words. 10 to 1,000. | `450` |
 
 Leave `maxBodyBytes` at its default unless you have a reason. HeatCaller sends documents of up to 900 KB; a lower limit makes the relay refuse some of them.
 
@@ -752,6 +839,7 @@ A voice's optional settings default to `eleven_flash_v2_5`, stability 0.5, simil
 | `RELAY_CONFIG_JSON` | The whole config as one JSON string. Used instead of the file when set. On Fly this is the secret `fly-set-config.cmd` sets. |
 | `RELAY_CONFIG` | Path to the config file. Default `./relay.config.json`. |
 | `RELAY_VOICE_KEY` | The ElevenLabs key behind the HeatCaller voice. Set on its own, never in the config. Without it the relay starts and doesn't offer the voice. See [The HeatCaller voice](#the-heatcaller-voice). |
+| `RELAY_BRAIN_KEY` | The Anthropic key behind AI commentary. Set on its own, never in the config. Without it the relay starts and doesn't offer commentary. See [AI commentary](#ai-commentary). |
 | `PORT` | Listen port. Overrides `port` in the config. |
 | `RELAY_DATA` | Data folder. Overrides `dataDir` in the config. `fly.toml` sets it to `/data`. |
 | `RELAY_UID` / `RELAY_GID` | The user and group the relay switches to after starting as root. Default 1000, the `node` user in the image. |
@@ -780,6 +868,12 @@ The relay would rather not start than start wrong. You'll see one of these in `f
 | `Club "..." in ... names a voice "..." that the catalog does not have.` | Correct that club's `voice.voices`, or add the voice to the catalog. |
 | `"voice" in ... must be an object.` / `"voice.voices" in ... must be a list.` / the same for a club | Correct the shape of the block. A club's `voice.voices` is a list of ids, not of objects. |
 | `"voice.previewDailyChars" in ... must be a whole number from 0 to 1000000` / `"voice.previewMaxChars" in ... must be a whole number from 40 to 600` | Correct or remove that number. |
+| `"brain" in ... must be an object.` / `"brain.monthlyLines" in ... must be a whole number from 0 to 1000000` (and the same for `maxWords`, `maxLongWords` and a club's `brain`) | Correct the block or the number. |
+| `"active" for ... in ... must be true or false` | Write `true` or `false` without quotes, or take the line out. |
+| `"autoTopUp" for ... in ...` / `"autoTopUp.voice" for ... needs a whole "amount" ...` | Correct the club's automatic top-up rule. |
+| `Club N in ... needs at least "club" and "tokenSha256".` | Complete that club's entry, or re-mint it with `--write`. |
+
+To check a config before you push it, run `node dist/src/index.js check-config relay.config.json` in the relay folder (after `npm run build`). It reads the file exactly as the relay does at start and prints `{"ok":true,"clubs":N,"active":N}`, or `{"ok":false,"error":"..."}` with the message the relay would have stopped on.
 
 ## Limits
 
@@ -796,7 +890,7 @@ The relay would rather not start than start wrong. You'll see one of these in `f
 | Check-in request body | 4 KB | Refused. |
 | Results listing | 8 MB | The listing holds the newest results that fit, and says how many older ones were left out (`omitted`). Each is still readable on its own. Old results are only forgotten after a new one has been saved. |
 | A club's voice allowance | `voice.monthlyChars` (100,000 by default) a calendar month | The relay refuses to speak, and the club's announcer uses the free Kokoro voice for every line until the month turns. Characters are reserved before each render and given back if it fails, so concurrent lines can't overshoot. |
-| A club's AI commentary | `brain.monthlyLines` plus this month's `brain-topup`, a calendar month | The relay refuses to write; the club's laptop switches to the model on that PC by itself, and stops sending lines to be refused. See [Monthly allowances and top-ups](#monthly-allowances-and-top-ups). |
+| A club's AI commentary | `brain.monthlyLines` plus this month's `brain-topup` and automatic top-ups, a calendar month | The relay refuses to write; the club's laptop switches to the model on that PC by itself, and stops sending lines to be refused. See [Monthly allowances and top-ups](#monthly-allowances-and-top-ups). |
 | Top-up requests from one club | 10 a month, open and answered together | Refused with 429. A second request for an allowance that already has one open is answered with that one. |
 | One spoken line | `voice.maxChars` (600 by default) | Refused. The app has a 600-character limit of its own, measured on the spoken words, and the Kokoro voice says that line. |
 | Renders at once | 6, across the whole relay | Refused as busy; the Kokoro voice says that line and the next is asked for as normal. |
@@ -813,6 +907,8 @@ Rate limits on PINs and check-in are covered in [Security and privacy](security-
 This setup is built to cost as little as Fly allows: one small machine that stops when idle, plus a 1 GB volume. Podium videos never go on it: since 28 Oct 2026 they stay on each club's laptop. The machine runs while the laptop is publishing or people have the club's pages open, and stops in between, so a club that races one night a week uses it for a small part of the week. The volume is kept whether or not the machine is running. Check Fly.io's current pricing for what that comes to; this page doesn't quote prices because they change.
 
 The HeatCaller voice adds an ElevenLabs bill on top, on your account rather than the clubs'. Two things keep it down: a line is only ever rendered once — the fixed lines once for every club put together — and each club's monthly allowance caps how much new rendering it can ask for. Set a credit limit on the key as well, so the allowances aren't the only thing between a mistake and a large invoice.
+
+AI commentary adds an Anthropic bill, also on your account. It's much the smaller of the two: a race night of commentary is cents. The per-club line allowance and a spend limit on the key keep it that way. The lap voice's clips cost one ElevenLabs render each, once (`lap-voice-render.cmd count` says how much before you spend anything).
 
 <!-- TODO: confirm whether a small relay fits inside Fly's free allowance at time of publishing -->
 

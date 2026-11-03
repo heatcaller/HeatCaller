@@ -1,26 +1,31 @@
 # Sounds and music
 
-Besides the spoken announcer, HeatCaller can play short sound effects for laps and race moments, a crowd and track atmosphere that reacts to the race, a between-race soundtrack, and a personal lap cue for each driver. All of it lives on the **Sounds** page, on its tabs: **Mixer**, **Soundscapes**, **Imaging**, **Effects**, **Ambience**, **Music** and **Lap Beeps**. A soundscape (the **Announcer Style** tab on the **Themes** page before 0.56) sets up the sound effects and the announcer's words and delivery in one go, and can bring its own crowd and music; see [Soundscapes](#soundscapes).
+Besides the spoken announcer, HeatCaller can play short sound effects for laps and race moments, radio-style jingles and beds around the race, a crowd and track atmosphere that reacts to the race, a between-race soundtrack, and a personal lap cue for each driver. All of it lives on the **Sounds** page, on its tabs: **Mixer**, **Soundscapes**, **Imaging**, **Effects**, **Ambience**, **Music** and **Lap Beeps**. A soundscape (the **Announcer Style** tab on the **Themes** page before 0.56) sets up the sound effects and the announcer's words and delivery in one go, and brings its own imaging, crowd and music; see [Soundscapes](#soundscapes).
+
+Every level, and how far each sound drops while the announcer talks, is set in one place: the [Mixer](#mixer).
 
 None of these sounds use the internet. They play on the laptop, through whatever speaker it's connected to.
+
+!!! note
+    In Simple mode the **Imaging**, **Effects**, **Ambience** and **Lap Beeps** tabs are hidden, and so are some cards on **Mixer**, **Soundscapes** and **Music**. Hidden isn't off: those sounds still play as the soundscape sets them. Turn on Advanced mode to see them; see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
 HeatCaller also records each race as it goes out and saves it as an mp3, with a clip and a highlight video for each driver. That's on the **Recording** tab of the **Club Website** page (it was the last tab here until 26 October 2026); see [Race recordings](#race-recordings).
 
 ## Effects
 
-**Sounds → Effects** plays short cues like Next Level Timing's own: a chime per lap plus sounds for race moments. Each sound plays **Classic tones** (tones HeatCaller generates itself) or one of the built-in sound packs: **Podium**, **Arcade**, **Broadcast**, **Synthwave** or **Pit Lane**. You can point any of them at your own audio file instead, and your file wins over both.
+**Sounds → Effects** plays short cues like Next Level Timing's own: a chime per lap plus sounds for race moments. Each sound plays **Generated tones** (tones HeatCaller makes itself, called **Classic tones** before 17 October) or one of the built-in sound packs: **Podium**, **Arcade**, **Broadcast**, **Classic** or **Pit Lane**. The **Classic** pack is the one called **Synthwave** before 16 October. You can point any of them at your own audio file instead, and your file wins over both.
 
-<!-- screenshot: Sounds > Effects tab with the Race, Practice, Sound, Pack, Your own file (optional) and Weight columns -->
+![Sounds, Effects tab: each sound with its Race and Practice ticks, Pack, Your own file (optional), Browse, Remove, Test and Weight](../assets/images/sounds-effects.png)
 
 The list has a heading over each column: **Race**, **Practice**, **Sound**, **Pack**, **Your own file (optional)** and **Weight**. Hover over most things on a row for a tip saying what they do. Each row has:
 
 - **Race** and **Practice** tick boxes: the first plays the sound in races, the second in practice. A sound with only the practice box ticked stays silent on race night. Under each heading is a tick box for the whole column: click it to tick every sound in that column, or to clear them all when they're all ticked. It shows a part-way mark when only some are ticked, and Undo puts back the ticks you had.
 - **Sound**: the sound's name. A longer explanation, such as "all-time best on this track" for **Track record**, sits on a smaller line underneath (shown in brackets in the table below).
-- **Pack**: the built-in sound this row plays, **Classic tones** or a pack.
+- **Pack**: the built-in sound this row plays, **Generated tones** or a pack.
 - **Your own file (optional)**: shows **(optional own file)** until you choose one. Once set, the box shows just the file's name; hover over it to see the full path. Click into the box and it shows the full path, so you can type or paste one.
 - **Browse** picks a `.wav` or `.mp3` file for the row.
 - **Remove** stops using your own file, so the row goes back to its pack sound. It's saved straight away, and the page says, for example: Fast lap is back to the Podium sound. "horn.wav" is no longer used - the file itself is untouched. Only the setting is cleared; your file isn't deleted. **Remove** is grayed out while the row has no file of its own.
-- **Test** plays the row as a race would (your own file if it's set, otherwise the pack sound) at the current volume.
+- **Test** plays the row as a race would (your own file if it's set, otherwise the pack sound) at the **Sound effects** level on the **Mixer**.
 - **Weight** (per-lap sounds only): which sounds win when several fire on the same lap.
 - **Caution** (per-lap sounds only): lets the sound play while a yellow or red flag is out. Otherwise per-lap sounds are held during a caution. Race-moment sounds always play.
 
@@ -58,13 +63,9 @@ A flag call cuts off a sound effect that's still playing. Crowd surges (for a fa
 
 On a busy track, per-lap sounds are kept close to the action: a lap chime that's fallen more than about 3 seconds behind the crossing is skipped, and no more than 3 wait to play at a time.
 
-Page settings:
+Under the list, **Max sounds per lap (good / invalid / fast / streak / leader change):** (1 to 5, default 3) sets how many per-lap sounds can play on one lap; when more fire, only the highest-weight ones play.
 
-| Setting | What it does | Default |
-|---|---|---|
-| **Streak threshold - races:** and **practice:** | 2 to 50. How many clean laps in a row count as a streak. Used by both the streak sound and the spoken **Consistency streak** announcement, and to color the Streak column on leaderboards. | 3 |
-| **Sound effects volume (%):** | Volume for all effects and lap beeps. The same setting as the **Sound effects** fader on the **Mixer**. | 100 |
-| **Max sounds per lap (good / invalid / fast / streak / leader change):** | 1 to 5. When more per-lap sounds than this fire on one lap, only the highest-weight ones play. | 3 |
+How loud the effects and lap beeps play is the **Sound effects** fader on the [Mixer](#mixer). How many clean laps make a streak, for the streak sound and the spoken streak call alike, is set on the **How often** card of **Voice → Race Calls**; see [How often](voice.md#how-often). Both were on this tab before 17 October.
 
 Buttons: **Enable All** and **Enable None** tick or clear every sound for both races and practice (files and volumes are left alone). **Test All Enabled** plays each ticked sound in turn.
 
@@ -73,7 +74,7 @@ Buttons: **Enable All** and **Enable None** tick or clear every sound for both r
 Changes save themselves as you make them; there's no Save button. The status line at the foot of the tab confirms each save and what's on, for example "Saved 19:42:07 - 12 sounds on for races, 12 for practice."
 
 !!! note
-    A custom sound file is played from where it is on disk; HeatCaller doesn't copy it anywhere. If you move or delete the file, HeatCaller quietly falls back to the row's pack sound (or the Classic tone). Files on a network share are not played.
+    A custom sound file is played from where it is on disk; HeatCaller doesn't copy it anywhere. If you move or delete the file, HeatCaller quietly falls back to the row's pack sound (or the generated tone). Files on a network share are not played.
 
 ## Ambience
 
@@ -116,40 +117,39 @@ The list on the **Layers** card shows each **Layer**, its **Source** (**Soundsca
 
 The layers on the other side stay in the list and keep their settings; they show "(not playing)" after their name. The sentence under the choice says what it means for what you have set up, for example "Only the layers you added. A soundscape's crowd beds stay listed, and applying another soundscape still replaces them - they are just not playing." The line under the list counts what will actually be heard, for example "3 of 4 layers ready to play."
 
-<!-- screenshot: Sounds > Ambience tab with two layers and the live state panel -->
+![Sounds, Ambience tab: the state panel, and four layers - two from the soundscape and two of the club's own - with their levels from Idle to Peak](../assets/images/sounds-ambience.png)
 
-### Reactions and ducking
+### Reactions
 
-**Overall level:** is beside **Enable ambience** at the top of the tab. The rest are on the **Reactions** and **Ducking** cards, under the layers.
+These are on the **Reactions** card, under the layers. How loud the ambience is overall is the **Ambience** fader on the [Mixer](#mixer) (default 60%), and how far it drops under the announcer is on the Mixer's [Ducking](#ducking) card; both were on this tab before 17 October.
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Overall level:** | Scales every layer at once. The same setting as the **Ambience** fader on the **Mixer**. | 60% |
 | **React to what happens in the race** | Lets individual moments cause a brief surge. With it off, ambience still follows the broad race state. | On |
 | Surge triggers | **Fastest lap**, **Lead change**, **Track record**, **Checkered flag**, **Last lap**, **Close battle**, **Consistency streak**, **Jump start**, **Personal best**, **Car gets lapped**. Close battle and lapping fire once per race. | The first six on; the last four off |
 | **Surge lasts:** | Seconds a surge lasts before settling back. | 6 |
 | **Finish celebration:** | Seconds the crowd stays up after the checkered flag, before dropping to idle. | 20 |
 | **Fade up / down:** | Seconds for a rise and a fall. A slower fall than rise sounds most natural. | 1.5 / 4 |
-| **Duck ambience while the announcer speaks** ... **down to:** | Drops the ambience while a line is spoken, including flag calls, so the voice stays clear. | On, 35% |
-| **Also lift the voice when the bed is loud** ... **up to x** | Raises the announcer's volume when the ambience is loud, scaled by how loud it is. No boost over a quiet bed. | On, x1.3 |
 
 ## Music
 
-**Sounds → Music** is a soundtrack for between races. Eleven tracks are included: Horizon Line, Chasing Sunset, Grid Runner, Afterglow, Cooldown Lap, Vanishing Point, Last Lap Lights, Redline Memory, One More Run, Back to the Grid and Long Way Home. The soundscapes' theme tracks (Victory Lane, Race Day Live, Neon Grid and Insert Coin) are included too; see [Theme music](#theme-music).
+**Sounds → Music** is a soundtrack for between races. Eleven tracks are included: Horizon Line, Chasing Sunset, Grid Runner, Afterglow, Cooldown Lap, Vanishing Point, Last Lap Lights, Redline Memory, One More Run, Back to the Grid and Long Way Home. The soundscapes' own music is included too, Victory Lane and Race Day Live among it; see [Theme music](#theme-music).
 
 1. Tick **Enable music**.
-2. Set **Volume:** (default 40%) and **Shuffle** (on by default; it plays every track once before repeating any).
+2. Leave **Shuffle** ticked (the default) to play every track once before repeating any.
 3. Choose what plays, next to **Play:**: **Theme music** or **My music**. See [Theme music or my music](#theme-music-or-my-music).
-4. Use the **Player** buttons: **Previous**, **Play** (which becomes **Pause** and **Resume**), **Stop** and **Next**. The player shows what's playing and the time. When a theme track is playing it says so, for example "Now playing:  Victory Lane  (theme music, Podium)".
+4. Use the **Player** buttons: **Previous**, **Play** (which becomes **Pause** and **Resume**), **Stop** and **Next**. The player shows what's playing and the time. When a theme track is playing it says so, for example "Now playing:  Top Step  (theme music, Podium)".
+
+How loud the music plays is the **Music** fader on the [Mixer](#mixer) (default 40%), and how far it drops under the announcer is on the Mixer's [Ducking](#ducking) card; both were on this tab before 17 October.
 
 ### Theme music or my music
 
 **Play:** has two choices, and the sentence under them says what the choice plays right now:
 
-- **Theme music** plays the music of the soundscape you applied last, for example Victory Lane for **Podium**. Your ticks under **My music** aren't changed; they're kept for when you switch back.
+- **Theme music** plays the music of the soundscape you applied last, for example Podium's four songs for **Podium**. Your ticks under **My music** aren't changed; they're kept for when you switch back.
 - **My music** plays the tracks ticked **Yes** in the **My music** column of the library: your own uploads and the included tracks.
 
-If **Theme music** has nothing to play, your music plays instead, and the sentence under the choice says why (in amber). That happens when no soundscape has been applied yet, when the soundscape has no music of its own (**Pit Lane** and **Classic** don't), or when its tracks aren't in your library or their files are missing. **Restore Included Tracks** puts the shipped tracks back.
+If **Theme music** has nothing to play, your music plays instead, and the sentence under the choice says why (in amber). That happens when no soundscape has been applied yet, when the soundscape has no music of its own (every built-in one has; a soundscape of your own may not), or when its tracks aren't in your library or their files are missing. **Restore Included Tracks** puts the shipped tracks back.
 
 Switching is heard straight away: music that's playing moves over to the new choice. Paused music is stopped, so **Play** starts the new choice rather than resuming the old one. The choice is saved, and stays as you left it when you apply another soundscape.
 
@@ -181,12 +181,7 @@ The status line under the page counts your ticks, for example "9 of 15 tracks in
 
 ### Behavior settings
 
-These are on the **Behavior** card, under the library.
-
-| Setting | What it does | Default |
-|---|---|---|
-| **Stop while a race is running** | Stops the music at staging, countdown and racing. Ignored if the Mixer is set to start music when a session begins, since that's the more specific instruction. | Off |
-| **Duck under announcements** ... **down to:** | Drops the music while the announcer speaks, including flag calls. | On, 25% |
+The **Behavior** card, under the library, has one setting: **Stop while a race is running** (off by default) stops the music at staging, countdown and racing. It's ignored if the Mixer is set to start music when a session begins, since that's the more specific instruction. The card is shown in Advanced mode.
 
 ### After the race
 
@@ -198,14 +193,16 @@ The recap can still be speaking when the next heat is staged. If that heat has b
 
 **Sounds → Soundscapes** sets up how a race night sounds in one go: a sound for every moment, and the announcer's words and delivery to match. As the tab puts it, "A soundscape is the whole sound of race day". Until 0.56 this was the **Announcer Style** tab on the **Themes** page. Soundscapes were called announcer styles before 0.54, and themes before 0.48. Searching for "announcer style" in the **Search pages...** box still finds it.
 
-<!-- screenshot: Sounds > Soundscapes tab with the soundscape cards, one marked LAST APPLIED -->
+![Sounds, Soundscapes tab: the soundscape cards with Preview, Apply, Customize and Voice Lines, Classic marked LAST APPLIED](../assets/images/sounds-soundscapes.png)
 
 ### What a soundscape holds
 
-- **The sound effects.** Everything on **Sounds → Effects**: which sounds are on for races and for practice, the pack or your own file on each row, the weights and **Caution** ticks, the streak thresholds and **Max sounds per lap (good / invalid / fast / streak / leader change):**. Not the **Sound effects volume (%):**.
+- **The sound effects.** Everything on **Sounds → Effects**: which sounds are on for races and for practice, the pack or your own file on each row, the weights and **Caution** ticks, **Max sounds per lap (good / invalid / fast / streak / leader change):**, and the streak thresholds (on the **How often** card of **Voice → Race Calls**). Not the **Sound effects** level on the **Mixer**.
 - **The announcer's words.** Everything on **Voice → Race Calls**: the lines, the **Race** and **Practice** ticks, the weights, speeds and **Caution** ticks, and the extra settings on some rows.
-- **The announcer's delivery.** The tuning on **Voice → Voice**: **Stability:**, **Similarity boost:**, **Style:**, **Speed:**, **Speaker boost**, **Text normalize:** and **Max spoken announcements per lap:**. The HeatCaller voice's own sound is set on the relay, so most of this tuning only changes your own ElevenLabs voice; the Kokoro voice uses **Speed:** and **Playback volume (%):**, and every voice uses **Max spoken announcements per lap:**. See [What the Kokoro voice uses](voice.md#what-the-kokoro-voice-uses).
-- **What plays underneath**, if it has any: a crowd for **Ambience** and theme music for **Music**. See [Soundscape crowd and music](#soundscape-crowd-and-music).
+- **The announcer's delivery.** The tuning on **Voice → Voice**: **Stability:**, **Similarity boost:**, **Style:**, **Speed:**, **Speaker boost** and **Text normalize:**, and **Max spoken announcements per lap:** on **Voice → Race Calls**. The HeatCaller voice's own sound is set on the relay, so most of this tuning only changes your own ElevenLabs voice; the Kokoro voice uses **Speed:**, and every voice uses **Max spoken announcements per lap:**. See [What the Kokoro voice uses](voice.md#what-the-kokoro-voice-uses).
+- **Its imaging**: the jingles, sweepers, bumpers, stingers and music beds on **Sounds → Imaging**. See [Imaging](#imaging).
+- **What plays underneath**: a crowd for **Ambience** and theme music for **Music**. See [Soundscape crowd and music](#soundscape-crowd-and-music).
+- **A look for the app.** Each built-in soundscape goes with one of the looks on the **Themes** page, and applying it puts the app in that look. See [Apply a soundscape](#apply-a-soundscape).
 - **An ElevenLabs voice, model and language**, only for a soundscape of your own that was saved with them. The built-in soundscapes carry none of these.
 
 !!! note
@@ -217,24 +214,23 @@ A soundscape doesn't hold lap beeps, rivalries, commentary settings, your own am
 
 Each soundscape has a card. At the top is its name, with **LAST APPLIED** against the right-hand edge (and an outline round the card) on the one you applied last. Under the name, a line says whether it's **Built-in** or **Custom**, which packs its sounds use ("own files" where a row plays a file of yours), "crowd" and "music" when it brings them, and, once you've recorded some, how many of its voice lines are recorded (for example "3 of 8 voice lines recorded"). Then comes its description, and its buttons along the bottom. A colored strip down the left edge marks a built-in soundscape's pack.
 
-Six soundscapes are built in:
+Five soundscapes are built in:
 
 | Soundscape | Description |
 |---|---|
-| **Classic** | The original HeatCaller sound - generated tones and the standard announcer lines. Plain and clear. |
+| **Classic** | 80s supersaws, arps and gated drums with a retro late-night radio DJ on the mic. |
 | **Podium** | Polished bells and chimes with a gracious, ceremony-style announcer. Premium and never harsh. |
 | **Arcade** | 8-bit chiptune sounds with an energetic gamer announcer - combos, high scores, GG. |
 | **Broadcast** | TV sports graphics sounds - whooshes, brass and big hits - with a calm, measured motorsport commentator. |
-| **Synthwave** | 80s supersaws, arps and gated drums with a retro late-night radio DJ on the mic. |
 | **Pit Lane** | Real trackside sounds - decoder beeps, air horns, the last-lap bell and the crowd - with a big arena announcer. |
 
-Three of the old built-in announcer styles were renamed: **Arcade / Video Game** is now **Arcade**, **Pro Broadcast** is **Broadcast**, and **Monster Truck Rally** is **Pit Lane**. A venue that remembers one of the old names still finds it.
+Since 16 October, **Classic** is what was **Synthwave**: its sounds, crowd, music and late-night DJ. The old Classic, on generated tones, is no longer a soundscape, and a club that was on **Synthwave** finds itself on **Classic**. Older built-in names were renamed too: **Arcade / Video Game** is now **Arcade**, **Pro Broadcast** is **Broadcast**, and **Monster Truck Rally** is **Pit Lane**. A venue that remembers one of the old names still finds it.
 
 Built-in soundscapes can't be changed or deleted. A new version of HeatCaller can bring newer built-ins, which replace the old ones; your own soundscapes are never touched.
 
 | Button | What it does |
 |---|---|
-| **Preview** | Plays a short pretend race in the soundscape: staging, the countdown, the start, a few laps, a fast lap, a lead change, a yellow and the restart, a streak, a track record, the last lap and the checkered flag, each with its sound, at your **Sound effects volume (%):**. The line above the cards says what's playing. The button reads **Stop** while it plays; press it to end the preview early. Previewing changes nothing. |
+| **Preview** | Plays a short pretend race in the soundscape: staging, the countdown, the start, a few laps, a fast lap, a lead change, a yellow and the restart, a streak, a track record, the last lap and the checkered flag, each with its sound, at the **Sound effects** level on the **Mixer**. The line above the cards says what's playing. The button reads **Stop** while it plays; press it to end the preview early. Previewing changes nothing. |
 | **Apply** | Makes the soundscape the current setup, after asking. See [Apply a soundscape](#apply-a-soundscape). |
 | **Customize** (built-in) or **Edit** (your own) | Opens the soundscape editor. See [Customize or edit a soundscape](#customize-or-edit-a-soundscape). |
 | **Voice Lines** | Records the soundscape's fixed race calls, so they always sound the part. See [Voice lines](#voice-lines). |
@@ -249,6 +245,8 @@ Built-in soundscapes can't be changed or deleted. A new version of HeatCaller ca
 2. Read the confirmation. It starts: "Apply "*name*"? This replaces your current announcer lines and sound effect settings." (With the HeatCaller voice chosen: "This replaces your sound effect settings.") It then says anything else the soundscape switches (an ElevenLabs voice and model, or a language), what it does underneath (for example "Underneath: the Podium crowd is added to Ambience - ..."), and what it doesn't touch.
 3. Click **Yes**.
 
+If the soundscape wears a different look from the app's (see [What a soundscape holds](#what-a-soundscape-holds)), the confirmation says so too ("It also changes the app's look to ..."). After you apply it, HeatCaller asks whether to restart now to put the look on; answer **No** and it changes at the next start. During a race or practice it doesn't ask, and the look waits for the next start. You can change the look back on the **Themes** page; see [Looks and the club logo](../screens/looks-and-logo.md).
+
 If the sound is lap times only (see [Choosing the sound in the setup wizards](#choosing-the-sound-in-the-setup-wizards)), the confirmation says so too: music, ambience and the spoken race intros and recaps come back on as they were before.
 
 The card is marked **LAST APPLIED**, the line above the cards says "Applied "*name*".", and the **Voice** and **Sounds** pages show the new settings straight away. **Undo** in the sidebar puts back everything the apply changed, in one step: the announcer settings, the sound effects, the crowd in **Ambience** and which soundscape is marked as applied.
@@ -259,14 +257,14 @@ The card is marked **LAST APPLIED**, the line above the cards says "Applied "*na
 - **The ElevenLabs voice.** A built-in soundscape keeps your current ElevenLabs voice and model, so the announcer carries on in the voice you chose. A soundscape of your own saved with an ElevenLabs voice switches to that voice and the model it was saved with.
 - **The language.** Kept, unless the soundscape sets one of its own. The built-in soundscapes don't.
 - **What plays underneath.** The soundscape's crowd goes into **Ambience**, and its music becomes what **Theme music** plays. Whether music plays at all stays as you have it. See [Soundscape crowd and music](#soundscape-crowd-and-music).
-- **This PC's setup is left as it is:** the voice and sound effects volumes, the **Output format:**, and the **Speak with** choice: which of the three voices speaks, which Kokoro voice, which HeatCaller announcer voice, and the stand-in box.
+- **This PC's setup is left as it is:** the levels on the **Mixer**, the **Output format:**, **Race calls:**, and the **Speak with** choice: which of the three voices speaks, which Kokoro voice, which HeatCaller announcer voice, and the stand-in box.
 - **On the HeatCaller voice, a soundscape's lines aren't applied**, and neither is anything else on **Voice → Race Calls** (the ticks, weights and speeds stay as you have them). Its sounds are. The wording stays the standard announcer lines, because those are the only lines that voice speaks. See [What's fixed while it's chosen](voice.md#whats-fixed-while-its-chosen).
 
 The confirmation spells it out. For a built-in soundscape it ends: "Not affected: your ElevenLabs API key, voice and model, the voice and sound volumes, the output format, the language, and which voice speaks - ElevenLabs, the HeatCaller voice or the Kokoro voice."
 
 With the HeatCaller voice chosen it adds a paragraph, so you know before you press **Yes** rather than after:
 
-> The HeatCaller voice speaks the standard announcer lines in its own delivery, so this soundscape's own lines are NOT applied, and its stability, similarity, style and speed are saved but make no difference until another voice speaks. Its sounds, and its Max spoken announcements per lap, are applied. To use its lines, switch to your own ElevenLabs key or the free Kokoro voice on Voice Settings.
+> The HeatCaller voice speaks the standard announcer lines in its own delivery, so this soundscape's own lines are NOT applied, and its stability, similarity, style and speed are saved but make no difference until another voice speaks. Its sounds, and its Max spoken announcements per lap, are applied. To use its lines, switch to your own ElevenLabs key or the free Kokoro voice on the Voice tab.
 
 A venue's **Preferred soundscape:**, on the **Venues** page, is applied the same way when you press **Apply This Venue**, and one **Undo** puts it back with the rest of the venue. See [Venues](../race-day/drivers-and-classes.md#venues).
 
@@ -284,7 +282,7 @@ The choice is applied when you move off the step, and stays until you change it,
 
 **Lap times only** changes these settings:
 
-- **Voice → Announcements:** the lap time, the start, time up, the checkered flag and the yellow, red and green flags are switched on, for races and practice. Staging, the countdown, jump starts, staggered starts, the grid call, last lap and final minute are left as you have them. Everything else, such as fast laps, records, leader changes, battles and streaks, is switched off. Only the ticks change, so this works the same on every voice, the HeatCaller voice included.
+- **Voice → Race Calls:** the lap time, the start, time up, the checkered flag and the yellow, red and green flags are switched on, for races and practice. Staging, the countdown, jump starts, staggered starts, the grid call, last lap, final minute, the time-left calls, the split time and the coaching calls are left as you have them. Everything else, such as fast laps, records, leader changes, battles and streaks, is switched off. Only the ticks change, so this works the same on every voice, the HeatCaller voice included.
 - **Sounds → Effects:** the sounds that play on a lap (**Good lap**, **Invalid lap**, **Personal best**, **Fast lap**, **Track record**, **Consistency streak** and **Leader change**) are switched off. The start, countdown, flag and finish sounds are left as they are, and so are **Lap Beeps**.
 - **Mixer:** **Bring up:** **Music** and **Ambience** are unticked, so a race doesn't bring them up. Music or ambience playing now is stopped.
 - **Voice → AI Commentary:** **Race intros - a "coming up" line as each race goes to the grid**, **Race recaps - a wrap-up after the checkered flag** and **Teasers before the recap:** are switched off.
@@ -308,14 +306,13 @@ Tick **Don't ask about the sound again**, under the drop-down, and neither wizar
 |---|---|
 | **Name:** | Required, and no two soundscapes can share one ("There's already a soundscape called "*name*" - pick another name."). |
 | **Description:** | Shown on the soundscape's card. |
-| **Background:** | The crowd: **Leave Ambience as it is**, **No soundscape crowd**, or one of the packs' crowds (for example **Podium crowd**). Then **Music:**: **No music of its own**, or one of the packs' music (for example "Podium music - "Victory Lane""; "(not in your library yet)" is added when none of its tracks are in your music library). See [Soundscape crowd and music](#soundscape-crowd-and-music). |
+| **Background:** | The crowd: **Leave Ambience as it is**, **No soundscape crowd**, or one of the packs' crowds (for example **Podium crowd**). Then **Music:**: **No music of its own**, or one of the packs' music (for example "Arcade music - "Insert Coin"", or "Podium music - 4 tracks"; "(not in your library yet)" is added when none of its tracks are in your music library). See [Soundscape crowd and music](#soundscape-crowd-and-music). |
 | The **Sounds** card | **Set all to:** puts one pack on every sound. Under it, each sound has its own pack list and a ▶ button that plays it. A sound that plays a file of your own says "own file": the file plays instead of the pack. The editor only picks packs; change or clear a file on **Sounds → Effects**. |
 | The **Announcer** card | **Stability:**, **Style:** and **Speed:** for the delivery (Stability and Style only change ElevenLabs voices). Under them, a list of race moments. For the moment you pick, **Announce this moment** switches it on or off, and the box beside it holds its lines, one per line, picked at random. `{driver}`, `{time}`, `{lap}` and `{streak}` are filled in, and tags like `[excited]` steer ElevenLabs delivery and are dropped for other voices. |
 
 The race moments are **Race staging**, **Countdown**, **Race start**, **Jump start**, **Personal best**, **Fastest lap**, **Track record**, **Leader change**, **Streak**, **Yellow flag**, **Red flag**, **Green (restart)**, **Last lap** and **Checkered flag**. **Last lap** here is the **Race time over** announcement (the last-lap call when the time runs out) and **Checkered flag** is **Race completed**. The soundscape's other announcements are kept as they are.
 
-With the HeatCaller voice chosen, a note under the cards says that this PC always speaks the standard lines while that voice is in use: the lines in the editor are saved, and apply once you use your own ElevenLabs key or the free Kokoro voice instead.
-<!-- TODO: confirm the wording once SoundscapeEditorForm's note is updated - the string in the code still offers the retired Windows voice, so it is described here rather than quoted. -->
+With the HeatCaller voice chosen, a note under the cards says: "This PC speaks with the HeatCaller voice, which always uses the standard lines. These lines are saved and apply once you use your own ElevenLabs key or the Kokoro voice."
 
 Along the foot of the window:
 
@@ -344,11 +341,11 @@ Voice lines are a soundscape's fixed race calls (staging, the countdown, the sta
 | **Delete the *n* recorded lines** | Deletes the recordings, after asking. Those lines go back to being spoken live. Only there once some are recorded. |
 | **What are voice lines?** | Explains them. |
 
-1. Choose your own ElevenLabs key or the HeatCaller voice under **Speak with** on **Voice → Voice**. With the Kokoro voice chosen, HeatCaller records nothing and says why: "Voice lines are recorded with ElevenLabs - your own key, or the HeatCaller voice through your relay. This PC speaks with the Kokoro voice, which already says these lines for free. Switch the voice on Voice Settings to record them, then switch back if you like: the recordings keep playing."
+1. Choose your own ElevenLabs key or the HeatCaller voice under **Speak with** on **Voice → Voice**. With the Kokoro voice chosen, HeatCaller records nothing and says why: "Voice lines are recorded with ElevenLabs - your own key, or the HeatCaller voice through your relay. This PC speaks with the Kokoro voice, which already says these lines for free. Switch the voice on the Voice tab to record them, then switch back if you like: the recordings keep playing."
 2. Press **Voice Lines** on the card and choose **Record *n* voice lines (about *x* characters)...**.
 3. HeatCaller asks how many lines it will record and about how many characters that is, for example "Record *n* lines for "Podium" with Rachel? That's about *x* characters, once." Click **Yes**.
 
-The line above the cards shows the progress, then "Recorded *n* voice lines for "Podium"." If some couldn't be rendered, it says how many were recorded and to check **Voice Settings** and record the missing ones.
+The line above the cards shows the progress, then "Recorded *n* voice lines for "Podium"." If some couldn't be rendered, it says how many were recorded and to check the **Voice** tab and record the missing ones.
 
 With the HeatCaller voice chosen, the question adds that the announcer says the standard lines while that voice is in use, so the recordings play once you switch to your own key or the Kokoro voice.
 
@@ -356,11 +353,11 @@ Deleting and re-recording can be undone with **Undo** in the sidebar, which puts
 
 Recordings are matched by their words alone (audio tags, spacing and capitals are ignored), and kept in the `VoiceLines` folder in HeatCaller's data folder, so they're part of backups. See [Where HeatCaller keeps your data](../admin/data-files.md). They're separate from the [saved voice lines](voice.md#saved-voice-lines) the announcer keeps on its own.
 
-Colors and the club logo aren't part of a soundscape. They're on the **Themes** page; see [Looks and the club logo](../screens/looks-and-logo.md).
+The club logo isn't part of a soundscape, and applying one only ever puts on the look that goes with its sounds. Looks and the logo are on the **Themes** page; see [Looks and the club logo](../screens/looks-and-logo.md).
 
 ## Soundscape crowd and music
 
-Applying a soundscape on **Sounds → Soundscapes** sets more than the sound effects and the announcer. The built-in soundscapes (other than **Classic**) also bring a crowd for **Ambience** and, all but **Pit Lane**, music of their own. The apply confirmation spells out what will happen on this PC.
+Applying a soundscape on **Sounds → Soundscapes** sets more than the sound effects and the announcer. Every built-in soundscape also brings a crowd for **Ambience** and music of its own. The apply confirmation spells out what will happen on this PC.
 
 ### The crowd
 
@@ -371,7 +368,7 @@ A soundscape puts two layers into **Ambience**, at the top of the list on the **
 | **_Pack_ crowd (from the soundscape)** | The venue: a low crowd murmur that plays all night and barely moves with the race. |
 | **_Pack_ crowd roar (from the soundscape)** | The same crowd on its feet. Silent between races and barely there while cars run, it fades in on the big moments: most of the way up (**Excited**) for a fast lap, a lead change, the last lap or a close battle, and full (**Peak**) at the finish and for a track record. |
 
-Those moments are the surges set under [Reactions and ducking](#reactions-and-ducking).
+Those moments are the surges set under [Reactions](#reactions).
 
 Applying a soundscape also ticks **Enable ambience**, so the crowd is heard, unless **Play:** on the Ambience tab is set to **My ambience** (the crowd would be silent then, so ambience is left as it was, and so is your **Play:** choice; see [Which layers play](#which-layers-play)). It doesn't start the ambience there and then, because a soundscape applied at a venue shouldn't start noise in a room that didn't ask for it. The crowd plays when ambience is next brought up, for example by **When a session starts** on the Mixer (see [Audio auto-start](#audio-auto-start)). If ambience is already playing, it restarts with the new crowd.
 
@@ -385,7 +382,7 @@ Each soundscape has its own crowd:
 | **Arcade** | An indoor event hall with a younger crowd, whoops and all. |
 | **Podium** | An outdoor sports-car or F1 grandstand: applause and distant air horns. |
 | **Broadcast** | A big speedway stadium, with air horns and the PA echoing round it. |
-| **Synthwave** | A huge indoor arena, monster-truck style, with stomps and horns. |
+| **Classic** | A huge indoor arena, monster-truck style, with stomps and horns. |
 
 !!! note
     A crowd added by an earlier version gets its roar layer added beside it the first time you open this version, once. A bed still at the old, louder levels comes down to the new low ones; one whose levels you've changed keeps them. If you delete the roar afterwards, it stays deleted until you apply a soundscape again.
@@ -396,30 +393,55 @@ A soundscape's music is what **Sounds → Music** plays when it's set to **Theme
 
 | Soundscape | Theme music |
 |---|---|
-| **Podium** | **Victory Lane**: a cinematic anthem of brass and strings. |
-| **Broadcast** | **Race Day Live**: a rock theme like a TV sports show's. |
-| **Synthwave** | **Neon Grid**: synthwave, followed by the eleven included tracks. |
+| **Classic** | **Neon Grid** and the eleven included tracks, its own four songs (**Chrome Apex**, **Midnight Pit Wall**, **Starlight Straight** and **Afterburn**), and **Victory Lane** and **Race Day Live**. |
+| **Podium** | Its own four songs: **Full Throttle**, **Top Step**, **Burnout** and **Champagne Spray**. |
 | **Arcade** | **Insert Coin**: chiptune. |
-| **Pit Lane** | None, so **Theme music** plays your music. |
+| **Broadcast** | Its own four songs: **Prime Time**, **Highlight Reel**, **Under the Lights** and **Post-Race Show**. |
+| **Pit Lane** | Its own four songs: **Gravel and Gasoline**, **Dirt Road Dash**, **Pit Stop Two-Step** and **Back Forty Straight**. |
+
+Every one of these tracks ships with HeatCaller and is in the music library, so **My music** can play them too.
 
 When you customize a soundscape, **No music of its own** gives it no theme music, so **Theme music** plays your music with it.
 
+## Imaging
+
+**Sounds → Imaging** is the soundscape's broadcast imaging: the jingles, sweepers, bumpers, stingers and music beds that make race night sound like a radio station. Each soundscape has its own, and where it has several of one kind they take turns at random. Race night plays the imaging of the soundscape in use on the **Soundscapes** tab.
+
+**Broadcast imaging ON** (it reads **Broadcast imaging OFF** while off) is the switch for all of it, and it's on to begin with. With it off, no imaging plays, and your club's own show music plays where it's set up. With it on, **On Air** on **Race Control** starts the show and the rest follows the race by itself.
+
+The page has these cards:
+
+| Card | What's on it |
+|---|---|
+| **Soundscape** | **Soundscape:** picks which soundscape's imaging the page shows. You can set up any of them here, not only the one in use. |
+| **Pieces** | The soundscape's pieces, one row each, with **Element**, **File**, **Post**, **Out** and **From** ("ships with it", "added" or "missing"). Under the list: a picker for the element, **Add Files** (copies files into the club's data as that element), **Play**, **Stop**, **Remove**, **Restore Element Defaults** and **Restore Soundscape Defaults**. Double-click a row to play it. |
+| **Run of show** | Where each kind of piece plays, one row for each point in the night, from **Top of the race** and **Opening bed** through **After-the-flag bed**, **Race recap open**, **Race recap bed** and **Between recap parts** to **After the recap**. Each row's picker chooses **Nothing**, **A jingle**, **A sweeper**, **A jingle or a sweeper**, **A bumper**, **A stinger** or **A music bed**. A point set to something the soundscape doesn't have plays nothing. **Restore Run of Show Defaults** puts them back. |
+| **Timing** | **Post timing:** nudges every piece's post earlier (below zero) or later (above zero). |
+| **Show treatment** | Your club's own show music: the opener, bed and sting for the set pieces. See [The show's music](commentary.md#the-shows-music). |
+
+**Post at:** and **Out at:**, under the list, mark where talking can start and stop over the selected piece:
+
+- **Post** is where the piece's own voice comes in: the announcer talks over the intro and stops right on it. Press **Play**, then **Mark Post** when you hear the voice, or type the time and press **Set Post**. **Play to Post** checks it. **Reset** means no intro, which is right for a stinger.
+- **Out** is where the piece's voice ends and only music is left: the next line starts there as the music fades. Mark it the same way with **Mark Out** or **Set Out**, and check it with **Play from Out**. **Reset** goes back to the piece's own mark.
+
+How loud the pieces and beds play is set on the Mixer's [Imaging levels](#imaging-levels) card.
+
 ## Mixer
 
-**Sounds → Mixer** balances everything the app plays, in one place. These are the same levels as on the other tabs: moving one here changes it there. Adjustments apply straight away, so you can set the blend by ear. Saving on **Voice Settings** or **Effects** doesn't put back an older level over one you've set here.
+**Sounds → Mixer** balances everything the app plays, in one place. Since 17 October it's the only place the levels and the ducking are set: the volume boxes that were on **Voice**, **Effects**, **Ambience** and **Music** are gone. Adjustments apply straight away, so you can set the blend by ear.
 
 The **Ambience** fader changes how loud the ambience is, not what mood it's in: moving it doesn't change the crowd's race state.
 
-<!-- screenshot: Sounds > Mixer tab with the four channel faders -->
+![Sounds, Mixer tab: the Announcements, Sound effects, Ambience and Music faders, with Imaging levels and Ducking below](../assets/images/sounds-mixer.png)
 
 ### Channels
 
 | Channel | Controls | Default |
 |---|---|---|
-| **Announcements** | Spoken lines from the announcer (**Playback volume (%):** on **Voice Settings**). | 100% |
-| **Sound effects** | Per-lap chimes and race cues (**Sound effects volume (%):** on **Effects**). | 100% |
-| **Ambience** | Crowd and track atmosphere (**Overall level:** on **Ambience**). | 60% |
-| **Music** | Between-race soundtrack (**Volume:** on **Music**). | 40% |
+| **Announcements** | Spoken lines from the announcer, in every voice. | 100% |
+| **Sound effects** | Per-lap chimes, race cues and lap beeps. | 100% |
+| **Ambience** | Crowd and track atmosphere: scales every layer on **Ambience** at once. | 60% |
+| **Music** | The between-race soundtrack on **Music**. | 40% |
 
 Each channel shows its level and a live status line, such as "Ready", "Muted", "Off", "Idle", "Playing - Racing" or "Playing -" and the track name. **Announcements** and **Sound effects** have a **Test** button. Drag a fader, or click it and use the arrow keys, <kbd>Page Up</kbd>/<kbd>Page Down</kbd>, <kbd>Home</kbd> (100%) and <kbd>End</kbd> (0%), or the mouse wheel.
 
@@ -433,20 +455,41 @@ The **Announcements** status also says which voice is speaking:
 | "Ready - Kokoro voice standing in" | ElevenLabs or the HeatCaller voice is chosen but can't speak just now, and the Kokoro voice is saying the lines. See [When ElevenLabs can't speak a line](voice.md#when-elevenlabs-cant-speak-a-line) and [When the HeatCaller voice can't speak a line](voice.md#when-the-heatcaller-voice-cant-speak-a-line). |
 | "Can't speak -" and the reason | The announcer is muted, or no voice can speak the announcements. |
 
-If the announcer can't speak at all, a red warning appears on its own line under the page's introduction, above the channels: "NO VOICE:" and the reason, for example "NO VOICE:  the Kokoro voice isn't downloaded on this PC yet (Voice Settings has a Download button)." Where the reason is about a quota, the notice adds "Sound effects, music and ambience are unaffected." While the Kokoro voice is only standing in, an amber notice takes that place instead, because the announcer can still speak, for example "The free Kokoro voice is standing in - the ElevenLabs quota is used up."
+If the announcer can't speak at all, a red warning appears on its own line under the page's introduction, above the channels: "NO VOICE:" and the reason, for example "NO VOICE:  the Kokoro voice isn't downloaded on this PC yet (the Voice tab has a Download button)." Where the reason is about a quota, the notice adds "Sound effects, music and ambience are unaffected." While the Kokoro voice is only standing in, an amber notice takes that place instead, because the announcer can still speak, for example "The free Kokoro voice is standing in - the ElevenLabs quota is used up."
 
 The reason after the colon says which voice can't speak and why:
 
 - **Your own ElevenLabs account:** "- no ElevenLabs API key is set" (a key locked to the PC it was saved on counts as none), "- no voice is selected" or "- the ElevenLabs quota is exhausted". These only go red with the stand-in box unticked; with it ticked the notice is the amber stand-in one.
 - **The HeatCaller voice:** "- no HeatCaller voice is chosen", "- this month's HeatCaller voice allowance is used up", "- the HeatCaller relay can't be reached", "- the HeatCaller voice isn't included for this club", "- the HeatCaller voice isn't switched on for this relay", "- the relay didn't accept this club's token", "- that HeatCaller voice isn't available any more" or "- the HeatCaller voice is busy". Apart from the first, these only go red on a PC that hasn't got Kokoro's voice file; anywhere else Kokoro stands in and the notice is amber.
-- **The Kokoro voice:** "- the Kokoro voice isn't downloaded on this PC yet (Voice Settings has a Download button)", or "- the Kokoro model wouldn't load" and the reason it gave. Nothing stands in under Kokoro, so this is the one state in which nothing at all can be spoken. See [When nothing can speak](voice.md#when-nothing-can-speak).
+- **The Kokoro voice:** "- the Kokoro voice isn't downloaded on this PC yet (the Voice tab has a Download button)", or "- the Kokoro model wouldn't load" and the reason it gave. Nothing stands in under Kokoro, so this is the one state in which nothing at all can be spoken. See [When nothing can speak](voice.md#when-nothing-can-speak).
 - **Muted:** "- the announcer is muted".
 
 The **Test** button on the **Announcements** channel speaks a level-check line in whichever voice is chosen, the HeatCaller voice included. On that voice it's the quickest way to hear how an announcer voice sounds on your PA, and it spends a few characters of the club's allowance.
 
 ### Ducking
 
-**Duck under announcements:** with **Ambience** and **Music** tick boxes switches ducking on or off for each. Off means that source stays at full level while the announcer talks. How far each one drops is set on its own tab.
+The **Ducking** card, under the channels, sets how far everything drops while the announcer talks, flag calls included. Pulling the bed down reads clearer than pushing the voice up.
+
+| Row | What it does | Default |
+|---|---|---|
+| **Ambience:** **Duck under announcements, down to** | Drops the ambience to this share of its level while a line is spoken. Untick it and the ambience stays at full level. | On, 35% |
+| **Music:** **Duck under announcements, down to** | The same for the music. | On, 25% |
+| **Voice lift:** **Lift the voice when the crowd is loud, up to x** | Raises the announcer's volume when the ambience is loud, scaled by how loud the crowd bed actually is. No lift over a quiet one. | On, x1.3 |
+| **Race recap:** **Duck music and crowd further, down to** | An extra drop under the race recap. Needs the race recaps on **Voice → AI Commentary**. | On, 20% |
+
+These used to be on the **Ambience** and **Music** tabs, and the recap's on the AI commentary settings; they're the same settings.
+
+### Imaging levels
+
+The **Imaging levels** card sets how loud the soundscape's [imaging](#imaging) plays:
+
+| Row | What it does | Default |
+|---|---|---|
+| **Imaging pieces:** | The jingles, sweepers, bumpers and stingers. | 80% |
+| **Imaging beds:** | The soundscape's music beds, low on purpose. | 22% |
+| **Beds under voice:** | How far the beds drop while the announcer speaks, as a share of their own level. | 55% |
+
+The levels for your club's own show music are on the **Show treatment** card on **Sounds → Imaging**.
 
 ### Checking the blend
 
@@ -488,7 +531,7 @@ There are eight cues: High blip, Low blip, Double high, Double low, Rising, Fall
 
 The list on the **Drivers** card shows **Driver**, **Transponder**, **Class** and **Cue**. **Turn On / Off** switches the selected driver's cue, and **Clear All** removes every cue (after asking). All of these can be undone.
 
-Lap beeps play the instant the car crosses, ahead of any spoken line, at the **Sound effects volume (%):** level. The sidebar mute silences them.
+Lap beeps play the instant the car crosses, ahead of any spoken line, at the **Sound effects** level on the [Mixer](#mixer). The sidebar mute silences them.
 
 ## Race recordings
 

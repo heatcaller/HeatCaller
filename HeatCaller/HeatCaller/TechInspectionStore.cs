@@ -302,6 +302,29 @@ public sealed class TechInspectionStore
         return newestClass!;
     }
 
+    /// <summary>
+    /// The classes a bulk log on Who's Racing inspects a driver in: every
+    /// class they race that runs tech and they are not cleared in, in order -
+    /// or, cleared in all of them (or none runs tech), the one class
+    /// <see cref="TechClassForDriver"/> names.
+    ///
+    /// WHY (2 Nov 2026): a bulk log used to file one inspection per driver,
+    /// in TechClassForDriver's class alone. A driver racing Stock and Box
+    /// Stock got Box Stock passed, the Tech column - which reads every class
+    /// they race - still showed "-" for Stock, and the bulk log looked as if
+    /// it had skipped them.
+    /// </summary>
+    public IReadOnlyList<string> TechClassesForDriver(DriverProfile profile, Func<string, bool> techIsRunFor)
+    {
+        var notCleared = profile.AllClasses
+            .Where(techIsRunFor)
+            .Where(className => Latest(profile.Transponder, className) is not { IsCleared: true })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return notCleared.Count > 0 ? notCleared : new[] { TechClassForDriver(profile, techIsRunFor) };
+    }
+
     /// <summary>Every inspection carried out at an event, newest first.</summary>
     public IReadOnlyList<TechInspection> ForEvent(string eventId) =>
         _inspections

@@ -7,7 +7,7 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 | Term | Meaning |
 |---|---|
 | **Transponder** | A small electronic tag in each car that the decoder identifies as it crosses the line. Each has an ID (for example `8467BE`). HeatCaller uses the ID to know which driver crossed. A driver profile can have a second transponder for another car they run. See [Transponders](../timing/transponders.md). |
-| **Decoder** | The timing box connected to the loop across the track. It reports which transponder crossed and when. HeatCaller works with direct EasyLap (USB) and I-Lap (serial) decoders. See [Decoders](../timing/decoders.md). |
+| **Decoder** | The timing box connected to the loop across the track. It reports which transponder crossed and when. HeatCaller works with direct EasyLap (USB) and I-Lap (serial) decoders, and, still marked Beta, MyLaps / AMB P3, ZRound / RiCino, Cano / RCHourglass, OpenStint and EasyLap / Robitronic serial decoders. See [Decoders](../timing/decoders.md). |
 | **Loop** | The wire across the track at the timing line that the decoder listens on. |
 | **Next Level Timing (NLT)** | Separate timing software. Earlier versions of HeatCaller could listen to it through its Neon API; that connection was retired in 0.50.0. HeatCaller now reads the decoder directly. |
 | **Lap** | The time between two crossings of the line by the same car. |
@@ -28,11 +28,10 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 | Term | Meaning |
 |---|---|
 | **On Air** | The normal start on **Race Control**: the soundscape's jingle, the race intro, the pit lane throw and the driver introductions, a bumper, and then **Stage**. It has no button: <kbd>F1</kbd> and **Start Next** start races through it, and <kbd>0</kbd> starts it by hand or, held for a second while it runs, skips to **Stage**. |
-| **Highlight video** | A short upright video of a driver's race, made after the flag from the announcer's calls, with captions. Every video stays on the race PC, in the night's **Highlights** folder; none goes on the club's page. |
 | **Stage / Countdown / Green** | The start sequence on **Race Control**. **Stage** calls the grid, **Countdown** counts down, and **Green** starts the race. By default each step follows on from the last once the announcer has finished speaking. |
 | **Yellow flag** | A caution. The race carries on and laps still count. |
 | **Red flag** | The race is stopped. The race clock pauses and laps aren't counted until **Green** resumes it. |
-| **Checkered flag** | The end of the race. It's thrown automatically at the lap or time limit, or by hand with **Checkered**. |
+| **Checkered flag** | The end of the race. It's thrown automatically at the lap or time limit, or by hand by pressing and holding **Checkered** (or <kbd>F6</kbd>). |
 | **Finish on next crossing** | When the limit is reached, the leader takes the flag and everyone else finishes the lap they're on. |
 | **Jump start** | A car crossing the line before the green flag. Each class can watch for jump starts (on by default). A jump start is always logged, announced and shown on the leaderboard. By default there's no automatic penalty (0 seconds), so the call is left to the race director. A class can set a time penalty, and can also choose for a jump start to cost the lap. |
 | **Standard start** | Everyone released on the green together, on one clock. |
@@ -72,7 +71,9 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 | **Ghost car** | A virtual opponent you can race when you're on track alone. Ghosts go through the same timing as real cars, so they appear in standings, get announced and show on the Big Screen. They never count toward track records and are left out of saved results. |
 | **Demo Mode** | A fake race run through the real race logic, announcer and sounds, with no decoder needed. A demo race can be saved to Race History, but it's marked Demo and never scored. |
 | **Pre-race check** | A check before the green that every car in the round is being heard by the decoder. **Pre-race check** on **Race Control**, or <kbd>R</kbd>. |
+| **Call-up** | The announcer calling the next race's drivers and marshals to get ready, between races. **Call Up** on the flag row (or <kbd>F12</kbd>) does it now. |
 | **Race Mode** | Full-screen Race Control with no sidebar. Toggle it with <kbd>F11</kbd>. |
+| **Simple mode / Advanced mode** | Simple mode, where a new install starts, shows what a race night needs and hides the tuning. Advanced mode shows every setting. Hidden settings keep their values and keep working. Switched on the **Settings mode** card on **Backup & Restore**. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md). |
 
 ## Results and championships
 
@@ -84,6 +85,7 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 | **DNF (did not finish)** | In championship standings, a driver who was in a session but completed no laps. They score no points, and the round doesn't count toward their total or their dropped rounds. |
 | **Podium** | A finish in the top three. |
 | **Results card** | A shareable image of a race's result. One is saved automatically in `Documents\HeatCaller Results` each time a race finishes. |
+| **Highlight video** | A short upright video of a driver's race, made after the flag from the announcer's calls, with captions. Every video stays on the race PC, in the night's **Highlights** folder; none goes on the club's page. See [Highlight videos](../announcer/sounds-and-music.md#highlight-videos). |
 | **Achievement badge** | An award a driver earns automatically for something they did on track. Shown on the **Achievements** page and announced when earned. |
 
 ## Phones and online
@@ -108,10 +110,10 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 
 | Term | Meaning |
 |---|---|
-| **Announcer** | HeatCaller's spoken race caller. It speaks with the HeatCaller voice, with ElevenLabs text-to-speech on your own account, or with the free Kokoro voice, chosen under **Speak with** on **Voice Settings**. See [Voice announcements](../announcer/voice.md). |
+| **Announcer** | HeatCaller's spoken race caller. It speaks with the HeatCaller voice, with ElevenLabs text-to-speech on your own account, or with the free Kokoro voice, chosen under **Speak with** on **Voice → Voice**. See [Voice announcements](../announcer/voice.md). |
 | **HeatCaller voice** | A natural announcer voice that comes with HeatCaller, spoken through the club's relay on HeatCaller's own ElevenLabs account. The club needs no account, no key and no bill; it has a monthly allowance of characters, and the wording it speaks is fixed. See [The HeatCaller voice](../announcer/voice.md#the-heatcaller-voice). |
 | **Allowance** | The characters a club may have spoken on the HeatCaller voice in a calendar month. Lines already saved on the laptop, and fixed lines rendered for another club, cost nothing. See [Your club's monthly allowance](../announcer/voice.md#your-clubs-monthly-allowance). |
-| **Kokoro voice** | The free voice that comes with HeatCaller: natural-sounding, running on the laptop's own processor, needing no account and no internet, and costing nothing however much the announcer talks. A new install speaks with it, and it also stands in whenever the HeatCaller voice or ElevenLabs can't speak a line. Its voice file is about 310 MB and ships in the installer; if it's missing, **Voice Settings** shows a **Download (about 310 MB)** button. Nothing stands in underneath it, so a PC without that file can't speak at all. See [Use the Kokoro voice](../announcer/voice.md#use-the-kokoro-voice). |
+| **Kokoro voice** | The free voice that comes with HeatCaller: natural-sounding, running on the laptop's own processor, needing no account and no internet, and costing nothing however much the announcer talks. A new install speaks with it, and it also stands in whenever the HeatCaller voice or ElevenLabs can't speak a line. Its voice file is about 310 MB and ships in the installer; if it's missing, **Voice → Voice** shows a **Download (about 310 MB)** button. Nothing stands in underneath it, so a PC without that file can't speak at all. See [Use the Kokoro voice](../announcer/voice.md#use-the-kokoro-voice). |
 | **Commentary** | Extra color commentary written by an AI model: through your club's relay when it can, and otherwise by the small model built into HeatCaller, on your own PC. See [Commentary](../announcer/commentary.md). |
 | **Block** | One run of the between-races show, start to finish. It opens once, works through two or three parts with a sting between them, and plays out - so the club's playlist is interrupted once rather than once per announcement. A block never runs longer than a minute and a half, and a race staging or any flag ends it where it is. See [How long a show gets](../announcer/commentary.md#how-long-a-show-gets). |
 | **Opener** | The piece of music a show comes on air with. It lands, rings out, and the first words arrive over its tail. Your club's is chosen beside **Opener:** on the **Show treatment** card on **Sounds → Imaging**; a soundscape with a recap opener of its own uses that for the race recap. Later shows in the night come in part way through it, so the same fanfare isn't heard whole all evening. See [The show's music](../announcer/commentary.md#the-shows-music). |

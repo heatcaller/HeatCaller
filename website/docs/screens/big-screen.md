@@ -12,16 +12,16 @@ This page also covers choosing which columns each leaderboard shows, and the **S
 4. Press <kbd>F11</kbd> to make it full screen. Press <kbd>F11</kbd> again to go back to a window. The banner, the clocks, the leaderboard and the ON DECK bar grow and shrink with the window, so full screen on a TV the writing fills the screen. It doesn't follow the text size you set for the laptop with <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd>.
 5. Press <kbd>Esc</kbd> to close it.
 
-A small reminder of the keys, "F11: toggle fullscreen     M: track map     O: on air     C: captions     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Each press of the button opens another window, so you can run more than one if you have the screens.
+A small reminder of the keys, "F11: toggle fullscreen     M: track map     O: on air     C: captions     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Pressing **Big Screen** (or <kbd>B</kbd>, or **Open Big Screen** on **Local Screens**) while it's already open brings that window to the front rather than opening a second one. The **Practice** page's **Open Big Screen** opens a window of its own each time, so you can run more than one if you have the screens.
 
-<!-- screenshot: Big Screen during a race, full screen, showing the banner, clock, countdown, leaderboard and ON DECK bar -->
+![The Big Screen in a window during a demo race: RACING - GREEN FLAG, the race clock and the leaderboard with laps, best laps and gaps](../assets/images/big-screen-racing.png)
 
 ## What it shows
 
 From top to bottom:
 
-- **Race state and flag**, for example "RACING — GREEN FLAG" or "RACING — YELLOW FLAG".
-- **Announcement banner.** Each line the announcer picks is shown here for about six seconds. The line appears even when the announcer can't speak or is muted, as long as the announcement is switched on. The rest of the time the banner describes the race: "RACE IN PROGRESS", "YELLOW FLAG — CAUTION", "RED FLAG — RACE STOPPED", "STAGING — GET READY", "COUNTDOWN — STAND BY", "RACE COMPLETE", or "Waiting for the race to start..." when nothing is running.
+- **Race state and flag**, for example "RACING — GREEN FLAG" or "RACING — YELLOW FLAG". During a warm-up it reads "WARM-UP".
+- **Announcement banner.** Each line the announcer picks is shown here for about six seconds. The line appears even when the announcer can't speak or is muted, as long as the announcement is switched on. The rest of the time the banner describes the race: "RACE IN PROGRESS", "YELLOW FLAG — CAUTION", "RED FLAG — RACE STOPPED", "STAGING — GET READY", "COUNTDOWN — STAND BY", "RACE COMPLETE", "WARM-UP — FREE LAPS, NOT COUNTED" during a warm-up, or "Waiting for the race to start..." when nothing is running.
 - **Banner across the screen**, under the announcement banner, for eight seconds when race control warns a driver or somebody sets the quickest sector of the session. Nothing is there the rest of the time. See [The banner across the screen](#the-banner-across-the-screen).
 - **Elapsed race time** on the left, counting from the green flag. Under a red flag it shows "(PAUSED)" after the time.
 - **Countdown** in the middle of the band, when the race has a limit: "5 LAPS TO GO" (counted on the leader's laps) for a lap race, or "03:12 REMAINING" for a timed race. It's blank when there's no limit. HeatCaller's mark, a small sun and HEATCALLER in the look's colors, sits in the bottom right of the same band (see [HeatCaller's mark](looks-and-logo.md#heatcallers-mark)).
@@ -114,7 +114,7 @@ While the announcer introduces the drivers on the grid, the Big Screen shows eac
 - **It follows the voice.** Each card goes up at its driver's place in the spoken line, timed from the real length of the audio, so it keeps pace with the announcer even on a long grid. A driver the announcer doesn't name gets no card.
 - **It leaves when the line does.** When the introductions end, the last driver stays up for two seconds and then the [grid roll call](#grid-roll-call) comes back. A flag, the countdown or **Reset** that cuts the announcer off takes the card down at once.
 - **It covers the roll call, not the race.** The card takes the leaderboard area for the length of the introductions, the roll call and track map included. A sponsor video that's playing isn't covered: the card waits.
-- **No photo, or a photo kept off.** A driver with no photo, or whose profile has **Keep their photo off it** ticked (see [Keeping a photo off the Big Screen](../race-day/drivers-and-classes.md#keeping-a-photo-off-the-big-screen)), gets the initials disc in their usual color. Their name shows either way.
+- **No photo, or a photo kept off.** A driver with no photo, or whose profile has **Keep their photo off it (a young driver, say)** ticked (see [Keeping a photo off the Big Screen](../race-day/drivers-and-classes.md#keeping-a-photo-off-the-big-screen)), gets the initials disc in their usual color. Their name shows either way.
 - **Turning it off.** Untick **Show each driver's name and photo on the Big Screen as they're introduced** under the driver introductions on **Voice → AI Commentary** (see [Before the start](../announcer/commentary.md#before-the-start)). It's on by default, and works the same whether the introductions come from **Stage** or from On Air.
 
 ## Between races
@@ -138,10 +138,6 @@ A card with nothing to say is left out. With no card at all, the board stays up.
 - A [commercial break](#the-commercial-break-after-a-race) comes first too. While one is on, the sponsors have the screen and neither the cards nor the board are shown.
 
 "Tonight" runs from 6 a.m. to 6 a.m., so a club night that goes past midnight is one night. A race counts for its class through the round it was run for, so a freeform race with no round isn't on the cards.
-
-### The podium's videos
-
-The Big Screen doesn't show a QR code for the podium's [highlight videos](../announcer/sounds-and-music.md#highlight-videos). Until 28 October 2026 a **PODIUM VIDEOS** strip came up after each race so drivers could download theirs from the club's page; the videos now stay on the race PC, in the night's **Highlights** folder, and **Share video** in a driver's drawer on Race Control opens theirs.
 
 ### Track evolution
 
@@ -184,13 +180,12 @@ The caption is the crowd's name for the segment, in capitals. Which segments get
 | **Sign-off numbers** | SIGN-OFF |
 | **Halfway standings** | STANDINGS SO FAR |
 | **Championship check** | CHAMPIONSHIP CHECK |
-| **Milestones** | MILESTONES |
 | **Qualifying report** | QUALIFYING REPORT |
 | **Form guide** | FORM GUIDE |
 | **Grid history** | THE GRID |
 | **This day at the club** | THIS DAY AT THE TRACK |
 
-See [Which segments get it](../announcer/commentary.md#which-segments-get-it). A show that doesn't name itself reads "THE SHOW". **Play It** on **Voice → AI Commentary** does exactly that: it runs a real show rather than one of the segments, so it's the quickest way to see the band without waiting for a race.
+See [Which segments get it](../announcer/commentary.md#which-segments-get-it). A recap of the whole night reads "TONIGHT'S RACING", and one about a single driver's night reads their name, for example "SAM'S NIGHT"; both get the music from the **Sign-off numbers** tick. A show that doesn't name itself reads "THE SHOW". **Play It** on **Voice → AI Commentary** does exactly that: it runs a real show rather than one of the segments, so it's the quickest way to see the band without waiting for a race.
 
 ### Who it's about
 
@@ -291,6 +286,8 @@ To change the columns:
 
 **Restore Defaults** puts back that leaderboard's default set. If you untick everything, the defaults are used.
 
+In Simple mode these buttons are hidden: **Columns** on Race Control, **Choose Columns** on Practice, and both column choosers on **Local Screens**. Turn on Advanced mode to change the columns; the leaderboards keep the columns you chose either way. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
+
 Race Control and Practice update as soon as you press **OK**. The web page updates straight away. The Big Screen picks up the change the next time you open it, so close it and open it again.
 
 <!-- screenshot: Choose columns - Big Screen window with a few columns ticked -->
@@ -303,18 +300,18 @@ Race Control and Practice update as soon as you press **OK**. The web page updat
 | **Driver** | Driver name, or the raw transponder ID if unassigned. |
 | **Car** | Car model from the driver's profile. |
 | **Transponder** | Raw transponder ID. |
-| **Laps** | Laps completed. |
+| **Laps** | Laps completed. A * means some were counted by hand. |
 | **Last Lap** | Most recent counted lap. |
 | **Best Lap** | Fastest lap this session. Highlighted when it's the quickest of anyone. |
 | **S1**, **S2**, **S3**, **S4** | With a split loop: each sector of the last lap. In the look's accent color when it's the quickest of anyone this session, and green when it's the driver's own best. |
 | **Ideal Lap** | The driver's best sectors added up. |
 | **S1 mph** to **S4 mph**, **Top Speed** | Speeds through the sectors, in mph, when the split loops are placed on the layout's plan. |
 | **At Split** | Live at the split loop: how far up or down the car is on its own best lap to that point. |
-| **Badges** | How many achievement badges this driver has earned. |
+| **Achievements** | How many achievements this driver has earned. |
 | **vs Best** | How far the last lap was off this driver's own best. |
 | **Qual** | Where this driver would qualify overall if the heat ended now, and how many places this heat has moved them. Blank outside a qualifier. |
-| **Gap to P1** | Time or laps behind the leader. |
-| **Interval** | Gap to the car directly ahead, rather than to the leader. |
+| **Gap to P1** | Time or laps behind the leader, to the thousandth: "+2.345", or "+1L" for a lap down. |
+| **Interval** | Gap to the car directly ahead, rather than to the leader, shown the same way. |
 | **Best Pace Gap** | How far this driver's best lap is off the quickest lap of the session. |
 | **Average** | Mean of every counted lap after the start. |
 | **Rolling Avg** | Mean of the most recent few laps. Reacts faster than the session average. |
@@ -327,8 +324,10 @@ Race Control and Practice update as soon as you press **OK**. The web page updat
 | **Gained** | Positions made up, or lost, since the grid. |
 | **Clean %** | Share of this driver's passes that counted as laps. Low means mistakes rather than pace. |
 | **Led** | Laps completed while leading on the road. |
+| **Rating** | Driver rating for this race, 0 to 150: finish, laps led, pace against the race's best lap, the fastest lap, distance and places gained, less 5 a warning. Live until the flag. |
 | **PBs** | How many times this driver has beaten their own best this session. |
 | **Penalty** | Manually applied time penalties. |
+| **By Hand** | Laps race control added by hand this race (**+1 Lap**), for a transponder that stopped being read. |
 | **Warnings** | Warnings from race control this race, and a black flag once the class's ladder reaches one. See [Warnings on the leaderboard itself](#warnings-on-the-leaderboard-itself). |
 | **Total Time** | Elapsed race time for this driver. |
 
@@ -348,7 +347,7 @@ The **Sponsors** page shows sponsor or promo images and videos on the Big Screen
 3. Press **Add Image** and choose one or more pictures: PNG, JPEG, GIF or BMP. For a video, press **Add Video** and choose one or more MP4, M4V, MOV, WEBM, MKV, AVI or WMV files.
 4. Put the slides in order with **Move Up** and **Move Down**. They're shown in the order listed on the **Slides (shown in this order)** card, with the selected slide's preview beside the list. Pictures and videos share one list and one rotation.
 5. Set the timing (below).
-6. Open the Big Screen, or close it and open it again if it's already open. The rotation starts when the Big Screen opens.
+6. Open the Big Screen. One that's already open picks the slides up without being reopened: the first slide comes up once the leaderboard has had its turn.
 
 The images and videos are copied into HeatCaller's own data folder, so moving or deleting the originals doesn't break the display mid-event. **Remove** takes the selected slide out of the rotation, after asking; it can be undone.
 
@@ -357,6 +356,10 @@ The images and videos are copied into HeatCaller's own data folder, so moving or
 A video plays **to its own end** rather than for the slide time, because cutting a sponsor's 30-second spot off after eight seconds would be worse than not showing it. Everything else about a video slide works like a picture: it takes the leaderboard area, the banner and clocks stay on screen, and it waits for the grid roll call and for a running race in the usual way.
 
 HeatCaller plays videos with VLC's own decoders, bundled inside it, so a file that plays on your laptop plays on the track PC — there's nothing to install and no codec pack to chase. A video over 512 MB is turned away, and so is a file with a video's name that isn't one inside.
+
+To check a video before the night, select it and press **Preview Video**. It plays in a window of its own through the same player the Big Screen uses, always with its sound, with **Pause** and **Play From Start**. It doesn't touch an open Big Screen.
+
+These are on the **Video sound** card. In Simple mode the card is hidden, along with **Rotation timing**; the settings keep working as set. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -425,10 +428,11 @@ These are on the **Sponsor reads** card, at the foot of the page.
 | Field | What it's for |
 |---|---|
 | **Name, as it's said:** | The name as the voice should say it, which isn't always what's on their banner: "and co" rather than the ampersand. |
-| **One-line tagline:** | One short line, heard once on their first read of the night. Leave it empty if they only bought the full read. |
+| **One-line tagline:** | One short line, said after every credit for a moment they present (see **Presents:**), and once on their first read of the night. Leave it empty if they only bought the full read. |
 | **Their read:** | The sentences to read out, up to 600 characters. Leave it empty and the sponsor gets a one-line mention instead. |
-| **Picture for their read:** | What the Big Screen shows for the length of their read. Choose a picture the club has already uploaded, or **Upload...** one for the read. With **None** chosen the screen shows their name instead — see below. |
+| **Picture for their read:** | What the Big Screen shows for the length of their read. Choose a picture the club has already uploaded, or **Upload** one for the read. With **None - show their name** chosen the screen shows their name instead — see below. |
 | **Share of the reads:** | 1 to 10. Two gets twice the reads of one, however many the night has room for. Everyone ends up within one of their share. |
+| **Presents:** | The moments of the race this sponsor presents, ticked from a list. See [Moments a sponsor presents](#moments-a-sponsor-presents). |
 | **In tonight's rotation** | Untick to take a sponsor out of tonight's reads and keep everything you've typed, for a sponsor whose season has finished. |
 
 Under **Their read:**, HeatCaller says how long the copy takes to say and over how many gaps, for example "About 37 seconds to read, read over 2 gaps. 550 of 600 characters used." It's worth a look, because it's the one thing about a read you can't judge by looking at it: four lines of text is nearly a minute out loud.
@@ -460,6 +464,16 @@ Since 22 Oct 2026 the second tick box is off for every club, including one that 
 
 Untick both and nothing is read out. The slides and videos carry on as before.
 
+#### Moments a sponsor presents
+
+A sponsor can also present moments of the race, the way a broadcaster sells "the fastest lap, presented by". Tick them under **Presents:**: **Fastest lap**, **Lead changes**, **Battles**, **Driver introductions**, **Qualifying recap**, **Running order (run-through)**, **Milestones and achievements** and **Race result**.
+
+The announcer puts a short credit on the end of that call, then the sponsor's tagline if they have one: "That fastest lap is brought to you by Joe's Hobby Shop!" On the recap show the credit comes at the top of the sponsor's segment instead. The stream's graphic for the moment carries their name too.
+
+- A moment that happens often (fastest laps, lead changes, battles) is credited at most once every three minutes. Driver introductions, the qualifying recap and the race result are credited every time.
+- Each moment has one sponsor. Tick the same moment for two sponsors and the card says so in red, for example "Fastest lap is ticked for Joe's Hobby Shop and Quickway Diner - only Joe's Hobby Shop, higher in the list, is named."
+- Every credit the announcer makes goes in tonight's report, under that sponsor's reads.
+
 #### Telling a sponsor what they got
 
 **Copy report for tonight**, on the **Sponsor reads** card, puts a plain-text report on the clipboard ready to paste into an email:
@@ -472,14 +486,17 @@ Sunday 11 October 2026
 Reads go out on the tail of a commercial break only.
 
 Ralph's Tavern: 4 reads (57% of the evening's reads; they bought 50%)
+    plus "presented by" on: fastest lap 3 times and race result once
 Quickway Diner: 3 reads (43% of the evening's reads; they bought 50%)
 Last Season Motors: no reads - switched off for this night
+
+This report covers the reads the announcer gave. It does not count the slides on the big screen: the slide rotation is a list of pictures and the app does not know which sponsor each one belongs to, so a figure for those would not be one anybody could stand behind.
 ```
 
 This is the thing that renews a sponsor, and no other timing software in this sport does it at all. Three deliberate choices in it are worth knowing about, because each one is the difference between a report a sponsor trusts and one they can argue with:
 
 - **Both numbers, always.** The share they *got* beside the share they *bought*. The rotation's promise is that everyone ends within one read of their share — and a report with only the count would have the sponsor on share 2 comparing their four reads with somebody else's three and ringing you about it.
-- **A sponsor who got nothing is still in it**, with the reason: switched off for the night, nothing typed for them to read, or the night simply had no gap long enough for their turn. Leaving them out is the one thing you must not do with a figure you're sending to somebody who paid.
+- **A sponsor who got nothing is still in it**, with the reason: switched off for the night, or their turn hadn't come round when the report was made. (A sponsor with nothing typed still gets their turn, as a one-line mention.) Leaving them out is the one thing you must not do with a figure you're sending to somebody who paid.
 - **It makes no claim about the slides.** The slide rotation is a flat list of pictures and HeatCaller doesn't know which sponsor any one of them belongs to, so "your logo was on screen fourteen times" is not a number it has. The report says so itself, so you're never the one who has to explain the gap.
 
 The clipboard rather than a file, because pasting into an email is what actually happens to this. The whole report is also shown in the message that confirms it was copied, so you can read it before you send it.
@@ -523,7 +540,7 @@ Having copy doesn't move a sponsor up the queue. Whose turn it is comes first, a
 |---|---|---|
 | Column change not showing on the Big Screen | The Big Screen reads its columns when it opens. | Close it with <kbd>Esc</kbd> and open it again. |
 | The Big Screen turned light after updating to 0.48 | The crowd screens match the app, and the app uses a light look such as **Daylight**. | On the **Themes** page, choose **Race Wall** (or another dark look) for the crowd screens. |
-| Sponsor slides never appear | **Show sponsor slides on the Big Screen** is off, no slides are listed, or a race is running with the recommended setting on. | Check the **Sponsors** page; wait until the race ends; reopen the Big Screen after turning slides on. |
+| Sponsor slides never appear | **Show sponsor slides on the Big Screen** is off, no slides are listed, a grid roll call is up, or a race is running with the recommended setting on. | Check the **Sponsors** page, and wait until the race ends. After turning slides on, give the leaderboard its turn (**Leaderboard shows for (sec):**, 60 by default). |
 | One slide never shows, and its preview on the **Sponsors** page is blank | The image is missing, unreadable, or over the size limits (50 MB, 20000 pixels across or down, 40 million pixels in all). | Remove it, save a smaller copy of the picture, and add that. |
 | **Add Video** says video is unavailable | The video player's files are missing from beside `HeatCaller.exe`. | Reinstall HeatCaller. Sponsor images keep working in the meantime. |
 | A video slide is skipped, pictures are fine | VLC couldn't open that particular file. | Re-export it as an MP4 (H.264) from whatever made it, and add that. |

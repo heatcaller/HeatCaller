@@ -138,6 +138,34 @@ public sealed class BugHunt4CheckInTests : IDisposable
     }
 
     [Fact]
+    public void A_bulk_log_inspects_a_driver_in_every_class_the_desk_is_still_waiting_on()
+    {
+        var tech = TechInspectionStore.Load();
+        tech.CurrentEventId = "day-1";
+        var ann = Ann();
+        var classes = Checklisted("Stock", "Mod");
+
+        bool Judged(string name) => RaceControlControl.DeskJudgesTechFor(name, classes, tech, null);
+
+        // Nothing inspected: both classes, so the Tech cell reads cleared
+        // after one bulk pass rather than moving on to Mod.
+        Assert.Equal(new[] { "Stock", "Mod" }, tech.TechClassesForDriver(ann, Judged));
+
+        var cars = tech.TechClassesForDriver(ann, Judged)
+            .Select(c => new BulkTech.Car(ann, c, null));
+
+        foreach (var record in BulkTech.Build(cars, TechResult.Passed, "", "", _ => new List<string>(), DateTime.UtcNow))
+        {
+            tech.Upsert(record);
+        }
+
+        Assert.True(tech.LatestForDriver(ann, Judged) is { IsCleared: true });
+
+        // Cleared everywhere: the one pass the desk shows, as Inspect opens.
+        Assert.Equal(new[] { tech.TechClassForDriver(ann, Judged) }, tech.TechClassesForDriver(ann, Judged));
+    }
+
+    [Fact]
     public void Switching_an_inspection_to_another_class_starts_its_checklist_fresh()
     {
         var stockPass = new TechInspection

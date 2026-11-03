@@ -16,6 +16,8 @@ What the number looks like depends on your decoder:
 |---|---|
 | Direct EasyLap Decoder (USB) | Six hexadecimal characters, for example `8467BE`. |
 | I-Lap Decoder (Serial) | 3 to 8 digits, with leading zeros removed. |
+| MyLaps / AMB P3, ZRound / RiCino, Cano / RCHourglass, OpenStint (Beta) | In decimal, the number printed on the transponder. |
+| EasyLap / Robitronic Serial (Beta) | Six hexadecimal characters, as over USB. |
 
 To find a transponder's number, pass it over the loop with the decoder connected and read the `[LAP EVENT] transponder=...` line in the Developer Console on the **Connection** page. See [Connecting your decoder](decoders.md). During a race you can also right-click a driver on the **Race Control** leaderboard and choose **Copy transponder ID**.
 
@@ -29,7 +31,7 @@ Every one of a driver's transponders counts as that driver: names, announcements
 
 When a driver stops using a transponder, pick it on the **Transponders:** line and click **Retire**. A retired transponder is shown as "(retired)" and is no longer in use, but it is still the driver's: everything timed on it stays theirs, and if it turns up again its laps are still filed under them. **Bring Back** puts it back in use. **Remove** takes it off the driver altogether, for a number added by mistake. Laps already timed on a removed transponder no longer count as theirs, so the form asks first. The main transponder can be retired but not removed, because the driver's results are filed under it.
 
-On a direct decoder (EasyLap or I-Lap), HeatCaller decides what to do with each of a driver's other transponders once per race, the first time it crosses the line:
+Whichever decoder you use, HeatCaller decides what to do with each of a driver's other transponders once per race, the first time it crosses the line:
 
 | When it's first heard | What happens for the rest of that race |
 |---|---|
@@ -72,7 +74,7 @@ If a number already belongs to another driver, you get the same "Transponder alr
 
 The list lasts until HeatCaller is closed. A transponder still unnamed is listed again the next time it crosses the line.
 
-Unknown transponders are detected on the direct decoder connections (EasyLap and I-Lap), where HeatCaller runs the race.
+Unknown transponders are detected on every decoder on the **Connection** page, the Beta ones included.
 
 On the phone and web pages served by the laptop, an unnamed driver shows as their transponder number. On the club's online pages they show as "Unnamed driver" instead, so transponder numbers are never published. See [Local Screens](../screens/phone-and-web.md) and [The online relay](../online/index.md).
 
@@ -100,7 +102,7 @@ The pre-race check answers one question before the green flag: is every car that
 
 ### Run the check
 
-1. Connect a direct decoder (EasyLap or I-Lap). See [Connecting your decoder](decoders.md).
+1. Connect your decoder. See [Connecting your decoder](decoders.md).
 2. Ask drivers to put their cars on the track, or roll them over the loop.
 3. On the **Race Control** page, click **Pre-race check** (or press <kbd>R</kbd>).
 4. Read the headline and the list. Fix any problems, have those cars cross the loop again, and click **Check again**.
@@ -127,7 +129,9 @@ Problems are listed first. When everything is fine, the headline reads "All *n* 
 
 The EasyLap decoder reports how many times it saw the transponder during each pass (hits) and how strong the signal was. HeatCaller treats a pass with fewer than 3 hits as marginal, and marks a transponder as weak ("!") when at least half of its recent passes were marginal. The **OK** line shows the average signal strength.
 
-The I-Lap decoder doesn't report signal information. I-Lap transponders show no signal figure and are never marked as weak; the check can still tell you whether each one has been heard.
+Of the Beta decoders, MyLaps P3, RCHourglass, OpenStint and the serial EasyLap report hits too, and are judged the same way.
+
+The I-Lap decoder doesn't report signal information, and nor do ZRound and a plain Cano. Their transponders show no signal figure and are never marked as weak; the check can still tell you whether each one has been heard.
 
 !!! note
     What the decoder has heard is kept in memory only, for 12 minutes. Restarting HeatCaller starts the list afresh.
@@ -150,7 +154,7 @@ When a transponder is fading:
 
 A night runs from 6am to 6am, so a club night that goes past midnight counts as one night. The record is per transponder, not per driver: a driver's second car has its own. Ghost cars aren't recorded.
 
-This is EasyLap only. The I-Lap decoder doesn't report signal strength, so its transponders are never called fading.
+This needs a decoder that reports hits: the EasyLap, or one of the Beta decoders that does (see [Signal strength](#signal-strength)). The I-Lap decoder doesn't, so its transponders are never called fading.
 
 ## Minimum lap time and rejected laps
 
@@ -170,7 +174,7 @@ How a pass is judged:
 
 When a pass is rejected:
 
-- The console shows "Lap rejected (too soon, ...ms < ...ms minimum): *transponder*".
+- The console shows "Lap rejected (too soon: ...ms after the previous pass, ...ms minimum; ...ms since the last counted lap): *transponder*".
 - The driver's rejected-pass count goes up. The **Clean %** leaderboard column shows what share of a driver's passes counted as laps.
 - If you've turned on the **Invalid lap** sound on the **Sounds → Effects** page, it plays. It's off by default. See [Sounds and music](../announcer/sounds-and-music.md).
 
@@ -181,4 +185,4 @@ A lap that lands within 10% of the minimum lap time is never accepted as a new t
 
 If a real lap was rejected or a double read was counted, fix it with the lap adjustments on the **Race Control** page. See [Corrections and recovery](../race-control/corrections-and-recovery.md).
 
-Separately, the I-Lap connection treats two reads of the same transponder within 0.8 seconds as one pass before the minimum lap time is even checked.
+Separately, the I-Lap and the Beta decoders treat two reads of the same transponder within 0.8 seconds as one pass before the minimum lap time is even checked.

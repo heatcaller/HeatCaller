@@ -22,13 +22,13 @@ If the lap you add brings the driver to the race's lap limit, the checkered flag
 
 ### Removing a lap
 
-Use **-1 Lap** when a car was counted twice, for example a double read on the line.
+Use **−1 Lap** when a car was counted twice, for example a double read on the line.
 
 - Laps you added by hand are removed first.
 - After that, the driver's last lap is merged into the lap before it rather than thrown away. Two crossings a moment apart were really one lap, and adding their times together gives that lap back. The laps still add up to the driver's total time.
 - The driver's best lap, their clean run and the fastest lap of the race are then worked out again. If the phantom short "lap" had set the driver's best, or the race's fastest lap, it no longer counts.
 
-If a phantom lap brought the checkered flag out early in a lap race, for example a car carried back across the loop after a crash, use **-1 Lap** on that driver straight away, before they come round again. Their real last lap then counts: the next time they cross, they take the flag. The checkered flag stays out for everyone else. A crossing they make while they're marked as finished isn't counted, even once the lap comes off, so if they've already come round, leave their count alone: the phantom lap stands in for the one they just finished. A driver who took the flag after it came out has finished, so taking a lap off them doesn't give them another lap to run.
+If a phantom lap brought the checkered flag out early in a lap race, for example a car carried back across the loop after a crash, use **−1 Lap** on that driver straight away, before they come round again. Their real last lap then counts: the next time they cross, they take the flag. The checkered flag stays out for everyone else. A crossing they make while they're marked as finished isn't counted, even once the lap comes off, so if they've already come round, leave their count alone: the phantom lap stands in for the one they just finished. A driver who took the flag after it came out has finished, so taking a lap off them doesn't give them another lap to run.
 
 The lap count never goes below zero.
 
@@ -92,7 +92,7 @@ Taking a black flag back before the race is saved means the driver isn't marked 
 
 **Where warnings show.**
 
-- **The Warnings column.** Add it to any leaderboard with **Columns...** (see [Columns](running-a-race.md#columns)). It shows "-" for a clean driver, ⚠ and the count, or the count and **⚑ BLACK** after a black flag. On Race Control it's in red.
+- **The Warnings column.** Add it to any leaderboard with **Columns** (see [Columns](running-a-race.md#columns)). It shows "-" for a clean driver, ⚠ and the count, or the count and **⚑ BLACK** after a black flag. On Race Control it's in red.
 - **Race History** has a **Warnings** column for every saved race. Hover over it to see each warning. See [Results and championships](results-and-championships.md).
 - **The Big Screen** shows a warning as a banner across the screen rather than in red on the board. See [The Big Screen](../screens/big-screen.md#the-banner-across-the-screen).
 - **Driver rating** takes 5 off for each warning.
@@ -110,7 +110,7 @@ The saved result, the championship points and the qualifying figures keep the fi
 
 ### Correcting a saved result
 
-**Edit Result** on the **Race History** page corrects a race after it has been saved. It only works once **Allow corrections to saved results** is ticked on the **Local Screens** page (it's off by default); until then it says "Correcting saved results is switched off on the laptop." Only a real race can be corrected, not practice or a demo race.
+**Edit Result** on the **Race History** page corrects a race after it has been saved. It only works once **Allow corrections to saved results** is ticked on the **Local Screens** page, in the **Race-day manager (phone)** card, which shows in Advanced mode only (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)). It's off by default; until then it says "Correcting saved results is switched off on the laptop." Only a real race can be corrected, not practice or a demo race. A result pasted in from LiveRC can't be corrected either: delete it and paste it again.
 
 1. Select the race on **Race History** and click **Edit Result**.
 2. For each driver, set **Added Laps** (laps added, or taken away with a minus sign), **Time Penalty (s)**, **Lap Penalty** and **Outcome** (**Finished**, **DNF** or **DQ**). **New order** shows the result as it will be.
@@ -234,7 +234,7 @@ For connection problems, see [Decoders](../timing/decoders.md) and [Troubleshoot
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| A driver's lap count is one too high after a double read | Two crossings close together, both over the minimum lap time | **-1 Lap**. If it happens often, raise **Min valid lap (ms):** in the race format. See [Running a race](running-a-race.md#minimum-lap-time). |
+| A driver's lap count is one too high after a double read | Two crossings close together, both over the minimum lap time | **−1 Lap**. If it happens often, raise **Min valid lap (ms):** in the race format. See [Running a race](running-a-race.md#minimum-lap-time). |
 | A correction didn't change the saved result | It was made on the board after the checkered flag | Make corrections before the race finishes, or correct the saved result with **Edit Result** on **Race History** (see [Correcting a saved result](#correcting-a-saved-result)). The console confirms when a correction was made after the flag. |
 | **Undo** didn't bring back a reset race | A new race was staged or run after the reset | The undo is refused on purpose, to protect the newer race. |
 | No recovery offer after a crash | The race was still staging or counting down, had no laps yet, was a demo or practice, was already saved, or was saved more than 24 hours ago | Check **Race History**. |

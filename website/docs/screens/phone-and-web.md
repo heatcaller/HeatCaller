@@ -1,16 +1,16 @@
 # Local Screens
 
-HeatCaller has a small web server built in. Turn it on from the **Local Screens** page and any phone, tablet or computer on the same Wi-Fi as the laptop can open five pages: live results, a transparent overlay for streaming, a race remote for throwing flags from the trackside, a self check-in page for drivers, and a race-day manager for running entries, the program and results from a phone.
+HeatCaller has a small web server built in. Turn it on from the **Local Screens** page and any phone, tablet or computer on the same Wi-Fi as the laptop can open its pages: live results, a race remote for throwing flags from the trackside, a self check-in page for drivers, a driver coach page with a driver's own laps and pit board, a race-day manager for running entries, the program and results from a phone, a transparent overlay for streaming, and broadcast graphics for a stream from this laptop.
 
 These pages work only on the venue's own network, with no internet needed. To publish results and check-in to the internet, use the online relay instead; see [The online relay](../online/index.md). The race-day manager can also be reached over the relay if the club turns that on - see [Race-day manager](#race-day-manager) below.
 
-<!-- screenshot: Local Screens page with the server running, the five addresses filled in -->
+![The Local Screens page with the server stopped: Port and PINs, Start Server, the Race-day manager card, and the addresses waiting to be filled in](../assets/images/local-screens.png)
 
 ## Before you start
 
 - The laptop and the phones must be on the same Wi-Fi network.
 - In Windows, set that Wi-Fi network as a **Private** network. The firewall rule HeatCaller suggests only applies to private networks.
-- The first time you start the server, Windows may block it. The fix takes one command, once. See [If the server won't start](#if-the-server-wont-start).
+- Before phones can connect the first time, Windows needs two one-off changes. **Set up phone pages**, beside **Start Server**, makes them for you. See [Set up phone pages](#set-up-phone-pages).
 
 ## Start the server
 
@@ -21,11 +21,28 @@ These pages work only on the venue's own network, with no internet needed. To pu
 5. In **Manager PIN:**, enter a PIN of six or more digits if you want the race-day manager reachable from a phone. Leave it blank to leave the manager closed - unlike the check-in PIN, a blank Manager PIN does not open the manager to anyone.
 6. Click **Start Server**, at the foot of the **Server** card.
 
-The status beside the buttons changes from "Stopped" to "Running on port *n*", and the five addresses on the **Open these on your phone, tablet, or in OBS** card fill in.
+The status beside the buttons changes from "Stopped" to "Running on port *n* - stop the server to change the port or PINs", and the seven addresses on the **Open these on your phone, tablet, or in OBS** card fill in.
 
 While the server is running, you can't change the port or the PINs. Click **Stop Server**, make the change, and start it again.
 
 To start the server every time HeatCaller opens, tick **Start the server automatically when the app opens**. The server then starts once the main window is up. An automatic start doesn't show any dialogs, so if it fails, the status just stays at "Stopped"; start it by hand to see why.
+
+In Simple mode, **Port:**, the **Race-day manager (phone)** card and the **Choose Web Columns** and **Choose Big Screen Columns** buttons are hidden. They keep their settings and go on working; turn on Advanced mode to change them. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
+
+### Set up phone pages
+
+Windows won't let phones on the Wi-Fi reach the laptop until it has two one-off changes: permission for HeatCaller to accept connections on its port, and a firewall rule to let them through. **Set up phone pages**, on the **Server** card, makes both. It works whether or not the server is running.
+
+1. Click **Set up phone pages**. HeatCaller explains the two changes and asks first. Click **OK**.
+2. Windows asks once for administrator permission. Allow it. HeatCaller itself keeps running as an ordinary app.
+3. HeatCaller says how it went: "Phone pages are set up" or "Phone pages aren't set up", with the reason. What Windows said goes to the console.
+4. Start the server, if it isn't running, and open one of the addresses on a phone.
+
+Pressing it again is safe: it replaces its own two entries rather than adding more. You only need it once per laptop and port. If you change the port, press it again.
+
+The firewall rule only covers networks set as **Private**, and Windows puts a Wi-Fi network it has just joined on **Public**. At a new venue, check it in Windows **Settings > Network & internet > Wi-Fi**, in the network's properties, and choose **Private**.
+
+If nobody can answer the administrator prompt (the answer was **No**, or the laptop is locked down), nothing is changed, and the two commands are written to the console so someone with an administrator account can run them by hand. See [If the server won't start](#if-the-server-wont-start).
 
 ### The PINs
 
@@ -67,6 +84,16 @@ When the server is running, the page lists one address for each page:
 **Driver coach** is the page a driver opens to hear their own lap times in their earbuds. See [Coach](#coach).
 
 HeatCaller works out the laptop's address on the local network for you (usually something like `192.168.1.20`). If an address says `localhost`, the laptop isn't connected to a network phones can reach.
+
+The server has three more pages that aren't listed on this card:
+
+| Page | Address | What it's for |
+|---|---|---|
+| Shout-outs | `/shoutout` on the laptop's address | The room sends the announcer a dedication or a birthday. It only takes them while **Take them from phones on the club's Wi-Fi** is ticked on the **Room & Web** card on **Club Website**, and nothing is said until you approve it. See [Letting the room send them](../announcer/commentary.md#letting-the-room-send-them). |
+| The room's vote | `/vote` on the laptop's address | The room votes on who wins the next race, while **Let phones on the club's Wi-Fi vote** is ticked on the same card. See [Letting the room vote](../announcer/commentary.md#letting-the-room-vote). |
+| Finish camera | `http://localhost:<port>/camera` | The photo-finish camera, opened with **Open Camera Page** on the **Connection** page. It only opens on the timing laptop itself; from anywhere else it says "The finish camera only opens on the timing laptop itself, at http://localhost:*port*/camera". See [Photo finish](../race-control/running-a-race.md#photo-finish). |
+
+The shout-out and vote pages are there even while they're switched off, and then say so, so an address printed on a poster never leads nowhere.
 
 ### QR posters
 
@@ -169,7 +196,7 @@ The page at `/coach` is for one driver to watch their own laps on their phone wh
 - **Last lap** shows their latest lap and how far it was off their best, or **Best lap** when it was their best.
 - **Target** shows how far the last lap was from the target lap race control set for them (**Coach *name*** → **Target lap...** on Race Control; see [Coaching a driver](../race-control/running-a-race.md#coaching-a-driver)), or **On target**. It's only there when a target is set.
 - **Last 10 laps** shows the trend of their last ten.
-- **Say my lap time**: tick it and the phone reads out the driver's own lap time after every lap, "nine point two one", with "best lap" on a new best - nobody else's laps. It's the phone's own voice, so it doesn't wait for the PA announcer. The phone remembers the tick. It's hidden on a phone that can't speak.
+- **Say my lap time**: tick it and the phone reads out the driver's own lap time after every lap, "nine point two one", with "best lap" on a new best - nobody else's laps. It's the phone's own voice, so it doesn't wait for the PA announcer. The phone remembers the tick; after a reload it reads "Say my lap time: tap to resume" until the page is tapped, since phones only let a page speak after a tap. It's hidden on a phone that can't speak.
 - A new best lap flashes the page and buzzes the phone. An iPhone can't buzz for a web page, so it beeps instead once the page has been tapped (ticking **Say my lap time** counts).
 - Under that is **Your report card** for the night, the same card as on their own night page (see below), worked out each time a race or practice is saved.
 
@@ -237,14 +264,17 @@ The page at `/broadcast` is TV-style graphics for a stream, over your camera in 
 
 | Graphic | When | What it shows |
 |---|---|---|
-| Timing tower (top left) | Racing and finished | The race name and clock, then the top 8: the leader's lap, and each car's gap to the one ahead. Rows slide as places change, a car that's just gained a place flashes green, and the fastest lap holder has a purple mark. |
+| Timing tower (top left) | Racing and finished | The race name and clock, the number of lead changes (and leaders), then the top 8, each with their racing number when they have one on their profile. The leader's row shows their lap; the column for the others changes every 8 seconds between **Interval** (the gap to the car ahead), **To leader** and, once someone other than the first leader has led, **Laps led**. Rows slide as places change, a car that's just gained a place flashes green, and the fastest lap holder has a purple mark. |
 | If it ended now (under the tower) | Racing, in a championship race | Who'd lead the championship. See [If it ended now](big-screen.md#if-it-ended-now). |
-| Battle (bottom) | Racing | The closest two cars in the top 8, when they're less than a second apart: "BATTLE FOR P2  Alex vs Sam  0.42s". |
+| Battle (bottom) | Racing | The closest two cars in the top 8, when they're less than a second apart: "BATTLE FOR P2  Alex vs Sam  0.420s", or "BATTLE FOR THE LEAD". While it's the same two cars, it adds "CLOSING" or "PULLING AWAY" and how many laps they've been together. |
 | Fastest lap (bottom right) | Racing | Pops up for 6 seconds with each new fastest lap of the race. |
-| The grid (middle) | Staging and countdown | The race name and its grid in order. |
-| The podium (middle) | Finished | The top three, with their laps and best lap. |
+| Moment (top middle) | As it happens | A banner for 7 seconds at each lead change ("*name* takes the lead from *name*"), and with the name of an achievement a driver has just earned. |
+| The grid (middle) | Staging and countdown | The race name and its grid in order, with racing numbers. |
+| The podium (middle) | Finished | The top three, with their laps, best lap and driver rating for the race. Ghost cars are left out. |
 
-To leave graphics out, add `?hide=` and their names to the address, separated by commas: `tower`, `champ`, `battle`, `fastest`, `grid` and `podium`. For example, `/broadcast?hide=grid,podium`. To add a captions strip, see [Captions](#captions).
+A sponsor who presents one of these moments on the **Sponsors** page is named on its graphic every time, for example "FASTEST LAP · PRESENTED BY ...".
+
+To leave graphics out, add `?hide=` and their names to the address, separated by commas: `tower`, `champ`, `battle`, `fastest`, `moment`, `grid` and `podium`. For example, `/broadcast?hide=grid,podium`. To keep the tower's last column on one gap, add `gap=interval` or `gap=leader` (for example `/broadcast?gap=leader`). To add a captions strip, see [Captions](#captions).
 
 ### Race remote
 
@@ -276,7 +306,7 @@ The remote asks before doing anything that would wipe a race in progress:
 
 The laptop carries out one command at a time. A second press while one is still going out - two marshals pressing **RED** together, say - is answered "NOT sent - the laptop is still carrying out RED." Check the flag, and press again if it's still needed. Each phone can send 20 commands a minute and all phones together 60; past that, the phone shows "NOT sent - too many commands in the last minute."
 
-The remote works only with the remote PIN set on the laptop. If it isn't, the phone shows "The remote needs a PIN. Set one on the laptop's Local Screens page first." or "The remote PIN on the laptop is too short. Make it four digits or more on the Local Screens page."
+The remote works only with the remote PIN set on the laptop. If it isn't, the phone shows "The remote needs a PIN. Set one on the laptop's Local Screens page first." or "The remote PIN on the laptop is too short or has something other than digits. Fix it on the Local Screens page."
 
 ### Driver check-in
 
@@ -382,7 +412,7 @@ For the wider picture, see [Security and privacy](../admin/security-and-privacy.
 
 ## If the server won't start
 
-If Windows won't let HeatCaller accept connections from other devices, clicking **Start Server** shows "Server didn't start" with these instructions (shown here for port 8080; HeatCaller fills in your own port):
+If Windows won't let HeatCaller accept connections from other devices, clicking **Start Server** shows "Server didn't start". The quickest fix is **Set up phone pages** (see [Set up phone pages](#set-up-phone-pages)). The message itself gives the same fix by hand (shown here for port 8080; HeatCaller fills in your own port):
 
 ```text
 Windows blocked the app from accepting connections from other devices.
@@ -399,7 +429,7 @@ If phones still can't connect after that, allow the port through the firewall (s
       netsh advfirewall firewall add rule name="HeatCaller web 8080" dir=in action=allow protocol=TCP localport=8080 profile=private
 ```
 
-To run them:
+To run them by hand, for example on a laptop where **Set up phone pages** isn't allowed:
 
 1. Click **Start**, type `cmd`, right-click **Command Prompt** and choose **Run as administrator**.
 2. Run the `netsh http add urlacl ...` command, with your port number.
@@ -413,7 +443,7 @@ If the message is "Couldn't start the web server on port *n*: ..." instead, some
 ## Troubleshooting
 
 **Phones can't open the page at all (it times out)**
-: Check that the phone is on the same Wi-Fi as the laptop, not on mobile data or a guest network. Check that the address doesn't say `localhost`. Make sure the Wi-Fi is set as a Private network in Windows and that the firewall command above has been run. Some venue and guest Wi-Fi networks stop devices from talking to each other; if so, bring your own router.
+: Check that the phone is on the same Wi-Fi as the laptop, not on mobile data or a guest network. Check that the address doesn't say `localhost`. Make sure the Wi-Fi is set as a Private network in Windows and that **Set up phone pages** has been run for this port (or the firewall command above). Some venue and guest Wi-Fi networks stop devices from talking to each other; if so, bring your own router.
 
 **"Laptop still starting - try again in a moment."** (HTTP 503)
 : HeatCaller is still opening, so it can't act on a command or check-in yet. Wait a few seconds and try again.

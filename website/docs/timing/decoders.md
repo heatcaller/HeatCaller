@@ -16,14 +16,15 @@ HeatCaller reads your decoder directly and runs the race itself, on the **Race C
 
 The five marked **(Beta)** were written from each decoder's published format and haven't yet been tested on a real decoder. See [The Beta decoders](#the-beta-decoders).
 
-The line at the top of the page says the same: "Choose your timing decoder and connect to it. Its laps feed the Race Control page, which runs the race."
+The line at the top of the page says the same: "Choose your timing decoder and connect to it. Its laps feed the Race Control page, which runs the race. With two decoders, the other one can be a split loop partway round the track."
 
-<!-- screenshot: Connection page with "Connect via:" set to Direct EasyLap Decoder (USB), status dot green, Developer Console below -->
+![The Connection page with Direct EasyLap Decoder (USB) chosen and not yet connected, the Mission Control and finish camera buttons, and the Developer Console below](../assets/images/connection.png)
 
 ## Choosing a connection type
 
 - **You have an EasyLap decoder.** Choose **Direct EasyLap Decoder (USB)**. Close any other timing program first, Next Level Timing included, because only one program can use the decoder at a time.
 - **You have an I-Lap decoder.** Choose **I-Lap Decoder (Serial)**.
+- **You have a MyLaps/AMB, RiCino, Cano, RCHourglass or OpenStint decoder, or an EasyLap or Robitronic on a serial port.** Choose its **(Beta)** entry. See [The Beta decoders](#the-beta-decoders).
 
 The decoder you choose here is the start/finish line, where laps are counted. If you have both, the other one can be a split loop partway round the track. See [A split loop](#a-split-loop). See also [Switching decoder types](#switching-decoder-types).
 
@@ -39,6 +40,7 @@ The decoder you choose here is the start/finish line, where laps are counted. If
 
 - **I-Lap:** it connects on the COM port it was last connected on, and no other. If that port isn't there yet, for example a USB adapter plugged in after HeatCaller opened, the console says "Waiting for the I-Lap on COM*n*" and it connects as soon as the port appears. Until you've connected once by hand there's no port to remember, and the console says to pick it and press **Connect** once.
 - **EasyLap:** it's tried once as HeatCaller opens. To keep trying until the decoder is found, and after a dropped connection, tick [Auto-connect](#auto-connect) as well.
+- **A Beta decoder:** it connects the way it was last set up, with its own **Source:**, port or address. On a COM port it waits for that port as the I-Lap does ("Waiting for the ... decoder on COM*n*"). Once connected, it keeps trying by itself if the link drops.
 - Pressing **Connect** or **Disconnect** yourself, or unticking the box, stops it waiting.
 
 ## Run timing on its own thread
@@ -155,9 +157,9 @@ See [Where HeatCaller keeps your data](../admin/data-files.md) for the folder lo
 
 - Run your usual timing system alongside HeatCaller the first time.
 - Every time you connect one, the console says "BETA: HeatCaller's ... support was written from the published format and has not yet been tested on a real decoder."
-- Keep the day's raw capture file (see below) and send it with any report. It's what turns Beta into tested.
+- Keep the day's raw capture file (see below) and send it with any report. It's what turns Beta into tested. **Save Support Info** doesn't pick it up, so attach it yourself.
 
-They can be the start/finish line, but not a split loop. Choosing one turns **Split loop:** off, and the console says "Split loop turned off - it works with the EasyLap and I-Lap only."
+They can be the start/finish line, but not a split loop. Choosing one turns **Split loop:** off, and the console says "Split loop turned off - it works with the EasyLap and I-Lap only. Turn it on again after switching back to one of them."
 
 ### Connect
 
@@ -288,10 +290,10 @@ HeatCaller remembers your choice and uses it next time it opens.
 
 The race on the **Race Control** page keeps running. Its clock and time limit carry on, but no crossings are counted while the decoder is disconnected.
 
-- With **Auto-connect** ticked, EasyLap reconnects by itself as soon as the decoder is back. Otherwise, click **Connect**.
+- With **Auto-connect** ticked, EasyLap reconnects by itself as soon as the decoder is back. A Beta decoder always does, trying every 3 seconds. Otherwise, click **Connect**.
 - Crossings made while disconnected are lost. Each driver's first counted lap after the reconnect runs from their last counted crossing, so it will be long. Check the laps and correct them if needed. See [Corrections and recovery](../race-control/corrections-and-recovery.md).
 - If the decoder's own clock restarted (for example, it lost power), HeatCaller can't work out a real lap time for the first crossing afterward. It rejects that one crossing, logs "Lap rejected: the decoder clock went backwards for ... The decoder was most likely reconnected during the race.", and times the following laps normally.
-- I-Lap lap times come from the laptop's clock, which doesn't restart when you reconnect.
+- I-Lap lap times come from the laptop's clock, which doesn't restart when you reconnect. A Beta decoder's clock is learned again after a reconnect or a restart, with its first passes timed as they arrive (see [The Beta decoders](#the-beta-decoders)).
 
 You won't miss it: the Next Up bar on **Race Control** turns into a pulsing red alarm while the decoder is unplugged, from the moment a race is staged. [Mission Control](../race-control/running-a-race.md#mission-control) shows the decoder and its heartbeat as tiles you can keep on a second screen. See [Timing warnings](../race-control/running-a-race.md#timing-warnings).
 
@@ -310,7 +312,7 @@ The **Developer console** card, under the **Timing decoder** card, shows everyth
 
 Filtering never throws lines away. You can narrow the view, read what you need, and clear the filter to see everything again. The console keeps roughly the most recent 5,000 lines.
 
-Right-click inside the console for **Copy** (the selected text), **Copy everything shown**, **Select all** and **Clear the console**.
+Right-click inside the console for **Copy** (the selected text), **Copy everything shown**, **Select all**, **Clear the console** and **Save support info...** (see [Save Support Info](../admin/backups.md#save-support-info)).
 
 !!! tip
     When you ask for help with a timing problem, filter to "Decoder", reproduce the problem, click **Copy** and paste the result into your message.
@@ -328,6 +330,15 @@ Right-click inside the console for **Copy** (the selected text), **Copy everythi
 
 **I-Lap connects but no laps appear**
 : Look at the console. If you see `[ilap raw]` lines but no `[LAP EVENT]` lines, HeatCaller isn't finding a transponder number in what the decoder sends. If you see "Discarded ... characters with no line ending - check the baud rate.", the decoder isn't talking at the rate chosen in **Baud:**. Check the decoder's setting and pick the same rate (9600 is the usual default). Keep the `ilap-raw-*.log` file for support.
+
+**A Beta decoder connects but no laps appear**
+: Look for "[decoder] Nothing has come from ... in 10 seconds." in the console. Check the address or COM port, the baud rate, and the decoder's own settings (some newer MyLaps decoders ship with P3 switched off). A Cano sends nothing until a car crosses, so drive one over the loop. Keep the `decoder-raw-*.log` file for support.
+
+**"... no answer from ... in 5 seconds - check the address, and that this PC is on the decoder's network" (Beta decoder on the network)**
+: The laptop can't reach the decoder. Check **Address:** and **Port:**, and that the laptop is on the same network as the decoder. HeatCaller keeps trying every 3 seconds until you press **Disconnect**.
+
+**"Type the decoder's IP address first - it's in the decoder's own settings, or its manual."**
+: **Source:** is a network one and **Address:** is empty. A **Port:** that isn't a number from 1 to 65535 is refused the same way, with the usual port for that decoder in the message.
 
 **Laps arrive but show a number instead of a name**
 : The transponder isn't on any driver profile yet. See [Transponders](transponders.md).

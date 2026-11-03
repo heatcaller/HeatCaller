@@ -61,7 +61,7 @@ internal sealed class BulkInspectionForm : Form
             Font = AppTheme.BoldFont,
         };
 
-        var intro = "One inspection is filed for each car, in the class its Tech cell shows. "
+        var intro = "One inspection is filed for each car, in every class its Tech cell is still waiting on. "
                     + "Passed marks every check on that class's checklist OK.";
 
         if (alreadyToday > 0)

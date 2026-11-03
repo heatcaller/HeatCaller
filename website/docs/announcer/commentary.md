@@ -13,6 +13,9 @@ It tries the relay first and falls back to the built-in model **for each line**,
 
 Settings are on **Voice → AI Commentary**.
 
+!!! note "In Simple mode"
+    In Simple mode, the tab shows only **Enable AI commentary** and a **What it talks about** card: six switches, **Before the race**, **During the race**, **Between races**, **After the flag**, **Recap show** and **Opening and closing the night**, each turning a part of the night on or off, and **Talking points on the Announcer screen - never spoken** under them. The cards this page describes are in Advanced mode. See [AI commentary in Simple mode](../getting-started/simple-and-advanced-mode.md#ai-commentary-in-simple-mode).
+
 ## What it's used for
 
 | Use | When | Spoken? |
@@ -131,7 +134,7 @@ The figures come from the relay and from ElevenLabs. HeatCaller asks for them wh
 
 <!-- screenshot: This Month window with AI commentary amber, HeatCaller voice red and the Emails card -->
 
-Open it from the chip at the foot of the sidebar, or from **Details...** under the allowance on the Commentary tab. It isn't in the way: it can stay open beside **Race Control**, and only one opens at a time.
+Open it from the chip at the foot of the sidebar, or from **Details...** under the allowance on the AI Commentary tab. It isn't in the way: it can stay open beside **Race Control**, and only one opens at a time.
 
 - **This month** has a line for each allowance, the same as the one on its own page: the share used and a bar, the figures, how many more race nights like tonight it will last, and **Ask for More** once 80% is used. A key of your own has **Upgrade on elevenlabs.io** instead, since more is bought on your own ElevenLabs plan. With nothing metered it says "Nothing on this PC is metered - the relay isn't set up and the voice is free."
 - Under the lines it says when the figures were last checked, for example "Checked at 21:04." If the relay couldn't be read, it says why instead, for example "The relay didn't answer. The figures above are the last it gave (tried at 21:04)." The last figures stay on show rather than going blank.
@@ -139,7 +142,7 @@ Open it from the chip at the foot of the sidebar, or from **Details...** under t
 - **Emails** has the **Email me at 80% and 100%** tick box and **Send to:**. See [The emails](#the-emails).
 - **Refresh** asks the relay and ElevenLabs now. **Close** closes the window.
 
-The window follows the figures while it's open, so a line that moves on the Commentary tab moves here too.
+The window follows the figures while it's open, so a line that moves on the AI Commentary tab moves here too.
 
 ### The chip in the sidebar
 
@@ -149,7 +152,7 @@ Pointing at it shows each allowance in full. Clicking it opens the This Month wi
 
 ### In Mission Control
 
-**Mission Control** (from **Connection → Mission Control**, or from the **Pre-race check**) has an **Allowances** tile. It only looks at what tonight depends on: commentary only while commentary is on, and only the voice that's chosen.
+**Mission Control** (the **Mission Control** button on **Race Control** or the **Connection** page, or from the **Pre-race check**) has an **Allowances** tile. It only looks at what tonight depends on: commentary only while commentary is on, and only the voice that's chosen.
 
 | The tile shows | Color | What it means |
 |---|---|---|
@@ -195,8 +198,8 @@ The portable copy of HeatCaller has no model beside it. It also looks in `%LOCAL
 ## Turn commentary on
 
 1. Open **Voice → AI Commentary**.
-2. Tick **Enable AI commentary**.
-3. On the **Who writes it** card, check **Write through the club relay when it can** and **Let the model on this PC write when the relay can't**. Both are on to start with. The line under the relay box says what will write.
+2. Tick **Enable AI commentary**. In Simple mode that's all there is to it: the **What it talks about** switches pick what it says. The steps below need Advanced mode.
+3. On the **Who writes it** card, the first on the tab, check **Write through the club relay when it can** and **Let the model on this PC write when the relay can't**. Both are on to start with. The line under the relay box says what will write.
 4. Press **Test Connection**, at the bottom of the same card.
     - "Working - replied in 2.1s. That's comfortably within the gap between races." means you're set.
     - If it took more than 8 seconds, it says "That's slow for live lines - intros and recaps get longer and should still make it."
@@ -205,7 +208,7 @@ The portable copy of HeatCaller has no model beside it. It also looks in `%LOCAL
 
 Changes save as you make them and take effect straight away.
 
-<!-- screenshot: AI Commentary tab with Enable AI commentary ticked and a successful Test Connection result on the Who writes it card -->
+![Voice, AI Commentary tab with Enable AI commentary ticked: the Who writes it card with the relay writing and This month at 11% used, and How it's written below](../assets/images/voice-ai-commentary.png)
 
 ### Warm-up
 
@@ -213,13 +216,13 @@ The model takes a few seconds to load into memory the first time it's used. Heat
 
 ## Settings
 
-The settings are on cards down the **Voice → AI Commentary** tab, **How it's written** first, since it covers every line, then the rest in the order the night happens: **Who writes it**, **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Between races**. Above them is the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
+The settings are on cards down the **Voice → AI Commentary** tab in Advanced mode: **Who writes it** first, then **How it's written**, since it covers every line, then the rest in the order the night happens: **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Between races**. Above them is the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
 
 Who speaks - the announcer's and the recap host's names, the co-host, the Technical Lead, the Team Principal and the achievements reader, with their voices - is on **Voice → Cast**. One **Load Voices**, on the **Voices** card at the top, fills every voice list on the tab. Under it, every speaker has a card laid out the same way: their name first, then their voice with **Test Voice**, then what they do and the settings for it - the **Announcer** card first. The show's music is on **Sounds → Imaging**, and recording the night is on **Club Website → Recording**. The sections below still describe those settings here, where they're explained.
 
 ### How it's written
 
-The first card on the page. These apply to every line the model writes - intros, recaps, segments and talking points alike. They change the words, not the voice; how it sounds is set on **Voice → Cast**.
+The second card on the page, under **Who writes it**. These apply to every line the model writes - intros, recaps, segments and talking points alike. They change the words, not the voice; how it sounds is set on **Voice → Cast**.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -336,6 +339,10 @@ A second commentator, for the segments that suit one. The announcer makes a rema
 | **Co-host's name:** | What the announcer calls them. Leave it blank and they are spoken *to* but never named — the model is told not to invent one. | Blank |
 | **Co-host's voice:** | Which voice reads their half. With nothing picked for the engine you're using, the announcer's own voice reads both halves — still a conversation, and better than silence. **Test Voice** beside it says a line in the voice picked. | Blank |
 | **What they're like:** | Their point of view — see below. | Even-handed |
+| **How much they talk:** | **Brief - a remark and a reply**, **Conversational - three turns** or **Full - four turns**. Each turn is another line the AI writes, and, on the relay, another line of the club's month. | Conversational |
+| **Two voices in the heats too, not just the mains** | The co-host is normally kept for the mains, which helps a main sound like one. Ticking this lets them out in the heats as well; it doesn't make the night any chattier. **Lively** and **Non-stop** under [How chatty](#how-chatty) do the same. | Off |
+
+The co-host also asks the questions in the Technical Lead's and the Team Principal's interviews. The card is grayed out while every one of those, and every two-hander segment, is switched off. In Simple mode, **What they're like** and **How much they talk** are hidden.
 
 Anything that can't be split cleanly into two voices is simply said in one instead. That costs a second request to the model, so it's worth knowing it happens — but it only happens when the model ignores the format, and a silence would cost more.
 
@@ -348,6 +355,7 @@ So you pick a disposition, and it goes into the same request that already carrie
 | Choice | What it does |
 |---|---|
 | **Even-handed** | No particular point of view. The second voice exactly as it was before this setting existed. |
+| **Explains why** | Not what happened, but why: the one who tells you what the lap times mean. Where the facts hold no reason, it says so rather than supplying one. |
 | **Backs the underdog** | Pulls for whoever is further down the order, and is never that impressed by the favorite winning. |
 | **Takes nothing on one lap** | Wants to see it twice before it counts — *"let's see him do that again"*. |
 | **Remembers everything** | Reaches for the night this happened before, and the number behind what just happened. |
@@ -417,7 +425,7 @@ Tick **Play the sponsors as a commercial break while the recap is being written*
 
 It needs a **Big Screen** open with **Show sponsor slides on the Big Screen** ticked and at least one slide to show, **at the moment the flag falls**. That's when HeatCaller decides whether a break follows, and the throw, the bumper and the break itself all go by that one answer - so the throw never promises a break that doesn't run. A Big Screen opened during the finish call is too late for that race's break. Without one there's nothing to put in a break, and a break with nothing in it would be silence added in front of the recap - so nothing changes and the recap goes out exactly as it does now. The console says "No commercial break - no Big Screen is up with the club's sponsor slides switched on."
 
-With the setting itself switched off the console now says so too - "No commercial break - it is switched off on the Commentary page". That was the one way out of the break with no line at all, and it is also the most likely one, since the setting is off until you turn it on. A club asking why their sponsor's video never played after a race had a log with nothing about a commercial break in it anywhere.
+With the setting itself switched off the console now says so too - "No commercial break - it is switched off on the AI Commentary tab", with the setting's name after it. That was the one way out of the break with no line at all, and it is also the most likely one, since the setting is off until you turn it on. A club asking why their sponsor's video never played after a race had a log with nothing about a commercial break in it anywhere.
 
 **A break leads with a video where the club has one.** A break is usually about one turn of the rotation long, so with the slides taken in file order a club's single video advert came up on a break roughly never - the stills either side of it had the eight seconds and the screen went back to the standings. The break now starts on a video slide if there is one and fills the rest of itself with the stills. It searches forward from wherever the rotation already is, so a club with two videos does not get the same one at every break all evening.
 
@@ -740,7 +748,7 @@ The opener goes *after* the teaser, not in front of it, because the teaser is th
 
 It also waits for the model: the opener starts once the recap is written and turned into speech, not while it's still being written. Otherwise a club whose model takes forty seconds hears the opener land, ring out, and then half a minute of bed with nobody talking over it.
 
-**Badges earned** is on the list for a reason worth knowing. The honors are a segment *of* the recap, so on an ordinary night they play under the recap's own music and this tick box changes nothing. Tick it and they also get a show of their own on a night with **no** recap — the AI switched off, the allowance spent, or the model with nothing to say — which is the night they're the whole program.
+**Achievements earned** is on the list for a reason worth knowing. The honors are a segment *of* the recap, so on an ordinary night they play under the recap's own music and this tick box changes nothing. Tick it and they also get a show of their own on a night with **no** recap — the AI switched off, the allowance spent, or the model with nothing to say — which is the night they're the whole program.
 
 If the next race is called to the grid partway through, the music is wound up with the rest of the sequence.
 
@@ -757,7 +765,7 @@ Untick all of them and nothing gets music, which is a different thing from switc
 
 ### Recording the night
 
-This card is on **Club Website → Recording** now. Every race is recorded as it goes out — the announcer and the effects, not the music or the crowd — and **each driver gets an mp3 of the stretches where the announcer called them**, and can get a highlight video for their phone too, with the music and the crowd under the call as the room heard them. See also [Race recordings](sounds-and-music.md#race-recordings).
+This card is on **Club Website → Recording** now, a tab shown in Advanced mode. Recording carries on in Simple mode as it was set. Every race is recorded as it goes out — the announcer and the effects, not the music or the crowd — and **each driver gets an mp3 of the stretches where the announcer called them**, and can get a highlight video for their phone too, with the music and the crowd under the call as the room heard them. See also [Race recordings](sounds-and-music.md#race-recordings).
 
 The clips are the half worth having. A driver who posts the forty seconds where their pass for the lead was called is the best advertisement your club has, and nobody else in RC timing produces one at all.
 
@@ -811,9 +819,22 @@ If something is already recording when a bookend starts, it isn't recorded separ
 !!! note
     This is the recording of the sign-off **as it goes out**, which is as long as your sign-off is — usually under a minute. The longer piece about the whole evening is separate; it's below.
 
+#### Written from the night
+
+Under **Recording the night**, the **Written from the night** card has four things the commentary writes from the evening. They need AI commentary on (**Voice → AI Commentary**).
+
+| Row | Button | What it does |
+|---|---|---|
+| **Tonight's recap:** | **Write And Play It** | The evening as a short piece, after the last race. See [The night in four minutes](#the-night-in-four-minutes). |
+| **A driver's night:** | Pick a driver, then **Write And Play It** | About ninety seconds on one driver's races and pace, played once and saved in tonight's folder under their name. The list is tonight's drivers, filled again each time you open it. |
+| **Check a line:** | **Why It Said That** | Lists the facts from the club's results that the last segment was built from, in the developer console. |
+| **The night before:** | **Write The Preview** | A short preview of the next race day from the program and entry lists, saved as a text file in `Documents\HeatCaller Previews` to paste into the club's page or group, and written out in the console. It never predicts winners or grids. With nothing in the program worth previewing it says "There was nothing in the program worth previewing yet - add the entry lists first." |
+
+**Also put it on the club's own web page**, under **Write The Preview**, puts the preview at the top of the club's page as well. The file is saved either way. On the page it comes down by itself a few hours after the first race, even with this PC off, and unticking it takes it down. Off until you tick it.
+
 #### The night in four minutes
 
-**Write And Play It**, on this card, is for the people who were **not** there.
+**Write And Play It**, beside **Tonight's recap:** on the **Written from the night** card, is for the people who were **not** there.
 
 After the last race it writes the whole evening as a short piece — a driver's family at home, the member who could not make it, the one who left after their main — plays it out once in the hall, and leaves it in tonight's folder as `The Night`, beside the races and the bookends.
 
@@ -1042,7 +1063,7 @@ The window lists everything for tonight: what's waiting for you, what's ready to
 
 ### Letting the room send them
 
-Two switches on the **Club notes** card on the **Commentary** tab, and both are **off** until you turn them on:
+Two switches under **Club notes** on the **Room & Web** card, on **Club Website → Website** (in Advanced mode), and both are **off** until you turn them on:
 
 | Switch | Who can send | Where from |
 |---|---|---|
@@ -1103,7 +1124,7 @@ Opening a vote on the next race closes the one before it, so a club can never ha
 
 ### Letting the room vote
 
-Two switches, under **The room's vote** on this tab, both off until you turn them on:
+Two switches, under **The room's vote** on the same **Room & Web** card on **Club Website → Website**, both off until you turn them on:
 
 | Switch | Who it lets in |
 |---|---|
@@ -1446,7 +1467,7 @@ If a claim is ever still held after six minutes it is let go and the console say
 
 ## Using the recap on the Announcer screen
 
-The last race summary is shown under **LAST RACE SUMMARY** on the Announcer screen (**Announcer Screen** on **Race Control**). Press **Repeat Race Summary** to say it again with the same delivery. It repeats the stored text rather than asking the model again, so it works even if nothing can write commentary any more. When commentary is off, that area says "Commentary is off. Enable it on the Commentary page." See [Announcer screen](voice.md#announcer-screen).
+The last race summary is shown under **LAST RACE SUMMARY** on the Announcer screen (**Announcer Screen** on **Race Control**). To say it again, press **Play again** in the [Broadcast window](#the-broadcast-window) while the recap is the last segment: it repeats the stored recap with its show round it rather than asking the model again, so it works even if nothing can write commentary any more. When commentary is off, that area says "Commentary is off. Turn it on at Voice > AI Commentary." See [Announcer screen](voice.md#announcer-screen).
 
 ## Privacy
 

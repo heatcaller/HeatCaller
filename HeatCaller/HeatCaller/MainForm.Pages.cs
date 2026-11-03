@@ -1017,27 +1017,32 @@ public partial class MainForm
         };
 
         // One inspection for several cars at once (1 Nov 2026): the drivers
-        // picked on Who's Racing with Ctrl or Shift. Each car is inspected in
-        // the class its Tech cell shows, and today's inspection of it, when
-        // there is one, is updated as the one-car Inspect above would - see
-        // BulkTech.Build.
+        // picked on Who's Racing with Ctrl or Shift. Each driver is inspected
+        // in every class their Tech cell is waiting on (2 Nov 2026 - it was
+        // only the first, so a two-class driver still read "-"), and today's
+        // inspection of each car, when there is one, is updated as the
+        // one-car Inspect above would - see BulkTech.Build.
         checkIn.InspectManyRequested += drivers =>
         {
             var nowUtc = DateTime.UtcNow;
             var cars = drivers
-                .Select(profile =>
-                {
-                    var className = checkIn.InspectClassFor(profile);
-                    return new BulkTech.Car(profile, className,
-                        BulkTech.EditableToday(_techInspections.Today(profile.Transponder, className), nowUtc));
-                })
+                .SelectMany(profile => checkIn.InspectClassesFor(profile)
+                    .Select(className => new BulkTech.Car(profile, className,
+                        BulkTech.EditableToday(_techInspections.Today(profile.Transponder, className), nowUtc))))
                 .ToList();
 
             var names = drivers
                 .Select(p => string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName.Trim())
                 .ToList();
 
-            using var form = new BulkInspectionForm(names, cars.Count(car => car.Existing is not null));
+            // Drivers with an inspection already today, since the window counts drivers.
+            var alreadyToday = cars
+                .Where(car => car.Existing is not null)
+                .Select(car => car.Profile.Transponder)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+
+            using var form = new BulkInspectionForm(names, alreadyToday);
 
             if (form.ShowDialog(this) != DialogResult.OK)
             {
@@ -1064,7 +1069,10 @@ public partial class MainForm
             // the lot, as they were one press.
             var befores = records.Select(record => (record.Id, Before: _techInspections.CopyOf(record.Id))).ToList();
 
-            _undo.Capture($"Record tech inspection for {Plural.Of(records.Count, "driver")}", () =>
+            // Drivers, not records: a two-class driver files two.
+            var driverCount = records.Select(r => r.Transponder).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
+            _undo.Capture($"Record tech inspection for {Plural.Of(driverCount, "driver")}", () =>
             {
                 var gone = 0;
 
@@ -1091,7 +1099,7 @@ public partial class MainForm
                 _techInspections.Upsert(record);
             }
 
-            OnClientRawMessage($"{AppTime.LogStampNow()}  [tech] Recorded \"{records[0].ResultText}\" for {Plural.Of(records.Count, "driver")} at once.");
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [tech] Recorded \"{records[0].ResultText}\" for {Plural.Of(driverCount, "driver")} at once.");
 
             techLog?.RefreshAll();
             checkIn.RefreshAll();
