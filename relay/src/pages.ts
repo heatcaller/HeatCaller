@@ -847,14 +847,18 @@ footer .hcmark:hover { color: var(--text); }
 /* The byline, on every page: right-justified beside the club's name, under
    Live's broadcast bug (3 Nov 2026, Asher). Under the name it was a third
    line between the name and the page's one-line summary. */
-.hcside { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding-top: 4px; }
-.hcby { display: flex; align-items: center; gap: 5px; white-space: nowrap; color: var(--muted); font-size: 0.78rem; }
+/* As tall as one line of the name (h1: 1.6rem at 1.5), so the byline sits
+   level with the name rather than above it (3 Nov 2026, Asher: "move the
+   heatcaller branding... down to the same line the club name is on"). */
+.hcside { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.hcby { display: flex; align-items: center; gap: 5px; min-height: 2.4rem; white-space: nowrap;
+        color: var(--muted); font-size: 0.78rem; }
 .hcby .hcsun { width: 14px; height: 14px; }
 /* Live's broadcast bug: a TV channel's corner logo, shown while a race
    is staged, counting down or running. Room is kept for it on Live
    whether it shows or not, so neither the name nor the byline under it
    jumps when a race starts. */
-.onair { display: flex; visibility: hidden; align-items: center; gap: 6px;
+.onair { display: flex; visibility: hidden; align-items: center; gap: 6px; margin-top: 3px;
          padding: 5px 10px 5px 7px; border-radius: 8px; border: 1px solid var(--primary); color: var(--primary);
          box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 55%, transparent); }
 .onair .hcsun { width: 20px; height: 20px; }
