@@ -1,14 +1,29 @@
 namespace HeatCaller;
 
 /// <summary>
-/// The two cars a battle line is about, as the line describes them:
-/// <paramref name="AheadId"/> in front, <paramref name="BehindId"/> chasing,
+/// The two cars a line is about, as the line describes them:
+/// <paramref name="AheadId"/> in front, <paramref name="BehindId"/> behind,
 /// fighting for <paramref name="Position"/>. Transponders, the key the
 /// announcer's standings are kept by. See CommentaryFacts.Battle.
 /// </summary>
 public sealed record BattlePair(string AheadId, string BehindId, int Position)
 {
     public static BattlePair Of(Battle battle) => new(battle.AheadId, battle.BehindId, battle.Position);
+
+    public static BattlePair Of(Horizon horizon) => new(horizon.AheadId, horizon.BehindId, horizon.Position);
+
+    /// <summary>
+    /// True when the swap that overrules the line is a pass worth calling in
+    /// its place - a line about a fight. False for a line that is itself
+    /// about a pass (the lead changing hands, a rivalry swap): the car
+    /// getting back in front has made a pass of its own, and the call it
+    /// gets anyway says so. See AnnouncementService.BattleLines.
+    /// </summary>
+    public bool CallsThePass { get; init; } = true;
+
+    /// <summary>A pair for a line about a pass just made - cut off without a pass call if it is undone. See <see cref="CallsThePass"/>.</summary>
+    public static BattlePair Passed(string aheadId, string behindId, int position) =>
+        new(aheadId, behindId, position) { CallsThePass = false };
 }
 
 /// <summary>
@@ -65,6 +80,27 @@ internal sealed record BattleVerdict(BattleLine? Cut, IReadOnlyList<BattleLine> 
 /// FOR THE LEAD the pass call IS the lead change call - it uses the Leader
 /// change call's own "takes the lead" wording, and the ordinary lead change
 /// call for that same crossing is not queued as well (HandleStandingUpdated).
+///
+/// WIDER (3 Nov 2026, asked for by Asher: every call a position change can
+/// betray, not just Battle watch). The same tag now goes on every line that
+/// says one car is ahead of another:
+///
+///   Battle watch, Horizon (AI)    cut off, and the pass called
+///   Close battle (fixed line)     the same
+///   Leader change                 "Sam takes the lead" - cut off quietly if
+///                                 Bill is straight back past him
+///   Rivalry                       the same, for the two rivals
+///
+/// The last two are lines ABOUT a pass, so the car getting back in front
+/// has made a pass of its own, and the ordinary call for it (the lead
+/// change, the rivalry line) says so - no pass call as well. See
+/// BattlePair.CallsThePass. A line kept for the end of the last one keeps
+/// its tag when it is offered again (EnqueueVoiceWork).
+///
+/// NOT THE RUNNING ORDER. A position report is worded again from the board
+/// just before it is said (PositionReportOrder), so one waiting is never out
+/// of date, and one being read out is let finish: a rundown stopped halfway
+/// is worse than one a car moved in, and the next report puts it right.
 /// </summary>
 public sealed partial class AnnouncementService
 {
@@ -262,7 +298,20 @@ public sealed partial class AnnouncementService
 
         if (verdict.Cut is not { } cut)
         {
-            StatusMessage?.Invoke($"[voice] Dropped {Plural.Of(verdict.Stale.Count, "waiting battle line")} - the two cars swapped before it was said.");
+            StatusMessage?.Invoke($"[voice] Dropped {Plural.Of(verdict.Stale.Count, "waiting line")} - the two cars it is about swapped before it was said.");
+            return false;
+        }
+
+        // A line about a pass the other car has just undone: stopped, and
+        // the call for that pass - already coming - says the rest.
+        if (!cut.Pair.CallsThePass)
+        {
+            var stopped = StopCurrentPlayback();
+
+            StatusMessage?.Invoke(
+                $"[voice] Call {(stopped ? "cut off mid-sentence" : "dropped before it spoke")} - "
+                + $"{DisplayNameFor(cut.Pair.BehindId)} got back ahead of {DisplayNameFor(cut.Pair.AheadId)}.");
+
             return false;
         }
 

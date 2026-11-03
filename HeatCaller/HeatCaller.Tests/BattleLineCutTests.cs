@@ -139,7 +139,8 @@ public sealed class BattleLineCutTests : IDisposable
 
     /// <summary>An announcer with every call and sound off, Sam (101), Bill (102) and Frank (103) on file, and what it puts on the screens.</summary>
     /// <param name="leaderChange">The Leader change call's one line, switched on - or null for it off.</param>
-    private static (AnnouncementService Announcer, ConcurrentQueue<string> Shown, ConcurrentQueue<string> Log) Announcer(string? leaderChange = null)
+    /// <param name="closeBattle">The Close battle call's one line, switched on - or null for it off.</param>
+    private static (AnnouncementService Announcer, ConcurrentQueue<string> Shown, ConcurrentQueue<string> Log) Announcer(string? leaderChange = null, string? closeBattle = null)
     {
         var profiles = ProfileStore.Load();
         profiles.Upsert(new DriverProfile { Transponder = "101", DriverName = "Sam" });
@@ -156,6 +157,11 @@ public sealed class BattleLineCutTests : IDisposable
         if (leaderChange is not null)
         {
             voice.Current.Events[nameof(AnnouncementEventType.LeaderChange)] = new AnnouncementEventConfig { Enabled = true, Weight = 100, Templates = { leaderChange } };
+        }
+
+        if (closeBattle is not null)
+        {
+            voice.Current.Events[nameof(AnnouncementEventType.CloseBattle)] = new AnnouncementEventConfig { Enabled = true, Weight = 100, Templates = { closeBattle } };
         }
 
         var sounds = SoundEffectsStore.Load();
@@ -271,5 +277,149 @@ public sealed class BattleLineCutTests : IDisposable
             // half above proves it was held back, not merely switched off.
             Assert.Equal(new[] { "Sam now leads" }, shown.ToList());
         }
+    }
+
+    // --- Wider: every call a position change can betray (3 Nov 2026) --------
+
+    /// <summary>Waits for the per-lap batches to settle, as the lead change test above does.</summary>
+    private static void UntilShown(ConcurrentQueue<string> shown, string words)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline && !shown.Any(text => text.Contains(words, StringComparison.Ordinal)))
+        {
+            Thread.Sleep(50);
+        }
+    }
+
+    [Fact]
+    public void A_line_about_a_pass_is_judged_by_the_same_rule()
+    {
+        // Sam took the lead from Bill; Bill crosses onto the next lap first.
+        var onAir = new BattleLine(BattlePair.Passed(aheadId: "101", behindId: "102", position: 1));
+
+        var verdict = AnnouncementService.JudgeBattleLines(onAir, [], Board(Car("101", 5, 50_100), Car("102", 6, 60_000)));
+
+        Assert.Same(onAir, verdict.Cut);
+        Assert.False(onAir.Pair.CallsThePass);
+        Assert.True(new BattlePair("102", "101", 1).CallsThePass);
+    }
+
+    [Fact]
+    public void A_line_about_a_pass_that_is_undone_is_cut_off_with_no_pass_call()
+    {
+        var (announcer, shown, log) = Announcer();
+
+        // Sam has just taken the lead from Bill, and the line saying so is on.
+        announcer.OnStandingUpdated(Car("101", 5, 50_100));
+        announcer.OnStandingUpdated(Car("102", 4, 40_000));
+        announcer.PutBattleLineOnAir(BattlePair.Passed("101", "102", 1));
+
+        // Bill is straight back past.
+        announcer.OnStandingUpdated(Car("102", 6, 60_000));
+        announcer.Muted = true;
+
+        Assert.Single(log, line => line.StartsWith("[voice] Call ", StringComparison.Ordinal)
+            && line.Contains("Bill got back ahead of Sam", StringComparison.Ordinal));
+        Assert.Empty(shown);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_lead_change_undone_before_it_is_said_is_dropped_and_the_new_one_called(bool billIsStraightBack)
+    {
+        var (announcer, shown, log) = Announcer(leaderChange: "{driver} now leads");
+
+        announcer.OnStandingUpdated(Car("102", 4, 40_000));
+        announcer.OnStandingUpdated(Car("101", 4, 40_400));
+
+        // Sam takes the lead - his call waits in the per-lap batch.
+        announcer.OnStandingUpdated(Car("101", 5, 50_100));
+
+        if (billIsStraightBack)
+        {
+            announcer.OnStandingUpdated(Car("102", 6, 60_000));
+            UntilShown(shown, "Bill now leads");
+        }
+        else
+        {
+            UntilShown(shown, "Sam now leads");
+        }
+
+        announcer.Muted = true;
+
+        if (billIsStraightBack)
+        {
+            // With the lead change count after it - Sam's lead still counts.
+            Assert.Single(shown, text => text.StartsWith("Bill now leads", StringComparison.Ordinal));
+            Assert.DoesNotContain(shown, text => text.Contains("Sam now leads", StringComparison.Ordinal));
+            Assert.Contains(log, line => line.StartsWith("[voice] Dropped LeaderChange - the two cars it is about swapped", StringComparison.Ordinal));
+        }
+        else
+        {
+            // The control: the same lead change, left standing, is said.
+            Assert.Equal(new[] { "Sam now leads" }, shown.ToList());
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_close_battle_line_is_dropped_when_the_two_cars_swap_before_it_is_said(bool samGetsThrough)
+    {
+        var (announcer, shown, log) = Announcer(closeBattle: "{rival} is all over {driver} {battle}");
+
+        // Bill and Sam four tenths apart on lap 3 - a close battle, offered
+        // to Bill's per-lap batch.
+        announcer.OnStandingUpdated(Car("102", 3, 30_000));
+        announcer.OnStandingUpdated(Car("101", 3, 30_400));
+
+        if (samGetsThrough)
+        {
+            announcer.OnStandingUpdated(Car("101", 4, 39_000));
+        }
+
+        // Waited out in full when it is dropped - long past the batch window.
+        UntilShown(shown, "all over");
+        announcer.Muted = true;
+
+        if (samGetsThrough)
+        {
+            Assert.DoesNotContain(shown, text => text.Contains("all over", StringComparison.Ordinal));
+            Assert.Contains(log, line => line.StartsWith("[voice] Dropped CloseBattle - the two cars it is about swapped", StringComparison.Ordinal));
+        }
+        else
+        {
+            Assert.Contains(shown, text => text.Contains("Sam is all over Bill", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void Every_call_a_pass_can_betray_is_tagged_with_its_two_cars()
+    {
+        var laps = Source("AnnouncementService.LapCalls.cs");
+        var director = Source("CommentaryDirector.cs");
+
+        Assert.Contains("about: new BattlePair(front.Transponder, chaser.Transponder, i + 1)", laps);
+        Assert.Contains("BattlePair.Passed(leader.Transponder, _currentLeaderTransponder, 1)", laps);
+        Assert.Contains("BattlePair.Passed(currentlyAhead, overtaken,", laps);
+        Assert.Contains("kind == SegmentKind.Horizon && horizonCalling is { } gap", director);
+
+        // A call kept for the end of the last line keeps its tag when it comes back.
+        Assert.Contains("using (AboutBattle(battle?.Pair))", Source("AnnouncementService.VoiceQueue.cs"));
+    }
+
+    private static string Source(string fileName)
+    {
+        var folder = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (folder is not null && !File.Exists(Path.Combine(folder.FullName, "check.cmd")))
+        {
+            folder = folder.Parent;
+        }
+
+        return File.ReadAllText(Path.Combine(
+            folder?.FullName ?? throw new DirectoryNotFoundException("No folder with check.cmd in it above " + AppContext.BaseDirectory),
+            "HeatCaller", "HeatCaller", fileName));
     }
 }

@@ -1051,14 +1051,16 @@ public sealed partial class AnnouncementService
             return false;
         }
 
-        // A battle line (1 Nov 2026) - see AnnouncementService.BattleLines.
-        // One whose two cars swapped while it was being written would
-        // contradict the board from its first word.
+        // A line about two cars (1 Nov 2026) - see AnnouncementService.BattleLines.
+        // One whose two cars swapped while it was being written, or while it
+        // was kept for the end of the last line, would contradict the board
+        // from its first word.
         var battle = BattleLineBeingQueued();
 
         if (battle is { Overtaken: true })
         {
-            StatusMessage?.Invoke("[voice] Dropped a battle line - the two cars swapped while it was being written.");
+            StatusMessage?.Invoke($"[voice] Dropped {type} - the two cars it is about swapped before it was queued.");
+            NoteKeptCallLost(heldOver, type, transponder, displayText, "the two cars it was about swapped");
             return false;
         }
 
@@ -1120,7 +1122,16 @@ public sealed partial class AnnouncementService
                 out var kept,
                 // With its own weight when it has one (23 Oct 2026, bug hunt
                 // 10), so a kept rivalry line comes back weighed the same.
-                holdOver: heldOver ? null : () => EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true, lost: lost, routineWeight: routineWeight),
+                //
+                // And with the two cars it is about (3 Nov 2026): the scope
+                // that tagged it is long gone by the time it is offered again.
+                holdOver: heldOver ? null : () =>
+                {
+                    using (AboutBattle(battle?.Pair))
+                    {
+                        return EnqueueVoiceWork(type, transponder, work, displayText, onAir, heldOver: true, lost: lost, routineWeight: routineWeight);
+                    }
+                },
                 alreadyCounted: heldOver,
                 lost: lost,
                 transponder: transponder,

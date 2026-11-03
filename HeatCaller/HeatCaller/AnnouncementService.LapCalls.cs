@@ -914,9 +914,20 @@ public sealed partial class AnnouncementService
                     ? LeadTracker.Tail(leadChange)
                     : string.Empty;
 
-                ConsiderPerLapAction("voice", leader.Transponder, voiceCfg.Weight, MaxVoicePerLap,
-                    () => EnqueueVoice(AnnouncementEventType.LeaderChange, leader, null, extras: leadExtras,
-                        autoTail: leadTail.Length > 0 ? ("{leadchanges}", leadTail) : null));
+                // Tagged with the two cars (3 Nov 2026), so "Sam takes the
+                // lead" is cut off if Bill is straight back past him before
+                // it is said - see AnnouncementService.BattleLines. Inside
+                // the action: the scope has to be open when the batch queues it.
+                var took = BattlePair.Passed(leader.Transponder, _currentLeaderTransponder, 1);
+
+                ConsiderPerLapAction("voice", leader.Transponder, voiceCfg.Weight, MaxVoicePerLap, () =>
+                {
+                    using (AboutBattle(took))
+                    {
+                        EnqueueVoice(AnnouncementEventType.LeaderChange, leader, null, extras: leadExtras,
+                            autoTail: leadTail.Length > 0 ? ("{leadchanges}", leadTail) : null);
+                    }
+                });
             }
         }
 
@@ -1467,7 +1478,8 @@ public sealed partial class AnnouncementService
             // any battle. The front car's place among the cars being called.
             var battleFor = i == 0 ? "the lead" : Ordinal(i + 1);
 
-            if (!FirePairLine(AnnouncementEventType.CloseBattle, front.Transponder, chaser.Transponder, offer, battleFor))
+            if (!FirePairLine(AnnouncementEventType.CloseBattle, front.Transponder, chaser.Transponder, offer, battleFor,
+                    about: new BattlePair(front.Transponder, chaser.Transponder, i + 1)))
             {
                 // Never reached the batch, so nothing would ever settle it.
                 lock (_battlesLock)
@@ -1513,7 +1525,8 @@ public sealed partial class AnnouncementService
     /// not mention gets "Battle for the lead!" in front of it, because that
     /// is the one battle a broadcast always names.
     /// </param>
-    private bool FirePairLine(AnnouncementEventType type, string driverTransponder, string rivalTransponder, BattleOffer? battle = null, string? battleFor = null)
+    /// <param name="about">For a close battle, the two cars as the line has them - see AnnouncementService.BattleLines.</param>
+    private bool FirePairLine(AnnouncementEventType type, string driverTransponder, string rivalTransponder, BattleOffer? battle = null, string? battleFor = null, BattlePair? about = null)
     {
         if (Muted)
         {
@@ -1630,6 +1643,12 @@ public sealed partial class AnnouncementService
             }
 
             var paced = false;
+
+            // A close battle carries its two cars, so it is cut off and the
+            // pass called if they swap before it is said (3 Nov 2026) - see
+            // AnnouncementService.BattleLines.
+            using var tagged = AboutBattle(about);
+
             var accepted = EnqueueVoiceWork(type, driverTransponder,
                 async () =>
                 {
@@ -1737,7 +1756,9 @@ public sealed partial class AnnouncementService
             {
                 var overtakerName = currentlyAhead == transponderA ? rivalry.DriverA : rivalry.DriverB;
                 var overtakenName = currentlyAhead == transponderA ? rivalry.DriverB : rivalry.DriverA;
-                FireRivalryLine(overtakerName, overtakenName, currentlyAhead, templates);
+                var overtaken = currentlyAhead == transponderA ? transponderB : transponderA;
+                FireRivalryLine(overtakerName, overtakenName, currentlyAhead, templates,
+                    BattlePair.Passed(currentlyAhead, overtaken, Math.Min(indexA, indexB) + 1));
             }
 
             _rivalryLastAhead[rivalry.Id] = currentlyAhead;
@@ -1752,7 +1773,8 @@ public sealed partial class AnnouncementService
     /// AnnouncementEventType-keyed template lookup and builds the text
     /// directly, but still shares the same synthesis/playback plumbing.
     /// </summary>
-    private void FireRivalryLine(string overtakerName, string overtakenName, string overtakerTransponder, List<string> templates)
+    /// <param name="passed">The swap, so the line is cut off if it is undone before it is said - see AnnouncementService.BattleLines.</param>
+    private void FireRivalryLine(string overtakerName, string overtakenName, string overtakerTransponder, List<string> templates, BattlePair? passed = null)
     {
         if (Muted)
         {
@@ -1807,6 +1829,11 @@ public sealed partial class AnnouncementService
         // setting, just an implementation detail invisible to the user.
         //
         // Shown only if accepted - see EnqueueVoiceWork.
+        //
+        // Tagged with the swap (3 Nov 2026), so it is cut off if the rival
+        // is straight back past - and that swap's own rivalry line says so.
+        using var tagged = AboutBattle(passed);
+
         EnqueueVoiceWork(AnnouncementEventType.LeaderChange, overtakerTransponder, () => SynthesizeAndPlayAsync(text, "[voice] Rivalry announcement",
             "[voice] Skipped rivalry announcement - ElevenLabs API key or voice not configured."),
             displayText: text,

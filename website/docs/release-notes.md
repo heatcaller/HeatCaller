@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **More calls stop when the order changes under them (3 November).** Until now, only a **Battle watch** line stopped when its two cars swapped. These calls now do too:
+    - **What's still to decide** ("Sam is taking three tenths a lap out of Bill"): if Sam gets past while it's being said, it stops and the pass is called, the same as a battle line.
+    - **Close battle**: the same. If the two cars swap before the line has been said, it's dropped and the pass is called.
+    - **Leader change**: if Bill takes the lead straight back before "Sam takes the lead" is said, the line stops and you hear the new lead change instead.
+    - **Rivalries**: if the rival gets straight back past, the line stops and the rivalry line for that swap is said instead.
+
+    A call that was waiting for the end of another line, and whose two cars swap while it waits, is dropped instead of being said late. The position report isn't cut: it's already re-read from the board just before it's said, and once it has started it finishes. The next report covers anything that changed. See [Announcements](announcer/voice.md#announcements). Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Listen live hears the whole room (2 November).** Listening along on the club's **Live** page used to play only the announcer's lines, one after another, in silence. Now it plays everything the room hears: the announcer, the show music, the crowd, the stingers and beds, and the tones, as one continuous stream a few seconds behind. The button is now called **Listen live**. Lines that never went to listeners still don't: penalty calls, and lines naming a driver who is shown by initials online, are taken out of the stream while the music carries on under them. If the page goes to the background, for example when you switch to another app on an iPhone, coming back no longer plays everything you missed, a long way behind: it drops it and picks up the room where it is now. Update HeatCaller on the race PC and redeploy the relay (`fly deploy --ha=false`). A race PC that hasn't been updated still sends the announcer's lines, and the new page still plays them.
 
 - **Small fixes found checking the user guide (2 November).**
