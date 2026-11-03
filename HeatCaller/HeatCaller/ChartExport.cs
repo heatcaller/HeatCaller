@@ -168,7 +168,12 @@ public sealed class ChartExportForm : Form
 
     public ChartExportOptions Options { get; } = new();
 
-    public ChartExportForm(AppSettings settings, Action<Graphics, Rectangle, ChartPalette> drawPreview)
+    /// <param name="chooseSize">
+    /// False for an image drawn at its own fixed size - the results card - which the
+    /// Size list did nothing for, while the choice made there was saved as the
+    /// charts' own (2 Nov 2026). The row is left out and the charts' size kept.
+    /// </param>
+    public ChartExportForm(AppSettings settings, Action<Graphics, Rectangle, ChartPalette> drawPreview, bool chooseSize = true)
     {
         _drawPreview = drawPreview;
 
@@ -217,7 +222,12 @@ public sealed class ChartExportForm : Form
             Options.ImageSize = (_cmbSize.SelectedItem as SizeItem)?.Value ?? new Size(1280, 680);
 
             settings.ChartExportStyle = Options.StyleKey;
-            settings.ChartExportWidth = Options.ImageSize.Width;
+
+            if (chooseSize)
+            {
+                settings.ChartExportWidth = Options.ImageSize.Width;
+            }
+
             settings.Save();
 
             DialogResult = DialogResult.OK;
@@ -229,11 +239,12 @@ public sealed class ChartExportForm : Form
         // Both drop-downs run to the right-hand edge, where the preview
         // ends, as they did beside their captions.
         var fields = new FieldGrid();
-        var captions = new List<Label>
+        var captions = new List<Label> { fields.AddRow("Style:", _cmbStyle, stretch: true) };
+
+        if (chooseSize)
         {
-            fields.AddRow("Style:", _cmbStyle, stretch: true),
-            fields.AddRow("Size:", _cmbSize, stretch: true),
-        };
+            captions.Add(fields.AddRow("Size:", _cmbSize, stretch: true));
+        }
 
         var page = new FillPage();
         page.Add(fields);

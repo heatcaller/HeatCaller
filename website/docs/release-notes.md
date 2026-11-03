@@ -4,6 +4,19 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Small fixes found checking the user guide (2 November).**
+    - **Save Support Info** now includes the Beta decoders' raw capture files (`decoder-raw-*.log`), which their console message asks you to send.
+    - <kbd>F1</kbd> in the **Broadcast** window or a lap breakdown window no longer skips On Air when it's already running: like the main window, it says to hold <kbd>0</kbd>.
+    - The welcome wizard's Timing step no longer tells you to plug in an EasyLap when a Beta decoder is picked.
+    - **Test** on **Voice → Race Calls** fills in every placeholder, and never reads one out in braces.
+    - A setup whose chassis sheet was deleted shows "(sheet deleted)" instead of a blank sheet.
+    - **Share Results Card** no longer shows a **Size:** list that did nothing and changed the charts' saved size.
+    - **Pace** no longer lists pasted results, which have no lap times.
+    - In Simple mode, double-clicking one of your own looks no longer opens the editor, and Themes has the **More settings in Advanced mode** line.
+    - Messages that named old places now name the current ones: the Broadcast window for Notes and Votes, **Race Day → Setup** to reopen a day, **Voice → Race Calls**, and the **Who writes it** card.
+
+    Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **"Backup & Restore" in the sidebar (2 November).** The sidebar showed the page as "Backup _Restore": the "&" was read as a keyboard-shortcut marker. It now reads **Backup & Restore**. The user guide also has screenshots now, on most pages. Update HeatCaller on the race PC; nothing changes on the relay.
 
 - **Five more decoders, in Beta (1 November).** **Connect via:** now also offers **MyLaps / AMB P3 (Beta)** (AMBrc, RC4 and others, over the network or a COM port), **ZRound open protocol / RiCino (Beta)**, **Cano / RCHourglass (Beta)**, **OpenStint (Beta)** and **EasyLap / Robitronic Serial (Beta)**. A new **Source:** row picks a COM port, the network or a simulated decoder, and each decoder remembers its own settings. They're written from each decoder's published format and haven't yet been tested on a real one, so they stay marked Beta until they have, and the console says so each time one connects. Run your usual timing alongside the first time, and keep the raw capture file. The simulated source plays a decoder of that type with your own drivers' transponders, so you can rehearse with it at home. They can be the line but not a split loop yet. See [The Beta decoders](timing/decoders.md#the-beta-decoders). Update HeatCaller on the race PC; nothing changes on the relay.

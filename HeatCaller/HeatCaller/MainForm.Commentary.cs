@@ -350,7 +350,7 @@ public partial class MainForm
         if (string.IsNullOrWhiteSpace(script))
         {
             // Named, not "above" (17 Oct 2026, Bug Hunt 8, A15-2): this is shown on Club Website > Recording (Sounds > Recording until 26 Oct 2026).
-            return "The model did not write anything usable. Try again, or check the Connection card on Voice > AI Commentary.";
+            return "The model did not write anything usable. Try again, or check the Who writes it card on Voice > AI Commentary.";
         }
 
         try

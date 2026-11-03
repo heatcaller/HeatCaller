@@ -305,7 +305,7 @@ public partial class RaceControlControl
 
         var why = _announcer.WillCall(AnnouncementEventType.TargetPace) || _coach?.Tones == true
             ? string.Empty
-            : $" \"Target lap (coach)\" is switched off for {(_race.IsPracticeMode ? "practice" : "races")} on Voice - Announcements, so nothing will be said until it is ticked.";
+            : $" \"Target lap (coach)\" is switched off for {(_race.IsPracticeMode ? "practice" : "races")} on Voice > Race Calls, so nothing will be said until it is ticked.";
 
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [coach] Coaching {name} to a {Sectors.Format(targetMs)}s lap: each lap against it at the line.{why}");
     }
@@ -383,7 +383,7 @@ public partial class RaceControlControl
 
         var why = _announcer.WillCall(AnnouncementEventType.GhostGap)
             ? string.Empty
-            : $" \"Gap to their ghost (coach)\" is switched off for {(_race.IsPracticeMode ? "practice" : "races")} on Voice - Announcements, so nothing will be said until it is ticked.";
+            : $" \"Gap to their ghost (coach)\" is switched off for {(_race.IsPracticeMode ? "practice" : "races")} on Voice > Race Calls, so nothing will be said until it is ticked.";
 
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [coach] Coaching {name} against their ghost: at the line, how far behind or ahead of it they are.{why}");
     }
@@ -405,7 +405,7 @@ public partial class RaceControlControl
 
         var why = _announcer.WillCall(AnnouncementEventType.ConsistencyCoach)
             ? string.Empty
-            : $" \"Consistency (coach)\" is switched off for {(_race.IsPracticeMode ? "practice" : "races")} on Voice - Announcements, so nothing will be said until it is ticked.";
+            : $" \"Consistency (coach)\" is switched off for {(_race.IsPracticeMode ? "practice" : "races")} on Voice > Race Calls, so nothing will be said until it is ticked.";
 
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [coach] Coaching {name} on consistency: every {_announcer.ConsistencyBlockLaps} clean laps, how far apart they were.{why}");
     }

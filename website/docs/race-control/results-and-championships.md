@@ -72,7 +72,7 @@ Races saved before lap-by-lap times were recorded can't be replayed.
     - **Print friendly - white background, dark ink**
     - **Monochrome - white background, gray lines (mono printers)**
     - **Match the app's look - as shown on screen**
-3. Check the **Preview:** and press **Save**. (The window is the one charts are saved with, so it also has a **Size:** list; the results card always comes out the same size.)
+3. Check the **Preview:** and press **Save**. The results card always comes out the same size, so there is no **Size:** list here.
 4. Choose where to save the PNG file.
 
 The style you pick is remembered for next time.
@@ -288,7 +288,7 @@ One driver's best lap per session over time. Choose the **Driver:** and a **Trac
 
 ### Pace
 
-The pace table for any saved session. Choose it in **Race:**. The same table opens from **Pace** on **Race History**.
+The pace table for any saved session. Choose it in **Race:**. Pasted results aren't listed: they have no lap times. The same table opens from **Pace** on **Race History**.
 
 It's sorted by each driver's best three laps in a row, the pace they could actually hold, rather than by result. Where the two orders disagree, a driver lost time somewhere other than outright speed.
 

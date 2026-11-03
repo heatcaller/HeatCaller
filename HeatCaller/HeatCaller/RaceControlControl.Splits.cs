@@ -288,7 +288,7 @@ public partial class RaceControlControl
 
         var why = _announcer.WillCall(AnnouncementEventType.SplitDelta)
             ? string.Empty
-            : $" \"Split coach\" is switched off for {(_race.IsPracticeMode ? "practice" : "races")} on Voice - Announcements, so nothing will be said until it is ticked.";
+            : $" \"Split coach\" is switched off for {(_race.IsPracticeMode ? "practice" : "races")} on Voice > Race Calls, so nothing will be said until it is ticked.";
 
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [split] Coaching {name} at the split: up or down on their best each time they cross it.{why}");
     }

@@ -182,8 +182,9 @@ public sealed class PaceAnalysisControl : UserControl
                 // is almost always the one that just finished. Practice is
                 // included: a practice session is where most of the lap
                 // times in this app come from, and its pace is as readable
-                // as a race's.
-                foreach (var session in _history.All.Where(s => s.Results.Count > 0))
+                // as a race's. A pasted result is not: it has no lap times,
+                // so it only ever drew an empty chart (2 Nov 2026).
+                foreach (var session in _history.All.Where(s => s.Results.Count > 0 && !s.IsImported()))
                 {
                     _cmbSession.Items.Add(new Choice(session));
                 }

@@ -240,7 +240,7 @@ internal sealed class RoomAndWebCard
 
         Card.Add(Heading("Club notes"), stretch: false, gapBelow: UiLayout.HintGap);
         Card.Add(Hint(
-            "A dedication, a birthday, the raffle - typed on the Notes button on Race Control's announcer strip and "
+            "A dedication, a birthday, the raffle - typed on the Notes button in the Broadcast window and "
             + "said once between races. The room can send them in too."));
         Card.Add(_chkNotesWifi, stretch: false, gapBelow: 0);
         Card.Add(_chkNotesRelay, stretch: false, gapBelow: 0);
@@ -249,7 +249,7 @@ internal sealed class RoomAndWebCard
         Card.Add(Heading("The room's vote"), stretch: false, gapBelow: UiLayout.HintGap);
         Card.Add(Hint(
             "The room votes on who wins, and after the race the announcer says how it did. Open a vote on the Votes "
-            + "button on Race Control's announcer strip; it closes when the result comes in. The announcer stays quiet "
+            + "button in the Broadcast window; it closes when the result comes in. The announcer stays quiet "
             + "if too few voted or the room split, and never says who picked whom."));
         Card.Add(_chkVoteWifi, stretch: false, gapBelow: 0);
         Card.Add(_chkVoteRelay, stretch: false, gapBelow: 0);
@@ -346,7 +346,7 @@ internal sealed class RoomAndWebCard
 
         if (!wifi && !relay)
         {
-            _lblNotesWhere.Text = "Only you can add one at the moment, on the Notes button on Race Control.";
+            _lblNotesWhere.Text = "Only you can add one at the moment, on the Notes button in the Broadcast window.";
             return;
         }
 

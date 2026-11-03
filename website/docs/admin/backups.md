@@ -245,7 +245,7 @@ The card says where to send it: **support@heatcaller.com**. Clicking the address
 | `summary.txt` | The HeatCaller version, the PC (Windows version, memory, screens, free disk space) and the settings that help work out a problem. Keys, tokens, PINs and passwords never go in: it only says whether each one is set. |
 | `logs` | The console from the last few times HeatCaller ran: up to 5 runs from the last 3 days, newest first. The newest always goes in. |
 | `crash` | `crash.log` and `crash.old.log`, if there are any. |
-| `decoder` | With an I-Lap decoder, its raw capture from the last 3 days (up to 3 files). A Beta decoder's `decoder-raw-*.log` files aren't included: attach them from the data folder yourself. |
+| `decoder` | The decoders' raw captures from the last 3 days: up to 3 of the I-Lap's `ilap-raw-*.log` files and up to 3 of the Beta decoders' `decoder-raw-*.log` files. |
 | `README.txt` | What's in the file and what was changed. |
 
 Before anything goes in, HeatCaller replaces:

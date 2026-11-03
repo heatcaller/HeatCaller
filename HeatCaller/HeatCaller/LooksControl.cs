@@ -164,7 +164,7 @@ public sealed class LooksControl : UserControl
         {
             Text = "A look is the set of colors HeatCaller paints with. Choose one for the app itself (it restarts to "
                  + "apply it) and one for the crowd screens - the Big Screen, the Wi-Fi pages and the club's online "
-                 + "pages - or let the screens match the app. New Look makes your own from any of them.",
+                 + "pages - or let the screens match the app. In Advanced mode, New Look makes your own from any of them.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -177,7 +177,8 @@ public sealed class LooksControl : UserControl
         _list.SelectedIndexChanged += List_SelectedIndexChanged;
         _list.DoubleClick += (_, _) =>
         {
-            if (SelectedLook() is { IsBuiltIn: false })
+            // Not in Simple mode, which hides Edit (2 Nov 2026).
+            if (SimpleMode.ShowAll && SelectedLook() is { IsBuiltIn: false })
             {
                 EditSelected();
             }
@@ -341,6 +342,7 @@ public sealed class LooksControl : UserControl
         page.Add(looks);
         page.Add(logo);
         page.Add(appearance, gapBelow: UiLayout.RowGap);
+        page.Add(SimpleMode.MoreLine(), stretch: false);
         page.Add(_lblStatus, gapBelow: 0);
 
         Controls.Add(page);
@@ -457,8 +459,8 @@ public sealed class LooksControl : UserControl
 
         var lblNote = new Label
         {
-            Text = "Online pages always show the logo, beside the club's name, and use it as the icon when somebody "
-                 + "adds them to a phone's home screen. A square logo on a transparent background looks best.",
+            Text = "Online pages always show the logo, beside the club's name. A square logo on a transparent "
+                 + "background looks best.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };

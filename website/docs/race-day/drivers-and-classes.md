@@ -674,7 +674,7 @@ Any driver can run a club pack: put it in their car on their **Batteries** tab, 
 
 A chassis sheet is the template a setup is filled in against: a diagram of the car with callouts, plus a list of fields. HeatCaller comes with a **Kyosho MR-04 / MR-03** sheet.
 
-Click **Chassis Sheets** to manage them. **New** starts a new sheet from the Kyosho one, **Duplicate** copies the selected sheet, **Edit** opens it, and **Delete** removes it (setups that used it are kept but show as legacy entries; Undo can restore the sheet).
+Click **Chassis Sheets** to manage them. **New** starts a new sheet from the Kyosho one, **Duplicate** copies the selected sheet, **Edit** opens it, and **Delete** removes it (setups that used it are kept, with "(sheet deleted)" in their **Chassis Sheet** column; Undo can restore the sheet).
 
 In the sheet editor (**Chassis Diagram**):
 

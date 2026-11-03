@@ -867,7 +867,7 @@ public sealed class CheckInControl : UserControl
     /// <summary>What the banner says under "This day is closed."</summary>
     private static string ClosedDayDetail(RaceEvent day) =>
         $"\"{day.DisplayName}\" is closed. This page is showing who was checked in that day, and it will not take "
-        + "check-ins or check-outs: start tonight's race day, or reopen this one on The Day, to change them.";
+        + "check-ins or check-outs: start tonight's race day, or reopen this one on Race Day > Setup, to change them.";
 
     /// <summary>
     /// Says no, in a window, when the current day is closed - see
@@ -885,7 +885,7 @@ public sealed class CheckInControl : UserControl
 
         AppDialog.Show(FindForm() ?? (IWin32Window)this,
             $"\"{day.DisplayName}\" is closed, so its check-in sheet can't be changed - it is the record of who was there that day.\r\n\r\n"
-            + "For tonight, start a new race day. To change that day's sheet, reopen it on The Day first.",
+            + "For tonight, start a new race day. To change that day's sheet, reopen it on Race Day > Setup first.",
             "This day is closed", MessageBoxButtons.OK, MessageBoxIcon.Information);
         return true;
     }

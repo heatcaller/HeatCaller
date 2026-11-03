@@ -18,6 +18,10 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly ElevenLabsClient _elevenLabs = new();
     private readonly VoiceProfile _original;
 
+    /// <summary>A placeholder a Test has no sample for - see the Test button's line.</summary>
+    private static readonly System.Text.RegularExpressions.Regex UnfilledPlaceholder =
+        new(@"\{[a-z]+\}", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
     /// <summary>
     /// The live announcer, when the host wires it in. Test playback then
     /// goes through its output lock, so a test pressed during a session
@@ -1023,7 +1027,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         if (AppDialog.Show(this,
                 $"Replace the spoken lines for {Plural.Of(changed, "event type")} with the built-in defaults?\r\n\r\n"
                 + "Any lines you've written or edited yourself will be lost. Enable/disable settings, "
-                + "weights and volumes are NOT affected.",
+                + "weights and speeds are NOT affected.",
                 "Restore default lines", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
         {
             return;
@@ -4463,6 +4467,29 @@ public sealed partial class VoiceSettingsControl : UserControl
             .Replace("{badge}", "Hat-Trick", StringComparison.OrdinalIgnoreCase)
             .Replace("{minutes}", "four", StringComparison.OrdinalIgnoreCase)
             .Replace("{seconds}", "thirty", StringComparison.OrdinalIgnoreCase)
+            .Replace("{team}", "Team Neon", StringComparison.OrdinalIgnoreCase)
+            .Replace("{sponsors}", "Pit Stop Hobbies", StringComparison.OrdinalIgnoreCase)
+            .Replace("{sponsor}", "Pit Stop Hobbies", StringComparison.OrdinalIgnoreCase)
+            .Replace("{streak}", "five", StringComparison.OrdinalIgnoreCase)
+            .Replace("{rivalstreak}", "three", StringComparison.OrdinalIgnoreCase)
+            .Replace("{track}", "the club track", StringComparison.OrdinalIgnoreCase)
+            .Replace("{drivers}", "Sam, Bill and Frank", StringComparison.OrdinalIgnoreCase)
+            .Replace("{race}", "the A-Main", StringComparison.OrdinalIgnoreCase)
+            .Replace("{place}", "second", StringComparison.OrdinalIgnoreCase)
+            .Replace("{overtaker}", "Sam", StringComparison.OrdinalIgnoreCase)
+            .Replace("{overtaken}", "Bill", StringComparison.OrdinalIgnoreCase)
+            .Replace("{name}", "Sam", StringComparison.OrdinalIgnoreCase)
+            .Replace("{previous}", "Bill", StringComparison.OrdinalIgnoreCase)
+            .Replace("{previouslaps}", "6 laps", StringComparison.OrdinalIgnoreCase)
+            .Replace("{leadchanges}", "fourth", StringComparison.OrdinalIgnoreCase)
+            .Replace("{leaders}", "three", StringComparison.OrdinalIgnoreCase)
+            .Replace("{backinfront}", "back in front for the second time", StringComparison.OrdinalIgnoreCase)
+            .Replace("{ghostgap}", "Two tenths behind your ghost", StringComparison.OrdinalIgnoreCase);
+
+        // Anything still in braces has no sample here: dropped the way the
+        // race drops an empty placeholder, rather than read aloud as "team"
+        // or "streak" in braces (2 Nov 2026).
+        spoken = UnfilledPlaceholder.Replace(spoken, AnnouncementText.Missing)
 
             // Tidied as the race tidies every line, so a fixed line tested
             // here is word for word the one the race asks for.

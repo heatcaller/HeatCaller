@@ -1300,9 +1300,18 @@ public sealed class FirstRunWizard : Form
             FillSerialPorts();
         }
 
+        // A Beta decoder is reached by a COM port, the network or a simulated
+        // one, and that is chosen on the Connection page - it was told to
+        // "plug the EasyLap in by USB" (2 Nov 2026).
+        var isBeta = DecoderConnection.IsStream(DecoderConnection.ValueAt(_cmbConnection.SelectedIndex));
+
         _lblTimingHint.Text = isILap
             ? "Leave the baud rate at 9600 unless the decoder has been set differently. No port listed? Plug the "
               + "decoder in and press Rescan - or pick it later on the Connection page.\r\n\r\n"
+              + "No decoder here yet? You can still try everything with a simulated race in Demo Mode."
+            : isBeta
+            ? "Choose how HeatCaller reaches it - a COM port, the network, or a simulated decoder to rehearse with - "
+              + "on the Connection page once this is done. It's in Beta: run your usual timing alongside it the first time.\r\n\r\n"
               + "No decoder here yet? You can still try everything with a simulated race in Demo Mode."
             : "Plug the EasyLap in by USB before you connect - there is nothing else to set.\r\n\r\n"
               + "No decoder here yet? You can still try everything with a simulated race in Demo Mode.";
