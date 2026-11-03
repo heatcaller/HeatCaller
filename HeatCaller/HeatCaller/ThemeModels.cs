@@ -568,7 +568,7 @@ public sealed class Theme
             "{driver} improves to a {time}.",
             "A step forward for {driver}, a personal best.",
             "{driver} goes quicker - a {time}.",
-            "Best lap of the night so far for {driver}.",
+            "{driver}'s quickest lap of this race so far.",
             "{driver} lowers their own best to a {time}.",
             "Good lap from {driver} - a personal best.",
             "{driver} has found a little more pace.",
@@ -711,7 +711,7 @@ public sealed class Theme
             "[excited] {driver} hits the high note - fastest lap, {time}!",
             "[excited] Neon-fast from {driver} - {time}!",
             "[excited] {driver} turns up the speed - {time}!",
-            "[excited] Best lap of the night so far - {driver}, {time}!",
+            "[excited] Best lap of the race so far - {driver}, {time}!",
             "[excited] {driver} is cruising fast - {time}!",
             "[excited] Off the charts - {driver}, {time}!");
         Lines(v, AnnouncementEventType.PersonalBestLap, false, 45,
