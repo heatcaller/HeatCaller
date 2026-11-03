@@ -4,6 +4,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Listen live hears the whole room (2 November).** Listening along on the club's **Live** page used to play only the announcer's lines, one after another, in silence. Now it plays everything the room hears: the announcer, the show music, the crowd, the stingers and beds, and the tones, as one continuous stream a few seconds behind. The button is now called **Listen live**. Lines that never went to listeners still don't: penalty calls, and lines naming a driver who is shown by initials online, are taken out of the stream while the music carries on under them. If the page goes to the background, for example when you switch to another app on an iPhone, coming back no longer plays everything you missed, a long way behind: it drops it and picks up the room where it is now. Update HeatCaller on the race PC and redeploy the relay (`fly deploy --ha=false`). A race PC that hasn't been updated still sends the announcer's lines, and the new page still plays them.
+
 - **Small fixes found checking the user guide (2 November).**
     - **Save Support Info** now includes the Beta decoders' raw capture files (`decoder-raw-*.log`), which their console message asks you to send.
     - <kbd>F1</kbd> in the **Broadcast** window or a lap breakdown window no longer skips On Air when it's already running: like the main window, it says to hold <kbd>0</kbd>.

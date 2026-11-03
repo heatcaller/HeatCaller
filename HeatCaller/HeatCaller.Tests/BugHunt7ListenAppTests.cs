@@ -168,13 +168,13 @@ public sealed class BugHunt7ListenAppTests
 
         var queue = SourceOf("AnnouncementService.VoiceQueue.cs");
         Assert.Contains("bool forListeners = true", queue);
-        Assert.Matches(@"if \(forListeners\)\s*\{\s*OfferLineToListeners\(text, audio[,)]", queue);
+        Assert.Matches(@"var onAir = forListeners && OfferLineToListeners\(text, audio[,)]", queue);
     }
 
     [Fact]
     public void The_caption_listeners_read_has_no_audio_tags()
     {
-        var offer = Between(SourceOf("AnnouncementService.ListenAlong.cs"), "private void OfferLineToListeners(", "private byte[]? AsMp3(");
+        var offer = Between(SourceOf("AnnouncementService.ListenAlong.cs"), "private bool OfferLineToListeners(", "private byte[]? AsMp3(");
         Assert.Contains("var words = VoiceProfile.StripAudioTags(text);", offer);
     }
 

@@ -622,17 +622,14 @@ public sealed partial class AnnouncementService
                 // With whether the audio says the names shortened (23 Oct
                 // 2026, bug hunt 10), so a line whose audio says them in
                 // full stays off the public page - see OfferToListenersOnly.
-                if (forListeners)
-                {
-                    OfferLineToListeners(text, audio, AudioFromShortenedText(synthesis.Source, text));
-                }
+                var onAir = forListeners && OfferLineToListeners(text, audio, AudioFromShortenedText(synthesis.Source, text));
 
                 // The pads the CALLER asked for, since 11 Oct 2026. This
                 // was the default 0.9s tail and the full lead whatever the
                 // line was, so two turns of one exchange paid both in full
                 // with the hand-over's beat on top - see SpeechLead.
                 // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
-                await PlayAsync(audio, volume, TailSecondsFor(tail), LeadSecondsFor(lead), StillWantedUnlessOvertaken(honourMute));
+                await PlayAsync(audio, volume, TailSecondsFor(tail), LeadSecondsFor(lead), StillWantedUnlessOvertaken(honourMute), onAir);
             }
             catch (Exception ex) when (synthesis.FromLibrary && IsUndecodable(ex))
             {

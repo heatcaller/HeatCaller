@@ -14,6 +14,9 @@ public partial class MainForm : Form
     /// </summary>
     private readonly RelayPublisher _relayPublisher;
 
+    /// <summary>The room's whole sound for listening along from home (2 Nov 2026). See ListenStream.</summary>
+    private ListenStream? _listenStream;
+
     /// <summary>Driver sign-up online: the invites, the sign-ups waiting for the desk, and approving them. See RelaySignupDesk.</summary>
     private readonly RelaySignupDesk _signupDesk;
 
@@ -2485,6 +2488,7 @@ public partial class MainForm : Form
             // race; left running they log into a closing window.
             _ghosts?.Stop();
 
+            _listenStream?.Dispose();
             _relayPublisher.Dispose();
             _decoderClient.Dispose();
             _ilapClient.Dispose();

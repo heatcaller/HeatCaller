@@ -89,19 +89,21 @@ public sealed partial class AnnouncementService
                     // the highlight videos' captions.
                     NoteHeard(prepared.Text);
 
-                    if (SendToListeners is not null && ListenersWanted?.Invoke() == true)
-                    {
-                        // WHY (23 Oct 2026, bug hunt 10): with whether the
-                        // clip says the names shortened - a batch and a saved
-                        // take are both made from ForCloudVoice(text), and a
-                        // line rendered alone keeps RenderLineAsync's source.
-                        OfferToListenersOnly(prepared.Text, EncodeWav(prepared.Pcm, prepared.Format),
-                            AudioFromShortenedText(prepared.Source, prepared.Text));
-                    }
+                    // WHY (23 Oct 2026, bug hunt 10): with whether the
+                    // clip says the names shortened - a batch and a saved
+                    // take are both made from ForCloudVoice(text), and a
+                    // line rendered alone keeps RenderLineAsync's source.
+                    // No wav is wrapped while the whole mix is streamed (2
+                    // Nov 2026): the clip goes out as the room hears it.
+                    var shortened = AudioFromShortenedText(prepared.Source, prepared.Text);
+                    var onAir = StreamingTheMix
+                        ? OfferToListenersOnly(prepared.Text, null, shortened)
+                        : SendToListeners is not null && ListenersWanted?.Invoke() == true
+                          && OfferToListenersOnly(prepared.Text, EncodeWav(prepared.Pcm, prepared.Format), shortened);
 
                     // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
                     await PlayPcmAsync(prepared.Pcm, prepared.Format, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence,
-                        stillWanted: () => !IsCutByCountdown() && !Muted);
+                        stillWanted: () => !IsCutByCountdown() && !Muted, onAir: onAir);
                 }
                 finally
                 {

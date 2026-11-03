@@ -112,7 +112,7 @@ public sealed class BugHunt8FBTests : IDisposable
     [Fact]
     public void A_line_sent_to_listeners_rearms_the_failure_notice()
     {
-        var offer = Between(Source("AnnouncementService.ListenAlong.cs"), "private void OfferLineToListeners(", "private byte[]? AsMp3(");
+        var offer = Between(Source("AnnouncementService.ListenAlong.cs"), "private bool OfferLineToListeners(", "private byte[]? AsMp3(");
 
         Assert.Contains("Volatile.Write(ref _listenEncodeComplained, 0);", offer);
     }

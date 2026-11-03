@@ -145,7 +145,14 @@ internal static class AudioBus
     /// what nearly everything else here is - recordings played back (a
     /// replayed moment, a driver's own clip) included, as they carry the
     /// room's sound with the call.
-    public static Task PlayAsync(ISampleProvider source, float volume, CancellationToken cancellationToken = default, bool allowBoost = false, bool voice = false)
+    ///
+    /// With <paramref name="offAir"/> the room hears the sound but anyone
+    /// listening along from home does not (2 Nov 2026 - see ListenStream).
+    /// The announcer's lines set it unless they are cleared for the public
+    /// page, which keeps an initials-only driver's name or a penalty call in
+    /// the room now that listeners hear the whole mix rather than only the
+    /// lines picked for them.
+    public static Task PlayAsync(ISampleProvider source, float volume, CancellationToken cancellationToken = default, bool allowBoost = false, bool voice = false, bool offAir = false)
     {
         if (Silent || cancellationToken.IsCancellationRequested)
         {
@@ -160,7 +167,7 @@ internal static class AudioBus
             gained = new SoftLimiter(gained);
         }
 
-        var clip = new Clip(gained, voice);
+        var clip = new Clip(gained, voice, offAir);
 
         MixingSampleProvider? mixer = null;
         Task<MixingSampleProvider>? opening = null;
@@ -512,6 +519,27 @@ internal static class AudioBus
     }
 
     /// <summary>
+    /// What listening along from home is given (2 Nov 2026 - see
+    /// ListenStream): the mix as the room hears it, less every sound played
+    /// off air (PlayAsync's offAir). A slot of its own rather than
+    /// <see cref="_listener"/>, which is a race recording's and must never be
+    /// displaced by somebody listening at home, nor the other way round.
+    /// </summary>
+    private static volatile IMixListener? _onAir;
+
+    /// <summary>Starts giving <paramref name="listener"/> the on-air mix - see <see cref="_onAir"/>. Same rules as <see cref="IMixListener"/>.</summary>
+    public static void ListenOnAir(IMixListener listener) => _onAir = listener;
+
+    /// <summary>Stops giving this listener the on-air mix. Does nothing when something else is listening by now.</summary>
+    public static void StopListeningOnAir(IMixListener listener)
+    {
+        if (ReferenceEquals(_onAir, listener))
+        {
+            _onAir = null;
+        }
+    }
+
+    /// <summary>
     /// Hands each read of the mix to the listener on its way to the device -
     /// see <see cref="IMixListener"/>. With nobody listening it is a null
     /// check and a return.
@@ -535,6 +563,12 @@ internal static class AudioBus
         private float[] _voiceMix = Array.Empty<float>();
         private float[] _effectMix = Array.Empty<float>();
 
+        // What was played off air this read, and the mix without it - for
+        // the on-air listener, and only added to while there is one.
+        private float[] _offAirMix = Array.Empty<float>();
+        private float[] _onAirMix = Array.Empty<float>();
+        private bool _anyOffAir;
+
         /// <summary>
         /// The output whose mixer is reading on this thread right now, so a
         /// clip can find the sub-mix to add itself to. Per thread: each
@@ -554,7 +588,7 @@ internal static class AudioBus
         /// Called on the device's thread from inside the mixer's read; never
         /// throws.
         /// </summary>
-        public static void Heard(bool voice, float[] buffer, int offset, int count)
+        public static void Heard(bool voice, bool offAir, float[] buffer, int offset, int count)
         {
             if (_reading is not { } tapped || count <= 0 || offset < 0 || offset + count > buffer.Length)
             {
@@ -568,6 +602,19 @@ internal static class AudioBus
             {
                 mix[i] += buffer[offset + i];
             }
+
+            if (offAir && _onAir is not null)
+            {
+                var off = tapped._offAirMix;
+                n = Math.Min(count, off.Length);
+
+                for (var i = 0; i < n; i++)
+                {
+                    off[i] += buffer[offset + i];
+                }
+
+                tapped._anyOffAir = true;
+            }
         }
 
         public WaveFormat WaveFormat => _source.WaveFormat;
@@ -578,12 +625,21 @@ internal static class AudioBus
             {
                 _voiceMix = new float[count];
                 _effectMix = new float[count];
+                _offAirMix = new float[count];
+                _onAirMix = new float[count];
             }
             else
             {
                 Array.Clear(_voiceMix, 0, count);
                 Array.Clear(_effectMix, 0, count);
+
+                if (_anyOffAir)
+                {
+                    Array.Clear(_offAirMix, 0, count);
+                }
             }
+
+            _anyOffAir = false;
 
             int read;
             _reading = this;
@@ -616,6 +672,32 @@ internal static class AudioBus
                     // thread. One that throws is taken off rather than
                     // given another chance to do it on the next buffer.
                     StopListening(listener);
+                }
+            }
+
+            if (read > 0 && _onAir is { } onAir)
+            {
+                try
+                {
+                    // The mixer only adds, so taking the off-air sounds back
+                    // out leaves exactly the mix without them.
+                    if (_anyOffAir)
+                    {
+                        for (var i = 0; i < read; i++)
+                        {
+                            _onAirMix[i] = buffer[offset + i] - _offAirMix[i];
+                        }
+
+                        onAir.Mixed(_onAirMix, 0, read);
+                    }
+                    else
+                    {
+                        onAir.Mixed(buffer, offset, read);
+                    }
+                }
+                catch
+                {
+                    StopListeningOnAir(onAir);
                 }
             }
 
@@ -668,16 +750,20 @@ internal static class AudioBus
         /// <summary>The announcer speaking, for the VOICE meter; else SFX (see PlayAsync).</summary>
         private readonly bool _voice;
 
+        /// <summary>Heard in the room, not by anyone listening along (see PlayAsync).</summary>
+        private readonly bool _offAir;
+
         // Continuations off the audio thread: whoever awaits this goes on to
         // do real work, and the device's own thread must not wait for it.
         private readonly TaskCompletionSource _done = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         private volatile bool _finished;
 
-        public Clip(ISampleProvider source, bool voice)
+        public Clip(ISampleProvider source, bool voice, bool offAir)
         {
             _source = source;
             _voice = voice;
+            _offAir = offAir;
         }
 
         public WaveFormat WaveFormat => _source.WaveFormat;
@@ -706,7 +792,7 @@ internal static class AudioBus
             }
 
             // Onto its level meter's sub-mix (Tapped.Heard).
-            Tapped.Heard(_voice, buffer, offset, read);
+            Tapped.Heard(_voice, _offAir, buffer, offset, read);
 
             // Short of what was asked for is the end: the mixer takes this
             // clip out of the mix on its own.

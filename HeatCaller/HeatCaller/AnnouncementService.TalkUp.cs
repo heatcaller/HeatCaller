@@ -53,7 +53,8 @@ public sealed partial class AnnouncementService
     /// word lands. Identical to the room; the only difference is the note.
     /// </summary>
     /// <param name="stillWanted">See <see cref="PlayPcmAsync"/> (23 Oct 2026, bug hunt 10).</param>
-    private async Task PlayNotingLastWordAsync(byte[] audio, double volume, double trailing, double leading, Func<bool>? stillWanted = null)
+    /// <param name="onAir">See <see cref="PlayPcmAsync"/>.</param>
+    private async Task PlayNotingLastWordAsync(byte[] audio, double volume, double trailing, double leading, Func<bool>? stillWanted = null, bool onAir = false)
     {
         var (pcm, format) = DecodeAudio(audio);
 
@@ -80,7 +81,7 @@ public sealed partial class AnnouncementService
 
         try
         {
-            await PlayPcmAsync(pcm, format, volume, trailing, leading, started: Heard, stillWanted: stillWanted);
+            await PlayPcmAsync(pcm, format, volume, trailing, leading, started: Heard, stillWanted: stillWanted, onAir: onAir);
         }
         finally
         {

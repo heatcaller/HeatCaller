@@ -3,6 +3,7 @@ import { createContext, runInContext } from "node:vm";
 import { describe, it } from "node:test";
 import { DEFAULT_CONTEXT, livePage } from "../src/pages.js";
 import { pageParts } from "./driverexp-rp1-fakepage.js";
+import { FakeAudioWorld } from "./listen-fake-audio.js";
 
 /**
  * THE LISTEN-ALONG PLAYER BETWEEN RACES (26 Oct 2026, asked for by Asher:
@@ -14,31 +15,9 @@ import { pageParts } from "./driverexp-rp1-fakepage.js";
  * for minutes, so losing it was losing everything. And one sweep runs at a
  * time, so a fetch that never answered stopped the player for good. Run as
  * the live page's own player script, with a clock the test moves.
+ *
+ * Played through Web Audio since 2 Nov 2026 (see listen-fake-audio).
  */
-
-/** One media element as the page sees it, and every line it was asked to play. */
-class FakeAudio {
-  static made: FakeAudio[] = [];
-  static played: string[] = [];
-  src = "";
-  onended: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-
-  constructor() {
-    FakeAudio.made.push(this);
-  }
-
-  play(): Promise<void> {
-    // Not the twentieth of a second of silence that unlocks the element.
-    if (!this.src.includes("//sQx")) {
-      FakeAudio.played.push(this.src.slice(this.src.indexOf(",") + 1));
-    }
-
-    return Promise.resolve();
-  }
-
-  pause(): void {}
-}
 
 /** How the relay answers one line's read: as held, a failure, or never. */
 type Answer = "ok" | 500 | 404 | "hang";
@@ -67,22 +46,28 @@ function player(held: Line[]) {
   const reads: string[] = [];
   const note = { textContent: "" };
   const btn = { textContent: "", addEventListener: (_type: string, run: () => void) => listeners.push(run) };
-
-  FakeAudio.made = [];
-  FakeAudio.played = [];
+  const sound = new FakeAudioWorld();
+  const { AudioContext, Audio, atob } = sound.globals();
 
   const reply = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
 
   const context = createContext({
     CLUB: "acme-rc",
-    Audio: FakeAudio,
+    Audio,
+    atob,
     AbortController,
-    document: { getElementById: (id: string) => (id === "listenbtn" ? btn : id === "listennote" ? note : null) },
+    document: {
+      hidden: false,
+      getElementById: (id: string) => (id === "listenbtn" ? btn : id === "listennote" ? note : null),
+      addEventListener() {},
+    },
     window: {
+      AudioContext,
       setInterval: (run: () => void) => intervals.push(run),
       clearInterval: () => {
         intervals.length = 0;
       },
+      addEventListener() {},
     },
     setTimeout: (run: () => void, ms: number) => {
       timers.push({ at: clock + ms, run });
@@ -137,12 +122,7 @@ function player(held: Line[]) {
       [...intervals].forEach((run) => run());
       await settle();
     },
-    /** The line now playing reaching its end. */
-    async ended(): Promise<void> {
-      FakeAudio.made[0]?.onended?.();
-      await settle();
-    },
-    played: () => FakeAudio.played,
+    played: () => sound.played(),
   };
 }
 
@@ -173,7 +153,6 @@ describe("the listen-along player, between races", () => {
     assert.deepEqual(page.played(), []);
 
     await page.poll();
-    await page.ended();
     assert.deepEqual(page.played(), ["five-minutes", "one-minute"]);
   });
 

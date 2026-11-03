@@ -4072,7 +4072,7 @@ function listenControl(listening: boolean): string {
   }
 
   return '<div class="card" id="listen">'
-    + '<button type="button" id="listenbtn" class="btn">Listen to the announcer</button>'
+    + '<button type="button" id="listenbtn" class="btn">Listen live</button>'
     + '<p class="note" id="listennote">A few seconds behind the room. Nothing plays until you press it.</p>'
     + "</div>";
 }
@@ -4546,16 +4546,36 @@ export function livePage(club: string, clubName: string, context: PageContext = 
 /**
  * The player.
  *
- * NOT A STREAM. Each line is a finished piece of audio the announcer
- * already spoke, so this is a queue rather than a buffer: fetch what is
- * new, play it in order, play the next one when the last one ends. There
- * is nothing to resynchronise and nothing to drop frames from.
+ * THE WHOLE ROOM, NOT ONLY THE VOICE (2 Nov 2026, asked for by Asher:
+ * "listen in on the relay should include all audio. not just the voice.
+ * imaging, ambiance, music, etc."). The laptop now sends the room's mix as
+ * one mp3 stream, cut into segments of about three seconds on frame
+ * boundaries (ListenStream on the laptop). A segment says kind "mix", and
+ * carries a few frames from the one before it ("lead"): the whole thing is
+ * decoded, and only the segment's own frames - the last frames*spf samples
+ * - are played, so the decoder starts each one warmed up and the joins are
+ * seamless. That needs Web Audio rather than one media element: an element
+ * swapping its source every three seconds leaves a gap at every join, which
+ * a voice hides and music does not. A document without a kind is a single
+ * line of the announcer's, from a laptop sending lines (an older version,
+ * or one whose encoder will not stream); it is played whole, after whatever
+ * is already playing.
  *
  * IT JOINS WHERE THE EVENING IS. On the first poll it marks everything it
- * finds as already heard and plays none of it, so pressing Listen does not
- * replay the last three minutes before catching up - somebody opening the
- * page joins the room as it is, which is what they would do walking in. On
- * every poll after that, anything new is played.
+ * finds as already heard - except the newest stretch of the stream, which it
+ * plays at once - so pressing Listen does not replay the last two minutes
+ * before catching up. On every poll after that, anything new is played.
+ *
+ * IT NEVER FALLS BEHIND (2 Nov 2026, asked for by Asher: "if you go to
+ * another app on ios then comeback the audio is way behind realtime. it
+ * should drop evertyhing and pick up from where it left off."). A phone that
+ * puts the page in the background stops its timers and its audio, and on
+ * coming back the player used to work through everything it had missed, a
+ * line at a time, and stay that far behind the room for the rest of the
+ * night. Now, coming back, it drops whatever it had waiting and starts again
+ * from the newest stretch, as it does when Listen is first pressed. The same
+ * happens whenever it finds more than three new documents at once, or more
+ * than MOST_BEHIND_S seconds waiting to be played.
  *
  * THE RELAY NEVER DECODES THE AUDIO, so this does. The bytes arrive as
  * base64 inside the club's own document - see the media-src note on the
@@ -4571,10 +4591,11 @@ const LISTEN_JS = `
     return;
   }
 
-  // A twentieth of a second of silence, as an mp3. Played inside the press
-  // to unlock the one element every line then plays through: iPhone Safari
-  // only lets a media element make a sound if it was first started by a
-  // tap, and a line arrives from a timer seconds later, never from a tap.
+  // A twentieth of a second of silence, as an mp3, looped on a media
+  // element started inside the press. iPhone Safari plays Web Audio as if it
+  // were a ringtone - so the silent switch mutes it - unless a media element
+  // is playing too; this is that element. (navigator.audioSession, where
+  // there is one, says the same thing more directly.)
   const SILENCE = 'data:audio/mpeg;base64,//sQxAADwAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xLEKYPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEU4PAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==';
 
   // A line the laptop sent again because its answer was lost lands a
@@ -4588,21 +4609,43 @@ const LISTEN_JS = `
   const WAIT_MS = 10000;
   const MOST_TRIES = 3;
 
+  // How far ahead of now a stretch is started when it does not follow on
+  // from the one before, so a slow decode cannot open a hole at its start.
+  const START_AHEAD_S = 0.3;
+
+  // Past this much waiting to be played, the player is not listening along
+  // any more but listening back: it drops what it has and starts again now.
+  const MOST_BEHIND_S = 9;
+
   // Id to the time the relay had it, for every line already heard.
   const heard = new Map();
 
   // Id to how many times fetching it has failed - see sweepOnce.
   const tries = new Map();
-  const queue = [];
   let on = false;
-  let playing = false;
   let started = false;
   let timer = null;
-  let player = null;
-  let current = null;
+  let ctx = null;
+  let keepAlive = null;
 
-  // Moved on by every press, so a sweep still waiting on the relay when
-  // Stop is pressed cannot queue lines into the next Listen.
+  // When the next sound starts, on the audio clock, and which stretch of
+  // which run of the stream was scheduled last - so the next one is joined
+  // straight on to it only when it really is the next one.
+  let nextAt = 0;
+  let lastRun = null;
+  let lastN = -1;
+
+  // Everything scheduled and not yet finished, and the captions waiting to
+  // be shown, so Stop and a catch-up can take them all back.
+  let playing = [];
+  let captions = [];
+
+  // Decodes run one after another, so a short stretch decoded quickly
+  // cannot be scheduled ahead of a longer one before it.
+  let chain = Promise.resolve();
+
+  // Moved on by every press and every catch-up, so a sweep or a decode
+  // still in flight from before cannot schedule anything into what follows.
   let turn = 0;
 
   // One sweep at a time. The timer starts one every two seconds whatever
@@ -4612,6 +4655,9 @@ const LISTEN_JS = `
   // now - see sweepOnce - and this still keeps two sweeps from fetching,
   // and queueing, the same line.)
   let sweeping = false;
+
+  // When the page was hidden, for the catch-up on coming back.
+  let hiddenAt = 0;
 
   function say(text) {
     note.textContent = text;
@@ -4680,18 +4726,35 @@ const LISTEN_JS = `
 
       const items = Array.isArray(body.items) ? body.items : [];
 
-      // Oldest first, so the announcer is played in the order it spoke.
-      const lines = items
+      // Oldest first, so the room is played in the order it was heard.
+      let lines = items
         .filter((one) => one && typeof one.id === 'string')
         .map((one) => ({ id: one.id, at: Date.parse(one.publishedAt) || 0 }))
         .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-      // THE FIRST SWEEP ONLY MARKS. See the remarks above.
+      // THE FIRST SWEEP MARKS, and plays only the newest - see the remarks
+      // above. The newest is fetched like any other; if it turns out to be a
+      // line rather than a stretch of the stream it is not played (a line
+      // can be minutes old, where the stream's newest is seconds).
+      let joining = false;
+
       if (!started) {
         started = true;
-        lines.forEach((one) => heard.set(one.id, one.at));
-        say(lines.length > 0 ? 'Listening. You will hear the next thing said.' : 'Listening. Nothing being said just now.');
-        return;
+        joining = lines.length > 0;
+        lines.slice(0, -1).forEach((one) => heard.set(one.id, one.at));
+        lines = lines.slice(-1);
+        say(lines.length > 0 ? 'Listening.' : 'Listening. Nothing to hear just now.');
+      }
+
+      // Too many new at once is a page that was asleep: all but the newest
+      // is let go rather than played late.
+      const fresh = lines.filter((one) => isNew(one.id, one.at));
+
+      if (fresh.length > 3) {
+        fresh.slice(0, -1).forEach((one) => heard.set(one.id, one.at));
+        lines = fresh.slice(-1);
+        joining = true;
+        dropAll();
       }
 
       for (const one of lines) {
@@ -4732,12 +4795,14 @@ const LISTEN_JS = `
         const doc = got && got.ok ? got.body : null;
         const said = doc && doc.body ? doc.body : {};
 
-        if (typeof said.audio === 'string' && said.audio.length > 0) {
-          queue.push({ audio: said.audio, said: typeof said.said === 'string' ? said.said : '' });
+        if (typeof said.audio !== 'string' || said.audio.length === 0 || (joining && said.kind !== 'mix')) {
+          continue;
         }
+
+        chain = chain.then(() => play(said, mine)).catch(() => {});
       }
 
-      playNext();
+      await chain;
     } catch (err) {
       // A sweep that failed is one sweep. The next one is in two seconds,
       // and a race night is not the moment to put an error on a page
@@ -4745,42 +4810,174 @@ const LISTEN_JS = `
     }
   }
 
-  function playNext() {
-    if (playing || queue.length === 0 || !on || player === null) {
+  function bytesOf(base64) {
+    const text = atob(base64);
+    const bytes = new Uint8Array(text.length);
+
+    for (let i = 0; i < text.length; i++) {
+      bytes[i] = text.charCodeAt(i);
+    }
+
+    return bytes.buffer;
+  }
+
+  // decodeAudioData as a promise, for the Safari that only takes callbacks.
+  function decode(bytes) {
+    return new Promise((done, fail) => {
+      const promised = ctx.decodeAudioData(bytes, done, fail);
+
+      if (promised && typeof promised.then === 'function') {
+        promised.then(done, fail);
+      }
+    });
+  }
+
+  async function play(said, mine) {
+    if (!on || mine !== turn || ctx === null) {
       return;
     }
 
-    const next = queue.shift();
-    const line = {};
+    const buffer = await decode(bytesOf(said.audio));
 
-    playing = true;
-    current = line;
-    say(next.said.length > 0 ? next.said : 'Playing...');
-
-    // ENDED AND ERROR BOTH MOVE ON. A line whose audio will not decode
-    // must not stop everything behind it: the room has moved on, and so
-    // should this. Only once per line, and not at all for a line Stop has
-    // already ended: an error and a refused play() can both report the
-    // same line, and the second must not cut off the one after it.
-    const done = () => {
-      if (current !== line) {
-        return;
-      }
-
-      current = null;
-      playing = false;
-      playNext();
-    };
-
-    player.onended = done;
-    player.onerror = done;
-    player.src = 'data:audio/mpeg;base64,' + next.audio;
-
-    const playing_ = player.play();
-
-    if (playing_ && typeof playing_.catch === 'function') {
-      playing_.catch(() => done());
+    if (!on || mine !== turn) {
+      return;
     }
+
+    const now = ctx.currentTime;
+    let offset = 0;
+    let length = buffer.duration;
+    let at;
+
+    if (said.kind === 'mix' && said.frames > 0 && said.spf > 0 && said.rate > 0) {
+      // Only the segment's own frames: the lead is decoded to warm the
+      // decoder up and is not played. Taken from the END, which is right
+      // whether or not this browser trims the decoder's delay from the front.
+      const own = Math.min(buffer.length, Math.round(said.frames * said.spf * buffer.sampleRate / said.rate));
+      offset = (buffer.length - own) / buffer.sampleRate;
+      length = own / buffer.sampleRate;
+
+      const follows = said.run === lastRun && said.n === lastN + 1 && nextAt > now;
+      lastRun = said.run;
+      lastN = said.n;
+      at = follows ? nextAt : now + START_AHEAD_S;
+    } else {
+      lastRun = null;
+      lastN = -1;
+      at = Math.max(nextAt, now + START_AHEAD_S);
+    }
+
+    if (at - now > MOST_BEHIND_S) {
+      dropAll();
+      at = now + START_AHEAD_S;
+    }
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.onended = () => {
+      playing = playing.filter((one) => one !== source);
+    };
+    source.start(at, offset, length);
+    playing.push(source);
+    nextAt = at + length;
+
+    // The words, shown as they are heard: a line's at its start, the
+    // stream's where each one falls in its stretch.
+    const shown = said.kind === 'mix'
+      ? (Array.isArray(said.captions) ? said.captions : [])
+      : [{ text: typeof said.said === 'string' ? said.said : '', at: 0 }];
+
+    shown.forEach((one) => {
+      if (one && typeof one.text === 'string' && one.text.length > 0) {
+        const wait = Math.max(0, (at - now + (Number(one.at) || 0)) * 1000);
+        captions.push(setTimeout(() => say(one.text), wait));
+      }
+    });
+  }
+
+  // Everything scheduled stops, and nothing waiting is shown.
+  function dropAll() {
+    playing.forEach((source) => {
+      try {
+        source.onended = null;
+        source.stop();
+      } catch (err) {
+        // Already ended.
+      }
+    });
+
+    playing = [];
+    captions.forEach((one) => clearTimeout(one));
+    captions = [];
+    nextAt = 0;
+    lastRun = null;
+    lastN = -1;
+  }
+
+  // Back from the background: drop it all and join the room again from the
+  // newest stretch. Moving the turn on throws away any sweep or decode still
+  // in flight from before.
+  function rejoin() {
+    turn += 1;
+    dropAll();
+    chain = Promise.resolve();
+    started = false;
+    sweeping = false;
+
+    if (ctx !== null && ctx.state !== 'running' && typeof ctx.resume === 'function') {
+      const resumed = ctx.resume();
+
+      if (resumed && typeof resumed.catch === 'function') {
+        resumed.catch(() => {});
+      }
+    }
+
+    if (keepAlive !== null) {
+      const going = keepAlive.play();
+
+      if (going && typeof going.catch === 'function') {
+        going.catch(() => {});
+      }
+    }
+
+    sweep();
+  }
+
+  function cameBack() {
+    if (!on) {
+      return;
+    }
+
+    // Back within a moment and still on time - a tab flicked away and back
+    // on a computer, where the sound carried on - is left alone.
+    const away = Date.now() - hiddenAt;
+    const onTime = ctx !== null && ctx.state === 'running' && nextAt > ctx.currentTime && nextAt - ctx.currentTime < MOST_BEHIND_S;
+
+    if (away < 2000 && onTime) {
+      return;
+    }
+
+    rejoin();
+  }
+
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        hiddenAt = Date.now();
+      } else {
+        cameBack();
+      }
+    });
+  }
+
+  if (typeof window.addEventListener === 'function') {
+    // Back from the browser's page cache, which an iPhone often does
+    // instead of firing visibilitychange.
+    window.addEventListener('pageshow', (event) => {
+      if (event && event.persisted) {
+        cameBack();
+      }
+    });
   }
 
   btn.addEventListener('click', () => {
@@ -4791,28 +4988,62 @@ const LISTEN_JS = `
       btn.textContent = 'Stop listening';
       say('Listening...');
 
-      // Inside the press, which is the only place this is allowed. See
-      // SILENCE.
-      if (player === null) {
-        player = new Audio();
+      // All of this inside the press, which is the only place a phone lets
+      // sound start.
+      try {
+        if (typeof navigator !== 'undefined' && navigator.audioSession) {
+          navigator.audioSession.type = 'playback';
+        }
+      } catch (err) {
+        // Not this browser.
       }
 
-      player.onended = null;
-      player.onerror = null;
-      player.src = SILENCE;
+      if (ctx === null) {
+        const Context = window.AudioContext || window.webkitAudioContext;
 
-      const unlocked = player.play();
+        if (typeof Context !== 'function') {
+          on = false;
+          btn.textContent = 'Listen live';
+          say('This browser cannot play it.');
+          return;
+        }
+
+        // The stream's own rate where the browser allows it, so nothing is
+        // resampled a segment at a time.
+        try {
+          ctx = new Context({ sampleRate: 44100 });
+        } catch (err) {
+          ctx = new Context();
+        }
+      }
+
+      if (typeof ctx.resume === 'function') {
+        const resumed = ctx.resume();
+
+        if (resumed && typeof resumed.catch === 'function') {
+          resumed.catch(() => {});
+        }
+      }
+
+      if (keepAlive === null) {
+        keepAlive = new Audio();
+        keepAlive.loop = true;
+        keepAlive.src = SILENCE;
+      }
+
+      const unlocked = keepAlive.play();
 
       if (unlocked && typeof unlocked.catch === 'function') {
         unlocked.catch(() => {});
       }
 
+      started = false;
       sweep();
       timer = window.setInterval(sweep, 2000);
       return;
     }
 
-    btn.textContent = 'Listen to the announcer';
+    btn.textContent = 'Listen live';
     say('Stopped. Nothing plays until you press it.');
 
     if (timer !== null) {
@@ -4820,18 +5051,23 @@ const LISTEN_JS = `
       timer = null;
     }
 
-    // Stop means stop: the line playing now as well as the ones waiting.
+    // Stop means stop: what is playing now as well as what is waiting.
     // And the next Listen joins where the evening is then, like the first
     // one did, rather than playing back everything said in between.
-    queue.length = 0;
+    dropAll();
+    chain = Promise.resolve();
     started = false;
-    playing = false;
-    current = null;
 
-    if (player !== null) {
-      player.onended = null;
-      player.onerror = null;
-      player.pause();
+    if (keepAlive !== null) {
+      keepAlive.pause();
+    }
+
+    if (ctx !== null && typeof ctx.suspend === 'function') {
+      const suspended = ctx.suspend();
+
+      if (suspended && typeof suspended.catch === 'function') {
+        suspended.catch(() => {});
+      }
     }
   });
 })();

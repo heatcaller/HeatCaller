@@ -250,15 +250,17 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
   // a document of the relay's own until the desk answers them, through the
   // signup/... routes in server.ts.
   /*
-   * The announcer's last few lines, as audio, so somebody at home can
-   * listen along with the room.
+   * The room's last couple of minutes, as audio, so somebody at home can
+   * listen along with it.
    *
-   * NOT A STREAM, and not an archive either. Each spoken line is already
-   * rendered to bytes before it is played, so the laptop puts those bytes
-   * here as the line goes out and the club's page plays them in order a
-   * few seconds behind. That is the same at-least-once shape every other
-   * inbox on this relay has, and it has none of an encoder's ways to fail
-   * on a race night.
+   * NOT AN ARCHIVE. Since 2 Nov 2026 the laptop sends the room's whole mix -
+   * the announcer, the music, the crowd, the imaging - as one mp3 stream cut
+   * into documents of about three seconds, and the club's page joins them
+   * back together a few seconds behind (LISTEN_JS in pages.ts). A laptop
+   * that cannot stream sends the announcer's lines one document each, as
+   * it always did, and the page plays those too. Either way it is the same
+   * at-least-once shape every other inbox on this relay has: the relay
+   * stores documents and never touches the audio inside them.
    *
    * ROLLING, AND THAT IS THE FEATURE RATHER THAN A LIMIT. Only the last
    * `maxItems` lines are kept. Somebody who opens the page mid-evening
@@ -282,12 +284,12 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
   listen: {
     name: "listen",
     kind: "collection",
-    what: "the announcer's last few lines, as audio, for listening along",
+    what: "the room's last couple of minutes, as audio, for listening along",
 
-    // About eight megabytes and forty lines, whichever runs out first.
-    // Forty lines is three or four minutes of an announcer talking, which
-    // is more than enough to be "a few seconds behind" and recover from a
-    // page that was backgrounded for a moment.
+    // About eight megabytes and forty documents, whichever runs out first.
+    // Forty three-second stretches of the stream is two minutes (about two
+    // megabytes); forty lines is three or four minutes of an announcer
+    // talking. Either is more than enough to be "a few seconds behind".
     ownBudget: 8 * 1024 * 1024,
     maxItems: 40,
     maxItemBytes: 256 * 1024,

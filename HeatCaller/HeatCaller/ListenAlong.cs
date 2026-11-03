@@ -101,6 +101,14 @@ internal sealed class ListenAlong
     /// </summary>
     internal static readonly TimeSpan GoesStale = TimeSpan.FromSeconds(45);
 
+    /// <summary>
+    /// How old a segment of the stream (ListenStream) may be when its turn
+    /// comes. Much less than a line: the page jumps to the newest segment
+    /// whenever it falls behind, so one sent a quarter of a minute late is
+    /// one nobody will play.
+    /// </summary>
+    internal static readonly TimeSpan SegmentGoesStale = TimeSpan.FromSeconds(15);
+
     /// <summary>What happened to a line offered for listeners.</summary>
     internal enum Verdict
     {
@@ -122,12 +130,17 @@ internal sealed class ListenAlong
     /// <param name="Text">What was said, for the page to show beside it. May be empty.</param>
     /// <param name="Mp3">The audio, already encoded.</param>
     /// <param name="AtUtc">When it was said, which is what <see cref="GoesStale"/> is measured from.</param>
-    internal sealed record Spoken(string Id, string Text, byte[] Mp3, DateTime AtUtc);
+    /// <param name="Segment">For a stretch of the stream rather than a line (2 Nov 2026 - see ListenStream): how the page is to join it to the rest. Null for a line.</param>
+    internal sealed record Spoken(string Id, string Text, byte[] Mp3, DateTime AtUtc, ListenSegment? Segment = null);
 
     private readonly object _gate = new();
     private readonly Queue<Spoken> _held = new();
 
     private bool _wanted;
+
+    /// <summary>Stream segments that reached the relay tonight, in seconds of audio, and how many did not - for <see cref="Report"/>.</summary>
+    private double _streamedSeconds;
+    private int _segmentsMissed;
 
     /// <summary>
     /// The meeting the counts and the numbering belong to.
@@ -316,6 +329,57 @@ internal sealed class ListenAlong
             _dropped = 0;
             _stale = 0;
             _refused = 0;
+            _streamedSeconds = 0;
+            _segmentsMissed = 0;
+        }
+    }
+
+    /// <summary>
+    /// Offers a stretch of the stream (2 Nov 2026 - see ListenStream). The
+    /// same queue as the lines and the same rule - the oldest goes when it is
+    /// full - but counted apart, so the recap says how long the room was
+    /// heard for rather than calling every three seconds a line.
+    /// </summary>
+    internal Verdict OfferSegment(ListenSegment segment)
+    {
+        if (segment.Mp3.Length == 0 || segment.Mp3.Length > MostBytes)
+        {
+            return segment.Mp3.Length == 0 ? Verdict.NothingToSend : Verdict.TooLong;
+        }
+
+        lock (_gate)
+        {
+            if (!_wanted)
+            {
+                return Verdict.NobodyIsListening;
+            }
+
+            while (_held.Count >= MostHeld)
+            {
+                Missed(_held.Dequeue(), stale: false);
+            }
+
+            var said = segment.Captions.Count > 0 ? segment.Captions[^1].Text : string.Empty;
+            _held.Enqueue(new Spoken(IdFor(_run, ++_numbered), said, segment.Mp3, segment.AtUtc, segment));
+        }
+
+        return Verdict.Held;
+    }
+
+    /// <summary>Counts something that never went out, as a line or as a segment. Under the lock.</summary>
+    private void Missed(Spoken what, bool stale)
+    {
+        if (what.Segment is not null)
+        {
+            _segmentsMissed++;
+        }
+        else if (stale)
+        {
+            _stale++;
+        }
+        else
+        {
+            _dropped++;
         }
     }
 
@@ -379,8 +443,7 @@ internal sealed class ListenAlong
             // results queue.
             while (_held.Count >= MostHeld)
             {
-                _held.Dequeue();
-                _dropped++;
+                Missed(_held.Dequeue(), stale: false);
             }
 
             _held.Enqueue(new Spoken(IdFor(_run, ++_numbered), (text ?? string.Empty).Trim(), mp3, atUtc));
@@ -405,13 +468,12 @@ internal sealed class ListenAlong
             {
                 var next = _held.Peek();
 
-                if (nowUtc - next.AtUtc <= GoesStale)
+                if (nowUtc - next.AtUtc <= (next.Segment is null ? GoesStale : SegmentGoesStale))
                 {
                     return next;
                 }
 
-                _held.Dequeue();
-                _stale++;
+                Missed(_held.Dequeue(), stale: true);
             }
 
             return null;
@@ -439,7 +501,15 @@ internal sealed class ListenAlong
             if (_held.Count > 0 && ReferenceEquals(_held.Peek(), sent))
             {
                 _held.Dequeue();
-                _sent++;
+
+                if (sent.Segment is { } segment)
+                {
+                    _streamedSeconds += segment.Seconds;
+                }
+                else
+                {
+                    _sent++;
+                }
             }
         }
     }
@@ -461,7 +531,15 @@ internal sealed class ListenAlong
             if (_held.Count > 0 && ReferenceEquals(_held.Peek(), line))
             {
                 _held.Dequeue();
-                _refused++;
+
+                if (line.Segment is not null)
+                {
+                    _segmentsMissed++;
+                }
+                else
+                {
+                    _refused++;
+                }
             }
         }
     }
@@ -507,11 +585,35 @@ internal sealed class ListenAlong
     /// </summary>
     internal static string Body(Spoken line)
     {
+        var at = line.AtUtc.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+
+        if (line.Segment is not { } segment)
+        {
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                audio = Convert.ToBase64String(line.Mp3),
+                said = line.Text,
+                at,
+            }, BodyOptions);
+        }
+
+        // A stretch of the stream (2 Nov 2026 - see ListenStream). "kind"
+        // is what tells the page to join it to the one before rather than
+        // play it as a line; "lead" frames are decoded and not played; "run"
+        // and "n" say whether it follows straight on from the last one.
         return System.Text.Json.JsonSerializer.Serialize(new
         {
+            kind = "mix",
             audio = Convert.ToBase64String(line.Mp3),
             said = line.Text,
-            at = line.AtUtc.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            at,
+            lead = segment.Lead,
+            frames = segment.Frames,
+            spf = segment.SamplesPerFrame,
+            rate = segment.SampleRate,
+            run = segment.Run.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            n = segment.Number,
+            captions = segment.Captions.Select(c => new { text = c.Text, at = Math.Round(c.AtSeconds, 2) }),
         }, BodyOptions);
     }
 
@@ -533,7 +635,8 @@ internal sealed class ListenAlong
     /// </summary>
     internal string? Report()
     {
-        int offered, sent, dropped, stale, refused;
+        int offered, sent, dropped, stale, refused, segmentsMissed;
+        double streamed;
 
         lock (_gate)
         {
@@ -542,11 +645,33 @@ internal sealed class ListenAlong
             dropped = _dropped;
             stale = _stale;
             refused = _refused;
+            streamed = _streamedSeconds;
+            segmentsMissed = _segmentsMissed;
+        }
+
+        // The room's sound, streamed (2 Nov 2026): said in minutes, as
+        // three-second segments counted as lines would mean nothing.
+        string? stream = null;
+
+        if (streamed > 0 || segmentsMissed > 0)
+        {
+            var minutes = (int)Math.Round(streamed / 60);
+
+            stream = minutes > 0
+                ? $"Streamed {Plural.Of(minutes, "minute")} of the room to anyone listening along"
+                : "Streamed the room to anyone listening along";
+
+            if (segmentsMissed > 0)
+            {
+                stream += $", with {Plural.Of(segmentsMissed, "gap")} where the connection could not keep up";
+            }
+
+            stream += ".";
         }
 
         if (offered == 0)
         {
-            return null;
+            return stream;
         }
 
         var text = $"Sent {Plural.Of(sent, "line")} out to anyone listening along";
@@ -568,6 +693,6 @@ internal sealed class ListenAlong
             text += $". {Plural.Of(refused, "line")} could not be sent at all";
         }
 
-        return text + ".";
+        return stream is null ? text + "." : text + ". " + stream;
     }
 }

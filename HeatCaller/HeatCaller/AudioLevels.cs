@@ -350,6 +350,10 @@ internal static class AudioLevels
                 // and crowd as heard, after the volume and the duck. A copy
                 // and a queue add, and it never throws; see RecapBed.
                 RecapBed.Offer(_meter, _heardAt, buffer, offset, read, _sampleRate, _channels);
+
+                // And to anyone listening along from home (2 Nov 2026) - the
+                // same copy-and-queue rules. See ListenStream.
+                ListenStream.Offer(_meter, buffer, offset, read, _sampleRate, _channels);
             }
 
             return read;

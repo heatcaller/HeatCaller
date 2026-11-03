@@ -1374,13 +1374,13 @@ public sealed partial class AnnouncementService
                 // WHY (23 Oct 2026, bug hunt 10): with whether its audio says
                 // the names shortened, so the line is not held back from
                 // listeners just because this path could not say.
-                OfferLineToListeners(prepared.Text, prepared.Audio, prepared.AudioShortened);
+                var onAir = OfferLineToListeners(prepared.Text, prepared.Audio, prepared.AudioShortened);
 
                 // Noting when its last word lands, so a piece of imaging
                 // can hit the post on it (17 Oct 2026) - see TalkUp. Plays
                 // exactly as PlayAsync did.
                 // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
-                await PlayNotingLastWordAsync(prepared.Audio, volume, trailing, leading, StillWantedUnlessOvertaken(honourMute: true));
+                await PlayNotingLastWordAsync(prepared.Audio, volume, trailing, leading, StillWantedUnlessOvertaken(honourMute: true), onAir);
             }
             finally
             {

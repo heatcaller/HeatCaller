@@ -165,6 +165,26 @@ public sealed partial class RelayPublisher
     }
 
     /// <summary>
+    /// Offers a stretch of the room's sound (2 Nov 2026 - see ListenStream).
+    /// The same queue and the same wake as a line; called on the stream's
+    /// encoder thread, so it does as little as <see cref="OfferToListeners"/>.
+    /// </summary>
+    internal ListenAlong.Verdict OfferStreamToListeners(string? dayId, ListenSegment segment)
+    {
+        Listening.NewMeeting(dayId);
+        Listening.Wanted = _settings.ListenAlongOnTheRelay;
+
+        var verdict = Listening.OfferSegment(segment);
+
+        if (verdict == ListenAlong.Verdict.Held)
+        {
+            _wake.Set();
+        }
+
+        return verdict;
+    }
+
+    /// <summary>
     /// Tells the relay whether this club is letting people listen, and
     /// sends whatever the announcer has said since the last pass.
     ///
