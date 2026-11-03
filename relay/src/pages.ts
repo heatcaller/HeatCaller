@@ -167,7 +167,15 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 .wrap { max-width: 860px; margin: 0 auto; }
-header { padding: 28px 0 0; }
+/* The club's name on the left, HeatCaller's byline (under Live's broadcast
+   bug) on the right, and the tabs across the whole width below both. */
+header { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: start;
+         padding: 28px 0 0; }
+header > nav { grid-column: 1 / -1; }
+/* Room between the name and what the page is about (3 Nov 2026, Asher:
+   "a little more space between the top of the page and where the actual
+   content starts"). */
+.hcname { padding-bottom: 14px; }
 h1 { margin: 0; font-size: 1.6rem; letter-spacing: -0.01em; }
 h1 span { color: var(--primary); }
 .sub { color: var(--muted); font-size: 0.85rem; margin-top: 6px; }
@@ -836,21 +844,23 @@ mark { background: var(--primary); color: var(--on-primary, #FFFFFF); border-rad
 footer .hcmark { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); text-decoration: none;
                  padding: 6px 0; margin-left: auto; font-size: 0.95rem; }
 footer .hcmark:hover { color: var(--text); }
-/* The byline under the club's name, on every page. */
-.hcby { display: flex; align-items: center; gap: 5px; margin-top: 4px; color: var(--muted); font-size: 0.78rem; }
+/* The byline, on every page: right-justified beside the club's name, under
+   Live's broadcast bug (3 Nov 2026, Asher). Under the name it was a third
+   line between the name and the page's one-line summary. */
+.hcside { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding-top: 4px; }
+.hcby { display: flex; align-items: center; gap: 5px; white-space: nowrap; color: var(--muted); font-size: 0.78rem; }
 .hcby .hcsun { width: 14px; height: 14px; }
 /* Live's broadcast bug: a TV channel's corner logo, shown while a race
    is staged, counting down or running. Room is kept for it on Live
-   whether it shows or not, so the name does not jump when a race starts. */
-header.onair-room { position: relative; }
-header.onair-room > h1, header.onair-room > .sub, header.onair-room > .hcby, header.onair-room .brand-text { padding-right: 84px; }
-.onair { display: none; position: absolute; top: 28px; right: 0; align-items: center; gap: 6px;
+   whether it shows or not, so neither the name nor the byline under it
+   jumps when a race starts. */
+.onair { display: flex; visibility: hidden; align-items: center; gap: 6px;
          padding: 5px 10px 5px 7px; border-radius: 8px; border: 1px solid var(--primary); color: var(--primary);
          box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 55%, transparent); }
 .onair .hcsun { width: 20px; height: 20px; }
 .onair b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
            font-weight: 700; font-size: 0.95rem; letter-spacing: 0.08em; }
-body.on-air .onair { display: flex; animation: onair 2.4s ease-in-out infinite; }
+body.on-air .onair { visibility: visible; animation: onair 2.4s ease-in-out infinite; }
 @keyframes onair { 50% { box-shadow: 0 0 4px color-mix(in srgb, var(--primary) 35%, transparent); } }
 @media (prefers-reduced-motion: reduce) { body.on-air .onair { animation: none; } }
 /* The first-night guide's line about who runs the timing. */
@@ -1508,9 +1518,7 @@ function shell(page: Shell, context: PageContext): string {
 
   const sunset = sunsetLook(look);
 
-  // "on HeatCaller" under the club's name, on every page.
   const heading = `<h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
-    <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
     <div class="sub">${sub}</div>`;
 
   // The logo's address carries a fingerprint of the logo itself (hex only),
@@ -1603,8 +1611,11 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
 <body data-club="${club}" data-club-name="${name}">${sunset ? HC_SUNSET : ""}
 <div class="wrap">
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
-    ${brand}${page.active === "live" ? `
-    <span class="onair" aria-hidden="true">${HC_SUN}<b>LIVE</b></span>` : ""}
+    <div class="hcname">${brand}</div>
+    <div class="hcside">${page.active === "live" ? `
+      <span class="onair" aria-hidden="true">${HC_SUN}<b>LIVE</b></span>` : ""}
+      <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
+    </div>
     ${tabsNav(club, name, lit)}
   </header>${ofResults ? `
   <nav class="subtabs" aria-label="Results">

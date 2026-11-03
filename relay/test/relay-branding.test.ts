@@ -41,10 +41,10 @@ describe("relay branding: HeatCaller on every club page", () => {
     assert.match(page, /<p>Acme RC times its races, calls them out loud and puts every lap on your phone with HeatCaller\.<\/p>/);
   });
 
-  it("puts the byline under the club's name on every page", async () => {
+  it("puts the byline beside the club's name on every page, under Live's bug", async () => {
     for (const path of PAGES) {
       const page = (await call(harness, "GET", path)).text;
-      assert.match(page, /<\/h1>\s*<div class="hcby"><svg class="hcsun"[\s\S]*?<\/svg><span>on HeatCaller<\/span><\/div>\s*<div class="sub">/, path);
+      assert.match(page, /<\/h1>\s*<div class="sub">[\s\S]*?<\/div>(\s*<\/div>)+\s*<div class="hcside">(\s*<span class="onair"[\s\S]*?<\/span>)?\s*<div class="hcby"><svg class="hcsun"[\s\S]*?<\/svg><span>on HeatCaller<\/span><\/div>/, path);
     }
   });
 
