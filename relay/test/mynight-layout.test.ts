@@ -135,25 +135,14 @@ describe("My Night: the races, one open at a time", () => {
     assert.match(more.textContent, /Std\. deviation/);
   });
 
-  it("lines the races up by the stat picked, the night's best marked", async () => {
+  it("shows each race's best lap, the night's best marked, and no stat picker", async () => {
     const page = await open(NIGHT);
-    const top = () => page.get("nx").find((n) => n.className === "rval top").map((n) => n.textContent);
+    const top = page.get("nx").find((n) => n.className === "rval top").map((n) => n.textContent);
 
-    assert.deepEqual(top(), ["8.800"], "best lap, quicker is better");
-
-    const consistency = page.get("nx").find((n) => n.className.startsWith("pk") && n.textContent === "Consistency")[0]!;
-    consistency.click();
-
-    assert.equal(top().length, 1);
-    assert.match(top()[0]!, /%$/);
-    const values = page.get("nx").find((n) => n.className.startsWith("rval")).map((n) => Number(n.textContent.replace("%", "")));
-    assert.equal(Number(top()[0]!.replace("%", "")), Math.max(...values), "more consistent is better");
-  });
-
-  it("has no picker for a single race", async () => {
-    const page = await open({ ...NIGHT, races: [NIGHT.races[0]] });
-
+    assert.deepEqual(top, ["8.800"], "best lap, quicker is better");
+    // The picker went on 4 Nov 2026: Lap stats already has all four.
     assert.equal(page.get("nx").find((n) => n.className === "pick").length, 0);
+    assert.equal(page.get("nx").find((n) => n.className.startsWith("pk")).length, 0);
   });
 
   it("opens a race from before lap data with its facts and no tabs", async () => {
