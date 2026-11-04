@@ -82,9 +82,9 @@ describe("lap voice: the clips", () => {
 
   it("costs about a dollar and a half to make once", () => {
     const cost = lapClipCost();
-    assert.equal(cost.clips, 2568);
-    assert.equal(cost.chars, 42430);
-    assert.equal(cost.dollars, 1.7);
+    assert.equal(cost.clips, 2629);
+    assert.equal(cost.chars, 43417);
+    assert.equal(cost.dollars, 1.74);
   });
 });
 
@@ -579,6 +579,52 @@ describe("lap voice: the Live page", () => {
     l.set(field([9500, 9600, 9520]));
     await l.p.advance(1000);
     assert.deepEqual(l.played, ["p2", "g-t4"]);
+  });
+
+  it("says Up to and Down to with Places gained ticked, and the plain place otherwise (3 Nov 2026)", async () => {
+    const ahead = (laps: number[]): Board => ({
+      columns: COLUMNS,
+      standings: [row("Asher K.", laps), row("Sam P.", [9100, 9000, 9050, 8990, 9020], { ahead: "+0.30" })],
+    });
+    const l = await livePageWith(field([9500, 9600]), {}, { "hg-laptalk-say-acme-rc": "pos,moves" });
+    l.set(field([9500, 9600, 9520]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["p2"], "the same place as when it was turned on");
+
+    l.set(ahead([9500, 9600, 9520, 9400]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played.slice(1), ["pu1"]);
+    assert.equal(TEXT.get("pu1"), "Up to P one");
+
+    l.set(field([9500, 9600, 9520, 9400, 9700]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played.slice(2), ["pd2"]);
+
+    l.set(field([9500, 9600, 9520, 9400, 9700, 9600]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played.slice(3), ["p2"], "no change, the plain place");
+  });
+
+  it("says how far a lap was off their best with Against your best ticked, never on a best lap (3 Nov 2026)", async () => {
+    const l = await livePageWith(field([9500, 9300]), {}, { "hg-laptalk-say-acme-rc": "time,best,vsbest" });
+    l.set(field([9500, 9300, 9500]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["t950", "tg-m20", "pb-off"]);
+    assert.deepEqual(l.played.map((n) => TEXT.get(n)), ["nine fifty", "point two", "off your best"]);
+
+    l.set(field([9500, 9300, 9500, 9250]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played.slice(3), ["t925", "best"]);
+
+    const phone = await livePageWith(field([9500, 9300]), null, { "hg-laptalk-say-acme-rc": "time,vsbest" });
+    phone.set(field([9500, 9300, 9650]));
+    await phone.p.advance(1000);
+    assert.equal(phone.said.at(-1), "9.65, 0.35 off your best");
+
+    // A lap more than two seconds off - a crash or a stop - says nothing of it.
+    phone.set(field([9500, 9300, 9650, 12000]));
+    await phone.p.advance(1000);
+    assert.equal(phone.said.at(-1), "12.00");
   });
 
   it("says the first lap of a driver who was not on the board when it was turned on", async () => {

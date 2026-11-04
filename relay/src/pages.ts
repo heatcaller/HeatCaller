@@ -3815,9 +3815,32 @@ const lapVoice = (function () {
 // longer, so they are off until ticked.
 const LV_SAY = [
   ['lap', 'Lap number', true], ['time', 'Lap time', true], ['best', 'Best lap', true],
-  ['target', 'Target', true], ['pos', 'Position', true], ['gap', 'Gap ahead', true],
+  ['vsbest', 'Against your best', false], ['target', 'Target', true], ['pos', 'Position', true],
+  ['moves', 'Places gained', false], ['gap', 'Gap ahead', true],
   ['behind', 'Gap behind', false], ['leader', 'Gap to P1', false],
 ];
+
+// The place (3 Nov 2026, Asher): "Up to P2" or "Down to P4" with Places
+// gained ticked and a different place from the last lap said (from, 0 for
+// none), else "P2" with Position ticked; null for neither.
+function lvPlacePart(say, pos, from) {
+  if (say.moves && from > 0 && pos !== from) {
+    const up = pos < from;
+    return { text: (up ? 'Up to P' : 'Down to P') + pos, clips: pos >= 1 && pos <= 30 ? [(up ? 'pu' : 'pd') + pos] : null };
+  }
+  return say.pos ? { text: 'P' + pos, clips: lvPlace(pos) } : null;
+}
+
+// How far a lap was off their best, with Against your best ticked: "point
+// two off your best". Not for a best lap, which is "best lap", and not past
+// two seconds - a lap that slow is a crash or a stop, and there is no clip.
+function lvBestPart(say, last, best, count) {
+  if (!say.vsbest || count < 2 || !(best > 0) || last <= best) return null;
+  const cs = Math.round((last - best) / 10);
+  if (cs < 1 || cs > 200) return null;
+  const n = Number((cs / 100).toFixed(2));
+  return { text: (n >= 1 ? n.toFixed(2) : String(n)) + ' off your best', clips: ['tg-m' + cs, 'pb-off'] };
+}
 
 function lvSayRead(key, shortKey) {
   const say = {};
@@ -4010,6 +4033,8 @@ const lapTalk = (function () {
   let heardFor = '', heardLaps = 0, firstLap = 0;
   // Whether lap 1 has been heard - or was already done when counting began.
   let heardStart = false;
+  // Their place when the last lap was said, for Places gained: 0 for none yet.
+  let placeAt = 0;
   // Who has been off the board since this was turned on: arriving is a new race.
   let absent = '';
   // The screen wake lock, and whether the phone gave one (null: not asked).
@@ -4128,6 +4153,7 @@ const lapTalk = (function () {
     if (heardFor !== who || count < heardLaps || (heardLaps > 0 && first !== firstLap)) {
       const newRace = absent === who || (heardFor === who && first !== firstLap);
       heardFor = who; heardLaps = count; firstLap = first; absent = ''; heardStart = started;
+      placeAt = newRace ? 0 : rows.indexOf(row) + 1;
       if (!newRace) return;
       if (count === 0) { if (!started) return; lapOne = true; }
     } else if (count === heardLaps) {
@@ -4146,7 +4172,9 @@ const lapTalk = (function () {
       const pos = rows.indexOf(row) + 1;
       const one = [];
       if (say.lap) one.push({ text: 'Lap 1', clips: lvLap(1) });
-      if (say.pos) one.push({ text: 'P' + pos, clips: lvPlace(pos) });
+      const place = lvPlacePart(say, pos, placeAt);
+      if (place) one.push(place);
+      placeAt = pos;
       const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
       const gap = gapWords(raw);
       if (gap) one.push({ text: gap, clips: lvGap(raw) });
@@ -4167,7 +4195,11 @@ const lapTalk = (function () {
     if (say.lap) parts.push({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
     if (say.time) parts.push({ text: lvTimeText(last), clips: lvTime(last) });
     if (say.best && isBest) parts.push({ text: 'best lap', clips: ['best'] });
-    if (say.pos) parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
+    const vsBest = lvBestPart(say, last, best, count);
+    if (vsBest) parts.push(vsBest);
+    const place = lvPlacePart(say, pos, placeAt);
+    if (place) parts.push(place);
+    placeAt = pos;
     const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
     const gap = gapWords(raw);
     if (gap) parts.push({ text: gap, clips: lvGap(raw) });
@@ -4193,7 +4225,7 @@ const lapTalk = (function () {
       show();
     });
 
-    if (sayRow) sayRow.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'pos', 'gap', 'behind', 'leader'], 'lapsay-', SAY_KEY));
+    if (sayRow) sayRow.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'pos', 'moves', 'gap', 'behind', 'leader'], 'lapsay-', SAY_KEY));
 
     // Any tap lets a page that was on before a reload speak again - and a
     // tap on a name changes who is followed, so the button is redrawn
@@ -7892,6 +7924,8 @@ const nightTalk = (function () {
   let heardTag = '', heardLaps = 0, firstLap = 0;
   // Whether lap 1 has been heard - or was already done when counting began.
   let heardStart = false;
+  // Their place when the last lap was said, for Places gained: 0 for none yet.
+  let placeAt = 0;
   // Whether their car has been off the board since lap times were turned on.
   let absent = false;
   // The screen wake lock: held, being asked for, and whether the phone gave one.
@@ -8016,6 +8050,7 @@ const nightTalk = (function () {
       // lap. A lap race control took away is still quiet.
       const newRace = absent || (heardTag !== '' && (heardTag !== row.tag || first !== firstLap));
       heardTag = row.tag; heardLaps = count; firstLap = first; absent = false; heardStart = started;
+      placeAt = newRace ? 0 : rows.indexOf(row) + 1;
       if (!newRace) return;
       if (count === 0) { if (!started) return; lapOne = true; }
     } else if (count === heardLaps) {
@@ -8034,7 +8069,9 @@ const nightTalk = (function () {
       const pos = rows.indexOf(row) + 1;
       const one = [];
       if (say.lap) one.push({ text: 'Lap 1', clips: lvLap(1) });
-      if (say.pos) one.push({ text: 'P' + pos, clips: lvPlace(pos) });
+      const place = lvPlacePart(say, pos, placeAt);
+      if (place) one.push(place);
+      placeAt = pos;
       const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
       const gap = gapWords(raw);
       if (gap) one.push({ text: gap, clips: lvGap(raw) });
@@ -8053,9 +8090,13 @@ const nightTalk = (function () {
     if (say.lap) parts.push({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
     if (say.time) parts.push({ text: lvTimeText(last), clips: lvTime(last) });
     if (say.best && count > 1 && last <= best) parts.push({ text: 'best lap', clips: ['best'] });
+    const vsBest = lvBestPart(say, last, best, count);
+    if (vsBest) parts.push(vsBest);
     const target = say.target ? targetWords(last, car && car.target) : '';
     if (target) parts.push({ text: target, clips: lvTarget(last, car.target) });
-    if (say.pos) parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
+    const place = lvPlacePart(say, pos, placeAt);
+    if (place) parts.push(place);
+    placeAt = pos;
     const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
     const gap = gapWords(raw);
     if (gap) parts.push({ text: gap, clips: lvGap(raw) });
@@ -8112,7 +8153,7 @@ const nightTalk = (function () {
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
     p.appendChild(b);
 
-    p.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'target', 'pos', 'gap', 'behind', 'leader'], 'nt-say-', SAY_KEY));
+    p.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'target', 'pos', 'moves', 'gap', 'behind', 'leader'], 'nt-say-', SAY_KEY));
 
     p.appendChild(el('div', 'when', !on
       ? 'Your phone reads out each of your laps as you race: lap, time, best lap, your target when one is set, place and gap. Keep this page open with the screen on.'

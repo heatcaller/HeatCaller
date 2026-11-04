@@ -155,6 +155,8 @@ export function lapClips(): LapClip[] {
     // 3 Nov 2026, Asher: said as lap times are turned off.
     { name: "off", text: "Lap times off" },
     { name: "best", text: "best lap" },
+    // After a margin clip ("point two"), for a lap slower than their best (3 Nov 2026).
+    { name: "pb-off", text: "off your best" },
   ];
 
   for (let cs = LAP_TIME_MIN_CS; cs <= LAP_TIME_MAX_CS; cs++) {
@@ -180,6 +182,14 @@ export function lapClips(): LapClip[] {
   // RaceNumbers.PositionSpoken: the letter stays a letter.
   for (let n = 1; n <= POSITION_MAX; n++) {
     clips.push({ name: `p${n}`, text: `P ${words(n)}` });
+  }
+  // Places gained or lost since the last lap (3 Nov 2026, Asher): a whole
+  // clip each rather than "up to" before "P two", so it is said as one line.
+  for (let n = 1; n <= POSITION_MAX; n++) {
+    clips.push({ name: `pu${n}`, text: `Up to P ${words(n)}` });
+  }
+  for (let n = 1; n <= POSITION_MAX; n++) {
+    clips.push({ name: `pd${n}`, text: `Down to P ${words(n)}` });
   }
 
   // RaceNumbers.Behind over GapSpoken: tenths under a second, halves to
