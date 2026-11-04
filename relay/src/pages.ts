@@ -167,11 +167,13 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 .wrap { max-width: 860px; margin: 0 auto; }
-/* The club's name on the left, HeatCaller's byline (under Live's broadcast
-   bug) on the right, and the tabs across the whole width below both. */
-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: start;
-         padding: 28px 0 0; }
-header > nav { grid-column: 1 / -1; }
+header { padding: 28px 0 0; }
+/* The club's name with the page's summary under it on the left, and
+   HeatCaller's byline (under Live's broadcast bug) on the right of the
+   name's line. */
+.hchead { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: start; }
+.hchead > .hcside { grid-column: 2; grid-row: 1 / span 2; }
+.hchead > .sub { grid-column: 1; }
 /* Room between the name and what the page is about (3 Nov 2026, Asher:
    "a little more space between the top of the page and where the actual
    content starts"). */
@@ -1628,8 +1630,17 @@ function shell(page: Shell, context: PageContext): string {
 
   const sunset = sunsetLook(look);
 
-  const heading = `<h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
-    <div class="sub">${sub}</div>`;
+  // HeatCaller's byline (under Live's broadcast bug) sits in the name's own
+  // block, so it stays beside the name even where a logo pushes the name
+  // onto a row of its own.
+  const heading = `<div class="hchead">
+    <h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
+    <div class="hcside">${page.active === "live" ? `
+      <span class="onair" aria-hidden="true">${HC_SUN}<b>LIVE</b></span>` : ""}
+      <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
+    </div>
+    <div class="sub">${sub}</div>
+    </div>`;
 
   // The logo's address carries a fingerprint of the logo itself (hex only),
   // so a newly uploaded logo shows at once instead of the cached old one.
@@ -1722,10 +1733,6 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
 <div class="wrap">
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
     <div class="hcname">${brand}</div>
-    <div class="hcside">${page.active === "live" ? `
-      <span class="onair" aria-hidden="true">${HC_SUN}<b>LIVE</b></span>` : ""}
-      <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
-    </div>
     ${tabsNav(club, name, lit)}
   </header>${ofResults ? `
   <nav class="subtabs" aria-label="Results">
