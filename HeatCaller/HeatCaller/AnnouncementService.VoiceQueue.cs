@@ -1061,6 +1061,7 @@ public sealed partial class AnnouncementService
         {
             StatusMessage?.Invoke($"[voice] Dropped {type} - the two cars it is about swapped before it was queued.");
             NoteKeptCallLost(heldOver, type, transponder, displayText, "the two cars it was about swapped");
+            SayBattleLineDropped(battle.Pair);
             return false;
         }
 
@@ -1553,6 +1554,12 @@ public sealed partial class AnnouncementService
                 }
 
                 continue;
+            }
+
+            // Heard, or about to be - so its battle watch was not wasted.
+            if (battle is not null)
+            {
+                SayBattleLineOnAir(battle.Pair);
             }
 
             if (work is null)

@@ -210,41 +210,44 @@ public sealed class KnownIssues2Tests : IDisposable
     // "Segments run"
     // ------------------------------------------------------------------
 
-    [Fact]
-    public void Segments_run_offers_every_tier_most_first()
-    {
-        Assert.Equal(
-            new[] { SegmentTier.Flourish, SegmentTier.Colour, SegmentTier.Core, SegmentTier.Essential },
-            CommentaryControl.TierChoices.Select(choice => choice.Tier).ToArray());
-
-        Assert.All(CommentaryControl.TierChoices, choice =>
-        {
-            Assert.False(string.IsNullOrWhiteSpace(choice.Name));
-            Assert.False(string.IsNullOrWhiteSpace(choice.Says));
-        });
-    }
+    // Folded into the tick boxes on 3 Nov 2026 - see AppSettings.FoldLowestTier.
 
     [Fact]
-    public void A_saved_tier_finds_its_choice_and_a_hand_edited_one_is_clamped()
+    public void A_hand_edited_tier_is_clamped()
     {
-        Assert.Equal(0, CommentaryControl.TierChoiceIndex((int)SegmentTier.Flourish));
-        Assert.Equal(2, CommentaryControl.TierChoiceIndex((int)SegmentTier.Core));
-        Assert.Equal(0, CommentaryControl.TierChoiceIndex(99));
-        Assert.Equal(3, CommentaryControl.TierChoiceIndex(-4));
-
         Assert.Equal(SegmentTier.Essential, CommentaryDirector.LowestTierOf(-4));
         Assert.Equal(SegmentTier.Flourish, CommentaryDirector.LowestTierOf(99));
     }
 
     [Fact]
-    public void A_tier_changed_on_the_page_reaches_tonight_s_budget()
+    public void A_saved_segments_run_choice_becomes_unticked_boxes()
+    {
+        var settings = new AppSettings
+        {
+            CommentaryLowestTier = (int)SegmentTier.Core,
+            CommentarySegmentsOff = CommentaryBudget.SaveSwitches(new[] { SegmentKind.PaceNote }),
+        };
+
+        Assert.True(settings.FoldLowestTier());
+
+        var off = CommentaryBudget.ParseSwitches(settings.CommentarySegmentsOff);
+
+        Assert.Equal((int)SegmentTier.Flourish, settings.CommentaryLowestTier);
+
+        // Everything above the old choice is off, what was already off stays
+        // off, and what the choice kept is still ticked.
+        Assert.All(CommentaryBudget.AllSpecs.Where(spec => spec.Tier > SegmentTier.Core),
+            spec => Assert.Contains(spec.Kind, off));
+        Assert.Contains(SegmentKind.PaceNote, off);
+        Assert.DoesNotContain(SegmentKind.BattleWatch, off);
+    }
+
+    [Fact]
+    public void Everything_ticked_folds_to_no_change()
     {
         var settings = new AppSettings();
-        var director = new CommentaryDirector(new CommentaryService(ProfileStore.Load(), settings), settings);
 
-        settings.CommentaryLowestTier = (int)SegmentTier.Core;
-        director.ClubTierChanged();
-
-        Assert.Equal(SegmentTier.Core, director.Budget.LowestTier);
+        Assert.False(settings.FoldLowestTier());
+        Assert.Equal(string.Empty, settings.CommentarySegmentsOff ?? string.Empty);
     }
 }

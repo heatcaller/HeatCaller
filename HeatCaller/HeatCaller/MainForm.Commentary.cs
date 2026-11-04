@@ -682,11 +682,6 @@ public partial class MainForm
     {
         commentary.AllowanceSeen += (spent, cap) => announcer.Director?.MonthlyUsage(spent, cap);
 
-        // "Segments run" on the same page, taken tonight (22 Oct 2026). The
-        // director is fetched when it changes, for the reason above; one
-        // built later reads the setting in NewMeeting.
-        commentary.LowestTierChanged += () => announcer.Director?.ClubTierChanged();
-
         // AND THE MONTH AS THE USAGE STORE HEARS IT (19 Oct 2026), once the
         // budget has had a first word from a write. A top-up made mid-night
         // reaches the store within five minutes (the This Month refresh) -

@@ -57,6 +57,132 @@ internal static class RaceNumbers
     /// unreachable from a lap time or a position and is here so a future
     /// caller gets a number rather than an exception.
     /// </summary>
+    // ------------------------------------------------------------------
+    // Times a model spelled out digit by digit (3 Nov 2026)
+    // ------------------------------------------------------------------
+
+    private const string DigitWord = "zero|oh|one|two|three|four|five|six|seven|eight|nine";
+
+    private const string TensWord = "twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety";
+
+    // Longest first, so "seventeen" is never read as "seven".
+    private const string WholeWord =
+        "(?:" + TensWord + ")(?:-(?:one|two|three|four|five|six|seven|eight|nine))?"
+        + "|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|ten"
+        + "|zero|one|two|three|four|five|six|seven|eight|nine";
+
+    // "three-point-three-zero-four", "eleven point two six four seconds":
+    // three or more digits after the point. One or two read well as they are.
+    private static readonly System.Text.RegularExpressions.Regex SpelledPoint = new(
+        $@"\b(?<whole>{WholeWord})[- ]point(?<digits>(?:[- ](?:{DigitWord})){{3,}})\b(?:\s+seconds?\b)?",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant
+        | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // "twelve-nine-four-five": a whole number and three digits, hyphened
+    // into one word with no "point" at all.
+    private static readonly System.Text.RegularExpressions.Regex SpelledRun = new(
+        $@"\b(?<whole>{WholeWord})(?<digits>(?:-(?:{DigitWord})){{3}})\b(?![-\w])",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant
+        | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // "a thirteen fifty-six-nine": the commentator's form with the
+    // thousandth hung off the end as one more digit.
+    private static readonly System.Text.RegularExpressions.Regex SpelledTail = new(
+        $@"\b(?<whole>{WholeWord}) (?<tens>{TensWord})-(?<unit>one|two|three|four|five|six|seven|eight|nine)-(?<digit>{DigitWord})\b(?![-\w])",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant
+        | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Puts a time a model wrote out digit by digit back into figures, so
+    /// AnnouncementService.SpellOutTimesForSpeech can say it the way the
+    /// rest are said (3 Nov 2026).
+    ///
+    /// The facts have carried thousandths since 1 Nov, and a recap handed
+    /// "3.304s" and told to say numbers in words wrote "three-point-three-
+    /// zero-four back" and "a twelve-nine-four-five" - every digit read out,
+    /// which on air sounds like the voice glitching. Turned back into
+    /// "3.304s back" and "12.945s", the same reader that turns a fact's
+    /// "0.3s behind" into "three tenths behind" decides whether it is a gap
+    /// or a lap. Only the shapes above are touched: a sentence with "one
+    /// two three" in it, or "point five", is left exactly as written.
+    /// </summary>
+    internal static string DigitsFromSpelledTimes(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text;
+        }
+
+        text = SpelledPoint.Replace(text, m => Figure(m.Groups["whole"].Value, Digits(m.Groups["digits"].Value)) ?? m.Value);
+        text = SpelledRun.Replace(text, m => Figure(m.Groups["whole"].Value, Digits(m.Groups["digits"].Value)) ?? m.Value);
+
+        return SpelledTail.Replace(text, m =>
+        {
+            var tens = Array.IndexOf(Tens, m.Groups["tens"].Value.ToLowerInvariant());
+            var unit = Array.IndexOf(Small, m.Groups["unit"].Value.ToLowerInvariant());
+            var digit = Digits(m.Groups["digit"].Value);
+
+            return tens < 2 || unit < 1 || digit is null
+                ? m.Value
+                : Figure(m.Groups["whole"].Value, $"{tens}{unit}{digit}") ?? m.Value;
+        });
+    }
+
+    /// <summary>"-three-zero-four" as "304", or null when a word is not a digit.</summary>
+    private static string? Digits(string spelled)
+    {
+        var digits = new System.Text.StringBuilder();
+
+        foreach (var word in spelled.Split(new[] { '-', ' ' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var lower = word.ToLowerInvariant();
+            var at = lower == "oh" ? 0 : Array.IndexOf(Small, lower);
+
+            if (at is < 0 or > 9)
+            {
+                return null;
+            }
+
+            digits.Append(at);
+        }
+
+        return digits.Length == 0 ? null : digits.ToString();
+    }
+
+    /// <summary>"thirteen" and "980" as "13.980s" - three places at most, the timing's own precision.</summary>
+    private static string? Figure(string spelledWhole, string? fraction)
+    {
+        if (fraction is null || WholeValue(spelledWhole) is not { } whole)
+        {
+            return null;
+        }
+
+        return $"{whole}.{(fraction.Length > 3 ? fraction[..3] : fraction)}s";
+    }
+
+    /// <summary>"thirteen" as 13 and "fifty-six" as 56, or null.</summary>
+    private static int? WholeValue(string spelled)
+    {
+        var parts = spelled.ToLowerInvariant().Split('-');
+        var first = Array.IndexOf(Small, parts[0]);
+
+        if (parts.Length == 1)
+        {
+            if (first >= 0)
+            {
+                return first;
+            }
+
+            var tens = Array.IndexOf(Tens, parts[0]);
+            return tens >= 2 ? tens * 10 : null;
+        }
+
+        var ten = Array.IndexOf(Tens, parts[0]);
+        var unit = Array.IndexOf(Small, parts[1]);
+
+        return ten >= 2 && unit is >= 1 and <= 9 ? (ten * 10) + unit : null;
+    }
+
     internal static string Words(long n)
     {
         if (n < 0)

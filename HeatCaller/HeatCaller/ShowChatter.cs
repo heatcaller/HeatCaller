@@ -94,6 +94,20 @@ internal static class ShowChatter
     /// Voice page - see <see cref="CallIsWorthIt"/>. Nought holds nothing
     /// back, which is every stop from Standard up.
     /// </param>
+    /// <param name="LimitScale">
+    /// What each segment's limits for the night and per class are
+    /// multiplied by - see <see cref="ScaledLimit"/>. Null is no limit at
+    /// all, which is Non-stop.
+    /// </param>
+    /// <param name="GapScale">
+    /// What each segment's gap after the last line is multiplied by - see
+    /// <see cref="ScaledGap"/>.
+    /// </param>
+    /// <param name="OpeningFloat">
+    /// The share of the night's budget released before a race has run -
+    /// see <see cref="CommentaryBudget.OpeningFloat"/>. One is the whole
+    /// share from the first race, so nothing is saved for the mains.
+    /// </param>
     internal sealed record Level(
         string Key,
         string Name,
@@ -101,7 +115,10 @@ internal static class ShowChatter
         double Scale,
         bool TwoVoicesBelowTheMains,
         double PerLapScale = 1.0,
-        int QuietestCall = 0);
+        int QuietestCall = 0,
+        double? LimitScale = 1.0,
+        double GapScale = 1.0,
+        double OpeningFloat = CommentaryBudget.OpeningFloat);
 
     /// <summary>
     /// The level a club is on until it says otherwise - the pacing exactly
@@ -135,7 +152,9 @@ internal static class ShowChatter
             // lap completed, every lap time, every personal best, every
             // streak, close battles, lappings, the running order. Those
             // are the ones that fire on a crossing and so fire constantly.
-            85),
+            85,
+            LimitScale: 0.5,
+            GapScale: 1.5),
 
         new Level(
             "measured",
@@ -148,7 +167,9 @@ internal static class ShowChatter
             // count, the lap time, personal bests, a qualifying
             // improvement - plus the running order, which the Voice page's
             // own note calls the most intrusive line in the set.
-            60),
+            60,
+            LimitScale: 0.75,
+            GapScale: 1.25),
 
         Standard,
 
@@ -159,8 +180,19 @@ internal static class ShowChatter
             1.5,
             true,
             1.5,
-            0),
+            0,
+            LimitScale: 2.0,
+            GapScale: 0.6,
+            OpeningFloat: 0.5),
 
+        // THE DIAL REACHES EVERY LIMIT NOW (3 Nov 2026). Turned all the way
+        // up, a demo of three Stock heats still heard almost nothing: each
+        // segment kept its own limits for the night and per class and its
+        // own gap after the last line, and this dial touched none of them -
+        // only the ten-minute ceiling. Non-stop now lifts the nightly and
+        // per-class limits outright (the ten-minute ceiling and the month's
+        // allowance still hold it), keeps about a third of each gap, and
+        // releases the night's whole share from the first race.
         new Level(
             "nonstop",
             "Non-stop",
@@ -168,7 +200,10 @@ internal static class ShowChatter
             2.0,
             true,
             2.0,
-            0),
+            0,
+            LimitScale: null,
+            GapScale: 0.35,
+            OpeningFloat: 1.0),
     };
 
     /// <summary>
@@ -233,6 +268,38 @@ internal static class ShowChatter
 
         return Math.Clamp(scaled, Least, Most);
     }
+
+    /// <summary>
+    /// A segment's limit for the night or per class with the dial applied
+    /// - see SegmentSpec.MaxPerMeeting. No limit stays no limit, Non-stop
+    /// lifts every limit, and anything else is held at one or more, so a
+    /// ticked segment is never switched off by the quiet stops.
+    ///
+    /// ONCE STAYS ONCE at every stop. A limit of one is what the segment
+    /// IS - the cold open, the sign-off numbers, the championship check
+    /// after a class's last main - not a matter of volume, and a second
+    /// cold open is not a chattier night.
+    /// </summary>
+    internal static int ScaledLimit(int cap, string? key)
+    {
+        if (cap <= 1)
+        {
+            return cap;
+        }
+
+        if (cap == int.MaxValue || For(key).LimitScale is not { } scale)
+        {
+            return int.MaxValue;
+        }
+
+        return Math.Max(1, (int)Math.Round(cap * scale, MidpointRounding.AwayFromZero));
+    }
+
+    /// <summary>A segment's gap after the last line with the dial applied - see SegmentSpec.MinGap.</summary>
+    internal static TimeSpan ScaledGap(TimeSpan gap, string? key) => gap * For(key).GapScale;
+
+    /// <summary>The share of the night's budget this stop releases before a race has run.</summary>
+    internal static double OpeningFloatFor(string? key) => Math.Clamp(For(key).OpeningFloat, 0, 1);
 
     /// <summary>
     /// Whether this level lets the second voice out below the mains.
@@ -372,11 +439,30 @@ internal static class ShowChatter
 
         var held = CallsHeldBack(key);
 
+        // EVERY LIMIT IT MOVES, worked out from the battle watch's own row
+        // (3 Nov 2026) - the line used to name only the ten-minute ceiling,
+        // and a club reading "Non-stop" took that to mean nothing else held.
+        var battle = CommentaryBudget.Spec(SegmentKind.BattleWatch);
+        var perNight = ScaledLimit(battle.MaxPerMeeting, key);
+        var perClass = ScaledLimit(battle.MaxPerClass, key);
+        var gap = (int)Math.Round(ScaledGap(battle.MinGap, key).TotalSeconds);
+
+        var limits = perNight == int.MaxValue
+            ? "No limit on how often a segment comes back in a night - only having nothing new to say stops a repeat."
+            : $"Each segment has a limit for the night and per class - battle watch {perNight} a night, {perClass} per class.";
+
+        var mains = level.OpeningFloat >= 1
+            ? " Nothing is saved for the mains: the night's whole share is there from the first race."
+            : level.OpeningFloat > CommentaryBudget.OpeningFloat
+                ? " Less is saved for the mains."
+                : " The night saves its share for the mains.";
+
         return $"{level.Blurb} Up to {heat} spoken {(heat == 1 ? "segment" : "segments")} in ten minutes in a heat "
              + $"and {main} in the top main"
              + (level.TwoVoicesBelowTheMains || twoVoicesInHeats
                  ? ", with the co-host out in the heats too."
                  : ", with the co-host held for the mains.")
+             + $" {limits} A battle watch waits {gap}s after the last line.{mains}"
              + $" On the timing calls it allows {perLap} per lap"
              + (held.Count > 0
                  ? $" and holds back {Plural.Of(held.Count, "call")} outright: {string.Join(", ", held)}."

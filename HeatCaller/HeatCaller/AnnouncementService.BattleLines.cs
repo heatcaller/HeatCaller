@@ -114,6 +114,45 @@ public sealed partial class AnnouncementService
     /// <summary>The pass call for any other place. {place} is the spoken ordinal - "third".</summary>
     internal const string BattlePassForAPlace = "[excited] And {driver} is through, up into {place}!";
 
+    /// <summary>
+    /// A battle line went to the speaker - raised on the voice loop's
+    /// thread. With <see cref="BattleLineDropped"/>, how the host tells a
+    /// battle watch the room heard from one it never did (3 Nov 2026).
+    /// </summary>
+    public event Action<BattlePair>? BattleLineOnAir;
+
+    /// <summary>
+    /// A battle line was thrown away unheard because its two cars swapped -
+    /// raised on whichever thread saw the swap. The director counted the
+    /// segment when it was queued, so without this a close fight used up
+    /// its own nightly limit without a word being said.
+    /// </summary>
+    public event Action<BattlePair>? BattleLineDropped;
+
+    private void SayBattleLineDropped(BattlePair pair)
+    {
+        try
+        {
+            BattleLineDropped?.Invoke(pair);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"[voice] Battle line drop handler failed: {ex.Message}");
+        }
+    }
+
+    private void SayBattleLineOnAir(BattlePair pair)
+    {
+        try
+        {
+            BattleLineOnAir?.Invoke(pair);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"[voice] Battle line handler failed: {ex.Message}");
+        }
+    }
+
     /// <summary>The pair the line being queued right now is about - see <see cref="AboutBattle"/>.</summary>
     private readonly AsyncLocal<BattlePair?> _queueingAbout = new();
 
@@ -295,6 +334,11 @@ public sealed partial class AnnouncementService
         }
 
         GiveBackLost(giveBack);
+
+        foreach (var pair in verdict.Stale.Select(line => line.Pair).Distinct())
+        {
+            SayBattleLineDropped(pair);
+        }
 
         if (verdict.Cut is not { } cut)
         {

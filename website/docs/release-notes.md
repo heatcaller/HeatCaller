@@ -4,6 +4,17 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **How chatty is the one dial for the AI commentary (3 November).** Turned all the way up, the AI could still go quiet in the heats. Each segment kept its own limits for the night and per class, and its own gap after the last line, and **How chatty** reached none of them. Now it moves them all. **Non-stop** lifts the nightly and per-class limits, shortens the gaps to about a third, and saves nothing for the mains. **Lively** doubles the limits; **Sparing** and **Measured** lower them. **Standard** is unchanged, and a once-a-night segment like the cold open stays once a night at every stop. **Pacing**, which only ever spaced the built-in timing calls, moved to **Voice > Announcements > How often**. **Segments run** is gone: any segments your choice there turned off are now unticked instead, so nothing you hear changes. Each demo run now gets a night of its own, so rehearsals no longer use up the real heats' segments. The **Lines not said this race** window on Race Control opens with a line on what the AI said and what held the rest. See [How chatty](announcer/commentary.md#how-chatty). Update HeatCaller on the race PC; nothing changes on the relay.
+
+- **Recap and battle watch fixes (3 November).**
+    - A battle watch thrown away because its two cars swapped before a word was said no longer counts toward its limits for the night and the class. Before, a close fight could use up its own limit in silence.
+    - The race recap no longer shouts: words written in capitals ("WELCOME BACK", "FIVE!") are put back into normal case, as the race intros already were, with names kept as spelled. A voice that isn't v3 read them as letters.
+    - Times the AI spells out one digit at a time ("three-point-three-zero-four", "a twelve-nine-four-five") are said like the rest, as "three and a half seconds back" or "a twelve ninety-four", and the AI is asked not to write them that way.
+    - The **Cold Open** ("Welcome to the track, everybody!") no longer plays inside the recap show, between the recap's parts.
+    - The sign-off no longer names the race that just finished as next. After a demo it names the round after the demo's. A sign-off that still gets it wrong is replaced by the show's own.
+
+    Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **More calls stop when the order changes under them (3 November).** Until now, only a **Battle watch** line stopped when its two cars swapped. These calls now do too:
     - **What's still to decide** ("Sam is taking three tenths a lap out of Bill"): if Sam gets past while it's being said, it stops and the pass is called, the same as a battle line.
     - **Close battle**: the same. If the two cars swap before the line has been said, it's dropped and the pass is called.

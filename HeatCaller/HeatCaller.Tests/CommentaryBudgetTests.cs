@@ -390,7 +390,7 @@ public sealed class CommentaryBudgetTests
         var again = budget.Peek(SegmentKind.ColdOpen);
 
         Assert.False(again.Allowed);
-        Assert.Equal("already said tonight", again.Reason);
+        Assert.StartsWith("already said tonight", again.Reason);
     }
 
     [Fact]
@@ -775,5 +775,96 @@ public sealed class CommentaryBudgetTests
         // it reads, so its deadline has to be inside a single race.
         Assert.True(CommentaryBudget.Spec(SegmentKind.BattleWatch).NeedsBy <= TimeSpan.FromSeconds(30));
         Assert.True(CommentaryBudget.Spec(SegmentKind.QualifyingReport).NeedsBy >= TimeSpan.FromMinutes(1));
+    }
+
+    // ------------------------------------------------------------------
+    // How chatty moves every limit (3 Nov 2026)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void Non_stop_lifts_the_nightly_and_per_class_limits()
+    {
+        var clock = new Clock();
+        var budget = Mid(clock, allowance: 100000);
+        budget.Chatter = "nonstop";
+
+        var limit = CommentaryBudget.Spec(SegmentKind.BattleWatch).MaxPerClass;
+
+        for (var i = 0; i < limit + 3; i++)
+        {
+            Assert.True(Write(budget, SegmentKind.BattleWatch, "Stock"), $"battle watch {i} was refused at Non-stop");
+            clock.Advance(TimeSpan.FromMinutes(11));
+        }
+    }
+
+    [Fact]
+    public void Standard_keeps_the_table_s_own_limits()
+    {
+        var clock = new Clock();
+        var budget = Mid(clock, allowance: 100000);
+
+        var limit = CommentaryBudget.Spec(SegmentKind.BattleWatch).MaxPerClass;
+
+        for (var i = 0; i < limit; i++)
+        {
+            Assert.True(Write(budget, SegmentKind.BattleWatch, "Stock"));
+            clock.Advance(TimeSpan.FromMinutes(11));
+        }
+
+        var refused = budget.Peek(SegmentKind.BattleWatch, "Stock");
+
+        Assert.False(refused.Allowed);
+        Assert.Equal(BudgetRefusal.ItsCapForTheNight, refused.Why);
+        Assert.Contains("Standard", refused.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Once_a_night_stays_once_a_night_at_every_stop()
+    {
+        foreach (var level in ShowChatter.All)
+        {
+            var clock = new Clock();
+            var budget = Mid(clock, allowance: 100000);
+            budget.Chatter = level.Key;
+
+            Assert.True(Write(budget, SegmentKind.ColdOpen));
+            clock.Advance(TimeSpan.FromMinutes(20));
+
+            Assert.False(budget.Peek(SegmentKind.ColdOpen).Allowed, $"a second cold open at {level.Name}");
+        }
+    }
+
+    [Fact]
+    public void Non_stop_shortens_the_gap_after_the_last_line()
+    {
+        var gap = CommentaryBudget.Spec(SegmentKind.BattleWatch).MinGap;
+        var wait = ShowChatter.ScaledGap(gap, "nonstop") + TimeSpan.FromSeconds(1);
+
+        Assert.True(wait < gap);
+
+        var clock = new Clock();
+        var standard = Mid(clock, allowance: 100000);
+        var nonStop = Mid(clock, allowance: 100000);
+        nonStop.Chatter = "nonstop";
+
+        Assert.True(Write(standard, SegmentKind.PaceNote));
+        Assert.True(Write(nonStop, SegmentKind.PaceNote));
+
+        clock.Advance(wait);
+
+        Assert.False(standard.Peek(SegmentKind.BattleWatch).Allowed);
+        Assert.True(nonStop.Peek(SegmentKind.BattleWatch).Allowed);
+    }
+
+    [Fact]
+    public void Non_stop_releases_the_whole_night_from_the_first_race()
+    {
+        var clock = new Clock();
+        var standard = Mid(clock, roundsRun: 0);
+        var nonStop = Mid(clock, roundsRun: 0);
+        nonStop.Chatter = "nonstop";
+
+        Assert.Equal(standard.NightAllotment * CommentaryBudget.OpeningFloat, standard.Entitled, 6);
+        Assert.Equal(nonStop.NightAllotment, nonStop.Entitled, 6);
     }
 }

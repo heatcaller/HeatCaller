@@ -2339,8 +2339,12 @@ public sealed partial class RaceControlControl
             closing && !follows,
             (_settings.RecapShowName ?? string.Empty).Trim(),
 
-            // A demo leaves its round unrun, so that round is still next.
-            closing ? UpNextAfter(record.IsDemo ? null : round) : null,
+            // The round after this one, demo or not (3 Nov 2026). A demo
+            // leaves its round unrun, and this used to name that round as
+            // next - so a demo of Q2 Heat 1 signed off "roll straight into
+            // Q2 Heat 1 next". A demo is a rehearsal of the show as it will
+            // run, and the show will go on to the round after.
+            closing ? UpNextAfter(round) : null,
             InterviewFollows: principal,
 
             // The host's own name, for the opening to introduce himself

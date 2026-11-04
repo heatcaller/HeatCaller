@@ -375,8 +375,45 @@ public sealed class AppSettings
     /// - 3 (Flourish) for everything. A club that never wants the
     /// furniture sets this once, rather than hearing it whenever the month
     /// happens to be quiet. Stored as an int: append to SegmentTier only.
+    ///
+    /// No longer offered (3 Nov 2026) - see <see cref="FoldLowestTier"/>.
     /// </summary>
     public int CommentaryLowestTier { get; set; } = (int)SegmentTier.Flourish;
+
+    /// <summary>
+    /// Turns a saved "Segments run" choice into unticked boxes, once.
+    ///
+    /// The picker came off the Commentary page on 3 Nov 2026: it said again
+    /// what the tick boxes under it already say, and a ticked box that
+    /// never ran because of a picker above it was one more thing a club had
+    /// to read the page twice to explain. A club that had chosen "The live
+    /// ones only" keeps exactly that - every segment above its choice is
+    /// unticked instead - and the choice goes back to everything.
+    /// </summary>
+    /// <returns>True when anything changed, so the file is saved.</returns>
+    internal bool FoldLowestTier()
+    {
+        var lowest = CommentaryDirector.LowestTierOf(CommentaryLowestTier);
+
+        if (lowest == SegmentTier.Flourish)
+        {
+            var wasOutOfRange = CommentaryLowestTier != (int)SegmentTier.Flourish;
+
+            CommentaryLowestTier = (int)SegmentTier.Flourish;
+            return wasOutOfRange;
+        }
+
+        var off = new HashSet<SegmentKind>(CommentaryBudget.ParseSwitches(CommentarySegmentsOff));
+
+        foreach (var spec in CommentaryBudget.AllSpecs.Where(spec => spec.Tier > lowest))
+        {
+            off.Add(spec.Kind);
+        }
+
+        CommentarySegmentsOff = CommentaryBudget.SaveSwitches(off);
+        CommentaryLowestTier = (int)SegmentTier.Flourish;
+        return true;
+    }
 
     /// <summary>
     /// How many race days a month this club runs, used to divide the
@@ -2664,7 +2701,7 @@ public sealed class AppSettings
                     // text. Take them in, then save at once so the plain
                     // copies are gone from disk from this launch on.
                     // "|" not "||": both must run.
-                    if (loaded.AdoptPlainTextSecrets(json) | loaded.MoveToRenamedRelay())
+                    if (loaded.AdoptPlainTextSecrets(json) | loaded.MoveToRenamedRelay() | loaded.FoldLowestTier())
                     {
                         loaded.Save();
                     }

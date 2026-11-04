@@ -895,7 +895,10 @@ public sealed class CommentaryBudget
                     ? 0
                     : Math.Clamp((double)_roundsRun / _roundsTotal, 0, 1);
 
-                var released = NightAllotment * (OpeningFloat + ((1 - OpeningFloat) * progress));
+                // The opening share is the dial's (3 Nov 2026): Non-stop
+                // releases the whole night at once - see ShowChatter.
+                var opening = ShowChatter.OpeningFloatFor(Chatter);
+                var released = NightAllotment * (opening + ((1 - opening) * progress));
 
                 return Math.Max(_entitledHighWater, released);
             }
@@ -1240,6 +1243,34 @@ public sealed class CommentaryBudget
     }
 
     /// <summary>
+    /// A segment already settled as said turned out not to be heard - the
+    /// voice threw it away after the director had let it go (3 Nov 2026).
+    /// Gives back its turn for the night and for the class, as
+    /// <see cref="Release"/> does; the lines stay spent, because the relay
+    /// kept them.
+    /// </summary>
+    public void GiveBackTurn(SegmentKind kind, string? className)
+    {
+        lock (_gate)
+        {
+            if (_perMeeting.TryGetValue(kind, out var meeting) && meeting > 0)
+            {
+                _perMeeting[kind] = meeting - 1;
+            }
+
+            if (className is { Length: > 0 })
+            {
+                var key = Key(kind, className);
+
+                if (_perClass.TryGetValue(key, out var forClass) && forClass > 0)
+                {
+                    _perClass[key] = forClass - 1;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// The segment will not be said. Its once-a-night and per-class turns
     /// are always given back, so it can still be said later tonight.
     ///
@@ -1392,14 +1423,23 @@ public sealed class CommentaryBudget
             return No("this club has it switched off", BudgetRefusal.SwitchedOff);
         }
 
-        if (Count(_perMeeting, kind) >= spec.MaxPerMeeting)
+        // THE LIMITS AND THE GAP MOVE WITH THE CLUB'S DIAL (3 Nov 2026) -
+        // see ShowChatter.ScaledLimit. They were the table's own numbers at
+        // every stop, so Non-stop on a night of Stock heats ran out of
+        // battle watches by the second heat and nothing said why.
+        var dial = Chatter;
+        var dialName = ShowChatter.For(dial).Name;
+        var perNight = ShowChatter.ScaledLimit(spec.MaxPerMeeting, dial);
+        var perClass = ShowChatter.ScaledLimit(spec.MaxPerClass, dial);
+
+        if (Count(_perMeeting, kind) >= perNight)
         {
-            return No("already said tonight", BudgetRefusal.ItsCapForTheNight);
+            return No($"already said tonight - {perNight} a night at {dialName}", BudgetRefusal.ItsCapForTheNight);
         }
 
-        if (className is { Length: > 0 } && ForClass(kind, className) >= spec.MaxPerClass)
+        if (className is { Length: > 0 } && ForClass(kind, className) >= perClass)
         {
-            return No($"already said for {className}", BudgetRefusal.ItsCapForTheNight);
+            return No($"already said for {className} - {perClass} per class at {dialName}", BudgetRefusal.ItsCapForTheNight);
         }
 
         // An essential is never refused - not for budget, not for airtime,
@@ -1422,9 +1462,13 @@ public sealed class CommentaryBudget
         // NOT INSIDE A PROGRAMME, where back-to-back is the whole idea -
         // see ReserveForProgramme, which explains why this one gate is
         // lifted there and lists the ones that are not.
-        if (!_insideAProgramme && spec.Speaks && _lastSpoken is { } last && now - last < spec.MinGap)
+        var gap = ShowChatter.ScaledGap(spec.MinGap, dial);
+
+        if (!_insideAProgramme && spec.Speaks && _lastSpoken is { } last && now - last < gap)
         {
-            return No($"only {(now - last).TotalSeconds:0}s since the last line", BudgetRefusal.TooSoonAfterTheLast);
+            return No(
+                $"only {(now - last).TotalSeconds:0}s since the last line - it waits {gap.TotalSeconds:0}s at {dialName}",
+                BudgetRefusal.TooSoonAfterTheLast);
         }
 
         // THE CAP MOVES WITH THE RACE (11 Oct 2026). Quieter in practice

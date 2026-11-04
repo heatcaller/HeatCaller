@@ -140,6 +140,11 @@ public sealed class CommentaryDirector
         // budget is Save's business after a segment.
         Continuity.LineHeard = () =>
         {
+            if (OnADemoNight)
+            {
+                return;
+            }
+
             _settings.CommentaryContinuityNight = Continuity.Save();
             _settings.Save();
         };
@@ -672,28 +677,62 @@ public sealed class CommentaryDirector
 
     /// <summary>
     /// The club's lowest tier as the budget takes it - clamped, so a
-    /// hand-edited value cannot become an undefined tier. One answer for the
-    /// budget and for the Commentary page's "Segments run" picker.
+    /// hand-edited value cannot become an undefined tier. Always Flourish
+    /// once AppSettings.FoldLowestTier has run, since the page's "Segments
+    /// run" picker was folded into the tick boxes (3 Nov 2026).
     /// </summary>
     internal static SegmentTier LowestTierOf(int saved) =>
         (SegmentTier)Math.Clamp(saved, (int)SegmentTier.Essential, (int)SegmentTier.Flourish);
 
-    /// <summary>
-    /// The club changed "Segments run" on the Commentary page: taken
-    /// tonight, not at the next race day (22 Oct 2026). Only the gate - the
-    /// night's spend and switches are NewMeeting's.
-    /// </summary>
-    internal void ClubTierChanged() => Budget.LowestTier = LowestTierOf(_settings.CommentaryLowestTier);
+    /// <summary>What a demo's own night is called - see <see cref="NewMeeting"/>.</summary>
+    internal const string DemoNightPrefix = "demo:";
+
+    /// <summary>True for a demo's night, which is never saved - see <see cref="NewMeeting"/>.</summary>
+    internal static bool IsDemoNight(string? nightId) =>
+        nightId?.StartsWith(DemoNightPrefix, StringComparison.Ordinal) == true;
+
+    /// <summary>The night the counts belong to: the race day, or a demo's own night on it.</summary>
+    private string _nightId = string.Empty;
+
+    /// <summary>True while a demo has the night - nothing about it is saved.</summary>
+    internal bool OnADemoNight => IsDemoNight(_nightId);
 
     /// <summary>
     /// A race day has been opened. Picks tonight's spend and tonight's
     /// facts back up when it is the same day as before - a laptop gets
     /// closed between the heats and the mains - and starts fresh when it
     /// is not.
+    ///
+    /// A DEMO GETS A NIGHT OF ITS OWN (3 Nov 2026). Demos of a programme's
+    /// heats used to count against that race day, so an afternoon of
+    /// rehearsals spent the battle watches and record laps the real heats
+    /// were owed, and the first real heat started silent. Pass the demo's
+    /// run number and the night's counts - the budget, what was said, the
+    /// sponsor rotation, the continuity lines - start fresh for it and are
+    /// never saved, so the real night is picked back up exactly as it was
+    /// left. The day itself is still the real one: the facts are looked up
+    /// by it.
     /// </summary>
-    public void NewMeeting(string dayId)
+    /// <param name="dayId">The race day.</param>
+    /// <param name="demoRun">Which demo this is, counting up from one, or null for a real race.</param>
+    public void NewMeeting(string dayId, int? demoRun = null)
     {
-        Budget.Restore(_settings.CommentaryBudgetNight, dayId);
+        var nightId = demoRun is { } run && !string.IsNullOrEmpty(dayId)
+            ? $"{DemoNightPrefix}{run}:{dayId}"
+            : dayId ?? string.Empty;
+
+        // Leaving the real night for a demo: write it down first, so what
+        // was in hand since the last spoken line is what comes back.
+        if (!string.Equals(_nightId, nightId, StringComparison.Ordinal)
+            && _nightId.Length > 0
+            && !IsDemoNight(_nightId))
+        {
+            Save();
+        }
+
+        _nightId = nightId;
+
+        Budget.Restore(_settings.CommentaryBudgetNight, nightId);
         Budget.RestoreSwitches(_settings.CommentarySegmentsOff);
         // The nights still to come this month, not the month's whole count -
         // which never counted down, so the last night was handed a quarter
@@ -722,22 +761,22 @@ public sealed class CommentaryDirector
         // the spend survived a restart and the facts did not, and a club
         // that reopened the app between the heats and the mains heard
         // every record and storyline over again.
-        Said.Restore(_settings.CommentaryFactsNight, dayId);
+        Said.Restore(_settings.CommentaryFactsNight, nightId);
 
         // And the sponsors' reads, for the same reason and with the same
         // miss behind it: SponsorRotation.Restore existed and nobody called
         // it, so a restart wiped the counts on the club's sponsor report.
         // Saved after every read (SalesReadSaid), so laying it back over
         // the night on every tick puts back exactly what is already here.
-        Sponsors.Restore(_settings.SponsorRotationNight, dayId);
+        Sponsors.Restore(_settings.SponsorRotationNight, nightId);
 
         // Guards itself on the day actually changing, like the two above.
-        Account.NewMeeting(dayId);
+        Account.NewMeeting(nightId);
 
         // And the same, for the same reason. Last week's promises were
         // paid off or were not, and either way nothing is coming back to
         // them - see NightPromises.
-        Promises.NewMeeting(dayId);
+        Promises.NewMeeting(nightId);
 
         // Guards itself on the day actually changing, like the two above
         // and for the reason the comment below spells out - this method
@@ -745,7 +784,7 @@ public sealed class CommentaryDirector
         // is a rotation that always hands out whatever a fresh shuffle
         // happens to start with. Restored for the same day, like Said
         // above - see ContinuityVoice.Restore.
-        Continuity.Restore(_settings.CommentaryContinuityNight, dayId);
+        Continuity.Restore(_settings.CommentaryContinuityNight, nightId);
 
         // The paid reads' own state, guarded on the day ACTUALLY changing.
         //
@@ -911,9 +950,23 @@ public sealed class CommentaryDirector
         _racing = true;
         _afterARace = false;
 
+        Account.RaceStarted();
         Battles.Reset();
         Pace.Reset();
         Horizons.Reset();
+    }
+
+    /// <summary>
+    /// A battle watch the director let go was thrown away by the voice
+    /// before a word of it was heard - its two cars swapped (3 Nov 2026).
+    /// Its turn for the night and the class comes back, so a close fight
+    /// does not use up its own limit in silence, and the race's own line
+    /// counts it as dropped rather than said.
+    /// </summary>
+    public void BattleUnheard()
+    {
+        Budget.GiveBackTurn(SegmentKind.BattleWatch, _className);
+        Account.DroppedAfterWriting();
     }
 
     /// <summary>The flag is out. Nothing in-race is worth saying from here.</summary>
@@ -1090,6 +1143,12 @@ public sealed class CommentaryDirector
     /// </summary>
     public void Save()
     {
+        // A demo's night is thrown away - see NewMeeting.
+        if (OnADemoNight)
+        {
+            return;
+        }
+
         _settings.CommentaryBudgetNight = Budget.Save();
         _settings.CommentaryFactsNight = Said.Save();
         _settings.SponsorRotationNight = Sponsors.Save();
@@ -1780,8 +1839,12 @@ public sealed class CommentaryDirector
 
         // Kept at once rather than on the way out, for the reason Save
         // gives: the restart this is for is usually a force-closed window.
-        _settings.SponsorRotationNight = Sponsors.Save();
-        _settings.Save();
+        // Not a demo's read, which no sponsor report should count.
+        if (!OnADemoNight)
+        {
+            _settings.SponsorRotationNight = Sponsors.Save();
+            _settings.Save();
+        }
 
         _lastSalesRead = _clock();
 
@@ -1856,6 +1919,7 @@ public sealed class CommentaryDirector
         var kinds = CommentaryBudget.AllSpecs
             .Where(spec => spec.Tier != SegmentTier.Essential)
             .Where(spec => InRace(spec.Kind) == _racing)
+            .Where(spec => !(_forTheProgramme && OpensTheNight(spec.Kind)))
             .OrderBy(spec => spec.Tier)
             // THE HORIZON GOES AFTER THE OTHER LIVE CALLS (15 Oct 2026),
             // whatever its deadline says. It has the shortest life of the
@@ -1870,6 +1934,16 @@ public sealed class CommentaryDirector
 
         return kinds.ToList();
     }
+
+    /// <summary>
+    /// True for the segment that opens an evening - never asked for INSIDE a
+    /// recap show (3 Nov 2026). The cold open is "Welcome to the track,
+    /// everybody! Tonight we've got five drivers...", and a programme asks
+    /// for whatever the ladder has due, so on a night whose first race was
+    /// a demo it came up between the recap's parts, straight after the
+    /// result it was meant to come before. Between races it can still run.
+    /// </summary>
+    internal static bool OpensTheNight(SegmentKind kind) => kind == SegmentKind.ColdOpen;
 
     /// <summary>True for the segments that only make sense while cars are on track.</summary>
     internal static bool InRace(SegmentKind kind) =>

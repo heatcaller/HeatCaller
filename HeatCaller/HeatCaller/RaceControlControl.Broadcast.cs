@@ -458,7 +458,7 @@ public sealed partial class RaceControlControl
                 return;
             }
 
-            var form = new UnsaidLinesForm(_announcer.Load);
+            var form = new UnsaidLinesForm(_announcer.Load, () => Commentary?.Invoke()?.Account.RaceReport());
             form.FormClosed += (_, _) =>
             {
                 // A window shown without ShowDialog is disposed by its own

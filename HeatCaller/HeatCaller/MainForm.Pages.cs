@@ -1893,6 +1893,41 @@ public partial class MainForm
         return pageGhosts;
     }
 
+    // The demo that has the commentary's night, and how many demos have
+    // had one since the app opened - see DemoRunForTheNight.
+    private int _demoRuns;
+    private bool _onADemoNight;
+    private bool _wasADemo;
+
+    /// <summary>
+    /// Which demo has the commentary's night, or null for the real race
+    /// day (3 Nov 2026) - see CommentaryDirector.NewMeeting.
+    ///
+    /// A demo starts a fresh night of its own, and the night stays the
+    /// demo's through its recap and the gap after it, until a real race is
+    /// staged. Read on the announcer's tick, like RaceDayId.
+    /// </summary>
+    private int? DemoRunForTheNight()
+    {
+        // A programme demo is set before On Air and cleared at its recap;
+        // a Demo page race only flags the session while it runs.
+        var demo = _race.IsDemoMode || _raceControlControl.DemoRound is not null;
+
+        if (demo && !_wasADemo)
+        {
+            _demoRuns++;
+            _onADemoNight = true;
+        }
+        else if (!demo && _onADemoNight && _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+        {
+            _onADemoNight = false;
+        }
+
+        _wasADemo = demo;
+
+        return _onADemoNight ? _demoRuns : null;
+    }
+
     /// <summary>
     /// Voice and its four tabs, and the announcer's wiring to Race Control.
     ///
@@ -1975,6 +2010,7 @@ public partial class MainForm
         // on every tick rather than once, so starting a new day mid-session
         // starts a new night rather than carrying the last one's budget.
         announcer.RaceDayId = () => _raceEvents.Active?.Id ?? string.Empty;
+        announcer.DemoRun = DemoRunForTheNight;
 
         // And the gap after the recap show, when On Air opens the next race:
         // the director stands down in it rather than adding a hand-over of

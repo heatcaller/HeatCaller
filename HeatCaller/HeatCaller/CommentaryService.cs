@@ -847,6 +847,12 @@ public sealed class CommentaryService
             "Say numbers the way a commentator does, never the way a timing screen shows them: "
             + "a gap of 0.3s is \"three tenths\", 0.5s is \"half a second\", 0.04s is \"four hundredths\"; "
             + "a lap of 5.06s is \"a five-oh-six\" and 12.34s is \"a twelve thirty-four\", with no \"seconds\" after it; "
+            // THE THOUSANDTHS (3 Nov 2026). The facts have carried them since
+            // 1 Nov, and a recap read "3.304s" out as "three-point-three-zero-
+            // four" - a digit at a time. RaceNumbers.DigitsFromSpelledTimes
+            // repairs that on the way out; this asks for it not to happen.
+            + "drop the thousandth when you say one: a lap of 12.945s is \"a twelve ninety-four\" and a gap of "
+            + "3.304s is \"three point three\" or \"over three seconds\" - never read a time out one digit at a time; "
             + "a position is \"P4\" or \"fourth\", never \"fourth position\".";
 
         return "You are a race announcer for small-scale RC car racing. " +
@@ -3343,10 +3349,17 @@ public sealed class CommentaryService
                       + "any other commentator, and do not give yourself a name."
                     : string.Empty);
 
-        var writing = Ask(Client,
-            BuildBroadcastSystemPrompt(extraWords), facts,
-            maxTokens: MaxTokensForWordLimit(extraWords),
-            temperature: Variety, ct: ct, timeout: BetweenRacesTimeout);
+        // Calmed as the intros are (3 Nov 2026) - see CalmRecapAsync.
+        var writing = CalmRecapAsync(
+            Ask(Client,
+                BuildBroadcastSystemPrompt(extraWords), facts,
+                maxTokens: MaxTokensForWordLimit(extraWords),
+                temperature: Variety, ct: ct, timeout: BetweenRacesTimeout),
+            session.Results.Select(result => result.DriverName)
+                .Append(context?.ShowName ?? string.Empty)
+                .Append(context?.AnnouncerName ?? string.Empty)
+                .Append(resultSponsor)
+                .ToList());
 
         // The credit goes on BEFORE the recap is recorded, so the recap
         // held as the last race summary - and compared by ForgetRaceSummary
@@ -3354,6 +3367,38 @@ public sealed class CommentaryService
         return await RecordAndReturn(SummaryKind, resultSponsor.Length > 0
             ? CreditFirstAsync(writing, () => SponsoredMoments.LeadIn(SponsoredMoment.RaceResult, resultSponsor, TaglineFor(presentedBy)))
             : writing);
+    }
+
+    /// <summary>
+    /// A recap with its shouting put back into normal case (3 Nov 2026).
+    ///
+    /// The intros have been held to this since Rehearsal 3; the recap never
+    /// was, and an energetic one came back as "WELCOME BACK TO HEAT CALLER
+    /// RACING!" and "Five lead changes! FIVE!". A voice that is not v3 reads
+    /// a word in capitals as letters - "W-E-L-C-O-M-E" - which is the
+    /// gibberish a room hears. The same CalmShouting the intros use, the
+    /// names kept as spelled, and each sentence given its capital back.
+    /// </summary>
+    private static async Task<string?> CalmRecapAsync(Task<string?> writing, IReadOnlyList<string> names)
+    {
+        var written = await writing.ConfigureAwait(false);
+
+        return string.IsNullOrWhiteSpace(written) ? written : CalmRecap(written, names);
+    }
+
+    /// <summary>CalmRecapAsync's body, for the tests.</summary>
+    internal static string CalmRecap(string text, IEnumerable<string> names)
+    {
+        var calmed = CalmShouting(text, names, out var shouted, out var stretched);
+
+        if (!shouted && !stretched)
+        {
+            return text;
+        }
+
+        calmed = LowerCaseI.Replace(calmed, "I");
+
+        return SentenceStartLower.Replace(calmed, m => m.Groups[1].Value + m.Groups[2].Value.ToUpperInvariant());
     }
 
     /// <summary>
@@ -3555,15 +3600,78 @@ public sealed class CommentaryService
             + (showName.Length > 0
                 ? $" for the Show named in the facts - say the show's name, \"{showName}\", word for word"
                 : " (no show name is given, so don't make one up)")
-            + (upNext.Length > 0 ? ", teeing up what is up next on the program" : string.Empty)
+            // NOTHING NEXT IS SAID SO (3 Nov 2026). With no "Up next" fact the
+            // model reached for the only race label it had - the one that
+            // had just finished - and promised it as next.
+            + (upNext.Length > 0
+                ? ", teeing up what is up next on the program by the name given there"
+                : ", without naming any next race - none is given, and the race just finished is not next")
             + (host.Length > 0 ? ", signing off as the Host named in the facts" : string.Empty)
             + ". The result has already been told: name the winner once at most and add nothing else about the race. "
             + $"One or two short sentences, under {ClosingWords + 10} words.";
 
-        return await RecordAndReturn("Closing", Ask(Client,
+        var line = await Ask(Client,
             BuildBroadcastSystemPrompt(0), facts,
             maxTokens: MaxTokensForWordLimit(),
-            temperature: Variety, ct: ct, timeout: BetweenRacesTimeout));
+            temperature: Variety, ct: ct, timeout: BetweenRacesTimeout);
+
+        // And checked, not only asked (3 Nov 2026): a sign-off that names
+        // the race just run without the one that is next has it as next.
+        // Nothing comes back, and the show's own sign-off goes out instead -
+        // see RaceControlControl.SignOffFallback.
+        if (line is not null && NamesTheRaceJustRun(line, session, upNext))
+        {
+            return null;
+        }
+
+        return await RecordAndReturn("Closing", Task.FromResult(line));
+    }
+
+    /// <summary>
+    /// True when a sign-off names the race that has just finished and not
+    /// the one up next - "roll straight into Q2 Heat 1 next" straight after
+    /// Q2 Heat 1. The label is matched as written and without its leading
+    /// words ("Stock Q2 Heat 1" or "Q2 Heat 1"), as whole words, so Q2 Heat 1
+    /// is not found inside Q2 Heat 10.
+    /// </summary>
+    internal static bool NamesTheRaceJustRun(string line, SessionRecord session, string? upNext)
+    {
+        var label = SpokenLabel(session);
+
+        if (string.Equals(label, "this race", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // The label, and the label with its leading words dropped one at a
+        // time - the class name a model leaves off - down to two words that
+        // still carry a number, so "Heat 1" counts and "Heat" alone does not.
+        var names = new List<string> { label };
+        var words = label.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        for (var skip = 1; words.Length - skip >= 2; skip++)
+        {
+            var tail = string.Join(' ', words.Skip(skip));
+
+            if (tail.Any(char.IsDigit))
+            {
+                names.Add(tail);
+            }
+        }
+
+        static bool Has(string text, string name) =>
+            Regex.IsMatch(text, $@"(?<![\p{{L}}\p{{N}}]){Regex.Escape(name)}(?![\p{{L}}\p{{N}}])",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        var next = (upNext ?? string.Empty).Trim();
+
+        // Naming the next race as well means the finished one was named as finished.
+        if (next.Length > 0 && Has(line, next))
+        {
+            return false;
+        }
+
+        return names.Any(name => name.Length >= 3 && !Has(next, name) && Has(line, name));
     }
 
     /// <summary>

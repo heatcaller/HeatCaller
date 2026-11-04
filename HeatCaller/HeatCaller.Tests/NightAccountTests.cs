@@ -160,12 +160,28 @@ public sealed class NightAccountTests
         var account = new NightAccount();
 
         account.Weighed(SegmentKind.GridHistory);
-        account.Refused(BudgetRefusal.ItsCapForTheNight);
+        account.Refused(BudgetRefusal.NothingNewToSay);
 
         var report = account.Report();
 
         Assert.NotNull(report);
         Assert.Contains("variety rule working", report!, StringComparison.Ordinal);
+    }
+
+    // The nightly limits follow How chatty since 3 Nov 2026, so a club
+    // that hit one is pointed at the dial rather than told it is working.
+    [Fact]
+    public void A_nightly_limit_names_the_dial_that_moves_it()
+    {
+        var account = new NightAccount();
+
+        account.Weighed(SegmentKind.BattleWatch);
+        account.Refused(BudgetRefusal.ItsCapForTheNight);
+
+        var report = account.Report();
+
+        Assert.NotNull(report);
+        Assert.Contains("How chatty", report!, StringComparison.Ordinal);
     }
 
     [Fact]

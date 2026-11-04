@@ -91,6 +91,42 @@ public partial class AnnouncerControl
     public Func<string>? RaceDayId { get; set; }
 
     /// <summary>
+    /// Which demo has the night, as MainForm reads it - null for a real
+    /// race. A demo's counts are its own and never saved; see
+    /// CommentaryDirector.NewMeeting.
+    /// </summary>
+    public Func<int?>? DemoRun { get; set; }
+
+    /// <summary>
+    /// Battle watches handed to the voice whose first word has not gone out
+    /// yet - see WatchForUnheardBattles. Written from the UI thread and
+    /// answered from the voice and timing threads.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<BattlePair, byte> _battlesNotYetHeard = new();
+
+    /// <summary>
+    /// Gives a battle watch's turn back when the voice throws it away before
+    /// a word of it is heard (3 Nov 2026). The director settles a segment as
+    /// said when it is queued; a close fight that swapped in the seconds
+    /// after was then binned by the voice, and the segment's nightly and
+    /// per-class limit was spent with nothing said - on a night of Stock
+    /// heats, by the second heat. A line that reaches the speaker first
+    /// keeps its turn, whatever happens to the rest of the exchange.
+    /// </summary>
+    private void WatchForUnheardBattles()
+    {
+        _announcer.BattleLineOnAir += pair => _battlesNotYetHeard.TryRemove(pair, out _);
+
+        _announcer.BattleLineDropped += pair =>
+        {
+            if (_battlesNotYetHeard.TryRemove(pair, out _))
+            {
+                Director?.BattleUnheard();
+            }
+        };
+    }
+
+    /// <summary>
     /// The class on track, as MainForm reads it from the active round.
     ///
     /// Scopes the per-class caps in the budget, and tells the history
@@ -1612,7 +1648,7 @@ public partial class AnnouncerControl
         // Cheap and idempotent - it returns at once for the day it is
         // already on, and starts a fresh night when somebody opens a new
         // one halfway through an evening.
-        director.NewMeeting(day);
+        director.NewMeeting(day, DemoRun?.Invoke());
 
         if (!string.Equals(_directorDay, day, StringComparison.Ordinal))
         {
@@ -1673,6 +1709,8 @@ public partial class AnnouncerControl
             // at 0 in every launch - and tonight's spent facts are restored
             // across one, so the mains would find "pole:5" already said by
             // a heat. The time of the green makes it this race's own.
+            _battlesNotYetHeard.Clear();
+
             director.RaceStarted(
                 $"{_race.SessionGeneration}@{DateTime.Now.Ticks}",
                 RaceClassName?.Invoke());
@@ -1682,6 +1720,13 @@ public partial class AnnouncerControl
             _directorGeneration = -1;
 
             director.RaceFinished();
+
+            // What the AI said in that race and what held the rest, in the
+            // log as well as in Race Control's "Lines not said" window.
+            if (director.Account.RaceReport() is { Length: > 0 } race)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [brain] {race}");
+            }
         }
 
         // The next race on its way closes the gap after the last one, so no
@@ -1807,7 +1852,7 @@ public partial class AnnouncerControl
             return;
         }
 
-        director.NewMeeting(day);
+        director.NewMeeting(day, DemoRun?.Invoke());
 
         // THE RACE TRACKED HERE TOO (22 Oct 2026, bug hunt), the way the AI
         // branch tracks it. Paid reads only go out in the gap after a flag
@@ -2437,6 +2482,13 @@ public partial class AnnouncerControl
         if (_settings is null)
         {
             return Task.CompletedTask;
+        }
+
+        // Not heard until a line of it reaches the speaker - see
+        // WatchForUnheardBattles.
+        if (said.Kind == SegmentKind.BattleWatch && said.About is { } pair)
+        {
+            _battlesNotYetHeard[pair] = 0;
         }
 
         // The show segments get an opener in front of them and a bed

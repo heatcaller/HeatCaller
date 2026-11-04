@@ -344,12 +344,16 @@ public sealed class ShowChatterTests
         budget.Stature = new RaceStature(RaceBilling.Heat, false);
         budget.Chatter = "sparing";
 
+        // Past the segment's own gap, which Sparing lengthens (3 Nov 2026).
+        var step = ShowChatter.ScaledGap(CommentaryBudget.Spec(SegmentKind.ComingUpNext).MinGap, "sparing")
+                   + TimeSpan.FromSeconds(1);
+
         for (var i = 0; i < Cap(RaceBilling.Heat, "sparing"); i++)
         {
             var verdict = budget.Reserve(SegmentKind.ComingUpNext);
             Assert.True(verdict.Allowed);
             budget.Settle(verdict.Ticket);
-            clock.Advance(TimeSpan.FromSeconds(25));
+            clock.Advance(step);
         }
 
         var refused = budget.Peek(SegmentKind.ComingUpNext);

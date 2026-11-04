@@ -74,28 +74,6 @@ public sealed class CommentaryControl : UserControl
     private readonly ComboBox _cmbChatter = new();
     private readonly Label _lblChatter = new();
 
-    // --- And how fast it says it (14 Oct 2026) ---
-    //
-    // The dial above is HOW MUCH. This one is HOW FAST, and they had to be
-    // two controls: the chattiness dial scales a per-DRIVER cap, so three
-    // cars at a cap of two are six calls a lap and ten cars are twenty,
-    // every one of them inside the cap the club set. Nothing had an
-    // opinion about the field until this. See AnnouncerDensity, which has
-    // the console log the report came with.
-    private readonly ComboBox _cmbDensity = new();
-    private readonly Label _lblDensity = new();
-
-    // --- And how far down the segments go (22 Oct 2026) ---
-    //
-    // AppSettings.CommentaryLowestTier was stored, handed to the budget
-    // (CommentaryDirector.NewMeeting) and offered nowhere - a club that
-    // never wanted the furniture had no way to say so short of unticking
-    // every box in the group, every one of which came back on with an
-    // update that added another. One choice, read off the tiers the boxes
-    // below are already grouped by. See TierChoices.
-    private readonly ComboBox _cmbLowestTier = new();
-    private readonly Label _lblLowestTier = new();
-
     private readonly CheckBox _chkIntros = new ThemedCheckBox();
     private readonly CheckBox _chkIntrosSelective = new ThemedCheckBox();
     private readonly CheckBox _chkDriverIntros = new ThemedCheckBox();
@@ -182,60 +160,6 @@ public sealed class CommentaryControl : UserControl
     /// <summary>The pickers' widths as last measured - see Pieces.PickerWidth.</summary>
     private (Font Font, int Count, int Width)? _toneWidth;
     private (Font Font, int Count, int Width)? _chatterWidth;
-
-    /// <summary>The pacing picker's measured width - see _chatterWidth.</summary>
-    private (Font Font, int Count, int Width)? _densityWidth;
-
-    /// <summary>The "Segments run" picker's measured width - see _chatterWidth.</summary>
-    private (Font Font, int Count, int Width)? _lowestTierWidth;
-
-    /// <summary>
-    /// The choices for how far down the segments go, most first. Each is the
-    /// LOWEST tier that still runs - AppSettings.CommentaryLowestTier - and
-    /// what it means said in the page's own group names, since nobody
-    /// setting up a race night knows the tiers by their names in the code.
-    /// Essential is never silenced by this (CommentaryBudget), which is why
-    /// the last choice still has the intros and recaps.
-    /// </summary>
-    internal static readonly IReadOnlyList<(SegmentTier Tier, string Name, string Says)> TierChoices = new[]
-    {
-        (SegmentTier.Flourish, "Everything that is ticked",
-            "Every ticked segment below can run, the top and tail of the evening included."),
-        (SegmentTier.Colour, "All but the top and tail",
-            "Nothing under \"The show\" runs, whatever is ticked there - no cold open, halfway standings or sign-off numbers."),
-        (SegmentTier.Core, "The live ones only",
-            "Only \"During the race\" runs. Nothing under \"Around the race\" or \"The show\", whatever is ticked."),
-        (SegmentTier.Essential, "Intros and recaps only",
-            "None of the segments below run. The race intros, recaps and achievements still do."),
-    };
-
-    /// <summary>
-    /// Where a saved setting sits in <see cref="TierChoices"/> - the first
-    /// choice (everything) for anything out of range, which is what the
-    /// budget does with it too (CommentaryDirector.LowestTierOf).
-    /// </summary>
-    internal static int TierChoiceIndex(int saved)
-    {
-        var tier = CommentaryDirector.LowestTierOf(saved);
-
-        for (var i = 0; i < TierChoices.Count; i++)
-        {
-            if (TierChoices[i].Tier == tier)
-            {
-                return i;
-            }
-        }
-
-        return 0;
-    }
-
-    /// <summary>
-    /// Raised when the club changes how far down the segments go, so the
-    /// director's budget - on the announcer screen, which this page cannot
-    /// reach - takes it tonight rather than at the next race day. The host
-    /// joins them up (MainForm.Commentary).
-    /// </summary>
-    internal event Action? LowestTierChanged;
 
     // Club notes, the room's vote and listening along - and the three
     // events that told the relay when one was switched off - moved to the
@@ -1068,95 +992,20 @@ public sealed class CommentaryControl : UserControl
 
         DescribeChatter();
 
-        // PACING, directly under chattiness because the two are read
-        // together and a club looking for one will find the other. Built
-        // the same way for the same reason - filled from the table, the
-        // handler attached after the club's own choice is selected, and
-        // the line beneath worked out from the real gaps rather than
-        // typed.
-        _cmbDensity.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbDensity.Items.Clear();
-
-        foreach (var level in AnnouncerDensity.All)
-        {
-            _cmbDensity.Items.Add(level.Name);
-        }
-
-        var densityNow = AnnouncerDensity.For(_settings.AnnouncerDensity);
-        var densityAt = 0;
-
-        for (var i = 0; i < AnnouncerDensity.All.Count; i++)
-        {
-            if (AnnouncerDensity.All[i].Key == densityNow.Key)
-            {
-                densityAt = i;
-                break;
-            }
-        }
-
-        _cmbDensity.SelectedIndex = densityAt;
-
-        _cmbDensity.SelectedIndexChanged += (_, _) =>
-        {
-            var at = _cmbDensity.SelectedIndex;
-
-            _settings.AnnouncerDensity = at >= 0 && at < AnnouncerDensity.All.Count
-                ? AnnouncerDensity.All[at].Key
-                : string.Empty;
-
-            _settings.Save();
-            _lblDensity.Text = AnnouncerDensity.Describe(_settings.AnnouncerDensity);
-        };
-
-        _lblDensity.Text = AnnouncerDensity.Describe(_settings.AnnouncerDensity);
-
-        // HOW FAR DOWN THE SEGMENTS GO (22 Oct 2026, known issues), with the
-        // other two dials: all three are about how much the night hears,
-        // and the boxes below go grey past the club's choice so the page
-        // says why a ticked segment never runs. Built as the two above.
-        _cmbLowestTier.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbLowestTier.Items.Clear();
-
-        foreach (var choice in TierChoices)
-        {
-            _cmbLowestTier.Items.Add(choice.Name);
-        }
-
-        _cmbLowestTier.SelectedIndex = TierChoiceIndex(_settings.CommentaryLowestTier);
-
-        _cmbLowestTier.SelectedIndexChanged += (_, _) =>
-        {
-            var at = _cmbLowestTier.SelectedIndex;
-
-            _settings.CommentaryLowestTier = at >= 0 && at < TierChoices.Count
-                ? (int)TierChoices[at].Tier
-                : (int)SegmentTier.Flourish;
-
-            _settings.Save();
-            _lblLowestTier.Text = TierChoices[TierChoiceIndex(_settings.CommentaryLowestTier)].Says;
-            UpdateEnabledState();
-            LowestTierChanged?.Invoke();
-        };
-
-        _lblLowestTier.Text = TierChoices[TierChoiceIndex(_settings.CommentaryLowestTier)].Says;
-
-        // The three dials on the left caption column with every other field
-        // (Flush): they were a step in, as if they belonged to a switch above
-        // them, and there is none.
+        // ONE DIAL (3 Nov 2026). This card had three: How chatty, Pacing and
+        // Segments run, and a club that turned all three up still heard a
+        // quiet night - the segments' own limits and gaps answered to none
+        // of them, Pacing only ever spaced the built-in timing calls, and
+        // Segments run said again what the tick boxes below already say.
+        // How chatty now moves every limit (see ShowChatter), Pacing lives
+        // on the Voice tab beside the per-lap cap it belongs with, and
+        // Segments run was folded into the ticks (AppSettings.FoldLowestTier).
         var chatterGrid = new FieldGrid();
 
         Flush(chatterGrid.AddRow("How chatty:", Line(_cmbChatter)));
         chatterGrid.AddHint(_lblChatter);
-
-        Flush(chatterGrid.AddRow("Pacing:", Line(_cmbDensity)));
-        chatterGrid.AddHint(_lblDensity);
-
-        Flush(chatterGrid.AddRow("Segments run:", Line(_cmbLowestTier)));
-        chatterGrid.AddHint(_lblLowestTier);
-
         chatterGrid.AddHint(Hint(
-            "On Race Control, \"held\" timing calls are this dial leaving a gap; \"lost\" ones are the announcer "
-            + "running out of room."));
+            "The spacing of the built-in timing calls (\"Top spot to Al Gorithim!\") is Pacing, on the Voice tab."));
 
         // ------------------------------------------------------------------
         // THE CARDS IN THE ORDER THE NIGHT HAPPENS (22 Oct 2026, page tidy).
@@ -1439,11 +1288,6 @@ public sealed class CommentaryControl : UserControl
 
         Fit(_cmbTone, Math.Max(UiLayout.AtTextSize(TonePickerWidth), Pieces.PickerWidth(_cmbTone, ref _toneWidth)));
         Fit(_cmbChatter, Math.Max(UiLayout.AtTextSize(ShowPieceWidth), Pieces.PickerWidth(_cmbChatter, ref _chatterWidth)));
-        // The pacing dial beside it, sized the same way. Left out when the
-        // dial was added (14 Oct 2026), so it kept the default width and
-        // "Room to breathe" was cut off at every size the layout test checks.
-        Fit(_cmbDensity, Math.Max(UiLayout.AtTextSize(ShowPieceWidth), Pieces.PickerWidth(_cmbDensity, ref _densityWidth)));
-        Fit(_cmbLowestTier, Math.Max(UiLayout.AtTextSize(ShowPieceWidth), Pieces.PickerWidth(_cmbLowestTier, ref _lowestTierWidth)));
 
         foreach (var number in new[]
                  {
@@ -1861,17 +1705,10 @@ public sealed class CommentaryControl : UserControl
         _numMaxWords.Enabled = on;
         _numVariety.Enabled = on;
 
-        // Grey past the club's "Segments run" choice too, so a ticked box
-        // that will never run says so (22 Oct 2026). Still ticked: the
-        // tick is kept for the day the club turns the dial back up.
-        var lowest = CommentaryDirector.LowestTierOf(_settings.CommentaryLowestTier);
-
-        foreach (var (kind, box) in _segmentBoxes)
+        foreach (var box in _segmentBoxes.Values)
         {
-            box.Enabled = on && CommentaryBudget.Spec(kind).Tier <= lowest;
+            box.Enabled = on;
         }
-
-        _cmbLowestTier.Enabled = on;
 
         // NOT GATED ON COMMENTARY (17 Oct 2026). How chatty also scales the
         // announcer's own lap calls (AnnouncementService reads

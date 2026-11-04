@@ -268,16 +268,11 @@ Intros and recaps say what kind of race it is: a qualifying heat, a main (the A-
 
 Intros and recaps are what the announcer says about a race. This card is everything else, and how much of it there is: *"Not written lap by lap - a model takes longer than a lap. Each segment speaks only when the race gives it something to say, and the night saves itself for the mains."* So switching every segment on doesn't mean hearing them all every race.
 
-**How chatty:** and **Pacing:** come first, each with a line under it describing the choice. **How chatty** sets the level the night's shape sits at - see [How chatty](#how-chatty). The line under the three dials: "On Race Control, "held" timing calls are this dial leaving a gap; "lost" ones are the announcer running out of room." See [The Broadcast window](#the-broadcast-window).
+**How chatty:** comes first, with a line under it describing the choice. It's the one dial for the AI commentary: it sets the level the night's shape sits at, and every segment's own limits and gaps - see [How chatty](#how-chatty). The tick boxes below it say which segments run.
 
-**Segments run:**, under **Pacing:**, sets how far down the segment groups below the night goes, whatever is ticked. Segments past the choice are grayed out, and a change takes effect straight away.
+**Pacing**, the gap between the built-in timing calls ("Top spot to Al Gorithim!"), is on **Voice > Announcements**, in the **How often** card beside **Max spoken announcements per lap**. It never governed the AI's segments, which is why it moved. The **Segments run** picker that used to sit here is gone: a club that had picked less than everything finds the segments past its choice unticked instead, so nothing it heard changes.
 
-| Choice | What runs |
-|---|---|
-| **Everything that is ticked** | Every ticked segment, the top and tail of the evening included. |
-| **All but the top and tail** | Nothing under **The show** runs - no cold open, halfway standings or sign-off numbers. |
-| **The live ones only** | Only **During the race**. Nothing under **Around the race** or **The show**. |
-| **Intros and recaps only** | None of the segments run. The race intros, recaps and achievements still do. |
+To see why the AI said little in a race, click the lost/held count on Race Control's announcer strip. The **Lines not said this race** window now opens with a line for the AI: what it said, and what held the rest, such as "too soon after the last line x12".
 
 Under the dials are the talking points:
 
@@ -1326,12 +1321,24 @@ The last race on the program still gets its extra at every volume: a Standard he
 
 **Lively and Non-stop also let the co-host out in the heats.** By default the second voice is held for the mains, because a signal spent on everything isn't a signal — but a club asking for a chatty evening means the two voices as much as it means the count.
 
+**It moves every segment's own limits too.** Each segment has a most-per-night, a most-per-class and a gap it keeps after the last line. A battle watch, at Standard, is said at most 8 times a night and 4 times per class, and waits 40 seconds after any line. **How chatty** scales all three, and how much of the night's share is saved for the mains:
+
+| | Sparing | Measured | **Standard** | Lively | Non-stop |
+|---|---|---|---|---|---|
+| Limits per night and per class | half | three quarters | **as set** | double | none |
+| Gap after the last line | 1.5 times | 1.25 times | **as set** | 0.6 times | about a third |
+| Saved for the mains | yes | yes | **yes** | less | nothing |
+
+A segment that is once a night (the cold open, the sign-off numbers) stays once a night at every stop, and no quiet stop takes a ticked segment to nothing.
+
 Two things worth knowing before you decide the setting is broken:
 
 - **It can't silence a race.** Intros and recaps are essential and are never refused for airtime at all. On **Sparing** you still hear every race introduced and every result called; what you lose is the color around them.
 - **It can't make the club talk more than it can afford.** Every money gate sits in *front* of the airtime ceiling, so **Non-stop** at a club with a small monthly allowance buys very little — the ceiling goes up and the headroom is what actually decides.
 
 Leave it on **Standard** and nothing changes: that's the pacing exactly as it shipped.
+
+**A demo gets a night of its own.** Each demo run, from the Demo Mode page or a round's **Start as Demo...**, starts with fresh limits and is forgotten afterwards, so rehearsing the heats at six doesn't use up what the real heats at seven are owed. A demo still spends relay lines from the month, like any other race.
 
 The console names whichever of the two moved the ceiling, so a quiet night reads as a decision rather than a fault:
 
