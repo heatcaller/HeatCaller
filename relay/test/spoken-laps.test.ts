@@ -122,7 +122,7 @@ describe("lap times in my ear: the control", () => {
   it("is on the live page for every club, with only the note until somebody is followed", async () => {
     const { html } = pageParts(livePage("acme-rc", "Acme RC", DEFAULT_CONTEXT));
     assert.match(html, /<button type="button" id="lapbtn"[^>]*aria-pressed="false"[^>]*>Lap times in my ear: off<\/button>/);
-    assert.match(html, /id="lapshort"/);
+    assert.match(html, /id="lapsayrow"/);
 
     const l = live(field([9500, 9600]));
     await l.p.settle();
@@ -132,7 +132,11 @@ describe("lap times in my ear: the control", () => {
 
     await follow(l, "Asher K.");
     assert.equal(l.p.get("lapbtn").hidden, false);
-    assert.equal(l.p.get("lapshortrow").hidden, false);
+    assert.equal(l.p.get("lapsayrow").hidden, false);
+    for (const part of ["lap", "time", "best", "pos", "gap"]) {
+      assert.equal((l.p.get("lapsay-" + part) as unknown as { checked: boolean }).checked, true, part + " is on until turned off");
+    }
+    assert.equal(l.p.byId.has("lapsay-target"), false, "no target on the Live page");
     assert.match(l.p.get("lapnote").textContent, /each of Asher K..s laps/);
   });
 
@@ -169,20 +173,46 @@ describe("lap times in my ear: what is said", () => {
     assert.equal(l.said.length, 3, "nothing more until another lap");
   });
 
-  it("says only the time, and best lap, with Time only ticked", async () => {
+  it("says only the parts ticked in What to say, and remembers them (3 Nov 2026)", async () => {
     const l = live(field([9500, 9600]));
     await l.p.settle();
     await follow(l, "Asher K.");
-    const box = l.p.get("lapshort") as unknown as { checked: boolean; fire(t: string): void };
-    box.checked = true;
-    box.fire("change");
+    for (const part of ["lap", "pos", "gap"]) {
+      const box = l.p.get("lapsay-" + part) as unknown as { checked: boolean; fire(t: string): void };
+      box.checked = false;
+      box.fire("change");
+    }
+    assert.equal(l.p.store.get("hg-laptalk-say-acme-rc"), "time,best,target");
     await turnOn(l);
     await l.p.advance(1000);
 
     l.set(field([9500, 9600, 9400]));
     await l.p.advance(1000);
     assert.equal(l.said.at(-1), "9.40, best lap");
-    assert.equal(l.p.store.get("hg-laptalk-short-acme-rc"), "1");
+  });
+
+  it("says the place without the time when only Position is ticked", async () => {
+    const l = live(field([9500, 9600]), { stored: { "hg-laptalk-say-acme-rc": "pos" } });
+    await l.p.settle();
+    await follow(l, "Asher K.");
+    await turnOn(l);
+    await l.p.advance(1000);
+    l.set(field([9500, 9600, 9700]));
+    await l.p.advance(1000);
+    assert.equal(l.said.at(-1), "P2");
+  });
+
+  it("keeps what a phone with Time only ticked said: the time and best lap", async () => {
+    const l = live(field([9500, 9600]), { stored: { "hg-laptalk-short-acme-rc": "1" } });
+    await l.p.settle();
+    await follow(l, "Asher K.");
+    assert.equal((l.p.get("lapsay-lap") as unknown as { checked: boolean }).checked, false);
+    assert.equal((l.p.get("lapsay-time") as unknown as { checked: boolean }).checked, true);
+    await turnOn(l);
+    await l.p.advance(1000);
+    l.set(field([9500, 9600, 9400]));
+    await l.p.advance(1000);
+    assert.equal(l.said.at(-1), "9.40, best lap");
   });
 
   it("reads Gap to P1 for the car in second when the board has no Interval", async () => {

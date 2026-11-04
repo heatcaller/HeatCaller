@@ -149,7 +149,8 @@ describe("My Night lap times: the control", () => {
     assert.match(part.textContent, /Lap times in my ear/);
     assert.equal(n.p.get("nt-laptalk").textContent, "Read out my laps");
     assert.equal(n.p.get("nt-laptalk").getAttribute("aria-pressed"), "false");
-    assert.match(part.textContent, /Time only/);
+    assert.match(part.textContent, /What to say/);
+    assert.match(part.textContent, /Lap number.*Lap time.*Best lap.*Target.*Position.*Gap ahead/);
     assert.match(part.textContent, /your target when one is set/);
   });
 
@@ -215,12 +216,14 @@ describe("My Night lap times: what is said", () => {
     assert.equal(n.said.at(-1), "Lap 6, 9.602, on target, P2, 0.41 seconds behind", "the time as the screen shows it, never rounded");
   });
 
-  it("with Time only ticked says the time, best lap and the target", async () => {
+  it("says only the parts ticked in What to say: here the time, best lap and the target (3 Nov 2026)", async () => {
     const n = await open(field([9500, 9600]), { cars: [{ tag: MINE, target: 9600 }] });
-    const box = n.p.get("nt-lapshort") as FakeNode & { checked: boolean };
-    box.checked = true;
-    box.fire("change");
-    assert.equal(n.p.store.get("hg-nighttalk-short-acme-rc"), "1");
+    for (const part of ["lap", "pos", "gap"]) {
+      const box = n.p.get("nt-say-" + part) as FakeNode & { checked: boolean };
+      box.checked = false;
+      box.fire("change");
+    }
+    assert.equal(n.p.store.get("hg-nighttalk-say-acme-rc"), "time,best,target");
 
     await turnOn(n);
     await n.p.advance(1000);

@@ -644,6 +644,10 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .ears label { display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; font-size: 0.95rem; }
 .ears label[hidden], .ears button[hidden] { display: none; }
 .ears button[aria-pressed=true] { background: var(--primary); color: var(--on-primary, #FFFFFF); }
+/* What to say (3 Nov 2026): a box per part of a lap's call. */
+.lvsay { margin: 10px 0 0; }
+.lvsay > span { display: block; font-size: 0.85rem; opacity: 0.8; margin-bottom: 2px; }
+.lvsay label, .ears .lvsay label { display: inline-flex; align-items: center; gap: 6px; margin: 2px 14px 2px 0; font-size: 0.95rem; }
 /* Message the announcer and Who wins? (2 Nov 2026): the live page's two
    ways into the room from outside it, when the club has them switched on.
    Every field full width and 16px text, as sign-up's are, so a phone does
@@ -3800,6 +3804,59 @@ const lapVoice = (function () {
   };
 })();
 
+// --- What to say (3 Nov 2026, Asher: "enable each component of what is
+// spoken") -------------------------------------------------------------------
+// One box per part of a lap's call, kept on this phone, in place of the
+// single Time only box. Every part is on until it is turned off. A phone
+// that had Time only ticked keeps what it said: the time, best lap and the
+// target. Nothing ticked says nothing.
+const LV_SAY = [
+  ['lap', 'Lap number'], ['time', 'Lap time'], ['best', 'Best lap'],
+  ['target', 'Target'], ['pos', 'Position'], ['gap', 'Gap ahead'],
+];
+
+function lvSayRead(key, shortKey) {
+  const say = {};
+  LV_SAY.forEach((p) => { say[p[0]] = true; });
+  try {
+    const saved = localStorage.getItem(key);
+    if (typeof saved === 'string') {
+      const on = saved.split(',');
+      LV_SAY.forEach((p) => { say[p[0]] = on.indexOf(p[0]) >= 0; });
+    } else if (localStorage.getItem(shortKey) === '1') {
+      say.lap = false; say.pos = false; say.gap = false;
+    }
+  } catch (e) { /* everything, then */ }
+  return say;
+}
+
+function lvSaySave(key, say) {
+  try { localStorage.setItem(key, LV_SAY.filter((p) => say[p[0]]).map((p) => p[0]).join(',')); } catch (e) { /* this visit only */ }
+}
+
+// The boxes for the parts this page says (names), each changing say in place.
+function lvSayBoxes(say, names, idPrefix, key) {
+  const wrap = document.createElement('div');
+  wrap.className = 'lvsay';
+  const head = document.createElement('span');
+  head.textContent = 'What to say';
+  wrap.appendChild(head);
+  LV_SAY.filter((p) => names.indexOf(p[0]) >= 0).forEach((p) => {
+    const label = document.createElement('label');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.id = idPrefix + p[0];
+    box.checked = !!say[p[0]];
+    box.addEventListener('change', () => { say[p[0]] = !!box.checked; lvSaySave(key, say); });
+    label.appendChild(box);
+    const words = document.createElement('span');
+    words.textContent = p[1];
+    label.appendChild(words);
+    wrap.appendChild(label);
+  });
+  return wrap;
+}
+
 // --- The clips for each kind of words, the names lapvoice.ts makes. ---------
 // Null when there is no clip: the call is then the phone's.
 
@@ -3889,19 +3946,19 @@ const bar = document.getElementById('bar');
 const lapTalk = (function () {
   const box = document.getElementById('laptalk');
   const btn = document.getElementById('lapbtn');
-  const shortBox = document.getElementById('lapshort');
-  const shortRow = document.getElementById('lapshortrow');
+  const sayRow = document.getElementById('lapsayrow');
   const note = document.getElementById('lapnote');
   const canSpeak = typeof window.speechSynthesis === 'object' && window.speechSynthesis !== null
     && typeof SpeechSynthesisUtterance === 'function';
   const ON_KEY = 'hg-laptalk-' + CLUB;
   const SHORT_KEY = 'hg-laptalk-short-' + CLUB;
+  const SAY_KEY = 'hg-laptalk-say-' + CLUB;
   const AUTOLOCK = ' If your screen goes dark, set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while you race.';
 
-  let on = false, timeOnly = false, unlocked = false;
+  let on = false, unlocked = false;
+  const say = lvSayRead(SAY_KEY, SHORT_KEY);
   try {
     on = canSpeak && localStorage.getItem(ON_KEY) === '1';
-    timeOnly = localStorage.getItem(SHORT_KEY) === '1';
   } catch (e) { /* off, and full calls */ }
 
   // Whose laps were last counted, how many, and the first of them.
@@ -3968,8 +4025,7 @@ const lapTalk = (function () {
     if (!canSpeak) return;
     const who = memory;
     btn.hidden = !who;
-    shortRow.hidden = !who;
-    shortBox.checked = timeOnly;
+    if (sayRow) sayRow.hidden = !who;
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     btn.textContent = 'Lap times in my ear: ' + (!on ? 'off' : unlocked ? 'on' : 'tap to resume');
     if (!who) {
@@ -4039,16 +4095,18 @@ const lapTalk = (function () {
     // Lap 1 (3 Nov 2026, Asher: "add Lap 1"): the start lap has no time -
     // it runs from the green - so it is the lap number, place and gap.
     // "lap" is the car's crossings, sent by HeatCaller from 3 Nov 2026;
-    // an older one sends none, and lap 1 is not said. Nothing in Time only.
+    // an older one sends none, and lap 1 is not said. Only the parts
+    // ticked in What to say.
     if (lapOne) {
-      if (timeOnly) return;
       const pos = rows.indexOf(row) + 1;
-      const one = [{ text: 'Lap 1', clips: lvLap(1) }, { text: 'P' + pos, clips: lvPlace(pos) }];
-      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
+      const one = [];
+      if (say.lap) one.push({ text: 'Lap 1', clips: lvLap(1) });
+      if (say.pos) one.push({ text: 'P' + pos, clips: lvPlace(pos) });
+      const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
       const gap = gapWords(raw);
       if (gap) one.push({ text: gap, clips: lvGap(raw) });
       lapVoice.warm(['lap2', 'best']);
-      call(one);
+      if (one.length > 0) call(one);
       return;
     }
 
@@ -4056,22 +4114,20 @@ const lapTalk = (function () {
     const last = laps[count - 1];
     const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
     const isBest = count > 1 && last <= best;
-    const parts = [{ text: lvTimeText(last), clips: lvTime(last) }];
-    if (isBest) parts.push({ text: 'best lap', clips: ['best'] });
+    const pos = rows.indexOf(row) + 1;
 
-    if (!timeOnly) {
-      const pos = rows.indexOf(row) + 1;
-      parts.unshift({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
-      parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
-      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
-      const gap = gapWords(raw);
-      if (gap) parts.push({ text: gap, clips: lvGap(raw) });
-      lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
-    } else {
-      lapVoice.warm(lvAhead(count + 1, last));
-    }
+    // In the order they are said; only the parts ticked in What to say.
+    const parts = [];
+    if (say.lap) parts.push({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
+    if (say.time) parts.push({ text: lvTimeText(last), clips: lvTime(last) });
+    if (say.best && isBest) parts.push({ text: 'best lap', clips: ['best'] });
+    if (say.pos) parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
+    const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
+    const gap = gapWords(raw);
+    if (gap) parts.push({ text: gap, clips: lvGap(raw) });
+    lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
 
-    call(parts);
+    if (parts.length > 0) call(parts);
   }
 
   if (canSpeak && btn) {
@@ -4090,10 +4146,7 @@ const lapTalk = (function () {
       show();
     });
 
-    shortBox.addEventListener('change', () => {
-      timeOnly = !!shortBox.checked;
-      save(SHORT_KEY, timeOnly);
-    });
+    if (sayRow) sayRow.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'pos', 'gap'], 'lapsay-', SAY_KEY));
 
     // Any tap lets a page that was on before a reload speak again - and a
     // tap on a name changes who is followed, so the button is redrawn
@@ -4558,7 +4611,7 @@ const VOTE_JS = `
 function lapTalkControl(): string {
   return '<div class="card ears" id="laptalk">'
     + '<button type="button" id="lapbtn" class="btn" aria-pressed="false" hidden>Lap times in my ear: off</button>'
-    + '<label id="lapshortrow" hidden><input type="checkbox" id="lapshort"> Time only</label>'
+    + '<div id="lapsayrow" hidden></div>'
     + '<p class="note" id="lapnote">Tap a driver&rsquo;s name on the board to follow them, then your phone can read out each of their laps.</p>'
     + "</div>";
 }
@@ -7779,12 +7832,13 @@ const nightTalk = (function () {
     && typeof SpeechSynthesisUtterance === 'function';
   const ON_KEY = 'hg-nighttalk-' + CLUB;
   const SHORT_KEY = 'hg-nighttalk-short-' + CLUB;
+  const SAY_KEY = 'hg-nighttalk-say-' + CLUB;
   const AUTOLOCK = ' If your screen goes dark, set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while you race.';
 
-  let on = false, timeOnly = false, unlocked = false;
+  let on = false, unlocked = false;
+  const say = lvSayRead(SAY_KEY, SHORT_KEY);
   try {
     on = canSpeak && localStorage.getItem(ON_KEY) === '1';
-    timeOnly = localStorage.getItem(SHORT_KEY) === '1';
   } catch (e) { /* off, and full calls */ }
 
   // Which car's laps were last counted, how many, and the first of them.
@@ -7927,39 +7981,39 @@ const nightTalk = (function () {
     // Lap 1 (3 Nov 2026, Asher: "add Lap 1"): the start lap has no time -
     // it runs from the green - so it is the lap number, place and gap.
     // "lap" is the car's crossings, sent by HeatCaller from 3 Nov 2026;
-    // an older one sends none, and lap 1 is not said. Nothing in Time only.
+    // an older one sends none, and lap 1 is not said. Only the parts
+    // ticked in What to say.
     if (lapOne) {
-      if (timeOnly) return;
       const pos = rows.indexOf(row) + 1;
-      const one = [{ text: 'Lap 1', clips: lvLap(1) }, { text: 'P' + pos, clips: lvPlace(pos) }];
-      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
+      const one = [];
+      if (say.lap) one.push({ text: 'Lap 1', clips: lvLap(1) });
+      if (say.pos) one.push({ text: 'P' + pos, clips: lvPlace(pos) });
+      const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
       const gap = gapWords(raw);
       if (gap) one.push({ text: gap, clips: lvGap(raw) });
       lapVoice.warm(['lap2', 'best']);
-      call(one);
+      if (one.length > 0) call(one);
       return;
     }
 
     const last = laps[count - 1];
     const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
-    const parts = [{ text: lvTimeText(last), clips: lvTime(last) }];
-    if (count > 1 && last <= best) parts.push({ text: 'best lap', clips: ['best'] });
-    const target = targetWords(last, car && car.target);
+    const pos = rows.indexOf(row) + 1;
+
+    // In the order they are said; only the parts ticked in What to say.
+    const parts = [];
+    if (say.lap) parts.push({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
+    if (say.time) parts.push({ text: lvTimeText(last), clips: lvTime(last) });
+    if (say.best && count > 1 && last <= best) parts.push({ text: 'best lap', clips: ['best'] });
+    const target = say.target ? targetWords(last, car && car.target) : '';
     if (target) parts.push({ text: target, clips: lvTarget(last, car.target) });
+    if (say.pos) parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
+    const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
+    const gap = gapWords(raw);
+    if (gap) parts.push({ text: gap, clips: lvGap(raw) });
+    lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
 
-    if (!timeOnly) {
-      const pos = rows.indexOf(row) + 1;
-      parts.unshift({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
-      parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
-      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
-      const gap = gapWords(raw);
-      if (gap) parts.push({ text: gap, clips: lvGap(raw) });
-      lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
-    } else {
-      lapVoice.warm(lvAhead(count + 1, last));
-    }
-
-    call(parts);
+    if (parts.length > 0) call(parts);
   }
 
   async function read() {
@@ -8009,15 +8063,7 @@ const nightTalk = (function () {
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
     p.appendChild(b);
 
-    const row = el('label', 'nt-short');
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.id = 'nt-lapshort';
-    box.checked = timeOnly;
-    box.addEventListener('change', () => { timeOnly = !!box.checked; save(SHORT_KEY, timeOnly); });
-    row.appendChild(box);
-    row.appendChild(el('span', '', 'Time only'));
-    p.appendChild(row);
+    p.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'target', 'pos', 'gap'], 'nt-say-', SAY_KEY));
 
     p.appendChild(el('div', 'when', !on
       ? 'Your phone reads out each of your laps as you race: lap, time, best lap, your target when one is set, place and gap. Keep this page open with the screen on.'

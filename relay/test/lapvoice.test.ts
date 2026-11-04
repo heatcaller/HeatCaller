@@ -521,7 +521,7 @@ describe("lap voice: the Live page", () => {
     assert.deepEqual(l.played.slice(3), ["lap2", "t940", "p2", "g-t4"]);
   });
 
-  it("says Lap 1 when the new race's first read already has it, and not in Time only", async () => {
+  it("says Lap 1 when the new race's first read already has it, and nothing with only the time ticked", async () => {
     const lap = (b: Board, n: number): Board => ({ ...b, standings: b.standings.map((r) => r.name === "Asher K." ? { ...r, lap: n } : r) });
     const l = await livePageWith(lap(field([9500, 9600]), 3), {});
     l.set(lap(field([]), 1));
