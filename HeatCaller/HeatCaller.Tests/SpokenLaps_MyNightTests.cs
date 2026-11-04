@@ -83,6 +83,26 @@ public sealed class SpokenLaps_MyNightTests : IDisposable
     }
 
     [Fact]
+    public void Every_row_carries_its_crossings_start_lap_included()
+    {
+        // 3 Nov 2026, Asher: "add Lap 1". "laps" leaves the start lap out,
+        // so "lap" is how a phone knows lap 1 is done.
+        var rows = RelayRows(Server());
+
+        Assert.Equal(2, rows[0]!["lap"]!.GetValue<int>());
+        Assert.Single(rows[0]!["laps"]!.AsArray());
+        Assert.Equal(2, rows[1]!["lap"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void The_lan_board_has_no_crossing_count()
+    {
+        var lan = JsonNode.Parse(Server().BuildStateJson())!["standings"]!.AsArray();
+
+        Assert.All(lan, r => Assert.Null(r!["lap"]));
+    }
+
+    [Fact]
     public void A_blank_transponder_has_no_tag()
     {
         Assert.Null(Server().RelayRowTag(" "));

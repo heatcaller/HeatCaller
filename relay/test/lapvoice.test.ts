@@ -266,6 +266,8 @@ interface Row {
   name: string;
   tag?: string;
   laps: number[];
+  /** Crossings, the start lap included (HeatCaller from 3 Nov 2026). */
+  lap?: number;
   best?: number;
   ahead?: string;
   cells?: { text: string; emphasis: string }[];
@@ -504,6 +506,42 @@ describe("lap voice: the Live page", () => {
     assert.deepEqual(l.played, ["lap2", "t940", "p2", "g-t4"]);
   });
 
+  it("says Lap 1 - number, place and gap, no time - when HeatCaller sends the crossings (3 Nov 2026)", async () => {
+    const lap = (b: Board, n: number): Board => ({ ...b, standings: b.standings.map((r) => r.name === "Asher K." ? { ...r, lap: n } : r) });
+    const l = await livePageWith(lap(field([]), 0), {});
+    l.set(lap(field([]), 1));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap1", "p2", "g-t4"]);
+    assert.deepEqual(l.played.map((n) => TEXT.get(n)), ["Lap one", "P two", "four tenths back"]);
+
+    await l.p.advance(1000);
+    assert.equal(l.played.length, 3, "once");
+    l.set(lap(field([9400]), 2));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played.slice(3), ["lap2", "t940", "p2", "g-t4"]);
+  });
+
+  it("says Lap 1 when the new race's first read already has it, and not in Time only", async () => {
+    const lap = (b: Board, n: number): Board => ({ ...b, standings: b.standings.map((r) => r.name === "Asher K." ? { ...r, lap: n } : r) });
+    const l = await livePageWith(lap(field([9500, 9600]), 3), {});
+    l.set(lap(field([]), 1));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap1", "p2", "g-t4"]);
+
+    const t = await livePageWith(lap(field([]), 0), {}, { "hg-laptalk-short-acme-rc": "1" });
+    t.set(lap(field([]), 1));
+    await t.p.advance(1000);
+    assert.deepEqual(t.played, []);
+    assert.deepEqual(t.said, []);
+  });
+
+  it("is quiet at lap 1 with an older HeatCaller, which sends no crossings", async () => {
+    const l = await livePageWith(field([]), {});
+    l.set(field([]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, []);
+  });
+
   it("says the first lap of a driver who was not on the board when it was turned on", async () => {
     const l = await livePageWith({ columns: COLUMNS, standings: [row("Sam P.", [9100])] }, {});
     await l.p.advance(1000);
@@ -666,6 +704,15 @@ describe("lap voice: My Night", () => {
     await p.advance(1000);
     assert.deepEqual(seen<string[]>(p, "__played").slice(7), ["lap5", "t945", "tg-m15", "tg-under", "p2", "g-t4"], "the clips, after coming back");
     assert.deepEqual(seen<string[]>(p, "__said"), [], "never the phone's voice");
+
+    // Lap 1 of the next race (3 Nov 2026): number, place and gap.
+    board = { ...board, standings: [board.standings[0]!, row("Asher K.", [], { tag: MINE, ahead: "+0.41", lap: 0 })] };
+    await p.advance(1000);
+    const atGrid = seen<string[]>(p, "__played").length;
+    board = { ...board, standings: [board.standings[0]!, row("Asher K.", [], { tag: MINE, ahead: "+0.41", lap: 1 })] };
+    await p.advance(1000);
+    await p.advance(1000);
+    assert.deepEqual(seen<string[]>(p, "__played").slice(atGrid), ["lap1", "p2", "g-t4"]);
 
     // Lap times off: said, then the silence stops with them (3 Nov 2026).
     const before = seen<string[]>(p, "__played").length;

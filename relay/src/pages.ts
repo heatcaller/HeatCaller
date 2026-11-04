@@ -3906,6 +3906,8 @@ const lapTalk = (function () {
 
   // Whose laps were last counted, how many, and the first of them.
   let heardFor = '', heardLaps = 0, firstLap = 0;
+  // Whether lap 1 has been heard - or was already done when counting began.
+  let heardStart = false;
   // Who has been off the board since this was turned on: arriving is a new race.
   let absent = '';
   // The screen wake lock, and whether the phone gave one (null: not asked).
@@ -4016,17 +4018,38 @@ const lapTalk = (function () {
     const laps = (Array.isArray(row.laps) ? row.laps : []).filter((v) => typeof v === 'number' && v > 0);
     const count = laps.length;
     const first = count > 0 ? laps[0] : 0;
+    const started = typeof row.lap === 'number' && row.lap >= 1;
+    let lapOne = false;
 
     // Somebody new, or a lap race control took away: counted from here,
     // quietly. A new race - or the driver arriving on the board - says its
     // newest lap (3 Nov 2026, Asher: "I didn't hear lap one"; see nightTalk).
     if (heardFor !== who || count < heardLaps || (heardLaps > 0 && first !== firstLap)) {
       const newRace = absent === who || (heardFor === who && first !== firstLap);
-      heardFor = who; heardLaps = count; firstLap = first; absent = '';
-      if (!newRace || count === 0) return;
+      heardFor = who; heardLaps = count; firstLap = first; absent = ''; heardStart = started;
+      if (!newRace) return;
+      if (count === 0) { if (!started) return; lapOne = true; }
+    } else if (count === heardLaps) {
+      if (count > 0 || !started || heardStart) return;
+      heardStart = true; lapOne = true;
     } else {
-      if (count === heardLaps) return;
-      heardLaps = count; firstLap = first;
+      heardLaps = count; firstLap = first; heardStart = true;
+    }
+
+    // Lap 1 (3 Nov 2026, Asher: "add Lap 1"): the start lap has no time -
+    // it runs from the green - so it is the lap number, place and gap.
+    // "lap" is the car's crossings, sent by HeatCaller from 3 Nov 2026;
+    // an older one sends none, and lap 1 is not said. Nothing in Time only.
+    if (lapOne) {
+      if (timeOnly) return;
+      const pos = rows.indexOf(row) + 1;
+      const one = [{ text: 'Lap 1', clips: lvLap(1) }, { text: 'P' + pos, clips: lvPlace(pos) }];
+      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
+      const gap = gapWords(raw);
+      if (gap) one.push({ text: gap, clips: lvGap(raw) });
+      lapVoice.warm(['lap2', 'best']);
+      call(one);
+      return;
     }
 
     // Two laps in one read - the phone or the relay was slow - says the newest.
@@ -7766,6 +7789,8 @@ const nightTalk = (function () {
 
   // Which car's laps were last counted, how many, and the first of them.
   let heardTag = '', heardLaps = 0, firstLap = 0;
+  // Whether lap 1 has been heard - or was already done when counting began.
+  let heardStart = false;
   // Whether their car has been off the board since lap times were turned on.
   let absent = false;
   // The screen wake lock: held, being asked for, and whether the phone gave one.
@@ -7877,6 +7902,8 @@ const nightTalk = (function () {
     const laps = (Array.isArray(row.laps) ? row.laps : []).filter((v) => typeof v === 'number' && v > 0);
     const count = laps.length;
     const first = count > 0 ? laps[0] : 0;
+    const started = typeof row.lap === 'number' && row.lap >= 1;
+    let lapOne = false;
 
     if (heardTag !== row.tag || count < heardLaps || (heardLaps > 0 && first !== firstLap)) {
       // WHY (3 Nov 2026, Asher: "I didn't hear lap one"): a new race was
@@ -7887,11 +7914,30 @@ const nightTalk = (function () {
       // new race, another of their cars, or the car arriving says its newest
       // lap. A lap race control took away is still quiet.
       const newRace = absent || (heardTag !== '' && (heardTag !== row.tag || first !== firstLap));
-      heardTag = row.tag; heardLaps = count; firstLap = first; absent = false;
-      if (!newRace || count === 0) return;
+      heardTag = row.tag; heardLaps = count; firstLap = first; absent = false; heardStart = started;
+      if (!newRace) return;
+      if (count === 0) { if (!started) return; lapOne = true; }
+    } else if (count === heardLaps) {
+      if (count > 0 || !started || heardStart) return;
+      heardStart = true; lapOne = true;
     } else {
-      if (count === heardLaps) return;
-      heardLaps = count; firstLap = first;
+      heardLaps = count; firstLap = first; heardStart = true;
+    }
+
+    // Lap 1 (3 Nov 2026, Asher: "add Lap 1"): the start lap has no time -
+    // it runs from the green - so it is the lap number, place and gap.
+    // "lap" is the car's crossings, sent by HeatCaller from 3 Nov 2026;
+    // an older one sends none, and lap 1 is not said. Nothing in Time only.
+    if (lapOne) {
+      if (timeOnly) return;
+      const pos = rows.indexOf(row) + 1;
+      const one = [{ text: 'Lap 1', clips: lvLap(1) }, { text: 'P' + pos, clips: lvPlace(pos) }];
+      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
+      const gap = gapWords(raw);
+      if (gap) one.push({ text: gap, clips: lvGap(raw) });
+      lapVoice.warm(['lap2', 'best']);
+      call(one);
+      return;
     }
 
     const last = laps[count - 1];
