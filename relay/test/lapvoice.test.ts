@@ -82,9 +82,9 @@ describe("lap voice: the clips", () => {
 
   it("costs about a dollar and a half to make once", () => {
     const cost = lapClipCost();
-    assert.equal(cost.clips, 2453);
-    assert.equal(cost.chars, 39666);
-    assert.equal(cost.dollars, 1.59);
+    assert.equal(cost.clips, 2744);
+    assert.equal(cost.chars, 45755);
+    assert.equal(cost.dollars, 1.83);
   });
 });
 
@@ -266,14 +266,20 @@ interface Row {
   name: string;
   tag?: string;
   laps: number[];
+  /** Crossings, the start lap included (HeatCaller from 3 Nov 2026). */
+  lap?: number;
   best?: number;
   ahead?: string;
+  /** The gap to P1 (HeatCaller from 3 Nov 2026). */
+  leader?: string;
   cells?: { text: string; emphasis: string }[];
 }
 
 interface Board {
   columns?: string[];
   standings: Row[];
+  /** The board's countdown: "5 LAPS TO GO", "04:32 REMAINING". */
+  countdown?: string;
 }
 
 function row(name: string, laps: number[], extra: Partial<Row> = {}): Row {
@@ -294,10 +300,19 @@ function withClips(p: FakePage, clips: Clips | null): void {
   p.eval("this.__said = []; this.__played = []; this.__asked = [];");
   p.eval(`
     this.SpeechSynthesisUtterance = function (text) { this.text = text; };
+    this.__held = 0; this.__paused = 0;
     window.speechSynthesis = { speak(u) { __said.push(u.text); }, cancel() {} };
+    // The looped silence that keeps an iPhone's silent switch off the clips.
+    this.Audio = window.Audio = function () {
+      this.play = function () { __held++; return Promise.resolve(); };
+      this.pause = function () { __paused++; };
+    };
     window.AudioContext = function () {
       this.state = 'running'; this.currentTime = 0; this.destination = {};
-      this.resume = function () {};
+      this.resumed = 0;
+      this.resume = function () { this.resumed++; };
+      window.__ctx = this;
+      window.__made = (window.__made || 0) + 1;
       this.decodeAudioData = function (bytes, ok) { ok({ duration: 0.5, name: bytes.name }); };
       this.createBufferSource = function () {
         return { connect() {}, stop() {}, start() { __played.push(this.buffer.name); } };
@@ -330,6 +345,8 @@ function seen<T>(p: FakePage, name: string): T {
 
 interface LivePage {
   p: FakePage;
+  /** What turning it on said and played. */
+  readonly turnedOn: { said: string[]; played: string[] };
   set(board: Board): void;
   readonly said: string[];
   readonly played: string[];
@@ -366,9 +383,12 @@ async function livePageWith(first: Board, clips: Clips | null, stored: Record<st
   p.get("lapbtn").click();
   await p.settle();
   await p.advance(1000);
+  const turnedOn = { said: seen<string[]>(p, "__said"), played: seen<string[]>(p, "__played") };
+  p.eval("__said.length = 0; __played.length = 0;");
 
   return {
     p,
+    turnedOn,
     set: (next) => { board = next; },
     get said() { return seen<string[]>(p, "__said"); },
     get played() { return seen<string[]>(p, "__played"); },
@@ -379,12 +399,13 @@ async function livePageWith(first: Board, clips: Clips | null, stored: Record<st
 describe("lap voice: the Live page", () => {
   it("plays a lap's clips one after another, and the phone says nothing", async () => {
     const l = await livePageWith(field([9500, 9600, 9450]), {});
-    assert.deepEqual(l.said, ["Lap times on"], "the first word is the phone's, before the list is in");
+    assert.deepEqual(l.turnedOn, { said: [], played: ["on"] }, "\"Lap times on\" waits for the clip list rather than being the phone's (3 Nov 2026)");
+    assert.ok((l.p.eval("__held") as number) > 0, "the silence under the clips is started by the tap");
 
     l.set(field([9500, 9600, 9450, 9520]));
     await l.p.advance(1000);
     assert.deepEqual(l.played, ["lap5", "t952", "p2", "g-t4"]);
-    assert.deepEqual(l.said, ["Lap times on"]);
+    assert.deepEqual(l.said, []);
     assert.deepEqual(l.played.map((n) => TEXT.get(n)), ["Lap five", "nine fifty-two", "P two", "four tenths back"]);
 
     l.set(field([9500, 9600, 9450, 9520, 9410], "+1L"));
@@ -419,10 +440,271 @@ describe("lap voice: the Live page", () => {
     const l = await livePageWith(field([9500, 9600]), { slow: ["t952"] });
     l.set(field([9500, 9600, 9520]));
     await l.p.advance(1000);
-    assert.equal(l.said.length, 1, "waiting for the clip");
+    assert.equal(l.said.length, 0, "waiting for the clip");
     await l.p.advance(1000);
     assert.equal(l.said.at(-1), "Lap 4, 9.52, P2, 0.41 seconds behind");
     assert.deepEqual(l.played, []);
+  });
+
+  it("wakes the phone's sound when it has been stopped, and still plays the clips (3 Nov 2026)", async () => {
+    const l = await livePageWith(field([9500, 9600]), {});
+    l.p.eval("window.__ctx.state = 'interrupted'");
+    l.set(field([9500, 9600, 9520]));
+    await l.p.advance(1000);
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap4", "t952", "p2", "g-t4"]);
+    assert.deepEqual(l.said, [], "never the phone's voice");
+    assert.ok((l.p.eval("window.__ctx.resumed") as number) > 0, "asked to start again");
+    assert.ok((l.p.eval("__held") as number) > 1, "the silence started again");
+  });
+
+  it("after the page was put away, wakes the sound on its own and plays the clips - no tap, no phone voice (3 Nov 2026)", async () => {
+    // iPhone (Safari and Chrome alike): back from the background the
+    // context says "running" and plays nothing.
+    const l = await livePageWith(field([9500, 9600]), {});
+    const visibility = (hidden: boolean) => {
+      l.p.hidden = hidden;
+      for (const run of l.p.documentListeners.get("visibilitychange") ?? []) run({});
+    };
+    const held = l.p.eval("__held") as number;
+    visibility(true);
+    assert.equal(l.p.eval("__held"), held);
+    visibility(false);
+    assert.equal(l.p.eval("__held"), held + 1, "the silence started again the moment the page is back");
+    l.set(field([9500, 9600, 9520]));
+    await l.p.advance(1000);
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap4", "t952", "p2", "g-t4"]);
+    assert.deepEqual(l.said, [], "never the phone's voice");
+
+    l.set(field([9500, 9600, 9520, 9530]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played.slice(4), ["lap5", "t953", "p2", "g-t4"]);
+    assert.equal(l.p.eval("__held"), held + 1, "once, not before every lap");
+  });
+
+  it("makes a new context on the first tap after the page was put away", async () => {
+    const l = await livePageWith(field([9500, 9600]), {});
+    const made = l.p.eval("window.__made") as number;
+    for (const run of l.p.documentListeners.get("click") ?? []) run({ target: l.p.body, preventDefault() {} });
+    assert.equal(l.p.eval("window.__made"), made, "a tap while it is fine keeps the context");
+
+    l.p.hidden = true;
+    for (const run of l.p.documentListeners.get("visibilitychange") ?? []) run({});
+    l.p.hidden = false;
+    for (const run of l.p.documentListeners.get("visibilitychange") ?? []) run({});
+    for (const run of l.p.documentListeners.get("click") ?? []) run({ target: l.p.body, preventDefault() {} });
+    assert.equal(l.p.eval("window.__made"), made + 1);
+
+    l.set(field([9500, 9600, 9520]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap4", "t952", "p2", "g-t4"], "the clips at once from the new context");
+  });
+
+  it("says a new race's first lap when the board already has it the first time it is read (3 Nov 2026)", async () => {
+    // Asher: "I didn't hear lap one". The board between races still showed
+    // the last race, and the new one's first read had a lap on it already.
+    const l = await livePageWith(field([9500, 9600, 9450]), {});
+    l.set(field([9400]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap2", "t940", "p2", "g-t4"]);
+  });
+
+  it("says Lap 1 - number, place and gap, no time - when HeatCaller sends the crossings (3 Nov 2026)", async () => {
+    const lap = (b: Board, n: number): Board => ({ ...b, standings: b.standings.map((r) => r.name === "Asher K." ? { ...r, lap: n } : r) });
+    const l = await livePageWith(lap(field([]), 0), {});
+    l.set(lap(field([]), 1));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap1", "p2", "g-t4"]);
+    assert.deepEqual(l.played.map((n) => TEXT.get(n)), ["Lap one", "P two", "four tenths back"]);
+
+    await l.p.advance(1000);
+    assert.equal(l.played.length, 3, "once");
+    l.set(lap(field([9400]), 2));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played.slice(3), ["lap2", "t940", "p2", "g-t4"]);
+  });
+
+  it("says Lap 1 when the new race's first read already has it, and nothing with only the time ticked", async () => {
+    const lap = (b: Board, n: number): Board => ({ ...b, standings: b.standings.map((r) => r.name === "Asher K." ? { ...r, lap: n } : r) });
+    const l = await livePageWith(lap(field([9500, 9600]), 3), {});
+    l.set(lap(field([]), 1));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap1", "p2", "g-t4"]);
+
+    const t = await livePageWith(lap(field([]), 0), {}, { "hg-laptalk-short-acme-rc": "1" });
+    t.set(lap(field([]), 1));
+    await t.p.advance(1000);
+    assert.deepEqual(t.played, []);
+    assert.deepEqual(t.said, []);
+  });
+
+  it("is quiet at lap 1 with an older HeatCaller, which sends no crossings", async () => {
+    const l = await livePageWith(field([]), {});
+    l.set(field([]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, []);
+  });
+
+  it("says the gap behind and the gap to P1 when ticked, after the gap ahead (3 Nov 2026)", async () => {
+    // Asher: "additional data points to announce such as time to P1".
+    const four = (laps: number[]): Board => ({
+      columns: COLUMNS,
+      standings: [
+        row("Sam P.", [9000]),
+        row("Bo D.", [9050], { ahead: "+0.30" }),
+        row("Asher K.", laps, { ahead: "+0.41", leader: "+2.52" }),
+        row("Cal T.", [9900], { ahead: "+1.20" }),
+      ],
+    });
+    const l = await livePageWith(four([9500, 9600]), {}, { "hg-laptalk-say-acme-rc": "lap,time,pos,gap,behind,leader" });
+    l.set(four([9500, 9600, 9520]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap4", "t952", "p3", "g-t4", "gb-h2", "gl-h5"]);
+    assert.deepEqual(l.played.map((n) => TEXT.get(n)),
+      ["Lap four", "nine fifty-two", "P three", "four tenths back", "a second clear", "two and a half seconds off the lead"]);
+
+    const phone = await livePageWith(four([9500, 9600]), null, { "hg-laptalk-say-acme-rc": "lap,time,pos,gap,behind,leader" });
+    phone.set(four([9500, 9600, 9520]));
+    await phone.p.advance(1000);
+    assert.equal(phone.said.at(-1), "Lap 4, 9.52, P3, 0.41 seconds behind, 1.20 seconds clear, 2.52 seconds off the lead");
+
+    // Off until ticked: a phone that never chose says what it always did.
+    const plain = await livePageWith(four([9500, 9600]), {});
+    plain.set(four([9500, 9600, 9520]));
+    await plain.p.advance(1000);
+    assert.deepEqual(plain.played, ["lap4", "t952", "p3", "g-t4"]);
+  });
+
+  it("never says the gap to P1 for P2 - it is the gap ahead - and no gap behind for the last car", async () => {
+    const l = await livePageWith(field([9500, 9600]), {}, { "hg-laptalk-say-acme-rc": "pos,gap,behind,leader" });
+    l.set(field([9500, 9600, 9520]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["p2", "g-t4"]);
+  });
+
+  it("says Up to and Down to with Places gained ticked, and the plain place otherwise (3 Nov 2026)", async () => {
+    const ahead = (laps: number[]): Board => ({
+      columns: COLUMNS,
+      standings: [row("Asher K.", laps), row("Sam P.", [9100, 9000, 9050, 8990, 9020], { ahead: "+0.30" })],
+    });
+    const l = await livePageWith(field([9500, 9600]), {}, { "hg-laptalk-say-acme-rc": "pos,moves" });
+    l.set(field([9500, 9600, 9520]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["p2"], "the same place as when it was turned on");
+
+    l.set(ahead([9500, 9600, 9520, 9400]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played.slice(1), ["pu1"]);
+    assert.equal(TEXT.get("pu1"), "Up to P one");
+
+    l.set(field([9500, 9600, 9520, 9400, 9700]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played.slice(2), ["pd2"]);
+
+    l.set(field([9500, 9600, 9520, 9400, 9700, 9600]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played.slice(3), ["p2"], "no change, the plain place");
+  });
+
+  it("says how far a lap was off their best with Against your best ticked, never on a best lap (3 Nov 2026)", async () => {
+    const l = await livePageWith(field([9500, 9300]), {}, { "hg-laptalk-say-acme-rc": "time,best,vsbest" });
+    l.set(field([9500, 9300, 9500]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["t950", "tg-m20", "pb-off"]);
+    assert.deepEqual(l.played.map((n) => TEXT.get(n)), ["nine fifty", "point two", "off your best"]);
+
+    l.set(field([9500, 9300, 9500, 9250]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played.slice(3), ["t925", "best"]);
+
+    const phone = await livePageWith(field([9500, 9300]), null, { "hg-laptalk-say-acme-rc": "time,vsbest" });
+    phone.set(field([9500, 9300, 9650]));
+    await phone.p.advance(1000);
+    assert.equal(phone.said.at(-1), "9.65, 0.35 off your best");
+
+    // A lap more than two seconds off - a crash or a stop - says nothing of it.
+    phone.set(field([9500, 9300, 9650, 12000]));
+    await phone.p.advance(1000);
+    assert.equal(phone.said.at(-1), "12.00");
+  });
+
+  it("says the laps or time left, last, with Laps or time left ticked (3 Nov 2026)", async () => {
+    const at = (laps: number[], countdown: string): Board => ({ ...field(laps), countdown });
+    const l = await livePageWith(at([9500, 9600], "6 LAPS TO GO"), {}, { "hg-laptalk-say-acme-rc": "time,pos,left" });
+    const heard: string[][] = [];
+    const lap = async (laps: number[], countdown: string) => {
+      const before = l.played.length;
+      l.set(at(laps, countdown));
+      await l.p.advance(1000);
+      heard.push(l.played.slice(before));
+    };
+    await lap([9500, 9600, 9520], "5 LAPS TO GO");
+    await lap([9500, 9600, 9520, 9530], "1 LAP TO GO");
+    await lap([9500, 9600, 9520, 9530, 9540], "04:32 REMAINING");
+    await lap([9500, 9600, 9520, 9530, 9540, 9550], "00:32 REMAINING");
+    await lap([9500, 9600, 9520, 9530, 9540, 9550, 9560], "00:00 REMAINING");
+    await lap([9500, 9600, 9520, 9530, 9540, 9550, 9560, 9570], "75 LAPS TO GO");
+    assert.deepEqual(heard, [
+      ["t952", "p2", "lt-l5"],
+      ["t953", "p2", "lt-last"],
+      ["t954", "p2", "lt-m4"],
+      ["t955", "p2", "lt-s30"],
+      ["t956", "p2", "lt-last"],
+      ["t957", "p2"],
+    ]);
+    assert.deepEqual(["lt-l5", "lt-last", "lt-m4", "lt-m1", "lt-s30"].map((n) => TEXT.get(n)),
+      ["five laps to go", "last lap", "four minutes left", "a minute left", "thirty seconds left"]);
+
+    const phone = await livePageWith(at([9500, 9600], ""), null, { "hg-laptalk-say-acme-rc": "time,left" });
+    phone.set(at([9500, 9600, 9520], "12:05 REMAINING"));
+    await phone.p.advance(1000);
+    assert.equal(phone.said.at(-1), "9.52, 12 minutes left");
+
+    // Off until ticked.
+    const plain = await livePageWith(at([9500, 9600], "6 LAPS TO GO"), {});
+    plain.set(at([9500, 9600, 9520], "5 LAPS TO GO"));
+    await plain.p.advance(1000);
+    assert.deepEqual(plain.played, ["lap4", "t952", "p2", "g-t4"]);
+  });
+
+  it("says the first lap of a driver who was not on the board when it was turned on", async () => {
+    const l = await livePageWith({ columns: COLUMNS, standings: [row("Sam P.", [9100])] }, {});
+    await l.p.advance(1000);
+    l.set(field([9400]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap2", "t940", "p2", "g-t4"]);
+  });
+
+  it("is still quiet about the board as it was when turned on, and about a lap race control took away", async () => {
+    const l = await livePageWith(field([9500, 9600, 9450]), {});
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, []);
+    l.set(field([9500, 9600]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, []);
+    assert.deepEqual(l.said, []);
+  });
+
+  it("drops a call that was waiting when the page went away - no old laps on the way back (3 Nov 2026)", async () => {
+    const l = await livePageWith(field([9500, 9600]), { slow: ["t952"] });
+    l.set(field([9500, 9600, 9520]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.said, [], "waiting for its clips");
+    l.p.hidden = true;
+    for (const run of l.p.documentListeners.get("visibilitychange") ?? []) run({});
+    await l.p.advance(5000);
+    l.p.hidden = false;
+    for (const run of l.p.documentListeners.get("visibilitychange") ?? []) run({});
+    await l.p.advance(3000);
+    assert.deepEqual(l.said, [], "not said in the phone's voice either");
+    assert.deepEqual(l.played, []);
+
+    // The next lap is said as it happens.
+    l.set(field([9500, 9600, 9520, 9530]));
+    await l.p.advance(1000);
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap5", "t953", "p2", "g-t4"]);
   });
 
   it("says it in the phone's voice when a clip will not load", async () => {
@@ -433,23 +715,17 @@ describe("lap voice: the Live page", () => {
     assert.deepEqual(l.played, []);
   });
 
-  it("uses the phone's voice with Phone voice ticked, and remembers it", async () => {
-    const l = await livePageWith(field([9500, 9600]), {});
-    assert.equal(l.p.get("lapphonerow").hidden, false);
-    const box = l.p.get("lapphone") as unknown as { checked: boolean; fire(t: string): void };
-    box.checked = true;
-    box.fire("change");
-    assert.equal(l.p.store.get("hg-lapvoice-phone-acme-rc"), "1");
-
+  it("has no Phone voice box, and a phone that had it ticked hears the clips (3 Nov 2026)", async () => {
+    const l = await livePageWith(field([9500, 9600]), {}, { "hg-lapvoice-phone-acme-rc": "1" });
+    assert.equal(l.p.byId.has("lapphone"), false);
+    assert.equal(l.p.byId.has("lapphonerow"), false);
     l.set(field([9500, 9600, 9520]));
     await l.p.advance(1000);
-    assert.equal(l.said.at(-1), "Lap 4, 9.52, P2, 0.41 seconds behind");
-    assert.deepEqual(l.played, []);
+    assert.deepEqual(l.played, ["lap4", "t952", "p2", "g-t4"]);
   });
 
-  it("is the phone's voice, with no Phone voice box, on a relay with no clips", async () => {
+  it("is the phone's voice on a relay with no clips", async () => {
     const l = await livePageWith(field([9500, 9600]), null);
-    assert.equal(l.p.get("lapphonerow").hidden, true);
     l.set(field([9500, 9600, 9520]));
     await l.p.advance(1000);
     assert.equal(l.said.at(-1), "Lap 4, 9.52, P2, 0.41 seconds behind");
@@ -531,11 +807,48 @@ describe("lap voice: My Night", () => {
     p.get("nt-laptalk").click();
     await p.settle();
     await p.advance(1000);
-    assert.ok(p.byId.has("nt-lapphone"), "the Phone voice box is drawn once the clips are listed");
+    assert.equal(p.byId.has("nt-lapphone"), false, "no Phone voice box (3 Nov 2026)");
+    assert.deepEqual(seen<string[]>(p, "__played"), ["on"], "\"Lap times on\" in the clips, not the phone's voice");
+    assert.deepEqual(seen<string[]>(p, "__said"), []);
+    p.eval("__played.length = 0;");
 
     board = { ...board, standings: [board.standings[0]!, row("Asher K.", [9500, 9600, 9400], { tag: MINE, ahead: "+0.41" })] };
     await p.advance(1000);
     assert.deepEqual(seen<string[]>(p, "__played"), ["lap4", "t940", "best", "tg-m20", "tg-under", "p2", "g-t4"]);
-    assert.deepEqual(seen<string[]>(p, "__said"), ["Lap times on"]);
+    assert.deepEqual(seen<string[]>(p, "__said"), []);
+
+    // 3 Nov 2026, Asher: silent on the Me tab after coming back to it. The
+    // page wakes the phone's sound itself and plays the clips - no tap, and
+    // never the phone's voice.
+    p.hidden = true;
+    for (const run of p.documentListeners.get("visibilitychange") ?? []) run({});
+    p.eval("window.__ctx.state = 'suspended'");
+    p.hidden = false;
+    for (const run of p.documentListeners.get("visibilitychange") ?? []) run({});
+    board = { ...board, standings: [board.standings[0]!, row("Asher K.", [9500, 9600, 9400, 9450], { tag: MINE, ahead: "+0.41" })] };
+    await p.advance(1000);
+    await p.advance(1000);
+    assert.deepEqual(seen<string[]>(p, "__played").slice(7), ["lap5", "t945", "tg-m15", "tg-under", "p2", "g-t4"], "the clips, after coming back");
+    assert.deepEqual(seen<string[]>(p, "__said"), [], "never the phone's voice");
+
+    // Lap 1 of the next race (3 Nov 2026): number, place and gap.
+    board = { ...board, standings: [board.standings[0]!, row("Asher K.", [], { tag: MINE, ahead: "+0.41", lap: 0 })] };
+    await p.advance(1000);
+    const atGrid = seen<string[]>(p, "__played").length;
+    board = { ...board, standings: [board.standings[0]!, row("Asher K.", [], { tag: MINE, ahead: "+0.41", lap: 1 })] };
+    await p.advance(1000);
+    await p.advance(1000);
+    assert.deepEqual(seen<string[]>(p, "__played").slice(atGrid), ["lap1", "p2", "g-t4"]);
+
+    // Lap times off: said, then the silence stops with them (3 Nov 2026).
+    const before = seen<string[]>(p, "__played").length;
+    p.get("nt-laptalk").click();
+    await p.settle();
+    await p.advance(500);
+    assert.deepEqual(seen<string[]>(p, "__played").slice(before), ["off"], "\"Lap times off\" in the clips");
+    assert.equal(p.eval("__paused"), 0, "the silence carries on till it is said");
+    await p.advance(3000);
+    assert.ok((p.eval("__paused") as number) > 0);
+    assert.ok((p.eval("window.__ctx.resumed") as number) > 0, "asked to start again");
   });
 });

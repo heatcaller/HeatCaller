@@ -644,6 +644,10 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .ears label { display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; font-size: 0.95rem; }
 .ears label[hidden], .ears button[hidden] { display: none; }
 .ears button[aria-pressed=true] { background: var(--primary); color: var(--on-primary, #FFFFFF); }
+/* What to say (3 Nov 2026): a box per part of a lap's call. */
+.lvsay { margin: 10px 0 0; }
+.lvsay > span { display: block; font-size: 0.85rem; opacity: 0.8; margin-bottom: 2px; }
+.lvsay label, .ears .lvsay label { display: inline-flex; align-items: center; gap: 6px; margin: 2px 14px 2px 0; font-size: 0.95rem; }
 /* Message the announcer and Who wins? (2 Nov 2026): the live page's two
    ways into the room from outside it, when the club has them switched on.
    Every field full width and 16px text, as sign-up's are, so a phone does
@@ -3496,8 +3500,8 @@ export function resultsPage(club: string, clubName: string, context: PageContext
  * does any of it play; a clip the relay does not have (a 2.40 lap, P31), a
  * load that fails, or one that takes longer than a second, and the phone's
  * own voice says the whole line instead, as it did before this existed.
- * "Phone voice" ticked, or a relay with no clips, is the phone's voice
- * every time.
+ * A relay with no clips is the phone's voice every time. There is no
+ * "Phone voice" box any more (3 Nov 2026, Asher: "remove the option").
  *
  * A phone only plays sound once the page has been tapped, so unlock() is
  * called from the same taps that let the phone's voice talk. Clips are
@@ -3505,19 +3509,24 @@ export function resultsPage(club: string, clubName: string, context: PageContext
  * played, so a whole night of them costs a phone a few megabytes, not the
  * hundreds that decoded sound would.
  */
+/** A twentieth of a second of silence as an mp3 - the same as LISTEN_JS's SILENCE. */
+const SILENT_MP3 = 'data:audio/mpeg;base64,//sQxAADwAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xLEKYPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEU4PAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==';
+
 const LAPVOICE_JS = `
 const lapVoice = (function () {
-  const PHONE_KEY = 'hg-lapvoice-phone-' + CLUB;
   // A call whose clips are not all here by then is said by the phone instead.
   const LATE_MS = 1000;
   // The breath between the parts of a call - the commas the phone voice pauses on.
   const BREATH = 0.12;
-
-  let phone = false;
-  try { phone = localStorage.getItem(PHONE_KEY) === '1'; } catch (e) { /* the clips, then */ }
+  // How long a call waits for the phone's sound to wake (see wake()).
+  const WAKE_MS = 300;
+  // A call older than this when its turn comes is history, and is dropped.
+  const STALE_MS = LATE_MS + WAKE_MS + 1000;
+  // A twentieth of a second of silence, looped while lap times are on - see holdOn().
+  const SILENT = ${JSON.stringify(SILENT_MP3)};
 
   let ctx = null, asked = false, version = '', voice = '';
-  let have = null;
+  let have = null, listed = false, hold = null, held = 0;
   const kept = new Map();
   let playing = 0, sources = [];
   const waiting = [];
@@ -3532,6 +3541,7 @@ const lapVoice = (function () {
           version = m.v;
           voice = typeof m.voice === 'string' ? m.voice : '';
         }
+        listed = true;
         waiting.splice(0).forEach((f) => { try { f(); } catch (e) { /* its own redraw */ } });
       }, () => { asked = false; });
     } catch (e) { asked = false; }
@@ -3544,21 +3554,105 @@ const lapVoice = (function () {
       // iPhone: play through the silent switch, as the phone's voice does.
       if (navigator.audioSession) navigator.audioSession.type = 'playback';
     } catch (e) { /* an older phone */ }
+    if (!ctx) fresh(); else nudge();
+    holdOn();
+  }
+
+  // WHY (3 Nov 2026, Asher: the phone's voice said "Lap times on", then
+  // no ElevenLabs until lap times went off and on again - Chrome on an
+  // iPhone): an iPhone plays a page's Web Audio as if it were a ringtone,
+  // so the silent switch mutes it, unless a media element is playing too.
+  // The phone's own voice is never muted that way, which is why it always
+  // worked. The announcer player found the same (LISTEN_JS); this is its answer: a
+  // twentieth of a second of silence, looped on a media element started in
+  // a tap, for as long as lap times are on. navigator.audioSession says
+  // the same where there is one; Chrome on an iPhone has none.
+  function holdOn() {
+    held++;
+    try {
+      if (hold === null) {
+        hold = new Audio();
+        hold.loop = true;
+        hold.src = SILENT;
+      }
+      const going = hold.play();
+      if (going && typeof going.catch === 'function') going.catch(() => { /* the next tap, then */ });
+    } catch (e) { hold = null; }
+  }
+
+  // Lap times off: the silence stops too - after afterMs, so a last call
+  // ("Lap times off") is heard, unless lap times are on again by then.
+  function release(afterMs) {
+    const mine = held;
+    const pause = () => {
+      if (held !== mine) return;
+      try { if (hold !== null) hold.pause(); } catch (e) { /* stopped already */ }
+    };
+    if (afterMs > 0) setTimeout(pause, afterMs);
+    else { stop(); pause(); }
+  }
+
+  // A new context, made inside a tap - the only time a phone allows it.
+  function fresh() {
     try {
       const Kind = window.AudioContext || window.webkitAudioContext;
-      if (!ctx && Kind) ctx = new Kind();
-      if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
+      if (!Kind) return;
+      if (ctx && typeof ctx.close === 'function') { try { ctx.close(); } catch (e) { /* gone already */ } }
+      ctx = new Kind();
+      away = false;
+      try { ctx.onstatechange = () => { if (ctx && ctx.state && ctx.state !== 'running') away = true; }; } catch (e) { /* not told, then */ }
     } catch (e) { ctx = null; }
+    nudge();
+  }
+
+  // WHY (3 Nov 2026, Asher: closed the app, came back, no ElevenLabs; wants
+  // it back on its own, with no phone voice): the page put away stops the
+  // context and the silence under it. So once the page has been away they
+  // are both started again - the moment it is back, and again before the
+  // next call plays - and a tap after it was away makes a new context.
+  let away = false, waking = null;
+  function back() {
+    if (ctx === null) return;
+    if (away) fresh(); else nudge();
+    holdOn();
+  }
+
+  function wake() {
+    if (waking) return waking;
+    waking = new Promise((done) => {
+      let finished = false;
+      const end = () => {
+        if (finished) return;
+        finished = true; waking = null; away = false;
+        nudge();
+        done();
+      };
+      holdOn();
+      nudge();
+      setTimeout(end, WAKE_MS);
+    });
+    return waking;
+  }
+
+  // Whether sound played now would be heard. A phone stops a page's audio
+  // when the screen locks, another app plays, a call comes in or the page
+  // is put away - "suspended", or "interrupted" on an iPhone - and clips
+  // played then are silent, with nothing to say so.
+  function live() { return ctx !== null && (!ctx.state || ctx.state === 'running'); }
+
+  // Asks a stopped context to start again: from a tap it always may, and
+  // when the page comes back many phones let it without one.
+  function nudge() {
+    if (ctx === null || live() || typeof ctx.resume !== 'function') return;
+    try {
+      const p = ctx.resume();
+      if (p && typeof p.catch === 'function') p.catch(() => { /* the next tap, then */ });
+    } catch (e) { /* the next tap, then */ }
   }
 
   function has() { return have !== null; }
 
-  function using() { return have !== null && !phone && ctx !== null && typeof ctx.decodeAudioData === 'function'; }
-
-  function setPhone(yes) {
-    phone = !!yes;
-    try { localStorage.setItem(PHONE_KEY, phone ? '1' : '0'); } catch (e) { /* this visit only */ }
-  }
+  function using() { return have !== null && ctx !== null && typeof ctx.decodeAudioData === 'function'; }
 
   function fetchClip(name) {
     let got = kept.get(name);
@@ -3602,6 +3696,31 @@ const lapVoice = (function () {
   function say(parts, speak) {
     const text = parts.map((p) => p.text).join(', ');
     const groups = parts.map((p) => p.clips);
+
+    // WHY (3 Nov 2026, Asher: "when i left the app and came back it fed me
+    // old laps until it caught up. it should just cut to whats live"): calls
+    // made while the page was away waited - for the phone's sound, for
+    // their clips, in the phone's own queue of lines - and all came out on
+    // the way back. Nothing is said while the page is away, a call is said
+    // only while it is fresh, and the page going away drops whatever is
+    // waiting (see the listeners below). The page's next read says the
+    // newest lap.
+    const made = Date.now();
+    const fresh = () => !document.hidden && Date.now() - made <= STALE_MS;
+    const fallback = () => { if (fresh()) speak(text); };
+    if (document.hidden) { stop(); return; }
+
+    // The list of clips still on its way - "Lap times on", the moment lap
+    // times are turned on: waited for, up to LATE_MS, rather than said in
+    // the phone's voice (3 Nov 2026, Asher).
+    if (asked && !listed && ctx !== null) {
+      stop();
+      const mine = playing;
+      let went = false;
+      waiting.push(() => { if (went || mine !== playing) return; went = true; if (fresh()) say(parts, speak); });
+      setTimeout(() => { if (went || mine !== playing) return; went = true; fallback(); }, LATE_MS);
+      return;
+    }
     if (!using() || groups.some((g) => !Array.isArray(g) || g.some((n) => !have.has(n)))) {
       stop();
       speak(text);
@@ -3614,14 +3733,21 @@ const lapVoice = (function () {
     const late = setTimeout(() => {
       if (settled || mine !== playing) return;
       settled = true;
-      speak(text);
-    }, LATE_MS);
+      fallback();
+    }, LATE_MS + (away || !live() ? WAKE_MS : 0));
 
+    // WHY (3 Nov 2026, Asher: "not hearing the elevenlabs lap times on the
+    // me tab"): a context the phone had stopped took the clips and played
+    // nothing. Now it is woken first (see wake()) and asked to start again.
+    const ready = away || !live() ? wake() : null;
     Promise.all(groups.map((g) => Promise.all(g.map((n) => fetchClip(n).then(decode)))))
+      .then((decoded) => ready ? ready.then(() => decoded) : decoded)
       .then((decoded) => {
         if (settled || mine !== playing) return;
         settled = true;
         clearTimeout(late);
+        if (!fresh()) return;
+        nudge();
         try { window.speechSynthesis.cancel(); } catch (e) { /* not talking */ }
         let at = ctx.currentTime + 0.02;
         decoded.forEach((group, i) => {
@@ -3640,7 +3766,7 @@ const lapVoice = (function () {
         if (settled || mine !== playing) return;
         settled = true;
         clearTimeout(late);
-        speak(text);
+        fallback();
       });
   }
 
@@ -3652,11 +3778,138 @@ const lapVoice = (function () {
 
   function whenReady(f) { if (asked && have === null) waiting.push(f); }
 
+  // Any tap, and the page coming back, wakes a context the phone stopped;
+  // a tap after the page was away makes a new one.
+  try {
+    document.addEventListener('click', back, true);
+    document.addEventListener('touchend', back, true);
+    const gone = () => {
+      away = true;
+      stop();
+      try { window.speechSynthesis.cancel(); } catch (e) { /* not talking */ }
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { gone(); return; }
+      // Anything the phone kept queued while the page was away is history.
+      stop();
+      try { window.speechSynthesis.cancel(); } catch (e) { /* not talking */ }
+      if (ctx !== null && away) wake();
+    });
+    window.addEventListener('pagehide', gone);
+  } catch (e) { /* the taps that unlock it, then */ }
+
   return {
-    unlock: unlock, has: has, using: using, say: say, stop: stop, warm: warm,
-    phone: () => phone, setPhone: setPhone, voice: () => voice, whenReady: whenReady,
+    unlock: unlock, has: has, using: using, say: say, stop: stop, release: release, warm: warm,
+    voice: () => voice, whenReady: whenReady,
   };
 })();
+
+// --- What to say (3 Nov 2026, Asher: "enable each component of what is
+// spoken") -------------------------------------------------------------------
+// One box per part of a lap's call, kept on this phone, in place of the
+// single Time only box. Every part is on until it is turned off. A phone
+// that had Time only ticked keeps what it said: the time, best lap and the
+// target. Nothing ticked says nothing.
+// Each part: its key, its box's words, and whether it is on until changed.
+// Gap behind and Gap to P1 (3 Nov 2026, Asher: "time to P1") make a call
+// longer, so they are off until ticked.
+const LV_SAY = [
+  ['lap', 'Lap number', true], ['time', 'Lap time', true], ['best', 'Best lap', true],
+  ['vsbest', 'Against your best', false], ['target', 'Target', true], ['pos', 'Position', true],
+  ['moves', 'Places gained', false], ['gap', 'Gap ahead', true],
+  ['behind', 'Gap behind', false], ['leader', 'Gap to P1', false],
+  ['left', 'Laps or time left', false],
+];
+
+// Laps or time left (3 Nov 2026, Asher), from the board's own countdown -
+// "5 LAPS TO GO", "1 LAP TO GO", "04:32 REMAINING" - counted from the
+// leader, as the big screen shows it: "five laps to go", "last lap", "four
+// minutes left", "thirty seconds left". Said last. Nothing for a count past
+// the clips (more than 50 laps or an hour), a warm-up, or no countdown.
+function lvLeftPart(say, state) {
+  if (!say.left || !state || typeof state.countdown !== 'string') return null;
+  const t = state.countdown.trim();
+  const laps = /^(\\d+) LAPS? TO GO$/i.exec(t);
+  if (laps) {
+    const n = Number(laps[1]);
+    if (n === 1) return { text: 'last lap', clips: ['lt-last'] };
+    return n >= 2 && n <= 50 ? { text: n + ' laps to go', clips: ['lt-l' + n] } : null;
+  }
+  const time = /^(\\d+):(\\d\\d) REMAINING$/i.exec(t);
+  if (!time) return null;
+  const total = Number(time[1]) * 60 + Number(time[2]);
+  if (total === 0) return { text: 'last lap', clips: ['lt-last'] };
+  if (total < 55) {
+    const tens = Math.max(10, Math.round(total / 10) * 10);
+    return { text: tens + ' seconds left', clips: ['lt-s' + tens] };
+  }
+  const minutes = Math.max(1, Math.floor(total / 60));
+  return minutes <= 60 ? { text: minutes + (minutes === 1 ? ' minute left' : ' minutes left'), clips: ['lt-m' + minutes] } : null;
+}
+
+// The place (3 Nov 2026, Asher): "Up to P2" or "Down to P4" with Places
+// gained ticked and a different place from the last lap said (from, 0 for
+// none), else "P2" with Position ticked; null for neither.
+function lvPlacePart(say, pos, from) {
+  if (say.moves && from > 0 && pos !== from) {
+    const up = pos < from;
+    return { text: (up ? 'Up to P' : 'Down to P') + pos, clips: pos >= 1 && pos <= 30 ? [(up ? 'pu' : 'pd') + pos] : null };
+  }
+  return say.pos ? { text: 'P' + pos, clips: lvPlace(pos) } : null;
+}
+
+// How far a lap was off their best, with Against your best ticked: "point
+// two off your best". Not for a best lap, which is "best lap", and not past
+// two seconds - a lap that slow is a crash or a stop, and there is no clip.
+function lvBestPart(say, last, best, count) {
+  if (!say.vsbest || count < 2 || !(best > 0) || last <= best) return null;
+  const cs = Math.round((last - best) / 10);
+  if (cs < 1 || cs > 200) return null;
+  const n = Number((cs / 100).toFixed(2));
+  return { text: (n >= 1 ? n.toFixed(2) : String(n)) + ' off your best', clips: ['tg-m' + cs, 'pb-off'] };
+}
+
+function lvSayRead(key, shortKey) {
+  const say = {};
+  LV_SAY.forEach((p) => { say[p[0]] = p[2]; });
+  try {
+    const saved = localStorage.getItem(key);
+    if (typeof saved === 'string') {
+      const on = saved.split(',');
+      LV_SAY.forEach((p) => { say[p[0]] = on.indexOf(p[0]) >= 0; });
+    } else if (localStorage.getItem(shortKey) === '1') {
+      say.lap = false; say.pos = false; say.gap = false;
+    }
+  } catch (e) { /* everything, then */ }
+  return say;
+}
+
+function lvSaySave(key, say) {
+  try { localStorage.setItem(key, LV_SAY.filter((p) => say[p[0]]).map((p) => p[0]).join(',')); } catch (e) { /* this visit only */ }
+}
+
+// The boxes for the parts this page says (names), each changing say in place.
+function lvSayBoxes(say, names, idPrefix, key) {
+  const wrap = document.createElement('div');
+  wrap.className = 'lvsay';
+  const head = document.createElement('span');
+  head.textContent = 'What to say';
+  wrap.appendChild(head);
+  LV_SAY.filter((p) => names.indexOf(p[0]) >= 0).forEach((p) => {
+    const label = document.createElement('label');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.id = idPrefix + p[0];
+    box.checked = !!say[p[0]];
+    box.addEventListener('change', () => { say[p[0]] = !!box.checked; lvSaySave(key, say); });
+    label.appendChild(box);
+    const words = document.createElement('span');
+    words.textContent = p[1];
+    label.appendChild(words);
+    wrap.appendChild(label);
+  });
+  return wrap;
+}
 
 // --- The clips for each kind of words, the names lapvoice.ts makes. ---------
 // Null when there is no clip: the call is then the phone's.
@@ -3683,20 +3936,61 @@ function lvPlace(n) { return n >= 1 && n <= 30 ? ['p' + n] : null; }
 
 // The gap to the car ahead, as RaceNumbers.GapSpoken rounds it: tenths
 // under a second, halves to ten, whole seconds to thirty; or laps.
-function lvGap(gap) {
+// set: 'g' for the car ahead ("back"), 'gl' for P1 ("off the lead"), 'gb'
+// for the car behind ("clear"). Nothing in it is 'g-0' for all three.
+function lvGap(gap, set) {
+  const k = set || 'g';
   const t = String(gap || '').trim();
   const laps = /^\\+?(\\d+)\\s*L(aps?)?$/i.exec(t);
-  if (laps) { const l = Number(laps[1]); return l >= 1 && l <= 9 ? ['g-l' + l] : null; }
+  if (laps) { const l = Number(laps[1]); return l >= 1 && l <= 9 ? [k + '-l' + l] : null; }
   const secs = /^\\+(\\d+([.,]\\d+)?)s?$/.exec(t);
   if (!secs) return null;
   const g = Math.abs(Number(secs[1].replace(',', '.')));
   if (!isFinite(g)) return null;
   if (g < 0.05) return ['g-0'];
-  if (g < 0.95) return ['g-t' + Math.max(1, Math.round(g * 10))];
-  if (g < 1.05) return ['g-h2'];
-  if (g >= 10) { const s = Math.round(g); return s <= 30 ? ['g-s' + s] : null; }
+  if (g < 0.95) return [k + '-t' + Math.max(1, Math.round(g * 10))];
+  if (g < 1.05) return [k + '-h2'];
+  if (g >= 10) { const s = Math.round(g); return s <= 30 ? [k + '-s' + s] : null; }
   const halves = Math.round(g * 2);
-  return halves >= 20 ? ['g-s10'] : ['g-h' + halves];
+  return halves >= 20 ? [k + '-s10'] : [k + '-h' + halves];
+}
+
+// A gap in the phone's own voice: "0.41 seconds clear", "1 lap off the lead".
+function lvGapWords(gap, tail) {
+  const t = String(gap || '').trim();
+  const laps = /^\\+?(\\d+)\\s*L(aps?)?$/i.exec(t);
+  if (laps) return laps[1] + (laps[1] === '1' ? ' lap ' : ' laps ') + tail;
+  const secs = /^\\+(\\d+([.,]\\d+)?)s?$/.exec(t);
+  return secs ? secs[1].replace(',', '.') + ' seconds ' + tail : '';
+}
+
+// The gap to P1 as the board has it: HeatCaller's own figure on the row
+// (from 3 Nov 2026), else the club's Gap to P1 column.
+function lvLeaderGap(state, row) {
+  if (typeof row.leader === 'string' && row.leader !== '') return row.leader;
+  const columns = Array.isArray(state.columns) ? state.columns.map((c) => String(c)) : [];
+  const at = columns.findIndex((c) => /^gap/i.test(c));
+  const cell = at >= 0 && Array.isArray(row.cells) ? row.cells[at] : null;
+  return cell && typeof cell === 'object' ? String(cell.text || '') : '';
+}
+
+// The gap to the car behind and to P1, when ticked, after the gap ahead.
+// The car behind's gap is that car's own gap to the car ahead - this one -
+// so gapAhead (the page's) on the next row. P2's gap to P1 is its gap
+// ahead, so it is only said from P3 back.
+function lvMoreGaps(say, state, rows, row, pos, gapAhead) {
+  const more = [];
+  if (say.behind && pos < rows.length && rows[pos] && typeof rows[pos] === 'object') {
+    const raw = gapAhead(state, rows[pos], pos + 1);
+    const words = lvGapWords(raw, 'clear');
+    if (words) more.push({ text: words, clips: lvGap(raw, 'gb') });
+  }
+  if (say.leader && pos > 2) {
+    const raw = lvLeaderGap(state, row);
+    const words = lvGapWords(raw, 'off the lead');
+    if (words) more.push({ text: words, clips: lvGap(raw, 'gl') });
+  }
+  return more;
 }
 
 // Against a target lap: "on target", or how far and which way.
@@ -3747,25 +4041,29 @@ const bar = document.getElementById('bar');
 const lapTalk = (function () {
   const box = document.getElementById('laptalk');
   const btn = document.getElementById('lapbtn');
-  const shortBox = document.getElementById('lapshort');
-  const shortRow = document.getElementById('lapshortrow');
+  const sayRow = document.getElementById('lapsayrow');
   const note = document.getElementById('lapnote');
-  const phoneBox = document.getElementById('lapphone');
-  const phoneRow = document.getElementById('lapphonerow');
   const canSpeak = typeof window.speechSynthesis === 'object' && window.speechSynthesis !== null
     && typeof SpeechSynthesisUtterance === 'function';
   const ON_KEY = 'hg-laptalk-' + CLUB;
   const SHORT_KEY = 'hg-laptalk-short-' + CLUB;
+  const SAY_KEY = 'hg-laptalk-say-' + CLUB;
   const AUTOLOCK = ' If your screen goes dark, set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while you race.';
 
-  let on = false, timeOnly = false, unlocked = false;
+  let on = false, unlocked = false;
+  const say = lvSayRead(SAY_KEY, SHORT_KEY);
   try {
     on = canSpeak && localStorage.getItem(ON_KEY) === '1';
-    timeOnly = localStorage.getItem(SHORT_KEY) === '1';
   } catch (e) { /* off, and full calls */ }
 
   // Whose laps were last counted, how many, and the first of them.
   let heardFor = '', heardLaps = 0, firstLap = 0;
+  // Whether lap 1 has been heard - or was already done when counting began.
+  let heardStart = false;
+  // Their place when the last lap was said, for Places gained: 0 for none yet.
+  let placeAt = 0;
+  // Who has been off the board since this was turned on: arriving is a new race.
+  let absent = '';
   // The screen wake lock, and whether the phone gave one (null: not asked).
   let lock = null, awake = null;
 
@@ -3784,8 +4082,9 @@ const lapTalk = (function () {
   }
 
   function hush() {
-    lapVoice.stop();
-    try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+    // "Lap times off" (3 Nov 2026, Asher), then the silence goes.
+    lapVoice.say([{ text: 'Lap times off', clips: ['off'] }], speak);
+    lapVoice.release(2500);
   }
 
   // A call in the lap voice's clips, or the phone's voice - see LAPVOICE_JS.
@@ -3823,10 +4122,7 @@ const lapTalk = (function () {
     if (!canSpeak) return;
     const who = memory;
     btn.hidden = !who;
-    shortRow.hidden = !who;
-    shortBox.checked = timeOnly;
-    if (phoneRow) phoneRow.hidden = !who || !lapVoice.has();
-    if (phoneBox) phoneBox.checked = lapVoice.phone();
+    if (sayRow) sayRow.hidden = !who;
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     btn.textContent = 'Lap times in my ear: ' + (!on ? 'off' : unlocked ? 'on' : 'tap to resume');
     if (!who) {
@@ -3864,80 +4160,110 @@ const lapTalk = (function () {
   function take(state) {
     show();
     const who = memory;
-    if (!on || !unlocked || !who) { heardFor = ''; return; }
+    if (!on || !unlocked || !who) { heardFor = ''; absent = ''; return; }
 
     const rows = Array.isArray(state && state.standings) ? state.standings : [];
     const mine = rows.filter((r) => r && typeof r === 'object' && r.name === who);
+    if (mine.length === 0) absent = who;
     if (who === 'Unnamed driver' || mine.length !== 1) return;
 
     const row = mine[0];
     const laps = (Array.isArray(row.laps) ? row.laps : []).filter((v) => typeof v === 'number' && v > 0);
     const count = laps.length;
     const first = count > 0 ? laps[0] : 0;
+    const started = typeof row.lap === 'number' && row.lap >= 1;
+    let lapOne = false;
 
-    // Somebody new, a new race, or a lap race control took away: counted
-    // from here, quietly.
+    // Somebody new, or a lap race control took away: counted from here,
+    // quietly. A new race - or the driver arriving on the board - says its
+    // newest lap (3 Nov 2026, Asher: "I didn't hear lap one"; see nightTalk).
     if (heardFor !== who || count < heardLaps || (heardLaps > 0 && first !== firstLap)) {
-      heardFor = who; heardLaps = count; firstLap = first;
-      return;
+      const newRace = absent === who || (heardFor === who && first !== firstLap);
+      heardFor = who; heardLaps = count; firstLap = first; absent = ''; heardStart = started;
+      placeAt = newRace ? 0 : rows.indexOf(row) + 1;
+      if (!newRace) return;
+      if (count === 0) { if (!started) return; lapOne = true; }
+    } else if (count === heardLaps) {
+      if (count > 0 || !started || heardStart) return;
+      heardStart = true; lapOne = true;
+    } else {
+      heardLaps = count; firstLap = first; heardStart = true;
     }
 
-    if (count === heardLaps) return;
-    heardLaps = count; firstLap = first;
+    // Lap 1 (3 Nov 2026, Asher: "add Lap 1"): the start lap has no time -
+    // it runs from the green - so it is the lap number, place and gap.
+    // "lap" is the car's crossings, sent by HeatCaller from 3 Nov 2026;
+    // an older one sends none, and lap 1 is not said. Only the parts
+    // ticked in What to say.
+    if (lapOne) {
+      const pos = rows.indexOf(row) + 1;
+      const one = [];
+      if (say.lap) one.push({ text: 'Lap 1', clips: lvLap(1) });
+      const place = lvPlacePart(say, pos, placeAt);
+      if (place) one.push(place);
+      placeAt = pos;
+      const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
+      const gap = gapWords(raw);
+      if (gap) one.push({ text: gap, clips: lvGap(raw) });
+      lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => one.push(m));
+      const left = lvLeftPart(say, state);
+      if (left) one.push(left);
+      lapVoice.warm(['lap2', 'best']);
+      if (one.length > 0) call(one);
+      return;
+    }
 
     // Two laps in one read - the phone or the relay was slow - says the newest.
     const last = laps[count - 1];
     const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
     const isBest = count > 1 && last <= best;
-    const parts = [{ text: lvTimeText(last), clips: lvTime(last) }];
-    if (isBest) parts.push({ text: 'best lap', clips: ['best'] });
+    const pos = rows.indexOf(row) + 1;
 
-    if (!timeOnly) {
-      const pos = rows.indexOf(row) + 1;
-      parts.unshift({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
-      parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
-      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
-      const gap = gapWords(raw);
-      if (gap) parts.push({ text: gap, clips: lvGap(raw) });
-      lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
-    } else {
-      lapVoice.warm(lvAhead(count + 1, last));
-    }
+    // In the order they are said; only the parts ticked in What to say.
+    const parts = [];
+    if (say.lap) parts.push({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
+    if (say.time) parts.push({ text: lvTimeText(last), clips: lvTime(last) });
+    if (say.best && isBest) parts.push({ text: 'best lap', clips: ['best'] });
+    const vsBest = lvBestPart(say, last, best, count);
+    if (vsBest) parts.push(vsBest);
+    const place = lvPlacePart(say, pos, placeAt);
+    if (place) parts.push(place);
+    placeAt = pos;
+    const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
+    const gap = gapWords(raw);
+    if (gap) parts.push({ text: gap, clips: lvGap(raw) });
+    lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => parts.push(m));
+    const left = lvLeftPart(say, state);
+    if (left) parts.push(left);
+    lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
 
-    call(parts);
+    if (parts.length > 0) call(parts);
   }
 
   if (canSpeak && btn) {
     btn.addEventListener('click', () => {
       // On, but waiting for a tap since a reload: this tap resumes it.
       if (on && !unlocked) {
-        unlocked = true; heardFor = '';
+        unlocked = true; heardFor = ''; absent = '';
         wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); show();
         return;
       }
       unlocked = true;
       on = !on;
       save(ON_KEY, on);
-      heardFor = '';
+      heardFor = ''; absent = '';
       if (on) { wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); } else { hush(); letSleep(); }
       show();
     });
 
-    shortBox.addEventListener('change', () => {
-      timeOnly = !!shortBox.checked;
-      save(SHORT_KEY, timeOnly);
-    });
-
-    if (phoneBox) {
-      phoneBox.addEventListener('change', () => { lapVoice.setPhone(!!phoneBox.checked); });
-    }
+    if (sayRow) sayRow.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'pos', 'moves', 'gap', 'behind', 'leader', 'left'], 'lapsay-', SAY_KEY));
 
     // Any tap lets a page that was on before a reload speak again - and a
     // tap on a name changes who is followed, so the button is redrawn
     // once the follow has been taken.
     document.addEventListener('click', (e) => {
       if (on && !unlocked && !(e && e.target === btn)) {
-        unlocked = true; heardFor = '';
+        unlocked = true; heardFor = ''; absent = '';
         speak(' '); wake(); stayAwake();
       }
       setTimeout(show, 0);
@@ -4395,8 +4721,7 @@ const VOTE_JS = `
 function lapTalkControl(): string {
   return '<div class="card ears" id="laptalk">'
     + '<button type="button" id="lapbtn" class="btn" aria-pressed="false" hidden>Lap times in my ear: off</button>'
-    + '<label id="lapshortrow" hidden><input type="checkbox" id="lapshort"> Time only</label>'
-    + '<label id="lapphonerow" hidden><input type="checkbox" id="lapphone"> Phone voice</label>'
+    + '<div id="lapsayrow" hidden></div>'
     + '<p class="note" id="lapnote">Tap a driver&rsquo;s name on the board to follow them, then your phone can read out each of their laps.</p>'
     + "</div>";
 }
@@ -7617,16 +7942,23 @@ const nightTalk = (function () {
     && typeof SpeechSynthesisUtterance === 'function';
   const ON_KEY = 'hg-nighttalk-' + CLUB;
   const SHORT_KEY = 'hg-nighttalk-short-' + CLUB;
+  const SAY_KEY = 'hg-nighttalk-say-' + CLUB;
   const AUTOLOCK = ' If your screen goes dark, set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while you race.';
 
-  let on = false, timeOnly = false, unlocked = false;
+  let on = false, unlocked = false;
+  const say = lvSayRead(SAY_KEY, SHORT_KEY);
   try {
     on = canSpeak && localStorage.getItem(ON_KEY) === '1';
-    timeOnly = localStorage.getItem(SHORT_KEY) === '1';
   } catch (e) { /* off, and full calls */ }
 
   // Which car's laps were last counted, how many, and the first of them.
   let heardTag = '', heardLaps = 0, firstLap = 0;
+  // Whether lap 1 has been heard - or was already done when counting began.
+  let heardStart = false;
+  // Their place when the last lap was said, for Places gained: 0 for none yet.
+  let placeAt = 0;
+  // Whether their car has been off the board since lap times were turned on.
+  let absent = false;
   // The screen wake lock: held, being asked for, and whether the phone gave one.
   let lock = null, asking = false, awake = null;
   let reading = false;
@@ -7646,8 +7978,9 @@ const nightTalk = (function () {
   }
 
   function hush() {
-    lapVoice.stop();
-    try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+    // "Lap times off" (3 Nov 2026, Asher), then the silence goes.
+    lapVoice.say([{ text: 'Lap times off', clips: ['off'] }], speak);
+    lapVoice.release(2500);
   }
 
   // A call in the lap voice's clips, or the phone's voice - see LAPVOICE_JS.
@@ -7719,7 +8052,7 @@ const nightTalk = (function () {
   }
 
   function take(state) {
-    if (!on || !unlocked) { heardTag = ''; return; }
+    if (!on || !unlocked) { heardTag = ''; absent = false; return; }
 
     const mineCars = cars();
     const rows = Array.isArray(state && state.standings) ? state.standings : [];
@@ -7727,6 +8060,7 @@ const nightTalk = (function () {
       && mineCars.some((c) => c.tag === r.tag));
 
     // Not on track - or, somehow, two of their cars at once: says nothing.
+    if (mine.length === 0) absent = true;
     if (mine.length !== 1) return;
 
     const row = mine[0];
@@ -7734,35 +8068,77 @@ const nightTalk = (function () {
     const laps = (Array.isArray(row.laps) ? row.laps : []).filter((v) => typeof v === 'number' && v > 0);
     const count = laps.length;
     const first = count > 0 ? laps[0] : 0;
+    const started = typeof row.lap === 'number' && row.lap >= 1;
+    let lapOne = false;
 
     if (heardTag !== row.tag || count < heardLaps || (heardLaps > 0 && first !== firstLap)) {
-      heardTag = row.tag; heardLaps = count; firstLap = first;
+      // WHY (3 Nov 2026, Asher: "I didn't hear lap one"): a new race was
+      // always counted from quietly, so a race whose first read already had
+      // a lap - the board between races still showing the last one, or the
+      // car not on it till it crossed the line - never said that lap. Only
+      // the board as it was when lap times were turned on is quiet now; a
+      // new race, another of their cars, or the car arriving says its newest
+      // lap. A lap race control took away is still quiet.
+      const newRace = absent || (heardTag !== '' && (heardTag !== row.tag || first !== firstLap));
+      heardTag = row.tag; heardLaps = count; firstLap = first; absent = false; heardStart = started;
+      placeAt = newRace ? 0 : rows.indexOf(row) + 1;
+      if (!newRace) return;
+      if (count === 0) { if (!started) return; lapOne = true; }
+    } else if (count === heardLaps) {
+      if (count > 0 || !started || heardStart) return;
+      heardStart = true; lapOne = true;
+    } else {
+      heardLaps = count; firstLap = first; heardStart = true;
+    }
+
+    // Lap 1 (3 Nov 2026, Asher: "add Lap 1"): the start lap has no time -
+    // it runs from the green - so it is the lap number, place and gap.
+    // "lap" is the car's crossings, sent by HeatCaller from 3 Nov 2026;
+    // an older one sends none, and lap 1 is not said. Only the parts
+    // ticked in What to say.
+    if (lapOne) {
+      const pos = rows.indexOf(row) + 1;
+      const one = [];
+      if (say.lap) one.push({ text: 'Lap 1', clips: lvLap(1) });
+      const place = lvPlacePart(say, pos, placeAt);
+      if (place) one.push(place);
+      placeAt = pos;
+      const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
+      const gap = gapWords(raw);
+      if (gap) one.push({ text: gap, clips: lvGap(raw) });
+      lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => one.push(m));
+      const left = lvLeftPart(say, state);
+      if (left) one.push(left);
+      lapVoice.warm(['lap2', 'best']);
+      if (one.length > 0) call(one);
       return;
     }
 
-    if (count === heardLaps) return;
-    heardLaps = count; firstLap = first;
-
     const last = laps[count - 1];
     const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
-    const parts = [{ text: lvTimeText(last), clips: lvTime(last) }];
-    if (count > 1 && last <= best) parts.push({ text: 'best lap', clips: ['best'] });
-    const target = targetWords(last, car && car.target);
+    const pos = rows.indexOf(row) + 1;
+
+    // In the order they are said; only the parts ticked in What to say.
+    const parts = [];
+    if (say.lap) parts.push({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
+    if (say.time) parts.push({ text: lvTimeText(last), clips: lvTime(last) });
+    if (say.best && count > 1 && last <= best) parts.push({ text: 'best lap', clips: ['best'] });
+    const vsBest = lvBestPart(say, last, best, count);
+    if (vsBest) parts.push(vsBest);
+    const target = say.target ? targetWords(last, car && car.target) : '';
     if (target) parts.push({ text: target, clips: lvTarget(last, car.target) });
+    const place = lvPlacePart(say, pos, placeAt);
+    if (place) parts.push(place);
+    placeAt = pos;
+    const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
+    const gap = gapWords(raw);
+    if (gap) parts.push({ text: gap, clips: lvGap(raw) });
+    lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => parts.push(m));
+    const left = lvLeftPart(say, state);
+    if (left) parts.push(left);
+    lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
 
-    if (!timeOnly) {
-      const pos = rows.indexOf(row) + 1;
-      parts.unshift({ text: 'Lap ' + (count + 1), clips: lvLap(count + 1) });
-      parts.push({ text: 'P' + pos, clips: lvPlace(pos) });
-      const raw = pos > 1 ? gapAhead(state, row, pos) : '';
-      const gap = gapWords(raw);
-      if (gap) parts.push({ text: gap, clips: lvGap(raw) });
-      lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
-    } else {
-      lapVoice.warm(lvAhead(count + 1, last));
-    }
-
-    call(parts);
+    if (parts.length > 0) call(parts);
   }
 
   async function read() {
@@ -7788,14 +8164,14 @@ const nightTalk = (function () {
 
   function toggle() {
     if (on && !unlocked) {
-      unlocked = true; heardTag = '';
+      unlocked = true; heardTag = ''; absent = false;
       wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); drawLive();
       return;
     }
     unlocked = true;
     on = !on;
     save(ON_KEY, on);
-    heardTag = '';
+    heardTag = ''; absent = false;
     if (on) { wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); } else { hush(); letSleep(); }
     drawLive();
   }
@@ -7812,28 +8188,7 @@ const nightTalk = (function () {
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
     p.appendChild(b);
 
-    const row = el('label', 'nt-short');
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.id = 'nt-lapshort';
-    box.checked = timeOnly;
-    box.addEventListener('change', () => { timeOnly = !!box.checked; save(SHORT_KEY, timeOnly); });
-    row.appendChild(box);
-    row.appendChild(el('span', '', 'Time only'));
-    p.appendChild(row);
-
-    // The lap voice's clips or the phone's own voice, once the relay says it has clips.
-    if (lapVoice.has()) {
-      const voiceRow = el('label', 'nt-short');
-      const phoneBox = document.createElement('input');
-      phoneBox.type = 'checkbox';
-      phoneBox.id = 'nt-lapphone';
-      phoneBox.checked = lapVoice.phone();
-      phoneBox.addEventListener('change', () => { lapVoice.setPhone(!!phoneBox.checked); });
-      voiceRow.appendChild(phoneBox);
-      voiceRow.appendChild(el('span', '', 'Phone voice'));
-      p.appendChild(voiceRow);
-    }
+    p.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'target', 'pos', 'moves', 'gap', 'behind', 'leader', 'left'], 'nt-say-', SAY_KEY));
 
     p.appendChild(el('div', 'when', !on
       ? 'Your phone reads out each of your laps as you race: lap, time, best lap, your target when one is set, place and gap. Keep this page open with the screen on.'
@@ -7850,7 +8205,7 @@ const nightTalk = (function () {
     // Any tap lets a page that was on before a reload speak again.
     document.addEventListener('click', (e) => {
       if (on && !unlocked && !(e && e.target && e.target.id === 'nt-laptalk')) {
-        unlocked = true; heardTag = '';
+        unlocked = true; heardTag = ''; absent = false;
         speak(' '); wake(); stayAwake();
         setTimeout(drawLive, 0);
       }

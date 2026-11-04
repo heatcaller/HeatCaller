@@ -149,7 +149,8 @@ describe("My Night lap times: the control", () => {
     assert.match(part.textContent, /Lap times in my ear/);
     assert.equal(n.p.get("nt-laptalk").textContent, "Read out my laps");
     assert.equal(n.p.get("nt-laptalk").getAttribute("aria-pressed"), "false");
-    assert.match(part.textContent, /Time only/);
+    assert.match(part.textContent, /What to say/);
+    assert.match(part.textContent, /Lap number.*Lap time.*Best lap.*Target.*Position.*Gap ahead/);
     assert.match(part.textContent, /your target when one is set/);
   });
 
@@ -215,12 +216,14 @@ describe("My Night lap times: what is said", () => {
     assert.equal(n.said.at(-1), "Lap 6, 9.602, on target, P2, 0.41 seconds behind", "the time as the screen shows it, never rounded");
   });
 
-  it("with Time only ticked says the time, best lap and the target", async () => {
+  it("says only the parts ticked in What to say: here the time, best lap and the target (3 Nov 2026)", async () => {
     const n = await open(field([9500, 9600]), { cars: [{ tag: MINE, target: 9600 }] });
-    const box = n.p.get("nt-lapshort") as FakeNode & { checked: boolean };
-    box.checked = true;
-    box.fire("change");
-    assert.equal(n.p.store.get("hg-nighttalk-short-acme-rc"), "1");
+    for (const part of ["lap", "pos", "gap"]) {
+      const box = n.p.get("nt-say-" + part) as FakeNode & { checked: boolean };
+      box.checked = false;
+      box.fire("change");
+    }
+    assert.equal(n.p.store.get("hg-nighttalk-say-acme-rc"), "time,best,target");
 
     await turnOn(n);
     await n.p.advance(1000);
@@ -272,25 +275,28 @@ describe("My Night lap times: what is said", () => {
     assert.deepEqual(n.said, ["Lap times on", "Lap 5, 9.30, best lap, P1"]);
   });
 
-  it("says nothing while the driver is not on the board, and a new race starts the count quietly", async () => {
+  it("says nothing while the driver is not on the board, and a new race says its newest lap (3 Nov 2026)", async () => {
     const n = await open({ standings: [row("Sam P.", SOMEONE, [9000, 9100])] });
     await turnOn(n);
     await n.p.advance(3000);
     assert.deepEqual(n.said, ["Lap times on"]);
 
-    // Their race goes out with laps already on it: counted, not said.
+    // Their race goes out with laps already on it: the newest is said, as
+    // it is live - never the ones before it (Asher: "I didn't hear lap one").
     n.set(field([9900, 9800, 9700]));
     await n.p.advance(1000);
-    assert.deepEqual(n.said, ["Lap times on"]);
+    assert.equal(n.said.length, 2);
+    assert.match(n.said.at(-1)!, /^Lap 4, 9.70/);
 
     n.set(field([9900, 9800, 9700, 9750]));
     await n.p.advance(1000);
-    assert.equal(n.said.length, 2);
+    assert.equal(n.said.length, 3);
 
-    // The next race: fewer laps - counted again from there, quietly.
+    // The next race, already a lap in when first read: that lap is said.
     n.set(field([9300]));
     await n.p.advance(1000);
-    assert.equal(n.said.length, 2);
+    assert.equal(n.said.length, 4);
+    assert.match(n.said.at(-1)!, /^Lap 2, 9.30/);
   });
 });
 
