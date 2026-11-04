@@ -3980,6 +3980,11 @@ function cells(row, columns) {
   }).join('');
 }
 
+// The last table render() wrote, so an unchanged read leaves the card be.
+// The notes that replace the table also take the card away, which is what
+// makes the next table be written again.
+let boardHtml = '';
+
 function render(state, seen) {
   // A copy's laps are not news: only a fresh read is counted for speaking.
   if (!seen) lapTalk.take(state);
@@ -4001,11 +4006,24 @@ function render(state, seen) {
     return;
   }
 
-  board.innerHTML = '<div class="card"><table><thead><tr>' +
+  const html = '<div class="card"><table><thead><tr>' +
     columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + '">' + esc(c) + '</th>').join('') +
     '</tr></thead><tbody>' +
     rows.map((r) => '<tr>' + cells(r, columns) + '</tr>').join('') +
     '</tbody></table></div>';
+
+  // The board redraws every second or two, and a fresh card starts
+  // scrolled hard left - so a phone that had swiped over to the last
+  // columns was thrown back to the start on the next read (3 Nov 2026).
+  // Nothing is written that is already on screen, and a redraw that is
+  // needed carries the sideways scroll across to the new card.
+  const old = board.querySelector ? board.querySelector('.card') : null;
+  if (old && html === boardHtml) return;
+  const left = old ? old.scrollLeft : 0;
+  board.innerHTML = html;
+  boardHtml = html;
+  const card = left && board.querySelector ? board.querySelector('.card') : null;
+  if (card) card.scrollLeft = left;
 }
 
 // Shows or hides the broadcast bug (see load).
