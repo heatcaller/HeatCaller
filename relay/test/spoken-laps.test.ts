@@ -137,6 +137,9 @@ describe("lap times in my ear: the control", () => {
       assert.equal((l.p.get("lapsay-" + part) as unknown as { checked: boolean }).checked, true, part + " is on until turned off");
     }
     assert.equal(l.p.byId.has("lapsay-target"), false, "no target on the Live page");
+    for (const part of ["behind", "leader"]) {
+      assert.equal((l.p.get("lapsay-" + part) as unknown as { checked: boolean }).checked, false, part + " is off until ticked");
+    }
     assert.match(l.p.get("lapnote").textContent, /each of Asher K..s laps/);
   });
 

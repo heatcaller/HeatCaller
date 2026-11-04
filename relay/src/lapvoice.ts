@@ -185,23 +185,12 @@ export function lapClips(): LapClip[] {
   // RaceNumbers.Behind over GapSpoken: tenths under a second, halves to
   // ten, whole seconds after. A gap is the car ahead's, so it is "back".
   clips.push({ name: "g-0", text: "nothing in it" });
-  for (let t = 1; t <= 9; t++) {
-    const gap = t === 1 ? "a tenth" : t === 5 ? "half a second" : `${words(t)} tenths`;
-    clips.push({ name: `g-t${t}`, text: `${gap} back` });
-  }
-  for (let halves = 2; halves <= 19; halves++) {
-    const whole = Math.floor(halves / 2);
-    const gap = halves % 2 === 0
-      ? (whole === 1 ? "a second" : `${words(whole)} seconds`)
-      : (whole === 1 ? "a second and a half" : `${words(whole)} and a half seconds`);
-    clips.push({ name: `g-h${halves}`, text: `${gap} back` });
-  }
-  for (let s = 10; s <= GAP_SECONDS_MAX; s++) {
-    clips.push({ name: `g-s${s}`, text: `${words(s)} seconds back` });
-  }
-  for (let l = 1; l <= LAPS_DOWN_MAX; l++) {
-    clips.push({ name: `g-l${l}`, text: l === 1 ? "a lap back" : `${words(l)} laps back` });
-  }
+  gapClips(clips, "g", "back");
+  // The same gaps to P1 and to the car behind (3 Nov 2026, Asher: "time to
+  // P1"): "four seconds off the lead", "half a second clear". Nothing in it
+  // is "g-0" for all three.
+  gapClips(clips, "gl", "off the lead");
+  gapClips(clips, "gb", "clear");
 
   // The target words, in two clips: how far, then which way.
   clips.push({ name: "tg-on", text: "on target" });
@@ -212,6 +201,27 @@ export function lapClips(): LapClip[] {
   }
 
   return clips;
+}
+
+/** One set of gap clips, prefix-t1 to prefix-l9, each ending in tail. */
+function gapClips(clips: LapClip[], prefix: string, tail: string): void {
+  for (let t = 1; t <= 9; t++) {
+    const gap = t === 1 ? "a tenth" : t === 5 ? "half a second" : `${words(t)} tenths`;
+    clips.push({ name: `${prefix}-t${t}`, text: `${gap} ${tail}` });
+  }
+  for (let halves = 2; halves <= 19; halves++) {
+    const whole = Math.floor(halves / 2);
+    const gap = halves % 2 === 0
+      ? (whole === 1 ? "a second" : `${words(whole)} seconds`)
+      : (whole === 1 ? "a second and a half" : `${words(whole)} and a half seconds`);
+    clips.push({ name: `${prefix}-h${halves}`, text: `${gap} ${tail}` });
+  }
+  for (let s = 10; s <= GAP_SECONDS_MAX; s++) {
+    clips.push({ name: `${prefix}-s${s}`, text: `${words(s)} seconds ${tail}` });
+  }
+  for (let l = 1; l <= LAPS_DOWN_MAX; l++) {
+    clips.push({ name: `${prefix}-l${l}`, text: l === 1 ? `a lap ${tail}` : `${words(l)} laps ${tail}` });
+  }
 }
 
 /** What one set of clips costs to make: ElevenLabs counts every character, spaces included. */

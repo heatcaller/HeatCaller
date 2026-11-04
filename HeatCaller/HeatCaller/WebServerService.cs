@@ -3310,6 +3310,11 @@ public sealed partial class WebServerService
         //    out - it runs from the green and isn't a lap time - so without
         //    this a phone can't tell a car that has done its first lap from
         //    one still on the grid, and never says "Lap 1".
+        //  - "leader", the gap to P1 in the same words as "ahead" (3 Nov
+        //    2026, Asher: "time to P1"), so a phone can say "four seconds
+        //    off the lead" whatever columns the club shows. Not on the
+        //    leader. The gap to the car behind needs nothing new: it is the
+        //    next row's "ahead".
         if (forRelay)
         {
             var relayNode = JsonSerializer.SerializeToNode(document)!.AsObject();
@@ -3335,6 +3340,11 @@ public sealed partial class WebServerService
                     if (i > 0 && RaceGaps.Format(RaceGaps.Between(car, ordered[i - 1])) is var ahead && ahead != "-")
                     {
                         row["ahead"] = ahead;
+                    }
+
+                    if (i > 0 && RaceGaps.Format(RaceGaps.Between(car, ordered[0])) is var leader && leader != "-")
+                    {
+                        row["leader"] = leader;
                     }
                 }
             }

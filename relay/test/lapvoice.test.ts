@@ -82,9 +82,9 @@ describe("lap voice: the clips", () => {
 
   it("costs about a dollar and a half to make once", () => {
     const cost = lapClipCost();
-    assert.equal(cost.clips, 2454);
-    assert.equal(cost.chars, 39679);
-    assert.equal(cost.dollars, 1.59);
+    assert.equal(cost.clips, 2568);
+    assert.equal(cost.chars, 42430);
+    assert.equal(cost.dollars, 1.7);
   });
 });
 
@@ -270,6 +270,8 @@ interface Row {
   lap?: number;
   best?: number;
   ahead?: string;
+  /** The gap to P1 (HeatCaller from 3 Nov 2026). */
+  leader?: string;
   cells?: { text: string; emphasis: string }[];
 }
 
@@ -540,6 +542,43 @@ describe("lap voice: the Live page", () => {
     l.set(field([]));
     await l.p.advance(1000);
     assert.deepEqual(l.played, []);
+  });
+
+  it("says the gap behind and the gap to P1 when ticked, after the gap ahead (3 Nov 2026)", async () => {
+    // Asher: "additional data points to announce such as time to P1".
+    const four = (laps: number[]): Board => ({
+      columns: COLUMNS,
+      standings: [
+        row("Sam P.", [9000]),
+        row("Bo D.", [9050], { ahead: "+0.30" }),
+        row("Asher K.", laps, { ahead: "+0.41", leader: "+2.52" }),
+        row("Cal T.", [9900], { ahead: "+1.20" }),
+      ],
+    });
+    const l = await livePageWith(four([9500, 9600]), {}, { "hg-laptalk-say-acme-rc": "lap,time,pos,gap,behind,leader" });
+    l.set(four([9500, 9600, 9520]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap4", "t952", "p3", "g-t4", "gb-h2", "gl-h5"]);
+    assert.deepEqual(l.played.map((n) => TEXT.get(n)),
+      ["Lap four", "nine fifty-two", "P three", "four tenths back", "a second clear", "two and a half seconds off the lead"]);
+
+    const phone = await livePageWith(four([9500, 9600]), null, { "hg-laptalk-say-acme-rc": "lap,time,pos,gap,behind,leader" });
+    phone.set(four([9500, 9600, 9520]));
+    await phone.p.advance(1000);
+    assert.equal(phone.said.at(-1), "Lap 4, 9.52, P3, 0.41 seconds behind, 1.20 seconds clear, 2.52 seconds off the lead");
+
+    // Off until ticked: a phone that never chose says what it always did.
+    const plain = await livePageWith(four([9500, 9600]), {});
+    plain.set(four([9500, 9600, 9520]));
+    await plain.p.advance(1000);
+    assert.deepEqual(plain.played, ["lap4", "t952", "p3", "g-t4"]);
+  });
+
+  it("never says the gap to P1 for P2 - it is the gap ahead - and no gap behind for the last car", async () => {
+    const l = await livePageWith(field([9500, 9600]), {}, { "hg-laptalk-say-acme-rc": "pos,gap,behind,leader" });
+    l.set(field([9500, 9600, 9520]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["p2", "g-t4"]);
   });
 
   it("says the first lap of a driver who was not on the board when it was turned on", async () => {

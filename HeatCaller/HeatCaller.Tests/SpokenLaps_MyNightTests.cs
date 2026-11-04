@@ -95,6 +95,16 @@ public sealed class SpokenLaps_MyNightTests : IDisposable
     }
 
     [Fact]
+    public void Every_row_but_the_leader_carries_the_gap_to_p1()
+    {
+        // 3 Nov 2026, Asher: "time to P1".
+        var rows = RelayRows(Server());
+
+        Assert.Null(rows[0]!["leader"]);
+        Assert.Equal(rows[1]!["ahead"]!.GetValue<string>(), rows[1]!["leader"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void The_lan_board_has_no_crossing_count()
     {
         var lan = JsonNode.Parse(Server().BuildStateJson())!["standings"]!.AsArray();

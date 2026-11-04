@@ -3810,14 +3810,18 @@ const lapVoice = (function () {
 // single Time only box. Every part is on until it is turned off. A phone
 // that had Time only ticked keeps what it said: the time, best lap and the
 // target. Nothing ticked says nothing.
+// Each part: its key, its box's words, and whether it is on until changed.
+// Gap behind and Gap to P1 (3 Nov 2026, Asher: "time to P1") make a call
+// longer, so they are off until ticked.
 const LV_SAY = [
-  ['lap', 'Lap number'], ['time', 'Lap time'], ['best', 'Best lap'],
-  ['target', 'Target'], ['pos', 'Position'], ['gap', 'Gap ahead'],
+  ['lap', 'Lap number', true], ['time', 'Lap time', true], ['best', 'Best lap', true],
+  ['target', 'Target', true], ['pos', 'Position', true], ['gap', 'Gap ahead', true],
+  ['behind', 'Gap behind', false], ['leader', 'Gap to P1', false],
 ];
 
 function lvSayRead(key, shortKey) {
   const say = {};
-  LV_SAY.forEach((p) => { say[p[0]] = true; });
+  LV_SAY.forEach((p) => { say[p[0]] = p[2]; });
   try {
     const saved = localStorage.getItem(key);
     if (typeof saved === 'string') {
@@ -3882,20 +3886,61 @@ function lvPlace(n) { return n >= 1 && n <= 30 ? ['p' + n] : null; }
 
 // The gap to the car ahead, as RaceNumbers.GapSpoken rounds it: tenths
 // under a second, halves to ten, whole seconds to thirty; or laps.
-function lvGap(gap) {
+// set: 'g' for the car ahead ("back"), 'gl' for P1 ("off the lead"), 'gb'
+// for the car behind ("clear"). Nothing in it is 'g-0' for all three.
+function lvGap(gap, set) {
+  const k = set || 'g';
   const t = String(gap || '').trim();
   const laps = /^\\+?(\\d+)\\s*L(aps?)?$/i.exec(t);
-  if (laps) { const l = Number(laps[1]); return l >= 1 && l <= 9 ? ['g-l' + l] : null; }
+  if (laps) { const l = Number(laps[1]); return l >= 1 && l <= 9 ? [k + '-l' + l] : null; }
   const secs = /^\\+(\\d+([.,]\\d+)?)s?$/.exec(t);
   if (!secs) return null;
   const g = Math.abs(Number(secs[1].replace(',', '.')));
   if (!isFinite(g)) return null;
   if (g < 0.05) return ['g-0'];
-  if (g < 0.95) return ['g-t' + Math.max(1, Math.round(g * 10))];
-  if (g < 1.05) return ['g-h2'];
-  if (g >= 10) { const s = Math.round(g); return s <= 30 ? ['g-s' + s] : null; }
+  if (g < 0.95) return [k + '-t' + Math.max(1, Math.round(g * 10))];
+  if (g < 1.05) return [k + '-h2'];
+  if (g >= 10) { const s = Math.round(g); return s <= 30 ? [k + '-s' + s] : null; }
   const halves = Math.round(g * 2);
-  return halves >= 20 ? ['g-s10'] : ['g-h' + halves];
+  return halves >= 20 ? [k + '-s10'] : [k + '-h' + halves];
+}
+
+// A gap in the phone's own voice: "0.41 seconds clear", "1 lap off the lead".
+function lvGapWords(gap, tail) {
+  const t = String(gap || '').trim();
+  const laps = /^\\+?(\\d+)\\s*L(aps?)?$/i.exec(t);
+  if (laps) return laps[1] + (laps[1] === '1' ? ' lap ' : ' laps ') + tail;
+  const secs = /^\\+(\\d+([.,]\\d+)?)s?$/.exec(t);
+  return secs ? secs[1].replace(',', '.') + ' seconds ' + tail : '';
+}
+
+// The gap to P1 as the board has it: HeatCaller's own figure on the row
+// (from 3 Nov 2026), else the club's Gap to P1 column.
+function lvLeaderGap(state, row) {
+  if (typeof row.leader === 'string' && row.leader !== '') return row.leader;
+  const columns = Array.isArray(state.columns) ? state.columns.map((c) => String(c)) : [];
+  const at = columns.findIndex((c) => /^gap/i.test(c));
+  const cell = at >= 0 && Array.isArray(row.cells) ? row.cells[at] : null;
+  return cell && typeof cell === 'object' ? String(cell.text || '') : '';
+}
+
+// The gap to the car behind and to P1, when ticked, after the gap ahead.
+// The car behind's gap is that car's own gap to the car ahead - this one -
+// so gapAhead (the page's) on the next row. P2's gap to P1 is its gap
+// ahead, so it is only said from P3 back.
+function lvMoreGaps(say, state, rows, row, pos, gapAhead) {
+  const more = [];
+  if (say.behind && pos < rows.length && rows[pos] && typeof rows[pos] === 'object') {
+    const raw = gapAhead(state, rows[pos], pos + 1);
+    const words = lvGapWords(raw, 'clear');
+    if (words) more.push({ text: words, clips: lvGap(raw, 'gb') });
+  }
+  if (say.leader && pos > 2) {
+    const raw = lvLeaderGap(state, row);
+    const words = lvGapWords(raw, 'off the lead');
+    if (words) more.push({ text: words, clips: lvGap(raw, 'gl') });
+  }
+  return more;
 }
 
 // Against a target lap: "on target", or how far and which way.
@@ -4105,6 +4150,7 @@ const lapTalk = (function () {
       const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
       const gap = gapWords(raw);
       if (gap) one.push({ text: gap, clips: lvGap(raw) });
+      lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => one.push(m));
       lapVoice.warm(['lap2', 'best']);
       if (one.length > 0) call(one);
       return;
@@ -4125,6 +4171,7 @@ const lapTalk = (function () {
     const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
     const gap = gapWords(raw);
     if (gap) parts.push({ text: gap, clips: lvGap(raw) });
+    lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => parts.push(m));
     lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
 
     if (parts.length > 0) call(parts);
@@ -4146,7 +4193,7 @@ const lapTalk = (function () {
       show();
     });
 
-    if (sayRow) sayRow.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'pos', 'gap'], 'lapsay-', SAY_KEY));
+    if (sayRow) sayRow.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'pos', 'gap', 'behind', 'leader'], 'lapsay-', SAY_KEY));
 
     // Any tap lets a page that was on before a reload speak again - and a
     // tap on a name changes who is followed, so the button is redrawn
@@ -7991,6 +8038,7 @@ const nightTalk = (function () {
       const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
       const gap = gapWords(raw);
       if (gap) one.push({ text: gap, clips: lvGap(raw) });
+      lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => one.push(m));
       lapVoice.warm(['lap2', 'best']);
       if (one.length > 0) call(one);
       return;
@@ -8011,6 +8059,7 @@ const nightTalk = (function () {
     const raw = say.gap && pos > 1 ? gapAhead(state, row, pos) : '';
     const gap = gapWords(raw);
     if (gap) parts.push({ text: gap, clips: lvGap(raw) });
+    lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => parts.push(m));
     lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
 
     if (parts.length > 0) call(parts);
@@ -8063,7 +8112,7 @@ const nightTalk = (function () {
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
     p.appendChild(b);
 
-    p.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'target', 'pos', 'gap'], 'nt-say-', SAY_KEY));
+    p.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'target', 'pos', 'gap', 'behind', 'leader'], 'nt-say-', SAY_KEY));
 
     p.appendChild(el('div', 'when', !on
       ? 'Your phone reads out each of your laps as you race: lap, time, best lap, your target when one is set, place and gap. Keep this page open with the screen on.'
