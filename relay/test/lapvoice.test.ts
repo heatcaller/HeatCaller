@@ -297,7 +297,9 @@ function withClips(p: FakePage, clips: Clips | null): void {
     window.speechSynthesis = { speak(u) { __said.push(u.text); }, cancel() {} };
     window.AudioContext = function () {
       this.state = 'running'; this.currentTime = 0; this.destination = {};
-      this.resume = function () {};
+      this.resumed = 0;
+      this.resume = function () { this.resumed++; };
+      window.__ctx = this;
       this.decodeAudioData = function (bytes, ok) { ok({ duration: 0.5, name: bytes.name }); };
       this.createBufferSource = function () {
         return { connect() {}, stop() {}, start() { __played.push(this.buffer.name); } };
@@ -425,6 +427,21 @@ describe("lap voice: the Live page", () => {
     assert.deepEqual(l.played, []);
   });
 
+  it("says it in the phone's voice when the phone has stopped the page's sound, and asks for it back (3 Nov 2026)", async () => {
+    const l = await livePageWith(field([9500, 9600]), {});
+    l.p.eval("window.__ctx.state = 'interrupted'");
+    l.set(field([9500, 9600, 9520]));
+    await l.p.advance(1000);
+    assert.equal(l.said.at(-1), "Lap 4, 9.52, P2, 0.41 seconds behind");
+    assert.deepEqual(l.played, []);
+    assert.ok((l.p.eval("window.__ctx.resumed") as number) > 0, "asked to start again");
+
+    l.p.eval("window.__ctx.state = 'running'");
+    l.set(field([9500, 9600, 9520, 9530]));
+    await l.p.advance(1000);
+    assert.deepEqual(l.played, ["lap5", "t953", "p2", "g-t4"], "the clips again once it is back");
+  });
+
   it("says it in the phone's voice when a clip will not load", async () => {
     const l = await livePageWith(field([9500, 9600]), { broken: ["p2"] });
     l.set(field([9500, 9600, 9520]));
@@ -537,5 +554,14 @@ describe("lap voice: My Night", () => {
     await p.advance(1000);
     assert.deepEqual(seen<string[]>(p, "__played"), ["lap4", "t940", "best", "tg-m20", "tg-under", "p2", "g-t4"]);
     assert.deepEqual(seen<string[]>(p, "__said"), ["Lap times on"]);
+
+    // 3 Nov 2026, Asher: silent on the Me tab. The phone stopped the
+    // page's sound - the clips are never played into nothing.
+    p.eval("window.__ctx.state = 'suspended'");
+    board = { ...board, standings: [board.standings[0]!, row("Asher K.", [9500, 9600, 9400, 9450], { tag: MINE, ahead: "+0.41" })] };
+    await p.advance(1000);
+    assert.equal(seen<string[]>(p, "__played").length, 7, "nothing played into a stopped context");
+    assert.equal(seen<string[]>(p, "__said").at(-1), "Lap 5, 9.45, 0.15 under target, P2, 0.41 seconds behind");
+    assert.ok((p.eval("window.__ctx.resumed") as number) > 0, "asked to start again");
   });
 });

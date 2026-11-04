@@ -3547,8 +3547,24 @@ const lapVoice = (function () {
     try {
       const Kind = window.AudioContext || window.webkitAudioContext;
       if (!ctx && Kind) ctx = new Kind();
-      if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
     } catch (e) { ctx = null; }
+    nudge();
+  }
+
+  // Whether sound played now would be heard. A phone stops a page's audio
+  // when the screen locks, another app plays, a call comes in or the page
+  // is put away - "suspended", or "interrupted" on an iPhone - and clips
+  // played then are silent, with nothing to say so.
+  function live() { return ctx !== null && (!ctx.state || ctx.state === 'running'); }
+
+  // Asks a stopped context to start again: from a tap it always may, and
+  // when the page comes back many phones let it without one.
+  function nudge() {
+    if (ctx === null || live() || typeof ctx.resume !== 'function') return;
+    try {
+      const p = ctx.resume();
+      if (p && typeof p.catch === 'function') p.catch(() => { /* the next tap, then */ });
+    } catch (e) { /* the next tap, then */ }
   }
 
   function has() { return have !== null; }
@@ -3622,6 +3638,11 @@ const lapVoice = (function () {
         if (settled || mine !== playing) return;
         settled = true;
         clearTimeout(late);
+        // WHY (3 Nov 2026, Asher: "not hearing the elevenlabs lap times on
+        // the me tab", the phone voice fine): a stopped context took the
+        // clips and played nothing. Now it is the phone's voice instead,
+        // and the context is asked to start again for the next lap.
+        if (!live()) { nudge(); speak(text); return; }
         try { window.speechSynthesis.cancel(); } catch (e) { /* not talking */ }
         let at = ctx.currentTime + 0.02;
         decoded.forEach((group, i) => {
@@ -3651,6 +3672,13 @@ const lapVoice = (function () {
   }
 
   function whenReady(f) { if (asked && have === null) waiting.push(f); }
+
+  // Any tap, and the page coming back, wakes a context the phone stopped.
+  try {
+    document.addEventListener('click', nudge, true);
+    document.addEventListener('touchend', nudge, true);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) nudge(); });
+  } catch (e) { /* the taps that unlock it, then */ }
 
   return {
     unlock: unlock, has: has, using: using, say: say, stop: stop, warm: warm,
