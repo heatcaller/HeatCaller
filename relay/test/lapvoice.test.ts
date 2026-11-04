@@ -294,9 +294,13 @@ function withClips(p: FakePage, clips: Clips | null): void {
   p.eval("this.__said = []; this.__played = []; this.__asked = [];");
   p.eval(`
     this.SpeechSynthesisUtterance = function (text) { this.text = text; };
-    this.__woke = 0;
-    // A line at no volume is the lap voice waking the phone's sound, unheard.
-    window.speechSynthesis = { speak(u) { if (u.volume === 0) __woke++; else __said.push(u.text); }, cancel() {} };
+    this.__held = 0; this.__paused = 0;
+    window.speechSynthesis = { speak(u) { __said.push(u.text); }, cancel() {} };
+    // The looped silence that keeps an iPhone's silent switch off the clips.
+    this.Audio = window.Audio = function () {
+      this.play = function () { __held++; return Promise.resolve(); };
+      this.pause = function () { __paused++; };
+    };
     window.AudioContext = function () {
       this.state = 'running'; this.currentTime = 0; this.destination = {};
       this.resumed = 0;
@@ -335,6 +339,8 @@ function seen<T>(p: FakePage, name: string): T {
 
 interface LivePage {
   p: FakePage;
+  /** What turning it on said and played. */
+  readonly turnedOn: { said: string[]; played: string[] };
   set(board: Board): void;
   readonly said: string[];
   readonly played: string[];
@@ -371,9 +377,12 @@ async function livePageWith(first: Board, clips: Clips | null, stored: Record<st
   p.get("lapbtn").click();
   await p.settle();
   await p.advance(1000);
+  const turnedOn = { said: seen<string[]>(p, "__said"), played: seen<string[]>(p, "__played") };
+  p.eval("__said.length = 0; __played.length = 0;");
 
   return {
     p,
+    turnedOn,
     set: (next) => { board = next; },
     get said() { return seen<string[]>(p, "__said"); },
     get played() { return seen<string[]>(p, "__played"); },
@@ -384,12 +393,13 @@ async function livePageWith(first: Board, clips: Clips | null, stored: Record<st
 describe("lap voice: the Live page", () => {
   it("plays a lap's clips one after another, and the phone says nothing", async () => {
     const l = await livePageWith(field([9500, 9600, 9450]), {});
-    assert.deepEqual(l.said, ["Lap times on"], "the first word is the phone's, before the list is in");
+    assert.deepEqual(l.turnedOn, { said: [], played: ["on"] }, "\"Lap times on\" waits for the clip list rather than being the phone's (3 Nov 2026)");
+    assert.ok((l.p.eval("__held") as number) > 0, "the silence under the clips is started by the tap");
 
     l.set(field([9500, 9600, 9450, 9520]));
     await l.p.advance(1000);
     assert.deepEqual(l.played, ["lap5", "t952", "p2", "g-t4"]);
-    assert.deepEqual(l.said, ["Lap times on"]);
+    assert.deepEqual(l.said, []);
     assert.deepEqual(l.played.map((n) => TEXT.get(n)), ["Lap five", "nine fifty-two", "P two", "four tenths back"]);
 
     l.set(field([9500, 9600, 9450, 9520, 9410], "+1L"));
@@ -424,7 +434,7 @@ describe("lap voice: the Live page", () => {
     const l = await livePageWith(field([9500, 9600]), { slow: ["t952"] });
     l.set(field([9500, 9600, 9520]));
     await l.p.advance(1000);
-    assert.equal(l.said.length, 1, "waiting for the clip");
+    assert.equal(l.said.length, 0, "waiting for the clip");
     await l.p.advance(1000);
     assert.equal(l.said.at(-1), "Lap 4, 9.52, P2, 0.41 seconds behind");
     assert.deepEqual(l.played, []);
@@ -437,9 +447,9 @@ describe("lap voice: the Live page", () => {
     await l.p.advance(1000);
     await l.p.advance(1000);
     assert.deepEqual(l.played, ["lap4", "t952", "p2", "g-t4"]);
-    assert.deepEqual(l.said, ["Lap times on"], "never the phone's voice");
+    assert.deepEqual(l.said, [], "never the phone's voice");
     assert.ok((l.p.eval("window.__ctx.resumed") as number) > 0, "asked to start again");
-    assert.ok((l.p.eval("__woke") as number) > 0, "woken with a line nobody hears");
+    assert.ok((l.p.eval("__held") as number) > 1, "the silence started again");
   });
 
   it("after the page was put away, wakes the sound on its own and plays the clips - no tap, no phone voice (3 Nov 2026)", async () => {
@@ -450,20 +460,21 @@ describe("lap voice: the Live page", () => {
       l.p.hidden = hidden;
       for (const run of l.p.documentListeners.get("visibilitychange") ?? []) run({});
     };
+    const held = l.p.eval("__held") as number;
     visibility(true);
-    assert.equal(l.p.eval("__woke"), 0);
+    assert.equal(l.p.eval("__held"), held);
     visibility(false);
-    assert.equal(l.p.eval("__woke"), 1, "woken the moment the page is back");
+    assert.equal(l.p.eval("__held"), held + 1, "the silence started again the moment the page is back");
     l.set(field([9500, 9600, 9520]));
     await l.p.advance(1000);
     await l.p.advance(1000);
     assert.deepEqual(l.played, ["lap4", "t952", "p2", "g-t4"]);
-    assert.deepEqual(l.said, ["Lap times on"], "never the phone's voice");
+    assert.deepEqual(l.said, [], "never the phone's voice");
 
     l.set(field([9500, 9600, 9520, 9530]));
     await l.p.advance(1000);
     assert.deepEqual(l.played.slice(4), ["lap5", "t953", "p2", "g-t4"]);
-    assert.equal(l.p.eval("__woke"), 1, "woken once, not before every lap");
+    assert.equal(l.p.eval("__held"), held + 1, "once, not before every lap");
   });
 
   it("makes a new context on the first tap after the page was put away", async () => {
@@ -585,11 +596,14 @@ describe("lap voice: My Night", () => {
     await p.settle();
     await p.advance(1000);
     assert.equal(p.byId.has("nt-lapphone"), false, "no Phone voice box (3 Nov 2026)");
+    assert.deepEqual(seen<string[]>(p, "__played"), ["on"], "\"Lap times on\" in the clips, not the phone's voice");
+    assert.deepEqual(seen<string[]>(p, "__said"), []);
+    p.eval("__played.length = 0;");
 
     board = { ...board, standings: [board.standings[0]!, row("Asher K.", [9500, 9600, 9400], { tag: MINE, ahead: "+0.41" })] };
     await p.advance(1000);
     assert.deepEqual(seen<string[]>(p, "__played"), ["lap4", "t940", "best", "tg-m20", "tg-under", "p2", "g-t4"]);
-    assert.deepEqual(seen<string[]>(p, "__said"), ["Lap times on"]);
+    assert.deepEqual(seen<string[]>(p, "__said"), []);
 
     // 3 Nov 2026, Asher: silent on the Me tab after coming back to it. The
     // page wakes the phone's sound itself and plays the clips - no tap, and
@@ -603,8 +617,11 @@ describe("lap voice: My Night", () => {
     await p.advance(1000);
     await p.advance(1000);
     assert.deepEqual(seen<string[]>(p, "__played").slice(7), ["lap5", "t945", "tg-m15", "tg-under", "p2", "g-t4"], "the clips, after coming back");
-    assert.deepEqual(seen<string[]>(p, "__said"), ["Lap times on"], "never the phone's voice");
-    assert.ok((p.eval("__woke") as number) > 0, "woken with a line nobody hears");
+    assert.deepEqual(seen<string[]>(p, "__said"), [], "never the phone's voice");
+
+    // Lap times off: the silence stops with them.
+    p.get("nt-laptalk").click();
+    assert.ok((p.eval("__paused") as number) > 0);
     assert.ok((p.eval("window.__ctx.resumed") as number) > 0, "asked to start again");
   });
 });

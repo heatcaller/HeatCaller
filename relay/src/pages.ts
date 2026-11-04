@@ -3505,17 +3505,22 @@ export function resultsPage(club: string, clubName: string, context: PageContext
  * played, so a whole night of them costs a phone a few megabytes, not the
  * hundreds that decoded sound would.
  */
+/** A twentieth of a second of silence as an mp3 - the same as LISTEN_JS's SILENCE. */
+const SILENT_MP3 = 'data:audio/mpeg;base64,//sQxAADwAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xLEKYPAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+xDEU4PAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==';
+
 const LAPVOICE_JS = `
 const lapVoice = (function () {
   // A call whose clips are not all here by then is said by the phone instead.
   const LATE_MS = 1000;
   // The breath between the parts of a call - the commas the phone voice pauses on.
   const BREATH = 0.12;
-  // The longest a call waits for the phone's sound to wake (see wake()).
-  const WAKE_MS = 600;
+  // How long a call waits for the phone's sound to wake (see wake()).
+  const WAKE_MS = 300;
+  // A twentieth of a second of silence, looped while lap times are on - see holdOn().
+  const SILENT = ${JSON.stringify(SILENT_MP3)};
 
   let ctx = null, asked = false, version = '', voice = '';
-  let have = null;
+  let have = null, listed = false, hold = null;
   const kept = new Map();
   let playing = 0, sources = [];
   const waiting = [];
@@ -3530,6 +3535,7 @@ const lapVoice = (function () {
           version = m.v;
           voice = typeof m.voice === 'string' ? m.voice : '';
         }
+        listed = true;
         waiting.splice(0).forEach((f) => { try { f(); } catch (e) { /* its own redraw */ } });
       }, () => { asked = false; });
     } catch (e) { asked = false; }
@@ -3543,6 +3549,34 @@ const lapVoice = (function () {
       if (navigator.audioSession) navigator.audioSession.type = 'playback';
     } catch (e) { /* an older phone */ }
     if (!ctx) fresh(); else nudge();
+    holdOn();
+  }
+
+  // WHY (3 Nov 2026, Asher: the phone's voice said "Lap times on", then
+  // no ElevenLabs until lap times went off and on again - Chrome on an
+  // iPhone): an iPhone plays a page's Web Audio as if it were a ringtone,
+  // so the silent switch mutes it, unless a media element is playing too.
+  // The phone's own voice is never muted that way, which is why it always
+  // worked. The announcer player found the same (LISTEN_JS); this is its answer: a
+  // twentieth of a second of silence, looped on a media element started in
+  // a tap, for as long as lap times are on. navigator.audioSession says
+  // the same where there is one; Chrome on an iPhone has none.
+  function holdOn() {
+    try {
+      if (hold === null) {
+        hold = new Audio();
+        hold.loop = true;
+        hold.src = SILENT;
+      }
+      const going = hold.play();
+      if (going && typeof going.catch === 'function') going.catch(() => { /* the next tap, then */ });
+    } catch (e) { hold = null; }
+  }
+
+  // Lap times off: the silence stops too.
+  function release() {
+    stop();
+    try { if (hold !== null) hold.pause(); } catch (e) { /* stopped already */ }
   }
 
   // A new context, made inside a tap - the only time a phone allows it.
@@ -3558,17 +3592,16 @@ const lapVoice = (function () {
     nudge();
   }
 
-  // WHY (3 Nov 2026, Asher: closed the app, came back, no ElevenLabs until
-  // Phone voice had spoken once; wants it back on its own, with no phone
-  // voice): after the page has been put away an iPhone - Safari and Chrome
-  // alike - can call its context "running" and still play nothing, and the
-  // phone's voice speaking is what woke it. So once the page has been away
-  // it is woken the same way, silently: a blank line at no volume, the
-  // moment the page is back and again before the next call plays. A tap
-  // after it was away also makes a new context, which is always heard.
+  // WHY (3 Nov 2026, Asher: closed the app, came back, no ElevenLabs; wants
+  // it back on its own, with no phone voice): the page put away stops the
+  // context and the silence under it. So once the page has been away they
+  // are both started again - the moment it is back, and again before the
+  // next call plays - and a tap after it was away makes a new context.
   let away = false, waking = null;
   function back() {
-    if (ctx !== null && away) fresh(); else nudge();
+    if (ctx === null) return;
+    if (away) fresh(); else nudge();
+    holdOn();
   }
 
   function wake() {
@@ -3581,13 +3614,7 @@ const lapVoice = (function () {
         nudge();
         done();
       };
-      try {
-        const u = new SpeechSynthesisUtterance(' ');
-        u.volume = 0;
-        u.onend = end;
-        u.onerror = end;
-        window.speechSynthesis.speak(u);
-      } catch (e) { /* a phone with no voice: the context alone */ }
+      holdOn();
       nudge();
       setTimeout(end, WAKE_MS);
     });
@@ -3656,6 +3683,18 @@ const lapVoice = (function () {
   function say(parts, speak) {
     const text = parts.map((p) => p.text).join(', ');
     const groups = parts.map((p) => p.clips);
+
+    // The list of clips still on its way - "Lap times on", the moment lap
+    // times are turned on: waited for, up to LATE_MS, rather than said in
+    // the phone's voice (3 Nov 2026, Asher).
+    if (asked && !listed && ctx !== null) {
+      stop();
+      const mine = playing;
+      let went = false;
+      waiting.push(() => { if (went || mine !== playing) return; went = true; say(parts, speak); });
+      setTimeout(() => { if (went || mine !== playing) return; went = true; speak(text); }, LATE_MS);
+      return;
+    }
     if (!using() || groups.some((g) => !Array.isArray(g) || g.some((n) => !have.has(n)))) {
       stop();
       speak(text);
@@ -3682,6 +3721,7 @@ const lapVoice = (function () {
         settled = true;
         clearTimeout(late);
         nudge();
+        try { window.speechSynthesis.cancel(); } catch (e) { /* not talking */ }
         let at = ctx.currentTime + 0.02;
         decoded.forEach((group, i) => {
           if (i > 0) at += BREATH;
@@ -3724,7 +3764,7 @@ const lapVoice = (function () {
   } catch (e) { /* the taps that unlock it, then */ }
 
   return {
-    unlock: unlock, has: has, using: using, say: say, stop: stop, warm: warm,
+    unlock: unlock, has: has, using: using, say: say, stop: stop, release: release, warm: warm,
     voice: () => voice, whenReady: whenReady,
   };
 })();
@@ -3853,7 +3893,7 @@ const lapTalk = (function () {
   }
 
   function hush() {
-    lapVoice.stop();
+    lapVoice.release();
     try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
   }
 
@@ -7708,7 +7748,7 @@ const nightTalk = (function () {
   }
 
   function hush() {
-    lapVoice.stop();
+    lapVoice.release();
     try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
   }
 
