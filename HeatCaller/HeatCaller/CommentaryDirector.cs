@@ -11,7 +11,7 @@ public sealed record SpokenSegment(SegmentKind Kind, string Text, IReadOnlyList<
     /// <summary>True when this should be spoken in two voices. See CommentaryExchange.</summary>
     public bool IsExchange => Turns.Count > 0;
 
-    /// <summary>The two cars a Battle watch line is about, or null. See AnnouncementService.BattleLines.</summary>
+    /// <summary>The two cars a Battle watch or Horizon line is about, or null. See AnnouncementService.BattleLines.</summary>
     public BattlePair? About { get; init; }
 }
 
@@ -2173,6 +2173,13 @@ public sealed class CommentaryDirector
             if (kind == SegmentKind.BattleWatch && calling is { } fight)
             {
                 written = written with { About = BattlePair.Of(fight) };
+            }
+
+            // And a Horizon line (3 Nov 2026): "Sam is taking three tenths
+            // a lap out of Bill" is as wrong as a battle line once Sam is by.
+            if (kind == SegmentKind.Horizon && horizonCalling is { } gap)
+            {
+                written = written with { About = BattlePair.Of(gap) };
             }
 
             SpokenSegment spokenLine = written;

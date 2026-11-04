@@ -538,7 +538,7 @@ Defaults are for a new install. The **Practice** tick starts the same as the **R
 | **Personal best lap** | A driver beats their own best this race. Fires often with a full grid. | `{driver}` `{car}` `{team}` `{sponsors}` `{time}` | No | 45 |
 | **Jump start** | A car crosses the line before the green flag. | `{driver}` `{car}` `{team}` `{sponsors}` | Yes | 95 |
 | **Track record** | The all-time fastest lap on the track layout selected in Race Control is broken. | `{driver}` `{car}` `{team}` `{sponsors}` `{time}` | Yes | – |
-| **Leader change** | P1 changes hands. Unless the line says `{leadchanges}`, the count is added ("the fourth lead change, among three drivers"); see [Extra settings on some rows](#extra-settings-on-some-rows). | `{driver}` `{car}` `{team}` `{sponsors}` (new leader), `{previous}` `{previouslaps}` `{leadchanges}` `{leaders}` `{backinfront}` | Yes | 100 |
+| **Leader change** | P1 changes hands. If the driver who lost the lead takes it straight back before the line is said, the line is stopped and the new lead change is called instead. Unless the line says `{leadchanges}`, the count is added ("the fourth lead change, among three drivers"); see [Extra settings on some rows](#extra-settings-on-some-rows). | `{driver}` `{car}` `{team}` `{sponsors}` (new leader), `{previous}` `{previouslaps}` `{leadchanges}` `{leaders}` `{backinfront}` | Yes | 100 |
 | **Every lap completed** | Every finish-line pass. | `{driver}` `{car}` `{team}` `{sponsors}` `{lap}` `{time}` `{laptime}` | No | 40 |
 | **Lap time only** | A quieter alternative: just the lap time after each lap. | fixed wording (see below) | No | 30 |
 | **Consistency streak** | A driver's clean-lap streak reaches the streak threshold, and again as it continues. | `{driver}` `{car}` `{team}` `{sponsors}` `{streak}` | Yes | 70 |
@@ -548,7 +548,7 @@ Defaults are for a new install. The **Practice** tick starts the same as the **R
 | **Red flag** | A red flag stops the race. | none | No | – |
 | **Green flag (resumed)** | Racing resumes after a yellow or red. Separate from **Race started** so the restart can be worded differently. | none | No | – |
 | **Position report** | Reads the running order during a race. | `{positions}` | No | – |
-| **Close battle** | Two drivers on the same lap within a second of each other. Once per pair per race. A fight for the lead that the line doesn't mention starts "Battle for the lead!". | `{driver}` `{car}` `{team}` `{sponsors}` (car in front), `{rival}` (chaser), `{battle}` | Yes | – |
+| **Close battle** | Two drivers on the same lap within a second of each other. Once per pair per race. If the chaser gets past before the line is finished, it stops and the pass is called instead ("And Sam is through, up into third!"). A fight for the lead that the line doesn't mention starts "Battle for the lead!". | `{driver}` `{car}` `{team}` `{sponsors}` (car in front), `{rival}` (chaser), `{battle}` | Yes | – |
 | **Car gets lapped** | The leader puts a full lap on another driver. | `{driver}` `{car}` `{team}` `{sponsors}` (leader), `{rival}` (lapped car) | No | – |
 | **Passed a ghost** | You get past a ghost car. | `{driver}`, `{rival}` (the ghost) | Yes | – |
 | **Passed by a ghost** | A ghost car gets past you. | `{driver}`, `{rival}` (the ghost) | Yes | – |
@@ -729,7 +729,7 @@ By default the announcer is unmuted automatically when a session starts, so a mu
 
 ## Rivalries
 
-**Voice → Race Calls** lets you give two particular drivers their own lines. Whenever those two swap places in the standings, in either direction, the announcer speaks one of the pair's lines.
+**Voice → Race Calls** lets you give two particular drivers their own lines. Whenever those two swap places in the standings, in either direction, the announcer speaks one of the pair's lines. If the other driver gets straight back past before the line is finished, it stops, and the line for that swap is said instead.
 
 1. Make sure both drivers have profiles with a driver name. You need at least two named driver profiles before you can add a rivalry.
 2. Press **Add Rivalry**.
