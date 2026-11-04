@@ -68,6 +68,9 @@ export const POSITION_MAX = 30;
 /** Gaps past this many seconds, and more laps than LAPS_DOWN_MAX, are the phone's voice. */
 export const GAP_SECONDS_MAX = 30;
 export const LAPS_DOWN_MAX = 9;
+/** Laps to go and minutes left with a clip (3 Nov 2026); more is not said. */
+export const LAPS_LEFT_MAX = 50;
+export const MINUTES_LEFT_MAX = 60;
 /** How far off a target lap gets a clip, in hundredths: 2.00. */
 export const TARGET_MARGIN_MAX_CS = 200;
 
@@ -201,6 +204,18 @@ export function lapClips(): LapClip[] {
   // is "g-0" for all three.
   gapClips(clips, "gl", "off the lead");
   gapClips(clips, "gb", "clear");
+
+  // Laps or time left (3 Nov 2026), from the board's countdown.
+  clips.push({ name: "lt-last", text: "last lap" });
+  for (let n = 2; n <= LAPS_LEFT_MAX; n++) {
+    clips.push({ name: `lt-l${n}`, text: `${words(n)} laps to go` });
+  }
+  for (let m = 1; m <= MINUTES_LEFT_MAX; m++) {
+    clips.push({ name: `lt-m${m}`, text: m === 1 ? "a minute left" : `${words(m)} minutes left` });
+  }
+  for (let t = 10; t <= 50; t += 10) {
+    clips.push({ name: `lt-s${t}`, text: `${words(t)} seconds left` });
+  }
 
   // The target words, in two clips: how far, then which way.
   clips.push({ name: "tg-on", text: "on target" });

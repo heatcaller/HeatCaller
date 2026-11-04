@@ -82,9 +82,9 @@ describe("lap voice: the clips", () => {
 
   it("costs about a dollar and a half to make once", () => {
     const cost = lapClipCost();
-    assert.equal(cost.clips, 2629);
-    assert.equal(cost.chars, 43417);
-    assert.equal(cost.dollars, 1.74);
+    assert.equal(cost.clips, 2744);
+    assert.equal(cost.chars, 45755);
+    assert.equal(cost.dollars, 1.83);
   });
 });
 
@@ -278,6 +278,8 @@ interface Row {
 interface Board {
   columns?: string[];
   standings: Row[];
+  /** The board's countdown: "5 LAPS TO GO", "04:32 REMAINING". */
+  countdown?: string;
 }
 
 function row(name: string, laps: number[], extra: Partial<Row> = {}): Row {
@@ -625,6 +627,45 @@ describe("lap voice: the Live page", () => {
     phone.set(field([9500, 9300, 9650, 12000]));
     await phone.p.advance(1000);
     assert.equal(phone.said.at(-1), "12.00");
+  });
+
+  it("says the laps or time left, last, with Laps or time left ticked (3 Nov 2026)", async () => {
+    const at = (laps: number[], countdown: string): Board => ({ ...field(laps), countdown });
+    const l = await livePageWith(at([9500, 9600], "6 LAPS TO GO"), {}, { "hg-laptalk-say-acme-rc": "time,pos,left" });
+    const heard: string[][] = [];
+    const lap = async (laps: number[], countdown: string) => {
+      const before = l.played.length;
+      l.set(at(laps, countdown));
+      await l.p.advance(1000);
+      heard.push(l.played.slice(before));
+    };
+    await lap([9500, 9600, 9520], "5 LAPS TO GO");
+    await lap([9500, 9600, 9520, 9530], "1 LAP TO GO");
+    await lap([9500, 9600, 9520, 9530, 9540], "04:32 REMAINING");
+    await lap([9500, 9600, 9520, 9530, 9540, 9550], "00:32 REMAINING");
+    await lap([9500, 9600, 9520, 9530, 9540, 9550, 9560], "00:00 REMAINING");
+    await lap([9500, 9600, 9520, 9530, 9540, 9550, 9560, 9570], "75 LAPS TO GO");
+    assert.deepEqual(heard, [
+      ["t952", "p2", "lt-l5"],
+      ["t953", "p2", "lt-last"],
+      ["t954", "p2", "lt-m4"],
+      ["t955", "p2", "lt-s30"],
+      ["t956", "p2", "lt-last"],
+      ["t957", "p2"],
+    ]);
+    assert.deepEqual(["lt-l5", "lt-last", "lt-m4", "lt-m1", "lt-s30"].map((n) => TEXT.get(n)),
+      ["five laps to go", "last lap", "four minutes left", "a minute left", "thirty seconds left"]);
+
+    const phone = await livePageWith(at([9500, 9600], ""), null, { "hg-laptalk-say-acme-rc": "time,left" });
+    phone.set(at([9500, 9600, 9520], "12:05 REMAINING"));
+    await phone.p.advance(1000);
+    assert.equal(phone.said.at(-1), "9.52, 12 minutes left");
+
+    // Off until ticked.
+    const plain = await livePageWith(at([9500, 9600], "6 LAPS TO GO"), {});
+    plain.set(at([9500, 9600, 9520], "5 LAPS TO GO"));
+    await plain.p.advance(1000);
+    assert.deepEqual(plain.played, ["lap4", "t952", "p2", "g-t4"]);
   });
 
   it("says the first lap of a driver who was not on the board when it was turned on", async () => {

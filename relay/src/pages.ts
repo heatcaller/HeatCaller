@@ -3818,7 +3818,34 @@ const LV_SAY = [
   ['vsbest', 'Against your best', false], ['target', 'Target', true], ['pos', 'Position', true],
   ['moves', 'Places gained', false], ['gap', 'Gap ahead', true],
   ['behind', 'Gap behind', false], ['leader', 'Gap to P1', false],
+  ['left', 'Laps or time left', false],
 ];
+
+// Laps or time left (3 Nov 2026, Asher), from the board's own countdown -
+// "5 LAPS TO GO", "1 LAP TO GO", "04:32 REMAINING" - counted from the
+// leader, as the big screen shows it: "five laps to go", "last lap", "four
+// minutes left", "thirty seconds left". Said last. Nothing for a count past
+// the clips (more than 50 laps or an hour), a warm-up, or no countdown.
+function lvLeftPart(say, state) {
+  if (!say.left || !state || typeof state.countdown !== 'string') return null;
+  const t = state.countdown.trim();
+  const laps = /^(\\d+) LAPS? TO GO$/i.exec(t);
+  if (laps) {
+    const n = Number(laps[1]);
+    if (n === 1) return { text: 'last lap', clips: ['lt-last'] };
+    return n >= 2 && n <= 50 ? { text: n + ' laps to go', clips: ['lt-l' + n] } : null;
+  }
+  const time = /^(\\d+):(\\d\\d) REMAINING$/i.exec(t);
+  if (!time) return null;
+  const total = Number(time[1]) * 60 + Number(time[2]);
+  if (total === 0) return { text: 'last lap', clips: ['lt-last'] };
+  if (total < 55) {
+    const tens = Math.max(10, Math.round(total / 10) * 10);
+    return { text: tens + ' seconds left', clips: ['lt-s' + tens] };
+  }
+  const minutes = Math.max(1, Math.floor(total / 60));
+  return minutes <= 60 ? { text: minutes + (minutes === 1 ? ' minute left' : ' minutes left'), clips: ['lt-m' + minutes] } : null;
+}
 
 // The place (3 Nov 2026, Asher): "Up to P2" or "Down to P4" with Places
 // gained ticked and a different place from the last lap said (from, 0 for
@@ -4179,6 +4206,8 @@ const lapTalk = (function () {
       const gap = gapWords(raw);
       if (gap) one.push({ text: gap, clips: lvGap(raw) });
       lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => one.push(m));
+      const left = lvLeftPart(say, state);
+      if (left) one.push(left);
       lapVoice.warm(['lap2', 'best']);
       if (one.length > 0) call(one);
       return;
@@ -4204,6 +4233,8 @@ const lapTalk = (function () {
     const gap = gapWords(raw);
     if (gap) parts.push({ text: gap, clips: lvGap(raw) });
     lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => parts.push(m));
+    const left = lvLeftPart(say, state);
+    if (left) parts.push(left);
     lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
 
     if (parts.length > 0) call(parts);
@@ -4225,7 +4256,7 @@ const lapTalk = (function () {
       show();
     });
 
-    if (sayRow) sayRow.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'pos', 'moves', 'gap', 'behind', 'leader'], 'lapsay-', SAY_KEY));
+    if (sayRow) sayRow.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'pos', 'moves', 'gap', 'behind', 'leader', 'left'], 'lapsay-', SAY_KEY));
 
     // Any tap lets a page that was on before a reload speak again - and a
     // tap on a name changes who is followed, so the button is redrawn
@@ -8076,6 +8107,8 @@ const nightTalk = (function () {
       const gap = gapWords(raw);
       if (gap) one.push({ text: gap, clips: lvGap(raw) });
       lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => one.push(m));
+      const left = lvLeftPart(say, state);
+      if (left) one.push(left);
       lapVoice.warm(['lap2', 'best']);
       if (one.length > 0) call(one);
       return;
@@ -8101,6 +8134,8 @@ const nightTalk = (function () {
     const gap = gapWords(raw);
     if (gap) parts.push({ text: gap, clips: lvGap(raw) });
     lvMoreGaps(say, state, rows, row, pos, gapAhead).forEach((m) => parts.push(m));
+    const left = lvLeftPart(say, state);
+    if (left) parts.push(left);
     lapVoice.warm(lvAhead(count + 1, last).concat(lvPlace(pos) || []));
 
     if (parts.length > 0) call(parts);
@@ -8153,7 +8188,7 @@ const nightTalk = (function () {
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
     p.appendChild(b);
 
-    p.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'target', 'pos', 'moves', 'gap', 'behind', 'leader'], 'nt-say-', SAY_KEY));
+    p.appendChild(lvSayBoxes(say, ['lap', 'time', 'best', 'vsbest', 'target', 'pos', 'moves', 'gap', 'behind', 'leader', 'left'], 'nt-say-', SAY_KEY));
 
     p.appendChild(el('div', 'when', !on
       ? 'Your phone reads out each of your laps as you race: lap, time, best lap, your target when one is set, place and gap. Keep this page open with the screen on.'
