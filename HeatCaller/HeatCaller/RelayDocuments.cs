@@ -2,6 +2,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 
 namespace HeatCaller;
@@ -676,8 +677,131 @@ internal static class RelayDocuments
             document["newcomer"] = newcomer;
         }
 
+        // The first-night guide in the club's own words (4 Nov 2026). Left
+        // out for the standard guide, which the relay already has.
+        if (FirstNightGuide(settings.RelayFirstNightGuide) is { } guide)
+        {
+            document["guide"] = guide;
+        }
+
+        // Club updates (4 Nov 2026): left out, and so no card, when empty.
+        if (ClubUpdates(settings.RelayClubUpdates) is { } updates)
+        {
+            document["updates"] = updates;
+        }
+
         return JsonSerializer.Serialize(document);
     }
+
+    /// <summary>
+    /// HeatCaller's own first-night guide, word for word as the relay's
+    /// pages draw it (relay/src/pages.ts, STANDARD_GUIDE). The Club Website
+    /// page shows it in the box for a club to change.
+    /// </summary>
+    internal static readonly (string Heading, string Words)[] StandardGuide =
+    {
+        ("This page", "When a time like \"about 7 min (19:42)\" shows, that is when your race should start. Turn on alerts and keep the page open: your phone beeps twice and buzzes when your race is next, and again when it is staged."),
+        ("Heats and mains", "You race a few short heats first. How you do in them decides which main (final) you race in later, with drivers of a similar pace."),
+        ("Your grid slot", "Every race gives you a grid slot - where your car starts. Slot 1 is the front."),
+        ("Staged", "When your race is staged, go to the driver stand with your radio, put your car on the track and wait for the start."),
+        ("The start", "A countdown runs before every start. Wait for the start signal - going early is a jump start, and it can add time to your race."),
+        ("Your transponder", "The small transponder on your car counts your laps. Make sure it is switched on and mounted before every race, and drive past the timing line once to check it is seen."),
+        ("Warnings", "Race control can give a warning for blocking or rough driving. More warnings add time to your race."),
+        ("Marshal after your race", "After you race, you marshal the next one: stand at your post beside the track and put back any car that flips or gets stuck. Everybody takes a turn."),
+        ("Questions", "Ask at the timing desk. Everybody was new once."),
+    };
+
+    /// <summary>The most parts, and the longest heading and words, the relay keeps (relay/src/site.ts).</summary>
+    internal const int MaxGuideParts = 20;
+    internal const int MaxGuideHeading = 60;
+    internal const int MaxGuideWords = 600;
+
+    /// <summary>The most club updates, and the longest words of one, the relay keeps (relay/src/site.ts).</summary>
+    internal const int MaxUpdates = 10;
+    internal const int MaxUpdateWords = 1000;
+
+    /// <summary>The standard guide as the box shows it: a part per paragraph, "Heading: words".</summary>
+    internal static string StandardGuideText() =>
+        string.Join(Environment.NewLine + Environment.NewLine, StandardGuide.Select(p => p.Heading + ": " + p.Words));
+
+    /// <summary>
+    /// The guide as typed into the box, in parts: split at blank lines, each
+    /// paragraph's lines run together, and a heading taken from before the
+    /// first colon when there is a short one there ("Parking: round the
+    /// back"); otherwise the paragraph is words with no heading.
+    /// </summary>
+    internal static List<(string Heading, string Words)> GuideParts(string? text) =>
+        Parts(text, MaxGuideParts, MaxGuideWords);
+
+    /// <summary>Club updates as typed into their box, in items - read exactly as the guide is, with room for ten longer ones.</summary>
+    internal static List<(string Heading, string Words)> UpdateParts(string? text) =>
+        Parts(text, MaxUpdates, MaxUpdateWords);
+
+    private static List<(string Heading, string Words)> Parts(string? text, int most, int maxWords)
+    {
+        var parts = new List<(string Heading, string Words)>();
+
+        foreach (var paragraph in Regex.Split((text ?? string.Empty).Replace("\r", string.Empty, StringComparison.Ordinal), @"\n[ \t]*\n"))
+        {
+            var flat = Regex.Replace(paragraph, @"\s+", " ").Trim();
+
+            if (flat.Length == 0)
+            {
+                continue;
+            }
+
+            var colon = flat.IndexOf(':');
+            var heading = colon > 0 && colon <= MaxGuideHeading ? flat[..colon].Trim() : string.Empty;
+            var words = heading.Length > 0 ? flat[(colon + 1)..].Trim() : flat;
+
+            if (words.Length == 0)
+            {
+                // "Parking:" and nothing after it is a heading with no words - kept as words.
+                (heading, words) = (string.Empty, flat);
+            }
+
+            parts.Add((heading, words.Length > maxWords ? words[..maxWords] : words));
+
+            if (parts.Count == most)
+            {
+                break;
+            }
+        }
+
+        return parts;
+    }
+
+    /// <summary>Whether the box holds the standard guide, give or take spacing - which is kept as no guide of the club's own.</summary>
+    internal static bool IsStandardGuide(string? text) =>
+        GuideParts(text).SequenceEqual(StandardGuide);
+
+    /// <summary>
+    /// The site document's "guide" part, or null for the standard guide - an
+    /// empty box, or the standard words left as they were. The relay tidies
+    /// and caps it again before it reaches a page.
+    /// </summary>
+    internal static List<Dictionary<string, string>>? FirstNightGuide(string? text)
+    {
+        var parts = GuideParts(text);
+
+        if (parts.Count == 0 || parts.SequenceEqual(StandardGuide))
+        {
+            return null;
+        }
+
+        return ForTheRelay(parts);
+    }
+
+    /// <summary>The site document's "updates" part, or null for none - no card on the drivers' pages.</summary>
+    internal static List<Dictionary<string, string>>? ClubUpdates(string? text)
+    {
+        var parts = UpdateParts(text);
+
+        return parts.Count == 0 ? null : ForTheRelay(parts);
+    }
+
+    private static List<Dictionary<string, string>> ForTheRelay(List<(string Heading, string Words)> parts) =>
+        parts.Select(p => new Dictionary<string, string> { ["heading"] = p.Heading, ["words"] = p.Words }).ToList();
 
     /// <summary>
     /// The site document's "newcomer" part - where the club races, when, and

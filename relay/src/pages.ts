@@ -359,15 +359,32 @@ footer .links a:hover { text-decoration: underline; }
 /* The club's logo: a block of its own beside the club's name rather than
    an icon in the heading, big enough to recognise from across the pits and
    bigger again on a laptop or a TV. The file is a 384px (sometimes 256px)
-   square, so at its largest it is still drawn from real pixels. On a very
-   narrow phone the name wraps underneath it instead of being squeezed. */
-.brand { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+   square, so at its largest it is still drawn from real pixels. */
 .brand .logo { width: 96px; height: 96px; width: clamp(72px, 22vw, 180px); height: clamp(72px, 22vw, 180px);
                flex: none; object-fit: contain; border-radius: 14px; }
 /* A plate only when the laptop says the logo would vanish on this page's
    background - a black logo on a black page. */
 .brand .logo.plate { background: var(--logo-plate, #FFFFFF); padding: 8px; padding: clamp(6px, 1.8vw, 14px); }
 .brand-text { flex: 1 1 220px; min-width: 0; }
+/* With a logo (4 Nov 2026, Asher: "the logo should be upper left as far as
+   it will look good. the club name and page title extends from just right
+   of the logo all the way to the right with the byline below it right
+   justified"). The logo sits in the top-left corner; the name takes all the
+   width beside it, the byline under the name on the right, level with the
+   logo's foot; and the page's summary runs the full width underneath both
+   rather than in a narrow column. */
+header:has(.brand) { padding-top: 8px; }
+.brand { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto 1fr;
+         column-gap: 14px; align-items: start; }
+.brand .logo { grid-column: 1; grid-row: 1 / span 2; }
+.brand .brand-text, .brand .hchead { display: contents; }
+/* A little below the logo's top edge (4 Nov 2026, Asher: "bring the club
+   name down a bit"). */
+.brand h1 { grid-column: 2; grid-row: 1; line-height: 1.15; margin-top: clamp(8px, 3vw, 22px); }
+.brand .hcside { grid-column: 2; grid-row: 2; align-self: end; flex-direction: row; align-items: center;
+                 justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.brand .hcby { min-height: 0; }
+.brand .sub { grid-column: 1 / -1; grid-row: 3; margin-top: 12px; }
 
 /* Following a driver */
 .nm { cursor: pointer; text-decoration: underline dotted transparent; text-underline-offset: 3px; }
@@ -452,8 +469,9 @@ a.go { text-align: center; text-decoration: none; }
 .night { list-style: none; max-width: 42rem; margin: 18px auto 0; padding: 0; text-align: left; }
 .night li { padding: 11px 2px; border-top: 1px solid var(--border); }
 .night li:first-child { border-top: 0; }
-#nt h2 { margin: 0 0 2px; font-size: 1.3rem; }
-#nt .sub { margin-bottom: 4px; }
+#nt h2, #nh h2 { margin: 0 0 2px; font-size: 1.3rem; }
+#nt .sub, #nh .sub { margin-bottom: 4px; }
+#nh:not(:empty) { margin: 0 auto 14px; max-width: 42rem; }
 /* A driver's evening as it happens (22 Oct 2026, driver experience): the
    live card on top of their night page - next race, marshal duty, check-in
    and their transponder - and, under the night's facts, one card per race
@@ -506,6 +524,9 @@ table.lxt th, table.lxt td { padding: 4px 12px; }
 table.lxt tbody tr { background: none; }
 table.lxt tbody tr:nth-child(odd) { background: var(--row-alt); }
 table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 700; }
+/* An open race's Lap times fill the card (4 Nov 2026, Asher: "Lap times
+   should fill the width of the page"). */
+.rc table.lxt { width: 100%; }
 .posfig { margin: 8px 16px 16px; }
 .posfig figcaption { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; margin-bottom: 4px; }
 .posg { display: block; width: 100%; height: auto; }
@@ -515,11 +536,28 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .posg circle { fill: var(--surface); stroke: var(--c); stroke-width: 2; }
 .posk { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.85rem; }
 .posk .sw { display: inline-block; width: 0.8em; height: 0.8em; border-radius: 2px; background: var(--c); margin-right: 6px; vertical-align: -1px; }
-.lapfig { margin: 0; }
-.lapchart, .pgchart { display: block; width: 100%; height: auto; margin: 8px 0 2px; }
-.lapchart polyline { stroke: var(--accent); stroke-width: 2; fill: none; stroke-linejoin: round; }
-.lapchart circle { fill: var(--good); }
-.lapchart .slow { fill: var(--muted); }
+/* The race card's charts, as LiveRC's lap-by-lap position graph (4 Nov
+   2026, Asher): each in a panel with its title in a band across the top, a
+   framed plot with a grid both ways, the axes numbered and titled, and a
+   ringed dot on every lap - the best lap filled green. */
+.lapfig { margin: 10px 0 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--bg); }
+.lapfig > .ttl { padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface);
+                 font-weight: 600; font-size: 0.9rem; }
+.lapfig > .cap { margin: 0; padding: 0 12px 10px; }
+.lapchart, .pgchart, .poschart { display: block; width: 100%; height: auto; margin: 8px 0 2px; }
+.lapchart, .poschart { max-width: 640px; margin: 6px auto 4px; }
+.lapchart polyline, .poschart polyline { stroke: var(--accent); stroke-width: 2.5; fill: none; stroke-linejoin: round; }
+.poschart polyline { stroke: var(--primary); }
+.lapchart circle, .poschart circle { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
+.poschart circle { stroke: var(--primary); }
+.lapchart circle.best { fill: var(--good); stroke: var(--good); }
+.lapchart circle.slow { fill: var(--muted); stroke: var(--muted); }
+.lapchart .frame, .poschart .frame { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.lapchart .gr, .poschart .gr { stroke: var(--border); stroke-width: 1; }
+.lapchart text, .poschart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.lapchart text.yt, .poschart text.yt { text-anchor: end; }
+.lapchart text.xt, .poschart text.xt { text-anchor: middle; }
+.lapchart text.ttl, .poschart text.ttl { fill: var(--text); font-size: 11px; font-weight: 600; text-anchor: middle; }
 .cap { color: var(--muted); font-size: 0.78rem; }
 .pgchart rect { fill: var(--border); }
 .pgchart rect.tonight { fill: var(--primary); }
@@ -540,6 +578,13 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .guide dl { margin: 0; padding: 4px 16px 14px; }
 .guide dt { font-weight: 600; margin-top: 10px; }
 .guide dd { margin: 2px 0 0; color: var(--muted); }
+.guide .gdone { display: block; margin: 0 auto 4px; }
+/* Club updates (4 Nov 2026): the guide's look, open rather than folded. */
+.lc.updates { border-left-color: var(--primary); }
+.updates dl { margin: 0 0 12px; }
+.updates dt { font-weight: 600; margin-top: 10px; }
+.updates dd { margin: 2px 0 0; color: var(--muted); }
+.updates .gdone { display: block; margin: 0 auto; }
 /* The results page's penalty chip: numbers only, never the reason. */
 .chip { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 0.72rem;
         font-weight: 700; color: var(--bad); border: 1px solid var(--bad); vertical-align: 1px; }
@@ -653,9 +698,27 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .ears label[hidden], .ears button[hidden] { display: none; }
 .ears button[aria-pressed=true] { background: var(--primary); color: var(--on-primary, #FFFFFF); }
 /* What to say (3 Nov 2026): a box per part of a lap's call. */
-.lvsay { margin: 10px 0 0; }
-.lvsay > span { display: block; font-size: 0.85rem; opacity: 0.8; margin-bottom: 2px; }
-.lvsay label, .ears .lvsay label { display: inline-flex; align-items: center; gap: 6px; margin: 2px 14px 2px 0; font-size: 0.95rem; }
+/* Since 4 Nov 2026 (Asher: "the check boxes for read out my laps need to be
+   themed"), each part is a chip in the club's colours rather than the
+   phone's own blue box: outlined and quiet when off, filled with a tick
+   when on. The box itself is still there, see-through over the whole chip,
+   so a tap, the keyboard and a screen reader work as they did. */
+.lvsay { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.lvsay > span { flex-basis: 100%; color: var(--muted); font-size: 0.72rem; font-weight: 700;
+                letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0; }
+.lvsay label, .ears .lvsay label { position: relative; display: inline-flex; align-items: center; gap: 8px; margin: 0;
+  min-height: 40px; padding: 8px 14px 8px 10px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--muted); font-size: 0.9rem; cursor: pointer; user-select: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s; }
+.lvsay input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.lvsay label::before { content: ""; flex: none; display: grid; place-items: center; width: 18px; height: 18px;
+  border-radius: 50%; border: 1.5px solid var(--muted); font-size: 11px; font-weight: 800; line-height: 1;
+  color: var(--on-primary, #FFFFFF); }
+.lvsay label:has(input:checked) { border-color: var(--primary); color: var(--text);
+  background: color-mix(in srgb, var(--primary) 20%, var(--bg)); }
+.lvsay label:has(input:checked)::before { content: "\\2713"; background: var(--primary); border-color: var(--primary); }
+.lvsay label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .lvsay label { transition: none; } }
 /* Message the announcer and Who wins? (2 Nov 2026): the live page's two
    ways into the room from outside it, when the club has them switched on.
    Every field full width and 16px text, as sign-up's are, so a phone does
@@ -1729,7 +1792,7 @@ ${preview}${twitter}
 <style>${STYLE}</style>
 ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
 </head>
-<body data-club="${club}" data-club-name="${name}">${sunset ? HC_SUNSET : ""}
+<body data-club="${club}" data-club-name="${name}"${look.guide.length > 0 ? ` data-guide="${escapeHtml(JSON.stringify(look.guide))}"` : ""}${look.updates.length > 0 ? ` data-updates="${escapeHtml(JSON.stringify(look.updates))}"` : ""}>${sunset ? HC_SUNSET : ""}
 <div class="wrap">
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
     <div class="hcname">${brand}</div>
@@ -6650,7 +6713,27 @@ export function tracksPage(club: string, clubName: string, context: PageContext 
  * is open survives the redraws both pages do on every poll.
  */
 const GUIDE_JS = `
-const GUIDE = [
+// The club's own guide when the laptop sent one (4 Nov 2026), from the
+// page's body - already tidied by the relay, and only ever drawn as text -
+// else HeatCaller's standard one below.
+function clubGuide() {
+  return clubParts('guide');
+}
+
+// The club's own parts from the page's body: [heading, words] pairs, or none.
+function clubParts(name) {
+  try {
+    const parts = JSON.parse(document.body.dataset[name] || '[]');
+    return Array.isArray(parts)
+      ? parts.filter((p) => p && typeof p.words === 'string' && p.words !== '')
+        .map((p) => [typeof p.heading === 'string' ? p.heading : '', p.words])
+      : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+const STANDARD_GUIDE = [
   ['This page', 'When a time like "about 7 min (19:42)" shows, that is when your race should start. Turn on alerts and keep the page open: your phone beeps twice and buzzes when your race is next, and again when it is staged.'],
   ['Heats and mains', 'You race a few short heats first. How you do in them decides which main (final) you race in later, with drivers of a similar pace.'],
   ['Your grid slot', 'Every race gives you a grid slot - where your car starts. Slot 1 is the front.'],
@@ -6662,9 +6745,30 @@ const GUIDE = [
   ['Questions', 'Ask at the timing desk. Everybody was new once.'],
 ];
 
+const OWN_GUIDE = clubGuide();
+const GUIDE = OWN_GUIDE.length > 0 ? OWN_GUIDE : STANDARD_GUIDE;
+
 let guideOpen = false;
 
+// Got it (4 Nov 2026, Asher: "have the option to dismiss it once read"):
+// kept on this phone for this club, so the guide stays gone on every page
+// and every visit. Without storage it stays gone for this visit. Kept
+// against these very words: when the club sends a new guide from the
+// laptop ("club should be able to push newly updated card"), it shows
+// again to a driver who had hidden the old one.
+function guideMark(parts) {
+  let h = 5381;
+  const text = JSON.stringify(parts);
+  for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+const GUIDE_KEY = 'hc-guide-done:' + CLUB + ':' + guideMark(GUIDE);
+let guideDone = false;
+try { guideDone = localStorage.getItem(GUIDE_KEY) === '1'; } catch (e) { /* shown, then */ }
+
+// The guide, or null once they have tapped Got it.
 function firstNightGuide() {
+  if (guideDone) return null;
   const d = document.createElement('details');
   d.className = 'guide';
   d.open = guideOpen;
@@ -6677,15 +6781,29 @@ function firstNightGuide() {
   const list = document.createElement('dl');
 
   for (const pair of GUIDE) {
-    const t = document.createElement('dt');
-    t.textContent = pair[0];
+    // A part the club wrote with no heading is its words alone.
+    if (pair[0] !== '') {
+      const t = document.createElement('dt');
+      t.textContent = pair[0];
+      list.appendChild(t);
+    }
     const w = document.createElement('dd');
     w.textContent = pair[1];
-    list.appendChild(t);
     list.appendChild(w);
   }
 
   d.appendChild(list);
+
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'go quiet gdone';
+  done.textContent = 'Got it - hide this';
+  done.addEventListener('click', () => {
+    guideDone = true;
+    try { localStorage.setItem(GUIDE_KEY, '1'); } catch (e) { /* this visit only */ }
+    d.remove();
+  });
+  d.appendChild(done);
 
   // Who runs the timing, and the way to the "What's HeatCaller?" sheet
   // (30 Oct 2026, relay branding).
@@ -6705,6 +6823,57 @@ function firstNightGuide() {
   d.appendChild(who);
   return d;
 }
+
+// --- Club updates (4 Nov 2026, Asher: "a separate optional card to push to
+// the relay for Club Updates. same motion") ---------------------------------
+// The club's news, sent from the laptop, as a card on the driver's night
+// page under the first-night guide - only when the club has sent some.
+// Got it hides it on this phone, kept against these very words, so news
+// the club sends after shows again.
+const UPDATES = clubParts('updates');
+const UPDATES_KEY = 'hc-updates-done:' + CLUB + ':' + guideMark(UPDATES);
+let updatesDone = false;
+try { updatesDone = localStorage.getItem(UPDATES_KEY) === '1'; } catch (e) { /* shown, then */ }
+
+function drawClubUpdates() {
+  const into = document.getElementById('up');
+  if (!into) return;
+  into.textContent = '';
+  if (updatesDone || UPDATES.length === 0) return;
+
+  const card = document.createElement('section');
+  card.className = 'lc updates';
+  const h = document.createElement('h3');
+  h.textContent = 'Club updates';
+  card.appendChild(h);
+
+  const list = document.createElement('dl');
+  for (const pair of UPDATES) {
+    if (pair[0] !== '') {
+      const t = document.createElement('dt');
+      t.textContent = pair[0];
+      list.appendChild(t);
+    }
+    const w = document.createElement('dd');
+    w.textContent = pair[1];
+    list.appendChild(w);
+  }
+  card.appendChild(list);
+
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'go quiet gdone';
+  done.textContent = 'Got it - hide this';
+  done.addEventListener('click', () => {
+    updatesDone = true;
+    try { localStorage.setItem(UPDATES_KEY, '1'); } catch (e) { /* this visit only */ }
+    card.remove();
+  });
+  card.appendChild(done);
+  into.appendChild(card);
+}
+
+drawClubUpdates();
 `;
 
 /**
@@ -6838,7 +7007,8 @@ let firstNight = false;
 // The first-night guide under their card, for a badge only: a racer signed
 // in by PIN gets checkin/list's answer, which does not carry the flag.
 function showGuide() {
-  if (firstNight && BADGE && drivers.length > 0) box.appendChild(firstNightGuide());
+  const guide = firstNight && BADGE && drivers.length > 0 ? firstNightGuide() : null;
+  if (guide) box.appendChild(guide);
 }
 
 async function api(action, payload) {
@@ -7698,7 +7868,13 @@ function draw() {
   // Oct 2026, under the races), the driver score, progress, reach and
   // clips - built with the DOM rather than as markup, so all three are
   // empty hooks here and nothing more.
-  box.innerHTML = head + '<div id="nj"></div><div id="ng"></div>' + body + '<div id="nx"></div>'
+  // Their name and the night's title go first on the page, above their
+  // live card and the first-night guide (4 Nov 2026, Asher: the guide is
+  // "the second thing on the me page after the driver name/info"), in "nh"
+  // where the page has one.
+  const nameBox = document.getElementById('nh');
+  if (nameBox) nameBox.innerHTML = head;
+  box.innerHTML = (nameBox ? '' : head) + '<div id="nj"></div><div id="ng"></div>' + body + '<div id="nx"></div>'
     + '<div class="nshare">'
     + '<button id="pic" class="go" type="button">Make a picture to share</button>'
     + '<button id="dl" class="go quiet" type="button">Save as a text file</button>'
@@ -8712,7 +8888,12 @@ function drawLive() {
   lvBox.textContent = '';
 
   if (live || ci.shown) lvBox.appendChild(liveCard());
-  if (firstNight) lvBox.appendChild(firstNightGuide());
+  // The guide in its own place under their name where the page has one,
+  // else under the card. Null once they have tapped Got it.
+  const guideBox = document.getElementById('gd');
+  if (guideBox) guideBox.textContent = '';
+  const guide = firstNight ? firstNightGuide() : null;
+  if (guide) (guideBox || lvBox).appendChild(guide);
 
   // The jump bar has a Right now button only while there is a card.
   const now = !!(live || ci.shown);
@@ -8756,6 +8937,35 @@ function clipBlock(c, words) {
   return box;
 }
 
+// The race card's charts, drawn as LiveRC draws its lap-by-lap position
+// graph (4 Nov 2026, Asher: "the chart should be analogous to the one" on
+// LiveRC): a framed plot with a grid both ways, laps 0 to the last along
+// the bottom, round numbers up the side, and a ringed dot on every lap.
+// The frame, the upright grid lines, the lap numbers and both axis titles;
+// the caller draws its own level lines. Returns the svg and a text helper.
+const CH = { W: 340, L: 44, R: 10, T: 10, B: 38 };
+
+function chartFrame(H, laps, side, cls, aria) {
+  const svg = sv('svg', { viewBox: '0 0 ' + CH.W + ' ' + H, class: cls, role: 'img', 'aria-label': aria });
+  const label = (attrs, words) => {
+    const t = sv('text', attrs);
+    t.textContent = words;
+    svg.appendChild(t);
+  };
+  const x = (k) => CH.L + k * (CH.W - CH.L - CH.R) / Math.max(1, laps);
+  const step = laps <= 10 ? 1 : laps <= 30 ? 5 : 10;
+  for (let k = 0; k <= laps; k += step) {
+    if (k > 0 && k < laps) svg.appendChild(sv('line', { x1: x(k).toFixed(1), y1: CH.T, x2: x(k).toFixed(1), y2: H - CH.B, class: 'gr' }));
+    if (laps - k >= step / 2 || k === laps) label({ x: x(k).toFixed(1), y: H - CH.B + 14, class: 'xt' }, String(k));
+  }
+  if (laps % step !== 0) label({ x: x(laps).toFixed(1), y: H - CH.B + 14, class: 'xt' }, String(laps));
+  svg.appendChild(sv('rect', { x: CH.L, y: CH.T, width: CH.W - CH.L - CH.R, height: H - CH.T - CH.B, class: 'frame' }));
+  const mid = (CH.T + H - CH.B) / 2;
+  label({ x: 10, y: mid.toFixed(1), class: 'ttl', transform: 'rotate(-90 10 ' + mid.toFixed(1) + ')' }, side);
+  label({ x: ((CH.L + CH.W - CH.R) / 2).toFixed(1), y: H - 4, class: 'ttl' }, 'Lap');
+  return { svg, label, x };
+}
+
 // One race's laps as a line: quicker is higher, the best lap marked. A lap
 // far slower than the rest (a crash, a flipped car) is drawn at the bottom
 // edge rather than squashing every other lap into a flat line.
@@ -8767,28 +8977,69 @@ function lapChart(list, bestMs) {
   const quick = sorted[0];
   const cap = Math.max(sorted[Math.floor(sorted.length / 2)] * 1.6, quick * 1.2);
   const slow = Math.min(sorted[sorted.length - 1], cap);
-  const span = Math.max(1, slow - quick);
-  const W = 300;
-  const H = 90;
-  const P = 6;
-  const x = (i) => P + i * (W - 2 * P) / (laps.length - 1);
-  const y = (ms) => P + (Math.min(ms, cap) - quick) / span * (H - 2 * P);
   const best = typeof bestMs === 'number' && laps.includes(bestMs) ? bestMs : quick;
   const at = laps.indexOf(best);
+  const H = 230;
 
-  const svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'lapchart', role: 'img',
-    'aria-label': 'Lap times for ' + laps.length + ' laps, best ' + lap(best) + ' on lap ' + (at + 1) });
-  svg.appendChild(sv('polyline', { points: laps.map((ms, i) => x(i).toFixed(1) + ',' + y(ms).toFixed(1)).join(' ') }));
+  // Up the side, round seconds - no more than about five steps - from just
+  // under the quickest lap at the top to just over the slowest at the foot.
+  const step = [0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10].find((s) => (slow - quick) / 1000 / s <= 5) || 10;
+  const lo = Math.floor(quick / 1000 / step) * step;
+  let hi = Math.ceil(slow / 1000 / step) * step;
+  if (hi - lo < step / 2) hi = lo + step;
+  const places = step >= 1 ? 0 : step === 0.25 ? 2 : 1;
+  const y = (ms) => ms > cap ? H - CH.B : CH.T + (ms / 1000 - lo) / (hi - lo) * (H - CH.T - CH.B);
 
+  const f = chartFrame(H, laps.length, 'Lap time (s)', 'lapchart',
+    'Lap times for ' + laps.length + ' laps, best ' + lap(best) + ' on lap ' + (at + 1));
+  const count = Math.round((hi - lo) / step);
+  for (let i = 0; i <= count; i++) {
+    const s = lo + i * step;
+    const level = CH.T + (s - lo) / (hi - lo) * (H - CH.T - CH.B);
+    if (i > 0 && i < count) {
+      f.svg.appendChild(sv('line', { x1: CH.L, y1: level.toFixed(1), x2: CH.W - CH.R, y2: level.toFixed(1), class: 'gr' }));
+    }
+    f.label({ x: CH.L - 6, y: (level + 4).toFixed(1), class: 'yt' }, s.toFixed(places));
+  }
+
+  const x = (i) => f.x(i + 1);
+  f.svg.appendChild(sv('polyline', { points: laps.map((ms, i) => x(i).toFixed(1) + ',' + y(ms).toFixed(1)).join(' ') }));
   laps.forEach((ms, i) => {
-    if (ms > cap) svg.appendChild(sv('circle', { cx: x(i).toFixed(1), cy: (H - P).toFixed(1), r: 3, class: 'slow' }));
+    if (ms > cap) f.svg.appendChild(sv('circle', { cx: x(i).toFixed(1), cy: (H - CH.B).toFixed(1), r: 3.5, class: 'slow' }));
+    else if (i !== at) f.svg.appendChild(sv('circle', { cx: x(i).toFixed(1), cy: y(ms).toFixed(1), r: 3.5, class: 'dot' }));
   });
-
-  svg.appendChild(sv('circle', { cx: x(at).toFixed(1), cy: y(best).toFixed(1), r: 4.5 }));
+  f.svg.appendChild(sv('circle', { cx: x(at).toFixed(1), cy: y(best).toFixed(1), r: 5, class: 'best' }));
 
   const fig = el('figure', 'lapfig');
-  fig.appendChild(svg);
-  fig.appendChild(el('figcaption', 'cap', 'Each lap, left to right - higher is quicker. Best ' + lap(best) + ' on lap ' + (at + 1) + '.'));
+  fig.appendChild(el('figcaption', 'ttl', 'Lap-by-lap times'));
+  fig.appendChild(f.svg);
+  fig.appendChild(el('p', 'cap', 'Higher is quicker. Best ' + lap(best) + ' on lap ' + (at + 1) + ', the green dot.'));
+  return fig;
+}
+
+// Their place after every lap, from the grid slot they started in (lap 0)
+// when that is known, first at the top - LiveRC's position graph with only
+// their own line, since a driver's night carries no one else's laps. Null
+// without a place for every lap.
+function posChart(posAt, start, of) {
+  if (!Array.isArray(posAt) || posAt.length < 2 || !posAt.every((p) => typeof p === 'number' && p > 0)) return null;
+  const field = Math.max(num(of), num(start), Math.max.apply(null, posAt), 2);
+  const H = Math.max(150, CH.T + CH.B + (field - 1) * 26);
+  const y = (p) => CH.T + (p - 1) * (H - CH.T - CH.B) / (field - 1);
+
+  const f = chartFrame(H, posAt.length, 'Position', 'poschart', 'Your position after each of ' + posAt.length + ' laps');
+  for (let p = 1; p <= field; p++) {
+    if (p > 1 && p < field) f.svg.appendChild(sv('line', { x1: CH.L, y1: y(p).toFixed(1), x2: CH.W - CH.R, y2: y(p).toFixed(1), class: 'gr' }));
+    f.label({ x: CH.L - 6, y: (y(p) + 4).toFixed(1), class: 'yt' }, String(p));
+  }
+
+  const points = (num(start) > 0 ? [[0, num(start)]] : []).concat(posAt.map((p, k) => [k + 1, p]));
+  f.svg.appendChild(sv('polyline', { points: points.map((pt) => f.x(pt[0]).toFixed(1) + ',' + y(pt[1]).toFixed(1)).join(' ') }));
+  for (const pt of points) f.svg.appendChild(sv('circle', { cx: f.x(pt[0]).toFixed(1), cy: y(pt[1]).toFixed(1), r: 3.5, class: 'dot' }));
+
+  const fig = el('figure', 'lapfig');
+  fig.appendChild(el('figcaption', 'ttl', 'Lap-by-lap position'));
+  fig.appendChild(f.svg);
   return fig;
 }
 
@@ -8957,8 +9208,10 @@ function hideRunsBox() {
 // The parts the jump bar can go to, as drawExtras built them this time.
 let jumps = [];
 
-// The stats a racer can line their races up by, in the race list.
-const PICKS = [['best', 'Best lap'], ['avg', 'Avg. lap'], ['consec3', 'Top 3 consec.'], ['consistency', 'Consistency']];
+// The race list shows each race's best lap (view.pick). A row of Best lap,
+// Avg. lap, Top 3 consec. and Consistency buttons above the list used to
+// change it; it went on 4 Nov 2026 (Asher: "aren't needed as they are
+// contained as info revealed with the Lap Stats button").
 
 // The four lap stats a race shows first; the rest wait behind More stats.
 const HEADLINE = ['Fast lap', 'Avg. lap', 'Top 3 consec.', 'Consistency'];
@@ -9067,23 +9320,6 @@ function drawJump() {
 // The car sections' names for the jump bar, by section id.
 let carNames = {};
 
-// The stat the race list lines up by - only when there is more than one
-// race with laps to line up.
-function pickPart() {
-  const row = el('div', 'pick');
-  row.setAttribute('role', 'group');
-  row.setAttribute('aria-label', 'Show on each race');
-  for (const p of PICKS) {
-    const b = tapButton(p[1], 'pk' + (view.pick === p[0] ? ' on' : ''), () => {
-      view.pick = p[0];
-      drawExtras();
-    });
-    b.setAttribute('aria-pressed', view.pick === p[0] ? 'true' : 'false');
-    row.appendChild(b);
-  }
-  return row;
-}
-
 // One race as a row: its name and time, where it left them, its laps and
 // the stat picked above the list - the night's best of it marked.
 function raceRow(r, value, top, open, onTap) {
@@ -9169,8 +9405,16 @@ function raceDetail(r, stats, own) {
     wrap.appendChild(table);
     tabs.push(['laps', 'Lap times (' + list.length + ')', wrap]);
 
+    // The lap times, and under them their place lap by lap when the laptop
+    // sent one for every lap (4 Nov 2026).
     const chart = lapChart(r.lapsMs, r.bestMs);
-    if (chart) tabs.push(['chart', 'Lap chart', chart]);
+    if (chart) {
+      const box = el('div', 'charts');
+      box.appendChild(chart);
+      const places = posChart(r.posAt, r.start, r.of);
+      if (places) box.appendChild(places);
+      tabs.push(['chart', 'Lap chart', box]);
+    }
   }
 
   if (tabs.length > 0) {
@@ -9232,7 +9476,6 @@ function racesPart(into, id, title, all, clipsOf) {
     return;
   }
   const stats = races.map((r) => lapStats(r.lapsMs));
-  if (races.length > 1 && stats.filter(Boolean).length > 0) part.appendChild(pickPart());
 
   const values = races.map((r, i) => pickValue(r, stats[i], view.pick));
   const good = values.filter((v) => v !== null);
@@ -10312,7 +10555,10 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // half-typed change; empty unless the club is taking requests.
     // "meout" is Sign out on this phone (29 Oct 2026, relay navigation
     // round 2), shown once this phone remembers the night it is showing.
-    body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
+    // "nh" is their name and the night's title, "gd" the first-night guide
+    // under it and "up" the club's updates under that (4 Nov 2026), all
+    // above the live card.
+    body: '<div id="nh"></div><div id="gd"></div><div id="up"></div><div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
       '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
     script: LAPS_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
     noindex: true,

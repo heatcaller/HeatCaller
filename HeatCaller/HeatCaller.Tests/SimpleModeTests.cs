@@ -461,6 +461,7 @@ public sealed class SimpleModeTests : IDisposable
         "WebServerControl.cs|Server", "WebServerControl.cs|Open these on your phone, tablet, or in OBS",
         "MainForm.Pages.cs|Website", "RelaySettingsControl.cs|Relay", "RelaySettingsControl.cs|Online check-in",
         "RelaySettingsControl.cs|Share", "RelaySettingsControl.cs|Status",
+        "RelaySettingsControl.cs|Your first night guide", "RelaySettingsControl.cs|Club updates",
         "RecordingControl.cs|Recording the night", "RecordingControl.cs|Written from the night",
 
         // Venues, which Simple hides as a page.

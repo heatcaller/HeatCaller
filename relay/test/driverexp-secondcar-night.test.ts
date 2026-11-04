@@ -82,7 +82,7 @@ describe("a night of two cars", () => {
     const markup = page.get("nt").html;
 
     assert.doesNotMatch(markup, /won Heat 1 in the main car|Main car card line/);
-    assert.match(markup, /Sam Parker/);
+    assert.match(page.get("nh").html, /Sam Parker/, "their name, at the top of the page");
     assert.equal(sections(page)[0]!.textContent.split("won Heat 1 in the main car").length - 1, 1);
   });
 
