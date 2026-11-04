@@ -340,7 +340,7 @@ describe("the first-night guide", () => {
   ] as const) {
     it(`appears when ${what} says so`, async () => {
       const page = await open(relay(body));
-      const guide = page.get("lv").find((n) => n.tagName === "DETAILS")[0];
+      const guide = page.get("gd").find((n) => n.tagName === "DETAILS")[0];
 
       assert.ok(guide, "a collapsible guide");
       assert.match(guide.textContent, /Your first night/);
@@ -352,19 +352,31 @@ describe("the first-night guide", () => {
   it("is not there otherwise", async () => {
     const page = await open(relay({ ok: true, night: night(), live: { next: { race: "A", away: 1 } } }));
 
-    assert.equal(page.get("lv").find((n) => n.tagName === "DETAILS").length, 0);
-    assert.doesNotMatch(page.get("lv").textContent, /first night/i);
+    assert.equal(page.get("gd").find((n) => n.tagName === "DETAILS").length, 0);
+    assert.doesNotMatch(page.get("gd").textContent, /first night/i);
   });
 
   it("stays open across the poll's redraws once opened", async () => {
     const page = await open(relay({ ok: true, night: null, live: { firstNight: true } }, { poll: () => ({ ok: true, live: { firstNight: true } }) }));
-    const guide = page.get("lv").find((n) => n.tagName === "DETAILS")[0]!;
+    const guide = page.get("gd").find((n) => n.tagName === "DETAILS")[0]!;
 
     guide.open = true;
     guide.fire("toggle");
     await page.advance(20000);
 
-    assert.equal(page.get("lv").find((n) => n.tagName === "DETAILS")[0]!.open, true);
+    assert.equal(page.get("gd").find((n) => n.tagName === "DETAILS")[0]!.open, true);
+  });
+
+  it("goes for good once they tap Got it, poll or no poll", async () => {
+    const page = await open(relay({ ok: true, night: null, live: { firstNight: true } }, { poll: () => ({ ok: true, live: { firstNight: true } }) }));
+    const done = page.button(page.get("gd"), /^Got it/);
+
+    assert.ok(done, "a way to put it away once read");
+    done.click();
+    assert.equal(page.get("gd").find((n) => n.tagName === "DETAILS").length, 0);
+
+    await page.advance(20000);
+    assert.equal(page.get("gd").find((n) => n.tagName === "DETAILS").length, 0, "the next redraw leaves it gone");
   });
 });
 
@@ -641,7 +653,7 @@ describe("against R1's relay", () => {
     assert.match(lv, /about 7 min/);
     assert.match(lv, /Turn 3/);
     assert.match(lv, /Last seen at/);
-    assert.match(lv, /Your first night/);
+    assert.match(page.get("gd").textContent, /Your first night/, "the guide, under their name");
     assert.ok(page.button(page.get("lv"), /^Check in$/), "checkin/one said check-in is open");
     assert.match(page.get("nt").textContent, /Nothing is filed for you yet/);
 

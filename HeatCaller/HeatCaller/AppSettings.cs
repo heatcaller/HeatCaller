@@ -2110,6 +2110,25 @@ public sealed class AppSettings
     public string RelayNewcomerJoin { get; set; } = string.Empty;
 
     /// <summary>
+    /// The first-night guide in the club's own words (4 Nov 2026, Asher: "the
+    /// guide should be able to be edited on laptop under the website nav"),
+    /// as typed on the Club Website page: a part per paragraph, "Heading:
+    /// words". Empty - the default, and what putting back the standard guide
+    /// leaves - is HeatCaller's own guide, so a club that never touched it
+    /// gets any later improvement to that guide.
+    /// </summary>
+    public string RelayFirstNightGuide { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Club updates (4 Nov 2026, Asher: "a separate optional card to push to
+    /// the relay for Club Updates. same motion"): the club's news for a card
+    /// on every driver's night page, typed and sent from the Club Website
+    /// page like the first-night guide - an item per paragraph, "Heading:
+    /// words". Empty is no card.
+    /// </summary>
+    public string RelayClubUpdates { get; set; } = string.Empty;
+
+    /// <summary>
     /// The club's pages elsewhere, keyed by platform ("facebook",
     /// "instagram" ... see RelaySocial.Platforms), each an address as typed
     /// and tidied on leaving the box. Linked from the club's online pages.

@@ -378,7 +378,9 @@ header:has(.brand) { padding-top: 8px; }
          column-gap: 14px; align-items: start; }
 .brand .logo { grid-column: 1; grid-row: 1 / span 2; }
 .brand .brand-text, .brand .hchead { display: contents; }
-.brand h1 { grid-column: 2; grid-row: 1; line-height: 1.15; }
+/* A little below the logo's top edge (4 Nov 2026, Asher: "bring the club
+   name down a bit"). */
+.brand h1 { grid-column: 2; grid-row: 1; line-height: 1.15; margin-top: clamp(8px, 3vw, 22px); }
 .brand .hcside { grid-column: 2; grid-row: 2; align-self: end; flex-direction: row; align-items: center;
                  justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .brand .hcby { min-height: 0; }
@@ -467,8 +469,9 @@ a.go { text-align: center; text-decoration: none; }
 .night { list-style: none; max-width: 42rem; margin: 18px auto 0; padding: 0; text-align: left; }
 .night li { padding: 11px 2px; border-top: 1px solid var(--border); }
 .night li:first-child { border-top: 0; }
-#nt h2 { margin: 0 0 2px; font-size: 1.3rem; }
-#nt .sub { margin-bottom: 4px; }
+#nt h2, #nh h2 { margin: 0 0 2px; font-size: 1.3rem; }
+#nt .sub, #nh .sub { margin-bottom: 4px; }
+#nh:not(:empty) { margin: 0 auto 14px; max-width: 42rem; }
 /* A driver's evening as it happens (22 Oct 2026, driver experience): the
    live card on top of their night page - next race, marshal duty, check-in
    and their transponder - and, under the night's facts, one card per race
@@ -575,6 +578,13 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .guide dl { margin: 0; padding: 4px 16px 14px; }
 .guide dt { font-weight: 600; margin-top: 10px; }
 .guide dd { margin: 2px 0 0; color: var(--muted); }
+.guide .gdone { display: block; margin: 0 auto 4px; }
+/* Club updates (4 Nov 2026): the guide's look, open rather than folded. */
+.lc.updates { border-left-color: var(--primary); }
+.updates dl { margin: 0 0 12px; }
+.updates dt { font-weight: 600; margin-top: 10px; }
+.updates dd { margin: 2px 0 0; color: var(--muted); }
+.updates .gdone { display: block; margin: 0 auto; }
 /* The results page's penalty chip: numbers only, never the reason. */
 .chip { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 0.72rem;
         font-weight: 700; color: var(--bad); border: 1px solid var(--bad); vertical-align: 1px; }
@@ -1782,7 +1792,7 @@ ${preview}${twitter}
 <style>${STYLE}</style>
 ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
 </head>
-<body data-club="${club}" data-club-name="${name}">${sunset ? HC_SUNSET : ""}
+<body data-club="${club}" data-club-name="${name}"${look.guide.length > 0 ? ` data-guide="${escapeHtml(JSON.stringify(look.guide))}"` : ""}${look.updates.length > 0 ? ` data-updates="${escapeHtml(JSON.stringify(look.updates))}"` : ""}>${sunset ? HC_SUNSET : ""}
 <div class="wrap">
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
     <div class="hcname">${brand}</div>
@@ -6703,7 +6713,27 @@ export function tracksPage(club: string, clubName: string, context: PageContext 
  * is open survives the redraws both pages do on every poll.
  */
 const GUIDE_JS = `
-const GUIDE = [
+// The club's own guide when the laptop sent one (4 Nov 2026), from the
+// page's body - already tidied by the relay, and only ever drawn as text -
+// else HeatCaller's standard one below.
+function clubGuide() {
+  return clubParts('guide');
+}
+
+// The club's own parts from the page's body: [heading, words] pairs, or none.
+function clubParts(name) {
+  try {
+    const parts = JSON.parse(document.body.dataset[name] || '[]');
+    return Array.isArray(parts)
+      ? parts.filter((p) => p && typeof p.words === 'string' && p.words !== '')
+        .map((p) => [typeof p.heading === 'string' ? p.heading : '', p.words])
+      : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+const STANDARD_GUIDE = [
   ['This page', 'When a time like "about 7 min (19:42)" shows, that is when your race should start. Turn on alerts and keep the page open: your phone beeps twice and buzzes when your race is next, and again when it is staged.'],
   ['Heats and mains', 'You race a few short heats first. How you do in them decides which main (final) you race in later, with drivers of a similar pace.'],
   ['Your grid slot', 'Every race gives you a grid slot - where your car starts. Slot 1 is the front.'],
@@ -6715,9 +6745,30 @@ const GUIDE = [
   ['Questions', 'Ask at the timing desk. Everybody was new once.'],
 ];
 
+const OWN_GUIDE = clubGuide();
+const GUIDE = OWN_GUIDE.length > 0 ? OWN_GUIDE : STANDARD_GUIDE;
+
 let guideOpen = false;
 
+// Got it (4 Nov 2026, Asher: "have the option to dismiss it once read"):
+// kept on this phone for this club, so the guide stays gone on every page
+// and every visit. Without storage it stays gone for this visit. Kept
+// against these very words: when the club sends a new guide from the
+// laptop ("club should be able to push newly updated card"), it shows
+// again to a driver who had hidden the old one.
+function guideMark(parts) {
+  let h = 5381;
+  const text = JSON.stringify(parts);
+  for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+const GUIDE_KEY = 'hc-guide-done:' + CLUB + ':' + guideMark(GUIDE);
+let guideDone = false;
+try { guideDone = localStorage.getItem(GUIDE_KEY) === '1'; } catch (e) { /* shown, then */ }
+
+// The guide, or null once they have tapped Got it.
 function firstNightGuide() {
+  if (guideDone) return null;
   const d = document.createElement('details');
   d.className = 'guide';
   d.open = guideOpen;
@@ -6730,15 +6781,29 @@ function firstNightGuide() {
   const list = document.createElement('dl');
 
   for (const pair of GUIDE) {
-    const t = document.createElement('dt');
-    t.textContent = pair[0];
+    // A part the club wrote with no heading is its words alone.
+    if (pair[0] !== '') {
+      const t = document.createElement('dt');
+      t.textContent = pair[0];
+      list.appendChild(t);
+    }
     const w = document.createElement('dd');
     w.textContent = pair[1];
-    list.appendChild(t);
     list.appendChild(w);
   }
 
   d.appendChild(list);
+
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'go quiet gdone';
+  done.textContent = 'Got it - hide this';
+  done.addEventListener('click', () => {
+    guideDone = true;
+    try { localStorage.setItem(GUIDE_KEY, '1'); } catch (e) { /* this visit only */ }
+    d.remove();
+  });
+  d.appendChild(done);
 
   // Who runs the timing, and the way to the "What's HeatCaller?" sheet
   // (30 Oct 2026, relay branding).
@@ -6758,6 +6823,57 @@ function firstNightGuide() {
   d.appendChild(who);
   return d;
 }
+
+// --- Club updates (4 Nov 2026, Asher: "a separate optional card to push to
+// the relay for Club Updates. same motion") ---------------------------------
+// The club's news, sent from the laptop, as a card on the driver's night
+// page under the first-night guide - only when the club has sent some.
+// Got it hides it on this phone, kept against these very words, so news
+// the club sends after shows again.
+const UPDATES = clubParts('updates');
+const UPDATES_KEY = 'hc-updates-done:' + CLUB + ':' + guideMark(UPDATES);
+let updatesDone = false;
+try { updatesDone = localStorage.getItem(UPDATES_KEY) === '1'; } catch (e) { /* shown, then */ }
+
+function drawClubUpdates() {
+  const into = document.getElementById('up');
+  if (!into) return;
+  into.textContent = '';
+  if (updatesDone || UPDATES.length === 0) return;
+
+  const card = document.createElement('section');
+  card.className = 'lc updates';
+  const h = document.createElement('h3');
+  h.textContent = 'Club updates';
+  card.appendChild(h);
+
+  const list = document.createElement('dl');
+  for (const pair of UPDATES) {
+    if (pair[0] !== '') {
+      const t = document.createElement('dt');
+      t.textContent = pair[0];
+      list.appendChild(t);
+    }
+    const w = document.createElement('dd');
+    w.textContent = pair[1];
+    list.appendChild(w);
+  }
+  card.appendChild(list);
+
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'go quiet gdone';
+  done.textContent = 'Got it - hide this';
+  done.addEventListener('click', () => {
+    updatesDone = true;
+    try { localStorage.setItem(UPDATES_KEY, '1'); } catch (e) { /* this visit only */ }
+    card.remove();
+  });
+  card.appendChild(done);
+  into.appendChild(card);
+}
+
+drawClubUpdates();
 `;
 
 /**
@@ -6891,7 +7007,8 @@ let firstNight = false;
 // The first-night guide under their card, for a badge only: a racer signed
 // in by PIN gets checkin/list's answer, which does not carry the flag.
 function showGuide() {
-  if (firstNight && BADGE && drivers.length > 0) box.appendChild(firstNightGuide());
+  const guide = firstNight && BADGE && drivers.length > 0 ? firstNightGuide() : null;
+  if (guide) box.appendChild(guide);
 }
 
 async function api(action, payload) {
@@ -7751,7 +7868,13 @@ function draw() {
   // Oct 2026, under the races), the driver score, progress, reach and
   // clips - built with the DOM rather than as markup, so all three are
   // empty hooks here and nothing more.
-  box.innerHTML = head + '<div id="nj"></div><div id="ng"></div>' + body + '<div id="nx"></div>'
+  // Their name and the night's title go first on the page, above their
+  // live card and the first-night guide (4 Nov 2026, Asher: the guide is
+  // "the second thing on the me page after the driver name/info"), in "nh"
+  // where the page has one.
+  const nameBox = document.getElementById('nh');
+  if (nameBox) nameBox.innerHTML = head;
+  box.innerHTML = (nameBox ? '' : head) + '<div id="nj"></div><div id="ng"></div>' + body + '<div id="nx"></div>'
     + '<div class="nshare">'
     + '<button id="pic" class="go" type="button">Make a picture to share</button>'
     + '<button id="dl" class="go quiet" type="button">Save as a text file</button>'
@@ -8765,7 +8888,12 @@ function drawLive() {
   lvBox.textContent = '';
 
   if (live || ci.shown) lvBox.appendChild(liveCard());
-  if (firstNight) lvBox.appendChild(firstNightGuide());
+  // The guide in its own place under their name where the page has one,
+  // else under the card. Null once they have tapped Got it.
+  const guideBox = document.getElementById('gd');
+  if (guideBox) guideBox.textContent = '';
+  const guide = firstNight ? firstNightGuide() : null;
+  if (guide) (guideBox || lvBox).appendChild(guide);
 
   // The jump bar has a Right now button only while there is a card.
   const now = !!(live || ci.shown);
@@ -10427,7 +10555,10 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // half-typed change; empty unless the club is taking requests.
     // "meout" is Sign out on this phone (29 Oct 2026, relay navigation
     // round 2), shown once this phone remembers the night it is showing.
-    body: '<div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
+    // "nh" is their name and the night's title, "gd" the first-night guide
+    // under it and "up" the club's updates under that (4 Nov 2026), all
+    // above the live card.
+    body: '<div id="nh"></div><div id="gd"></div><div id="up"></div><div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
       '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
     script: LAPS_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
     noindex: true,

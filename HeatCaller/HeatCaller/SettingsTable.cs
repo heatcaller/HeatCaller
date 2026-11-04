@@ -317,6 +317,8 @@ internal static class SettingsTable
             nameof(AppSettings.RelayNewcomerWhere),
             nameof(AppSettings.RelayNewcomerWhen),
             nameof(AppSettings.RelayNewcomerJoin),
+            nameof(AppSettings.RelayFirstNightGuide),
+            nameof(AppSettings.RelayClubUpdates),
             nameof(AppSettings.RelaySocialLinks),
             nameof(AppSettings.RelayCheckInPhotos),
             nameof(AppSettings.RelayRacerPinsEnabled),

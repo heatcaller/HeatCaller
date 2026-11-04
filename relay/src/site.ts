@@ -86,6 +86,27 @@ export interface Look {
    * three empty (an older app, or a club that left them blank) is no card.
    */
   readonly newcomer: Newcomer;
+  /**
+   * The first-night guide in the club's own words (4 Nov 2026, Asher: "the
+   * guide should be able to be edited on laptop under the website nav"):
+   * a heading and its words per part, plain text, tidied and capped like
+   * the tagline. Empty - an older app, or a club that kept the standard
+   * guide - is HeatCaller's own guide.
+   */
+  readonly guide: readonly GuidePart[];
+  /**
+   * Club updates (4 Nov 2026, Asher: "a separate optional card to push to
+   * the relay for Club Updates. same motion"): news the club sends from
+   * the laptop - a heading and words per item, tidied like the guide - for
+   * a card on every driver's night page. Empty is no card.
+   */
+  readonly updates: readonly GuidePart[];
+}
+
+/** One part of the first-night guide: a short heading (may be empty) and its words. */
+export interface GuidePart {
+  readonly heading: string;
+  readonly words: string;
 }
 
 /** The three lines of Home's "New here?" card. Empty strings for any left blank. */
@@ -146,6 +167,11 @@ const MAX_LOGO_BYTES = 400 * 1024;
 const MAX_TAGLINE = 160;
 const MAX_NEWCOMER_LINE = 160;
 const MAX_NEWCOMER_JOIN = 300;
+const MAX_GUIDE_PARTS = 20;
+const MAX_GUIDE_HEADING = 60;
+const MAX_GUIDE_WORDS = 600;
+const MAX_UPDATES = 10;
+const MAX_UPDATE_WORDS = 1000;
 
 const NO_NEWCOMER: Newcomer = Object.freeze({ where: "", when: "", join: "" });
 
@@ -166,6 +192,8 @@ export const DEFAULT_LOOK: Look = Object.freeze({
   vote: false,
   social: Object.freeze([]),
   newcomer: NO_NEWCOMER,
+  guide: Object.freeze([]),
+  updates: Object.freeze([]),
 });
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -248,6 +276,8 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     vote: false,
     social: socialFrom(body?.["social"]),
     newcomer: newcomerFrom(body?.["newcomer"]),
+    guide: guideFrom(body?.["guide"]),
+    updates: updatesFrom(body?.["updates"]),
   };
 }
 
@@ -277,6 +307,44 @@ export function newcomerFrom(value: unknown): Newcomer {
   };
 
   return newcomer.where === "" && newcomer.when === "" && newcomer.join === "" ? NO_NEWCOMER : newcomer;
+}
+
+/**
+ * The site document's "guide" array of { heading, words }. Each part is
+ * one line of plain text, tidied and capped; a part with no words is
+ * dropped, and past twenty parts the rest are. Anything that is not an
+ * array is no guide of the club's own.
+ */
+export function guideFrom(value: unknown): readonly GuidePart[] {
+  return partsFrom(value, MAX_GUIDE_PARTS, MAX_GUIDE_WORDS);
+}
+
+/** The site document's "updates" array of { heading, words }, read exactly as the guide is, with room for ten longer items. */
+export function updatesFrom(value: unknown): readonly GuidePart[] {
+  return partsFrom(value, MAX_UPDATES, MAX_UPDATE_WORDS);
+}
+
+function partsFrom(value: unknown, most: number, maxWords: number): readonly GuidePart[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const parts: GuidePart[] = [];
+
+  for (const item of value) {
+    const raw = record(item);
+    const words = oneLine(raw?.["words"], maxWords);
+
+    if (words !== "") {
+      parts.push({ heading: oneLine(raw?.["heading"], MAX_GUIDE_HEADING), words });
+    }
+
+    if (parts.length === most) {
+      break;
+    }
+  }
+
+  return parts;
 }
 
 /**

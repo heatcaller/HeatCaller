@@ -115,6 +115,18 @@ public sealed class RelaySettingsControl : UserControl
     private readonly TextBox _txtNewcomerWhen = new();
     private readonly TextBox _txtNewcomerJoin = new();
 
+    /// <summary>The first-night guide, as the club words it (4 Nov 2026) - see BuildGuideCard.</summary>
+    private readonly TextBox _txtGuide = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, WordWrap = true, AcceptsReturn = true };
+    private readonly Button _btnSendGuide = new();
+    private readonly Button _btnStandardGuide = new();
+    private readonly Label _lblGuideState = new();
+
+    /// <summary>Club updates (4 Nov 2026) - see BuildUpdatesCard.</summary>
+    private readonly TextBox _txtUpdates = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, WordWrap = true, AcceptsReturn = true };
+    private readonly Button _btnSendUpdates = new();
+    private readonly Button _btnClearUpdates = new();
+    private readonly Label _lblUpdatesState = new();
+
     /// <summary>One box per RelaySocial platform, keyed by its key.</summary>
     private readonly Dictionary<string, TextBox> _socialBoxes = new(StringComparer.OrdinalIgnoreCase);
 
@@ -367,6 +379,8 @@ public sealed class RelaySettingsControl : UserControl
         page.Add(BuildRelayCard());
         page.Add(SimpleMode.Hide(BuildPublishCard()));
         page.Add(SimpleMode.Hide(BuildLookCard()));
+        page.Add(BuildGuideCard());
+        page.Add(BuildUpdatesCard());
         page.Add(BuildCheckInCard());
         page.Add(SimpleMode.Hide(BuildPinsCard()));
         page.Add(SimpleMode.Hide(BuildMailCard()));
@@ -410,6 +424,21 @@ public sealed class RelaySettingsControl : UserControl
         Fit(_txtNewcomerWhere, address);
         Fit(_txtNewcomerWhen, address);
         Fit(_txtNewcomerJoin, address);
+
+        // Room for a few parts of the guide at a time; it scrolls past that.
+        var guide = Pieces.LineHeight(_txtGuide.Font) * 14 + UiLayout.HintGap * 2;
+
+        if (_txtGuide.Height != guide)
+        {
+            _txtGuide.Height = guide;
+        }
+
+        var updates = Pieces.LineHeight(_txtUpdates.Font) * 8 + UiLayout.HintGap * 2;
+
+        if (_txtUpdates.Height != updates)
+        {
+            _txtUpdates.Height = updates;
+        }
 
         foreach (var box in _socialBoxes.Values)
         {
@@ -1142,6 +1171,168 @@ public sealed class RelaySettingsControl : UserControl
         card.Add(lblLookHint, gapBelow: 0);
 
         return card;
+    }
+
+    /// <summary>
+    /// "Your first night" (4 Nov 2026, Asher: "the guide should be able to be
+    /// edited on laptop under the website nav", and "club should be able to
+    /// push newly updated card from the laptop to the relay"): the guide a
+    /// driver on their first night sees on their phone, in a box to reword.
+    ///
+    /// Unlike the welcome line it is NOT sent as it is typed - the site
+    /// document goes every couple of seconds, and a half-written guide would
+    /// reach drivers' phones. It goes when Send is pressed, and every driver
+    /// who hid the old one sees the new one, since a guide that has changed
+    /// is shown again (relay/src/pages.ts, GUIDE_KEY).
+    /// </summary>
+    private Section BuildGuideCard()
+    {
+        var hint = HintLabel(
+            "Shown on the phone of a driver racing here for the first time, on their check-in and night pages. "
+            + "One part per paragraph, a blank line between them, each starting with its heading and a colon - "
+            + "\"Parking: round the back, by the bins.\"");
+
+        _txtGuide.MaxLength = RelayDocuments.MaxGuideParts * (RelayDocuments.MaxGuideHeading + RelayDocuments.MaxGuideWords + 8);
+        _txtGuide.TextChanged += (_, _) => RefreshGuideState();
+
+        _btnSendGuide.Text = "Send to the club's pages";
+        _btnSendGuide.Click += (_, _) => SendGuide(_txtGuide.Text);
+
+        _btnStandardGuide.Text = "Put back the standard guide";
+        _btnStandardGuide.Click += (_, _) =>
+        {
+            ShowGuide(string.Empty);
+            SendGuide(string.Empty);
+        };
+
+        _textSize.Wear(_lblGuideState, () => AppTheme.SmallFont);
+        _lblGuideState.AutoSize = true;
+        _lblGuideState.ForeColor = AppTheme.TextMuted;
+
+        var card = new Section("Your first night guide");
+
+        card.Add(hint);
+        card.Add(_txtGuide, gapBelow: UiLayout.HintGap);
+        card.Add(new ButtonBar().With(_btnSendGuide, _btnStandardGuide), gapBelow: UiLayout.HintGap);
+        card.Add(_lblGuideState, gapBelow: 0);
+
+        return card;
+    }
+
+    /// <summary>The guide in the box: the club's own, or the standard one for a club that has none.</summary>
+    private void ShowGuide(string saved)
+    {
+        _txtGuide.Text = string.IsNullOrWhiteSpace(saved) ? RelayDocuments.StandardGuideText() : saved;
+        RefreshGuideState();
+    }
+
+    /// <summary>
+    /// The box's guide into the settings, which the next pass sends to the
+    /// relay within a couple of seconds. The standard words, or nothing at
+    /// all, are kept as no guide of the club's own.
+    /// </summary>
+    private void SendGuide(string text)
+    {
+        var parts = RelayDocuments.GuideParts(text);
+        _settings.RelayFirstNightGuide = parts.Count == 0 || RelayDocuments.IsStandardGuide(text) ? string.Empty : text.Trim();
+        _settings.Save();
+
+        if (parts.Count == 0)
+        {
+            ShowGuide(string.Empty);
+        }
+
+        RefreshGuideState();
+    }
+
+    /// <summary>Whether what is in the box has gone to the club's pages, and what they show.</summary>
+    private void RefreshGuideState()
+    {
+        var sent = _settings.RelayFirstNightGuide;
+        var box = _txtGuide.Text;
+        var same = string.IsNullOrWhiteSpace(sent)
+            ? RelayDocuments.IsStandardGuide(box)
+            : RelayDocuments.GuideParts(box).SequenceEqual(RelayDocuments.GuideParts(sent));
+
+        _btnSendGuide.Enabled = !same;
+        _btnStandardGuide.Enabled = !string.IsNullOrWhiteSpace(sent) || !RelayDocuments.IsStandardGuide(box);
+
+        var parts = RelayDocuments.GuideParts(box).Count;
+
+        _lblGuideState.Text = !same
+            ? $"Changed here, not sent yet - {Plural.Of(parts, "part")}. Press Send to put it on drivers' phones."
+            : string.IsNullOrWhiteSpace(sent)
+                ? "Drivers see the standard guide."
+                : "Sent. Drivers see this guide within a few seconds, including any who had hidden the old one.";
+    }
+
+    /// <summary>
+    /// Club updates (4 Nov 2026, Asher: "a separate optional card to push to
+    /// the relay for Club Updates. same motion"): the club's news, for a card
+    /// on every driver's night page under the first-night guide. Optional -
+    /// an empty box is no card - and sent the guide's way: held in the box
+    /// until Send, and shown again to a driver who hid the last lot.
+    /// </summary>
+    private Section BuildUpdatesCard()
+    {
+        var hint = HintLabel(
+            "Optional. News for every driver, on their night page under the first-night guide - a change of night, "
+            + "a new track layout, a race coming up. One item per paragraph, a blank line between them; start one "
+            + "with a heading and a colon to give it a heading. Leave it empty for no card.");
+
+        _txtUpdates.MaxLength = RelayDocuments.MaxUpdates * (RelayDocuments.MaxGuideHeading + RelayDocuments.MaxUpdateWords + 8);
+        _txtUpdates.PlaceholderText = "Track night moved: we race Thursday this week, doors at 6.";
+        _txtUpdates.TextChanged += (_, _) => RefreshUpdatesState();
+
+        _btnSendUpdates.Text = "Send to the club's pages";
+        _btnSendUpdates.Click += (_, _) => SendUpdates(_txtUpdates.Text);
+
+        _btnClearUpdates.Text = "Take the card down";
+        _btnClearUpdates.Click += (_, _) =>
+        {
+            _txtUpdates.Text = string.Empty;
+            SendUpdates(string.Empty);
+        };
+
+        _textSize.Wear(_lblUpdatesState, () => AppTheme.SmallFont);
+        _lblUpdatesState.AutoSize = true;
+        _lblUpdatesState.ForeColor = AppTheme.TextMuted;
+
+        var card = new Section("Club updates");
+
+        card.Add(hint);
+        card.Add(_txtUpdates, gapBelow: UiLayout.HintGap);
+        card.Add(new ButtonBar().With(_btnSendUpdates, _btnClearUpdates), gapBelow: UiLayout.HintGap);
+        card.Add(_lblUpdatesState, gapBelow: 0);
+
+        return card;
+    }
+
+    /// <summary>The box's updates into the settings, which the next pass sends to the relay within a couple of seconds.</summary>
+    private void SendUpdates(string text)
+    {
+        _settings.RelayClubUpdates = RelayDocuments.UpdateParts(text).Count == 0 ? string.Empty : text.Trim();
+        _settings.Save();
+        RefreshUpdatesState();
+    }
+
+    /// <summary>Whether what is in the updates box has gone to the club's pages.</summary>
+    private void RefreshUpdatesState()
+    {
+        var sent = RelayDocuments.UpdateParts(_settings.RelayClubUpdates);
+        var box = RelayDocuments.UpdateParts(_txtUpdates.Text);
+        var same = box.SequenceEqual(sent);
+
+        _btnSendUpdates.Enabled = !same;
+        _btnClearUpdates.Enabled = sent.Count > 0 || box.Count > 0;
+
+        _lblUpdatesState.Text = !same
+            ? box.Count == 0
+                ? "Emptied here, not sent yet. Press Send to take the card off drivers' pages."
+                : $"Changed here, not sent yet - {Plural.Of(box.Count, "item")}. Press Send to put it on drivers' phones."
+            : sent.Count == 0
+                ? "No club updates card on drivers' pages."
+                : "Sent. Drivers see these within a few seconds, including any who had hidden the last ones.";
     }
 
     /// <summary>
@@ -2694,6 +2885,9 @@ public sealed class RelaySettingsControl : UserControl
             _txtNewcomerWhere.Text = _settings.RelayNewcomerWhere;
             _txtNewcomerWhen.Text = _settings.RelayNewcomerWhen;
             _txtNewcomerJoin.Text = _settings.RelayNewcomerJoin;
+            ShowGuide(_settings.RelayFirstNightGuide);
+            _txtUpdates.Text = _settings.RelayClubUpdates;
+            RefreshUpdatesState();
 
             foreach (var (key, box) in _socialBoxes)
             {
