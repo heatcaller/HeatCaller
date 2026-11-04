@@ -34,6 +34,7 @@ export class FakeNode {
   href = "";
   src = "";
   value = "";
+  checked = false;
   controls = false;
   preload = "";
   style: Record<string, string> = {};

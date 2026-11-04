@@ -72,6 +72,9 @@ internal static class DriverNight
     /// </summary>
     internal const int MostDocumentBytes = 64 * 1024;
 
+    /// <summary>The night's one line when they have only demo races or practice runs tonight.</summary>
+    internal const string OnlyRunsLine = "No races filed for you tonight - only demo races or practice.";
+
     /// <summary>
     /// The shape of a badge id, as the relay's own DRIVER_ID insists on it:
     /// twenty lowercase hex characters.
@@ -210,12 +213,21 @@ internal static class DriverNight
 
         var named = (parts.DriverName ?? string.Empty).Trim();
 
-        if (named.Length == 0 || parts.Facts is null || parts.Facts.Empty)
+        if (named.Length == 0)
         {
             return null;
         }
 
         var lines = Lines(parts.Facts);
+
+        // ONLY DEMO RACES OR PRACTICE (3 Nov 2026): no facts, because
+        // DriverCut counts races, but the runs are worth opening for their
+        // lap stats. One plain line says why there is nothing else - the
+        // page needs a line, and every other word here is still DriverCut's.
+        if (lines.Length == 0 && parts.Races is { Count: > 0 } runs && runs.Any(r => r is { Kind: not null }))
+        {
+            lines = new[] { OnlyRunsLine };
+        }
 
         if (lines.Length == 0)
         {

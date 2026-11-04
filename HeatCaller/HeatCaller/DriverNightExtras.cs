@@ -46,24 +46,50 @@ internal static class DriverNightExtras
     /// <param name="transponder">The driver. Used only to find their row - it is never written into what comes back.</param>
     /// <param name="tonight">Tonight's races, as MainForm.RacesTonight gives them.</param>
     /// <param name="roundOf">A round by id, for the label of a race saved without one.</param>
+    /// <param name="runs">
+    /// Tonight's demo races and practice runs (MainForm.NightRunsTonight),
+    /// or null for none. 3 Nov 2026 (asked for by Asher: "yes, marked as
+    /// demo, and do the same for practice"): each one theirs goes in the
+    /// list too, marked with <see cref="NightRace.Kind"/>, so the lap stats
+    /// can be looked at after a rehearsal or a practice run. They never
+    /// carry a driver rating, and a practice run no finishing place - the
+    /// page leaves them out of the night at a glance and the Driver score,
+    /// and has a tick box to hide them. Imported results never go.
+    /// </param>
     internal static IReadOnlyList<NightRace> Races(
         string? transponder,
         IEnumerable<SessionRecord>? tonight,
-        Func<string, RoundDefinition?>? roundOf)
+        Func<string, RoundDefinition?>? roundOf,
+        IEnumerable<SessionRecord>? runs = null)
     {
         var who = transponder?.Trim();
 
-        if (string.IsNullOrEmpty(who) || tonight is null)
+        if (string.IsNullOrEmpty(who) || (tonight is null && runs is null))
         {
             return Array.Empty<NightRace>();
         }
 
-        var races = new List<NightRace>();
-
-        foreach (var session in tonight
+        var counted = (tonight ?? Enumerable.Empty<SessionRecord>())
             .Where(s => s is not null && !s.IsNotScored() && s.SessionType != RaceSessionType.Practice)
-            .OrderBy(RelayResultsIndex.EffectiveStart))
+            .Select(s => (Session: s, Kind: (string?)null));
+        var marked = (runs ?? Enumerable.Empty<SessionRecord>())
+            .Where(s => s is not null && !s.IsImported())
+            .Select(s => (Session: s, Kind: KindOf(s)))
+            .Where(x => x.Kind is not null);
+
+        var races = new List<NightRace>();
+        var counts = counted.ToList();
+        var raceIds = new HashSet<string>(counts.Select(x => x.Session.Id ?? string.Empty), StringComparer.Ordinal);
+
+        foreach (var (session, kind) in counts.Concat(marked)
+            .OrderBy(x => RelayResultsIndex.EffectiveStart(x.Session)))
         {
+            // A session handed in both ways goes once, as the race it is.
+            if (kind is not null && !string.IsNullOrEmpty(session.Id) && raceIds.Contains(session.Id))
+            {
+                continue;
+            }
+
             var results = session.Results ?? new List<SessionResultEntry>();
             var row = results.FirstOrDefault(r => r is not null && SameDriver(r.Transponder, who));
 
@@ -99,27 +125,35 @@ internal static class DriverNightExtras
             // card. The same DriverRating the report card's line, Driver Hub
             // and the leaderboard use, so the numbers never disagree. Left
             // out when the race has no rating (a field of one).
-            double? rating = DriverRating.ForSession(session).TryGetValue(row.Transponder ?? string.Empty, out var rated) ? rated : null;
+            //
+            // Never for a demo or a practice run (3 Nov 2026): a rehearsal
+            // is not a result, and practice has no finishing order to rate.
+            double? rating = kind is null
+                && DriverRating.ForSession(session).TryGetValue(row.Transponder ?? string.Empty, out var rated) ? rated : null;
+            var practice = kind == PracticeKind;
 
             races.Add(new NightRace
             {
                 Sid = session.Id,
-                Label = LabelOf(session, roundOf),
+                Label = LabelOf(session, roundOf, kind),
                 At = RelayResultsIndex.EffectiveStart(session).ToString("O", CultureInfo.InvariantCulture),
-                Pos = row.Position,
+                Kind = kind,
+
+                // Practice is not a race: no place, so the page says none.
+                Pos = practice ? 0 : row.Position,
 
                 // Ghosts are recordings racing alongside, not drivers, so
                 // "4th of 6" counts the people.
                 Of = results.Count(r => r is not null && !Ghosts.IsGhost(r.Transponder)),
-                Start = row.StartPosition > 0 ? row.StartPosition : null,
+                Start = !practice && row.StartPosition > 0 ? row.StartPosition : null,
                 Laps = row.Laps,
                 BestMs = row.FastLapMs,
                 LapsMs = laps.Count > 0 ? laps : null,
-                PosAt = laps.Count > 0 && kept.All(lap => lap.Pos > 0) ? kept.Select(lap => lap.Pos).ToList() : null,
+                PosAt = !practice && laps.Count > 0 && kept.All(lap => lap.Pos > 0) ? kept.Select(lap => lap.Pos).ToList() : null,
                 StartMs = laps.Count > 0 && row.LapTimesMs is { Count: > 1 } ? row.LapTimesMs[0] : null,
                 LengthS = session.TimeLimitSeconds is > 0 ? session.TimeLimitSeconds : null,
                 Pen = pen.Count > 0 ? pen.ToList() : null,
-                Out = OutOf(row),
+                Out = practice ? null : OutOf(row),
                 Rating = rating,
             });
         }
@@ -390,19 +424,52 @@ internal static class DriverNightExtras
             .ToList();
     }
 
-    /// <summary>The race's own label, or its round's, or "Race".</summary>
-    private static string LabelOf(SessionRecord session, Func<string, RoundDefinition?>? roundOf)
+    /// <summary><see cref="NightRace.Kind"/> for a demo race.</summary>
+    internal const string DemoKind = "demo";
+
+    /// <summary><see cref="NightRace.Kind"/> for a practice run.</summary>
+    internal const string PracticeKind = "practice";
+
+    /// <summary>"demo", "practice", or null for a race that counts (and for an imported result, which never goes).</summary>
+    private static string? KindOf(SessionRecord session)
     {
-        if (!string.IsNullOrWhiteSpace(session.Label))
+        if (session.IsImported())
         {
-            return session.Label.Trim();
+            return null;
+        }
+
+        if (session.IsDemoSession())
+        {
+            return DemoKind;
+        }
+
+        return session.SessionType == RaceSessionType.Practice ? PracticeKind : null;
+    }
+
+    /// <summary>
+    /// The race's own label, or its round's, or "Race" ("Practice" for a
+    /// practice run). A demo's "[DEMO]" prefix is taken off: the page marks
+    /// a demo with a chip of its own.
+    /// </summary>
+    private static string LabelOf(SessionRecord session, Func<string, RoundDefinition?>? roundOf, string? kind = null)
+    {
+        var own = (session.Label ?? string.Empty).Trim();
+
+        if (kind == DemoKind && own.StartsWith(SessionRecord.DemoLabelPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            own = own[SessionRecord.DemoLabelPrefix.Length..].Trim();
+        }
+
+        if (own.Length > 0)
+        {
+            return own;
         }
 
         return !string.IsNullOrEmpty(session.RoundId)
             && roundOf?.Invoke(session.RoundId) is { } round
             && !string.IsNullOrWhiteSpace(round.RoundLabel)
             ? round.RoundLabel.Trim()
-            : "Race";
+            : kind == PracticeKind ? "Practice" : "Race";
     }
 
     /// <summary>"DQ" or "DNF" when the result was one, otherwise null (left out).</summary>
@@ -481,6 +548,15 @@ internal sealed record NightRace
     /// <summary>When it started, UTC, round-trip format.</summary>
     [JsonPropertyName("at")]
     public string At { get; init; } = string.Empty;
+
+    /// <summary>
+    /// "demo" or "practice" for a run that does not count (3 Nov 2026), or
+    /// left out for a race. The page marks it, leaves it out of the night
+    /// at a glance and the Driver score, and can hide it.
+    /// </summary>
+    [JsonPropertyName("kind")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Kind { get; init; }
 
     [JsonPropertyName("pos")]
     public int Pos { get; init; }
