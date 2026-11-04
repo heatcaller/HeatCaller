@@ -64,6 +64,12 @@ internal sealed class NightAccount
     private int _everyFactSpent;
     private int _droppedAfterWriting;
 
+    // The same counts for the race in front of the announcer, cleared at
+    // each green - see RaceReport.
+    private int _raceWeighed;
+    private int _raceSpoke;
+    private readonly Dictionary<string, int> _raceHeld = new();
+
     /// <summary>The last segment that went out, and the facts it was built from - see <see cref="Proof"/>.</summary>
     private SegmentKind? _lastKind;
 
@@ -99,8 +105,30 @@ internal sealed class NightAccount
 
             _lastKind = null;
             _lastPack = null;
+
+            ClearRace();
         }
     }
+
+    /// <summary>A race has gone green: the race's own counts start again - see <see cref="RaceReport"/>.</summary>
+    internal void RaceStarted()
+    {
+        lock (_gate)
+        {
+            ClearRace();
+        }
+    }
+
+    /// <summary>Called with _gate held.</summary>
+    private void ClearRace()
+    {
+        _raceWeighed = 0;
+        _raceSpoke = 0;
+        _raceHeld.Clear();
+    }
+
+    /// <summary>Counts one reason against this race. Called with _gate held.</summary>
+    private void HeldThisRace(string why) => _raceHeld[why] = _raceHeld.TryGetValue(why, out var had) ? had + 1 : 1;
 
     /// <summary>The night this account is of.</summary>
     internal string DayId
@@ -126,6 +154,7 @@ internal sealed class NightAccount
         lock (_gate)
         {
             _weighed[kind] = Count(_weighed, kind) + 1;
+            _raceWeighed++;
         }
     }
 
@@ -135,6 +164,7 @@ internal sealed class NightAccount
         lock (_gate)
         {
             _nothingToSay++;
+            HeldThisRace("nothing to build it from yet");
         }
     }
 
@@ -144,6 +174,7 @@ internal sealed class NightAccount
         lock (_gate)
         {
             _everyFactSpent++;
+            HeldThisRace(Short(BudgetRefusal.NothingNewToSay));
         }
     }
 
@@ -158,6 +189,7 @@ internal sealed class NightAccount
         lock (_gate)
         {
             _refused[why] = _refused.TryGetValue(why, out var had) ? had + 1 : 1;
+            HeldThisRace(Short(why));
         }
     }
 
@@ -167,6 +199,7 @@ internal sealed class NightAccount
         lock (_gate)
         {
             _droppedAfterWriting++;
+            HeldThisRace("written, then the race moved on");
         }
     }
 
@@ -184,6 +217,7 @@ internal sealed class NightAccount
         lock (_gate)
         {
             _spoke[kind] = Count(_spoke, kind) + 1;
+            _raceSpoke++;
 
             if (pack is not null)
             {
@@ -279,6 +313,65 @@ internal sealed class NightAccount
     }
 
     /// <summary>
+    /// The race in front of the announcer, in one line - for the "Lines not
+    /// said this race" window on Race Control (3 Nov 2026). Null before
+    /// anything has been weighed up this race.
+    ///
+    /// WHY ONE LINE A RACE, when <see cref="Report"/> already sums the
+    /// night: the night's report arrives with the sign-off, and the
+    /// question "why didn't the AI say anything in that heat?" is asked
+    /// straight after the heat. The counts are checks, not lines - a record
+    /// lap turned away for being too soon is asked about again each second
+    /// until it is said or goes stale - which is why they are given as
+    /// "x37" rather than as "37 lines".
+    /// </summary>
+    internal string? RaceReport()
+    {
+        lock (_gate)
+        {
+            if (_raceWeighed == 0)
+            {
+                return null;
+            }
+
+            var said = $"AI commentary this race: {Plural.Of(_raceSpoke, "segment")} said.";
+
+            if (_raceHeld.Count == 0)
+            {
+                return said;
+            }
+
+            var held = string.Join(", ", _raceHeld
+                .OrderByDescending(one => one.Value)
+                .Select(one => $"{one.Key} x{one.Value}"));
+
+            var dial = new[]
+            {
+                BudgetRefusal.ItsCapForTheNight, BudgetRefusal.TooSoonAfterTheLast,
+                BudgetRefusal.TheAirtimeCap, BudgetRefusal.TheNightsHeadroom,
+            }.Any(why => _raceHeld.ContainsKey(Short(why)));
+
+            return $"{said} Held back: {held}."
+                 + (dial ? " How chatty on the AI Commentary tab moves the limits, gaps and caps." : string.Empty);
+        }
+    }
+
+    /// <summary>A refusal in a few words, for <see cref="RaceReport"/>.</summary>
+    private static string Short(BudgetRefusal why) => why switch
+    {
+        BudgetRefusal.SwitchedOff => "switched off",
+        BudgetRefusal.ItsCapForTheNight => "its limit for the night or class",
+        BudgetRefusal.NothingNewToSay => "nothing new to say",
+        BudgetRefusal.TooSoonAfterTheLast => "too soon after the last line",
+        BudgetRefusal.TheAirtimeCap => "the ten-minute cap",
+        BudgetRefusal.TheRelayIsBusy => "relay busy",
+        BudgetRefusal.TheMonthsAllowance => "the month's allowance",
+        BudgetRefusal.TheNightsHeadroom => "saving for the mains",
+        BudgetRefusal.BetweenRaces => "the Between races settings",
+        _ => "the budget",
+    };
+
+    /// <summary>
     /// Why the announcer said what it last said: the facts it was given, in
     /// the words it was given them in.
     ///
@@ -343,12 +436,13 @@ internal sealed class NightAccount
         BudgetRefusal.SwitchedOff =>
             "this club has it switched off - tick it under Segments on the AI Commentary tab",
         BudgetRefusal.ItsCapForTheNight =>
-            "it had already been said as often as one night allows, which is the variety rule working",
+            "it had already been said as often as one night (or one class) allows at this chattiness - How chatty "
+            + "on the AI Commentary tab raises the limit, and Non-stop lifts it",
         BudgetRefusal.NothingNewToSay =>
             "there was nothing new to say about it, which is the variety rule working",
         BudgetRefusal.TooSoonAfterTheLast =>
-            "it came too soon after the last line - the gap each segment keeps is its own, and a club that "
-            + "wants more of them turns the chattiness dial up on the AI Commentary tab",
+            "it came too soon after the last line - each segment keeps a gap, and How chatty on the AI Commentary "
+            + "tab shortens it",
         BudgetRefusal.TheAirtimeCap =>
             "the last ten minutes were already as full as this race and the chattiness dial allow - the dial "
             + "is on the AI Commentary tab, and a heat is deliberately quieter than a main",
@@ -358,7 +452,8 @@ internal sealed class NightAccount
             "the month's allowance is down to what is held back for intros and recaps - the allowance is on "
             + "the Connection tab",
         BudgetRefusal.TheNightsHeadroom =>
-            "the night's own budget had no room left for it - the budget is on the AI Commentary tab",
+            "the night's own budget was saving itself for the mains - How chatty at Lively or Non-stop on the AI "
+            + "Commentary tab saves less, or none",
         BudgetRefusal.BetweenRaces =>
             "the Between races settings held it - how much the announcer says between races, how often and "
             + "when are on the Between races card on the AI Commentary tab",

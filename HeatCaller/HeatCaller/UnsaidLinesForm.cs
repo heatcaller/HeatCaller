@@ -38,7 +38,11 @@ internal sealed class UnsaidLinesForm : Form
 
     private readonly AnnouncerLoad _load;
 
+    /// <summary>The AI commentary's own line for this race, or null - see NightAccount.RaceReport.</summary>
+    private readonly Func<string?>? _aiThisRace;
+
     private readonly Label _lblReport = new();
+    private readonly Label _lblAi = new();
     private readonly CheckBox _chkHeld = new();
     private readonly ListBox _list = new();
     private readonly Label _lblCount = new();
@@ -49,9 +53,10 @@ internal sealed class UnsaidLinesForm : Form
 
     private bool _drawnWithHeld;
 
-    public UnsaidLinesForm(AnnouncerLoad load)
+    public UnsaidLinesForm(AnnouncerLoad load, Func<string?>? aiThisRace = null)
     {
         _load = load;
+        _aiThisRace = aiThisRace;
 
         Text = "Lines not said this race";
         Font = AppTheme.BodyFont;
@@ -62,6 +67,14 @@ internal sealed class UnsaidLinesForm : Form
         _lblReport.MaximumSize = new Size(UiLayout.AtTextSize(640), 0);
         _lblReport.ForeColor = AppTheme.TextMuted;
         _lblReport.Font = AppTheme.SmallFont;
+
+        // The AI's segments are not timing calls and never reach the list
+        // below, so a quiet AI was the one thing this window could not
+        // explain (3 Nov 2026).
+        _lblAi.AutoSize = true;
+        _lblAi.MaximumSize = new Size(UiLayout.AtTextSize(640), 0);
+        _lblAi.ForeColor = AppTheme.TextMuted;
+        _lblAi.Font = AppTheme.SmallFont;
 
         _chkHeld.Text = "Show lines held back by the pacing dial too";
         _chkHeld.AutoSize = true;
@@ -97,6 +110,7 @@ internal sealed class UnsaidLinesForm : Form
 
         var page = new FillPage();
         page.Add(_lblReport, gapBelow: UiLayout.RowGap);
+        page.Add(_lblAi, gapBelow: UiLayout.RowGap);
         page.Add(_chkHeld, gapBelow: UiLayout.RowGap);
         page.AddFill(_list, _ => UiLayout.AtTextSize(260), gapBelow: UiLayout.RowGap);
         page.Add(footer, gapBelow: 0);
@@ -141,6 +155,7 @@ internal sealed class UnsaidLinesForm : Form
         }
 
         _lblReport.Text = _load.Report();
+        _lblAi.Text = _aiThisRace?.Invoke() ?? "AI commentary this race: nothing weighed up yet.";
 
         var version = _load.LinesVersion;
         var withHeld = _chkHeld.Checked;

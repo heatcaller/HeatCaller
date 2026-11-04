@@ -4,6 +4,17 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **How chatty is the one dial for the AI commentary (3 November).** Turned all the way up, the AI could still go quiet in the heats. Each segment kept its own limits for the night and per class, and its own gap after the last line, and **How chatty** reached none of them. Now it moves them all. **Non-stop** lifts the nightly and per-class limits, shortens the gaps to about a third, and saves nothing for the mains. **Lively** doubles the limits; **Sparing** and **Measured** lower them. **Standard** is unchanged, and a once-a-night segment like the cold open stays once a night at every stop. **Pacing**, which only ever spaced the built-in timing calls, moved to **Voice > Announcements > How often**. **Segments run** is gone: any segments your choice there turned off are now unticked instead, so nothing you hear changes. Each demo run now gets a night of its own, so rehearsals no longer use up the real heats' segments. The **Lines not said this race** window on Race Control opens with a line on what the AI said and what held the rest. See [How chatty](announcer/commentary.md#how-chatty). Update HeatCaller on the race PC; nothing changes on the relay.
+
+- **Recap and battle watch fixes (3 November).**
+    - A battle watch thrown away because its two cars swapped before a word was said no longer counts toward its limits for the night and the class. Before, a close fight could use up its own limit in silence.
+    - The race recap no longer shouts: words written in capitals ("WELCOME BACK", "FIVE!") are put back into normal case, as the race intros already were, with names kept as spelled. A voice that isn't v3 read them as letters.
+    - Times the AI spells out one digit at a time ("three-point-three-zero-four", "a twelve-nine-four-five") are said like the rest, as "three and a half seconds back" or "a twelve ninety-four", and the AI is asked not to write them that way.
+    - The **Cold Open** ("Welcome to the track, everybody!") no longer plays inside the recap show, between the recap's parts.
+    - The sign-off no longer names the race that just finished as next. After a demo it names the round after the demo's. A sign-off that still gets it wrong is replaced by the show's own.
+
+    Update HeatCaller on the race PC; nothing changes on the relay.
+
 - **Listen live hears the whole room (2 November).** Listening along on the club's **Live** page used to play only the announcer's lines, one after another, in silence. Now it plays everything the room hears: the announcer, the show music, the crowd, the stingers and beds, and the tones, as one continuous stream a few seconds behind. The button is now called **Listen live**. Lines that never went to listeners still don't: penalty calls, and lines naming a driver who is shown by initials online, are taken out of the stream while the music carries on under them. If the page goes to the background, for example when you switch to another app on an iPhone, coming back no longer plays everything you missed, a long way behind: it drops it and picks up the room where it is now. Update HeatCaller on the race PC and redeploy the relay (`fly deploy --ha=false`). A race PC that hasn't been updated still sends the announcer's lines, and the new page still plays them.
 
 - **Small fixes found checking the user guide (2 November).**

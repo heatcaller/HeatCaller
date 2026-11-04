@@ -561,8 +561,59 @@ public sealed partial class VoiceSettingsControl
         // others, so a club hearing fewer calls than this was told nothing
         // here about why.
         grid.AddHint(Hint(
-            "The AI Commentary tab's How chatty scales this up or down, and its Pacing holds calls back to leave gaps - "
-            + "both apply even with AI commentary off."));
+            "The AI Commentary tab's How chatty scales this up or down, even with AI commentary off."));
+
+        // PACING MOVED HERE (3 Nov 2026) from the AI Commentary tab, where it
+        // sat between How chatty and the segments and read as the gap
+        // between AI lines. It never was: it spaces these calls, the ones
+        // off the timing loop, and nothing else - so "Wall to wall" on that
+        // page changed nothing a club turning it up was listening for. Same
+        // setting (AppSettings.AnnouncerDensity), same table.
+        _cmbPacing.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbPacing.Items.Clear();
+
+        foreach (var level in AnnouncerDensity.All)
+        {
+            _cmbPacing.Items.Add(level.Name);
+        }
+
+        var pacingNow = AnnouncerDensity.For(_appSettings.AnnouncerDensity);
+        var pacingAt = 0;
+
+        for (var i = 0; i < AnnouncerDensity.All.Count; i++)
+        {
+            if (AnnouncerDensity.All[i].Key == pacingNow.Key)
+            {
+                pacingAt = i;
+                break;
+            }
+        }
+
+        _cmbPacing.SelectedIndex = pacingAt;
+
+        // An AppSettings switch, not part of the voice profile - kept out of
+        // WireAutoSave's walk and saved on its own, like the streak boxes.
+        _autoSaveWired.Add(_cmbPacing);
+
+        var pacingSays = Hint(AnnouncerDensity.Describe(_appSettings.AnnouncerDensity));
+
+        _cmbPacing.SelectedIndexChanged += (_, _) =>
+        {
+            var at = _cmbPacing.SelectedIndex;
+
+            _appSettings.AnnouncerDensity = at >= 0 && at < AnnouncerDensity.All.Count
+                ? AnnouncerDensity.All[at].Key
+                : string.Empty;
+
+            _appSettings.Save();
+            pacingSays.Text = AnnouncerDensity.Describe(_appSettings.AnnouncerDensity);
+        };
+
+        grid.AddRow("Pacing:", _cmbPacing);
+        grid.AddHint(pacingSays);
+        grid.AddHint(Hint(
+            "The gap between these calls - not the AI commentary, whose gaps follow How chatty. On Race Control, "
+            + "\"held\" calls are this leaving a gap; \"lost\" ones are the announcer running out of room."));
 
         if (_soundStore is { } sounds)
         {
@@ -612,6 +663,14 @@ public sealed partial class VoiceSettingsControl
             {
                 box.Width = width;
             }
+        }
+
+        // Wide enough for "Room to breathe" at every text size.
+        var pacing = Math.Max(UiLayout.AtTextSize(PacingPickerWidth), Pieces.PickerWidth(_cmbPacing, ref _pacingWidth));
+
+        if (_cmbPacing.Width != pacing)
+        {
+            _cmbPacing.Width = pacing;
         }
     }
 

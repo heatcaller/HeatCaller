@@ -1059,6 +1059,7 @@ public sealed partial class AnnouncementService
         if (battle is { Overtaken: true })
         {
             StatusMessage?.Invoke("[voice] Dropped a battle line - the two cars swapped while it was being written.");
+            SayBattleLineDropped(battle.Pair);
             return false;
         }
 
@@ -1542,6 +1543,12 @@ public sealed partial class AnnouncementService
                 }
 
                 continue;
+            }
+
+            // Heard, or about to be - so its battle watch was not wasted.
+            if (battle is not null)
+            {
+                SayBattleLineOnAir(battle.Pair);
             }
 
             if (work is null)

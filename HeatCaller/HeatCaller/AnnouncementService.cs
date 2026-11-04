@@ -1414,7 +1414,10 @@ public sealed partial class AnnouncementService
     /// </summary>
     internal static string SpellOutTimesForSpeech(string text) =>
         System.Text.RegularExpressions.Regex.Replace(
-            text,
+            // A time the model spelled digit by digit is put back into
+            // figures first, so it is said by the rules below rather than
+            // read out a digit at a time (3 Nov 2026). See RaceNumbers.
+            RaceNumbers.DigitsFromSpelledTimes(text),
             // [0-9] rather than \d, which in .NET also matches other
             // scripts' digits that the parse below can't read. At most nine
             // whole digits, so the millisecond sum can't overflow. The word

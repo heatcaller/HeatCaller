@@ -226,6 +226,15 @@ public sealed partial class VoiceSettingsControl : UserControl
 
     private readonly CheckBox _chkRaceCallsPractice = new ThemedCheckBox();
     private readonly NumericUpDown _numMaxPerLap = new();
+
+    /// <summary>Pacing - the gap between timing calls (AppSettings.AnnouncerDensity). See BuildHowOftenCard.</summary>
+    private readonly ComboBox _cmbPacing = new();
+
+    /// <summary>The Pacing picker's measured width - see Pieces.PickerWidth.</summary>
+    private (Font Font, int Count, int Width)? _pacingWidth;
+
+    /// <summary>The Pacing picker's narrowest, before text size.</summary>
+    private const int PacingPickerWidth = 160;
     private readonly NumericUpDown _numStreakEveryN = new();
     private readonly CheckBox _chkOnlyLongestStreak = new ThemedCheckBox();
     private readonly CheckBox _chkMentionStreakChaser = new ThemedCheckBox();

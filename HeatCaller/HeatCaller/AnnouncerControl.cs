@@ -153,6 +153,7 @@ public sealed partial class AnnouncerControl : UserControl
         _announcer = announcer;
 
         ConnectTheVoiceToSettings();
+        WatchForUnheardBattles();
 
         Dock = DockStyle.Fill;
 
