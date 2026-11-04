@@ -3496,8 +3496,8 @@ export function resultsPage(club: string, clubName: string, context: PageContext
  * does any of it play; a clip the relay does not have (a 2.40 lap, P31), a
  * load that fails, or one that takes longer than a second, and the phone's
  * own voice says the whole line instead, as it did before this existed.
- * "Phone voice" ticked, or a relay with no clips, is the phone's voice
- * every time.
+ * A relay with no clips is the phone's voice every time. There is no
+ * "Phone voice" box any more (3 Nov 2026, Asher: "remove the option").
  *
  * A phone only plays sound once the page has been tapped, so unlock() is
  * called from the same taps that let the phone's voice talk. Clips are
@@ -3507,14 +3507,12 @@ export function resultsPage(club: string, clubName: string, context: PageContext
  */
 const LAPVOICE_JS = `
 const lapVoice = (function () {
-  const PHONE_KEY = 'hg-lapvoice-phone-' + CLUB;
   // A call whose clips are not all here by then is said by the phone instead.
   const LATE_MS = 1000;
   // The breath between the parts of a call - the commas the phone voice pauses on.
   const BREATH = 0.12;
-
-  let phone = false;
-  try { phone = localStorage.getItem(PHONE_KEY) === '1'; } catch (e) { /* the clips, then */ }
+  // The longest a call waits for the phone's sound to wake (see wake()).
+  const WAKE_MS = 600;
 
   let ctx = null, asked = false, version = '', voice = '';
   let have = null;
@@ -3544,11 +3542,56 @@ const lapVoice = (function () {
       // iPhone: play through the silent switch, as the phone's voice does.
       if (navigator.audioSession) navigator.audioSession.type = 'playback';
     } catch (e) { /* an older phone */ }
+    if (!ctx) fresh(); else nudge();
+  }
+
+  // A new context, made inside a tap - the only time a phone allows it.
+  function fresh() {
     try {
       const Kind = window.AudioContext || window.webkitAudioContext;
-      if (!ctx && Kind) ctx = new Kind();
+      if (!Kind) return;
+      if (ctx && typeof ctx.close === 'function') { try { ctx.close(); } catch (e) { /* gone already */ } }
+      ctx = new Kind();
+      away = false;
+      try { ctx.onstatechange = () => { if (ctx && ctx.state && ctx.state !== 'running') away = true; }; } catch (e) { /* not told, then */ }
     } catch (e) { ctx = null; }
     nudge();
+  }
+
+  // WHY (3 Nov 2026, Asher: closed the app, came back, no ElevenLabs until
+  // Phone voice had spoken once; wants it back on its own, with no phone
+  // voice): after the page has been put away an iPhone - Safari and Chrome
+  // alike - can call its context "running" and still play nothing, and the
+  // phone's voice speaking is what woke it. So once the page has been away
+  // it is woken the same way, silently: a blank line at no volume, the
+  // moment the page is back and again before the next call plays. A tap
+  // after it was away also makes a new context, which is always heard.
+  let away = false, waking = null;
+  function back() {
+    if (ctx !== null && away) fresh(); else nudge();
+  }
+
+  function wake() {
+    if (waking) return waking;
+    waking = new Promise((done) => {
+      let finished = false;
+      const end = () => {
+        if (finished) return;
+        finished = true; waking = null; away = false;
+        nudge();
+        done();
+      };
+      try {
+        const u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0;
+        u.onend = end;
+        u.onerror = end;
+        window.speechSynthesis.speak(u);
+      } catch (e) { /* a phone with no voice: the context alone */ }
+      nudge();
+      setTimeout(end, WAKE_MS);
+    });
+    return waking;
   }
 
   // Whether sound played now would be heard. A phone stops a page's audio
@@ -3569,12 +3612,7 @@ const lapVoice = (function () {
 
   function has() { return have !== null; }
 
-  function using() { return have !== null && !phone && ctx !== null && typeof ctx.decodeAudioData === 'function'; }
-
-  function setPhone(yes) {
-    phone = !!yes;
-    try { localStorage.setItem(PHONE_KEY, phone ? '1' : '0'); } catch (e) { /* this visit only */ }
-  }
+  function using() { return have !== null && ctx !== null && typeof ctx.decodeAudioData === 'function'; }
 
   function fetchClip(name) {
     let got = kept.get(name);
@@ -3631,19 +3669,19 @@ const lapVoice = (function () {
       if (settled || mine !== playing) return;
       settled = true;
       speak(text);
-    }, LATE_MS);
+    }, LATE_MS + (away || !live() ? WAKE_MS : 0));
 
+    // WHY (3 Nov 2026, Asher: "not hearing the elevenlabs lap times on the
+    // me tab"): a context the phone had stopped took the clips and played
+    // nothing. Now it is woken first (see wake()) and asked to start again.
+    const ready = away || !live() ? wake() : null;
     Promise.all(groups.map((g) => Promise.all(g.map((n) => fetchClip(n).then(decode)))))
+      .then((decoded) => ready ? ready.then(() => decoded) : decoded)
       .then((decoded) => {
         if (settled || mine !== playing) return;
         settled = true;
         clearTimeout(late);
-        // WHY (3 Nov 2026, Asher: "not hearing the elevenlabs lap times on
-        // the me tab", the phone voice fine): a stopped context took the
-        // clips and played nothing. Now it is the phone's voice instead,
-        // and the context is asked to start again for the next lap.
-        if (!live()) { nudge(); speak(text); return; }
-        try { window.speechSynthesis.cancel(); } catch (e) { /* not talking */ }
+        nudge();
         let at = ctx.currentTime + 0.02;
         decoded.forEach((group, i) => {
           if (i > 0) at += BREATH;
@@ -3673,16 +3711,21 @@ const lapVoice = (function () {
 
   function whenReady(f) { if (asked && have === null) waiting.push(f); }
 
-  // Any tap, and the page coming back, wakes a context the phone stopped.
+  // Any tap, and the page coming back, wakes a context the phone stopped;
+  // a tap after the page was away makes a new one.
   try {
-    document.addEventListener('click', nudge, true);
-    document.addEventListener('touchend', nudge, true);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) nudge(); });
+    document.addEventListener('click', back, true);
+    document.addEventListener('touchend', back, true);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) away = true;
+      else if (ctx !== null && away) wake();
+    });
+    window.addEventListener('pagehide', () => { away = true; });
   } catch (e) { /* the taps that unlock it, then */ }
 
   return {
     unlock: unlock, has: has, using: using, say: say, stop: stop, warm: warm,
-    phone: () => phone, setPhone: setPhone, voice: () => voice, whenReady: whenReady,
+    voice: () => voice, whenReady: whenReady,
   };
 })();
 
@@ -3778,8 +3821,6 @@ const lapTalk = (function () {
   const shortBox = document.getElementById('lapshort');
   const shortRow = document.getElementById('lapshortrow');
   const note = document.getElementById('lapnote');
-  const phoneBox = document.getElementById('lapphone');
-  const phoneRow = document.getElementById('lapphonerow');
   const canSpeak = typeof window.speechSynthesis === 'object' && window.speechSynthesis !== null
     && typeof SpeechSynthesisUtterance === 'function';
   const ON_KEY = 'hg-laptalk-' + CLUB;
@@ -3853,8 +3894,6 @@ const lapTalk = (function () {
     btn.hidden = !who;
     shortRow.hidden = !who;
     shortBox.checked = timeOnly;
-    if (phoneRow) phoneRow.hidden = !who || !lapVoice.has();
-    if (phoneBox) phoneBox.checked = lapVoice.phone();
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     btn.textContent = 'Lap times in my ear: ' + (!on ? 'off' : unlocked ? 'on' : 'tap to resume');
     if (!who) {
@@ -3955,10 +3994,6 @@ const lapTalk = (function () {
       timeOnly = !!shortBox.checked;
       save(SHORT_KEY, timeOnly);
     });
-
-    if (phoneBox) {
-      phoneBox.addEventListener('change', () => { lapVoice.setPhone(!!phoneBox.checked); });
-    }
 
     // Any tap lets a page that was on before a reload speak again - and a
     // tap on a name changes who is followed, so the button is redrawn
@@ -4424,7 +4459,6 @@ function lapTalkControl(): string {
   return '<div class="card ears" id="laptalk">'
     + '<button type="button" id="lapbtn" class="btn" aria-pressed="false" hidden>Lap times in my ear: off</button>'
     + '<label id="lapshortrow" hidden><input type="checkbox" id="lapshort"> Time only</label>'
-    + '<label id="lapphonerow" hidden><input type="checkbox" id="lapphone"> Phone voice</label>'
     + '<p class="note" id="lapnote">Tap a driver&rsquo;s name on the board to follow them, then your phone can read out each of their laps.</p>'
     + "</div>";
 }
@@ -7849,19 +7883,6 @@ const nightTalk = (function () {
     row.appendChild(box);
     row.appendChild(el('span', '', 'Time only'));
     p.appendChild(row);
-
-    // The lap voice's clips or the phone's own voice, once the relay says it has clips.
-    if (lapVoice.has()) {
-      const voiceRow = el('label', 'nt-short');
-      const phoneBox = document.createElement('input');
-      phoneBox.type = 'checkbox';
-      phoneBox.id = 'nt-lapphone';
-      phoneBox.checked = lapVoice.phone();
-      phoneBox.addEventListener('change', () => { lapVoice.setPhone(!!phoneBox.checked); });
-      voiceRow.appendChild(phoneBox);
-      voiceRow.appendChild(el('span', '', 'Phone voice'));
-      p.appendChild(voiceRow);
-    }
 
     p.appendChild(el('div', 'when', !on
       ? 'Your phone reads out each of your laps as you race: lap, time, best lap, your target when one is set, place and gap. Keep this page open with the screen on.'
