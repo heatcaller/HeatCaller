@@ -209,6 +209,76 @@ describe("My Night: the driver score", () => {
   });
 });
 
+describe("My Night: demo races and practice (3 Nov 2026)", () => {
+  // A demo race the driver ran, then a practice run, after their two heats.
+  const RUNS = {
+    ...NIGHT,
+    races: [
+      ...NIGHT.races,
+      { ...race(3, { bestMs: 8500, lapsMs: LAPS2 }), label: "Demo Heat", kind: "demo" },
+      { ...race(4, { bestMs: 8400, lapsMs: LAPS1 }), label: "Practice", pos: 0, kind: "practice" },
+    ],
+  };
+
+  function tick(page: FakePage): FakeNode {
+    return page.get("nx").find((n) => n.tagName === "INPUT" && n.type === "checkbox")[0]!;
+  }
+
+  it("lists them with a chip, and the latest opens with its lap stats", async () => {
+    const page = await open(RUNS);
+    const list = rows(page);
+
+    assert.equal(list.length, 4);
+    assert.match(list[2]!.textContent, /Demo Heat.*Demo/);
+    assert.match(list[3]!.textContent, /Practice.*Practice/);
+    assert.doesNotMatch(list[0]!.textContent, /Demo|Practice/);
+    assert.equal(list[3]!.className, "rrow open");
+    assert.match(byClass(page.get("nx"), "rc")[0]!.textContent, /Lap stats/);
+  });
+
+  it("leaves them out of the night at a glance and the driver score", async () => {
+    const page = await open(RUNS);
+    const glance = page.get("ng").textContent;
+
+    assert.match(glance, /Best lap8\.800Heat 2/);
+    assert.match(glance, /Races2/);
+    assert.match(page.get("n-score").textContent, /Average of 2 races/);
+  });
+
+  it("hides them all with one tick, and shows them again", async () => {
+    const page = await open(RUNS);
+    const box = tick(page);
+
+    assert.equal(box.checked, false);
+    box.checked = true;
+    box.fire("change");
+    assert.equal(rows(page).length, 2);
+    assert.equal(rows(page)[1]!.className, "rrow open", "the latest real race opens");
+    assert.equal(tick(page).checked, true);
+
+    tick(page).checked = false;
+    tick(page).fire("change");
+    assert.equal(rows(page).length, 4);
+  });
+
+  it("keeps the tick box, and says why the list is empty, on a night of only demo and practice", async () => {
+    const page = await open({ ...NIGHT, races: RUNS.races.slice(2) });
+    const box = tick(page);
+
+    box.checked = true;
+    box.fire("change");
+    assert.equal(rows(page).length, 0);
+    assert.ok(tick(page), "still there to untick");
+    assert.match(page.get("nx").textContent, /Only demo races and practice so far/);
+  });
+
+  it("has no tick box on a night of races only", async () => {
+    const page = await open(NIGHT);
+
+    assert.equal(page.get("nx").find((n) => n.tagName === "INPUT").length, 0);
+  });
+});
+
 describe("My Night: the jump bar", () => {
   it("goes to each part that is there, as buttons rather than links", async () => {
     const page = await open({ ...NIGHT, progress: { layout: "Club Oval", nights: [{ night: "2026-10-15", bestMs: 9000 }, { night: "2026-10-22", bestMs: 8800 }] } });

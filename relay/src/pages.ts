@@ -577,6 +577,12 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
             border-radius: 999px; padding: 4px 12px; min-height: 40px; cursor: pointer; }
 .pick .pk.on { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
 .rlist { list-style: none; margin: 0; padding: 0; }
+/* Demo races and practice runs on the night (3 Nov 2026, asked for by
+   Asher): a quiet chip on the row, and one tick box to hide them all. */
+.chip.kind { color: var(--muted); border-color: var(--border); }
+.hidek { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 0 8px; color: var(--muted);
+         font-size: 0.9rem; cursor: pointer; }
+.hidek input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
 .rrow { border: 1px solid var(--border); border-radius: 12px; margin: 0 0 8px; background: var(--surface); overflow: hidden; }
 .rbtn { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name val" "fin val"; gap: 0 12px;
         width: 100%; min-height: 56px; padding: 10px 14px; font: inherit; color: var(--text); background: none;
@@ -5646,7 +5652,8 @@ function drawYou() {
   h.textContent = who ? 'You, ' + who : 'You';
   you.appendChild(h);
 
-  const races = Array.isArray(night.races) ? night.races.filter((r) => r && Number(r.pos) > 0) : [];
+  // A demo race is never a best finish (3 Nov 2026).
+  const races = Array.isArray(night.races) ? night.races.filter((r) => r && Number(r.pos) > 0 && !r.kind) : [];
   const best = races.slice().sort((a, b) => Number(a.pos) - Number(b.pos))[0];
   const when = [night.title, night.when].filter(Boolean).join(' · ');
 
@@ -8808,7 +8815,41 @@ function listPart(title, said) {
 // view.race is the race open in the list: '' until they choose, which
 // opens their latest race (the one they came to look at after a heat), and
 // 'none' once they close it.
-const view = { race: '', tab: 'stats', pick: 'best', more: false, asks: false, details: false, scroll: '' };
+const view = { race: '', tab: 'stats', pick: 'best', more: false, asks: false, details: false, scroll: '', hideRuns: false };
+
+// Demo races and practice runs (3 Nov 2026, asked for by Asher: "marked as
+// demo, and do the same for practice. make a tick mark to remove both
+// easily"). The laptop sends them with kind 'demo' or 'practice'; they are
+// in the race list with a chip, never in the night at a glance or the
+// Driver score, and one tick box hides them. The tick is remembered on
+// this phone only.
+const RUN_WORDS = { demo: 'Demo', practice: 'Practice' };
+const HIDE_RUNS_KEY = 'hg-night-hide-runs';
+try { view.hideRuns = localStorage.getItem(HIDE_RUNS_KEY) === '1'; } catch (e) { /* not kept: shown */ }
+
+function runKind(r) {
+  return r && typeof r.kind === 'string' && Object.prototype.hasOwnProperty.call(RUN_WORDS, r.kind) ? r.kind : '';
+}
+
+// The races the list shows: every one, or only real races when ticked.
+function shownRaces(races) {
+  return view.hideRuns ? races.filter((r) => runKind(r) === '') : races;
+}
+
+function hideRunsBox() {
+  const label = el('label', 'hidek');
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = view.hideRuns;
+  box.addEventListener('change', () => {
+    view.hideRuns = box.checked;
+    try { localStorage.setItem(HIDE_RUNS_KEY, box.checked ? '1' : '0'); } catch (e) { /* this time only */ }
+    drawExtras();
+  });
+  label.appendChild(box);
+  label.appendChild(el('span', '', 'Hide demo and practice'));
+  return label;
+}
 
 // The parts the jump bar can go to, as drawExtras built them this time.
 let jumps = [];
@@ -8954,6 +8995,7 @@ function raceRow(r, value, top, open, onTap) {
   b.appendChild(name);
 
   const fin = el('span', 'rfin', [finishWords(r), num(r.laps) > 0 ? plural(num(r.laps), 'lap', 'laps') : ''].filter(Boolean).join(' · '));
+  if (runKind(r) !== '') name.appendChild(el('span', 'chip kind', RUN_WORDS[runKind(r)]));
   if (lines(r.pen).length > 0) fin.appendChild(el('span', 'chip', 'Penalty'));
   b.appendChild(fin);
 
@@ -9078,8 +9120,14 @@ function raceDetail(r, stats, own) {
 // Their races as a list. clipsOf(r) gives a race's own calls (and marks
 // them as shown, open or not, so they are not listed again under Race
 // calls).
-function racesPart(into, id, title, races, clipsOf) {
+function racesPart(into, id, title, all, clipsOf) {
   const part = partHead(into, id, title);
+  const races = shownRaces(all);
+  if (all.some((r) => runKind(r) !== '')) part.appendChild(hideRunsBox());
+  if (races.length === 0) {
+    part.appendChild(el('p', 'note', 'Only demo races and practice so far. Untick to see them.'));
+    return;
+  }
   const stats = races.map((r) => lapStats(r.lapsMs));
   if (races.length > 1 && stats.filter(Boolean).length > 0) part.appendChild(pickPart());
 
@@ -9162,7 +9210,9 @@ function cardLines(said, scored) {
 // ids: where the jump bar can go ({} for a car's section, which the bar
 // reaches as a whole); mine: whether the headings say "Your".
 function nightPart(into, glanceInto, races, facts, coach, improve, progress, clipsOf, ids, mine) {
-  const glance = glancePart(races);
+  // The glance and the score count real races only: a demo or a practice
+  // run is never a best finish (3 Nov 2026).
+  const glance = glancePart(races.filter((r) => runKind(r) === ''));
   if (glance) glanceInto.appendChild(glance);
 
   if (facts.length > 0) {
@@ -9172,7 +9222,8 @@ function nightPart(into, glanceInto, races, facts, coach, improve, progress, cli
   }
 
   if (races.length > 0) {
-    racesPart(into, ids.races, (mine ? 'Your ' : '') + (races.length === 1 ? (mine ? 'race' : 'Race') : (mine ? 'races' : 'Races')), races, clipsOf);
+    const n = shownRaces(races).length;
+    racesPart(into, ids.races, (mine ? 'Your ' : '') + (n === 1 ? (mine ? 'race' : 'Race') : (mine ? 'races' : 'Races')), races, clipsOf);
   }
 
   const scored = races.some((r) => typeof r.rating === 'number' && r.rating >= 0 && r.rating <= 150);
@@ -9227,7 +9278,8 @@ function drawExtras() {
     return own;
   };
   const cars = carsOf(night);
-  latest = races.length > 0 ? raceKey(races[races.length - 1]) : '';
+  const listed = shownRaces(races);
+  latest = listed.length > 0 ? raceKey(listed[listed.length - 1]) : '';
 
   if (cars.length === 0) {
     // One car: the glance goes above the night's facts, which draw() put

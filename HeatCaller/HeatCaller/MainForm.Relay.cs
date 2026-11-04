@@ -1959,11 +1959,32 @@ public partial class MainForm
 
         // A demo race is a rehearsal rather than a result, exactly as
         // PublishSessionToRelay has it: it never reaches the club's public
-        // results and it must not reach a driver's night either.
-        if (!session.IsNotScored())
+        // results. Since 3 Nov 2026 (asked for by Asher) it does reach the
+        // driver's own night, marked as a demo and counted for nothing -
+        // see DriverNightExtras.Races. An imported result never does.
+        if (!session.IsImported())
         {
             PublishNightsFor(DriversIn(session));
         }
+    }
+
+    /// <summary>
+    /// Tonight's demo races and practice runs, oldest first - the runs a
+    /// driver's night lists marked as such (3 Nov 2026), and nothing else
+    /// reads. Kept apart from <see cref="RacesTonight"/>, which every pace
+    /// figure and commentary reader counts from and must never count these.
+    /// Tonight as TonightAtTheTrack has it, 6am to 6am.
+    /// </summary>
+    private IReadOnlyList<SessionRecord> NightRunsTonight()
+    {
+        var tonight = TonightAtTheTrack.NightOf(DateTime.Now);
+
+        return _sessionHistory.All
+            .Where(s => s is not null && !s.IsImported()
+                && (s.IsDemoSession() || s.SessionType == RaceSessionType.Practice))
+            .Where(s => TonightAtTheTrack.NightOf(s.StartedAtUtc.ToLocalTime()) == tonight)
+            .OrderBy(s => s.StartedAtUtc)
+            .ToList();
     }
 
     /// <summary>
@@ -1987,6 +2008,7 @@ public partial class MainForm
     private void ResendDriverNights() =>
         PublishNightsFor(RacesTonight()
             .Where(race => race is not null && !race.IsNotScored())
+            .Concat(NightRunsTonight())
             .SelectMany(DriversIn)
             .Distinct(StringComparer.OrdinalIgnoreCase));
 
@@ -2028,8 +2050,9 @@ public partial class MainForm
             }
 
             var tonight = RacesTonight();
+            var runs = NightRunsTonight();
 
-            if (tonight.Count == 0)
+            if (tonight.Count == 0 && runs.Count == 0)
             {
                 return;
             }
@@ -2114,7 +2137,7 @@ public partial class MainForm
                 // fails leaves the night as it was (see WithNightExtras).
                 var parts = WithNightExtras(
                     new NightParts(named, night, dayName, facts[0], atUtc) { Coach = coach },
-                    ordered, facts, tonight, history, roundOf, paceByClass, achievements, nowLocal);
+                    ordered, facts, tonight, runs, history, roundOf, paceByClass, achievements, nowLocal);
                 var document = DriverNight.Document(parts);
 
                 if (document is null)
@@ -2160,6 +2183,7 @@ public partial class MainForm
         NightDriver driver,
         IReadOnlyList<PackedFacts> facts,
         IReadOnlyList<SessionRecord> tonight,
+        IReadOnlyList<SessionRecord> runs,
         IReadOnlyList<SessionRecord> history,
         Func<string, RoundDefinition?> roundOf,
         Dictionary<string, IReadOnlyList<DriverPaceTonight>> paceByClass,
@@ -2171,7 +2195,7 @@ public partial class MainForm
         try
         {
             var lead = driver.Cars[0];
-            var (races, improve, progress) = CarExtras(lead.Transponder, tonight, history, roundOf, paceByClass, nowLocal);
+            var (races, improve, progress) = CarExtras(lead.Transponder, tonight, runs, history, roundOf, paceByClass, nowLocal);
 
             // Badges are the driver's, not a car's: looked up by their main
             // transponder, as the badge window keys them, and otherwise by
@@ -2231,7 +2255,7 @@ public partial class MainForm
                     continue;
                 }
 
-                var (races, improve, progress) = CarExtras(car.Transponder, tonight, history, roundOf, paceByClass, nowLocal);
+                var (races, improve, progress) = CarExtras(car.Transponder, tonight, runs, history, roundOf, paceByClass, nowLocal);
 
                 cars.Add(new NightCar
                 {
@@ -2266,6 +2290,7 @@ public partial class MainForm
     private (IReadOnlyList<NightRace> Races, string? Improve, NightProgress? Progress) CarExtras(
         string who,
         IReadOnlyList<SessionRecord> tonight,
+        IReadOnlyList<SessionRecord> runs,
         IReadOnlyList<SessionRecord> history,
         Func<string, RoundDefinition?> roundOf,
         Dictionary<string, IReadOnlyList<DriverPaceTonight>> paceByClass,
@@ -2286,7 +2311,7 @@ public partial class MainForm
         }
 
         return (
-            DriverNightExtras.Races(who, tonight, roundOf),
+            DriverNightExtras.Races(who, tonight, roundOf, runs),
             DriverNightExtras.Improvement(who, paces),
             DriverNightExtras.Progress(who, history, latest?.TrackLayoutName, _pbResets, nowLocal));
     }

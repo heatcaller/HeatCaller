@@ -287,6 +287,8 @@ The sections need the relay redeployed after 22 Oct 2026 (see [Updating the rela
 - **The call of this race**, when the club shares drivers' clips: the announcer's call of that driver in that race, with a player and **Download the call (mp3)**.
 - **Something wrong?**, when the club takes requests: a way to ask the desk to look at that result (see [Querying a result](driver-requests.md#querying-a-result)).
 
+Their **demo races** and **practice runs** tonight are in the list too, each marked **Demo** or **Practice**, so their lap stats can be looked at after a rehearsal. They count for nothing: they're left out of the night at a glance and **Driver score**, and a practice run has no place. Tick **Hide demo and practice** above the list to show only real races; the phone remembers the tick. A driver with only demo races or practice tonight still gets a night, with the line "No races filed for you tonight - only demo races or practice." Imported results are never listed. This needs the relay redeployed after 3 Nov 2026.
+
 #### How the night went
 
 After the races, as much of this as there's something to say about:
