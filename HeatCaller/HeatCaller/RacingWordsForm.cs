@@ -34,12 +34,9 @@ namespace HeatCaller;
 public sealed class RacingWordsForm : Form
 {
     /// <summary>
-    /// One entry. <paramref name="WasCalled"/> is filled in for the four
-    /// captions that were renamed, so somebody who learned the old wording
-    /// - from an older build, a forum post, or another club's software -
-    /// can still find their way to the new one.
+    /// One entry: the words as the app shows them, and what they mean.
     /// </summary>
-    private sealed record Word(string Term, string Meaning, string? WasCalled = null);
+    private sealed record Word(string Term, string Meaning);
 
     private sealed record Group(string Heading, string Blurb, Word[] Words);
 
@@ -132,23 +129,19 @@ public sealed class RacingWordsForm : Form
                 new Word(
                     "Build tonight's heats",
                     "Takes everyone who is checked in, splits each class into heats of the size you set, and "
-                    + "writes the running order. Press it once the classes are ticked and the drivers are in.",
-                    "Build the Qualifying Program"),
+                    + "writes the running order. Press it once the classes are ticked and the drivers are in."),
                 new Word(
                     "Heats each driver gets",
                     "How many times every driver in a class races before the finals. Three is the usual club "
-                    + "number. Their best result out of those counts.",
-                    "Qualifying rounds"),
+                    + "number. Their best result out of those counts."),
                 new Word(
                     "Build the finals from qualifying",
                     "Sorts each class by how they did in the heats and puts them into the finals - the fastest "
-                    + "into the A-Main, the next lot into the B-Main, and so on.",
-                    "Seed the Mains"),
+                    + "into the A-Main, the next lot into the B-Main, and so on."),
                 new Word(
                     "Move the top finishers up",
                     "Takes the drivers who won through in a lower final and puts them into the final above it. "
-                    + "Has to happen before that final goes out, which is why the app asks for it when it does.",
-                    "Apply Bump-Ups"),
+                    + "Has to happen before that final goes out, which is why the app asks for it when it does."),
             }),
 
         new Group(
@@ -276,9 +269,7 @@ public sealed class RacingWordsForm : Form
 
                 words.Add(new Label
                 {
-                    Text = word.WasCalled is null
-                        ? word.Term
-                        : $"{word.Term}   (used to be called “{word.WasCalled}”)",
+                    Text = word.Term,
                     AutoSize = true,
                     Font = AppTheme.BoldFont,
                     ForeColor = AppTheme.TextDark,

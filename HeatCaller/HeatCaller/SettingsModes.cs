@@ -179,13 +179,13 @@ internal static class SettingsModes
     internal static string? UpdateNote(Decision decision) => decision switch
     {
         Decision.UpdatedToSimple =>
-            "HeatCaller now has Simple mode and Advanced mode.\r\n\r\n"
-            + "This PC is in Simple mode, which shows what a race night needs. Nothing you had set has changed.\r\n\r\n"
+            "HeatCaller has Simple mode and Advanced mode.\r\n\r\n"
+            + "This PC is in Simple mode, which shows what a race night needs. Your settings are kept.\r\n\r\n"
             + "To see every setting, turn on Advanced mode on the Backup & Restore page.",
         Decision.UpdatedToAdvanced =>
-            "HeatCaller now has Simple mode and Advanced mode.\r\n\r\n"
-            + "Some settings on this PC have been changed from how HeatCaller ships, so it stays in Advanced mode and every "
-            + "setting is still shown.\r\n\r\n"
+            "HeatCaller has Simple mode and Advanced mode.\r\n\r\n"
+            + "Some settings on this PC have been changed from how HeatCaller ships, so it is in Advanced mode and every "
+            + "setting is shown.\r\n\r\n"
             + "To switch to Simple mode, click \"Advanced\" at the bottom of the sidebar, or use the Backup & Restore page.",
         _ => null,
     };
