@@ -272,25 +272,28 @@ describe("My Night lap times: what is said", () => {
     assert.deepEqual(n.said, ["Lap times on", "Lap 5, 9.30, best lap, P1"]);
   });
 
-  it("says nothing while the driver is not on the board, and a new race starts the count quietly", async () => {
+  it("says nothing while the driver is not on the board, and a new race says its newest lap (3 Nov 2026)", async () => {
     const n = await open({ standings: [row("Sam P.", SOMEONE, [9000, 9100])] });
     await turnOn(n);
     await n.p.advance(3000);
     assert.deepEqual(n.said, ["Lap times on"]);
 
-    // Their race goes out with laps already on it: counted, not said.
+    // Their race goes out with laps already on it: the newest is said, as
+    // it is live - never the ones before it (Asher: "I didn't hear lap one").
     n.set(field([9900, 9800, 9700]));
     await n.p.advance(1000);
-    assert.deepEqual(n.said, ["Lap times on"]);
+    assert.equal(n.said.length, 2);
+    assert.match(n.said.at(-1)!, /^Lap 4, 9.70/);
 
     n.set(field([9900, 9800, 9700, 9750]));
     await n.p.advance(1000);
-    assert.equal(n.said.length, 2);
+    assert.equal(n.said.length, 3);
 
-    // The next race: fewer laps - counted again from there, quietly.
+    // The next race, already a lap in when first read: that lap is said.
     n.set(field([9300]));
     await n.p.advance(1000);
-    assert.equal(n.said.length, 2);
+    assert.equal(n.said.length, 4);
+    assert.match(n.said.at(-1)!, /^Lap 2, 9.30/);
   });
 });
 

@@ -212,7 +212,7 @@ describe("lap times in my ear: what is said", () => {
     assert.deepEqual(l.said, ["Lap times on", "Lap 4, 9.30, best lap, P1"]);
   });
 
-  it("starts counting again quietly for a new race", async () => {
+  it("says a new race's laps from its newest, never the ones before (3 Nov 2026)", async () => {
     const l = live(field([9500, 9600, 9450]));
     await l.p.settle();
     await follow(l, "Asher K.");
@@ -226,10 +226,11 @@ describe("lap times in my ear: what is said", () => {
     assert.equal(l.said.at(-1), "Lap 2, 9.80, P2, 0.41 seconds behind", "the new race's first flying lap, never called a best");
 
     // A new race seen only once it already had more laps (the phone was
-    // away for the reset): its laps so far are not said.
+    // away for the reset): only its newest lap is said - what is live.
     l.set(field([8800, 8900, 8850, 8700]));
     await l.p.advance(1000);
-    assert.equal(l.said.length, 2);
+    assert.equal(l.said.length, 3);
+    assert.equal(l.said.at(-1), "Lap 5, 8.70, best lap, P2, 0.41 seconds behind");
     l.set(field([8800, 8900, 8850, 8700, 8750]));
     await l.p.advance(1000);
     assert.equal(l.said.at(-1), "Lap 6, 8.75, P2, 0.41 seconds behind");

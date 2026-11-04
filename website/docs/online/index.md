@@ -94,7 +94,10 @@ The **Live** page can read out the laps of the driver you follow, in your phone'
 - Tap it and it changes to "on". The phone says "Lap times on", then after each new lap of that driver: "Lap 7, 9.42, best lap, P2, 0.4 seconds behind". The gap is to the car ahead. HeatCaller from 29 October 2026 sends it with every row of the board. With an older version it's read from the board's **Interval** column (or **Gap to P1** for the car in second), so it's only said when the club shows one of them.
 - Tick **Time only** for just the time, and "best lap" on a new best: "9.42, best lap".
 - A lap is said a second or two after the car crosses the line. While it's on, the page reads the board every second.
-- It stays quiet for laps already run when you turn it on or follow someone new, and starts again from the next one. A new race starts the count again.
+- It stays quiet for laps already run when you turn it on or follow someone new, and starts again from the next one. When a new race starts, or the driver comes onto the board, it reads out their newest lap straight away, even if the board already had it the first time the phone saw it.
+- Tap it again to turn it off and the phone says "Lap times off".
+- If you leave the page and come back, it doesn't read out the laps you missed. It goes straight to the next new lap.
+- The first lap of a race, from the start to the first time across the line, isn't read out. It isn't a lap time, so the board doesn't carry one. The first lap read out is "Lap 2" with the first full lap's time.
 - Put earbuds in and you can hear your own laps from the driver's stand.
 
 Keep the page open with the screen on: a phone stops a page talking when its screen locks or the browser goes to the background. While it's on, the page asks the phone to keep the screen on. If your phone won't, the page says so: set Auto-Lock to Never (iPhone: Settings, Display & Brightness) or the screen timeout to its longest (Android: Settings, Display) while you race.

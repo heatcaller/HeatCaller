@@ -152,6 +152,8 @@ export function marginWords(cs: number): string {
 export function lapClips(): LapClip[] {
   const clips: LapClip[] = [
     { name: "on", text: "Lap times on" },
+    // 3 Nov 2026, Asher: said as lap times are turned off.
+    { name: "off", text: "Lap times off" },
     { name: "best", text: "best lap" },
   ];
 

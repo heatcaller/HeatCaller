@@ -3516,11 +3516,13 @@ const lapVoice = (function () {
   const BREATH = 0.12;
   // How long a call waits for the phone's sound to wake (see wake()).
   const WAKE_MS = 300;
+  // A call older than this when its turn comes is history, and is dropped.
+  const STALE_MS = LATE_MS + WAKE_MS + 1000;
   // A twentieth of a second of silence, looped while lap times are on - see holdOn().
   const SILENT = ${JSON.stringify(SILENT_MP3)};
 
   let ctx = null, asked = false, version = '', voice = '';
-  let have = null, listed = false, hold = null;
+  let have = null, listed = false, hold = null, held = 0;
   const kept = new Map();
   let playing = 0, sources = [];
   const waiting = [];
@@ -3562,6 +3564,7 @@ const lapVoice = (function () {
   // a tap, for as long as lap times are on. navigator.audioSession says
   // the same where there is one; Chrome on an iPhone has none.
   function holdOn() {
+    held++;
     try {
       if (hold === null) {
         hold = new Audio();
@@ -3573,10 +3576,16 @@ const lapVoice = (function () {
     } catch (e) { hold = null; }
   }
 
-  // Lap times off: the silence stops too.
-  function release() {
-    stop();
-    try { if (hold !== null) hold.pause(); } catch (e) { /* stopped already */ }
+  // Lap times off: the silence stops too - after afterMs, so a last call
+  // ("Lap times off") is heard, unless lap times are on again by then.
+  function release(afterMs) {
+    const mine = held;
+    const pause = () => {
+      if (held !== mine) return;
+      try { if (hold !== null) hold.pause(); } catch (e) { /* stopped already */ }
+    };
+    if (afterMs > 0) setTimeout(pause, afterMs);
+    else { stop(); pause(); }
   }
 
   // A new context, made inside a tap - the only time a phone allows it.
@@ -3684,6 +3693,19 @@ const lapVoice = (function () {
     const text = parts.map((p) => p.text).join(', ');
     const groups = parts.map((p) => p.clips);
 
+    // WHY (3 Nov 2026, Asher: "when i left the app and came back it fed me
+    // old laps until it caught up. it should just cut to whats live"): calls
+    // made while the page was away waited - for the phone's sound, for
+    // their clips, in the phone's own queue of lines - and all came out on
+    // the way back. Nothing is said while the page is away, a call is said
+    // only while it is fresh, and the page going away drops whatever is
+    // waiting (see the listeners below). The page's next read says the
+    // newest lap.
+    const made = Date.now();
+    const fresh = () => !document.hidden && Date.now() - made <= STALE_MS;
+    const fallback = () => { if (fresh()) speak(text); };
+    if (document.hidden) { stop(); return; }
+
     // The list of clips still on its way - "Lap times on", the moment lap
     // times are turned on: waited for, up to LATE_MS, rather than said in
     // the phone's voice (3 Nov 2026, Asher).
@@ -3691,8 +3713,8 @@ const lapVoice = (function () {
       stop();
       const mine = playing;
       let went = false;
-      waiting.push(() => { if (went || mine !== playing) return; went = true; say(parts, speak); });
-      setTimeout(() => { if (went || mine !== playing) return; went = true; speak(text); }, LATE_MS);
+      waiting.push(() => { if (went || mine !== playing) return; went = true; if (fresh()) say(parts, speak); });
+      setTimeout(() => { if (went || mine !== playing) return; went = true; fallback(); }, LATE_MS);
       return;
     }
     if (!using() || groups.some((g) => !Array.isArray(g) || g.some((n) => !have.has(n)))) {
@@ -3707,7 +3729,7 @@ const lapVoice = (function () {
     const late = setTimeout(() => {
       if (settled || mine !== playing) return;
       settled = true;
-      speak(text);
+      fallback();
     }, LATE_MS + (away || !live() ? WAKE_MS : 0));
 
     // WHY (3 Nov 2026, Asher: "not hearing the elevenlabs lap times on the
@@ -3720,6 +3742,7 @@ const lapVoice = (function () {
         if (settled || mine !== playing) return;
         settled = true;
         clearTimeout(late);
+        if (!fresh()) return;
         nudge();
         try { window.speechSynthesis.cancel(); } catch (e) { /* not talking */ }
         let at = ctx.currentTime + 0.02;
@@ -3739,7 +3762,7 @@ const lapVoice = (function () {
         if (settled || mine !== playing) return;
         settled = true;
         clearTimeout(late);
-        speak(text);
+        fallback();
       });
   }
 
@@ -3756,11 +3779,19 @@ const lapVoice = (function () {
   try {
     document.addEventListener('click', back, true);
     document.addEventListener('touchend', back, true);
+    const gone = () => {
+      away = true;
+      stop();
+      try { window.speechSynthesis.cancel(); } catch (e) { /* not talking */ }
+    };
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) away = true;
-      else if (ctx !== null && away) wake();
+      if (document.hidden) { gone(); return; }
+      // Anything the phone kept queued while the page was away is history.
+      stop();
+      try { window.speechSynthesis.cancel(); } catch (e) { /* not talking */ }
+      if (ctx !== null && away) wake();
     });
-    window.addEventListener('pagehide', () => { away = true; });
+    window.addEventListener('pagehide', gone);
   } catch (e) { /* the taps that unlock it, then */ }
 
   return {
@@ -3875,6 +3906,8 @@ const lapTalk = (function () {
 
   // Whose laps were last counted, how many, and the first of them.
   let heardFor = '', heardLaps = 0, firstLap = 0;
+  // Who has been off the board since this was turned on: arriving is a new race.
+  let absent = '';
   // The screen wake lock, and whether the phone gave one (null: not asked).
   let lock = null, awake = null;
 
@@ -3893,8 +3926,9 @@ const lapTalk = (function () {
   }
 
   function hush() {
-    lapVoice.release();
-    try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+    // "Lap times off" (3 Nov 2026, Asher), then the silence goes.
+    lapVoice.say([{ text: 'Lap times off', clips: ['off'] }], speak);
+    lapVoice.release(2500);
   }
 
   // A call in the lap voice's clips, or the phone's voice - see LAPVOICE_JS.
@@ -3971,10 +4005,11 @@ const lapTalk = (function () {
   function take(state) {
     show();
     const who = memory;
-    if (!on || !unlocked || !who) { heardFor = ''; return; }
+    if (!on || !unlocked || !who) { heardFor = ''; absent = ''; return; }
 
     const rows = Array.isArray(state && state.standings) ? state.standings : [];
     const mine = rows.filter((r) => r && typeof r === 'object' && r.name === who);
+    if (mine.length === 0) absent = who;
     if (who === 'Unnamed driver' || mine.length !== 1) return;
 
     const row = mine[0];
@@ -3982,15 +4017,17 @@ const lapTalk = (function () {
     const count = laps.length;
     const first = count > 0 ? laps[0] : 0;
 
-    // Somebody new, a new race, or a lap race control took away: counted
-    // from here, quietly.
+    // Somebody new, or a lap race control took away: counted from here,
+    // quietly. A new race - or the driver arriving on the board - says its
+    // newest lap (3 Nov 2026, Asher: "I didn't hear lap one"; see nightTalk).
     if (heardFor !== who || count < heardLaps || (heardLaps > 0 && first !== firstLap)) {
-      heardFor = who; heardLaps = count; firstLap = first;
-      return;
+      const newRace = absent === who || (heardFor === who && first !== firstLap);
+      heardFor = who; heardLaps = count; firstLap = first; absent = '';
+      if (!newRace || count === 0) return;
+    } else {
+      if (count === heardLaps) return;
+      heardLaps = count; firstLap = first;
     }
-
-    if (count === heardLaps) return;
-    heardLaps = count; firstLap = first;
 
     // Two laps in one read - the phone or the relay was slow - says the newest.
     const last = laps[count - 1];
@@ -4018,14 +4055,14 @@ const lapTalk = (function () {
     btn.addEventListener('click', () => {
       // On, but waiting for a tap since a reload: this tap resumes it.
       if (on && !unlocked) {
-        unlocked = true; heardFor = '';
+        unlocked = true; heardFor = ''; absent = '';
         wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); show();
         return;
       }
       unlocked = true;
       on = !on;
       save(ON_KEY, on);
-      heardFor = '';
+      heardFor = ''; absent = '';
       if (on) { wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); } else { hush(); letSleep(); }
       show();
     });
@@ -4040,7 +4077,7 @@ const lapTalk = (function () {
     // once the follow has been taken.
     document.addEventListener('click', (e) => {
       if (on && !unlocked && !(e && e.target === btn)) {
-        unlocked = true; heardFor = '';
+        unlocked = true; heardFor = ''; absent = '';
         speak(' '); wake(); stayAwake();
       }
       setTimeout(show, 0);
@@ -7729,6 +7766,8 @@ const nightTalk = (function () {
 
   // Which car's laps were last counted, how many, and the first of them.
   let heardTag = '', heardLaps = 0, firstLap = 0;
+  // Whether their car has been off the board since lap times were turned on.
+  let absent = false;
   // The screen wake lock: held, being asked for, and whether the phone gave one.
   let lock = null, asking = false, awake = null;
   let reading = false;
@@ -7748,8 +7787,9 @@ const nightTalk = (function () {
   }
 
   function hush() {
-    lapVoice.release();
-    try { window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+    // "Lap times off" (3 Nov 2026, Asher), then the silence goes.
+    lapVoice.say([{ text: 'Lap times off', clips: ['off'] }], speak);
+    lapVoice.release(2500);
   }
 
   // A call in the lap voice's clips, or the phone's voice - see LAPVOICE_JS.
@@ -7821,7 +7861,7 @@ const nightTalk = (function () {
   }
 
   function take(state) {
-    if (!on || !unlocked) { heardTag = ''; return; }
+    if (!on || !unlocked) { heardTag = ''; absent = false; return; }
 
     const mineCars = cars();
     const rows = Array.isArray(state && state.standings) ? state.standings : [];
@@ -7829,6 +7869,7 @@ const nightTalk = (function () {
       && mineCars.some((c) => c.tag === r.tag));
 
     // Not on track - or, somehow, two of their cars at once: says nothing.
+    if (mine.length === 0) absent = true;
     if (mine.length !== 1) return;
 
     const row = mine[0];
@@ -7838,12 +7879,20 @@ const nightTalk = (function () {
     const first = count > 0 ? laps[0] : 0;
 
     if (heardTag !== row.tag || count < heardLaps || (heardLaps > 0 && first !== firstLap)) {
-      heardTag = row.tag; heardLaps = count; firstLap = first;
-      return;
+      // WHY (3 Nov 2026, Asher: "I didn't hear lap one"): a new race was
+      // always counted from quietly, so a race whose first read already had
+      // a lap - the board between races still showing the last one, or the
+      // car not on it till it crossed the line - never said that lap. Only
+      // the board as it was when lap times were turned on is quiet now; a
+      // new race, another of their cars, or the car arriving says its newest
+      // lap. A lap race control took away is still quiet.
+      const newRace = absent || (heardTag !== '' && (heardTag !== row.tag || first !== firstLap));
+      heardTag = row.tag; heardLaps = count; firstLap = first; absent = false;
+      if (!newRace || count === 0) return;
+    } else {
+      if (count === heardLaps) return;
+      heardLaps = count; firstLap = first;
     }
-
-    if (count === heardLaps) return;
-    heardLaps = count; firstLap = first;
 
     const last = laps[count - 1];
     const best = typeof row.best === 'number' && row.best > 0 ? row.best : Math.min.apply(null, laps);
@@ -7890,14 +7939,14 @@ const nightTalk = (function () {
 
   function toggle() {
     if (on && !unlocked) {
-      unlocked = true; heardTag = '';
+      unlocked = true; heardTag = ''; absent = false;
       wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); drawLive();
       return;
     }
     unlocked = true;
     on = !on;
     save(ON_KEY, on);
-    heardTag = '';
+    heardTag = ''; absent = false;
     if (on) { wake(); call([{ text: 'Lap times on', clips: ['on'] }]); stayAwake(); read(); } else { hush(); letSleep(); }
     drawLive();
   }
@@ -7939,7 +7988,7 @@ const nightTalk = (function () {
     // Any tap lets a page that was on before a reload speak again.
     document.addEventListener('click', (e) => {
       if (on && !unlocked && !(e && e.target && e.target.id === 'nt-laptalk')) {
-        unlocked = true; heardTag = '';
+        unlocked = true; heardTag = ''; absent = false;
         speak(' '); wake(); stayAwake();
         setTimeout(drawLive, 0);
       }
