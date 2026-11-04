@@ -356,7 +356,7 @@ describe("the club's look", () => {
 
     // In a block of its own beside the name, not squeezed into the heading.
     assert.match(home, /<div class="brand">\s*<img class="logo"/);
-    assert.match(home, /<div class="brand-text"><h1>Acme RC <span>/);
+    assert.match(home, /<div class="brand-text"><div class="hchead">\s*<h1>Acme RC <span>/);
   });
 
   it("refuses anything but a PNG as a logo", async () => {

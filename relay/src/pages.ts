@@ -167,11 +167,13 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 .wrap { max-width: 860px; margin: 0 auto; }
-/* The club's name on the left, HeatCaller's byline (under Live's broadcast
-   bug) on the right, and the tabs across the whole width below both. */
-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: start;
-         padding: 28px 0 0; }
-header > nav { grid-column: 1 / -1; }
+header { padding: 28px 0 0; }
+/* The club's name with the page's summary under it on the left, and
+   HeatCaller's byline (under Live's broadcast bug) on the right of the
+   name's line. */
+.hchead { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: start; }
+.hchead > .hcside { grid-column: 2; grid-row: 1 / span 2; }
+.hchead > .sub { grid-column: 1; }
 /* Room between the name and what the page is about (3 Nov 2026, Asher:
    "a little more space between the top of the page and where the actual
    content starts"). */
@@ -900,6 +902,102 @@ body.on-air .onair { visibility: visible; animation: onair 2.4s ease-in-out infi
 .hcabout .go { display: block; margin: 18px 0 12px; padding: 14px; border-radius: 12px; background: #FF2E88; color: #FFFFFF;
                font-weight: 700; text-decoration: none; box-shadow: 0 0 22px rgba(255, 46, 136, 0.45); }
 .hcabout .close { background: none; border: 0; padding: 8px 16px; font: inherit; font-size: 0.9rem; color: #8E7BB8; cursor: pointer; }
+
+/* PIT WALL (3 Nov 2026, Asher picked direction A of the relay refresh:
+   "build a pit wall"). One kit for every control on the club's pages, each
+   colour taken from the club's look so a control follows whatever look the
+   club picked. Written last so it wins over the older rules above without
+   rewriting them; it changes how a control looks, never where it sits.
+
+     Primary  .go - the one thing to do on a screen.
+     Tonal    .go.quiet - a second choice, tinted from the primary.
+     Outline  .page, .share, the live page's .btn toggles - neutral actions;
+              a toggle fills with the primary when it is on.
+     Segmented  Results' own tabs and a night's race tabs.
+
+   Every control at least 44px to tap, a focus ring for a keyboard, and a
+   small press when tapped. The phone's tab bar lights its page's icon in a
+   tonal pill. */
+:root { --on-primary: #FFFFFF; --warn: #F5B83D; --tonal: var(--surface); --on-tonal: var(--text); --ring: var(--accent); }
+html.light { --warn: #D99400; }
+/* color-mix is Safari 16.2 and later: before that, the plain colours above. */
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  :root { --tonal: color-mix(in srgb, var(--primary) 16%, var(--surface));
+          --on-tonal: color-mix(in srgb, var(--primary) 45%, var(--text));
+          --ring: color-mix(in srgb, var(--accent) 70%, transparent); }
+}
+.go, .page, .share, .btn, .rtab, .jump .jb, .pick .pk, .vote .pick, nav.subtabs a {
+  transition: transform 0.08s ease, filter 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent; }
+.go:active:not(:disabled), .page:active:not(:disabled), .share:active, .btn:active:not(:disabled),
+.rtab:active, .jump .jb:active, .vote .pick:active:not(:disabled) { transform: scale(0.97); }
+.go:focus-visible, .page:focus-visible, .share:focus-visible, .btn:focus-visible, .rtab:focus-visible,
+.jump .jb:focus-visible, .pick .pk:focus-visible, .vote .pick:focus-visible, .rbtn:focus-visible,
+.ci-row:focus-visible, .linkish:focus-visible, nav a:focus-visible, summary:focus-visible {
+  outline: 3px solid var(--ring); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .go, .page, .share, .btn, .rtab, .jump .jb, .pick .pk, .vote .pick, nav.subtabs a { transition: none; }
+  .go:active, .page:active, .share:active, .btn:active, .rtab:active, .jump .jb:active, .vote .pick:active { transform: none; }
+}
+/* Primary and tonal. */
+.go { border-radius: 14px; }
+@media (hover: hover) { .go:hover:not(:disabled) { filter: brightness(1.08); } }
+.go.quiet { background: var(--tonal); color: var(--on-tonal); border: 1px solid transparent; }
+/* Outline: Newer, Older, Show more, Done. */
+.page { background: transparent; border-radius: 14px; font-weight: 600; padding: 10px 20px; }
+@media (hover: hover) { .page:hover:not(:disabled) { background: var(--surface); } }
+/* Share: an outlined button now rather than a grey word, still a finger
+   tall without making the row it sits on any taller. */
+.share { margin: -6px 0; padding: 8px 14px; min-height: 36px; font-size: 0.8rem; letter-spacing: 0;
+         text-transform: none; color: var(--text); border: 1px solid var(--border); border-radius: 10px; }
+.share:hover { color: var(--text); background: var(--surface); border-color: var(--primary); }
+/* The live page's Listen, Captions and Lap times in my ear. They had no
+   style of their own, so a phone drew its own grey buttons. Listen is the
+   room's sound and so the primary; the other two are toggles. */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 18px;
+       font: inherit; font-size: 0.95rem; font-weight: 700; color: var(--text); background: transparent;
+       border: 1px solid var(--border); border-radius: 14px; cursor: pointer; }
+.btn[hidden] { display: none; }
+@media (hover: hover) { .btn:hover { border-color: var(--primary); } }
+#listen .btn { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+.btn[aria-pressed=true] { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+/* Segmented: Results' own tabs, and a night's race tabs. One track, the
+   chosen part filled. */
+nav.subtabs { gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+              flex-wrap: nowrap; }
+nav.subtabs a { min-height: 44px; padding: 8px 10px; color: var(--muted); background: transparent;
+                border: 0; border-radius: 12px; }
+@media (hover: hover) { nav.subtabs a:hover { color: var(--text); background: var(--row-alt); } }
+nav.subtabs a[aria-current] { color: var(--on-primary); background: var(--primary); }
+.rtabs { gap: 4px; padding: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 16px; }
+.rtab { min-height: 44px; color: var(--muted); background: transparent; border: 0; border-radius: 12px; }
+.rtab.on { color: var(--on-primary); background: var(--primary); }
+.jump .jb { border-radius: 12px; }
+@media (hover: hover) { .jump .jb:hover { border-color: var(--primary); } }
+.vote .pick { border-radius: 14px; }
+/* Soft cards. */
+.card, details, .rrow, .trk, .gl { border-radius: 14px; }
+.lc, .solo { border-radius: 16px; }
+/* The top row of tabs on a laptop: the page's own one in a tonal pill. */
+@media (min-width: 641px) {
+  nav.tabs a { border-radius: 10px 10px 0 0; }
+  nav.tabs a[aria-current] { background: var(--tonal); color: var(--on-tonal); }
+}
+/* The phone's bar: no line over the page's tab, its icon lit in a pill. */
+@media (max-width: 640px) {
+  nav.tabs { background: var(--surface); }
+  nav.tabs a { border-top: 0; margin: 0; padding: 6px 2px; }
+  nav.tabs a[aria-current] { color: var(--text); font-weight: 600; }
+  nav.tabs svg { width: 56px; height: 30px; padding: 4px 17px; border-radius: 999px; }
+  nav.tabs a[aria-current] svg { background: var(--tonal); color: var(--on-tonal); }
+  nav.tabs .dot { top: 5px; left: calc(50% + 12px); }
+}
+html.hcshell nav.tabs { background: var(--surface); }
+html.hcshell nav.tabs a { border-top: 0; margin: 0; padding: 6px 2px; }
+html.hcshell nav.tabs a[aria-current] { color: var(--text); font-weight: 600; background: none; }
+html.hcshell nav.tabs svg { width: 56px; height: 30px; padding: 4px 17px; border-radius: 999px; }
+html.hcshell nav.tabs a[aria-current] svg { background: var(--tonal); color: var(--on-tonal); }
+html.hcshell nav.tabs .dot { top: 5px; left: calc(50% + 12px); }
 `;
 
 /** Shared by every page: escaping, time formatting, and polling that stops when nobody is looking. */
@@ -1532,8 +1630,17 @@ function shell(page: Shell, context: PageContext): string {
 
   const sunset = sunsetLook(look);
 
-  const heading = `<h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
-    <div class="sub">${sub}</div>`;
+  // HeatCaller's byline (under Live's broadcast bug) sits in the name's own
+  // block, so it stays beside the name even where a logo pushes the name
+  // onto a row of its own.
+  const heading = `<div class="hchead">
+    <h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
+    <div class="hcside">${page.active === "live" ? `
+      <span class="onair" aria-hidden="true">${HC_SUN}<b>LIVE</b></span>` : ""}
+      <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
+    </div>
+    <div class="sub">${sub}</div>
+    </div>`;
 
   // The logo's address carries a fingerprint of the logo itself (hex only),
   // so a newly uploaded logo shows at once instead of the cached old one.
@@ -1626,10 +1733,6 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
 <div class="wrap">
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
     <div class="hcname">${brand}</div>
-    <div class="hcside">${page.active === "live" ? `
-      <span class="onair" aria-hidden="true">${HC_SUN}<b>LIVE</b></span>` : ""}
-      <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
-    </div>
     ${tabsNav(club, name, lit)}
   </header>${ofResults ? `
   <nav class="subtabs" aria-label="Results">
@@ -11536,7 +11639,7 @@ html.light body:not(.signin) .msg { box-shadow: 0 8px 28px rgba(17, 21, 28, 0.18
 .chip.go { background: var(--primary); color: var(--on-primary); }
 .chip.status-onTrack { background: var(--bad); color: #fff; }
 .chip.status-next { background: var(--primary); color: var(--on-primary); }
-.chip.status-recorded { background: var(--good); color: #0a2e17; }
+.chip.status-recorded { background: var(--good); color: var(--bg); }
 
 /* A result's winner: plain text under a small caption, the way the Today
    tab labels its figures. It used to be a grey pill, which looked like a
@@ -11561,10 +11664,10 @@ html.light body:not(.signin) .msg { box-shadow: 0 8px 28px rgba(17, 21, 28, 0.18
 .meter .kv { border-bottom: 0; padding-bottom: 4px; flex-wrap: wrap; }
 .bar { height: 8px; border-radius: 4px; background: var(--raised); overflow: hidden; margin: 2px 0 6px; }
 .bar i { display: block; height: 100%; background: var(--good); }
-.bar.watch i { background: #F5B83D; }
+.bar.watch i { background: var(--warn); }
 .bar.spent i { background: var(--bad); }
 /* The dark looks' amber is too pale on a light page; the app's own light amber. */
-html.light .bar.watch i { background: #D99400; }
+html.light { --warn: #D99400; }
 .note { font-size: 13px; color: var(--muted); }
 a.note { color: var(--accent); }
 
@@ -11593,6 +11696,44 @@ a.note { color: var(--accent); }
 select { font-family: inherit; font-size: 14px; padding: 10px; border-radius: 8px;
          border: 1px solid var(--raised); background: var(--surface); color: var(--text); }
 label.chk { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); margin: 10px 0; }
+
+/* PIT WALL (3 Nov 2026, Asher picked direction A of the relay refresh):
+   the club pages' kit on the desk too, so a button here looks like the
+   same button there, and every colour comes from the club's look - the
+   danger red, the recorded chip's text and the amber bar used to be
+   written in. Written last so it wins over the rules above.
+     Primary    Sign in.
+     Tonal      every other .btn.
+     Danger     .btn.danger, tinted from the look's own red.
+     Segmented  the desk's four tabs. */
+:root { --warn: #F5B83D; --tonal: var(--raised); --on-tonal: var(--text); --ring: var(--accent);
+        --danger-bg: var(--surface); --danger-edge: var(--bad); }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  :root { --tonal: color-mix(in srgb, var(--primary) 16%, var(--surface));
+          --on-tonal: color-mix(in srgb, var(--primary) 45%, var(--text));
+          --ring: color-mix(in srgb, var(--accent) 70%, transparent);
+          --danger-bg: color-mix(in srgb, var(--bad) 16%, var(--surface));
+          --danger-edge: color-mix(in srgb, var(--bad) 40%, transparent); }
+}
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px;
+       padding: 0 18px; border: 1px solid transparent; border-radius: 14px; background: var(--tonal); color: var(--on-tonal);
+       -webkit-tap-highlight-color: transparent; transition: transform 0.08s ease, filter 0.15s ease; }
+.btn.wide { display: flex; }
+.btn.small { min-height: 38px; padding: 0 14px; border-radius: 12px; }
+.btn:active { opacity: 1; transform: scale(0.97); }
+@media (hover: hover) { .btn:hover { filter: brightness(1.08); } }
+#signinForm .btn { background: var(--primary); color: var(--on-primary); }
+.btn.danger { background: var(--danger-bg); color: var(--bad); border-color: var(--danger-edge); }
+.btn:focus-visible, .navbtn:focus-visible, .row:focus-visible, .chip:focus-visible, .linkbtn:focus-visible {
+  outline: 3px solid var(--ring); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn:active { transform: none; } }
+.tabs { width: calc(100% - 28px); max-width: 612px; margin: 0 auto; padding: 4px; gap: 4px;
+        border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 0 0 6px var(--bg); }
+.navbtn { min-height: 44px; padding: 8px 10px; border-bottom: 0; border-radius: 12px; }
+.navbtn.on { color: var(--on-primary); background: var(--primary); }
+.row { border-color: var(--border); border-radius: 14px; }
+.detail { border-radius: 14px; }
+.pin, .find, select { border-color: var(--border); border-radius: 12px; }
 </style>
 ${overrides}
 </head>
