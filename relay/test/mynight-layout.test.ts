@@ -184,17 +184,18 @@ describe("My Night: the driver score", () => {
     assert.equal(score.find((n) => n.className === "scbars").length, 0);
   });
 
-  it("is left out, and the report card's line kept, for a night from a laptop that sends no rating", async () => {
+  it("says there is no score yet, and keeps the report card's line, for a night from a laptop that sends no rating", async () => {
     const page = await open({ ...NIGHT, races: [race(1, { bestMs: 9000 })] });
 
-    assert.doesNotMatch(page.get("nx").textContent, /Driver score/);
+    assert.match(page.get("n-score").textContent, /^Driver scoreNo driver score yet./);
     assert.match(page.get("n-how").textContent, /Driver rating tonight/);
   });
 
   it("ignores a rating that is not one", async () => {
     const page = await open({ ...NIGHT, races: [race(1, { rating: "high" }), race(2, { rating: 900 })] });
 
-    assert.doesNotMatch(page.get("nx").textContent, /Driver score/);
+    assert.match(page.get("n-score").textContent, /No driver score yet/);
+    assert.doesNotMatch(page.get("n-score").textContent, /out of 150/);
   });
 });
 
@@ -274,7 +275,7 @@ describe("My Night: the jump bar", () => {
     const bar = page.get("nj");
     const names = bar.find((n) => n.tagName === "BUTTON").map((n) => n.textContent);
 
-    assert.deepEqual(names, ["Races", "Report card", "Driver score", "Progress"]);
+    assert.deepEqual(names, ["Races", "Report card", "Driver score", "Progress", "Rearrange"]);
     assert.equal(bar.find((n) => n.tagName === "A").length, 0, "the address keeps their code");
   });
 
@@ -286,6 +287,6 @@ describe("My Night: the jump bar", () => {
     });
     const names = page.get("nj").find((n) => n.tagName === "BUTTON").map((n) => n.textContent);
 
-    assert.deepEqual(names, ["Main car · B6.4", "Second car"]);
+    assert.deepEqual(names, ["Main car · B6.4", "Second car", "Rearrange"]);
   });
 });

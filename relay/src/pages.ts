@@ -619,6 +619,18 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .car .glance { margin-top: 6px; }
 .nsec { scroll-margin-top: 60px; }
 .car, #n-prog { scroll-margin-top: 60px; }
+/* Rearrange cards (4 Nov 2026, asked for by Asher): each card gets an Up
+   and Down bar, outlined so it is plain which card the buttons move. */
+.moving { outline: 2px dashed var(--accent); outline-offset: 6px; border-radius: 12px; margin: 0 0 10px; }
+.mv { display: flex; align-items: center; gap: 8px; margin: 26px 0 12px; }
+.mv-n { flex: 1; font-weight: 700; color: var(--accent); }
+.jump .jb-mv { color: var(--accent); border-color: var(--accent); }
+.jump .jb-mv.on { color: var(--bg); background: var(--accent); }
+#lv, #ea { scroll-margin-top: 60px; }
+.mvb, .mvgo { font: inherit; font-size: 0.95rem; font-weight: 600; color: var(--text); background: var(--surface);
+              border: 1px solid var(--border); border-radius: 12px; padding: 8px 14px; min-height: 44px; cursor: pointer; }
+.mvb:disabled { opacity: 0.4; cursor: default; }
+.mvfoot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 22px 0 0; }
 .pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .pick .pk { font: inherit; font-size: 0.8rem; color: var(--muted); background: none; border: 1px solid var(--border);
             border-radius: 999px; padding: 4px 12px; min-height: 40px; cursor: pointer; }
@@ -7894,7 +7906,10 @@ function draw() {
   // where the page has one.
   const nameBox = document.getElementById('nh');
   if (nameBox) nameBox.innerHTML = head;
-  box.innerHTML = (nameBox ? '' : head) + '<div id="nj"></div><div id="ng"></div>' + body + '<div id="nx"></div>'
+  // The tab bar ("nj"), the glance ("ng") and the cards ("nx") are places of
+  // their own above this since 4 Nov 2026 (Asher: "Tabs should be above
+  // right now card"), so a night not filed yet still has its cards.
+  box.innerHTML = (nameBox ? '' : head) + body
     + '<div class="nshare">'
     + '<button id="pic" class="go" type="button">Make a picture to share</button>'
     + '</div>';
@@ -8550,7 +8565,6 @@ const nightTalk = (function () {
     if (!ready()) return null;
 
     const p = el('div', 'lc-part nt-ears');
-    p.appendChild(el('b', '', 'Lap times in my ear'));
     const b = tapButton(!on ? 'Read out my laps' : unlocked ? 'Reading out your laps - tap to stop' : 'Tap to resume your lap times',
       'go quiet' + (on && unlocked ? ' on' : ''), toggle);
     b.id = 'nt-laptalk';
@@ -8944,8 +8958,6 @@ function liveCard() {
     if (check.state !== 'waiting') tp.appendChild(tapButton('Check my transponder', 'go quiet', startCheck));
     jobs.appendChild(tp);
 
-    const ears = nightTalk.part();
-    if (ears) jobs.appendChild(ears);
 
     // The pack is a race-night job, so on race night it sits here rather
     // than in Your details. The same element every time the card redraws,
@@ -8971,6 +8983,24 @@ function drawLive() {
   lvBox.textContent = '';
 
   if (live || ci.shown) lvBox.appendChild(liveCard());
+
+  // Lap times in my ear as a card of its own (4 Nov 2026, Asher: "lap
+  // times in my ear should be it's own card"), out of the Right now card's
+  // row of jobs, so it can be moved like the others. There while they have
+  // a live entry and the laptop sends their cars' tags.
+  const eaBox = document.getElementById('ea');
+  let ears = null;
+  if (eaBox) {
+    eaBox.textContent = '';
+    ears = live ? nightTalk.part() : null;
+    if (ears) {
+      const card = el('section', 'lc ears-card');
+      card.appendChild(el('h3', '', 'Lap times in my ear'));
+      card.appendChild(ears);
+      eaBox.appendChild(card);
+    }
+  }
+
   // The guide in its own place under their name where the page has one,
   // else under the card. Null once they have tapped Got it.
   const guideBox = document.getElementById('gd');
@@ -8978,8 +9008,9 @@ function drawLive() {
   const guide = firstNight ? firstNightGuide() : null;
   if (guide) (guideBox || lvBox).appendChild(guide);
 
-  // The jump bar has a Right now button only while there is a card.
-  const now = !!(live || ci.shown);
+  // The jump bar has a Right now or Lap times button only while that card
+  // is there.
+  const now = (live || ci.shown ? 'n' : '') + (ears ? 'e' : '');
   if (now !== jumpNow) {
     jumpNow = now;
     drawJump();
@@ -8987,7 +9018,7 @@ function drawLive() {
 }
 
 // Whether the jump bar was last drawn with the Right now card there.
-let jumpNow = false;
+let jumpNow = '';
 
 // The minutes on the card, kept counting between polls.
 function tickClock() {
@@ -9360,6 +9391,14 @@ function glancePart(races) {
   const laps = races.reduce((a, r) => a + num(r.laps), 0);
   if (laps > 0) tiles.push(['Laps', String(laps), '']);
 
+  // Their driver score in the glance (4 Nov 2026, asked for by Asher: "add
+  // driver score to me tab"): the same average the Driver score card shows,
+  // up top where it is seen without scrolling past the races.
+  const rated = races.filter(ratedRace);
+  if (rated.length > 0) {
+    tiles.push(['Driver score', (rated.reduce((a, r) => a + r.rating, 0) / rated.length).toFixed(1), 'out of 150']);
+  }
+
   if (tiles.length === 0) return null;
 
   const box = el('div', 'glance');
@@ -9381,13 +9420,16 @@ function drawJump() {
   if (!at) return;
 
   at.textContent = '';
-  const names = { 'n-races': 'Races', 'n-how': 'Report card', 'n-score': 'Driver score', 'n-prog': 'Progress', 'n-calls': 'Race calls' };
-  const list = jumps.map((id) => [id, names[id] || (carNames[id] || '')]).filter((x) => x[1] !== '');
-  // Back up to the next race, which is what race night is for (29 Oct 2026).
-  if (lvBox && lvBox.children && lvBox.children.length > 0 && (live || ci.shown)) list.unshift(['lv', 'Right now']);
+  // In the order of the cards (jumps, from arrange), each only while its
+  // card is there: Right now and Lap times come and go with the live entry.
+  const names = { lv: 'Right now', ea: 'Lap times', 'n-races': 'Races', 'n-how': 'Report card', 'n-score': 'Driver score', 'n-prog': 'Progress', 'n-calls': 'Race calls' };
+  const list = jumps
+    .filter((id) => hasCard(document.getElementById(id)))
+    .map((id) => [id, names[id] || (carNames[id] || '')])
+    .filter((x) => x[1] !== '');
   if (ydBox && ydBox.children && ydBox.children.length > 0) list.push(['yd', 'Your details']);
 
-  if (list.length < 2) return;
+  if (list.length === 0) return;
 
   const bar = el('nav', 'jump');
   bar.setAttribute('aria-label', 'Parts of your night');
@@ -9396,6 +9438,13 @@ function drawJump() {
       const to = document.getElementById(x[0]);
       if (to) to.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }));
+  }
+  // Rearrange on the tab bar, where it is seen (4 Nov 2026, Asher: "don't
+  // see how to reorder the cards"), as Done while they are at it.
+  if (movable > 1) {
+    const b = tapButton(arranging ? 'Done' : 'Rearrange', 'jb jb-mv' + (arranging ? ' on' : ''), toggleArranging);
+    b.setAttribute('aria-pressed', arranging ? 'true' : 'false');
+    bar.appendChild(b);
   }
   at.appendChild(bar);
 }
@@ -9488,14 +9537,15 @@ function raceDetail(r, stats, own) {
     wrap.appendChild(table);
     tabs.push(['laps', 'Lap times (' + list.length + ')', wrap]);
 
-    // The lap times, and under them their place lap by lap when the laptop
-    // sent one for every lap (4 Nov 2026).
+    // Their place lap by lap when the laptop sent one for every lap (4 Nov
+    // 2026), and the lap times under it - the position chart first since
+    // 4 Nov 2026 (Asher: "postion chart before lap time chart").
     const chart = lapChart(r.lapsMs, r.bestMs);
     if (chart) {
       const box = el('div', 'charts');
-      box.appendChild(chart);
       const places = posChart(r.posAt, r.start, r.of);
       if (places) box.appendChild(places);
+      box.appendChild(chart);
       tabs.push(['chart', 'Lap chart', box]);
     }
   }
@@ -9593,9 +9643,13 @@ function racesPart(into, id, title, all, clipsOf) {
 // 2026, asked for by Asher: "Add in driver score, probably near the report
 // card or progress"). The laptop works each race's rating out (its
 // DriverRating, 0 to 150) and sends it with the race; the page only adds up.
+function ratedRace(r) {
+  return typeof r.rating === 'number' && r.rating >= 0 && r.rating <= 150;
+}
+
 function scorePart(into, id, races) {
-  const rated = races.filter((r) => typeof r.rating === 'number' && r.rating >= 0 && r.rating <= 150);
-  if (rated.length === 0) return;
+  const rated = races.filter(ratedRace);
+  if (rated.length === 0) return false;
 
   const part = partHead(into, id, 'Driver score');
   const avg = rated.reduce((a, r) => a + r.rating, 0) / rated.length;
@@ -9625,6 +9679,7 @@ function scorePart(into, id, races) {
   }
 
   part.appendChild(el('p', 'cap', 'Out of 150 for each race: where you finished, a win, laps led, your best lap against the quickest, the fastest lap, laps completed and places gained, less 5 for each warning.'));
+  return true;
 }
 
 // The report card's lines, less its driver rating line when the Driver
@@ -9650,12 +9705,18 @@ function nightPart(into, glanceInto, races, facts, coach, improve, progress, cli
     into.appendChild(ul);
   }
 
+  // A night of one car always has its races, report card, driver score and
+  // progress cards (4 Nov 2026, Asher: "I don't see driver score, report
+  // card, or progress"): one with nothing in it yet says when it fills in,
+  // rather than the card not being there to find or move.
   if (races.length > 0) {
     const n = shownRaces(races).length;
     racesPart(into, ids.races, (mine ? 'Your ' : '') + (n === 1 ? (mine ? 'race' : 'Race') : (mine ? 'races' : 'Races')), races, clipsOf);
+  } else if (mine) {
+    partHead(into, ids.races, 'Your races').appendChild(el('p', 'note', 'Your races show here after each one: where you finished, your laps and your lap charts.'));
   }
 
-  const scored = races.some((r) => typeof r.rating === 'number' && r.rating >= 0 && r.rating <= 150);
+  const scored = races.some(ratedRace);
   const card = cardLines(coach, scored);
   const better = typeof improve === 'string' ? lines([improve]) : lines(improve);
   const betterTitle = mine ? 'Your improvement tonight' : 'Improvement tonight';
@@ -9673,47 +9734,207 @@ function nightPart(into, glanceInto, races, facts, coach, improve, progress, cli
       for (const l of better) ul.appendChild(el('li', '', l));
       part.appendChild(ul);
     }
+  } else if (mine) {
+    partHead(into, ids.how, 'Your report card').appendChild(el('p', 'note', 'Your report card is written after your first race: your best lap, how consistent you were and what to work on.'));
   }
 
-  scorePart(into, ids.score, races);
+  if (!scorePart(into, ids.score, races) && mine) {
+    partHead(into, ids.score, 'Driver score').appendChild(el('p', 'note', races.length > 0
+      ? 'No driver score yet. A score comes with each race against other drivers, never a demo or practice run.'
+      : 'Your driver score shows here after your first race: out of 150 for each race you run.'));
+  }
 
   const prog = progressPart(progress);
   if (prog) {
-    if (ids.prog) {
-      prog.id = ids.prog;
-      jumps.push(ids.prog);
-    }
+    if (ids.prog) prog.id = ids.prog;
     into.appendChild(prog);
+  } else if (mine) {
+    const part = el('div', 'pg');
+    if (ids.prog) part.id = ids.prog;
+    part.appendChild(el('h3', '', 'Your progress'));
+    part.appendChild(el('p', 'note', 'Your best lap on each night you race the same track, night by night, shows here.'));
+    into.appendChild(part);
+  }
+}
+
+// ---- the cards in the order they want (4 Nov 2026, asked for by Asher:
+// "allow cards to be reordered on me tab", then "don't see how to reorder
+// the cards"). Right now, Lap times in my ear and the night's cards - races,
+// report card, driver score, progress, achievements, race calls, or a
+// night of two cars' sections - each move up or down after Rearrange on the
+// tab bar at the top, and the order is kept on this phone only. Their name,
+// the guide and club updates stay above them.
+//
+// Up and Down buttons rather than dragging: a drag is easy to start by
+// mistake while scrolling a phone in the pits, and a button says what it
+// does to a screen reader.
+const ORDER_KEY = 'hg-night-order';
+const CARD_WORDS = { now: 'Right now', ear: 'Lap times in my ear', races: 'Races', how: 'Report card', score: 'Driver score', prog: 'Progress', reach: 'Achievements in reach', calls: 'Race calls' };
+let cardOrder = [];
+try {
+  const kept = JSON.parse(localStorage.getItem(ORDER_KEY) || '[]');
+  if (Array.isArray(kept)) cardOrder = kept.filter((k) => typeof k === 'string').slice(0, 20);
+} catch (e) { /* not kept: the usual order */ }
+let arranging = false;
+
+// What a card is, from how it was built; '' for one that stays put.
+function cardKey(node) {
+  const id = node.id || '';
+  if (id === 'lv') return 'now';
+  if (id === 'ea') return 'ear';
+  if (id === 'n-races') return 'races';
+  if (id === 'n-how') return 'how';
+  if (id === 'n-score') return 'score';
+  if (id === 'n-calls') return 'calls';
+  const cls = String(node.className || '').split(' ');
+  if (cls.indexOf('pg') >= 0) return 'prog';
+  if (cls.indexOf('rch') >= 0) return 'reach';
+  if (/^n-car-[0-9]+$/.test(id)) return 'car' + id.slice(6);
+  return '';
+}
+
+function cardName(key) {
+  return CARD_WORDS[key] || carNames['n-car-' + key.slice(3)] || 'This card';
+}
+
+// Right now and Lap times are empty boxes while there is nothing live.
+function hasCard(node) {
+  return !!node && !!node.children && node.children.length > 0;
+}
+
+function markMoving(node, on) {
+  const kept = String(node.className || '').split(' ').filter((c) => c !== '' && c !== 'moving');
+  if (on) kept.push('moving');
+  node.className = kept.join(' ');
+}
+
+// The keys in the order to draw them: theirs first, and a card they have
+// never placed (one that was not there when they arranged) where it would
+// usually be, after the card it usually follows.
+function orderedKeys(keys, saved) {
+  const out = saved.filter((k) => keys.indexOf(k) >= 0);
+  keys.forEach((k, i) => {
+    if (out.indexOf(k) >= 0) return;
+    const before = keys.slice(0, i).reverse().find((p) => out.indexOf(p) >= 0);
+    out.splice(before ? out.indexOf(before) + 1 : 0, 0, k);
+  });
+  return out;
+}
+
+function keepOrder(keys) {
+  cardOrder = keys.slice();
+  try { localStorage.setItem(ORDER_KEY, JSON.stringify(cardOrder)); } catch (e) { /* this time only */ }
+}
+
+function toggleArranging() {
+  arranging = !arranging;
+  drawExtras();
+}
+
+// How many cards there are to move, for the tab bar's Rearrange button.
+let movable = 0;
+
+function arrange(at) {
+  const cards = Array.from(at.children).filter((n) => cardKey(n) !== '');
+  const keys = cards.map(cardKey);
+  const order = orderedKeys(keys, cardOrder);
+  const byKey = {};
+  cards.forEach((n) => { byKey[cardKey(n)] = n; });
+  const shown = order.filter((k) => hasCard(byKey[k]));
+  movable = shown.length;
+  if (movable < 2) arranging = false;
+
+  // Re-appended in order, each with its Up and Down above it while they
+  // are arranging - beside the card rather than in it, so Right now
+  // redrawing itself every few seconds leaves them be. The cards that stay
+  // put (a car's stray races) go after them.
+  const rest = Array.from(at.children).filter((n) => cardKey(n) === '');
+  for (const k of order) {
+    const card = byKey[k];
+    const j = shown.indexOf(k);
+    markMoving(card, arranging && j >= 0);
+
+    if (arranging && j >= 0) {
+      const bar = el('div', 'mv');
+      bar.appendChild(el('span', 'mv-n', cardName(k)));
+      // Swapped with the next card they can see, so a move is never spent
+      // on an empty Right now.
+      const move = (to) => () => {
+        const next = order.slice();
+        const a = next.indexOf(k);
+        const b = next.indexOf(shown[to]);
+        next[a] = shown[to];
+        next[b] = k;
+        keepOrder(next);
+        drawExtras();
+        const moved = document.getElementById(card.id || '');
+        if (moved && moved.scrollIntoView) moved.scrollIntoView({ block: 'center' });
+      };
+      const up = tapButton('Up', 'mvb', move(j - 1));
+      up.setAttribute('aria-label', 'Move ' + cardName(k) + ' up');
+      up.disabled = j === 0;
+      const down = tapButton('Down', 'mvb', move(j + 1));
+      down.setAttribute('aria-label', 'Move ' + cardName(k) + ' down');
+      down.disabled = j === shown.length - 1;
+      bar.appendChild(up);
+      bar.appendChild(down);
+      at.appendChild(bar);
+    }
+    at.appendChild(card);
+  }
+  for (const n of rest) at.appendChild(n);
+
+  // The tab bar goes in the same order as the page.
+  jumps = order.map((k) => byKey[k].id).filter((id) => id !== '');
+
+  // Under the cards as well as on the tab bar: on a phone the tab bar
+  // scrolls sideways, and its last button is off the edge of the screen.
+  if (movable > 1) {
+    const foot = el('p', 'mvfoot');
+    foot.appendChild(tapButton(arranging ? 'Done' : 'Rearrange cards', arranging ? 'go' : 'mvgo', toggleArranging));
+    if (arranging && cardOrder.length > 0) {
+      foot.appendChild(tapButton('Put back the usual order', 'mvgo', () => {
+        keepOrder([]);
+        drawExtras();
+      }));
+    }
+    at.appendChild(foot);
   }
 }
 
 function drawExtras() {
   const at = document.getElementById('nx');
-  if (!at || !night) return;
+  if (!at) return;
 
+  // Right now and Lap times in my ear are drawn by drawLive, not here:
+  // lifted out before the rest is cleared, and put back as they were.
+  const held = [lvBox, document.getElementById('ea')].filter(Boolean);
+  for (const n of held) n.remove();
   at.textContent = '';
+  for (const n of held) at.appendChild(n);
   jumps = [];
   carNames = {};
 
   const glanceAt = document.getElementById('ng');
   if (glanceAt) glanceAt.textContent = '';
 
+  // Nothing filed yet is a night of no races: every card still drawn.
+  const nt = night || {};
   const good = (Array.isArray(clips) ? clips : []).filter(ownClip);
   const shown = new Set();
-  const races = Array.isArray(night.races) ? night.races.filter((r) => r && typeof r === 'object') : [];
+  const races = Array.isArray(nt.races) ? nt.races.filter((r) => r && typeof r === 'object') : [];
   const clipsOf = (r) => {
     const own = good.filter((c) => typeof c.race === 'string' && c.race !== '' && c.race === r.sid);
     own.forEach((c) => shown.add(c));
     return own;
   };
-  const cars = carsOf(night);
+  const cars = carsOf(nt);
   const listed = shownRaces(races);
   latest = listed.length > 0 ? raceKey(listed[listed.length - 1]) : '';
 
   if (cars.length === 0) {
-    // One car: the glance goes above the night's facts, which draw() put
-    // there; everything else below them.
-    nightPart(at, glanceAt || at, races, [], lines(night.coach), night.improve, night.progress, clipsOf,
+    // One car: the glance in its place above the cards, the cards in "nx".
+    nightPart(at, glanceAt || at, races, [], lines(nt.coach), nt.improve, nt.progress, clipsOf,
       { races: 'n-races', how: 'n-how', score: 'n-score', prog: 'n-prog' }, true);
   } else {
     // One section per car (22 Oct 2026, second transponder), each laid out
@@ -9727,12 +9948,11 @@ function drawExtras() {
 
       const theirs = races.filter((r) => carOf(r, cars) === car);
       nightPart(sec, sec, theirs,
-        lines(i === 0 ? night.lines : car.lines),
-        lines(i === 0 ? night.coach : car.coach),
-        i === 0 ? night.improve : car.improve,
-        i === 0 ? night.progress : car.progress,
+        lines(i === 0 ? nt.lines : car.lines),
+        lines(i === 0 ? nt.coach : car.coach),
+        i === 0 ? nt.improve : car.improve,
+        i === 0 ? nt.progress : car.progress,
         clipsOf, {}, false);
-      jumps.push(sec.id);
       at.appendChild(sec);
     });
 
@@ -9742,15 +9962,8 @@ function drawExtras() {
     if (stray.length > 0) racesPart(at, '', 'Other races', stray, clipsOf);
   }
 
-  const reach = (Array.isArray(night.reach) ? night.reach : []).map(reachWords).filter(Boolean).slice(0, 3);
-  if (reach.length > 0) {
-    const part = listPart('Achievements in reach', reach);
-    if (cars.length === 0 && jumps.indexOf('n-prog') < 0) {
-      part.id = 'n-prog';
-      jumps.push('n-prog');
-    }
-    at.appendChild(part);
-  }
+  const reach = (Array.isArray(nt.reach) ? nt.reach : []).map(reachWords).filter(Boolean).slice(0, 3);
+  if (reach.length > 0) at.appendChild(listPart('Achievements in reach', reach));
 
   const rest = good.filter((c) => !shown.has(c));
 
@@ -9759,6 +9972,7 @@ function drawExtras() {
     for (const c of rest) part.appendChild(clipBlock(c, ''));
   }
 
+  arrange(at);
   drawJump();
 }
 
@@ -9774,8 +9988,10 @@ function paintNight() {
   }
 
   box.textContent = '';
-  box.appendChild(el('h2', '', 'Your night'));
   box.appendChild(el('p', 'note', 'Nothing is filed for you yet tonight. Your races show here after each one.'));
+  // The cards all the same (4 Nov 2026, Asher: "I don't see driver score,
+  // report card, or progress"), each saying when it fills in.
+  drawExtras();
 }
 
 function take(body) {
@@ -10641,7 +10857,12 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // "nh" is their name and the night's title, "gd" the first-night guide
     // under it and "up" the club's updates under that (4 Nov 2026), all
     // above the live card.
-    body: '<div id="nh"></div><div id="gd"></div><div id="up"></div><div id="lv"></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
+    // Since 4 Nov 2026 (Asher: "Tabs should be above right now card") the
+    // tab bar "nj" sits under their name, and "nx" holds every card they
+    // can move - Right now ("lv"), Lap times in my ear ("ea") and the
+    // night's own - with the night's facts and Share in "nt" under them.
+    body: '<div id="nh"></div><div id="nj"></div><div id="gd"></div><div id="up"></div><div id="ng"></div>' +
+      '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
       '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
     script: LAPS_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
     noindex: true,

@@ -129,7 +129,8 @@ async function open(first: Board, opts: Opts = {}): Promise<Night> {
 }
 
 function ears(n: Night): FakeNode | undefined {
-  return n.p.get("lv").find((e) => e.className.includes("nt-ears"))[0];
+  // Its own card since 4 Nov 2026 (Asher: "lap times in my ear should be it's own card").
+  return n.p.get("ea").find((e) => e.className.includes("ears-card"))[0];
 }
 
 async function turnOn(n: Night): Promise<void> {
@@ -142,7 +143,7 @@ function tapAnywhere(n: Night): void {
 }
 
 describe("My Night lap times: the control", () => {
-  it("sits in the Right now card when the laptop sends the driver's cars", async () => {
+  it("is a card of its own when the laptop sends the driver's cars", async () => {
     const n = await open(field([9500, 9600]));
     const part = ears(n);
     assert.ok(part, "the switch is drawn");

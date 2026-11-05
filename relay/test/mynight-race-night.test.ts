@@ -90,11 +90,12 @@ function press(root: FakeNode, words: RegExp): void {
 }
 
 describe("My Night on race night: the jobs in one row", () => {
-  it("puts the transponder, lap times in my ear and the battery pack side by side", async () => {
+  it("puts the transponder and the battery pack side by side, with lap times in a card of its own", async () => {
     const { page } = await open();
     const cells = row(page).children.map((c) => c.find((n) => n.tagName === "B" || n.tagName === "H4")[0]?.textContent);
 
-    assert.deepEqual(cells, ["Your transponder", "Lap times in my ear", "Your battery pack"]);
+    assert.deepEqual(cells, ["Your transponder", "Your battery pack"]);
+    assert.match(page.get("ea").textContent, /^Lap times in my ear/);
   });
 
   it("takes the pack out of Your details while it is in the Right now card", async () => {
@@ -151,7 +152,7 @@ describe("My Night on race night: back up to Right now", () => {
     const { page } = await open();
     const names = page.get("nj").find((n) => n.tagName === "BUTTON").map((n) => n.textContent);
 
-    assert.deepEqual(names, ["Right now", "Races", "Report card", "Driver score", "Your details"]);
+    assert.deepEqual(names, ["Right now", "Lap times", "Races", "Report card", "Driver score", "Progress", "Your details", "Rearrange"]);
   });
 
   it("has no Right now button when there is no card", async () => {
