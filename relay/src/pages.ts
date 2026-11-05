@@ -1029,7 +1029,10 @@ footer .hcmark:hover { color: var(--text); }
    is staged, counting down or running. Room is kept for it on Live
    whether it shows or not, so neither the name nor the byline under it
    jumps when a race starts. */
-.onair { display: flex; visibility: hidden; align-items: center; gap: 6px; margin-top: 3px;
+/* Room above and below it (4 Nov 2026, Asher: "add some space above and
+   below the live bug"), so its glow clears the top of the page and the
+   byline under it. */
+.onair { display: flex; visibility: hidden; align-items: center; gap: 6px; margin: 10px 0 8px;
          padding: 5px 10px 5px 7px; border-radius: 8px; border: 1px solid var(--primary); color: var(--primary);
          box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 55%, transparent); }
 .onair .hcsun { width: 20px; height: 20px; }
