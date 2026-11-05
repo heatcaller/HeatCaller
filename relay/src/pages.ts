@@ -4618,7 +4618,9 @@ function drawBar(state, over, at, rows) {
   const flag = over ? 'checkered' : String(state.flag || 'None').toLowerCase();
   const running = String(state.state || 'Idle');
   bar.className = 'flagbar f-' + esc(flag) + (over ? ' over' : '');
-  const kick = over ? 'Chequered flag' : (LB_FLAG_WORDS[flag] || 'Race control');
+  // Before the green there is no flag: the stage is named instead.
+  const kick = over ? 'Chequered flag'
+    : LB_FLAG_WORDS[flag] || (running === 'Staging' ? 'Get ready' : running === 'Countdown' ? 'Start sequence' : 'Race control');
   const said = over ? 'Race over' : running === 'Idle' ? 'Not racing' : running;
 
   const list = Array.isArray(rows) ? rows : [];
@@ -4640,9 +4642,16 @@ function drawBar(state, over, at, rows) {
     if (done > 0) info = '<b>' + lbPlural(done, 'lap') + '</b>' + (who ? ' \\u00B7 Winner ' + who : '');
   } else {
     const count = String(state.countdown || '').trim();
-    const words = left === null ? count.toLowerCase() : /^last lap$/i.test(count) ? 'Last lap' : lbPlural(left, 'lap') + ' to go';
+    const words = left === null ? count.toLowerCase()
+      : left === 0 ? 'Finishing' : /^last lap$/i.test(count) ? 'Last lap' : lbPlural(left, 'lap') + ' to go';
     const leader = who && done > 0 ? 'Leader ' + who : '';
     info = (words ? '<b>' + esc(words) + '</b>' : '') + (words && leader ? ' \\u00B7 ' : '') + leader;
+    // Nothing to count yet: what the stage is.
+    if (info === '') {
+      info = running === 'Staging' ? 'Cars to the start line'
+        : running === 'Countdown' ? 'Starting any moment'
+        : running === 'Racing' ? 'Waiting for the first crossing' : '';
+    }
   }
   const next = state.onDeck ? '<span class="ondeck">Next up: <b>' + esc(state.onDeck) + '</b></span>' : '';
 
@@ -4947,12 +4956,27 @@ function render(state, seen, at, empty) {
   const running = String(state.state || 'Idle');
 
   if (rows.length === 0) {
-    // Between races: the last one's board under "Race over", unless the
-    // next is already being staged or counted down - then the bar says so
-    // and the last race's board stays under it until the new one fills.
+    // THE NEXT RACE UNDER WAY (4 Nov 2026, Asher: "it didn't show the
+    // stages as they updated and at one point went back to race over").
+    // The laptop empties the board when a race is staged and again at the
+    // green (RaceControlSession.Stage, GreenFlag), so Staging, Countdown and
+    // the first lap of Racing all come with nobody on the board. Each of
+    // those is the new race: the card says which, and the last race's
+    // board goes, rather than "Race over" over the old board until the
+    // first car crosses the line.
+    if (running === 'Staging' || running === 'Countdown' || running === 'Racing') {
+      drawBar(state, false, 0, []);
+      board.innerHTML = '<p class="note">' + (running === 'Racing'
+        ? 'Green flag. The board fills as the cars cross the line.'
+        : 'The cars are lining up. The board fills once the race is under way.') + '</p>';
+      boardHtml = '';
+      posChart.hide();
+      return;
+    }
+
+    // Between races: the last one's board under "Race over".
     const kept = keptRace();
-    const coming = running === 'Staging' || running === 'Countdown';
-    drawBar(state, !!kept && !coming, kept ? kept.at : 0, kept && !coming && Array.isArray(kept.state.standings) ? kept.state.standings : []);
+    drawBar(state, !!kept, kept ? kept.at : 0, kept && Array.isArray(kept.state.standings) ? kept.state.standings : []);
     if (kept) {
       drawBoard(kept.state);
       posChart.draw(Array.isArray(kept.state.standings) ? kept.state.standings : []);
