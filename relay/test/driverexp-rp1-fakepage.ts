@@ -263,6 +263,11 @@ export class FakePage {
         page.intervals.push({ every, next: page.clock + every, run });
         return 1000 + page.intervals.length;
       },
+      // As a browser's: the handle setInterval gave stops that interval.
+      clearInterval: (handle: unknown) => {
+        const at = typeof handle === "number" ? handle - 1001 : -1;
+        if (at >= 0 && page.intervals[at] !== undefined) page.intervals[at] = { every: Infinity, next: Infinity, run: () => {} };
+      },
       AbortController,
       fetch: (url: string, init?: { body?: string; signal?: AbortSignal }) => {
         const body = JSON.parse(init?.body ?? "{}") as Record<string, unknown>;

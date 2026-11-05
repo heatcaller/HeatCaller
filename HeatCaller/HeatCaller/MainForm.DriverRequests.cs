@@ -26,6 +26,22 @@ public partial class MainForm
     /// <summary>Whether the button was last shown or hidden, so a change of the setting is picked up.</summary>
     private bool _driverRequestsShownAs;
 
+    /// <summary>The Driver Hub's Setups tab, redrawn when a phone files a setup change. Set as the page is built.</summary>
+    private Action? _driverHubSetupsRefresh;
+
+    /// <summary>A phone filed a setup change: the hub shows it at once if it is open on that driver.</summary>
+    private void SetupLogChangedByPhone()
+    {
+        try
+        {
+            _driverHubSetupsRefresh?.Invoke();
+        }
+        catch
+        {
+            // The setup is filed; the hub shows it next time it is opened.
+        }
+    }
+
     /// <summary>Requests already mentioned in the console, so each is announced once.</summary>
     private HashSet<string>? _driverRequestsAnnounced;
 
@@ -47,6 +63,13 @@ public partial class MainForm
             badge => _relayBadgeIds.TryGetValue(badge, out var transponder) ? transponder : null)
         {
             RelayProblem = () => _relayPublisher.DriverRequestsProblem,
+
+            // A setup change from a phone files itself into the Garage's log
+            // (4 Nov 2026) - see DriverRequestDesk.FileSetup.
+            Setups = _setupLog,
+            Cars = _cars,
+            EventId = () => _raceEvents.Active?.Id,
+            TrackName = () => RunningTrackName(_settings.LastRaceControlTrackName),
         };
 
         // Filed on the publisher's own thread - the store is thread-safe.
@@ -78,6 +101,20 @@ public partial class MainForm
             entries.DriverRequestsRequested += ShowDriverRequests;
             _driverRequestsButtonWired = true;
             _driverRequestsVersionShown = -1;
+        }
+
+        // Setup changes from phones go straight into the setup log, so they
+        // never wait on the desk's list. Guarded: the roster tick must run.
+        try
+        {
+            if (_driverRequestDesk?.FileWaitingSetups() > 0)
+            {
+                SetupLogChangedByPhone();
+            }
+        }
+        catch (Exception ex)
+        {
+            OnClientRawMessage($"[driver requests] A setup change from a phone couldn't be filed: {ex.Message}");
         }
 
         var shown = _settings.RelayDriverRequests || store.WaitingCount > 0;

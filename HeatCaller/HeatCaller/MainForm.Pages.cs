@@ -361,6 +361,7 @@ public partial class MainForm
         driverProfiles.ReportCardFor = transponder => CoachReportFor(transponder, publicNames: false, includeSetup: true);
         pageDriverProfiles.Controls.Add(driverProfiles);
         _navRefreshHooks["Driver Hub"] = driverProfiles.RefreshAll;
+        _driverHubSetupsRefresh = driverProfiles.RefreshSetups;
         driverProfiles.AttachUnknownTransponders(_unknownTransponders);
 
         // How "Hear It" and "Check Names..." on Driver Hub actually speak.

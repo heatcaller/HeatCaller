@@ -304,3 +304,24 @@ describe("the laptop's side", () => {
     assert.deepEqual(await h.store.listItems("acme-rc", "driverasks"), []);
   });
 });
+
+/**
+ * A SETUP CHANGE FROM THE PHONE (4 Nov 2026, from the relay roadmap): the
+ * sheet's five short parts and a note, for the laptop to file into the
+ * Garage's setup log by itself.
+ */
+describe("a setup change from the driver's night", () => {
+  it("keeps the parts it knows, cleaned and short, and drops the rest", () => {
+    assert.deepEqual(
+      askFieldsFrom("setup", { tires: "  Soft  rears ", springs: "blue", notes: "Went\u0007 up a tooth", hack: "x", motor: "" }, false),
+      { ok: true, f: { tires: "Soft rears", springs: "blue", notes: "Went up a tooth" } });
+  });
+
+  it("refuses one that says nothing, or runs long, or is not text", () => {
+    assert.equal(askFieldsFrom("setup", {}, false).ok, false);
+    assert.equal(askFieldsFrom("setup", { tires: "   " }, false).ok, false);
+    assert.equal(askFieldsFrom("setup", { tires: "x".repeat(81) }, false).ok, false);
+    assert.equal(askFieldsFrom("setup", { notes: "x".repeat(301) }, false).ok, false);
+    assert.equal(askFieldsFrom("setup", { gearing: 21 }, false).ok, false);
+  });
+});

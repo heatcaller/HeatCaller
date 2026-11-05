@@ -513,6 +513,14 @@ public sealed partial class ProfileManagerControl : UserControl
     /// inactive, and races, badges, check-ins and championship tables all
     /// move on while it is out of sight, so the stats start again too.
     /// </summary>
+    /// <summary>
+    /// Redraws the driver card's Setups tab for the driver on it, and
+    /// nothing else - for a setup change a phone has just filed (4 Nov 2026,
+    /// DriverRequestDesk.FileSetup), which should show at once on the hub
+    /// without the whole page being rebuilt under the desk.
+    /// </summary>
+    public void RefreshSetups() => _hubSetups?.ShowDriver(CardProfile()?.Transponder);
+
     public void RefreshAll()
     {
         InvalidateStats();

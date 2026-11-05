@@ -830,6 +830,16 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .livepos .posg .axl { stroke: var(--muted); stroke-width: 1.5; }
 .livepos .posg circle.now { fill: var(--c); }
 .livepos .posk li b { font-variant-numeric: tabular-nums; margin-right: 4px; }
+/* The live track map (4 Nov 2026): the road, the line, the split loops and a numbered dot per car. */
+.lmap { display: block; width: 100%; height: auto; margin: 6px 0 0; }
+.lmap .lm-edge { fill: none; stroke: var(--border); stroke-width: 22; stroke-linecap: round; stroke-linejoin: round; }
+.lmap .lm-road { fill: none; stroke: var(--surface); stroke-width: 16; stroke-linecap: round; stroke-linejoin: round; }
+.lmap .lm-split { fill: var(--accent); }
+.lmap .lm-line { fill: var(--text); }
+.lmap .lm-car circle { fill: var(--c); stroke: var(--bg); stroke-width: 2; }
+.lmap .lm-car.me circle { stroke: var(--text); stroke-width: 3; }
+.lmap .lm-car.stop circle { stroke: var(--bad); stroke-width: 3; }
+.lmap .lm-car text { fill: #0B0618; font-size: 12px; font-weight: 800; }
 /* The same two charts on a driver's race card (4 Nov 2026), each its own
    figure under the Just me tick; their own line drawn heavier on top. */
 .lpfig { margin: 14px 0 0; padding: 0; }
@@ -840,6 +850,7 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .lpfig .posk li b.kv { margin: 0 0 0 5px; }
 .mecharts .jm { margin-top: 4px; }
 .lvsay[hidden] { display: none; }
+.setuplog textarea { display: block; width: 100%; min-height: 72px; margin: 6px 0 0; padding: 10px; font: inherit; font-size: 1rem; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); resize: vertical; }
 /* Just me and Compare with, side by side over the charts (4 Nov 2026). */
 .mesay { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 4px 0 0; }
 .mesay .lvsay { margin: 0; }
@@ -1935,6 +1946,16 @@ function lxLaps(list) {
   return Array.isArray(list) ? list.filter((ms) => typeof ms === 'number' && isFinite(ms) && ms > 0) : [];
 }
 
+// THE THEORETICAL BEST (4 Nov 2026, from the relay roadmap): their best
+// time in every sector of the split loop, added up - the lap they would
+// have done had their best sectors all come on one lap. The laptop sends a
+// driver's best sectors with each result (Sectors.Bests); null without a
+// split loop, or with a sector missing.
+function lxTheoretical(sectors) {
+  if (!Array.isArray(sectors) || sectors.length < 2 || !sectors.every((ms) => typeof ms === 'number' && isFinite(ms) && ms > 0)) return null;
+  return sectors.reduce((a, ms) => a + ms, 0);
+}
+
 function lxMean(list) {
   return list.length === 0 ? null : list.reduce((a, b) => a + b, 0) / list.length;
 }
@@ -2241,6 +2262,8 @@ let lengthOf = 0;
 // Their lap chart is on their own night - see raceDetail there.
 function lapPanel(r, lengthS) {
   const stats = lapStatLines(lapStats(r.lapsMs));
+  const theory = lxTheoretical(r.sectorsMs);
+  if (theory !== null) stats.push(['Theoretical best', lap(theory)]);
   const list = lapRows(r.lapsMs, r.posAt, r.startMs, lengthS);
   const pace = list.some((x) => x.pace !== '');
   const pos = list.some((x) => x.pos > 0);
@@ -5001,7 +5024,131 @@ const posChart = (function () {
     drawTimes(rows);
   }
 
-  return { take: take, draw: draw, hide: hide };
+  // The colour a driver has in these charts, for the track map's dots.
+  function colourOf(name) {
+    const d = h.d[name];
+    return d ? COLOURS[d.c % COLOURS.length] : '#9E8AC7';
+  }
+
+  return { take: take, draw: draw, hide: hide, colourOf: colourOf };
+})();
+
+// --- The live track map (4 Nov 2026, Asher: "the live track map should
+// be on the live tab") --------------------------------------------------
+// The laptop's own map, as its Big Screen and the club Wi-Fi pages draw it:
+// the layout's line from the start-finish round, the split loops on it,
+// and a dot per car where the laptop works out it is - its last crossing
+// of the line or a split, and its usual lap. Between the once-a-second
+// frames each dot carries on at its own pace (rate, laps a second), held
+// short of the next loop it has not crossed yet (cap), as the Wi-Fi page's
+// do; a car well overdue sits still and is marked. Each car comes by its
+// row's tag, never its transponder, so the dot is named from the board:
+// numbered by place and in the colour its lines have in the charts below.
+//
+// Drawn only while a race is on and the layout has a plan; the frame
+// carries no map otherwise, and the card goes.
+const liveMap = (function () {
+  const box = document.getElementById('livemap');
+  const out = document.getElementById('lmapbody');
+  let shape = '';
+  let pts = [];
+  let cum = [];
+  let total = 0;
+  let cars = [];
+  let at = 0;
+  let timer = 0;
+  let base = '';
+  let frame = '';
+  let toScreen = null;
+
+  function hide() {
+    if (box) box.hidden = true;
+    if (timer) { clearInterval(timer); timer = 0; }
+    cars = [];
+  }
+
+  function pointAt(f) {
+    if (pts.length < 2 || total <= 0) return pts[0] || [0, 0];
+    const want = ((f % 1) + 1) % 1 * total;
+    let i = 1;
+    while (i < cum.length - 1 && cum[i] < want) i++;
+    const a = pts.at(i - 1), b = pts.at(i);
+    const span = cum[i] - cum[i - 1];
+    const t = span > 0 ? (want - cum[i - 1]) / span : 0;
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  }
+
+  function build(raw, splits) {
+    pts = raw;
+    cum = [0];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts.at(i - 1), b = pts.at(i);
+      cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+    }
+    total = cum[cum.length - 1];
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    const minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    const W = 600, pad = 28;
+    const scale = (W - 2 * pad) / Math.max(1e-6, maxX - minX);
+    const H = Math.max(160, Math.min(520, Math.round((maxY - minY) * scale + 2 * pad)));
+    const s = Math.min(scale, (H - 2 * pad) / Math.max(1e-6, maxY - minY));
+    const ox = (W - (maxX - minX) * s) / 2, oy = (H - (maxY - minY) * s) / 2;
+    toScreen = (p) => [ox + (p[0] - minX) * s, oy + (p[1] - minY) * s];
+    const d = pts.map((p, i) => { const q = toScreen(p); return (i === 0 ? 'M' : 'L') + q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join(' ');
+    const start = toScreen(pts[0]);
+    const ticks = (Array.isArray(splits) ? splits : []).filter((f) => typeof f === 'number' && f > 0 && f < 1)
+      .map((f) => { const q = toScreen(pointAt(f)); return '<circle class="lm-split" r="4" cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '"/>'; }).join('');
+    // The road, the line and the loops: drawn once a layout, the dots over them each tick.
+    frame = '<svg class="lmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Where each car is on the track">';
+    base = '<path class="lm-edge" d="' + d + '"/><path class="lm-road" d="' + d + '"/>' + ticks
+      + '<rect class="lm-line" x="' + (start[0] - 3).toFixed(1) + '" y="' + (start[1] - 10).toFixed(1) + '" width="6" height="20" rx="2"/>';
+  }
+
+  // The dots, at where each car has got to since the frame came.
+  function tick() {
+    if (!toScreen || !out) return;
+    const secs = Math.max(0, (Date.now() - at) / 1000);
+    const html = cars.slice().sort((a, b) => b.pos - a.pos).map((c) => {
+      const f = c.stop ? c.f : Math.min(c.cap, c.f + c.rate * secs);
+      const q = toScreen(pointAt(f));
+      return '<g class="lm-car' + (c.stop ? ' stop' : '') + (c.me ? ' me' : '') + '" style="--c:' + c.colour + '" transform="translate(' + q[0].toFixed(1) + ' ' + q[1].toFixed(1) + ')">'
+        + '<circle r="' + (c.me ? 13 : 11) + '"/><text y="4" text-anchor="middle">' + c.pos + '</text></g>';
+    }).join('');
+    out.innerHTML = frame + base + '<g class="lm-cars">' + html + '</g></svg>'
+      + '<p class="note">Where each car is, worked out from its last crossing of the line or a split. The number is its place.</p>';
+  }
+
+  function take(map, rows, colourOf) {
+    if (!box || !out || !map || typeof map !== 'object' || !Array.isArray(map.pts)) { hide(); return; }
+    const raw = map.pts.filter((p) => Array.isArray(p) && p.length === 2 && p.every((v) => typeof v === 'number' && isFinite(v)));
+    if (raw.length < 3) { hide(); return; }
+    const key = raw.length + ':' + raw[0].join(',') + ':' + raw.at(-1).join(',') + ':' + raw.at(Math.floor(raw.length / 2)).join(',');
+    if (key !== shape) { shape = key; build(raw, map.splits); }
+    box.hidden = false;
+    const byTag = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((r) => { if (r && typeof r.tag === 'string' && r.tag !== '') byTag.set(r.tag, r); });
+    cars = (Array.isArray(map.cars) ? map.cars : [])
+      .filter((c) => c && typeof c.tag === 'string' && byTag.has(c.tag) && typeof c.f === 'number')
+      .map((c) => {
+        const row = byTag.get(c.tag);
+        const name = String(row.name || '');
+        return {
+          pos: Math.max(1, Math.round(Number(c.pos) || 1)),
+          f: c.f,
+          rate: typeof c.rate === 'number' && isFinite(c.rate) ? c.rate : 0,
+          cap: typeof c.cap === 'number' && isFinite(c.cap) ? c.cap : c.f,
+          stop: c.stop === true,
+          me: name !== '' && name === memory,
+          colour: colourOf(name),
+        };
+      });
+    at = Date.now();
+    tick();
+    if (!timer) timer = setInterval(tick, 100);
+  }
+
+  return { take: take, hide: hide };
 })();
 
 function drawBoard(state) {
@@ -5051,11 +5198,14 @@ function render(state, seen, at, empty) {
         : 'The cars are lining up. The board fills once the race is under way.') + '</p>';
       boardHtml = '';
       posChart.hide();
+      // The track with nobody on it yet, once the green has gone.
+      if (running === 'Racing') liveMap.take(state.map, [], posChart.colourOf); else liveMap.hide();
       return;
     }
 
     // Between races: the last one's board under "Race over".
     const kept = keptRace();
+    liveMap.hide();
     drawBar(state, !!kept, kept ? kept.at : 0, kept && Array.isArray(kept.state.standings) ? kept.state.standings : []);
     if (kept) {
       drawBoard(kept.state);
@@ -5074,6 +5224,7 @@ function render(state, seen, at, empty) {
   posChart.take(rows);
   drawBoard(state);
   posChart.draw(rows);
+  if (over) liveMap.hide(); else liveMap.take(state.map, rows, posChart.colourOf);
 }
 
 // Shows or hides the broadcast bug (see load).
@@ -5619,6 +5770,7 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     // Without Listen it stays, as the only way to read them.
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
       + '<div id="board"></div>'
+      + '<div id="livemap" class="card livepos" hidden><h3>Track map</h3><div id="lmapbody"></div></div>'
       + '<div id="livepos" class="card livepos" hidden><h3>Position by lap</h3><div id="lposbody"></div></div>'
       + '<div id="livetimes" class="card livepos" hidden><h3>Lap times</h3><div id="ltimebody"></div></div>'
       + voteControl(context.look.vote)
@@ -10006,6 +10158,15 @@ function raceStory(r, field) {
     lines.push(['Best place', nth(Math.min.apply(null, places))]);
   }
 
+  // Their best sectors, added up - from their own row of the race's result.
+  const own = Array.isArray(field) ? field.find((x) => x && typeof x === 'object' && sameLaps(lxLaps(x.lapsMs), laps)) : null;
+  const theory = own ? lxTheoretical(own.sectorsMs) : null;
+  if (theory !== null) {
+    lines.push(['Theoretical best', lap(theory)]);
+    lines.push(['Left on the table', secs(Math.max(0, sorted[0] - theory))]);
+    notes.push('Theoretical best adds up your best time in each sector: the lap you had in you.');
+  }
+
   // Against the field, lap by lap: where their time ranked among everyone
   // who ran that lap.
   const rest = Array.isArray(field) ? field.filter((x) => x && typeof x === 'object' && !sameLaps(lxLaps(x.lapsMs), laps)) : [];
@@ -11012,6 +11173,7 @@ function kindWords(kind) {
   if (kind === 'details') return 'Your details';
   if (kind === 'pack') return 'Battery pack';
   if (kind === 'query') return 'Race query';
+  if (kind === 'setup') return 'Setup log';
   return 'Request';
 }
 
@@ -11181,6 +11343,10 @@ function drawAsks(message) {
     packs.className = 'su';
     sec.appendChild(packs);
   }
+
+  // A setup change, for the Garage's setup log, the Driver Hub and the
+  // technical lead's interview (4 Nov 2026) - see setupForm.
+  sec.appendChild(setupBox());
 
   const change = el('details', 'yd-change');
   change.open = view.details || !!message;
@@ -11454,6 +11620,73 @@ function detailsForm(message) {
 // what they have picked and what the desk said survive a redraw.
 let packNode = null;
 let packFor = '';
+
+// THE SETUP LOG FROM THE PHONE (4 Nov 2026, Asher: "when you make an setup
+// log change on the relay it should update in the driver hub and feed into
+// the technical lead interview"). The setup sheet's five short parts and a
+// note, sent as a request the laptop files by itself into the Garage's
+// setup log: the Driver Hub lists it under the driver's setups, and the
+// technical lead's interview after a race they win reads it, as it reads a
+// setup logged at the desk. The same element on every redraw, so a half
+// typed change survives the next poll.
+let setupNode = null;
+
+function setupBox() {
+  if (setupNode === null) setupNode = setupForm();
+  return setupNode;
+}
+
+const SETUP_PARTS = [['tires', 'Tires'], ['gearing', 'Gearing'], ['springs', 'Springs'], ['ride', 'Ride height'], ['motor', 'Motor'], ['notes', 'Notes']];
+
+function setupForm() {
+  const part = el('details', 'yd-change setuplog');
+  part.open = view.setupOpen === true;
+  part.addEventListener('toggle', () => { view.setupOpen = part.open; });
+  part.appendChild(el('summary', '', 'Log a setup change'));
+  part.appendChild(el('p', 'when', 'What you changed on the car. It goes in your setup log at the desk, and the technical lead can talk about it after the race.'));
+
+  const inputs = {};
+  for (const [key, words] of SETUP_PARTS) {
+    const label = el('label', 'f', words);
+    const box = document.createElement(key === 'notes' ? 'textarea' : 'input');
+    if (key !== 'notes') box.type = 'text';
+    box.maxLength = key === 'notes' ? 300 : 80;
+    box.addEventListener('input', markEdited);
+    label.appendChild(box);
+    part.appendChild(label);
+    inputs[key] = box;
+  }
+
+  const said = el('p', 'yd-said', '');
+  said.setAttribute('role', 'status');
+
+  const send = tapButton('Add to my setup log', 'go quiet', async () => {
+    const parts = {};
+    for (const [key] of SETUP_PARTS) {
+      const v = String(inputs[key].value || '').trim();
+      if (v !== '') parts[key] = v;
+    }
+    if (Object.keys(parts).length === 0) {
+      said.textContent = 'Say what you changed.';
+      return;
+    }
+    send.disabled = true;
+    said.textContent = 'Sending\\u2026';
+    const got = await sendAsk('setup', parts);
+    send.disabled = false;
+    if (got.ok) {
+      for (const [key] of SETUP_PARTS) inputs[key].value = '';
+      edited = false;
+      said.textContent = 'Sent - it goes in your setup log in a few seconds.';
+    } else {
+      said.textContent = got.words;
+    }
+  });
+
+  part.appendChild(send);
+  part.appendChild(said);
+  return part;
+}
 
 function packBox() {
   const key = JSON.stringify(me && me.packs ? me.packs : null);
