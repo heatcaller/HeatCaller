@@ -31,7 +31,7 @@
 import { DEFAULT_CONTEXT, shell, type PageContext } from "./pages.js";
 
 /** The page's own look: the shared stylesheet has the forms, buttons and charts; these are the garage's rows and cards. */
-const GARAGE_CSS = `
+export const GARAGE_CSS = `
 .gx { max-width: 42rem; margin: 0 auto 16px; text-align: left; background: var(--surface);
       border: 1px solid var(--border); border-radius: 14px; padding: 16px 16px 18px; }
 .gx h2 { margin: 0 0 4px; font-size: 1.15rem; }
@@ -95,6 +95,27 @@ html.light .gpal { --gp2: #9A6B00; --gp3: #1B7F4B; --gp4: #6B3FB5; --gp5: #C2541
 .gx fieldset .chk { min-height: 32px; }
 `;
 
+/*
+ * What only the Garage's own page has (5 Nov 2026, when the Garage also
+ * became a space on Me): putting a ?d= code into the fragment, and the link
+ * back to the night. Inside the night page the night does both itself - so
+ * the code is still written into exactly one thing there, its fragment.
+ * GARAGE_JS asks for these by typeof, so it runs with or without them.
+ */
+const GARAGE_PAGE_JS = String.raw`
+function tuck() {
+  try {
+    if (CODE && !codeFrom(location.hash)) history.replaceState(null, '', location.pathname + '#d=' + CODE);
+  } catch (e) { /* the code simply stays where it was */ }
+}
+
+function backLink() {
+  const back = el('a', 'more', 'Back to your night');
+  back.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/night#d=' + CODE);
+  return back;
+}
+`;
+
 const GARAGE_JS = String.raw`
 // ---- who the driver is (exactly as NIGHT_JS)
 
@@ -105,11 +126,9 @@ function codeFrom(raw) {
 
 const CODE = codeFrom(location.hash) || codeFrom(location.search);
 
-function tuck() {
-  try {
-    if (CODE && !codeFrom(location.hash)) history.replaceState(null, '', location.pathname + '#d=' + CODE);
-  } catch (e) { /* the code simply stays where it was */ }
-}
+// Inside the night page, as Me's Garage space (5 Nov 2026): the night
+// shows their name, so the garage leaves its own heading out.
+const EMBED = !!document.getElementById('me-garage');
 
 const API = '/api/v1/c/' + encodeURIComponent(CLUB);
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -608,6 +627,9 @@ async function readGarage() {
   message(garage === null ? "Waiting for the timing desk's laptop… Your garage shows here once HeatCaller sends it." : '');
   paintAll();
   matchAsks();
+  // For the rest of Me (5 Nov 2026): the Tonight tiles and the status strip
+  // read the pack in the car, the car tonight and the pack charts from here.
+  try { document.dispatchEvent(new CustomEvent('hg-garage', { detail: garage })); } catch (e) { /* an old browser: no tiles from it */ }
   const stamp = document.getElementById('stamp');
   if (stamp) stamp.textContent = 'Updated ' + new Date(Date.now()).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   schedule();
@@ -628,12 +650,12 @@ function pinTrouble(a) {
 }
 
 function buildHead(box) {
-  const head = el('div', 'ghead');
-  head.appendChild(el('h2', '', garage ? (str(garage.driver) || 'Your garage') : 'Your garage'));
-  const back = el('a', 'more', 'Back to your night');
-  back.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/night#d=' + CODE);
-  head.appendChild(back);
-  box.appendChild(head);
+  if (!EMBED) {
+    const head = el('div', 'ghead');
+    head.appendChild(el('h2', '', garage ? (str(garage.driver) || 'Your garage') : 'Your garage'));
+    if (typeof backLink === 'function') head.appendChild(backLink());
+    box.appendChild(head);
+  }
 
   if (!loaded) return;
 
@@ -1698,7 +1720,7 @@ function start() {
     message('This page needs the code from your check-in badge. Open your night from the link your club sent you, or ask at the timing desk.', true);
     return;
   }
-  tuck();
+  if (typeof tuck === 'function') tuck();
   paint('head', true);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && Date.now() - lastRead > 5000) readGarage();
@@ -1724,7 +1746,25 @@ export function garagePage(club: string, clubName: string, context: PageContext 
     body: `<style>${GARAGE_CSS}</style>` +
       '<div id="gh"></div><div id="gm"><p class="note">Loading&hellip;</p></div>' +
       '<div id="gp"></div><div id="gr"></div><div id="gc"></div><div id="gg"></div><div id="gs"></div>',
-    script: GARAGE_JS,
+    script: GARAGE_PAGE_JS + GARAGE_JS,
     noindex: true,
   }, context);
+}
+
+/**
+ * THE GARAGE AS A SPACE ON ME (5 Nov 2026, Asher: "Yes, build it" - the
+ * Pit Wall mix, which folds the Garage page into Me). The same sections,
+ * drawn into the night page's Garage space: its markup, and its script in
+ * a scope of its own so its names never meet the night's. Without the
+ * Garage page's own bits (GARAGE_PAGE_JS) - the night puts the code in the
+ * fragment and has their name at the top.
+ */
+// Cars first on Me (the mix's car-first Garage), then the packs, the races'
+// packs, the pack charts and the setup sheet.
+export const GARAGE_EMBED_BODY =
+  '<div id="me-garage"><div id="gh"></div><div id="gm"></div>' +
+  '<div id="gg"></div><div id="gp"></div><div id="gr"></div><div id="gc"></div><div id="gs"></div></div>';
+
+export function garageEmbedScript(): string {
+  return "\n;(() => {\n" + GARAGE_JS + "\n})();\n";
 }

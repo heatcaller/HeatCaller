@@ -18,6 +18,8 @@
 import type { PagePreview } from "./preview.js";
 import { DEFAULT_LOOK, type Look, type SocialLink } from "./site.js";
 import { SUN_ICON_SIZE } from "./sun.js";
+import { GARAGE_CSS, GARAGE_EMBED_BODY, garageEmbedScript } from "./garagepage.js";
+import { ME_BODY_END, ME_BODY_TOP, ME_CSS, ME_JS } from "./mespaces.js";
 
 /** What a page needs to know beyond its club: how the club looks, and where it is being served from. */
 export interface PageContext {
@@ -13033,10 +13035,18 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // tab bar "nj" sits under their name, and "nx" holds every card they
     // can move - Right now ("lv"), Lap times in my ear ("ea") and the
     // night's own - with the night's facts and Share in "nt" under them.
-    body: '<div id="nh"></div><div id="nj"></div><div id="gd"></div><div id="ng"></div>' +
-      '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
-      '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
-    script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
+    //
+    // Since 5 Nov 2026 (Asher: "Yes, build it", the Pit Wall mix) Me is a
+    // pit wall laid over all of that - see mespaces.ts: the status strip,
+    // the moment card, the switch and the Tonight tiles under their name;
+    // the Garage folded in as a space ("me-garage", the Garage page's own
+    // sections and script); Quick, its sheet and the empty note at the foot.
+    body: `<style>${ME_CSS}${GARAGE_CSS}</style>` +
+      '<div id="nh"></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="gd"></div><div id="ng"></div>' +
+      '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div>' +
+      GARAGE_EMBED_BODY + '<div id="yd"></div>' +
+      '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>' + ME_BODY_END,
+    script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS + garageEmbedScript() + ME_JS,
     noindex: true,
   }, context);
 }
