@@ -840,17 +840,11 @@ html.light .follow, html.light .toast { box-shadow: 0 8px 28px rgba(17, 21, 28, 
 @media (prefers-reduced-motion: reduce) {
   .flagbar, .flagbar::before, .flagbar .fg i { animation: none !important; }
 }
-/* The last race's board, kept up on Live once the race is over (4 Nov
-   2026, Asher: "keep the board for the last race up on the live after the
-   race is over. clearly indicate that the race is over"). */
-.finhead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 8px; padding: 10px 16px;
-  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
-@supports (color: color-mix(in srgb, red 50%, blue)) {
-  .finhead { background: repeating-conic-gradient(color-mix(in srgb, var(--text) 8%, transparent) 0 25%, transparent 0 50%) 0 0 / 16px 16px, var(--surface); }
-}
-.finhead b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
-  font-size: 1.15rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
-.finhead span { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
+/* Race over: when the board was last updated, where the countdown was
+   (4 Nov 2026, Asher: "remove the race over final board card. the
+   chequered flag card is good. add the last updated time to it"). */
+.flagbar .count.upd b { font-size: 1.5rem; padding: 4px 8px; white-space: nowrap; }
+@media (max-width: 420px) { .flagbar .count.upd b { font-size: 1.2rem; } }
 /* The live position chart, under the board. */
 .livepos { padding: 14px 16px 16px; }
 .livepos[hidden] { display: none; }
@@ -4602,8 +4596,9 @@ function lbCount(text) {
 }
 
 // over: the race is done - the laptop says Finished, or the board went
-// empty and the last race's is being kept up.
-function drawBar(state, over) {
+// empty and the last race's is being kept up. at: when that board was
+// last updated, shown on the right of a race that is over.
+function drawBar(state, over, at) {
   const flag = over ? 'checkered' : String(state.flag || 'None').toLowerCase();
   const running = String(state.state || 'Idle');
   const moving = !over && (running === 'Racing' || running === 'Countdown');
@@ -4612,7 +4607,8 @@ function drawBar(state, over) {
   const said = over ? 'Race over' : running === 'Idle' ? 'Not racing' : running;
   bar.innerHTML = '<span class="fg" aria-hidden="true"><i></i></span>'
     + '<span class="fl-txt"><span class="kick">' + esc(kick) + '</span><span class="state">' + esc(said) + '</span></span>'
-    + (over ? '' : lbCount(state.countdown))
+    + (!over ? lbCount(state.countdown)
+      : at ? '<span class="count upd"><b>' + esc(lbClock(at)) + '</b><span>Last update</span></span>' : '')
     + (state.onDeck ? '<span class="ondeck">Next up: <b>' + esc(state.onDeck) + '</b></span>' : '');
 }
 
@@ -4656,6 +4652,8 @@ function lbClock(at) {
 const posChart = (function () {
   const box = document.getElementById('livepos');
   const out = document.getElementById('lposbody');
+  const tbox = document.getElementById('livetimes');
+  const tout = document.getElementById('ltimebody');
   const KEY = 'hg-livepos-' + CLUB;
   const COLOURS = ['#F5C342', '#8EC5FF', '#E5484D', '#46A758', '#A77BEB', '#FF8B3E',
     '#2EE6FF', '#FF2E9A', '#A0E85B', '#C9A04E', '#D9C2FF', '#7FD6C2'];
@@ -4715,9 +4713,12 @@ const posChart = (function () {
     if (changed) save();
   }
 
-  function hide() { if (box) box.hidden = true; }
+  function hide() {
+    if (box) box.hidden = true;
+    if (tbox) tbox.hidden = true;
+  }
 
-  function draw(rows) {
+  function drawPos(rows) {
     if (!box || !out) return;
     const ns = names(rows);
     const lines = ns.map((k, i) => ({ k: k, now: i + 1, d: h.d[k] })).filter((x) => x.d);
@@ -4779,17 +4780,105 @@ const posChart = (function () {
     if (out.innerHTML !== html) out.innerHTML = html;
   }
 
+  // --- Lap times (4 Nov 2026, Asher: "add a live time by lap chart below
+  // the position one"). Every row of the board carries all of its flying
+  // laps, so unlike the places this is the whole race however late the
+  // page was opened. A line per driver in the same colour as their place
+  // line, on the same laps: the start lap has no time, so the first time
+  // is lap 2. Quicker is higher, as on a driver's night (lapChart), and a
+  // lap far slower than the rest - a crash, a flipped car - sits on the
+  // bottom edge rather than flattening every other lap into a line.
+  function drawTimes(rows) {
+    if (!tbox || !tout) return;
+    const ns = names(rows);
+    const lines = ns.map((k, i) => {
+      const laps = rows[i] && Array.isArray(rows[i].laps)
+        ? rows[i].laps.filter((v) => typeof v === 'number' && isFinite(v) && v > 0).slice(0, 300) : [];
+      const d = h.d[k];
+      return { k: k, now: i + 1, laps: laps, c: d ? d.c : i % COLOURS.length };
+    });
+    const all = [];
+    lines.forEach((line) => line.laps.forEach((ms) => all.push(ms)));
+    tbox.hidden = false;
+    if (all.length === 0) {
+      const wait = '<p class="note">The lines start with the first timed lap: one per driver, every lap they run.</p>';
+      if (tout.innerHTML !== wait) tout.innerHTML = wait;
+      return;
+    }
+
+    const sorted = all.slice().sort((a, b) => a - b);
+    const quick = sorted[0];
+    const cap = Math.max(sorted[Math.floor(sorted.length / 2)] * 1.6, quick * 1.2);
+    const slow = Math.min(sorted[sorted.length - 1], cap);
+    const step = [0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10].find((s) => (slow - quick) / 1000 / s <= 5) || 10;
+    const lo = Math.floor(quick / 1000 / step) * step;
+    let hi = Math.ceil(slow / 1000 / step) * step;
+    if (hi - lo < step / 2) hi = lo + step;
+    const places = step >= 1 ? 0 : step === 0.25 ? 2 : 1;
+    const most = Math.max.apply(null, lines.map((line) => line.laps.length));
+    const first = 2, last = Math.max(3, most + 1);
+
+    const W = Math.max(300, Math.min(760, Math.round(tout.clientWidth || 600)));
+    const L = 66, R = 18, T = 16, B = 52, H = 260;
+    const base = H - B + 12;
+    const x = (lap) => L + (lap - first) * (W - L - R) / Math.max(1, last - first);
+    const yOf = (s) => T + (s - lo) / (hi - lo) * (base - 12 - T);
+    const y = (ms) => ms > cap ? base - 4 : yOf(ms / 1000);
+
+    let svg = '<svg class="posg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Each driver\\u2019s time for every lap">';
+    const count = Math.round((hi - lo) / step);
+    for (let i = 0; i <= count; i++) {
+      const s = lo + i * step;
+      svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + yOf(s).toFixed(1) + '" y2="' + yOf(s).toFixed(1) + '"/>'
+        + '<text class="ax" x="' + (L - 10) + '" y="' + (yOf(s) + 4).toFixed(1) + '" text-anchor="end">' + s.toFixed(places) + '</text>';
+    }
+    svg += '<line class="axl" x1="' + L + '" x2="' + L + '" y1="' + (T - 6) + '" y2="' + base + '"/>'
+      + '<line class="axl" x1="' + L + '" x2="' + (W - R) + '" y1="' + base + '" y2="' + base + '"/>';
+    const span = last - first;
+    const xstep = [1, 2, 5, 10, 20, 50].find((s) => s * (W - L - R) / Math.max(1, span) >= 30) || 100;
+    for (let l = first; l <= last; l++) {
+      if (l !== first && l !== last && l % xstep !== 0) continue;
+      if (l === last && l !== first && l % xstep !== 0 && (last - Math.floor(last / xstep) * xstep) * (W - L - R) / Math.max(1, span) < 24) continue;
+      svg += '<text class="ax" x="' + x(l).toFixed(1) + '" y="' + (base + 18) + '" text-anchor="middle">' + l + '</text>';
+    }
+    svg += '<text class="axt" x="' + ((L + W - R) / 2).toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle">Lap</text>'
+      + '<text class="axt" text-anchor="middle" transform="translate(14 ' + ((T + base) / 2).toFixed(1) + ') rotate(-90)">Lap time (s)</text>';
+
+    // Last place first, so the leader's line is drawn on top; each
+    // driver's best lap filled in.
+    lines.slice().reverse().forEach((line) => {
+      if (line.laps.length === 0) return;
+      const colour = COLOURS[line.c % COLOURS.length];
+      const best = Math.min.apply(null, line.laps);
+      const path = line.laps.map((ms, i) => x(i + 2).toFixed(1) + ',' + y(ms).toFixed(1)).join(' ');
+      svg += '<g style="--c:' + colour + '"><polyline points="' + path + '"/>'
+        + line.laps.map((ms, i) => '<circle' + (ms === best ? ' class="now" r="5"' : ' r="3"') + ' cx="' + x(i + 2).toFixed(1) + '" cy="' + y(ms).toFixed(1) + '"/>').join('')
+        + '</g>';
+    });
+    svg += '</svg>';
+
+    const key = '<ul class="posk">' + lines.filter((line) => line.laps.length > 0).map((line) =>
+      '<li><span class="sw" style="--c:' + COLOURS[line.c % COLOURS.length] + '"></span>' + esc(line.k)
+      + ' <b>' + (Math.min.apply(null, line.laps) / 1000).toFixed(3) + '</b></li>').join('') + '</ul>';
+    const capped = sorted[sorted.length - 1] > cap
+      ? '<p class="note">Higher is quicker; the filled dot is each driver\\u2019s best. Laps over ' + (cap / 1000).toFixed(1) + 's sit on the bottom line.</p>'
+      : '<p class="note">Higher is quicker; the filled dot is each driver\\u2019s best.</p>';
+    const html = svg + key + capped;
+    if (tout.innerHTML !== html) tout.innerHTML = html;
+  }
+
+  function draw(rows) {
+    drawPos(rows);
+    drawTimes(rows);
+  }
+
   return { take: take, draw: draw, hide: hide };
 })();
 
-function drawBoard(state, final, at) {
+function drawBoard(state) {
   const columns = Array.isArray(state.columns) ? state.columns : [];
   const rows = Array.isArray(state.standings) ? state.standings : [];
-  const head = final
-    ? '<div class="finhead"><b>\\uD83C\\uDFC1 Race over \\u00B7 final board</b>'
-      + (at ? '<span>Last update ' + esc(lbClock(at)) + '</span>' : '') + '</div>'
-    : '';
-  const html = head + '<div class="card"><table><thead><tr>' +
+  const html = '<div class="card"><table><thead><tr>' +
     columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + '">' + esc(c) + '</th>').join('') +
     '</tr></thead><tbody>' +
     rows.map((r) => '<tr>' + cells(r, columns) + '</tr>').join('') +
@@ -4820,12 +4909,12 @@ function render(state, seen, at, empty) {
   if (rows.length === 0) {
     // Between races: the last one's board under "Race over", unless the
     // next is already being staged or counted down - then the bar says so
-    // and the board under it is still marked as the last race's.
+    // and the last race's board stays under it until the new one fills.
     const kept = keptRace();
     const coming = running === 'Staging' || running === 'Countdown';
-    drawBar(state, !!kept && !coming);
+    drawBar(state, !!kept && !coming, kept ? kept.at : 0);
     if (kept) {
-      drawBoard(kept.state, true, kept.at);
+      drawBoard(kept.state);
       posChart.draw(Array.isArray(kept.state.standings) ? kept.state.standings : []);
       return;
     }
@@ -4836,10 +4925,10 @@ function render(state, seen, at, empty) {
   }
 
   const over = running === 'Finished';
-  drawBar(state, over);
+  drawBar(state, over, at);
   keepRace(state, at || Date.now());
   posChart.take(rows);
-  drawBoard(state, over, over ? at : 0);
+  drawBoard(state);
   posChart.draw(rows);
 }
 
@@ -5387,6 +5476,7 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
       + '<div id="board"></div>'
       + '<div id="livepos" class="card livepos" hidden><h3>Position by lap</h3><div id="lposbody"></div></div>'
+      + '<div id="livetimes" class="card livepos" hidden><h3>Lap times</h3><div id="ltimebody"></div></div>'
       + voteControl(context.look.vote)
       + listenControl(context.look.listening)
       + noteControl(context.look.notes)
