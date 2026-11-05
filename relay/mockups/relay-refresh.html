@@ -1,0 +1,521 @@
+<title>Relay Refresh</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a review sheet. Plan up top, then one band per relay tab with its three phone mockups side by side. */
+:root {
+  --page: #F3F1F7; --ink: #1B1530; --soft: #615A78; --line: #DDD8E8; --card: #FFFFFF; --hi: #D81B7A;
+  --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #0E0A1A; --ink: #EEEAF7; --soft: #A39BBD; --line: #2B2443; --card: #171128; --hi: #FF5FAE; color-scheme: dark }
+
+body { background: var(--page); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 80px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; letter-spacing: .01em; }
+h1 { font-size: 2.6rem; line-height: 1; margin: 0 0 8px; }
+h2 { font-size: 1.7rem; margin: 0 0 6px; }
+h3 { font-size: 1.15rem; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .06em; }
+.lede { color: var(--soft); max-width: 65ch; margin: 0; }
+.eyebrow { font: 600 .72rem var(--f-body); text-transform: uppercase; letter-spacing: .14em; color: var(--hi); margin-bottom: 6px; }
+section.plan { display: grid; gap: 18px; margin: 28px 0 8px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; min-width: 0; }
+.box ul, .box ol { margin: 6px 0 0; padding-left: 18px; }
+.box li { margin: 4px 0; }
+.box code, td code { font: .8rem var(--f-mono); background: color-mix(in srgb, var(--hi) 10%, transparent); padding: 1px 5px; border-radius: 4px; }
+.tblw { overflow-x: auto; }
+table.inv { width: 100%; border-collapse: collapse; font-size: .88rem; min-width: 560px; }
+table.inv th, table.inv td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.inv th { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--soft); }
+
+/* Sticky control bar */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--page); }
+.ctl { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9; background: color-mix(in srgb, var(--page) 92%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); margin: 24px -16px 0; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.ctl .grp { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ctl .lbl { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--soft); font-weight: 600; }
+.pill { font: 600 .85rem var(--f-body); padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.pill[aria-pressed="true"] { background: var(--ink); color: var(--page); border-color: var(--ink); }
+.pill:focus-visible, .pick button:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px; }
+.sw { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(128,128,128,.4); }
+.jump a { color: var(--soft); text-decoration: none; font-weight: 600; font-size: .85rem; padding: 4px 6px; border-radius: 6px; }
+.jump a:hover { color: var(--ink); background: var(--card); }
+
+/* Tab bands */
+.band { margin-top: 44px; scroll-margin-top: 80px; }
+.bandhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 8px 16px; margin-bottom: 14px; }
+.bandhead p { margin: 0; color: var(--soft); max-width: 70ch; }
+.trio { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; justify-items: center; }
+.slot { display: grid; gap: 10px; justify-items: center; width: 100%; max-width: 340px; }
+.cap { width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.cap b { font-family: var(--f-display); font-size: 1.2rem; letter-spacing: .02em; }
+.cap span { color: var(--soft); font-size: .8rem; }
+.why { font-size: .84rem; color: var(--soft); margin: 0; width: 100%; }
+.pick { display: flex; gap: 6px; width: 100%; }
+.pick button { flex: 1; font: 600 .82rem var(--f-body); padding: 8px; border-radius: 10px; border: 1px dashed var(--line); background: transparent; color: var(--soft); cursor: pointer; }
+.pick button[aria-pressed="true"] { border: 1px solid var(--hi); color: var(--hi); background: color-mix(in srgb, var(--hi) 10%, transparent); }
+.picks { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+#picksout { font: .82rem var(--f-mono); color: var(--soft); white-space: pre-wrap; margin: 0; }
+
+/* ================= THE PHONE (club look tokens live here) ================= */
+.phone {
+  --bg:#0F0722; --surface:#1A0F3A; --row-alt:#150B2E; --primary:#FF2E9A; --on-primary:#FFFFFF; --accent:#2EE6FF;
+  --text:#F7F2FF; --muted:#9E8AC7; --border:#33215C; --good:#3DD68C; --bad:#FF5C7A; --warn:#F5B83D;
+  --tonal: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  --on-tonal: color-mix(in srgb, var(--primary) 55%, var(--text));
+  --ring: color-mix(in srgb, var(--accent) 70%, transparent);
+  width: 100%; max-width: 330px; height: 640px; border-radius: 34px; padding: 10px; background: #08060D;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 18px 40px rgba(10,5,25,.28);
+}
+.scr { position: relative; height: 100%; border-radius: 26px; overflow: hidden; background: var(--bg); color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; }
+.body { flex: 1; overflow-y: auto; padding: 14px 14px 18px; display: flex; flex-direction: column; gap: 12px; scrollbar-width: none; }
+.body::-webkit-scrollbar { display: none; }
+.status { height: 22px; flex: none; display: flex; justify-content: space-between; padding: 6px 18px 0; font-size: 11px; font-weight: 600; color: var(--text); opacity: .8; }
+.mh { display: flex; align-items: center; gap: 10px; }
+.mh .crest { width: 34px; height: 34px; border-radius: 10px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; font-weight: 800; font-size: 13px; flex: none; }
+.mh .nm { font-weight: 800; font-size: 17px; line-height: 1.1; }
+.mh .nm span { color: var(--primary); }
+.mh .sb { font-size: 11.5px; color: var(--muted); }
+.k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 700; }
+.big { font-size: 20px; font-weight: 800; line-height: 1.15; }
+.mut { color: var(--muted); font-size: 12.5px; }
+.num { font-variant-numeric: tabular-nums; }
+.acc { color: var(--accent); }
+.gd { color: var(--good); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.row .grow { flex: 1; min-width: 0; }
+.row .grow b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list { display: flex; flex-direction: column; }
+.list > .row { padding: 10px 2px; border-top: 1px solid var(--border); }
+.list > .row:first-child { border-top: 0; }
+.pos { width: 22px; text-align: center; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pos.p1 { color: var(--primary); }
+.av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; flex: none;
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface)); color: var(--text); }
+.me-row { background: color-mix(in srgb, var(--primary) 12%, transparent); border-radius: 10px; }
+.chip { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 4px 8px; border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, var(--muted) 20%, transparent); color: var(--muted); }
+.chip.live { background: var(--bad); color: #fff; }
+.chip.next { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+.chip.done { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.meter { height: 7px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--good); border-radius: inherit; }
+.meter.w i { background: var(--warn); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); display: inline-block; box-shadow: 0 0 0 0 var(--bad); animation: pulse 1.6s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 7px transparent; } }
+@media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.field { display: flex; flex-direction: column; gap: 5px; font-weight: 600; font-size: 12.5px; }
+.field .in { min-height: 44px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); display: flex; align-items: center; padding: 0 12px; font-weight: 400; font-size: 14px; }
+.pin { letter-spacing: .5em; justify-content: center; font-size: 22px; color: var(--text) !important; font-weight: 700 !important; }
+
+/* ---------- Buttons: one kit, every colour a look token ---------- */
+.b { --h: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--h); padding: 0 18px;
+  font: 700 14.5px/1 system-ui, -apple-system, "Segoe UI", sans-serif; border: 1px solid transparent; cursor: pointer; text-decoration: none;
+  transition: transform .08s, filter .15s, background .15s; white-space: nowrap; }
+.b:active { transform: scale(.97); }
+.b:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.b.full { width: 100%; }
+.b.sm { --h: 36px; padding: 0 12px; font-size: 12.5px; }
+.b.icon { padding: 0; width: var(--h); }
+.b-pri { background: var(--primary); color: var(--on-primary); }
+.b-pri:hover { filter: brightness(1.08); }
+.b-ton { background: var(--tonal); color: var(--on-tonal); }
+.b-out { background: transparent; color: var(--text); border-color: var(--border); }
+.b-out:hover { border-color: var(--primary); }
+.b-gho { background: transparent; color: var(--accent); }
+.b-ok { background: var(--good); color: var(--bg); }
+.b-dan { background: color-mix(in srgb, var(--bad) 16%, var(--surface)); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+.b[disabled] { opacity: .4; cursor: default; }
+.b[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+.brow { display: flex; gap: 8px; flex-wrap: wrap; }
+.brow > .b { flex: 1 1 0; }
+
+/* Segmented control (sub-tabs, race tabs, desk tabs) */
+.seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); }
+.seg a { flex: 1; min-height: 38px; display: grid; place-items: center; border-radius: 10px; font-weight: 700; font-size: 12.5px; color: var(--muted); text-decoration: none; }
+.seg a.on { background: var(--primary); color: var(--on-primary); }
+
+/* Bottom tab bar */
+.bar { flex: none; display: flex; border-top: 1px solid var(--border); background: var(--surface); padding: 6px 4px 10px; }
+.bar a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 600; color: var(--muted); text-decoration: none; position: relative; }
+.bar a .ic { width: 52px; height: 28px; border-radius: 99px; display: grid; place-items: center; }
+.bar a.on { color: var(--text); }
+.bar a .ld { position: absolute; top: 2px; left: calc(50% + 10px); width: 7px; height: 7px; border-radius: 50%; background: var(--bad); }
+
+/* ===== Direction A: "Pit Wall" - soft cards, rounded-rect buttons, pill-lit tab bar ===== */
+.vA .b { border-radius: 14px; }
+.vA .bar a.on .ic { background: var(--tonal); color: var(--on-tonal); }
+
+/* ===== Direction B: "Broadcast" - a header band in the club colour, full pills, bold caps ===== */
+.vB .band-top { margin: -14px -14px 0; padding: 14px 14px 18px; background:
+  linear-gradient(160deg, color-mix(in srgb, var(--primary) 70%, var(--bg)), color-mix(in srgb, var(--primary) 18%, var(--bg)) 75%); color: #fff; }
+.vB .band-top .mut, .vB .band-top .k { color: rgba(255,255,255,.75); }
+.vB .band-top .mh .crest { background: rgba(255,255,255,.18); color: #fff; }
+.vB .band-top .nm span { color: #fff; opacity: .8; }
+.vB .b { border-radius: 999px; text-transform: uppercase; letter-spacing: .06em; font-size: 13px; }
+.vB .b.sm { font-size: 11px; }
+.vB .card { border-radius: 20px; border-color: transparent; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.vB .seg { border-radius: 999px; }
+.vB .seg a { border-radius: 999px; text-transform: uppercase; letter-spacing: .05em; font-size: 11px; }
+.vB .bar { background: var(--bg); }
+.vB .bar a.on { color: var(--primary); }
+.vB .bar a.on::before { content: ""; position: absolute; top: -7px; width: 28px; height: 3px; border-radius: 0 0 3px 3px; background: var(--primary); box-shadow: 0 0 10px var(--primary); }
+.vB .bigbtn { min-height: 60px; font-size: 16px; }
+
+/* ===== Direction C: "Timing Sheet" - flat and dense, 8px corners, outlined, icons lead ===== */
+.vC .b { border-radius: 8px; --h: 44px; }
+.vC .b.sm { --h: 34px; }
+.vC .card { border-radius: 10px; background: transparent; padding: 12px; }
+.vC .seg { background: transparent; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 0; gap: 0; }
+.vC .seg a { border-radius: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; min-height: 40px; }
+.vC .seg a.on { background: transparent; color: var(--text); border-bottom-color: var(--primary); }
+.vC .bar { background: var(--bg); }
+.vC .bar a.on { color: var(--primary); }
+.vC .bar a.on .ic { background: transparent; }
+.vC .list > .row { padding: 8px 2px; }
+.vC .tight { font-size: 12.5px; }
+.vC .chip { border-radius: 4px; }
+
+/* Tables inside phones */
+.tt { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.tt th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 4px 4px 6px; font-weight: 700; }
+.tt td { padding: 7px 4px; border-top: 1px solid var(--border); }
+.tt tr.me td { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.tt td.r, .tt th.r { text-align: right; }
+.toast { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 700; white-space: nowrap; box-shadow: 0 8px 22px rgba(0,0,0,.35); }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">HeatCaller relay &middot; UI update plan</div>
+  <h1>Relay Refresh</h1>
+  <p class="lede">One button kit and one set of colour tokens for every page the relay serves: the five club tabs, the pages under them, and the club's Manage desk. Below the plan, each tab has three directions to pick from. Switch the club look to check that every control follows it.</p>
+
+  <section class="plan">
+    <div class="cols">
+      <div class="box">
+        <h3>What's wrong today</h3>
+        <ul>
+          <li>Eight button styles that grew one page at a time: <code>.go</code>, <code>.go.quiet</code>, <code>.page</code>, <code>.share</code>, <code>.btn</code>, <code>.rtab</code>, <code>.chip</code>, the caption/ear toggles.</li>
+          <li>Colours written straight into rules, so they ignore the club look: Manage's danger <code>#7a2233</code>, the recorded chip's <code>#0a2e17</code>, the amber <code>#F5B83D</code>, the About sheet's <code>#FF2E88</code>, white text on live chips.</li>
+          <li>Manage uses <code>--raised</code>, <code>--hair</code> and <code>--on-tint</code>, which the club pages never define.</li>
+          <li>Share is a grey caps word, Newer/Older look like tags, and pressed states only exist on two toggles.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>The kit</h3>
+        <ul>
+          <li><b>Primary</b>: the one thing to do on a screen (Check in, Sign in, Listen live).</li>
+          <li><b>Tonal</b>: a second action that still matters (Follow, Seed mains). Mixed from the primary, so it follows the look.</li>
+          <li><b>Outline</b>: neutral actions (Newer, Older, Share, Details).</li>
+          <li><b>Ghost</b>: inline links that act (What's HeatCaller?, Change).</li>
+          <li><b>Danger</b>: tinted from <code>--bad</code>, never a literal.</li>
+          <li><b>Segmented</b>: Results' sub-tabs, Me's race tabs, Manage's desk tabs.</li>
+          <li>Every control is at least 44px tall, shows a focus ring, shrinks a little when pressed and marks on/off with <code>aria-pressed</code>.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>How it lands</h3>
+        <ol>
+          <li>Add the missing tokens to the root block: <code>--on-primary</code>, <code>--warn</code>, <code>--tonal</code>, <code>--ring</code>, with <code>--raised</code>/<code>--hair</code> made aliases.</li>
+          <li>Write the kit once in <code>STYLE</code> as <code>.b</code> + <code>.b-pri/-ton/-out/-gho/-dan</code>, <code>.seg</code>, <code>.bar</code>.</li>
+          <li>Move each page's markup onto the kit, tab by tab, in the order you approve.</li>
+          <li>Delete the old classes once nothing uses them; a test fails if a hex colour appears in a page rule.</li>
+          <li>Check every tab on a phone in all four looks, then release notes.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="box">
+      <h3>Where each old control goes</h3>
+      <div class="tblw"><table class="inv">
+        <thead><tr><th>Today</th><th>Where it's used</th><th>Becomes</th></tr></thead>
+        <tbody>
+          <tr><td><code>.go</code></td><td>Check in, Sign up, Listen, Vote, Shout</td><td>Primary, full width</td></tr>
+          <tr><td><code>.go.quiet</code></td><td>Second choice under a big button</td><td>Tonal, full width</td></tr>
+          <tr><td><code>.page</code></td><td>Newer / Older / Show more on Results</td><td>Outline</td></tr>
+          <tr><td><code>.share</code></td><td>Every session and race day</td><td>Outline, small, with an icon</td></tr>
+          <tr><td><code>.btn</code>, <code>.btn.small</code>, <code>.btn.danger</code></td><td>Manage desk</td><td>Primary / Tonal / Danger, same sizes as the club pages</td></tr>
+          <tr><td><code>.rtab</code>, <code>nav.subtabs</code>, Manage's tabs</td><td>Me, Results, Manage</td><td>Segmented</td></tr>
+          <tr><td><code>.caps</code>, <code>.ears</code>, <code>#lapbtn</code></td><td>Live captions, lap times in my ear</td><td>Outline that fills when on</td></tr>
+          <tr><td><code>.chip</code> (as a button)</td><td>Manage rows</td><td>Small tonal button; chips go back to being status only</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <div class="ctl" role="toolbar" aria-label="Mockup controls">
+    <div class="grp"><span class="lbl">Club look</span><span id="looks"></span></div>
+    <div class="grp jump" id="jump"><span class="lbl">Jump to</span></div>
+  </div>
+
+  <div id="bands"></div>
+
+  <section class="band" id="picks">
+    <div class="bandhead"><div><div class="eyebrow">Your picks</div><h2>What to build</h2>
+    <p>Pick one direction per tab above (mixing is fine; the kit is shared). Copy the list and paste it back to me.</p></div></div>
+    <div class="box picks"><pre id="picksout">Nothing picked yet.</pre><button class="pill" id="copy" type="button">Copy picks</button></div>
+  </section>
+</div>
+
+<script>
+const LOOKS = {
+  Synthwave: { '--bg':'#0F0722','--surface':'#1A0F3A','--row-alt':'#150B2E','--primary':'#FF2E9A','--on-primary':'#FFFFFF','--accent':'#2EE6FF','--text':'#F7F2FF','--muted':'#9E8AC7','--border':'#33215C','--good':'#3DD68C','--bad':'#FF5C7A','--warn':'#F5B83D' },
+  Midnight:  { '--bg':'#0B1220','--surface':'#131C2E','--row-alt':'#0F1727','--primary':'#3B82F6','--on-primary':'#FFFFFF','--accent':'#38BDF8','--text':'#E6EBF5','--muted':'#8A96AD','--border':'#24304A','--good':'#34D399','--bad':'#F87171','--warn':'#FBBF24' },
+  Daylight:  { '--bg':'#F5F7FB','--surface':'#FFFFFF','--row-alt':'#EEF2F8','--primary':'#2563EB','--on-primary':'#FFFFFF','--accent':'#0E7490','--text':'#111827','--muted':'#5B6474','--border':'#D7DDE8','--good':'#15803D','--bad':'#DC2626','--warn':'#B45309' },
+  'Pit Lane':{ '--bg':'#121212','--surface':'#1D1D1D','--row-alt':'#171717','--primary':'#FFD400','--on-primary':'#111111','--accent':'#FF9F1C','--text':'#F5F5F5','--muted':'#A3A3A3','--border':'#333333','--good':'#4ADE80','--bad':'#F43F5E','--warn':'#FBBF24' }
+};
+const I = {
+  home:'M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10',
+  live:'M12 12h.01M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8',
+  schedule:'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',
+  results:'M5 21V4M5 4h11l-2 4 2 4H5',
+  me:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0',
+  share:'M12 3v12M7 8l5-5 5 5M5 14v6h14v-6',
+  play:'M7 4l13 8-13 8z',
+  cc:'M3 6h18v12H3zM10 10.5a2 2 0 1 0 0 3M17 10.5a2 2 0 1 0 0 3',
+  ear:'M7 10a5 5 0 1 1 10 0c0 3-3 4-3 7a3 3 0 0 1-6 0M10 10a2 2 0 1 1 4 0',
+  check:'M5 12l5 5 9-10',
+  chev:'M9 6l6 6-6 6',
+  left:'M15 6l-6 6 6 6',
+  star:'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z',
+  map:'M9 4l6 2 5-2v14l-5 2-6-2-5 2V6zM9 4v14M15 6v14',
+  plus:'M12 5v14M5 12h14',
+  bell:'M6 17V11a6 6 0 0 1 12 0v6l2 2H4zM10 21h4',
+  flag:'M5 21V4M5 4h11l-2 4 2 4H5',
+  gear:'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6M19 12l2-1-1-3-2 .2-1.3-1.5.3-2-3-1-1 2h-2l-1-2-3 1 .3 2L6 8.2 4 8l-1 3 2 1v0l-2 1 1 3 2-.2 1.3 1.5-.3 2 3 1 1-2h2l1 2 3-1-.3-2 1.3-1.5 2 .2 1-3z',
+  user:'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0',
+  shuffle:'M4 7h4l8 10h4M4 17h4l2-2.5M14 9.5L16 7h4M17 4l3 3-3 3M17 14l3 3-3 3',
+  up:'M12 19V5M5 12l7-7 7 7'
+};
+const ic = (n, cls='i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${I[n]}"/></svg>`;
+
+function bar(lit, v) {
+  const t = [['home','Home'],['live','Live'],['schedule','Schedule'],['results','Results'],['me','Me']];
+  return `<nav class="bar">${t.map(([k,l]) => `<a href="#" class="${lit===k?'on':''}" tabindex="-1"><span class="ic">${ic(k)}</span>${l}${k==='live'?'<i class="ld"></i>':''}</a>`).join('')}</nav>`;
+}
+function head(v, sub, extra='') {
+  const h = `<div class="mh"><div class="crest">TR</div><div class="grow"><div class="nm">Thornbury <span>Raceway</span></div><div class="sb">${sub}</div></div>${extra}</div>`;
+  return v==='B' ? h : h;
+}
+const phone = (v, lit, inner, after='') => `<div class="phone v${v}"><div class="scr"><div class="status"><span>19:42</span><span>5G &#9646;&#9646;&#9646;</span></div><div class="body">${inner}</div>${after}${lit?bar(lit,v):''}</div></div>`;
+
+const drivers = [['1','Mia Okafor','MO','14.212','—'],['2','Sam Reyes','SR','14.388','+0.9'],['3','Jonah Pike','JP','14.401','+1.4'],['4','Asher K.','AK','14.517','+2.2'],['5','Ruby Lane','RL','14.630','+3.0'],['6','Theo Marsh','TM','14.702','+4.1']];
+
+/* ---------------- HOME ---------------- */
+const home = {
+  A: () => phone('A','home', `
+    ${head('A','Club nights every Tuesday · Indoor 380 m')}
+    <div class="card"><span class="k">Tonight</span><span class="big">Tuesday Sprint Night</span><span class="mut">Doors 18:30 · First heat 19:15 · 22 drivers in</span>
+      <div class="brow"><a class="b b-pri" href="#">${ic('check')}Check in</a><a class="b b-ton" href="#">Schedule</a></div></div>
+    <div class="card"><div class="row"><span class="dot"></span><div class="grow"><b>Heat 4 · Pro class is on track</b><span class="mut">Lap 9 of 14</span></div><a class="b b-out sm" href="#">Watch</a></div></div>
+    <div class="card"><span class="k">Track record</span><div class="row"><div class="grow"><b class="num">13.984 · Mia Okafor</b><span class="mut">Set 14 Oct</span></div><a class="b b-gho sm" href="#">${ic('map')}Tracks</a></div></div>
+    <div class="brow"><a class="b b-out sm" href="#">Instagram</a><a class="b b-out sm" href="#">Facebook</a><a class="b b-gho sm" href="#">What's HeatCaller?</a></div>`),
+  B: () => phone('B','home', `
+    <div class="band-top">${head('B','Club nights every Tuesday')}
+      <div style="margin-top:16px"><span class="k">Tonight · 19:15</span><div class="big" style="font-size:24px">Tuesday Sprint Night</div><span class="mut">22 drivers checked in</span></div>
+      <div style="margin-top:14px"><a class="b b-pri full bigbtn" href="#" style="background:#fff;color:var(--bg)">${ic('check')}Check in</a></div></div>
+    <div class="card"><div class="row"><span class="chip live">Live</span><div class="grow"><b>Heat 4 · Pro class</b><span class="mut">Lap 9 of 14 · Mia leads</span></div><a class="b b-ton sm" href="#">Watch</a></div></div>
+    <div class="row" style="gap:8px"><div class="card" style="flex:1"><span class="k">Record</span><b class="num">13.984</b><span class="mut">Mia Okafor</span></div><div class="card" style="flex:1"><span class="k">Next night</span><b>Tue 10 Nov</b><span class="mut">Endurance</span></div></div>
+    <a class="b b-out full" href="#">${ic('map')}Tracks & layouts</a>`),
+  C: () => phone('C','home', `
+    ${head('C','Indoor 380 m · Tuesdays', `<a class="b b-out sm icon" href="#" aria-label="Notifications">${ic('bell')}</a>`)}
+    <div class="seg"><a class="on" href="#">Tonight</a><a href="#">About</a><a href="#">Tracks</a></div>
+    <div class="list tight">
+      <div class="row"><div class="grow"><b>Tuesday Sprint Night</b><span class="mut">First heat 19:15</span></div><a class="b b-pri sm" href="#">Check in</a></div>
+      <div class="row"><span class="chip live">Live</span><div class="grow"><b>Heat 4 · Pro</b><span class="mut">Lap 9/14</span></div><a class="b b-out sm icon" href="#" aria-label="Watch">${ic('chev')}</a></div>
+      <div class="row"><span class="chip next">Next</span><div class="grow"><b>Heat 5 · Rookie</b><span class="mut">≈ 19:52</span></div><a class="b b-out sm icon" href="#" aria-label="Open">${ic('chev')}</a></div>
+      <div class="row"><span class="chip">Rec</span><div class="grow"><b class="num">13.984 · Mia Okafor</b><span class="mut">Layout A, 14 Oct</span></div></div>
+    </div>
+    <div class="brow"><a class="b b-out sm" href="#">Instagram</a><a class="b b-out sm" href="#">Facebook</a></div>
+    <a class="b b-gho sm" href="#">What's HeatCaller?</a>`)
+};
+
+/* ---------------- LIVE ---------------- */
+const liveRows = (tight) => `<div class="list">${drivers.map(([p,n,a,t,g]) => `<div class="row ${n==='Asher K.'?'me-row':''}"><span class="pos ${p==='1'?'p1':''}">${p}</span>${tight?'':`<span class="av">${a}</span>`}<div class="grow"><b>${n}</b>${tight?'':`<span class="mut num">Best ${t}</span>`}</div>${tight?`<span class="num mut">${t}</span>`:''}<span class="num acc">${g}</span></div>`).join('')}</div>`;
+const live = {
+  A: () => phone('A','live', `
+    ${head('A','Heat 4 · Pro class')}
+    <div class="card"><div class="row"><span class="chip live">Live</span><span class="grow mut">Lap <b class="num" style="color:var(--text)">9</b> of 14</span><span class="num acc">04:12</span></div><div class="meter"><i style="width:64%"></i></div></div>
+    <div class="brow"><button class="b b-pri" type="button">${ic('play')}Listen live</button><button class="b b-out" type="button" aria-pressed="true">${ic('cc')}Captions</button></div>
+    <button class="b b-ton full" type="button">${ic('ear')}Lap times in my ear: off</button>
+    <div class="card">${liveRows(false)}</div>
+    <div class="row mut" style="font-size:12px">Tap a name to follow them.</div>`),
+  B: () => phone('B','live', `
+    <div class="band-top"><div class="row"><span class="chip live">● On air</span><span class="grow"></span><span class="num" style="font-weight:800">04:12</span></div>
+      <div class="big" style="font-size:26px;margin-top:10px">Heat 4 · Pro</div><span class="mut">Lap 9 of 14 · Mia Okafor leads by 0.9s</span>
+      <div class="brow" style="margin-top:14px"><button class="b b-pri" type="button" style="background:#fff;color:var(--bg)">${ic('play')}Listen</button><button class="b b-out" type="button" style="color:#fff;border-color:rgba(255,255,255,.4)">${ic('cc')}CC</button><button class="b b-out icon" type="button" style="color:#fff;border-color:rgba(255,255,255,.4)" aria-label="Lap times in my ear">${ic('ear')}</button></div></div>
+    <div class="card" style="padding:10px 12px">${liveRows(false)}</div>
+    <div class="card"><div class="row"><span class="av">AK</span><div class="grow"><b>Following Asher K.</b><span class="mut">P4 · +2.2 to the leader</span></div><button class="b b-dan sm" type="button">Stop</button></div></div>`),
+  C: () => phone('C','live', `
+    ${head('C','Heat 4 · Pro · lap 9/14', '<span class="chip live">Live</span>')}
+    <div class="brow"><button class="b b-pri sm" type="button">${ic('play')}Listen</button><button class="b b-out sm" type="button" aria-pressed="true">${ic('cc')}Captions</button><button class="b b-out sm" type="button">${ic('ear')}In my ear</button></div>
+    <table class="tt"><thead><tr><th>P</th><th>Driver</th><th class="r">Best</th><th class="r">Gap</th></tr></thead><tbody>
+    ${drivers.map(([p,n,a,t,g]) => `<tr class="${n==='Asher K.'?'me':''}"><td><b>${p}</b></td><td>${n}</td><td class="r">${t}</td><td class="r acc">${g}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="card"><span class="k">Caption</span><span>"Okafor goes purple in sector two, that's a 14.21!"</span></div>`)
+};
+
+/* ---------------- SCHEDULE ---------------- */
+const sched = [['19:15','Heat 1 · Rookie','done'],['19:28','Heat 2 · Club','done'],['19:40','Heat 3 · Rookie','done'],['19:52','Heat 4 · Pro','live'],['20:05','Heat 5 · Club','next'],['20:18','Heat 6 · Pro','']];
+const chipFor = s => s==='live'?'<span class="chip live">On track</span>':s==='next'?'<span class="chip next">Next</span>':s==='done'?'<span class="chip done">Done</span>':'<span class="chip">Later</span>';
+const schedule = {
+  A: () => phone('A','schedule', `
+    ${head('A','Tuesday Sprint Night · 6 heats')}
+    <div class="card" style="border-color:var(--accent)"><span class="k">Your next race</span><span class="big">Heat 5 · Club</span><span class="mut">≈ 20:05 · kart 7 · be in the dummy grid by 19:58</span>
+      <div class="brow"><button class="b b-pri" type="button">${ic('bell')}Remind me</button><button class="b b-out" type="button">Details</button></div></div>
+    <div class="card"><div class="list">${sched.map(([t,n,s]) => `<div class="row"><span class="num mut" style="width:40px">${t}</span><div class="grow"><b>${n}</b></div>${chipFor(s)}</div>`).join('')}</div></div>`),
+  B: () => phone('B','schedule', `
+    <div class="band-top">${head('B','Tonight · 6 heats')}<div class="seg" style="margin-top:14px;background:rgba(0,0,0,.2);border-color:transparent"><a class="on" href="#">Tonight</a><a href="#" style="color:#fff">Next night</a></div></div>
+    ${sched.map(([t,n,s]) => `<div class="card" style="padding:12px;${s==='next'?'outline:2px solid var(--accent)':''}"><div class="row"><div style="width:46px"><b class="num">${t}</b></div><div class="grow"><b>${n}</b>${s==='next'?'<span class="mut">You race · kart 7</span>':''}</div>${chipFor(s)}</div></div>`).join('')}`),
+  C: () => phone('C','schedule', `
+    ${head('C','Tuesday Sprint Night', `<button class="b b-out sm" type="button">${ic('bell')}Alerts</button>`)}
+    <div class="seg"><a class="on" href="#">All heats</a><a href="#">Mine</a><a href="#">By class</a></div>
+    <table class="tt"><thead><tr><th>Time</th><th>Heat</th><th class="r">Status</th></tr></thead><tbody>
+    ${sched.map(([t,n,s]) => `<tr class="${s==='next'?'me':''}"><td class="num">${t}</td><td>${n}</td><td class="r">${chipFor(s)}</td></tr>`).join('')}</tbody></table>
+    <div class="mut">Times move with the night. Highlighted rows are yours.</div>`)
+};
+
+/* ---------------- RESULTS ---------------- */
+const res = drivers.slice(0,5);
+const results = {
+  A: () => phone('A','results', `
+    ${head('A','Every race the club has published')}
+    <div class="seg"><a class="on" href="#">Results</a><a href="#">Standings</a><a href="#">Awards</a></div>
+    <div class="row"><div class="grow"><b>Tue 27 Oct</b><span class="mut">8 heats · 24 drivers</span></div><button class="b b-out sm" type="button">${ic('share')}Share</button></div>
+    <div class="card"><div class="row"><div class="grow"><b>Final · Pro</b><span class="mut">14 laps</span></div><button class="b b-gho sm" type="button">${ic('share')}</button></div>
+      <div class="list">${res.slice(0,3).map(([p,n,a,t]) => `<div class="row"><span class="pos ${p==='1'?'p1':''}">${p}</span><span class="av">${a}</span><div class="grow"><b>${n}</b></div><span class="num mut">${t}</span></div>`).join('')}</div>
+      <button class="b b-ton full sm" type="button">Full result</button></div>
+    <div class="brow"><button class="b b-out" type="button" disabled>${ic('left')}Newer</button><button class="b b-out" type="button">Older${ic('chev')}</button></div>`),
+  B: () => phone('B','results', `
+    <div class="band-top">${head('B','Results')}<div class="seg" style="margin-top:14px;background:rgba(0,0,0,.2);border-color:transparent"><a class="on" href="#">Results</a><a href="#" style="color:#fff">Standings</a><a href="#" style="color:#fff">Awards</a></div></div>
+    <div class="card"><span class="k">Final · Pro · Tue 27 Oct</span>
+      <div class="row" style="align-items:end;justify-content:center;gap:6px;margin:6px 0">
+        <div style="text-align:center;flex:1"><span class="av" style="margin:auto">SR</span><div style="height:40px;background:var(--tonal);border-radius:8px 8px 0 0;margin-top:4px;display:grid;place-items:center;font-weight:800">2</div></div>
+        <div style="text-align:center;flex:1"><span class="av" style="margin:auto">MO</span><div style="height:58px;background:var(--primary);color:var(--on-primary);border-radius:8px 8px 0 0;margin-top:4px;display:grid;place-items:center;font-weight:800">1</div></div>
+        <div style="text-align:center;flex:1"><span class="av" style="margin:auto">JP</span><div style="height:30px;background:var(--tonal);border-radius:8px 8px 0 0;margin-top:4px;display:grid;place-items:center;font-weight:800">3</div></div></div>
+      <div class="brow"><button class="b b-pri sm" type="button">Full result</button><button class="b b-out sm" type="button">${ic('share')}Share</button></div></div>
+    <div class="card"><div class="row"><div class="grow"><b>Heat 6 · Club</b><span class="mut">Winner Ruby Lane · 14.630</span></div><button class="b b-ton sm icon" type="button" aria-label="Open">${ic('chev')}</button></div></div>
+    <button class="b b-out full" type="button">Show 10 more</button>`),
+  C: () => phone('C','results', `
+    ${head('C','Results')}
+    <div class="seg"><a href="#">Results</a><a class="on" href="#">Standings</a><a href="#">Awards</a></div>
+    <div class="row"><span class="mut grow">Pro class · after 6 rounds</span><button class="b b-out sm" type="button">${ic('share')}Share</button></div>
+    <table class="tt"><thead><tr><th>#</th><th>Driver</th><th class="r">Wins</th><th class="r">Pts</th></tr></thead><tbody>
+    ${[['1','Mia Okafor','4','212'],['2','Sam Reyes','1','188'],['3','Jonah Pike','1','171'],['4','Asher K.','0','150'],['5','Ruby Lane','0','133'],['6','Theo Marsh','0','120']].map(r => `<tr class="${r[1]==='Asher K.'?'me':''}"><td><b>${r[0]}</b></td><td>${r[1]}</td><td class="r">${r[2]}</td><td class="r"><b>${r[3]}</b></td></tr>`).join('')}</tbody></table>
+    <div class="brow"><button class="b b-out sm" type="button" disabled>${ic('left')}Newer</button><span class="mut" style="align-self:center;flex:0">1–6 of 24</span><button class="b b-out sm" type="button">Older${ic('chev')}</button></div>`)
+};
+
+/* ---------------- ME ---------------- */
+const me = {
+  A: () => phone('A','me', `
+    ${head('A','Your night')}
+    <div class="card" style="align-items:center;text-align:center"><span class="av" style="width:72px;height:72px;font-size:24px;background:var(--primary);color:var(--on-primary)">AK</span><span class="big">Asher K.</span><span class="mut">Club class · transponder 4471</span>
+      <button class="b b-pri full" type="button">${ic('check')}Check in for tonight</button><button class="b b-ton full" type="button">Not me? Pick again</button></div>
+    <div class="card" style="border-color:var(--accent)"><span class="k">Next race</span><span class="big acc">Heat 5 · ≈ 20:05</span><span class="mut">Kart 7 · marshal turn 3 in Heat 6</span></div>
+    <div class="seg"><a class="on" href="#">Heat 2</a><a href="#">Heat 5</a><a href="#">Final</a></div>`),
+  B: () => phone('B','me', `
+    <div class="band-top" style="text-align:center"><span class="av" style="width:84px;height:84px;font-size:28px;margin:6px auto;background:rgba(255,255,255,.2);color:#fff">AK</span><div class="big">Asher K.</div><span class="mut">Club class · 6 nights this season</span>
+      <div style="margin-top:14px"><button class="b b-pri full bigbtn" type="button" style="background:#fff;color:var(--bg)">${ic('check')}Check in</button></div></div>
+    <div class="row" style="gap:8px"><div class="card" style="flex:1;align-items:center"><span class="k">Best</span><b class="num">14.517</b></div><div class="card" style="flex:1;align-items:center"><span class="k">Podiums</span><b>3</b></div><div class="card" style="flex:1;align-items:center"><span class="k">Score</span><b>B+</b></div></div>
+    <div class="card"><div class="row"><div class="grow"><b>Heat 5 · Club</b><span class="mut">≈ 20:05 · kart 7</span></div><span class="chip next">Next</span></div></div>
+    <button class="b b-out full" type="button">${ic('share')}Share my night</button>`),
+  C: () => phone('C','me', `
+    ${head('C','Asher K. · Club class', `<button class="b b-gho sm" type="button">Change</button>`)}
+    <div class="field">Your PIN<div class="in pin">• • • •</div></div>
+    <button class="b b-pri full" type="button">Unlock my night</button>
+    <div class="list tight">
+      <div class="row"><span class="chip done">In</span><div class="grow"><b>Checked in 18:52</b><span class="mut">Transponder 4471</span></div></div>
+      <div class="row"><span class="chip next">Next</span><div class="grow"><b>Heat 5 · Club</b><span class="mut">≈ 20:05 · kart 7</span></div><button class="b b-out sm icon" type="button" aria-label="Open">${ic('chev')}</button></div>
+      <div class="row"><span class="chip">Duty</span><div class="grow"><b>Marshal turn 3</b><span class="mut">Heat 6</span></div></div>
+      <div class="row"><span class="chip done">P2</span><div class="grow"><b>Heat 2 · Club</b><span class="mut num">Best 14.517 · +0.31</span></div><button class="b b-out sm icon" type="button" aria-label="Share">${ic('share')}</button></div>
+    </div>`)
+};
+
+/* ---------------- MANAGE ---------------- */
+const meters = `<div class="field" style="font-weight:400"><div class="row"><span class="grow">Voice minutes</span><b class="num">412 / 500</b></div><div class="meter w"><i style="width:82%"></i></div></div>
+  <div class="field" style="font-weight:400"><div class="row"><span class="grow">Clips</span><b class="num">38 / 200</b></div><div class="meter"><i style="width:19%"></i></div></div>`;
+const manage = {
+  A: () => phone('A','', `
+    ${head('A','Club desk · signed in as Asher', `<button class="b b-out sm icon" type="button" aria-label="Settings">${ic('gear')}</button>`)}
+    <div class="seg"><a class="on" href="#">Today</a><a href="#">Entries</a><a href="#">Program</a><a href="#">Results</a></div>
+    <div class="card"><span class="k">This month</span>${meters}<button class="b b-ton sm" type="button">Ask for more</button></div>
+    <div class="card"><span class="k">Program · Club class</span><div class="field"><div class="in">Club class ▾</div></div>
+      <div class="brow"><button class="b b-pri" type="button">${ic('shuffle')}Seed mains</button><button class="b b-ton" type="button">${ic('up')}Bump ups</button></div></div>
+    <button class="b b-dan full" type="button">Cancel tonight</button>`),
+  B: () => phone('B','', `
+    <div class="band-top">${head('B','Club desk')}
+      <div class="row" style="gap:8px;margin-top:14px"><div style="flex:1"><span class="k">Checked in</span><div class="big num">22</div></div><div style="flex:1"><span class="k">Heats</span><div class="big num">6</div></div><div style="flex:1"><span class="k">On track</span><div class="big">H4</div></div></div></div>
+    <div class="seg"><a href="#">Today</a><a class="on" href="#">Entries</a><a href="#">Program</a><a href="#">Results</a></div>
+    ${[['Mia Okafor','Pro',true],['Sam Reyes','Pro',true],['New driver · Kai','Rookie',false]].map(([n,c,on]) => `<div class="card" style="padding:12px"><div class="row"><span class="av">${n.split(' ').map(w=>w[0]).join('').slice(0,2)}</span><div class="grow"><b>${n}</b><span class="mut">${c}</span></div>${on?'<span class="chip done">In</span>':'<button class="b b-pri sm" type="button">Approve</button>'}</div></div>`).join('')}
+    <button class="b b-out full" type="button">${ic('plus')}Add a driver</button>`),
+  C: () => phone('C','', `
+    ${head('C','Club desk')}
+    <div class="field">Club PIN<div class="in pin">• • • • • •</div></div>
+    <button class="b b-pri full" type="button">Sign in</button>
+    <div class="seg"><a href="#">Today</a><a href="#">Entries</a><a class="on" href="#">Program</a><a href="#">Results</a></div>
+    <div class="list tight">${sched.slice(2).map(([t,n,s]) => `<div class="row"><span class="num mut" style="width:38px">${t}</span><div class="grow"><b>${n}</b></div>${chipFor(s)}<button class="b b-out sm icon" type="button" aria-label="Edit">${ic('chev')}</button></div>`).join('')}</div>
+    <div class="brow"><button class="b b-ton sm" type="button">${ic('shuffle')}Seed mains</button><button class="b b-ton sm" type="button">${ic('up')}Bump ups</button></div>
+    ${meters}`)
+};
+
+const TABS = [
+  { id:'home', name:'Home', note:'Tonight at a glance, the way in to check-in, the live heat and the track record. Tracks lives here.', set: home },
+  { id:'live', name:'Live', note:'The heat on track. Listen, captions and lap times in my ear become one row of real toggles that fill when on.', set: live },
+  { id:'schedule', name:'Schedule', note:'The night in order, with your own heat lifted out and status chips that stop looking like buttons.', set: schedule },
+  { id:'results', name:'Results', note:'Results, Standings and Awards as one segmented control. Share, Newer and Older become proper buttons.', set: results },
+  { id:'me', name:'Me', note:'Check-in, the PIN box, your night and sign-up. The big button stays big; the second choice is tonal, not grey.', set: me },
+  { id:'manage', name:'Manage', note:'The club desk gets the same kit as the club pages: no more hard-coded danger red, chips used only for status.', set: manage }
+];
+const DIRS = { A:['Pit Wall','soft cards, rounded buttons','Calm and familiar. Least change for drivers, easiest to build.'],
+               B:['Broadcast','club-colour band, pill buttons','Loudest use of the club look. Feels like the TV graphic.'],
+               C:['Timing Sheet','flat, dense, outlined','Most on one screen. Tables and icons, suits regulars.'] };
+
+let look = 'Synthwave', picks = {};
+try { look = localStorage.getItem('rr-look') || look; picks = JSON.parse(localStorage.getItem('rr-picks') || '{}'); } catch (e) {}
+
+function applyLook() {
+  const vars = LOOKS[look] || LOOKS.Synthwave;
+  document.querySelectorAll('.phone').forEach(p => Object.entries(vars).forEach(([k,v]) => p.style.setProperty(k, v)));
+  document.querySelectorAll('#looks .pill').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === look));
+}
+function showPicks() {
+  document.querySelectorAll('.pick button').forEach(b => b.setAttribute('aria-pressed', picks[b.dataset.tab] === b.dataset.v));
+  const lines = TABS.filter(t => picks[t.id]).map(t => `${t.name}: ${picks[t.id]} (${DIRS[picks[t.id]][0]})`);
+  document.getElementById('picksout').textContent = lines.length ? lines.join('\n') : 'Nothing picked yet.';
+}
+
+document.getElementById('looks').innerHTML = Object.keys(LOOKS).map(n =>
+  `<button class="pill" type="button" data-look="${n}"><span class="sw" style="background:${LOOKS[n]['--primary']};box-shadow:inset 0 0 0 3px ${LOOKS[n]['--bg']}"></span>${n}</button>`).join('');
+document.getElementById('jump').insertAdjacentHTML('beforeend', TABS.map(t => `<a href="#${t.id}">${t.name}</a>`).join('') + '<a href="#picks">Picks</a>');
+document.getElementById('bands').innerHTML = TABS.map(t => `
+  <section class="band" id="${t.id}">
+    <div class="bandhead"><div><div class="eyebrow">Tab</div><h2>${t.name}</h2><p>${t.note}</p></div></div>
+    <div class="trio">${['A','B','C'].map(v => `
+      <div class="slot"><div class="cap"><b>${v} · ${DIRS[v][0]}</b><span>${DIRS[v][1]}</span></div>
+        ${t.set[v]()}
+        <p class="why">${DIRS[v][2]}</p>
+        <div class="pick"><button type="button" data-tab="${t.id}" data-v="${v}">Pick ${v} for ${t.name}</button></div></div>`).join('')}
+    </div></section>`).join('');
+
+document.addEventListener('click', e => {
+  const l = e.target.closest('#looks .pill');
+  if (l) { look = l.dataset.look; try { localStorage.setItem('rr-look', look); } catch (x) {} applyLook(); return; }
+  const p = e.target.closest('.pick button');
+  if (p) { picks[p.dataset.tab] = picks[p.dataset.tab] === p.dataset.v ? undefined : p.dataset.v; try { localStorage.setItem('rr-picks', JSON.stringify(picks)); } catch (x) {} showPicks(); return; }
+  if (e.target.closest('.phone a, .phone button')) { e.preventDefault(); return; }
+  if (e.target.id === 'copy') {
+    const text = document.getElementById('picksout').textContent;
+    const done = () => { e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy picks', 1500); };
+    try { navigator.clipboard.writeText(text).then(done, () => selectOut()); } catch (x) { selectOut(); }
+  }
+});
+function selectOut() { const r = document.createRange(); r.selectNodeContents(document.getElementById('picksout')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+applyLook(); showPicks();
+</script>
