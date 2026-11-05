@@ -213,6 +213,7 @@ function meSetSpace(sp, dir) {
     b.setAttribute('aria-selected', on ? 'true' : 'false');
     b.tabIndex = on ? 0 : -1;
   }
+  meDots();
   meEmpty();
   if (was !== '' && was !== sp) {
     // Slide in from the side it came from, and back to the switch.
@@ -586,9 +587,11 @@ function mePackSheet() {
         const got = await sendAsk('pack', { pack: c.id });
         if (got.ok) {
           if (me.packs) me.packs.current = c.id === 'none' ? '' : c.id;
+          // sendAsk has buzzed once for "sent"; HeatCaller's answer buzzes again.
+          const sent = sentAsks.length > 0 ? sentAsks[sentAsks.length - 1] : null;
+          if (sent && sent.kind === 'pack') mePackRefs.set(sent.ref, c.id === 'none' ? '' : String(c.label));
           meCloseSheet();
           meToast(c.id === 'none' ? 'No pack in the car - HeatCaller will have it in a few seconds' : c.label + ' is in the car - HeatCaller will have it in a few seconds');
-          if (navigator.vibrate) navigator.vibrate(30);
           meRefresh();
         } else {
           for (const x of grid.querySelectorAll('button')) x.disabled = false;
@@ -629,9 +632,97 @@ function meQuick() {
   });
 }
 
+// ---- HeatCaller's answer to a pack swap
+
+// The pack asks sent from this page, by ref, with the pack's name ('' for
+// "no pack"), and the ones already answered on screen - so an answer
+// buzzes once, and only for a swap made in this visit.
+const mePackRefs = new Map();
+const meAnswered = new Set();
+
+function meAnswers() {
+  const list = live && Array.isArray(live.asks) ? live.asks : [];
+  for (const a of list) {
+    if (!a || typeof a !== 'object' || a.kind !== 'pack') continue;
+    const ref = String(a.ref || '');
+    if (meAnswered.has(ref) || !sentAsks.some((s) => s.ref === ref)) continue;
+    if (a.state !== 'approved' && a.state !== 'declined' && a.state !== 'noted') continue;
+    meAnswered.add(ref);
+    const label = mePackRefs.has(ref) ? mePackRefs.get(ref) : null;
+    const said = typeof a.said === 'string' && a.said.trim() !== '' ? ' - ' + a.said.trim() : '';
+    if (a.state === 'declined') {
+      meToast('HeatCaller did not take the pack swap' + said, true);
+      if (navigator.vibrate) navigator.vibrate([60, 80, 60]);
+    } else {
+      meToast(label === null ? 'HeatCaller has your pack' : label === '' ? 'HeatCaller has it: no pack in the car' : 'HeatCaller has it: ' + label + ' is in the car');
+      if (navigator.vibrate) navigator.vibrate([25, 70, 25]);
+    }
+  }
+}
+
+// ---- a dot on a space with something new since they last looked
+
+const ME_SEEN_KEY = 'hg-me-seen-' + CLUB;
+let meSeenSigs = {};
+
+// What a space has, in a word: it changes when something new arrives and
+// not on the clock. '' while it is not known yet - never a dot for that.
+function meSigOf(sp) {
+  if (sp === 'races' || sp === 'stats') {
+    if (!night) return '';
+    const rs = meRacesReal();
+    const last = rs.length > 0 ? rs[rs.length - 1] : null;
+    return rs.length + ':' + (last ? String(last.id || last.at || last.label || '') : '');
+  }
+  if (sp === 'garage') {
+    if (!meGarage) return '';
+    const packs = Array.isArray(meGarage.packs) ? meGarage.packs : [];
+    const cars = Array.isArray(meGarage.cars) ? meGarage.cars : [];
+    return packs.map((p) => p ? String(p.id) + '.' + num(p.sessions) + (p.retired === true ? 'r' : '') : '').join(',') + '|' +
+      cars.map((c) => {
+        if (!c) return '';
+        const s = Array.isArray(c.setups) && c.setups[0] ? String(c.setups[0].id || '') : '';
+        return String(c.id) + '.' + s + '.' + (Array.isArray(c.photos) ? c.photos.length : 0) + (c.retired === true ? 'r' : '');
+      }).join(',');
+  }
+  return '';
+}
+
+function meDots() {
+  let changed = false;
+  for (const b of document.querySelectorAll('#me-switch button')) {
+    const sp = b.getAttribute('data-s') || '';
+    const sig = meSigOf(sp);
+    let dot = false;
+    if (sig !== '') {
+      // The space open now, or one never looked at on this phone, is seen as it is.
+      if (sp === meSpace || !Object.prototype.hasOwnProperty.call(meSeenSigs, sp)) {
+        if (meSeenSigs[sp] !== sig) { meSeenSigs[sp] = sig; changed = true; }
+      } else {
+        dot = meSeenSigs[sp] !== sig;
+      }
+    }
+    const has = b.querySelector('.me-dot');
+    if (dot && !has) {
+      const d = el('span', 'me-dot');
+      d.setAttribute('aria-hidden', 'true');
+      b.appendChild(d);
+    } else if (!dot && has) {
+      has.remove();
+    }
+    const words = (ME_SPACES.find((s) => s[0] === sp) || ['', ''])[1];
+    b.setAttribute('aria-label', dot ? words + ', something new' : words);
+  }
+  if (changed) {
+    try { localStorage.setItem(ME_SEEN_KEY, JSON.stringify(meSeenSigs)); } catch (e) { /* this visit only */ }
+  }
+}
+
 // ---- keeping it in step
 
 function meRefresh() {
+  meAnswers();
+  meDots();
   meClassify();
   meStrip();
   // The switch sticks right under the strip, however tall the strip is.
@@ -658,6 +749,10 @@ function meStart() {
   if (!document.getElementById('me-switch') || !b || !b.classList || typeof b.setAttribute !== 'function'
     || typeof MutationObserver === 'undefined' || typeof document.querySelectorAll !== 'function') return;
   document.body.classList.add('me-on');
+  try {
+    const kept = JSON.parse(localStorage.getItem(ME_SEEN_KEY) || '{}');
+    if (kept && typeof kept === 'object' && !Array.isArray(kept)) meSeenSigs = kept;
+  } catch (e) { /* nothing seen yet */ }
   meSwitch();
   meSwipe();
 

@@ -344,6 +344,23 @@ describe("garage page: what it sends", () => {
     assert.deepEqual(asks(page)[3]?.body["f"], { op: "unphoto", car: CAR_A, photo: "0a0b0c0d0e0f.jpg" });
   });
 
+  it("one car is a plain list; two or more swipe, with a dot per car and the one racing tonight first in view", async () => {
+    const one = await open(relay({}));
+    assert.equal(one.get("gg").find((n) => /\bgcars\b/.test(n.className)).length, 0);
+    assert.equal(one.get("gg").find((n) => n.className === "gdots").length, 0);
+
+    const two = garage();
+    const cars = two["cars"] as Record<string, unknown>[];
+    cars.unshift({ ...cars[1], id: "88888888888888888888888888888888", name: "TT-02", retired: false, tonight: false });
+    const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: two, pin: false, signedIn: false, asks: [] } }) }));
+    const row = page.get("gg").find((n) => /\bgcars\b/.test(n.className))[0];
+    assert.ok(row, "the cars swipe");
+    assert.equal(row.children.length, 2, "the retired car is not in the row");
+    const dots = page.get("gg").find((n) => n.className === "gdots")[0]!;
+    assert.deepEqual(dots.children.map((d) => d.getAttribute("aria-label")), ["TT-02", "MR-03 Red"]);
+    assert.deepEqual(dots.children.map((d) => d.getAttribute("aria-current")), ["false", "true"]);
+  });
+
   it("a photo goes to driver/photo with the car and the base64", async () => {
     const page = await open(relay({}));
     await page.eval(`sendPhoto('${CAR_A}', 'QUJD', 'photo-${CAR_A}')`);

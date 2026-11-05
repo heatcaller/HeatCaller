@@ -63,6 +63,20 @@ export const GARAGE_CSS = `
 .gcar { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px 12px; padding: 14px 0; border-top: 1px solid var(--border); }
 .glist > .gcar:first-child { border-top: 0; }
 .gcar > .gwide { grid-column: 1 / -1; }
+/* Two or more cars: a row to swipe through, a big photo on each. */
+.gcars { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 2px 8px;
+         scrollbar-width: none; overscroll-behavior-x: contain; }
+.gcars::-webkit-scrollbar { display: none; }
+.gcars > .gcar { flex: 0 0 86%; scroll-snap-align: center; grid-template-columns: minmax(0, 1fr); align-content: start;
+                 padding: 12px; border: 1px solid var(--border); border-radius: 18px; background: var(--bg); }
+.glist.gcars > .gcar:first-child { border-top: 1px solid var(--border); }
+.gcars .gthumb { width: 100%; height: auto; aspect-ratio: 4 / 3; border-radius: 12px; }
+.gcars div.gthumb { display: grid; place-items: center; }
+.gcars div.gthumb::after { content: "No photo yet"; color: var(--muted); font-size: 0.85rem; }
+.gdots { display: flex; justify-content: center; gap: 6px; margin: 2px 0 6px; }
+.gdots button { width: 24px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+.gdots button::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.gdots button[aria-current="true"]::before { background: var(--accent); width: 18px; border-radius: 4px; }
 .gthumb { display: block; width: 76px; height: 57px; object-fit: cover; border-radius: 10px; background: var(--bg);
           border: 1px solid var(--border); }
 .gphotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin: 8px 0; }
@@ -346,7 +360,7 @@ function settled(form) {
 const SECTIONS = {};
 const view = {
   packEdit: '', packRemove: '', packAdd: false,
-  carEdit: '', carPhotos: '', photo: '', photoRemove: false, carAdd: false, retired: false,
+  carEdit: '', carPhotos: '', photo: '', photoRemove: false, carAdd: false, retired: false, carAt: '',
   layout: '', chart: 'fade', setupCar: '', history: false,
 };
 
@@ -1454,6 +1468,59 @@ async function sendPhoto(car, data, key) {
   return false;
 }
 
+// The cars as a row to swipe through, with a dot for each. Which car is in
+// view is kept by id, so a redraw (every read, every change) stays on it;
+// the first time, the one racing tonight.
+function carousel(card, list, live) {
+  const dots = el('div', 'gdots');
+  dots.setAttribute('aria-label', 'Your cars');
+  const slides = Array.from(list.children);
+  const go = (i, smooth) => {
+    const s = slides[i];
+    if (!s) return;
+    list.scrollTo({ left: s.offsetLeft - (list.clientWidth - s.offsetWidth) / 2, behavior: smooth ? 'smooth' : 'auto' });
+  };
+  live.forEach((c, i) => {
+    const d = el('button', '');
+    d.type = 'button';
+    d.setAttribute('aria-label', carName(c));
+    d.addEventListener('click', () => go(i, true));
+    dots.appendChild(d);
+  });
+  card.appendChild(dots);
+
+  const mark = (i) => {
+    Array.from(dots.children).forEach((d, j) => d.setAttribute('aria-current', j === i ? 'true' : 'false'));
+  };
+  let at = live.findIndex((c) => c.id === view.carAt);
+  if (at < 0) at = Math.max(0, live.findIndex((c) => c.tonight === true));
+  mark(at);
+  let t = 0;
+  list.addEventListener('scroll', () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      const mid = list.scrollLeft + list.clientWidth / 2;
+      let best = 0;
+      slides.forEach((s, j) => {
+        if (Math.abs(s.offsetLeft + s.offsetWidth / 2 - mid) < Math.abs(slides[best].offsetLeft + slides[best].offsetWidth / 2 - mid)) best = j;
+      });
+      view.carAt = live[best].id;
+      mark(best);
+    }, 80);
+  }, { passive: true });
+  // Once it is on the page and has a size - which, folded into Me, is only
+  // when the Garage space is opened.
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(() => {
+      if (!list.isConnected) { ro.disconnect(); return; }
+      if (list.clientWidth > 0) { ro.disconnect(); go(at, false); }
+    });
+    ro.observe(list);
+  } else if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => go(at, false));
+  }
+}
+
 function buildCars(box, sec) {
   if (!garage) return;
   const all = cars();
@@ -1462,9 +1529,11 @@ function buildCars(box, sec) {
   const live = all.filter((c) => c.retired !== true);
   const gone = all.filter((c) => c.retired === true);
   if (live.length === 0) card.appendChild(el('p', 'note', 'No cars yet. Add one below.'));
-  const list = el('div', 'glist');
+  const swipe = live.length > 1;
+  const list = el('div', 'glist' + (swipe ? ' gcars' : ''));
   for (const c of live) list.appendChild(carCard(c, sec));
   card.appendChild(list);
+  if (swipe) carousel(card, list, live);
 
   if (gone.length > 0) {
     const old = el('details', 'yd-change');
