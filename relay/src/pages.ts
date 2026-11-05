@@ -807,6 +807,9 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .flagbar.over .lp-fin { opacity: 1; box-shadow: 0 0 14px rgba(255, 255, 255, 0.45); }
 .flagbar .lp-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; color: var(--muted); font-size: 0.9rem; }
 .flagbar .lp-foot b { color: var(--text); font-weight: 700; }
+/* The driver this phone follows (4 Nov 2026): their place and gaps, under the bar. */
+.flagbar .lp-me { padding: 8px 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border); font-size: 0.9rem; color: var(--muted); }
+.flagbar .lp-me b { color: var(--text); font-weight: 700; }
 .flagbar .lp-foot .ondeck b { font-weight: 600; }
 .ondeck { color: var(--muted); font-size: 0.85rem; margin-left: auto; }
 .flagbar .ondeck { font-size: 0.9rem; margin-left: auto; }
@@ -837,6 +840,13 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .lpfig .posk li b.kv { margin: 0 0 0 5px; }
 .mecharts .jm { margin-top: 4px; }
 .lvsay[hidden] { display: none; }
+/* Just me and Compare with, side by side over the charts (4 Nov 2026). */
+.mesay { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 4px 0 0; }
+.mesay .lvsay { margin: 0; }
+.mevs { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
+.mevs select { margin: 0; min-height: 40px; border-radius: 999px; padding: 6px 14px; }
+.mevs select:disabled { opacity: 0.5; }
+.story .note { padding: 8px 0 0; text-align: left; }
 
 /* Standings */
 select {
@@ -4654,7 +4664,81 @@ function drawBar(state, over, at, rows) {
   bar.innerHTML = '<div class="lp-top"><span class="lp-id"><span class="kick"><i></i>' + esc(kick) + '</span>'
     + '<span class="state">' + esc(said) + '</span></span>' + right + '</div>'
     + lbBar(done, total, over)
+    + (over ? '' : lbFollow(state, list, left))
     + (info || next ? '<div class="lp-foot"><span>' + info + '</span>' + next + '</div>' : '');
+}
+
+// --- The driver this phone follows, on the flag card (4 Nov 2026, from the
+// relay roadmap Asher asked to have built) -------------------------------
+// Their place, the gap to the car ahead and whether it is closing, the
+// room to the car behind, and - with the laps left known - how much a lap
+// they must find to catch the car ahead by the flag. Only for a name on
+// exactly one row, and only once they have a lap: an "Unnamed driver" or
+// a name the board shows twice could be anybody.
+//
+// The gaps are the board's own: the laptop's figure for the car ahead
+// (row.ahead, from 29 Oct 2026), else the club's Interval column, or the
+// Gap column for the car in second. A gap in laps ("+1L") is said as laps
+// and has no catching to do.
+let lbTrail = { who: '', gaps: [] };
+
+function lbGapText(state, row, pos) {
+  if (typeof row.ahead === 'string' && row.ahead !== '') return row.ahead;
+  const columns = Array.isArray(state.columns) ? state.columns.map((c) => String(c)) : [];
+  let at = columns.findIndex((c) => /^interval$/i.test(c));
+  if (at < 0 && pos === 2) at = columns.findIndex((c) => /^gap/i.test(c));
+  const cell = at >= 0 && Array.isArray(row.cells) ? row.cells[at] : null;
+  return cell && typeof cell === 'object' ? String(cell.text || '') : '';
+}
+
+// Seconds, or null for a gap in laps or one that cannot be read.
+function lbGapSecs(text) {
+  const m = /^\\+?(\\d+(?:[.,]\\d+)?)s?$/.exec(String(text || '').trim());
+  return m ? Number(m[1].replace(',', '.')) : null;
+}
+
+function lbFollow(state, rows, left) {
+  const who = memory;
+  if (!who || who === 'Unnamed driver') return '';
+  const mine = rows.filter((r) => r && typeof r === 'object' && r.name === who);
+  if (mine.length !== 1) return '';
+  const row = mine[0];
+  const pos = rows.indexOf(row) + 1;
+  const lapNow = lbLaps(row);
+  if (lapNow < 1) return '';
+
+  // A new race, or somebody else followed: the trail starts again.
+  if (lbTrail.who !== who || (lbTrail.gaps.length > 0 && lapNow < lbTrail.gaps.at(-1).lap)) lbTrail = { who: who, gaps: [] };
+
+  const parts = ['<b>' + esc(who) + '</b> P' + pos];
+  if (pos > 1) {
+    const ahead = rows.at(pos - 2);
+    const text = lbGapText(state, row, pos);
+    const secs = lbGapSecs(text);
+    const name = ahead && ahead.name ? esc(String(ahead.name)) : 'the car ahead';
+    if (secs === null) {
+      if (text) parts.push(esc(text.replace(/^\\+/, '')) + ' behind ' + name);
+    } else {
+      // One reading a lap, the first seen on it: the trend is over the last three laps.
+      const to = ahead && ahead.name ? String(ahead.name) : '';
+      if (lbTrail.gaps.length === 0 || lbTrail.gaps.at(-1).lap !== lapNow) lbTrail.gaps.push({ lap: lapNow, secs: secs, to: to });
+      if (lbTrail.gaps.length > 12) lbTrail.gaps.shift();
+      parts.push(secs.toFixed(2) + 's behind ' + name);
+      // Only against the same car: a new car ahead is a new gap, not a trend.
+      const then = lbTrail.gaps.find((g) => g.lap === lapNow - 3 && g.to === to);
+      if (then) {
+        const per = (then.secs - secs) / 3;
+        if (Math.abs(per) >= 0.02) parts.push((per > 0 ? 'closing ' : 'losing ') + Math.abs(per).toFixed(2) + 's a lap');
+      }
+      if (left !== null && left > 0) parts.push('needs ' + (secs / left).toFixed(2) + 's a lap to catch by the flag');
+    }
+  }
+  const behind = rows.at(pos);
+  if (behind && typeof behind === 'object') {
+    const secs = lbGapSecs(lbGapText(state, behind, pos + 1));
+    if (secs !== null) parts.push(secs.toFixed(2) + 's clear of ' + esc(String(behind.name || 'the car behind')));
+  }
+  return '<div class="lp-me">' + parts.join(' \\u00B7 ') + '</div>';
 }
 
 // --- The last race, kept (4 Nov 2026, Asher: "keep the board for the last
@@ -8756,6 +8840,40 @@ const ci = { shown: false, on: false, busy: false, pending: null };
 let alertsOn = false;
 let audio = null;
 let lastKey = '';
+// ALERTS FOR MORE THAN THE CALL-UP (4 Nov 2026, from the relay roadmap
+// Asher asked to have built): their marshal duty coming up next, and their
+// result filed, as well as their race - and, with the page in the
+// background, a notice from the phone itself when it lets the page show
+// one. lastDuty is what the duty said last time; racesSeen the races on
+// the night when it was last drawn (-1 before the first answer).
+let lastDuty = '';
+let racesSeen = -1;
+
+function dutyKey(m) {
+  return m && typeof m === 'object' && typeof m.race === 'string' ? m.race + '|' + num(m.away) : 'none';
+}
+
+// The phone's own notice, only while the page is out of sight and only
+// when the driver said yes to them: in sight, the toast and the buzz say it.
+function notice(title, body) {
+  try {
+    if (!document.hidden || typeof Notification !== 'function' || Notification.permission !== 'granted') return;
+    new Notification(title, { body: body, tag: 'hc-' + CLUB });
+  } catch (e) { /* the buzz still went */ }
+}
+
+// The rest of what alerts cover, as the card says it: marshal duty only for
+// a driver who has one.
+function alertsAlso() {
+  const m = live && live.marshal;
+  return (m && typeof m === 'object' && typeof m.race === 'string' && m.race !== '' ? 'when your marshal duty is next ' : '') + 'and when your result is in.';
+}
+
+function alertNow(title, body) {
+  buzz();
+  toast(title + (body ? ' - ' + body : ''));
+  notice(title, body);
+}
 
 // --- Lap times in my ear, on their own night (29 Oct 2026, asked for by
 // Asher) -------------------------------------------------------------------
@@ -9202,6 +9320,10 @@ function toggleAlerts() {
       if (audio.state !== 'running') audio.resume();
     } catch (e) { audio = null; }
     lastKey = callKey(live && live.next);
+    lastDuty = dutyKey(live && live.marshal);
+    try {
+      if (typeof Notification === 'function' && Notification.permission === 'default') Notification.requestPermission();
+    } catch (e) { /* buzz and toast only */ }
     buzz();
     toast('Alerts on. Keep this page open on your screen.');
   } else {
@@ -9369,8 +9491,8 @@ function liveCard() {
 
     card.appendChild(tapButton(alertsOn ? 'Alerts on - tap to turn off' : 'Turn on alerts', 'go quiet' + (alertsOn ? ' on' : ''), toggleAlerts));
     card.appendChild(el('div', 'when', alertsOn
-      ? 'Keep this page open on your screen. It beeps and buzzes when your race is next, and again when it is staged.'
-      : 'Two beeps and a buzz when your race is next, and again when it is staged.'));
+      ? 'Keep this page open. It beeps and buzzes when your race is next, when it is staged, ' + alertsAlso()
+      : 'Two beeps and a buzz when your race is next, when it is staged, ' + alertsAlso()));
 
     const m = live.marshal;
 
@@ -9712,30 +9834,107 @@ function meTimes(lines, W) {
 
 // The Lap chart tab: the tick box when there is a field to hide, then the
 // two charts, redrawn when the tick changes or the result arrives.
+function raceSid(r) {
+  return typeof r.sid === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(r.sid) ? r.sid : '';
+}
+
+// The race's field from its public result, asked for once a visit and
+// shared by the charts and the race story: what is known now (an array,
+// null while it is read, false when the relay has none, undefined before
+// it is asked), with done called once it arrives.
+const fieldWaiting = new Map();
+
+function fieldFor(sid, done) {
+  if (!sid) return false;
+  if (fieldOf.has(sid)) {
+    if (fieldOf.get(sid) === null && done) fieldWaiting.get(sid).push(done);
+    return fieldOf.get(sid);
+  }
+  fieldOf.set(sid, null);
+  fieldWaiting.set(sid, done ? [done] : []);
+  const settle = () => {
+    const waiting = fieldWaiting.get(sid) || [];
+    fieldWaiting.delete(sid);
+    for (const fn of waiting) { try { fn(); } catch (e) { /* one card's redraw never stops another's */ } }
+  };
+  grab('/collection/results?ids=' + encodeURIComponent(sid)).then((answer) => {
+    if (answer === null || answer === undefined) { fieldOf.delete(sid); fieldWaiting.delete(sid); return; }
+    const items = !answer.missing && answer.body && Array.isArray(answer.body.items) ? answer.body.items : [];
+    const item = items.find((x) => x && String(x.id) === sid);
+    const list = item && item.body && Array.isArray(item.body.results) ? item.body.results : null;
+    fieldOf.set(sid, list === null ? false : list);
+    if (list !== null) settle(); else fieldWaiting.delete(sid);
+  }, () => { fieldOf.delete(sid); fieldWaiting.delete(sid); });
+  return null;
+}
+
+// The Lap chart tab: Just me and Compare with when there is a field, then
+// the two charts, redrawn when either changes or the result arrives.
+//
+// COMPARE WITH ANYONE (4 Nov 2026, from the relay roadmap Asher asked to
+// have built): one other driver from the race beside their own line, the
+// rest taken away - the head-to-head a driver wants after being beaten by
+// someone. Just me, when ticked, wins over it. The pick is kept by name
+// for the visit, so the next race with the same rival opens on them too.
 function meCharts(r) {
   const box = el('div', 'charts mecharts');
-  const tick = el('div', 'lvsay jm');
-  const label = el('label');
-  const input = document.createElement('input');
-  input.type = 'checkbox';
-  input.checked = justMe();
-  label.appendChild(input);
-  label.appendChild(el('span', '', 'Just me'));
-  tick.appendChild(label);
   let out = el('div');
   box.appendChild(out);
+  const sid = raceSid(r);
 
-  const sid = typeof r.sid === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(r.sid) ? r.sid : '';
+  // The two controls, made afresh on every draw.
+  const controls = (others) => {
+    const bar = el('div', 'mesay');
+    const tick = el('div', 'lvsay jm');
+    const label = el('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = justMe();
+    input.addEventListener('change', () => {
+      view.justMe = input.checked;
+      try { localStorage.setItem(JUST_ME_KEY, view.justMe ? '1' : '0'); } catch (e) { /* this visit only */ }
+      paint();
+    });
+    label.appendChild(input);
+    label.appendChild(el('span', '', 'Just me'));
+    tick.appendChild(label);
+    bar.appendChild(tick);
+    const pickBox = el('label', 'mevs');
+    pickBox.appendChild(el('span', '', 'Compare with'));
+    const pick = document.createElement('select');
+    const all = document.createElement('option');
+    all.value = '';
+    all.textContent = 'Everyone';
+    pick.appendChild(all);
+    for (const l of others) {
+      const o = document.createElement('option');
+      o.value = l.name;
+      o.textContent = l.name;
+      if (l.name === view.vs) o.selected = true;
+      pick.appendChild(o);
+    }
+    pick.value = view.vs;
+    pick.disabled = justMe();
+    pick.addEventListener('change', () => { view.vs = pick.value; paint(); });
+    pickBox.appendChild(pick);
+    bar.appendChild(pickBox);
+    return bar;
+  };
 
   const paint = () => {
     // A fresh holder each time, the old one and its charts gone.
     out.remove();
     out = el('div');
     box.appendChild(out);
-    const lines = meLines(r, sid ? fieldOf.get(sid) : null);
-    // The tick only when there is somebody to hide, above the charts.
-    if (lines.length > 1) out.appendChild(tick);
-    const shown = lines.length > 1 && justMe() ? lines.filter((l) => l.me) : lines;
+    const lines = meLines(r, fieldFor(sid, paint));
+    const others = lines.filter((l) => !l.me);
+    if (typeof view.vs !== 'string') view.vs = '';
+    const vs = others.some((l) => l.name === view.vs) ? view.vs : '';
+    // The choices only when there is somebody to hide, above the charts.
+    if (others.length > 0) out.appendChild(controls(others));
+    const shown = others.length === 0 ? lines
+      : justMe() ? lines.filter((l) => l.me)
+      : vs !== '' ? lines.filter((l) => l.me || l.name === vs) : lines;
     const W = meChartWidth(box);
     const places = mePositions(shown, r.of, W);
     if (places) out.appendChild(places);
@@ -9743,26 +9942,124 @@ function meCharts(r) {
     if (times) out.appendChild(times);
   };
 
-  input.addEventListener('change', () => {
-    view.justMe = input.checked;
-    try { localStorage.setItem(JUST_ME_KEY, view.justMe ? '1' : '0'); } catch (e) { /* this visit only */ }
-    paint();
-  });
-
   paint();
+  return box;
+}
 
-  if (sid && !fieldOf.has(sid)) {
-    fieldOf.set(sid, null);
-    grab('/collection/results?ids=' + encodeURIComponent(sid)).then((answer) => {
-      if (answer === null || answer === undefined) { fieldOf.delete(sid); return; }
-      const items = !answer.missing && answer.body && Array.isArray(answer.body.items) ? answer.body.items : [];
-      const item = items.find((x) => x && String(x.id) === sid);
-      const list = item && item.body && Array.isArray(item.body.results) ? item.body.results : null;
-      fieldOf.set(sid, list === null ? false : list);
-      if (list !== null) paint();
-    }, () => { fieldOf.delete(sid); });
+// THE RACE STORY (4 Nov 2026, from the relay roadmap): how the race went,
+// in the few numbers a driver can do something about - the mistakes and
+// what they cost, the start, the passes, how the pace held up - worked out
+// from their own laps and places, and, once the race's public result is
+// read, how their laps stood against the field's. Nothing here is a guess:
+// a figure that cannot be worked out is left out.
+//
+// A MISTAKE is a lap over 110% of their own typical (median) lap: a crash,
+// a flip, a marshal wait. What it cost is how far each one ran over that
+// typical lap.
+function raceStory(r, field) {
+  const laps = lxLaps(r.lapsMs);
+  const lines = [];
+  const notes = [];
+  if (laps.length === 0) return { lines, notes };
+
+  const sorted = laps.slice().sort((a, b) => a - b);
+  const typical = sorted.length % 2 === 1
+    ? sorted[(sorted.length - 1) / 2]
+    : (sorted.at(sorted.length / 2 - 1) + sorted.at(sorted.length / 2)) / 2;
+  const slips = laps.map((ms, i) => ({ ms, n: i + 1 })).filter((x) => x.ms > typical * 1.1);
+  const lost = slips.reduce((a, x) => a + (x.ms - typical), 0);
+  const secs = (ms) => (ms / 1000).toFixed(ms >= 10000 ? 1 : 2) + 's';
+
+  lines.push(['Mistakes', slips.length === 0 ? 'None' : String(slips.length)]);
+  if (slips.length > 0) {
+    lines.push(['Time lost to them', secs(lost)]);
+    notes.push((slips.length === 1 ? 'The slow lap was lap ' : 'The slow laps were laps ')
+      + slips.map((x) => x.n).join(', ') + ', against a typical lap of ' + lap(Math.round(typical)) + '.');
   }
 
+  let run = 0, longest = 0;
+  for (const ms of laps) { run = ms > typical * 1.1 ? 0 : run + 1; longest = Math.max(longest, run); }
+  if (laps.length >= 3) lines.push(['Longest clean run', plural(longest, 'lap', 'laps')]);
+
+  if (laps.length >= 6) {
+    const first = lxMean(laps.slice(0, 3));
+    const last = lxMean(laps.slice(-3));
+    const d = last - first;
+    lines.push(['Pace at the end', Math.abs(d) < 50 ? 'Held' : (d > 0 ? secs(d) + ' slower' : secs(-d) + ' quicker')]);
+  }
+
+  const places = Array.isArray(r.posAt) && r.posAt.length > 0 && r.posAt.every((p) => typeof p === 'number' && p > 0) ? r.posAt : null;
+  if (places) {
+    const grid = num(r.start);
+    if (grid > 0) {
+      const d = grid - places[0];
+      lines.push(['Start', d > 0 ? 'Gained ' + plural(d, 'place', 'places') : d < 0 ? 'Lost ' + plural(-d, 'place', 'places') : 'Held ' + nth(grid)]);
+    }
+    let made = 0, gone = 0;
+    for (let i = 1; i < places.length; i++) {
+      const d = places.at(i - 1) - places.at(i);
+      if (d > 0) made += d; else gone -= d;
+    }
+    lines.push(['Places gained / lost', made + ' / ' + gone]);
+    const led = places.filter((p) => p === 1).length;
+    if (led > 0) lines.push(['Laps led', String(led)]);
+    lines.push(['Best place', nth(Math.min.apply(null, places))]);
+  }
+
+  // Against the field, lap by lap: where their time ranked among everyone
+  // who ran that lap.
+  const rest = Array.isArray(field) ? field.filter((x) => x && typeof x === 'object' && !sameLaps(lxLaps(x.lapsMs), laps)) : [];
+  if (rest.length > 0) {
+    let quickest = 0, ranks = 0, counted = 0;
+    laps.forEach((ms, i) => {
+      const theirs = rest.map((x) => lxLaps(x.lapsMs)).filter((l) => l.length > i).map((l) => l.at(i));
+      if (theirs.length === 0) return;
+      const rank = 1 + theirs.filter((t) => t < ms).length;
+      if (rank === 1) quickest++;
+      ranks += rank;
+      counted++;
+    });
+    if (counted > 0) {
+      lines.push(['Quickest car', 'On ' + quickest + ' of ' + plural(counted, 'lap', 'laps')]);
+      lines.push(['Average lap rank', (ranks / counted).toFixed(1) + ' of ' + (rest.length + 1)]);
+    }
+    const mine = typical;
+    const theirTypical = rest.map((x) => lxLaps(x.lapsMs)).filter((l) => l.length > 0)
+      .map((l) => l.slice().sort((a, b) => a - b).at(Math.floor((l.length - 1) / 2)));
+    if (theirTypical.length > 0) {
+      const fieldTypical = theirTypical.slice().sort((a, b) => a - b).at(Math.floor((theirTypical.length - 1) / 2));
+      const d = fieldTypical - mine;
+      lines.push(['Against the field', Math.abs(d) < 20 ? 'Level' : secs(Math.abs(d)) + ' a lap ' + (d > 0 ? 'quicker' : 'slower')]);
+      notes.push('Against the field compares your typical lap with the typical lap of the middle driver.');
+    }
+  }
+
+  return { lines, notes };
+}
+
+// The Race story tab: the figures as the stats tab sets them out, and the
+// notes under them. Drawn again once the field arrives.
+function storyPanel(r) {
+  const box = el('div', 'nlx story');
+  const sid = raceSid(r);
+  let out = el('div');
+  box.appendChild(out);
+  const paint = () => {
+    out.remove();
+    out = el('div');
+    box.appendChild(out);
+    const s = raceStory(r, fieldFor(sid, paint));
+    const dl = el('dl', 'lxs');
+    for (const line of s.lines) {
+      const one = el('div');
+      one.appendChild(el('dt', '', line[0]));
+      one.appendChild(el('dd', '', line[1]));
+      dl.appendChild(one);
+    }
+    out.appendChild(dl);
+    for (const n of s.notes) out.appendChild(el('p', 'note', n));
+  };
+  paint();
   return box;
 }
 
@@ -10152,6 +10449,8 @@ function raceDetail(r, stats, own) {
     // Since 4 Nov 2026 the same two charts as Live's, with the rest of the
     // field from the race's public result - see meCharts.
     if (lxLaps(r.lapsMs).length > 0) tabs.push(['chart', 'Lap chart', meCharts(r)]);
+    // How the race went, from the relay roadmap (4 Nov 2026) - see raceStory.
+    if (lxLaps(r.lapsMs).length > 0) tabs.push(['story', 'Race story', storyPanel(r)]);
   }
 
   if (tabs.length > 0) {
@@ -10600,6 +10899,7 @@ function paintNight() {
 
 function take(body) {
   night = body && typeof body.night === 'object' && body.night !== null ? body.night : null;
+  if (racesSeen < 0 && night && Array.isArray(night.races)) racesSeen = night.races.length;
   clips = Array.isArray(body && body.clips) ? body.clips : [];
   live = body && typeof body.live === 'object' && body.live !== null ? body.live : null;
   if ((night && night.firstNight === true) || (live && live.firstNight === true)) firstNight = true;
@@ -11262,6 +11562,12 @@ async function refreshNight() {
   take(a.body);
   if (live === null) live = was;
   if (JSON.stringify([night, clips, asksOpen]) !== before) paintNight();
+  const races = night && Array.isArray(night.races) ? night.races : [];
+  if (alertsOn && racesSeen >= 0 && races.length > racesSeen) {
+    const r = races[races.length - 1] || {};
+    alertNow('Your result is in', [String(r.label || ''), finishWords(r)].filter(Boolean).join(' - '));
+  }
+  racesSeen = races.length;
   drawLive();
   refreshAsks();
 }
@@ -11275,11 +11581,15 @@ function takeLive(entry) {
   const now = n && typeof n === 'object' ? String(n.race || '') : '';
 
   if (alertsOn) {
-    if (worthABuzz(lastKey, n)) {
-      buzz();
-      toast(callWords(n) + ' - ' + String(n.race || ''));
-    }
+    if (worthABuzz(lastKey, n)) alertNow(callWords(n), String(n.race || ''));
     lastKey = callKey(n);
+    // Their marshal duty, once, when it becomes the next race.
+    const m = live && live.marshal;
+    const duty = dutyKey(m);
+    if (lastDuty !== '' && duty !== lastDuty && m && typeof m === 'object' && num(m.away) === 0) {
+      alertNow('Marshal duty next', String(m.race || '') + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : ''));
+    }
+    lastDuty = duty;
   }
 
   if (before !== '' && before !== now) refreshSoon();
