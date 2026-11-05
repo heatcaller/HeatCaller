@@ -233,6 +233,11 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
   // main each driver would make (4 Nov 2026, the relay roadmap). Public:
   // it is worked out from results that are public already.
   qualifying: { name: "qualifying", kind: "snapshot", what: "where qualifying stands, and the main each driver would make" },
+  // The club's sponsors, for the foot of Live (5 Nov 2026, Asher: "add
+  // sponsorships to the live tab at the bottom"): name, line, logo and
+  // website, as the Sponsors page has them. Public - it is what the
+  // sponsor paid to have shown.
+  sponsors: { name: "sponsors", kind: "snapshot", what: "the club's sponsors, for the foot of Live" },
   // Online check-in: who can be checked in, the PIN's hash, and the
   // drivers' names and photos. Private - the relay hands out pieces of
   // it to a PIN or a badge, never the whole thing.

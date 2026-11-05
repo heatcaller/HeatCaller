@@ -44,6 +44,13 @@ public sealed class SponsorsControl : UserControl
     /// </summary>
     internal Func<IReadOnlyDictionary<string, IReadOnlyDictionary<SponsoredMoment, int>>>? MentionsTonight { get; set; }
 
+    /// <summary>
+    /// What phones saw of each sponsor on the club's Live page tonight, by
+    /// sponsor id - or null when the relay is not in use or has not been
+    /// read. See RelaySponsors (5 Nov 2026).
+    /// </summary>
+    internal Func<IReadOnlyDictionary<string, (int Seen, int Taps)>?>? WebViewsTonight { get; set; }
+
     private readonly Button _btnReport = new();
 
     private readonly CheckBox _chkEnabled = new ThemedCheckBox();
@@ -62,6 +69,10 @@ public sealed class SponsorsControl : UserControl
     private readonly ListBox _lstSponsors = new();
     private readonly TextBox _txtSponsorName = new();
     private readonly TextBox _txtSponsorTagline = new();
+
+    /// <summary>The name as written, and their website, for the club's Live page (5 Nov 2026). See RelaySponsors.</summary>
+    private readonly TextBox _txtSponsorWebName = new();
+    private readonly TextBox _txtSponsorWebsite = new();
     private readonly TextBox _txtSponsorCopy = new();
     private readonly NumericUpDown _numSponsorWeight = new();
     private readonly CheckBox _chkSponsorEnabled = new ThemedCheckBox();
@@ -516,6 +527,10 @@ public sealed class SponsorsControl : UserControl
 
         _txtSponsorName.TextChanged += (_, _) => SaveSponsorField(s => s.Name = _txtSponsorName.Text);
         _txtSponsorTagline.TextChanged += (_, _) => SaveSponsorField(s => s.Tagline = _txtSponsorTagline.Text);
+        _txtSponsorWebName.TextChanged += (_, _) => SaveSponsorField(s => s.WebName = _txtSponsorWebName.Text);
+        _txtSponsorWebsite.TextChanged += (_, _) => SaveSponsorField(s => s.Website = _txtSponsorWebsite.Text);
+        _txtSponsorWebName.MaxLength = 60;
+        _txtSponsorWebsite.MaxLength = 200;
 
         // The list's wording follows the fields when the cursor LEAVES
         // them, not as they are typed. Replacing a row in a list box takes
@@ -578,6 +593,10 @@ public sealed class SponsorsControl : UserControl
         grid.AddRow("One-line tagline:", _txtSponsorTagline);
         grid.AddHint("Said after every credit for a moment they present (below), and once on their first read of the night. "
                      + "Leave it empty if they only bought the full read.");
+        grid.AddRow("Name on the web page:", _txtSponsorWebName);
+        grid.AddHint("How their name is written on the club's Live page, if it differs from how it's said. Leave it empty to use the name above.");
+        grid.AddRow("Their website:", _txtSponsorWebsite);
+        grid.AddHint("Their card on the club's Live page links here, and each tap is counted in the sponsor report.");
         grid.AddRow("Their read:", _txtSponsorCopy);
         grid.AddHint(_lblCopyLength);
         _cmbSponsorPicture.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -681,7 +700,8 @@ public sealed class SponsorsControl : UserControl
                 // reader - a report copied at twenty past midnight was
                 // dated the day after the club raced.
                 TonightAtTheTrack.NightOf(DateTime.Now),
-                MentionsTonight?.Invoke());
+                MentionsTonight?.Invoke(),
+                WebViewsTonight?.Invoke());
 
             if (string.IsNullOrWhiteSpace(report))
             {
@@ -736,6 +756,8 @@ public sealed class SponsorsControl : UserControl
 
         Fit(_txtSponsorName, UiLayout.AtTextSize(SponsorNameWidth));
         Fit(_txtSponsorTagline, UiLayout.AtTextSize(SalesCopyWidth));
+        Fit(_txtSponsorWebName, UiLayout.AtTextSize(SponsorNameWidth));
+        Fit(_txtSponsorWebsite, UiLayout.AtTextSize(SalesCopyWidth));
         Fit(_cmbSponsorPicture, UiLayout.AtTextSize(SponsorPictureWidth));
 
         // Four lines of the box's own font, and the hint's gap twice over
@@ -1236,6 +1258,8 @@ public sealed class SponsorsControl : UserControl
         {
             _txtSponsorName.Text = sponsor?.Name ?? string.Empty;
             _txtSponsorTagline.Text = sponsor?.Tagline ?? string.Empty;
+            _txtSponsorWebName.Text = sponsor?.WebName ?? string.Empty;
+            _txtSponsorWebsite.Text = sponsor?.Website ?? string.Empty;
             _txtSponsorCopy.Text = sponsor?.SalesCopy ?? string.Empty;
             _numSponsorWeight.Value = Math.Clamp(sponsor?.Weight ?? 1, (int)_numSponsorWeight.Minimum, (int)_numSponsorWeight.Maximum);
             _chkSponsorEnabled.Checked = sponsor?.Enabled ?? true;
@@ -1259,6 +1283,8 @@ public sealed class SponsorsControl : UserControl
 
         _txtSponsorName.Enabled = on;
         _txtSponsorTagline.Enabled = on;
+        _txtSponsorWebName.Enabled = on;
+        _txtSponsorWebsite.Enabled = on;
         _txtSponsorCopy.Enabled = on;
         _numSponsorWeight.Enabled = on;
         _chkSponsorEnabled.Enabled = on;

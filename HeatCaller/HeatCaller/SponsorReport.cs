@@ -71,7 +71,8 @@ internal static class SponsorReport
         SponsorPlacement placement,
         string? eventName,
         DateTime nightLocal,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<SponsoredMoment, int>>? mentionsTonight = null)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<SponsoredMoment, int>>? mentionsTonight = null,
+        IReadOnlyDictionary<string, (int Seen, int Taps)>? webTonight = null)
     {
         var sold = (bookings ?? Array.Empty<SponsorBooking>())
             .Where(one => !string.IsNullOrWhiteSpace(one.Id) && !string.IsNullOrWhiteSpace(one.Name))
@@ -144,6 +145,13 @@ internal static class SponsorReport
             {
                 text.AppendLine(mentions);
             }
+
+            // THEIR CARD ON THE CLUB'S LIVE PAGE (5 Nov 2026) - see
+            // RelaySponsors. Only when the page's counts were read at all.
+            if (webTonight is not null && WebLine(sponsor, webTonight) is { Length: > 0 } web)
+            {
+                text.AppendLine(web);
+            }
         }
 
         text.AppendLine();
@@ -151,6 +159,14 @@ internal static class SponsorReport
             "This report covers the reads the announcer gave. It does not count the slides on the big screen: "
             + "the slide rotation is a list of pictures and the app does not know which sponsor each one belongs "
             + "to, so a figure for those would not be one anybody could stand behind.");
+
+        if (webTonight is not null)
+        {
+            text.AppendLine(
+                "Views on the club's Live page are counted once a sponsor's card is on a phone's screen, at most "
+                + "once per phone every half hour, so a phone left open all evening is not counted over and over. "
+                + "Taps are people who followed the link to the sponsor's website.");
+        }
 
         return text.ToString();
     }
@@ -246,6 +262,37 @@ internal static class SponsorReport
             : string.Join(", ", parts.Take(parts.Count - 1)) + " and " + parts[^1];
 
         return $"    plus \"presented by\" on: {list}";
+    }
+
+    /// <summary>
+    /// "    plus their card on the club's Live page: seen 42 times on phones,
+    /// 3 taps through to their website" - or the plain "not on" when they
+    /// were not on the page, and nothing when they were not on the books.
+    /// </summary>
+    private static string WebLine(SponsorBooking sponsor, IReadOnlyDictionary<string, (int Seen, int Taps)> web)
+    {
+        if (!sponsor.Enabled)
+        {
+            return string.Empty;
+        }
+
+        var (seen, taps) = web.TryGetValue(sponsor.Id, out var pair) ? pair : (0, 0);
+
+        if (seen <= 0 && taps <= 0)
+        {
+            return "    plus their card on the club's Live page: not seen on a phone this night";
+        }
+
+        var line = $"    plus their card on the club's Live page: seen {(seen == 1 ? "once" : $"{seen} times")} on phones";
+
+        if (!string.IsNullOrWhiteSpace(RelaySponsors.WebsiteOf(sponsor)) || taps > 0)
+        {
+            line += taps == 0
+                ? ", no taps through to their website"
+                : $", {Plural.Of(taps, "tap")} through to their website";
+        }
+
+        return line;
     }
 
     private static int Reads(IReadOnlyDictionary<string, int> counts, string? id) =>

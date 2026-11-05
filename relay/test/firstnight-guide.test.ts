@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { DEFAULT_CONTEXT, nightPage, checkinPage } from "../src/pages.js";
+import { DEFAULT_CONTEXT, homePage, nightPage, checkinPage } from "../src/pages.js";
 import { DEFAULT_LOOK, guideFrom, lookFrom, updatesFrom } from "../src/site.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
 
@@ -76,8 +76,27 @@ describe("the first-night guide from the app", () => {
     return (await opened(guide)).get("gd").textContent;
   }
 
-  it("draws the club's updates under the guide, hides them on Got it, and shows newer news again", async () => {
+  // On Home since 5 Nov 2026 (Asher: "move that card from the me tab to
+  // the home tab"), with the same Got it key the night page kept.
+  async function home(store?: Map<string, string>, updates?: string): Promise<FakePage> {
+    const { html, script } = pageParts(homePage("acme-rc", "Acme RC"));
+    const page = new FakePage(html, async () => ({ status: 404, body: {} }), {});
+    page.get("now").dataset = { when: "" };
+    if (updates !== undefined) page.body.dataset["updates"] = updates;
+    if (store) for (const [k, v] of store) page.store.set(k, v);
+    page.run(script);
+    await page.settle();
+    return page;
+  }
+
+  it("keeps the club's updates off the driver's night now that they are on Home", () => {
+    assert.doesNotMatch(nightPage("acme-rc", "Acme RC"), /id="up"/);
+    assert.match(homePage("acme-rc", "Acme RC"), /id="up"/);
+  });
+
+  it("draws the club's updates on Home, hides them on Got it, and shows newer news again", async () => {
     const news = JSON.stringify([{ heading: "Track night moved", words: "Thursday this week." }]);
+    const opened = (_g?: undefined, store?: Map<string, string>, updates?: string) => home(store, updates);
     const page = await opened(undefined, undefined, news);
 
     assert.match(page.get("up").textContent, /Club updates/);

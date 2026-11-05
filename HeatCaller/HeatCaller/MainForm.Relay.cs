@@ -1407,6 +1407,11 @@ public partial class MainForm
         SendToRelayIfChanged(RelayChannel.Standings, "standings", BuildStandingsDocument);
         RepublishChangedResultsIndexYears();
 
+        // The club's sponsors, for the foot of Live (5 Nov 2026) - see
+        // RelaySponsors. Logos are encoded once and cached.
+        SendToRelayIfChanged(RelayChannel.Sponsors, "the sponsors", () => RelaySponsors.Document(
+            _sponsors.Sponsors, file => RelaySponsors.Picture(_sponsors, file, _relaySponsorImages)));
+
         SendToRelayIfChanged(RelayChannel.Tracks, "the tracks", () => RelayDocuments.Tracks(
             _trackLayouts, _sessionHistory.SavedView(), _profiles, _pbResets, _raceEvents.Current.TrackLayoutName, abbreviate, _relayTrackImages));
 
