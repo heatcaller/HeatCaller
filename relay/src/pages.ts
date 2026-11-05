@@ -1012,9 +1012,8 @@ footer .hcmark:hover { color: var(--text); }
    below the live bug"), so its glow clears the top of the page and the
    byline under it. */
 .onair { display: flex; visibility: hidden; align-items: center; gap: 6px; margin: 10px 0 8px;
-         padding: 5px 10px 5px 7px; border-radius: 8px; border: 1px solid var(--primary); color: var(--primary);
+         padding: 5px 10px; border-radius: 8px; border: 1px solid var(--primary); color: var(--primary);
          box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 55%, transparent); }
-.onair .hcsun { width: 20px; height: 20px; }
 .onair b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
            font-weight: 700; font-size: 0.95rem; letter-spacing: 0.08em; }
 body.on-air .onair { visibility: visible; animation: onair 2.4s ease-in-out infinite; }
@@ -1778,7 +1777,7 @@ function shell(page: Shell, context: PageContext): string {
   const heading = `<div class="hchead">
     <h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
     <div class="hcside">${page.active === "live" ? `
-      <span class="onair" aria-hidden="true">${HC_SUN}<b>LIVE</b></span>` : ""}
+      <span class="onair" aria-hidden="true"><b>LIVE</b></span>` : ""}
       <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
     </div>
     <div class="sub">${sub}</div>

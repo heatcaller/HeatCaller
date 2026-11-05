@@ -51,7 +51,8 @@ describe("relay branding: HeatCaller on every club page", () => {
   it("carries the broadcast bug on Live only, hidden until a race runs", async () => {
     const live = (await call(harness, "GET", "/c/acme-rc/live")).text;
     assert.match(live, /<header class="onair-room">/);
-    assert.match(live, /<span class="onair" aria-hidden="true"><svg class="hcsun"[\s\S]*?<\/svg><b>LIVE<\/b><\/span>/);
+    // The word alone since 4 Nov 2026 (Asher: "remove the sun icon from the live bug").
+    assert.match(live, /<span class="onair" aria-hidden="true"><b>LIVE<\/b><\/span>/);
     assert.match(live, /onAir\(fresh && \['Staging', 'Countdown', 'Racing'\]\.includes\(String\(state\.state\)\)\)/);
 
     for (const path of PAGES.filter((p) => p !== "/c/acme-rc/live")) {
