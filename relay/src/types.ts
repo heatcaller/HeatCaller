@@ -344,6 +344,25 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
     maxItemBytes: 512 * 1024,
   },
   /*
+   * EACH DRIVER'S GARAGE (5 Nov 2026, asked for by Asher): their battery
+   * packs and how each is doing, their recent races and the pack on each,
+   * their cars with photos, and the setup sheets those cars use - for the
+   * phone's Garage page, which changes all of it through driver/ask. One
+   * item per badge id, as nights are. Private, switched with the
+   * driver-requests switch, and taken down when that closes. Its own
+   * budget, so a garage can never push a result out (planRoom).
+   */
+  garage: {
+    name: "garage",
+    kind: "collection",
+    what: "one driver's own garage, for the driver whose badge id it is",
+    private: true,
+    ownBudget: 24 * 1024 * 1024,
+    maxItems: 400,
+    maxItemBytes: 512 * 1024,
+    rollOldest: true,
+  },
+  /*
    * THE ANNOUNCER'S LAST FEW LINES, AS TEXT (22 Oct 2026, driver
    * experience), for a captions view on the live page - for somebody who
    * cannot hear the PA, or is somewhere they cannot play sound. Public,

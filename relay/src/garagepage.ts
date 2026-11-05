@@ -1,0 +1,1730 @@
+/**
+ * THE GARAGE ON THE PHONE (5 Nov 2026, Asher: drivers manage their battery
+ * packs, see their pack charts, manage their garage and fill in setup
+ * sheets from the relay, landing 1:1 in HeatCaller's Driver Hub with no
+ * desk approval). The whole feature's contract is
+ * claude/garage-relay-contract.md; this is the page.
+ *
+ * WHO THE DRIVER IS, exactly as on the night page: the badge code from the
+ * fragment (#d=, or ?d= tucked into the fragment), and the pass a personal
+ * PIN earns in this tab's sessionStorage under the night page's own key,
+ * so a driver signed in on their night is signed in here too. The code and
+ * the pass only ever go into POST bodies.
+ *
+ * WHAT IT DOES. Reads the driver's garage document (driver/garage) every
+ * 15 seconds while the page is in view, and sends every change as a
+ * driver/ask the laptop applies by itself (pack, packedit, car, setup) or a
+ * photo (driver/photo). Each send says Saving, then Sent with its ref, then
+ * - once the answer turns up in the garage read's asks - In HeatCaller or
+ * why not.
+ *
+ * NOTHING HALF-TYPED IS LOST. Every section is drawn on its own and only
+ * when what it shows has changed; never while something in it has focus
+ * or has been typed in and not sent. What was typed is kept as a draft per
+ * form, so even a redraw the driver asked for (opening another form) puts
+ * it back.
+ *
+ * Built from elements, never markup: pack labels, car names and setup
+ * values are the driver's own typing.
+ */
+
+import { DEFAULT_CONTEXT, shell, type PageContext } from "./pages.js";
+
+/** The page's own look: the shared stylesheet has the forms, buttons and charts; these are the garage's rows and cards. */
+const GARAGE_CSS = `
+.gx { max-width: 42rem; margin: 0 auto 16px; text-align: left; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 14px; padding: 16px 16px 18px; }
+.gx h2 { margin: 0 0 4px; font-size: 1.15rem; }
+.gx h3 { margin: 18px 0 6px; font-size: 1rem; }
+.gx .su { max-width: none; }
+.gx .note { padding: 8px 0 0; text-align: left; }
+.ghead { max-width: 42rem; margin: 0 auto 16px; }
+.ghead h2 { margin: 0; font-size: 1.35rem; }
+.ghead .more { display: inline-block; min-height: 44px; line-height: 44px; color: var(--accent); }
+.grow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); }
+.glist > .grow:first-child { border-top: 0; }
+.gname { flex: 1 1 11rem; min-width: 0; }
+.gname b { display: block; overflow-wrap: anywhere; }
+.gname .when { display: block; }
+.gbtns { display: flex; flex-wrap: wrap; gap: 6px; }
+.gb { font: inherit; font-size: 0.9rem; font-weight: 600; color: var(--text); background: var(--bg);
+      border: 1px solid var(--border); border-radius: 12px; padding: 8px 14px; min-height: 44px; min-width: 44px; cursor: pointer; }
+.gb.on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+.gb.warn { color: var(--bad); border-color: var(--bad); }
+.gb:disabled { opacity: 0.5; cursor: default; }
+.gb:focus-visible { outline: 2px solid var(--ring, var(--accent)); outline-offset: 2px; }
+.gfull { flex: 1 1 100%; }
+.gform { flex: 1 1 100%; margin-top: 4px; padding: 12px; border: 1px dashed var(--border); border-radius: 12px; }
+.gform .go, .gx .su .go { margin: 4px 0 0; max-width: none; }
+.gmuted .gname { opacity: 0.6; }
+.gtag { display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700;
+        border: 1px solid var(--border); color: var(--muted); vertical-align: 1px; }
+.gtag.tonight { background: var(--good); border-color: var(--good); color: var(--bg); }
+.gcar { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px 12px; padding: 14px 0; border-top: 1px solid var(--border); }
+.glist > .gcar:first-child { border-top: 0; }
+.gcar > .gwide { grid-column: 1 / -1; }
+.gthumb { display: block; width: 76px; height: 57px; object-fit: cover; border-radius: 10px; background: var(--bg);
+          border: 1px solid var(--border); }
+.gphotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin: 8px 0; }
+.gphoto { padding: 0; border: 2px solid transparent; border-radius: 12px; background: none; min-height: 44px; cursor: pointer; }
+.gphoto.on { border-color: var(--accent); }
+.gphoto img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; }
+.gfile { position: relative; overflow: hidden; display: inline-flex; align-items: center; }
+.gfile input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.gok { color: var(--good); }
+.gno { color: var(--bad); }
+.gtake { font-weight: 600; margin: 10px 0; }
+.gx .card { margin: 10px 0; }
+.gx table th, .gx table td { padding: 8px 10px; }
+.gx td.few, .gx tr.few td { color: var(--muted); }
+.gx .rtabs { margin: 14px 0 8px; }
+.gx .rtab[aria-pressed=true] { color: var(--on-primary, #FFFFFF); background: var(--primary); border-color: var(--primary); }
+.gpal { --gp0: var(--accent); --gp1: var(--primary); --gp2: #F5C342; --gp3: #3DD68C; --gp4: #A77BEB; --gp5: #FF8B3E;
+        --gp6: #8EC5FF; --gp7: #E5484D; }
+html.light .gpal { --gp2: #9A6B00; --gp3: #1B7F4B; --gp4: #6B3FB5; --gp5: #C2541A; --gp6: #2F5FA8; --gp7: #B3261E; }
+.gchart { margin-top: 4px; }
+.gx figcaption { text-transform: none; letter-spacing: normal; font-weight: 400; margin: 6px 0 0; }
+.gchart .zero { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.gchart .axt { fill: var(--muted); font-size: 12px; font-weight: 700; }
+.gchart .ax { font-size: 12px; }
+.gset { list-style: none; margin: 6px 0 0; padding: 0; }
+.gset li { padding: 8px 0; border-top: 1px solid var(--border); }
+.gset li:first-child { border-top: 0; }
+.gset .when { display: block; }
+.gx details > summary { min-height: 44px; display: flex; align-items: center; color: var(--accent); cursor: pointer; }
+.gx fieldset .chk { min-height: 32px; }
+`;
+
+const GARAGE_JS = String.raw`
+// ---- who the driver is (exactly as NIGHT_JS)
+
+function codeFrom(raw) {
+  const m = /[#?&]?d=([0-9a-fA-F]{20})(?:&|$)/.exec(String(raw || ''));
+  return m ? m[1].toLowerCase() : '';
+}
+
+const CODE = codeFrom(location.hash) || codeFrom(location.search);
+
+function tuck() {
+  try {
+    if (CODE && !codeFrom(location.hash)) history.replaceState(null, '', location.pathname + '#d=' + CODE);
+  } catch (e) { /* the code simply stays where it was */ }
+}
+
+const API = '/api/v1/c/' + encodeURIComponent(CLUB);
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const PASS_KEY = 'hg-night-pass-' + CLUB;
+const OBJECT_ID = /^[0-9a-f]{32}$/;
+const PHOTO_ID = /^[0-9a-f]{12}\.jpg$/;
+const FIELD_ID = /^[A-Za-z0-9_-]{1,48}$/;
+const REF = /^[0-9A-F]{6}$/;
+const LEGACY = [['tires', 'Tires'], ['gearing', 'Gearing'], ['springs', 'Springs'], ['ride', 'Ride height'], ['motor', 'Motor']];
+const EVERY_MS = 15000;
+
+// One answer for every kind of nothing, as the night page has: a bad
+// code, a closed club and a driver not on tonight's list all land here.
+const NOTHING = 'No garage was found for that code. It may be that your club does not offer this, '
+  + "or that you are not on tonight's check-in list.";
+
+function pass() {
+  try { return sessionStorage.getItem(PASS_KEY) || ''; } catch (e) { return ''; }
+}
+
+function setPass(v) {
+  try {
+    if (typeof v === 'string' && v !== '') sessionStorage.setItem(PASS_KEY, v);
+    else sessionStorage.removeItem(PASS_KEY);
+  } catch (e) { /* private browsing: they sign in again next time */ }
+}
+
+// ---- small helpers
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null && text !== '') e.textContent = String(text);
+  return e;
+}
+
+function sv(tag, attrs) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const k of Object.keys(attrs || {})) e.setAttribute(k, String(attrs[k]));
+  return e;
+}
+
+function svText(attrs, words) {
+  const t = sv('text', attrs);
+  t.textContent = String(words);
+  return t;
+}
+
+function tapButton(text, cls, onTap) {
+  const b = el('button', cls, text);
+  b.type = 'button';
+  b.addEventListener('click', onTap);
+  return b;
+}
+
+function arr(v) {
+  return Array.isArray(v) ? v.filter((x) => x && typeof x === 'object') : [];
+}
+
+function str(v) {
+  return typeof v === 'string' ? v : '';
+}
+
+function isNum(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+function plural(n, one, many) {
+  return n + ' ' + (n === 1 ? one : many);
+}
+
+// The relay's own cleaning, so a length checked here is the length it checks.
+function cleanText(v) {
+  return String(v === undefined || v === null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function cleanNotes(v) {
+  return String(v === undefined || v === null ? '' : v).replace(/\r\n?/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ').trim();
+}
+
+function secs(v) {
+  return isNum(v) ? v.toFixed(3) : '-';
+}
+
+// 0.3 rather than 0.30: plain words read better without the trailing zero.
+function short(v) {
+  return String(Math.round(Math.abs(v) * 100) / 100);
+}
+
+function signed(v, dp) {
+  if (!isNum(v)) return '-';
+  const t = v.toFixed(dp);
+  return (v > 0 && Number(t) !== 0 ? '+' : '') + t;
+}
+
+function when(raw) {
+  const at = Date.parse(str(raw));
+  if (!Number.isFinite(at)) return '';
+  const d = new Date(at);
+  try {
+    return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+      + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  } catch (e) {
+    return d.toISOString().slice(0, 16).replace('T', ' ');
+  }
+}
+
+function dayOf(raw) {
+  const at = Date.parse(str(raw));
+  if (!Number.isFinite(at)) return '';
+  try { return new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); } catch (e) { return ''; }
+}
+
+// A 32-hex id for something the phone makes (a pack, a car).
+function newId() {
+  const b = new Uint8Array(16);
+  try {
+    crypto.getRandomValues(b);
+  } catch (e) {
+    for (let i = 0; i < b.length; i++) b[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(b, (x) => (x < 16 ? '0' : '') + x.toString(16)).join('');
+}
+
+// Every relay call this page makes: a POST, with whatever it carries in the body.
+async function post(path, payload) {
+  const r = await fetch(API + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+  let body = {};
+  try { body = await r.json(); } catch (e) { /* an empty answer is still an answer */ }
+  return { status: r.status, body: body || {} };
+}
+
+// ---- what the relay said
+
+let garage = null;
+let hasPin = false;
+let signedIn = false;
+let asks = [];
+let loaded = false;
+let stopped = false;
+
+function limits() {
+  const l = garage && garage.limits && typeof garage.limits === 'object' ? garage.limits : {};
+  return {
+    photosPerCar: isNum(l.photosPerCar) && l.photosPerCar > 0 ? Math.floor(l.photosPerCar) : 6,
+    photoBytes: isNum(l.photoBytes) && l.photoBytes > 0 ? Math.floor(l.photoBytes) : 460800,
+  };
+}
+
+function packs() {
+  return arr(garage && garage.packs).filter((p) => OBJECT_ID.test(str(p.id)));
+}
+
+function cars() {
+  return arr(garage && garage.cars).filter((c) => OBJECT_ID.test(str(c.id)));
+}
+
+function races() {
+  return arr(garage && garage.races).filter((r) => OBJECT_ID.test(str(r.id)));
+}
+
+function packLabel(p) {
+  return str(p.label) || 'Unnamed pack';
+}
+
+function carName(c) {
+  return str(c.name) || 'Unnamed car';
+}
+
+function needsPin() {
+  return hasPin && !signedIn;
+}
+
+// ---- what is being typed: one draft per form, kept across redraws
+
+const drafts = new Map();
+
+function draftOf(form) {
+  return drafts.get(form);
+}
+
+function val(form, field, initial) {
+  const d = drafts.get(form);
+  return d && Object.prototype.hasOwnProperty.call(d.values, field) ? d.values[field] : initial;
+}
+
+function put(section, form, field, value) {
+  let d = drafts.get(form);
+  if (!d) {
+    d = { section: section, values: {}, dirty: true };
+    drafts.set(form, d);
+  }
+  d.values[field] = value;
+  d.dirty = true;
+}
+
+function drop(form) {
+  drafts.delete(form);
+}
+
+// Sent: what it says stays on screen, but it no longer holds the section's
+// redraws, and the next new data starts the form afresh.
+function settled(form) {
+  const d = drafts.get(form);
+  if (d) d.dirty = false;
+}
+
+// ---- each part of the page, drawn on its own
+
+const SECTIONS = {};
+const view = {
+  packEdit: '', packRemove: '', packAdd: false,
+  carEdit: '', carPhotos: '', photo: '', photoRemove: false, carAdd: false, retired: false,
+  layout: '', chart: 'fade', setupCar: '', history: false,
+};
+
+function section(name, id, keyOf, build) {
+  SECTIONS[name] = { box: document.getElementById(id), keyOf: keyOf, build: build, key: null };
+}
+
+function focusedIn(box) {
+  try {
+    const a = document.activeElement;
+    return !!(a && a !== document.body && box && typeof box.contains === 'function' && box.contains(a)
+      && /^(INPUT|TEXTAREA|SELECT)$/.test(String(a.tagName || '')));
+  } catch (e) { return false; }
+}
+
+function busy(name, s) {
+  for (const d of drafts.values()) if (d.section === name && d.dirty) return true;
+  return focusedIn(s.box);
+}
+
+function paint(name, force) {
+  const s = SECTIONS[name];
+  if (!s || !s.box) return;
+  const key = JSON.stringify(s.keyOf());
+  if (!force && key === s.key) return;
+  if (!force && busy(name, s)) return;
+  // New data: anything sent and settled starts again from it.
+  if (key !== s.key) {
+    for (const [form, d] of [...drafts]) if (d.section === name && !d.dirty) drafts.delete(form);
+  }
+  s.key = key;
+  s.box.textContent = '';
+  s.build(s.box, name);
+}
+
+function paintAll() {
+  for (const name of Object.keys(SECTIONS)) paint(name, false);
+}
+
+// ---- form fields, every one inside its own label
+
+function textBox(parent, sec, form, field, title, initial, max, opts) {
+  const o = opts || {};
+  const label = el('label', 'f', title);
+  const input = document.createElement(o.long ? 'textarea' : 'input');
+  if (!o.long) input.type = o.password ? 'password' : 'text';
+  if (o.long) input.setAttribute('rows', '3');
+  input.setAttribute('maxlength', String(max));
+  input.maxLength = max;
+  input.setAttribute('autocomplete', 'off');
+  if (o.mode) input.setAttribute('inputmode', o.mode);
+  input.value = String(val(form, field, initial === undefined || initial === null ? '' : initial));
+  input.addEventListener('input', () => put(sec, form, field, String(input.value || '')));
+  label.appendChild(input);
+  if (o.hint) label.appendChild(el('span', 'hint', o.hint));
+  parent.appendChild(label);
+  return { label: label, input: input };
+}
+
+function selectBox(parent, sec, form, field, title, choices, initial, onChange) {
+  const label = el('label', 'f', title);
+  const pick = document.createElement('select');
+  const value = String(val(form, field, initial));
+  for (const [v, words] of choices) {
+    const o = document.createElement('option');
+    o.value = v;
+    o.textContent = words;
+    if (v === value) o.selected = true;
+    pick.appendChild(o);
+  }
+  pick.value = value;
+  pick.addEventListener('change', () => {
+    put(sec, form, field, String(pick.value || ''));
+    if (onChange) onChange(String(pick.value || ''));
+  });
+  label.appendChild(pick);
+  parent.appendChild(label);
+  return { label: label, input: pick };
+}
+
+function tickBox(parent, sec, form, field, title, initial, onChange) {
+  const label = el('label', 'chk');
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = val(form, field, initial === true) === true;
+  box.addEventListener('change', () => {
+    put(sec, form, field, box.checked === true);
+    if (onChange) onChange(box.checked === true);
+  });
+  label.appendChild(box);
+  label.appendChild(el('span', '', title));
+  parent.appendChild(label);
+  return { label: label, input: box };
+}
+
+// ---- how each send is getting on
+
+const statuses = new Map();
+const statusNodes = new Map();
+const photoRefs = new Map();
+
+function statusLine(key) {
+  const p = el('p', 'yd-said');
+  p.setAttribute('role', 'status');
+  statusNodes.set(key, p);
+  showStatus(key);
+  return p;
+}
+
+function showStatus(key) {
+  const p = statusNodes.get(key);
+  if (!p) return;
+  const s = statuses.get(key);
+  p.textContent = s ? s.words : '';
+  p.className = 'yd-said' + (s && s.cls ? ' ' + s.cls : '');
+}
+
+function setStatus(key, words, ref, cls) {
+  statuses.set(key, { words: words, ref: ref || '', cls: cls || '' });
+  showStatus(key);
+}
+
+function sentWords(ref) {
+  return 'Sent — HeatCaller will have it in a few seconds' + (ref ? ' (ref ' + ref + ')' : '');
+}
+
+// The answers in the garage read, matched to what this page sent by ref.
+function matchAsks() {
+  for (const [key, s] of statuses) {
+    if (!s.ref) continue;
+    const a = asks.find((x) => str(x.ref) === s.ref);
+    if (!a) continue;
+    const said = cleanText(a.said);
+    if (a.state === 'approved' || a.state === 'noted') {
+      photoRefs.delete(s.ref);
+      setStatus(key, 'In HeatCaller ✓' + (said ? ' — ' + said : ''), '', 'gok');
+    } else if (a.state === 'declined') {
+      photoRefs.delete(s.ref);
+      setStatus(key, 'HeatCaller did not take that' + (said ? ': ' + said : '.'), '', 'gno');
+    }
+  }
+}
+
+// Every refusal in words - the relay's own where it has them.
+function askTrouble(a) {
+  if (a === null) return 'Could not reach the club. Check your connection and try again.';
+  const said = a.body && typeof a.body.error === 'string' && a.body.error.trim() !== '' ? a.body.error.trim() : '';
+  if (a.status === 400) return said || 'That could not be sent. Check what you typed and try again.';
+  if (a.status === 403) return said || 'Sign in with your personal PIN first.';
+  if (a.status === 404) return "HeatCaller is not taking changes from phones just now, or you are not on tonight's check-in list. Ask at the desk.";
+  if (a.status === 413) return 'That is too big to send.';
+  if (a.status === 429) return said || 'You have sent too many changes for now. Wait a few minutes and try again.';
+  if (a.status === 503) return said || 'The club has a lot to get through right now. Try again in a while.';
+  return 'The club could not take that just now. Try again in a minute.';
+}
+
+const PIN_FIRST = 'Sign in with your personal PIN at the top of this page first.';
+
+// After a 403 the pass is no good: back to the PIN box, saying why.
+function lostPin(a) {
+  if (a && a.status === 403 && hasPin) {
+    setPass('');
+    signedIn = false;
+    paint('head', true);
+  }
+}
+
+// One change, sent to driver/ask. Answers true when the relay took it.
+async function change(kind, f, key) {
+  if (!CODE) return false;
+  if (needsPin()) {
+    setStatus(key, PIN_FIRST, '', 'gno');
+    return false;
+  }
+  setStatus(key, 'Saving…');
+  const payload = { id: CODE, kind: kind, f: f };
+  const p = pass();
+  if (p !== '') payload.pass = p;
+
+  let a = null;
+  try { a = await post('/driver/ask', payload); } catch (e) { a = null; }
+
+  if (a !== null && a.status === 200 && a.body.ok === true) {
+    const ref = typeof a.body.ref === 'string' && REF.test(a.body.ref) ? a.body.ref : '';
+    setStatus(key, sentWords(ref), ref);
+    if (navigator.vibrate) navigator.vibrate(30);
+    soon();
+    return true;
+  }
+
+  lostPin(a);
+  setStatus(key, askTrouble(a), '', 'gno');
+  return false;
+}
+
+// ---- reading the garage, every 15 seconds while in view, sooner after a send
+
+let timer = 0;
+let fast = [];
+let reading = false;
+let lastRead = 0;
+
+function schedule() {
+  if (stopped) return;
+  clearTimeout(timer);
+  const wait = fast.length > 0 ? fast.shift() : EVERY_MS;
+  timer = setTimeout(() => {
+    if (document.hidden) schedule(); else readGarage();
+  }, wait);
+}
+
+function soon() {
+  fast = [3000, 6000];
+  schedule();
+}
+
+function message(words, bad) {
+  const box = document.getElementById('gm');
+  if (!box) return;
+  box.textContent = '';
+  if (words) box.appendChild(el('p', bad ? 'note bad' : 'note', words));
+}
+
+function take(body) {
+  garage = body && typeof body.garage === 'object' && body.garage !== null && !Array.isArray(body.garage) ? body.garage : null;
+  hasPin = !!body && body.pin === true;
+  signedIn = !!body && body.signedIn === true;
+  asks = arr(body && body.asks);
+  // A pass the relay no longer takes - their PIN changed - is forgotten.
+  if (hasPin && !signedIn && pass() !== '') setPass('');
+}
+
+async function readGarage() {
+  if (reading || stopped) return;
+  reading = true;
+  lastRead = Date.now();
+
+  const payload = { id: CODE };
+  const p = pass();
+  if (p !== '') payload.pass = p;
+
+  let a = null;
+  try { a = await post('/driver/garage', payload); } catch (e) { a = null; }
+  reading = false;
+
+  if (a === null) {
+    if (!loaded) message('Could not reach the club. This page will keep trying.', true);
+    schedule();
+    return;
+  }
+
+  if (a.status === 429) {
+    if (!loaded) message('Too many tries from here. This page will try again in a moment.', true);
+    schedule();
+    return;
+  }
+
+  if (a.status >= 500) {
+    if (!loaded) message('The relay could not answer just now. This page will try again in a moment.', true);
+    schedule();
+    return;
+  }
+
+  if (a.status !== 200 || a.body.ok !== true) {
+    stopped = true;
+    garage = null;
+    message(NOTHING, true);
+    for (const name of Object.keys(SECTIONS)) {
+      const s = SECTIONS[name];
+      if (s.box) s.box.textContent = '';
+      s.key = null;
+    }
+    return;
+  }
+
+  loaded = true;
+  take(a.body);
+  message(garage === null ? "Waiting for the timing desk's laptop… Your garage shows here once HeatCaller sends it." : '');
+  paintAll();
+  matchAsks();
+  const stamp = document.getElementById('stamp');
+  if (stamp) stamp.textContent = 'Updated ' + new Date(Date.now()).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  schedule();
+}
+
+// ---- 1. their name, the way back, and the PIN
+
+function pinTrouble(a) {
+  if (a === null) return 'Could not reach the club. Check your connection and try again.';
+  const said = a.body && typeof a.body.error === 'string' && a.body.error.trim() !== '' ? a.body.error.trim() : '';
+  if (a.status === 200 && a.body.mode === 'staff') return "That is the club's PIN, not your own. Use the personal PIN the club sent you.";
+  if (a.status === 200 && a.body.mode === 'racer') return 'That PIN belongs to a different driver. Use your own personal PIN.';
+  if (a.status === 200) return 'That PIN did not sign you in. Ask at the desk.';
+  if (a.status === 403) return said || 'That PIN is not right.';
+  if (a.status === 409) return 'Online check-in is closed just now, and PIN sign-in with it. Ask at the desk.';
+  if (a.status === 429) return said || 'Too many tries. Wait a few minutes and try again.';
+  return 'The club could not answer just now. Try again in a minute.';
+}
+
+function buildHead(box) {
+  const head = el('div', 'ghead');
+  head.appendChild(el('h2', '', garage ? (str(garage.driver) || 'Your garage') : 'Your garage'));
+  const back = el('a', 'more', 'Back to your night');
+  back.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/night#d=' + CODE);
+  head.appendChild(back);
+  box.appendChild(head);
+
+  if (!loaded) return;
+
+  if (needsPin()) {
+    const card = el('section', 'gx');
+    const part = el('div', 'su');
+    part.appendChild(el('p', '', 'You have a personal PIN, so changes here need it. You can look at everything without it. '
+      + 'This phone remembers it only until you close this tab.'));
+    const label = el('label', 'f', 'Your personal PIN');
+    const input = document.createElement('input');
+    input.type = 'password';
+    input.setAttribute('inputmode', 'numeric');
+    input.setAttribute('autocomplete', 'off');
+    input.setAttribute('maxlength', '8');
+    label.appendChild(input);
+    part.appendChild(label);
+    const said = statusLine('pin');
+
+    const go = tapButton('Sign in', 'go', async () => {
+      const p = String(input.value || '').trim();
+      if (!/^[0-9]{4,8}$/.test(p)) {
+        setStatus('pin', 'A personal PIN is 4 to 8 digits.', '', 'gno');
+        return;
+      }
+      go.disabled = true;
+      setStatus('pin', 'Checking…');
+      let a = null;
+      try { a = await post('/checkin/list', { pin: p }); } catch (e) { a = null; }
+      go.disabled = false;
+      input.value = '';
+      // Only their OWN racer pass, as the night page's "Your details".
+      if (a !== null && a.status === 200 && a.body.mode === 'racer' && a.body.driver && a.body.driver.id === CODE
+        && typeof a.body.pass === 'string' && a.body.pass !== '') {
+        setPass(a.body.pass);
+        signedIn = true;
+        setStatus('pin', 'Signed in.', '', 'gok');
+        paint('head', true);
+        readGarage();
+        return;
+      }
+      setStatus('pin', pinTrouble(a), '', 'gno');
+    });
+    part.appendChild(go);
+    part.appendChild(said);
+    card.appendChild(part);
+    box.appendChild(card);
+    return;
+  }
+
+  if (hasPin && signedIn) {
+    const p = el('p', 'ghead');
+    p.appendChild(tapButton('Forget my PIN on this phone', 'linkish', () => {
+      setPass('');
+      signedIn = false;
+      setStatus('pin', 'Signed out on this phone.');
+      paint('head', true);
+    }));
+    p.appendChild(statusLine('pin'));
+    box.appendChild(p);
+  }
+}
+
+// ---- 2. battery packs
+
+function chemChoices(current) {
+  const list = (Array.isArray(garage && garage.chemistries) ? garage.chemistries : []).filter((c) => typeof c === 'string' && c !== '');
+  if (current && !list.includes(current)) list.push(current);
+  return [['', 'Not set']].concat(list.map((c) => [c, c]));
+}
+
+function packForm(parent, sec, form, p) {
+  const box = el('div', 'su');
+  textBox(box, sec, form, 'label', 'Label', p ? str(p.label) : '', 40, { hint: 'What is written on the pack, like "Blue 2".' });
+  selectBox(box, sec, form, 'chem', 'Type', chemChoices(p ? str(p.chem) : ''), p ? str(p.chem) : '');
+  textBox(box, sec, form, 'notes', 'Notes', p ? str(p.notes) : '', 300, { long: true });
+  parent.appendChild(box);
+  return box;
+}
+
+function packFields(form, p) {
+  return {
+    label: cleanText(val(form, 'label', p ? str(p.label) : '')),
+    chem: cleanText(val(form, 'chem', p ? str(p.chem) : '')),
+    notes: cleanNotes(val(form, 'notes', p ? str(p.notes) : '')),
+  };
+}
+
+function buildPacks(box, sec) {
+  if (!garage) return;
+  const card = el('section', 'gx');
+  card.appendChild(el('h2', '', 'Battery packs'));
+  const all = packs();
+
+  // The pack in the car now.
+  const inUse = all.filter((p) => p.retired !== true);
+  const inCar = all.find((p) => p.inCar === true);
+  const carForm = 'pack-car';
+  const now = el('div', 'su');
+  const pick = selectBox(now, sec, carForm, 'pack', 'The pack in your car now',
+    [['none', 'No pack in the car']].concat(inUse.map((p) => [p.id, packLabel(p) + (p.club === true ? ' (club pack)' : '')])),
+    inCar ? inCar.id : 'none');
+  now.appendChild(tapButton('Save', 'go quiet', async () => {
+    const v = String(pick.input.value || 'none');
+    if (v !== 'none' && !OBJECT_ID.test(v)) { setStatus('pack-car', 'Pick one of your packs.', '', 'gno'); return; }
+    if (await change('pack', { pack: v }, 'pack-car')) settled(carForm);
+  }));
+  now.appendChild(statusLine('pack-car'));
+  card.appendChild(now);
+
+  // Their packs.
+  card.appendChild(el('h3', '', 'Your packs'));
+  if (all.length === 0) card.appendChild(el('p', 'note', 'No packs yet. Add one below.'));
+  const list = el('div', 'glist');
+  for (const p of all) {
+    const row = el('div', 'grow' + (p.retired === true ? ' gmuted' : ''));
+    const name = el('div', 'gname');
+    const b = el('b', '', packLabel(p));
+    if (p.club === true) b.appendChild(el('span', 'gtag', 'Club pack'));
+    if (p.inCar === true) b.appendChild(el('span', 'gtag tonight', 'In the car'));
+    if (p.retired === true) b.appendChild(el('span', 'gtag', 'Retired'));
+    name.appendChild(b);
+    const n = isNum(p.sessions) ? Math.round(p.sessions) : 0;
+    name.appendChild(el('span', 'when', [str(p.chem), plural(n, 'race', 'races')].filter(Boolean).join(' · ')));
+    if (str(p.notes)) name.appendChild(el('span', 'when', str(p.notes)));
+    row.appendChild(name);
+
+    if (p.mine === true) {
+      const btns = el('div', 'gbtns');
+      btns.appendChild(tapButton('Edit', 'gb' + (view.packEdit === p.id ? ' on' : ''), () => {
+        view.packEdit = view.packEdit === p.id ? '' : p.id;
+        view.packRemove = '';
+        paint(sec, true);
+      }));
+      btns.appendChild(tapButton(p.retired === true ? 'Unretire' : 'Retire', 'gb', () => {
+        change('packedit', { op: p.retired === true ? 'unretire' : 'retire', pack: p.id }, 'pack-' + p.id);
+      }));
+      btns.appendChild(tapButton('Remove', 'gb warn', () => {
+        view.packRemove = view.packRemove === p.id ? '' : p.id;
+        view.packEdit = '';
+        paint(sec, true);
+      }));
+      row.appendChild(btns);
+
+      if (view.packRemove === p.id) {
+        const ask = el('div', 'gform');
+        ask.appendChild(el('p', '', 'Remove ' + packLabel(p) + '? Packs with races on them are retired instead, so their charts stay.'));
+        const yes = el('div', 'gbtns');
+        yes.appendChild(tapButton('Yes, remove it', 'gb warn', async () => {
+          view.packRemove = '';
+          paint(sec, true);
+          await change('packedit', { op: 'remove', pack: p.id }, 'pack-' + p.id);
+        }));
+        yes.appendChild(tapButton('Keep it', 'gb', () => { view.packRemove = ''; paint(sec, true); }));
+        ask.appendChild(yes);
+        row.appendChild(ask);
+      }
+
+      if (view.packEdit === p.id) {
+        const form = 'pack-edit-' + p.id;
+        const wrap = el('div', 'gform');
+        const fields = packForm(wrap, sec, form, p);
+        fields.appendChild(tapButton('Save the pack', 'go', async () => {
+          const f = packFields(form, p);
+          if (f.label === '') { setStatus('pack-' + p.id, 'Give the pack a label.', '', 'gno'); return; }
+          if (await change('packedit', { op: 'edit', pack: p.id, label: f.label, chem: f.chem, notes: f.notes }, 'pack-' + p.id)) {
+            drop(form);
+            view.packEdit = '';
+            paint(sec, true);
+          }
+        }));
+        fields.appendChild(tapButton('Cancel', 'linkish', () => { drop(form); view.packEdit = ''; paint(sec, true); }));
+        row.appendChild(wrap);
+      }
+    }
+    const said = statusLine('pack-' + p.id);
+    said.className += ' gfull';
+    row.appendChild(said);
+    list.appendChild(row);
+  }
+  card.appendChild(list);
+
+  // Add a pack.
+  const add = el('details', 'yd-change');
+  add.open = view.packAdd;
+  add.addEventListener('toggle', () => { view.packAdd = add.open; });
+  add.appendChild(el('summary', '', 'Add a pack'));
+  const fields = packForm(add, sec, 'pack-add', null);
+  fields.appendChild(tapButton('Add the pack', 'go', async () => {
+    const f = packFields('pack-add', null);
+    if (f.label === '') { setStatus('pack-add', 'Give the pack a label - what is written on it.', '', 'gno'); return; }
+    if (await change('packedit', { op: 'add', pack: newId(), label: f.label, chem: f.chem, notes: f.notes }, 'pack-add')) {
+      drop('pack-add');
+      view.packAdd = false;
+      paint(sec, true);
+    }
+  }));
+  card.appendChild(add);
+  card.appendChild(statusLine('pack-add'));
+  box.appendChild(card);
+}
+
+// ---- 3. which pack did you run?
+
+function whoWords(by) {
+  if (by === 'phone') return 'Recorded by you';
+  if (by === 'desk') return 'Recorded by the desk';
+  if (by === 'car') return 'Recorded from the pack in the car';
+  if (by === 'hub') return 'Recorded in the Driver Hub';
+  if (by === 'before') return 'Picked before the race';
+  return '';
+}
+
+function buildRaces(box, sec) {
+  if (!garage) return;
+  const list = races();
+  const card = el('section', 'gx');
+  card.appendChild(el('h2', '', 'Which pack did you run?'));
+  if (list.length === 0) {
+    card.appendChild(el('p', 'note', 'Your races show here after you have raced. Say which pack you ran and the charts below learn from it.'));
+    box.appendChild(card);
+    return;
+  }
+  card.appendChild(el('p', 'when', 'Say which pack was in the car for each race. It feeds your pack charts.'));
+  const all = packs();
+  const rows = el('div', 'glist');
+  for (const r of list) {
+    const row = el('div', 'grow');
+    const name = el('div', 'gname');
+    name.appendChild(el('b', '', str(r.label) || 'Race'));
+    name.appendChild(el('span', 'when', [when(r.at), str(r.layout), isNum(r.best) ? 'best ' + secs(r.best) : ''].filter(Boolean).join(' · ')));
+    const who = whoWords(str(r.by));
+    if (who && OBJECT_ID.test(str(r.pack))) name.appendChild(el('span', 'when', who));
+    row.appendChild(name);
+
+    const tagged = str(r.pack);
+    const choices = all.filter((p) => p.retired !== true || p.id === tagged);
+    const form = 'race-' + r.id;
+    const wrap = el('div', 'su gfull');
+    const pick = selectBox(wrap, sec, form, 'pack', 'Pack in ' + (str(r.label) || 'this race'),
+      [['none', 'Not recorded']].concat(choices.map((p) => [p.id, packLabel(p)])),
+      OBJECT_ID.test(tagged) ? tagged : 'none');
+    wrap.appendChild(tapButton('Save', 'go quiet', async () => {
+      const v = String(pick.input.value || 'none');
+      if (v !== 'none' && !OBJECT_ID.test(v)) return;
+      if (await change('pack', { pack: v, race: r.id }, form)) settled(form);
+    }));
+    wrap.appendChild(statusLine(form));
+    row.appendChild(wrap);
+    rows.appendChild(row);
+  }
+  card.appendChild(rows);
+  box.appendChild(card);
+}
+
+// ---- 4. pack charts
+
+const PALETTE = 8;
+
+function colourOf(i) {
+  return 'var(--gp' + (i % PALETTE) + ')';
+}
+
+function packStats(group) {
+  return arr(group && group.packs).filter((p) => typeof p.id === 'string');
+}
+
+// "Blue 2 holds its pace best; Red 1 fades 0.3s by the end." - from the numbers.
+function takeaway(list) {
+  const trusted = list.filter((p) => p.enough === true && isNum(p.fade));
+  const use = trusted.length > 0 ? trusted : list.filter((p) => isNum(p.fade));
+  if (use.length === 0) return '';
+  const few = trusted.length === 0 ? ' (Only a few races so far, so take it lightly.)' : '';
+  if (use.length === 1) {
+    const p = use[0];
+    return (p.fade > 0.05
+      ? packLabel(p) + ' fades ' + short(p.fade) + 's by the end of a run.'
+      : packLabel(p) + ' holds its pace well across a run.') + few;
+  }
+  const byFade = use.slice().sort((a, b) => a.fade - b.fade);
+  const holds = byFade[0];
+  const fades = byFade[byFade.length - 1];
+  const withMedian = use.filter((p) => isNum(p.median));
+  const quickest = withMedian.length > 0 ? withMedian.slice().sort((a, b) => a.median - b.median)[0] : null;
+  let words = quickest && quickest.id === holds.id
+    ? packLabel(holds) + ' is your quickest and holds its pace best'
+    : packLabel(holds) + ' holds its pace best';
+  words += fades.fade > 0.05
+    ? '; ' + packLabel(fades) + ' fades ' + short(fades.fade) + 's by the end.'
+    : '; none of your packs fade much.';
+  if (quickest && quickest.id !== holds.id) words += ' ' + packLabel(quickest) + ' is your quickest.';
+  return words + few;
+}
+
+function chartWidth(box) {
+  const own = box && box.clientWidth ? box.clientWidth : 0;
+  const screen = document.documentElement && document.documentElement.clientWidth ? document.documentElement.clientWidth - 72 : 600;
+  return Math.max(300, Math.min(760, Math.round(own || screen)));
+}
+
+// Round steps for an axis: 0.05, 0.1, 0.2, 0.5...
+function steps(lo, hi, want) {
+  const span = hi - lo;
+  if (!(span > 0)) return [lo];
+  const raw = span / Math.max(1, want);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw) || raw;
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-6; v += step) out.push(Math.round(v / step) * step);
+  return out;
+}
+
+function frame(W, H, lo, hi, aria, side, dp, sign) {
+  const L = 56, R = 14, T = 14, B = 46;
+  const svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'posg gchart', role: 'img', 'aria-label': aria });
+  const y = (v) => T + (hi - v) * (H - T - B) / Math.max(1e-9, hi - lo);
+  for (const v of steps(lo, hi, 4)) {
+    svg.appendChild(sv('line', { class: 'grid', x1: L, x2: W - R, y1: y(v).toFixed(1), y2: y(v).toFixed(1) }));
+    svg.appendChild(svText({ class: 'ax', x: L - 6, y: (y(v) + 4).toFixed(1), 'text-anchor': 'end' }, sign ? signed(v, dp) : v.toFixed(dp)));
+  }
+  svg.appendChild(svText({ class: 'axt', 'text-anchor': 'middle', transform: 'translate(12 ' + ((T + H - B) / 2).toFixed(1) + ') rotate(-90)' }, side));
+  return { svg: svg, y: y, L: L, R: R, T: T, B: B };
+}
+
+function line(svg, colour, pts, dots) {
+  const g = sv('g', { style: '--c:' + colour });
+  if (pts.length > 1) g.appendChild(sv('polyline', { points: pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ') }));
+  if (dots || pts.length === 1) for (const p of pts) g.appendChild(sv('circle', { cx: p[0].toFixed(1), cy: p[1].toFixed(1), r: 3.5 }));
+  svg.appendChild(g);
+}
+
+function fadeChart(list, W) {
+  const lines = list.map((p, i) => ({ p: p, i: i, v: (Array.isArray(p.profile) ? p.profile : []).filter(isNum) }))
+    .filter((l) => l.v.length >= 2);
+  if (lines.length === 0) return null;
+  const all = lines.flatMap((l) => l.v);
+  let lo = Math.min(0, ...all);
+  let hi = Math.max(0, ...all);
+  if (hi - lo < 0.1) { lo -= 0.05; hi += 0.05; }
+  const pad = (hi - lo) * 0.08;
+  lo -= pad;
+  hi += pad;
+  const H = 250;
+  const f = frame(W, H, lo, hi, 'Fade across a run: each pack\'s lap time from the start to the end of a run, against its own median', 'seconds vs its median', 2, true);
+  const most = Math.max(...lines.map((l) => l.v.length));
+  const x = (k) => f.L + k * (W - f.L - f.R) / Math.max(1, most - 1);
+  f.svg.appendChild(sv('line', { class: 'zero', x1: f.L, x2: W - f.R, y1: f.y(0).toFixed(1), y2: f.y(0).toFixed(1) }));
+  const base = H - f.B + 16;
+  f.svg.appendChild(svText({ class: 'ax', x: f.L, y: base, 'text-anchor': 'start' }, 'Start'));
+  f.svg.appendChild(svText({ class: 'ax', x: W - f.R, y: base, 'text-anchor': 'end' }, 'End'));
+  f.svg.appendChild(svText({ class: 'axt', x: ((f.L + W - f.R) / 2).toFixed(1), y: H - 6, 'text-anchor': 'middle' }, 'start → end of the run'));
+  for (const l of lines) line(f.svg, colourOf(l.i), l.v.map((v, k) => [x(k), f.y(v)]), false);
+  return f.svg;
+}
+
+function paceChart(list, W) {
+  const lines = list.map((p, i) => ({
+    p: p, i: i,
+    v: arr(p.trend).map((t) => [Date.parse(str(t.at)), t.median]).filter((t) => Number.isFinite(t[0]) && isNum(t[1])),
+  })).filter((l) => l.v.length >= 1);
+  if (lines.length === 0) return null;
+  const times = lines.flatMap((l) => l.v.map((t) => t[0]));
+  const vals = lines.flatMap((l) => l.v.map((t) => t[1]));
+  let lo = Math.min(...vals);
+  let hi = Math.max(...vals);
+  if (hi - lo < 0.1) { lo -= 0.05; hi += 0.05; }
+  const pad = (hi - lo) * 0.08;
+  lo -= pad;
+  hi += pad;
+  const H = 250;
+  const f = frame(W, H, lo, hi, 'Pace over time: each pack\'s median lap in every race, oldest first', 'median lap (s)', 2, false);
+  const t0 = Math.min(...times);
+  const t1 = Math.max(...times);
+  const x = (t) => t1 === t0 ? (f.L + W - f.R) / 2 : f.L + (t - t0) * (W - f.L - f.R) / (t1 - t0);
+  const base = H - f.B + 16;
+  f.svg.appendChild(svText({ class: 'ax', x: f.L, y: base, 'text-anchor': 'start' }, dayOf(new Date(t0).toISOString())));
+  if (t1 !== t0) f.svg.appendChild(svText({ class: 'ax', x: W - f.R, y: base, 'text-anchor': 'end' }, dayOf(new Date(t1).toISOString())));
+  f.svg.appendChild(svText({ class: 'axt', x: ((f.L + W - f.R) / 2).toFixed(1), y: H - 6, 'text-anchor': 'middle' }, 'race by race →'));
+  for (const l of lines) line(f.svg, colourOf(l.i), l.v.slice().sort((a, b) => a[0] - b[0]).map((t) => [x(t[0]), f.y(t[1])]), true);
+  return f.svg;
+}
+
+function buildCharts(box, sec) {
+  if (!garage) return;
+  const stats = garage.stats && typeof garage.stats === 'object' ? garage.stats : {};
+  const groups = arr(stats.groups).filter((g) => typeof g.layout === 'string');
+  const card = el('section', 'gx gpal');
+  card.appendChild(el('h2', '', 'Pack charts'));
+
+  if (!groups.some((g) => packStats(g).length > 0)) {
+    card.appendChild(el('p', 'note', 'No pack charts yet. Say which pack you ran in each race, and after a few races '
+      + 'this shows which of your packs is quickest and which fades by the end of a run.'));
+    box.appendChild(card);
+    return;
+  }
+
+  const layouts = (Array.isArray(stats.layouts) ? stats.layouts : []).filter((l) => typeof l === 'string' && l !== '' && groups.some((g) => g.layout === l));
+  if (view.layout !== '' && !layouts.includes(view.layout)) view.layout = '';
+  const group = groups.find((g) => g.layout === view.layout) || groups.find((g) => g.layout === '') || groups[0];
+
+  if (layouts.length > 0) {
+    const chips = el('div', 'pick');
+    chips.setAttribute('role', 'group');
+    chips.setAttribute('aria-label', 'Track layout');
+    for (const [v, words] of [['', 'All layouts']].concat(layouts.map((l) => [l, l]))) {
+      const b = tapButton(words, 'pk' + (group.layout === v ? ' on' : ''), () => { view.layout = v; paint(sec, true); });
+      b.setAttribute('aria-pressed', group.layout === v ? 'true' : 'false');
+      chips.appendChild(b);
+    }
+    card.appendChild(chips);
+  }
+
+  const list = packStats(group);
+  if (list.length === 0) {
+    card.appendChild(el('p', 'note', 'No pack races on this layout yet.'));
+    box.appendChild(card);
+    return;
+  }
+
+  const take = takeaway(list);
+  if (take) card.appendChild(el('p', 'gtake', take));
+
+  // The numbers.
+  const wrap = el('div', 'card');
+  const table = el('table');
+  const thead = el('thead');
+  const hr = el('tr');
+  for (const [words, n] of [['Pack', false], ['Races', true], ['Best', true], ['Median', true], ['±', true], ['Fade', true], ['Gap', true]]) {
+    const th = el('th', n ? 'n' : '', words);
+    th.setAttribute('scope', 'col');
+    if (words === '±') th.setAttribute('title', 'Consistency: how much the laps vary (lower is steadier)');
+    hr.appendChild(th);
+  }
+  thead.appendChild(hr);
+  table.appendChild(thead);
+  const tbody = el('tbody');
+  list.forEach((p, i) => {
+    const tr = el('tr', p.enough === true ? '' : 'few');
+    const name = el('td', '');
+    const sw = el('span', 'sw');
+    sw.setAttribute('style', 'display:inline-block;width:0.8em;height:0.8em;border-radius:2px;margin-right:6px;background:' + colourOf(i));
+    name.appendChild(sw);
+    name.appendChild(document.createTextNode ? document.createTextNode(packLabel(p)) : el('span', '', packLabel(p)));
+    if (p.enough !== true) name.appendChild(el('span', 'gtag', 'few races'));
+    tr.appendChild(name);
+    tr.appendChild(el('td', 'n', isNum(p.sessions) ? String(Math.round(p.sessions)) : '-'));
+    tr.appendChild(el('td', 'n', secs(p.best)));
+    tr.appendChild(el('td', 'n', secs(p.median)));
+    tr.appendChild(el('td', 'n', secs(p.spread)));
+    tr.appendChild(el('td', 'n', isNum(p.fade) ? signed(p.fade, 2) + 's' : '-'));
+    tr.appendChild(el('td', 'n', isNum(p.gap) ? (p.gap <= 0.0005 ? 'quickest' : '+' + p.gap.toFixed(3)) : '-'));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  card.appendChild(wrap);
+  card.appendChild(el('p', 'when', 'Median is a normal lap. ± is how much your laps vary. Fade is how much slower you are at the end of a run than at the start. Gap is behind your quickest pack.'));
+
+  // The two charts, one at a time.
+  const tabs = el('div', 'rtabs');
+  tabs.setAttribute('role', 'group');
+  tabs.setAttribute('aria-label', 'Chart');
+  for (const [v, words] of [['fade', 'Fade across a run'], ['pace', 'Pace over time']]) {
+    const b = tapButton(words, 'rtab', () => { view.chart = v; paint(sec, true); });
+    b.setAttribute('aria-pressed', view.chart === v ? 'true' : 'false');
+    tabs.appendChild(b);
+  }
+  card.appendChild(tabs);
+
+  const fig = el('figure', 'posfig');
+  fig.setAttribute('style', 'margin:0');
+  const W = chartWidth(box);
+  const chart = view.chart === 'pace' ? paceChart(list, W) : fadeChart(list, W);
+  if (chart) {
+    fig.appendChild(chart);
+    fig.appendChild(el('figcaption', 'when', view.chart === 'pace'
+      ? 'Each dot is a race: your normal lap on that pack. Lower is quicker.'
+      : 'How each pack\'s laps change through a run. Above the dashed line is slower than its normal lap.'));
+    const key = el('ul', 'posk');
+    list.forEach((p, i) => {
+      const li = el('li', '');
+      const sw = el('span', 'sw');
+      sw.setAttribute('style', '--c:' + colourOf(i));
+      li.appendChild(sw);
+      li.appendChild(el('span', '', packLabel(p)));
+      key.appendChild(li);
+    });
+    fig.appendChild(key);
+  } else {
+    fig.appendChild(el('p', 'note', 'Not enough laps on these packs to draw this yet.'));
+  }
+  card.appendChild(fig);
+  box.appendChild(card);
+}
+
+// ---- 5. my garage
+
+function photosOf(car) {
+  return arr(car.photos).filter((p) => PHOTO_ID.test(str(p.id)) && /^data:image\//.test(str(p.thumb)));
+}
+
+function coverOf(car) {
+  const list = photosOf(car);
+  return list.find((p) => p.id === car.cover) || list[0] || null;
+}
+
+function chassisChoices() {
+  return arr(garage && garage.chassis).filter((c) => OBJECT_ID.test(str(c.id)));
+}
+
+function classChoices() {
+  return (Array.isArray(garage && garage.classes) ? garage.classes : []).filter((c) => typeof c === 'string' && c !== '');
+}
+
+function carForm(parent, sec, form, car) {
+  const box = el('div', 'su');
+  textBox(box, sec, form, 'name', 'Name', car ? str(car.name) : '', 60, { hint: 'What you call it, like "MR-03 Red".' });
+
+  const known = chassisChoices();
+  const own = car ? str(car.chassis) : '';
+  const chassisStart = own !== '' && known.some((c) => c.id === own) ? own : '';
+  const chassis = selectBox(box, sec, form, 'chassis', 'Chassis',
+    [['', 'Not set']].concat(known.map((c) => [c.id, str(c.name) || 'Chassis'])).concat([['other', 'Not listed']]),
+    chassisStart, (v) => { other.label.hidden = v !== 'other'; });
+  const other = textBox(box, sec, form, 'chassisOther', 'Which chassis is it?', '', 60, { hint: 'The desk adds it to the club’s list.' });
+  other.label.hidden = chassis.input.value !== 'other';
+
+  const classes = classChoices();
+  const cls = car ? str(car.cls) : '';
+  const clsStart = cls === '' || classes.includes(cls) ? cls : 'other';
+  const clsPick = selectBox(box, sec, form, 'cls', 'Class',
+    [['', 'Not set']].concat(classes.map((c) => [c, c])).concat([['other', 'Another class']]),
+    clsStart, (v) => { clsOther.label.hidden = v !== 'other'; });
+  const clsOther = textBox(box, sec, form, 'clsOther', 'Which class?', clsStart === 'other' ? cls : '', 40);
+  clsOther.label.hidden = clsPick.input.value !== 'other';
+
+  textBox(box, sec, form, 'body', 'Bodyshell', car ? str(car.body) : '', 60);
+  textBox(box, sec, form, 'number', 'Race number', car ? str(car.number) : '', 8, { mode: 'numeric' });
+  textBox(box, sec, form, 'notes', 'Notes', car ? str(car.notes) : '', 300, { long: true });
+  parent.appendChild(box);
+  return { box: box, chassis: chassis.input, other: other.input, cls: clsPick.input, clsOther: clsOther.input };
+}
+
+// Every text field the Garage has, as driver/ask's car kind takes them.
+function carFields(form, car, inputs) {
+  const pickC = String(inputs.chassis.value || '');
+  const pickK = String(inputs.cls.value || '');
+  const f = {
+    name: cleanText(val(form, 'name', car ? str(car.name) : '')),
+    chassis: pickC === 'other' || !OBJECT_ID.test(pickC) ? '' : pickC,
+    cls: pickK === 'other' ? cleanText(inputs.clsOther.value) : cleanText(pickK),
+    body: cleanText(val(form, 'body', car ? str(car.body) : '')),
+    number: cleanText(val(form, 'number', car ? str(car.number) : '')),
+    notes: cleanNotes(val(form, 'notes', car ? str(car.notes) : '')),
+  };
+  if (pickC === 'other' && cleanText(inputs.other.value) !== '') f.chassisOther = cleanText(inputs.other.value);
+  return f;
+}
+
+function carCard(car, sec) {
+  const card = el('div', 'gcar' + (car.retired === true ? ' gmuted' : ''));
+  const cover = coverOf(car);
+  if (cover) {
+    const im = el('img', 'gthumb');
+    im.setAttribute('src', cover.thumb);
+    im.setAttribute('alt', 'Photo of ' + carName(car));
+    card.appendChild(im);
+  } else {
+    const none = el('div', 'gthumb');
+    none.setAttribute('aria-hidden', 'true');
+    card.appendChild(none);
+  }
+
+  const name = el('div', 'gname');
+  const b = el('b', '', carName(car));
+  if (car.tonight === true) b.appendChild(el('span', 'gtag tonight', 'Racing tonight'));
+  if (car.retired === true) b.appendChild(el('span', 'gtag', 'Retired'));
+  name.appendChild(b);
+  const facts = [str(car.chassisName), str(car.cls), str(car.number) ? '#' + str(car.number) : ''].filter(Boolean);
+  if (facts.length > 0) name.appendChild(el('span', 'when', facts.join(' · ')));
+  if (str(car.body)) name.appendChild(el('span', 'when', 'Body: ' + str(car.body)));
+  if (str(car.notes)) name.appendChild(el('span', 'when', str(car.notes)));
+  card.appendChild(name);
+
+  const key = 'car-' + car.id;
+  const btns = el('div', 'gbtns gwide');
+  btns.appendChild(tapButton('Edit', 'gb' + (view.carEdit === car.id ? ' on' : ''), () => {
+    view.carEdit = view.carEdit === car.id ? '' : car.id;
+    paint(sec, true);
+  }));
+  if (car.retired !== true && car.tonight !== true) {
+    btns.appendChild(tapButton('Racing tonight', 'gb', () => { change('car', { op: 'tonight', car: car.id }, key); }));
+  }
+  btns.appendChild(tapButton(car.retired === true ? 'Unretire' : 'Retire', 'gb', () => {
+    change('car', { op: car.retired === true ? 'unretire' : 'retire', car: car.id }, key);
+  }));
+  const shots = photosOf(car);
+  btns.appendChild(tapButton('Photos (' + shots.length + ')', 'gb' + (view.carPhotos === car.id ? ' on' : ''), () => {
+    view.carPhotos = view.carPhotos === car.id ? '' : car.id;
+    view.photo = '';
+    view.photoRemove = false;
+    paint(sec, true);
+  }));
+  card.appendChild(btns);
+
+  if (view.carEdit === car.id) {
+    const form = 'car-edit-' + car.id;
+    const wrap = el('div', 'gform gwide');
+    const inputs = carForm(wrap, sec, form, car);
+    inputs.box.appendChild(tapButton('Save the car', 'go', async () => {
+      const f = carFields(form, car, inputs);
+      if (f.name === '') { setStatus(key, 'Give the car a name.', '', 'gno'); return; }
+      if (await change('car', Object.assign({ op: 'edit', car: car.id }, f), key)) {
+        drop(form);
+        view.carEdit = '';
+        paint(sec, true);
+      }
+    }));
+    inputs.box.appendChild(tapButton('Cancel', 'linkish', () => { drop(form); view.carEdit = ''; paint(sec, true); }));
+    card.appendChild(wrap);
+  }
+
+  if (view.carPhotos === car.id) card.appendChild(photoPanel(car, sec));
+
+  const said = statusLine(key);
+  said.className += ' gwide';
+  card.appendChild(said);
+  return card;
+}
+
+function photoPanel(car, sec) {
+  const key = 'photo-' + car.id;
+  const wrap = el('div', 'gform gwide');
+  const shots = photosOf(car);
+  const most = limits().photosPerCar;
+  wrap.appendChild(el('p', 'when', plural(shots.length, 'photo', 'photos') + ' of ' + most + '. Tap one to make it the cover or remove it.'));
+
+  if (shots.length > 0) {
+    const grid = el('div', 'gphotos');
+    shots.forEach((p, i) => {
+      const b = tapButton('', 'gphoto' + (view.photo === p.id ? ' on' : ''), () => {
+        view.photo = view.photo === p.id ? '' : p.id;
+        view.photoRemove = false;
+        paint(sec, true);
+      });
+      b.setAttribute('aria-label', 'Photo ' + (i + 1) + (p.id === car.cover ? ', the cover' : ''));
+      b.setAttribute('aria-pressed', view.photo === p.id ? 'true' : 'false');
+      const im = el('img', '');
+      im.setAttribute('src', p.thumb);
+      im.setAttribute('alt', '');
+      b.appendChild(im);
+      grid.appendChild(b);
+    });
+    wrap.appendChild(grid);
+  }
+
+  const picked = shots.find((p) => p.id === view.photo);
+  if (picked) {
+    const btns = el('div', 'gbtns');
+    if (picked.id !== car.cover) {
+      btns.appendChild(tapButton('Make cover', 'gb', () => { change('car', { op: 'cover', car: car.id, photo: picked.id }, key); }));
+    }
+    if (!view.photoRemove) {
+      btns.appendChild(tapButton('Remove', 'gb warn', () => { view.photoRemove = true; paint(sec, true); }));
+    } else {
+      btns.appendChild(tapButton('Yes, remove this photo', 'gb warn', async () => {
+        view.photoRemove = false;
+        view.photo = '';
+        paint(sec, true);
+        await change('car', { op: 'unphoto', car: car.id, photo: picked.id }, key);
+      }));
+      btns.appendChild(tapButton('Keep it', 'gb', () => { view.photoRemove = false; paint(sec, true); }));
+    }
+    wrap.appendChild(btns);
+  }
+
+  if (car.retired !== true) {
+    const btns = el('div', 'gbtns');
+    for (const [words, camera] of [['Take a photo', true], ['Choose a photo', false]]) {
+      const label = el('label', 'gb gfile');
+      label.appendChild(el('span', '', words));
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.setAttribute('accept', 'image/*');
+      if (camera) input.setAttribute('capture', 'environment');
+      input.setAttribute('aria-label', words + ' of ' + carName(car));
+      input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        input.value = '';
+        if (file) addPhoto(car, file, key);
+      });
+      label.appendChild(input);
+      btns.appendChild(label);
+    }
+    wrap.appendChild(btns);
+  }
+  wrap.appendChild(statusLine(key));
+  return wrap;
+}
+
+// ---- photos: shrunk on the phone, then sent
+
+function pendingPhotos(car) {
+  let n = 0;
+  for (const c of photoRefs.values()) if (c === car) n += 1;
+  return n;
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.addEventListener('load', () => resolve(String(r.result || '')));
+    r.addEventListener('error', () => reject(new Error('unreadable')));
+    r.readAsDataURL(file);
+  });
+}
+
+// A data: address, because the content policy lets images come from data:
+// and not from blob:.
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.addEventListener('load', () => resolve(im));
+    im.addEventListener('error', () => reject(new Error('unreadable')));
+    im.src = src;
+  });
+}
+
+function base64Bytes(b64) {
+  return Math.floor(b64.length * 3 / 4) - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0);
+}
+
+// Longest edge 1600 px, JPEG at 0.82, through a canvas (which also drops the
+// camera's location data); a step down in quality, then in size, until it
+// fits. Answers the base64 without its data: prefix, or '' if it never fits.
+async function shrinkPhoto(file, maxBytes) {
+  const im = await loadImage(await readFile(file));
+  const w0 = im.naturalWidth || im.width;
+  const h0 = im.naturalHeight || im.height;
+  if (!w0 || !h0) throw new Error('unreadable');
+  let scale = Math.min(1, 1600 / Math.max(w0, h0));
+  let quality = 0.82;
+  for (let tries = 0; tries < 12; tries++) {
+    const w = Math.max(1, Math.round(w0 * scale));
+    const h = Math.max(1, Math.round(h0 * scale));
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(im, 0, 0, w, h);
+    const url = c.toDataURL('image/jpeg', quality);
+    const b64 = url.slice(url.indexOf(',') + 1);
+    if (url.indexOf('data:image/jpeg') === 0 && base64Bytes(b64) <= maxBytes) return b64;
+    if (quality > 0.55) quality = Math.round((quality - 0.1) * 100) / 100;
+    else { scale *= 0.8; quality = 0.72; }
+  }
+  return '';
+}
+
+async function addPhoto(car, file, key) {
+  if (needsPin()) { setStatus(key, PIN_FIRST, '', 'gno'); return; }
+  const most = limits().photosPerCar;
+  if (photosOf(car).length + pendingPhotos(car.id) >= most) {
+    setStatus(key, carName(car) + ' has ' + most + ' photos already. Remove one first.', '', 'gno');
+    return;
+  }
+  setStatus(key, 'Shrinking the photo…');
+  let data = '';
+  try { data = await shrinkPhoto(file, limits().photoBytes); } catch (e) {
+    setStatus(key, 'That photo could not be read. Try another one.', '', 'gno');
+    return;
+  }
+  if (data === '') {
+    setStatus(key, 'That photo is too big even after shrinking. Try another one.', '', 'gno');
+    return;
+  }
+  await sendPhoto(car.id, data, key);
+}
+
+async function sendPhoto(car, data, key) {
+  if (needsPin()) { setStatus(key, PIN_FIRST, '', 'gno'); return false; }
+  setStatus(key, 'Saving…');
+  const payload = { id: CODE, car: car, data: data };
+  const p = pass();
+  if (p !== '') payload.pass = p;
+  let a = null;
+  try { a = await post('/driver/photo', payload); } catch (e) { a = null; }
+  if (a !== null && a.status === 200 && a.body.ok === true) {
+    const ref = typeof a.body.ref === 'string' && REF.test(a.body.ref) ? a.body.ref : '';
+    if (ref) photoRefs.set(ref, car);
+    setStatus(key, sentWords(ref), ref);
+    soon();
+    return true;
+  }
+  lostPin(a);
+  setStatus(key, a !== null && a.status === 413 ? 'That photo is too big to send. Try another one.' : askTrouble(a), '', 'gno');
+  return false;
+}
+
+function buildCars(box, sec) {
+  if (!garage) return;
+  const all = cars();
+  const card = el('section', 'gx');
+  card.appendChild(el('h2', '', 'My garage'));
+  const live = all.filter((c) => c.retired !== true);
+  const gone = all.filter((c) => c.retired === true);
+  if (live.length === 0) card.appendChild(el('p', 'note', 'No cars yet. Add one below.'));
+  const list = el('div', 'glist');
+  for (const c of live) list.appendChild(carCard(c, sec));
+  card.appendChild(list);
+
+  if (gone.length > 0) {
+    const old = el('details', 'yd-change');
+    old.open = view.retired;
+    old.addEventListener('toggle', () => { view.retired = old.open; });
+    old.appendChild(el('summary', '', 'Retired cars (' + gone.length + ')'));
+    const olist = el('div', 'glist');
+    for (const c of gone) olist.appendChild(carCard(c, sec));
+    old.appendChild(olist);
+    card.appendChild(old);
+  }
+
+  const add = el('details', 'yd-change');
+  add.open = view.carAdd;
+  add.addEventListener('toggle', () => { view.carAdd = add.open; });
+  add.appendChild(el('summary', '', 'Add a car'));
+  const inputs = carForm(add, sec, 'car-add', null);
+  inputs.box.appendChild(tapButton('Add the car', 'go', async () => {
+    const f = carFields('car-add', null, inputs);
+    if (f.name === '') { setStatus('car-add', 'Give the car a name.', '', 'gno'); return; }
+    if (await change('car', Object.assign({ op: 'add', car: newId() }, f), 'car-add')) {
+      drop('car-add');
+      view.carAdd = false;
+      paint(sec, true);
+    }
+  }));
+  card.appendChild(add);
+  card.appendChild(statusLine('car-add'));
+  box.appendChild(card);
+}
+
+// ---- 6. setup sheet
+
+function sheetOf(car) {
+  const id = str(car && car.sheet);
+  const sheets = garage && garage.sheets && typeof garage.sheets === 'object' ? garage.sheets : {};
+  const s = OBJECT_ID.test(id) ? sheets[id] : null;
+  return s && typeof s === 'object' && Array.isArray(s.sections) ? s : null;
+}
+
+function fieldsOf(sheet) {
+  return arr(sheet && sheet.sections).flatMap((s) => arr(s.fields)).filter((f) => FIELD_ID.test(str(f.id)));
+}
+
+function setupsOf(car) {
+  return arr(car && car.setups).filter((s) => OBJECT_ID.test(str(s.id)));
+}
+
+function valuesOf(s) {
+  const v = s && s.values && typeof s.values === 'object' ? s.values : {};
+  const out = {};
+  for (const k of Object.keys(v)) if (typeof v[k] === 'string') out[k] = v[k];
+  return out;
+}
+
+function raceChoices() {
+  return [['', 'Not in a race']].concat(races().map((r) => [r.id, (str(r.label) || 'Race') + (when(r.at) ? ' · ' + when(r.at) : '')]));
+}
+
+function sheetField(parent, sec, form, f, initial) {
+  const kind = str(f.kind);
+  const field = 'v.' + f.id;
+  const title = (str(f.label) || f.id) + (str(f.unit) ? ' (' + str(f.unit) + ')' : '');
+  const options = (Array.isArray(f.options) ? f.options : []).filter((o) => typeof o === 'string' && o !== '');
+
+  if (kind === 'choice') {
+    const list = options.slice();
+    if (initial && !list.includes(initial)) list.push(initial);
+    selectBox(parent, sec, form, field, title, [['', '—']].concat(list.map((o) => [o, o])), initial);
+    return;
+  }
+
+  if (kind === 'multi') {
+    const set = el('fieldset', '');
+    set.appendChild(el('legend', '', title));
+    const on = String(val(form, field, initial)).split(', ').filter(Boolean);
+    const boxes = [];
+    for (const o of options) {
+      const label = el('label', 'chk');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = on.includes(o);
+      box.addEventListener('change', () => {
+        put(sec, form, field, boxes.filter((b) => b[0].checked).map((b) => b[1]).join(', '));
+      });
+      boxes.push([box, o]);
+      label.appendChild(box);
+      label.appendChild(el('span', '', o));
+      set.appendChild(label);
+    }
+    parent.appendChild(set);
+    return;
+  }
+
+  if (kind === 'bool') {
+    tickBox(parent, sec, form, field, title, initial === 'Yes');
+    return;
+  }
+
+  textBox(parent, sec, form, field, title, initial, 80, kind === 'number' ? { mode: 'decimal' } : {});
+}
+
+function sheetValue(form, f, initial) {
+  const v = val(form, 'v.' + f.id, str(f.kind) === 'bool' ? initial === 'Yes' : initial);
+  if (str(f.kind) === 'bool') return v === true || v === 'Yes' ? 'Yes' : '';
+  return cleanText(v);
+}
+
+function buildSetup(box, sec) {
+  if (!garage) return;
+  const card = el('section', 'gx');
+  card.appendChild(el('h2', '', 'Setup sheet'));
+  const list = cars().filter((c) => c.retired !== true);
+  if (list.length === 0) {
+    card.appendChild(el('p', 'note', 'Add a car to your garage first, and its setup sheet shows here.'));
+    box.appendChild(card);
+    return;
+  }
+  if (!list.some((c) => c.id === view.setupCar)) view.setupCar = (list.find((c) => c.tonight === true) || list[0]).id;
+  const car = list.find((c) => c.id === view.setupCar);
+
+  const top = el('div', 'su');
+  const label = el('label', 'f', 'Car');
+  const pick = document.createElement('select');
+  for (const c of list) {
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = carName(c) + (c.tonight === true ? ' (racing tonight)' : '');
+    if (c.id === car.id) o.selected = true;
+    pick.appendChild(o);
+  }
+  pick.value = car.id;
+  pick.addEventListener('change', () => { view.setupCar = String(pick.value || ''); paint(sec, true); });
+  label.appendChild(pick);
+  top.appendChild(label);
+  card.appendChild(top);
+
+  const sheet = sheetOf(car);
+  const setups = setupsOf(car);
+  const newest = setups[0] || null;
+  const form = 'setup-' + car.id;
+  const key = 'setup-' + car.id;
+  const body = el('div', 'su');
+
+  if (sheet) {
+    const start = valuesOf(newest);
+    body.appendChild(el('p', 'when', newest
+      ? 'Started from your last setup (' + when(newest.at) + '). Change what you changed.'
+      : 'The ' + (str(sheet.name) || 'club') + ' setup sheet.'));
+    const fields = fieldsOf(sheet);
+    const canFix = !!newest && newest.editable === true;
+    const fix = canFix && val(form, 'fix', false) === true;
+    if (canFix) {
+      tickBox(body, sec, form, 'fix', 'Fix my last entry (' + when(newest.at) + ') instead of adding a new one', false, (on) => {
+        if (on) {
+          const d = draftOf(form);
+          if (d && !Object.prototype.hasOwnProperty.call(d.values, 'notes')) d.values.notes = str(newest.notes);
+          if (d && !Object.prototype.hasOwnProperty.call(d.values, 'race')) d.values.race = OBJECT_ID.test(str(newest.race)) ? newest.race : '';
+        }
+        paint(sec, true);
+      });
+    }
+    for (const s of arr(sheet.sections)) {
+      const set = el('fieldset', '');
+      set.appendChild(el('legend', '', str(s.name) || 'Setup'));
+      for (const f of arr(s.fields).filter((x) => FIELD_ID.test(str(x.id)))) sheetField(set, sec, form, f, start[f.id] || '');
+      body.appendChild(set);
+    }
+    const raceInit = fix && OBJECT_ID.test(str(newest.race)) ? newest.race : '';
+    const race = selectBox(body, sec, form, 'race', 'Ran in race', raceChoices(), raceInit);
+    textBox(body, sec, form, 'notes', 'Notes', fix ? str(newest.notes) : '', 300, { long: true });
+
+    body.appendChild(tapButton(fix ? 'Save the fix' : 'Add to my setup log', 'go', async () => {
+      const f = { car: car.id, sheet: str(car.sheet), notes: cleanNotes(val(form, 'notes', fix ? str(newest.notes) : '')) };
+      const r = String(race.input.value || '');
+      if (OBJECT_ID.test(r)) f.race = r;
+      if (val(form, 'fix', false) === true && canFix) f.entry = newest.id;
+      let count = 0;
+      for (const fl of fields) {
+        const v = sheetValue(form, fl, start[fl.id] || '');
+        if (v === '') continue;
+        if (v.length > 80) { setStatus(key, 'Keep ' + (str(fl.label) || fl.id) + ' under 80 characters.', '', 'gno'); return; }
+        count += 1;
+        if (count > 80) { setStatus(key, 'That sheet has too many values to send at once.', '', 'gno'); return; }
+        f['v.' + fl.id] = v;
+      }
+      if (count === 0 && f.notes === '') { setStatus(key, 'Fill in at least one part of the sheet.', '', 'gno'); return; }
+      if (await change('setup', f, key)) settled(form);
+    }));
+  } else {
+    body.appendChild(el('p', 'when', 'This car has no setup sheet at the club, so this is the short setup log.'));
+    const start = valuesOf(newest);
+    for (const [k, words] of LEGACY) textBox(body, sec, form, k, words, start[k] || '', 80);
+    textBox(body, sec, form, 'notes', 'Notes', '', 300, { long: true });
+    body.appendChild(tapButton('Add to my setup log', 'go', async () => {
+      const f = {};
+      for (const [k] of LEGACY) {
+        const v = cleanText(val(form, k, start[k] || ''));
+        if (v !== '') f[k] = v;
+      }
+      const notes = cleanNotes(val(form, 'notes', ''));
+      if (notes !== '') f.notes = notes;
+      if (Object.keys(f).length === 0) { setStatus(key, 'Say what you changed.', '', 'gno'); return; }
+      // Which car, so it lands on this one rather than the one racing tonight.
+      f.car = car.id;
+      if (await change('setup', f, key)) settled(form);
+    }));
+  }
+  body.appendChild(statusLine(key));
+  card.appendChild(body);
+
+  // The car's recent setups, with what changed from the one before.
+  if (setups.length > 0) {
+    const labels = {};
+    for (const f of fieldsOf(sheet)) labels[f.id] = str(f.label) || f.id;
+    for (const [k, words] of LEGACY) if (!labels[k]) labels[k] = words;
+    const hist = el('details', 'yd-change');
+    hist.open = view.history;
+    hist.addEventListener('toggle', () => { view.history = hist.open; });
+    hist.appendChild(el('summary', '', 'Recent setups (' + setups.length + ')'));
+    const ul = el('ul', 'gset');
+    setups.forEach((s, i) => {
+      const li = el('li', '');
+      li.appendChild(el('b', '', when(s.at) || 'Setup'));
+      const facts = [str(s.track), str(s.raceLabel), s.fromPhone === true ? 'from your phone' : ''].filter(Boolean);
+      if (facts.length > 0) li.appendChild(el('span', 'when', facts.join(' · ')));
+      const now = valuesOf(s);
+      const before = setups[i + 1] ? valuesOf(setups[i + 1]) : null;
+      const changed = Object.keys(now).filter((k) => now[k] !== '' && (!before || before[k] !== now[k]))
+        .map((k) => (labels[k] || k) + ': ' + now[k] + (before && before[k] ? ' (was ' + before[k] + ')' : ''));
+      li.appendChild(el('span', 'when', changed.length > 0 ? (before ? 'Changed: ' : '') + changed.join('; ') : 'Nothing changed'));
+      if (str(s.notes)) li.appendChild(el('span', 'when', 'Notes: ' + str(s.notes)));
+      ul.appendChild(li);
+    });
+    hist.appendChild(ul);
+    card.appendChild(hist);
+  }
+  box.appendChild(card);
+}
+
+// ---- starting
+
+section('head', 'gh', () => [garage ? str(garage.driver) : '', loaded, hasPin, signedIn], buildHead);
+section('packs', 'gp', () => [garage ? [garage.packs, garage.chemistries] : null], buildPacks);
+section('races', 'gr', () => [garage ? [garage.races, garage.packs] : null], buildRaces);
+section('charts', 'gc', () => [garage ? garage.stats : null], buildCharts);
+section('cars', 'gg', () => [garage ? [garage.cars, garage.chassis, garage.classes, garage.limits] : null], buildCars);
+section('setup', 'gs', () => [garage ? [garage.cars, garage.sheets, garage.races] : null], buildSetup);
+
+function start() {
+  if (!CODE) {
+    paint('head', true);
+    message('This page needs the code from your check-in badge. Open your night from the link your club sent you, or ask at the timing desk.', true);
+    return;
+  }
+  tuck();
+  paint('head', true);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && Date.now() - lastRead > 5000) readGarage();
+  });
+  readGarage();
+}
+
+start();
+`;
+
+/**
+ * The page. Served whatever the code is, as the night page is: the page
+ * asks, and says what came back. Lit as "Me", since it is a driver's own.
+ */
+export function garagePage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
+  return shell({
+    club,
+    clubName,
+    active: "night",
+    heading: "Garage",
+    sub: "Your battery packs, cars and setups - straight into HeatCaller's Driver Hub, opened with the code on your check-in badge.",
+    path: `/c/${club}/garage`,
+    body: `<style>${GARAGE_CSS}</style>` +
+      '<div id="gh"></div><div id="gm"><p class="note">Loading&hellip;</p></div>' +
+      '<div id="gp"></div><div id="gr"></div><div id="gc"></div><div id="gg"></div><div id="gs"></div>',
+    script: GARAGE_JS,
+    noindex: true,
+  }, context);
+}

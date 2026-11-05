@@ -1790,7 +1790,7 @@ function tabsNav(club: string, name: string, lit: string): string {
     </nav>`;
 }
 
-function shell(page: Shell, context: PageContext): string {
+export function shell(page: Shell, context: PageContext): string {
   const club = escapeHtml(page.club);
   const name = escapeHtml(page.clubName);
   const look = context.look;
@@ -12152,7 +12152,9 @@ function askTrouble(a) {
 // one kind that needs it. Answers { ok, words, status }.
 async function sendAsk(kind, f) {
   const payload = { id: CODE, kind: kind, f: f };
-  const p = kind === 'details' ? pass() : '';
+  // The pass goes with everything but a query (5 Nov 2026): packs and
+  // setups now change by themselves, so a driver with a PIN needs it.
+  const p = kind === 'query' ? '' : pass();
   if (p !== '') payload.pass = p;
 
   let a = null;
@@ -12166,7 +12168,8 @@ async function sendAsk(kind, f) {
     }
     if (navigator.vibrate) navigator.vibrate(30);
     drawLive();
-    return { ok: true, status: 200, words: 'Sent - the desk will check it' + (ref !== '' ? ' (ref ' + ref + ')' : '') };
+    const self = kind === 'pack' || kind === 'setup';
+    return { ok: true, status: 200, words: (self ? 'Sent - HeatCaller will have it in a few seconds' : 'Sent - the desk will check it') + (ref !== '' ? ' (ref ' + ref + ')' : '') };
   }
 
   return { ok: false, status: a === null ? 0 : a.status, words: askTrouble(a) };
@@ -12338,6 +12341,10 @@ function drawAsks(message) {
   const sec = el('section', 'yd');
   sec.appendChild(el('h3', '', 'Your details'));
   sec.appendChild(el('p', 'when', 'Ask the timing desk to change how you are called and shown. Nothing changes until the desk checks it.'));
+
+  // Their packs, cars and setup sheets have a page of their own (5 Nov
+  // 2026, asked for by Asher), opened with the same code.
+  sec.appendChild(garageLink());
 
   // The battery pack first, because it changes on race night; the request
   // to change how they are called folded under it (28 Oct 2026), opened by
@@ -12735,7 +12742,7 @@ function packPart() {
   said.setAttribute('role', 'status');
 
   let sentPack = current;
-  const send = tapButton('Tell the desk', 'go quiet', async () => {
+  const send = tapButton('Save', 'go quiet', async () => {
     const value = String(pick.value || '');
 
     if (value !== 'none' && !OBJECT_ID.test(value)) {
@@ -12744,7 +12751,7 @@ function packPart() {
     }
 
     if (value === sentPack) {
-      said.textContent = value === current ? 'That is already your pack.' : 'Already sent - the desk will check it.';
+      said.textContent = value === current ? 'That is already your pack.' : 'Already sent - HeatCaller will have it in a few seconds.';
       return;
     }
 
@@ -12761,7 +12768,20 @@ function packPart() {
 
   part.appendChild(send);
   part.appendChild(said);
+  part.appendChild(garageLink());
   return part;
+}
+
+// Their own garage page (5 Nov 2026): packs, pack charts, cars, photos and
+// setup sheets, with the same code in the fragment, never in the address.
+function garageLink() {
+  const p = el('p', 'note');
+  const a = el('a', 'more', 'Your packs, cars and setups \\u2192');
+  // This page's own fragment, which tuck() has already put the code in:
+  // the code itself is written into nothing new.
+  a.href = '/c/' + encodeURIComponent(CLUB) + '/garage' + (codeFrom(location.hash) ? location.hash : '');
+  p.appendChild(a);
+  return p;
 }
 
 // ---- polling the live part

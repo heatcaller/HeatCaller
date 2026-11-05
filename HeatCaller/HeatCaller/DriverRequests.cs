@@ -721,8 +721,26 @@ internal sealed class DriverRequestStore
         "m" => DriverAsk.QueryMaxChars,
         "tires" or "gearing" or "springs" or "ride" or "motor" => DriverAsk.SetupPartMaxChars,
         "notes" => DriverAsk.SetupNotesMaxChars,
+
+        // 5 Nov 2026, the garage from the phone.
+        "op" => 16,
+        "car" or "sheet" or "entry" or "chassis" => 32 + 8,
+        "photo" => 24,
+        "label" => DriverAsk.PackLabelMaxChars,
+        "chem" => DriverAsk.PackChemistryMaxChars,
+        "name" or "chassisOther" => DriverAsk.CarNameMaxChars,
+        "cls" => DriverAsk.CarClassMaxChars,
+        "body" => DriverAsk.CarBodyMaxChars,
+        "number" => DriverAsk.CarNumberMaxChars,
+        _ when IsSheetValue(field) => DriverAsk.SheetValueMaxChars,
         _ => 0,
     };
+
+    /// <summary>"v.front-spring": one setup sheet value, by its field's id.</summary>
+    internal static bool IsSheetValue(string field) =>
+        field.StartsWith(DriverAsk.SheetValuePrefix, StringComparison.Ordinal)
+        && field.Length is > 2 and <= 50
+        && field.Skip(2).All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 
     internal static bool IsFlag(string field) => field is "emailMyNight" or "noPhoto" or "noVideo" or "initials" or "guardian";
 }
@@ -740,7 +758,7 @@ internal sealed class DriverRequestStore
 /// NO NAMES IN THE LOG, as RelaySignupDesk: the session log goes into
 /// support bundles.
 /// </summary>
-internal sealed class DriverRequestDesk
+internal sealed partial class DriverRequestDesk
 {
     /// <summary>The details fields a phone can propose, in the order the desk is shown them.</summary>
     internal static readonly string[] DetailFields =
@@ -1050,6 +1068,10 @@ internal sealed class DriverRequestDesk
             case DriverAsk.Setup:
                 lines.Add("Setup change: " + SetupWords(request));
                 break;
+
+            default:
+                lines.Add(WriteWords(request));
+                break;
         }
 
         return lines;
@@ -1108,6 +1130,10 @@ internal sealed class DriverRequestDesk
         DriverAsk.Details => "Their details",
         DriverAsk.Pack => "Battery pack",
         DriverAsk.Query => "Result query",
+        DriverAsk.Setup => "Setup sheet",
+        DriverAsk.PackEdit => "Their packs",
+        DriverAsk.Car => "Their garage",
+        DriverAsk.Photo => "Car photo",
         _ => kind,
     };
 

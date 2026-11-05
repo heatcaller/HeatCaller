@@ -15,9 +15,11 @@ namespace HeatCaller;
 /// recognises it by its id. Nothing is confirmed until it is on disk
 /// (DriverRequestStore.FileAll).
 ///
-/// NOTHING COLLECTED HERE CHANGES ANYTHING. Every request waits for the desk
-/// (DriverRequestsForm), which approves, notes or declines it; the phone sees
-/// the answer in its driverlive entry.
+/// NOTHING COLLECTED HERE CHANGES ANYTHING BY ITSELF. Details and queries
+/// wait for the desk (DriverRequestsForm), which approves, notes or declines
+/// them; packs, cars, photos and setups are applied on the roster tick by
+/// DriverRequestDesk.FileWaitingWrites (5 Nov 2026). Either way the phone
+/// sees the answer in its driverlive entry.
 ///
 /// THE SWITCH IS SENT, NOT INFERRED, as every other one here: open while
 /// Driver requests is ticked, and a close - which also throws away every
@@ -126,6 +128,10 @@ public sealed partial class RelayPublisher
             {
                 _nextAsksPollTick = Environment.TickCount64 + (long)AsksPollEvery.TotalMilliseconds;
                 CollectDriverAsks(token);
+
+                // Their car photos on the same tick (5 Nov 2026) - see
+                // RelayPublisher.Photos.
+                CollectDriverPhotos(token);
             }
 
             return;

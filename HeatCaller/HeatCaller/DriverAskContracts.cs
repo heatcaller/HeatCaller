@@ -43,6 +43,23 @@ internal static class DriverAsk
     /// </summary>
     public const string Setup = "setup";
 
+    /// <summary>
+    /// One of their own battery packs added, edited, retired, back in use or
+    /// removed (5 Nov 2026, Asher: "They should be able to add new battery
+    /// packs and remove/retire old battery packs from the relay"). Applied by
+    /// itself, as every kind below is - see DriverRequestDesk.FileWaitingWrites.
+    /// </summary>
+    public const string PackEdit = "packedit";
+
+    /// <summary>One of their own cars added, edited, retired, raced tonight, or its photos changed (5 Nov 2026).</summary>
+    public const string Car = "car";
+
+    /// <summary>A car photo from their phone - collected through its own route, filed as a request so its answer reaches the phone (5 Nov 2026).</summary>
+    public const string Photo = "photo";
+
+    /// <summary>The kinds the laptop applies by itself, with no desk in between - the relay's DRIVER_WRITE_KINDS, and photos.</summary>
+    public static bool IsWrite(string? kind) => kind is Pack or PackEdit or Car or Setup or Photo;
+
     // --- States -----------------------------------------------------------
 
     public const string Waiting = "waiting";
@@ -75,6 +92,19 @@ internal static class DriverAsk
     /// <summary>A setup change's note from the phone.</summary>
     public const int SetupNotesMaxChars = 300;
 
+    // 5 Nov 2026, the garage from the phone - the relay's driverasks.ts.
+    public const int PackLabelMaxChars = 40;
+    public const int PackChemistryMaxChars = 16;
+    public const int CarNameMaxChars = 60;
+    public const int CarClassMaxChars = 40;
+    public const int CarBodyMaxChars = 60;
+    public const int CarNumberMaxChars = 8;
+    public const int SheetValueMaxChars = 80;
+    public const int SheetValuesMost = 80;
+
+    /// <summary>The prefix a setup sheet value's field id comes under: "v.front-spring".</summary>
+    public const string SheetValuePrefix = "v.";
+
     /// <summary>The longest reason the desk can send back with a decline.</summary>
     public const int SaidMaxChars = 120;
 
@@ -93,7 +123,7 @@ internal static class DriverAsk
     }
 
     /// <summary>True for one of the four kinds, exactly as the relay spells them.</summary>
-    public static bool IsKind(string? kind) => kind is Details or Pack or Query or Setup;
+    public static bool IsKind(string? kind) => kind is Details or Pack or Query or Setup or PackEdit or Car or Photo;
 
     /// <summary>True for one of the four states, exactly as the phone reads them.</summary>
     public static bool IsState(string? state) => state is Waiting or Approved or Noted or Declined;

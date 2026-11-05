@@ -38,7 +38,22 @@ internal sealed class DriverBatteriesPanel : UserControl
     private readonly Button _btnSetPack = new() { Text = "Set Pack..." };
 
     private readonly Label _lblPace = new() { AutoSize = true };
+    private readonly ComboBox _cmbLayout = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _cmbChart = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ListView _pace = new();
+    private readonly PackChartControl _chart = new();
+
+    /// <summary>The layout picker's first choice: every layout.</summary>
+    private const string AllLayouts = "All layouts";
+
+    /// <summary>The layout picker's width, and the chart picker's, at the normal text size.</summary>
+    private const int PickerWidth = 240;
+
+    /// <summary>The least the chart gets at the normal text size.</summary>
+    private const int ChartLeastHeight = 200;
+
+    /// <summary>Set while the layout picker is refilled, so that is not taken for a choice.</summary>
+    private bool _fillingLayouts;
 
     private string? _driver;
 
@@ -69,8 +84,24 @@ internal sealed class DriverBatteriesPanel : UserControl
             ("Sessions", 12, HorizontalAlignment.Right), ("Avg best lap", 16, HorizontalAlignment.Right), ("Notes", 32, HorizontalAlignment.Left));
         SetUp(_sessions, ("When", 20, HorizontalAlignment.Left), ("Session", 30, HorizontalAlignment.Left),
             ("Best lap", 14, HorizontalAlignment.Right), ("Pack", 18, HorizontalAlignment.Left), ("Recorded by", 18, HorizontalAlignment.Left));
-        SetUp(_pace, ("Pack", 28, HorizontalAlignment.Left), ("Sessions", 14, HorizontalAlignment.Right),
-            ("Best lap", 18, HorizontalAlignment.Right), ("Avg best lap", 20, HorizontalAlignment.Right), ("Gap", 20, HorizontalAlignment.Right));
+        SetUp(_pace, ("Pack", 25, HorizontalAlignment.Left), ("Races", 9, HorizontalAlignment.Right),
+            ("Best", 13, HorizontalAlignment.Right), ("Median", 13, HorizontalAlignment.Right),
+            ("Consistency", 14, HorizontalAlignment.Right), ("Fade", 13, HorizontalAlignment.Right), ("Gap", 13, HorizontalAlignment.Right));
+
+        _cmbChart.Items.AddRange(new object[] { "Fade through a race", "Median lap over time" });
+        _cmbChart.SelectedIndex = 0;
+        _cmbChart.SelectedIndexChanged += (_, _) =>
+            _chart.Mode = _cmbChart.SelectedIndex == 1 ? PackChartMode.Trend : PackChartMode.Fade;
+
+        _cmbLayout.Items.Add(AllLayouts);
+        _cmbLayout.SelectedIndex = 0;
+        _cmbLayout.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_fillingLayouts)
+            {
+                Fill();
+            }
+        };
 
         _packs.SelectedIndexChanged += (_, _) => UpdateButtons();
         _packs.DoubleClick += (_, _) => EditPicked();
@@ -96,9 +127,17 @@ internal sealed class DriverBatteriesPanel : UserControl
         page.AddFill(_sessions, _ => ListLeast(_sessions, 3), gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar().With(_btnSetPack), gapBelow: UiLayout.SectionGap);
 
+        // The layout looked at and the chart's mode, on a line above the list -
+        // each on a line of its own when they no longer fit side by side.
+        var pick = new FieldRow();
+        pick.Add(new Label { Text = "Layout:" }, _cmbLayout, () => UiLayout.AtTextSize(PickerWidth));
+        pick.Add(new Label { Text = "Chart:" }, _cmbChart, () => UiLayout.AtTextSize(PickerWidth));
+
         page.Add(Heading("Pace by pack"), stretch: false, gapBelow: UiLayout.HintGap);
         page.Add(_lblPace, stretch: false, gapBelow: UiLayout.HintGap);
-        page.AddFill(_pace, _ => ListLeast(_pace, 2), gapBelow: 0);
+        page.Add(pick, gapBelow: UiLayout.RowGap);
+        page.AddFill(_pace, _ => ListLeast(_pace, 2), gapBelow: UiLayout.RowGap);
+        page.AddFill(_chart, _ => UiLayout.AtTextSize(ChartLeastHeight), gapBelow: 0);
 
         Controls.Add(page);
 
@@ -238,6 +277,8 @@ internal sealed class DriverBatteriesPanel : UserControl
                 _lblPacks.Text = string.Empty;
                 _lblSessions.Text = string.Empty;
                 _lblPace.Text = string.Empty;
+                _chart.Packs = Array.Empty<PackStats>();
+                FillLayouts(Array.Empty<string>());
                 return;
             }
 
@@ -292,8 +333,9 @@ internal sealed class DriverBatteriesPanel : UserControl
                     : $"Pack {inCar.DisplayName} is in the car: each session they run is recorded on it. The club's own packs are on the Garage page.";
 
             // Their sessions, newest first, with the pack each was run on.
+            // Demo and imported races left out: no pack is recorded on them (AutoTag), and their laps count for nothing.
             var mine = _history.All
-                .Where(s => s.Results.Any(r => string.Equals(BatteryPackStore.DriverKey(_profiles, r.Transponder), key, StringComparison.OrdinalIgnoreCase)))
+                .Where(s => !s.IsNotScored() && s.Results.Any(r => string.Equals(BatteryPackStore.DriverKey(_profiles, r.Transponder), key, StringComparison.OrdinalIgnoreCase)))
                 .Take(RecentSessions)
                 .ToList();
 
@@ -317,37 +359,7 @@ internal sealed class DriverBatteriesPanel : UserControl
                 ? "No sessions yet."
                 : "Double-click a session to change the pack it was run on.";
 
-            foreach (var row in pace)
-            {
-                var item = new ListViewItem(new[]
-                {
-                    row.Pack.DisplayName,
-                    row.Sessions.ToString(),
-                    $"{row.BestLapSeconds:0.000}s",
-                    $"{row.AverageBestLapSeconds:0.000}s",
-                    row.GapToBestPackSeconds <= 0 ? "-" : $"+{row.GapToBestPackSeconds:0.000}s",
-                });
-
-                // Only a gap worth acting on stands out. Flagging every
-                // difference would make normal run-to-run variation look
-                // like a tired pack.
-                if (row.GapToBestPackSeconds >= 0.1)
-                {
-                    item.ForeColor = AppTheme.Danger;
-                }
-                else if (row.GapToBestPackSeconds <= 0 && pace.Count > 1)
-                {
-                    item.ForeColor = AppTheme.Success;
-                }
-
-                _pace.Items.Add(item);
-            }
-
-            _lblPace.Text = pace.Count == 0
-                ? "Shown once sessions are recorded on their packs. Each session's best lap, averaged per pack."
-                : pace.Count == 1
-                    ? "One pack so far - a second shows whether either is costing time. Each session's best lap, averaged."
-                    : "Each session's best lap, averaged per pack - quickest first. A gap of a tenth or more is in red.";
+            FillPace(key);
         }
         finally
         {
@@ -363,6 +375,107 @@ internal sealed class DriverBatteriesPanel : UserControl
             Reselect(_sessions, item => item.Tag is SessionRecord s && s.Id == keptSession);
 
             UpdateButtons();
+        }
+    }
+
+    /// <summary>
+    /// Pace by pack (PackAnalytics), on the layout picked: each pack's races,
+    /// best lap, median clean lap, consistency and fade, and how far its
+    /// median is off the best pack's - with the chart under it.
+    /// </summary>
+    private void FillPace(string key)
+    {
+        var layout = _cmbLayout.SelectedIndex > 0 ? _cmbLayout.SelectedItem as string : null;
+        var report = PackAnalytics.For(key, _store, _history, _profiles, layout is null ? null : new PackFilter(Layout: layout));
+
+        FillLayouts(report.Layouts);
+
+        // The layout picked may have gone - no race left on it: every layout again.
+        if (layout is not null && _cmbLayout.SelectedIndex <= 0)
+        {
+            layout = null;
+            report = PackAnalytics.For(key, _store, _history, _profiles);
+        }
+
+        var packs = report.Packs;
+
+        foreach (var row in packs)
+        {
+            var item = new ListViewItem(new[]
+            {
+                row.Pack.DisplayName + (row.Enough ? string.Empty : "  (few races)"),
+                row.Sessions.ToString(),
+                $"{row.BestLap:0.000}s",
+                row.MedianLap > 0 ? $"{row.MedianLap:0.000}s" : "-",
+                row.MedianLap > 0 ? $"±{row.Spread:0.000}s" : "-",
+                row.MedianLap > 0 ? Signed(row.Fade) : "-",
+                row.MedianLap <= 0 || Math.Abs(row.GapToBestPack) < 0.0005 ? "-" : Signed(row.GapToBestPack),
+            });
+
+            // Only a gap worth acting on stands out. Flagging every
+            // difference would make normal run-to-run variation look
+            // like a tired pack. A pack with too few races to trust is
+            // muted rather than called good or bad.
+            if (!row.Enough)
+            {
+                item.ForeColor = AppTheme.TextMuted;
+            }
+            else if (row.GapToBestPack >= 0.1)
+            {
+                item.ForeColor = AppTheme.Danger;
+            }
+            else if (row.MedianLap > 0 && row.GapToBestPack <= 0 && packs.Count > 1)
+            {
+                item.ForeColor = AppTheme.Success;
+            }
+
+            _pace.Items.Add(item);
+        }
+
+        _chart.Packs = packs;
+
+        _lblPace.Text = packs.Count == 0
+            ? layout is null
+                ? "Shown once sessions are recorded on their packs: the median clean lap on each, how steady it is, and how much it fades."
+                : "No races on their packs on this layout yet."
+            : packs.Count == 1
+                ? "One pack so far - a second shows whether either is costing time. Median of clean laps; fade is the last third against the first."
+                : $"Median of clean laps, quickest first. Fade is the last third of a race against the first. A gap of a tenth or more is in red; under {PackAnalytics.EnoughSessions} races is too few to trust.";
+    }
+
+    private static string Signed(double seconds) => seconds >= 0 ? $"+{seconds:0.000}s" : $"-{-seconds:0.000}s";
+
+    /// <summary>The layout picker: every layout, then each one they have raced their packs on, the one picked kept.</summary>
+    private void FillLayouts(IReadOnlyList<string> layouts)
+    {
+        var picked = _cmbLayout.SelectedIndex > 0 ? _cmbLayout.SelectedItem as string : null;
+        var now = _cmbLayout.Items.Cast<object>().Skip(1).Select(o => o as string ?? string.Empty).ToList();
+
+        if (now.SequenceEqual(layouts, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        _fillingLayouts = true;
+
+        try
+        {
+            _cmbLayout.BeginUpdate();
+            _cmbLayout.Items.Clear();
+            _cmbLayout.Items.Add(AllLayouts);
+
+            foreach (var layout in layouts)
+            {
+                _cmbLayout.Items.Add(layout);
+            }
+
+            var again = picked is null ? -1 : _cmbLayout.Items.IndexOf(picked);
+            _cmbLayout.SelectedIndex = again > 0 ? again : 0;
+        }
+        finally
+        {
+            _cmbLayout.EndUpdate();
+            _fillingLayouts = false;
         }
     }
 
@@ -388,6 +501,7 @@ internal sealed class DriverBatteriesPanel : UserControl
             PackTagSource.RaceControl => "Race Control",
             PackTagSource.DriverHub => "By hand",
             PackTagSource.Converted => "Before",
+            PackTagSource.Phone => "Phone",
             _ => string.Empty,
         };
     }

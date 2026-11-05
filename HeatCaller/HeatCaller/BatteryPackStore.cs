@@ -61,6 +61,9 @@ public enum PackTagSource
 
     /// <summary>A tag from before tags were per driver, on a session one driver ran alone.</summary>
     Converted,
+
+    /// <summary>Picked by the driver on their phone, through the relay.</summary>
+    Phone,
 }
 
 /// <summary>Which pack a driver ran a session on - or, with no pack id, that none is recorded on purpose.</summary>
