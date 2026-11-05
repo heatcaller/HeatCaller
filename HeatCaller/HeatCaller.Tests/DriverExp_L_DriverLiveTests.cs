@@ -225,7 +225,7 @@ public sealed class DriverExp_L_DriverLiveTests
             {
                 new DriverAskAnswer("a1b2c3", DriverAsk.Details, DriverAsk.Declined, longReason),
                 new DriverAskAnswer("ZZZZZZ", DriverAsk.Details, DriverAsk.Waiting, ""),
-                new DriverAskAnswer("D4E5F6", "photo", DriverAsk.Waiting, ""),
+                new DriverAskAnswer("D4E5F6", "teleport", DriverAsk.Waiting, ""),
                 new DriverAskAnswer("A0A0A0", DriverAsk.Query, "lost", ""),
                 new DriverAskAnswer("B0B0B0", DriverAsk.Query, DriverAsk.Noted, " Thanks "),
             },

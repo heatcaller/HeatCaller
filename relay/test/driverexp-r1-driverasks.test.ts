@@ -144,13 +144,14 @@ describe("who can ask", () => {
     assert.match(right.body.ref, /^[0-9A-F]{6}$/);
     h.advance(1000);
 
-    // A pack needs only the badge, even for Sam.
-    assert.equal((await ask({ id: SAM, kind: "pack", f: { pack: PACK } })).status, 200);
+    // A pack changes by itself since 5 Nov 2026, so for Sam it needs her PIN too.
+    assert.equal((await ask({ id: SAM, kind: "pack", f: { pack: PACK } })).status, 403);
+    assert.equal((await ask({ id: SAM, pass, kind: "pack", f: { pack: PACK } })).status, 200);
 
     const items = (await inbox()).body.items;
     assert.equal(items[0].v, "pin");
     assert.equal(items[0].f.email, "sam@example.com");
-    assert.equal(items[1].v, "badge");
+    assert.equal(items[1].v, "pin");
   });
 
   it("lets a driver with no PIN change details by badge - but not their email", async () => {
@@ -187,14 +188,23 @@ describe("how much can be asked", () => {
     await openEverything(h);
   });
 
-  it("holds at most five per badge", async () => {
+  it("holds at most five per badge for the desk, and thirty changes beside them", async () => {
     for (let i = 0; i < DRIVER_ASKS_PER_DRIVER; i++) {
+      assert.equal((await ask({ id: BILL, kind: "details", f: { announcer: `Billy ${i}` } })).status, 200);
+    }
+
+    const sixth = await ask({ id: BILL, kind: "details", f: { announcer: "Billy six" } });
+    assert.equal(sixth.status, 429);
+    assert.match(sixth.body.error, /5 waiting already/);
+
+    // Pack changes have their own room (5 Nov 2026).
+    for (let i = 0; i < 30; i++) {
       assert.equal((await ask({ id: BILL, kind: "pack", f: { pack: PACK } })).status, 200);
     }
 
-    const sixth = await ask({ id: BILL, kind: "pack", f: { pack: PACK } });
-    assert.equal(sixth.status, 429);
-    assert.match(sixth.body.error, /5 waiting already/);
+    const more = await ask({ id: BILL, kind: "pack", f: { pack: PACK } });
+    assert.equal(more.status, 429);
+    assert.match(more.body.error, /not picked up your last changes/);
   });
 
   it("takes six an hour from a badge and three queries", async () => {
@@ -209,13 +219,16 @@ describe("how much can be asked", () => {
     await call(h, "POST", `${API}/driver/collected`, { token: ACME_TOKEN, json: { ids } });
 
     for (let i = 0; i < 3; i++) {
-      assert.equal((await ask({ id: BILL, kind: "pack", f: { pack: PACK } })).status, 200);
+      assert.equal((await ask({ id: BILL, kind: "details", f: { announcer: `Billy ${i}` } })).status, 200);
     }
 
-    assert.equal((await ask({ id: BILL, kind: "pack", f: { pack: PACK } })).status, 429, "the seventh in an hour");
+    assert.equal((await ask({ id: BILL, kind: "details", f: { announcer: "Billy seven" } })).status, 429, "the seventh in an hour");
+
+    // Changes the laptop applies by itself are counted apart (5 Nov 2026).
+    assert.equal((await ask({ id: BILL, kind: "pack", f: { pack: PACK } })).status, 200);
 
     h.advance(61 * 60 * 1000);
-    assert.equal((await ask({ id: BILL, kind: "pack", f: { pack: PACK } })).status, 200);
+    assert.equal((await ask({ id: BILL, kind: "details", f: { announcer: "Billy again" } })).status, 200);
   });
 
   it("takes three hundred from one address in ten minutes", async () => {

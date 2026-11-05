@@ -219,6 +219,10 @@ public partial class MainForm
                 SendToRelayIfChanged(RelayChannel.DriverLive, "the drivers' live evening", BuildDriverLiveDocument);
             }
 
+            // Each driver's garage goes with their details (5 Nov 2026) -
+            // see MainForm.DriverGarage.
+            TickDriverGarage(now, meOpen && now - _driverMeOpenedUtc >= DriverMeSettleFor);
+
             if (!meOpen || now - _driverMeOpenedUtc < DriverMeSettleFor)
             {
                 return;

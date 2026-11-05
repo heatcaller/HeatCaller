@@ -360,18 +360,18 @@ describe("the pack and the race query", () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me(), asksOpen: true } }));
     const yd = page.get("yd");
 
-    await press(page, yd, /^Tell the desk$/);
+    await press(page, yd, /^Save$/);
     assert.equal(asks(page).length, 0);
     assert.match(said(yd), /already your pack/);
 
     const pick = field(yd, /^The pack in your car now/);
     pick.value = "none";
     pick.fire("change");
-    await press(page, yd, /^Tell the desk$/);
+    await press(page, yd, /^Save$/);
     assert.deepEqual(asks(page)[0]?.body, { id: CODE, kind: "pack", f: { pack: "none" } });
 
     pick.value = PACK_B;
-    await press(page, yd, /^Tell the desk$/);
+    await press(page, yd, /^Save$/);
     assert.deepEqual(asks(page)[1]?.body["f"], { pack: PACK_B });
     assert.equal("pass" in (asks(page)[1]?.body ?? {}), false, "the badge is enough for a pack");
   });
@@ -441,7 +441,7 @@ describe("what never leaves the page the wrong way", () => {
     type(field(yd, /^Announcer name/), "Rocket");
     await press(page, yd, /^Send to the desk$/);
     field(yd, /^The pack in your car now/).value = PACK_B;
-    await press(page, yd, /^Tell the desk$/);
+    await press(page, yd, /^Save$/);
     await press(page, page.get("nx"), /Something wrong/);
     type(field(page.get("nx"), /^What looks wrong/), "Wrong.");
     await press(page, page.get("nx"), /^Send to the desk$/);
@@ -451,7 +451,7 @@ describe("what never leaves the page the wrong way", () => {
     for (const s of page.sent) {
       assert.doesNotMatch(s.url, new RegExp(CODE));
       assert.doesNotMatch(s.url, /\?/);
-      assert.match(s.url, /^\/api\/v1\/c\/acme-rc\/(night|checkin\/one|checkin\/list|driver\/ask)$/);
+      assert.match(s.url, /^\/api\/v1\/c\/acme-rc\/(night|checkin\/one|checkin\/list|driver\/ask|driver\/garage)$/);
     }
   });
 

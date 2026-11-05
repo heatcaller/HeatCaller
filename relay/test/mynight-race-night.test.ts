@@ -118,7 +118,7 @@ describe("My Night on race night: the jobs in one row", () => {
   it("sends the pack from the card", async () => {
     const { page, asks } = await open();
     pick(row(page)).value = PACK_B;
-    press(row(page), /^Tell the desk$/);
+    press(row(page), /^Save$/);
     await page.settle();
 
     assert.deepEqual(asks[0], { id: CODE, kind: "pack", f: { pack: PACK_B } });

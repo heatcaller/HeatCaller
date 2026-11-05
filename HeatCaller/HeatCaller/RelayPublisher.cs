@@ -3469,8 +3469,13 @@ public sealed partial class RelayPublisher : IDisposable
             // queue included. A newer copy follows within seconds anyway.
             var driverLiveRefused = code is 401 or 403 && item.ItemId is null
                 && item.Channel == NameOf(RelayChannel.DriverLive);
-            var driverMeRefused = code is 401 or 403 && item.ItemId is null
-                && item.Channel == NameOf(RelayChannel.DriverMe);
+            var driverMeRefused = (code is 401 or 403 && item.ItemId is null
+                && item.Channel == NameOf(RelayChannel.DriverMe))
+
+                // A driver's garage goes with driverme's switch (5 Nov
+                // 2026) and is a collection item, so it must never sit at
+                // the head of the results queue either.
+                || (code is 401 or 403 && item.Channel == DriverGarage.Channel);
 
             // And not called "a different club": a 403 on a switched channel
             // is a switch not told, and the token is fine. A 401 is still the

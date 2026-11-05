@@ -51,8 +51,23 @@ import {
   DRIVER_ASKS_OPEN_DOC,
   DRIVER_ASKS_PER_CLUB,
   DRIVER_ASKS_PER_DRIVER,
+  DRIVER_ASK_SETUP_MAX_BODY,
+  DRIVER_WRITES_PER_DRIVER,
+  isWriteKind,
   type DriverAskBody,
 } from "./driverasks.js";
+import {
+  asDriverPhoto,
+  DRIVER_PHOTO_MAX_BODY,
+  DRIVER_PHOTOS_CHANNEL,
+  DRIVER_PHOTOS_COLLECT_MAX_BODY,
+  DRIVER_PHOTOS_PER_CLUB,
+  DRIVER_PHOTOS_PER_DRIVER,
+  GARAGE_CHANNEL,
+  photoBytesOf,
+  type DriverPhotoBody,
+} from "./garage.js";
+import { garagePage } from "./garagepage.js";
 import { DEFAULT_LOOK, lookFrom, type Look } from "./site.js";
 import { sunIcon } from "./sun.js";
 import { BRAIN_LONG_WORDS_CEILING, BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
@@ -312,6 +327,9 @@ const SWITCHED_CHANNELS: ReadonlyMap<string, string> = new Map([
   // their nights, and their own details with the driver-requests switch.
   [DRIVER_LIVE_CHANNEL, "This club is not offering drivers their own night, so their live evening is not accepted."],
   [DRIVER_ME_CHANNEL, "This club is not taking drivers' own requests, so their details are not accepted."],
+  // 5 Nov 2026: each driver's garage - packs, cars, sheets - goes with
+  // their details.
+  [GARAGE_CHANNEL, "This club is not taking drivers' own requests, so their garages are not accepted."],
 ]);
 
 /**
@@ -1115,6 +1133,14 @@ export class Relay {
   /** Result queries from one badge, per club: three an hour. */
   private readonly askQueries: Limiter;
   /**
+   * Changes the laptop applies by itself - packs, cars, setups - from one
+   * badge, per club: a hundred and twenty an hour (5 Nov 2026), so swapping
+   * packs between every round and logging every sheet never runs out.
+   */
+  private readonly askWrites: Limiter;
+  /** Car photos from one badge, per club: thirty an hour. */
+  private readonly photoUploads: Limiter;
+  /**
    * The night page's live poll ({part:"live"}), per club and address -
    * apart from checkinReads, because a paddock of phones on the venue's
    * one address polling every twenty seconds would otherwise use up the
@@ -1356,6 +1382,8 @@ export class Relay {
     this.askTraffic = new Limiter(300, 10 * 60 * 1000, () => this.now().getTime());
     this.askPerDriver = new Limiter(6, 60 * 60 * 1000, () => this.now().getTime());
     this.askQueries = new Limiter(3, 60 * 60 * 1000, () => this.now().getTime());
+    this.askWrites = new Limiter(120, 60 * 60 * 1000, () => this.now().getTime());
+    this.photoUploads = new Limiter(30, 60 * 60 * 1000, () => this.now().getTime());
     this.nightLiveReads = new Limiter(1200, 60 * 1000, () => this.now().getTime());
     this.brain = options.brain;
     this.topUpRequests = options.topUpRequests;
@@ -2207,6 +2235,15 @@ export class Relay {
             sendHtml(response, 200, nightPage(tenant.club, tenant.name, context), context.nonce);
             return;
           }
+
+          // A driver's own garage (5 Nov 2026) - opened from their night
+          // with the same code in the fragment, and served whatever the
+          // answer will be for the night page's reasons.
+          if (page === "garage") {
+            const context = await this.contextFor(request, tenant.club);
+            sendHtml(response, 200, garagePage(tenant.club, tenant.name, context), context.nonce);
+            return;
+          }
         }
 
         // One session's own address, which exists so that a link to it
@@ -2543,6 +2580,34 @@ export class Relay {
 
     if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "open") {
       await this.setDriverAsksOpen(request, response, club);
+      return;
+    }
+
+    // A DRIVER'S OWN GARAGE (5 Nov 2026): the phone reads its document and
+    // sends car photos; the laptop collects the photos with its token, as
+    // it does the asks. See garage.ts.
+    if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "garage") {
+      await this.readGarage(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 2 && rest[0] === "driver" && rest[1] === "photo") {
+      await this.driverPhoto(request, response, club, liftCeiling);
+      return;
+    }
+
+    if (method === "GET" && rest.length === 2 && rest[0] === "driver" && rest[1] === "photos") {
+      await this.readDriverPhotos(request, response, club);
+      return;
+    }
+
+    if (method === "GET" && rest.length === 3 && rest[0] === "driver" && rest[1] === "photo") {
+      await this.readDriverPhoto(request, response, club, rest[2] as string);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 3 && rest[0] === "driver" && rest[1] === "photos" && rest[2] === "collected") {
+      await this.clearDriverPhotos(request, response, club);
       return;
     }
 
@@ -3005,7 +3070,7 @@ export class Relay {
     const channel = spec.name;
     const maxItems = spec.maxItems ?? Number.POSITIVE_INFINITY;
 
-    const [items, used, tunnel, signups, votes, notes, inbox, asks] = await Promise.all([
+    const [items, used, tunnel, signups, votes, notes, inbox, asks, photos] = await Promise.all([
       this.store.itemSizes(club, channel),
       this.store.usage(club),
       this.store.snapshotBytes(club, MANAGE_QUEUE),
@@ -3016,6 +3081,9 @@ export class Relay {
       // Drivers' asks are written by phones too (22 Oct 2026, driver
       // experience), with a ceiling of their own (DRIVER_ASKS_PER_CLUB).
       this.store.itemSizes(club, DRIVER_ASKS_CHANNEL),
+      // And their car photos on the way to the laptop (5 Nov 2026), with
+      // a ceiling of their own (DRIVER_PHOTOS_PER_CLUB).
+      this.store.itemSizes(club, DRIVER_PHOTOS_CHANNEL),
     ]);
     const replaced = items.find((item) => item.id === id);
     const others = items.filter((item) => item.id !== id).sort((a, b) => a.at - b.at);
@@ -3109,7 +3177,7 @@ export class Relay {
     const offQuota = await this.offQuotaBytes(club);
     const phoneWritten =
       votes.reduce((sum, item) => sum + item.bytes, 0) + notes.reduce((sum, item) => sum + item.bytes, 0) + inbox +
-      asks.reduce((sum, item) => sum + item.bytes, 0);
+      asks.reduce((sum, item) => sum + item.bytes, 0) + photos.reduce((sum, item) => sum + item.bytes, 0);
 
     let total = used - tunnel - signups - phoneWritten - offQuota - (replaced?.bytes ?? 0) + bytes;
     let count = others.length + 1;
@@ -6275,7 +6343,7 @@ export class Relay {
     // 22 Oct 2026, driver experience: the drivers' details go with the
     // driver-requests switch; their live evening, like their nights, with
     // the nights switch.
-    if (channel === DRIVER_ME_CHANNEL) {
+    if (channel === DRIVER_ME_CHANNEL || channel === GARAGE_CHANNEL) {
       return !(await this.driverAsksOpenFor(club));
     }
 
@@ -6932,9 +7000,12 @@ export class Relay {
 
     this.askTraffic.hit(who);
 
-    const body = await readBody(request, response, DRIVER_ASK_MAX_BODY);
+    // Read to the setup sheet's limit, then held to 2 KB for every other
+    // kind (5 Nov 2026): only a whole sheet needs more.
+    const body = await readBody(request, response, DRIVER_ASK_SETUP_MAX_BODY);
 
-    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)
+      || (body["kind"] !== "setup" && jsonBytes(body) > DRIVER_ASK_MAX_BODY)) {
       sendJson(response, 400, { ok: false, error: "That request could not be read." });
       return;
     }
@@ -6966,7 +7037,12 @@ export class Relay {
     // A driver who HAS a personal PIN changes their details only with it:
     // the badge code alone is printed on a lanyard. A driver without one
     // can use the badge - but not for their email (askFieldsFrom).
-    if (kind === "details" && hasRacerPin(checkin, id) && !withPin) {
+    // The same holds for everything the laptop now applies by itself (5
+    // Nov 2026, Asher: "go with your suggestions"): packs, cars and
+    // setups change with no desk in between, so the PIN is the check.
+    const write = isWriteKind(kind);
+
+    if ((kind === "details" || write) && hasRacerPin(checkin, id) && !withPin) {
       sendJson(response, 403, { ok: false, error: "Sign in with your personal PIN first." });
       return;
     }
@@ -6979,13 +7055,17 @@ export class Relay {
     }
 
     const badge = `${club}|${id}`;
+    const limiter = write ? this.askWrites : this.askPerDriver;
 
-    if (this.askPerDriver.blocked(badge) || (kind === "query" && this.askQueries.blocked(badge))) {
-      sendJson(response, 429, { ok: false, error: "You have asked a few times already - wait a while, or ask at the desk." });
+    if (limiter.blocked(badge) || (kind === "query" && this.askQueries.blocked(badge))) {
+      sendJson(response, 429, {
+        ok: false,
+        error: write ? "That is a lot of changes in one hour - wait a little and try again." : "You have asked a few times already - wait a while, or ask at the desk.",
+      });
       return;
     }
 
-    this.askPerDriver.hit(badge);
+    limiter.hit(badge);
 
     if (kind === "query") {
       this.askQueries.hit(badge);
@@ -6994,7 +7074,7 @@ export class Relay {
     const at = this.now();
     const stored: DriverAskBody = { b: id, k: kind as DriverAskBody["k"], v: withPin ? "pin" : "badge", f: check.f, at: at.toISOString() };
 
-    if (jsonBytes(stored) > DRIVER_ASK_MAX_STORED) {
+    if (jsonBytes(stored) > (kind === "setup" ? DRIVER_ASK_SETUP_MAX_BODY : DRIVER_ASK_MAX_STORED)) {
       sendJson(response, 413, { ok: false, error: "That is too long." });
       return;
     }
@@ -7013,7 +7093,14 @@ export class Relay {
         return "full" as const;
       }
 
-      if (held.filter((item) => asDriverAsk(item.doc.body)?.b === id).length >= DRIVER_ASKS_PER_DRIVER) {
+      // Writes and desk asks each have their own room (5 Nov 2026), so a
+      // busy evening of pack swaps never stops a query reaching the desk.
+      const mineHeld = held.filter((item) => {
+        const ask = asDriverAsk(item.doc.body);
+        return ask !== undefined && ask.b === id && isWriteKind(ask.k) === write;
+      }).length;
+
+      if (mineHeld >= (write ? DRIVER_WRITES_PER_DRIVER : DRIVER_ASKS_PER_DRIVER)) {
         return "mine" as const;
       }
 
@@ -7041,7 +7128,12 @@ export class Relay {
     }
 
     if (outcome === "mine") {
-      sendJson(response, 429, { ok: false, error: `You have ${DRIVER_ASKS_PER_DRIVER} waiting already - the desk will get to them.` });
+      sendJson(response, 429, {
+        ok: false,
+        error: write
+          ? "HeatCaller has not picked up your last changes yet - is the timing desk's laptop on? Try again in a minute."
+          : `You have ${DRIVER_ASKS_PER_DRIVER} waiting already - the desk will get to them.`,
+      });
       return;
     }
 
@@ -7113,6 +7205,276 @@ export class Relay {
     sendJson(response, 200, { ok: true, cleared: gone });
   }
 
+  // ---------------------------------------------------- drivers' garages
+  //
+  // 5 Nov 2026, asked for by Asher - see garage.ts and
+  // claude/garage-relay-contract.md.
+
+  /**
+   * One driver's garage, for the phone's Garage page: the document the
+   * laptop built, whether they have a personal PIN and whether the pass
+   * sent is theirs, and how their recent requests went. The same gate as
+   * an ask - and its one 404 for every way of failing it.
+   */
+  private async readGarage(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const address = `${club}|${clientAddress(request)}`;
+
+    if (this.nightLiveReads.blocked(address)) {
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a minute and try again." });
+      return;
+    }
+
+    this.nightLiveReads.hit(address);
+
+    const body = await readBody(request, response, 1024);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That request could not be read." });
+      return;
+    }
+
+    const id = typeof body["id"] === "string" ? body["id"].trim().toLowerCase() : "";
+    const checkin = DRIVER_ID.test(id) ? await this.askGateOf(club, id) : undefined;
+
+    if (checkin === undefined) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const pass = typeof body["pass"] === "string" && PASS.test(body["pass"]) ? body["pass"] : "";
+    const doc = await this.store.getItem(club, GARAGE_CHANNEL, id).catch(() => undefined);
+    const live = await this.liveEntryOf(club, id);
+    const asks = live !== undefined && Array.isArray(live.entry["asks"]) ? live.entry["asks"] : [];
+
+    sendJson(response, 200, {
+      ok: true,
+      garage: doc === undefined || !isPlainObject(doc.body) ? null : doc.body,
+      pin: hasRacerPin(checkin, id),
+      signedIn: pass !== "" && racerByPass(checkin, pass)?.id === id,
+      asks,
+    });
+  }
+
+  /**
+   * A car photo from the driver's phone, already shrunk there to a JPEG of
+   * 450 KB or less. Held until the laptop collects it - which checks the
+   * whole picture and that the car is theirs - as an ask is.
+   */
+  private async driverPhoto(request: IncomingMessage, response: ServerResponse, club: string, liftCeiling: () => void): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.askTraffic.blocked(who)) {
+      await discardRest(request, response);
+      sendJson(response, 429, { ok: false, error: "Too many requests. Wait a few minutes and try again." });
+      return;
+    }
+
+    this.askTraffic.hit(who);
+
+    const declared = Number(request.headers["content-length"] ?? "0");
+
+    if (Number.isFinite(declared) && declared > DRIVER_PHOTO_MAX_BODY) {
+      await discardRest(request, response);
+      sendJson(response, 413, { ok: false, error: "That photo is too big. Try a smaller one." });
+      return;
+    }
+
+    // A phone on the venue's Wi-Fi can take more than the 30-second
+    // ceiling to send half a megabyte - an idle timeout instead, as a
+    // clip has.
+    liftCeiling();
+    request.setTimeout(30_000, () => request.destroy());
+
+    let body: unknown;
+
+    try {
+      body = await readBody(request, response, DRIVER_PHOTO_MAX_BODY);
+    } finally {
+      if (!request.destroyed) {
+        request.setTimeout(0);
+      }
+    }
+
+    if (body === "too-big") {
+      sendJson(response, 413, { ok: false, error: "That photo is too big. Try a smaller one." });
+      return;
+    }
+
+    if (body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That photo could not be read." });
+      return;
+    }
+
+    const id = typeof body["id"] === "string" ? body["id"].trim().toLowerCase() : "";
+    const checkin = DRIVER_ID.test(id) ? await this.askGateOf(club, id) : undefined;
+
+    if (checkin === undefined) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const pass = typeof body["pass"] === "string" && PASS.test(body["pass"]) ? body["pass"] : "";
+    const withPin = pass !== "" && racerByPass(checkin, pass)?.id === id;
+
+    if (hasRacerPin(checkin, id) && !withPin) {
+      sendJson(response, 403, { ok: false, error: "Sign in with your personal PIN first." });
+      return;
+    }
+
+    const car = typeof body["car"] === "string" ? body["car"].trim().toLowerCase() : "";
+
+    if (!/^[0-9a-f]{32}$/.test(car)) {
+      sendJson(response, 400, { ok: false, error: "Which car is the photo of?" });
+      return;
+    }
+
+    const photo = photoBytesOf(body["data"]);
+
+    if (!photo.ok) {
+      sendJson(response, 400, { ok: false, error: photo.error });
+      return;
+    }
+
+    const badge = `${club}|${id}`;
+
+    if (this.photoUploads.blocked(badge)) {
+      sendJson(response, 429, { ok: false, error: "That is a lot of photos in one hour - wait a little and try again." });
+      return;
+    }
+
+    this.photoUploads.hit(badge);
+
+    const at = this.now();
+    const stored: DriverPhotoBody = { b: id, car, v: withPin ? "pin" : "badge", data: body["data"] as string, at: at.toISOString() };
+
+    const outcome = await this.withLock(club, async () => {
+      if ((await this.askGateOf(club, id)) === undefined) {
+        return "closed" as const;
+      }
+
+      const held = await this.store.listItems(club, DRIVER_PHOTOS_CHANNEL);
+
+      if (held.length >= DRIVER_PHOTOS_PER_CLUB) {
+        return "full" as const;
+      }
+
+      if (held.filter((item) => asDriverPhoto(item.doc.body)?.b === id).length >= DRIVER_PHOTOS_PER_DRIVER) {
+        return "mine" as const;
+      }
+
+      const itemId = randomBytes(12).toString("hex");
+
+      await this.store.putItem(club, DRIVER_PHOTOS_CHANNEL, itemId, {
+        seq: at.getTime(),
+        publishedAt: at.toISOString(),
+        body: stored,
+      });
+
+      return { itemId };
+    });
+
+    if (outcome === "closed") {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    if (outcome === "full" || outcome === "mine") {
+      sendJson(response, outcome === "full" ? 503 : 429, {
+        ok: false,
+        error: "HeatCaller has not picked up the photos already sent - is the timing desk's laptop on? Try again in a minute.",
+      });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true, ref: askRefOf(outcome.itemId) });
+  }
+
+  /** The photos waiting, oldest first, without their pictures - the laptop then takes them one at a time. */
+  private async readDriverPhotos(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    if (!this.laptopMay(request, response, club)) {
+      return;
+    }
+
+    const items = (await this.store.listItems(club, DRIVER_PHOTOS_CHANNEL))
+      .map((item) => ({ id: item.id, seq: item.doc.seq, photo: asDriverPhoto(item.doc.body) }))
+      .filter((item): item is { id: string; seq: number; photo: DriverPhotoBody } => item.photo !== undefined)
+      .sort((a, b) => a.seq - b.seq || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((item) => ({
+        id: item.id,
+        b: item.photo.b,
+        car: item.photo.car,
+        v: item.photo.v,
+        at: item.photo.at,
+        bytes: Math.floor((item.photo.data.length * 3) / 4),
+      }));
+
+    sendJson(response, 200, { ok: true, items });
+  }
+
+  /** One waiting photo, picture and all. */
+  private async readDriverPhoto(request: IncomingMessage, response: ServerResponse, club: string, rawId: string): Promise<void> {
+    if (!this.laptopMay(request, response, club)) {
+      return;
+    }
+
+    const id = rawId.toLowerCase();
+    const doc = /^[0-9a-f]{24}$/.test(id) ? await this.store.getItem(club, DRIVER_PHOTOS_CHANNEL, id).catch(() => undefined) : undefined;
+    const photo = doc === undefined ? undefined : asDriverPhoto(doc.body);
+
+    if (photo === undefined) {
+      sendJson(response, 404, { ok: false, error: "That photo has gone." });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true, id, ...photo });
+  }
+
+  /** The laptop saying it has these photos now. An id already gone is not an error. */
+  private async clearDriverPhotos(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    if (!this.laptopMay(request, response, club)) {
+      return;
+    }
+
+    const body = await readBody(request, response, DRIVER_PHOTOS_COLLECT_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const ids = (Array.isArray(body["ids"]) ? (body["ids"] as unknown[]) : [])
+      .filter((id): id is string => typeof id === "string" && /^[0-9a-f]{24}$/.test(id))
+      .slice(0, DRIVER_PHOTOS_PER_CLUB);
+
+    let gone = 0;
+
+    await this.withLock(club, async () => {
+      for (const id of ids) {
+        await this.store.deleteItem(club, DRIVER_PHOTOS_CHANNEL, id);
+        gone++;
+      }
+    });
+
+    sendJson(response, 200, { ok: true, cleared: gone });
+  }
+
+  /** The laptop's publish token for this club, or the 401/403 already sent. */
+  private laptopMay(request: IncomingMessage, response: ServerResponse, club: string): boolean {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return false;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return false;
+    }
+
+    return true;
+  }
+
   /**
    * The laptop saying whether its club takes drivers' asks - sent when the
    * setting changes and on every start. CLOSING CLEARS WHAT IS HELD: every
@@ -7154,6 +7516,15 @@ export class Relay {
         for (const item of await this.store.itemSizes(club, DRIVER_ASKS_CHANNEL)) {
           await this.store.deleteItem(club, DRIVER_ASKS_CHANNEL, item.id);
         }
+
+        // Their garages and the photos on their way go too (5 Nov 2026).
+        for (const channel of [DRIVER_PHOTOS_CHANNEL, GARAGE_CHANNEL]) {
+          for (const item of await this.store.itemSizes(club, channel)) {
+            await this.store.deleteItem(club, channel, item.id);
+          }
+        }
+
+        this.forgetListing(club, GARAGE_CHANNEL);
 
         await this.blankSnapshot(club, DRIVER_ME_CHANNEL);
       });

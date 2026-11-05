@@ -70,6 +70,17 @@ public partial class MainForm
             Cars = _cars,
             EventId = () => _raceEvents.Active?.Id,
             TrackName = () => RunningTrackName(_settings.LastRaceControlTrackName),
+
+            // Their packs, cars, photos and sheets from the phone (5 Nov
+            // 2026) - see DriverRequests.Garage.
+            ChassisTypes = _chassisTypes,
+            Sheets = _chassisTemplates,
+        };
+
+        _driverRequestDesk.GarageChangedByPhone += () =>
+        {
+            SetupLogChangedByPhone();
+            GarageChanged();
         };
 
         // Filed on the publisher's own thread - the store is thread-safe.
@@ -103,18 +114,16 @@ public partial class MainForm
             _driverRequestsVersionShown = -1;
         }
 
-        // Setup changes from phones go straight into the setup log, so they
-        // never wait on the desk's list. Guarded: the roster tick must run.
+        // Packs, cars, photos and setups from phones are applied by
+        // themselves (5 Nov 2026), so they never wait on the desk's list.
+        // Guarded: the roster tick must run.
         try
         {
-            if (_driverRequestDesk?.FileWaitingSetups() > 0)
-            {
-                SetupLogChangedByPhone();
-            }
+            _driverRequestDesk?.FileWaitingWrites();
         }
         catch (Exception ex)
         {
-            OnClientRawMessage($"[driver requests] A setup change from a phone couldn't be filed: {ex.Message}");
+            OnClientRawMessage($"[driver requests] A change from a phone couldn't be applied: {ex.Message}");
         }
 
         var shown = _settings.RelayDriverRequests || store.WaitingCount > 0;

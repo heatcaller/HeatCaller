@@ -18,6 +18,8 @@
 import type { PagePreview } from "./preview.js";
 import { DEFAULT_LOOK, type Look, type SocialLink } from "./site.js";
 import { SUN_ICON_SIZE } from "./sun.js";
+import { GARAGE_CSS, GARAGE_EMBED_BODY, garageEmbedScript } from "./garagepage.js";
+import { ME_BODY_END, ME_BODY_TOP, ME_CSS, ME_JS } from "./mespaces.js";
 
 /** What a page needs to know beyond its club: how the club looks, and where it is being served from. */
 export interface PageContext {
@@ -1790,7 +1792,7 @@ function tabsNav(club: string, name: string, lit: string): string {
     </nav>`;
 }
 
-function shell(page: Shell, context: PageContext): string {
+export function shell(page: Shell, context: PageContext): string {
   const club = escapeHtml(page.club);
   const name = escapeHtml(page.clubName);
   const look = context.look;
@@ -12152,7 +12154,9 @@ function askTrouble(a) {
 // one kind that needs it. Answers { ok, words, status }.
 async function sendAsk(kind, f) {
   const payload = { id: CODE, kind: kind, f: f };
-  const p = kind === 'details' ? pass() : '';
+  // The pass goes with everything but a query (5 Nov 2026): packs and
+  // setups now change by themselves, so a driver with a PIN needs it.
+  const p = kind === 'query' ? '' : pass();
   if (p !== '') payload.pass = p;
 
   let a = null;
@@ -12166,7 +12170,8 @@ async function sendAsk(kind, f) {
     }
     if (navigator.vibrate) navigator.vibrate(30);
     drawLive();
-    return { ok: true, status: 200, words: 'Sent - the desk will check it' + (ref !== '' ? ' (ref ' + ref + ')' : '') };
+    const self = kind === 'pack' || kind === 'setup';
+    return { ok: true, status: 200, words: (self ? 'Sent - HeatCaller will have it in a few seconds' : 'Sent - the desk will check it') + (ref !== '' ? ' (ref ' + ref + ')' : '') };
   }
 
   return { ok: false, status: a === null ? 0 : a.status, words: askTrouble(a) };
@@ -12338,6 +12343,10 @@ function drawAsks(message) {
   const sec = el('section', 'yd');
   sec.appendChild(el('h3', '', 'Your details'));
   sec.appendChild(el('p', 'when', 'Ask the timing desk to change how you are called and shown. Nothing changes until the desk checks it.'));
+
+  // Their packs, cars and setup sheets have a page of their own (5 Nov
+  // 2026, asked for by Asher), opened with the same code.
+  sec.appendChild(garageLink());
 
   // The battery pack first, because it changes on race night; the request
   // to change how they are called folded under it (28 Oct 2026), opened by
@@ -12735,7 +12744,7 @@ function packPart() {
   said.setAttribute('role', 'status');
 
   let sentPack = current;
-  const send = tapButton('Tell the desk', 'go quiet', async () => {
+  const send = tapButton('Save', 'go quiet', async () => {
     const value = String(pick.value || '');
 
     if (value !== 'none' && !OBJECT_ID.test(value)) {
@@ -12744,7 +12753,7 @@ function packPart() {
     }
 
     if (value === sentPack) {
-      said.textContent = value === current ? 'That is already your pack.' : 'Already sent - the desk will check it.';
+      said.textContent = value === current ? 'That is already your pack.' : 'Already sent - HeatCaller will have it in a few seconds.';
       return;
     }
 
@@ -12761,7 +12770,20 @@ function packPart() {
 
   part.appendChild(send);
   part.appendChild(said);
+  part.appendChild(garageLink());
   return part;
+}
+
+// Their own garage page (5 Nov 2026): packs, pack charts, cars, photos and
+// setup sheets, with the same code in the fragment, never in the address.
+function garageLink() {
+  const p = el('p', 'note');
+  const a = el('a', 'more', 'Your packs, cars and setups \\u2192');
+  // This page's own fragment, which tuck() has already put the code in:
+  // the code itself is written into nothing new.
+  a.href = '/c/' + encodeURIComponent(CLUB) + '/garage' + (codeFrom(location.hash) ? location.hash : '');
+  p.appendChild(a);
+  return p;
 }
 
 // ---- polling the live part
@@ -13013,10 +13035,18 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // tab bar "nj" sits under their name, and "nx" holds every card they
     // can move - Right now ("lv"), Lap times in my ear ("ea") and the
     // night's own - with the night's facts and Share in "nt" under them.
-    body: '<div id="nh"></div><div id="nj"></div><div id="gd"></div><div id="ng"></div>' +
-      '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
-      '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
-    script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
+    //
+    // Since 5 Nov 2026 (Asher: "Yes, build it", the Pit Wall mix) Me is a
+    // pit wall laid over all of that - see mespaces.ts: the status strip,
+    // the moment card, the switch and the Tonight tiles under their name;
+    // the Garage folded in as a space ("me-garage", the Garage page's own
+    // sections and script); Quick, its sheet and the empty note at the foot.
+    body: `<style>${ME_CSS}${GARAGE_CSS}</style>` +
+      '<div id="nh"></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="gd"></div><div id="ng"></div>' +
+      '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div>' +
+      GARAGE_EMBED_BODY + '<div id="yd"></div>' +
+      '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>' + ME_BODY_END,
+    script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS + garageEmbedScript() + ME_JS,
     noindex: true,
   }, context);
 }
