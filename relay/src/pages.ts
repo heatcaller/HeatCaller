@@ -547,20 +547,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .lapfig > .ttl { padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface);
                  font-weight: 600; font-size: 0.9rem; }
 .lapfig > .cap { margin: 0; padding: 0 12px 10px; }
-.lapchart, .pgchart, .poschart { display: block; width: 100%; height: auto; margin: 8px 0 2px; }
-.lapchart, .poschart { max-width: 640px; margin: 6px auto 4px; }
-.lapchart polyline, .poschart polyline { stroke: var(--accent); stroke-width: 2.5; fill: none; stroke-linejoin: round; }
-.poschart polyline { stroke: var(--primary); }
-.lapchart circle, .poschart circle { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
-.poschart circle { stroke: var(--primary); }
-.lapchart circle.best { fill: var(--good); stroke: var(--good); }
-.lapchart circle.slow { fill: var(--muted); stroke: var(--muted); }
-.lapchart .frame, .poschart .frame { fill: none; stroke: var(--muted); stroke-width: 1.5; }
-.lapchart .gr, .poschart .gr { stroke: var(--border); stroke-width: 1; }
-.lapchart text, .poschart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.lapchart text.yt, .poschart text.yt { text-anchor: end; }
-.lapchart text.xt, .poschart text.xt { text-anchor: middle; }
-.lapchart text.ttl, .poschart text.ttl { fill: var(--text); font-size: 11px; font-weight: 600; text-anchor: middle; }
+.pgchart { display: block; width: 100%; height: auto; margin: 8px 0 2px; }
 .cap { color: var(--muted); font-size: 0.78rem; }
 .pgchart rect { fill: var(--border); }
 .pgchart rect.tonight { fill: var(--primary); }
@@ -840,6 +827,16 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .livepos .posg .axl { stroke: var(--muted); stroke-width: 1.5; }
 .livepos .posg circle.now { fill: var(--c); }
 .livepos .posk li b { font-variant-numeric: tabular-nums; margin-right: 4px; }
+/* The same two charts on a driver's race card (4 Nov 2026), each its own
+   figure under the Just me tick; their own line drawn heavier on top. */
+.lpfig { margin: 14px 0 0; padding: 0; }
+.lpfig + .lpfig { margin-top: 22px; }
+.lpfig .posg g.me polyline { stroke-width: 4; }
+.lpfig .posg circle.slow { fill: var(--surface); stroke-dasharray: 2 2; }
+.lpfig .posk li.me { font-weight: 700; }
+.lpfig .posk li b.kv { margin: 0 0 0 5px; }
+.mecharts .jm { margin-top: 4px; }
+.lvsay[hidden] { display: none; }
 
 /* Standings */
 select {
@@ -9507,110 +9504,266 @@ function clipBlock(c, words) {
   return box;
 }
 
-// The race card's charts, drawn as LiveRC draws its lap-by-lap position
-// graph (4 Nov 2026, Asher: "the chart should be analogous to the one" on
-// LiveRC): a framed plot with a grid both ways, laps 0 to the last along
-// the bottom, round numbers up the side, and a ringed dot on every lap.
-// The frame, the upright grid lines, the lap numbers and both axis titles;
-// the caller draws its own level lines. Returns the svg and a text helper.
-const CH = { W: 340, L: 44, R: 10, T: 10, B: 38 };
+// THE RACE CARD'S CHARTS AS LIVE'S (4 Nov 2026, Asher: "make the two
+// charts on the me tab the same as the two charts on the live tab. add a
+// themed tick box that removes the other drivers and just shows you").
+// Position by lap and Lap times, drawn as the Live page draws its two
+// cards under the board: a line per driver in its own colour, P1 at the
+// top, labelled axes, the newest place or best lap filled in, and a key.
+//
+// A driver's night carries only their own laps, so the rest of the field
+// comes from the race's public result (the results page's own document,
+// by the race's sid), read once per race and kept for the visit. Until it
+// answers - or for a race the club has not published - the charts carry
+// their line alone, and there is no tick box, since there is nobody to
+// hide. Their own line is found in the result by its laps, then by their
+// place, is drawn last so it sits on top, and is called You.
+//
+// Built from elements, never markup: every name in a result is the club's
+// typing, and goes in as text.
+const ME_COLOURS = ['#F5C342', '#8EC5FF', '#E5484D', '#46A758', '#A77BEB', '#FF8B3E',
+  '#2EE6FF', '#FF2E9A', '#A0E85B', '#C9A04E', '#D9C2FF', '#7FD6C2'];
+const JUST_ME_KEY = 'hg-night-just-me';
 
-function chartFrame(H, laps, side, cls, aria) {
-  const svg = sv('svg', { viewBox: '0 0 ' + CH.W + ' ' + H, class: cls, role: 'img', 'aria-label': aria });
-  const label = (attrs, words) => {
-    const t = sv('text', attrs);
-    t.textContent = words;
-    svg.appendChild(t);
-  };
-  const x = (k) => CH.L + k * (CH.W - CH.L - CH.R) / Math.max(1, laps);
-  const step = laps <= 10 ? 1 : laps <= 30 ? 5 : 10;
-  for (let k = 0; k <= laps; k += step) {
-    if (k > 0 && k < laps) svg.appendChild(sv('line', { x1: x(k).toFixed(1), y1: CH.T, x2: x(k).toFixed(1), y2: H - CH.B, class: 'gr' }));
-    if (laps - k >= step / 2 || k === laps) label({ x: x(k).toFixed(1), y: H - CH.B + 14, class: 'xt' }, String(k));
+// The tick, as this phone last left it: read the first time a chart is
+// drawn, since view is declared further down this script.
+function justMe() {
+  if (view.justMe === undefined) {
+    try { view.justMe = localStorage.getItem(JUST_ME_KEY) === '1'; } catch (e) { view.justMe = false; }
   }
-  if (laps % step !== 0) label({ x: x(laps).toFixed(1), y: H - CH.B + 14, class: 'xt' }, String(laps));
-  svg.appendChild(sv('rect', { x: CH.L, y: CH.T, width: CH.W - CH.L - CH.R, height: H - CH.T - CH.B, class: 'frame' }));
-  const mid = (CH.T + H - CH.B) / 2;
-  label({ x: 10, y: mid.toFixed(1), class: 'ttl', transform: 'rotate(-90 10 ' + mid.toFixed(1) + ')' }, side);
-  label({ x: ((CH.L + CH.W - CH.R) / 2).toFixed(1), y: H - 4, class: 'ttl' }, 'Lap');
-  return { svg, label, x };
+  return view.justMe;
 }
 
-// One race's laps as a line: quicker is higher, the best lap marked. A lap
-// far slower than the rest (a crash, a flipped car) is drawn at the bottom
-// edge rather than squashing every other lap into a flat line.
-function lapChart(list, bestMs) {
-  const laps = Array.isArray(list) ? list.filter((ms) => typeof ms === 'number' && ms > 0).slice(0, 200) : [];
-  if (laps.length < 2) return null;
+// Each race's field from its public result, by sid: an array of results,
+// null while it is being read, false when the relay has none, or absent -
+// not asked yet, or the read failed and the next redraw asks again.
+const fieldOf = new Map();
 
-  const sorted = laps.slice().sort((a, b) => a - b);
-  const quick = sorted[0];
-  const cap = Math.max(sorted[Math.floor(sorted.length / 2)] * 1.6, quick * 1.2);
-  const slow = Math.min(sorted[sorted.length - 1], cap);
-  const best = typeof bestMs === 'number' && laps.includes(bestMs) ? bestMs : quick;
-  const at = laps.indexOf(best);
-  const H = 230;
+function svText(attrs, words) {
+  const t = sv('text', attrs);
+  t.textContent = String(words);
+  return t;
+}
 
-  // Up the side, round seconds - no more than about five steps - from just
-  // under the quickest lap at the top to just over the slowest at the foot.
+// As wide as the screen the card is on, so the labels stay their own size
+// on a phone: the chart is drawn while its tab may still be hidden, when
+// it has no width of its own to measure.
+function meChartWidth(box) {
+  const own = box && box.clientWidth ? box.clientWidth : 0;
+  const screen = document.documentElement && document.documentElement.clientWidth ? document.documentElement.clientWidth - 72 : 600;
+  return Math.max(300, Math.min(760, Math.round(own || screen)));
+}
+
+function sameLaps(a, b) {
+  return a.length > 0 && a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+// [{name, colour, me, posAt, start, laps}], in the order they finished.
+function meLines(r, field) {
+  const own = { name: 'You', me: true, posAt: r.posAt, start: num(r.start), laps: lxLaps(r.lapsMs) };
+  const list = Array.isArray(field) ? field.filter((x) => x && typeof x === 'object') : [];
+  let at = list.findIndex((x) => sameLaps(lxLaps(x.lapsMs), own.laps));
+  if (at < 0 && num(r.pos) > 0) at = list.findIndex((x) => num(x.pos) === num(r.pos));
+  if (list.length < 2 || at < 0) return [Object.assign(own, { colour: ME_COLOURS[0] })];
+  return list.map((x, i) => i === at
+    ? Object.assign(own, {
+      colour: ME_COLOURS[i % ME_COLOURS.length],
+      // Their own night's places, else the result's.
+      posAt: Array.isArray(own.posAt) && own.posAt.length > 0 ? own.posAt : x.posAt,
+      start: own.start > 0 ? own.start : num(x.qual),
+    })
+    : {
+      name: String(x.name || 'Unnamed driver'), me: false, colour: ME_COLOURS[i % ME_COLOURS.length],
+      posAt: x.posAt, start: num(x.qual), laps: lxLaps(x.lapsMs),
+    });
+}
+
+// The frame both charts share: level lines with their labels are the
+// caller's; this draws both axes, the lap numbers and the two titles.
+function meFrame(W, H, lo, hi, side, aria, cls) {
+  const L = 66, R = 18, T = 16, B = 52;
+  const base = H - B + 12;
+  const svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'posg ' + cls, role: 'img', 'aria-label': aria });
+  const x = (l) => L + (l - lo) * (W - L - R) / Math.max(1, hi - lo);
+  // The level lines go in here, under everything else.
+  const grid = sv('g', {});
+  svg.appendChild(grid);
+  svg.appendChild(sv('line', { class: 'axl', x1: L, x2: L, y1: T - 6, y2: base }));
+  svg.appendChild(sv('line', { class: 'axl', x1: L, x2: W - R, y1: base, y2: base }));
+  const span = hi - lo;
+  const step = [1, 2, 5, 10, 20, 50].find((s) => s * (W - L - R) / Math.max(1, span) >= 30) || 100;
+  for (let l = lo; l <= hi; l++) {
+    if (l !== lo && l !== hi && l % step !== 0) continue;
+    if (l === hi && l !== lo && l % step !== 0 && (hi - Math.floor(hi / step) * step) * (W - L - R) / Math.max(1, span) < 24) continue;
+    svg.appendChild(svText({ class: 'ax', x: x(l).toFixed(1), y: base + 18, 'text-anchor': 'middle' }, l === 0 ? 'Start' : l));
+  }
+  svg.appendChild(svText({ class: 'axt', x: ((L + W - R) / 2).toFixed(1), y: H - 4, 'text-anchor': 'middle' }, 'Lap'));
+  svg.appendChild(svText({ class: 'axt', 'text-anchor': 'middle', transform: 'translate(14 ' + ((T + base) / 2).toFixed(1) + ') rotate(-90)' }, side));
+  return { svg, grid, x, L, R, T, B, base };
+}
+
+// One driver's line: its points, the last (or the best) filled in.
+function meLine(svg, line, pts, filled) {
+  const g = sv('g', { style: '--c:' + line.colour, class: line.me ? 'me' : '' });
+  g.appendChild(sv('polyline', { points: pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ') }));
+  pts.forEach((p, j) => {
+    const big = filled(j);
+    const attrs = { cx: p[0].toFixed(1), cy: p[1].toFixed(1), r: big ? 5 : 3 };
+    if (big) attrs.class = 'now';
+    else if (p[2]) attrs.class = 'slow';
+    g.appendChild(sv('circle', attrs));
+  });
+  svg.appendChild(g);
+}
+
+function meKey(lines, tail) {
+  const ul = el('ul', 'posk');
+  for (const line of lines) {
+    const li = el('li', line.me ? 'me' : '');
+    const sw = el('span', 'sw');
+    sw.setAttribute('style', '--c:' + line.colour);
+    li.appendChild(sw);
+    li.appendChild(el('span', '', line.name));
+    const more = tail(line);
+    if (more) li.appendChild(el('b', 'kv', more));
+    ul.appendChild(li);
+  }
+  return ul;
+}
+
+function meFigure(title, svg, key, note) {
+  const fig = el('figure', 'livepos lpfig');
+  fig.appendChild(el('h3', '', title));
+  fig.appendChild(svg);
+  fig.appendChild(key);
+  if (note) fig.appendChild(el('p', 'note', note));
+  return fig;
+}
+
+// Position by lap: lap 0 is the grid slot when it is known. Null without
+// a place for every lap from anybody shown.
+function mePositions(lines, of, W) {
+  const use = lines.filter((l) => Array.isArray(l.posAt) && l.posAt.length > 0 && l.posAt.every((p) => typeof p === 'number' && p > 0));
+  if (use.length === 0) return null;
+  const marks = use.map((l) => (l.start > 0 ? [[0, l.start]] : []).concat(l.posAt.map((p, k) => [k + 1, p])));
+  const laps = [].concat.apply([], marks.map((m) => m.map((p) => p[0])));
+  const lo = Math.min.apply(null, laps);
+  const hi = Math.max.apply(null, laps);
+  let field = Math.max(num(of), use.length);
+  marks.forEach((m) => m.forEach((p) => { field = Math.max(field, p[1]); }));
+  const H = 16 + 52 + Math.max(2, field - 1) * 30;
+  const f = meFrame(W, H, lo, hi, 'Position', 'Position after every lap', 'mepos');
+  const y = (p) => f.T + (p - 1) * (f.base - 12 - f.T) / Math.max(1, field - 1);
+  for (let p = 1; p <= field; p++) {
+    f.grid.appendChild(sv('line', { class: 'grid', x1: f.L, x2: W - f.R, y1: y(p).toFixed(1), y2: y(p).toFixed(1) }));
+    f.svg.appendChild(svText({ class: 'ax', x: f.L - 10, y: (y(p) + 4).toFixed(1), 'text-anchor': 'end' }, 'P' + p));
+  }
+  // Everybody else from last to first, then them on top.
+  const order = use.map((l, i) => i).filter((i) => !use[i].me).reverse().concat(use.map((l, i) => i).filter((i) => use[i].me));
+  for (const i of order) {
+    const pts = marks[i].map((p) => [f.x(p[0]), y(p[1])]);
+    meLine(f.svg, use[i], pts, (j) => j === pts.length - 1);
+  }
+  const key = meKey(use, (l) => 'P' + l.posAt[l.posAt.length - 1]);
+  return meFigure('Position by lap', f.svg, key, '');
+}
+
+// Lap times: quicker is higher; a lap far slower than the rest sits on
+// the bottom line rather than flattening every other lap. Null with no
+// laps.
+function meTimes(lines, W) {
+  const use = lines.filter((l) => l.laps.length > 0);
+  if (use.length === 0) return null;
+  const all = [].concat.apply([], use.map((l) => l.laps)).sort((a, b) => a - b);
+  const quick = all[0];
+  const cap = Math.max(all[Math.floor(all.length / 2)] * 1.6, quick * 1.2);
+  const slow = Math.min(all[all.length - 1], cap);
   const step = [0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10].find((s) => (slow - quick) / 1000 / s <= 5) || 10;
   const lo = Math.floor(quick / 1000 / step) * step;
   let hi = Math.ceil(slow / 1000 / step) * step;
   if (hi - lo < step / 2) hi = lo + step;
   const places = step >= 1 ? 0 : step === 0.25 ? 2 : 1;
-  const y = (ms) => ms > cap ? H - CH.B : CH.T + (ms / 1000 - lo) / (hi - lo) * (H - CH.T - CH.B);
-
-  const f = chartFrame(H, laps.length, 'Lap time (s)', 'lapchart',
-    'Lap times for ' + laps.length + ' laps, best ' + lap(best) + ' on lap ' + (at + 1));
+  const most = Math.max.apply(null, use.map((l) => l.laps.length));
+  const me = use.find((l) => l.me);
+  const mine = me ? Math.min.apply(null, me.laps) : 0;
+  const aria = 'Lap times for every lap' + (me ? ', your best ' + lap(mine) + ' on lap ' + (me.laps.indexOf(mine) + 1) : '');
+  const f = meFrame(W, 260, 1, Math.max(2, most), 'Lap time (s)', aria, 'metimes');
+  const yOf = (s) => f.T + (s - lo) / (hi - lo) * (f.base - 12 - f.T);
+  const y = (ms) => ms > cap ? f.base - 4 : yOf(ms / 1000);
   const count = Math.round((hi - lo) / step);
   for (let i = 0; i <= count; i++) {
     const s = lo + i * step;
-    const level = CH.T + (s - lo) / (hi - lo) * (H - CH.T - CH.B);
-    if (i > 0 && i < count) {
-      f.svg.appendChild(sv('line', { x1: CH.L, y1: level.toFixed(1), x2: CH.W - CH.R, y2: level.toFixed(1), class: 'gr' }));
-    }
-    f.label({ x: CH.L - 6, y: (level + 4).toFixed(1), class: 'yt' }, s.toFixed(places));
+    f.grid.appendChild(sv('line', { class: 'grid', x1: f.L, x2: W - f.R, y1: yOf(s).toFixed(1), y2: yOf(s).toFixed(1) }));
+    f.svg.appendChild(svText({ class: 'ax', x: f.L - 10, y: (yOf(s) + 4).toFixed(1), 'text-anchor': 'end' }, s.toFixed(places)));
   }
-
-  const x = (i) => f.x(i + 1);
-  f.svg.appendChild(sv('polyline', { points: laps.map((ms, i) => x(i).toFixed(1) + ',' + y(ms).toFixed(1)).join(' ') }));
-  laps.forEach((ms, i) => {
-    if (ms > cap) f.svg.appendChild(sv('circle', { cx: x(i).toFixed(1), cy: (H - CH.B).toFixed(1), r: 3.5, class: 'slow' }));
-    else if (i !== at) f.svg.appendChild(sv('circle', { cx: x(i).toFixed(1), cy: y(ms).toFixed(1), r: 3.5, class: 'dot' }));
-  });
-  f.svg.appendChild(sv('circle', { cx: x(at).toFixed(1), cy: y(best).toFixed(1), r: 5, class: 'best' }));
-
-  const fig = el('figure', 'lapfig');
-  fig.appendChild(el('figcaption', 'ttl', 'Lap-by-lap times'));
-  fig.appendChild(f.svg);
-  fig.appendChild(el('p', 'cap', 'Higher is quicker. Best ' + lap(best) + ' on lap ' + (at + 1) + ', the green dot.'));
-  return fig;
+  const order = use.map((l, i) => i).filter((i) => !use[i].me).reverse().concat(use.map((l, i) => i).filter((i) => use[i].me));
+  for (const i of order) {
+    const l = use[i];
+    const best = Math.min.apply(null, l.laps);
+    const at = l.laps.indexOf(best);
+    const pts = l.laps.map((ms, k) => [f.x(k + 1), y(ms), ms > cap]);
+    meLine(f.svg, l, pts, (j) => j === at);
+  }
+  const key = meKey(use, (l) => lap(Math.min.apply(null, l.laps)));
+  const note = 'Higher is quicker; the filled dot is the best lap.'
+    + (all[all.length - 1] > cap ? ' Laps over ' + (cap / 1000).toFixed(1) + 's sit on the bottom line.' : '');
+  return meFigure('Lap times', f.svg, key, note);
 }
 
-// Their place after every lap, from the grid slot they started in (lap 0)
-// when that is known, first at the top - LiveRC's position graph with only
-// their own line, since a driver's night carries no one else's laps. Null
-// without a place for every lap.
-function posChart(posAt, start, of) {
-  if (!Array.isArray(posAt) || posAt.length < 2 || !posAt.every((p) => typeof p === 'number' && p > 0)) return null;
-  const field = Math.max(num(of), num(start), Math.max.apply(null, posAt), 2);
-  const H = Math.max(150, CH.T + CH.B + (field - 1) * 26);
-  const y = (p) => CH.T + (p - 1) * (H - CH.T - CH.B) / (field - 1);
+// The Lap chart tab: the tick box when there is a field to hide, then the
+// two charts, redrawn when the tick changes or the result arrives.
+function meCharts(r) {
+  const box = el('div', 'charts mecharts');
+  const tick = el('div', 'lvsay jm');
+  const label = el('label');
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = justMe();
+  label.appendChild(input);
+  label.appendChild(el('span', '', 'Just me'));
+  tick.appendChild(label);
+  let out = el('div');
+  box.appendChild(out);
 
-  const f = chartFrame(H, posAt.length, 'Position', 'poschart', 'Your position after each of ' + posAt.length + ' laps');
-  for (let p = 1; p <= field; p++) {
-    if (p > 1 && p < field) f.svg.appendChild(sv('line', { x1: CH.L, y1: y(p).toFixed(1), x2: CH.W - CH.R, y2: y(p).toFixed(1), class: 'gr' }));
-    f.label({ x: CH.L - 6, y: (y(p) + 4).toFixed(1), class: 'yt' }, String(p));
+  const sid = typeof r.sid === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(r.sid) ? r.sid : '';
+
+  const paint = () => {
+    // A fresh holder each time, the old one and its charts gone.
+    out.remove();
+    out = el('div');
+    box.appendChild(out);
+    const lines = meLines(r, sid ? fieldOf.get(sid) : null);
+    // The tick only when there is somebody to hide, above the charts.
+    if (lines.length > 1) out.appendChild(tick);
+    const shown = lines.length > 1 && justMe() ? lines.filter((l) => l.me) : lines;
+    const W = meChartWidth(box);
+    const places = mePositions(shown, r.of, W);
+    if (places) out.appendChild(places);
+    const times = meTimes(shown, W);
+    if (times) out.appendChild(times);
+  };
+
+  input.addEventListener('change', () => {
+    view.justMe = input.checked;
+    try { localStorage.setItem(JUST_ME_KEY, view.justMe ? '1' : '0'); } catch (e) { /* this visit only */ }
+    paint();
+  });
+
+  paint();
+
+  if (sid && !fieldOf.has(sid)) {
+    fieldOf.set(sid, null);
+    grab('/collection/results?ids=' + encodeURIComponent(sid)).then((answer) => {
+      if (answer === null || answer === undefined) { fieldOf.delete(sid); return; }
+      const items = !answer.missing && answer.body && Array.isArray(answer.body.items) ? answer.body.items : [];
+      const item = items.find((x) => x && String(x.id) === sid);
+      const list = item && item.body && Array.isArray(item.body.results) ? item.body.results : null;
+      fieldOf.set(sid, list === null ? false : list);
+      if (list !== null) paint();
+    }, () => { fieldOf.delete(sid); });
   }
 
-  const points = (num(start) > 0 ? [[0, num(start)]] : []).concat(posAt.map((p, k) => [k + 1, p]));
-  f.svg.appendChild(sv('polyline', { points: points.map((pt) => f.x(pt[0]).toFixed(1) + ',' + y(pt[1]).toFixed(1)).join(' ') }));
-  for (const pt of points) f.svg.appendChild(sv('circle', { cx: f.x(pt[0]).toFixed(1), cy: y(pt[1]).toFixed(1), r: 3.5, class: 'dot' }));
-
-  const fig = el('figure', 'lapfig');
-  fig.appendChild(el('figcaption', 'ttl', 'Lap-by-lap position'));
-  fig.appendChild(f.svg);
-  return fig;
+  return box;
 }
 
 // The cars a driver raced tonight, when one of them was a second
@@ -9996,14 +10149,9 @@ function raceDetail(r, stats, own) {
     // Their place lap by lap when the laptop sent one for every lap (4 Nov
     // 2026), and the lap times under it - the position chart first since
     // 4 Nov 2026 (Asher: "postion chart before lap time chart").
-    const chart = lapChart(r.lapsMs, r.bestMs);
-    if (chart) {
-      const box = el('div', 'charts');
-      const places = posChart(r.posAt, r.start, r.of);
-      if (places) box.appendChild(places);
-      box.appendChild(chart);
-      tabs.push(['chart', 'Lap chart', box]);
-    }
+    // Since 4 Nov 2026 the same two charts as Live's, with the rest of the
+    // field from the race's public result - see meCharts.
+    if (lxLaps(r.lapsMs).length > 0) tabs.push(['chart', 'Lap chart', meCharts(r)]);
   }
 
   if (tabs.length > 0) {
