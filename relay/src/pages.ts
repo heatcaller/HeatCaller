@@ -770,18 +770,18 @@ html.light .pill.running, html.light .pill.next { color: #FFFFFF; }
 html.light .follow, html.light .toast { box-shadow: 0 8px 28px rgba(17, 21, 28, 0.18); }
 
 /* Live */
-/* The flag bar as race control's banner (4 Nov 2026, Asher: "rethink how
-   the flag card looks. it's not exciting in any way"). The flag itself,
-   waving on its pole, beside what the race is doing in big condensed
-   capitals and the countdown as a scoreboard readout; the whole bar tinted
-   the flag's colour, with speed lines under a green, hazard stripes under
-   a yellow, a slow pulse under a red and a chequered field at the finish.
-   --flag is the one colour each flag sets. */
-.flagbar { --flag: var(--muted); position: relative; overflow: hidden; isolation: isolate;
-           display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px 16px;
+/* The flag card as a lap progress track (4 Nov 2026, Asher picked
+   direction 5 of ten: "build 5 lap progress"). What the race is doing in
+   big condensed capitals under the flag's name, the lap against the
+   race's length on the right, and a bar of the race's laps filling in the
+   flag's colour towards a chequered finish block; under it the laps to
+   go, the leader and what is on next. Once the race is over the bar is
+   full, the finish block lit, and the board's last update sits where the
+   lap was. --flag is the one colour each flag sets. */
+.flagbar { --flag: var(--muted); display: flex; flex-direction: column; gap: 14px;
            background: var(--surface); border: 1px solid var(--border);
-           border-left: 6px solid var(--muted); border-radius: 14px;
-           padding: 14px 18px; margin-bottom: 14px; min-height: 84px; }
+           border-left: 1px solid var(--border); border-radius: 16px;
+           padding: 18px 22px; margin-bottom: 14px; }
 .flagbar.f-green { border-left-color: var(--good); --flag: var(--good); }
 .flagbar.f-yellow { border-left-color: #FFD34D; --flag: #FFD34D; }
 .flagbar.f-red { border-left-color: var(--bad); --flag: var(--bad); }
@@ -789,62 +789,47 @@ html.light .follow, html.light .toast { box-shadow: 0 8px 28px rgba(17, 21, 28, 
 /* WHY (23 Oct 2026, bug hunt 10): the app sends FlagState "Checkered", so the
    class is f-checkered; only f-chequered had a rule and the finish bar stayed grey. */
 .flagbar.f-checkered, .flagbar.f-chequered { border-left-color: var(--accent); --flag: var(--accent); }
-@supports (color: color-mix(in srgb, red 50%, blue)) {
-  .flagbar { background: linear-gradient(100deg, color-mix(in srgb, var(--flag) 26%, var(--surface)) 0%, var(--surface) 70%);
-             border-color: color-mix(in srgb, var(--flag) 45%, var(--border)); }
-  .flagbar.f-white { background: linear-gradient(100deg, color-mix(in srgb, #FFFFFF 14%, var(--surface)) 0%, var(--surface) 70%); }
-}
-/* The pattern under the words, faded out towards the left. */
-.flagbar::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
-  -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000 100%); mask-image: linear-gradient(90deg, transparent 30%, #000 100%); }
-.flagbar.f-green.running::before { opacity: 0.22; background: repeating-linear-gradient(115deg, var(--flag) 0 3px, transparent 3px 26px);
-  background-size: 200% 100%; animation: fb-speed 0.9s linear infinite; }
-.flagbar.f-yellow::before { opacity: 0.16; background: repeating-linear-gradient(135deg, var(--flag) 0 14px, transparent 14px 28px); }
-.flagbar.f-checkered::before, .flagbar.f-chequered::before, .flagbar.over::before { opacity: 0.2;
-  background: repeating-conic-gradient(var(--text) 0 25%, transparent 0 50%) 0 0 / 22px 22px; }
-.flagbar.f-red { animation: fb-red 1.6s ease-in-out infinite; }
-@keyframes fb-speed { to { background-position: -52px 0; } }
-@keyframes fb-red { 50% { box-shadow: inset 0 0 0 1px var(--bad), 0 0 22px color-mix(in srgb, var(--bad) 45%, transparent); } }
-/* The flag on its pole. */
-.flagbar .fg { position: relative; width: 44px; height: 52px; flex: none; }
-.flagbar .fg::before { content: ""; position: absolute; left: 3px; top: 2px; bottom: 0; width: 3px; border-radius: 2px; background: var(--muted); }
-.flagbar .fg i { position: absolute; left: 6px; top: 4px; width: 36px; height: 25px; border-radius: 1px 4px 4px 1px;
-  background: var(--flag); transform-origin: left center; box-shadow: 0 0 14px color-mix(in srgb, var(--flag) 50%, transparent); }
-.flagbar.f-none .fg i { background: transparent; border: 2px dashed var(--muted); box-shadow: none; }
-.flagbar.f-checkered .fg i, .flagbar.f-chequered .fg i, .flagbar.over .fg i {
-  background: repeating-conic-gradient(#111 0 25%, #FFF 0 50%) 0 0 / 12px 12.5px; box-shadow: 0 0 14px rgba(255, 255, 255, 0.25); }
-.flagbar.running .fg i, .flagbar.over .fg i { animation: fb-wave 1.1s ease-in-out infinite; }
-@keyframes fb-wave { 0%, 100% { transform: perspective(80px) rotateY(0deg) skewY(0deg); }
-                     50% { transform: perspective(80px) rotateY(-28deg) skewY(-5deg); } }
-.flagbar .fl-txt { min-width: 0; }
-.flagbar .kick { display: block; color: var(--flag); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
-.flagbar.f-white .kick, .flagbar.f-none .kick { color: var(--muted); }
+html.light .flagbar.f-white { --flag: #8A90A0; }
+.flagbar .lp-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.flagbar .lp-id { min-width: 0; }
+.flagbar .kick { display: flex; align-items: center; gap: 8px; color: var(--flag); font-size: 0.75rem; font-weight: 800;
+                 letter-spacing: 0.16em; text-transform: uppercase; }
+.flagbar .kick i { width: 10px; height: 10px; border-radius: 2px; background: var(--flag); flex: none; }
+.flagbar.f-none .kick { color: var(--muted); }
+.flagbar.f-none .kick i { display: none; }
 .state { font-weight: 700; font-size: 1.1rem; }
-.flagbar .state { display: block; font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
-  font-size: 2rem; line-height: 1.05; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; overflow-wrap: anywhere; }
-.count { font-variant-numeric: tabular-nums; font-size: 1.1rem; color: var(--accent); }
-/* The countdown, as a scoreboard: the figure big, what it counts under it. */
-.flagbar .count { display: flex; flex-direction: column; align-items: flex-end; text-align: right; color: var(--text); }
-.flagbar .count b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
-  font-size: 2.1rem; line-height: 1; font-weight: 800; letter-spacing: 0.02em; padding: 4px 10px; border-radius: 10px;
-  background: var(--bg); border: 1px solid var(--border); text-shadow: 0 0 12px color-mix(in srgb, var(--flag) 60%, transparent); }
-.flagbar .count span { margin-top: 4px; color: var(--muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+.flagbar .state, .flagbar .lp-lap, .flagbar .lp-time b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  font-stretch: condensed; font-weight: 800; line-height: 1; }
+.flagbar .state { display: block; font-size: 2.5rem; text-transform: uppercase; overflow-wrap: anywhere; }
+.flagbar .lp-lap { font-size: 2.5rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.flagbar .lp-lap span { color: var(--muted); }
+.flagbar .lp-time { display: flex; flex-direction: column; align-items: flex-end; }
+.flagbar .lp-time b { font-size: 2rem; white-space: nowrap; }
+.flagbar .lp-time span { color: var(--muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+/* The race's laps, one segment each; a long race is one track instead. */
+.flagbar .lp-bar { display: flex; align-items: center; gap: 6px; }
+.flagbar .lp-bar > i { flex: 1; height: 14px; border-radius: 4px; background: var(--border); }
+.flagbar .lp-bar > i.on { background: var(--flag); }
+.flagbar .lp-bar > i.now { background: var(--flag); box-shadow: 0 0 12px var(--flag); }
+.flagbar .lp-bar > i.done { background: var(--muted); }
+.flagbar .lp-track { flex: 1; height: 14px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.flagbar .lp-track b { display: block; height: 100%; border-radius: 4px; background: var(--flag); }
+.flagbar.over .lp-track b { background: var(--muted); }
+.flagbar .lp-fin { width: 26px; height: 26px; flex: none; margin-left: 4px; border-radius: 4px; opacity: 0.45;
+  background: repeating-conic-gradient(#111 0 25%, #FFF 0 50%) 0 0 / 13px 13px; }
+.flagbar.over .lp-fin { opacity: 1; box-shadow: 0 0 14px rgba(255, 255, 255, 0.45); }
+.flagbar .lp-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; color: var(--muted); font-size: 0.9rem; }
+.flagbar .lp-foot b { color: var(--text); font-weight: 700; }
+.flagbar .lp-foot .ondeck b { font-weight: 600; }
 .ondeck { color: var(--muted); font-size: 0.85rem; margin-left: auto; }
-.flagbar .ondeck { grid-column: 1 / -1; margin: 4px 0 0; padding-top: 8px; border-top: 1px dashed var(--border); }
-.flagbar .ondeck b { color: var(--text); font-weight: 600; }
+.flagbar .ondeck { font-size: 0.9rem; margin-left: auto; }
 @media (max-width: 420px) {
-  .flagbar { gap: 6px 12px; padding: 12px 14px; }
-  .flagbar .state { font-size: 1.6rem; }
-  .flagbar .count b { font-size: 1.6rem; }
+  .flagbar { padding: 14px 16px; gap: 12px; }
+  .flagbar .state, .flagbar .lp-lap { font-size: 2rem; }
+  .flagbar .lp-time b { font-size: 1.5rem; }
+  .flagbar .lp-bar { gap: 4px; }
+  .flagbar .ondeck { margin-left: 0; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .flagbar, .flagbar::before, .flagbar .fg i { animation: none !important; }
-}
-/* Race over: when the board was last updated, where the countdown was
-   (4 Nov 2026, Asher: "remove the race over final board card. the
-   chequered flag card is good. add the last updated time to it"). */
-.flagbar .count.upd b { font-size: 1.5rem; padding: 4px 8px; white-space: nowrap; }
-@media (max-width: 420px) { .flagbar .count.upd b { font-size: 1.2rem; } }
 /* The live position chart, under the board. */
 .livepos { padding: 14px 16px 16px; }
 .livepos[hidden] { display: none; }
@@ -4577,39 +4562,94 @@ function cells(row, columns) {
 // makes the next table be written again.
 let boardHtml = '';
 
-// --- The flag bar (4 Nov 2026, Asher: "rethink how the flag card looks") --
-// Race control's banner: the flag waving on its pole, a line naming it,
-// what the race is doing in big capitals and the countdown as a
-// scoreboard figure. The look is the stylesheet's (.flagbar); this only
-// picks the classes and writes the words.
+// --- The flag card (4 Nov 2026, Asher picked direction 5: "build 5 lap
+// progress") --------------------------------------------------------------
+// What the race is doing under the flag's name, the leader's lap against
+// the race's length, and a bar of the race's laps filling towards the
+// finish. The length is the leader's lap plus the laps the countdown says
+// are left ("5 LAPS TO GO"); a timed race's countdown is minutes, not
+// laps, so it has the lap and the time left and no bar. The look is the
+// stylesheet's (.flagbar); this only picks the classes and writes the words.
 const LB_FLAG_WORDS = {
   green: 'Green flag', yellow: 'Caution', red: 'Red flag \\u00B7 stopped',
   white: 'White flag \\u00B7 last lap', checkered: 'Chequered flag', chequered: 'Chequered flag',
 };
 
-// "04:32 REMAINING" or "5 LAPS TO GO": the figure big, what it counts under it.
-function lbCount(text) {
+// The leader's crossings, the start lap included (see posChart's lapsOf).
+function lbLaps(r) {
+  if (r && typeof r.lap === 'number' && r.lap >= 0) return Math.floor(r.lap);
+  const n = r && Array.isArray(r.laps) ? r.laps.filter((v) => typeof v === 'number' && v > 0).length : 0;
+  return n > 0 ? n + 1 : 0;
+}
+
+// "5 LAPS TO GO", "1 LAP TO GO", "LAST LAP": the laps left. null for a
+// countdown that is not in laps.
+function lbToGo(text) {
   const t = String(text || '').trim();
-  if (t === '') return '';
-  const m = /^(\\S+)\\s+(.+)$/.exec(t);
-  return '<span class="count">' + (m ? '<b>' + esc(m[1]) + '</b><span>' + esc(m[2]) + '</span>' : '<b>' + esc(t) + '</b>') + '</span>';
+  if (/^last lap$/i.test(t)) return 1;
+  const m = /^(\\d+)\\s*laps?\\s*to\\s*go$/i.exec(t);
+  return m ? Number(m[1]) : null;
+}
+
+function lbPlural(n, one) {
+  return n + ' ' + one + (n === 1 ? '' : 's');
+}
+
+// A segment a lap, the one being run lit; past forty, one track filling.
+function lbBar(done, total, over) {
+  if (!(total > 0)) return '';
+  const upto = Math.min(done, total);
+  let inner = '';
+  if (total <= 40) {
+    for (let i = 0; i < total; i++) {
+      inner += '<i class="' + (over ? 'done' : i < upto - 1 ? 'on' : i === upto - 1 ? 'now' : '') + '"></i>';
+    }
+  } else {
+    inner = '<span class="lp-track"><b style="width:' + Math.round(upto / total * 100) + '%"></b></span>';
+  }
+  return '<div class="lp-bar" aria-hidden="true">' + inner + '<span class="lp-fin"></span></div>';
 }
 
 // over: the race is done - the laptop says Finished, or the board went
 // empty and the last race's is being kept up. at: when that board was
-// last updated, shown on the right of a race that is over.
-function drawBar(state, over, at) {
+// last updated, shown on the right of a race that is over. rows: the
+// board the lap and the leader are read from.
+function drawBar(state, over, at, rows) {
   const flag = over ? 'checkered' : String(state.flag || 'None').toLowerCase();
   const running = String(state.state || 'Idle');
-  const moving = !over && (running === 'Racing' || running === 'Countdown');
-  bar.className = 'flagbar f-' + esc(flag) + (moving ? ' running' : '') + (over ? ' over' : '');
+  bar.className = 'flagbar f-' + esc(flag) + (over ? ' over' : '');
   const kick = over ? 'Chequered flag' : (LB_FLAG_WORDS[flag] || 'Race control');
   const said = over ? 'Race over' : running === 'Idle' ? 'Not racing' : running;
-  bar.innerHTML = '<span class="fg" aria-hidden="true"><i></i></span>'
-    + '<span class="fl-txt"><span class="kick">' + esc(kick) + '</span><span class="state">' + esc(said) + '</span></span>'
-    + (!over ? lbCount(state.countdown)
-      : at ? '<span class="count upd"><b>' + esc(lbClock(at)) + '</b><span>Last update</span></span>' : '')
-    + (state.onDeck ? '<span class="ondeck">Next up: <b>' + esc(state.onDeck) + '</b></span>' : '');
+
+  const list = Array.isArray(rows) ? rows : [];
+  const lead = list[0] && typeof list[0] === 'object' ? list[0] : null;
+  const done = lead ? lbLaps(lead) : 0;
+  const left = over ? null : lbToGo(state.countdown);
+  const total = over ? done : left !== null && done > 0 ? done + left : 0;
+  const who = lead && lead.name ? esc(String(lead.name)) : '';
+
+  let right = '';
+  if (over) {
+    if (at) right = '<span class="lp-time"><b>' + esc(lbClock(at)) + '</b><span>Last update</span></span>';
+  } else if (done > 0) {
+    right = '<span class="lp-lap">Lap ' + done + (total > 0 ? '<span> / ' + total + '</span>' : '') + '</span>';
+  }
+
+  let info = '';
+  if (over) {
+    if (done > 0) info = '<b>' + lbPlural(done, 'lap') + '</b>' + (who ? ' \\u00B7 Winner ' + who : '');
+  } else {
+    const count = String(state.countdown || '').trim();
+    const words = left === null ? count.toLowerCase() : /^last lap$/i.test(count) ? 'Last lap' : lbPlural(left, 'lap') + ' to go';
+    const leader = who && done > 0 ? 'Leader ' + who : '';
+    info = (words ? '<b>' + esc(words) + '</b>' : '') + (words && leader ? ' \\u00B7 ' : '') + leader;
+  }
+  const next = state.onDeck ? '<span class="ondeck">Next up: <b>' + esc(state.onDeck) + '</b></span>' : '';
+
+  bar.innerHTML = '<div class="lp-top"><span class="lp-id"><span class="kick"><i></i>' + esc(kick) + '</span>'
+    + '<span class="state">' + esc(said) + '</span></span>' + right + '</div>'
+    + lbBar(done, total, over)
+    + (info || next ? '<div class="lp-foot"><span>' + info + '</span>' + next + '</div>' : '');
 }
 
 // --- The last race, kept (4 Nov 2026, Asher: "keep the board for the last
@@ -4912,7 +4952,7 @@ function render(state, seen, at, empty) {
     // and the last race's board stays under it until the new one fills.
     const kept = keptRace();
     const coming = running === 'Staging' || running === 'Countdown';
-    drawBar(state, !!kept && !coming, kept ? kept.at : 0);
+    drawBar(state, !!kept && !coming, kept ? kept.at : 0, kept && !coming && Array.isArray(kept.state.standings) ? kept.state.standings : []);
     if (kept) {
       drawBoard(kept.state);
       posChart.draw(Array.isArray(kept.state.standings) ? kept.state.standings : []);
@@ -4925,7 +4965,7 @@ function render(state, seen, at, empty) {
   }
 
   const over = running === 'Finished';
-  drawBar(state, over, at);
+  drawBar(state, over, at, rows);
   keepRace(state, at || Date.now());
   posChart.take(rows);
   drawBoard(state);
