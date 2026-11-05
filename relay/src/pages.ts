@@ -850,6 +850,28 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .lpfig .posk li b.kv { margin: 0 0 0 5px; }
 .mecharts .jm { margin-top: 4px; }
 .lvsay[hidden] { display: none; }
+/* Qualifying on the Schedule (4 Nov 2026): a line where each main ends. */
+.qual { padding: 0 0 6px; margin-bottom: 12px; }
+.qual h3 { margin: 0; padding: 12px 16px 6px; font-size: 1.05rem; }
+.qual tr.cut td { border-top: 2px dashed var(--accent); }
+/* How far behind the night is running, on the Schedule (4 Nov 2026). */
+.late { margin: 0 0 10px; padding: 10px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-weight: 700; }
+.late.behind { border-color: var(--warn); color: var(--warn); }
+details .eta { display: block; color: var(--muted); font-size: 0.8rem; font-weight: 400; }
+/* What it takes, under the standings (4 Nov 2026). */
+.wt { padding: 14px 18px; margin-top: 14px; }
+.wt h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.wt p { margin: 0 0 8px; }
+.wt ul { list-style: none; margin: 0; padding: 0; }
+.wt li { padding: 4px 0; border-top: 1px solid var(--border); }
+.wt .wt-gap { color: var(--muted); margin: 0 6px; }
+.wt .wt-in { color: var(--good); }
+.wt .wt-out { color: var(--muted); }
+.wt .wt-crown { font-weight: 700; color: var(--accent); }
+/* The charge timer on the Right now card (4 Nov 2026). */
+.lc-chargeset { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.lc-chargeset select { margin: 0; min-height: 44px; }
+.lc-late { color: var(--bad); font-weight: 600; }
 .setuplog textarea { display: block; width: 100%; min-height: 72px; margin: 6px 0 0; padding: 10px; font: inherit; font-size: 1rem; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); resize: vertical; }
 /* Just me and Compare with, side by side over the charts (4 Nov 2026). */
 .mesay { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 4px 0 0; }
@@ -6354,7 +6376,43 @@ function draw() {
       <td class="n opt">\${esc(r.podiums ?? 0)}</td>
       <td class="n opt">\${r.best == null ? '-' : esc(r.best)}</td>
     </tr>\`).join('') +
-    '</tbody></table></div>';
+    '</tbody></table></div>' + whatItTakes(season);
+}
+
+// WHAT IT TAKES (4 Nov 2026, from the relay roadmap Asher asked to have
+// built): with the season's length known, the points still to be won and
+// who can still catch the leader - each driver's gap to the top against
+// the most the rounds left could pay them. Nothing at all for a season
+// whose length the club has not set: a guessed length would tell a driver
+// they are out of it when they are not. With a best-rounds rule a dropped
+// round can change it, and the page says so rather than pretend.
+function whatItTakes(season) {
+  const planned = Number(season.planned) || 0;
+  const most = Number(season.most) || 0;
+  const held = Number(season.held) || 0;
+  const rows = Array.isArray(season.standings) ? season.standings : [];
+  if (planned <= 0 || most <= 0 || rows.length < 2) return '';
+  const left = Math.max(0, planned - held);
+  const top = Number(rows[0].points) || 0;
+  const most_left = left * most;
+  const head = left === 0
+    ? 'All ' + planned + ' rounds are run.'
+    : left + (left === 1 ? ' round' : ' rounds') + ' to go, up to ' + most_left + ' points still to win.';
+  const second = Number(rows[1].points) || 0;
+  const settled = top - second > most_left;
+  const lines = rows.slice(1, 8).map((r) => {
+    const gap = top - (Number(r.points) || 0);
+    const alive = gap <= most_left;
+    return '<li>' + nm(r.name) + ' <span class="wt-gap">' + gap + ' behind</span> ' +
+      (left === 0 ? '' : alive ? '<b class="wt-in">can still win it</b>' : '<span class="wt-out">cannot catch the leader</span>') + '</li>';
+  }).join('');
+  const crown = settled && left > 0
+    ? '<p class="wt-crown">' + nm(rows[0].name) + ' has the title won: nobody can make up ' + (top - second) + ' points in what is left.</p>'
+    : '';
+  const rule = Number(season.bestOf) > 0
+    ? '<p class="note">Best ' + Number(season.bestOf) + ' rounds count, so a dropped round can change these.</p>'
+    : '';
+  return '<div class="card wt"><h3>What it takes</h3><p>' + esc(head) + '</p>' + crown + '<ul>' + lines + '</ul>' + rule + '</div>';
 }
 
 async function load() {
@@ -7005,6 +7063,34 @@ export function homePage(club: string, clubName: string, context: PageContext = 
 
 // --------------------------------------------------------------- schedule
 
+/**
+ * QUALIFYING AND THE MAINS (4 Nov 2026, from the relay roadmap Asher asked
+ * to have built): the laptop's qualifying order for each class on the race
+ * day, and the main each driver would make. What it takes to move up is
+ * worked out here: the score of the last driver into the main above.
+ * Shared by the Schedule page (every class) and a driver's night (theirs).
+ */
+const QUAL_JS = `
+// A qualifying score as LiveRC writes it: laps and time ("18/5:02.103"), or
+// the best run of laps in a row ("3 in 27.512").
+function qualScore(cls, r) {
+  if (!r) return '';
+  if (cls && cls.method === 'BestConsecutiveLaps' && Number(r.consecutiveMs) > 0) return (Number(cls.consecutive) || 3) + ' in ' + lap(Number(r.consecutiveMs));
+  return Number(r.laps) > 0 ? Number(r.laps) + '/' + lap(Number(r.timeMs)) : '-';
+}
+
+// For a row in a lower main: the score to beat for the one above, as words.
+function qualToMoveUp(cls, rows, r) {
+  const size = Number(cls && cls.mainSize) || 0;
+  const pos = Number(r && r.pos) || 0;
+  if (size < 2 || pos <= size) return '';
+  const tier = Math.floor((pos - 1) / size);
+  const cut = rows.find((x) => Number(x.pos) === tier * size);
+  const above = cut ? String(cut.main || '') : '';
+  return cut && above ? 'Beat ' + qualScore(cls, cut) + ' to make the ' + above + ' main' : '';
+}
+`;
+
 const SCHEDULE_JS = `
 const board = document.getElementById('board');
 const head = document.getElementById('head');
@@ -7017,6 +7103,49 @@ let lastText = '';
 
 function hit(name, q) {
   return q.length > 0 && String(name).toLowerCase().includes(q);
+}
+
+// HOW FAR BEHIND THE NIGHT IS RUNNING (4 Nov 2026, from the relay roadmap
+// Asher asked to have built): each line's time as the club typed it
+// against when the laptop actually started it (startedUtc), the latest
+// started line setting how late the night is - and the lines still to
+// come shown at their planned time plus that. Times are the club's clock,
+// read on this phone's: a phone at the track is in the track's time zone.
+// A time typed in a way this does not read ("after lunch") is left alone.
+function clockOn(text, dayOf) {
+  const m = /^(\\d{1,2})[:.](\\d{2})\\s*(am|pm)?$/i.exec(String(text || '').trim());
+  if (!m) return NaN;
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  const half = m[3] ? m[3].toLowerCase() : '';
+  if (half === 'pm' && h < 12) h += 12;
+  if (half === 'am' && h === 12) h = 0;
+  if (h > 23 || min > 59) return NaN;
+  const d = new Date(dayOf);
+  d.setHours(h, min, 0, 0);
+  return d.getTime();
+}
+
+function clockWords(ms) {
+  try { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+}
+
+// Minutes late (negative: early) by the latest line that has started, or null.
+function runningLate(lines) {
+  let late = null;
+  for (const l of lines) {
+    const started = Date.parse(String(l.startedUtc || ''));
+    if (!Number.isFinite(started)) continue;
+    const planned = clockOn(l.time, started);
+    if (Number.isFinite(planned)) late = Math.round((started - planned) / 60000);
+  }
+  return late;
+}
+
+function lateWords(late) {
+  if (late === null) return '';
+  if (Math.abs(late) <= 2) return 'Running on time';
+  return late > 0 ? 'Running ' + late + ' min behind' : 'Running ' + (-late) + ' min ahead';
 }
 
 function draw() {
@@ -7040,15 +7169,29 @@ function draw() {
     return;
   }
 
-  board.innerHTML = shown.map((l) => {
+  const late = runningLate(lines);
+  const banner = late === null ? '' : '<p class="late' + (late > 2 ? ' behind' : '') + '">' + esc(lateWords(late)) + '</p>';
+
+  board.innerHTML = banner + shown.map((l) => {
     const drivers = Array.isArray(l.drivers) ? l.drivers : [];
+    // When it really started, or when it should now go off.
+    const started = Date.parse(String(l.startedUtc || ''));
+    const planned = clockOn(l.time, Number.isFinite(started) ? started : Date.now());
+    let when = '';
+    if (Number.isFinite(started)) {
+      const by = Number.isFinite(planned) ? Math.round((started - planned) / 60000) : 0;
+      when = 'started ' + clockWords(started) + (Math.abs(by) > 2 ? (by > 0 ? ', ' + by + ' min late' : ', ' + (-by) + ' min early') : '');
+    } else if (late !== null && late > 2 && Number.isFinite(planned) && (l.status === 'next' || l.status === 'upcoming')) {
+      when = 'about ' + clockWords(planned + late * 60000);
+    }
     const status = ['done', 'running', 'next', 'upcoming'].includes(l.status) ? l.status : 'upcoming';
     const pill = LABEL[status] ? '<span class="pill ' + status + '">' + LABEL[status] + '</span>' : '';
     const open = drivers.length > 0 && (opened.has(l.id) || (q && drivers.some((n) => hit(n, q))));
 
     return '<details class="' + status + '" data-id="' + esc(l.id) + '"' + (open ? ' open' : '') + '><summary>' +
       '<span class="tm">' + esc(l.time || '') + '</span>' +
-      '<span class="title">' + esc([l.className, l.description].filter(Boolean).join(' - ') || 'Session') + '</span>' +
+      '<span class="title">' + esc([l.className, l.description].filter(Boolean).join(' - ') || 'Session') +
+        (when ? '<span class="eta">' + esc(when) + '</span>' : '') + '</span>' +
       '<span class="winner">' +
         (drivers.length > 0 ? '<span class="when">' + drivers.length + (drivers.length === 1 ? ' driver' : ' drivers') + '</span> ' : '') +
         pill + '</span></summary>' +
@@ -7121,6 +7264,45 @@ async function load() {
 picker.addEventListener('change', draw);
 find.addEventListener('input', draw);
 poll(load, 15000);
+
+// Qualifying, under the running order (4 Nov 2026) - see QUAL_JS. A line
+// across the table where each main ends, and the drivers searched for
+// marked as they are in the line-ups.
+const qualBox = document.getElementById('qual');
+let qualText = '';
+
+function drawQual(classes) {
+  const cls = picker.value;
+  const q = find.value.trim().toLowerCase();
+  const shown = classes.filter((c) => c && Array.isArray(c.rows) && c.rows.length > 0 && (!cls || c.name === cls));
+  if (shown.length === 0) { qualBox.innerHTML = ''; return; }
+  qualBox.innerHTML = '<div class="day">Qualifying</div>' + shown.map((c) => {
+    const size = Number(c.mainSize) || 0;
+    const rows = c.rows.map((r) => {
+      const cut = size >= 2 && Number(r.pos) > 1 && (Number(r.pos) - 1) % size === 0;
+      const who = hit(r.name, q) ? '<mark>' + nm(r.name) + '</mark>' : nm(r.name);
+      return '<tr' + (cut ? ' class="cut"' : '') + '><td class="pos">' + esc(r.pos) + '</td><td>' + who + '</td>' +
+        '<td class="n">' + esc(qualScore(c, r)) + '</td><td class="n">' + esc(r.main || '') + '</td></tr>';
+    }).join('');
+    return '<div class="card qual"><h3>' + esc(c.name) + '</h3><table><thead><tr><th class="pos">#</th><th>Driver</th>' +
+      '<th class="n">Best</th><th class="n">Main</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }).join('');
+}
+
+let qualClasses = [];
+async function loadQual() {
+  const answer = await grab('/snapshot/qualifying').catch(() => null);
+  if (answer === null || answer.missing) { if (answer && answer.status === 404) { qualClasses = []; drawQual([]); } return; }
+  const text = JSON.stringify(answer.body.body);
+  if (text === qualText) return;
+  qualText = text;
+  qualClasses = answer.body.body && Array.isArray(answer.body.body.classes) ? answer.body.body.classes : [];
+  drawQual(qualClasses);
+}
+
+picker.addEventListener('change', () => drawQual(qualClasses));
+find.addEventListener('input', () => drawQual(qualClasses));
+poll(loadQual, 30000);
 `;
 
 export function schedulePage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
@@ -7135,8 +7317,9 @@ export function schedulePage(club: string, clubName: string, context: PageContex
       '<div class="tools"><select id="cls" style="display:none"></select>' +
       '<input id="find" type="search" placeholder="Find your name" autocomplete="off" style="display:none"></div>' +
       '<div class="day">Running order</div>' +
-      '<div id="board"><p class="note">Loading&hellip;</p></div>',
-    script: SCHEDULE_JS,
+      '<div id="board"><p class="note">Loading&hellip;</p></div>' +
+      '<div id="qual"></div>',
+    script: QUAL_JS + SCHEDULE_JS,
   }, context);
 }
 
@@ -9366,6 +9549,117 @@ function plural(n, one, many) {
   return n + ' ' + (n === 1 ? one : many);
 }
 
+// Where they stand in qualifying, found by the row tags of their own cars
+// (live.cars) - the same tags Live's board gives them, never a name match.
+// Read from the relay once a minute while the night page is open.
+let qualDoc = null;
+let qualAt = 0;
+
+async function readQual() {
+  if (Date.now() - qualAt < 60000) return;
+  qualAt = Date.now();
+  const answer = await grab('/snapshot/qualifying').catch(() => null);
+  if (answer === null) return;
+  qualDoc = !answer.missing && answer.body && answer.body.body ? answer.body.body : null;
+  drawLive();
+}
+
+function qualMine() {
+  const tags = live && Array.isArray(live.cars) ? live.cars.map((c) => c && c.tag).filter((x) => typeof x === 'string' && x !== '') : [];
+  const classes = qualDoc && Array.isArray(qualDoc.classes) ? qualDoc.classes : [];
+  for (const c of classes) {
+    const rows = Array.isArray(c.rows) ? c.rows : [];
+    const r = rows.find((x) => x && typeof x.tag === 'string' && tags.includes(x.tag));
+    if (r) return { cls: c, rows: rows, r: r };
+  }
+  return null;
+}
+
+function qualPart() {
+  // Only for a driver with a car to find: nothing to look up otherwise.
+  if (!(live && Array.isArray(live.cars) && live.cars.some((c) => c && typeof c.tag === 'string' && c.tag !== ''))) return null;
+  readQual();
+  const m = qualMine();
+  if (!m) return null;
+  const part = el('div', 'lc-part lc-qual');
+  part.appendChild(el('b', '', 'Qualifying'));
+  part.appendChild(el('div', '', nth(Number(m.r.pos)) + ' of ' + m.rows.length + ' in ' + String(m.cls.name || '') + (m.r.main ? ' - ' + m.r.main + ' main' : '')));
+  part.appendChild(el('div', 'when', 'Best ' + qualScore(m.cls, m.r)));
+  const up = qualToMoveUp(m.cls, m.rows, m.r);
+  if (up) part.appendChild(el('div', 'when', up));
+  return part;
+}
+
+// THE CHARGE TIMER (4 Nov 2026, from the relay roadmap Asher asked to have
+// built): a driver puts a pack on charge, says how long it takes, and the
+// card says when it is ready against when their next race is due - the
+// scramble at the charging table, answered before it starts. Kept on this
+// phone only: nothing about it goes to the relay or the laptop. With
+// alerts on it beeps and buzzes once when the time is up.
+const CHARGE_KEY = 'hg-charge-' + CLUB;
+const CHARGE_MINUTES = [15, 20, 30, 45, 60, 90];
+let charge = null;
+try {
+  const raw = JSON.parse(localStorage.getItem(CHARGE_KEY) || 'null');
+  if (raw && typeof raw.until === 'number' && isFinite(raw.until)) charge = { until: raw.until, told: raw.told === true };
+} catch (e) { /* none on charge */ }
+
+function saveCharge() {
+  try { if (charge) localStorage.setItem(CHARGE_KEY, JSON.stringify(charge)); else localStorage.removeItem(CHARGE_KEY); } catch (e) { /* this visit only */ }
+}
+
+// When it is ready, against when their race is due: the words for the card.
+function chargeWords(next, now) {
+  if (!charge) return 'Put a pack on charge and say how long it takes.';
+  const left = Math.round((charge.until - now) / 60000);
+  const ready = left <= 0 ? 'Charged' : 'Ready at ' + hm(charge.until) + ' (' + left + ' min)';
+  const due = next && typeof next === 'object' && typeof next.eta === 'string' ? Date.parse(next.eta) : NaN;
+  if (left <= 0 || !Number.isFinite(due)) return ready;
+  const spare = Math.round((due - charge.until) / 60000);
+  return ready + (spare >= 0 ? ' - ' + spare + ' min before your race' : ' - ' + (-spare) + ' min after your race is due');
+}
+
+function chargePart(next) {
+  const part = el('div', 'lc-part lc-charge');
+  part.appendChild(el('b', '', 'Charging'));
+  const now = Date.now();
+  const due = next && typeof next === 'object' && typeof next.eta === 'string' ? Date.parse(next.eta) : NaN;
+  const late = !!charge && Number.isFinite(due) && charge.until > due;
+  part.appendChild(el('div', 'when' + (late ? ' lc-late' : ''), chargeWords(next, now)));
+  if (charge) {
+    part.appendChild(tapButton('Off the charger', 'go quiet', () => { charge = null; saveCharge(); drawLive(); }));
+  } else {
+    const row = el('div', 'lc-chargeset');
+    const pick = document.createElement('select');
+    for (const m of CHARGE_MINUTES) {
+      const o = document.createElement('option');
+      o.value = String(m);
+      o.textContent = m + ' min';
+      if (m === 30) o.selected = true;
+      pick.appendChild(o);
+    }
+    pick.value = '30';
+    row.appendChild(pick);
+    row.appendChild(tapButton('On charge', 'go quiet', () => {
+      const mins = Math.max(1, Math.min(240, Number(pick.value) || 30));
+      charge = { until: Date.now() + mins * 60000, told: false };
+      saveCharge();
+      drawLive();
+    }));
+    part.appendChild(row);
+  }
+  return part;
+}
+
+// Once a quarter-minute: the time is up - say so once, and redraw the card.
+setInterval(() => {
+  if (!charge || charge.told || Date.now() < charge.until) return;
+  charge.told = true;
+  saveCharge();
+  if (alertsOn) alertNow('Your pack is charged', '');
+  try { drawLive(); } catch (e) { /* the card catches up on the next poll */ }
+}, 15000);
+
 function hm(ms) {
   return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
@@ -9694,6 +9988,13 @@ function liveCard() {
       pack.className = 'su lc-part lc-pack';
       jobs.appendChild(pack);
     }
+
+    // The charge timer (4 Nov 2026) - see chargePart.
+    jobs.appendChild(chargePart(live.next));
+
+    // Where they stand in qualifying (4 Nov 2026) - see qualMine.
+    const standing = qualPart();
+    if (standing) jobs.appendChild(standing);
   }
 
   if (jobs.children.length > 0) card.appendChild(jobs);
@@ -12011,7 +12312,7 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     body: '<div id="nh"></div><div id="nj"></div><div id="gd"></div><div id="up"></div><div id="ng"></div>' +
       '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
       '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
-    script: LAPS_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
+    script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
     noindex: true,
   }, context);
 }

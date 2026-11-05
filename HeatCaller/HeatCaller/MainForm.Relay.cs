@@ -1062,6 +1062,94 @@ public partial class MainForm
     /// PublishExtrasToRelay can rebuild it on its thirty-second pass and
     /// send it only when it has changed.
     /// </summary>
+    /// <summary>
+    /// WHERE QUALIFYING STANDS, FOR THE RELAY (4 Nov 2026, from the relay
+    /// roadmap Asher asked to have built): for each class with anybody
+    /// ranked on the race day in hand, the same order the Standings button
+    /// and the program's mains are built from (QualifyingCalculator.Compute
+    /// over the rounds the day counts), each driver's best score, and the
+    /// main that order would put them in (MainsBuilder.PlanSeeding at the
+    /// class's main size). The page works out what it takes to move up.
+    ///
+    /// NAMES AS THE STANDINGS SEND THEM: shortened together, initials where a
+    /// driver asked, and "Unnamed driver" for a car raced under its number.
+    /// Each row also carries the row tag Live's board gives the same car, so
+    /// a driver's own night can find them in it - never the transponder.
+    ///
+    /// Empty outside a race day: there is no qualifying to show.
+    /// </summary>
+    private string BuildQualifyingDocument(bool abbreviate)
+    {
+        // Null until its page is built, on the first passes after start.
+        if (_raceProgram is null || !_raceProgram.HasRaceDay)
+        {
+            return JsonSerializer.Serialize(new { classes = Array.Empty<object>() });
+        }
+
+        var counted = _raceProgram.QualifyingRoundsCounted();
+        var transponderNames = TransponderNamesInHistory();
+        var privacy = PublicPrivacy.Current;
+        var classes = new List<object>();
+
+        foreach (var raceClass in _raceClasses.All)
+        {
+            List<QualifyingCalculator.Entry> entries;
+
+            try
+            {
+                entries = QualifyingCalculator.Compute(raceClass.Name, _rounds, _sessionHistory, _profiles, raceClass, counted);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (entries.Count == 0)
+            {
+                continue;
+            }
+
+            var shownAs = entries.Select(e => transponderNames.Contains((e.DriverName ?? string.Empty).Trim())
+                                              || RelayDocuments.PublicNameOrUnnamed(e.DriverName, e.Transponder) == RelayDocuments.UnnamedDriver
+                ? RelayDocuments.UnnamedDriver
+                : e.DriverName ?? string.Empty).ToList();
+            var names = RelayPublisher.DisplayNames(shownAs, abbreviate, entries.Select(e => (string?)e.Transponder).ToList(), privacy);
+
+            var plan = MainsBuilder.PlanSeeding(entries.Select(e => e.Transponder).ToList(), raceClass.MainSize);
+            var tierOf = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            for (var tier = 0; tier < plan.Tiers.Count; tier++)
+            {
+                foreach (var t in plan.Tiers[tier])
+                {
+                    tierOf.TryAdd(t, tier);
+                }
+            }
+
+            classes.Add(new
+            {
+                name = raceClass.Name,
+                method = raceClass.QualifyingMethod.ToString(),
+                consecutive = raceClass.ConsecutiveLapCount,
+                mainSize = plan.MainSize,
+                rows = entries.Select((e, i) => new
+                {
+                    pos = i + 1,
+                    name = names[i],
+                    tag = Ghosts.IsGhost(e.Transponder) ? null : _webServer.RelayRowTag(e.Transponder),
+                    main = MainsBuilder.SeedPlan.LetterFor(tierOf.TryGetValue(e.Transponder, out var tier) ? tier : 0),
+                    laps = e.BestLaps,
+                    timeMs = e.BestElapsedMs,
+                    consecutiveMs = e.BestConsecutiveMs,
+                    fastLapMs = e.BestFastLapMs,
+                    heats = e.HeatsRun,
+                }).ToList(),
+            });
+        }
+
+        return JsonSerializer.Serialize(new { classes });
+    }
+
     private string BuildStandingsDocument()
     {
         var abbreviate = _settings.RelayAbbreviateNames;
@@ -1112,6 +1200,19 @@ public partial class MainForm
                 {
                     id = season.Id,
                     name = season.Name,
+
+                    // WHAT IT TAKES (4 Nov 2026, from the relay roadmap Asher
+                    // asked to have built): the season's length as the club
+                    // set it (0 = not said, and then the page says nothing
+                    // about who can still win), the most one round pays,
+                    // the best-rounds rule, and the rounds run so far - as
+                    // many as anybody has raced, counted and dropped, which
+                    // is the season to date for a driver who made them all.
+                    planned = season.PlannedRounds,
+                    most = season.MostPointsInARound(),
+                    bestOf = season.CountBestRounds,
+                    held = table.Count == 0 ? 0 : table.Max(entry => entry.SessionsCounted + entry.DroppedRounds),
+
                     standings = table.Select((entry, index) => new
                     {
                         pos = index + 1,
@@ -1267,6 +1368,9 @@ public partial class MainForm
 
         SendToRelayIfChanged(RelayChannel.Programme, "the schedule", () => RelayDocuments.Programme(
             _daySchedule, _rounds, _raceEvents, _profiles, _settings.RelayPublishRoster, abbreviate));
+
+        // Where qualifying stands (4 Nov 2026) - see BuildQualifyingDocument.
+        SendToRelayIfChanged(RelayChannel.Qualifying, "qualifying", () => BuildQualifyingDocument(abbreviate));
 
         if (_relayExtrasTick++ % 15 != 0)
         {

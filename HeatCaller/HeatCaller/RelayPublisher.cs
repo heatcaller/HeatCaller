@@ -31,6 +31,11 @@ public enum RelayChannel
     DriverLive,
     DriverMe,
     Captions,
+
+    // 4 Nov 2026 (the relay roadmap): where qualifying stands for each class
+    // on the race day in hand, and the main each driver would make. Public,
+    // as the results it is worked out from are.
+    Qualifying,
 }
 
 /// <summary>
@@ -3710,6 +3715,7 @@ public sealed partial class RelayPublisher : IDisposable
         RelayChannel.DriverLive => "driverlive",
         RelayChannel.DriverMe => "driverme",
         RelayChannel.Captions => "captions",
+        RelayChannel.Qualifying => "qualifying",
 
         // A NAME THE RELAY WILL REFUSE, not "state" (13 Oct 2026). This
         // arm used to answer "state", so a channel added to the enum and

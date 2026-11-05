@@ -94,7 +94,8 @@ describe("My Night on race night: the jobs in one row", () => {
     const { page } = await open();
     const cells = row(page).children.map((c) => c.find((n) => n.tagName === "B" || n.tagName === "H4")[0]?.textContent);
 
-    assert.deepEqual(cells, ["Your transponder", "Your battery pack"]);
+    // The charge timer joined them on 4 Nov 2026 (the relay roadmap).
+    assert.deepEqual(cells, ["Your transponder", "Your battery pack", "Charging"]);
     assert.match(page.get("ea").textContent, /^Lap times in my ear/);
   });
 
@@ -160,5 +161,41 @@ describe("My Night on race night: back up to Right now", () => {
     const names = page.get("nj").find((n) => n.tagName === "BUTTON").map((n) => n.textContent);
 
     assert.equal(names.includes("Right now"), false);
+  });
+});
+
+describe("My Night on race night: charging and the setup log (4 Nov 2026)", () => {
+  it("times a pack on charge, against the race, and says when it is done", async () => {
+    const { page } = await open({ live: { ...LIVE, next: { race: "A Main (Stock)", away: 2, eta: "2026-10-22T19:45:00.000Z" } } });
+    const charging = () => row(page).children.find((c) => c.className.includes("lc-charge"))!;
+    assert.match(charging().textContent, /Put a pack on charge/);
+
+    page.button(charging(), /On charge/)!.click();
+    assert.match(charging().textContent, /Ready at .* \(30 min\)/);
+    assert.match(charging().textContent, /min before your race|min after your race is due/);
+    assert.ok(page.store.get("hg-charge-acme-rc"), "kept on this phone");
+
+    await page.advance(31 * 60 * 1000);
+    assert.match(charging().textContent, /Charged/);
+
+    page.button(charging(), /Off the charger/)!.click();
+    assert.match(charging().textContent, /Put a pack on charge/);
+  });
+
+  it("sends a setup change for their setup log, the parts they filled and nothing else", async () => {
+    const { page, asks } = await open();
+    const form = page.get("yd").find((n) => n.className.includes("setuplog"))[0]!;
+    assert.ok(form, "the setup form");
+    const boxes = form.find((n) => n.tagName === "INPUT" || n.tagName === "TEXTAREA");
+    assert.equal(boxes.length, 6, "tires, gearing, springs, ride height, motor, notes");
+    (boxes[0] as unknown as { value: string }).value = " Soft rears ";
+    (boxes[5] as unknown as { value: string }).value = "Up a tooth";
+
+    page.button(form, /Add to my setup log/)!.click();
+    await page.settle();
+
+    const sent = asks.find((a) => a["kind"] === "setup");
+    assert.ok(sent, "a setup ask");
+    assert.deepEqual(sent["f"], { tires: "Soft rears", notes: "Up a tooth" });
   });
 });
