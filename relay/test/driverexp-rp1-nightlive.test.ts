@@ -502,8 +502,10 @@ describe("the night's own extras", () => {
   it("a night from an older laptop draws exactly as before", async () => {
     const page = await open(relay({ ok: true, night: night() }));
 
-    assert.equal(page.get("nx").children.length, 0);
+    // Its facts as before; its cards (4 Nov 2026) each say when they fill in.
     assert.match(page.get("nt").drawn(), /Bill raced twice/);
+    assert.match(page.get("n-races").textContent, /Your races show here after each one/);
+    assert.match(page.get("n-score").textContent, /Your driver score shows here after your first race/);
   });
 });
 

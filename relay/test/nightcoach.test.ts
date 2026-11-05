@@ -132,11 +132,13 @@ describe("the report card", () => {
     assert.doesNotMatch(page.get("nt").html, /report card/, "not in the markup above the races");
   });
 
-  it("is left out of a night that has none", async () => {
+  // An empty card that says when it fills in since 4 Nov 2026 (Asher: "I
+  // don't see driver score, report card, or progress").
+  it("says when it fills in on a night that has none", async () => {
     for (const coach of [undefined, [], "not a list"]) {
       const page = await opened({ driver: "Bill", lines: ["A win."], coach });
 
-      assert.doesNotMatch(page.get("nx").textContent, /report card/);
+      assert.equal(page.get("n-how").textContent, "Your report cardYour report card is written after your first race: your best lap, how consistent you were and what to work on.");
     }
   });
 
