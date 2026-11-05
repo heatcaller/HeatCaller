@@ -21,8 +21,10 @@ describe("the Live page puts the race board first", () => {
     const html = livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: true } });
 
     assert.match(html, /<div id="bar" class="flagbar">[\s\S]*?<\/div><div id="board"><\/div>/);
-    for (const card of ["listen", "captions", "laptalk"]) assert.ok(at(html, "board") < at(html, card), card);
-    assert.ok(at(html, "listen") < at(html, "captions") && at(html, "captions") < at(html, "laptalk"));
+    for (const card of ["listen", "laptalk"]) assert.ok(at(html, "board") < at(html, card), card);
+    assert.ok(at(html, "listen") < at(html, "laptalk"));
+    // Listen shows the words itself, so no Captions card (4 Nov 2026).
+    assert.doesNotMatch(html, /id="captions"/);
   });
 
   it("does the same with Listen off", () => {

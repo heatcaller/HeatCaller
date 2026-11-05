@@ -400,7 +400,7 @@ describe("listening along from home", () => {
     // A button, not autoplay: browsers refuse to start audio unasked, and
     // a page that starts talking at whoever opens it is a page people
     // close.
-    assert.match(page.text, /Nothing plays until you press it/);
+    assert.match(page.text, /Press Listen Live to hear the broadcast./);
   });
 
   /**
