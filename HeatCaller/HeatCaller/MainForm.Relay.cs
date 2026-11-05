@@ -1625,6 +1625,24 @@ public partial class MainForm
 
         [JsonPropertyName("results")]
         public List<RelayResultRow> Results { get; init; } = new();
+
+        /// <summary>The race control log: corrections made to this result since the race (4 Nov 2026). Left out for a result never corrected.</summary>
+        [JsonPropertyName("corrections")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<RelayCorrection>? Corrections { get; init; }
+    }
+
+    /// <summary>One line of the public race control log: when, whose result, and what changed - never why.</summary>
+    private sealed class RelayCorrection
+    {
+        [JsonPropertyName("at")]
+        public DateTime At { get; init; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; init; } = string.Empty;
+
+        [JsonPropertyName("change")]
+        public string Change { get; init; } = string.Empty;
     }
 
     private sealed class RelayResultRow
@@ -1844,6 +1862,57 @@ public partial class MainForm
         }
     }
 
+    /// <summary>
+    /// THE RACE CONTROL LOG, IN PUBLIC (4 Nov 2026, from the relay roadmap
+    /// Asher asked to have built): the corrections made to a result since the
+    /// race - when, whose, and what changed ("time penalty 0s -> 5s") - so a
+    /// result that moved on the results page says it moved, and a driver can
+    /// see a decision was made rather than a mistake. NEVER WHY: the reason is
+    /// the race director's words about a named person, who may be a child, and
+    /// goes only to that driver's own night, as the penalty reasons do.
+    ///
+    /// Named as the result's rows are (the same shortened, initials-aware
+    /// names); a line whose words carry any of the race's transponder numbers
+    /// is left out rather than rewritten. Newest first, at most twenty. Null
+    /// for a result nobody corrected, so its document is what it was.
+    /// </summary>
+    private static List<RelayCorrection>? PublicCorrections(SessionRecord session, IReadOnlyList<string> names)
+    {
+        if (session.Edits is not { Count: > 0 } edits)
+        {
+            return null;
+        }
+
+        var ids = session.Results.Select(r => (r.Transponder ?? string.Empty).Trim()).Where(t => t.Length > 0).ToList();
+        var lines = new List<RelayCorrection>();
+
+        foreach (var edit in edits.OrderByDescending(e => e.AtUtc))
+        {
+            var change = (edit.Change ?? string.Empty).Trim();
+
+            if (change.Length == 0 || ids.Any(id => change.Contains(id, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var at = session.Results.FindIndex(r => string.Equals(r.Transponder, edit.Transponder, StringComparison.OrdinalIgnoreCase));
+
+            lines.Add(new RelayCorrection
+            {
+                At = edit.AtUtc,
+                Name = at >= 0 && at < names.Count ? names[at] : "A driver",
+                Change = change.Length > 120 ? change[..120] : change,
+            });
+
+            if (lines.Count >= 20)
+            {
+                break;
+            }
+        }
+
+        return lines.Count == 0 ? null : lines;
+    }
+
     /// <summary>The championship a round is part of, or the meeting's own name, or nothing.</summary>
     private string? SeasonLabelFor(string? roundId)
     {
@@ -1968,6 +2037,7 @@ public partial class MainForm
                     LapsMs = r.LapTimesMs is { Count: > 1 } ? r.LapTimesMs.Skip(1).ToList() : null,
                     PosAt = positions is not null && positions[i].Length > 0 ? positions[i] : null,
                 }).ToList(),
+                Corrections = PublicCorrections(session, names),
             });
 
             // The effective start - the end, for a session saved without a

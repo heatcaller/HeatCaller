@@ -226,3 +226,28 @@ describe("the Live track map", () => {
     assert.equal(p.get("livemap").hidden, true);
   });
 });
+
+/**
+ * THE WHO WINS? RECORD (4 Nov 2026, from the relay roadmap): this phone's
+ * picks, each settled by the first finished race after it.
+ */
+describe("Who wins?: this phone's record", () => {
+  it("settles a pick by the next finished race and keeps the tally", async () => {
+    const { html, script } = pageParts(livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, vote: true } }));
+    const p = new FakePage(html, async () => ({ status: 404 }));
+    p.run(script);
+    await p.settle();
+
+    assert.equal(p.eval("picksWords()"), "");
+    p.eval("picksAdd('Q1 Heat 1', 'Sam P.')");
+    p.eval("picksSettle('Sam P.', Date.now() + 60000)");
+    p.eval("picksAdd('Q1 Heat 2', 'Sam P.')");
+    p.eval("picksSettle('Jordan M.', Date.now() + 120000)");
+    assert.equal(p.eval("picksWords()"), "Your picks: 1 of 2 right");
+
+    // A finish from before a pick never settles it.
+    p.eval("picksAdd('Q1 Heat 3', 'Riley T.')");
+    p.eval("picksSettle('Riley T.', Date.now() - 60000)");
+    assert.equal(p.eval("picksWords()"), "Your picks: 1 of 2 right");
+  });
+});

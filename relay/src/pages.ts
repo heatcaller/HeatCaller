@@ -850,6 +850,21 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .lpfig .posk li b.kv { margin: 0 0 0 5px; }
 .mecharts .jm { margin-top: 4px; }
 .lvsay[hidden] { display: none; }
+/* Club health on the results page (4 Nov 2026). */
+.clubhealth { padding: 12px 16px; margin-bottom: 14px; }
+.clubhealth h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.ch-bars { display: flex; align-items: flex-end; gap: 3px; height: 52px; margin-top: 8px; }
+.ch-bar { flex: 1; max-width: 24px; background: var(--primary); border-radius: 3px 3px 0 0; opacity: 0.8; }
+/* The race control log under a corrected result (4 Nov 2026). */
+.rclog { margin: 8px 16px 14px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--warn); }
+.rclog h4 { margin: 0 0 2px; font-size: 0.95rem; color: var(--warn); }
+.rclog ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.rclog li { padding: 3px 0; font-size: 0.9rem; }
+/* Head to head on a driver's history (4 Nov 2026). */
+.rivals { padding: 12px 16px; margin-bottom: 12px; }
+.rivals h3 { margin: 0 0 4px; font-size: 1.05rem; }
+.rivals ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.rivals li { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-top: 1px solid var(--border); }
 /* Qualifying on the Schedule (4 Nov 2026): a line where each main ends. */
 .qual { padding: 0 0 6px; margin-bottom: 12px; }
 .qual h3 { margin: 0; padding: 12px 16px 6px; font-size: 1.05rem; }
@@ -2450,8 +2465,26 @@ function card(line, body, mine) {
         '<th class="pos">Pos</th><th>Driver</th><th class="n">Qual</th>' +
         '<th class="n">Laps/Time</th><th class="n">Behind</th><th class="n">Best</th>' +
         '</tr></thead>' + withLength(body, () => rows(results, line.id)) + '</table></div>' +
-        positionGraph(results)) +
+        positionGraph(results) + raceControlLog(body)) +
     '</details>';
+}
+
+// THE RACE CONTROL LOG (4 Nov 2026, from the relay roadmap Asher asked to
+// have built): the corrections made to this result since the race - when,
+// whose, and what changed - so a result that moved says it moved. Never
+// why: the laptop does not send the reasons, which stay on the driver's
+// own night.
+function raceControlLog(body) {
+  const list = body && Array.isArray(body.corrections) ? body.corrections.filter((c) => c && typeof c.change === 'string' && c.change !== '') : [];
+  if (list.length === 0) return '';
+  const when = (at) => {
+    const t = Date.parse(String(at || ''));
+    if (!Number.isFinite(t)) return '';
+    try { return new Date(t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+  };
+  return '<div class="rclog"><h4>Race control</h4><p class="when">This result was corrected after the race.</p><ul>' +
+    list.slice(0, 20).map((c) => '<li><span class="when">' + esc(when(c.at)) + '</span> ' + nm(String(c.name || 'A driver')) + ': ' + esc(c.change) + '</li>').join('') +
+    '</ul></div>';
 }
 
 // The rows of one session, drawn with its time limit in hand for pace.
@@ -2916,6 +2949,49 @@ function moreFor(left) {
   return '<button type="button" class="page wide" id="more">Show ' + Math.min(left, STEP) + ' more</button>';
 }
 
+// CLUB HEALTH (4 Nov 2026, from the relay roadmap Asher asked to have
+// built): the year so far in a few numbers a club runs on - race days, how
+// many drivers came and how many a night, first-timers and how many of them
+// came back - and a bar for each night. Counted from the results index the
+// page already has, by driver as the index lists them; no names shown.
+function clubHealth() {
+  const days = Array.isArray(idx.days) ? idx.days : [];
+  const raced = Array.isArray(idx.raced) ? idx.raced : [];
+  if (days.length < 2) return '';
+  const dayOf = new Map();
+  days.forEach((entry, d) => {
+    const inside = entry && Array.isArray(entry.sessions) ? entry.sessions : [];
+    for (const i of inside) dayOf.set(i, d);
+  });
+  const perDay = days.map(() => new Set());
+  const first = [];
+  const last = [];
+  raced.forEach((list, who) => {
+    const ds = (Array.isArray(list) ? list : []).map((i) => dayOf.get(i)).filter((d) => typeof d === 'number');
+    if (ds.length === 0) return;
+    for (const d of ds) perDay[d].add(who);
+    first.push(Math.min.apply(null, ds));
+    last.push(Math.max.apply(null, ds));
+  });
+  const drivers = first.length;
+  if (drivers === 0) return '';
+  const counts = perDay.map((set) => set.size);
+  const avg = counts.reduce((a, n) => a + n, 0) / counts.length;
+  const lastDay = days.length - 1;
+  const newcomers = first.filter((d) => d < lastDay).length;
+  const back = first.filter((d, i) => d < lastDay && last[i] > d).length;
+  const most = Math.max.apply(null, counts);
+  const bars = counts.map((n, d) => '<span class="ch-bar" style="height:' + Math.max(4, Math.round(n / Math.max(1, most) * 48)) + 'px" title="' + esc(String(days[d].day || '')) + ': ' + n + '"></span>').join('');
+  return '<div class="card clubhealth"><h3>The club in ' + esc(year) + '</h3>' +
+    '<dl class="lxs">' +
+    '<div><dt>Race days</dt><dd>' + days.length + '</dd></div>' +
+    '<div><dt>Drivers</dt><dd>' + drivers + '</dd></div>' +
+    '<div><dt>A night, on average</dt><dd>' + avg.toFixed(1) + '</dd></div>' +
+    (newcomers > 0 ? '<div><dt>First-timers who came back</dt><dd>' + back + ' of ' + newcomers + '</dd></div>' : '') +
+    '</dl><div class="ch-bars" aria-label="Drivers each race day, oldest first" role="img">' + bars + '</div>' +
+    '<p class="when">Drivers each race day, oldest first.</p></div>';
+}
+
 // A race day at a time, newest first. One read of the index says which
 // sessions were run that day; one read of the results draws them.
 async function drawDays() {
@@ -2951,7 +3027,7 @@ async function drawDays() {
     return fail(mine, 'Could not fetch that race day from the relay. Try again in a moment.');
   }
 
-  const drawn = paint(mine, drawGroups(screen, got, ''), pagerFor(before, screen.length, days.length));
+  const drawn = paint(mine, (pageAt === 0 && seasonPick.value === '' ? clubHealth() : '') + drawGroups(screen, got, ''), pagerFor(before, screen.length, days.length));
 
   // The newest day on the screen names it, so the address bar holds a
   // link to what is being read. Only the draw that actually reached the
@@ -2959,6 +3035,32 @@ async function drawDays() {
   if (drawn && mine === turn) syncLink(screen[0].day);
 
   return drawn;
+}
+
+// RIVALS (4 Nov 2026, from the relay roadmap Asher asked to have built):
+// the drivers this one has raced most in the races on the screen, and who
+// finished ahead how often - the head-to-head a driver checks after a
+// night. Only drivers met at least twice, the five met most; a race whose
+// result does not have them (by the name on it) counts for nobody.
+function rivalsOf(lines, got, who) {
+  const met = new Map();
+  for (const line of lines) {
+    const body = got.get(line.id);
+    const rows = body && Array.isArray(body.results) ? body.results : [];
+    const me = rows.find((r) => r && r.name === who);
+    if (!me || !(Number(me.pos) > 0)) continue;
+    for (const r of rows) {
+      if (!r || r === me || !(Number(r.pos) > 0) || typeof r.name !== 'string' || r.name === '' || r.name === 'Unnamed driver') continue;
+      const tally = met.get(r.name) || { name: r.name, ahead: 0, behind: 0 };
+      if (Number(me.pos) < Number(r.pos)) tally.ahead++; else tally.behind++;
+      met.set(r.name, tally);
+    }
+  }
+  const top = [...met.values()].filter((t) => t.ahead + t.behind >= 2)
+    .sort((a, b) => (b.ahead + b.behind) - (a.ahead + a.behind) || a.name.localeCompare(b.name)).slice(0, 5);
+  if (top.length === 0) return '';
+  return '<div class="card rivals"><h3>Head to head</h3><p class="when">In the races below: who finished ahead.</p><ul>' +
+    top.map((t) => '<li>' + nm(t.name) + ' <b>' + esc(who) + ' ' + t.ahead + ' - ' + t.behind + '</b></li>').join('') + '</ul></div>';
 }
 
 // One driver's year, newest first, each session showing where they
@@ -2996,7 +3098,7 @@ async function drawDriver(number) {
   const lead = '<p class="when">' + esc(who) + ' raced ' + lines.length + (lines.length === 1 ? ' time' : ' times') +
     ' in ' + esc(season || year) + '.</p>';
 
-  const drawn = paint(mine, lead + drawGroups(groupByDay(take), got, who),
+  const drawn = paint(mine, lead + rivalsOf(take, got, who) + drawGroups(groupByDay(take), got, who),
     lines.length > take.length ? moreFor(lines.length - take.length) : '');
 
   // No day names a driver's history, so the address bar holds nothing
@@ -5241,6 +5343,8 @@ function render(state, seen, at, empty) {
   }
 
   const over = running === 'Finished';
+  // A finished race settles this phone's Who wins? picks (4 Nov 2026).
+  if (over && rows[0] && typeof rows[0].name === 'string' && typeof picksSettle === 'function') picksSettle(rows[0].name, at || Date.now());
   drawBar(state, over, at, rows);
   keepRace(state, at || Date.now());
   posChart.take(rows);
@@ -5472,6 +5576,52 @@ function voteControl(vote: boolean): string {
 }
 
 const VOTE_JS = `
+// THE WHO WINS? RECORD (4 Nov 2026, from the relay roadmap Asher asked to
+// have built): this phone's picks and how many came right - the season
+// table a prediction game needs, for the one person who can see it. Kept
+// on this phone only, as the vote itself is anonymous. A pick is settled by
+// the first finished race after it was made, which is the race the vote
+// was for: voting is only ever open for the race about to run.
+const PICKS_KEY = 'hg-picks-' + CLUB;
+
+function picksRead() {
+  try {
+    const list = JSON.parse(localStorage.getItem(PICKS_KEY) || '[]');
+    return Array.isArray(list) ? list.filter((x) => x && typeof x.name === 'string' && typeof x.at === 'number').slice(-60) : [];
+  } catch (e) { return []; }
+}
+
+function picksWrite(list) {
+  try { localStorage.setItem(PICKS_KEY, JSON.stringify(list.slice(-60))); } catch (e) { /* this visit only */ }
+}
+
+// A pick just made: one per race, the latest standing.
+function picksAdd(race, name) {
+  const list = picksRead().filter((x) => !(x.right === null && x.race === race));
+  list.push({ race: race, name: name, at: Date.now(), right: null });
+  picksWrite(list);
+}
+
+// A race has finished at finishedAt with winner first: settle the picks waiting for it.
+function picksSettle(winner, finishedAt) {
+  const list = picksRead();
+  let changed = false;
+  for (const x of list) {
+    if (x.right === null && finishedAt > x.at && finishedAt - x.at < 3 * 3600000) {
+      x.right = x.name === winner;
+      changed = true;
+    }
+  }
+  if (changed) picksWrite(list);
+}
+
+function picksWords() {
+  const done = picksRead().filter((x) => x.right === true || x.right === false);
+  if (done.length === 0) return '';
+  const right = done.filter((x) => x.right).length;
+  return 'Your picks: ' + right + ' of ' + done.length + ' right';
+}
+
 (function () {
   const box = document.getElementById('vote');
   const race = document.getElementById('voterace');
@@ -5535,9 +5685,10 @@ const VOTE_JS = `
     if (now === shown) return;
     shown = now;
 
-    if (!open) said.textContent = 'Voting has closed. Your pick is in.';
-    else if (mine) said.textContent = 'You have ' + mineName + '. Good luck.';
-    else said.textContent = 'Tap who you reckon wins.';
+    const record = typeof picksWords === 'function' ? picksWords() : '';
+    if (!open) said.textContent = 'Voting has closed. Your pick is in.' + (record ? ' ' + record + '.' : '');
+    else if (mine) said.textContent = 'You have ' + mineName + '. Good luck.' + (record ? ' ' + record + '.' : '');
+    else said.textContent = 'Tap who you reckon wins.' + (record ? ' ' + record + ' so far.' : '');
   }
 
   async function ballot() {
@@ -5588,6 +5739,7 @@ const VOTE_JS = `
       mine = id;
       mineName = name;
       shown = null;
+      if (typeof picksAdd === 'function') picksAdd(race.textContent || '', name);
       ballot();
       return;
     }
