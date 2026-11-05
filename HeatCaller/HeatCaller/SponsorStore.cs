@@ -71,6 +71,8 @@ public sealed class SponsorStore
                         sponsor.Tagline ??= string.Empty;
                         sponsor.SalesCopy ??= string.Empty;
                         sponsor.PictureFileName ??= string.Empty;
+                        sponsor.WebName ??= string.Empty;
+                        sponsor.Website ??= string.Empty;
                         sponsor.Presents ??= new List<string>();
                     }
 
@@ -687,6 +689,20 @@ public sealed class SponsorBooking
     /// SponsorStore.OnScreenFor.
     /// </summary>
     public string PictureFileName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The name as it is WRITTEN, for the club's web page (5 Nov 2026) -
+    /// "Smith &amp; Co." where <see cref="Name"/> is spelt to be said. Empty
+    /// uses Name. See RelaySponsors.
+    /// </summary>
+    public string WebName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Their website, linked from their card on the club's Live page
+    /// (5 Nov 2026), and every tap on it counted for the sponsor report.
+    /// Empty is no link.
+    /// </summary>
+    public string Website { get; set; } = string.Empty;
 }
 
 /// <summary>

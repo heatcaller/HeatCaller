@@ -2442,6 +2442,13 @@ public partial class MainForm
         // announcer counts them as each one goes to the speaker. See
         // SponsoredMomentGate.
         sponsors.MentionsTonight = () => _announcer.SponsorMentions.MentionsTonight();
+
+        // And what phones saw of them on the club's Live page (5 Nov 2026),
+        // as the relay last counted it - null, and no such lines in the
+        // report, for a club not on the relay or before the first read.
+        sponsors.WebViewsTonight = () => _relayPublisher.SponsorViews is { } views
+            ? RelaySponsors.ForTheNight(views, TonightAtTheTrack.NightOf(DateTime.Now))
+            : null;
     }
 
     /// <summary>

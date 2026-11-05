@@ -168,7 +168,9 @@ describe("relay navigation, round 6: Home changes with the night", () => {
     assert.match(recap, /A Main - Stock<\/span><span class="when">1st <span class="nm" data-n="Asher Kent">/);
     assert.doesNotMatch(recap, /Heat 1<\/span><span class="when">1st/);
     assert.match(recap, /Fastest lap[\s\S]*7\.412 &middot; [\s\S]*Asher Kent/);
-    assert.match(recap, /Points leader &middot; Winter Series[\s\S]*Jo Rivera[\s\S]*148 pts &middot; 7 clear/);
+    // The points leaders moved to Season at a glance on 5 Nov 2026 (Home reimagined).
+    assert.doesNotMatch(recap, /Points leader/);
+    assert.match(page.get("season").innerHTML, /Winter Series[\s\S]*Jo Rivera[\s\S]*148 pts/);
     assert.match(recap, /New achievement[\s\S]*Asher Kent[\s\S]*Track Record/);
     assert.doesNotMatch(recap, /Sam Parker[^<]*<\/span> &middot; old/);
     assert.match(recap, /href="\/c\/acme-rc\/results#d=2026-10-21">All of that night's results/);

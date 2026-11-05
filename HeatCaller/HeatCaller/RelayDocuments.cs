@@ -562,7 +562,7 @@ internal static class RelayDocuments
     /// photo arrives at whatever size the camera made it; the plan is
     /// already drawn to size.
     /// </summary>
-    private static string JpegDataUri(Image image, Size max)
+    internal static string JpegDataUri(Image image, Size max)
     {
         var scale = Math.Min(1.0, Math.Min(max.Width / (double)image.Width, max.Height / (double)image.Height));
         var width = Math.Max(1, (int)Math.Round(image.Width * scale));

@@ -36,6 +36,10 @@ public enum RelayChannel
     // on the race day in hand, and the main each driver would make. Public,
     // as the results it is worked out from are.
     Qualifying,
+
+    // 5 Nov 2026 (Asher: "add sponsorships to the live tab at the bottom"):
+    // the club's sponsors for the foot of Live - see RelaySponsors. Public.
+    Sponsors,
 }
 
 /// <summary>
@@ -2091,6 +2095,10 @@ public sealed partial class RelayPublisher : IDisposable
                     // experience) - see RelayPublisher.Requests. Its own
                     // tick and its own close, like sign-up above.
                     CollectDriverAsksPass(pass.Token);
+
+                    // What phones saw of the sponsors on Live (5 Nov 2026) -
+                    // see RelayPublisher.Sponsors. Its own three-minute tick.
+                    CollectSponsorViewsPass(pass.Token);
                 }
                 finally
                 {
@@ -3716,6 +3724,7 @@ public sealed partial class RelayPublisher : IDisposable
         RelayChannel.DriverMe => "driverme",
         RelayChannel.Captions => "captions",
         RelayChannel.Qualifying => "qualifying",
+        RelayChannel.Sponsors => "sponsors",
 
         // A NAME THE RELAY WILL REFUSE, not "state" (13 Oct 2026). This
         // arm used to answer "state", so a channel added to the enum and

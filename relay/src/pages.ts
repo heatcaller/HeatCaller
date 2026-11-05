@@ -850,6 +850,30 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .lpfig .posk li b.kv { margin: 0 0 0 5px; }
 .mecharts .jm { margin-top: 4px; }
 .lvsay[hidden] { display: none; }
+/* Home, reimagined (5 Nov 2026). */
+.hp { padding: 14px 16px 16px; }
+.hp[hidden] { display: none; }
+.hp h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.tn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.tn { display: flex; flex-direction: column; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+.tn b { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.tn span { color: var(--muted); font-size: 0.8rem; }
+.sg-name { margin: 8px 0 4px; font-weight: 600; }
+.sg { list-style: none; margin: 0 0 6px; padding: 0; }
+.sg li { display: flex; gap: 10px; padding: 4px 0; }
+.sg-pos { width: 2.5em; color: var(--muted); }
+.sg-who { flex: 1; }
+.sg-pts { font-variant-numeric: tabular-nums; }
+#spnight .sp { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); color: inherit; text-decoration: none; text-align: center; }
+#spnight .sp img { max-width: 100%; max-height: 80px; object-fit: contain; }
+#spnight .spline { color: var(--muted); font-size: 0.85rem; }
+/* Our sponsors, at the foot of Live (5 Nov 2026). */
+.sponsors .spgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+.sponsors .sp { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 84px; padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); color: inherit; text-decoration: none; text-align: center; }
+.sponsors a.sp:hover { border-color: var(--accent); }
+.sponsors .sp img { max-width: 100%; max-height: 64px; object-fit: contain; }
+.sponsors .spname { font-size: 1.05rem; }
+.sponsors .spline { color: var(--muted); font-size: 0.8rem; }
 /* Club health on the results page (4 Nov 2026). */
 .clubhealth { padding: 12px 16px; margin-bottom: 14px; }
 .clubhealth h3 { margin: 0 0 6px; font-size: 1.05rem; }
@@ -5925,6 +5949,132 @@ const CAPTIONS_JS = `
 })();
 `;
 
+/**
+ * OUR SPONSORS (5 Nov 2026, Asher: "add sponsorships to the live tab at the
+ * bottom"): the sponsors on the laptop's Sponsors page, last on Live - a
+ * logo or the name, their line, and their website where the club gave one.
+ *
+ * And what each sponsor got from it, for the sponsor report: the card
+ * counts a sponsor as SEEN once it is on screen, once per phone per half
+ * hour (so a phone left on Live all night is one view every half hour, not
+ * one every poll), and a TAP when somebody follows the link. Both go to
+ * the relay, which keeps them by the hour for the laptop to read. Nothing
+ * about the phone goes with them.
+ */
+const SPONSORS_JS = `
+(function () {
+  const box = document.getElementById('sponsors');
+  const body = document.getElementById('spbody');
+  if (!box || !body) return;
+  const SEEN_KEY = 'hg-spseen-' + CLUB;
+  const AGAIN_MS = 30 * 60000;
+  let text = '';
+  let shown = [];
+
+  function seenRead() {
+    try { const o = JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; }
+  }
+
+  function seenWrite(o) {
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify(o)); } catch (e) { /* counted again next time */ }
+  }
+
+  function tell(what) {
+    try {
+      fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/sponsors/seen', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(what), cache: 'no-store', keepalive: true,
+      }).catch(() => {});
+    } catch (e) { /* not counted */ }
+  }
+
+  // On screen now: in the window, on a page that is not hidden.
+  function onScreen() {
+    if (box.hidden || document.hidden) return false;
+    if (typeof box.getBoundingClientRect !== 'function') return true;
+    const r = box.getBoundingClientRect();
+    const tall = window.innerHeight || 0;
+    return !(tall > 0 && (r.top > tall || r.bottom < 0));
+  }
+
+  function countSeen() {
+    if (shown.length === 0 || !onScreen()) return;
+    const was = seenRead();
+    const now = Date.now();
+    const due = shown.filter((id) => !(Number(was[id]) > now - AGAIN_MS));
+    if (due.length === 0) return;
+    const kept = {};
+    for (const id of Object.keys(was)) if (Number(was[id]) > now - AGAIN_MS) kept[id] = was[id];
+    for (const id of due) kept[id] = now;
+    seenWrite(kept);
+    tell({ seen: due });
+  }
+
+  function web(url) {
+    return typeof url === 'string' && /^https?:[/][/][^\\s]+$/i.test(url) ? url : '';
+  }
+
+  function draw(list) {
+    shown = list.map((s) => s.id);
+    const grid = document.createElement('div');
+    grid.className = 'spgrid';
+    for (const s of list) {
+      const url = web(s.url);
+      const one = document.createElement(url ? 'a' : 'div');
+      one.className = 'sp';
+      if (url) {
+        one.href = url;
+        one.target = '_blank';
+        one.rel = 'noopener sponsored';
+        one.addEventListener('click', () => tell({ tap: s.id }));
+      }
+      if (typeof s.picture === 'string' && s.picture.indexOf('data:image/') === 0) {
+        const img = document.createElement('img');
+        img.src = s.picture;
+        img.alt = String(s.name || '');
+        one.appendChild(img);
+      } else {
+        const name = document.createElement('b');
+        name.className = 'spname';
+        name.textContent = String(s.name || '');
+        one.appendChild(name);
+      }
+      if (s.tagline) {
+        const line = document.createElement('span');
+        line.className = 'spline';
+        line.textContent = String(s.tagline);
+        one.appendChild(line);
+      }
+      grid.appendChild(one);
+    }
+    body.innerHTML = '';
+    body.appendChild(grid);
+    box.hidden = list.length === 0;
+  }
+
+  async function load() {
+    const answer = await grab('/snapshot/sponsors').catch(() => null);
+    if (answer === null) return;
+    if (answer.missing) {
+      if (answer.status === 404) { shown = []; box.hidden = true; text = ''; }
+      return;
+    }
+    const doc = answer.body && answer.body.body;
+    const t = JSON.stringify(doc);
+    if (t !== text) {
+      text = t;
+      const list = doc && Array.isArray(doc.sponsors)
+        ? doc.sponsors.filter((s) => s && typeof s.id === 'string' && s.id !== '' && typeof s.name === 'string' && s.name !== '')
+        : [];
+      draw(list);
+    }
+    countSeen();
+  }
+
+  if (typeof window.addEventListener === 'function') window.addEventListener('scroll', countSeen, { passive: true });
+  poll(load, 60000);
+})();
+`;
+
 export function livePage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
   return shell({
     club,
@@ -5951,9 +6101,11 @@ export function livePage(club: string, clubName: string, context: PageContext = 
       + listenControl(context.look.listening)
       + noteControl(context.look.notes)
       + (context.look.listening ? "" : captionsControl())
-      + lapTalkControl(),
+      + lapTalkControl()
+      // The club's sponsors, last on the page (5 Nov 2026) - see SPONSORS_JS.
+      + '<div id="sponsors" class="card livepos sponsors" hidden><h3>Our sponsors</h3><div id="spbody"></div></div>',
     script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : CAPTIONS_JS)
-      + (context.look.notes ? NOTE_JS : "") + (context.look.vote ? VOTE_JS : ""),
+      + (context.look.notes ? NOTE_JS : "") + (context.look.vote ? VOTE_JS : "") + SPONSORS_JS,
   }, context);
 }
 
@@ -6658,6 +6810,48 @@ function mineLink(words, path) {
   return a;
 }
 
+// Marshal duty, the charger and qualifying, as [label, words] lines.
+var mineQual = null;
+var mineQualAt = 0;
+
+function mineExtras(entry) {
+  const out = [];
+  const m = entry && entry.marshal;
+  if (m && typeof m === 'object' && typeof m.race === 'string' && m.race !== '') {
+    const away = Math.round(Number(m.away) || 0);
+    out.push(['Marshal duty', m.race + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : '') +
+      (away <= 0 ? ' - next' : away === 1 ? ' - 1 race away' : ' - ' + away + ' races away')]);
+  }
+  try {
+    const c = JSON.parse(localStorage.getItem('hg-charge-' + CLUB) || 'null');
+    if (c && typeof c.until === 'number' && isFinite(c.until)) {
+      const left = Math.round((c.until - Date.now()) / 60000);
+      out.push(['On charge', left <= 0 ? 'Charged' : 'Ready in ' + left + ' min']);
+    }
+  } catch (e) { /* none on charge */ }
+  const tags = entry && Array.isArray(entry.cars) ? entry.cars.map((x) => x && x.tag).filter((x) => typeof x === 'string' && x !== '') : [];
+  const classes = mineQual && Array.isArray(mineQual.classes) ? mineQual.classes : [];
+  for (const cls of classes) {
+    const rows = Array.isArray(cls.rows) ? cls.rows : [];
+    const r = rows.find((x) => x && typeof x.tag === 'string' && tags.includes(x.tag));
+    if (r) {
+      out.push(['Qualifying', ordinal(r.pos) + ' of ' + rows.length + ' in ' + String(cls.name || '') + (r.main ? ' - ' + r.main + ' main' : '')]);
+      break;
+    }
+  }
+  // Read once a minute at most, and only for a driver with cars to match.
+  if (tags.length > 0 && Date.now() - mineQualAt > 60000) {
+    mineQualAt = Date.now();
+    grab('/snapshot/qualifying').then((a) => {
+      if (!a || a.missing || !a.body) return;
+      const had = JSON.stringify(mineQual);
+      mineQual = a.body.body || null;
+      if (JSON.stringify(mineQual) !== had) drawMine(entry);
+    }).catch(() => {});
+  }
+  return out;
+}
+
 function drawMine(entry) {
   const n = entry && typeof entry === 'object' && entry.next && typeof entry.next === 'object' ? entry.next : null;
 
@@ -6681,6 +6875,22 @@ function drawMine(entry) {
     const race = document.createElement('div');
     race.textContent = n.race;
     mine.appendChild(race);
+  }
+
+  // The rest of their night on the same card (5 Nov 2026): marshal duty,
+  // the pack on charge (kept on this phone by the night page's timer) and
+  // where they stand in qualifying.
+  for (const extra of mineExtras(entry)) {
+    const p = document.createElement('p');
+    p.className = 'you-l';
+    const k = document.createElement('span');
+    k.className = 'gl-k';
+    k.textContent = extra[0];
+    const v = document.createElement('b');
+    v.textContent = extra[1];
+    p.appendChild(k);
+    p.appendChild(v);
+    mine.appendChild(p);
   }
 
   const links = document.createElement('p');
@@ -6800,6 +7010,357 @@ async function readYou() {
 }
 
 if (you && MINE) poll(readYou, 300000);
+`;
+
+
+/**
+ * HOME, REIMAGINED (5 Nov 2026, Asher: "Plan on reimagining what the home tab
+ * does. it's under utilized right now", then "build it all"). Home answers
+ * "what should I do right now?", and changes through the night:
+ *
+ *   - the hero card says who is leading, who is on the line next, and when
+ *     tonight's racing is done (in HOME_JS's load);
+ *   - Your next race also carries marshal duty, the pack on charge and the
+ *     qualifying place (drawMine, in HOME_ME_JS);
+ *   - Club updates, moved here from the driver's night;
+ *   - Tonight in numbers, Moments, Season at a glance and Sponsor of the
+ *     night, below.
+ */
+const HOME_PLUS_JS = `
+// Shared with HOME_JS's load and the recap. var, not let: load can run
+// before this part of the script has.
+var homeLines = [];
+var homeTracks = [];
+
+// The race night a moment belongs to: six in the morning to six the next,
+// the same turn the laptop files a night by. yyyy-mm-dd, local.
+function nightOf(ms) {
+  const d = new Date(ms - 6 * 3600000);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function tonightKey() {
+  return nightOf(Date.now());
+}
+
+function startedTonight(l) {
+  const t = Date.parse(String(l && l.startedUtc || ''));
+  return Number.isFinite(t) && nightOf(t) === tonightKey();
+}
+
+function doneTonight(lines) {
+  return Array.isArray(lines) && lines.length > 0 && lines.every((l) => l && l.status === 'done') && lines.some(startedTonight);
+}
+
+function heroLeader(s) {
+  const rows = s && Array.isArray(s.standings) ? s.standings : [];
+  const top = rows[0];
+  if (!top || typeof top.name !== 'string' || top.name === '') return '';
+  return '<span class="when">Leading: ' + esc(top.name) + '</span>';
+}
+
+function heroLineup(l) {
+  const names = Array.isArray(l && l.drivers) ? l.drivers.filter((n) => typeof n === 'string' && n !== '') : [];
+  if (names.length === 0) return '';
+  return '<span class="when">' + names.length + (names.length === 1 ? ' driver' : ' drivers') +
+    (names.length <= 6 ? ': ' + names.map((n) => esc(n)).join(', ') : '') + '</span>';
+}
+
+// A line's time as the club typed it ("7:30 pm", "19.30"), on the day it
+// started. NaN for anything else.
+function planAt(text, dayOf) {
+  const t = String(text || '').trim().toLowerCase();
+  const pm = t.endsWith('pm');
+  const am = t.endsWith('am');
+  const core = (pm || am ? t.slice(0, -2) : t).trim().replace('.', ':');
+  const bits = core.split(':');
+  if (bits.length !== 2 || bits[1].length !== 2) return NaN;
+  let h = Number(bits[0]);
+  const m = Number(bits[1]);
+  if (!Number.isInteger(h) || !Number.isInteger(m)) return NaN;
+  if (pm && h < 12) h += 12;
+  if (am && h === 12) h = 0;
+  if (h > 23 || m > 59) return NaN;
+  const d = new Date(dayOf);
+  d.setHours(h, m, 0, 0);
+  return d.getTime();
+}
+
+// Minutes behind (negative: ahead) by the latest line that has started, or null.
+function behindBy(lines) {
+  let late = null;
+  let latest = -Infinity;
+  for (const l of lines) {
+    const started = Date.parse(String(l && l.startedUtc || ''));
+    if (!Number.isFinite(started) || started < latest) continue;
+    const planned = planAt(l.time, started);
+    if (!Number.isFinite(planned)) continue;
+    latest = started;
+    late = Math.round((started - planned) / 60000);
+  }
+  return late;
+}
+
+// ---------------------------------------------------- tonight in numbers
+
+function drawTonight() {
+  const box = document.getElementById('tonight');
+  if (!box) return;
+  const lines = Array.isArray(homeLines) ? homeLines : [];
+  const ran = lines.filter(startedTonight);
+  const night = nightHeld && nightHeld.day === tonightKey() ? nightHeld : null;
+
+  if (ran.length === 0 && night === null) {
+    box.hidden = true;
+    box.textContent = '';
+    return;
+  }
+
+  const drivers = new Set();
+  for (const l of ran.length > 0 ? lines : []) {
+    for (const n of Array.isArray(l.drivers) ? l.drivers : []) {
+      if (typeof n === 'string' && n.trim() !== '') drivers.add(n.trim().toLowerCase());
+    }
+  }
+
+  const done = ran.filter((l) => l.status === 'done').length;
+  const races = Math.max(done, night ? night.sessions.filter((x) => x.type === 'Race').length : 0);
+  const late = ran.length > 0 ? behindBy(lines) : null;
+  const left = lines.filter((l) => l.status === 'next' || l.status === 'upcoming').length;
+
+  const tiles = [];
+  tiles.push(['Races run', String(races)]);
+  if (left > 0 && ran.length > 0) tiles.push(['Still to run', String(left)]);
+  if (drivers.size > 0) tiles.push(['Drivers', String(drivers.size)]);
+  if (night && night.fast) tiles.push(['Fastest lap', lap(night.fast.ms)]);
+  if (late !== null) tiles.push(['Schedule', Math.abs(late) <= 2 ? 'On time' : late > 0 ? late + ' min behind' : (-late) + ' min ahead']);
+
+  box.innerHTML = '<h3>Tonight in numbers</h3><div class="tn-grid">' +
+    tiles.map((t) => '<div class="tn"><b>' + esc(t[1]) + '</b><span>' + esc(t[0]) + '</span></div>').join('') + '</div>' +
+    (night && night.fast ? '<p class="when">Fastest lap by ' + esc(night.fast.name) + (night.fast.label ? ' in ' + esc(night.fast.label) : '') + '</p>' : '');
+  box.hidden = false;
+}
+
+// --------------------------------------------------------------- moments
+
+// The best of tonight, as it happens: photo finishes, a lap record broken
+// tonight and achievements earned tonight - each a tap from its results.
+function drawMoments() {
+  const box = document.getElementById('moments');
+  if (!box) return;
+  const today = tonightKey();
+  const night = nightHeld && nightHeld.day === today ? nightHeld : null;
+  const rows = [];
+
+  if (night) {
+    for (const c of (night.close || []).slice(0, 3)) {
+      rows.push('<li><span class="title">Photo finish' + (c.label ? ' &middot; ' + esc(c.label) : '') + '</span>' +
+        '<span class="when">' + esc(c.won) + ' by ' + (c.by / 1000).toFixed(2) + 's from ' + esc(c.second) + '</span></li>');
+    }
+  }
+
+  for (const t of Array.isArray(homeTracks) ? homeTracks : []) {
+    const rec = t && t.record;
+    const at = rec ? Date.parse(String(rec.setUtc || '')) : NaN;
+    if (rec && Number(rec.ms) > 0 && Number.isFinite(at) && nightOf(at) === today) {
+      rows.push('<li><span class="title">New lap record &middot; ' + esc(t.name) + '</span>' +
+        '<span class="when">' + esc(lap(Number(rec.ms))) + (rec.holder ? ' by ' + esc(rec.holder) : '') + '</span></li>');
+    }
+  }
+
+  if (night) {
+    for (const r of earnedThatNight(night).slice(0, 3)) {
+      rows.push('<li><span class="title">Achievement</span>' +
+        '<span class="when">' + esc(r.name) + ' &middot; ' + esc(badgeName(r.id)) + '</span></li>');
+    }
+  }
+
+  if (rows.length === 0) {
+    box.hidden = true;
+    box.textContent = '';
+    return;
+  }
+
+  box.innerHTML = '<h3>Tonight&rsquo;s moments</h3><ul class="list">' + rows.join('') +
+    '<li><a class="more" href="' + BASE + '/results#d=' + encodeURIComponent(today) + '">Tonight&rsquo;s results &rarr;</a></li></ul>';
+  box.hidden = false;
+}
+
+// ------------------------------------------------------ season at a glance
+
+function drawSeason() {
+  const box = document.getElementById('season');
+  if (!box) return;
+  const seasons = standingsDoc && Array.isArray(standingsDoc.seasons) ? standingsDoc.seasons : [];
+  const shown = seasons.filter((x) => x && Array.isArray(x.standings) && x.standings.length > 0).slice(0, 3);
+
+  if (shown.length === 0) {
+    box.hidden = true;
+    box.textContent = '';
+    return;
+  }
+
+  box.innerHTML = '<h3>Season at a glance</h3>' + shown.map((x) =>
+    (shown.length > 1 || x.name ? '<p class="sg-name">' + esc(x.name || 'Season') + '</p>' : '') +
+    '<ol class="sg">' + x.standings.slice(0, 3).map((r) =>
+      '<li><span class="sg-pos">' + esc(ordinal(r.pos)) + '</span><span class="sg-who">' + esc(r.name) + '</span>' +
+      '<span class="sg-pts">' + esc(r.points) + ' pts</span></li>').join('') + '</ol>').join('') +
+    '<p class="lc-go"><a class="more" href="' + BASE + '/standings">Full standings &rarr;</a></p>';
+  box.hidden = false;
+}
+
+// ----------------------------------------------------------- club updates
+
+// The club's news (moved from the driver's night, 5 Nov 2026). Got it hides
+// it on this phone against these very words - the same key the night page
+// kept, so news a driver already hid there stays hidden here.
+function updatesParts() {
+  try {
+    const parts = JSON.parse(document.body.dataset.updates || '[]');
+    return Array.isArray(parts)
+      ? parts.filter((x) => x && typeof x.words === 'string' && x.words !== '')
+        .map((x) => [typeof x.heading === 'string' ? x.heading : '', x.words])
+      : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function updatesMark(parts) {
+  let h = 5381;
+  const text = JSON.stringify(parts);
+  for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+function drawUpdates() {
+  const into = document.getElementById('up');
+  if (!into) return;
+  const parts = updatesParts();
+  const key = 'hc-updates-done:' + CLUB + ':' + updatesMark(parts);
+  let gone = false;
+  try { gone = localStorage.getItem(key) === '1'; } catch (e) { /* shown, then */ }
+  into.textContent = '';
+  if (gone || parts.length === 0) return;
+
+  const card = document.createElement('section');
+  card.className = 'lc updates';
+  const h = document.createElement('h3');
+  h.textContent = 'Club updates';
+  card.appendChild(h);
+
+  const list = document.createElement('dl');
+  for (const pair of parts) {
+    if (pair[0] !== '') {
+      const t = document.createElement('dt');
+      t.textContent = pair[0];
+      list.appendChild(t);
+    }
+    const w = document.createElement('dd');
+    w.textContent = pair[1];
+    list.appendChild(w);
+  }
+  card.appendChild(list);
+
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'go quiet gdone';
+  done.textContent = 'Got it - hide this';
+  done.addEventListener('click', () => {
+    try { localStorage.setItem(key, '1'); } catch (e) { /* this visit only */ }
+    card.remove();
+  });
+  card.appendChild(done);
+  into.appendChild(card);
+}
+
+// ------------------------------------------------------ sponsor of the night
+
+// One sponsor at a time, in turn every ten minutes, counted exactly as Live
+// counts its sponsors card (SPONSORS_JS) and on the same once-a-half-hour
+// key, so a phone that has both open is one view, not two.
+const SP_SEEN_KEY = 'hg-spseen-' + CLUB;
+let spList = [];
+
+function spTell(what) {
+  try {
+    fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/sponsors/seen', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(what), cache: 'no-store', keepalive: true,
+    }).catch(() => {});
+  } catch (e) { /* not counted */ }
+}
+
+function spCount(id) {
+  if (document.hidden) return;
+  let was = {};
+  try { const o = JSON.parse(localStorage.getItem(SP_SEEN_KEY) || '{}'); if (o && typeof o === 'object' && !Array.isArray(o)) was = o; } catch (e) { /* none */ }
+  const now = Date.now();
+  if (Number(was[id]) > now - 30 * 60000) return;
+  const kept = {};
+  for (const k of Object.keys(was)) if (Number(was[k]) > now - 30 * 60000) kept[k] = was[k];
+  kept[id] = now;
+  try { localStorage.setItem(SP_SEEN_KEY, JSON.stringify(kept)); } catch (e) { /* counted again next time */ }
+  spTell({ seen: [id] });
+}
+
+function drawSponsor() {
+  const box = document.getElementById('spnight');
+  if (!box) return;
+  if (spList.length === 0) {
+    box.hidden = true;
+    box.textContent = '';
+    return;
+  }
+  const s = spList[Math.floor(Date.now() / 600000) % spList.length];
+  const url = typeof s.url === 'string' && (s.url.indexOf('https://') === 0 || s.url.indexOf('http://') === 0) ? s.url : '';
+
+  box.textContent = '';
+  const h = document.createElement('h3');
+  h.textContent = 'Sponsor of the night';
+  box.appendChild(h);
+
+  const one = document.createElement(url ? 'a' : 'div');
+  one.className = 'sp';
+  if (url) {
+    one.href = url;
+    one.target = '_blank';
+    one.rel = 'noopener sponsored';
+    one.addEventListener('click', () => spTell({ tap: s.id }));
+  }
+  if (typeof s.picture === 'string' && s.picture.indexOf('data:image/') === 0) {
+    const img = document.createElement('img');
+    img.src = s.picture;
+    img.alt = String(s.name || '');
+    one.appendChild(img);
+  } else {
+    const name = document.createElement('b');
+    name.className = 'spname';
+    name.textContent = String(s.name || '');
+    one.appendChild(name);
+  }
+  if (s.tagline) {
+    const line = document.createElement('span');
+    line.className = 'spline';
+    line.textContent = String(s.tagline);
+    one.appendChild(line);
+  }
+  box.appendChild(one);
+  box.hidden = false;
+  spCount(s.id);
+}
+
+async function loadSponsor() {
+  const answer = await grab('/snapshot/sponsors').catch(() => null);
+  if (answer === null) return;
+  const doc = !answer.missing && answer.body ? answer.body.body : null;
+  spList = doc && Array.isArray(doc.sponsors)
+    ? doc.sponsors.filter((x) => x && typeof x.id === 'string' && x.id !== '' && typeof x.name === 'string' && x.name !== '')
+    : [];
+  drawSponsor();
+}
+
+drawUpdates();
+poll(loadSponsor, 300000);
 `;
 
 const HOME_JS = `
@@ -6929,7 +7490,7 @@ async function load() {
       '<span class="kicker">On track now</span>' +
       '<span class="big">' + esc(running ? lineTitle(running) : s.state) + '</span>' +
       '<span class="when">' + esc(s.state) + (s.countdown ? ' &middot; ' + esc(s.countdown) : '') +
-      ' &middot; follow it live &rarr;</span></a>';
+      ' &middot; follow it live &rarr;</span>' + heroLeader(s) + '</a>';
   } else if (coming) {
     now.innerHTML = coming;
   } else if (running || next) {
@@ -6937,7 +7498,13 @@ async function load() {
     now.innerHTML = '<a class="hero next" href="' + BASE + '/schedule">' +
       '<span class="kicker">' + (running ? 'On now' : 'Up next') + '</span>' +
       '<span class="big">' + esc(lineTitle(l)) + '</span>' +
-      '<span class="when">' + (l.time ? esc(l.time) + ' &middot; ' : '') + 'see the full schedule &rarr;</span></a>';
+      '<span class="when">' + (l.time ? esc(l.time) + ' &middot; ' : '') + 'see the full schedule &rarr;</span>' + heroLineup(l) + '</a>';
+  } else if (doneTonight(lines)) {
+    // Tonight's racing is over (5 Nov 2026): say so, and where the results are.
+    now.innerHTML = '<a class="hero" href="' + BASE + '/results">' +
+      '<span class="kicker">' + (ev && ev.name ? esc(ev.name) : 'Tonight') + '</span>' +
+      '<span class="big">That\\'s racing done for tonight</span>' +
+      '<span class="when">See tonight\\'s results &rarr;</span></a>';
   } else {
     const usual = now.dataset.when || '';
     now.innerHTML = '<div class="hero">' +
@@ -6947,7 +7514,9 @@ async function load() {
   }
 
   quiet = !live && !running && !next && !coming;
+  homeLines = lines;
   drawRecap();
+  drawTonight();
   touched();
 }
 
@@ -6998,6 +7567,8 @@ async function lastNight() {
     .filter((x) => x && typeof x === 'object');
   const ids = sessions.map((x) => String(x.id || '')).filter(Boolean).slice(0, 50);
   let fast = null;
+  const close = [];
+  const raceIds = new Set(sessions.filter((x) => x.type === 'Race').map((x) => String(x.id || '')));
 
   if (ids.length > 0) {
     const answer = await grab('/collection/results?ids=' + ids.map(encodeURIComponent).join(',')).catch(() => null);
@@ -7009,11 +7580,23 @@ async function lastNight() {
         const ms = Number(r && r.fastLapMs);
         if (ms > 0 && r.name && (fast === null || ms < fast.ms)) fast = { ms, name: r.name, label: b.label || '' };
       }
+      // A photo finish (5 Nov 2026, Moments): first and second on the same
+      // lap, under a second and a half apart at the flag.
+      if (raceIds.has(String(item && item.id || ''))) {
+        const top = (Array.isArray(b.results) ? b.results : []).filter((r) => r && Number(r.pos) > 0)
+          .sort((x, y) => Number(x.pos) - Number(y.pos));
+        const a = top[0];
+        const c = top[1];
+        const gap = a && c ? Number(c.elapsedMs) - Number(a.elapsedMs) : NaN;
+        if (a && c && Number(a.laps) > 0 && Number(a.laps) === Number(c.laps) && Number(a.elapsedMs) > 0 && gap >= 0 && gap < 1500) {
+          close.push({ label: b.label || '', won: a.name, second: c.name, by: gap });
+        }
+      }
     }
   }
 
   nightSig = sig;
-  nightHeld = { day: String(first.day || ''), sessions, fast };
+  nightHeld = { day: String(first.day || ''), sessions, fast, close };
   return nightHeld;
 }
 
@@ -7081,7 +7664,8 @@ function drawRecap() {
       (night.fast.label ? '<span class="right">' + esc(night.fast.label) + '</span>' : '') + '</li>');
   }
 
-  for (const l of leaders()) {
+  // Points leaders: on Season at a glance since 5 Nov 2026.
+  for (const l of []) {
     rows.push('<li><span class="title">Points leader' + (l.season ? ' &middot; ' + esc(l.season) : '') + '</span>' +
       '<span class="when">' + nm(l.name) + ' &middot; ' + esc(l.points) + ' pts' +
       (Number.isFinite(l.clear) ? ' &middot; ' + esc(l.clear) + ' clear' : '') + '</span></li>');
@@ -7118,6 +7702,9 @@ async function loadRecap() {
 
   drawRecap();
   if (typeof drawYou === 'function') drawYou();
+  drawTonight();
+  drawMoments();
+  drawSeason();
 }
 
 // ------------------------------------------------------------- tracks
@@ -7133,6 +7720,8 @@ async function loadTracks() {
 
   const doc = answer.missing ? {} : answer.body.body || {};
   const tracks = Array.isArray(doc.tracks) ? doc.tracks.slice() : [];
+  homeTracks = tracks;
+  drawMoments();
 
   tracks.sort((a, b) => (b.name === doc.current) - (a.name === doc.current));
 
@@ -7195,21 +7784,31 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     // preview of the next night - and, while nothing is, the last race
     // night (round 6: the Up next and Latest results lists went, as
     // Schedule and Results show both in full).
+    // Since 5 Nov 2026 (Home reimagined, Asher: "build it all"): the
+    // club's updates under the hero, then the driver's own strips, then
+    // Tonight in numbers, Moments, Season at a glance and Sponsor of the
+    // night - each hidden until it has something to say - and New here?
+    // further down, for the visitor who has scrolled to find out more.
     body:
       '<section class="lc" id="mine" hidden></section>' +
       `<div id="now" data-when="${escapeHtml(n.when)}"><p class="note">Loading&hellip;</p></div>` +
+      '<div id="up"></div>' +
       // Check in from Me (30 Oct 2026, round 5): a right PIN on Me checks a
       // driver in.
       (look.checkIn
         ? `<p class="note"><a class="more" href="${base}/mynight">Check in: tap Me and type your PIN</a></p>`
         : "") +
       '<section class="lc you" id="you" hidden></section>' +
-      newcomer +
+      '<section class="card hp" id="tonight" hidden></section>' +
+      '<section class="card hp" id="moments" hidden></section>' +
+      '<section class="card hp" id="season" hidden></section>' +
+      '<section class="card hp sponsors" id="spnight" hidden></section>' +
       '<div class="day">Last race night</div><div class="card" id="recap" style="display:none"></div>' +
+      newcomer +
       // Tracks live on Home (30 Oct 2026, round 6), no longer a Results tab.
       '<div class="day" id="tracks-h">Our tracks</div><div id="tracks" style="display:none"></div>' +
       social,
-    script: HOME_JS + HOME_ME_JS,
+    script: HOME_JS + HOME_ME_JS + HOME_PLUS_JS,
   }, context);
 }
 
@@ -7880,56 +8479,9 @@ function firstNightGuide() {
   return d;
 }
 
-// --- Club updates (4 Nov 2026, Asher: "a separate optional card to push to
-// the relay for Club Updates. same motion") ---------------------------------
-// The club's news, sent from the laptop, as a card on the driver's night
-// page under the first-night guide - only when the club has sent some.
-// Got it hides it on this phone, kept against these very words, so news
-// the club sends after shows again.
-const UPDATES = clubParts('updates');
-const UPDATES_KEY = 'hc-updates-done:' + CLUB + ':' + guideMark(UPDATES);
-let updatesDone = false;
-try { updatesDone = localStorage.getItem(UPDATES_KEY) === '1'; } catch (e) { /* shown, then */ }
-
-function drawClubUpdates() {
-  const into = document.getElementById('up');
-  if (!into) return;
-  into.textContent = '';
-  if (updatesDone || UPDATES.length === 0) return;
-
-  const card = document.createElement('section');
-  card.className = 'lc updates';
-  const h = document.createElement('h3');
-  h.textContent = 'Club updates';
-  card.appendChild(h);
-
-  const list = document.createElement('dl');
-  for (const pair of UPDATES) {
-    if (pair[0] !== '') {
-      const t = document.createElement('dt');
-      t.textContent = pair[0];
-      list.appendChild(t);
-    }
-    const w = document.createElement('dd');
-    w.textContent = pair[1];
-    list.appendChild(w);
-  }
-  card.appendChild(list);
-
-  const done = document.createElement('button');
-  done.type = 'button';
-  done.className = 'go quiet gdone';
-  done.textContent = 'Got it - hide this';
-  done.addEventListener('click', () => {
-    updatesDone = true;
-    try { localStorage.setItem(UPDATES_KEY, '1'); } catch (e) { /* this visit only */ }
-    card.remove();
-  });
-  card.appendChild(done);
-  into.appendChild(card);
-}
-
-drawClubUpdates();
+// Club updates moved to Home on 5 Nov 2026 (Asher: "club news already
+// exists. move that card from the me tab to the home tab") - see
+// HOME_PLUS_JS.
 `;
 
 /**
@@ -12455,13 +13007,13 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // "meout" is Sign out on this phone (29 Oct 2026, relay navigation
     // round 2), shown once this phone remembers the night it is showing.
     // "nh" is their name and the night's title, "gd" the first-night guide
-    // under it and "up" the club's updates under that (4 Nov 2026), all
-    // above the live card.
+    // under it, above the live card. (The club's updates were under the
+    // guide until 5 Nov 2026, when they moved to Home.)
     // Since 4 Nov 2026 (Asher: "Tabs should be above right now card") the
     // tab bar "nj" sits under their name, and "nx" holds every card they
     // can move - Right now ("lv"), Lap times in my ear ("ea") and the
     // night's own - with the night's facts and Share in "nt" under them.
-    body: '<div id="nh"></div><div id="nj"></div><div id="gd"></div><div id="up"></div><div id="ng"></div>' +
+    body: '<div id="nh"></div><div id="nj"></div><div id="gd"></div><div id="ng"></div>' +
       '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
       '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
     script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,

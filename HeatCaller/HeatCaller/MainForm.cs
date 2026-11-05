@@ -38,6 +38,9 @@ public partial class MainForm : Form
     /// <summary>Rendered track pictures, kept between rebuilds. See RelayDocuments.Tracks.</summary>
     private readonly Dictionary<string, string?> _relayTrackImages = new();
 
+    /// <summary>Sponsor logos already encoded for the relay's Live page - see RelaySponsors.Picture.</summary>
+    private readonly Dictionary<string, string?> _relaySponsorImages = new();
+
     /// <summary>Build failures already logged, so one broken document is one line in the log rather than one every two seconds.</summary>
     private readonly HashSet<string> _relayBuildErrors = new(StringComparer.Ordinal);
 
@@ -1036,6 +1039,12 @@ public partial class MainForm : Form
         // single instance again, so a vote from the club's web page lands
         // in the list the announcer reads its verdict from.
         _relayPublisher.TonightsVote = () => _roomVote;
+
+        // Whether there are sponsors on the club's Live page to count views
+        // for (5 Nov 2026) - see RelayPublisher.Sponsors. Asked off the UI
+        // thread; Any over the list is a read, and a torn one only means
+        // a three-minute wait.
+        _relayPublisher.HasSponsorsOnline = () => _sponsors.Sponsors.Any(s => s.Enabled);
 
         // WHY (20 Oct 2026): when the vote closes (the green flag, or by
         // hand) the closed ballot goes up at once rather than on the next

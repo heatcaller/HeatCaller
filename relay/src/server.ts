@@ -159,6 +159,22 @@ const INBOX_MAX_ITEMS = 500;
 const CHECKIN_MAX_BODY = 4 * 1024;
 
 /** Where the relay keeps a club's race-day-manager tunnel: requests waiting for the laptop, and answers waiting for a phone. Not a channel, for the same reason INBOX is not one. */
+/**
+ * WHAT PHONES SAW OF EACH SPONSOR (5 Nov 2026): the Live page's sponsors
+ * card counts a view and a tap (SPONSORS_JS in pages.ts), and they are kept
+ * here by the hour, {hours: {"2026-11-05T22": {id: [seen, taps]}}}, for the
+ * laptop's sponsor report. Not a channel: never served to the public. Only
+ * ids in the published sponsors document are counted, so it cannot be used
+ * to write anything else into a club's folder.
+ */
+const SPONSOR_VIEWS = "sponsorviews";
+
+/** How long the hourly counts are kept: a season's worth of nights is the laptop's to keep. */
+const SPONSOR_VIEWS_DAYS = 45;
+
+/** A phone's report of what it saw is a short list of ids. */
+const SPONSOR_SEEN_MAX_BODY = 2048;
+
 const MANAGE_QUEUE = "managequeue";
 
 /**
@@ -1057,6 +1073,9 @@ export class Relay {
    */
   private readonly notesTraffic: Limiter;
   private readonly voteTraffic: Limiter;
+
+  /** Sponsor views and taps from one address - see sponsorSeen. */
+  private readonly sponsorTraffic: Limiter;
   /** One laptop rendering lines: a race night's worth in a burst when Prepare Lines runs, and a trickle after that. */
   private readonly voiceTraffic: Limiter;
   /** The two open voice-sample routes, per address - nobody is signed in, so that is all there is. See VOICE_SAMPLES_PER_ADDRESS. */
@@ -1301,6 +1320,7 @@ export class Relay {
     // route: changing your mind is a legitimate thing to do here, where
     // sending a second dedication is not.
     this.voteTraffic = new Limiter(6, 5 * 60 * 1000, () => this.now().getTime());
+    this.sponsorTraffic = new Limiter(20, 5 * 60 * 1000, () => this.now().getTime());
 
     // Prepare Lines on the laptop walks a whole announcer style in one go -
     // a hundred or so lines, two at a time - and a club is entitled to do
@@ -2559,6 +2579,18 @@ export class Relay {
 
     if (method === "GET" && rest.length === 2 && rest[0] === "vote" && rest[1] === "inbox") {
       await this.readRoomVotes(request, response, club);
+      return;
+    }
+
+    // The sponsors at the foot of Live (5 Nov 2026): phones say what they
+    // saw and tapped, and the laptop reads the counts for its report.
+    if (method === "POST" && rest.length === 2 && rest[0] === "sponsors" && rest[1] === "seen") {
+      await this.sponsorSeen(request, response, club);
+      return;
+    }
+
+    if (method === "GET" && rest.length === 2 && rest[0] === "sponsors" && rest[1] === "views") {
+      await this.sponsorViews(request, response, club);
       return;
     }
 
@@ -7733,6 +7765,151 @@ export class Relay {
    * driver ids landing in a list the laptop then counts. See VOTE_CHANNEL
    * for why that makes this route safe to have without an approval gate.
    */
+  /**
+   * A phone saw the sponsors card, or tapped one of them - see SPONSOR_VIEWS.
+   * {seen: [id, ...]} or {tap: id}. Ids not in the published sponsors are
+   * dropped; a body with none left is refused.
+   */
+  private async sponsorSeen(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = `${club}|${clientAddress(request)}`;
+
+    if (this.sponsorTraffic.blocked(who)) {
+      sendJson(response, 429, { ok: false, error: "Counted already." });
+      return;
+    }
+
+    this.sponsorTraffic.hit(who);
+
+    const body = await readBody(request, response, SPONSOR_SEEN_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    let published: StoredDocument | undefined;
+
+    try {
+      published = await this.store.getSnapshot(club, "sponsors");
+    } catch {
+      sendJson(response, 503, { ok: false, error: "Try again in a moment." });
+      return;
+    }
+
+    const listed = isPlainObject(published?.body) && Array.isArray((published.body as Record<string, unknown>)["sponsors"])
+      ? ((published.body as Record<string, unknown>)["sponsors"] as unknown[])
+      : [];
+    const known = new Set(listed
+      .map((one) => (isPlainObject(one) && typeof one["id"] === "string" ? one["id"] : ""))
+      .filter((id) => id !== ""));
+
+    if (known.size === 0) {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    const seen = Array.isArray(body["seen"])
+      ? [...new Set((body["seen"] as unknown[]).filter((id): id is string => typeof id === "string" && known.has(id)))].slice(0, 50)
+      : [];
+    const tap = typeof body["tap"] === "string" && known.has(body["tap"]) ? body["tap"] : "";
+
+    if (seen.length === 0 && tap === "") {
+      sendJson(response, 400, { ok: false, error: "None of those are this club's sponsors." });
+      return;
+    }
+
+    const at = this.now();
+    const hour = at.toISOString().slice(0, 13);
+    const oldest = new Date(at.getTime() - SPONSOR_VIEWS_DAYS * 24 * 3600 * 1000).toISOString().slice(0, 13);
+
+    const counted = await this.withLock(club, async () => {
+      let held: StoredDocument | undefined;
+
+      try {
+        held = await this.store.getSnapshot(club, SPONSOR_VIEWS);
+      } catch (error) {
+        // Unreadable for good (not JSON) starts again; a read that merely
+        // failed is not written over.
+        if (!(error instanceof StoreReadError && error.corrupt)) return false;
+      }
+
+      const was = isPlainObject(held?.body) && isPlainObject((held.body as Record<string, unknown>)["hours"])
+        ? ((held.body as Record<string, unknown>)["hours"] as Record<string, unknown>)
+        : {};
+      const hours: Record<string, Record<string, [number, number]>> = {};
+
+      for (const [key, slot] of Object.entries(was)) {
+        if (key < oldest || !isPlainObject(slot)) continue;
+        const kept: Record<string, [number, number]> = {};
+        for (const [id, pair] of Object.entries(slot)) {
+          if (Array.isArray(pair) && pair.length === 2 && Number.isFinite(pair[0]) && Number.isFinite(pair[1])) {
+            kept[id] = [Number(pair[0]), Number(pair[1])];
+          }
+        }
+        hours[key] = kept;
+      }
+
+      const now = hours[hour] ?? {};
+
+      for (const id of seen) {
+        const pair = now[id] ?? [0, 0];
+        now[id] = [pair[0] + 1, pair[1]];
+      }
+
+      if (tap !== "") {
+        const pair = now[tap] ?? [0, 0];
+        now[tap] = [pair[0], pair[1] + 1];
+      }
+
+      hours[hour] = now;
+
+      await this.store.putSnapshot(club, SPONSOR_VIEWS, {
+        seq: at.getTime(),
+        publishedAt: at.toISOString(),
+        body: { hours },
+      });
+
+      return true;
+    });
+
+    if (!counted) {
+      sendJson(response, 503, { ok: false, error: "Try again in a moment." });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true });
+  }
+
+  /** The hourly sponsor counts, for the laptop's sponsor report. Publish token only. */
+  private async sponsorViews(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    let held: StoredDocument | undefined;
+
+    try {
+      held = await this.store.getSnapshot(club, SPONSOR_VIEWS);
+    } catch {
+      sendJson(response, 503, { ok: false, error: "Try again in a moment." });
+      return;
+    }
+
+    const hours = isPlainObject(held?.body) && isPlainObject((held.body as Record<string, unknown>)["hours"])
+      ? (held.body as Record<string, unknown>)["hours"]
+      : {};
+
+    sendJson(response, 200, { ok: true, hours });
+  }
+
   private async sendRoomVote(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
     const who = `${club}|${clientAddress(request)}`;
 
