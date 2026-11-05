@@ -381,8 +381,11 @@ header:has(.brand) { padding-top: 8px; }
 /* A little below the logo's top edge (4 Nov 2026, Asher: "bring the club
    name down a bit"). */
 .brand h1 { grid-column: 2; grid-row: 1; line-height: 1.15; margin-top: clamp(8px, 3vw, 22px); }
-.brand .hcside { grid-column: 2; grid-row: 2; align-self: end; flex-direction: row; align-items: center;
-                 justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+/* The bug above the byline, both against the right edge (4 Nov 2026, Asher:
+   "move byline below the live bug when race is going and right justify the
+   bug"). They used to sit side by side, the bug to the byline's left. */
+.brand .hcside { grid-column: 2; grid-row: 2; align-self: end; justify-self: end; flex-direction: column;
+                 align-items: flex-end; gap: 4px; }
 .brand .hcby { min-height: 0; }
 .brand .sub { grid-column: 1 / -1; grid-row: 3; margin-top: 12px; }
 
@@ -767,20 +770,97 @@ html.light .pill.running, html.light .pill.next { color: #FFFFFF; }
 html.light .follow, html.light .toast { box-shadow: 0 8px 28px rgba(17, 21, 28, 0.18); }
 
 /* Live */
-.flagbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+/* The flag bar as race control's banner (4 Nov 2026, Asher: "rethink how
+   the flag card looks. it's not exciting in any way"). The flag itself,
+   waving on its pole, beside what the race is doing in big condensed
+   capitals and the countdown as a scoreboard readout; the whole bar tinted
+   the flag's colour, with speed lines under a green, hazard stripes under
+   a yellow, a slow pulse under a red and a chequered field at the finish.
+   --flag is the one colour each flag sets. */
+.flagbar { --flag: var(--muted); position: relative; overflow: hidden; isolation: isolate;
+           display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px 16px;
            background: var(--surface); border: 1px solid var(--border);
-           border-left: 6px solid var(--muted); border-radius: 10px;
-           padding: 14px 18px; margin-bottom: 14px; }
-.flagbar.f-green { border-left-color: var(--good); }
-.flagbar.f-yellow { border-left-color: #FFD34D; }
-.flagbar.f-red { border-left-color: var(--bad); }
-.flagbar.f-white { border-left-color: #FFFFFF; }
+           border-left: 6px solid var(--muted); border-radius: 14px;
+           padding: 14px 18px; margin-bottom: 14px; min-height: 84px; }
+.flagbar.f-green { border-left-color: var(--good); --flag: var(--good); }
+.flagbar.f-yellow { border-left-color: #FFD34D; --flag: #FFD34D; }
+.flagbar.f-red { border-left-color: var(--bad); --flag: var(--bad); }
+.flagbar.f-white { border-left-color: #FFFFFF; --flag: #FFFFFF; }
 /* WHY (23 Oct 2026, bug hunt 10): the app sends FlagState "Checkered", so the
    class is f-checkered; only f-chequered had a rule and the finish bar stayed grey. */
-.flagbar.f-checkered, .flagbar.f-chequered { border-left-color: var(--accent); }
+.flagbar.f-checkered, .flagbar.f-chequered { border-left-color: var(--accent); --flag: var(--accent); }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .flagbar { background: linear-gradient(100deg, color-mix(in srgb, var(--flag) 26%, var(--surface)) 0%, var(--surface) 70%);
+             border-color: color-mix(in srgb, var(--flag) 45%, var(--border)); }
+  .flagbar.f-white { background: linear-gradient(100deg, color-mix(in srgb, #FFFFFF 14%, var(--surface)) 0%, var(--surface) 70%); }
+}
+/* The pattern under the words, faded out towards the left. */
+.flagbar::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000 100%); mask-image: linear-gradient(90deg, transparent 30%, #000 100%); }
+.flagbar.f-green.running::before { opacity: 0.22; background: repeating-linear-gradient(115deg, var(--flag) 0 3px, transparent 3px 26px);
+  background-size: 200% 100%; animation: fb-speed 0.9s linear infinite; }
+.flagbar.f-yellow::before { opacity: 0.16; background: repeating-linear-gradient(135deg, var(--flag) 0 14px, transparent 14px 28px); }
+.flagbar.f-checkered::before, .flagbar.f-chequered::before, .flagbar.over::before { opacity: 0.2;
+  background: repeating-conic-gradient(var(--text) 0 25%, transparent 0 50%) 0 0 / 22px 22px; }
+.flagbar.f-red { animation: fb-red 1.6s ease-in-out infinite; }
+@keyframes fb-speed { to { background-position: -52px 0; } }
+@keyframes fb-red { 50% { box-shadow: inset 0 0 0 1px var(--bad), 0 0 22px color-mix(in srgb, var(--bad) 45%, transparent); } }
+/* The flag on its pole. */
+.flagbar .fg { position: relative; width: 44px; height: 52px; flex: none; }
+.flagbar .fg::before { content: ""; position: absolute; left: 3px; top: 2px; bottom: 0; width: 3px; border-radius: 2px; background: var(--muted); }
+.flagbar .fg i { position: absolute; left: 6px; top: 4px; width: 36px; height: 25px; border-radius: 1px 4px 4px 1px;
+  background: var(--flag); transform-origin: left center; box-shadow: 0 0 14px color-mix(in srgb, var(--flag) 50%, transparent); }
+.flagbar.f-none .fg i { background: transparent; border: 2px dashed var(--muted); box-shadow: none; }
+.flagbar.f-checkered .fg i, .flagbar.f-chequered .fg i, .flagbar.over .fg i {
+  background: repeating-conic-gradient(#111 0 25%, #FFF 0 50%) 0 0 / 12px 12.5px; box-shadow: 0 0 14px rgba(255, 255, 255, 0.25); }
+.flagbar.running .fg i, .flagbar.over .fg i { animation: fb-wave 1.1s ease-in-out infinite; }
+@keyframes fb-wave { 0%, 100% { transform: perspective(80px) rotateY(0deg) skewY(0deg); }
+                     50% { transform: perspective(80px) rotateY(-28deg) skewY(-5deg); } }
+.flagbar .fl-txt { min-width: 0; }
+.flagbar .kick { display: block; color: var(--flag); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
+.flagbar.f-white .kick, .flagbar.f-none .kick { color: var(--muted); }
 .state { font-weight: 700; font-size: 1.1rem; }
+.flagbar .state { display: block; font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
+  font-size: 2rem; line-height: 1.05; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; overflow-wrap: anywhere; }
 .count { font-variant-numeric: tabular-nums; font-size: 1.1rem; color: var(--accent); }
+/* The countdown, as a scoreboard: the figure big, what it counts under it. */
+.flagbar .count { display: flex; flex-direction: column; align-items: flex-end; text-align: right; color: var(--text); }
+.flagbar .count b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
+  font-size: 2.1rem; line-height: 1; font-weight: 800; letter-spacing: 0.02em; padding: 4px 10px; border-radius: 10px;
+  background: var(--bg); border: 1px solid var(--border); text-shadow: 0 0 12px color-mix(in srgb, var(--flag) 60%, transparent); }
+.flagbar .count span { margin-top: 4px; color: var(--muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
 .ondeck { color: var(--muted); font-size: 0.85rem; margin-left: auto; }
+.flagbar .ondeck { grid-column: 1 / -1; margin: 4px 0 0; padding-top: 8px; border-top: 1px dashed var(--border); }
+.flagbar .ondeck b { color: var(--text); font-weight: 600; }
+@media (max-width: 420px) {
+  .flagbar { gap: 6px 12px; padding: 12px 14px; }
+  .flagbar .state { font-size: 1.6rem; }
+  .flagbar .count b { font-size: 1.6rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flagbar, .flagbar::before, .flagbar .fg i { animation: none !important; }
+}
+/* The last race's board, kept up on Live once the race is over (4 Nov
+   2026, Asher: "keep the board for the last race up on the live after the
+   race is over. clearly indicate that the race is over"). */
+.finhead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 8px; padding: 10px 16px;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .finhead { background: repeating-conic-gradient(color-mix(in srgb, var(--text) 8%, transparent) 0 25%, transparent 0 50%) 0 0 / 16px 16px, var(--surface); }
+}
+.finhead b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
+  font-size: 1.15rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.finhead span { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
+/* The live position chart, under the board. */
+.livepos { padding: 14px 16px 16px; }
+.livepos[hidden] { display: none; }
+.livepos h3 { margin: 0 0 2px; font-size: 1.05rem; }
+.livepos .note { padding: 6px 0 0; text-align: left; }
+.livepos .posg .ax { font-size: 13px; }
+.livepos .posg .axt { fill: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.livepos .posg .axl { stroke: var(--muted); stroke-width: 1.5; }
+.livepos .posg circle.now { fill: var(--c); }
+.livepos .posk li b { font-variant-numeric: tabular-nums; margin-right: 4px; }
 
 /* Standings */
 select {
@@ -1039,7 +1119,7 @@ html.light { --warn: #D99400; }
 .btn[hidden] { display: none; }
 @media (hover: hover) { .btn:hover { border-color: var(--primary); } }
 #listen .btn { background: var(--primary); color: var(--on-primary); border-color: transparent; }
-#listennote.cap { color: #fff; font-weight: 700; font-size: 3em; line-height: 1.15; padding: 16px 0; overflow-wrap: anywhere; }
+#listennote.cap { color: #fff; font-weight: 700; font-size: 1.5em; line-height: 1.25; padding: 16px 0; overflow-wrap: anywhere; }
 .btn[aria-pressed=true] { background: var(--primary); color: var(--on-primary); border-color: transparent; }
 /* Segmented: Results' own tabs, and a night's race tabs. One track, the
    chosen part filled. */
@@ -4500,28 +4580,213 @@ function cells(row, columns) {
 // makes the next table be written again.
 let boardHtml = '';
 
-function render(state, seen) {
-  // A copy's laps are not news: only a fresh read is counted for speaking.
-  if (!seen) lapTalk.take(state);
-  const flag = String(state.flag || 'None').toLowerCase();
+// --- The flag bar (4 Nov 2026, Asher: "rethink how the flag card looks") --
+// Race control's banner: the flag waving on its pole, a line naming it,
+// what the race is doing in big capitals and the countdown as a
+// scoreboard figure. The look is the stylesheet's (.flagbar); this only
+// picks the classes and writes the words.
+const LB_FLAG_WORDS = {
+  green: 'Green flag', yellow: 'Caution', red: 'Red flag \\u00B7 stopped',
+  white: 'White flag \\u00B7 last lap', checkered: 'Chequered flag', chequered: 'Chequered flag',
+};
+
+// "04:32 REMAINING" or "5 LAPS TO GO": the figure big, what it counts under it.
+function lbCount(text) {
+  const t = String(text || '').trim();
+  if (t === '') return '';
+  const m = /^(\\S+)\\s+(.+)$/.exec(t);
+  return '<span class="count">' + (m ? '<b>' + esc(m[1]) + '</b><span>' + esc(m[2]) + '</span>' : '<b>' + esc(t) + '</b>') + '</span>';
+}
+
+// over: the race is done - the laptop says Finished, or the board went
+// empty and the last race's is being kept up.
+function drawBar(state, over) {
+  const flag = over ? 'checkered' : String(state.flag || 'None').toLowerCase();
   const running = String(state.state || 'Idle');
+  const moving = !over && (running === 'Racing' || running === 'Countdown');
+  bar.className = 'flagbar f-' + esc(flag) + (moving ? ' running' : '') + (over ? ' over' : '');
+  const kick = over ? 'Chequered flag' : (LB_FLAG_WORDS[flag] || 'Race control');
+  const said = over ? 'Race over' : running === 'Idle' ? 'Not racing' : running;
+  bar.innerHTML = '<span class="fg" aria-hidden="true"><i></i></span>'
+    + '<span class="fl-txt"><span class="kick">' + esc(kick) + '</span><span class="state">' + esc(said) + '</span></span>'
+    + (over ? '' : lbCount(state.countdown))
+    + (state.onDeck ? '<span class="ondeck">Next up: <b>' + esc(state.onDeck) + '</b></span>' : '');
+}
 
-  bar.className = 'flagbar f-' + esc(flag);
-  bar.innerHTML =
-    '<span class="state">' + esc(running) + '</span>' +
-    (state.countdown ? '<span class="count">' + esc(state.countdown) + '</span>' : '') +
-    (flag !== 'none' ? '<span class="when">Flag: ' + esc(state.flag) + '</span>' : '') +
-    (state.onDeck ? '<span class="ondeck">Next: ' + esc(state.onDeck) + '</span>' : '');
+// --- The last race, kept (4 Nov 2026, Asher: "keep the board for the last
+// race up on the live after the race is over. clearly indicate that the
+// race is over"). The laptop empties the board between races; the last
+// board that had anybody on it is kept on this phone, with the time it was
+// last seen, and shown under "Race over" until the next race fills the
+// board again. Twelve hours at most, so last week's final is not this
+// week's.
+const LB_LAST_KEY = 'hg-lastrace-' + CLUB;
+const LB_KEEP_MS = 12 * 3600 * 1000;
+let lastRace = null;
+try {
+  const raw = JSON.parse(localStorage.getItem(LB_LAST_KEY) || 'null');
+  if (raw && raw.state && typeof raw.at === 'number') lastRace = raw;
+} catch (e) { /* nothing kept */ }
 
-  const columns = Array.isArray(state.columns) ? state.columns : [];
-  const rows = Array.isArray(state.standings) ? state.standings : [];
+function keepRace(state, at) {
+  lastRace = { state: state, at: at };
+  try { localStorage.setItem(LB_LAST_KEY, JSON.stringify(lastRace)); } catch (e) { /* this visit only */ }
+}
 
-  if (rows.length === 0) {
-    board.innerHTML = '<p class="note">Nobody is on track. The board fills as soon as a session starts.</p>';
-    return;
+function keptRace() {
+  return lastRace && Date.now() - lastRace.at < LB_KEEP_MS ? lastRace : null;
+}
+
+function lbClock(at) {
+  try { return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+}
+
+// --- The position chart (4 Nov 2026, Asher: "create a position chart to
+// appear on a separate card below the leaderboard that updates as the
+// board above does"). The live board carries nobody's place lap by lap,
+// so the chart is what this page saw: each driver's place on the board
+// the first time it showed them on a new lap, and their grid slot before
+// the start. Kept on this phone with the race, so a reload keeps the lines;
+// a page opened mid-race draws from the lap it joined at and says so,
+// rather than making up the laps it missed. A new race - a different
+// field, or fewer laps than a driver already had - starts it again.
+const posChart = (function () {
+  const box = document.getElementById('livepos');
+  const out = document.getElementById('lposbody');
+  const KEY = 'hg-livepos-' + CLUB;
+  const COLOURS = ['#F5C342', '#8EC5FF', '#E5484D', '#46A758', '#A77BEB', '#FF8B3E',
+    '#2EE6FF', '#FF2E9A', '#A0E85B', '#C9A04E', '#D9C2FF', '#7FD6C2'];
+  // d: name -> { c: colour, p: { lap: place } }; n: the next colour.
+  let h = { d: {}, n: 0 };
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (raw && raw.d && typeof raw.d === 'object' && typeof raw.n === 'number') h = raw;
+  } catch (e) { /* a new chart */ }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(h)); } catch (e) { /* this visit only */ }
   }
 
-  const html = '<div class="card"><table><thead><tr>' +
+  // A name per row; one the board shows twice gets a number after it.
+  function names(rows) {
+    const seen = {};
+    return rows.map((r) => {
+      const k = String((r && r.name) || 'Unnamed driver');
+      seen[k] = (seen[k] || 0) + 1;
+      return seen[k] > 1 ? k + ' (' + seen[k] + ')' : k;
+    });
+  }
+
+  // Crossings, the start lap included: the laptop's own count when it
+  // sends one, else the flying laps and the start lap before them.
+  function lapsOf(r) {
+    if (r && typeof r.lap === 'number' && r.lap >= 0) return Math.floor(r.lap);
+    const n = r && Array.isArray(r.laps) ? r.laps.filter((v) => typeof v === 'number' && v > 0).length : 0;
+    return n > 0 ? n + 1 : 0;
+  }
+
+  function top(d) {
+    let m = -1;
+    for (const k in d.p) m = Math.max(m, Number(k));
+    return m;
+  }
+
+  function take(rows) {
+    const ns = names(rows);
+    const counts = rows.map(lapsOf);
+    let fresh = Object.keys(h.d).length > 0 && !ns.some((k) => h.d[k]);
+    ns.forEach((k, i) => { if (h.d[k] && counts[i] < top(h.d[k])) fresh = true; });
+    if (fresh) h = { d: {}, n: 0 };
+    let changed = fresh;
+    ns.forEach((k, i) => {
+      let d = h.d[k];
+      if (!d) { d = h.d[k] = { c: h.n % COLOURS.length, p: {} }; h.n += 1; changed = true; }
+      const lap = counts[i];
+      const pos = i + 1;
+      if (lap === 0) {
+        if (d.p[0] !== pos) { d.p[0] = pos; changed = true; }
+      } else if (d.p[lap] === undefined) {
+        d.p[lap] = pos; changed = true;
+      }
+    });
+    if (changed) save();
+  }
+
+  function hide() { if (box) box.hidden = true; }
+
+  function draw(rows) {
+    if (!box || !out) return;
+    const ns = names(rows);
+    const lines = ns.map((k, i) => ({ k: k, now: i + 1, d: h.d[k] })).filter((x) => x.d);
+    const laps = [];
+    lines.forEach((x) => Object.keys(x.d.p).forEach((l) => laps.push(Number(l))));
+    box.hidden = false;
+    if (!laps.some((l) => l >= 1)) {
+      const wait = '<p class="note">The lines start with the first lap: one per driver, their place after every lap.</p>';
+      if (out.innerHTML !== wait) out.innerHTML = wait;
+      return;
+    }
+
+    const lo = Math.min.apply(null, laps);
+    const hi = Math.max.apply(null, laps);
+    let field = lines.length;
+    lines.forEach((x) => { for (const l in x.d.p) field = Math.max(field, x.d.p[l]); });
+    // As wide as the card really is, so the labels stay their own size on
+    // a phone rather than shrinking with a chart drawn for a laptop.
+    const W = Math.max(300, Math.min(760, Math.round(out.clientWidth || 600)));
+    const L = 66, R = 18, T = 16, B = 52;
+    const H = T + B + Math.max(2, field - 1) * 30;
+    const x = (l) => L + (l - lo) * (W - L - R) / Math.max(1, hi - lo);
+    const y = (p) => T + (p - 1) * (H - T - B) / Math.max(1, field - 1);
+    const base = H - B + 12;
+
+    let svg = '<svg class="posg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Each driver\\u2019s position after every lap">';
+    for (let p = 1; p <= field; p++) {
+      svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(p).toFixed(1) + '" y2="' + y(p).toFixed(1) + '"/>'
+        + '<text class="ax" x="' + (L - 10) + '" y="' + (y(p) + 4).toFixed(1) + '" text-anchor="end">P' + p + '</text>';
+    }
+    svg += '<line class="axl" x1="' + L + '" x2="' + L + '" y1="' + (T - 6) + '" y2="' + base + '"/>'
+      + '<line class="axl" x1="' + L + '" x2="' + (W - R) + '" y1="' + base + '" y2="' + base + '"/>';
+    const span = hi - lo;
+    // The fewest laps between labels that leaves each one room to read.
+    const step = [1, 2, 5, 10, 20, 50].find((s) => s * (W - L - R) / Math.max(1, span) >= 30) || 100;
+    for (let l = lo; l <= hi; l++) {
+      if (l !== lo && l !== hi && l % step !== 0) continue;
+      if (l === hi && l !== lo && l % step !== 0 && (hi - Math.floor(hi / step) * step) * (W - L - R) / Math.max(1, span) < 24) continue;
+      svg += '<text class="ax" x="' + x(l).toFixed(1) + '" y="' + (base + 18) + '" text-anchor="middle">' + (l === 0 ? 'Start' : l) + '</text>';
+    }
+    svg += '<text class="axt" x="' + ((L + W - R) / 2).toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle">Lap</text>'
+      + '<text class="axt" text-anchor="middle" transform="translate(14 ' + ((T + base) / 2).toFixed(1) + ') rotate(-90)">Position</text>';
+
+    // Last place first, so the leader's line is drawn on top.
+    lines.slice().reverse().forEach((line) => {
+      const colour = COLOURS[line.d.c % COLOURS.length];
+      const pts = Object.keys(line.d.p).map(Number).sort((a, b) => a - b).map((l) => [l, line.d.p[l]]);
+      const path = pts.map((pt) => x(pt[0]).toFixed(1) + ',' + y(pt[1]).toFixed(1)).join(' ');
+      svg += '<g style="--c:' + colour + '"><polyline points="' + path + '"/>'
+        + pts.map((pt, j) => '<circle' + (j === pts.length - 1 ? ' class="now" r="5"' : ' r="3"') + ' cx="' + x(pt[0]).toFixed(1) + '" cy="' + y(pt[1]).toFixed(1) + '"/>').join('')
+        + '</g>';
+    });
+    svg += '</svg>';
+
+    const key = '<ul class="posk">' + lines.map((line) =>
+      '<li><span class="sw" style="--c:' + COLOURS[line.d.c % COLOURS.length] + '"></span><b>P' + line.now + '</b>' + esc(line.k) + '</li>').join('') + '</ul>';
+    const joined = lo > 1 ? '<p class="note">Drawn from lap ' + lo + ', when this page started watching.</p>' : '';
+    const html = svg + key + joined;
+    if (out.innerHTML !== html) out.innerHTML = html;
+  }
+
+  return { take: take, draw: draw, hide: hide };
+})();
+
+function drawBoard(state, final, at) {
+  const columns = Array.isArray(state.columns) ? state.columns : [];
+  const rows = Array.isArray(state.standings) ? state.standings : [];
+  const head = final
+    ? '<div class="finhead"><b>\\uD83C\\uDFC1 Race over \\u00B7 final board</b>'
+      + (at ? '<span>Last update ' + esc(lbClock(at)) + '</span>' : '') + '</div>'
+    : '';
+  const html = head + '<div class="card"><table><thead><tr>' +
     columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + '">' + esc(c) + '</th>').join('') +
     '</tr></thead><tbody>' +
     rows.map((r) => '<tr>' + cells(r, columns) + '</tr>').join('') +
@@ -4541,6 +4806,40 @@ function render(state, seen) {
   if (card) card.scrollLeft = left;
 }
 
+// at: when the laptop published this board. empty: what to say when there
+// is no board, and no last race to keep up either.
+function render(state, seen, at, empty) {
+  // A copy's laps are not news: only a fresh read is counted for speaking.
+  if (!seen) lapTalk.take(state);
+  const rows = Array.isArray(state.standings) ? state.standings : [];
+  const running = String(state.state || 'Idle');
+
+  if (rows.length === 0) {
+    // Between races: the last one's board under "Race over", unless the
+    // next is already being staged or counted down - then the bar says so
+    // and the board under it is still marked as the last race's.
+    const kept = keptRace();
+    const coming = running === 'Staging' || running === 'Countdown';
+    drawBar(state, !!kept && !coming);
+    if (kept) {
+      drawBoard(kept.state, true, kept.at);
+      posChart.draw(Array.isArray(kept.state.standings) ? kept.state.standings : []);
+      return;
+    }
+    board.innerHTML = '<p class="note">' + (empty || 'Nobody is on track. The board fills as soon as a session starts.') + '</p>';
+    boardHtml = '';
+    posChart.hide();
+    return;
+  }
+
+  const over = running === 'Finished';
+  drawBar(state, over);
+  keepRace(state, at || Date.now());
+  posChart.take(rows);
+  drawBoard(state, over, over ? at : 0);
+  posChart.draw(rows);
+}
+
 // Shows or hides the broadcast bug (see load).
 function onAir(on) {
   const body = document.body;
@@ -4554,13 +4853,12 @@ async function load() {
 
   if (answer === null) {
     board.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
+    boardHtml = '';
     return;
   }
 
   if (answer.missing) {
-    bar.className = 'flagbar';
-    bar.innerHTML = '<span class="state">Not racing</span>';
-    board.innerHTML = '<p class="note">No race has been published yet.</p>';
+    render({}, true, 0, 'No race has been published yet.');
     onAir(false);
     lapTalk.show();
     touched();
@@ -4568,13 +4866,14 @@ async function load() {
   }
 
   const state = answer.body.body || {};
-  render(state, answer.seen === true);
+  const at = Date.parse(answer.body.publishedAt);
+  render(state, answer.seen === true, isFinite(at) ? at : 0);
 
   // The broadcast bug in the corner (30 Oct 2026, relay branding) while a
   // race is staged, counting down or running - the same reading, and the
   // same two minutes before a laptop that went quiet stops counting, as
   // the red dot the other pages put on the Live tab.
-  const fresh = Date.now() - Date.parse(answer.body.publishedAt) < 120000;
+  const fresh = Date.now() - at < 120000;
   onAir(fresh && ['Staging', 'Countdown', 'Racing'].includes(String(state.state)));
   touched();
 }
@@ -5084,6 +5383,7 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     // Without Listen it stays, as the only way to read them.
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
       + '<div id="board"></div>'
+      + '<div id="livepos" class="card livepos" hidden><h3>Position by lap</h3><div id="lposbody"></div></div>'
       + voteControl(context.look.vote)
       + listenControl(context.look.listening)
       + noteControl(context.look.notes)
