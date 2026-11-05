@@ -114,12 +114,13 @@ describe("My Night: the races, one open at a time", () => {
     const card = byClass(page.get("nx"), "rc")[0]!;
     const tabs = card.find((n) => n.className.startsWith("rtab") && n.tagName === "BUTTON");
 
-    assert.deepEqual(tabs.map((t) => t.textContent), ["Lap stats", "Lap times (7)", "Lap chart"]);
+    // Race story joined them on 4 Nov 2026 (the relay roadmap).
+    assert.deepEqual(tabs.map((t) => t.textContent), ["Lap stats", "Lap times (7)", "Lap chart", "Race story"]);
     const panels = card.find((n) => n.getAttribute("role") === "tabpanel");
-    assert.deepEqual(panels.map((p) => p.hidden), [false, true, true]);
+    assert.deepEqual(panels.map((p) => p.hidden), [false, true, true, true]);
 
     tabs[2]!.click();
-    assert.deepEqual(panels.map((p) => p.hidden), [true, true, false]);
+    assert.deepEqual(panels.map((p) => p.hidden), [true, true, false, true]);
     assert.equal(tabs[2]!.getAttribute("aria-selected"), "true");
   });
 

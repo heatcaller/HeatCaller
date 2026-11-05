@@ -807,6 +807,9 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .flagbar.over .lp-fin { opacity: 1; box-shadow: 0 0 14px rgba(255, 255, 255, 0.45); }
 .flagbar .lp-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; color: var(--muted); font-size: 0.9rem; }
 .flagbar .lp-foot b { color: var(--text); font-weight: 700; }
+/* The driver this phone follows (4 Nov 2026): their place and gaps, under the bar. */
+.flagbar .lp-me { padding: 8px 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border); font-size: 0.9rem; color: var(--muted); }
+.flagbar .lp-me b { color: var(--text); font-weight: 700; }
 .flagbar .lp-foot .ondeck b { font-weight: 600; }
 .ondeck { color: var(--muted); font-size: 0.85rem; margin-left: auto; }
 .flagbar .ondeck { font-size: 0.9rem; margin-left: auto; }
@@ -827,6 +830,16 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .livepos .posg .axl { stroke: var(--muted); stroke-width: 1.5; }
 .livepos .posg circle.now { fill: var(--c); }
 .livepos .posk li b { font-variant-numeric: tabular-nums; margin-right: 4px; }
+/* The live track map (4 Nov 2026): the road, the line, the split loops and a numbered dot per car. */
+.lmap { display: block; width: 100%; height: auto; margin: 6px 0 0; }
+.lmap .lm-edge { fill: none; stroke: var(--border); stroke-width: 22; stroke-linecap: round; stroke-linejoin: round; }
+.lmap .lm-road { fill: none; stroke: var(--surface); stroke-width: 16; stroke-linecap: round; stroke-linejoin: round; }
+.lmap .lm-split { fill: var(--accent); }
+.lmap .lm-line { fill: var(--text); }
+.lmap .lm-car circle { fill: var(--c); stroke: var(--bg); stroke-width: 2; }
+.lmap .lm-car.me circle { stroke: var(--text); stroke-width: 3; }
+.lmap .lm-car.stop circle { stroke: var(--bad); stroke-width: 3; }
+.lmap .lm-car text { fill: #0B0618; font-size: 12px; font-weight: 800; }
 /* The same two charts on a driver's race card (4 Nov 2026), each its own
    figure under the Just me tick; their own line drawn heavier on top. */
 .lpfig { margin: 14px 0 0; padding: 0; }
@@ -837,6 +850,51 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .lpfig .posk li b.kv { margin: 0 0 0 5px; }
 .mecharts .jm { margin-top: 4px; }
 .lvsay[hidden] { display: none; }
+/* Club health on the results page (4 Nov 2026). */
+.clubhealth { padding: 12px 16px; margin-bottom: 14px; }
+.clubhealth h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.ch-bars { display: flex; align-items: flex-end; gap: 3px; height: 52px; margin-top: 8px; }
+.ch-bar { flex: 1; max-width: 24px; background: var(--primary); border-radius: 3px 3px 0 0; opacity: 0.8; }
+/* The race control log under a corrected result (4 Nov 2026). */
+.rclog { margin: 8px 16px 14px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--warn); }
+.rclog h4 { margin: 0 0 2px; font-size: 0.95rem; color: var(--warn); }
+.rclog ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.rclog li { padding: 3px 0; font-size: 0.9rem; }
+/* Head to head on a driver's history (4 Nov 2026). */
+.rivals { padding: 12px 16px; margin-bottom: 12px; }
+.rivals h3 { margin: 0 0 4px; font-size: 1.05rem; }
+.rivals ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.rivals li { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-top: 1px solid var(--border); }
+/* Qualifying on the Schedule (4 Nov 2026): a line where each main ends. */
+.qual { padding: 0 0 6px; margin-bottom: 12px; }
+.qual h3 { margin: 0; padding: 12px 16px 6px; font-size: 1.05rem; }
+.qual tr.cut td { border-top: 2px dashed var(--accent); }
+/* How far behind the night is running, on the Schedule (4 Nov 2026). */
+.late { margin: 0 0 10px; padding: 10px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-weight: 700; }
+.late.behind { border-color: var(--warn); color: var(--warn); }
+details .eta { display: block; color: var(--muted); font-size: 0.8rem; font-weight: 400; }
+/* What it takes, under the standings (4 Nov 2026). */
+.wt { padding: 14px 18px; margin-top: 14px; }
+.wt h3 { margin: 0 0 6px; font-size: 1.05rem; }
+.wt p { margin: 0 0 8px; }
+.wt ul { list-style: none; margin: 0; padding: 0; }
+.wt li { padding: 4px 0; border-top: 1px solid var(--border); }
+.wt .wt-gap { color: var(--muted); margin: 0 6px; }
+.wt .wt-in { color: var(--good); }
+.wt .wt-out { color: var(--muted); }
+.wt .wt-crown { font-weight: 700; color: var(--accent); }
+/* The charge timer on the Right now card (4 Nov 2026). */
+.lc-chargeset { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.lc-chargeset select { margin: 0; min-height: 44px; }
+.lc-late { color: var(--bad); font-weight: 600; }
+.setuplog textarea { display: block; width: 100%; min-height: 72px; margin: 6px 0 0; padding: 10px; font: inherit; font-size: 1rem; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); resize: vertical; }
+/* Just me and Compare with, side by side over the charts (4 Nov 2026). */
+.mesay { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 4px 0 0; }
+.mesay .lvsay { margin: 0; }
+.mevs { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
+.mevs select { margin: 0; min-height: 40px; border-radius: 999px; padding: 6px 14px; }
+.mevs select:disabled { opacity: 0.5; }
+.story .note { padding: 8px 0 0; text-align: left; }
 
 /* Standings */
 select {
@@ -1925,6 +1983,16 @@ function lxLaps(list) {
   return Array.isArray(list) ? list.filter((ms) => typeof ms === 'number' && isFinite(ms) && ms > 0) : [];
 }
 
+// THE THEORETICAL BEST (4 Nov 2026, from the relay roadmap): their best
+// time in every sector of the split loop, added up - the lap they would
+// have done had their best sectors all come on one lap. The laptop sends a
+// driver's best sectors with each result (Sectors.Bests); null without a
+// split loop, or with a sector missing.
+function lxTheoretical(sectors) {
+  if (!Array.isArray(sectors) || sectors.length < 2 || !sectors.every((ms) => typeof ms === 'number' && isFinite(ms) && ms > 0)) return null;
+  return sectors.reduce((a, ms) => a + ms, 0);
+}
+
 function lxMean(list) {
   return list.length === 0 ? null : list.reduce((a, b) => a + b, 0) / list.length;
 }
@@ -2231,6 +2299,8 @@ let lengthOf = 0;
 // Their lap chart is on their own night - see raceDetail there.
 function lapPanel(r, lengthS) {
   const stats = lapStatLines(lapStats(r.lapsMs));
+  const theory = lxTheoretical(r.sectorsMs);
+  if (theory !== null) stats.push(['Theoretical best', lap(theory)]);
   const list = lapRows(r.lapsMs, r.posAt, r.startMs, lengthS);
   const pace = list.some((x) => x.pace !== '');
   const pos = list.some((x) => x.pos > 0);
@@ -2395,8 +2465,26 @@ function card(line, body, mine) {
         '<th class="pos">Pos</th><th>Driver</th><th class="n">Qual</th>' +
         '<th class="n">Laps/Time</th><th class="n">Behind</th><th class="n">Best</th>' +
         '</tr></thead>' + withLength(body, () => rows(results, line.id)) + '</table></div>' +
-        positionGraph(results)) +
+        positionGraph(results) + raceControlLog(body)) +
     '</details>';
+}
+
+// THE RACE CONTROL LOG (4 Nov 2026, from the relay roadmap Asher asked to
+// have built): the corrections made to this result since the race - when,
+// whose, and what changed - so a result that moved says it moved. Never
+// why: the laptop does not send the reasons, which stay on the driver's
+// own night.
+function raceControlLog(body) {
+  const list = body && Array.isArray(body.corrections) ? body.corrections.filter((c) => c && typeof c.change === 'string' && c.change !== '') : [];
+  if (list.length === 0) return '';
+  const when = (at) => {
+    const t = Date.parse(String(at || ''));
+    if (!Number.isFinite(t)) return '';
+    try { return new Date(t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+  };
+  return '<div class="rclog"><h4>Race control</h4><p class="when">This result was corrected after the race.</p><ul>' +
+    list.slice(0, 20).map((c) => '<li><span class="when">' + esc(when(c.at)) + '</span> ' + nm(String(c.name || 'A driver')) + ': ' + esc(c.change) + '</li>').join('') +
+    '</ul></div>';
 }
 
 // The rows of one session, drawn with its time limit in hand for pace.
@@ -2861,6 +2949,49 @@ function moreFor(left) {
   return '<button type="button" class="page wide" id="more">Show ' + Math.min(left, STEP) + ' more</button>';
 }
 
+// CLUB HEALTH (4 Nov 2026, from the relay roadmap Asher asked to have
+// built): the year so far in a few numbers a club runs on - race days, how
+// many drivers came and how many a night, first-timers and how many of them
+// came back - and a bar for each night. Counted from the results index the
+// page already has, by driver as the index lists them; no names shown.
+function clubHealth() {
+  const days = Array.isArray(idx.days) ? idx.days : [];
+  const raced = Array.isArray(idx.raced) ? idx.raced : [];
+  if (days.length < 2) return '';
+  const dayOf = new Map();
+  days.forEach((entry, d) => {
+    const inside = entry && Array.isArray(entry.sessions) ? entry.sessions : [];
+    for (const i of inside) dayOf.set(i, d);
+  });
+  const perDay = days.map(() => new Set());
+  const first = [];
+  const last = [];
+  raced.forEach((list, who) => {
+    const ds = (Array.isArray(list) ? list : []).map((i) => dayOf.get(i)).filter((d) => typeof d === 'number');
+    if (ds.length === 0) return;
+    for (const d of ds) perDay[d].add(who);
+    first.push(Math.min.apply(null, ds));
+    last.push(Math.max.apply(null, ds));
+  });
+  const drivers = first.length;
+  if (drivers === 0) return '';
+  const counts = perDay.map((set) => set.size);
+  const avg = counts.reduce((a, n) => a + n, 0) / counts.length;
+  const lastDay = days.length - 1;
+  const newcomers = first.filter((d) => d < lastDay).length;
+  const back = first.filter((d, i) => d < lastDay && last[i] > d).length;
+  const most = Math.max.apply(null, counts);
+  const bars = counts.map((n, d) => '<span class="ch-bar" style="height:' + Math.max(4, Math.round(n / Math.max(1, most) * 48)) + 'px" title="' + esc(String(days[d].day || '')) + ': ' + n + '"></span>').join('');
+  return '<div class="card clubhealth"><h3>The club in ' + esc(year) + '</h3>' +
+    '<dl class="lxs">' +
+    '<div><dt>Race days</dt><dd>' + days.length + '</dd></div>' +
+    '<div><dt>Drivers</dt><dd>' + drivers + '</dd></div>' +
+    '<div><dt>A night, on average</dt><dd>' + avg.toFixed(1) + '</dd></div>' +
+    (newcomers > 0 ? '<div><dt>First-timers who came back</dt><dd>' + back + ' of ' + newcomers + '</dd></div>' : '') +
+    '</dl><div class="ch-bars" aria-label="Drivers each race day, oldest first" role="img">' + bars + '</div>' +
+    '<p class="when">Drivers each race day, oldest first.</p></div>';
+}
+
 // A race day at a time, newest first. One read of the index says which
 // sessions were run that day; one read of the results draws them.
 async function drawDays() {
@@ -2896,7 +3027,7 @@ async function drawDays() {
     return fail(mine, 'Could not fetch that race day from the relay. Try again in a moment.');
   }
 
-  const drawn = paint(mine, drawGroups(screen, got, ''), pagerFor(before, screen.length, days.length));
+  const drawn = paint(mine, (pageAt === 0 && seasonPick.value === '' ? clubHealth() : '') + drawGroups(screen, got, ''), pagerFor(before, screen.length, days.length));
 
   // The newest day on the screen names it, so the address bar holds a
   // link to what is being read. Only the draw that actually reached the
@@ -2904,6 +3035,32 @@ async function drawDays() {
   if (drawn && mine === turn) syncLink(screen[0].day);
 
   return drawn;
+}
+
+// RIVALS (4 Nov 2026, from the relay roadmap Asher asked to have built):
+// the drivers this one has raced most in the races on the screen, and who
+// finished ahead how often - the head-to-head a driver checks after a
+// night. Only drivers met at least twice, the five met most; a race whose
+// result does not have them (by the name on it) counts for nobody.
+function rivalsOf(lines, got, who) {
+  const met = new Map();
+  for (const line of lines) {
+    const body = got.get(line.id);
+    const rows = body && Array.isArray(body.results) ? body.results : [];
+    const me = rows.find((r) => r && r.name === who);
+    if (!me || !(Number(me.pos) > 0)) continue;
+    for (const r of rows) {
+      if (!r || r === me || !(Number(r.pos) > 0) || typeof r.name !== 'string' || r.name === '' || r.name === 'Unnamed driver') continue;
+      const tally = met.get(r.name) || { name: r.name, ahead: 0, behind: 0 };
+      if (Number(me.pos) < Number(r.pos)) tally.ahead++; else tally.behind++;
+      met.set(r.name, tally);
+    }
+  }
+  const top = [...met.values()].filter((t) => t.ahead + t.behind >= 2)
+    .sort((a, b) => (b.ahead + b.behind) - (a.ahead + a.behind) || a.name.localeCompare(b.name)).slice(0, 5);
+  if (top.length === 0) return '';
+  return '<div class="card rivals"><h3>Head to head</h3><p class="when">In the races below: who finished ahead.</p><ul>' +
+    top.map((t) => '<li>' + nm(t.name) + ' <b>' + esc(who) + ' ' + t.ahead + ' - ' + t.behind + '</b></li>').join('') + '</ul></div>';
 }
 
 // One driver's year, newest first, each session showing where they
@@ -2941,7 +3098,7 @@ async function drawDriver(number) {
   const lead = '<p class="when">' + esc(who) + ' raced ' + lines.length + (lines.length === 1 ? ' time' : ' times') +
     ' in ' + esc(season || year) + '.</p>';
 
-  const drawn = paint(mine, lead + drawGroups(groupByDay(take), got, who),
+  const drawn = paint(mine, lead + rivalsOf(take, got, who) + drawGroups(groupByDay(take), got, who),
     lines.length > take.length ? moreFor(lines.length - take.length) : '');
 
   // No day names a driver's history, so the address bar holds nothing
@@ -4654,7 +4811,81 @@ function drawBar(state, over, at, rows) {
   bar.innerHTML = '<div class="lp-top"><span class="lp-id"><span class="kick"><i></i>' + esc(kick) + '</span>'
     + '<span class="state">' + esc(said) + '</span></span>' + right + '</div>'
     + lbBar(done, total, over)
+    + (over ? '' : lbFollow(state, list, left))
     + (info || next ? '<div class="lp-foot"><span>' + info + '</span>' + next + '</div>' : '');
+}
+
+// --- The driver this phone follows, on the flag card (4 Nov 2026, from the
+// relay roadmap Asher asked to have built) -------------------------------
+// Their place, the gap to the car ahead and whether it is closing, the
+// room to the car behind, and - with the laps left known - how much a lap
+// they must find to catch the car ahead by the flag. Only for a name on
+// exactly one row, and only once they have a lap: an "Unnamed driver" or
+// a name the board shows twice could be anybody.
+//
+// The gaps are the board's own: the laptop's figure for the car ahead
+// (row.ahead, from 29 Oct 2026), else the club's Interval column, or the
+// Gap column for the car in second. A gap in laps ("+1L") is said as laps
+// and has no catching to do.
+let lbTrail = { who: '', gaps: [] };
+
+function lbGapText(state, row, pos) {
+  if (typeof row.ahead === 'string' && row.ahead !== '') return row.ahead;
+  const columns = Array.isArray(state.columns) ? state.columns.map((c) => String(c)) : [];
+  let at = columns.findIndex((c) => /^interval$/i.test(c));
+  if (at < 0 && pos === 2) at = columns.findIndex((c) => /^gap/i.test(c));
+  const cell = at >= 0 && Array.isArray(row.cells) ? row.cells[at] : null;
+  return cell && typeof cell === 'object' ? String(cell.text || '') : '';
+}
+
+// Seconds, or null for a gap in laps or one that cannot be read.
+function lbGapSecs(text) {
+  const m = /^\\+?(\\d+(?:[.,]\\d+)?)s?$/.exec(String(text || '').trim());
+  return m ? Number(m[1].replace(',', '.')) : null;
+}
+
+function lbFollow(state, rows, left) {
+  const who = memory;
+  if (!who || who === 'Unnamed driver') return '';
+  const mine = rows.filter((r) => r && typeof r === 'object' && r.name === who);
+  if (mine.length !== 1) return '';
+  const row = mine[0];
+  const pos = rows.indexOf(row) + 1;
+  const lapNow = lbLaps(row);
+  if (lapNow < 1) return '';
+
+  // A new race, or somebody else followed: the trail starts again.
+  if (lbTrail.who !== who || (lbTrail.gaps.length > 0 && lapNow < lbTrail.gaps.at(-1).lap)) lbTrail = { who: who, gaps: [] };
+
+  const parts = ['<b>' + esc(who) + '</b> P' + pos];
+  if (pos > 1) {
+    const ahead = rows.at(pos - 2);
+    const text = lbGapText(state, row, pos);
+    const secs = lbGapSecs(text);
+    const name = ahead && ahead.name ? esc(String(ahead.name)) : 'the car ahead';
+    if (secs === null) {
+      if (text) parts.push(esc(text.replace(/^\\+/, '')) + ' behind ' + name);
+    } else {
+      // One reading a lap, the first seen on it: the trend is over the last three laps.
+      const to = ahead && ahead.name ? String(ahead.name) : '';
+      if (lbTrail.gaps.length === 0 || lbTrail.gaps.at(-1).lap !== lapNow) lbTrail.gaps.push({ lap: lapNow, secs: secs, to: to });
+      if (lbTrail.gaps.length > 12) lbTrail.gaps.shift();
+      parts.push(secs.toFixed(2) + 's behind ' + name);
+      // Only against the same car: a new car ahead is a new gap, not a trend.
+      const then = lbTrail.gaps.find((g) => g.lap === lapNow - 3 && g.to === to);
+      if (then) {
+        const per = (then.secs - secs) / 3;
+        if (Math.abs(per) >= 0.02) parts.push((per > 0 ? 'closing ' : 'losing ') + Math.abs(per).toFixed(2) + 's a lap');
+      }
+      if (left !== null && left > 0) parts.push('needs ' + (secs / left).toFixed(2) + 's a lap to catch by the flag');
+    }
+  }
+  const behind = rows.at(pos);
+  if (behind && typeof behind === 'object') {
+    const secs = lbGapSecs(lbGapText(state, behind, pos + 1));
+    if (secs !== null) parts.push(secs.toFixed(2) + 's clear of ' + esc(String(behind.name || 'the car behind')));
+  }
+  return '<div class="lp-me">' + parts.join(' \\u00B7 ') + '</div>';
 }
 
 // --- The last race, kept (4 Nov 2026, Asher: "keep the board for the last
@@ -4917,7 +5148,131 @@ const posChart = (function () {
     drawTimes(rows);
   }
 
-  return { take: take, draw: draw, hide: hide };
+  // The colour a driver has in these charts, for the track map's dots.
+  function colourOf(name) {
+    const d = h.d[name];
+    return d ? COLOURS[d.c % COLOURS.length] : '#9E8AC7';
+  }
+
+  return { take: take, draw: draw, hide: hide, colourOf: colourOf };
+})();
+
+// --- The live track map (4 Nov 2026, Asher: "the live track map should
+// be on the live tab") --------------------------------------------------
+// The laptop's own map, as its Big Screen and the club Wi-Fi pages draw it:
+// the layout's line from the start-finish round, the split loops on it,
+// and a dot per car where the laptop works out it is - its last crossing
+// of the line or a split, and its usual lap. Between the once-a-second
+// frames each dot carries on at its own pace (rate, laps a second), held
+// short of the next loop it has not crossed yet (cap), as the Wi-Fi page's
+// do; a car well overdue sits still and is marked. Each car comes by its
+// row's tag, never its transponder, so the dot is named from the board:
+// numbered by place and in the colour its lines have in the charts below.
+//
+// Drawn only while a race is on and the layout has a plan; the frame
+// carries no map otherwise, and the card goes.
+const liveMap = (function () {
+  const box = document.getElementById('livemap');
+  const out = document.getElementById('lmapbody');
+  let shape = '';
+  let pts = [];
+  let cum = [];
+  let total = 0;
+  let cars = [];
+  let at = 0;
+  let timer = 0;
+  let base = '';
+  let frame = '';
+  let toScreen = null;
+
+  function hide() {
+    if (box) box.hidden = true;
+    if (timer) { clearInterval(timer); timer = 0; }
+    cars = [];
+  }
+
+  function pointAt(f) {
+    if (pts.length < 2 || total <= 0) return pts[0] || [0, 0];
+    const want = ((f % 1) + 1) % 1 * total;
+    let i = 1;
+    while (i < cum.length - 1 && cum[i] < want) i++;
+    const a = pts.at(i - 1), b = pts.at(i);
+    const span = cum[i] - cum[i - 1];
+    const t = span > 0 ? (want - cum[i - 1]) / span : 0;
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  }
+
+  function build(raw, splits) {
+    pts = raw;
+    cum = [0];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts.at(i - 1), b = pts.at(i);
+      cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+    }
+    total = cum[cum.length - 1];
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    const minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    const W = 600, pad = 28;
+    const scale = (W - 2 * pad) / Math.max(1e-6, maxX - minX);
+    const H = Math.max(160, Math.min(520, Math.round((maxY - minY) * scale + 2 * pad)));
+    const s = Math.min(scale, (H - 2 * pad) / Math.max(1e-6, maxY - minY));
+    const ox = (W - (maxX - minX) * s) / 2, oy = (H - (maxY - minY) * s) / 2;
+    toScreen = (p) => [ox + (p[0] - minX) * s, oy + (p[1] - minY) * s];
+    const d = pts.map((p, i) => { const q = toScreen(p); return (i === 0 ? 'M' : 'L') + q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join(' ');
+    const start = toScreen(pts[0]);
+    const ticks = (Array.isArray(splits) ? splits : []).filter((f) => typeof f === 'number' && f > 0 && f < 1)
+      .map((f) => { const q = toScreen(pointAt(f)); return '<circle class="lm-split" r="4" cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '"/>'; }).join('');
+    // The road, the line and the loops: drawn once a layout, the dots over them each tick.
+    frame = '<svg class="lmap" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Where each car is on the track">';
+    base = '<path class="lm-edge" d="' + d + '"/><path class="lm-road" d="' + d + '"/>' + ticks
+      + '<rect class="lm-line" x="' + (start[0] - 3).toFixed(1) + '" y="' + (start[1] - 10).toFixed(1) + '" width="6" height="20" rx="2"/>';
+  }
+
+  // The dots, at where each car has got to since the frame came.
+  function tick() {
+    if (!toScreen || !out) return;
+    const secs = Math.max(0, (Date.now() - at) / 1000);
+    const html = cars.slice().sort((a, b) => b.pos - a.pos).map((c) => {
+      const f = c.stop ? c.f : Math.min(c.cap, c.f + c.rate * secs);
+      const q = toScreen(pointAt(f));
+      return '<g class="lm-car' + (c.stop ? ' stop' : '') + (c.me ? ' me' : '') + '" style="--c:' + c.colour + '" transform="translate(' + q[0].toFixed(1) + ' ' + q[1].toFixed(1) + ')">'
+        + '<circle r="' + (c.me ? 13 : 11) + '"/><text y="4" text-anchor="middle">' + c.pos + '</text></g>';
+    }).join('');
+    out.innerHTML = frame + base + '<g class="lm-cars">' + html + '</g></svg>'
+      + '<p class="note">Where each car is, worked out from its last crossing of the line or a split. The number is its place.</p>';
+  }
+
+  function take(map, rows, colourOf) {
+    if (!box || !out || !map || typeof map !== 'object' || !Array.isArray(map.pts)) { hide(); return; }
+    const raw = map.pts.filter((p) => Array.isArray(p) && p.length === 2 && p.every((v) => typeof v === 'number' && isFinite(v)));
+    if (raw.length < 3) { hide(); return; }
+    const key = raw.length + ':' + raw[0].join(',') + ':' + raw.at(-1).join(',') + ':' + raw.at(Math.floor(raw.length / 2)).join(',');
+    if (key !== shape) { shape = key; build(raw, map.splits); }
+    box.hidden = false;
+    const byTag = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((r) => { if (r && typeof r.tag === 'string' && r.tag !== '') byTag.set(r.tag, r); });
+    cars = (Array.isArray(map.cars) ? map.cars : [])
+      .filter((c) => c && typeof c.tag === 'string' && byTag.has(c.tag) && typeof c.f === 'number')
+      .map((c) => {
+        const row = byTag.get(c.tag);
+        const name = String(row.name || '');
+        return {
+          pos: Math.max(1, Math.round(Number(c.pos) || 1)),
+          f: c.f,
+          rate: typeof c.rate === 'number' && isFinite(c.rate) ? c.rate : 0,
+          cap: typeof c.cap === 'number' && isFinite(c.cap) ? c.cap : c.f,
+          stop: c.stop === true,
+          me: name !== '' && name === memory,
+          colour: colourOf(name),
+        };
+      });
+    at = Date.now();
+    tick();
+    if (!timer) timer = setInterval(tick, 100);
+  }
+
+  return { take: take, hide: hide };
 })();
 
 function drawBoard(state) {
@@ -4967,11 +5322,14 @@ function render(state, seen, at, empty) {
         : 'The cars are lining up. The board fills once the race is under way.') + '</p>';
       boardHtml = '';
       posChart.hide();
+      // The track with nobody on it yet, once the green has gone.
+      if (running === 'Racing') liveMap.take(state.map, [], posChart.colourOf); else liveMap.hide();
       return;
     }
 
     // Between races: the last one's board under "Race over".
     const kept = keptRace();
+    liveMap.hide();
     drawBar(state, !!kept, kept ? kept.at : 0, kept && Array.isArray(kept.state.standings) ? kept.state.standings : []);
     if (kept) {
       drawBoard(kept.state);
@@ -4985,11 +5343,14 @@ function render(state, seen, at, empty) {
   }
 
   const over = running === 'Finished';
+  // A finished race settles this phone's Who wins? picks (4 Nov 2026).
+  if (over && rows[0] && typeof rows[0].name === 'string' && typeof picksSettle === 'function') picksSettle(rows[0].name, at || Date.now());
   drawBar(state, over, at, rows);
   keepRace(state, at || Date.now());
   posChart.take(rows);
   drawBoard(state);
   posChart.draw(rows);
+  if (over) liveMap.hide(); else liveMap.take(state.map, rows, posChart.colourOf);
 }
 
 // Shows or hides the broadcast bug (see load).
@@ -5215,6 +5576,52 @@ function voteControl(vote: boolean): string {
 }
 
 const VOTE_JS = `
+// THE WHO WINS? RECORD (4 Nov 2026, from the relay roadmap Asher asked to
+// have built): this phone's picks and how many came right - the season
+// table a prediction game needs, for the one person who can see it. Kept
+// on this phone only, as the vote itself is anonymous. A pick is settled by
+// the first finished race after it was made, which is the race the vote
+// was for: voting is only ever open for the race about to run.
+const PICKS_KEY = 'hg-picks-' + CLUB;
+
+function picksRead() {
+  try {
+    const list = JSON.parse(localStorage.getItem(PICKS_KEY) || '[]');
+    return Array.isArray(list) ? list.filter((x) => x && typeof x.name === 'string' && typeof x.at === 'number').slice(-60) : [];
+  } catch (e) { return []; }
+}
+
+function picksWrite(list) {
+  try { localStorage.setItem(PICKS_KEY, JSON.stringify(list.slice(-60))); } catch (e) { /* this visit only */ }
+}
+
+// A pick just made: one per race, the latest standing.
+function picksAdd(race, name) {
+  const list = picksRead().filter((x) => !(x.right === null && x.race === race));
+  list.push({ race: race, name: name, at: Date.now(), right: null });
+  picksWrite(list);
+}
+
+// A race has finished at finishedAt with winner first: settle the picks waiting for it.
+function picksSettle(winner, finishedAt) {
+  const list = picksRead();
+  let changed = false;
+  for (const x of list) {
+    if (x.right === null && finishedAt > x.at && finishedAt - x.at < 3 * 3600000) {
+      x.right = x.name === winner;
+      changed = true;
+    }
+  }
+  if (changed) picksWrite(list);
+}
+
+function picksWords() {
+  const done = picksRead().filter((x) => x.right === true || x.right === false);
+  if (done.length === 0) return '';
+  const right = done.filter((x) => x.right).length;
+  return 'Your picks: ' + right + ' of ' + done.length + ' right';
+}
+
 (function () {
   const box = document.getElementById('vote');
   const race = document.getElementById('voterace');
@@ -5278,9 +5685,10 @@ const VOTE_JS = `
     if (now === shown) return;
     shown = now;
 
-    if (!open) said.textContent = 'Voting has closed. Your pick is in.';
-    else if (mine) said.textContent = 'You have ' + mineName + '. Good luck.';
-    else said.textContent = 'Tap who you reckon wins.';
+    const record = typeof picksWords === 'function' ? picksWords() : '';
+    if (!open) said.textContent = 'Voting has closed. Your pick is in.' + (record ? ' ' + record + '.' : '');
+    else if (mine) said.textContent = 'You have ' + mineName + '. Good luck.' + (record ? ' ' + record + '.' : '');
+    else said.textContent = 'Tap who you reckon wins.' + (record ? ' ' + record + ' so far.' : '');
   }
 
   async function ballot() {
@@ -5331,6 +5739,7 @@ const VOTE_JS = `
       mine = id;
       mineName = name;
       shown = null;
+      if (typeof picksAdd === 'function') picksAdd(race.textContent || '', name);
       ballot();
       return;
     }
@@ -5535,6 +5944,7 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     // Without Listen it stays, as the only way to read them.
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
       + '<div id="board"></div>'
+      + '<div id="livemap" class="card livepos" hidden><h3>Track map</h3><div id="lmapbody"></div></div>'
       + '<div id="livepos" class="card livepos" hidden><h3>Position by lap</h3><div id="lposbody"></div></div>'
       + '<div id="livetimes" class="card livepos" hidden><h3>Lap times</h3><div id="ltimebody"></div></div>'
       + voteControl(context.look.vote)
@@ -6118,7 +6528,43 @@ function draw() {
       <td class="n opt">\${esc(r.podiums ?? 0)}</td>
       <td class="n opt">\${r.best == null ? '-' : esc(r.best)}</td>
     </tr>\`).join('') +
-    '</tbody></table></div>';
+    '</tbody></table></div>' + whatItTakes(season);
+}
+
+// WHAT IT TAKES (4 Nov 2026, from the relay roadmap Asher asked to have
+// built): with the season's length known, the points still to be won and
+// who can still catch the leader - each driver's gap to the top against
+// the most the rounds left could pay them. Nothing at all for a season
+// whose length the club has not set: a guessed length would tell a driver
+// they are out of it when they are not. With a best-rounds rule a dropped
+// round can change it, and the page says so rather than pretend.
+function whatItTakes(season) {
+  const planned = Number(season.planned) || 0;
+  const most = Number(season.most) || 0;
+  const held = Number(season.held) || 0;
+  const rows = Array.isArray(season.standings) ? season.standings : [];
+  if (planned <= 0 || most <= 0 || rows.length < 2) return '';
+  const left = Math.max(0, planned - held);
+  const top = Number(rows[0].points) || 0;
+  const most_left = left * most;
+  const head = left === 0
+    ? 'All ' + planned + ' rounds are run.'
+    : left + (left === 1 ? ' round' : ' rounds') + ' to go, up to ' + most_left + ' points still to win.';
+  const second = Number(rows[1].points) || 0;
+  const settled = top - second > most_left;
+  const lines = rows.slice(1, 8).map((r) => {
+    const gap = top - (Number(r.points) || 0);
+    const alive = gap <= most_left;
+    return '<li>' + nm(r.name) + ' <span class="wt-gap">' + gap + ' behind</span> ' +
+      (left === 0 ? '' : alive ? '<b class="wt-in">can still win it</b>' : '<span class="wt-out">cannot catch the leader</span>') + '</li>';
+  }).join('');
+  const crown = settled && left > 0
+    ? '<p class="wt-crown">' + nm(rows[0].name) + ' has the title won: nobody can make up ' + (top - second) + ' points in what is left.</p>'
+    : '';
+  const rule = Number(season.bestOf) > 0
+    ? '<p class="note">Best ' + Number(season.bestOf) + ' rounds count, so a dropped round can change these.</p>'
+    : '';
+  return '<div class="card wt"><h3>What it takes</h3><p>' + esc(head) + '</p>' + crown + '<ul>' + lines + '</ul>' + rule + '</div>';
 }
 
 async function load() {
@@ -6769,6 +7215,34 @@ export function homePage(club: string, clubName: string, context: PageContext = 
 
 // --------------------------------------------------------------- schedule
 
+/**
+ * QUALIFYING AND THE MAINS (4 Nov 2026, from the relay roadmap Asher asked
+ * to have built): the laptop's qualifying order for each class on the race
+ * day, and the main each driver would make. What it takes to move up is
+ * worked out here: the score of the last driver into the main above.
+ * Shared by the Schedule page (every class) and a driver's night (theirs).
+ */
+const QUAL_JS = `
+// A qualifying score as LiveRC writes it: laps and time ("18/5:02.103"), or
+// the best run of laps in a row ("3 in 27.512").
+function qualScore(cls, r) {
+  if (!r) return '';
+  if (cls && cls.method === 'BestConsecutiveLaps' && Number(r.consecutiveMs) > 0) return (Number(cls.consecutive) || 3) + ' in ' + lap(Number(r.consecutiveMs));
+  return Number(r.laps) > 0 ? Number(r.laps) + '/' + lap(Number(r.timeMs)) : '-';
+}
+
+// For a row in a lower main: the score to beat for the one above, as words.
+function qualToMoveUp(cls, rows, r) {
+  const size = Number(cls && cls.mainSize) || 0;
+  const pos = Number(r && r.pos) || 0;
+  if (size < 2 || pos <= size) return '';
+  const tier = Math.floor((pos - 1) / size);
+  const cut = rows.find((x) => Number(x.pos) === tier * size);
+  const above = cut ? String(cut.main || '') : '';
+  return cut && above ? 'Beat ' + qualScore(cls, cut) + ' to make the ' + above + ' main' : '';
+}
+`;
+
 const SCHEDULE_JS = `
 const board = document.getElementById('board');
 const head = document.getElementById('head');
@@ -6781,6 +7255,49 @@ let lastText = '';
 
 function hit(name, q) {
   return q.length > 0 && String(name).toLowerCase().includes(q);
+}
+
+// HOW FAR BEHIND THE NIGHT IS RUNNING (4 Nov 2026, from the relay roadmap
+// Asher asked to have built): each line's time as the club typed it
+// against when the laptop actually started it (startedUtc), the latest
+// started line setting how late the night is - and the lines still to
+// come shown at their planned time plus that. Times are the club's clock,
+// read on this phone's: a phone at the track is in the track's time zone.
+// A time typed in a way this does not read ("after lunch") is left alone.
+function clockOn(text, dayOf) {
+  const m = /^(\\d{1,2})[:.](\\d{2})\\s*(am|pm)?$/i.exec(String(text || '').trim());
+  if (!m) return NaN;
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  const half = m[3] ? m[3].toLowerCase() : '';
+  if (half === 'pm' && h < 12) h += 12;
+  if (half === 'am' && h === 12) h = 0;
+  if (h > 23 || min > 59) return NaN;
+  const d = new Date(dayOf);
+  d.setHours(h, min, 0, 0);
+  return d.getTime();
+}
+
+function clockWords(ms) {
+  try { return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+}
+
+// Minutes late (negative: early) by the latest line that has started, or null.
+function runningLate(lines) {
+  let late = null;
+  for (const l of lines) {
+    const started = Date.parse(String(l.startedUtc || ''));
+    if (!Number.isFinite(started)) continue;
+    const planned = clockOn(l.time, started);
+    if (Number.isFinite(planned)) late = Math.round((started - planned) / 60000);
+  }
+  return late;
+}
+
+function lateWords(late) {
+  if (late === null) return '';
+  if (Math.abs(late) <= 2) return 'Running on time';
+  return late > 0 ? 'Running ' + late + ' min behind' : 'Running ' + (-late) + ' min ahead';
 }
 
 function draw() {
@@ -6804,15 +7321,29 @@ function draw() {
     return;
   }
 
-  board.innerHTML = shown.map((l) => {
+  const late = runningLate(lines);
+  const banner = late === null ? '' : '<p class="late' + (late > 2 ? ' behind' : '') + '">' + esc(lateWords(late)) + '</p>';
+
+  board.innerHTML = banner + shown.map((l) => {
     const drivers = Array.isArray(l.drivers) ? l.drivers : [];
+    // When it really started, or when it should now go off.
+    const started = Date.parse(String(l.startedUtc || ''));
+    const planned = clockOn(l.time, Number.isFinite(started) ? started : Date.now());
+    let when = '';
+    if (Number.isFinite(started)) {
+      const by = Number.isFinite(planned) ? Math.round((started - planned) / 60000) : 0;
+      when = 'started ' + clockWords(started) + (Math.abs(by) > 2 ? (by > 0 ? ', ' + by + ' min late' : ', ' + (-by) + ' min early') : '');
+    } else if (late !== null && late > 2 && Number.isFinite(planned) && (l.status === 'next' || l.status === 'upcoming')) {
+      when = 'about ' + clockWords(planned + late * 60000);
+    }
     const status = ['done', 'running', 'next', 'upcoming'].includes(l.status) ? l.status : 'upcoming';
     const pill = LABEL[status] ? '<span class="pill ' + status + '">' + LABEL[status] + '</span>' : '';
     const open = drivers.length > 0 && (opened.has(l.id) || (q && drivers.some((n) => hit(n, q))));
 
     return '<details class="' + status + '" data-id="' + esc(l.id) + '"' + (open ? ' open' : '') + '><summary>' +
       '<span class="tm">' + esc(l.time || '') + '</span>' +
-      '<span class="title">' + esc([l.className, l.description].filter(Boolean).join(' - ') || 'Session') + '</span>' +
+      '<span class="title">' + esc([l.className, l.description].filter(Boolean).join(' - ') || 'Session') +
+        (when ? '<span class="eta">' + esc(when) + '</span>' : '') + '</span>' +
       '<span class="winner">' +
         (drivers.length > 0 ? '<span class="when">' + drivers.length + (drivers.length === 1 ? ' driver' : ' drivers') + '</span> ' : '') +
         pill + '</span></summary>' +
@@ -6885,6 +7416,45 @@ async function load() {
 picker.addEventListener('change', draw);
 find.addEventListener('input', draw);
 poll(load, 15000);
+
+// Qualifying, under the running order (4 Nov 2026) - see QUAL_JS. A line
+// across the table where each main ends, and the drivers searched for
+// marked as they are in the line-ups.
+const qualBox = document.getElementById('qual');
+let qualText = '';
+
+function drawQual(classes) {
+  const cls = picker.value;
+  const q = find.value.trim().toLowerCase();
+  const shown = classes.filter((c) => c && Array.isArray(c.rows) && c.rows.length > 0 && (!cls || c.name === cls));
+  if (shown.length === 0) { qualBox.innerHTML = ''; return; }
+  qualBox.innerHTML = '<div class="day">Qualifying</div>' + shown.map((c) => {
+    const size = Number(c.mainSize) || 0;
+    const rows = c.rows.map((r) => {
+      const cut = size >= 2 && Number(r.pos) > 1 && (Number(r.pos) - 1) % size === 0;
+      const who = hit(r.name, q) ? '<mark>' + nm(r.name) + '</mark>' : nm(r.name);
+      return '<tr' + (cut ? ' class="cut"' : '') + '><td class="pos">' + esc(r.pos) + '</td><td>' + who + '</td>' +
+        '<td class="n">' + esc(qualScore(c, r)) + '</td><td class="n">' + esc(r.main || '') + '</td></tr>';
+    }).join('');
+    return '<div class="card qual"><h3>' + esc(c.name) + '</h3><table><thead><tr><th class="pos">#</th><th>Driver</th>' +
+      '<th class="n">Best</th><th class="n">Main</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }).join('');
+}
+
+let qualClasses = [];
+async function loadQual() {
+  const answer = await grab('/snapshot/qualifying').catch(() => null);
+  if (answer === null || answer.missing) { if (answer && answer.status === 404) { qualClasses = []; drawQual([]); } return; }
+  const text = JSON.stringify(answer.body.body);
+  if (text === qualText) return;
+  qualText = text;
+  qualClasses = answer.body.body && Array.isArray(answer.body.body.classes) ? answer.body.body.classes : [];
+  drawQual(qualClasses);
+}
+
+picker.addEventListener('change', () => drawQual(qualClasses));
+find.addEventListener('input', () => drawQual(qualClasses));
+poll(loadQual, 30000);
 `;
 
 export function schedulePage(club: string, clubName: string, context: PageContext = DEFAULT_CONTEXT): string {
@@ -6899,8 +7469,9 @@ export function schedulePage(club: string, clubName: string, context: PageContex
       '<div class="tools"><select id="cls" style="display:none"></select>' +
       '<input id="find" type="search" placeholder="Find your name" autocomplete="off" style="display:none"></div>' +
       '<div class="day">Running order</div>' +
-      '<div id="board"><p class="note">Loading&hellip;</p></div>',
-    script: SCHEDULE_JS,
+      '<div id="board"><p class="note">Loading&hellip;</p></div>' +
+      '<div id="qual"></div>',
+    script: QUAL_JS + SCHEDULE_JS,
   }, context);
 }
 
@@ -8756,6 +9327,40 @@ const ci = { shown: false, on: false, busy: false, pending: null };
 let alertsOn = false;
 let audio = null;
 let lastKey = '';
+// ALERTS FOR MORE THAN THE CALL-UP (4 Nov 2026, from the relay roadmap
+// Asher asked to have built): their marshal duty coming up next, and their
+// result filed, as well as their race - and, with the page in the
+// background, a notice from the phone itself when it lets the page show
+// one. lastDuty is what the duty said last time; racesSeen the races on
+// the night when it was last drawn (-1 before the first answer).
+let lastDuty = '';
+let racesSeen = -1;
+
+function dutyKey(m) {
+  return m && typeof m === 'object' && typeof m.race === 'string' ? m.race + '|' + num(m.away) : 'none';
+}
+
+// The phone's own notice, only while the page is out of sight and only
+// when the driver said yes to them: in sight, the toast and the buzz say it.
+function notice(title, body) {
+  try {
+    if (!document.hidden || typeof Notification !== 'function' || Notification.permission !== 'granted') return;
+    new Notification(title, { body: body, tag: 'hc-' + CLUB });
+  } catch (e) { /* the buzz still went */ }
+}
+
+// The rest of what alerts cover, as the card says it: marshal duty only for
+// a driver who has one.
+function alertsAlso() {
+  const m = live && live.marshal;
+  return (m && typeof m === 'object' && typeof m.race === 'string' && m.race !== '' ? 'when your marshal duty is next ' : '') + 'and when your result is in.';
+}
+
+function alertNow(title, body) {
+  buzz();
+  toast(title + (body ? ' - ' + body : ''));
+  notice(title, body);
+}
 
 // --- Lap times in my ear, on their own night (29 Oct 2026, asked for by
 // Asher) -------------------------------------------------------------------
@@ -9096,6 +9701,117 @@ function plural(n, one, many) {
   return n + ' ' + (n === 1 ? one : many);
 }
 
+// Where they stand in qualifying, found by the row tags of their own cars
+// (live.cars) - the same tags Live's board gives them, never a name match.
+// Read from the relay once a minute while the night page is open.
+let qualDoc = null;
+let qualAt = 0;
+
+async function readQual() {
+  if (Date.now() - qualAt < 60000) return;
+  qualAt = Date.now();
+  const answer = await grab('/snapshot/qualifying').catch(() => null);
+  if (answer === null) return;
+  qualDoc = !answer.missing && answer.body && answer.body.body ? answer.body.body : null;
+  drawLive();
+}
+
+function qualMine() {
+  const tags = live && Array.isArray(live.cars) ? live.cars.map((c) => c && c.tag).filter((x) => typeof x === 'string' && x !== '') : [];
+  const classes = qualDoc && Array.isArray(qualDoc.classes) ? qualDoc.classes : [];
+  for (const c of classes) {
+    const rows = Array.isArray(c.rows) ? c.rows : [];
+    const r = rows.find((x) => x && typeof x.tag === 'string' && tags.includes(x.tag));
+    if (r) return { cls: c, rows: rows, r: r };
+  }
+  return null;
+}
+
+function qualPart() {
+  // Only for a driver with a car to find: nothing to look up otherwise.
+  if (!(live && Array.isArray(live.cars) && live.cars.some((c) => c && typeof c.tag === 'string' && c.tag !== ''))) return null;
+  readQual();
+  const m = qualMine();
+  if (!m) return null;
+  const part = el('div', 'lc-part lc-qual');
+  part.appendChild(el('b', '', 'Qualifying'));
+  part.appendChild(el('div', '', nth(Number(m.r.pos)) + ' of ' + m.rows.length + ' in ' + String(m.cls.name || '') + (m.r.main ? ' - ' + m.r.main + ' main' : '')));
+  part.appendChild(el('div', 'when', 'Best ' + qualScore(m.cls, m.r)));
+  const up = qualToMoveUp(m.cls, m.rows, m.r);
+  if (up) part.appendChild(el('div', 'when', up));
+  return part;
+}
+
+// THE CHARGE TIMER (4 Nov 2026, from the relay roadmap Asher asked to have
+// built): a driver puts a pack on charge, says how long it takes, and the
+// card says when it is ready against when their next race is due - the
+// scramble at the charging table, answered before it starts. Kept on this
+// phone only: nothing about it goes to the relay or the laptop. With
+// alerts on it beeps and buzzes once when the time is up.
+const CHARGE_KEY = 'hg-charge-' + CLUB;
+const CHARGE_MINUTES = [15, 20, 30, 45, 60, 90];
+let charge = null;
+try {
+  const raw = JSON.parse(localStorage.getItem(CHARGE_KEY) || 'null');
+  if (raw && typeof raw.until === 'number' && isFinite(raw.until)) charge = { until: raw.until, told: raw.told === true };
+} catch (e) { /* none on charge */ }
+
+function saveCharge() {
+  try { if (charge) localStorage.setItem(CHARGE_KEY, JSON.stringify(charge)); else localStorage.removeItem(CHARGE_KEY); } catch (e) { /* this visit only */ }
+}
+
+// When it is ready, against when their race is due: the words for the card.
+function chargeWords(next, now) {
+  if (!charge) return 'Put a pack on charge and say how long it takes.';
+  const left = Math.round((charge.until - now) / 60000);
+  const ready = left <= 0 ? 'Charged' : 'Ready at ' + hm(charge.until) + ' (' + left + ' min)';
+  const due = next && typeof next === 'object' && typeof next.eta === 'string' ? Date.parse(next.eta) : NaN;
+  if (left <= 0 || !Number.isFinite(due)) return ready;
+  const spare = Math.round((due - charge.until) / 60000);
+  return ready + (spare >= 0 ? ' - ' + spare + ' min before your race' : ' - ' + (-spare) + ' min after your race is due');
+}
+
+function chargePart(next) {
+  const part = el('div', 'lc-part lc-charge');
+  part.appendChild(el('b', '', 'Charging'));
+  const now = Date.now();
+  const due = next && typeof next === 'object' && typeof next.eta === 'string' ? Date.parse(next.eta) : NaN;
+  const late = !!charge && Number.isFinite(due) && charge.until > due;
+  part.appendChild(el('div', 'when' + (late ? ' lc-late' : ''), chargeWords(next, now)));
+  if (charge) {
+    part.appendChild(tapButton('Off the charger', 'go quiet', () => { charge = null; saveCharge(); drawLive(); }));
+  } else {
+    const row = el('div', 'lc-chargeset');
+    const pick = document.createElement('select');
+    for (const m of CHARGE_MINUTES) {
+      const o = document.createElement('option');
+      o.value = String(m);
+      o.textContent = m + ' min';
+      if (m === 30) o.selected = true;
+      pick.appendChild(o);
+    }
+    pick.value = '30';
+    row.appendChild(pick);
+    row.appendChild(tapButton('On charge', 'go quiet', () => {
+      const mins = Math.max(1, Math.min(240, Number(pick.value) || 30));
+      charge = { until: Date.now() + mins * 60000, told: false };
+      saveCharge();
+      drawLive();
+    }));
+    part.appendChild(row);
+  }
+  return part;
+}
+
+// Once a quarter-minute: the time is up - say so once, and redraw the card.
+setInterval(() => {
+  if (!charge || charge.told || Date.now() < charge.until) return;
+  charge.told = true;
+  saveCharge();
+  if (alertsOn) alertNow('Your pack is charged', '');
+  try { drawLive(); } catch (e) { /* the card catches up on the next poll */ }
+}, 15000);
+
 function hm(ms) {
   return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
@@ -9202,6 +9918,10 @@ function toggleAlerts() {
       if (audio.state !== 'running') audio.resume();
     } catch (e) { audio = null; }
     lastKey = callKey(live && live.next);
+    lastDuty = dutyKey(live && live.marshal);
+    try {
+      if (typeof Notification === 'function' && Notification.permission === 'default') Notification.requestPermission();
+    } catch (e) { /* buzz and toast only */ }
     buzz();
     toast('Alerts on. Keep this page open on your screen.');
   } else {
@@ -9369,8 +10089,8 @@ function liveCard() {
 
     card.appendChild(tapButton(alertsOn ? 'Alerts on - tap to turn off' : 'Turn on alerts', 'go quiet' + (alertsOn ? ' on' : ''), toggleAlerts));
     card.appendChild(el('div', 'when', alertsOn
-      ? 'Keep this page open on your screen. It beeps and buzzes when your race is next, and again when it is staged.'
-      : 'Two beeps and a buzz when your race is next, and again when it is staged.'));
+      ? 'Keep this page open. It beeps and buzzes when your race is next, when it is staged, ' + alertsAlso()
+      : 'Two beeps and a buzz when your race is next, when it is staged, ' + alertsAlso()));
 
     const m = live.marshal;
 
@@ -9420,6 +10140,13 @@ function liveCard() {
       pack.className = 'su lc-part lc-pack';
       jobs.appendChild(pack);
     }
+
+    // The charge timer (4 Nov 2026) - see chargePart.
+    jobs.appendChild(chargePart(live.next));
+
+    // Where they stand in qualifying (4 Nov 2026) - see qualMine.
+    const standing = qualPart();
+    if (standing) jobs.appendChild(standing);
   }
 
   if (jobs.children.length > 0) card.appendChild(jobs);
@@ -9712,30 +10439,107 @@ function meTimes(lines, W) {
 
 // The Lap chart tab: the tick box when there is a field to hide, then the
 // two charts, redrawn when the tick changes or the result arrives.
+function raceSid(r) {
+  return typeof r.sid === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(r.sid) ? r.sid : '';
+}
+
+// The race's field from its public result, asked for once a visit and
+// shared by the charts and the race story: what is known now (an array,
+// null while it is read, false when the relay has none, undefined before
+// it is asked), with done called once it arrives.
+const fieldWaiting = new Map();
+
+function fieldFor(sid, done) {
+  if (!sid) return false;
+  if (fieldOf.has(sid)) {
+    if (fieldOf.get(sid) === null && done) fieldWaiting.get(sid).push(done);
+    return fieldOf.get(sid);
+  }
+  fieldOf.set(sid, null);
+  fieldWaiting.set(sid, done ? [done] : []);
+  const settle = () => {
+    const waiting = fieldWaiting.get(sid) || [];
+    fieldWaiting.delete(sid);
+    for (const fn of waiting) { try { fn(); } catch (e) { /* one card's redraw never stops another's */ } }
+  };
+  grab('/collection/results?ids=' + encodeURIComponent(sid)).then((answer) => {
+    if (answer === null || answer === undefined) { fieldOf.delete(sid); fieldWaiting.delete(sid); return; }
+    const items = !answer.missing && answer.body && Array.isArray(answer.body.items) ? answer.body.items : [];
+    const item = items.find((x) => x && String(x.id) === sid);
+    const list = item && item.body && Array.isArray(item.body.results) ? item.body.results : null;
+    fieldOf.set(sid, list === null ? false : list);
+    if (list !== null) settle(); else fieldWaiting.delete(sid);
+  }, () => { fieldOf.delete(sid); fieldWaiting.delete(sid); });
+  return null;
+}
+
+// The Lap chart tab: Just me and Compare with when there is a field, then
+// the two charts, redrawn when either changes or the result arrives.
+//
+// COMPARE WITH ANYONE (4 Nov 2026, from the relay roadmap Asher asked to
+// have built): one other driver from the race beside their own line, the
+// rest taken away - the head-to-head a driver wants after being beaten by
+// someone. Just me, when ticked, wins over it. The pick is kept by name
+// for the visit, so the next race with the same rival opens on them too.
 function meCharts(r) {
   const box = el('div', 'charts mecharts');
-  const tick = el('div', 'lvsay jm');
-  const label = el('label');
-  const input = document.createElement('input');
-  input.type = 'checkbox';
-  input.checked = justMe();
-  label.appendChild(input);
-  label.appendChild(el('span', '', 'Just me'));
-  tick.appendChild(label);
   let out = el('div');
   box.appendChild(out);
+  const sid = raceSid(r);
 
-  const sid = typeof r.sid === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(r.sid) ? r.sid : '';
+  // The two controls, made afresh on every draw.
+  const controls = (others) => {
+    const bar = el('div', 'mesay');
+    const tick = el('div', 'lvsay jm');
+    const label = el('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = justMe();
+    input.addEventListener('change', () => {
+      view.justMe = input.checked;
+      try { localStorage.setItem(JUST_ME_KEY, view.justMe ? '1' : '0'); } catch (e) { /* this visit only */ }
+      paint();
+    });
+    label.appendChild(input);
+    label.appendChild(el('span', '', 'Just me'));
+    tick.appendChild(label);
+    bar.appendChild(tick);
+    const pickBox = el('label', 'mevs');
+    pickBox.appendChild(el('span', '', 'Compare with'));
+    const pick = document.createElement('select');
+    const all = document.createElement('option');
+    all.value = '';
+    all.textContent = 'Everyone';
+    pick.appendChild(all);
+    for (const l of others) {
+      const o = document.createElement('option');
+      o.value = l.name;
+      o.textContent = l.name;
+      if (l.name === view.vs) o.selected = true;
+      pick.appendChild(o);
+    }
+    pick.value = view.vs;
+    pick.disabled = justMe();
+    pick.addEventListener('change', () => { view.vs = pick.value; paint(); });
+    pickBox.appendChild(pick);
+    bar.appendChild(pickBox);
+    return bar;
+  };
 
   const paint = () => {
     // A fresh holder each time, the old one and its charts gone.
     out.remove();
     out = el('div');
     box.appendChild(out);
-    const lines = meLines(r, sid ? fieldOf.get(sid) : null);
-    // The tick only when there is somebody to hide, above the charts.
-    if (lines.length > 1) out.appendChild(tick);
-    const shown = lines.length > 1 && justMe() ? lines.filter((l) => l.me) : lines;
+    const lines = meLines(r, fieldFor(sid, paint));
+    const others = lines.filter((l) => !l.me);
+    if (typeof view.vs !== 'string') view.vs = '';
+    const vs = others.some((l) => l.name === view.vs) ? view.vs : '';
+    // The choices only when there is somebody to hide, above the charts.
+    if (others.length > 0) out.appendChild(controls(others));
+    const shown = others.length === 0 ? lines
+      : justMe() ? lines.filter((l) => l.me)
+      : vs !== '' ? lines.filter((l) => l.me || l.name === vs) : lines;
     const W = meChartWidth(box);
     const places = mePositions(shown, r.of, W);
     if (places) out.appendChild(places);
@@ -9743,26 +10547,133 @@ function meCharts(r) {
     if (times) out.appendChild(times);
   };
 
-  input.addEventListener('change', () => {
-    view.justMe = input.checked;
-    try { localStorage.setItem(JUST_ME_KEY, view.justMe ? '1' : '0'); } catch (e) { /* this visit only */ }
-    paint();
-  });
-
   paint();
+  return box;
+}
 
-  if (sid && !fieldOf.has(sid)) {
-    fieldOf.set(sid, null);
-    grab('/collection/results?ids=' + encodeURIComponent(sid)).then((answer) => {
-      if (answer === null || answer === undefined) { fieldOf.delete(sid); return; }
-      const items = !answer.missing && answer.body && Array.isArray(answer.body.items) ? answer.body.items : [];
-      const item = items.find((x) => x && String(x.id) === sid);
-      const list = item && item.body && Array.isArray(item.body.results) ? item.body.results : null;
-      fieldOf.set(sid, list === null ? false : list);
-      if (list !== null) paint();
-    }, () => { fieldOf.delete(sid); });
+// THE RACE STORY (4 Nov 2026, from the relay roadmap): how the race went,
+// in the few numbers a driver can do something about - the mistakes and
+// what they cost, the start, the passes, how the pace held up - worked out
+// from their own laps and places, and, once the race's public result is
+// read, how their laps stood against the field's. Nothing here is a guess:
+// a figure that cannot be worked out is left out.
+//
+// A MISTAKE is a lap over 110% of their own typical (median) lap: a crash,
+// a flip, a marshal wait. What it cost is how far each one ran over that
+// typical lap.
+function raceStory(r, field) {
+  const laps = lxLaps(r.lapsMs);
+  const lines = [];
+  const notes = [];
+  if (laps.length === 0) return { lines, notes };
+
+  const sorted = laps.slice().sort((a, b) => a - b);
+  const typical = sorted.length % 2 === 1
+    ? sorted[(sorted.length - 1) / 2]
+    : (sorted.at(sorted.length / 2 - 1) + sorted.at(sorted.length / 2)) / 2;
+  const slips = laps.map((ms, i) => ({ ms, n: i + 1 })).filter((x) => x.ms > typical * 1.1);
+  const lost = slips.reduce((a, x) => a + (x.ms - typical), 0);
+  const secs = (ms) => (ms / 1000).toFixed(ms >= 10000 ? 1 : 2) + 's';
+
+  lines.push(['Mistakes', slips.length === 0 ? 'None' : String(slips.length)]);
+  if (slips.length > 0) {
+    lines.push(['Time lost to them', secs(lost)]);
+    notes.push((slips.length === 1 ? 'The slow lap was lap ' : 'The slow laps were laps ')
+      + slips.map((x) => x.n).join(', ') + ', against a typical lap of ' + lap(Math.round(typical)) + '.');
   }
 
+  let run = 0, longest = 0;
+  for (const ms of laps) { run = ms > typical * 1.1 ? 0 : run + 1; longest = Math.max(longest, run); }
+  if (laps.length >= 3) lines.push(['Longest clean run', plural(longest, 'lap', 'laps')]);
+
+  if (laps.length >= 6) {
+    const first = lxMean(laps.slice(0, 3));
+    const last = lxMean(laps.slice(-3));
+    const d = last - first;
+    lines.push(['Pace at the end', Math.abs(d) < 50 ? 'Held' : (d > 0 ? secs(d) + ' slower' : secs(-d) + ' quicker')]);
+  }
+
+  const places = Array.isArray(r.posAt) && r.posAt.length > 0 && r.posAt.every((p) => typeof p === 'number' && p > 0) ? r.posAt : null;
+  if (places) {
+    const grid = num(r.start);
+    if (grid > 0) {
+      const d = grid - places[0];
+      lines.push(['Start', d > 0 ? 'Gained ' + plural(d, 'place', 'places') : d < 0 ? 'Lost ' + plural(-d, 'place', 'places') : 'Held ' + nth(grid)]);
+    }
+    let made = 0, gone = 0;
+    for (let i = 1; i < places.length; i++) {
+      const d = places.at(i - 1) - places.at(i);
+      if (d > 0) made += d; else gone -= d;
+    }
+    lines.push(['Places gained / lost', made + ' / ' + gone]);
+    const led = places.filter((p) => p === 1).length;
+    if (led > 0) lines.push(['Laps led', String(led)]);
+    lines.push(['Best place', nth(Math.min.apply(null, places))]);
+  }
+
+  // Their best sectors, added up - from their own row of the race's result.
+  const own = Array.isArray(field) ? field.find((x) => x && typeof x === 'object' && sameLaps(lxLaps(x.lapsMs), laps)) : null;
+  const theory = own ? lxTheoretical(own.sectorsMs) : null;
+  if (theory !== null) {
+    lines.push(['Theoretical best', lap(theory)]);
+    lines.push(['Left on the table', secs(Math.max(0, sorted[0] - theory))]);
+    notes.push('Theoretical best adds up your best time in each sector: the lap you had in you.');
+  }
+
+  // Against the field, lap by lap: where their time ranked among everyone
+  // who ran that lap.
+  const rest = Array.isArray(field) ? field.filter((x) => x && typeof x === 'object' && !sameLaps(lxLaps(x.lapsMs), laps)) : [];
+  if (rest.length > 0) {
+    let quickest = 0, ranks = 0, counted = 0;
+    laps.forEach((ms, i) => {
+      const theirs = rest.map((x) => lxLaps(x.lapsMs)).filter((l) => l.length > i).map((l) => l.at(i));
+      if (theirs.length === 0) return;
+      const rank = 1 + theirs.filter((t) => t < ms).length;
+      if (rank === 1) quickest++;
+      ranks += rank;
+      counted++;
+    });
+    if (counted > 0) {
+      lines.push(['Quickest car', 'On ' + quickest + ' of ' + plural(counted, 'lap', 'laps')]);
+      lines.push(['Average lap rank', (ranks / counted).toFixed(1) + ' of ' + (rest.length + 1)]);
+    }
+    const mine = typical;
+    const theirTypical = rest.map((x) => lxLaps(x.lapsMs)).filter((l) => l.length > 0)
+      .map((l) => l.slice().sort((a, b) => a - b).at(Math.floor((l.length - 1) / 2)));
+    if (theirTypical.length > 0) {
+      const fieldTypical = theirTypical.slice().sort((a, b) => a - b).at(Math.floor((theirTypical.length - 1) / 2));
+      const d = fieldTypical - mine;
+      lines.push(['Against the field', Math.abs(d) < 20 ? 'Level' : secs(Math.abs(d)) + ' a lap ' + (d > 0 ? 'quicker' : 'slower')]);
+      notes.push('Against the field compares your typical lap with the typical lap of the middle driver.');
+    }
+  }
+
+  return { lines, notes };
+}
+
+// The Race story tab: the figures as the stats tab sets them out, and the
+// notes under them. Drawn again once the field arrives.
+function storyPanel(r) {
+  const box = el('div', 'nlx story');
+  const sid = raceSid(r);
+  let out = el('div');
+  box.appendChild(out);
+  const paint = () => {
+    out.remove();
+    out = el('div');
+    box.appendChild(out);
+    const s = raceStory(r, fieldFor(sid, paint));
+    const dl = el('dl', 'lxs');
+    for (const line of s.lines) {
+      const one = el('div');
+      one.appendChild(el('dt', '', line[0]));
+      one.appendChild(el('dd', '', line[1]));
+      dl.appendChild(one);
+    }
+    out.appendChild(dl);
+    for (const n of s.notes) out.appendChild(el('p', 'note', n));
+  };
+  paint();
   return box;
 }
 
@@ -10152,6 +11063,8 @@ function raceDetail(r, stats, own) {
     // Since 4 Nov 2026 the same two charts as Live's, with the rest of the
     // field from the race's public result - see meCharts.
     if (lxLaps(r.lapsMs).length > 0) tabs.push(['chart', 'Lap chart', meCharts(r)]);
+    // How the race went, from the relay roadmap (4 Nov 2026) - see raceStory.
+    if (lxLaps(r.lapsMs).length > 0) tabs.push(['story', 'Race story', storyPanel(r)]);
   }
 
   if (tabs.length > 0) {
@@ -10600,6 +11513,7 @@ function paintNight() {
 
 function take(body) {
   night = body && typeof body.night === 'object' && body.night !== null ? body.night : null;
+  if (racesSeen < 0 && night && Array.isArray(night.races)) racesSeen = night.races.length;
   clips = Array.isArray(body && body.clips) ? body.clips : [];
   live = body && typeof body.live === 'object' && body.live !== null ? body.live : null;
   if ((night && night.firstNight === true) || (live && live.firstNight === true)) firstNight = true;
@@ -10712,6 +11626,7 @@ function kindWords(kind) {
   if (kind === 'details') return 'Your details';
   if (kind === 'pack') return 'Battery pack';
   if (kind === 'query') return 'Race query';
+  if (kind === 'setup') return 'Setup log';
   return 'Request';
 }
 
@@ -10881,6 +11796,10 @@ function drawAsks(message) {
     packs.className = 'su';
     sec.appendChild(packs);
   }
+
+  // A setup change, for the Garage's setup log, the Driver Hub and the
+  // technical lead's interview (4 Nov 2026) - see setupForm.
+  sec.appendChild(setupBox());
 
   const change = el('details', 'yd-change');
   change.open = view.details || !!message;
@@ -11155,6 +12074,73 @@ function detailsForm(message) {
 let packNode = null;
 let packFor = '';
 
+// THE SETUP LOG FROM THE PHONE (4 Nov 2026, Asher: "when you make an setup
+// log change on the relay it should update in the driver hub and feed into
+// the technical lead interview"). The setup sheet's five short parts and a
+// note, sent as a request the laptop files by itself into the Garage's
+// setup log: the Driver Hub lists it under the driver's setups, and the
+// technical lead's interview after a race they win reads it, as it reads a
+// setup logged at the desk. The same element on every redraw, so a half
+// typed change survives the next poll.
+let setupNode = null;
+
+function setupBox() {
+  if (setupNode === null) setupNode = setupForm();
+  return setupNode;
+}
+
+const SETUP_PARTS = [['tires', 'Tires'], ['gearing', 'Gearing'], ['springs', 'Springs'], ['ride', 'Ride height'], ['motor', 'Motor'], ['notes', 'Notes']];
+
+function setupForm() {
+  const part = el('details', 'yd-change setuplog');
+  part.open = view.setupOpen === true;
+  part.addEventListener('toggle', () => { view.setupOpen = part.open; });
+  part.appendChild(el('summary', '', 'Log a setup change'));
+  part.appendChild(el('p', 'when', 'What you changed on the car. It goes in your setup log at the desk, and the technical lead can talk about it after the race.'));
+
+  const inputs = {};
+  for (const [key, words] of SETUP_PARTS) {
+    const label = el('label', 'f', words);
+    const box = document.createElement(key === 'notes' ? 'textarea' : 'input');
+    if (key !== 'notes') box.type = 'text';
+    box.maxLength = key === 'notes' ? 300 : 80;
+    box.addEventListener('input', markEdited);
+    label.appendChild(box);
+    part.appendChild(label);
+    inputs[key] = box;
+  }
+
+  const said = el('p', 'yd-said', '');
+  said.setAttribute('role', 'status');
+
+  const send = tapButton('Add to my setup log', 'go quiet', async () => {
+    const parts = {};
+    for (const [key] of SETUP_PARTS) {
+      const v = String(inputs[key].value || '').trim();
+      if (v !== '') parts[key] = v;
+    }
+    if (Object.keys(parts).length === 0) {
+      said.textContent = 'Say what you changed.';
+      return;
+    }
+    send.disabled = true;
+    said.textContent = 'Sending\\u2026';
+    const got = await sendAsk('setup', parts);
+    send.disabled = false;
+    if (got.ok) {
+      for (const [key] of SETUP_PARTS) inputs[key].value = '';
+      edited = false;
+      said.textContent = 'Sent - it goes in your setup log in a few seconds.';
+    } else {
+      said.textContent = got.words;
+    }
+  });
+
+  part.appendChild(send);
+  part.appendChild(said);
+  return part;
+}
+
 function packBox() {
   const key = JSON.stringify(me && me.packs ? me.packs : null);
   if (packNode === null || key !== packFor) {
@@ -11262,6 +12248,12 @@ async function refreshNight() {
   take(a.body);
   if (live === null) live = was;
   if (JSON.stringify([night, clips, asksOpen]) !== before) paintNight();
+  const races = night && Array.isArray(night.races) ? night.races : [];
+  if (alertsOn && racesSeen >= 0 && races.length > racesSeen) {
+    const r = races[races.length - 1] || {};
+    alertNow('Your result is in', [String(r.label || ''), finishWords(r)].filter(Boolean).join(' - '));
+  }
+  racesSeen = races.length;
   drawLive();
   refreshAsks();
 }
@@ -11275,11 +12267,15 @@ function takeLive(entry) {
   const now = n && typeof n === 'object' ? String(n.race || '') : '';
 
   if (alertsOn) {
-    if (worthABuzz(lastKey, n)) {
-      buzz();
-      toast(callWords(n) + ' - ' + String(n.race || ''));
-    }
+    if (worthABuzz(lastKey, n)) alertNow(callWords(n), String(n.race || ''));
     lastKey = callKey(n);
+    // Their marshal duty, once, when it becomes the next race.
+    const m = live && live.marshal;
+    const duty = dutyKey(m);
+    if (lastDuty !== '' && duty !== lastDuty && m && typeof m === 'object' && num(m.away) === 0) {
+      alertNow('Marshal duty next', String(m.race || '') + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : ''));
+    }
+    lastDuty = duty;
   }
 
   if (before !== '' && before !== now) refreshSoon();
@@ -11468,7 +12464,7 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     body: '<div id="nh"></div><div id="nj"></div><div id="gd"></div><div id="up"></div><div id="ng"></div>' +
       '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div><div id="yd"></div>' +
       '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>',
-    script: LAPS_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
+    script: LAPS_JS + QUAL_JS + LAPVOICE_JS + NIGHT_JS + NIGHT_ME_JS + NIGHT_GO_JS,
     noindex: true,
   }, context);
 }

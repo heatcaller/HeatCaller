@@ -219,6 +219,33 @@ describe("alerts", () => {
     assert.equal(page.vibrations.length, 3, "going green is not a call-up");
   });
 
+  it("buzz when their marshal duty is next and when their result is in (4 Nov 2026)", async () => {
+    let marshal: Record<string, unknown> = { race: "Q2 Heat 3", post: "Turn 2", away: 1 };
+    let races: Record<string, unknown>[] = [{ sid: "a".repeat(32), label: "Q1 Heat 1", pos: 2, of: 6, laps: 9, lapsMs: [9000, 9100] }];
+    const answer = () => ({ ok: true, night: night({ races }), live: { next: { race: "Q2 Heat 1", away: 3 }, marshal } });
+    const page = await open(relay({ get ok() { return true; }, get night() { return answer().night; }, get live() { return answer().live; } },
+      { poll: () => ({ ok: true, live: answer().live }) }));
+
+    assert.match(page.get("lv").textContent, /when your marshal duty is next/);
+    page.button(page.get("lv"), /Turn on alerts/)!.click();
+    assert.equal(page.vibrations.length, 1, "a test buzz on the tap");
+
+    marshal = { race: "Q2 Heat 3", post: "Turn 2", away: 0 };
+    await page.advance(20000);
+    assert.equal(page.vibrations.length, 2, "marshal duty is next");
+    const said = () => String(page.eval("(document.getElementById('toast') || {}).textContent || ''"));
+    assert.equal(said(), "Marshal duty next - Q2 Heat 3 - Turn 2");
+
+    await page.advance(20000);
+    assert.equal(page.vibrations.length, 2, "once, not every poll");
+
+    races = races.concat([{ sid: "b".repeat(32), label: "Q2 Heat 1", pos: 1, of: 6, laps: 9, lapsMs: [8900, 9000] }]);
+    page.eval("refreshNight()");
+    await page.settle();
+    assert.equal(page.vibrations.length, 3, "their result is in");
+    assert.equal(said(), "Your result is in - Q2 Heat 1 - 1st of 6");
+  });
+
   it("the rule on its own", async () => {
     const page = await open(relay(404));
     const worth = (before: string, n: unknown) => page.eval(`worthABuzz(${JSON.stringify(before)}, ${JSON.stringify(n)})`);
@@ -507,6 +534,54 @@ describe("the night's own extras", () => {
     assert.equal(lines("mepos"), 1, "Just me: their line alone");
     assert.equal(lines("metimes"), 1);
     assert.equal(page.store.get("hg-night-just-me"), "1", "remembered on this phone");
+
+    // Compare with (4 Nov 2026, the relay roadmap): off while Just me is on,
+    // then their line and one rival's.
+    const pick = () => page.get("nx").find((n) => n.tagName === "SELECT")[0]!;
+    assert.equal((pick() as unknown as { disabled: boolean }).disabled, true, "Just me wins over Compare with");
+    const tickNow = page.get("nx").find((n) => n.tagName === "INPUT" && n.parent?.parent?.className === "lvsay jm")[0]!;
+    (tickNow as unknown as { checked: boolean }).checked = false;
+    tickNow.fire("change");
+    assert.equal(lines("mepos"), 3, "everyone again");
+    assert.deepEqual(pick().find((n) => n.tagName === "OPTION").map((n) => n.textContent),
+      ["Everyone", "Sam P.", "<img src=x onerror=alert(2)>"], "the other drivers, as text");
+    (pick() as unknown as { value: string }).value = "Sam P.";
+    pick().fire("change");
+    assert.equal(lines("mepos"), 2, "them and Sam");
+    assert.equal(lines("metimes"), 2);
+  });
+
+  it("tells the race story: mistakes and what they cost, the start, the passes, the field", async () => {
+    // 4 Nov 2026, the relay roadmap. Their laps hold one 30 s lap - lap 5.
+    const field = {
+      id: RACE, type: "Race", label: "Q1 Heat 2",
+      results: [
+        { pos: 1, name: "Sam P.", lapsMs: [8500, 8400, 8450, 8420, 8390, 8410, 8400] },
+        { pos: 2, name: "Alex M", lapsMs: [8600, 8900, 8550, 8520, 8590, 8510, 8500] },
+        { pos: 3, name: "Asher K.", lapsMs: laps },
+      ],
+    };
+    const races = full.night["races"] as Record<string, unknown>[];
+    const base = relay({ ...full, night: { ...full.night, races: [{ ...races[0], posAt: [4, 4, 3, 3, 3, 3, 3] }, races[1]] } });
+    const page = await open(async (url, body) => url.includes("/collection/results")
+      ? { status: 200, body: { ok: true, items: [{ id: RACE, body: field }] } }
+      : base(url, body));
+    openRace(page, "Q1 Heat 2");
+    await page.settle();
+
+    const story = page.get("nx").find((n) => n.className === "nlx story")[0];
+    assert.ok(story, "a Race story panel");
+    const facts = Object.fromEntries(story.find((n) => n.tagName === "DIV" && n.children.length === 2 && n.children[0]!.tagName === "DT")
+      .map((d) => [d.children[0]!.textContent, d.children[1]!.textContent]));
+
+    assert.equal(facts["Mistakes"], "1");
+    assert.equal(facts["Time lost to them"], "21.3s", "30.000 against a typical 8.700");
+    assert.equal(facts["Longest clean run"], "4 laps");
+    assert.equal(facts["Start"], "Gained 1 place", "from 5th on the grid to 4th after lap 1");
+    assert.equal(facts["Places gained / lost"], "1 / 0");
+    assert.equal(facts["Best place"], "3rd");
+    assert.equal(facts["Quickest car"], "On 0 of 7 laps");
+    assert.match(story.textContent, /The slow lap was lap 5/);
   });
 
   it("shows improvement, six bars of progress with the since line, and at most three in reach", async () => {

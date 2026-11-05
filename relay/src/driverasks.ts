@@ -48,15 +48,25 @@ export const ASK_MAX_ABOUT = 120;
 export const ASK_MAX_EMAIL = 120;
 export const ASK_MAX_QUERY = 300;
 
+/**
+ * A setup log entry from the driver's own night (4 Nov 2026, from the relay
+ * roadmap Asher asked to have built): the setup sheet's five short parts and
+ * a note, the laptop's legacy SetupEntry fields, which file straight into
+ * the Garage's setup log and the technical lead's brief.
+ */
+export const ASK_SETUP_PARTS: readonly string[] = ["tires", "gearing", "springs", "ride", "motor"];
+export const ASK_MAX_SETUP_PART = 80;
+export const ASK_MAX_SETUP_NOTES = 300;
+
 /** A pack id or a race (session) id: a Guid "N", as the laptop makes them. */
 export const ASK_OBJECT_ID = /^[0-9a-f]{32}$/;
 
 /** Plain enough to be an address and nothing else - the desk mails a notice to the OLD one before it changes. */
 const EMAIL = /^[^\s@<>()",;:\\[\]]+@[^\s@<>()",;:\\[\]]+\.[^\s@<>()",;:\\[\]]+$/;
 
-export type DriverAskKind = "details" | "pack" | "query";
+export type DriverAskKind = "details" | "pack" | "query" | "setup";
 
-export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query"];
+export const DRIVER_ASK_KINDS: readonly DriverAskKind[] = ["details", "pack", "query", "setup"];
 
 /** Which proof came with the ask: the personal PIN's pass, or the badge code alone. */
 export type DriverAskProof = "pin" | "badge";
@@ -139,6 +149,41 @@ export function askFieldsFrom(kind: string, f: unknown, withPin: boolean): AskCh
     }
 
     return { ok: true, f: { race, m } };
+  }
+
+  if (kind === "setup") {
+    const out: Record<string, string> = {};
+
+    const limits: [string, number][] = ASK_SETUP_PARTS.map((n): [string, number] => [n, ASK_MAX_SETUP_PART]);
+    limits.push(["notes", ASK_MAX_SETUP_NOTES]);
+
+    for (const [name, max] of limits) {
+      const value = input[name];
+
+      if (value === undefined) {
+        continue;
+      }
+
+      if (typeof value !== "string") {
+        return refuse(400, "That request could not be read.");
+      }
+
+      const cleaned = cleanAskText(value, max + 1);
+
+      if (cleaned.length > max) {
+        return refuse(400, `Keep each part under ${max} characters.`);
+      }
+
+      if (cleaned.length > 0) {
+        out[name] = cleaned;
+      }
+    }
+
+    if (Object.keys(out).length === 0) {
+      return refuse(400, "Say what you changed.");
+    }
+
+    return { ok: true, f: out };
   }
 
   if (kind !== "details") {

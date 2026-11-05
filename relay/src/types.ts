@@ -229,6 +229,10 @@ export const CHANNELS: Readonly<Record<string, ChannelSpec>> = Object.freeze({
     rollOldest: true,
   },
   site: { name: "site", kind: "snapshot", what: "the club's colors, welcome line and logo" },
+  // Where qualifying stands on the race day in hand, per class, with the
+  // main each driver would make (4 Nov 2026, the relay roadmap). Public:
+  // it is worked out from results that are public already.
+  qualifying: { name: "qualifying", kind: "snapshot", what: "where qualifying stands, and the main each driver would make" },
   // Online check-in: who can be checked in, the PIN's hash, and the
   // drivers' names and photos. Private - the relay hands out pieces of
   // it to a PIN or a badge, never the whole thing.

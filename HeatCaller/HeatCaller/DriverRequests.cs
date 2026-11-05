@@ -719,6 +719,8 @@ internal sealed class DriverRequestStore
         "pack" => 32 + 8,
         "race" => 32 + 8,
         "m" => DriverAsk.QueryMaxChars,
+        "tires" or "gearing" or "springs" or "ride" or "motor" => DriverAsk.SetupPartMaxChars,
+        "notes" => DriverAsk.SetupNotesMaxChars,
         _ => 0,
     };
 
@@ -787,6 +789,159 @@ internal sealed class DriverRequestDesk
 
     /// <summary>What went wrong collecting requests from the relay, or null. Set by the host.</summary>
     public Func<string?>? RelayProblem { get; set; }
+
+    // ------------------------------------------------------- setup changes
+
+    /// <summary>
+    /// The Garage's setup log, which a setup change from a phone is filed
+    /// into (4 Nov 2026). Set by the host; without it a setup request waits
+    /// for the desk like any other.
+    /// </summary>
+    public SetupLogStore? Setups { get; set; }
+
+    /// <summary>The Garage's cars, so a setup lands on the car they are running when there is one.</summary>
+    public CarStore? Cars { get; set; }
+
+    /// <summary>The race day in hand, for a car lent for the day. Null outside one.</summary>
+    public Func<string?>? EventId { get; set; }
+
+    /// <summary>The track layout being raced on, written on the setup as the desk's own are.</summary>
+    public Func<string?>? TrackName { get; set; }
+
+    /// <summary>The parts of a setup sheet a phone can send, in the order they are shown, with the desk's words for them.</summary>
+    internal static readonly (string Key, string Caption)[] SetupParts =
+    {
+        ("tires", "Tires"), ("gearing", "Gearing"), ("springs", "Springs"), ("ride", "Ride height"), ("motor", "Motor"), ("notes", "Notes"),
+    };
+
+    /// <summary>"Tires: soft; Springs: blue" - what a setup request says, for the desk's list.</summary>
+    internal static string SetupWords(DriverRequest request)
+    {
+        var parts = SetupParts
+            .Where(p => request.Text(p.Key).Length > 0)
+            .Select(p => $"{p.Caption}: {request.Text(p.Key)}")
+            .ToList();
+
+        return parts.Count == 0 ? "nothing" : string.Join("; ", parts);
+    }
+
+    /// <summary>
+    /// Files every setup request still waiting, as <see cref="FileSetup"/>
+    /// does one. Returns how many went into the log. Called on the UI
+    /// thread's roster tick, so a change sent from a phone is in the Driver
+    /// Hub within seconds of the relay handing it over.
+    /// </summary>
+    public int FileWaitingSetups()
+    {
+        if (Setups is null)
+        {
+            return 0;
+        }
+
+        var filed = 0;
+
+        foreach (var request in _store.Waiting.Where(r => r.Kind == DriverAsk.Setup).ToList())
+        {
+            if (FileSetup(request, out _))
+            {
+                filed++;
+            }
+        }
+
+        return filed;
+    }
+
+    /// <summary>
+    /// A SETUP CHANGE FROM THE PHONE, INTO THE GARAGE'S LOG (4 Nov 2026,
+    /// Asher: "when you make an setup log change on the relay it should
+    /// update in the driver hub and feed into the technical lead interview").
+    ///
+    /// Filed without the desk, unlike every other request: it changes nothing
+    /// anybody else sees, only adds a line to the driver's own setup log, and
+    /// the badge it came with is the driver's own. It is a setup entry like
+    /// one typed at the desk - the five parts of the old sheet and the note
+    /// - so the Driver Hub lists it under their setups (a setup is theirs by
+    /// its car or their name), and <see cref="MechanicBrief.SetupLines"/>
+    /// gives the technical lead the newest one on the winner's car or name.
+    ///
+    /// ON THEIR CAR when they have exactly one for the day, the car the
+    /// technical lead looks at; otherwise on their name, which the brief and
+    /// the hub both read. Recorded at the time the phone sent it, so the
+    /// brief's "logged on race day" holds.
+    ///
+    /// A badge nobody on this laptop has, or a driver with no name, stays
+    /// waiting for the desk to discard - nothing is filed against nobody.
+    /// </summary>
+    public bool FileSetup(DriverRequest request, out string refusal)
+    {
+        if (request.Kind != DriverAsk.Setup || !_store.IsWaiting(request.Id))
+        {
+            refusal = "That request has already been answered.";
+            return false;
+        }
+
+        if (Setups is null)
+        {
+            refusal = "The setup log isn't open on this laptop.";
+            return false;
+        }
+
+        if (DriverOf(request) is not { } profile)
+        {
+            refusal = "Nobody on this laptop has that badge. Discard it.";
+            return false;
+        }
+
+        var name = (profile.DriverName ?? string.Empty).Trim();
+
+        if (name.Length == 0)
+        {
+            refusal = "That driver has no name to file a setup under. Give them one in the Driver Hub first.";
+            return false;
+        }
+
+        if (SetupParts.All(p => request.Text(p.Key).Length == 0))
+        {
+            refusal = "The request says nothing changed.";
+            return false;
+        }
+
+        Car? car = null;
+
+        try
+        {
+            var cars = Cars?.DrivenBy(profile.Transponder, EventId?.Invoke()) ?? Array.Empty<Car>();
+            car = cars.Count == 1 ? cars[0] : null;
+        }
+        catch
+        {
+            car = null;
+        }
+
+        var entry = new SetupEntry
+        {
+            RecordedAtUtc = request.AskedUtc,
+            DriverName = name,
+            TrackLayoutName = (TrackName?.Invoke() ?? string.Empty).Trim(),
+            CarModel = car is not null && !string.IsNullOrWhiteSpace(car.Name) ? car.Name.Trim() : (profile.CarModel ?? string.Empty).Trim(),
+            CarId = car?.Id,
+            Tires = request.Text("tires"),
+            Gearing = request.Text("gearing"),
+            Springs = request.Text("springs"),
+            RideHeight = request.Text("ride"),
+            Motor = request.Text("motor"),
+            Notes = request.Text("notes"),
+        };
+
+        Setups.Upsert(entry);
+        _store.Answer(request.Id, DriverAsk.Approved, "In your setup log", DateTime.UtcNow);
+
+        // No names: the session log goes into support bundles.
+        _log("[driver requests] A driver logged a setup change from their phone - it is in their setup log in the Driver Hub.");
+
+        refusal = string.Empty;
+        return true;
+    }
 
     // ------------------------------------------------------------- who
 
@@ -890,6 +1045,10 @@ internal sealed class DriverRequestDesk
 
             case DriverAsk.Query:
                 lines.Add($"Query about {RaceWords(request)}: \"{request.Text("m")}\"");
+                break;
+
+            case DriverAsk.Setup:
+                lines.Add("Setup change: " + SetupWords(request));
                 break;
         }
 

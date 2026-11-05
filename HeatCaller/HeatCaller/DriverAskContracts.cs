@@ -35,6 +35,14 @@ internal static class DriverAsk
     /// <summary>"Something wrong?" about one of tonight's results.</summary>
     public const string Query = "query";
 
+    /// <summary>
+    /// A setup change for the Garage's setup log (4 Nov 2026, from the relay
+    /// roadmap): the sheet's five short parts and a note. Filed by itself -
+    /// see DriverRequestDesk.FileSetup - since it changes nothing but adds a
+    /// line to their own log.
+    /// </summary>
+    public const string Setup = "setup";
+
     // --- States -----------------------------------------------------------
 
     public const string Waiting = "waiting";
@@ -61,6 +69,12 @@ internal static class DriverAsk
     public const int EmailMaxChars = 120;
     public const int QueryMaxChars = 300;
 
+    /// <summary>One part of a setup sheet from the phone (tires, gearing, springs, ride height, motor).</summary>
+    public const int SetupPartMaxChars = 80;
+
+    /// <summary>A setup change's note from the phone.</summary>
+    public const int SetupNotesMaxChars = 300;
+
     /// <summary>The longest reason the desk can send back with a decline.</summary>
     public const int SaidMaxChars = 120;
 
@@ -78,8 +92,8 @@ internal static class DriverAsk
             : id[..6].ToUpperInvariant();
     }
 
-    /// <summary>True for one of the three kinds, exactly as the relay spells them.</summary>
-    public static bool IsKind(string? kind) => kind is Details or Pack or Query;
+    /// <summary>True for one of the four kinds, exactly as the relay spells them.</summary>
+    public static bool IsKind(string? kind) => kind is Details or Pack or Query or Setup;
 
     /// <summary>True for one of the four states, exactly as the phone reads them.</summary>
     public static bool IsState(string? state) => state is Waiting or Approved or Noted or Declined;

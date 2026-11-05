@@ -116,3 +116,138 @@ describe("the Live flag card through a race", () => {
     assert.match(r.board(), /Jordan M\./);
   });
 });
+
+/**
+ * THE DRIVER THIS PHONE FOLLOWS (4 Nov 2026, from the relay roadmap): their
+ * place, the gap to the car ahead, whether it is closing over the last
+ * three laps, how much a lap they need to catch by the flag, and the room
+ * to the car behind - on the flag card.
+ */
+describe("the Live flag card for the driver this phone follows", () => {
+  const STATE = "/api/v1/c/acme-rc/snapshot/state";
+  const row = (name: string, flying: number, ahead?: string) => ({
+    name, laps: Array.from({ length: flying }, () => 9000), best: 9000, lap: flying + 1, ...(ahead ? { ahead } : {}),
+    cells: [{ text: name, emphasis: "none" }],
+  });
+  const frame = (lap: number, gap: string, behind: string, toGo: number) => ({
+    state: "Racing", flag: "Green", countdown: `${toGo} LAPS TO GO`,
+    standings: [row("Sam P.", lap - 1), row("Asher K.", lap - 1, gap), row("Jordan M.", lap - 1, behind)],
+  });
+
+  it("says the gap, the trend, what it takes to catch, and the car behind", async () => {
+    let now: Record<string, unknown> = frame(2, "+1.20", "+0.80", 10);
+    const { html, script } = pageParts(livePage("acme-rc", "Acme RC", DEFAULT_CONTEXT));
+    const p: FakePage = new FakePage(html, async (url: string) => url === STATE
+      ? { status: 200, body: { seq: 1, publishedAt: new Date(p.clock).toISOString(), body: now } }
+      : { status: 404 });
+    p.store.set("hg-follow-acme-rc", "Asher K.");
+    p.run(script);
+    await p.settle();
+    const me = () => /<div class="lp-me">([\s\S]*?)<\/div>/.exec(p.get("bar").innerHTML)?.[1] ?? "";
+
+    assert.match(me(), /<b>Asher K\.<\/b> P2/);
+    assert.match(me(), /1\.20s behind Sam P\./);
+    assert.match(me(), /needs 0\.12s a lap to catch by the flag/);
+    assert.match(me(), /0\.80s clear of Jordan M\./);
+    assert.doesNotMatch(me(), /closing|losing/, "no trend before three laps");
+
+    for (const [lap, gap] of [[3, "+1.05"], [4, "+0.90"], [5, "+0.75"]] as const) {
+      now = frame(lap, gap, "+0.80", 12 - lap);
+      await p.advance(2000);
+      await p.settle();
+    }
+    assert.match(me(), /0\.75s behind Sam P\. · closing 0\.15s a lap/);
+
+    // Somebody not on the board, or nobody followed: no line.
+    p.store.set("hg-follow-acme-rc", "");
+    p.eval(`setFollowed("")`);
+    now = frame(6, "+0.60", "+0.80", 6);
+    await p.advance(2000);
+    await p.settle();
+    assert.equal(me(), "");
+  });
+});
+
+/**
+ * THE LIVE TRACK MAP (4 Nov 2026, Asher: "the live track map should be on
+ * the live tab"): the laptop's line, and a numbered dot per car found by
+ * its row's tag - never anything that is not on the board.
+ */
+describe("the Live track map", () => {
+  const STATE = "/api/v1/c/acme-rc/snapshot/state";
+  const square = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]];
+  const row = (name: string, tag: string) => ({ name, tag, laps: [9000], best: 9000, lap: 2, cells: [{ text: name, emphasis: "none" }] });
+
+  async function page(frame: () => Record<string, unknown>) {
+    const { html, script } = pageParts(livePage("acme-rc", "Acme RC", DEFAULT_CONTEXT));
+    const p: FakePage = new FakePage(html, async (url: string) => url === STATE
+      ? { status: 200, body: { seq: 1, publishedAt: new Date(p.clock).toISOString(), body: frame() } }
+      : { status: 404 });
+    p.run(script);
+    await p.settle();
+    return p;
+  }
+
+  it("draws the line and a dot per car on the board, numbered by place", async () => {
+    const p = await page(() => ({
+      state: "Racing", flag: "Green", countdown: "5 LAPS TO GO",
+      standings: [row("Sam P.", "aaaa"), row("Asher K.", "bbbb")],
+      map: { pts: square, splits: [0.5], cars: [
+        { tag: "aaaa", pos: 1, f: 0.25, rate: 0.1, cap: 0.49, stop: false },
+        { tag: "bbbb", pos: 2, f: 0.1, rate: 0.1, cap: 0.49, stop: true },
+        { tag: "zzzz", pos: 3, f: 0.3, rate: 0.1, cap: 0.49, stop: false },
+      ] },
+    }));
+    assert.equal(p.get("livemap").hidden, false);
+    const drawn = p.get("lmapbody").innerHTML;
+    assert.match(drawn, /<path class="lm-road" d="M/);
+    assert.equal((drawn.match(/lm-split/g) ?? []).length, 1, "the split loop");
+
+    await p.advance(300);
+    const dots = p.get("lmapbody").find((n) => n.className === "lm-cars")[0]?.innerHTML
+      ?? /<g class="lm-cars">([\s\S]*)<\/g><\/svg>/.exec(p.get("lmapbody").innerHTML)?.[1] ?? "";
+    assert.equal((dots.match(/class="lm-car/g) ?? []).length, 2, "a car not on the board has no dot");
+    assert.match(dots, /class="lm-car stop"/, "the overdue car is marked");
+    assert.match(dots, />1<\/text>/);
+    assert.match(dots, />2<\/text>/);
+  });
+
+  it("goes when the frame has no map, and when the race is over", async () => {
+    let finished = false;
+    const p = await page(() => ({
+      state: finished ? "Finished" : "Racing", flag: "Green", countdown: "",
+      standings: [row("Sam P.", "aaaa")],
+      ...(finished ? {} : { map: { pts: square, splits: [], cars: [] } }),
+    }));
+    assert.equal(p.get("livemap").hidden, false);
+    finished = true;
+    await p.advance(2000);
+    await p.settle();
+    assert.equal(p.get("livemap").hidden, true);
+  });
+});
+
+/**
+ * THE WHO WINS? RECORD (4 Nov 2026, from the relay roadmap): this phone's
+ * picks, each settled by the first finished race after it.
+ */
+describe("Who wins?: this phone's record", () => {
+  it("settles a pick by the next finished race and keeps the tally", async () => {
+    const { html, script } = pageParts(livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, vote: true } }));
+    const p = new FakePage(html, async () => ({ status: 404 }));
+    p.run(script);
+    await p.settle();
+
+    assert.equal(p.eval("picksWords()"), "");
+    p.eval("picksAdd('Q1 Heat 1', 'Sam P.')");
+    p.eval("picksSettle('Sam P.', Date.now() + 60000)");
+    p.eval("picksAdd('Q1 Heat 2', 'Sam P.')");
+    p.eval("picksSettle('Jordan M.', Date.now() + 120000)");
+    assert.equal(p.eval("picksWords()"), "Your picks: 1 of 2 right");
+
+    // A finish from before a pick never settles it.
+    p.eval("picksAdd('Q1 Heat 3', 'Riley T.')");
+    p.eval("picksSettle('Riley T.', Date.now() - 60000)");
+    assert.equal(p.eval("picksWords()"), "Your picks: 1 of 2 right");
+  });
+});

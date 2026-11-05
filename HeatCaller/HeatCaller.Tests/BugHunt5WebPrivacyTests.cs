@@ -145,9 +145,24 @@ public sealed class BugHunt5WebPrivacyTests : IDisposable
         // doing so: it is a public document with a format the relay knows.
         Assert.Null(relay["people"]);
         Assert.Null(relay["cards"]);
-        Assert.Null(relay["map"]);
         Assert.Null(relay["standings"]!.AsArray()[0]!["id"]);
         Assert.DoesNotContain(Transponder, relay.ToJsonString());
+
+        // WHY (4 Nov 2026, Asher: "the live track map should be on the live
+        // tab"): the relay copy now carries the map too - but each car on it
+        // by its row's tag alone, the same tag the board row has, never the
+        // Wi-Fi copy's roster id; and no ghost, which has no row on the relay.
+        if (relay["map"] is JsonObject map)
+        {
+            foreach (var car in map["cars"]!.AsArray())
+            {
+                Assert.Null(car!["id"]);
+                Assert.NotNull(car["tag"]);
+            }
+
+            var tags = relay["standings"]!.AsArray().Select(r => r!["tag"]?.GetValue<string>()).Where(t => t is not null).ToHashSet();
+            Assert.All(map["cars"]!.AsArray(), car => Assert.Contains(car!["tag"]!.GetValue<string>(), tags));
+        }
     }
 
     // --- Helpers ----------------------------------------------------------------------------

@@ -3349,6 +3349,18 @@ public sealed partial class WebServerService
                 }
             }
 
+            // The live track map on the relay's Live tab (4 Nov 2026, Asher:
+            // "the live track map should be on the live tab"). Guarded: the
+            // live state must not go stale for the sake of a picture.
+            try
+            {
+                AddRelayTrackMap(relayNode);
+            }
+            catch
+            {
+                relayNode["map"] = null;
+            }
+
             return relayNode.ToJsonString();
         }
 
@@ -3512,6 +3524,113 @@ public sealed partial class WebServerService
             ["splits"] = splits,
             ["cars"] = placed,
         };
+    }
+
+    /// <summary>
+    /// The most points of the track's line the relay copy carries. The
+    /// frame goes up once a second while a race is on, so a plan drawn with
+    /// thousands of points is thinned to this many, evenly along the line,
+    /// keeping its first and last (the finish line, start and end).
+    /// </summary>
+    internal const int RelayMapPoints = 240;
+
+    /// <summary>
+    /// The live track map for the relay copy of the state (4 Nov 2026): the
+    /// same line, split loops and cars as the Wi-Fi copy's "map"
+    /// (<see cref="AddTrackMap"/>), with three differences that the public
+    /// internet asks for.
+    ///
+    /// EACH CAR BY ITS ROW'S TAG, never its transponder or the roster's id -
+    /// the same opaque <see cref="RelayRowTag"/> the board row carries, so the
+    /// page names a dot from its row and nothing new about a car goes out.
+    /// A car with no tag is left off the map, as it has none on its row.
+    ///
+    /// NO GHOSTS: a ghost has no row on the relay's board either.
+    ///
+    /// A THINNER LINE: see <see cref="RelayMapPoints"/>.
+    /// </summary>
+    private void AddRelayTrackMap(System.Text.Json.Nodes.JsonObject node)
+    {
+        var (line, cars) = TrackMap?.Invoke() ?? (null, Array.Empty<TrackPositions.Car>());
+
+        if (line is null)
+        {
+            node["map"] = null;
+            return;
+        }
+
+        static double Round(float value) => Math.Round(value, 3);
+
+        var source = line.Points;
+        var points = new System.Text.Json.Nodes.JsonArray();
+
+        foreach (var p in ThinnedLine(source.Count, RelayMapPoints).Select(i => source[i]))
+        {
+            points.Add(new System.Text.Json.Nodes.JsonArray(Round(p.X), Round(p.Y)));
+        }
+
+        var splits = new System.Text.Json.Nodes.JsonArray(line.SplitAt
+            .Select(f => (System.Text.Json.Nodes.JsonNode?)Round(f))
+            .ToArray());
+
+        var placed = new System.Text.Json.Nodes.JsonArray();
+
+        foreach (var c in cars)
+        {
+            if (Ghosts.IsGhost(c.Transponder) || RelayRowTag(c.Transponder) is not { } tag)
+            {
+                continue;
+            }
+
+            placed.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["tag"] = tag,
+                ["pos"] = c.Position,
+                ["f"] = Round(c.Fraction),
+                ["rate"] = Math.Round(c.Rate, 5),
+                ["cap"] = Round(c.Cap),
+                ["stop"] = c.Stopped,
+            });
+        }
+
+        node["map"] = new System.Text.Json.Nodes.JsonObject
+        {
+            ["pts"] = points,
+            ["splits"] = splits,
+            ["cars"] = placed,
+        };
+    }
+
+    /// <summary>
+    /// Which of <paramref name="count"/> points to keep so no more than
+    /// <paramref name="most"/> remain: evenly spaced indexes, the first and
+    /// the last always among them. Every index when there are few enough.
+    /// </summary>
+    internal static IReadOnlyList<int> ThinnedLine(int count, int most)
+    {
+        if (count <= 0)
+        {
+            return Array.Empty<int>();
+        }
+
+        if (count <= most || most < 2)
+        {
+            return Enumerable.Range(0, count).ToList();
+        }
+
+        var kept = new List<int>(most);
+
+        for (var k = 0; k < most; k++)
+        {
+            var index = (int)Math.Round(k * (count - 1) / (double)(most - 1));
+
+            if (kept.Count == 0 || kept[^1] != index)
+            {
+                kept.Add(index);
+            }
+        }
+
+        return kept;
     }
 
     /// <summary>
