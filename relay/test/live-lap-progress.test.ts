@@ -1,0 +1,118 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { DEFAULT_CONTEXT, livePage } from "../src/pages.js";
+import { FakePage, pageParts } from "./driverexp-rp1-fakepage.js";
+
+/**
+ * THE FLAG CARD AS A LAP PROGRESS TRACK (4 Nov 2026, Asher picked
+ * direction 5 of ten: "build 5 lap progress"). The race's length is the
+ * leader's lap plus what the countdown says is left, so the countdown has
+ * to be read right as the page ships it - a regex losing its backslashes
+ * inside the page's template string once left every race without a bar.
+ */
+
+/** One function from the live page's script, as the phone gets it. */
+function pageFunction(name: string): (...args: unknown[]) => unknown {
+  const html = livePage("acme-rc", "Acme RC");
+  const match = new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`).exec(html);
+  assert.ok(match, `the page has ${name}()`);
+  return new Function(`${match[0]}; return ${name};`)() as (...args: unknown[]) => unknown;
+}
+
+describe("the Live flag card's lap progress", () => {
+  it("reads the laps left from the countdown", () => {
+    const toGo = pageFunction("lbToGo");
+    assert.equal(toGo("5 LAPS TO GO"), 5);
+    assert.equal(toGo("1 LAP TO GO"), 1);
+    assert.equal(toGo("LAST LAP"), 1);
+    assert.equal(toGo("12 laps to go"), 12);
+  });
+
+  it("has no laps left for a timed race's countdown", () => {
+    const toGo = pageFunction("lbToGo");
+    assert.equal(toGo("04:32 REMAINING"), null);
+    assert.equal(toGo(""), null);
+  });
+
+  it("draws a segment a lap with the lap being run lit", () => {
+    const bar = pageFunction("lbBar");
+    const html = String(bar(7, 12, false));
+    assert.equal((html.match(/<i class="/g) ?? []).length, 12);
+    assert.equal((html.match(/<i class="on">/g) ?? []).length, 6);
+    assert.equal((html.match(/<i class="now">/g) ?? []).length, 1);
+    assert.match(html, /<span class="lp-fin"><\/span>/);
+  });
+
+  it("draws one track past forty laps, and nothing without a length", () => {
+    const bar = pageFunction("lbBar");
+    assert.match(String(bar(30, 60, false)), /<span class="lp-track"><b style="width:50%"><\/b><\/span>/);
+    assert.equal(bar(5, 0, false), "");
+  });
+});
+
+/**
+ * A RACE AS THE LAPTOP SENDS IT (4 Nov 2026, Asher: "it didn't show the
+ * stages as they updated and at one point went back to race over"). The
+ * laptop empties the board when a race is staged and again at the green
+ * (RaceControlSession.Stage, GreenFlag), so Staging, Countdown and the
+ * start of Racing all arrive with nobody on the board.
+ */
+describe("the Live flag card through a race", () => {
+  const STATE = "/api/v1/c/acme-rc/snapshot/state";
+  const row = (name: string, laps: number[]) => ({
+    name, laps, best: Math.min(...laps), cells: [{ text: "1", emphasis: "none" }, { text: name, emphasis: "none" }],
+  });
+  const finished = { state: "Finished", flag: "Checkered", countdown: "", standings: [row("Sam P.", [9100, 9000]), row("Asher K.", [9500, 9400])] };
+
+  async function race() {
+    let frame: Record<string, unknown> = finished;
+    const { html, script } = pageParts(livePage("acme-rc", "Acme RC", DEFAULT_CONTEXT));
+    const p: FakePage = new FakePage(html, async (url: string) => url === STATE
+      ? { status: 200, body: { seq: 1, publishedAt: new Date(p.clock).toISOString(), body: frame } }
+      : { status: 404 });
+    p.run(script);
+    await p.settle();
+    return {
+      p,
+      bar: () => p.get("bar"),
+      board: () => p.get("board").innerHTML,
+      async send(next: Record<string, unknown>) { frame = next; await p.advance(2000); await p.settle(); },
+    };
+  }
+
+  it("names every stage of the next race and never says it is over until it is", async () => {
+    const r = await race();
+    assert.match(r.bar().className, /\bover\b/);
+    assert.match(r.bar().innerHTML, /Race over/);
+
+    await r.send({ state: "Staging", flag: "None", countdown: "", standings: [] });
+    assert.doesNotMatch(r.bar().className, /\bover\b/);
+    assert.match(r.bar().innerHTML, /<span class="state">Staging<\/span>/);
+    assert.match(r.bar().innerHTML, /Cars to the start line/);
+    assert.match(r.board(), /lining up/);
+
+    await r.send({ state: "Countdown", flag: "None", countdown: "", standings: [] });
+    assert.match(r.bar().innerHTML, /<span class="state">Countdown<\/span>/);
+    assert.match(r.bar().innerHTML, /Start sequence/);
+
+    // The green, before anybody has crossed the line.
+    await r.send({ state: "Racing", flag: "Green", countdown: "12 LAPS TO GO", standings: [] });
+    assert.doesNotMatch(r.bar().className, /\bover\b/);
+    assert.doesNotMatch(r.bar().innerHTML, /Race over/);
+    assert.match(r.bar().innerHTML, /<span class="state">Racing<\/span>/);
+    assert.match(r.board(), /Green flag/);
+
+    await r.send({ state: "Racing", flag: "Green", countdown: "10 LAPS TO GO", standings: [row("Jordan M.", [9000])] });
+    assert.match(r.bar().innerHTML, /Lap 2<span> \/ 12<\/span>/);
+    assert.match(r.bar().innerHTML, /10 laps to go/);
+
+    await r.send({ state: "Finished", flag: "Checkered", countdown: "", standings: [row("Jordan M.", [9000, 9100])] });
+    assert.match(r.bar().innerHTML, /Race over/);
+    assert.match(r.bar().innerHTML, /Winner Jordan M\./);
+
+    // Back to Idle: the race just run stays up, over.
+    await r.send({ state: "Idle", flag: "None", countdown: "", standings: [] });
+    assert.match(r.bar().innerHTML, /Race over/);
+    assert.match(r.board(), /Jordan M\./);
+  });
+});

@@ -442,20 +442,71 @@ describe("the night's own extras", () => {
   it("draws the lap chart: a point per lap, the best marked, the crash lap held at the edge", async () => {
     const page = await open(relay(full));
     openRace(page, "Q1 Heat 2");
-    const chart = page.get("nx").find((n) => n.tagName === "SVG" && n.getAttribute("class") === "lapchart")[0];
+    // Since 4 Nov 2026 the Live page's Lap times chart ("posg metimes"),
+    // with only their line here: this relay has no public result for it.
+    const isTimes = (n: { tagName: string; getAttribute(k: string): string | null }) =>
+      n.tagName === "SVG" && /\bmetimes\b/.test(n.getAttribute("class") ?? "");
+    const chart = page.get("nx").find(isTimes)[0];
 
     assert.ok(chart, "a chart for the race with laps");
     const line = chart.find((n) => n.tagName === "POLYLINE")[0]!;
     assert.equal(line.getAttribute("points")!.split(" ").length, laps.length);
     assert.equal(chart.find((n) => n.tagName === "CIRCLE" && n.getAttribute("class") === "slow").length, 1, "the 30 s lap");
-    assert.match(chart.getAttribute("aria-label")!, /best 8\.600 on lap 6/);
+    assert.match(chart.getAttribute("aria-label")!, /your best 8\.600 on lap 6/);
 
     // The quickest lap is the highest point (smallest y).
     const ys = line.getAttribute("points")!.split(" ").map((p) => Number(p.split(",")[1]));
     assert.equal(Math.min(...ys), ys[5]);
 
     // The DNF race had no laps, so no chart.
-    assert.equal(page.get("nx").find((n) => n.tagName === "SVG" && n.getAttribute("class") === "lapchart").length, 1);
+    assert.equal(page.get("nx").find(isTimes).length, 1);
+  });
+
+  it("draws the whole field from the race's public result, and Just me takes the rest away", async () => {
+    // 4 Nov 2026, Asher: "make the two charts on the me tab the same as the
+    // two charts on the live tab. add a themed tick box that removes the
+    // other drivers and just shows you".
+    const field = {
+      id: RACE, type: "Race", label: "Q1 Heat 2",
+      results: [
+        { pos: 1, name: "Sam P.", qual: 1, lapsMs: [8500, 8400, 8450, 8420, 8390, 8410, 8400], posAt: [1, 1, 1, 1, 1, 1, 1] },
+        { pos: 2, name: "<img src=x onerror=alert(2)>", qual: 2, lapsMs: [8600, 8500, 8550, 8520, 8590, 8510, 8500], posAt: [2, 2, 3, 2, 2, 2, 2] },
+        { pos: 3, name: "Asher K.", qual: 5, lapsMs: laps, posAt: [5, 4, 2, 3, 3, 3, 3] },
+      ],
+    };
+    const asked: string[] = [];
+    const base = relay(full);
+    const page = await open(async (url, body) => {
+      if (url.includes("/collection/results")) {
+        asked.push(url);
+        return { status: 200, body: { ok: true, items: [{ id: RACE, body: field }] } };
+      }
+      return base(url, body);
+    });
+    openRace(page, "Q1 Heat 2");
+    await page.settle();
+
+    const svgs = (kind: string) => page.get("nx").find((n) => n.tagName === "SVG" && new RegExp(`\\b${kind}\\b`).test(n.getAttribute("class") ?? ""));
+    const lines = (kind: string) => svgs(kind)[0]!.find((n) => n.tagName === "POLYLINE").length;
+
+    assert.ok(asked.some((u) => u.includes(`ids=${RACE}`)), "the race's own result, by its sid");
+    assert.equal(lines("mepos"), 3, "a position line per driver");
+    assert.equal(lines("metimes"), 3, "a lap time line per driver");
+    const mine = svgs("mepos")[0]!.find((n) => n.tagName === "G" && n.getAttribute("class") === "me");
+    assert.equal(mine.length, 1, "their own line, marked");
+    assert.match(page.get("nx").textContent, /You/);
+    // A name from the result is the club's typing: text, never an element.
+    assert.match(page.get("nx").textContent, /<img src=x onerror=alert\(2\)>/);
+    assert.equal(page.get("nx").find((n) => n.tagName === "IMG").length, 0);
+
+    const tick = page.get("nx").find((n) => n.tagName === "INPUT" && n.parent?.parent?.className === "lvsay jm")[0];
+    assert.ok(tick, "the Just me tick");
+    (tick as unknown as { checked: boolean }).checked = true;
+    tick.fire("change");
+
+    assert.equal(lines("mepos"), 1, "Just me: their line alone");
+    assert.equal(lines("metimes"), 1);
+    assert.equal(page.store.get("hg-night-just-me"), "1", "remembered on this phone");
   });
 
   it("shows improvement, six bars of progress with the since line, and at most three in reach", async () => {

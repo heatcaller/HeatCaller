@@ -381,8 +381,11 @@ header:has(.brand) { padding-top: 8px; }
 /* A little below the logo's top edge (4 Nov 2026, Asher: "bring the club
    name down a bit"). */
 .brand h1 { grid-column: 2; grid-row: 1; line-height: 1.15; margin-top: clamp(8px, 3vw, 22px); }
-.brand .hcside { grid-column: 2; grid-row: 2; align-self: end; flex-direction: row; align-items: center;
-                 justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+/* The bug above the byline, both against the right edge (4 Nov 2026, Asher:
+   "move byline below the live bug when race is going and right justify the
+   bug"). They used to sit side by side, the bug to the byline's left. */
+.brand .hcside { grid-column: 2; grid-row: 2; align-self: end; justify-self: end; flex-direction: column;
+                 align-items: flex-end; gap: 4px; }
 .brand .hcby { min-height: 0; }
 .brand .sub { grid-column: 1 / -1; grid-row: 3; margin-top: 12px; }
 
@@ -544,20 +547,7 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .lapfig > .ttl { padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface);
                  font-weight: 600; font-size: 0.9rem; }
 .lapfig > .cap { margin: 0; padding: 0 12px 10px; }
-.lapchart, .pgchart, .poschart { display: block; width: 100%; height: auto; margin: 8px 0 2px; }
-.lapchart, .poschart { max-width: 640px; margin: 6px auto 4px; }
-.lapchart polyline, .poschart polyline { stroke: var(--accent); stroke-width: 2.5; fill: none; stroke-linejoin: round; }
-.poschart polyline { stroke: var(--primary); }
-.lapchart circle, .poschart circle { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
-.poschart circle { stroke: var(--primary); }
-.lapchart circle.best { fill: var(--good); stroke: var(--good); }
-.lapchart circle.slow { fill: var(--muted); stroke: var(--muted); }
-.lapchart .frame, .poschart .frame { fill: none; stroke: var(--muted); stroke-width: 1.5; }
-.lapchart .gr, .poschart .gr { stroke: var(--border); stroke-width: 1; }
-.lapchart text, .poschart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.lapchart text.yt, .poschart text.yt { text-anchor: end; }
-.lapchart text.xt, .poschart text.xt { text-anchor: middle; }
-.lapchart text.ttl, .poschart text.ttl { fill: var(--text); font-size: 11px; font-weight: 600; text-anchor: middle; }
+.pgchart { display: block; width: 100%; height: auto; margin: 8px 0 2px; }
 .cap { color: var(--muted); font-size: 0.78rem; }
 .pgchart rect { fill: var(--border); }
 .pgchart rect.tonight { fill: var(--primary); }
@@ -767,20 +757,86 @@ html.light .pill.running, html.light .pill.next { color: #FFFFFF; }
 html.light .follow, html.light .toast { box-shadow: 0 8px 28px rgba(17, 21, 28, 0.18); }
 
 /* Live */
-.flagbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+/* The flag card as a lap progress track (4 Nov 2026, Asher picked
+   direction 5 of ten: "build 5 lap progress"). What the race is doing in
+   big condensed capitals under the flag's name, the lap against the
+   race's length on the right, and a bar of the race's laps filling in the
+   flag's colour towards a chequered finish block; under it the laps to
+   go, the leader and what is on next. Once the race is over the bar is
+   full, the finish block lit, and the board's last update sits where the
+   lap was. --flag is the one colour each flag sets. */
+.flagbar { --flag: var(--muted); display: flex; flex-direction: column; gap: 14px;
            background: var(--surface); border: 1px solid var(--border);
-           border-left: 6px solid var(--muted); border-radius: 10px;
-           padding: 14px 18px; margin-bottom: 14px; }
-.flagbar.f-green { border-left-color: var(--good); }
-.flagbar.f-yellow { border-left-color: #FFD34D; }
-.flagbar.f-red { border-left-color: var(--bad); }
-.flagbar.f-white { border-left-color: #FFFFFF; }
+           border-left: 1px solid var(--border); border-radius: 16px;
+           padding: 18px 22px; margin-bottom: 14px; }
+.flagbar.f-green { border-left-color: var(--good); --flag: var(--good); }
+.flagbar.f-yellow { border-left-color: #FFD34D; --flag: #FFD34D; }
+.flagbar.f-red { border-left-color: var(--bad); --flag: var(--bad); }
+.flagbar.f-white { border-left-color: #FFFFFF; --flag: #FFFFFF; }
 /* WHY (23 Oct 2026, bug hunt 10): the app sends FlagState "Checkered", so the
    class is f-checkered; only f-chequered had a rule and the finish bar stayed grey. */
-.flagbar.f-checkered, .flagbar.f-chequered { border-left-color: var(--accent); }
+.flagbar.f-checkered, .flagbar.f-chequered { border-left-color: var(--accent); --flag: var(--accent); }
+html.light .flagbar.f-white { --flag: #8A90A0; }
+.flagbar .lp-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.flagbar .lp-id { min-width: 0; }
+.flagbar .kick { display: flex; align-items: center; gap: 8px; color: var(--flag); font-size: 0.75rem; font-weight: 800;
+                 letter-spacing: 0.16em; text-transform: uppercase; }
+.flagbar .kick i { width: 10px; height: 10px; border-radius: 2px; background: var(--flag); flex: none; }
+.flagbar.f-none .kick { color: var(--muted); }
+.flagbar.f-none .kick i { display: none; }
 .state { font-weight: 700; font-size: 1.1rem; }
-.count { font-variant-numeric: tabular-nums; font-size: 1.1rem; color: var(--accent); }
+.flagbar .state, .flagbar .lp-lap, .flagbar .lp-time b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  font-stretch: condensed; font-weight: 800; line-height: 1; }
+.flagbar .state { display: block; font-size: 2.5rem; text-transform: uppercase; overflow-wrap: anywhere; }
+.flagbar .lp-lap { font-size: 2.5rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.flagbar .lp-lap span { color: var(--muted); }
+.flagbar .lp-time { display: flex; flex-direction: column; align-items: flex-end; }
+.flagbar .lp-time b { font-size: 2rem; white-space: nowrap; }
+.flagbar .lp-time span { color: var(--muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+/* The race's laps, one segment each; a long race is one track instead. */
+.flagbar .lp-bar { display: flex; align-items: center; gap: 6px; }
+.flagbar .lp-bar > i { flex: 1; height: 14px; border-radius: 4px; background: var(--border); }
+.flagbar .lp-bar > i.on { background: var(--flag); }
+.flagbar .lp-bar > i.now { background: var(--flag); box-shadow: 0 0 12px var(--flag); }
+.flagbar .lp-bar > i.done { background: var(--muted); }
+.flagbar .lp-track { flex: 1; height: 14px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.flagbar .lp-track b { display: block; height: 100%; border-radius: 4px; background: var(--flag); }
+.flagbar.over .lp-track b { background: var(--muted); }
+.flagbar .lp-fin { width: 26px; height: 26px; flex: none; margin-left: 4px; border-radius: 4px; opacity: 0.45;
+  background: repeating-conic-gradient(#111 0 25%, #FFF 0 50%) 0 0 / 13px 13px; }
+.flagbar.over .lp-fin { opacity: 1; box-shadow: 0 0 14px rgba(255, 255, 255, 0.45); }
+.flagbar .lp-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; color: var(--muted); font-size: 0.9rem; }
+.flagbar .lp-foot b { color: var(--text); font-weight: 700; }
+.flagbar .lp-foot .ondeck b { font-weight: 600; }
 .ondeck { color: var(--muted); font-size: 0.85rem; margin-left: auto; }
+.flagbar .ondeck { font-size: 0.9rem; margin-left: auto; }
+@media (max-width: 420px) {
+  .flagbar { padding: 14px 16px; gap: 12px; }
+  .flagbar .state, .flagbar .lp-lap { font-size: 2rem; }
+  .flagbar .lp-time b { font-size: 1.5rem; }
+  .flagbar .lp-bar { gap: 4px; }
+  .flagbar .ondeck { margin-left: 0; }
+}
+/* The live position chart, under the board. */
+.livepos { padding: 14px 16px 16px; }
+.livepos[hidden] { display: none; }
+.livepos h3 { margin: 0 0 2px; font-size: 1.05rem; }
+.livepos .note { padding: 6px 0 0; text-align: left; }
+.livepos .posg .ax { font-size: 13px; }
+.livepos .posg .axt { fill: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.livepos .posg .axl { stroke: var(--muted); stroke-width: 1.5; }
+.livepos .posg circle.now { fill: var(--c); }
+.livepos .posk li b { font-variant-numeric: tabular-nums; margin-right: 4px; }
+/* The same two charts on a driver's race card (4 Nov 2026), each its own
+   figure under the Just me tick; their own line drawn heavier on top. */
+.lpfig { margin: 14px 0 0; padding: 0; }
+.lpfig + .lpfig { margin-top: 22px; }
+.lpfig .posg g.me polyline { stroke-width: 4; }
+.lpfig .posg circle.slow { fill: var(--surface); stroke-dasharray: 2 2; }
+.lpfig .posk li.me { font-weight: 700; }
+.lpfig .posk li b.kv { margin: 0 0 0 5px; }
+.mecharts .jm { margin-top: 4px; }
+.lvsay[hidden] { display: none; }
 
 /* Standings */
 select {
@@ -949,10 +1005,12 @@ footer .hcmark:hover { color: var(--text); }
    is staged, counting down or running. Room is kept for it on Live
    whether it shows or not, so neither the name nor the byline under it
    jumps when a race starts. */
-.onair { display: flex; visibility: hidden; align-items: center; gap: 6px; margin-top: 3px;
-         padding: 5px 10px 5px 7px; border-radius: 8px; border: 1px solid var(--primary); color: var(--primary);
+/* Room above and below it (4 Nov 2026, Asher: "add some space above and
+   below the live bug"), so its glow clears the top of the page and the
+   byline under it. */
+.onair { display: flex; visibility: hidden; align-items: center; gap: 6px; margin: 10px 0 8px;
+         padding: 5px 10px; border-radius: 8px; border: 1px solid var(--primary); color: var(--primary);
          box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 55%, transparent); }
-.onair .hcsun { width: 20px; height: 20px; }
 .onair b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
            font-weight: 700; font-size: 0.95rem; letter-spacing: 0.08em; }
 body.on-air .onair { visibility: visible; animation: onair 2.4s ease-in-out infinite; }
@@ -1039,7 +1097,7 @@ html.light { --warn: #D99400; }
 .btn[hidden] { display: none; }
 @media (hover: hover) { .btn:hover { border-color: var(--primary); } }
 #listen .btn { background: var(--primary); color: var(--on-primary); border-color: transparent; }
-#listennote.cap { color: #fff; font-weight: 700; font-size: 3em; line-height: 1.15; padding: 16px 0; overflow-wrap: anywhere; }
+#listennote.cap { color: #fff; font-weight: 700; font-size: 1.5em; line-height: 1.25; padding: 16px 0; overflow-wrap: anywhere; }
 .btn[aria-pressed=true] { background: var(--primary); color: var(--on-primary); border-color: transparent; }
 /* Segmented: Results' own tabs, and a night's race tabs. One track, the
    chosen part filled. */
@@ -1716,7 +1774,7 @@ function shell(page: Shell, context: PageContext): string {
   const heading = `<div class="hchead">
     <h1>${name} <span>${escapeHtml(page.heading)}</span></h1>
     <div class="hcside">${page.active === "live" ? `
-      <span class="onair" aria-hidden="true">${HC_SUN}<b>LIVE</b></span>` : ""}
+      <span class="onair" aria-hidden="true"><b>LIVE</b></span>` : ""}
       <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
     </div>
     <div class="sub">${sub}</div>
@@ -4500,27 +4558,371 @@ function cells(row, columns) {
 // makes the next table be written again.
 let boardHtml = '';
 
-function render(state, seen) {
-  // A copy's laps are not news: only a fresh read is counted for speaking.
-  if (!seen) lapTalk.take(state);
-  const flag = String(state.flag || 'None').toLowerCase();
+// --- The flag card (4 Nov 2026, Asher picked direction 5: "build 5 lap
+// progress") --------------------------------------------------------------
+// What the race is doing under the flag's name, the leader's lap against
+// the race's length, and a bar of the race's laps filling towards the
+// finish. The length is the leader's lap plus the laps the countdown says
+// are left ("5 LAPS TO GO"); a timed race's countdown is minutes, not
+// laps, so it has the lap and the time left and no bar. The look is the
+// stylesheet's (.flagbar); this only picks the classes and writes the words.
+const LB_FLAG_WORDS = {
+  green: 'Green flag', yellow: 'Caution', red: 'Red flag \\u00B7 stopped',
+  white: 'White flag \\u00B7 last lap', checkered: 'Chequered flag', chequered: 'Chequered flag',
+};
+
+// The leader's crossings, the start lap included (see posChart's lapsOf).
+function lbLaps(r) {
+  if (r && typeof r.lap === 'number' && r.lap >= 0) return Math.floor(r.lap);
+  const n = r && Array.isArray(r.laps) ? r.laps.filter((v) => typeof v === 'number' && v > 0).length : 0;
+  return n > 0 ? n + 1 : 0;
+}
+
+// "5 LAPS TO GO", "1 LAP TO GO", "LAST LAP": the laps left. null for a
+// countdown that is not in laps.
+function lbToGo(text) {
+  const t = String(text || '').trim();
+  if (/^last lap$/i.test(t)) return 1;
+  const m = /^(\\d+)\\s*laps?\\s*to\\s*go$/i.exec(t);
+  return m ? Number(m[1]) : null;
+}
+
+function lbPlural(n, one) {
+  return n + ' ' + one + (n === 1 ? '' : 's');
+}
+
+// A segment a lap, the one being run lit; past forty, one track filling.
+function lbBar(done, total, over) {
+  if (!(total > 0)) return '';
+  const upto = Math.min(done, total);
+  let inner = '';
+  if (total <= 40) {
+    for (let i = 0; i < total; i++) {
+      inner += '<i class="' + (over ? 'done' : i < upto - 1 ? 'on' : i === upto - 1 ? 'now' : '') + '"></i>';
+    }
+  } else {
+    inner = '<span class="lp-track"><b style="width:' + Math.round(upto / total * 100) + '%"></b></span>';
+  }
+  return '<div class="lp-bar" aria-hidden="true">' + inner + '<span class="lp-fin"></span></div>';
+}
+
+// over: the race is done - the laptop says Finished, or the board went
+// empty and the last race's is being kept up. at: when that board was
+// last updated, shown on the right of a race that is over. rows: the
+// board the lap and the leader are read from.
+function drawBar(state, over, at, rows) {
+  const flag = over ? 'checkered' : String(state.flag || 'None').toLowerCase();
   const running = String(state.state || 'Idle');
+  bar.className = 'flagbar f-' + esc(flag) + (over ? ' over' : '');
+  // Before the green there is no flag: the stage is named instead.
+  const kick = over ? 'Chequered flag'
+    : LB_FLAG_WORDS[flag] || (running === 'Staging' ? 'Get ready' : running === 'Countdown' ? 'Start sequence' : 'Race control');
+  const said = over ? 'Race over' : running === 'Idle' ? 'Not racing' : running;
 
-  bar.className = 'flagbar f-' + esc(flag);
-  bar.innerHTML =
-    '<span class="state">' + esc(running) + '</span>' +
-    (state.countdown ? '<span class="count">' + esc(state.countdown) + '</span>' : '') +
-    (flag !== 'none' ? '<span class="when">Flag: ' + esc(state.flag) + '</span>' : '') +
-    (state.onDeck ? '<span class="ondeck">Next: ' + esc(state.onDeck) + '</span>' : '');
+  const list = Array.isArray(rows) ? rows : [];
+  const lead = list[0] && typeof list[0] === 'object' ? list[0] : null;
+  const done = lead ? lbLaps(lead) : 0;
+  const left = over ? null : lbToGo(state.countdown);
+  const total = over ? done : left !== null && done > 0 ? done + left : 0;
+  const who = lead && lead.name ? esc(String(lead.name)) : '';
 
-  const columns = Array.isArray(state.columns) ? state.columns : [];
-  const rows = Array.isArray(state.standings) ? state.standings : [];
-
-  if (rows.length === 0) {
-    board.innerHTML = '<p class="note">Nobody is on track. The board fills as soon as a session starts.</p>';
-    return;
+  let right = '';
+  if (over) {
+    if (at) right = '<span class="lp-time"><b>' + esc(lbClock(at)) + '</b><span>Last update</span></span>';
+  } else if (done > 0) {
+    right = '<span class="lp-lap">Lap ' + done + (total > 0 ? '<span> / ' + total + '</span>' : '') + '</span>';
   }
 
+  let info = '';
+  if (over) {
+    if (done > 0) info = '<b>' + lbPlural(done, 'lap') + '</b>' + (who ? ' \\u00B7 Winner ' + who : '');
+  } else {
+    const count = String(state.countdown || '').trim();
+    const words = left === null ? count.toLowerCase()
+      : left === 0 ? 'Finishing' : /^last lap$/i.test(count) ? 'Last lap' : lbPlural(left, 'lap') + ' to go';
+    const leader = who && done > 0 ? 'Leader ' + who : '';
+    info = (words ? '<b>' + esc(words) + '</b>' : '') + (words && leader ? ' \\u00B7 ' : '') + leader;
+    // Nothing to count yet: what the stage is.
+    if (info === '') {
+      info = running === 'Staging' ? 'Cars to the start line'
+        : running === 'Countdown' ? 'Starting any moment'
+        : running === 'Racing' ? 'Waiting for the first crossing' : '';
+    }
+  }
+  const next = state.onDeck ? '<span class="ondeck">Next up: <b>' + esc(state.onDeck) + '</b></span>' : '';
+
+  bar.innerHTML = '<div class="lp-top"><span class="lp-id"><span class="kick"><i></i>' + esc(kick) + '</span>'
+    + '<span class="state">' + esc(said) + '</span></span>' + right + '</div>'
+    + lbBar(done, total, over)
+    + (info || next ? '<div class="lp-foot"><span>' + info + '</span>' + next + '</div>' : '');
+}
+
+// --- The last race, kept (4 Nov 2026, Asher: "keep the board for the last
+// race up on the live after the race is over. clearly indicate that the
+// race is over"). The laptop empties the board between races; the last
+// board that had anybody on it is kept on this phone, with the time it was
+// last seen, and shown under "Race over" until the next race fills the
+// board again. Twelve hours at most, so last week's final is not this
+// week's.
+const LB_LAST_KEY = 'hg-lastrace-' + CLUB;
+const LB_KEEP_MS = 12 * 3600 * 1000;
+let lastRace = null;
+try {
+  const raw = JSON.parse(localStorage.getItem(LB_LAST_KEY) || 'null');
+  if (raw && raw.state && typeof raw.at === 'number') lastRace = raw;
+} catch (e) { /* nothing kept */ }
+
+function keepRace(state, at) {
+  lastRace = { state: state, at: at };
+  try { localStorage.setItem(LB_LAST_KEY, JSON.stringify(lastRace)); } catch (e) { /* this visit only */ }
+}
+
+function keptRace() {
+  return lastRace && Date.now() - lastRace.at < LB_KEEP_MS ? lastRace : null;
+}
+
+function lbClock(at) {
+  try { return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+}
+
+// --- The position chart (4 Nov 2026, Asher: "create a position chart to
+// appear on a separate card below the leaderboard that updates as the
+// board above does"). The live board carries nobody's place lap by lap,
+// so the chart is what this page saw: each driver's place on the board
+// the first time it showed them on a new lap, and their grid slot before
+// the start. Kept on this phone with the race, so a reload keeps the lines;
+// a page opened mid-race draws from the lap it joined at and says so,
+// rather than making up the laps it missed. A new race - a different
+// field, or fewer laps than a driver already had - starts it again.
+const posChart = (function () {
+  const box = document.getElementById('livepos');
+  const out = document.getElementById('lposbody');
+  const tbox = document.getElementById('livetimes');
+  const tout = document.getElementById('ltimebody');
+  const KEY = 'hg-livepos-' + CLUB;
+  const COLOURS = ['#F5C342', '#8EC5FF', '#E5484D', '#46A758', '#A77BEB', '#FF8B3E',
+    '#2EE6FF', '#FF2E9A', '#A0E85B', '#C9A04E', '#D9C2FF', '#7FD6C2'];
+  // d: name -> { c: colour, p: { lap: place } }; n: the next colour.
+  let h = { d: {}, n: 0 };
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (raw && raw.d && typeof raw.d === 'object' && typeof raw.n === 'number') h = raw;
+  } catch (e) { /* a new chart */ }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(h)); } catch (e) { /* this visit only */ }
+  }
+
+  // A name per row; one the board shows twice gets a number after it.
+  function names(rows) {
+    const seen = {};
+    return rows.map((r) => {
+      const k = String((r && r.name) || 'Unnamed driver');
+      seen[k] = (seen[k] || 0) + 1;
+      return seen[k] > 1 ? k + ' (' + seen[k] + ')' : k;
+    });
+  }
+
+  // Crossings, the start lap included: the laptop's own count when it
+  // sends one, else the flying laps and the start lap before them.
+  function lapsOf(r) {
+    if (r && typeof r.lap === 'number' && r.lap >= 0) return Math.floor(r.lap);
+    const n = r && Array.isArray(r.laps) ? r.laps.filter((v) => typeof v === 'number' && v > 0).length : 0;
+    return n > 0 ? n + 1 : 0;
+  }
+
+  function top(d) {
+    let m = -1;
+    for (const k in d.p) m = Math.max(m, Number(k));
+    return m;
+  }
+
+  function take(rows) {
+    const ns = names(rows);
+    const counts = rows.map(lapsOf);
+    let fresh = Object.keys(h.d).length > 0 && !ns.some((k) => h.d[k]);
+    ns.forEach((k, i) => { if (h.d[k] && counts[i] < top(h.d[k])) fresh = true; });
+    if (fresh) h = { d: {}, n: 0 };
+    let changed = fresh;
+    ns.forEach((k, i) => {
+      let d = h.d[k];
+      if (!d) { d = h.d[k] = { c: h.n % COLOURS.length, p: {} }; h.n += 1; changed = true; }
+      const lap = counts[i];
+      const pos = i + 1;
+      if (lap === 0) {
+        if (d.p[0] !== pos) { d.p[0] = pos; changed = true; }
+      } else if (d.p[lap] === undefined) {
+        d.p[lap] = pos; changed = true;
+      }
+    });
+    if (changed) save();
+  }
+
+  function hide() {
+    if (box) box.hidden = true;
+    if (tbox) tbox.hidden = true;
+  }
+
+  function drawPos(rows) {
+    if (!box || !out) return;
+    const ns = names(rows);
+    const lines = ns.map((k, i) => ({ k: k, now: i + 1, d: h.d[k] })).filter((x) => x.d);
+    const laps = [];
+    lines.forEach((x) => Object.keys(x.d.p).forEach((l) => laps.push(Number(l))));
+    box.hidden = false;
+    if (!laps.some((l) => l >= 1)) {
+      const wait = '<p class="note">The lines start with the first lap: one per driver, their place after every lap.</p>';
+      if (out.innerHTML !== wait) out.innerHTML = wait;
+      return;
+    }
+
+    const lo = Math.min.apply(null, laps);
+    const hi = Math.max.apply(null, laps);
+    let field = lines.length;
+    lines.forEach((x) => { for (const l in x.d.p) field = Math.max(field, x.d.p[l]); });
+    // As wide as the card really is, so the labels stay their own size on
+    // a phone rather than shrinking with a chart drawn for a laptop.
+    const W = Math.max(300, Math.min(760, Math.round(out.clientWidth || 600)));
+    const L = 66, R = 18, T = 16, B = 52;
+    const H = T + B + Math.max(2, field - 1) * 30;
+    const x = (l) => L + (l - lo) * (W - L - R) / Math.max(1, hi - lo);
+    const y = (p) => T + (p - 1) * (H - T - B) / Math.max(1, field - 1);
+    const base = H - B + 12;
+
+    let svg = '<svg class="posg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Each driver\\u2019s position after every lap">';
+    for (let p = 1; p <= field; p++) {
+      svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(p).toFixed(1) + '" y2="' + y(p).toFixed(1) + '"/>'
+        + '<text class="ax" x="' + (L - 10) + '" y="' + (y(p) + 4).toFixed(1) + '" text-anchor="end">P' + p + '</text>';
+    }
+    svg += '<line class="axl" x1="' + L + '" x2="' + L + '" y1="' + (T - 6) + '" y2="' + base + '"/>'
+      + '<line class="axl" x1="' + L + '" x2="' + (W - R) + '" y1="' + base + '" y2="' + base + '"/>';
+    const span = hi - lo;
+    // The fewest laps between labels that leaves each one room to read.
+    const step = [1, 2, 5, 10, 20, 50].find((s) => s * (W - L - R) / Math.max(1, span) >= 30) || 100;
+    for (let l = lo; l <= hi; l++) {
+      if (l !== lo && l !== hi && l % step !== 0) continue;
+      if (l === hi && l !== lo && l % step !== 0 && (hi - Math.floor(hi / step) * step) * (W - L - R) / Math.max(1, span) < 24) continue;
+      svg += '<text class="ax" x="' + x(l).toFixed(1) + '" y="' + (base + 18) + '" text-anchor="middle">' + (l === 0 ? 'Start' : l) + '</text>';
+    }
+    svg += '<text class="axt" x="' + ((L + W - R) / 2).toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle">Lap</text>'
+      + '<text class="axt" text-anchor="middle" transform="translate(14 ' + ((T + base) / 2).toFixed(1) + ') rotate(-90)">Position</text>';
+
+    // Last place first, so the leader's line is drawn on top.
+    lines.slice().reverse().forEach((line) => {
+      const colour = COLOURS[line.d.c % COLOURS.length];
+      const pts = Object.keys(line.d.p).map(Number).sort((a, b) => a - b).map((l) => [l, line.d.p[l]]);
+      const path = pts.map((pt) => x(pt[0]).toFixed(1) + ',' + y(pt[1]).toFixed(1)).join(' ');
+      svg += '<g style="--c:' + colour + '"><polyline points="' + path + '"/>'
+        + pts.map((pt, j) => '<circle' + (j === pts.length - 1 ? ' class="now" r="5"' : ' r="3"') + ' cx="' + x(pt[0]).toFixed(1) + '" cy="' + y(pt[1]).toFixed(1) + '"/>').join('')
+        + '</g>';
+    });
+    svg += '</svg>';
+
+    const key = '<ul class="posk">' + lines.map((line) =>
+      '<li><span class="sw" style="--c:' + COLOURS[line.d.c % COLOURS.length] + '"></span><b>P' + line.now + '</b>' + esc(line.k) + '</li>').join('') + '</ul>';
+    const joined = lo > 1 ? '<p class="note">Drawn from lap ' + lo + ', when this page started watching.</p>' : '';
+    const html = svg + key + joined;
+    if (out.innerHTML !== html) out.innerHTML = html;
+  }
+
+  // --- Lap times (4 Nov 2026, Asher: "add a live time by lap chart below
+  // the position one"). Every row of the board carries all of its flying
+  // laps, so unlike the places this is the whole race however late the
+  // page was opened. A line per driver in the same colour as their place
+  // line, on the same laps: the start lap has no time, so the first time
+  // is lap 2. Quicker is higher, as on a driver's night (lapChart), and a
+  // lap far slower than the rest - a crash, a flipped car - sits on the
+  // bottom edge rather than flattening every other lap into a line.
+  function drawTimes(rows) {
+    if (!tbox || !tout) return;
+    const ns = names(rows);
+    const lines = ns.map((k, i) => {
+      const laps = rows[i] && Array.isArray(rows[i].laps)
+        ? rows[i].laps.filter((v) => typeof v === 'number' && isFinite(v) && v > 0).slice(0, 300) : [];
+      const d = h.d[k];
+      return { k: k, now: i + 1, laps: laps, c: d ? d.c : i % COLOURS.length };
+    });
+    const all = [];
+    lines.forEach((line) => line.laps.forEach((ms) => all.push(ms)));
+    tbox.hidden = false;
+    if (all.length === 0) {
+      const wait = '<p class="note">The lines start with the first timed lap: one per driver, every lap they run.</p>';
+      if (tout.innerHTML !== wait) tout.innerHTML = wait;
+      return;
+    }
+
+    const sorted = all.slice().sort((a, b) => a - b);
+    const quick = sorted[0];
+    const cap = Math.max(sorted[Math.floor(sorted.length / 2)] * 1.6, quick * 1.2);
+    const slow = Math.min(sorted[sorted.length - 1], cap);
+    const step = [0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10].find((s) => (slow - quick) / 1000 / s <= 5) || 10;
+    const lo = Math.floor(quick / 1000 / step) * step;
+    let hi = Math.ceil(slow / 1000 / step) * step;
+    if (hi - lo < step / 2) hi = lo + step;
+    const places = step >= 1 ? 0 : step === 0.25 ? 2 : 1;
+    const most = Math.max.apply(null, lines.map((line) => line.laps.length));
+    const first = 2, last = Math.max(3, most + 1);
+
+    const W = Math.max(300, Math.min(760, Math.round(tout.clientWidth || 600)));
+    const L = 66, R = 18, T = 16, B = 52, H = 260;
+    const base = H - B + 12;
+    const x = (lap) => L + (lap - first) * (W - L - R) / Math.max(1, last - first);
+    const yOf = (s) => T + (s - lo) / (hi - lo) * (base - 12 - T);
+    const y = (ms) => ms > cap ? base - 4 : yOf(ms / 1000);
+
+    let svg = '<svg class="posg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Each driver\\u2019s time for every lap">';
+    const count = Math.round((hi - lo) / step);
+    for (let i = 0; i <= count; i++) {
+      const s = lo + i * step;
+      svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + yOf(s).toFixed(1) + '" y2="' + yOf(s).toFixed(1) + '"/>'
+        + '<text class="ax" x="' + (L - 10) + '" y="' + (yOf(s) + 4).toFixed(1) + '" text-anchor="end">' + s.toFixed(places) + '</text>';
+    }
+    svg += '<line class="axl" x1="' + L + '" x2="' + L + '" y1="' + (T - 6) + '" y2="' + base + '"/>'
+      + '<line class="axl" x1="' + L + '" x2="' + (W - R) + '" y1="' + base + '" y2="' + base + '"/>';
+    const span = last - first;
+    const xstep = [1, 2, 5, 10, 20, 50].find((s) => s * (W - L - R) / Math.max(1, span) >= 30) || 100;
+    for (let l = first; l <= last; l++) {
+      if (l !== first && l !== last && l % xstep !== 0) continue;
+      if (l === last && l !== first && l % xstep !== 0 && (last - Math.floor(last / xstep) * xstep) * (W - L - R) / Math.max(1, span) < 24) continue;
+      svg += '<text class="ax" x="' + x(l).toFixed(1) + '" y="' + (base + 18) + '" text-anchor="middle">' + l + '</text>';
+    }
+    svg += '<text class="axt" x="' + ((L + W - R) / 2).toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle">Lap</text>'
+      + '<text class="axt" text-anchor="middle" transform="translate(14 ' + ((T + base) / 2).toFixed(1) + ') rotate(-90)">Lap time (s)</text>';
+
+    // Last place first, so the leader's line is drawn on top; each
+    // driver's best lap filled in.
+    lines.slice().reverse().forEach((line) => {
+      if (line.laps.length === 0) return;
+      const colour = COLOURS[line.c % COLOURS.length];
+      const best = Math.min.apply(null, line.laps);
+      const path = line.laps.map((ms, i) => x(i + 2).toFixed(1) + ',' + y(ms).toFixed(1)).join(' ');
+      svg += '<g style="--c:' + colour + '"><polyline points="' + path + '"/>'
+        + line.laps.map((ms, i) => '<circle' + (ms === best ? ' class="now" r="5"' : ' r="3"') + ' cx="' + x(i + 2).toFixed(1) + '" cy="' + y(ms).toFixed(1) + '"/>').join('')
+        + '</g>';
+    });
+    svg += '</svg>';
+
+    const key = '<ul class="posk">' + lines.filter((line) => line.laps.length > 0).map((line) =>
+      '<li><span class="sw" style="--c:' + COLOURS[line.c % COLOURS.length] + '"></span>' + esc(line.k)
+      + ' <b>' + (Math.min.apply(null, line.laps) / 1000).toFixed(3) + '</b></li>').join('') + '</ul>';
+    const capped = sorted[sorted.length - 1] > cap
+      ? '<p class="note">Higher is quicker; the filled dot is each driver\\u2019s best. Laps over ' + (cap / 1000).toFixed(1) + 's sit on the bottom line.</p>'
+      : '<p class="note">Higher is quicker; the filled dot is each driver\\u2019s best.</p>';
+    const html = svg + key + capped;
+    if (tout.innerHTML !== html) tout.innerHTML = html;
+  }
+
+  function draw(rows) {
+    drawPos(rows);
+    drawTimes(rows);
+  }
+
+  return { take: take, draw: draw, hide: hide };
+})();
+
+function drawBoard(state) {
+  const columns = Array.isArray(state.columns) ? state.columns : [];
+  const rows = Array.isArray(state.standings) ? state.standings : [];
   const html = '<div class="card"><table><thead><tr>' +
     columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + '">' + esc(c) + '</th>').join('') +
     '</tr></thead><tbody>' +
@@ -4541,6 +4943,55 @@ function render(state, seen) {
   if (card) card.scrollLeft = left;
 }
 
+// at: when the laptop published this board. empty: what to say when there
+// is no board, and no last race to keep up either.
+function render(state, seen, at, empty) {
+  // A copy's laps are not news: only a fresh read is counted for speaking.
+  if (!seen) lapTalk.take(state);
+  const rows = Array.isArray(state.standings) ? state.standings : [];
+  const running = String(state.state || 'Idle');
+
+  if (rows.length === 0) {
+    // THE NEXT RACE UNDER WAY (4 Nov 2026, Asher: "it didn't show the
+    // stages as they updated and at one point went back to race over").
+    // The laptop empties the board when a race is staged and again at the
+    // green (RaceControlSession.Stage, GreenFlag), so Staging, Countdown and
+    // the first lap of Racing all come with nobody on the board. Each of
+    // those is the new race: the card says which, and the last race's
+    // board goes, rather than "Race over" over the old board until the
+    // first car crosses the line.
+    if (running === 'Staging' || running === 'Countdown' || running === 'Racing') {
+      drawBar(state, false, 0, []);
+      board.innerHTML = '<p class="note">' + (running === 'Racing'
+        ? 'Green flag. The board fills as the cars cross the line.'
+        : 'The cars are lining up. The board fills once the race is under way.') + '</p>';
+      boardHtml = '';
+      posChart.hide();
+      return;
+    }
+
+    // Between races: the last one's board under "Race over".
+    const kept = keptRace();
+    drawBar(state, !!kept, kept ? kept.at : 0, kept && Array.isArray(kept.state.standings) ? kept.state.standings : []);
+    if (kept) {
+      drawBoard(kept.state);
+      posChart.draw(Array.isArray(kept.state.standings) ? kept.state.standings : []);
+      return;
+    }
+    board.innerHTML = '<p class="note">' + (empty || 'Nobody is on track. The board fills as soon as a session starts.') + '</p>';
+    boardHtml = '';
+    posChart.hide();
+    return;
+  }
+
+  const over = running === 'Finished';
+  drawBar(state, over, at, rows);
+  keepRace(state, at || Date.now());
+  posChart.take(rows);
+  drawBoard(state);
+  posChart.draw(rows);
+}
+
 // Shows or hides the broadcast bug (see load).
 function onAir(on) {
   const body = document.body;
@@ -4554,13 +5005,12 @@ async function load() {
 
   if (answer === null) {
     board.innerHTML = '<p class="note bad">Could not reach the relay. This page will keep trying.</p>';
+    boardHtml = '';
     return;
   }
 
   if (answer.missing) {
-    bar.className = 'flagbar';
-    bar.innerHTML = '<span class="state">Not racing</span>';
-    board.innerHTML = '<p class="note">No race has been published yet.</p>';
+    render({}, true, 0, 'No race has been published yet.');
     onAir(false);
     lapTalk.show();
     touched();
@@ -4568,13 +5018,14 @@ async function load() {
   }
 
   const state = answer.body.body || {};
-  render(state, answer.seen === true);
+  const at = Date.parse(answer.body.publishedAt);
+  render(state, answer.seen === true, isFinite(at) ? at : 0);
 
   // The broadcast bug in the corner (30 Oct 2026, relay branding) while a
   // race is staged, counting down or running - the same reading, and the
   // same two minutes before a laptop that went quiet stops counting, as
   // the red dot the other pages put on the Live tab.
-  const fresh = Date.now() - Date.parse(answer.body.publishedAt) < 120000;
+  const fresh = Date.now() - at < 120000;
   onAir(fresh && ['Staging', 'Countdown', 'Racing'].includes(String(state.state)));
   touched();
 }
@@ -5084,6 +5535,8 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     // Without Listen it stays, as the only way to read them.
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
       + '<div id="board"></div>'
+      + '<div id="livepos" class="card livepos" hidden><h3>Position by lap</h3><div id="lposbody"></div></div>'
+      + '<div id="livetimes" class="card livepos" hidden><h3>Lap times</h3><div id="ltimebody"></div></div>'
       + voteControl(context.look.vote)
       + listenControl(context.look.listening)
       + noteControl(context.look.notes)
@@ -9051,110 +9504,266 @@ function clipBlock(c, words) {
   return box;
 }
 
-// The race card's charts, drawn as LiveRC draws its lap-by-lap position
-// graph (4 Nov 2026, Asher: "the chart should be analogous to the one" on
-// LiveRC): a framed plot with a grid both ways, laps 0 to the last along
-// the bottom, round numbers up the side, and a ringed dot on every lap.
-// The frame, the upright grid lines, the lap numbers and both axis titles;
-// the caller draws its own level lines. Returns the svg and a text helper.
-const CH = { W: 340, L: 44, R: 10, T: 10, B: 38 };
+// THE RACE CARD'S CHARTS AS LIVE'S (4 Nov 2026, Asher: "make the two
+// charts on the me tab the same as the two charts on the live tab. add a
+// themed tick box that removes the other drivers and just shows you").
+// Position by lap and Lap times, drawn as the Live page draws its two
+// cards under the board: a line per driver in its own colour, P1 at the
+// top, labelled axes, the newest place or best lap filled in, and a key.
+//
+// A driver's night carries only their own laps, so the rest of the field
+// comes from the race's public result (the results page's own document,
+// by the race's sid), read once per race and kept for the visit. Until it
+// answers - or for a race the club has not published - the charts carry
+// their line alone, and there is no tick box, since there is nobody to
+// hide. Their own line is found in the result by its laps, then by their
+// place, is drawn last so it sits on top, and is called You.
+//
+// Built from elements, never markup: every name in a result is the club's
+// typing, and goes in as text.
+const ME_COLOURS = ['#F5C342', '#8EC5FF', '#E5484D', '#46A758', '#A77BEB', '#FF8B3E',
+  '#2EE6FF', '#FF2E9A', '#A0E85B', '#C9A04E', '#D9C2FF', '#7FD6C2'];
+const JUST_ME_KEY = 'hg-night-just-me';
 
-function chartFrame(H, laps, side, cls, aria) {
-  const svg = sv('svg', { viewBox: '0 0 ' + CH.W + ' ' + H, class: cls, role: 'img', 'aria-label': aria });
-  const label = (attrs, words) => {
-    const t = sv('text', attrs);
-    t.textContent = words;
-    svg.appendChild(t);
-  };
-  const x = (k) => CH.L + k * (CH.W - CH.L - CH.R) / Math.max(1, laps);
-  const step = laps <= 10 ? 1 : laps <= 30 ? 5 : 10;
-  for (let k = 0; k <= laps; k += step) {
-    if (k > 0 && k < laps) svg.appendChild(sv('line', { x1: x(k).toFixed(1), y1: CH.T, x2: x(k).toFixed(1), y2: H - CH.B, class: 'gr' }));
-    if (laps - k >= step / 2 || k === laps) label({ x: x(k).toFixed(1), y: H - CH.B + 14, class: 'xt' }, String(k));
+// The tick, as this phone last left it: read the first time a chart is
+// drawn, since view is declared further down this script.
+function justMe() {
+  if (view.justMe === undefined) {
+    try { view.justMe = localStorage.getItem(JUST_ME_KEY) === '1'; } catch (e) { view.justMe = false; }
   }
-  if (laps % step !== 0) label({ x: x(laps).toFixed(1), y: H - CH.B + 14, class: 'xt' }, String(laps));
-  svg.appendChild(sv('rect', { x: CH.L, y: CH.T, width: CH.W - CH.L - CH.R, height: H - CH.T - CH.B, class: 'frame' }));
-  const mid = (CH.T + H - CH.B) / 2;
-  label({ x: 10, y: mid.toFixed(1), class: 'ttl', transform: 'rotate(-90 10 ' + mid.toFixed(1) + ')' }, side);
-  label({ x: ((CH.L + CH.W - CH.R) / 2).toFixed(1), y: H - 4, class: 'ttl' }, 'Lap');
-  return { svg, label, x };
+  return view.justMe;
 }
 
-// One race's laps as a line: quicker is higher, the best lap marked. A lap
-// far slower than the rest (a crash, a flipped car) is drawn at the bottom
-// edge rather than squashing every other lap into a flat line.
-function lapChart(list, bestMs) {
-  const laps = Array.isArray(list) ? list.filter((ms) => typeof ms === 'number' && ms > 0).slice(0, 200) : [];
-  if (laps.length < 2) return null;
+// Each race's field from its public result, by sid: an array of results,
+// null while it is being read, false when the relay has none, or absent -
+// not asked yet, or the read failed and the next redraw asks again.
+const fieldOf = new Map();
 
-  const sorted = laps.slice().sort((a, b) => a - b);
-  const quick = sorted[0];
-  const cap = Math.max(sorted[Math.floor(sorted.length / 2)] * 1.6, quick * 1.2);
-  const slow = Math.min(sorted[sorted.length - 1], cap);
-  const best = typeof bestMs === 'number' && laps.includes(bestMs) ? bestMs : quick;
-  const at = laps.indexOf(best);
-  const H = 230;
+function svText(attrs, words) {
+  const t = sv('text', attrs);
+  t.textContent = String(words);
+  return t;
+}
 
-  // Up the side, round seconds - no more than about five steps - from just
-  // under the quickest lap at the top to just over the slowest at the foot.
+// As wide as the screen the card is on, so the labels stay their own size
+// on a phone: the chart is drawn while its tab may still be hidden, when
+// it has no width of its own to measure.
+function meChartWidth(box) {
+  const own = box && box.clientWidth ? box.clientWidth : 0;
+  const screen = document.documentElement && document.documentElement.clientWidth ? document.documentElement.clientWidth - 72 : 600;
+  return Math.max(300, Math.min(760, Math.round(own || screen)));
+}
+
+function sameLaps(a, b) {
+  return a.length > 0 && a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+// [{name, colour, me, posAt, start, laps}], in the order they finished.
+function meLines(r, field) {
+  const own = { name: 'You', me: true, posAt: r.posAt, start: num(r.start), laps: lxLaps(r.lapsMs) };
+  const list = Array.isArray(field) ? field.filter((x) => x && typeof x === 'object') : [];
+  let at = list.findIndex((x) => sameLaps(lxLaps(x.lapsMs), own.laps));
+  if (at < 0 && num(r.pos) > 0) at = list.findIndex((x) => num(x.pos) === num(r.pos));
+  if (list.length < 2 || at < 0) return [Object.assign(own, { colour: ME_COLOURS[0] })];
+  return list.map((x, i) => i === at
+    ? Object.assign(own, {
+      colour: ME_COLOURS[i % ME_COLOURS.length],
+      // Their own night's places, else the result's.
+      posAt: Array.isArray(own.posAt) && own.posAt.length > 0 ? own.posAt : x.posAt,
+      start: own.start > 0 ? own.start : num(x.qual),
+    })
+    : {
+      name: String(x.name || 'Unnamed driver'), me: false, colour: ME_COLOURS[i % ME_COLOURS.length],
+      posAt: x.posAt, start: num(x.qual), laps: lxLaps(x.lapsMs),
+    });
+}
+
+// The frame both charts share: level lines with their labels are the
+// caller's; this draws both axes, the lap numbers and the two titles.
+function meFrame(W, H, lo, hi, side, aria, cls) {
+  const L = 66, R = 18, T = 16, B = 52;
+  const base = H - B + 12;
+  const svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'posg ' + cls, role: 'img', 'aria-label': aria });
+  const x = (l) => L + (l - lo) * (W - L - R) / Math.max(1, hi - lo);
+  // The level lines go in here, under everything else.
+  const grid = sv('g', {});
+  svg.appendChild(grid);
+  svg.appendChild(sv('line', { class: 'axl', x1: L, x2: L, y1: T - 6, y2: base }));
+  svg.appendChild(sv('line', { class: 'axl', x1: L, x2: W - R, y1: base, y2: base }));
+  const span = hi - lo;
+  const step = [1, 2, 5, 10, 20, 50].find((s) => s * (W - L - R) / Math.max(1, span) >= 30) || 100;
+  for (let l = lo; l <= hi; l++) {
+    if (l !== lo && l !== hi && l % step !== 0) continue;
+    if (l === hi && l !== lo && l % step !== 0 && (hi - Math.floor(hi / step) * step) * (W - L - R) / Math.max(1, span) < 24) continue;
+    svg.appendChild(svText({ class: 'ax', x: x(l).toFixed(1), y: base + 18, 'text-anchor': 'middle' }, l === 0 ? 'Start' : l));
+  }
+  svg.appendChild(svText({ class: 'axt', x: ((L + W - R) / 2).toFixed(1), y: H - 4, 'text-anchor': 'middle' }, 'Lap'));
+  svg.appendChild(svText({ class: 'axt', 'text-anchor': 'middle', transform: 'translate(14 ' + ((T + base) / 2).toFixed(1) + ') rotate(-90)' }, side));
+  return { svg, grid, x, L, R, T, B, base };
+}
+
+// One driver's line: its points, the last (or the best) filled in.
+function meLine(svg, line, pts, filled) {
+  const g = sv('g', { style: '--c:' + line.colour, class: line.me ? 'me' : '' });
+  g.appendChild(sv('polyline', { points: pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ') }));
+  pts.forEach((p, j) => {
+    const big = filled(j);
+    const attrs = { cx: p[0].toFixed(1), cy: p[1].toFixed(1), r: big ? 5 : 3 };
+    if (big) attrs.class = 'now';
+    else if (p[2]) attrs.class = 'slow';
+    g.appendChild(sv('circle', attrs));
+  });
+  svg.appendChild(g);
+}
+
+function meKey(lines, tail) {
+  const ul = el('ul', 'posk');
+  for (const line of lines) {
+    const li = el('li', line.me ? 'me' : '');
+    const sw = el('span', 'sw');
+    sw.setAttribute('style', '--c:' + line.colour);
+    li.appendChild(sw);
+    li.appendChild(el('span', '', line.name));
+    const more = tail(line);
+    if (more) li.appendChild(el('b', 'kv', more));
+    ul.appendChild(li);
+  }
+  return ul;
+}
+
+function meFigure(title, svg, key, note) {
+  const fig = el('figure', 'livepos lpfig');
+  fig.appendChild(el('h3', '', title));
+  fig.appendChild(svg);
+  fig.appendChild(key);
+  if (note) fig.appendChild(el('p', 'note', note));
+  return fig;
+}
+
+// Position by lap: lap 0 is the grid slot when it is known. Null without
+// a place for every lap from anybody shown.
+function mePositions(lines, of, W) {
+  const use = lines.filter((l) => Array.isArray(l.posAt) && l.posAt.length > 0 && l.posAt.every((p) => typeof p === 'number' && p > 0));
+  if (use.length === 0) return null;
+  const marks = use.map((l) => (l.start > 0 ? [[0, l.start]] : []).concat(l.posAt.map((p, k) => [k + 1, p])));
+  const laps = [].concat.apply([], marks.map((m) => m.map((p) => p[0])));
+  const lo = Math.min.apply(null, laps);
+  const hi = Math.max.apply(null, laps);
+  let field = Math.max(num(of), use.length);
+  marks.forEach((m) => m.forEach((p) => { field = Math.max(field, p[1]); }));
+  const H = 16 + 52 + Math.max(2, field - 1) * 30;
+  const f = meFrame(W, H, lo, hi, 'Position', 'Position after every lap', 'mepos');
+  const y = (p) => f.T + (p - 1) * (f.base - 12 - f.T) / Math.max(1, field - 1);
+  for (let p = 1; p <= field; p++) {
+    f.grid.appendChild(sv('line', { class: 'grid', x1: f.L, x2: W - f.R, y1: y(p).toFixed(1), y2: y(p).toFixed(1) }));
+    f.svg.appendChild(svText({ class: 'ax', x: f.L - 10, y: (y(p) + 4).toFixed(1), 'text-anchor': 'end' }, 'P' + p));
+  }
+  // Everybody else from last to first, then them on top.
+  const order = use.map((l, i) => i).filter((i) => !use[i].me).reverse().concat(use.map((l, i) => i).filter((i) => use[i].me));
+  for (const i of order) {
+    const pts = marks[i].map((p) => [f.x(p[0]), y(p[1])]);
+    meLine(f.svg, use[i], pts, (j) => j === pts.length - 1);
+  }
+  const key = meKey(use, (l) => 'P' + l.posAt[l.posAt.length - 1]);
+  return meFigure('Position by lap', f.svg, key, '');
+}
+
+// Lap times: quicker is higher; a lap far slower than the rest sits on
+// the bottom line rather than flattening every other lap. Null with no
+// laps.
+function meTimes(lines, W) {
+  const use = lines.filter((l) => l.laps.length > 0);
+  if (use.length === 0) return null;
+  const all = [].concat.apply([], use.map((l) => l.laps)).sort((a, b) => a - b);
+  const quick = all[0];
+  const cap = Math.max(all[Math.floor(all.length / 2)] * 1.6, quick * 1.2);
+  const slow = Math.min(all[all.length - 1], cap);
   const step = [0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10].find((s) => (slow - quick) / 1000 / s <= 5) || 10;
   const lo = Math.floor(quick / 1000 / step) * step;
   let hi = Math.ceil(slow / 1000 / step) * step;
   if (hi - lo < step / 2) hi = lo + step;
   const places = step >= 1 ? 0 : step === 0.25 ? 2 : 1;
-  const y = (ms) => ms > cap ? H - CH.B : CH.T + (ms / 1000 - lo) / (hi - lo) * (H - CH.T - CH.B);
-
-  const f = chartFrame(H, laps.length, 'Lap time (s)', 'lapchart',
-    'Lap times for ' + laps.length + ' laps, best ' + lap(best) + ' on lap ' + (at + 1));
+  const most = Math.max.apply(null, use.map((l) => l.laps.length));
+  const me = use.find((l) => l.me);
+  const mine = me ? Math.min.apply(null, me.laps) : 0;
+  const aria = 'Lap times for every lap' + (me ? ', your best ' + lap(mine) + ' on lap ' + (me.laps.indexOf(mine) + 1) : '');
+  const f = meFrame(W, 260, 1, Math.max(2, most), 'Lap time (s)', aria, 'metimes');
+  const yOf = (s) => f.T + (s - lo) / (hi - lo) * (f.base - 12 - f.T);
+  const y = (ms) => ms > cap ? f.base - 4 : yOf(ms / 1000);
   const count = Math.round((hi - lo) / step);
   for (let i = 0; i <= count; i++) {
     const s = lo + i * step;
-    const level = CH.T + (s - lo) / (hi - lo) * (H - CH.T - CH.B);
-    if (i > 0 && i < count) {
-      f.svg.appendChild(sv('line', { x1: CH.L, y1: level.toFixed(1), x2: CH.W - CH.R, y2: level.toFixed(1), class: 'gr' }));
-    }
-    f.label({ x: CH.L - 6, y: (level + 4).toFixed(1), class: 'yt' }, s.toFixed(places));
+    f.grid.appendChild(sv('line', { class: 'grid', x1: f.L, x2: W - f.R, y1: yOf(s).toFixed(1), y2: yOf(s).toFixed(1) }));
+    f.svg.appendChild(svText({ class: 'ax', x: f.L - 10, y: (yOf(s) + 4).toFixed(1), 'text-anchor': 'end' }, s.toFixed(places)));
   }
-
-  const x = (i) => f.x(i + 1);
-  f.svg.appendChild(sv('polyline', { points: laps.map((ms, i) => x(i).toFixed(1) + ',' + y(ms).toFixed(1)).join(' ') }));
-  laps.forEach((ms, i) => {
-    if (ms > cap) f.svg.appendChild(sv('circle', { cx: x(i).toFixed(1), cy: (H - CH.B).toFixed(1), r: 3.5, class: 'slow' }));
-    else if (i !== at) f.svg.appendChild(sv('circle', { cx: x(i).toFixed(1), cy: y(ms).toFixed(1), r: 3.5, class: 'dot' }));
-  });
-  f.svg.appendChild(sv('circle', { cx: x(at).toFixed(1), cy: y(best).toFixed(1), r: 5, class: 'best' }));
-
-  const fig = el('figure', 'lapfig');
-  fig.appendChild(el('figcaption', 'ttl', 'Lap-by-lap times'));
-  fig.appendChild(f.svg);
-  fig.appendChild(el('p', 'cap', 'Higher is quicker. Best ' + lap(best) + ' on lap ' + (at + 1) + ', the green dot.'));
-  return fig;
+  const order = use.map((l, i) => i).filter((i) => !use[i].me).reverse().concat(use.map((l, i) => i).filter((i) => use[i].me));
+  for (const i of order) {
+    const l = use[i];
+    const best = Math.min.apply(null, l.laps);
+    const at = l.laps.indexOf(best);
+    const pts = l.laps.map((ms, k) => [f.x(k + 1), y(ms), ms > cap]);
+    meLine(f.svg, l, pts, (j) => j === at);
+  }
+  const key = meKey(use, (l) => lap(Math.min.apply(null, l.laps)));
+  const note = 'Higher is quicker; the filled dot is the best lap.'
+    + (all[all.length - 1] > cap ? ' Laps over ' + (cap / 1000).toFixed(1) + 's sit on the bottom line.' : '');
+  return meFigure('Lap times', f.svg, key, note);
 }
 
-// Their place after every lap, from the grid slot they started in (lap 0)
-// when that is known, first at the top - LiveRC's position graph with only
-// their own line, since a driver's night carries no one else's laps. Null
-// without a place for every lap.
-function posChart(posAt, start, of) {
-  if (!Array.isArray(posAt) || posAt.length < 2 || !posAt.every((p) => typeof p === 'number' && p > 0)) return null;
-  const field = Math.max(num(of), num(start), Math.max.apply(null, posAt), 2);
-  const H = Math.max(150, CH.T + CH.B + (field - 1) * 26);
-  const y = (p) => CH.T + (p - 1) * (H - CH.T - CH.B) / (field - 1);
+// The Lap chart tab: the tick box when there is a field to hide, then the
+// two charts, redrawn when the tick changes or the result arrives.
+function meCharts(r) {
+  const box = el('div', 'charts mecharts');
+  const tick = el('div', 'lvsay jm');
+  const label = el('label');
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = justMe();
+  label.appendChild(input);
+  label.appendChild(el('span', '', 'Just me'));
+  tick.appendChild(label);
+  let out = el('div');
+  box.appendChild(out);
 
-  const f = chartFrame(H, posAt.length, 'Position', 'poschart', 'Your position after each of ' + posAt.length + ' laps');
-  for (let p = 1; p <= field; p++) {
-    if (p > 1 && p < field) f.svg.appendChild(sv('line', { x1: CH.L, y1: y(p).toFixed(1), x2: CH.W - CH.R, y2: y(p).toFixed(1), class: 'gr' }));
-    f.label({ x: CH.L - 6, y: (y(p) + 4).toFixed(1), class: 'yt' }, String(p));
+  const sid = typeof r.sid === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(r.sid) ? r.sid : '';
+
+  const paint = () => {
+    // A fresh holder each time, the old one and its charts gone.
+    out.remove();
+    out = el('div');
+    box.appendChild(out);
+    const lines = meLines(r, sid ? fieldOf.get(sid) : null);
+    // The tick only when there is somebody to hide, above the charts.
+    if (lines.length > 1) out.appendChild(tick);
+    const shown = lines.length > 1 && justMe() ? lines.filter((l) => l.me) : lines;
+    const W = meChartWidth(box);
+    const places = mePositions(shown, r.of, W);
+    if (places) out.appendChild(places);
+    const times = meTimes(shown, W);
+    if (times) out.appendChild(times);
+  };
+
+  input.addEventListener('change', () => {
+    view.justMe = input.checked;
+    try { localStorage.setItem(JUST_ME_KEY, view.justMe ? '1' : '0'); } catch (e) { /* this visit only */ }
+    paint();
+  });
+
+  paint();
+
+  if (sid && !fieldOf.has(sid)) {
+    fieldOf.set(sid, null);
+    grab('/collection/results?ids=' + encodeURIComponent(sid)).then((answer) => {
+      if (answer === null || answer === undefined) { fieldOf.delete(sid); return; }
+      const items = !answer.missing && answer.body && Array.isArray(answer.body.items) ? answer.body.items : [];
+      const item = items.find((x) => x && String(x.id) === sid);
+      const list = item && item.body && Array.isArray(item.body.results) ? item.body.results : null;
+      fieldOf.set(sid, list === null ? false : list);
+      if (list !== null) paint();
+    }, () => { fieldOf.delete(sid); });
   }
 
-  const points = (num(start) > 0 ? [[0, num(start)]] : []).concat(posAt.map((p, k) => [k + 1, p]));
-  f.svg.appendChild(sv('polyline', { points: points.map((pt) => f.x(pt[0]).toFixed(1) + ',' + y(pt[1]).toFixed(1)).join(' ') }));
-  for (const pt of points) f.svg.appendChild(sv('circle', { cx: f.x(pt[0]).toFixed(1), cy: y(pt[1]).toFixed(1), r: 3.5, class: 'dot' }));
-
-  const fig = el('figure', 'lapfig');
-  fig.appendChild(el('figcaption', 'ttl', 'Lap-by-lap position'));
-  fig.appendChild(f.svg);
-  return fig;
+  return box;
 }
 
 // The cars a driver raced tonight, when one of them was a second
@@ -9540,14 +10149,9 @@ function raceDetail(r, stats, own) {
     // Their place lap by lap when the laptop sent one for every lap (4 Nov
     // 2026), and the lap times under it - the position chart first since
     // 4 Nov 2026 (Asher: "postion chart before lap time chart").
-    const chart = lapChart(r.lapsMs, r.bestMs);
-    if (chart) {
-      const box = el('div', 'charts');
-      const places = posChart(r.posAt, r.start, r.of);
-      if (places) box.appendChild(places);
-      box.appendChild(chart);
-      tabs.push(['chart', 'Lap chart', box]);
-    }
+    // Since 4 Nov 2026 the same two charts as Live's, with the rest of the
+    // field from the race's public result - see meCharts.
+    if (lxLaps(r.lapsMs).length > 0) tabs.push(['chart', 'Lap chart', meCharts(r)]);
   }
 
   if (tabs.length > 0) {
