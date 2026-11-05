@@ -4,6 +4,14 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Relay page changes (4 November).**
+    - **Make a picture to share** on a driver's night does something on a phone now. It used to save the picture as a download, which a phone quietly drops, always from the home-screen icon. Now it opens the phone's share sheet with the picture in it. Where the browser can't share a picture, the picture opens on the page to press and hold, with a **Save picture** button.
+    - **Save as a text file** is gone from the night page. The picture is the way to share a night.
+    - On **Live**, the announcer's words beside **Listen live** are three times the size, in white and bold. With listening off it says "Press Listen Live to hear the broadcast."
+    - The **Captions** card under **Message the announcer** is gone when the club has listening on, since **Listen live** already shows the words. A club without listening still gets it.
+
+    Redeploy the relay; nothing changes on the race PC.
+
 - **How chatty is the one dial for the AI commentary (3 November).** Turned all the way up, the AI could still go quiet in the heats. Each segment kept its own limits for the night and per class, and its own gap after the last line, and **How chatty** reached none of them. Now it moves them all. **Non-stop** lifts the nightly and per-class limits, shortens the gaps to about a third, and saves nothing for the mains. **Lively** doubles the limits; **Sparing** and **Measured** lower them. **Standard** is unchanged, and a once-a-night segment like the cold open stays once a night at every stop. **Pacing**, which only ever spaced the built-in timing calls, moved to **Voice > Announcements > How often**. **Segments run** is gone: any segments your choice there turned off are now unticked instead, so nothing you hear changes. Each demo run now gets a night of its own, so rehearsals no longer use up the real heats' segments. The **Lines not said this race** window on Race Control opens with a line on what the AI said and what held the rest. See [How chatty](announcer/commentary.md#how-chatty). Update HeatCaller on the race PC; nothing changes on the relay.
 
 - **Recap and battle watch fixes (3 November).**

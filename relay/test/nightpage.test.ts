@@ -307,11 +307,16 @@ describe("what it draws", () => {
     assert.equal((html.match(/<li>/g) ?? []).length, 2);
   });
 
-  it("offers the download, and builds it in the browser", async () => {
+  it("offers the picture and no text file, and builds it in the browser", async () => {
     const draw = await drawing();
     const html = draw({ driver: "Bill Hargrove", lines: ["Raced."] });
 
-    assert.match(html, /id="dl"/);
+    assert.match(html, /id="pic"/);
+    assert.doesNotMatch(html, /id="dl"/);
+    assert.doesNotMatch(html, /text file/);
+    // The phone's share sheet first, with the picture on the page after.
+    assert.ok((await page()).text.includes("navigator.canShare({ files: [file] })"));
+    assert.ok((await page()).text.includes("Press and hold the picture to save or share it."));
 
     // No endpoint for it: the words are already on the screen, and a
     // download route would be the relay serving the same text twice.

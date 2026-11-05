@@ -55,14 +55,19 @@ function lines(...n: number[]): { lines: Line[] } {
 }
 
 describe("the captions control", () => {
-  it("is drawn for every club, pressed false, with a polite live region", () => {
-    for (const listening of [false, true]) {
-      const { html } = pageParts(livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening } }));
-      assert.match(html, /<button type="button" id="capbtn"[^>]*aria-pressed="false"[^>]*>Captions<\/button>/);
-      assert.match(html, /id="caplines"[^>]*aria-live="polite"/);
-      // Listen is still there exactly when the club has it on.
-      assert.equal(/id="listenbtn"/.test(html), listening);
-    }
+  it("is drawn, pressed false, with a polite live region, where the club has no Listen", () => {
+    const { html } = pageParts(livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: false } }));
+    assert.match(html, /<button type="button" id="capbtn"[^>]*aria-pressed="false"[^>]*>Captions<\/button>/);
+    assert.match(html, /id="caplines"[^>]*aria-live="polite"/);
+    assert.doesNotMatch(html, /id="listenbtn"/);
+  });
+
+  // 4 Nov 2026, asked for by Asher: Listen shows the words itself, so a
+  // second Captions card under Message the announcer is gone.
+  it("is not drawn where the club has Listen, which shows the words itself", () => {
+    const { html } = pageParts(livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: true } }));
+    assert.match(html, /id="listenbtn"/);
+    assert.doesNotMatch(html, /id="capbtn"/);
   });
 
   it("reads nothing until pressed, then every two seconds, and stops when pressed again", async () => {
@@ -181,14 +186,6 @@ describe("the captions control", () => {
     assert.equal(reads(p), 2);
   });
 
-  it("leaves the Listen button alone", async () => {
-    const p = page(() => lines(1), true);
-    await p.settle();
-    const listen = p.get("listenbtn");
-    const before = listen.textContent;
-    p.get("capbtn").click();
-    await p.settle();
-    assert.equal(listen.textContent, before);
-    assert.equal(p.sent.some((s) => /listen/.test(s.url)), false, "no audio is fetched for captions");
-  });
+  // "leaves the Listen button alone" went on 4 Nov 2026: Captions and
+  // Listen are never on the page together now (see the test above).
 });

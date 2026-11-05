@@ -672,6 +672,10 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .lc-asks > summary { font-weight: 600; padding: 0; }
 .nshare { display: flex; flex-wrap: wrap; gap: 8px; max-width: 42rem; margin: 22px auto 8px; }
 .nshare .go { flex: 1 1 12rem; margin: 0; }
+#picview { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.82); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; overflow: auto; }
+#picview img { max-width: 100%; max-height: 70vh; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+#picview p { color: #fff; margin: 14px 0 0; text-align: center; }
+#picview .nshare { width: 100%; }
 .su textarea, .rc-ask textarea {
   width: 100%; min-height: 88px; margin: 0; padding: 12px; font: inherit; font-size: 1rem; font-weight: 400;
   border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); resize: vertical; }
@@ -1023,6 +1027,7 @@ html.light { --warn: #D99400; }
 .btn[hidden] { display: none; }
 @media (hover: hover) { .btn:hover { border-color: var(--primary); } }
 #listen .btn { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+#listennote.cap { color: #fff; font-weight: 700; font-size: 3em; line-height: 1.15; padding: 16px 0; overflow-wrap: anywhere; }
 .btn[aria-pressed=true] { background: var(--primary); color: var(--on-primary); border-color: transparent; }
 /* Segmented: Results' own tabs, and a night's race tabs. One track, the
    chosen part filled. */
@@ -4604,7 +4609,7 @@ function listenControl(listening: boolean): string {
 
   return '<div class="card" id="listen">'
     + '<button type="button" id="listenbtn" class="btn">Listen live</button>'
-    + '<p class="note" id="listennote">A few seconds behind the room. Nothing plays until you press it.</p>'
+    + '<p class="note" id="listennote">Press Listen Live to hear the broadcast.</p>'
     + "</div>";
 }
 
@@ -5061,14 +5066,18 @@ export function livePage(club: string, clubName: string, context: PageContext = 
     // Captions and Lap times in my ear follow it. Who wins? sits straight
     // under the board while a vote is open, since it only matters before
     // the race; Message the announcer goes with Listen (2 Nov 2026).
+    // With Listen on there is no Captions card (4 Nov 2026, asked for by
+    // Asher): Listen shows the announcer's words as they are heard, so a
+    // second set under Message the announcer said the same thing twice.
+    // Without Listen it stays, as the only way to read them.
     body: '<div id="bar" class="flagbar"><span class="state">Loading&hellip;</span></div>'
       + '<div id="board"></div>'
       + voteControl(context.look.vote)
       + listenControl(context.look.listening)
       + noteControl(context.look.notes)
-      + captionsControl()
+      + (context.look.listening ? "" : captionsControl())
       + lapTalkControl(),
-    script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : "") + CAPTIONS_JS
+    script: LAPVOICE_JS + LIVE_JS + (context.look.listening ? LISTEN_JS : CAPTIONS_JS)
       + (context.look.notes ? NOTE_JS : "") + (context.look.vote ? VOTE_JS : ""),
   }, context);
 }
@@ -5189,8 +5198,19 @@ const LISTEN_JS = `
   // When the page was hidden, for the catch-up on coming back.
   let hiddenAt = 0;
 
+  // A word about the player, in the note's own small grey.
   function say(text) {
     note.textContent = text;
+    if (note.classList) note.classList.remove('cap');
+  }
+
+  // The announcer's own words, as they are heard: three times the size,
+  // white and bold (4 Nov 2026, asked for by Asher), so they read from
+  // arm's length. This is the page's one set of captions while Listen is
+  // there - see livePage.
+  function sayLine(text) {
+    note.textContent = text;
+    if (note.classList) note.classList.add('cap');
   }
 
   function isNew(id, at) {
@@ -5420,7 +5440,7 @@ const LISTEN_JS = `
     shown.forEach((one) => {
       if (one && typeof one.text === 'string' && one.text.length > 0) {
         const wait = Math.max(0, (at - now + (Number(one.at) || 0)) * 1000);
-        captions.push(setTimeout(() => say(one.text), wait));
+        captions.push(setTimeout(() => sayLine(one.text), wait));
       }
     });
   }
@@ -5574,7 +5594,7 @@ const LISTEN_JS = `
     }
 
     btn.textContent = 'Listen live';
-    say('Stopped. Nothing plays until you press it.');
+    say('Press Listen Live to hear the broadcast.');
 
     if (timer !== null) {
       window.clearInterval(timer);
@@ -7877,14 +7897,12 @@ function draw() {
   box.innerHTML = (nameBox ? '' : head) + '<div id="nj"></div><div id="ng"></div>' + body + '<div id="nx"></div>'
     + '<div class="nshare">'
     + '<button id="pic" class="go" type="button">Make a picture to share</button>'
-    + '<button id="dl" class="go quiet" type="button">Save as a text file</button>'
     + '</div>';
 
+  // No "Save as a text file" since 4 Nov 2026 (asked for by Asher): the
+  // picture is the one way a night leaves the page.
   const shot = document.getElementById('pic');
   if (shot) shot.addEventListener('click', picture);
-
-  const button = document.getElementById('dl');
-  if (button) button.addEventListener('click', save);
 }
 
 // What a saved file is called. Their own name and the date, so a driver
@@ -7910,30 +7928,6 @@ function hand(blob, name) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
-}
-
-function save() {
-  const card = lines(night.coach);
-  const cars = carsOf(night);
-  let said = [];
-
-  if (cars.length === 0) {
-    said = lines(night.lines).concat(card.length === 0 ? [] : ['', 'Your report card'].concat(card));
-  } else {
-    // Car by car, as the page draws it (22 Oct 2026, second transponder).
-    cars.forEach((c, i) => {
-      const facts = lines(i === 0 ? night.lines : c.lines);
-      const coach = lines(i === 0 ? night.coach : c.coach);
-      said = said.concat(i === 0 ? [] : [''], [carHeading(c)], facts,
-        coach.length === 0 ? [] : ['', 'Report card'].concat(coach));
-    });
-  }
-
-  const text = [night.driver || '', [night.title, night.when].filter(Boolean).join(' · '), '']
-    .concat(said)
-    .join('\\r\\n') + '\\r\\n';
-
-  hand(new Blob([text], { type: 'text/plain;charset=utf-8' }), fileName(night, 'txt'));
 }
 
 // ---- the picture a driver actually shares ------------------------------
@@ -8098,9 +8092,9 @@ function picture() {
   const ctx = canvas.getContext('2d');
 
   if (!ctx || !canvas.toBlob) {
-    // A toast, not nothing(): nothing() replaced the night and the very
-    // text-file button this points at. 17 Oct 2026, Bug Hunt 8, A21-4.
-    toast('This browser cannot make the picture. The text file still works.');
+    // A toast, not nothing(): nothing() would replace the night itself.
+    // 17 Oct 2026, Bug Hunt 8, A21-4.
+    toast('This browser cannot make the picture.');
     return;
   }
 
@@ -8162,10 +8156,99 @@ function picture() {
   ctx.font = '400 22px ' + face;
   ctx.fillText('Timed and called by HeatCaller', CARD_PAD + 46, CARD_H - 40);
 
-  canvas.toBlob((blob) => {
-    if (blob) hand(blob, fileName(night, 'png'));
-  }, 'image/png');
+  handOver(canvas);
 }
+
+// THE PICTURE GOES TO THE SHARE SHEET (4 Nov 2026, Asher: "Make a picture
+// to share doesn't do anything"). It used to be handed over only as a
+// download, and a phone drops a download from a page in a frame - which
+// is every page opened from the home-screen icon - and an iPhone drops it
+// from the icon anyway. Now: the phone's own share sheet with the picture
+// in it, where the phone can share a file; otherwise the picture shown on
+// the page itself to press and hold or save, so the button always shows it.
+//
+// Made with toDataURL rather than toBlob, so the share sheet is asked for
+// in the same tick as the tap: a phone only opens one straight after a tap.
+function pictureBlob(canvas) {
+  const url = canvas.toDataURL('image/png');
+  const raw = atob(url.slice(url.indexOf(',') + 1));
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return { url: url, blob: new Blob([bytes], { type: 'image/png' }) };
+}
+
+function handOver(canvas) {
+  let made;
+  try { made = pictureBlob(canvas); } catch (e) {
+    toast('This browser cannot make the picture.');
+    return;
+  }
+
+  const name = fileName(night, 'png');
+  let file = null;
+  try { file = new File([made.blob], name, { type: 'image/png' }); } catch (e) { file = null; }
+
+  let shareable = false;
+  try {
+    shareable = !!file && typeof navigator.share === 'function'
+      && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+  } catch (e) { shareable = false; }
+
+  if (!shareable) {
+    showPicture(made, name);
+    return;
+  }
+
+  navigator.share({ files: [file], title: night.driver || 'My night' }).catch((e) => {
+    // Closing the sheet is them changing their mind, not a failure.
+    if (e && e.name === 'AbortError') return;
+    showPicture(made, name);
+  });
+}
+
+// The picture on the page, over everything, with Save picture and Close.
+// Built with the DOM: nothing here is markup.
+function showPicture(made, name) {
+  const old = document.getElementById('picview');
+  if (old) old.remove();
+
+  const view = document.createElement('div');
+  view.id = 'picview';
+  view.setAttribute('role', 'dialog');
+  view.setAttribute('aria-label', 'Your picture to share');
+
+  const img = document.createElement('img');
+  img.src = made.url;
+  img.alt = 'A picture of your night';
+
+  const hint = document.createElement('p');
+  hint.textContent = 'Press and hold the picture to save or share it.';
+
+  const row = document.createElement('div');
+  row.className = 'nshare';
+
+  const keep = document.createElement('button');
+  keep.type = 'button';
+  keep.className = 'go';
+  keep.textContent = 'Save picture';
+  keep.addEventListener('click', () => hand(made.blob, name));
+
+  const shut = document.createElement('button');
+  shut.type = 'button';
+  shut.className = 'go quiet';
+  shut.textContent = 'Close';
+  shut.addEventListener('click', () => view.remove());
+
+  row.appendChild(keep);
+  row.appendChild(shut);
+  view.appendChild(img);
+  view.appendChild(hint);
+  view.appendChild(row);
+  view.addEventListener('click', (e) => { if (e.target === view) view.remove(); });
+  document.body.appendChild(view);
+  shut.focus();
+}
+
 
 // ---- their evening as it happens ----------------------------------------
 //
