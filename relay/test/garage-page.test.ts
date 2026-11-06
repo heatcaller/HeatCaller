@@ -405,6 +405,19 @@ describe("garage page: what it sends", () => {
     });
   });
 
+  it("bug hunt 11: a tick HeatCaller stored as \"true\" starts ticked and goes back as Yes", async () => {
+    const stored = garage();
+    const cars = stored["cars"] as Record<string, unknown>[];
+    const setups = cars[0]!["setups"] as Record<string, unknown>[];
+    setups[0]!["values"] = { "front-spring": "Soft", sway: "true" };
+    const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: stored, asks: [] } }) }));
+    const box = page.get("gs");
+    assert.equal((field(box, /^Sway bar/) as unknown as { checked: boolean }).checked, true, "started from the last setup");
+    await press(page, box, /^Add to my setup log$/);
+    const f = asks(page)[0]?.body["f"] as Record<string, string>;
+    assert.equal(f["v.sway"], "Yes");
+  });
+
   it("fixing the last entry sends its id", async () => {
     const page = await open(relay({}));
     const box = page.get("gs");

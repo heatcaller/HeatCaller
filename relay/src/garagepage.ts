@@ -1553,15 +1553,25 @@ function sheetField(parent, sec, form, f, initial) {
   }
 
   if (kind === 'bool') {
-    tickBox(parent, sec, form, field, title, initial === 'Yes');
+    tickBox(parent, sec, form, field, title, isTick(initial));
     return;
   }
 
   textBox(parent, sec, form, field, title, initial, 80, kind === 'number' ? { mode: 'decimal' } : {});
 }
 
+// WHY (2026-11-05, Bug hunt 11): HeatCaller stores a ticked yes/no as
+// "true" (the desk's Setup Sheet form and a tick from this page alike) and
+// publishes it as stored, but only "Yes" counted as ticked here. The sheet
+// opened with every tick cleared, left them out of the request, and "Fix
+// my last entry" erased them. Either spelling is a tick.
+function isTick(v) {
+  const t = str(v).trim().toLowerCase();
+  return t === 'yes' || t === 'true' || t === '1';
+}
+
 function sheetValue(form, f, initial) {
-  const v = val(form, 'v.' + f.id, str(f.kind) === 'bool' ? initial === 'Yes' : initial);
+  const v = val(form, 'v.' + f.id, str(f.kind) === 'bool' ? isTick(initial) : initial);
   if (str(f.kind) === 'bool') return v === true || v === 'Yes' ? 'Yes' : '';
   return cleanText(v);
 }
