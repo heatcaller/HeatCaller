@@ -2565,6 +2565,20 @@ public sealed partial class RaceControlSession
         if (State is not (RaceState.Staging or RaceState.Countdown))
         {
             ClearJumpStartWindow();
+
+            // WHY (2026-11-05, Bug hunt 11: alternate decisions carried into
+            // a countdown that skipped Stage): Stage forgets the last race's
+            // alternate-transponder decisions; a countdown straight from
+            // Finished or Idle did not. The owner's main transponder was
+            // still "heard this race" from the last heat (or from passes
+            // between races), so a spare that jumped in the countdown was
+            // kept as a separate car and the jump, penalty and crossing went
+            // under the spare. The green then forgot the decisions, the
+            // spare merged into the owner on its next pass, and the penalty
+            // was never applied - with an orphaned 1-lap start row for the
+            // spare. Forgotten here as Stage does, so the jump lands on the
+            // owner's row exactly as it does after Stage.
+            ClearAlternateDecisions();
         }
 
         SetState(RaceState.Countdown);
