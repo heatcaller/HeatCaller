@@ -110,6 +110,12 @@ public sealed class RecordWatch
     private readonly HashSet<string> _recordGone = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _seen = new(StringComparer.Ordinal);
 
+    /// <summary>The layout record at the green, in seconds (Bug hunt 11) - null until one is read.</summary>
+    private double? _markAtGreen;
+
+    /// <summary>Half a millisecond: a lap and a record within this are the same timed lap.</summary>
+    private const double SameLap = 0.0005;
+
     /// <summary>The fastest lap ever set on this layout, and who holds it. From the layout's records.</summary>
     public Func<(double Seconds, string Holder)?>? LayoutRecord { get; set; }
 
@@ -203,9 +209,22 @@ public sealed class RecordWatch
             return null;
         }
 
+        _markAtGreen ??= mark.Seconds;
+
         // The record has gone. PaceWatch calls that, and from here on this
         // driver has nothing left to be close to.
-        if (lap.LapSeconds < mark.Seconds)
+        //
+        // WHY (2026-11-05, Bug hunt 11): Race Control writes a new record
+        // onto the layout as the lap crosses the line, before it is fed here,
+        // so on the breaking lap the mark read above is that very lap and
+        // "lap < mark" was false. The breaker was never marked gone, and a
+        // near lap later logged "one more like that and it is gone" about
+        // the record they already held. A lap that IS a mark set since the
+        // green is the record going.
+        var setThisRace = mark.Seconds < _markAtGreen - SameLap
+                          && Math.Abs(lap.LapSeconds - mark.Seconds) < SameLap;
+
+        if (lap.LapSeconds < mark.Seconds || setThisRace)
         {
             _recordGone.Add(lap.DriverId);
 
@@ -375,6 +394,9 @@ public sealed class RecordWatch
         _said.Clear();
         _recordGone.Clear();
         _seen.Clear();
+
+        // The record as it stands at the green (Bug hunt 11) - see Saw.
+        _markAtGreen = LayoutRecord?.Invoke() is { Seconds: > 0 } mark ? mark.Seconds : null;
     }
 
     /// <summary>

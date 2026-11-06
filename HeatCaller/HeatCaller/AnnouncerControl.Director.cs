@@ -248,6 +248,12 @@ public partial class AnnouncerControl
             _director.Pace.LayoutRecord = () =>
                 PaceHistory.LayoutRecordFor(Layouts?.Invoke()?.All, _settings.LastRaceControlTrackName);
 
+            // WHY (2026-11-05, Bug hunt 11): the same rule Race Control's live
+            // record follows, so a rental or a guest excluded from records is
+            // never called "the fastest lap ever on this layout" for a lap
+            // the Track Layouts page does not show.
+            _director.Pace.CanHoldRecord = transponder => AchievementEvaluator.CanHoldTrackRecord(transponder, _profiles);
+
             _director.Pace.NightBest = () =>
                 PaceHistory.NightBestFor(RacesTonight?.Invoke(), _settings.LastRaceControlTrackName);
 

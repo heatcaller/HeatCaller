@@ -137,8 +137,17 @@ public static partial class AchievementEvaluator
         // beat would be no best at all.
         var bestsPool = context?.AtHome == true ? EarlierSessions(history, record) : earlier;
 
+        // WHY (2026-11-05, Bug hunt 11): from the cars that count - not a
+        // disqualified one. A black flag keeps the DQ'd car's fast lap and
+        // lap list (ResultEditor zeroes only its laps), so its 9.700 stood
+        // as the race's fastest: the driver with the best legal lap lost
+        // Quickest of the Day and everything built on it (Double, Quick and
+        // Tidy, Grand Slam, Pace Setter), and the DQ'd car's getaway could
+        // keep Rocket Start from everyone else. The rest of the app (Tonight
+        // at the Track, the commentary) already says a DQ sets no fastest
+        // lap. See Counted.
         var fastestOfRace = results
-            .Where(r => r.FastLapMs > 0)
+            .Where(r => r.FastLapMs > 0 && Counted(r))
             .Select(r => r.FastLapMs)
             .DefaultIfEmpty(0)
             .Min();
@@ -167,7 +176,7 @@ public static partial class AchievementEvaluator
         // than counted as the quickest getaway there has ever been. Three
         // cars at least, or "quickest start" is just "not last".
         var openingLaps = results
-            .Where(r => r.LapTimesMs.Count >= 2 && r.LapTimesMs[0] > 0)
+            .Where(r => r.LapTimesMs.Count >= 2 && r.LapTimesMs[0] > 0 && Counted(r))
             .Select(r => r.LapTimesMs[0])
             .ToList();
 
@@ -1361,13 +1370,25 @@ public static partial class AchievementEvaluator
     }
 
     /// <summary>
+    /// Whether a result counts towards a race-wide figure such as the
+    /// fastest lap: it turned a lap and was not disqualified (2026-11-05,
+    /// Bug hunt 11). A DQ normally has no laps, but its outcome is checked
+    /// too, so a result edited by hand cannot slip one through.
+    /// </summary>
+    private static bool Counted(SessionResultEntry entry) =>
+        entry.Laps >= MinimumLapsToCount
+        && ResultEditor.NormaliseOutcome(entry.Outcome) != ResultEditor.Dq;
+
+    /// <summary>
     /// Whether this driver set the fastest lap of a past race, among real
     /// cars, with at least one other real car setting a time to beat.
     /// </summary>
     private static bool SetFastestLapIn(SessionRecord race, string transponder)
     {
+        // A disqualified car's lap is not the race's fastest here either
+        // (2026-11-05, Bug hunt 11) - the same rule as fastestOfRace.
         var timed = race.Results
-            .Where(e => !GhostService.IsGhost(e.Transponder) && e.FastLapMs > 0)
+            .Where(e => !GhostService.IsGhost(e.Transponder) && e.FastLapMs > 0 && Counted(e))
             .ToList();
 
         if (timed.Count < 2)

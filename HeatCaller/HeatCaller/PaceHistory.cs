@@ -122,7 +122,14 @@ internal static class PaceHistory
 
             foreach (var entry in race.Results)
             {
-                if (entry is null || entry.FastLapMs <= 0 || Ghosts.IsGhost(entry.Transponder))
+                // WHY (2026-11-05, Bug hunt 11): nor is a disqualified
+                // result. A DQ keeps its fast lap (ResultEditor zeroes only
+                // the laps), so a black-flagged 9.700 held the night's best:
+                // a legal lap under the real best went uncalled, and a
+                // quicker one was said to beat the DQ'd driver. Dropped as
+                // TonightAtTheTrack.FastestLaps and CommentaryReaders drop it.
+                if (entry is null || entry.FastLapMs <= 0 || Ghosts.IsGhost(entry.Transponder)
+                    || ResultEditor.NormaliseOutcome(entry.Outcome) == ResultEditor.Dq)
                 {
                     continue;
                 }
