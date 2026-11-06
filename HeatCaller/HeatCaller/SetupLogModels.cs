@@ -348,6 +348,61 @@ public sealed class SetupLogStore
     public static SetupEntry CopyOf(SetupEntry entry) =>
         JsonSerializer.Deserialize<SetupEntry>(JsonSerializer.Serialize(entry))!;
 
+    /// <summary>
+    /// An edit (<paramref name="edited"/>, made from <paramref name="opened"/>)
+    /// laid over the entry as it is stored now (<paramref name="now"/>):
+    /// each part the edit changed takes the edit's value, everything else
+    /// keeps what is stored now - the sheet's values one by one.
+    ///
+    /// WHY (2026-11-05, Bug hunt 11: a desk save over a phone's fix): a
+    /// phone can fix tonight's entry while the desk has it open, and the
+    /// desk's save wrote its copy from when it opened back whole.
+    /// </summary>
+    public static SetupEntry MergeEdit(SetupEntry opened, SetupEntry edited, SetupEntry now)
+    {
+        var was = JsonSerializer.SerializeToNode(opened)!.AsObject();
+        var desk = JsonSerializer.SerializeToNode(edited)!.AsObject();
+        var merged = JsonSerializer.SerializeToNode(now)!.AsObject();
+
+        foreach (var (name, value) in desk.ToList())
+        {
+            if (name == nameof(SetupEntry.Values))
+            {
+                continue;
+            }
+
+            if (!System.Text.Json.Nodes.JsonNode.DeepEquals(value, was[name]))
+            {
+                merged[name] = value?.DeepClone();
+            }
+        }
+
+        var result = merged.Deserialize<SetupEntry>()!;
+        result.Values = new Dictionary<string, string>(now.Values);
+
+        foreach (var key in opened.Values.Keys.Union(edited.Values.Keys))
+        {
+            var before = opened.Values.TryGetValue(key, out var b) ? b : null;
+            var after = edited.Values.TryGetValue(key, out var a) ? a : null;
+
+            if (string.Equals(before, after, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (after is null)
+            {
+                result.Values.Remove(key);
+            }
+            else
+            {
+                result.Values[key] = after;
+            }
+        }
+
+        return result;
+    }
+
     /// <summary>True when any entry was filled in against this chassis sheet.</summary>
     public bool UsesTemplate(string templateId) => _entries.Any(e => e.ChassisTemplateId == templateId);
 

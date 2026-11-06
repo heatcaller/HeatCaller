@@ -300,8 +300,33 @@ public partial class MainForm
         return service;
     }
 
-    /// <summary>Who is ahead of whom, last time we looked.</summary>
-    private readonly Dictionary<string, bool> _ghostWasAhead = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Who is ahead of whom, last time we looked: per ghost, the real car it was measured against and whether the ghost was ahead of it.</summary>
+    private readonly Dictionary<string, (string Human, bool Ahead)> _ghostWasAhead = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// CheckGhostPositions' decision for one ghost, on its own for testing:
+    /// null for no call, otherwise whether the human passed the ghost.
+    /// Records the new state either way.
+    /// </summary>
+    internal static bool? GhostPassCall(IDictionary<string, (string Human, bool Ahead)> wasAhead,
+        string ghost, string human, bool ghostAhead)
+    {
+        // WHY (2026-11-05, Bug hunt 11): the state used to be kept per ghost
+        // only, against whichever real car led at the time. When the leading
+        // real car changed between two of a ghost's crossings (A, G, B going
+        // to G, B, A after A broke down), the old "behind A" was compared
+        // with "ahead of B" and the PA called a pass on B that never
+        // happened. Only a swap between the same two cars is a pass now; a
+        // new reference car just starts afresh.
+        bool? call = wasAhead.TryGetValue(ghost, out var last)
+            && string.Equals(last.Human, human, StringComparison.OrdinalIgnoreCase)
+            && last.Ahead != ghostAhead
+                ? !ghostAhead
+                : null;
+
+        wasAhead[ghost] = (human, ghostAhead);
+        return call;
+    }
 
     /// <summary>
     /// Announces when a real driver and a ghost swap places.
@@ -339,15 +364,13 @@ public partial class MainForm
         {
             var ghostAhead = standings.ToList().IndexOf(ghost) < humanIndex;
 
-            if (_ghostWasAhead.TryGetValue(ghost.TransponderId, out var wasAhead) && wasAhead != ghostAhead)
+            if (GhostPassCall(_ghostWasAhead, ghost.TransponderId, human.TransponderId, ghostAhead) is { } humanPassedGhost)
             {
                 _announcer.NotifyGhostPass(
                     human.TransponderId,
                     ghost.TransponderId,
-                    humanPassedGhost: !ghostAhead);
+                    humanPassedGhost: humanPassedGhost);
             }
-
-            _ghostWasAhead[ghost.TransponderId] = ghostAhead;
         }
     }
 
@@ -368,46 +391,10 @@ public partial class MainForm
     /// </summary>
     private void EnsureGhostProfiles()
     {
-        // Ghosts that have been deleted or renamed leave orphan profiles
-        // behind, which would keep appearing in every picker.
-        var liveTransponders = _ghostStore.Current.Ghosts
-            .Select(g => g.Transponder)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var orphans = _profiles.AllIncludingGhosts
-            .Where(p => GhostService.IsGhost(p.Transponder) && !liveTransponders.Contains(p.Transponder))
-            .Select(p => p.Transponder)
-            .ToList();
-
-        foreach (var orphan in orphans)
+        if (!SyncGhostProfiles(_ghostStore, _profiles))
         {
-            _profiles.Delete(orphan);
+            return;
         }
-
-        // Every ghost gets a profile, enabled or not - a disabled ghost
-        // should still be selectable, it just won't run until switched on.
-        foreach (var ghost in _ghostStore.Current.Ghosts)
-        {
-            var existing = _profiles.Get(ghost.Transponder);
-
-            if (existing is not null
-                && existing.DriverName == ghost.Name
-                && existing.CarModel == ghost.CarModel)
-            {
-                continue;
-            }
-
-            _profiles.Upsert(new DriverProfile
-            {
-                Transponder = ghost.Transponder,
-                DriverName = ghost.Name,
-                CarModel = ghost.CarModel,
-                ExcludeFromRecords = true,
-                Notes = "Virtual opponent (ghost car).",
-            });
-        }
-
-        _profiles.Save();
 
         // Reports what actually happened. Three attempts at making ghosts
         // appear in the pickers have now failed, so this says plainly how
@@ -420,5 +407,64 @@ public partial class MainForm
         OnClientRawMessage(
             $"{AppTime.LogStampNow()}  [ghost] {Plural.Of(ghostCount, "ghost")} configured, "
             + $"{Plural.Of(ghostProfiles, "ghost profile")}, {Plural.Of(raceable, "selectable driver")} total.");
+    }
+
+    /// <summary>EnsureGhostProfiles' work on the profiles, on its own for testing. False when nothing was done.</summary>
+    internal static bool SyncGhostProfiles(GhostStore ghostStore, ProfileStore profiles)
+    {
+        // WHY (2026-11-05, Bug hunt 11): ghosts.json held by a backup or sync
+        // tool at launch loads as empty defaults (GhostStore.LoadedUnreadable),
+        // and the startup call here then took every ghost's profile for an
+        // orphan and deleted it from profiles.json - they came back next
+        // launch as bare new profiles, FirstSeen and all else lost.
+        // GhostStore.Save already refuses to bring the profiles into line
+        // with those empty defaults; this is the same rule for the startup
+        // call and HandleGhosts.
+        if (ghostStore.LoadedUnreadable)
+        {
+            return false;
+        }
+
+        // Ghosts that have been deleted or renamed leave orphan profiles
+        // behind, which would keep appearing in every picker.
+        var liveTransponders = ghostStore.Current.Ghosts
+            .Select(g => g.Transponder)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var orphans = profiles.AllIncludingGhosts
+            .Where(p => GhostService.IsGhost(p.Transponder) && !liveTransponders.Contains(p.Transponder))
+            .Select(p => p.Transponder)
+            .ToList();
+
+        foreach (var orphan in orphans)
+        {
+            profiles.Delete(orphan);
+        }
+
+        // Every ghost gets a profile, enabled or not - a disabled ghost
+        // should still be selectable, it just won't run until switched on.
+        foreach (var ghost in ghostStore.Current.Ghosts)
+        {
+            var existing = profiles.Get(ghost.Transponder);
+
+            if (existing is not null
+                && existing.DriverName == ghost.Name
+                && existing.CarModel == ghost.CarModel)
+            {
+                continue;
+            }
+
+            profiles.Upsert(new DriverProfile
+            {
+                Transponder = ghost.Transponder,
+                DriverName = ghost.Name,
+                CarModel = ghost.CarModel,
+                ExcludeFromRecords = true,
+                Notes = "Virtual opponent (ghost car).",
+            });
+        }
+
+        profiles.Save();
+        return true;
     }
 }

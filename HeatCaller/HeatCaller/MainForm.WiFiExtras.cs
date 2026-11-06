@@ -36,6 +36,17 @@ public partial class MainForm
         // Tonight's penalties at once, so a laptop restarted mid-evening
         // shows them before the next race is filed.
         PublishPenaltiesToWiFi();
+
+        // WHY (2026-11-05, Bug hunt 11): a race deleted from Race History
+        // (or with its whole day) left its penalty lines on the follow card
+        // and its report-card lines on /coach until the next race was filed
+        // - both are copies, rebuilt only when a race was filed or edited.
+        // Rebuilt here too, from the history the race is already gone from.
+        _sessionHistory.SessionDeleted += _ =>
+        {
+            PublishCoachCards();
+            PublishPenaltiesToWiFi();
+        };
     }
 
     partial void RaceFiledWiFiExtras(SessionRecord session)

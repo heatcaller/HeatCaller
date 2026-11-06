@@ -469,6 +469,10 @@ internal static class SettingsTable
             nameof(AppSettings.ResultsCardStyle),
             nameof(AppSettings.OnAirReadyHistoryMs),
 
+            // Which of the EasyLap and I-Lap was last the line - kept by the
+            // app for the Line Up offset, not chosen by anyone (5 Nov 2026).
+            nameof(AppSettings.SplitLoopOffsetLine),
+
             // The voices' cache revisions, moved on by the app, not by anyone.
             nameof(AppSettings.CoHostHeatCallerRev),
             nameof(AppSettings.RecapHostHeatCallerRev),

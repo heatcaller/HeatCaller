@@ -170,6 +170,38 @@ public sealed class UnknownTransponders
     /// <summary>A banner button was pressed.</summary>
     public void Request(string transponder, Choice choice) => Requested?.Invoke(transponder, choice);
 
+    /// <summary>
+    /// Why Belongs To or New Driver is refused for this transponder, or
+    /// null when it may go ahead.
+    ///
+    /// WHY (2026-11-05, Bug hunt 11): a unit registered on the Rentals page
+    /// has no profile - lending it at the counter, through SignupForms or
+    /// the relay sign-up desk names only the holder, on purpose (see
+    /// RelaySignupDesk.Approve) - so it lands on this list whenever it
+    /// races, as a bare ID. The operator who knows Sam has R4 then clicked
+    /// Belongs To Sam or New Driver "Sam", and the club's unit became Sam's
+    /// for good: every later borrower announced, scored and published as
+    /// Sam, the very harm the sign-up paths were changed to avoid. Club
+    /// Rental is the right answer for a registered unit, so the other two
+    /// say so instead. A retired unit is out of service, so it is left
+    /// alone - the club may have passed it on to a driver.
+    /// </summary>
+    public static string? RentalRefusal(RentalTransponder? unit, Choice choice)
+    {
+        if (unit is null || unit.Retired || choice == Choice.ClubRental)
+        {
+            return null;
+        }
+
+        var holder = unit.IsOut && !string.IsNullOrWhiteSpace(unit.CurrentHolderName)
+            ? $", out with {unit.CurrentHolderName.Trim()}"
+            : string.Empty;
+
+        return $"Transponder {unit.Transponder} is the club's rental unit {unit.DisplayName}{holder}.\n\n"
+            + "Giving it to a driver would name every later borrower as that driver. "
+            + "Use Club Rental instead, so its laps go out under the rental's name.";
+    }
+
     /// <summary>"14 laps in Heat 2 · best 7.905", or what is known of it.</summary>
     public static string Describe(Sighting sighting)
     {

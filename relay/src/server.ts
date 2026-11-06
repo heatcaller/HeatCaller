@@ -4505,7 +4505,13 @@ export class Relay {
     const ask = result.request;
 
     // Answered at once when the club's config allows it (autotopup.ts):
-    // only a new ask, from a club that is on and has the meter in its plan.
+    // only an ask still open, from a club that is on and has the meter in its plan.
+    // 2026-11-05 Bug hunt 11: was "only a new ask" (!result.already). An ask
+    // made below 90% stayed open, and every later ask that month came back
+    // "already" and skipped this check, so a club that then ran out on race
+    // night never got its automatic top-up. An open ask asked again is
+    // checked again; autoTopUp refuses an id it has answered and keeps
+    // perMonth, so it can't give twice.
     const tenant = this.tenants.club(club);
     const rule = tenant?.autoTopUp?.[meter];
     const included = meter === "voice" ? tenant?.voice?.enabled === true : tenant?.brain?.enabled === true;
@@ -4514,7 +4520,7 @@ export class Relay {
     // top-up of the month at once.
     let nearlySpent = false;
 
-    if (!result.already && rule !== undefined && tenant !== undefined && isActive(tenant) && included) {
+    if (ask.status === "open" && rule !== undefined && tenant !== undefined && isActive(tenant) && included) {
       const usage = meter === "voice"
         ? (tenant.voice !== undefined ? await this.voice?.usage(club, tenant.voice) : undefined)
         : (tenant.brain !== undefined ? await this.brain?.usage(club, tenant.brain) : undefined);

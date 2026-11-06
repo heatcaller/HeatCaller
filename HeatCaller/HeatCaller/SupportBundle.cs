@@ -533,7 +533,8 @@ internal static class SupportBundle
     /// without anybody having decided it should. For each secret, only
     /// whether it is set.
     /// </summary>
-    internal static string DescribeSettings(AppSettings s)
+    /// <param name="elevenLabsKeySet">Whether the voice settings hold an ElevenLabs key (VoiceProfile.ApiKey) - Bug hunt 11, 5 Nov 2026.</param>
+    internal static string DescribeSettings(AppSettings s, bool elevenLabsKeySet)
     {
         var text = new StringBuilder();
 
@@ -576,7 +577,10 @@ internal static class SupportBundle
         text.AppendLine($"  Intros / recaps / notes: {YesNo(s.CommentaryRaceIntros)} / {YesNo(s.CommentaryRaceSummaries)} / {YesNo(s.CommentaryTalkingPoints)}");
         text.AppendLine($"  Tone, max length:        {s.CommentaryToneStyle}, {s.CommentaryMaxWords} words");
         text.AppendLine($"  Sound with races:        {YesNo(s.AudioStartWithRaces)} (music {YesNo(s.AudioStartMusic)}, ambience {YesNo(s.AudioStartAmbience)})");
-        text.AppendLine($"  ElevenLabs key:          {IsSet(s.ApiKey)}");
+        // 5 Nov 2026, Bug hunt 11: was IsSet(s.ApiKey) - the retired Next
+        // Level Timing key - so a club with a working ElevenLabs key read
+        // "not set". The key lives in the voice settings; the caller says.
+        text.AppendLine($"  ElevenLabs key:          {(elevenLabsKeySet ? "set" : "not set")}");
 
         text.AppendLine();
         text.AppendLine("ONLINE AND PHONES");

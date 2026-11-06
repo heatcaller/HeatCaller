@@ -152,6 +152,32 @@ internal sealed class ClubNotes
                 {
                     file.Notes ??= new List<ClubNote>();
 
+                    // WHY (2026-11-05, Bug hunt 11: a hand-edited or
+                    // damaged club-notes.json): valid JSON can still say
+                    // "DayId": null or hold a null note, and both got past
+                    // this - StartUp's filedOn.Length and NewMeeting's
+                    // RemoveAll then threw in MainForm's constructor, so
+                    // the app would not start until the file was fixed.
+                    // Cleaned here the way VenueStore and ThemeStore clean
+                    // theirs.
+                    file.DayId ??= string.Empty;
+                    file.Notes.RemoveAll(one => one is null);
+
+                    // 5 Nov 2026, Bug hunt 11 review: a note with no usable
+                    // text is dropped, not kept as "". Approved and unsaid,
+                    // ToSay handed it out first forever, and the announcer
+                    // (CommentaryShowFacts.ClubAside) says nothing for empty
+                    // text, so it was never marked said and every later
+                    // club note sat behind it. There is nothing in it to
+                    // keep; the rest only need an Id and From filled.
+                    file.Notes.RemoveAll(one => string.IsNullOrWhiteSpace(one.Text));
+
+                    foreach (var one in file.Notes)
+                    {
+                        one.Id ??= Guid.NewGuid().ToString("N");
+                        one.From ??= string.Empty;
+                    }
+
                     return new ClubNotes(file);
                 }
             }
@@ -164,14 +190,73 @@ internal sealed class ClubNotes
         return new ClubNotes(new NotesFile()) { LoadedUnreadable = unreadable };
     }
 
+    /// <summary>
+    /// Whether the last save reached the disk, so everything held in memory
+    /// is in the file too. The whole file is written every time, so one
+    /// good save puts every note on disk at once.
+    /// </summary>
+    private bool _onDisk = true;
+
+    /// <summary>
+    /// Ids of notes from the room filed while not on disk, so the collector
+    /// left the relay's copy there (see AddFromTheRoom's notOnDisk).
+    /// Session-only, like what it describes.
+    /// </summary>
+    private readonly HashSet<string> _heldOnRelay = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The tidied text of notes from <see cref="_heldOnRelay"/> that were
+    /// then removed or cleared off tonight's list. The relay's copy of each
+    /// is still there and will be offered again; matched here, it is
+    /// treated as handled so the collector confirms (deletes) it.
+    /// </summary>
+    private readonly HashSet<string> _goneWhileHeldOnRelay = new(StringComparer.CurrentCultureIgnoreCase);
+
+    /// <summary>
+    /// Notes leaving the list: any whose relay copy was left on the relay
+    /// are remembered, so the next collection does not file them again.
+    ///
+    /// WHY (5 Nov 2026, Bug hunt 11 review): a shout-out held in memory
+    /// only (file unreadable at start-up, or a failed write) is left on the
+    /// relay and offered on every poll, and the only thing that kept it
+    /// from being filed twice was AddFromTheRoom's duplicate check against
+    /// the notes still on the list. Once the race director removed it, or
+    /// NewMeeting cleared the list, the next poll filed the relay's copy as
+    /// a brand-new note - again and again while the file stayed unreadable,
+    /// bringing back exactly what was taken off.
+    /// </summary>
+    private void Forget(IEnumerable<ClubNote> gone)
+    {
+        foreach (var one in gone)
+        {
+            if (one.Id is not null && _heldOnRelay.Remove(one.Id))
+            {
+                var text = Tidy(one.Text);
+
+                if (text.Length > 0)
+                {
+                    _goneWhileHeldOnRelay.Add(text);
+                }
+            }
+        }
+    }
+
     private void Save()
     {
+        // WHY IT KEEPS THE ANSWER (2026-11-05, Bug hunt 11: RelayPublisher):
+        // a note from the club's page is confirmed to the relay - deleted
+        // there - once it is filed here, and "filed" was any note added to
+        // memory, written or not. With the file unreadable at start-up, or
+        // a write that failed, the dedication was then in memory only; a
+        // restart before it was read out lost it from both places. See
+        // AddFromTheRoom's onDisk and RelayPublisher.CollectClubNotes.
         if (LoadedUnreadable)
         {
+            _onDisk = false;
             return;
         }
 
-        SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(
+        _onDisk = SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(
             _file,
             new JsonSerializerOptions { WriteIndented = true }));
     }
@@ -240,12 +325,14 @@ internal sealed class ClubNotes
 
             if (!adopt)
             {
+                Forget(_file.Notes);
                 _file.Notes.Clear();
             }
             else
             {
                 var now = DateTime.UtcNow;
 
+                Forget(_file.Notes.Where(one => now - one.AddedAtUtc > AdoptedWithin).ToList());
                 _file.Notes.RemoveAll(one => now - one.AddedAtUtc > AdoptedWithin);
             }
 
@@ -391,8 +478,20 @@ internal sealed class ClubNotes
     /// </summary>
     /// <param name="text">The aside, in their words.</param>
     /// <param name="from">Who sent it, if they said. Never trusted for anything but being read out.</param>
-    internal string? AddFromTheRoom(string? text, string? from = null)
+    internal string? AddFromTheRoom(string? text, string? from = null) => AddFromTheRoom(text, from, out _);
+
+    /// <summary>
+    /// <see cref="AddFromTheRoom(string?, string?)"/>, also saying whether
+    /// the note is in memory but NOT on disk - added, or already held, while
+    /// club-notes.json is unreadable from start-up or the last write failed.
+    /// A collector that deletes the sender's copy once a note is filed must
+    /// not do so then (2026-11-05, Bug hunt 11: RelayPublisher). False for a
+    /// note refused, which was never going to be kept.
+    /// </summary>
+    internal string? AddFromTheRoom(string? text, string? from, out bool notOnDisk)
     {
+        notOnDisk = false;
+
         lock (_gate)
         {
             var said = Tidy(text);
@@ -406,6 +505,15 @@ internal sealed class ClubNotes
             {
                 return $"That is a bit long - keep it under {MostChars} characters so the announcer can work it "
                        + "into a sentence.";
+            }
+
+            // Removed or cleared while its relay copy was still there (see
+            // Forget, 5 Nov 2026, Bug hunt 11 review): already handled, so
+            // answered as filed and on disk - the collector then confirms
+            // the relay's copy instead of filing it as a new note again.
+            if (_goneWhileHeldOnRelay.Contains(said))
+            {
+                return null;
             }
 
             if (_file.Notes.Count(one => !WasTyped(one)) >= MostFromTheRoom)
@@ -423,12 +531,22 @@ internal sealed class ClubNotes
                 // Said as though it worked, because it did: somebody pressing
                 // send twice has got their message in, and telling them it
                 // was a duplicate invites them to reword it and send it again.
+                // Held but not yet written: try the write again, so a disk
+                // that has come back lets the relay's copy go.
+                if (!_onDisk)
+                {
+                    Save();
+                }
+
+                notOnDisk = LoadedUnreadable || !_onDisk;
                 return null;
             }
 
+            var id = Guid.NewGuid().ToString("N");
+
             _file.Notes.Add(new ClubNote
             {
-                Id = Guid.NewGuid().ToString("N"),
+                Id = id,
                 Text = said,
                 From = TidyName(from),
                 AddedAtUtc = DateTime.UtcNow,
@@ -440,6 +558,12 @@ internal sealed class ClubNotes
             });
 
             Save();
+            notOnDisk = LoadedUnreadable || !_onDisk;
+
+            if (notOnDisk)
+            {
+                _heldOnRelay.Add(id);
+            }
 
             return null;
         }
@@ -480,6 +604,8 @@ internal sealed class ClubNotes
             {
                 return;
             }
+
+            Forget(_file.Notes.Where(one => string.Equals(one.Id, id, StringComparison.Ordinal)).ToList());
 
             if (_file.Notes.RemoveAll(one => string.Equals(one.Id, id, StringComparison.Ordinal)) > 0)
             {

@@ -85,6 +85,15 @@ public sealed class PaceWatch
     public Func<(double Seconds, string Holder)?>? LayoutRecord { get; set; }
 
     /// <summary>
+    /// Whether this driver may hold the layout record - false for a ghost,
+    /// a rental or a driver excluded from records, the rule Race Control's
+    /// live record check follows. Unset, everybody can (Bug hunt 11).
+    /// </summary>
+    public Func<string, bool>? CanHoldRecord { get; set; }
+
+    private (double Seconds, string Holder)? _layoutAtGreen;
+
+    /// <summary>
     /// How much faster a lap has to be before it counts as beating
     /// something. A hundredth: inside that the loop's own timing is as
     /// likely an explanation as the driver.
@@ -157,9 +166,22 @@ public sealed class PaceWatch
         // taken from the old holder. Each is now judged against whichever is
         // faster, the stored figure or this race's own best so far; a lap
         // that beats only the old mark falls through to the checks below.
-        if (LayoutRecord?.Invoke() is { } layout)
+        //
+        // WHY (2026-11-05, Bug hunt 11): the layout record is NOT from saved
+        // races. Race Control writes a new record onto the layout the moment
+        // the lap crosses the line, before this watch is fed it on the
+        // announcer's next tick - so the record read here was already the
+        // lap itself, nothing a real record beat was ever called, and the
+        // only laps called "the fastest ever on this layout" were the ones
+        // Race Control refused (a rental, a driver excluded from records).
+        // So the record is now the one standing at the green (see
+        // LayoutAtGreen), this race's own best is counted only from drivers
+        // who can hold it, and a driver who cannot hold it is never told
+        // they broke it.
+        if (LayoutAtGreen() is { } layout && CanHoldRecord?.Invoke(lap.DriverId) != false)
         {
-            var (mark, holder) = Standing(layout.Seconds, layout.Holder, sessionBest, sessionHolder);
+            var (eligibleBest, eligibleHolder) = RecordEligibleBest(sessionBest, sessionHolder);
+            var (mark, holder) = Standing(layout.Seconds, layout.Holder, eligibleBest, eligibleHolder);
 
             if (Beats(lap.LapSeconds, mark))
             {
@@ -216,6 +238,42 @@ public sealed class PaceWatch
     }
 
     private bool Beats(double lap, double mark) => mark > 0 && lap < mark - MeaningfulMargin;
+
+    /// <summary>
+    /// The layout record as it stood at the green (Bug hunt 11,
+    /// 2026-11-05): read at Reset, or at the first lap where there was
+    /// nothing to read then (no layout wired yet, or none with a record).
+    /// Kept for the race once found, because the store behind it is
+    /// rewritten by this race's own record laps.
+    /// </summary>
+    private (double Seconds, string Holder)? LayoutAtGreen() =>
+        _layoutAtGreen ??= LayoutRecord?.Invoke();
+
+    /// <summary>
+    /// This race's best lap so far among drivers who can hold the layout
+    /// record - every driver, when CanHoldRecord is not wired.
+    /// </summary>
+    private (double Seconds, string? Holder) RecordEligibleBest(double sessionBest, string? sessionHolder)
+    {
+        if (CanHoldRecord is not { } canHold)
+        {
+            return (sessionBest, sessionHolder);
+        }
+
+        var best = double.MaxValue;
+        string? holder = null;
+
+        foreach (var (driver, seconds) in _bestThisSession)
+        {
+            if (seconds > 0 && seconds < best && canHold(driver))
+            {
+                best = seconds;
+                holder = driver;
+            }
+        }
+
+        return (best, holder);
+    }
 
     /// <summary>
     /// The figure a stored record really stands at now: the stored one, or
@@ -275,8 +333,9 @@ public sealed class PaceWatch
 
     /// <summary>
     /// A new race. The session's own bests go; what the night and the
-    /// layout hold does not, because those are read fresh every time and
-    /// belong to the stores behind them.
+    /// layout hold does not, because those belong to the stores behind
+    /// them. The night's best is read fresh every time; the layout record
+    /// is read here, once, as it stands at the green (Bug hunt 11).
     /// </summary>
     public void Reset()
     {
@@ -285,5 +344,8 @@ public sealed class PaceWatch
         _sessionBest = double.MaxValue;
         _sessionBestHolder = null;
         _lapsSeen = 0;
+
+        // The record as it stands now, at the green - see LayoutAtGreen.
+        _layoutAtGreen = LayoutRecord?.Invoke();
     }
 }

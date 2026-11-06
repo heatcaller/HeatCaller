@@ -37,6 +37,22 @@ public sealed class DayScheduleStore
     /// </summary>
     private readonly Dictionary<string, DateTime> _startsTakenBack = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Generated lines SyncToProgram took off because their round left the
+    /// programme, by event and round id, so a round that comes back gets its
+    /// own line back.
+    ///
+    /// WHY (2026-11-05, Bug hunt 11: undoing a round delete lost its line):
+    /// deleting a round dropped its line, and the undo - or undoing a heats
+    /// build that replaced it - brought the round back under the same id to
+    /// a brand new, blank line: the typed 19:40 and "started 19:42 · 3 min
+    /// late" were gone, and running late was measured from an older heat.
+    /// Round ids are fresh Guids, so the same id only comes back through an
+    /// undo. Memory only, like _startsTakenBack: an undo does not outlive
+    /// the session either.
+    /// </summary>
+    private readonly Dictionary<(string EventId, string RoundId), ScheduleEntry> _parkedLines = new();
+
     /// <summary>The name the auto-tick flag is saved under on a line in the file.</summary>
     private const string AutoTickedProperty = "AutoCompleted";
 
@@ -369,7 +385,14 @@ public sealed class DayScheduleStore
             // A round that has gone loses its line, and so does a second line
             // claiming a round that already has one - which nothing should
             // write, but a half-finished older rebuild could have left behind.
-            if (!wanted.Contains(line.RoundId) || !byRound.TryAdd(line.RoundId, line))
+            if (!wanted.Contains(line.RoundId))
+            {
+                // Bug hunt 11 (2026-11-05): kept aside for an undo - see _parkedLines.
+                _parkedLines[(CurrentEventId, line.RoundId)] = line;
+                _entries.Remove(line);
+                changed = true;
+            }
+            else if (!byRound.TryAdd(line.RoundId, line))
             {
                 _entries.Remove(line);
                 changed = true;
@@ -378,6 +401,22 @@ public sealed class DayScheduleStore
 
         foreach (var line in program)
         {
+            // Bug hunt 11 (2026-11-05): a round back under its old id - an
+            // undone delete or heats build - takes its own line back, with
+            // its time, tick and start, unless a line already holds that id.
+            if (!byRound.ContainsKey(line.RoundId)
+                && _parkedLines.Remove((CurrentEventId, line.RoundId), out var parked)
+                && !_entries.Any(e => string.Equals(e.Id, parked.Id, StringComparison.Ordinal)))
+            {
+                parked.EventId = CurrentEventId;
+                _entries.Add(parked);
+                byRound[line.RoundId] = parked;
+                changed = true;
+            }
+
+            // Its line is on the sheet, so nothing parked for it is wanted.
+            _parkedLines.Remove((CurrentEventId, line.RoundId));
+
             if (byRound.TryGetValue(line.RoundId, out var existing))
             {
                 // Only the wording, and only when it moved - a round renamed
@@ -700,6 +739,14 @@ public sealed class DayScheduleStore
     public void ClearAll()
     {
         _entries.RemoveAll(e => string.Equals(e.EventId, CurrentEventId, StringComparison.Ordinal));
+
+        // Bug hunt 11 (2026-11-05): a cleared sheet stays cleared - a round
+        // undeleted after this gets a fresh line, not one from before the clear.
+        foreach (var key in _parkedLines.Keys.Where(k => string.Equals(k.EventId, CurrentEventId, StringComparison.Ordinal)).ToList())
+        {
+            _parkedLines.Remove(key);
+        }
+
         Save();
     }
 

@@ -490,15 +490,20 @@ internal sealed class SignupsForm : Form
             // Only an invite this laptop knows has anything here to put back.
             // For one it doesn't, the "no" to the phone is all there is, and
             // that can't be recalled - the prompt says so.
-            if (_undo is not null && _desk.InviteFor(request) is { State: SignupInviteState.Open } invite)
+            //
+            // 5 Nov 2026, Bug hunt 11 review: the undo is captured only when
+            // the reject went through. Reject returns false (invite put
+            // back, nothing sent) when signups.json can't be saved, and an
+            // undo for it would then "reopen" an invite that never closed.
+            var invite = _undo is not null && _desk.InviteFor(request) is { State: SignupInviteState.Open } open ? open : null;
+
+            if (_desk.Reject(request, prompt.Reason) && _undo is not null && invite is not null)
             {
                 var desk = _desk;
                 var inviteId = invite.Id;
                 var name = request.Name;
                 _undo.Capture($"Turn down {name}'s sign-up (their phone is told no - they'd sign up again)", () => desk.UndoReject(inviteId, name));
             }
-
-            _desk.Reject(request, prompt.Reason);
         }
     }
 
@@ -713,14 +718,17 @@ internal sealed class SignupsForm : Form
                 + (pending ? $"{Environment.NewLine}{Environment.NewLine}They have already signed up with it: their phone is told it was canceled, and Undo can't take that back." : string.Empty),
                 "Cancel invite", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
         {
-            if (_undo is not null)
+            // 5 Nov 2026, Bug hunt 11 review: the undo is captured only when
+            // the cancel went through - Cancel returns false (invite left
+            // open, nothing sent) when signups.json can't be saved.
+            var inviteId = invite.Id;
+            var forText = invite.ForText;
+
+            if (_desk.Cancel(invite) && _undo is not null)
             {
                 var desk = _desk;
-                var inviteId = invite.Id;
-                _undo.Capture($"Cancel the invite for {invite.ForText}", () => desk.UndoCancel(inviteId, pending));
+                _undo.Capture($"Cancel the invite for {forText}", () => desk.UndoCancel(inviteId, pending));
             }
-
-            _desk.Cancel(invite);
         }
     }
 }

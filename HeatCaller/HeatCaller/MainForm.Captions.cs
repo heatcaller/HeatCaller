@@ -323,6 +323,13 @@ public partial class MainForm
     {
         var register = privacy ?? PublicPrivacy.Empty;
 
+        // 6 Nov 2026, Bug hunt 11: every rule below judges l.Said - the whole
+        // spoken line the piece came from - not the piece. A long line is
+        // captioned a piece at a time (CaptionLog, 26 Oct), and judged piece
+        // by piece only the first piece of a long black flag started "Black
+        // flag," and only the piece naming a withheld driver named them, so
+        // the typed reason and the rest of the line went online. Judged
+        // whole, a line is left out with every one of its pieces.
         return lines
             .Skip(Math.Max(0, lines.Count - RelayCaptionLines))
             // Race control's warning and black-flag calls never go online
@@ -331,18 +338,18 @@ public partial class MainForm
             // .OnWarningIssued), and design 1.4 rule 1 keeps reasons to the
             // driver's own night and the room. The room still hears and
             // sees them; the public results carry the numbers.
-            .Where(l => !AnnouncementService.IsRaceControlCall(l.Text))
+            .Where(l => !AnnouncementService.IsRaceControlCall(l.Said))
             // A line that mentions an initials-only driver - by any name, or
             // any word of one - is left out whole, the way listen-along
             // withholds it (22 Oct 2026, security review). Redact alone let a
             // first name or a word the register doesn't hold through; it
             // stays below as a second layer.
-            .Where(l => !register.MentionsWithheld(l.Text))
+            .Where(l => !register.MentionsWithheld(l.Said))
             // A line naming a car by its transponder number is left out
             // whole (23 Oct 2026, bug hunt 10), the way listen-along withholds
             // it: the announcer says an unnamed car's number, and a
             // transponder number must never go online.
-            .Where(l => namesACarByNumber?.Invoke(l.Text) != true)
+            .Where(l => namesACarByNumber?.Invoke(l.Said) != true)
             .Select(l => new CaptionLine(l.N, register.Redact(l.Text), l.AtUtc))
             // "Shorten published names" (23 Oct 2026, bug hunt 10): the
             // pages showed "Sam S." while this showed "Sam Smith".

@@ -65,7 +65,13 @@ public partial class MainForm
 
             if (state == RaceState.Finished)
             {
-                Interlocked.Exchange(ref _gridHeardSinceTicks, DateTime.UtcNow.Ticks);
+                var finished = DateTime.UtcNow;
+                Interlocked.Exchange(ref _gridHeardSinceTicks, finished.Ticks);
+
+                // WHY (2026-11-05, Bug hunt 11): shared with the Big Screen's
+                // roll call (RollCall.Since), so a screen opened after this
+                // finish still starts its roll call after it too.
+                RollCall.NoteFinish(finished);
             }
             else if ((state is RaceState.Staging or RaceState.Countdown) && !wasStaged)
             {

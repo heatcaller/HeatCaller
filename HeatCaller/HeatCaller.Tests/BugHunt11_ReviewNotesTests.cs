@@ -1,0 +1,224 @@
+using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
+using System.Text;
+
+namespace HeatCaller.Tests;
+
+/// <summary>
+/// Bug hunt 11 review (5 Nov 2026): a shout-out left on the relay because
+/// club-notes.json could not hold it came back as a new note once the race
+/// director removed it (or NewMeeting cleared the list), on every poll.
+/// </summary>
+public sealed class BugHunt11_ReviewNotesTests : IDisposable
+{
+    private readonly TempAppData _data = new();
+
+    public void Dispose() => _data.Dispose();
+
+    private static void Call(object owner, string name, params object?[] args)
+    {
+        var method = owner.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
+                     ?? throw new MissingMethodException(owner.GetType().Name, name);
+
+        try
+        {
+            method.Invoke(owner, args);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            throw ex.InnerException;
+        }
+    }
+
+    private static AppSettings Relay(string root) => new()
+    {
+        RelayEnabled = false,
+        RelayBaseUrl = root,
+        RelayClub = "acme-rc",
+        RelayToken = "hg_test",
+        ClubNotesFromTheRelay = true,
+    };
+
+    private ClubNotes LoadUnreadableNotes()
+    {
+        File.WriteAllText(_data.PathOf("club-notes.json"), "{\"DayId\":\"\",\"Notes\":[]}");
+
+        using (new FileStream(_data.PathOf("club-notes.json"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            return ClubNotes.Load();
+        }
+    }
+
+    private static FakeRelay InboxWithOne() => new((_, path) =>
+        path.EndsWith("/notes/inbox", StringComparison.Ordinal)
+            ? (200, "{\"items\":[{\"id\":\"n1\",\"m\":\"Happy birthday Dad\",\"n\":\"Jess\"}]}")
+            : (200, "{}"));
+
+    [Fact]
+    public void A_held_shout_out_the_director_removed_is_not_filed_again_and_is_confirmed()
+    {
+        var notes = LoadUnreadableNotes();
+        Assert.True(notes.LoadedUnreadable);
+
+        using var relay = InboxWithOne();
+        using var publisher = new RelayPublisher(Relay(relay.Root));
+        publisher.TonightsNotes = () => notes;
+
+        Call(publisher, "CollectClubNotes", CancellationToken.None);
+
+        var held = Assert.Single(notes.All);
+        Assert.DoesNotContain(relay.Requests, r => r.Contains("/notes/collected", StringComparison.Ordinal));
+
+        notes.Remove(held.Id);
+        Assert.Empty(notes.All);
+
+        Call(publisher, "CollectClubNotes", CancellationToken.None);
+
+        Assert.Empty(notes.All);
+        Assert.Contains(relay.Requests, r => r.Contains("/notes/collected", StringComparison.Ordinal) && r.Contains("n1", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_held_shout_out_cleared_by_a_new_meeting_is_not_filed_again()
+    {
+        var notes = LoadUnreadableNotes();
+
+        Assert.Null(notes.AddFromTheRoom("Happy birthday Dad", "Jess", out var notOnDisk));
+        Assert.True(notOnDisk);
+
+        notes.NewMeeting("last-week");
+        notes.NewMeeting("tonight");
+        Assert.Empty(notes.All);
+
+        Assert.Null(notes.AddFromTheRoom("Happy birthday Dad", "Jess", out notOnDisk));
+        Assert.False(notOnDisk);
+        Assert.Empty(notes.All);
+    }
+
+    [Fact]
+    public void A_removed_note_that_was_on_disk_can_be_sent_again()
+    {
+        var notes = ClubNotes.Load();
+
+        Assert.Null(notes.AddFromTheRoom("Happy birthday Dad", "Jess", out var notOnDisk));
+        Assert.False(notOnDisk);
+
+        notes.Remove(Assert.Single(notes.All).Id);
+
+        Assert.Null(notes.AddFromTheRoom("Happy birthday Dad", "Jess", out notOnDisk));
+        Assert.Single(notes.All);
+    }
+
+    /// <summary>
+    /// A relay on the loopback that answers each request from a rule and
+    /// records "METHOD path body" for every one it was sent. (A copy of
+    /// BugHunt11_RelayPublisherTests' private one.)
+    /// </summary>
+    private sealed class FakeRelay : IDisposable
+    {
+        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly Func<string, string, (int Status, string Body)> _answer;
+        private readonly CancellationTokenSource _stop = new();
+
+        public ConcurrentQueue<string> RequestQueue { get; } = new();
+
+        public IReadOnlyList<string> Requests => RequestQueue.ToList();
+
+        public string Root { get; }
+
+        public FakeRelay(Func<string, string, (int Status, string Body)> answer)
+        {
+            _answer = answer;
+            _listener.Start();
+            Root = $"http://127.0.0.1:{((IPEndPoint)_listener.LocalEndpoint).Port}";
+            _ = Task.Run(AcceptLoop);
+        }
+
+        private async Task AcceptLoop()
+        {
+            while (!_stop.IsCancellationRequested)
+            {
+                TcpClient client;
+
+                try
+                {
+                    client = await _listener.AcceptTcpClientAsync(_stop.Token);
+                }
+                catch
+                {
+                    return;
+                }
+
+                _ = Task.Run(() => Serve(client));
+            }
+        }
+
+        private void Serve(TcpClient client)
+        {
+            using (client)
+            {
+                try
+                {
+                    var stream = client.GetStream();
+                    var buffer = new List<byte>();
+                    var one = new byte[1];
+
+                    while (!EndsWithBlankLine(buffer) && stream.Read(one, 0, 1) == 1)
+                    {
+                        buffer.Add(one[0]);
+                    }
+
+                    var head = Encoding.ASCII.GetString(buffer.ToArray());
+                    var lines = head.Split("\r\n");
+                    var parts = lines[0].Split(' ');
+                    var length = lines
+                        .Where(l => l.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                        .Select(l => int.Parse(l["Content-Length:".Length..].Trim()))
+                        .FirstOrDefault();
+
+                    var body = new byte[length];
+                    var read = 0;
+
+                    while (read < length)
+                    {
+                        var got = stream.Read(body, read, length - read);
+
+                        if (got == 0)
+                        {
+                            break;
+                        }
+
+                        read += got;
+                    }
+
+                    RequestQueue.Enqueue($"{parts[0]} {parts[1]} {Encoding.UTF8.GetString(body, 0, read)}");
+
+                    var (status, text) = _answer(parts[0], parts[1]);
+                    var payload = Encoding.UTF8.GetBytes(text);
+                    var reply = Encoding.ASCII.GetBytes(
+                        $"HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {payload.Length}\r\nConnection: close\r\n\r\n");
+
+                    stream.Write(reply);
+                    stream.Write(payload);
+                    stream.Flush();
+                }
+                catch
+                {
+                    // A test that has finished with it.
+                }
+            }
+        }
+
+        private static bool EndsWithBlankLine(List<byte> buffer) =>
+            buffer.Count >= 4
+            && buffer[^4] == '\r' && buffer[^3] == '\n' && buffer[^2] == '\r' && buffer[^1] == '\n';
+
+        public void Dispose()
+        {
+            _stop.Cancel();
+            _listener.Stop();
+        }
+    }
+}

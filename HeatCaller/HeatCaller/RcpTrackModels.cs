@@ -1016,7 +1016,17 @@ public static class RcpPlan
             }
         }
 
-        if (design.Decals.FirstOrDefault(d => d is not null && d.Kind == RcpDecalKind.FinishLine) is not { } finish)
+        // 5 Nov 2026, Bug hunt 11 review: a finish line across a wide lane is
+        // one decal per tile; take them top-left first (lowest Row, then
+        // Col - the tile TrackLayout.CutFor keys on) rather than in list
+        // order, so the same plan saved in another order measures the same.
+        var finishes = design.Decals
+            .Where(d => d is not null && d.Kind == RcpDecalKind.FinishLine)
+            .OrderBy(d => d.Row)
+            .ThenBy(d => d.Col)
+            .ToList();
+
+        if (finishes.FirstOrDefault() is not { } finish)
         {
             return (null, "Put the finish line on the plan - sectors are measured from it.");
         }
@@ -1042,7 +1052,8 @@ public static class RcpPlan
 
         var length = RouteLengthInTiles(design);
 
-        if (Along(points, finish) is not { } start)
+        // The first of those tiles the racing line passes over.
+        if (finishes.Select(f => Along(points, f)).FirstOrDefault(a => a is not null) is not { } start)
         {
             return (null, "The racing line doesn't pass over the finish line.");
         }

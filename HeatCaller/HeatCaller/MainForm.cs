@@ -1527,8 +1527,12 @@ public partial class MainForm : Form
         // WHY (20 Oct 2026): the mention is no longer counted here, as it is
         // asked - CommentaryService runs the Count once the model has
         // actually written a line, so a segment that came back empty no
-        // longer goes in the sponsor report. (A segment the director writes
-        // and then drops is still counted - not worth a second path back.)
+        // longer goes in the sponsor report.
+        // 5 Nov 2026, Bug hunt 11 review: a segment the director writes and
+        // then drops is no longer counted either. Bug hunt 11 gave the
+        // director a SponsorCreditsHeld that counts only once the line is
+        // Spoken and gives the ration back when it is Dropped - see
+        // CommentaryService.BuildSegmentAsync and the director's Commit.
         if (_commentary is not null)
         {
             // With the give-back (22 Oct 2026, bug hunt): a segment that comes

@@ -23,7 +23,8 @@ internal static class SupportInfo
 
     /// <param name="owner">The window the dialogs belong to.</param>
     /// <param name="log">The console. Called on the UI thread.</param>
-    public static async void Save(Control owner, AppSettings settings, ProfileStore profiles, Action<string> log)
+    /// <param name="voice">The voice settings, which hold the ElevenLabs key (Bug hunt 11, 5 Nov 2026).</param>
+    public static async void Save(Control owner, AppSettings settings, VoiceSettingsStore voice, ProfileStore profiles, Action<string> log)
     {
         if (Interlocked.CompareExchange(ref _saving, 1, 0) != 0)
         {
@@ -37,7 +38,7 @@ internal static class SupportInfo
 
         try
         {
-            (zipPath, outcome) = await Build(owner, settings, profiles, log);
+            (zipPath, outcome) = await Build(owner, settings, voice, profiles, log);
         }
         catch (Exception ex)
         {
@@ -77,7 +78,7 @@ internal static class SupportInfo
 
     /// <summary>Asks where, then builds the file. Returns nulls when the club cancels.</summary>
     private static async Task<(string? Path, SupportBundle.Outcome? Outcome)> Build(
-        Control owner, AppSettings settings, ProfileStore profiles, Action<string> log)
+        Control owner, AppSettings settings, VoiceSettingsStore voice, ProfileStore profiles, Action<string> log)
     {
         var now = DateTime.Now;
 
@@ -113,7 +114,11 @@ internal static class SupportInfo
                 new[] { p.Contact, p.Email }.Where(c => !string.IsNullOrWhiteSpace(c)).ToList()))
             .ToList();
 
-        var summary = SupportBundle.DescribeSystem(now) + Environment.NewLine + SupportBundle.DescribeSettings(settings);
+        // 5 Nov 2026, Bug hunt 11: the ElevenLabs key is the voice settings'
+        // (VoiceProfile.ApiKey), not AppSettings.ApiKey - that one is the
+        // retired Next Level Timing key - so only whether it is set goes in.
+        var elevenLabsKeySet = !string.IsNullOrEmpty(voice.Current.ApiKey);
+        var summary = SupportBundle.DescribeSystem(now) + Environment.NewLine + SupportBundle.DescribeSettings(settings, elevenLabsKeySet);
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var logFolder = SessionLog.Folder;
         var currentLog = SessionLog.FilePath;

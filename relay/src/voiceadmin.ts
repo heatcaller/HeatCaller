@@ -9,7 +9,7 @@ import { checkKeys } from "./keycheck.js";
 import { checkVoiceAccount, type VoiceAccountCheck } from "./voiceaccount.js";
 import { autoGiven, type AutoGiven } from "./autotopup.js";
 import { appendAudit, readAudit, readAuditArgument } from "./adminaudit.js";
-import { closeRequests, isMeterName, openRequests, type MeterName, type TopUpAsk } from "./topuprequests.js";
+import { closeRequests, closeRequestsRefusal, isMeterName, openRequests, type MeterName, type TopUpAsk } from "./topuprequests.js";
 import {
   monthOf,
   readTopUps,
@@ -280,7 +280,34 @@ export async function topUp(
 
   const month = monthOf(now);
   const path = meter === "voice" ? voiceTopUpPath(config.dataDir, club) : brainTopUpPath(config.dataDir, club);
-  const months: Record<string, number> = { ...readTopUps(await readJson(path)) };
+  const raw = await readJsonStrict(path);
+
+  // WHY (6 Nov 2026, Bug hunt 11): a top-up file that is there but will
+  // not read (a crash mid-write, a disk error) used to count as no file,
+  // and was saved over with just this top-up - "voice-topup acme-rc 10000"
+  // left {"2026-11": 10000}, losing the 50,000 given earlier this month and
+  // every month before. It is left as it is now, and the operator told.
+  if (raw === UNREADABLE || (raw !== undefined && (typeof raw !== "object" || raw === null || Array.isArray(raw)))) {
+    return {
+      ok: false,
+      error:
+        `The top-up file ${path} will not read, so it was left as it is and nothing was given - writing over it ` +
+        `would lose every top-up in it. Mend it, or move it aside, and run this again.`,
+    };
+  }
+
+  // Giving more answers the club's ask for more (below). When that ask
+  // cannot be marked done - its done file will not read - nothing is given
+  // either, so the two never disagree (6 Nov 2026, Bug hunt 11).
+  if (characters > 0) {
+    const refusal = await closeRequestsRefusal(config.dataDir, club, meter, now);
+
+    if (refusal !== undefined) {
+      return { ok: false, error: `${refusal} No top-up was given.` };
+    }
+  }
+
+  const months: Record<string, number> = { ...readTopUps(raw) };
   const given = Math.max(0, (months[month] ?? 0) + characters);
 
   if (given > 0) {
@@ -315,7 +342,17 @@ export async function topUp(
   const on = meter === "voice" ? tenant.voice?.enabled === true : tenant.brain?.enabled === true;
 
   // Giving more answers the club's ask for more; taking some back does not.
-  const closed = characters > 0 ? await closeRequests(config.dataDir, club, meter, now, owner) : 0;
+  let closed = 0;
+
+  try {
+    closed = characters > 0 ? await closeRequests(config.dataDir, club, meter, now, owner) : 0;
+  } catch (error) {
+    // Only if the done file broke between the check above and here.
+    return {
+      ok: false,
+      error: `The top-up was given, but the club's request could not be marked done: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
 
   // The relay's automatic top-ups count towards what the club may use, though they live in its own file.
   const auto = sum(await autoGiven(config.dataDir, club, month), meter);
@@ -719,7 +756,13 @@ export async function declineRequests(
     return { ok: false, error: `There is no club "${club}" in this relay's config.` };
   }
 
-  return { ok: true, closed: await closeRequests(config.dataDir, club, meter, now, owner) };
+  // 6 Nov 2026, Bug hunt 11: a done file that will not read is left alone
+  // (closeRequests throws), and topup-decline says so rather than crashing.
+  try {
+    return { ok: true, closed: await closeRequests(config.dataDir, club, meter, now, owner) };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 /** topup-requests as a list to read: who asked for what, when, and what they said. */
@@ -776,6 +819,29 @@ async function readJson(path: string): Promise<unknown> {
   } catch {
     // No file - a club that has never spoken, or never been topped up.
     return undefined;
+  }
+}
+
+const UNREADABLE = Symbol("unreadable");
+
+/**
+ * readJson for a file about to be written over: undefined only when there
+ * is no file, UNREADABLE when it is there and will not read (6 Nov 2026,
+ * Bug hunt 11 - see topUp).
+ */
+async function readJsonStrict(path: string): Promise<unknown> {
+  let text: string;
+
+  try {
+    text = await readFile(path, "utf8");
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? undefined : UNREADABLE;
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return UNREADABLE;
   }
 }
 

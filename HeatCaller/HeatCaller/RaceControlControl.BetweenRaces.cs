@@ -282,7 +282,7 @@ public sealed partial class RaceControlControl
         return facts;
     }
 
-    /// <summary>When the round is due by the run sheet and how late the day is running, plus any push-back - null when the sheet gives no time ahead.</summary>
+    /// <summary>When the round is due by the run sheet and how late the day is running, plus any push-back - null when the sheet gives no time, or it passed more than a countdown mark's window ago (DueStill).</summary>
     private DateTime? DueFor(RoundDefinition round, DateTime now)
     {
         if (_daySchedule is null)
@@ -297,9 +297,23 @@ public sealed partial class RaceControlControl
             return null;
         }
 
-        at = at.AddMinutes(Gap.PushedBackMinutes);
-        return at > now ? at : null;
+        return DueStill(at.AddMinutes(Gap.PushedBackMinutes), now);
     }
+
+    /// <summary>
+    /// The due time while it is ahead, and for GapState.MarkWindow after it
+    /// passes; null after that.
+    /// </summary>
+    /// <remarks>
+    /// 2026-11-05, Bug hunt 11: this returned null the moment the due time
+    /// came, so MarkDue never saw the "Time's up" mark (0) become due and the
+    /// ticked box said nothing on the night, though Hear the gap played it.
+    /// The time is kept through the mark's window. Every other reader (the
+    /// quiet before the call, the long break, {minutes}) checks due > now
+    /// itself, so a passed time changes nothing for them.
+    /// </remarks>
+    internal static DateTime? DueStill(DateTime due, DateTime now) =>
+        now - due < GapState.MarkWindow ? due : null;
 
     /// <summary>A driver as the announcer says them - the announcer name where one is set.</summary>
     private string SpokenNameOf(string transponder)

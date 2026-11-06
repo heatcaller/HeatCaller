@@ -269,12 +269,16 @@ public partial class MainForm
         }
 
         var profile = _profiles.Get(transponder);
-        var before = _ghostStore.Snapshot();
-
-        var (ghost, refreshed) = OwnBestGhost.ChaseFor(_ghostStore.Current, transponder, profile?.DriverName, profile?.CarModel);
+        // Bug hunt 11 (2026-11-05): the Undo puts back only what the chase
+        // changed, not a snapshot of every ghost - see OwnBestGhost.ChaseWithUndo.
+        var (ghost, refreshed, undo) = OwnBestGhost.ChaseWithUndo(_ghostStore.Current, transponder, profile?.DriverName, profile?.CarModel);
 
         var store = _ghostStore;
-        _undo.Capture(refreshed ? $"Bring {ghost.Name} up to date" : $"Chase {ghost.Name}", () => store.Restore(before));
+        _undo.Capture(refreshed ? $"Bring {ghost.Name} up to date" : $"Chase {ghost.Name}", () =>
+        {
+            undo(store.Current);
+            store.Save();
+        });
 
         _ghostStore.Save();
 

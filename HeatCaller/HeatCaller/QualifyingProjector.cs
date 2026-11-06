@@ -166,7 +166,15 @@ public sealed class QualifyingProjector
             round.Id,
             round.RoundLabel,
             DateTime.UtcNow,
-            standings.Select(s => new QualifyingCalculator.LiveResult(
+            // 2026-11-05, Bug hunt 11: a black-flagged driver is left out of
+            // the running heat. Saving the race DQs him (RaceControlWarnings.
+            // ApplyBlackFlags) and a DQ'd heat does not count for him at all
+            // (the stored-heat loop in QualifyingCalculator.Compute), so the
+            // projection kept him at his full score all heat and showed
+            // everyone he would no longer beat a place lower than they end up.
+            // The 'if it ended now' championship table does the same
+            // (RaceControlControl.Tonight, WithBlackFlags).
+            standings.Where(s => !s.IsBlackFlagged).Select(s => new QualifyingCalculator.LiveResult(
                 s.TransponderId,
                 DisplayName(s.TransponderId),
                 _profiles.Get(s.TransponderId)?.CarModel ?? string.Empty,
@@ -296,15 +304,24 @@ public sealed class QualifyingProjector
         // when the next lap is counted, so without this a penalty given
         // between laps would not redraw the projection until that lap.
         long penalty = 0;
+        // 2026-11-05, Bug hunt 11: black flags too. A black flag adds no lap
+        // and no penalty, so without this the projection that still ranked
+        // the flagged driver was handed back until the next crossing.
+        var blackFlagged = 0;
 
         foreach (var s in standings)
         {
             laps += s.Laps;
             elapsed += s.ElapsedMs;
             penalty += s.PenaltyMs;
+
+            if (s.IsBlackFlagged)
+            {
+                blackFlagged++;
+            }
         }
 
-        return $"{round.Id}|{_race.SessionGeneration}|{standings.Count}|{laps}|{elapsed}|{penalty}"
+        return $"{round.Id}|{_race.SessionGeneration}|{standings.Count}|{laps}|{elapsed}|{penalty}|{blackFlagged}"
             + $"|{raceClass?.QualifyingMethod}|{raceClass?.ConsecutiveLapCount}|{raceClass?.CountBestRounds}"
             // 17 Oct 2026, Bug Hunt 8, A26-3: an Edit Result DQ or a Delete
             // during a live qualifier redraws the projection at once.

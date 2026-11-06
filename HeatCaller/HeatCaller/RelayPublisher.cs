@@ -912,6 +912,9 @@ public sealed partial class RelayPublisher : IDisposable
             _nightsOpenTold = false;
             // No backoff carried over to the new settings (20 Oct 2026, #85).
             _nextNightsOpenTick = 0;
+            // Listening's neither (2026-11-05, Bug hunt 11: RelayPublisher) -
+            // see _listenOpenBackoffFor.
+            _nextListenOpenTick = 0;
 
             // And the shout-outs switch and the vote's ballot, which never
             // healed at all: the notes inbox answers 200 and empty for a
@@ -1218,6 +1221,7 @@ public sealed partial class RelayPublisher : IDisposable
 
                 var now = _ledger.NoteSent(note.SessionId, note.StartedUtc, from, out var noted);
                 changed |= noted;
+                changed |= KeepOwedWhileAnotherCopyIsQueued(note);
 
                 if (now != _settings.RelayResultsFromUtc)
                 {
@@ -1256,6 +1260,7 @@ public sealed partial class RelayPublisher : IDisposable
                 // too big to queue at all.
                 var changed = _ledger.Owed.Remove(note.SessionId);
                 changed |= _ledger.NoteWithheld(note.SessionId, note.StartedUtc, _settings.RelayResultsFromUtc, note.Correction);
+                changed |= KeepOwedWhileAnotherCopyIsQueued(note);
 
                 if (changed)
                 {
@@ -1267,6 +1272,36 @@ public sealed partial class RelayPublisher : IDisposable
         {
             // As NoteResultDelivered.
         }
+    }
+
+    /// <summary>
+    /// Puts a session back in Owed when a different copy of its result -
+    /// queued by a later PublishResult, so not this note's own copy or its
+    /// re-numbered reissue - is still waiting in the queue. Call under
+    /// _ledgerGate; takes _gate inside, the order PublishResult takes them.
+    ///
+    /// WHY (2026-11-05, Bug hunt 11: RelayPublisher): a correction made
+    /// while the first copy sat at the head of a stalled queue queues behind
+    /// it (ReplaceQueuedResult never touches the head). When the link came
+    /// back long enough for the OLD copy to go, its delivery cleared Owed
+    /// and saved the ledger, though the correction was still only in
+    /// memory. Closed before that went, and opened more than 36 hours later,
+    /// nothing re-sent it and the relay kept the uncorrected result for
+    /// good - the very loss Owed exists to prevent.
+    /// </summary>
+    /// <returns>Whether Owed changed.</returns>
+    private bool KeepOwedWhileAnotherCopyIsQueued(ResultNote note)
+    {
+        bool queued;
+
+        lock (_gate)
+        {
+            queued = _results.Any(one => one.Result is { } other
+                                         && !ReferenceEquals(other, note)
+                                         && string.Equals(other.SessionId, note.SessionId, StringComparison.Ordinal));
+        }
+
+        return queued && _ledger.Owed.Add(note.SessionId);
     }
 
     /// <summary>
@@ -1488,6 +1523,8 @@ public sealed partial class RelayPublisher : IDisposable
         _nightsOpenTold = false;
         // No backoff carried over from before the delete (20 Oct 2026, #85).
         _nextNightsOpenTick = 0;
+        // Listening's neither (2026-11-05, Bug hunt 11: RelayPublisher).
+        _nextListenOpenTick = 0;
 
         // And the results the index was describing. Left set, the
         // next index published would name a season of sessions

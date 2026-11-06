@@ -2569,9 +2569,18 @@ public static partial class CommentaryReaders
         // handed. ForTheLayout then decides how many survive.
         bests.Sort((a, b) => a.BestSeconds.CompareTo(b.BestSeconds));
 
-        var (winner, run) = RunOfWinsOn(onLayout, profiles);
+        var (winner, run, holder) = RunOfWinsOn(onLayout, profiles);
 
-        return new LayoutLegend(Typed(onLayout[^1].TrackLayoutName), onLayout.Count, bests, winner, run);
+        // 5 Nov 2026, Bug Hunt 11: tonight's races still do not EXTEND a
+        // run, but one tonight won by anybody else has ENDED it - and
+        // "the last four here have all gone to Bill" said after the room
+        // watched Sam win here is false. Counted the way the run is: a
+        // race too small to be a win neither makes nor breaks it.
+        var endedTonight = run > 0
+            && tonightOnLayout.Any(session => WinnerIn(session, profiles!) is { Length: > 0 } tonightWinner
+                && !string.Equals(tonightWinner, holder, StringComparison.OrdinalIgnoreCase));
+
+        return new LayoutLegend(Typed(onLayout[^1].TrackLayoutName), onLayout.Count, bests, winner, run, endedTonight);
     }
 
     /// <summary>One driver's quickest lap across these races, in milliseconds - zero when they set none.</summary>
@@ -2687,13 +2696,13 @@ public static partial class CommentaryReaders
     /// Counted by TRANSPONDER and named from today's profile, like
     /// everything else that holds a run to a person - see SaidAs.
     /// </summary>
-    private static (string Winner, int Run) RunOfWinsOn(
+    private static (string Winner, int Run, string Holder) RunOfWinsOn(
         IReadOnlyList<SessionRecord> onLayout,
         ProfileStore? profiles)
     {
         if (profiles is null)
         {
-            return (string.Empty, 0);
+            return (string.Empty, 0, string.Empty);
         }
 
         var holder = string.Empty;
@@ -2729,10 +2738,10 @@ public static partial class CommentaryReaders
         // Bug Hunt 8, A09-5; see WinnerIn).
         if (run == 0 || holder == SomebodyElse)
         {
-            return (string.Empty, 0);
+            return (string.Empty, 0, string.Empty);
         }
 
-        return (SaidAs(profiles, holder), run);
+        return (SaidAs(profiles, holder), run, holder);
     }
 
     /// <summary>

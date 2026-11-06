@@ -351,9 +351,41 @@ export class TopUpRequests {
 }
 
 /**
+ * Why closeRequests would refuse to write a club's done file, or undefined
+ * when it would not.
+ *
+ * WHY (6 Nov 2026, Bug hunt 11): closeRequests used to read a done file
+ * that was there but would not read (a crash mid-write, a disk error) as
+ * an empty one and save over it with only the asks it was closing - so
+ * every request answered before opened again. Like ask(), autoTopUp() and
+ * forgetNotes() on the relay's side, it now leaves such a file alone and
+ * says so. voice-topup and brain-topup ask this first, so a top-up is not
+ * given when the ask it answers cannot be marked done.
+ */
+export async function closeRequestsRefusal(dataDir: string, club: string, meter: MeterName, now: Date): Promise<string | undefined> {
+  const open = (await requestsFor(dataDir, club, monthOf(now))).filter((ask) => ask.meter === meter && ask.status === "open");
+
+  return open.length === 0 ? undefined : doneFileRefusal(topUpDonePath(dataDir, club), await readJsonFile(topUpDonePath(dataDir, club)));
+}
+
+/** The refusal for a done file that is there and is not one (see closeRequestsRefusal). */
+function doneFileRefusal(path: string, raw: unknown): string | undefined {
+  if (raw === UNREADABLE || (raw !== undefined && (typeof raw !== "object" || raw === null || Array.isArray(raw)))) {
+    return (
+      `The answered-requests file ${path} will not read, so it was left as it is - writing over it would open ` +
+      `every request answered before again. Mend it, or move it aside, and run this again.`
+    );
+  }
+
+  return undefined;
+}
+
+/**
  * The operator's side, run by brain-topup and voice-topup: marks this
  * club's open requests for <meter> this month done. Returns how many.
- * Writes only the done file - see the note at the top.
+ * Writes only the done file - see the note at the top. Throws, writing
+ * nothing, when the done file is there and will not read (see
+ * closeRequestsRefusal).
  */
 export async function closeRequests(
   dataDir: string,
@@ -370,7 +402,14 @@ export async function closeRequests(
 
   const path = topUpDonePath(dataDir, club);
   const doneRaw = await readJsonFile(path);
-  const done = doneRaw === UNREADABLE ? {} : readDoneFile(doneRaw);
+  // 6 Nov 2026, Bug hunt 11: never written over when it will not read - see closeRequestsRefusal.
+  const refusal = doneFileRefusal(path, doneRaw);
+
+  if (refusal !== undefined) {
+    throw new Error(refusal);
+  }
+
+  const done = readDoneFile(doneRaw);
 
   for (const ask of open) {
     done[ask.id] = now.toISOString();

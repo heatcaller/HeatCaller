@@ -4,7 +4,30 @@ namespace HeatCaller;
 /// <param name="N">Its number, counting up from 1 for as long as the app runs, so a page can tell a new line from one it has shown.</param>
 /// <param name="Text">What was said, on one line, at most <see cref="CaptionLog.PieceChars"/> characters.</param>
 /// <param name="AtUtc">When it was heard.</param>
-public sealed record CaptionLine(long N, string Text, DateTime AtUtc);
+public sealed record CaptionLine(long N, string Text, DateTime AtUtc)
+{
+    /// <summary>
+    /// The whole spoken line this piece is part of, single-spaced - the same
+    /// on every piece of one line. Null for a line made by hand (the tests),
+    /// which is then its own whole line: see <see cref="Said"/>.
+    /// </summary>
+    /// <remarks>
+    /// 6 Nov 2026, Bug hunt 11: since 26 Oct a long line is captioned a piece
+    /// at a time, and the public captions (MainForm.PublicCaptionLines)
+    /// judged each piece on its own. Only the first piece of "Black flag,
+    /// Sam Smith. &lt;typed reason&gt;. Please bring your car in..." starts
+    /// "Black flag,", so the reason went onto the club's relay captions; a
+    /// later piece of a line naming an initials-only driver, or a car by its
+    /// transponder number, doesn't repeat the name, so it went out too. Every
+    /// piece now carries the line it came from, and the public filters judge
+    /// that once for all its pieces. Never written into any document: the
+    /// captions JSON names its fields (n, t, at) one by one.
+    /// </remarks>
+    public string? WholeText { get; init; }
+
+    /// <summary>What the public filters judge: the whole line this piece came from, or the piece itself when it has none.</summary>
+    public string Said => WholeText ?? Text;
+}
 
 /// <summary>
 /// The last few lines the announcer said, as text, for anybody who can't
@@ -67,7 +90,7 @@ internal sealed class CaptionLog
     private readonly Queue<CaptionLine> _lines = new();
 
     /// <summary>The rest of the line being said: its pieces not reached yet, each with when it is due. Numbered as released.</summary>
-    private readonly Queue<(string Text, DateTime DueUtc)> _waiting = new();
+    private readonly Queue<(string Text, string Whole, DateTime DueUtc)> _waiting = new();
 
     private long _next;
 
@@ -92,12 +115,16 @@ internal sealed class CaptionLog
         {
             ReleaseWaitingLocked(at);
 
-            var first = KeepLocked(pieces[0], at);
+            // 6 Nov 2026, Bug hunt 11: every piece carries the whole line, so
+            // the public captions withhold all of a line or none of it - see
+            // CaptionLine.WholeText.
+            var whole = SingleSpaced(text);
+            var first = KeepLocked(pieces[0], whole, at);
             var said = pieces[0].Length + 1;
 
             for (var i = 1; i < pieces.Count; i++)
             {
-                _waiting.Enqueue((pieces[i], at + TimeSpan.FromSeconds(said / CharsPerSecond)));
+                _waiting.Enqueue((pieces[i], whole, at + TimeSpan.FromSeconds(said / CharsPerSecond)));
                 said += pieces[i].Length + 1;
             }
 
@@ -272,9 +299,9 @@ internal sealed class CaptionLog
         string.Join(" ", (text ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     /// <summary>Keeps one piece as a line, numbered now. Call under _gate.</summary>
-    private CaptionLine KeepLocked(string text, DateTime atUtc)
+    private CaptionLine KeepLocked(string text, string whole, DateTime atUtc)
     {
-        var line = new CaptionLine(++_next, text, atUtc);
+        var line = new CaptionLine(++_next, text, atUtc) { WholeText = whole };
         _lines.Enqueue(line);
 
         while (_lines.Count > Kept)
@@ -290,8 +317,8 @@ internal sealed class CaptionLog
     {
         while (_waiting.Count > 0 && _waiting.Peek().DueUtc <= nowUtc)
         {
-            var (text, due) = _waiting.Dequeue();
-            KeepLocked(text, due);
+            var (text, whole, due) = _waiting.Dequeue();
+            KeepLocked(text, whole, due);
         }
     }
 
@@ -300,8 +327,8 @@ internal sealed class CaptionLog
     {
         while (_waiting.Count > 0)
         {
-            var (text, due) = _waiting.Dequeue();
-            KeepLocked(text, due <= nowUtc ? due : nowUtc);
+            var (text, whole, due) = _waiting.Dequeue();
+            KeepLocked(text, whole, due <= nowUtc ? due : nowUtc);
         }
     }
 }

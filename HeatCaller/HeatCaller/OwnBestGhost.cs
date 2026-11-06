@@ -76,6 +76,63 @@ internal static class OwnBestGhost
     }
 
     /// <summary>
+    /// ChaseFor, plus what puts back only what it changed - for the Undo.
+    /// The undo is handed the settings as they are when it runs (a later
+    /// save or Undo may have replaced the object) and finds the ghost by Id.
+    /// </summary>
+    // WHY (2026-11-05, Bug hunt 11): the Practice page's Chase a Best Lap and
+    // Race Control's "Chase Sam's best (ghost)" undid by restoring a snapshot
+    // of the whole garage, so a ghost unticked (or "Race ghost cars" changed)
+    // after the chase - neither of which has an undo of its own - was put
+    // back too, and an unticked ghost went back on track in a running
+    // practice. The same fix GhostControl.EditGhost had: only this ghost
+    // goes back, and ghost racing only if the chase was what switched it on.
+    internal static (GhostCar Ghost, bool Refreshed, Action<GhostSettings> Undo) ChaseWithUndo(
+        GhostSettings settings, string transponder, string? driverName, string? carModel)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var racingWasOn = settings.Enabled;
+        var before = settings.Ghosts.FirstOrDefault(g =>
+            g.PaceSource == GhostPaceSource.OwnBestTonight
+            && string.Equals(g.SourceTransponder, transponder, StringComparison.OrdinalIgnoreCase));
+        var ghostWasOn = before?.Enabled ?? false;
+        var revisionBefore = before?.PaceRevision ?? 0;
+
+        var (ghost, refreshed) = ChaseFor(settings, transponder, driverName, carModel);
+        var id = ghost.Id;
+        var revisionAfter = ghost.PaceRevision;
+
+        void Undo(GhostSettings now)
+        {
+            if (!refreshed)
+            {
+                now.Ghosts.RemoveAll(g => g.Id == id);
+            }
+            else if (now.Ghosts.FirstOrDefault(g => g.Id == id) is { } chased)
+            {
+                // Left alone where it has been changed since.
+                if (chased.PaceRevision == revisionAfter)
+                {
+                    chased.PaceRevision = revisionBefore;
+                }
+
+                if (!ghostWasOn && chased.Enabled)
+                {
+                    chased.Enabled = false;
+                }
+            }
+
+            if (!racingWasOn && now.Enabled)
+            {
+                now.Enabled = false;
+            }
+        }
+
+        return (ghost, refreshed, Undo);
+    }
+
+    /// <summary>
     /// The drivers to offer, those on the practice board first - the driver
     /// asking is almost always one of them - then everyone else, ghosts never.
     /// </summary>

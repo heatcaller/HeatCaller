@@ -426,6 +426,9 @@ internal sealed class GapState
     /// <summary>The night's one gap, shared by Race Control and the Announcer screen.</summary>
     public static GapState Shared { get; } = new();
 
+    /// <summary>How long a countdown mark stays due after its time comes (MarkDue).</summary>
+    public static readonly TimeSpan MarkWindow = TimeSpan.FromSeconds(45);
+
     private string? _raceKey;
     private DateTime? _floorFreeSinceUtc;
     private int _lines;
@@ -999,7 +1002,7 @@ internal sealed class GapState
             {
                 var at = due - TimeSpan.FromMinutes(mark);
 
-                if (nowUtc >= at && nowUtc - at < TimeSpan.FromSeconds(45) && !_marksSaid.Contains(mark))
+                if (nowUtc >= at && nowUtc - at < MarkWindow && !_marksSaid.Contains(mark))
                 {
                     return mark;
                 }
