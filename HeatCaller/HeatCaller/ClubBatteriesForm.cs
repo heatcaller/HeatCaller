@@ -62,6 +62,11 @@ internal sealed class ClubBatteriesForm : Form
         _btnEdit.Click += (_, _) => Run(pack => BatteryActions.AddOrEdit(this, _store, _undo, pack, string.Empty) is not null);
         _btnRetire.Click += (_, _) => Run(pack =>
         {
+            if (!pack.Retired && !RetireConfirm.Ask(this, $"pack {pack.DisplayName}"))
+            {
+                return false;
+            }
+
             BatteryActions.SetRetired(_store, _undo, pack, !pack.Retired);
             return true;
         });

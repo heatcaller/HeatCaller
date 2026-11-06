@@ -627,6 +627,11 @@ internal sealed class DriverBatteriesPanel : UserControl
             return;
         }
 
+        if (!pack.Retired && !RetireConfirm.Ask(FindForm(), $"pack {pack.DisplayName}"))
+        {
+            return;
+        }
+
         Change(() =>
         {
             BatteryActions.SetRetired(_store, _undo, pack, !pack.Retired);

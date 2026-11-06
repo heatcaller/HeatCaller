@@ -498,6 +498,11 @@ internal sealed class DriverTransponderPanel : UserControl
 
         var kind = row.IsSplit ? "split transponder" : "transponder";
 
+        if (retire && !RetireConfirm.Ask(FindForm(), $"{kind} {row.Id}"))
+        {
+            return;
+        }
+
         Change(retire ? $"Retire {kind} {row.Id}" : $"Bring back {kind} {row.Id}",
             p =>
             {

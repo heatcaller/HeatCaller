@@ -705,9 +705,13 @@ public sealed class RelaySettingsControl : UserControl
             + "club's pages and captions still show the short name, and a line that says a full name is not "
             + "sent to people listening along at home.");
 
+        var (btnBoardColumns, lblBoardColumns) = BuildBoardColumns();
+
         var card = new Section("What gets published");
 
         card.Add(lblAlways);
+        card.Add(new ButtonBar().With(btnBoardColumns), gapBelow: UiLayout.HintGap);
+        card.Add(lblBoardColumns);
         card.Add(_chkRoster, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblRosterHint);
         card.Add(_chkDriverNights, stretch: false, gapBelow: UiLayout.HintGap);
@@ -736,6 +740,82 @@ public sealed class RelaySettingsControl : UserControl
         StepIn(card.Add(lblFullNamesHint, gapBelow: 0));
 
         return card;
+    }
+
+    /// <summary>
+    /// The live board's columns on the club's website, and the line under
+    /// the button saying which they are (5 Nov 2026 - see RelayColumns).
+    ///
+    /// A pick that comes out the same as the Live Results page's columns is
+    /// saved as no pick at all, so the board goes on following that page -
+    /// which is also what the picker's Restore Defaults gives.
+    /// </summary>
+    private (Button Button, Label Hint) BuildBoardColumns()
+    {
+        var btn = new Button { Text = "Choose Live Board Columns..." };
+        var hint = HintLabel(string.Empty);
+
+        void ShowColumns()
+        {
+            var labels = RelayColumns.Resolve(_settings.WebKpis, _settings.RelayKpis, forRelay: true)
+                .Select(k => k.Label);
+            var whose = _settings.RelayKpis.Count == 0
+                ? "The same columns as the Live Results page"
+                : "Its own columns";
+
+            hint.Text = $"The live race on the club's website. {whose}: {string.Join(", ", labels)}. "
+                + "The transponder number is never shown online.";
+        }
+
+        btn.Click += (_, _) =>
+        {
+            var following = RelayColumns.Current(_settings.WebKpis, Array.Empty<string>());
+
+            using var form = new KpiPickerForm("Club website live board",
+                RelayColumns.Current(_settings.WebKpis, _settings.RelayKpis),
+                following,
+                RelayColumns.LeftOut);
+
+            if (form.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            var picked = form.SelectedKeys.SequenceEqual(following, StringComparer.OrdinalIgnoreCase)
+                ? new List<string>()
+                : form.SelectedKeys.ToList();
+
+            var before = _settings.RelayKpis.ToList();
+
+            if (before.SequenceEqual(picked))
+            {
+                return;
+            }
+
+            _undo?.Capture("Change the website's live board columns", () =>
+            {
+                _settings.RelayKpis = before.ToList();
+                _settings.Save();
+                ShowColumns();
+            });
+
+            _settings.RelayKpis = picked;
+            _settings.Save();
+            ShowColumns();
+        };
+
+        // The Live Results page's columns change on Local Screens; read again
+        // whenever this page comes back on screen, so the line is never stale.
+        hint.VisibleChanged += (_, _) =>
+        {
+            if (hint.Visible)
+            {
+                ShowColumns();
+            }
+        };
+
+        ShowColumns();
+        return (btn, hint);
     }
 
     /// <summary>

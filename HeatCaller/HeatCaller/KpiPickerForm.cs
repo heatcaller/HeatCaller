@@ -33,21 +33,28 @@ public sealed class KpiPickerForm : Form
     /// <summary>Chosen KPI keys, in display order.</summary>
     public List<string> SelectedKeys { get; private set; } = new();
 
-    public KpiPickerForm(string surfaceName, IEnumerable<string> currentKeys, IEnumerable<string> defaults)
+    /// <param name="leftOut">
+    /// Columns this surface can never show, so they are not offered - the
+    /// club's website and the transponder number (RelayColumns.LeftOut).
+    /// </param>
+    public KpiPickerForm(string surfaceName, IEnumerable<string> currentKeys, IEnumerable<string> defaults,
+        IEnumerable<string>? leftOut = null)
     {
         var current = currentKeys.ToList();
+        var notOffered = new HashSet<string>(leftOut ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        var offered = KpiCatalog.All.Where(d => !notOffered.Contains(d.Key)).ToList();
 
         // Selected ones first in their saved order, then everything else -
         // so the list doubles as the column order.
         foreach (var key in current)
         {
             var def = KpiCatalog.Find(key);
-            if (def is not null)
+            if (def is not null && !notOffered.Contains(def.Key))
             {
                 _entries.Add(new Entry { Definition = def, Selected = true });
             }
         }
-        foreach (var def in KpiCatalog.All.Where(d => !_entries.Any(e => e.Definition.Key == d.Key)))
+        foreach (var def in offered.Where(d => !_entries.Any(e => e.Definition.Key == d.Key)))
         {
             _entries.Add(new Entry { Definition = def, Selected = false });
         }
@@ -70,12 +77,12 @@ public sealed class KpiPickerForm : Form
             foreach (var key in defaultKeys)
             {
                 var def = KpiCatalog.Find(key);
-                if (def is not null)
+                if (def is not null && !notOffered.Contains(def.Key))
                 {
                     _entries.Add(new Entry { Definition = def, Selected = true });
                 }
             }
-            foreach (var def in KpiCatalog.All.Where(d => !defaultKeys.Contains(d.Key)))
+            foreach (var def in offered.Where(d => !defaultKeys.Contains(d.Key)))
             {
                 _entries.Add(new Entry { Definition = def, Selected = false });
             }

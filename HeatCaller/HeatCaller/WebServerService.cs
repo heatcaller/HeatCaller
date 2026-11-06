@@ -3220,12 +3220,7 @@ public sealed partial class WebServerService
 
         _kpiTracker.Observe(ordered, view?.Generation ?? _race.SessionGeneration);
 
-        var columns = KpiCatalog.Resolve(ui.WebKpis, KpiCatalog.DefaultWeb);
-
-        if (forRelay)
-        {
-            columns = columns.Where(k => k.Key != "transponder").ToList();
-        }
+        var columns = RelayColumns.Resolve(ui.WebKpis, ui.RelayKpis, forRelay);
 
         var context = new KpiContext
         {
@@ -3347,6 +3342,17 @@ public sealed partial class WebServerService
                         row["leader"] = leader;
                     }
                 }
+            }
+
+            // A timed race's length in seconds (5 Nov 2026, Asher: "on flag
+            // card on relay make a progress bar for a timed race as well as
+            // the lap number race"). The countdown says only the time left
+            // ("07:30 REMAINING"); with the length too the flag card can fill
+            // a bar from it, as it does from "5 LAPS TO GO". Not for a lap
+            // race, whose countdown is laps and wins (GetCountdownText).
+            if (_race.LapLimit is null && _race.TimeLimit is { } timeLimit && timeLimit > TimeSpan.Zero)
+            {
+                relayNode["raceSecs"] = (int)Math.Round(timeLimit.TotalSeconds);
             }
 
             // The live track map on the relay's Live tab (4 Nov 2026, Asher:

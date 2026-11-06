@@ -288,6 +288,7 @@ internal static class SettingsTable
             nameof(AppSettings.PracticeKpis),
             nameof(AppSettings.BigScreenKpis),
             nameof(AppSettings.WebKpis),
+            nameof(AppSettings.RelayKpis),
 
             // Themes: animated header, the synthwave crowd screen.
             nameof(AppSettings.AnimateHeader),

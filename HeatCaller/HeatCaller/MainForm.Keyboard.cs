@@ -389,7 +389,9 @@ public partial class MainForm
 
         // A grid cell being edited types into an editing box the grid owns,
         // which ActiveControl does not reach - the grid itself says so.
-        return focused is TextBoxBase or UpDownBase or ComboBox
+        // TimePicker too: it takes typed digits and A/P, and without it here
+        // a 0 typed into a race time on Race Control started On Air.
+        return focused is TextBoxBase or UpDownBase or ComboBox or TimePicker
                || focused is DataGridView { IsCurrentCellInEditMode: true };
     }
 
