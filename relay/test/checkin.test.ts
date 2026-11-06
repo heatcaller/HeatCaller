@@ -305,13 +305,15 @@ describe("the club's look", () => {
   // Asher): a right PIN there checks the driver in itself.
   // Since 30 Oct 2026 (relay navigation round 5) Home points drivers at
   // Me, where a right PIN checks them in, rather than at the check-in page.
-  it("points drivers from Home to Me only while check-in is open, and never links the check-in page", async () => {
+  // Since 5 Nov 2026 (Asher: "remove open your night and check in from home
+  // screen") Home says nothing about checking in, open or not.
+  it("says nothing about checking in on Home, and never links the check-in page", async () => {
     assert.equal((await call(harness, "GET", "/c/acme-rc")).text.includes("Check in: tap Me"), false);
 
     await publishCheckin(harness, checkinDoc(), 2);
 
     const home = (await call(harness, "GET", "/c/acme-rc")).text;
-    assert.match(home, /<a class="more" href="\/c\/acme-rc\/mynight">Check in: tap Me and type your PIN<\/a>/);
+    assert.equal(home.includes("Check in: tap Me"), false);
     assert.equal(home.includes('/c/acme-rc/checkin"'), false);
     assert.equal((await call(harness, "GET", "/c/acme-rc/mynight")).text.includes('/c/acme-rc/checkin"'), false);
     assert.equal((await call(harness, "GET", "/c/acme-rc/results")).text.includes('/c/acme-rc/checkin"'), false, "not a tab");

@@ -20,10 +20,13 @@ function scriptOf(page: string): string {
 }
 
 describe("Me as a pit wall", () => {
-  it("has the strip, the moment card, the switch, the tiles, the Garage space and Quick", () => {
-    for (const id of ["me-strip", "me-moment", "me-switch", "me-tiles", "me-garage", "me-fab", "me-sheet", "me-empty"]) {
+  it("has the strip, the moment card, the switch, the tiles, the Garage space and the pack sheet", () => {
+    for (const id of ["me-strip", "me-moment", "me-switch", "me-tiles", "me-garage", "me-sheet", "me-empty"]) {
       assert.match(html, new RegExp(`id="${id}"`), id);
     }
+
+    // No Quick button (5 Nov 2026, Asher: "remove the quick menu").
+    assert.doesNotMatch(html, /me-fab|\+ Quick|meQuick/);
 
     // The Garage's own sections, inside its space.
     for (const id of ["gh", "gm", "gp", "gr", "gc", "gg", "gs"]) {
@@ -34,6 +37,13 @@ describe("Me as a pit wall", () => {
     for (const id of ["nh", "nj", "gd", "ng", "nx", "lv", "ea", "nt", "yd", "meout"]) {
       assert.match(html, new RegExp(`id="${id}"`), id);
     }
+  });
+
+  it("keeps the pack sheet's buttons clear of the home-screen icon's one bar", () => {
+    // Inside the shell (html.framed) the bar is drawn over the page's foot;
+    // the sheet keeps the same room for it the About sheet does.
+    assert.match(html, /html\.framed \.me-sheet \.in \{ padding-bottom: calc\(22px \+ 58px \+ var\(--sa-b, 0px\)\); \}/);
+    assert.match(html, /html\.framed \.hcabout \.sheet \{ padding-bottom: calc\(28px \+ 58px/);
   });
 
   it("puts the strip and the switch above the night's own parts, and the Garage before Your details", () => {

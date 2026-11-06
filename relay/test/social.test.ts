@@ -84,13 +84,16 @@ describe("club social links: on the pages", () => {
 
     const home = await call(harness, "GET", "/c/acme-rc");
 
-    assert.match(home.text, /<div class="social"><a href="https:\/\/www\.facebook\.com\/acmerc\?ref=a&amp;b=%22c%22"[^>]*rel="noopener noreferrer me"[^>]*>Facebook<\/a><\/div>/);
+    // An icon, not the word (5 Nov 2026, Asher: "replace the socials labels
+    // with icons"); the name stays as its accessible label and tooltip.
+    assert.match(home.text, /<div class="social"><a class="soc" href="https:\/\/www\.facebook\.com\/acmerc\?ref=a&amp;b=%22c%22"[^>]*rel="noopener noreferrer me" aria-label="Facebook" title="Facebook"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">[\s\S]*?<\/svg><\/a><\/div>/);
+    assert.doesNotMatch(home.text, />Facebook<\/a>/, "no word on the button");
     assert.doesNotMatch(home.text, /href="javascript:/);
     assert.doesNotMatch(home.text, /Instagram/);
 
     const live = await call(harness, "GET", "/c/acme-rc/live");
 
-    assert.match(live.text, /<span class="links"[^>]*><a href="https:\/\/www\.facebook\.com\/acmerc/);
+    assert.match(live.text, /<span class="links"[^>]*><a class="soc" href="https:\/\/www\.facebook\.com\/acmerc[^"]*"[^>]*aria-label="Facebook"/);
     assert.doesNotMatch(live.text, /class="social"/);
   });
 });

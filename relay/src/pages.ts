@@ -668,6 +668,25 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .trk-t { min-width: 0; }
 .trk-s { display: block; color: var(--muted); font-size: 0.85rem; }
 #tracks-h { scroll-margin-top: calc(16px + var(--sa-t)); }
+/* Our tracks on Home as a card (5 Nov 2026, Asher: "do something with our
+   tracks and lap records. it looks off"): each layout a row - picture or
+   track mark, name, and the lap record on the right in big figures. */
+.trkcard[hidden] { display: none; }
+.trkcard .trk { margin: 0; padding: 10px 2px; background: none; border: 0; border-radius: 0; border-top: 1px solid var(--border); }
+.trkcard .trk:first-child { border-top: 0; padding-top: 2px; }
+.trkcard .trk-img { width: 56px; height: 56px; border-radius: 12px; }
+.trk-mark { display: grid; place-items: center; background: var(--tonal, var(--row-alt)); color: var(--on-tonal, var(--primary)); }
+.trk-mark svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.trkcard .trk-t { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.trkcard .trk-t b { font-size: 1.05rem; overflow-wrap: anywhere; }
+.trkcard .pill { font-size: 0.65rem; }
+.trk-rec { display: flex; flex-direction: column; align-items: flex-end; text-align: right; flex: none; max-width: 45%; }
+.trk-k { color: var(--muted); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.trk-rec b { font-family: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif; font-stretch: condensed;
+             font-size: 1.6rem; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; color: var(--accent); }
+.trk-who { color: var(--muted); font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.trk-rec.none .trk-who { font-style: italic; }
+.trk-all { display: flex; align-items: center; justify-content: center; margin-top: 12px; text-decoration: none; }
 .lc-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0 18px; }
 .lc-pack { max-width: none; margin: 14px 0 0; gap: 8px; }
 .lc-pack h4 { margin: 0; font-size: 1rem; }
@@ -876,6 +895,16 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .sponsors .sp img { max-width: 100%; max-height: 64px; object-fit: contain; }
 .sponsors .spname { font-size: 1.05rem; }
 .sponsors .spline { color: var(--muted); font-size: 0.8rem; }
+/* SPONSOR SLIDES FILL THE WIDTH (5 Nov 2026, Asher: "sponsor slides on
+   relay should fill the width while maintaining aspect ratio"). A sponsor
+   with a picture is that picture edge to edge across its card, as tall as
+   its own shape makes it - never cropped, never squashed - with the
+   tagline under it. On Live they stack one to a row so each gets the
+   page's width; a sponsor with only a name keeps its plain tile. */
+.sponsors .spgrid { grid-template-columns: minmax(0, 1fr); }
+.sponsors .sp:has(> img) { padding: 0; gap: 0; min-height: 0; overflow: hidden; align-items: stretch; }
+.sponsors .sp > img, #spnight .sp > img { display: block; width: 100%; height: auto; max-width: none; max-height: none; object-fit: fill; }
+.sponsors .sp:has(> img) .spline { padding: 8px 12px 10px; }
 /* Club health on the results page (4 Nov 2026). */
 .clubhealth { padding: 12px 16px; margin-bottom: 14px; }
 .clubhealth h3 { margin: 0 0 6px; font-size: 1.05rem; }
@@ -1220,6 +1249,34 @@ html.hcshell nav.tabs a[aria-current] { color: var(--text); font-weight: 600; ba
 html.hcshell nav.tabs svg { width: 56px; height: 30px; padding: 4px 17px; border-radius: 999px; }
 html.hcshell nav.tabs a[aria-current] svg { background: var(--tonal); color: var(--on-tonal); }
 html.hcshell nav.tabs .dot { top: 5px; left: calc(50% + 12px); }
+/* PIT WALL, SECOND PASS (5 Nov 2026, Asher: "pit wall for all"): what
+   came after the kit - Home reimagined, its sponsor of the night, Live's
+   sponsors, a night's Rearrange buttons - onto the same soft cards and
+   outline buttons. Look only, as above. */
+.hero { border-radius: 16px; }
+.tile, .tn, #spnight .sp, .sponsors .sp, .late, .rclog { border-radius: 14px; }
+@media (hover: hover) { #spnight a.sp:hover { border-color: var(--primary); } .sponsors a.sp:hover { border-color: var(--primary); } }
+/* The club's links as outline buttons, as the Pit Wall mockup's Home has them. */
+.social a { border-radius: 14px; background: transparent; }
+/* The club's links as icons (5 Nov 2026): square buttons on Home, a row of
+   small marks in the footer, each a finger wide. */
+a.soc svg { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8;
+            stroke-linecap: round; stroke-linejoin: round; }
+a.soc svg .f { fill: currentColor; stroke: none; }
+.social a.soc { width: 48px; min-height: 48px; padding: 0; justify-content: center; }
+footer .links a.soc { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; padding: 0; }
+footer .links:has(a.soc) { gap: 4px 8px; }
+@media (hover: hover) { .social a:hover { color: var(--text); background: var(--surface); } }
+/* Up, Down, Rearrange cards, Put back the usual order: outline. */
+.mvb, .mvgo { background: transparent; border-radius: 14px; font-weight: 700;
+  -webkit-tap-highlight-color: transparent; transition: transform 0.08s ease, border-color 0.15s ease; }
+@media (hover: hover) { .mvb:hover:not(:disabled), .mvgo:hover { border-color: var(--primary); } }
+.mvb:active:not(:disabled), .mvgo:active { transform: scale(0.97); }
+.hero:focus-visible, .tile:focus-visible, .social a:focus-visible, .sp:focus-visible, .trk:focus-visible,
+.mvb:focus-visible, .mvgo:focus-visible, a.more:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .mvb, .mvgo { transition: none; } .mvb:active, .mvgo:active { transform: none; }
+}
 `;
 
 /** Shared by every page: escaping, time formatting, and polling that stops when nobody is looking. */
@@ -1639,6 +1696,40 @@ function meForget() {
     setTimeout(go, 300);
   });
   addEventListener('pageshow', (e) => { if (e.persisted && !SHELL) { ahead = null; light(own); } });
+
+  // A SWIPE ALONG THE BAR (5 Nov 2026, Asher: "add ability to swipe left
+  // and right on the bottom tabs to change screens", then "the swiping is
+  // backwards"). The bar follows the finger: a swipe to the right goes to
+  // the tab on the right, to the left the one on the left, no wrapping -
+  // exactly a tap on that tab, so it lights, reads ahead and swaps the page
+  // as a tap does. Only on the bar: the page above has sideways swipes of
+  // its own (Me's spaces, the Garage's cars). A finger that moved is never
+  // also a tap on the tab it lifted from.
+  let sx = 0, sy = 0, st = 0, swiped = 0;
+  tabs.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { st = 0; return; }
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+  }, { passive: true });
+  tabs.addEventListener('touchend', (e) => {
+    if (!st || e.changedTouches.length !== 1) return;
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    const quick = Date.now() - st < 700;
+    st = 0;
+    if (!quick || Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const all = Array.from(tabs.querySelectorAll('a'));
+    const at = all.indexOf(tabs.querySelector('a[aria-current]'));
+    if (at < 0) return;
+    const to = all[at + (dx > 0 ? 1 : -1)];
+    if (!to) return;
+    swiped = Date.now();
+    // The read-ahead a finger landing on the tab would have started.
+    try { to.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })); } catch (err) { /* no read-ahead */ }
+    to.click();
+  }, { passive: true });
+  tabs.addEventListener('click', (e) => {
+    if (e.isTrusted && swiped && Date.now() - swiped < 500) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
 })();
 
 // The Me tab goes straight to a remembered night. Again whenever the
@@ -1767,9 +1858,36 @@ function escapeHtml(value: string): string {
  */
 function socialAnchors(links: readonly SocialLink[]): string {
   return links
-    .map((link) => `<a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer me">${escapeHtml(link.label)}</a>`)
+    .map((link) => {
+      const label = escapeHtml(link.label);
+      const icon = SOCIAL_ICONS[link.kind];
+      // ICONS, NOT WORDS (5 Nov 2026, Asher: "replace the socials labels
+      // with icons"). The platform's name stays as the link's accessible
+      // name and its tooltip, so a screen reader still says "Facebook".
+      return icon === undefined
+        ? `<a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer me">${label}</a>`
+        : `<a class="soc" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer me" aria-label="${label}" title="${label}">`
+          + `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icon}</svg></a>`;
+    })
     .join("");
 }
+
+/**
+ * One small mark per platform SOCIAL_LABELS knows, drawn in the club's own
+ * colours (currentColor) on a 24px grid - a plain line drawing of each, not
+ * the platforms' own artwork. Fixed markup, nothing from the laptop.
+ */
+const SOCIAL_ICONS: Readonly<Record<string, string>> = Object.freeze({
+  website: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  facebook: '<path d="M14 21v-8h3l.5-3.5H14V7.6c0-1 .4-1.6 1.7-1.6H18V3.1A22 22 0 0 0 15.3 3C12.7 3 11 4.6 11 7.4v2.1H8V13h3v8"/>',
+  instagram: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle class="f" cx="17.5" cy="6.5" r="1.1"/>',
+  youtube: '<rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path class="f" d="M10 9.2v5.6l4.8-2.8z"/>',
+  tiktok: '<path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5M14 3c.4 2.6 2.2 4.4 5 4.6"/>',
+  x: '<path d="M4 4h4.5L20 20h-4.5zM20 4l-6.6 7.4M4 20l6.6-7.4"/>',
+  discord: '<path d="M8.5 7.5a13 13 0 0 1 7 0M7 17c3 1.4 7 1.4 10 0M6.5 6.5C5 8.8 4 11.6 4 15c1.6 1.6 3.3 2.4 4.5 2.6l1-1.8M17.5 6.5C19 8.8 20 11.6 20 15c-1.6 1.6-3.3 2.4-4.5 2.6l-1-1.8"/>'
+    + '<circle class="f" cx="9.5" cy="12.5" r="1.2"/><circle class="f" cx="14.5" cy="12.5" r="1.2"/>',
+  whatsapp: '<path d="M4 20l1.3-4.2A8.5 8.5 0 1 1 8.4 19z"/><path d="M9 8.5c0 3.5 2.5 6.5 6.5 6.5l1-1.5-2-1-1 1c-1.2-.5-2.5-1.8-3-3l1-1-1-2z"/>',
+});
 
 /**
  * The club's five tabs. club and name are already escaped; lit is the key
@@ -1861,8 +1979,10 @@ export function shell(page: Shell, context: PageContext): string {
       <span class="onair" aria-hidden="true"><b>LIVE</b></span>` : ""}
       <div class="hcby">${HC_SUN}<span>on HeatCaller</span></div>
     </div>
-    <div class="sub">${sub}</div>
     </div>`;
+  // No line under the name saying what the page is for (5 Nov 2026, Asher:
+  // "remove all top of page tool tips from relay pages"). The words still
+  // describe the page to search engines and link previews (description).
 
   // The logo's address carries a fingerprint of the logo itself (hex only),
   // so a newly uploaded logo shows at once instead of the cached old one.
@@ -6895,12 +7015,15 @@ function drawMine(entry) {
     mine.appendChild(p);
   }
 
+  // No "Open your night" (5 Nov 2026, Asher: "remove open your night and
+  // check in from home screen") - Me is a tap away on the bar.
   const links = document.createElement('p');
   links.className = 'lc-go';
-  links.appendChild(mineLink('Open your night', '/night#d=' + MINE));
-  if (n.now === true) links.appendChild(mineLink('Watch live', '/live'));
-  else if (next) links.appendChild(mineLink('See the running order', '/schedule'));
-  mine.appendChild(links);
+  const where = n.now === true ? mineLink('Watch live', '/live') : next ? mineLink('See the running order', '/schedule') : null;
+  if (where) {
+    links.appendChild(where);
+    mine.appendChild(links);
+  }
 }
 
 async function readMine() {
@@ -6982,11 +7105,7 @@ function drawYou() {
   const recent = achievementsDoc && Array.isArray(achievementsDoc.recent) ? achievementsDoc.recent : [];
   const earned = who ? recent.find((r) => r && sameName(r.name, who)) : null;
   if (earned) you.appendChild(youLine('Newest achievement', badgeName(earned.id)));
-
-  const links = document.createElement('p');
-  links.className = 'lc-go';
-  links.appendChild(mineLink('Open your night', '/night#d=' + MINE));
-  you.appendChild(links);
+  // No "Open your night" here either (5 Nov 2026) - Me is on the bar.
 }
 
 async function readYou() {
@@ -7730,17 +7849,28 @@ async function loadTracks() {
   const see = newbie ? newbie.querySelector('a[href="#tracks-h"]') : null;
   if (see) see.hidden = tracks.length === 0;
 
+  // One row per layout (5 Nov 2026, Asher: "it looks off"): its picture, or
+  // a track mark when it has none; its name, with Racing here today on
+  // today's; and the lap record on the right, big, with who holds it - or
+  // "No record yet" and its typical lap. The card hides with no tracks.
+  const MARK = '<span class="trk-img trk-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 4h7a5 5 0 0 1 0 10H9a3 3 0 0 0 0 6h11"/><path d="M4 4h3M17 20h3"/></svg></span>';
   section(trackList, tracks.length === 0 ? '' : tracks.slice(0, 6).map((t) => {
     const rec = t.record && t.record.ms > 0 ? t.record : null;
     const facts = [
-      rec ? 'Lap record ' + lap(rec.ms) + (rec.holder ? ' &middot; ' + esc(rec.holder) : '') : '',
       t.lengthFeet > 0 ? esc(Math.round(t.lengthFeet)) + ' ft' : '',
+      !rec && t.averageLapSeconds > 0 ? 'Typical lap ' + esc(Number(t.averageLapSeconds).toFixed(1)) + 's' : '',
     ].filter(Boolean).join(' &middot; ');
-    return '<a class="trk" href="' + BASE + '/tracks">' + img(t.image, 'trk-img', t.name) +
+    const record = rec
+      ? '<span class="trk-rec"><span class="trk-k">Lap record</span><b>' + lap(rec.ms) + '</b>' +
+        (rec.holder ? '<span class="trk-who">' + esc(rec.holder) + '</span>' : '') + '</span>'
+      : '<span class="trk-rec none"><span class="trk-k">Lap record</span><span class="trk-who">No record yet</span></span>';
+    return '<a class="trk" href="' + BASE + '/tracks">' + (img(t.image, 'trk-img', t.name) || MARK) +
       '<span class="trk-t"><b>' + esc(t.name) + '</b>' +
-      (t.name === doc.current ? ' <span class="pill running">Racing here today</span>' : '') +
-      (facts ? '<span class="trk-s">' + facts + '</span>' : '') + '</span></a>';
-  }).join('') + '<p class="lc-go"><a class="more" href="' + BASE + '/tracks">Lap records and the quickest drivers &rarr;</a></p>');
+      (t.name === doc.current ? '<span class="pill running">Racing here today</span>' : '') +
+      (facts ? '<span class="trk-s">' + facts + '</span>' : '') + '</span>' + record + '</a>';
+  }).join('') + '<a class="page wide trk-all" href="' + BASE + '/tracks">Lap records and the quickest drivers</a>');
+  const card = document.getElementById('tracks-h');
+  if (card) card.hidden = tracks.length === 0;
 }
 
 // "New here?" is for somebody the club does not know yet. A phone that
@@ -7795,11 +7925,9 @@ export function homePage(club: string, clubName: string, context: PageContext = 
       '<section class="lc" id="mine" hidden></section>' +
       `<div id="now" data-when="${escapeHtml(n.when)}"><p class="note">Loading&hellip;</p></div>` +
       '<div id="up"></div>' +
-      // Check in from Me (30 Oct 2026, round 5): a right PIN on Me checks a
-      // driver in.
-      (look.checkIn
-        ? `<p class="note"><a class="more" href="${base}/mynight">Check in: tap Me and type your PIN</a></p>`
-        : "") +
+      // No "Check in: tap Me and type your PIN" line any more (5 Nov 2026,
+      // Asher: "remove open your night and check in from home screen"):
+      // checking in is on Me, a tap away on the bar.
       '<section class="lc you" id="you" hidden></section>' +
       '<section class="card hp" id="tonight" hidden></section>' +
       '<section class="card hp" id="moments" hidden></section>' +
@@ -7808,7 +7936,9 @@ export function homePage(club: string, clubName: string, context: PageContext = 
       '<div class="day">Last race night</div><div class="card" id="recap" style="display:none"></div>' +
       newcomer +
       // Tracks live on Home (30 Oct 2026, round 6), no longer a Results tab.
-      '<div class="day" id="tracks-h">Our tracks</div><div id="tracks" style="display:none"></div>' +
+      // A card of its own like its neighbours since 5 Nov 2026 (Asher: "do
+      // something with our tracks and lap records. it looks off").
+      '<section class="card hp trkcard" id="tracks-h" hidden><h3>Our tracks</h3><div id="tracks" style="display:none"></div></section>' +
       social,
     script: HOME_JS + HOME_ME_JS + HOME_PLUS_JS,
   }, context);
@@ -12076,6 +12206,7 @@ function take(body) {
   // anything missing or of the wrong shape counts as no.
   me = body && typeof body.me === 'object' && body.me !== null && !Array.isArray(body.me) ? body.me : null;
   asksOpen = !!body && body.asksOpen === true;
+  queriesOff = !!body && body.queriesOff === true;
 }
 
 // ---- asking the desk
@@ -12106,6 +12237,9 @@ const ASK_STATES = ['waiting', 'approved', 'noted', 'declined'];
 let me = null;
 // Whether the relay will take a request from this code right now.
 let asksOpen = false;
+// Whether the club has switched result queries off on the laptop (5 Nov
+// 2026): each race's "Something wrong?" goes, the other requests stay.
+let queriesOff = false;
 // What this page sent and the relay took, until the live entry lists it.
 const sentAsks = [];
 // Each race's "Something wrong?", by race id, so a redraw of the night
@@ -12225,7 +12359,7 @@ function asksPart() {
 // ---- "Something wrong?" under a race
 
 function queryPart(r) {
-  if (!asksOpen || !r || typeof r.sid !== 'string' || !OBJECT_ID.test(r.sid)) return null;
+  if (!asksOpen || queriesOff || !r || typeof r.sid !== 'string' || !OBJECT_ID.test(r.sid)) return null;
 
   // Both of a driver's cars in one race is two cards with the same race id
   // (22 Oct 2026, second transponder). Each keeps its own query, and says
@@ -12344,9 +12478,9 @@ function drawAsks(message) {
   sec.appendChild(el('h3', '', 'Your details'));
   sec.appendChild(el('p', 'when', 'Ask the timing desk to change how you are called and shown. Nothing changes until the desk checks it.'));
 
-  // Their packs, cars and setup sheets have a page of their own (5 Nov
-  // 2026, asked for by Asher), opened with the same code.
-  sec.appendChild(garageLink());
+  // No link to the Garage and no "Log a setup change" here any more (5 Nov
+  // 2026, Asher: "remove links on your details for your packs, cars, setups
+  // and log a setup change"): on Me they are the Garage space, a tap away.
 
   // The battery pack first, because it changes on race night; the request
   // to change how they are called folded under it (28 Oct 2026), opened by
@@ -12357,10 +12491,6 @@ function drawAsks(message) {
     packs.className = 'su';
     sec.appendChild(packs);
   }
-
-  // A setup change, for the Garage's setup log, the Driver Hub and the
-  // technical lead's interview (4 Nov 2026) - see setupForm.
-  sec.appendChild(setupBox());
 
   const change = el('details', 'yd-change');
   change.open = view.details || !!message;
@@ -12635,73 +12765,6 @@ function detailsForm(message) {
 let packNode = null;
 let packFor = '';
 
-// THE SETUP LOG FROM THE PHONE (4 Nov 2026, Asher: "when you make an setup
-// log change on the relay it should update in the driver hub and feed into
-// the technical lead interview"). The setup sheet's five short parts and a
-// note, sent as a request the laptop files by itself into the Garage's
-// setup log: the Driver Hub lists it under the driver's setups, and the
-// technical lead's interview after a race they win reads it, as it reads a
-// setup logged at the desk. The same element on every redraw, so a half
-// typed change survives the next poll.
-let setupNode = null;
-
-function setupBox() {
-  if (setupNode === null) setupNode = setupForm();
-  return setupNode;
-}
-
-const SETUP_PARTS = [['tires', 'Tires'], ['gearing', 'Gearing'], ['springs', 'Springs'], ['ride', 'Ride height'], ['motor', 'Motor'], ['notes', 'Notes']];
-
-function setupForm() {
-  const part = el('details', 'yd-change setuplog');
-  part.open = view.setupOpen === true;
-  part.addEventListener('toggle', () => { view.setupOpen = part.open; });
-  part.appendChild(el('summary', '', 'Log a setup change'));
-  part.appendChild(el('p', 'when', 'What you changed on the car. It goes in your setup log at the desk, and the technical lead can talk about it after the race.'));
-
-  const inputs = {};
-  for (const [key, words] of SETUP_PARTS) {
-    const label = el('label', 'f', words);
-    const box = document.createElement(key === 'notes' ? 'textarea' : 'input');
-    if (key !== 'notes') box.type = 'text';
-    box.maxLength = key === 'notes' ? 300 : 80;
-    box.addEventListener('input', markEdited);
-    label.appendChild(box);
-    part.appendChild(label);
-    inputs[key] = box;
-  }
-
-  const said = el('p', 'yd-said', '');
-  said.setAttribute('role', 'status');
-
-  const send = tapButton('Add to my setup log', 'go quiet', async () => {
-    const parts = {};
-    for (const [key] of SETUP_PARTS) {
-      const v = String(inputs[key].value || '').trim();
-      if (v !== '') parts[key] = v;
-    }
-    if (Object.keys(parts).length === 0) {
-      said.textContent = 'Say what you changed.';
-      return;
-    }
-    send.disabled = true;
-    said.textContent = 'Sending\\u2026';
-    const got = await sendAsk('setup', parts);
-    send.disabled = false;
-    if (got.ok) {
-      for (const [key] of SETUP_PARTS) inputs[key].value = '';
-      edited = false;
-      said.textContent = 'Sent - it goes in your setup log in a few seconds.';
-    } else {
-      said.textContent = got.words;
-    }
-  });
-
-  part.appendChild(send);
-  part.appendChild(said);
-  return part;
-}
-
 function packBox() {
   const key = JSON.stringify(me && me.packs ? me.packs : null);
   if (packNode === null || key !== packFor) {
@@ -12770,20 +12833,7 @@ function packPart() {
 
   part.appendChild(send);
   part.appendChild(said);
-  part.appendChild(garageLink());
   return part;
-}
-
-// Their own garage page (5 Nov 2026): packs, pack charts, cars, photos and
-// setup sheets, with the same code in the fragment, never in the address.
-function garageLink() {
-  const p = el('p', 'note');
-  const a = el('a', 'more', 'Your packs, cars and setups \\u2192');
-  // This page's own fragment, which tuck() has already put the code in:
-  // the code itself is written into nothing new.
-  a.href = '/c/' + encodeURIComponent(CLUB) + '/garage' + (codeFrom(location.hash) ? location.hash : '');
-  p.appendChild(a);
-  return p;
 }
 
 // ---- polling the live part
@@ -12817,11 +12867,11 @@ async function refreshNight() {
 
   // asksOpen is in the key because each race card's "Something wrong?"
   // comes and goes with it (22 Oct 2026, driver experience, RP2).
-  const before = JSON.stringify([night, clips, asksOpen]);
+  const before = JSON.stringify([night, clips, asksOpen, queriesOff]);
   const was = live;
   take(a.body);
   if (live === null) live = was;
-  if (JSON.stringify([night, clips, asksOpen]) !== before) paintNight();
+  if (JSON.stringify([night, clips, asksOpen, queriesOff]) !== before) paintNight();
   const races = night && Array.isArray(night.races) ? night.races : [];
   if (alertsOn && racesSeen >= 0 && races.length > racesSeen) {
     const r = races[races.length - 1] || {};
@@ -13040,7 +13090,7 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // pit wall laid over all of that - see mespaces.ts: the status strip,
     // the moment card, the switch and the Tonight tiles under their name;
     // the Garage folded in as a space ("me-garage", the Garage page's own
-    // sections and script); Quick, its sheet and the empty note at the foot.
+    // sections and script); the pack-swap sheet and the empty note at the foot.
     body: `<style>${ME_CSS}${GARAGE_CSS}</style>` +
       '<div id="nh"></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="gd"></div><div id="ng"></div>' +
       '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div>' +

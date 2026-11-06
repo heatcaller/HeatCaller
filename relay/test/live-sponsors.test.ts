@@ -122,3 +122,15 @@ describe("counting what phones saw", () => {
     assert.equal(total(await views(), "s1")[0], 20);
   });
 });
+
+describe("sponsor slides fill the width (5 Nov 2026)", () => {
+  // Asher: "sponsor slides on relay should fill the width while maintaining
+  // aspect ratio" - on Live and Home's Sponsor of the night alike.
+  it("draws a picture edge to edge at its own shape, one to a row on Live", async () => {
+    const { livePage } = await import("../src/pages.js");
+    const page = livePage("acme-rc", "Acme RC");
+    assert.match(page, /\.sponsors \.spgrid \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+    assert.match(page, /\.sponsors \.sp > img, #spnight \.sp > img \{ display: block; width: 100%; height: auto; max-width: none; max-height: none;/);
+    assert.match(page, /\.sponsors \.sp:has\(> img\) \{ padding: 0;/);
+  });
+});

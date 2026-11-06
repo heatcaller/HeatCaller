@@ -58,6 +58,9 @@ public sealed partial class RelayPublisher
     /// <summary>What it was told: open or closed.</summary>
     private bool _asksOpenAsTold;
 
+    /// <summary>Whether result queries were on when it was told - a change is told at once, not at the next retell.</summary>
+    private bool _asksQueriesAsTold = true;
+
     /// <summary>How many times the relay has taken an OPEN - see DriverAsksOpenedCount.</summary>
     private int _asksOpenedCount;
 
@@ -167,6 +170,16 @@ public sealed partial class RelayPublisher
     private static bool AsksWanted(AppSettings settings) =>
         settings.RelayDriverRequests && settings.PublishDriverNightsToTheRelay;
 
+    /// <summary>
+    /// What driver/open is sent. "queries": false only when open with result
+    /// queries switched off (5 Nov 2026) - a relay from before the switch
+    /// ignores it, and leaving it out means on, as it always was.
+    /// </summary>
+    internal static string AsksOpenBody(bool open, bool resultQueries) =>
+        open && !resultQueries
+            ? JsonSerializer.Serialize(new { open, queries = false })
+            : JsonSerializer.Serialize(new { open });
+
     /// <summary>Tells the relay requests are open, reads the inbox, files what is there, then confirms what was filed.</summary>
     private void CollectDriverAsks(CancellationToken token)
     {
@@ -255,8 +268,10 @@ public sealed partial class RelayPublisher
     /// </summary>
     private bool TellTheRelayAsksAreOpen(RelayTarget target, string club, bool wanted, CancellationToken token)
     {
+        var queries = _settings.RelayResultQueries;
+
         if (_asksOpenToldTo == target && _asksOpenAsTold == wanted
-            && (!wanted || Environment.TickCount64 < _asksOpenRetellTick))
+            && (!wanted || (_asksQueriesAsTold == queries && Environment.TickCount64 < _asksOpenRetellTick)))
         {
             return true;
         }
@@ -265,8 +280,7 @@ public sealed partial class RelayPublisher
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, $"{target.Root}/api/v1/c/{club}/driver/open");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(new { open = wanted }), Encoding.UTF8, "application/json");
+            request.Content = new StringContent(AsksOpenBody(wanted, queries), Encoding.UTF8, "application/json");
 
             using var response = Send(request, token);
 
@@ -291,6 +305,7 @@ public sealed partial class RelayPublisher
 
             _asksOpenToldTo = target;
             _asksOpenAsTold = wanted;
+            _asksQueriesAsTold = queries;
             _asksOpenRetellTick = Environment.TickCount64 + (long)AsksOpenRetellEvery.TotalMilliseconds;
 
             if (reopened)

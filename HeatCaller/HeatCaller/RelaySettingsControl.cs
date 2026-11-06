@@ -85,6 +85,7 @@ public sealed class RelaySettingsControl : UserControl
     // everything else on this page that puts something new online or in
     // somebody's inbox.
     private readonly CheckBox _chkDriverRequests = new ThemedCheckBox();
+    private readonly CheckBox _chkResultQueries = new ThemedCheckBox();
     private readonly CheckBox _chkRelayCaptions = new ThemedCheckBox();
     private readonly CheckBox _chkNightEmail = new ThemedCheckBox();
     private readonly CheckBox _chkNightEmailAuto = new ThemedCheckBox();
@@ -659,7 +660,7 @@ public sealed class RelaySettingsControl : UserControl
             + "it can find or open. Needs online check-in set up. Unticking takes every night off the relay, "
             + "with any driver requests still waiting there.");
 
-        var (lblRequestsHint, lblNightEmailHint, lblNightEmailAutoHint, lblCaptionsHint) = BuildDriverExtras();
+        var (lblRequestsHint, lblQueriesHint, lblNightEmailHint, lblNightEmailAutoHint, lblCaptionsHint) = BuildDriverExtras();
 
         _chkAbbreviate.Text = "Shorten published names to a first name and an initial";
         _chkAbbreviate.AutoSize = true;
@@ -716,6 +717,8 @@ public sealed class RelaySettingsControl : UserControl
         // experience) - see StepIn.
         StepIn(card.Add(_chkDriverRequests, stretch: false, gapBelow: UiLayout.HintGap));
         StepIn(card.Add(lblRequestsHint));
+        StepIn(card.Add(_chkResultQueries, stretch: false, gapBelow: UiLayout.HintGap));
+        StepIn(card.Add(lblQueriesHint));
 
         card.Add(_chkNightEmail, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblNightEmailHint);
@@ -742,7 +745,7 @@ public sealed class RelaySettingsControl : UserControl
     /// kept: only the ticks and the night email's status line and button are
     /// spoken to again.
     /// </summary>
-    private (Label RequestsHint, Label NightEmailHint, Label NightEmailAutoHint, Label CaptionsHint) BuildDriverExtras()
+    private (Label RequestsHint, Label QueriesHint, Label NightEmailHint, Label NightEmailAutoHint, Label CaptionsHint) BuildDriverExtras()
     {
         _chkDriverRequests.Text = "Let drivers send changes from their phone";
         _chkDriverRequests.AutoSize = true;
@@ -766,6 +769,7 @@ public sealed class RelaySettingsControl : UserControl
                 _publisher.CloseDriverAsksOnTheRelay();
             }
 
+            RefreshDriverExtras();
             _publisher.SettingsChanged();
         };
 
@@ -773,6 +777,29 @@ public sealed class RelaySettingsControl : UserControl
             "Off by default. From their night page a driver can ask to change their details or battery pack, ask "
             + "to be kept more private online, or query a result. Nothing changes until the desk approves it. Needs "
             + "online check-in and the box above. Unticking throws away any requests still on the relay.");
+
+        // Result queries on a switch of their own (5 Nov 2026, Asher: "can
+        // you turn off the something wrong with a result from the app? if
+        // not add it to the club website tab"). Sent with the requests
+        // switch, so the relay hides "Something wrong?" and refuses a query
+        // within one publish pass; the other requests carry on.
+        _chkResultQueries.Text = "Let drivers query a result";
+        _chkResultQueries.AutoSize = true;
+        _chkResultQueries.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.RelayResultQueries = _chkResultQueries.Checked;
+            _settings.Save();
+            _publisher.SettingsChanged();
+        };
+
+        var lblQueriesHint = HintLabel(
+            "On by default. Shows \"Something wrong?\" under each race on a driver's night page. Untick it and "
+            + "drivers ask about a result at the desk instead; their other requests still work.");
 
         _chkNightEmail.Text = "Offer drivers their night by email";
         _chkNightEmail.AutoSize = true;
@@ -836,7 +863,7 @@ public sealed class RelaySettingsControl : UserControl
             "Off by default. What the announcer says, as text on the live page, for anyone who can't hear the PA "
             + "- no sound needed. Lines about drivers who asked to be shown by initials are left out.");
 
-        return (lblRequestsHint, lblNightEmailHint, lblNightEmailAutoHint, lblCaptionsHint);
+        return (lblRequestsHint, lblQueriesHint, lblNightEmailHint, lblNightEmailAutoHint, lblCaptionsHint);
     }
 
     /// <summary>
@@ -871,6 +898,7 @@ public sealed class RelaySettingsControl : UserControl
     private void RefreshDriverExtras()
     {
         _chkDriverRequests.Enabled = _settings.PublishDriverNightsToTheRelay && _settings.RelayCheckInEnabled;
+        _chkResultQueries.Enabled = _chkDriverRequests.Enabled && _settings.RelayDriverRequests;
         _chkNightEmailAuto.Enabled = _settings.NightEmailOffered;
 
         RefreshNightEmailState();
@@ -2877,6 +2905,7 @@ public sealed class RelaySettingsControl : UserControl
             _chkFullNamesAloud.Checked = _settings.SayFullNamesWithOnlineVoices;
             _chkFullNamesAloud.Enabled = _settings.RelayAbbreviateNames;
             _chkDriverRequests.Checked = _settings.RelayDriverRequests;
+            _chkResultQueries.Checked = _settings.RelayResultQueries;
             _chkNightEmail.Checked = _settings.NightEmailOffered;
             _chkNightEmailAuto.Checked = _settings.NightEmailAutomatic;
             _chkRelayCaptions.Checked = _settings.RelayCaptions;

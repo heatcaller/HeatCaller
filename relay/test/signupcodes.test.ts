@@ -213,7 +213,7 @@ describe("driver sign-up with the laptop's eight-digit codes", () => {
     assert.equal(page.status, 200);
     assert.match(page.text, /<meta name="robots" content="noindex, nofollow">/);
     assert.match(page.text, /<div id="su">/);
-    assert.match(page.text, /<span class="links"[^>]*><a href="https:\/\/acme-rc\.example\/"/);
+    assert.match(page.text, /<span class="links"[^>]*><a class="soc" href="https:\/\/acme-rc\.example\/"/);
 
     // The one script is the page's own, named by the nonce the policy allows.
     const nonce = /script-src 'nonce-([^']+)'/.exec(page.headers["content-security-policy"] ?? "")?.[1] ?? "";

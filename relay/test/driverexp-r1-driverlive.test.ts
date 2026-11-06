@@ -216,6 +216,34 @@ describe("a driver's night answer", () => {
     assert.equal(answer.body.asksOpen, undefined);
   });
 
+  it("turns result queries off on their own, and keeps the other requests (5 Nov 2026)", async () => {
+    await putNight(SAM);
+    await putNight(BILL);
+    const race = "fedcba9876543210fedcba9876543210";
+    const query = { id: BILL, kind: "query", f: { race, m: "I did 12 laps" } };
+    const ask = (json: unknown) => call(h, "POST", `${API}/driver/ask`, { json });
+
+    // A laptop from before the switch sends only "open": queries stay on.
+    assert.equal((await night({ id: BILL })).body.queriesOff, undefined);
+
+    const off = await call(h, "POST", `${API}/driver/open`, { token: ACME_TOKEN, json: { open: true, queries: false } });
+    assert.equal(off.status, 200);
+
+    const answer = await night({ id: BILL });
+    assert.equal(answer.body.asksOpen, true, "the other requests are still open");
+    assert.equal(answer.body.queriesOff, true);
+
+    const refused = await ask(query);
+    assert.equal(refused.status, 403);
+    assert.match(refused.body.error, /Ask at the desk/);
+    assert.equal((await ask({ id: BILL, kind: "pack", f: { pack: "none" } })).status, 200, "a pack swap still goes");
+
+    // Back on.
+    await setSwitch(h, "driver/open", true);
+    assert.equal((await night({ id: BILL })).body.queriesOff, undefined);
+    assert.equal((await ask(query)).status, 200);
+  });
+
   it("leaves out asksOpen for somebody not on tonight's check-in list", async () => {
     await putNight(OFF);
     const answer = await night({ id: OFF });
