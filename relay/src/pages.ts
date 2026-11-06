@@ -687,6 +687,25 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .trk-who { color: var(--muted); font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .trk-rec.none .trk-who { font-style: italic; }
 .trk-all { display: flex; align-items: center; justify-content: center; margin-top: 12px; text-decoration: none; }
+/* CHART LINES. Every chart - Live's position and lap charts, a race's
+   charts, Me's, the Garage's pack charts and the track map's dots - takes
+   its lines from --ln0 to --ln11. Every look keeps the original twelve...
+   */
+:root { --ln0: #F5C342; --ln1: #8EC5FF; --ln2: #E5484D; --ln3: #46A758; --ln4: #A77BEB; --ln5: #FF8B3E;
+        --ln6: #2EE6FF; --ln7: #FF2E9A; --ln8: #A0E85B; --ln9: #C9A04E; --ln10: #D9C2FF; --ln11: #7FD6C2; }
+/* ...except Synthwave (5 Nov 2026, Asher: "make the charts lines match the
+   synthwave look but still readable", then "confirm synthwave colors are
+   just for that theme. the original ones are fine for other themes").
+   Neon, ordered so places next to each other never share a family (pink,
+   cyan, sun yellow, violet, sunset orange, mint...), with a soft glow under
+   each line, kept faint so the line itself stays crisp. html.synthwave is
+   set by the page for the Synthwave look only (sunsetLook). */
+html.synthwave { --ln0: #FF2E9A; --ln1: #2EE6FF; --ln2: #FFD23F; --ln3: #B967FF; --ln4: #FF8A3D; --ln5: #3DF5B0;
+                 --ln6: #6C8CFF; --ln7: #FF5C5C; --ln8: #A0E85B; --ln9: #FF9DE2; --ln10: #00C2A8; --ln11: #E0C3FF; }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  html.synthwave .posg polyline, html.synthwave .gchart polyline {
+    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--c) 55%, transparent)); }
+}
 .lc-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0 18px; }
 .lc-pack { max-width: none; margin: 14px 0 0; gap: 8px; }
 .lc-pack h4 { margin: 0; font-size: 1rem; }
@@ -2048,7 +2067,7 @@ export function shell(page: Shell, context: PageContext): string {
   const links = anchors === "" ? "" : `<span class="links">${anchors}</span>`;
 
   return `<!doctype html>
-<html lang="en" class="${look.light ? "light" : "dark"}">
+<html lang="en" class="${look.light ? "light" : "dark"}${sunset ? " synthwave" : ""}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -2469,8 +2488,8 @@ function lapPanel(r, lengthS) {
 //
 // Built as markup like the rest of this page. Every number in it is one
 // this function made, and every name goes through esc().
-const LINE_COLOURS = ['#F5C342', '#8EC5FF', '#E5484D', '#46A758', '#A77BEB', '#FF8B3E',
-  '#2EE6FF', '#FF2E9A', '#A0E85B', '#C9A04E', '#D9C2FF', '#7FD6C2'];
+const LINE_COLOURS = ['var(--ln0)', 'var(--ln1)', 'var(--ln2)', 'var(--ln3)', 'var(--ln4)', 'var(--ln5)',
+  'var(--ln6)', 'var(--ln7)', 'var(--ln8)', 'var(--ln9)', 'var(--ln10)', 'var(--ln11)'];
 
 function positionGraph(results) {
   const drivers = (Array.isArray(results) ? results : [])
@@ -5077,8 +5096,8 @@ const posChart = (function () {
   const tbox = document.getElementById('livetimes');
   const tout = document.getElementById('ltimebody');
   const KEY = 'hg-livepos-' + CLUB;
-  const COLOURS = ['#F5C342', '#8EC5FF', '#E5484D', '#46A758', '#A77BEB', '#FF8B3E',
-    '#2EE6FF', '#FF2E9A', '#A0E85B', '#C9A04E', '#D9C2FF', '#7FD6C2'];
+  const COLOURS = ['var(--ln0)', 'var(--ln1)', 'var(--ln2)', 'var(--ln3)', 'var(--ln4)', 'var(--ln5)',
+    'var(--ln6)', 'var(--ln7)', 'var(--ln8)', 'var(--ln9)', 'var(--ln10)', 'var(--ln11)'];
   // d: name -> { c: colour, p: { lap: place } }; n: the next colour.
   let h = { d: {}, n: 0 };
   try {
@@ -10932,8 +10951,8 @@ function clipBlock(c, words) {
 //
 // Built from elements, never markup: every name in a result is the club's
 // typing, and goes in as text.
-const ME_COLOURS = ['#F5C342', '#8EC5FF', '#E5484D', '#46A758', '#A77BEB', '#FF8B3E',
-  '#2EE6FF', '#FF2E9A', '#A0E85B', '#C9A04E', '#D9C2FF', '#7FD6C2'];
+const ME_COLOURS = ['var(--ln0)', 'var(--ln1)', 'var(--ln2)', 'var(--ln3)', 'var(--ln4)', 'var(--ln5)',
+  'var(--ln6)', 'var(--ln7)', 'var(--ln8)', 'var(--ln9)', 'var(--ln10)', 'var(--ln11)'];
 const JUST_ME_KEY = 'hg-night-just-me';
 
 // The tick, as this phone last left it: read the first time a chart is

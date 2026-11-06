@@ -104,6 +104,9 @@ export const GARAGE_CSS = `
 .gpal { --gp0: var(--accent); --gp1: var(--primary); --gp2: #F5C342; --gp3: #3DD68C; --gp4: #A77BEB; --gp5: #FF8B3E;
         --gp6: #8EC5FF; --gp7: #E5484D; }
 html.light .gpal { --gp2: #9A6B00; --gp3: #1B7F4B; --gp4: #6B3FB5; --gp5: #C2541A; --gp6: #2F5FA8; --gp7: #B3261E; }
+/* Synthwave's neon lines on Synthwave only (5 Nov 2026) - see --ln0 to --ln11 in pages.ts. */
+html.synthwave .gpal { --gp0: var(--ln0); --gp1: var(--ln1); --gp2: var(--ln2); --gp3: var(--ln3); --gp4: var(--ln4);
+                       --gp5: var(--ln5); --gp6: var(--ln6); --gp7: var(--ln7); }
 .gchart { margin-top: 4px; }
 .gx figcaption { text-transform: none; letter-spacing: normal; font-weight: 400; margin: 6px 0 0; }
 .gchart .zero { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
