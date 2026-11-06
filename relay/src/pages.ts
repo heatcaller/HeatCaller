@@ -5520,6 +5520,24 @@ function drawBoard(state) {
   if (card) card.scrollLeft = left;
 }
 
+// How long this page has been watching without a break, for settling Who
+// wins? picks (2026-11-05, Bug hunt 11). The relay holds only the newest
+// board, and a page hidden or closed reads nothing, so a phone locked from
+// its pick until the next race was under way never saw the race it voted
+// on finish - and the next race's finish settled the pick instead.
+// watchingSince is when the reads last started again after a break of
+// more than LOOK_GAP_MS (this phone's clock, as a pick's time is).
+const LOOK_GAP_MS = 15000;
+let lastLook = 0;
+let watchingSince = 0;
+
+// The leader's race so far, in ms: the flying laps (the start lap is not
+// sent, so a little short of the race). 0 when there are none.
+function raceMsOf(row) {
+  const laps = row && Array.isArray(row.laps) ? row.laps.filter((v) => typeof v === 'number' && v > 0) : [];
+  return laps.reduce((a, b) => a + b, 0);
+}
+
 // at: when the laptop published this board. empty: what to say when there
 // is no board, and no last race to keep up either.
 function render(state, seen, at, empty) {
@@ -5566,7 +5584,7 @@ function render(state, seen, at, empty) {
 
   const over = running === 'Finished';
   // A finished race settles this phone's Who wins? picks (4 Nov 2026).
-  if (over && rows[0] && typeof rows[0].name === 'string' && typeof picksSettle === 'function') picksSettle(rows[0].name, at || Date.now());
+  if (over && rows[0] && typeof rows[0].name === 'string' && typeof picksSettle === 'function') picksSettle(rows[0].name, at || Date.now(), raceMsOf(rows[0]), watchingSince);
   drawBar(state, over, at, rows);
   keepRace(state, at || Date.now());
   posChart.take(rows);
@@ -5591,6 +5609,11 @@ async function load() {
     boardHtml = '';
     return;
   }
+
+  // A read that answered: still watching, or watching again after a break.
+  const looked = Date.now();
+  if (lastLook === 0 || looked - lastLook > LOOK_GAP_MS) watchingSince = looked;
+  lastLook = looked;
 
   if (answer.missing) {
     render({}, true, 0, 'No race has been published yet.');
@@ -5825,12 +5848,25 @@ function picksAdd(race, name) {
 }
 
 // A race has finished at finishedAt with winner first: settle the picks waiting for it.
-function picksSettle(winner, finishedAt) {
+//
+// Only a race this page can tell was the pick's (2026-11-05, Bug hunt 11):
+// the first finish it saw after a pick was taken as the pick's race, but a
+// phone locked from its vote until the next race was running never saw
+// the voted race finish, and the next one's settled the pick - often as
+// wrong. raceMs is how long the finished race ran, watchingSince when this
+// page last started reading again after a break (left out: it never
+// stopped). A pick is settled when the page has watched since it was made,
+// or when the finish came too soon after it for another whole race to have
+// run first. Otherwise its race may have finished unseen: it is put aside
+// as missed, and counts neither way.
+function picksSettle(winner, finishedAt, raceMs, watchingSince) {
   const list = picksRead();
   let changed = false;
   for (const x of list) {
     if (x.right === null && finishedAt > x.at && finishedAt - x.at < 3 * 3600000) {
-      x.right = x.name === winner;
+      const watched = typeof watchingSince !== 'number' || watchingSince <= x.at;
+      const soon = typeof raceMs === 'number' && raceMs > 0 && finishedAt - x.at < 2 * raceMs;
+      x.right = watched || soon ? x.name === winner : 'missed';
       changed = true;
     }
   }
@@ -6420,6 +6456,14 @@ const LISTEN_JS = `
   // and queueing, the same line.)
   let sweeping = false;
 
+  // Which sweep holds sweeping (2026-11-05, Bug hunt 11: rejoin clears
+  // sweeping so a stuck sweep from before cannot hold up the new one, and
+  // that old sweep's finally then cleared it again under the new sweep -
+  // so the next tick started a second sweep that fetched and played the
+  // newest stretch twice, one over the other). Only the sweep that set the
+  // flag last may clear it.
+  let sweepId = 0;
+
   // When the page was hidden, for the catch-up on coming back.
   let hiddenAt = 0;
 
@@ -6452,11 +6496,15 @@ const LISTEN_JS = `
     }
 
     sweeping = true;
+    sweepId += 1;
+    const me = sweepId;
 
     try {
       await sweepOnce();
     } finally {
-      sweeping = false;
+      if (sweepId === me) {
+        sweeping = false;
+      }
     }
   }
 
@@ -7278,9 +7326,19 @@ function planAt(text, dayOf) {
   if (pm && h < 12) h += 12;
   if (am && h === 12) h = 0;
   if (h > 23 || m > 59) return NaN;
-  const d = new Date(dayOf);
-  d.setHours(h, m, 0, 0);
-  return d.getTime();
+  // On whichever day - the one before, the same or the one after - puts it
+  // nearest dayOf (2026-11-05, Bug hunt 11): a night past midnight read a
+  // 23:55 line started at 00:10 as 1425 min ahead. The laptop's
+  // ScheduleDrift.MinutesOff does the same.
+  let best = NaN;
+  for (const shift of [-1, 0, 1]) {
+    const d = new Date(dayOf);
+    d.setDate(d.getDate() + shift);
+    d.setHours(h, m, 0, 0);
+    const t = d.getTime();
+    if (!Number.isFinite(best) || Math.abs(t - dayOf) < Math.abs(best - dayOf)) best = t;
+  }
+  return best;
 }
 
 // Minutes behind (negative: ahead) by the latest line that has started, or null.
@@ -7766,9 +7824,17 @@ async function lastNight() {
   let fast = null;
   const close = [];
   const raceIds = new Set(sessions.filter((x) => x.type === 'Race').map((x) => String(x.id || '')));
+  // 2026-11-05, Bug hunt 11: a results read that failed (busy - a paddock
+  // of phones on one address gets 429s - or the connection dropped) was
+  // kept as the night, with no fastest lap and no photo finishes, until
+  // the club next published. The night still shows from the index, but
+  // like a failed year read it is not marked read, so the next poll asks
+  // again. A 404 is an answer, as grab keeps it.
+  let readAll = true;
 
   if (ids.length > 0) {
     const answer = await grab('/collection/results?ids=' + ids.map(encodeURIComponent).join(',')).catch(() => null);
+    if (answer === null || (answer.missing && answer.status !== 404)) readAll = false;
     const list = answer && !answer.missing && Array.isArray(answer.body.items) ? answer.body.items : [];
 
     for (const item of list) {
@@ -7792,7 +7858,7 @@ async function lastNight() {
     }
   }
 
-  nightSig = sig;
+  if (readAll) nightSig = sig;
   nightHeld = { day: String(first.day || ''), sessions, fast, close };
   return nightHeld;
 }
@@ -8080,9 +8146,20 @@ function clockOn(text, dayOf) {
   if (half === 'pm' && h < 12) h += 12;
   if (half === 'am' && h === 12) h = 0;
   if (h > 23 || min > 59) return NaN;
-  const d = new Date(dayOf);
-  d.setHours(h, min, 0, 0);
-  return d.getTime();
+  // On whichever day - the one before, the same or the one after - puts it
+  // nearest dayOf (2026-11-05, Bug hunt 11): a night past midnight read a
+  // 23:55 line started at 00:10 as 1425 min early, and a 00:20 line not
+  // yet started, seen at 23:50, as a day early. The laptop's
+  // ScheduleDrift.MinutesOff does the same.
+  let best = NaN;
+  for (const shift of [-1, 0, 1]) {
+    const d = new Date(dayOf);
+    d.setDate(d.getDate() + shift);
+    d.setHours(h, min, 0, 0);
+    const t = d.getTime();
+    if (!Number.isFinite(best) || Math.abs(t - dayOf) < Math.abs(best - dayOf)) best = t;
+  }
+  return best;
 }
 
 function clockWords(ms) {
