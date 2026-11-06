@@ -132,6 +132,26 @@ internal static class DriverNightExtras
                 && DriverRating.ForSession(session).TryGetValue(row.Transponder ?? string.Empty, out var rated) ? rated : null;
             var practice = kind == PracticeKind;
 
+            // WHY (2026-11-05, Bug hunt 11: the grid place): StartPosition is
+            // the raw grid slot, which counts no-shows on a stated roster and
+            // ghosts dragged to the front, while PosAt (LapByLap) counts only
+            // the real cars on track. Sent raw, the driver behind a slot-1
+            // no-show who led lap 1 read "started 2nd" and "Gained 1 place"
+            // having passed nobody, while the Charge badge and NightMoments
+            // put them on pole. Now the same rule NightMoments' Charge moment
+            // follows: the place among real cars that turned a lap and lined
+            // up ahead (AchievementEvaluator.GridPlace, no ghosts, no DQs),
+            // and a slot past the field - left over from a bigger race - is
+            // no grid position at all.
+            var gridField = results.Count(r => r is not null && !string.IsNullOrWhiteSpace(r.Transponder));
+            var realCars = results
+                .Where(r => r is not null && !string.IsNullOrWhiteSpace(r.Transponder) && !Ghosts.IsGhost(r.Transponder))
+                .Where(r => !string.Equals((r.Outcome ?? string.Empty).Trim(), ResultEditor.Dq, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var grid = row.StartPosition > 0 && row.StartPosition <= gridField
+                ? AchievementEvaluator.GridPlace(realCars, row)
+                : 0;
+
             races.Add(new NightRace
             {
                 Sid = session.Id,
@@ -145,7 +165,7 @@ internal static class DriverNightExtras
                 // Ghosts are recordings racing alongside, not drivers, so
                 // "4th of 6" counts the people.
                 Of = results.Count(r => r is not null && !Ghosts.IsGhost(r.Transponder)),
-                Start = !practice && row.StartPosition > 0 ? row.StartPosition : null,
+                Start = !practice && grid > 0 ? grid : null,
                 Laps = row.Laps,
                 BestMs = row.FastLapMs,
                 LapsMs = laps.Count > 0 ? laps : null,
