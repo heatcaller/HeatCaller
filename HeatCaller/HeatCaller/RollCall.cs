@@ -22,6 +22,55 @@ internal static class RollCall
     /// <summary>How long before the roll call began a pass still counts.</summary>
     internal static readonly TimeSpan Grace = TimeSpan.FromMinutes(2);
 
+    /// <summary>When the last race finished (DateTime.UtcNow ticks), or 0 before any has this session. Any thread.</summary>
+    private static long _lastFinishTicks;
+
+    /// <summary>When the last race finished, or null before any has this session.</summary>
+    public static DateTime? LastFinishUtc
+    {
+        get
+        {
+            var ticks = Interlocked.Read(ref _lastFinishTicks);
+            return ticks == 0 ? null : new DateTime(ticks, DateTimeKind.Utc);
+        }
+    }
+
+    /// <summary>Notes that a race has just finished. Any thread; a later finish always wins.</summary>
+    public static void NoteFinish(DateTime finishedUtc)
+    {
+        var ticks = finishedUtc.Ticks;
+        long seen;
+
+        do
+        {
+            seen = Interlocked.Read(ref _lastFinishTicks);
+
+            if (ticks <= seen)
+            {
+                return;
+            }
+        }
+        while (Interlocked.CompareExchange(ref _lastFinishTicks, ticks, seen) != seen);
+    }
+
+    /// <summary>
+    /// Since when a pass counts as heard for a roll call beginning at
+    /// <paramref name="nowUtc"/>: the grace before it, but never from before
+    /// <paramref name="lastFinishUtc"/>.
+    ///
+    /// WHY (2026-11-05, Bug hunt 11: the Big Screen's roll call started from
+    /// now less the grace with no regard for the last finish, so a heat
+    /// staged inside two minutes of the one before counted that heat's
+    /// passes - a transponder that died on its last lap showed HEARD, even
+    /// "ALL n CARS HEARD - READY", while Mission Control, clamped to the
+    /// finish, still said waiting. The same rule as Mission Control's now.)
+    /// </summary>
+    public static DateTime Since(DateTime nowUtc, DateTime? lastFinishUtc)
+    {
+        var graced = nowUtc - Grace;
+        return lastFinishUtc is { } finished && finished > graced ? finished : graced;
+    }
+
     public enum State
     {
         Waiting,
