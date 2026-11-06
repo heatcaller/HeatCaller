@@ -184,6 +184,17 @@ public sealed partial class RaceDayService
                                 + "The results on the track's Wi-Fi pages are always up to date.");
         }
 
+        // 2026-11-05, Bug hunt 11: a race whose filing failed (race-history.json
+        // locked, SessionHistoryStore.Add returned false) is still in History.All,
+        // so it shows on /manage - but nothing publishes a race that is not on
+        // disk (SessionHistoryStore.Saved / SavedView). This op was the one way
+        // round that rule, leaving a result on the relay the laptop could forget.
+        if (_host.History.IsUnsaved(session))
+        {
+            throw new OpRefused("This race isn't saved to the race history yet (the laptop couldn't write the file) - "
+                                + "it can't be published until it is. Save it on the laptop first.");
+        }
+
         _host.RepublishSession(session);
 
         return OpResult.Done($"Re-sent \"{session.Label}\" to the online results", "Sent to the online results page.");

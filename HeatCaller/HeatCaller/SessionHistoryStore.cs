@@ -403,10 +403,32 @@ public sealed class SessionHistoryStore
             _deletedUnfiled.Add(unfiled);
         }
 
+        var removed = _sessions.Where(s => s.Id == id).ToList();
+
         _sessions.RemoveAll(s => s.Id == id);
         _unsaved.RemoveWhere(s => s.Id == id);
-        return Save();
+        var saved = Save();
+
+        // WHY (2026-11-05, Bug hunt 11: a deleted race's penalty lines and
+        // report cards stayed on the Wi-Fi phone pages until the next race
+        // was filed - nothing told MainForm a race had gone). Raised whether
+        // or not the write landed: the race is out of All either way, and
+        // All is what the listeners read back.
+        foreach (var record in removed)
+        {
+            RaiseEach(SessionDeleted, record);
+        }
+
+        return saved;
     }
+
+    /// <summary>
+    /// Raised after a session has been removed by Delete - Race History's
+    /// delete and its undo of a paste, and a race day deleted whole. Same
+    /// threading rule as SessionAdded: raised on the calling thread (always
+    /// the UI thread), and a handler must not throw.
+    /// </summary>
+    public event Action<SessionRecord>? SessionDeleted;
 
     /// <summary>
     /// For an undo of a delete: puts back a record that was deleted before it

@@ -491,6 +491,18 @@ public static class ResultEditor
         // race left those out of the best; taking the slower of the two is
         // what stops one becoming a driver's best the moment a phantom
         // crossing comes off. A race that recorded no best keeps none.
+        //
+        // Bug hunt 11 (2026-11-05): when the fold leaves no flying lap at
+        // all - the only one was the phantom - there is nothing for the
+        // race's best to be "the slower of", and keeping it kept the
+        // phantom's time as a best lap the result no longer has (and hid a
+        // record it set from RecordLapTakenOff). No lap left, no best - what
+        // RaceControlSession.RecomputeAfterLapRemoval gives for the same -1.
+        if (rebuilt == 0)
+        {
+            return (times, 0);
+        }
+
         return (times, raced.FastLapMs > 0 ? Math.Max(raced.FastLapMs, rebuilt) : 0);
     }
 

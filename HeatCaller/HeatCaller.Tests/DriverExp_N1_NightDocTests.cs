@@ -85,9 +85,9 @@ public sealed class DriverExp_N1_NightDocTests
     public void Each_race_carries_its_place_field_grid_laps_and_best()
     {
         var heat = Race("Heat 2", Tonight.AddHours(-1),
-            Row(Sam, 2, start: 4, laps: new long[] { 9000, 8500, 8400 }, best: 8400),
-            Row(Kim, 1),
-            Row(Ghost, 3));
+            Row(Sam, 2, start: 3, laps: new long[] { 9000, 8500, 8400 }, best: 8400),
+            Row(Kim, 1, start: 1),
+            Row(Ghost, 3, start: 2));
 
         var race = Assert.Single(DriverNightExtras.Races(Sam, new[] { heat }, null));
 
@@ -95,7 +95,7 @@ public sealed class DriverExp_N1_NightDocTests
         Assert.Equal("Heat 2", race.Label);
         Assert.Equal(2, race.Pos);
         Assert.Equal(2, race.Of); // the ghost is a recording, not a driver
-        Assert.Equal(4, race.Start);
+        Assert.Equal(2, race.Start); // slot 3, behind the ghost: 2nd of the real cars (bug hunt 11)
         Assert.Equal(3, race.Laps);
         Assert.Equal(8400, race.BestMs);
         Assert.Equal(new long[] { 8500, 8400 }, race.LapsMs!);

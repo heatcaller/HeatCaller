@@ -39,6 +39,30 @@ public sealed class AchievementStore
 
                 if (loaded is not null)
                 {
+                    // WHY (2026-11-05, Bug hunt 11: a hand-edited or restored
+                    // file can say null where the app never writes one): a
+                    // null driver, "Unlocked": null or "TrackRecords": null
+                    // made every race's badge evaluation throw in For() or
+                    // Has(), which the caller only logs - so no badge and no
+                    // running total was saved again until somebody found the
+                    // file. Repaired as RivalryStore does (Bug Hunt 8, A11-1).
+                    loaded.RemoveAll(d => d is null);
+
+                    foreach (var driver in loaded)
+                    {
+                        driver.Transponder ??= string.Empty;
+                        driver.Unlocked ??= new List<UnlockedAchievement>();
+                        driver.Unlocked.RemoveAll(u => u is null);
+                        driver.TrackRecords ??= new List<string>();
+                        driver.TrackRecords.RemoveAll(t => t is null);
+
+                        foreach (var unlocked in driver.Unlocked)
+                        {
+                            unlocked.Id ??= string.Empty;
+                            unlocked.Detail ??= string.Empty;
+                        }
+                    }
+
                     return new AchievementStore(loaded);
                 }
             }

@@ -124,6 +124,23 @@ public sealed class TrackLayout
         {
             var marked = decals.Where(d => d is not null && d.Kind == kind).ToList();
 
+            // 2026-11-05 Bug hunt 11: a finish line across a lane two or more
+            // tiles wide is one FinishLine decal per tile ("Build me a track"
+            // always lays it so), and demanding exactly one left every such
+            // plan on the bare count - so moving a split loop never changed
+            // the cut and old sector records stayed current. Key the finish
+            // on the first FinishLine decal, as MeasureSectors does; only the
+            // split loops must be one of each.
+            //
+            // 5 Nov 2026, Bug hunt 11 review: "first" was list order, so the
+            // same plan saved with its finish tiles the other way round got a
+            // different cut and lost its sector records. Key on the top-left
+            // tile (lowest Row, then Col), which MeasureSectors tries first.
+            if (kind == RcpDecalKind.FinishLine && marked.Count > 1)
+            {
+                marked = marked.OrderBy(d => d.Row).ThenBy(d => d.Col).Take(1).ToList();
+            }
+
             if (marked.Count != 1)
             {
                 return count;
@@ -262,12 +279,22 @@ public sealed class TrackLayout
         // where they have just been drawn, so they carry over to them.
         var bare = sectors.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        if (cut != bare
-            && !SectorRecordsByCut.ContainsKey(cut)
+        var firstPlacement = cut != bare && !SectorRecordsByCut.ContainsKey(cut);
+
+        if (firstPlacement
             && SectorRecordsByCut.Remove(bare, out var earlier)
             && earlier is not null)
         {
             SectorRecordsByCut[cut] = earlier;
+        }
+
+        // 5 Nov 2026, Bug hunt 11 review: the record lap's sectors kept with
+        // the bare count carry over to the same placement as the sector
+        // records (see RecordSectorsAsCutNow), so moving a loop after this
+        // puts them aside too.
+        if (firstPlacement && RecordSectorCut == bare)
+        {
+            RecordSectorCut = cut;
         }
 
         var current = CurrentSectorRecords(sectors.Length);
@@ -381,9 +408,26 @@ public sealed class TrackLayout
     public long[]? RecordSectorsAsCutNow(int sectors) =>
         RecordSectors() is { } record
         && record.Length == sectors
-        && (RecordSectorCut is null || RecordSectorCut == CutFor(sectors))
+        && (RecordSectorCut is null || RecordSectorCut == CutFor(sectors) || IsCarriedOverBareCut(RecordSectorCut, sectors))
             ? record
             : null;
+
+    /// <summary>
+    /// 5 Nov 2026, Bug hunt 11 review: a record lap saved with the bare count
+    /// as its cut (the loops not on the plan yet, or a multi-tile finish from
+    /// before CutFor keyed on it - "2" now "2:c,r;...") still counts for the
+    /// loops where they are now until a lap is offered with them, just as
+    /// the sector records under the bare count do (CurrentSectorRecords,
+    /// OfferSectors). Without it the upgrade lost the record-pace sectors.
+    /// </summary>
+    private bool IsCarriedOverBareCut(string cut, int sectors)
+    {
+        var now = CutFor(sectors);
+
+        return cut == sectors.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            && now != cut
+            && SectorRecordsByCut?.ContainsKey(now) != true;
+    }
 
     /// <summary>Keeps a record lap's sectors with the cut they were taken with - null clears both.</summary>
     public void KeepRecordSectors(IReadOnlyList<long>? sectors)
