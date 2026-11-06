@@ -1777,7 +1777,10 @@ if (FRAMED) {
     try { url = new URL(a.href, location.href); } catch (err) { return; }
     const home = '/c/' + encodeURIComponent(CLUB);
     if (url.origin !== location.origin || (url.pathname !== home && url.pathname.indexOf(home + '/') !== 0)) return;
-    if (/\.[A-Za-z0-9]+$/.test(url.pathname) || url.pathname.indexOf(home + '/clip/') === 0) return;
+    // WHY (2026-11-05, Bug hunt 11: a doubled backslash): this sits in a
+    // template literal, where a lone backslash-dot cooks to a bare dot, so
+    // "looks like a file" matched every club page and no link reached hcGo.
+    if (/\\.[A-Za-z0-9]+$/.test(url.pathname) || url.pathname.indexOf(home + '/clip/') === 0) return;
     if (url.pathname === location.pathname && url.search === location.search) return;
     let go = null;
     try { go = parent.hcGo; } catch (err) { return; }
@@ -3118,8 +3121,19 @@ function moreFor(left) {
 // many drivers came and how many a night, first-timers and how many of them
 // came back - and a bar for each night. Counted from the results index the
 // page already has, by driver as the index lists them; no names shown.
+//
+// WHY (2026-11-05, Bug hunt 11: oldest night first): the laptop's index
+// lists days newest first (RelayResultsIndex), but everything below reads
+// index 0 as the oldest night - first-timers were each driver's newest
+// night and the bars ran backwards under "oldest first". Put in date
+// order here, whichever way round they arrive.
 function clubHealth() {
-  const days = Array.isArray(idx.days) ? idx.days : [];
+  const days = (Array.isArray(idx.days) ? idx.days : []).slice()
+    .sort((a, b) => {
+      const x = String(a && a.day ? a.day : '');
+      const y = String(b && b.day ? b.day : '');
+      return x < y ? -1 : x > y ? 1 : 0;
+    });
   const raced = Array.isArray(idx.raced) ? idx.raced : [];
   if (days.length < 2) return '';
   const dayOf = new Map();
@@ -3206,18 +3220,37 @@ async function drawDays() {
 // finished ahead how often - the head-to-head a driver checks after a
 // night. Only drivers met at least twice, the five met most; a race whose
 // result does not have them (by the name on it) counts for nobody.
+//
+// WHY (2026-11-05, Bug hunt 11: rivals by the index's name): the driver's
+// own row was found by exact name, but each heat shortens names among its
+// own drivers only, so the index's "Alex Ken" is "Alex K" in a heat Alex
+// Kemp did not race - that race was skipped. Found with myRow() now, as
+// the cards below are, and each rival tallied under the index's name for
+// them (the one the alike() rule picks out, when only one does), so a
+// rival shortened two ways in two heats is still one rival.
+function rivalKey(name) {
+  const list = idx && Array.isArray(idx.drivers)
+    ? idx.drivers.map((d) => (d !== null && typeof d === 'object' ? String(d.n ?? '') : '')).filter((n) => n !== '')
+    : [];
+  const exact = list.filter((n) => n.toLowerCase() === name.toLowerCase());
+  if (exact.length === 1) return exact[0];
+  const close = list.filter((n) => alike(n, name));
+  return close.length === 1 ? close[0] : name;
+}
+
 function rivalsOf(lines, got, who) {
   const met = new Map();
   for (const line of lines) {
     const body = got.get(line.id);
-    const rows = body && Array.isArray(body.results) ? body.results : [];
-    const me = rows.find((r) => r && r.name === who);
+    const rows = body && Array.isArray(body.results) ? body.results.filter((r) => r !== null && typeof r === 'object') : [];
+    const me = myRow(rows, who);
     if (!me || !(Number(me.pos) > 0)) continue;
     for (const r of rows) {
       if (!r || r === me || !(Number(r.pos) > 0) || typeof r.name !== 'string' || r.name === '' || r.name === 'Unnamed driver') continue;
-      const tally = met.get(r.name) || { name: r.name, ahead: 0, behind: 0 };
+      const key = rivalKey(r.name);
+      const tally = met.get(key) || { name: key, ahead: 0, behind: 0 };
       if (Number(me.pos) < Number(r.pos)) tally.ahead++; else tally.behind++;
-      met.set(r.name, tally);
+      met.set(key, tally);
     }
   }
   const top = [...met.values()].filter((t) => t.ahead + t.behind >= 2)
@@ -3805,6 +3838,10 @@ async function loadFlat() {
 
   for (const item of sorted) {
     const body = item.body || {};
+    // WHY (2026-11-05, Bug hunt 11: View laps in the flat listing): the
+    // toggle writes a driver's lap panel from bodyOf, which only bodies()
+    // filled - here View laps opened empty until the next redraw.
+    bodyOf.set(item.id, body);
     const d = when(body, item.publishedAt);
     const iso = d ? isoOf(d) : '';
     const label = d ? dayLabel(iso) : 'Undated';
@@ -5483,6 +5520,24 @@ function drawBoard(state) {
   if (card) card.scrollLeft = left;
 }
 
+// How long this page has been watching without a break, for settling Who
+// wins? picks (2026-11-05, Bug hunt 11). The relay holds only the newest
+// board, and a page hidden or closed reads nothing, so a phone locked from
+// its pick until the next race was under way never saw the race it voted
+// on finish - and the next race's finish settled the pick instead.
+// watchingSince is when the reads last started again after a break of
+// more than LOOK_GAP_MS (this phone's clock, as a pick's time is).
+const LOOK_GAP_MS = 15000;
+let lastLook = 0;
+let watchingSince = 0;
+
+// The leader's race so far, in ms: the flying laps (the start lap is not
+// sent, so a little short of the race). 0 when there are none.
+function raceMsOf(row) {
+  const laps = row && Array.isArray(row.laps) ? row.laps.filter((v) => typeof v === 'number' && v > 0) : [];
+  return laps.reduce((a, b) => a + b, 0);
+}
+
 // at: when the laptop published this board. empty: what to say when there
 // is no board, and no last race to keep up either.
 function render(state, seen, at, empty) {
@@ -5529,7 +5584,7 @@ function render(state, seen, at, empty) {
 
   const over = running === 'Finished';
   // A finished race settles this phone's Who wins? picks (4 Nov 2026).
-  if (over && rows[0] && typeof rows[0].name === 'string' && typeof picksSettle === 'function') picksSettle(rows[0].name, at || Date.now());
+  if (over && rows[0] && typeof rows[0].name === 'string' && typeof picksSettle === 'function') picksSettle(rows[0].name, at || Date.now(), raceMsOf(rows[0]), watchingSince);
   drawBar(state, over, at, rows);
   keepRace(state, at || Date.now());
   posChart.take(rows);
@@ -5554,6 +5609,11 @@ async function load() {
     boardHtml = '';
     return;
   }
+
+  // A read that answered: still watching, or watching again after a break.
+  const looked = Date.now();
+  if (lastLook === 0 || looked - lastLook > LOOK_GAP_MS) watchingSince = looked;
+  lastLook = looked;
 
   if (answer.missing) {
     render({}, true, 0, 'No race has been published yet.');
@@ -5764,9 +5824,13 @@ const VOTE_JS = `
 // THE WHO WINS? RECORD (4 Nov 2026, from the relay roadmap Asher asked to
 // have built): this phone's picks and how many came right - the season
 // table a prediction game needs, for the one person who can see it. Kept
-// on this phone only, as the vote itself is anonymous. A pick is settled by
-// the first finished race after it was made, which is the race the vote
-// was for: voting is only ever open for the race about to run.
+// on this phone only, as the vote itself is anonymous. Voting is only ever
+// open for the race about to run, so a pick belongs to the first race to
+// finish after it - but it is settled right or wrong only when this page
+// can tell it saw that race finish (it kept watching since the pick, or the
+// finish came too soon for another whole race to have run first). Otherwise
+// it is marked 'missed' and counts neither way (5 Nov 2026, Bug hunt 11
+// review; see picksSettle).
 const PICKS_KEY = 'hg-picks-' + CLUB;
 
 function picksRead() {
@@ -5788,12 +5852,25 @@ function picksAdd(race, name) {
 }
 
 // A race has finished at finishedAt with winner first: settle the picks waiting for it.
-function picksSettle(winner, finishedAt) {
+//
+// Only a race this page can tell was the pick's (2026-11-05, Bug hunt 11):
+// the first finish it saw after a pick was taken as the pick's race, but a
+// phone locked from its vote until the next race was running never saw
+// the voted race finish, and the next one's settled the pick - often as
+// wrong. raceMs is how long the finished race ran, watchingSince when this
+// page last started reading again after a break (left out: it never
+// stopped). A pick is settled when the page has watched since it was made,
+// or when the finish came too soon after it for another whole race to have
+// run first. Otherwise its race may have finished unseen: it is put aside
+// as missed, and counts neither way.
+function picksSettle(winner, finishedAt, raceMs, watchingSince) {
   const list = picksRead();
   let changed = false;
   for (const x of list) {
     if (x.right === null && finishedAt > x.at && finishedAt - x.at < 3 * 3600000) {
-      x.right = x.name === winner;
+      const watched = typeof watchingSince !== 'number' || watchingSince <= x.at;
+      const soon = typeof raceMs === 'number' && raceMs > 0 && finishedAt - x.at < 2 * raceMs;
+      x.right = watched || soon ? x.name === winner : 'missed';
       changed = true;
     }
   }
@@ -6383,6 +6460,14 @@ const LISTEN_JS = `
   // and queueing, the same line.)
   let sweeping = false;
 
+  // Which sweep holds sweeping (2026-11-05, Bug hunt 11: rejoin clears
+  // sweeping so a stuck sweep from before cannot hold up the new one, and
+  // that old sweep's finally then cleared it again under the new sweep -
+  // so the next tick started a second sweep that fetched and played the
+  // newest stretch twice, one over the other). Only the sweep that set the
+  // flag last may clear it.
+  let sweepId = 0;
+
   // When the page was hidden, for the catch-up on coming back.
   let hiddenAt = 0;
 
@@ -6415,11 +6500,15 @@ const LISTEN_JS = `
     }
 
     sweeping = true;
+    sweepId += 1;
+    const me = sweepId;
 
     try {
       await sweepOnce();
     } finally {
-      sweeping = false;
+      if (sweepId === me) {
+        sweeping = false;
+      }
     }
   }
 
@@ -7241,9 +7330,19 @@ function planAt(text, dayOf) {
   if (pm && h < 12) h += 12;
   if (am && h === 12) h = 0;
   if (h > 23 || m > 59) return NaN;
-  const d = new Date(dayOf);
-  d.setHours(h, m, 0, 0);
-  return d.getTime();
+  // On whichever day - the one before, the same or the one after - puts it
+  // nearest dayOf (2026-11-05, Bug hunt 11): a night past midnight read a
+  // 23:55 line started at 00:10 as 1425 min ahead. The laptop's
+  // ScheduleDrift.MinutesOff does the same.
+  let best = NaN;
+  for (const shift of [-1, 0, 1]) {
+    const d = new Date(dayOf);
+    d.setDate(d.getDate() + shift);
+    d.setHours(h, m, 0, 0);
+    const t = d.getTime();
+    if (!Number.isFinite(best) || Math.abs(t - dayOf) < Math.abs(best - dayOf)) best = t;
+  }
+  return best;
 }
 
 // Minutes behind (negative: ahead) by the latest line that has started, or null.
@@ -7729,9 +7828,17 @@ async function lastNight() {
   let fast = null;
   const close = [];
   const raceIds = new Set(sessions.filter((x) => x.type === 'Race').map((x) => String(x.id || '')));
+  // 2026-11-05, Bug hunt 11: a results read that failed (busy - a paddock
+  // of phones on one address gets 429s - or the connection dropped) was
+  // kept as the night, with no fastest lap and no photo finishes, until
+  // the club next published. The night still shows from the index, but
+  // like a failed year read it is not marked read, so the next poll asks
+  // again. A 404 is an answer, as grab keeps it.
+  let readAll = true;
 
   if (ids.length > 0) {
     const answer = await grab('/collection/results?ids=' + ids.map(encodeURIComponent).join(',')).catch(() => null);
+    if (answer === null || (answer.missing && answer.status !== 404)) readAll = false;
     const list = answer && !answer.missing && Array.isArray(answer.body.items) ? answer.body.items : [];
 
     for (const item of list) {
@@ -7755,7 +7862,7 @@ async function lastNight() {
     }
   }
 
-  nightSig = sig;
+  if (readAll) nightSig = sig;
   nightHeld = { day: String(first.day || ''), sessions, fast, close };
   return nightHeld;
 }
@@ -8043,9 +8150,20 @@ function clockOn(text, dayOf) {
   if (half === 'pm' && h < 12) h += 12;
   if (half === 'am' && h === 12) h = 0;
   if (h > 23 || min > 59) return NaN;
-  const d = new Date(dayOf);
-  d.setHours(h, min, 0, 0);
-  return d.getTime();
+  // On whichever day - the one before, the same or the one after - puts it
+  // nearest dayOf (2026-11-05, Bug hunt 11): a night past midnight read a
+  // 23:55 line started at 00:10 as 1425 min early, and a 00:20 line not
+  // yet started, seen at 23:50, as a day early. The laptop's
+  // ScheduleDrift.MinutesOff does the same.
+  let best = NaN;
+  for (const shift of [-1, 0, 1]) {
+    const d = new Date(dayOf);
+    d.setDate(d.getDate() + shift);
+    d.setHours(h, min, 0, 0);
+    const t = d.getTime();
+    if (!Number.isFinite(best) || Math.abs(t - dayOf) < Math.abs(best - dayOf)) best = t;
+  }
+  return best;
 }
 
 function clockWords(ms) {
@@ -10490,7 +10608,9 @@ function chargeWords(next, now) {
   const ready = left <= 0 ? 'Charged' : 'Ready at ' + hm(charge.until) + ' (' + left + ' min)';
   const due = next && typeof next === 'object' && typeof next.eta === 'string' ? Date.parse(next.eta) : NaN;
   if (left <= 0 || !Number.isFinite(due)) return ready;
-  const spare = Math.round((due - charge.until) / 60000);
+  // Bug hunt 11 (2026-11-05): the ETA is on the relay's clock and until on
+  // the phone's, so the ETA goes onto the phone's clock (less skew) first.
+  const spare = Math.round((due - skew - charge.until) / 60000);
   return ready + (spare >= 0 ? ' - ' + spare + ' min before your race' : ' - ' + (-spare) + ' min after your race is due');
 }
 
@@ -10499,7 +10619,8 @@ function chargePart(next) {
   part.appendChild(el('b', '', 'Charging'));
   const now = Date.now();
   const due = next && typeof next === 'object' && typeof next.eta === 'string' ? Date.parse(next.eta) : NaN;
-  const late = !!charge && Number.isFinite(due) && charge.until > due;
+  // Bug hunt 11 (2026-11-05): on one clock, as chargeWords.
+  const late = !!charge && Number.isFinite(due) && charge.until > due - skew;
   part.appendChild(el('div', 'when' + (late ? ' lc-late' : ''), chargeWords(next, now)));
   if (charge) {
     part.appendChild(tapButton('Off the charger', 'go quiet', () => { charge = null; saveCharge(); drawLive(); }));
@@ -11187,6 +11308,9 @@ function fieldFor(sid, done) {
   };
   grab('/collection/results?ids=' + encodeURIComponent(sid)).then((answer) => {
     if (answer === null || answer === undefined) { fieldOf.delete(sid); fieldWaiting.delete(sid); return; }
+    // Bug hunt 11 (2026-11-05): busy or broken (a 429, a 5xx) is a failed
+    // read, not 'the relay has none' - left absent so the next redraw asks.
+    if (answer.missing && answer.status !== 404) { fieldOf.delete(sid); fieldWaiting.delete(sid); return; }
     const items = !answer.missing && answer.body && Array.isArray(answer.body.items) ? answer.body.items : [];
     const item = items.find((x) => x && String(x.id) === sid);
     const list = item && item.body && Array.isArray(item.body.results) ? item.body.results : null;
@@ -12236,7 +12360,10 @@ function paintNight() {
 
 function take(body) {
   night = body && typeof body.night === 'object' && body.night !== null ? body.night : null;
-  if (racesSeen < 0 && night && Array.isArray(night.races)) racesSeen = night.races.length;
+  // Bug hunt 11 (2026-11-05): any answer is the first answer - a night of
+  // null (a driver before their first race) is none seen, so their first
+  // result still says 'Your result is in' when refreshNight reads it.
+  if (racesSeen < 0) racesSeen = night && Array.isArray(night.races) ? night.races.length : 0;
   clips = Array.isArray(body && body.clips) ? body.clips : [];
   live = body && typeof body.live === 'object' && body.live !== null ? body.live : null;
   if ((night && night.firstNight === true) || (live && live.firstNight === true)) firstNight = true;
@@ -14682,9 +14809,16 @@ const APP_SHELL_JS = `
 const stage = document.getElementById('hcstage');
 const HOME = '/c/' + encodeURIComponent(CLUB);
 // Only the club's own pages are ever shown under the bar.
+// Bug hunt 11 (2026-11-05): and as the browser will load it - a path like
+// /c/club/../other resolves to another club's page - so the resolved
+// pathname must still be the club's own.
 function hcInside(path) {
-  return typeof path === 'string' && (path === HOME || ['/', '?', '#'].indexOf(path.charAt(HOME.length)) >= 0)
-    && path.indexOf(HOME) === 0 && path.indexOf('//') < 0 && path.indexOf('\\\\') < 0;
+  if (!(typeof path === 'string' && (path === HOME || ['/', '?', '#'].indexOf(path.charAt(HOME.length)) >= 0)
+    && path.indexOf(HOME) === 0 && path.indexOf('//') < 0 && path.indexOf('\\\\') < 0)) return false;
+  try {
+    const u = new URL(path, location.origin);
+    return u.origin === location.origin && (u.pathname === HOME || u.pathname.indexOf(HOME + '/') === 0);
+  } catch (e) { return false; }
 }
 let shown = null;
 let coming = null;

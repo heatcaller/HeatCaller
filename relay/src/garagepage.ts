@@ -1116,9 +1116,19 @@ function carForm(parent, sec, form, car) {
 
   const known = chassisChoices();
   const own = car ? str(car.chassis) : '';
-  const chassisStart = own !== '' && known.some((c) => c.id === own) ? own : '';
+  // 2026-11-05, Bug hunt 11: a car whose chassis the club has since retired
+  // is not in the published list, so it started on 'Not set' and Save sent
+  // chassis:'' - wiping the car's chassis and its setup sheet. Like the
+  // desktop editor, the car's own chassis is added back as a choice.
+  // 5 Nov 2026, Bug hunt 11 review: only when the laptop still resolved it
+  // (chassisName set). A chassis type since deleted is published with an
+  // empty name and FillCar refuses its id, so offering it made every phone
+  // edit of the car fail; such a car starts on 'Not set' instead.
+  const ownMissing = OBJECT_ID.test(own) && str(car && car.chassisName) !== '' && !known.some((c) => c.id === own);
+  const ownChoice = ownMissing ? [[own, str(car && car.chassisName) || 'Current chassis']] : [];
+  const chassisStart = own !== '' && (ownMissing || known.some((c) => c.id === own)) ? own : '';
   const chassis = selectBox(box, sec, form, 'chassis', 'Chassis',
-    [['', 'Not set']].concat(known.map((c) => [c.id, str(c.name) || 'Chassis'])).concat([['other', 'Not listed']]),
+    [['', 'Not set']].concat(ownChoice, known.map((c) => [c.id, str(c.name) || 'Chassis'])).concat([['other', 'Not listed']]),
     chassisStart, (v) => { other.label.hidden = v !== 'other'; });
   const other = textBox(box, sec, form, 'chassisOther', 'Which chassis is it?', '', 60, { hint: 'The desk adds it to the club’s list.' });
   other.label.hidden = chassis.input.value !== 'other';
@@ -1553,15 +1563,25 @@ function sheetField(parent, sec, form, f, initial) {
   }
 
   if (kind === 'bool') {
-    tickBox(parent, sec, form, field, title, initial === 'Yes');
+    tickBox(parent, sec, form, field, title, isTick(initial));
     return;
   }
 
   textBox(parent, sec, form, field, title, initial, 80, kind === 'number' ? { mode: 'decimal' } : {});
 }
 
+// WHY (2026-11-05, Bug hunt 11): HeatCaller stores a ticked yes/no as
+// "true" (the desk's Setup Sheet form and a tick from this page alike) and
+// publishes it as stored, but only "Yes" counted as ticked here. The sheet
+// opened with every tick cleared, left them out of the request, and "Fix
+// my last entry" erased them. Either spelling is a tick.
+function isTick(v) {
+  const t = str(v).trim().toLowerCase();
+  return t === 'yes' || t === 'true' || t === '1';
+}
+
 function sheetValue(form, f, initial) {
-  const v = val(form, 'v.' + f.id, str(f.kind) === 'bool' ? initial === 'Yes' : initial);
+  const v = val(form, 'v.' + f.id, str(f.kind) === 'bool' ? isTick(initial) : initial);
   if (str(f.kind) === 'bool') return v === true || v === 'Yes' ? 'Yes' : '';
   return cleanText(v);
 }
