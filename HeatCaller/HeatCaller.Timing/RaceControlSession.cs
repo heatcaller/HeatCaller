@@ -1352,9 +1352,23 @@ public sealed partial class RaceControlSession
     /// so a driver out in their second car is announced in it.
     /// </summary>
     public string HeardAs(string rowTransponder) =>
-        !string.IsNullOrWhiteSpace(rowTransponder) && _heardAsByRow.TryGetValue(rowTransponder, out var heard)
-            ? heard
-            : rowTransponder;
+        string.IsNullOrWhiteSpace(rowTransponder) ? rowTransponder
+        : _heardAsByRow.TryGetValue(rowTransponder, out var heard) ? heard
+        : _heardAsLastRace.TryGetValue(rowTransponder, out var heardLastRace) ? heardLastRace
+        : rowTransponder;
+
+    /// <summary>
+    /// 5 Nov 2026, Bug hunt 11 review: HeardAs's rows for the race still on
+    /// the board while a countdown pressed straight from Finished runs.
+    /// StartCountdown forgets the last race's alternate decisions (see the
+    /// WHY there), and _heardAsByRow with them - but the finished race's
+    /// rows stay on the board until the green, and a driver who raced on
+    /// their spare was then shown in their main car. Display only: nothing
+    /// that decides where a lap goes reads it, so the new countdown's
+    /// decisions start clean. Emptied with every other decision at the
+    /// green, at Stage and wherever else they are cleared.
+    /// </summary>
+    private volatile Dictionary<string, string> _heardAsLastRace = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// For HeardAs: each row a transponder is being filed under this race,
@@ -1403,6 +1417,7 @@ public sealed partial class RaceControlSession
     {
         _alternateMerged.Clear();
         _heardAsByRow = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        _heardAsLastRace = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         _mergedInto.Clear();
         _heardThisRace.Clear();
         _bothCarsWarned.Clear();
@@ -2565,6 +2580,29 @@ public sealed partial class RaceControlSession
         if (State is not (RaceState.Staging or RaceState.Countdown))
         {
             ClearJumpStartWindow();
+
+            // WHY (2026-11-05, Bug hunt 11: alternate decisions carried into
+            // a countdown that skipped Stage): Stage forgets the last race's
+            // alternate-transponder decisions; a countdown straight from
+            // Finished or Idle did not. The owner's main transponder was
+            // still "heard this race" from the last heat (or from passes
+            // between races), so a spare that jumped in the countdown was
+            // kept as a separate car and the jump, penalty and crossing went
+            // under the spare. The green then forgot the decisions, the
+            // spare merged into the owner on its next pass, and the penalty
+            // was never applied - with an orphaned 1-lap start row for the
+            // spare. Forgotten here as Stage does, so the jump lands on the
+            // owner's row exactly as it does after Stage.
+            //
+            // 5 Nov 2026, Bug hunt 11 review: but the finished race's rows
+            // stay on the board until the green, so who they were heard as
+            // is kept for display (see _heardAsLastRace) - only the decisions
+            // the new race's laps and jumps are filed by are forgotten.
+            var heardAsOnTheBoard = _heardAsByRow;
+
+            ClearAlternateDecisions();
+
+            _heardAsLastRace = heardAsOnTheBoard;
         }
 
         SetState(RaceState.Countdown);

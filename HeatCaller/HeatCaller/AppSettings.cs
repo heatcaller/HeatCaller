@@ -125,6 +125,20 @@ public sealed class AppSettings
     public int SplitLoopOffsetMs { get; set; }
 
     /// <summary>
+    /// The EasyLap or the I-Lap, whichever was the line last (DecoderConnection's
+    /// saved number), or 0 before either has been - what the Line Up offset
+    /// (SplitLoopOffsetMs) runs from. Kept by the app, not chosen.
+    /// </summary>
+    /// <remarks>
+    /// WHY (2026-11-05, Bug hunt 11: the offset was not turned round after a
+    /// restart): only remembered in memory before, so a night that ended with
+    /// a decoder from 3 up as the line started the next with it forgotten -
+    /// the line then moved to the other of the two, the offset stayed the old
+    /// way round, and every split was out by twice it.
+    /// </remarks>
+    public int SplitLoopOffsetLine { get; set; }
+
+    /// <summary>
     /// Record every pass the race is given and every command it is told
     /// (Stage, the green, flags, laps added by hand, warnings, penalties,
     /// releases, undo) to a file under this PC's data folder - see

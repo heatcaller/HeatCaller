@@ -156,7 +156,7 @@ There is nothing underneath Kokoro: it is both the free voice a club can choose 
 | `Settings Backups\` | The copies of your settings saved before each **Restore Default Settings** or **Put Back Earlier Settings**, as `settings YYYY-MM-DD HH-MM-SS.zip`. The last 10 are kept. See [Restore default settings](../getting-started/simple-and-advanced-mode.md#restore-default-settings). |
 | `undo-holding\` | Files set aside so **Undo** can bring them back: removed music, recorded voice lines, a club logo, track photos, sponsor slides, a deleted backup. Each is cleared after 7 days. Not part of backups. |
 | `*.unreadable-YYYYMMDD-HHMMSS` | A copy of a file HeatCaller couldn't read. See [Unreadable files](#unreadable-files). |
-| `race-in-progress-discarded.json` | The last unfinished race you chose not to restore. |
+| `race-in-progress-discarded-YYYYMMDD-HHMMSS.json` | An unfinished race you chose not to restore, or a practice that was running when the app closed. Each one is kept under its own name. To be offered that race again, close HeatCaller and rename it back to `race-in-progress.json`. |
 | `race-in-progress-cleared.json` | A finished race's journal that couldn't be deleted. |
 | `race-in-progress-filed.txt` | Appears beside a journal that couldn't be deleted or moved, to mark that its race was saved, so it isn't offered back at the next start. |
 | `race-in-progress-unread-YYYYMMDD-HHMMSS.json` | A race journal that couldn't be read at start-up, kept before the next race wrote over it. To be offered that race again, close HeatCaller and rename it back to `race-in-progress.json`. |
@@ -242,7 +242,7 @@ Close HeatCaller first. Then you can delete:
 | `crash.old.log` | Keep it if you're reporting a problem. |
 | `crash.log` | Keep it if you're reporting a problem. A new one starts when needed. |
 | `*.unreadable-*` | Only once you've recovered anything you need from it. |
-| `race-in-progress-discarded.json`, `race-in-progress-cleared.json` | Copies of race journals that are no longer needed. |
+| `race-in-progress-discarded-*.json`, `race-in-progress-cleared.json` | Copies of race journals that are no longer needed. |
 | `*.tmp` | Left over from an interrupted save. |
 | `%LocalAppData%\HeatCaller\Logs` | Console logs and freeze dumps. Safe to delete; keep them if you're reporting a problem. |
 | `Documents\HeatCaller Race Audio` | Recordings and highlight videos of past races. Only the last few nights are kept (**Keep the last:** on **Club Website → Recording**, 6 by default); copy a night's folder elsewhere to keep it longer. |

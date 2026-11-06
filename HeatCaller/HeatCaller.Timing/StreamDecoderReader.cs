@@ -49,8 +49,11 @@ internal sealed class StreamDecoderReader
     private readonly List<DecoderReading> _readings = new();
     private readonly Dictionary<string, long> _lastPassMs = new(StringComparer.Ordinal);
 
-    /// <summary>The decoder's first clock reading, so the rest fit DecoderClockMap's 32-bit milliseconds.</summary>
+    /// <summary>DecoderClockMap.Jump before the decoder's first clock reading, so the rest fit DecoderClockMap's 32-bit milliseconds.</summary>
     private long? _base;
+
+    /// <summary>The latest clock reading since the map last started, so a reading a little behind it (a pass reported after a heartbeat) is not taken for a restart.</summary>
+    private long? _highest;
 
     /// <summary>The last offset the map gave, used while it is short of readings.</summary>
     private long? _lastOffset;
@@ -120,23 +123,37 @@ internal sealed class StreamDecoderReader
 
     /// <summary>
     /// Teaches the map one reading of the decoder's clock, and hands back
-    /// that reading on the map's scale (milliseconds since the first one).
-    /// A clock that went backwards, or ran past the map's 32 bits, starts
+    /// that reading on the map's scale (milliseconds since _base).
+    /// A clock that went well backwards, or ran past the map's 32 bits, starts
     /// the map again.
     /// </summary>
     private long Learn(long deviceMs, long arrivedMs)
     {
-        if (_base is not { } start || deviceMs < start || deviceMs - start > uint.MaxValue)
+        // WHY (2026-11-05, Bug hunt 11): a pass is only sent once the car has
+        // left the loop, so a heartbeat or status that came first can carry a
+        // later clock than the pass after it. Every reading was checked
+        // against the very first one, so connecting while a car was on the
+        // loop logged "it has restarted" and threw the map away. Now only a
+        // step back of more than DecoderClockMap.Jump below the highest clock
+        // seen is a restart, and the base sits Jump below the first reading so
+        // a reading within that reporting delay still fits the map's scale.
+        if (_base is not { } start || _highest is not { } highest
+            || deviceMs < highest - DecoderClockMap.Jump || deviceMs - start > uint.MaxValue)
         {
-            if (_base is not null)
+            if (_highest is not null)
             {
-                _log($"[decoder] The {DecoderConnection.ShortName(_decoder)} decoder's clock went from after {_base}ms back to {deviceMs}ms - it has restarted. Learning its clock again; laps are timed as they arrive meanwhile.");
+                _log($"[decoder] The {DecoderConnection.ShortName(_decoder)} decoder's clock went from after {_highest}ms back to {deviceMs}ms - it has restarted. Learning its clock again; laps are timed as they arrive meanwhile.");
             }
 
-            _base = deviceMs;
-            start = deviceMs;
+            start = deviceMs - DecoderClockMap.Jump;
+            _base = start;
+            _highest = deviceMs;
             Clock.Reset();
             _lastOffset = null;
+        }
+        else if (deviceMs > highest)
+        {
+            _highest = deviceMs;
         }
 
         var relative = deviceMs - start;

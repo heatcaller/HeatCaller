@@ -438,7 +438,17 @@ public sealed class BigScreenForm : Form
         // lambda can't be unsubscribed - these two were left attached when
         // the window closed, so a reopened-and-closed Big Screen accumulated
         // dead handlers that still fired against a disposed form.
-        _stateChangedHandler = _ => SafeInvoke(RefreshAll);
+        _stateChangedHandler = state =>
+        {
+            // WHY (2026-11-05, Bug hunt 11): the finish is noted the moment
+            // it happens (any thread), so the next roll call starts after it.
+            if (state == RaceState.Finished)
+            {
+                RollCall.NoteFinish(DateTime.UtcNow);
+            }
+
+            SafeInvoke(RefreshAll);
+        };
         _flagChangedHandler = _ => SafeInvoke(RefreshAll);
 
         _race.LapProcessed += OnRaceEvent;
@@ -2711,7 +2721,10 @@ public sealed class BigScreenForm : Form
 
             if (_rollCallSinceUtc is null)
             {
-                _rollCallSinceUtc = DateTime.UtcNow - RollCall.Grace;
+                // WHY (2026-11-05, Bug hunt 11): never from before the last
+                // finish - a pass in the heat before is not proof the
+                // transponder is alive now. See RollCall.Since.
+                _rollCallSinceUtc = RollCall.Since(DateTime.UtcNow, RollCall.LastFinishUtc);
                 _rollCall.Reset();
                 ColourRollCall();
 
