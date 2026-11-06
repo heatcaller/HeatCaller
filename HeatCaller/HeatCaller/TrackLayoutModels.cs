@@ -124,6 +124,18 @@ public sealed class TrackLayout
         {
             var marked = decals.Where(d => d is not null && d.Kind == kind).ToList();
 
+            // 2026-11-05 Bug hunt 11: a finish line across a lane two or more
+            // tiles wide is one FinishLine decal per tile ("Build me a track"
+            // always lays it so), and demanding exactly one left every such
+            // plan on the bare count - so moving a split loop never changed
+            // the cut and old sector records stayed current. Key the finish
+            // on the first FinishLine decal, as MeasureSectors does; only the
+            // split loops must be one of each.
+            if (kind == RcpDecalKind.FinishLine && marked.Count > 1)
+            {
+                marked = marked.Take(1).ToList();
+            }
+
             if (marked.Count != 1)
             {
                 return count;
