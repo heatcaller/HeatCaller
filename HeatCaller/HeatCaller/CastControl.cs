@@ -313,9 +313,8 @@ public sealed class CastControl : UserControl
     /// <summary>
     /// A card per speaker on the layout pieces (LayoutPieces.cs), under the
     /// one Load Voices. One caption column down every card
-    /// (FieldGrid.LineUp), a setting that belongs to a switch a step in
-    /// (Stepped), and the page scrolls when it is taller than the window
-    /// (PageStack) - the way they were laid out on the Commentary page.
+    /// (FieldGrid.LineUp), everything else in the field column beside it,
+    /// and the page scrolls when it is taller than the window (PageStack).
     /// </summary>
     private void BuildLayout()
     {
@@ -337,22 +336,31 @@ public sealed class CastControl : UserControl
             return box;
         }
 
-        // A setting that belongs to the switch above it has its caption a
-        // step in; one that is not keeps the step on its right, so the
-        // fields still line up down the page.
-        static Label Stepped(Label caption)
-        {
-            caption.Margin = new Padding(UiLayout.Indent, caption.Margin.Top, caption.Margin.Right, caption.Margin.Bottom);
-            return caption;
-        }
-
-        static Label Flush(Label caption)
-        {
-            caption.Margin = new Padding(caption.Margin.Left, caption.Margin.Top, caption.Margin.Right + UiLayout.Indent, caption.Margin.Bottom);
-            return caption;
-        }
-
+        // ONE SHAPE FOR EVERY CARD (6 Nov 2026, asked for by Asher: "it's
+        // very messy. different alignments"). Two columns and nothing
+        // outside them: the captions down the left, lined up across the
+        // whole page (LineUpGrids), and everything else - the fields, the
+        // notes about them, the switches and the notes about those - in the
+        // field column. Only the card's opening line, what the speaker does,
+        // runs from the card's edge, straight under its title. The captions
+        // used to be stepped in under some switches and not others, and the
+        // switches and their notes sat at the card's edge on some cards and
+        // in the field column on others.
         static FlowLayoutPanel Line(params Control[] controls) => FieldGrid.Inline(controls);
+
+        // A switch in the field column, with its note under it.
+        static void Switch(FieldGrid grid, CheckBox box, string? note = null)
+        {
+            grid.AddField(box);
+
+            if (note is not null)
+            {
+                grid.AddHint(note);
+            }
+        }
+
+        // What a speaker does, first on their card under its title.
+        Label About(string text) => Hint(text);
 
         // A button whose caption is swapped while it works ("Loading..."),
         // in a panel of its own that is always as big as its usual caption
@@ -406,7 +414,7 @@ public sealed class CastControl : UserControl
 
         var loadGrid = new FieldGrid();
 
-        Flush(loadGrid.AddRow("Voices:", Line(Steady(_btnLoadVoices, LoadVoicesCaption), _lblVoiceSource)));
+        loadGrid.AddRow("Voices:", Line(Steady(_btnLoadVoices, LoadVoicesCaption), _lblVoiceSource));
         loadGrid.AddHint(
             "Fills every voice list on this tab, the announcer's included, from the engine chosen on the Voice tab. Each engine keeps its own picks; "
             + "with none picked, the announcer's own voice speaks. The Kokoro voices on this PC are on every list too, "
@@ -432,18 +440,17 @@ public sealed class CastControl : UserControl
 
         var announcerGrid = new FieldGrid();
 
-        Flush(announcerGrid.AddRow("Announcer's name:", Line(_txtAnnouncerName, Suffix("said in the On Air openings and the cold open; blank and the announcer is never named"))));
+        announcerGrid.AddRow("Name:", _txtAnnouncerName);
+        announcerGrid.AddHint("Said in the On Air openings and the cold open. Blank and the announcer is never named.");
 
         var announcer = new Section("Announcer");
 
-        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
-        // speaker's name first, then their voice, then what they do and the
-        // settings for it.
-        // The voice rows go under the name when the Voice tab hands them
-        // over (HostAnnouncerVoice).
-        _announcerName = announcer.Add(announcerGrid, gapBelow: UiLayout.RowGap);
-        announcer.Add(Hint(
-            "The voice carrying the whole program, from the engine chosen on the Voice tab."), gapBelow: 0);
+        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher; 6 Nov
+        // 2026): what the speaker does, their name, their voice, then the
+        // switches and settings for what they do. The voice rows go under
+        // the name when the Voice tab hands them over (HostAnnouncerVoice).
+        announcer.Add(About("The voice carrying the whole program, from the engine chosen on the Voice tab."));
+        _announcerName = announcer.Add(announcerGrid);
         _announcerCard = announcer;
 
         // ------------------------------------------------------------------
@@ -465,7 +472,7 @@ public sealed class CastControl : UserControl
         _btnTestRecapHost.Text = "Test Voice";
         _btnTestRecapHost.Click += (_, _) => SpeakAsRecapHost?.Invoke(_settings.RecapHostVoice);
 
-        Check(_chkBroadcastVoice, "Recap voice delivery - give the recap its own stability and style");
+        Check(_chkBroadcastVoice, "Give the recap its own stability and style");
         _chkBroadcastVoice.Checked = _settings.SummaryUseBroadcastVoice;
         _chkBroadcastVoice.CheckedChanged += (_, _) =>
         {
@@ -490,40 +497,30 @@ public sealed class CastControl : UserControl
 
         var recapHostGrid = new FieldGrid();
 
-        Flush(recapHostGrid.AddRow("Recap host's name:", Line(_txtRecapHostName, Suffix("said when the recap opens and at its sign-off; blank and the host is never named"))));
-        Flush(recapHostGrid.AddRow("Recap host's voice:", Line(_cmbRecapHostVoice, _btnTestRecapHost)));
-        Stepped(recapHostGrid.AddRow(StandInCaption, Line(_cmbRecapHostStandIn, _btnTestRecapHostStandIn)));
+        recapHostGrid.AddRow("Name:", _txtRecapHostName);
+        recapHostGrid.AddHint("Said when the recap opens and at its sign-off. Blank and the host is never named.");
+        recapHostGrid.AddRow("Voice:", Line(_cmbRecapHostVoice, _btnTestRecapHost));
+        recapHostGrid.AddRow(StandInCaption, Line(_cmbRecapHostStandIn, _btnTestRecapHostStandIn));
 
-        // Stability and style on lines of their own, so neither is ever
-        // placed from the width of the other's note.
-        var deliveryGrid = new FieldGrid();
+        Switch(recapHostGrid, _chkBroadcastVoice,
+            "Overrides the Voice tab's stability and style for the recap only, so lap calls aren't over-acted. "
+            + "Untick it to use the Voice tab's values everywhere.");
 
-        Stepped(deliveryGrid.AddRow("Stability:", Line(_numStability, Suffix("lower = more emotional range"))));
-        Stepped(deliveryGrid.AddRow("Style:", Line(_numStyleEx, Suffix("higher = more dramatic; past ~0.6 it can distort"))));
+        recapHostGrid.AddRow("Stability:", Line(_numStability, Suffix("lower = more emotional range")));
+        recapHostGrid.AddRow("Style:", Line(_numStyleEx, Suffix("higher = more dramatic; past ~0.6 it can distort")));
 
         var recapHost = new Section("Recap host");
 
-        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
-        // speaker's name first, then their voice, then what they do and the
-        // settings for it.
-        recapHost.Add(recapHostGrid);
-        // What they do under the card's fields, from its left edge, as every
-        // other card has it - it used to sit in the field column (6 Nov 2026).
-        recapHost.Add(Hint(
+        recapHost.Add(About(
             "Reads the recap, the questions to the Technical Lead and the sign-off; the announcer keeps the race calls. "
-            + "Heard only when race recaps are switched on, on the AI Commentary tab's Recap show card."), gapBelow: UiLayout.SectionGap);
-        recapHost.Add(_chkBroadcastVoice, stretch: false, gapBelow: UiLayout.HintGap);
-        recapHost.Add(Hint(
-            "Overrides the Voice tab's stability and style for the recap only, so lap calls aren't over-acted. "
-            + "Untick it to use the Voice tab's values everywhere."));
-        recapHost.Add(deliveryGrid, gapBelow: 0);
+            + "Heard only when race recaps are switched on, on the AI Commentary tab's Recap show card."));
+        recapHost.Add(recapHostGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
         // The co-host
         // ------------------------------------------------------------------
 
         Check(_chkCoHost, "Two voices in the booth");
-        _textSize.Wear(_chkCoHost, () => AppTheme.BoldFont);
         _chkCoHost.Checked = _settings.CommentaryCoHost;
         _chkCoHost.CheckedChanged += (_, _) =>
         {
@@ -603,37 +600,32 @@ public sealed class CastControl : UserControl
             RefreshEnabledState();
         };
 
-        // The name and voice first, above the switch (25 Oct 2026) - see the card below.
-        var coHostVoiceGrid = new FieldGrid();
-
-        Flush(coHostVoiceGrid.AddRow("Co-host's name:", Line(_txtCoHostName, Suffix("blank and they are talked to but never named - the model never makes one up"))));
-        Flush(coHostVoiceGrid.AddRow("Co-host's voice:", Line(_cmbCoHostVoice, _btnTestCoHost)));
-        Stepped(coHostVoiceGrid.AddRow(StandInCaption, Line(_cmbCoHostStandIn, _btnTestCoHostStandIn)));
-
+        // The name and voice first, above the switch (25 Oct 2026).
         var coHostGrid = new FieldGrid();
 
-        Stepped(coHostGrid.AddRow("What they're like:", Line(_cmbCoHostStance)));
+        coHostGrid.AddRow("Name:", _txtCoHostName);
+        coHostGrid.AddHint("Blank and they are talked to but never named - the model never makes one up.");
+        coHostGrid.AddRow("Voice:", Line(_cmbCoHostVoice, _btnTestCoHost));
+        coHostGrid.AddRow(StandInCaption, Line(_cmbCoHostStandIn, _btnTestCoHostStandIn));
+
+        Switch(coHostGrid, _chkCoHost);
+
+        coHostGrid.AddRow("What they're like:", _cmbCoHostStance);
         coHostGrid.AddHint(_lblCoHostStance);
 
-        Stepped(coHostGrid.AddRow("How much they talk:", Line(_cmbExchangeTurns)));
+        coHostGrid.AddRow("How much they talk:", _cmbExchangeTurns);
         coHostGrid.AddHint(
             "Each turn is another line the AI writes - and, on the relay, another line of the club's month.");
 
-        Stepped(coHostGrid.AddRow(string.Empty, _chkTwoVoicesInHeats));
-        coHostGrid.AddHint(
+        Switch(coHostGrid, _chkTwoVoicesInHeats,
             "Normally kept for the mains, which helps a main sound like one. Ticking this doesn't make the night any chattier.");
 
         var coHost = new Section("Co-host");
 
-        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
-        // speaker's name first, then their voice, then what they do and the
-        // settings for it.
-        coHost.Add(coHostVoiceGrid);
-        coHost.Add(Hint(
+        coHost.Add(About(
             "A second commentator who answers the announcer in the segments marked as a two-hander on the AI "
             + "Commentary tab, and asks the questions in the Technical Lead's and the Team Principal's interviews. "
             + "Grayed out while every one of those is switched off."));
-        coHost.Add(_chkCoHost, stretch: false);
         coHost.Add(coHostGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
@@ -673,21 +665,20 @@ public sealed class CastControl : UserControl
 
         var mechanicGrid = new FieldGrid();
 
-        Flush(mechanicGrid.AddRow("Technical Lead's name:", Line(_txtMechanicName, Suffix("blank for \"the team's technical lead\" - the model never makes a name up"))));
-        Flush(mechanicGrid.AddRow("Technical Lead's voice:", Line(_cmbMechanicVoice, _btnTestMechanic)));
-        Stepped(mechanicGrid.AddRow(StandInCaption, Line(_cmbMechanicStandIn, _btnTestMechanicStandIn)));
+        mechanicGrid.AddRow("Name:", _txtMechanicName);
+        mechanicGrid.AddHint("Blank for \"the team's technical lead\" - the model never makes a name up.");
+        mechanicGrid.AddRow("Voice:", Line(_cmbMechanicVoice, _btnTestMechanic));
+        mechanicGrid.AddRow(StandInCaption, Line(_cmbMechanicStandIn, _btnTestMechanicStandIn));
+
+        Switch(mechanicGrid, _chkInterview);
+        Switch(mechanicGrid, _chkInterviewHeats);
 
         var mechanic = new Section("Technical Lead");
 
-        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
-        // speaker's name first, then their voice, then what they do and the
-        // settings for it.
-        mechanic.Add(mechanicGrid);
-        mechanic.Add(_chkInterview, stretch: false, gapBelow: UiLayout.HintGap);
-        mechanic.Add(_chkInterviewHeats, stretch: false, gapBelow: UiLayout.HintGap);
-        mechanic.Add(Hint(
+        mechanic.Add(About(
             "Straight after the finish call, the co-host in pit lane asks two questions about the race and any setup "
-            + "changes logged in the Garage for the winning car, then hands back before the break. Needs race recaps on."), gapBelow: 0);
+            + "changes logged in the Garage for the winning car, then hands back before the break. Needs race recaps on."));
+        mechanic.Add(mechanicGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
         // The Team Principal (17 Oct 2026)
@@ -743,31 +734,27 @@ public sealed class CastControl : UserControl
 
         var principalGrid = new FieldGrid();
 
-        Flush(principalGrid.AddRow("Team Principal's name:", Line(_txtPrincipalName, Suffix("blank for \"the team principal\" - the model never makes a name up"))));
-        Flush(principalGrid.AddRow("Team Principal's voice:", Line(_cmbPrincipalVoice, _btnTestPrincipal)));
-        Stepped(principalGrid.AddRow(StandInCaption, Line(_cmbPrincipalStandIn, _btnTestPrincipalStandIn)));
+        principalGrid.AddRow("Name:", _txtPrincipalName);
+        principalGrid.AddHint("Blank for \"the team principal\" - the model never makes a name up.");
+        principalGrid.AddRow("Voice:", Line(_cmbPrincipalVoice, _btnTestPrincipal));
+        principalGrid.AddRow(StandInCaption, Line(_cmbPrincipalStandIn, _btnTestPrincipalStandIn));
+
+        Switch(principalGrid, _chkPrincipalBefore,
+            "When a race is staged: two questions about how the team is feeling and what it is hoping for, for the "
+            + "driver with the most riding on it - each driver's principal once a night. The countdown waits for it, and "
+            + "it is skipped when the night is running ten minutes or more behind.");
+        Switch(principalGrid, _chkPrincipalAfter,
+            "The recap host has them in the booth later that night for two questions about what the win means to the "
+            + "team. Part of the recap show, so it needs race recaps on.");
+        Switch(principalGrid, _chkPrincipalHeats);
+        Switch(principalGrid, _chkPrincipalTeamsOnly);
 
         var principal = new Section("Team Principal");
 
-        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
-        // speaker's name first, then their voice, then what they do and the
-        // settings for it.
-        principal.Add(principalGrid);
-        principal.Add(Hint(
+        principal.Add(About(
             "The big picture, where the Technical Lead has the car: the result, the points, the championship and the "
-            + "rivalry - never the setup. A driver with a team gets that team's principal; one without gets their own."),
-            gapBelow: UiLayout.RowGap);
-        principal.Add(_chkPrincipalBefore, stretch: false, gapBelow: UiLayout.HintGap);
-        principal.Add(Hint(
-            "When a race is staged: two questions about how the team is feeling and what it is hoping for, for the "
-            + "driver with the most riding on it - each driver's principal once a night. The countdown waits for it, and "
-            + "it is skipped when the night is running ten minutes or more behind."));
-        principal.Add(_chkPrincipalAfter, stretch: false, gapBelow: UiLayout.HintGap);
-        principal.Add(Hint(
-            "The recap host has them in the booth later that night for two questions about what the win means to the "
-            + "team. Part of the recap show, so it needs race recaps on."));
-        principal.Add(_chkPrincipalHeats, stretch: false, gapBelow: UiLayout.HintGap);
-        principal.Add(_chkPrincipalTeamsOnly, stretch: false, gapBelow: 0);
+            + "rivalry - never the setup. A driver with a team gets that team's principal; one without gets their own."));
+        principal.Add(principalGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
         // The badges reader
@@ -798,20 +785,19 @@ public sealed class CastControl : UserControl
 
         var honoursGrid = new FieldGrid();
 
-        Flush(honoursGrid.AddRow("Reader's name:", Line(_txtHonoursName, Suffix("blank and they are thrown to but never named - no name is made up"))));
-        Flush(honoursGrid.AddRow("Reader's voice:", Line(_cmbHonoursVoice, _btnTestHonours)));
-        Stepped(honoursGrid.AddRow(StandInCaption, Line(_cmbHonoursStandIn, _btnTestHonoursStandIn)));
+        honoursGrid.AddRow("Name:", _txtHonoursName);
+        honoursGrid.AddHint("Blank and they are thrown to but never named - no name is made up.");
+        honoursGrid.AddRow("Voice:", Line(_cmbHonoursVoice, _btnTestHonours));
+        honoursGrid.AddRow(StandInCaption, Line(_cmbHonoursStandIn, _btnTestHonoursStandIn));
+
+        Switch(honoursGrid, _chkBadgeHonours,
+            "Ticking this MOVES the achievement calls from the flag into the recap, so nobody hears an achievement twice. Untick it "
+            + "and the calls at the flag come back, as set up on Race Calls.");
 
         var honours = new Section("Achievements reader");
 
-        // ONE ORDER ON EVERY CARD (25 Oct 2026, asked for by Asher): the
-        // speaker's name first, then their voice, then what they do and the
-        // settings for it.
-        honours.Add(honoursGrid);
-        honours.Add(_chkBadgeHonours, stretch: false, gapBelow: UiLayout.HintGap);
-        honours.Add(Hint(
-            "Ticking this MOVES the achievement calls from the flag into the recap, so nobody hears an achievement twice. Untick it "
-            + "and the calls at the flag come back, as set up on Race Calls."), gapBelow: 0);
+        honours.Add(About("A third voice on the recap show, reading out the achievements each race unlocked. Needs race recaps on."));
+        honours.Add(honoursGrid, gapBelow: 0);
 
         // ------------------------------------------------------------------
         // The page
@@ -843,7 +829,7 @@ public sealed class CastControl : UserControl
         // The Kokoro voice for when ElevenLabs runs out is a refinement, so
         // Advanced (5 Nov 2026) - in Simple mode each of the cast still has a
         // voice of their own, CastStandIns' default for them.
-        SimpleMode.HideRow(coHostVoiceGrid, _cmbCoHostStandIn);
+        SimpleMode.HideRow(coHostGrid, _cmbCoHostStandIn);
 
         _standIns = new[]
         {
@@ -874,7 +860,7 @@ public sealed class CastControl : UserControl
         // a grid left out of this still looks correct on its own.
         _ownGrids = new[]
         {
-            loadGrid, announcerGrid, recapHostGrid, deliveryGrid, coHostVoiceGrid, coHostGrid, mechanicGrid, principalGrid, honoursGrid,
+            loadGrid, announcerGrid, recapHostGrid, coHostGrid, mechanicGrid, principalGrid, honoursGrid,
         };
 
         _textSize.Keep(LineUpGrids);
@@ -900,8 +886,10 @@ public sealed class CastControl : UserControl
     /// Voice tab is built and again whenever it is built anew; give the old
     /// rows back first (ReleaseAnnouncerVoice).
     /// </summary>
-    internal void HostAnnouncerVoice(FieldGrid voice)
+    internal void HostAnnouncerVoice(VoiceSettingsControl owner)
     {
+        var voice = owner.AnnouncerVoiceGrid;
+
         if (_announcerCard is null || _announcerName is null || ReferenceEquals(_announcerVoice, voice))
         {
             return;
@@ -910,6 +898,7 @@ public sealed class CastControl : UserControl
         ReleaseAnnouncerVoice();
 
         _announcerVoice = voice;
+        _announcerVoiceOwner = owner;
         _announcerCard.AddAfter(_announcerName, voice, gapBelow: UiLayout.RowGap);
 
         // Built on the Voice tab, outside this page, so the theming pass
@@ -917,7 +906,11 @@ public sealed class CastControl : UserControl
         // themed by the Voice tab for the same reason.
         AppTheme.ApplyRecursively(voice);
         LineUpGrids();
+        SizeFields();
     }
+
+    /// <summary>The Voice tab that built the announcer's voice rows, while they are here - it sizes its pickers to this page's (SizeFields).</summary>
+    private VoiceSettingsControl? _announcerVoiceOwner;
 
     /// <summary>
     /// Takes the announcer's voice rows back out, for the host to dispose
@@ -933,6 +926,7 @@ public sealed class CastControl : UserControl
         }
 
         _announcerVoice = null;
+        _announcerVoiceOwner = null;
         _announcerCard?.RemovePart(voice);
         LineUpGrids();
 
@@ -963,8 +957,18 @@ public sealed class CastControl : UserControl
             Pieces.PickerWidth(_cmbHonoursVoice, ref _honoursVoiceWidth),
             Pieces.PickerWidth(_cmbRecapHostVoice, ref _recapHostVoiceWidth),
         }.Concat(_standIns.Select((row, i) => Pieces.PickerWidth(row.Picker, ref _standInWidths[i])))
+            .Concat((_announcerVoiceOwner?.AnnouncerVoicePickers ?? Array.Empty<ComboBox>()).Select(AnnouncerPickerWidth))
             .Append(voice)
             .Max();
+
+        // The announcer's pickers too, on the Voice tab's rows (6 Nov 2026).
+        _announcerVoiceOwner?.UseCastPickerWidth(widest);
+
+        static int AnnouncerPickerWidth(ComboBox picker)
+        {
+            (Font Font, int Count, int Width)? fresh = null;
+            return Pieces.PickerWidth(picker, ref fresh);
+        }
 
         foreach (var picker in new[] { _cmbMechanicVoice, _cmbPrincipalVoice, _cmbCoHostVoice, _cmbHonoursVoice, _cmbRecapHostVoice }
                      .Concat(_standIns.Select(row => row.Picker)))

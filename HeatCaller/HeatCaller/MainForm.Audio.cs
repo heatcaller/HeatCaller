@@ -1097,7 +1097,7 @@ public partial class MainForm
             _voiceSettingsControl.HostRivalries(rivalries);
         }
 
-        _castControl?.HostAnnouncerVoice(_voiceSettingsControl.AnnouncerVoiceGrid);
+        _castControl?.HostAnnouncerVoice(_voiceSettingsControl);
 
         // Its handle now, not when the Voice tab is next opened (22 Oct 2026).
         // A soundscape is applied from Sounds, so that tab is hidden and the
