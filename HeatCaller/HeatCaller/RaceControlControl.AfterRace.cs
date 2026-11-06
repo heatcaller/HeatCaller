@@ -7861,8 +7861,11 @@ public sealed partial class RaceControlControl
         // a declined race is, so the laps are still on disk.
         if (entry.IsPractice)
         {
-            RaceJournal.Discard();
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [practice] The app closed during practice - that session was set aside, not restored.");
+            // 2026-11-05, Bug hunt 11: say so when it could not be set aside,
+            // rather than logging that it was.
+            StatusMessage?.Invoke(RaceJournal.Discard()
+                ? $"{AppTime.LogStampNow()}  [practice] The app closed during practice - that session was set aside, not restored."
+                : $"{AppTime.LogStampNow()}  [practice] The app closed during practice - that session was not restored, and it could not be set aside (another program may have the file open).");
             return;
         }
 
@@ -7883,8 +7886,11 @@ public sealed partial class RaceControlControl
 
         if (answer != DialogResult.Yes)
         {
-            RaceJournal.Discard();
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Unfinished race set aside, not restored.");
+            // 2026-11-05, Bug hunt 11: the dialog promised a copy is kept - say
+            // so when it could not be, rather than logging that it was.
+            StatusMessage?.Invoke(RaceJournal.Discard()
+                ? $"{AppTime.LogStampNow()}  [race] Unfinished race set aside, not restored."
+                : $"{AppTime.LogStampNow()}  [race] Unfinished race not restored, and it could not be set aside (another program may have race-in-progress.json open). It will be offered again at the next launch, and a copy is kept before the next race writes over it.");
             return;
         }
 

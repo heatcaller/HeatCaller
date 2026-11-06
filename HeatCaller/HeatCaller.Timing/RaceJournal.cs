@@ -32,9 +32,6 @@ public sealed class RaceJournal
         AppPaths.Root,
         "race-in-progress.json");
 
-    /// <summary>Where a journal the user chose not to restore is kept, rather than deleted outright.</summary>
-    private static string DiscardedPath => FilePath.Replace(".json", "-discarded.json");
-
     /// <summary>Where a journal goes when it cannot be deleted after the race is saved - anywhere but the name that means "unfinished".</summary>
     private static string ClearedPath => FilePath.Replace(".json", "-cleared.json");
 
@@ -1205,26 +1202,66 @@ public sealed class RaceJournal
     /// Somebody who says no to restoring a race at nine in the morning may
     /// well want it back at nine fifteen, and the file costs nothing to
     /// keep.
+    ///
+    /// True when the journal is now kept under a set-aside name (or there
+    /// was none), false when no copy of it could be made.
     /// </summary>
-    public static void Discard()
+    public static bool Discard()
     {
+        // 2026-11-05, Bug hunt 11: there was one "-discarded" slot, emptied
+        // before each move, so declining a second crashed race - or the
+        // practice OfferRaceRecovery sets aside without asking - deleted the
+        // race declined last time, though the dialog had promised "Choosing
+        // No keeps a copy on disk". And a failed move was swallowed: the log
+        // said "set aside" while the journal sat under the "unfinished" name
+        // for the next race's first write to go over. Each set-aside journal
+        // now gets its own stamped name, as the unread copies do, and when it
+        // cannot be moved a copy is kept instead - failing that, the next
+        // write or Clear keeps one first - and the caller is told.
+        if (!File.Exists(FilePath))
+        {
+            return true;
+        }
+
+        string target;
         try
         {
-            if (!File.Exists(FilePath))
+            var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            target = FilePath.Replace(".json", $"-discarded-{stamp}.json");
+            for (var n = 2; File.Exists(target); n++)
             {
-                return;
+                target = FilePath.Replace(".json", $"-discarded-{stamp}-{n}.json");
             }
-
-            if (File.Exists(DiscardedPath))
-            {
-                File.Delete(DiscardedPath);
-            }
-
-            File.Move(FilePath, DiscardedPath);
         }
         catch
         {
-            // ignore
+            _keepUnreadJournal = true;
+            return false;
+        }
+
+        try
+        {
+            File.Move(FilePath, target, overwrite: false);
+            return true;
+        }
+        catch
+        {
+            // Moving failed - something holds the file. A copy can often
+            // still be made; the journal stays where it is, to be offered
+            // again or written over by the next race.
+        }
+
+        try
+        {
+            File.Copy(FilePath, target, overwrite: false);
+            return true;
+        }
+        catch
+        {
+            // No copy either. Have the next Record or Clear keep one before
+            // it writes over or deletes the file - see TryKeepUnreadJournal.
+            _keepUnreadJournal = true;
+            return false;
         }
     }
 }
