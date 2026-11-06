@@ -48,7 +48,16 @@ internal static class LapByLap
         {
             var mine = crossings[me];
 
-            if (mine is null || mine.Length < 2)
+            // Bug hunt 11 (2026-11-05): a lap counted by hand (+1 Lap, or a
+            // lap Edit Result added) has no time of its own, so from the
+            // missed crossing on this row's k-th timed crossing is really a
+            // later lap, and comparing it with everyone's k-th lap showed a
+            // leader a place down for the rest of the race. Where the hand
+            // lap fell is not stored, so the row gets no positions of its
+            // own. It still counts for the others: its k-th timed crossing
+            // is never earlier than its real k-th one, so it is only ever
+            // put ahead of a driver it really was ahead of.
+            if (mine is null || mine.Length < 2 || (rows[me] is { } row && HandCountedLaps.In(row) > 0))
             {
                 answer.Add(Array.Empty<int>());
                 continue;

@@ -164,7 +164,7 @@ internal static class PastedResult
         TimeSpan.FromSeconds(1));
 
     private static readonly Regex TimeToken = new(
-        @"\d+(?::\d{1,2}){0,2}(?:\.\d+)?",
+        @"\d+(?::\d{1,2}){0,2}(?:[.,]\d+)?",
         RegexOptions.CultureInvariant,
         TimeSpan.FromSeconds(1));
 
@@ -210,7 +210,12 @@ internal static class PastedResult
 
         var parts = match.Value.Split(':');
         var secondsText = parts[^1];
-        var dot = secondsText.IndexOf('.');
+        // Bug hunt 11 (2026-11-05): a results page that writes a decimal
+        // comma ("17,234", "10:10,631") was cut at the comma and read as
+        // 17.000 with no problem reported. A results time never has a
+        // thousands separator, so a comma here can only be the fraction
+        // mark - the reading ResultEditForm and DriverImport give one too.
+        var dot = secondsText.IndexOfAny(new[] { '.', ',' });
         var whole = dot < 0 ? secondsText : secondsText[..dot];
         var fraction = dot < 0 ? string.Empty : secondsText[(dot + 1)..];
 
