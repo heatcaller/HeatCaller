@@ -497,6 +497,11 @@ internal static class VoiceEngines
 /// Speak in <paramref name="KokoroVoiceName"/> with every engine, not only
 /// with Kokoro chosen on the Voice tab.
 /// </param>
+/// <param name="KokoroStandInVoiceName">
+/// The Kokoro voice this speaker switches to when ElevenLabs (or the
+/// HeatCaller voice) can't speak - the allowance run out, typically. Blank
+/// falls back to <paramref name="KokoroVoiceName"/>. See StandInKokoroVoice.
+/// </param>
 public sealed record SecondVoice(
     string ElevenLabsVoiceId,
     string ElevenLabsVoiceName,
@@ -504,8 +509,26 @@ public sealed record SecondVoice(
     string HeatCallerVoiceName,
     string HeatCallerRev,
     string KokoroVoiceName = "",
-    bool KokoroAlways = false)
+    bool KokoroAlways = false,
+    string KokoroStandInVoiceName = "")
 {
+    /// <summary>
+    /// The Kokoro voice this speaker stands in with - their own stand-in
+    /// pick, or failing that their Kokoro voice. Empty when neither is set,
+    /// and the announcer's stand-in voice is used.
+    /// </summary>
+    /// <remarks>
+    /// EACH OF THE CAST IN A KOKORO VOICE OF THEIR OWN (5 Nov 2026, asked
+    /// for by Asher: "when eleven labs allowance runs out each cast member
+    /// should have their own kokoro voice that is configurable underneath
+    /// the eleven labs"). Until then a stand-in line for the co-host or the
+    /// Technical Lead came out in the announcer's Kokoro voice unless a
+    /// Kokoro voice had once been picked for them with Kokoro chosen, so an
+    /// interview became the announcer talking to himself.
+    /// </remarks>
+    public string StandInKokoroVoice =>
+        !string.IsNullOrWhiteSpace(KokoroStandInVoiceName) ? KokoroStandInVoiceName.Trim() : KokoroVoiceName?.Trim() ?? string.Empty;
+
     /// <summary>Whether a voice has been picked for this engine - otherwise the announcer's own is used.</summary>
     public bool IsSetFor(VoiceEngine engine) => SpeaksKokoroWith(engine) || engine switch
     {
@@ -533,6 +556,32 @@ public sealed record SecondVoice(
         VoiceEngine.Kokoro => KokoroSpeech.Describe(KokoroVoiceName),
         _ => string.Empty,
     };
+}
+
+/// <summary>
+/// The Kokoro voice each of the cast stands in with when nothing has been
+/// picked for them (5 Nov 2026 - see SecondVoice.StandInKokoroVoice). One
+/// each, none of them the announcer's (KokoroSpeech.DefaultVoice), so a
+/// settings file from before there was the choice still sounds like five
+/// different people when ElevenLabs runs out.
+/// </summary>
+internal static class CastStandIns
+{
+    internal const string RecapHost = "bm_george";
+    internal const string CoHost = "am_adam";
+    internal const string TechnicalLead = "am_eric";
+    internal const string TeamPrincipal = "bm_lewis";
+    internal const string AchievementsReader = "af_bella";
+
+    /// <summary>
+    /// The stand-in voice for a speaker: the one picked, or - for a speaker
+    /// with none, which is every speaker in an older file - their Kokoro
+    /// voice if they have one, and otherwise their own default.
+    /// </summary>
+    internal static string Resolve(string? picked, string? kokoroVoice, string fallback) =>
+        !string.IsNullOrWhiteSpace(picked) ? picked.Trim()
+        : !string.IsNullOrWhiteSpace(kokoroVoice) ? kokoroVoice.Trim()
+        : fallback;
 }
 
 /// <summary>
@@ -912,6 +961,15 @@ public sealed class VoiceProfile
         if (!string.IsNullOrWhiteSpace(voice.KokoroVoiceName))
         {
             copy.KokoroVoiceName = voice.KokoroVoiceName;
+        }
+
+        // Their own stand-in voice (5 Nov 2026 - see SecondVoice.StandInKokoroVoice):
+        // with ElevenLabs or the HeatCaller voice speaking, the only Kokoro
+        // line this copy will ever say is a stand-in one, so the Kokoro voice
+        // it carries is the one picked for when ElevenLabs runs out.
+        if (copy.EffectiveEngine != VoiceEngine.Kokoro && voice.StandInKokoroVoice.Length > 0)
+        {
+            copy.KokoroVoiceName = voice.StandInKokoroVoice;
         }
 
         return copy;

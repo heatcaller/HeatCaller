@@ -164,6 +164,13 @@ public sealed partial class VoiceSettingsControl : UserControl
     private readonly List<Control> _kokoroVoiceRow = new();
 
     /// <summary>
+    /// The Kokoro row's caption: "Kokoro voice:" with Kokoro chosen, and the
+    /// Cast tab's "If ElevenLabs runs out:" while it only stands in (5 Nov
+    /// 2026), so the announcer's row reads like everyone else's under it.
+    /// </summary>
+    private Label? _kokoroCaption;
+
+    /// <summary>
     /// The announcer's voice picker and Test Voice for the engine in use, for
     /// the Cast tab to show at its top. Not a child of this control, so the
     /// host disposes it when it replaces this page (MainForm.Audio's
@@ -715,6 +722,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         var kokoroCaption = _announcerVoiceGrid.AddRow("Kokoro voice:", kokoroLine);
         _announcerVoiceGrid.AddHint(_lblKokoroTestStatus);
         _kokoroVoiceRow.AddRange(new Control[] { kokoroCaption, kokoroLine, _lblKokoroTestStatus });
+        _kokoroCaption = kokoroCaption;
 
         // (22 Oct 2026, page tidy): the captions keep the Cast tab's step on
         // their right, as its own flush captions do (CastControl's Flush) -
@@ -791,6 +799,13 @@ public sealed partial class VoiceSettingsControl : UserControl
             foreach (var control in _kokoroVoiceRow)
             {
                 control.Visible = kokoro;
+            }
+
+            var caption = kokoroChosen ? "Kokoro voice:" : CastControl.StandInCaption;
+
+            if (_kokoroCaption is { } label && label.Text != caption)
+            {
+                label.Text = caption;
             }
         }
         finally

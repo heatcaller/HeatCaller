@@ -410,7 +410,11 @@ public sealed partial class AnnouncementService
             // come out in the HeatCaller voice on a night everything else is
             // in the Kokoro voice. Each goes line by line below, where
             // Kokoro says it.
-            var passOverSaved = onThisPc || HeatCallerSavedLinesPassedOver(renderProfile);
+            // And ElevenLabs' own used-up quota (5 Nov 2026), the same way -
+            // see ElevenLabsSavedLinesPassedOver.
+            var passOverSaved = onThisPc
+                || HeatCallerSavedLinesPassedOver(renderProfile)
+                || ElevenLabsSavedLinesPassedOver(renderProfile);
 
             // Otherwise whatever the saved-voice library already has first.
             // Those need no request at all, and on a regular club night that

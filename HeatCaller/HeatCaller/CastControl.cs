@@ -100,6 +100,28 @@ public sealed class CastControl : UserControl
     private readonly ComboBox _cmbHonoursVoice = new();
     private readonly Button _btnTestHonours = new();
 
+    // --- The Kokoro voice each of them switches to when ElevenLabs runs
+    // out (5 Nov 2026, asked for by Asher: "each cast member should have
+    // their own kokoro voice that is configurable underneath the eleven
+    // labs"). One under each voice picker - see SecondVoice.StandInKokoroVoice.
+    private readonly ComboBox _cmbRecapHostStandIn = new();
+    private readonly ComboBox _cmbCoHostStandIn = new();
+    private readonly ComboBox _cmbMechanicStandIn = new();
+    private readonly ComboBox _cmbPrincipalStandIn = new();
+    private readonly ComboBox _cmbHonoursStandIn = new();
+
+    /// <summary>Each stand-in picker with the voice picker above it, what it shows and where a pick is saved - set up in BuildLayout.</summary>
+    private StandInRow[] _standIns = Array.Empty<StandInRow>();
+
+    /// <summary>The stand-in pickers' widths as last measured, one each - see Pieces.PickerWidth.</summary>
+    private readonly (Font Font, int Count, int Width)?[] _standInWidths = new (Font Font, int Count, int Width)?[5];
+
+    /// <summary>One "If ElevenLabs runs out" picker: its own list, the voice picker above it, the voice it shows, and the setting a pick goes to.</summary>
+    private sealed record StandInRow(ComboBox Picker, ComboBox VoicePicker, Func<SecondVoice> Voice, Action<string> Save);
+
+    /// <summary>The caption of every stand-in row, kept in one place.</summary>
+    internal const string StandInCaption = "If ElevenLabs runs out:";
+
     // --- Load Voices, at the top, for every list ---
     private readonly Button _btnLoadVoices = new();
 
@@ -378,7 +400,8 @@ public sealed class CastControl : UserControl
             "Fills every voice list on this tab, the announcer's included, from the engine chosen on the Voice tab. Each engine keeps its own picks; "
             + "with none picked, the announcer's own voice speaks. The Kokoro voices on this PC are on every list too, "
             + "whatever the engine: pick one and that speaker talks in Kokoro's free voice even beside an ElevenLabs "
-            + "or HeatCaller announcer.");
+            + "or HeatCaller announcer. Under each voice is the Kokoro voice they switch to if ElevenLabs runs out - "
+            + "and while it is out no saved ElevenLabs line plays, so the night stays in one set of voices.");
 
         var voices = new Section("Voices");
 
@@ -458,6 +481,7 @@ public sealed class CastControl : UserControl
 
         Flush(recapHostGrid.AddRow("Recap host's name:", Line(_txtRecapHostName, Suffix("said when the recap opens and at its sign-off; blank and the host is never named"))));
         Flush(recapHostGrid.AddRow("Recap host's voice:", Line(_cmbRecapHostVoice, _btnTestRecapHost)));
+        Stepped(recapHostGrid.AddRow(StandInCaption, Line(_cmbRecapHostStandIn)));
         recapHostGrid.AddHint(
             "Reads the recap, the questions to the Technical Lead and the sign-off; the announcer keeps the race calls.");
 
@@ -572,6 +596,7 @@ public sealed class CastControl : UserControl
 
         Flush(coHostVoiceGrid.AddRow("Co-host's name:", Line(_txtCoHostName, Suffix("blank and they are talked to but never named - the model never makes one up"))));
         Flush(coHostVoiceGrid.AddRow("Co-host's voice:", Line(_cmbCoHostVoice, _btnTestCoHost)));
+        Stepped(coHostVoiceGrid.AddRow(StandInCaption, Line(_cmbCoHostStandIn)));
 
         var coHostGrid = new FieldGrid();
 
@@ -638,6 +663,7 @@ public sealed class CastControl : UserControl
 
         Flush(mechanicGrid.AddRow("Technical Lead's name:", Line(_txtMechanicName, Suffix("blank for \"the team's technical lead\" - the model never makes a name up"))));
         Flush(mechanicGrid.AddRow("Technical Lead's voice:", Line(_cmbMechanicVoice, _btnTestMechanic)));
+        Stepped(mechanicGrid.AddRow(StandInCaption, Line(_cmbMechanicStandIn)));
 
         var mechanic = new Section("Technical Lead");
 
@@ -707,6 +733,7 @@ public sealed class CastControl : UserControl
 
         Flush(principalGrid.AddRow("Team Principal's name:", Line(_txtPrincipalName, Suffix("blank for \"the team principal\" - the model never makes a name up"))));
         Flush(principalGrid.AddRow("Team Principal's voice:", Line(_cmbPrincipalVoice, _btnTestPrincipal)));
+        Stepped(principalGrid.AddRow(StandInCaption, Line(_cmbPrincipalStandIn)));
 
         var principal = new Section("Team Principal");
 
@@ -761,6 +788,7 @@ public sealed class CastControl : UserControl
 
         Flush(honoursGrid.AddRow("Reader's name:", Line(_txtHonoursName, Suffix("blank and they are thrown to but never named - no name is made up"))));
         Flush(honoursGrid.AddRow("Reader's voice:", Line(_cmbHonoursVoice, _btnTestHonours)));
+        Stepped(honoursGrid.AddRow(StandInCaption, Line(_cmbHonoursStandIn)));
 
         var honours = new Section("Achievements reader");
 
@@ -799,6 +827,31 @@ public sealed class CastControl : UserControl
 
         SimpleMode.HideRow(coHostGrid, _cmbCoHostStance);
         SimpleMode.HideRow(coHostGrid, _cmbExchangeTurns);
+
+        // The Kokoro voice for when ElevenLabs runs out is a refinement, so
+        // Advanced (5 Nov 2026) - in Simple mode each of the cast still has a
+        // voice of their own, CastStandIns' default for them.
+        SimpleMode.HideRow(coHostVoiceGrid, _cmbCoHostStandIn);
+
+        _standIns = new[]
+        {
+            new StandInRow(_cmbRecapHostStandIn, _cmbRecapHostVoice, () => _settings.RecapHostVoice, name => _settings.RecapHostKokoroStandInVoiceName = name),
+            new StandInRow(_cmbCoHostStandIn, _cmbCoHostVoice, () => _settings.CoHostVoice, name => _settings.CoHostKokoroStandInVoiceName = name),
+            new StandInRow(_cmbMechanicStandIn, _cmbMechanicVoice, () => _settings.MechanicVoice, name => _settings.MechanicKokoroStandInVoiceName = name),
+            new StandInRow(_cmbPrincipalStandIn, _cmbPrincipalVoice, () => _settings.PrincipalVoice, name => _settings.PrincipalKokoroStandInVoiceName = name),
+            new StandInRow(_cmbHonoursStandIn, _cmbHonoursVoice, () => _settings.HonoursVoice, name => _settings.HonoursKokoroStandInVoiceName = name),
+        };
+
+        foreach (var row in _standIns)
+        {
+            row.Picker.DropDownStyle = ComboBoxStyle.DropDownList;
+            row.Picker.SelectedIndexChanged += (_, _) => SaveStandIn(row);
+
+            // Whether the row means anything follows the voice picked above it.
+            row.VoicePicker.SelectedIndexChanged += (_, _) => RefreshEnabledState();
+        }
+
+        FillStandIns();
 
         Controls.Add(page);
 
@@ -899,6 +952,11 @@ public sealed class CastControl : UserControl
         Fit(_cmbExchangeTurns, Math.Max(voice, Pieces.PickerWidth(_cmbExchangeTurns, ref _exchangeTurnsWidth)));
         Fit(_cmbHonoursVoice, Math.Max(voice, Pieces.PickerWidth(_cmbHonoursVoice, ref _honoursVoiceWidth)));
         Fit(_cmbRecapHostVoice, Math.Max(voice, Pieces.PickerWidth(_cmbRecapHostVoice, ref _recapHostVoiceWidth)));
+
+        for (var i = 0; i < _standIns.Length; i++)
+        {
+            Fit(_standIns[i].Picker, Math.Max(voice, Pieces.PickerWidth(_standIns[i].Picker, ref _standInWidths[i])));
+        }
 
         Fit(_numStability, NumberWidth(_numStability));
         Fit(_numStyleEx, NumberWidth(_numStyleEx));
@@ -1009,6 +1067,13 @@ public sealed class CastControl : UserControl
         _cmbCoHostVoice.Enabled = coHostOn && anyExchange;
         _btnTestCoHost.Enabled = coHostOn && anyExchange;
         _cmbCoHostStance.Enabled = coHostOn && anyExchange;
+
+        // Each stand-in picker with the voice picker above it, and only while
+        // it would ever be heard (5 Nov 2026 - see StandInApplies).
+        foreach (var row in _standIns)
+        {
+            row.Picker.Enabled = row.VoicePicker.Enabled && StandInApplies(row);
+        }
 
         // Load Voices fills every list in one pass (FillVoices) - and the
         // announcer's (25 Oct 2026), who is always on the show - so it is
@@ -1192,6 +1257,85 @@ public sealed class CastControl : UserControl
         _recapHostVoiceWidth = null;
         SizeFields();
     }
+
+    // ==================== If ElevenLabs runs out ====================
+
+    /// <summary>Set while the stand-in lists are being filled, so filling them isn't taken for a pick.</summary>
+    private bool _fillingStandIns;
+
+    /// <summary>
+    /// Fills every "If ElevenLabs runs out" list with the Kokoro voices and
+    /// selects the one each speaker stands in with - their own pick, their
+    /// Kokoro voice, or their default (CastStandIns.Resolve), which is what
+    /// they will actually be heard in. Kokoro's voices are files beside the
+    /// exe, so the lists are full whether or not Load Voices was pressed.
+    /// </summary>
+    private void FillStandIns()
+    {
+        var installed = KokoroSpeech.InstalledVoices();
+
+        _fillingStandIns = true;
+
+        try
+        {
+            foreach (var row in _standIns)
+            {
+                var saved = row.Voice().StandInKokoroVoice;
+                var choices = installed.Select(v => new VoiceChoice(v.Name, v.Name, string.Empty, v.Display)).ToList();
+                var at = choices.FindIndex(c => string.Equals(c.Id, saved, StringComparison.OrdinalIgnoreCase));
+
+                // A voice saved on another PC that this one hasn't got stays
+                // on the list, saying who speaks instead - as the announcer's does.
+                if (at < 0 && saved.Length > 0)
+                {
+                    choices.Insert(0, new VoiceChoice(saved, saved, string.Empty,
+                        $"{KokoroSpeech.Describe(saved)} (not on this PC - {KokoroSpeech.Describe(KokoroSpeech.DefaultVoice)} speaks instead)"));
+                    at = 0;
+                }
+
+                row.Picker.Items.Clear();
+
+                foreach (var choice in choices)
+                {
+                    row.Picker.Items.Add(choice);
+                }
+
+                row.Picker.SelectedIndex = Math.Max(0, at);
+            }
+        }
+        finally
+        {
+            _fillingStandIns = false;
+        }
+
+        Array.Clear(_standInWidths);
+        SizeFields();
+    }
+
+    /// <summary>Saves the Kokoro voice picked for when ElevenLabs runs out.</summary>
+    private void SaveStandIn(StandInRow row)
+    {
+        if (_fillingStandIns || row.Picker.SelectedItem is not VoiceChoice choice)
+        {
+            return;
+        }
+
+        row.Save(choice.Id);
+        _settings.Save();
+    }
+
+    /// <summary>
+    /// Whether a speaker's stand-in voice is ever heard: with ElevenLabs or
+    /// the HeatCaller voice speaking (with Kokoro chosen there is nothing to
+    /// stand in for), and a voice of their own picked above it. With the
+    /// announcer's own voice they share the announcer's stand-in voice too,
+    /// and with a Kokoro voice picked for every engine they are on Kokoro
+    /// already.
+    /// </summary>
+    private bool StandInApplies(StandInRow row) =>
+        _voiceListEngine != VoiceEngine.Kokoro
+        && row.VoicePicker.SelectedItem is VoiceChoice { IsKokoro: false } picked
+        && picked.Id.Length > 0;
 
     /// <summary>Saves the mechanic's picked voice against the engine the list is showing.</summary>
     private void SaveMechanicVoice()
