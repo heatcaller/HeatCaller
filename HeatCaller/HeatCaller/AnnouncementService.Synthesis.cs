@@ -548,7 +548,7 @@ public sealed partial class AnnouncementService
     /// than hand back silence if Kokoro cannot speak after all.
     /// </summary>
     private static async Task<SynthesisResult> RenderWithStandInAsync(VoiceProfile profile, string text) =>
-        new SynthesisResult(await KokoroSpeech.RenderAsync(profile, text), LineSource.StandIn);
+        new SynthesisResult(await KokoroSpeech.RenderAsync(profile, text, renderingAhead: RenderingAhead.Value), LineSource.StandIn);
 
     /// <summary>
     /// A line in the Kokoro voice, on this PC, because it is the voice
@@ -572,7 +572,9 @@ public sealed partial class AnnouncementService
 
         try
         {
-            return new SynthesisResult(await KokoroSpeech.RenderAsync(profile, text), LineSource.Kokoro);
+            // A long line rendered ahead - the recap, during the teaser - gets
+            // the time its length needs (6 Nov 2026, see KokoroSpeech.RenderTimeoutFor).
+            return new SynthesisResult(await KokoroSpeech.RenderAsync(profile, text, renderingAhead: RenderingAhead.Value), LineSource.Kokoro);
         }
         // Not a cancel: a line dropped because a flag interrupted it is the
         // queue working as designed, and reporting that as "Kokoro couldn't

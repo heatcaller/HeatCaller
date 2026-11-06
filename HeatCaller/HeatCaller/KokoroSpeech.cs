@@ -77,11 +77,64 @@ internal static class KokoroSpeech
     /// <summary>Anything smaller than this is a broken download, not the model.</summary>
     private const long SmallestRealModel = 50L * 1024 * 1024;
 
-    /// <summary>The longest one render may take. Kokoro renders a race line in well under a second on an ordinary laptop; this is a line that has stuck.</summary>
+    /// <summary>
+    /// The longest a short line's render may take. Kokoro renders a race line
+    /// in well under a second on an ordinary laptop; this is a line that has
+    /// stuck. A longer line gets longer - see RenderTimeoutFor.
+    /// </summary>
     private static readonly TimeSpan RenderTimeout = TimeSpan.FromSeconds(30);
 
-    /// <summary>The longest a line waits for the one before it - longer than RenderTimeout, so a line is never failed for waiting behind one still allowed to finish.</summary>
+    /// <summary>
+    /// What each character of a line adds to its time limit (6 Nov 2026).
+    /// One limit for every line failed the recap show night after night: a
+    /// recap is one line of 1,500 characters or so, a minute and a half of
+    /// speech, and on Asher's laptop Kokoro took longer than 30 s to say it -
+    /// so the render in advance gave up, the live render gave up too, and the
+    /// recap host never spoke. A tenth of a second a character is a little
+    /// slower than speaking it, which no working render is.
+    /// </summary>
+    private static readonly TimeSpan RenderTimePerCharacter = TimeSpan.FromSeconds(0.1);
+
+    /// <summary>The most any line's limit comes to, however long it is.</summary>
+    private static readonly TimeSpan LongestRenderTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// How long a line waits for the gate past the time the line before it
+    /// still has - so a line is never failed for waiting behind one still
+    /// allowed to finish. Never less than this in all.
+    /// </summary>
     private static readonly TimeSpan GateWait = TimeSpan.FromSeconds(40);
+
+    /// <summary>For the tests: one time limit for every line, in place of RenderTimeoutFor's.</summary>
+    internal static TimeSpan? RenderTimeoutForTests { get; set; }
+
+    /// <summary>When the render holding the gate runs out of time, as ticks of DateTime.UtcNow - see WaitForGateAsync.</summary>
+    private static long _gateBusyUntilTicks;
+
+    /// <summary>
+    /// The time limit for rendering <paramref name="spoken"/>: RenderTimeout,
+    /// and more for a longer line - but only for one rendered AHEAD of being
+    /// said (the recap during the teaser, a recorded line). A line rendered
+    /// in the voice queue holds the one voice loop while it renders, so it
+    /// keeps the flat limit, as AnnouncementService.LimitFor does for
+    /// ElevenLabs and for the same reason.
+    /// </summary>
+    internal static TimeSpan RenderTimeoutFor(string spoken, bool renderingAhead)
+    {
+        if (RenderTimeoutForTests is { } forTests)
+        {
+            return forTests;
+        }
+
+        if (!renderingAhead)
+        {
+            return RenderTimeout;
+        }
+
+        var limit = RenderTimeout + (RenderTimePerCharacter * (spoken?.Length ?? 0));
+
+        return limit > LongestRenderTimeout ? LongestRenderTimeout : limit;
+    }
 
     /// <summary>The longest a line waits for the model to load. The first load reads 310 MB off the disk.</summary>
     private static readonly TimeSpan LoadWait = TimeSpan.FromSeconds(60);
@@ -383,7 +436,12 @@ internal static class KokoroSpeech
     /// out as words.
     /// </summary>
     /// <exception cref="InvalidOperationException">With a plain reason, whenever it can't speak the line.</exception>
-    internal static async Task<byte[]> RenderAsync(VoiceProfile profile, string text, CancellationToken cancel = default)
+    /// <param name="renderingAhead">
+    /// True for a line rendered ahead of being said, which may take as long
+    /// as its length needs and waits for the line before it however long that
+    /// has - see RenderTimeoutFor and WaitForGateAsync.
+    /// </param>
+    internal static async Task<byte[]> RenderAsync(VoiceProfile profile, string text, CancellationToken cancel = default, bool renderingAhead = false)
     {
         var spoken = VoiceProfile.StripAudioTags(text ?? string.Empty);
 
@@ -440,13 +498,21 @@ internal static class KokoroSpeech
             say = (line, voice) => engine.SynthesizeAsync(line, (KokoroSharp.Core.KokoroVoice)voice, config);
         }
 
-        if (!await Gate.WaitAsync(GateWait, cancel).ConfigureAwait(false))
-        {
-            throw new InvalidOperationException(
-                $"The Kokoro voice was still busy with the line before this one after {GateWait.TotalSeconds:0} s.");
-        }
+        await WaitForGateAsync(renderingAhead, cancel).ConfigureAwait(false);
+
+        var timeout = RenderTimeoutFor(spoken, renderingAhead);
+        Interlocked.Exchange(ref _gateBusyUntilTicks, (DateTime.UtcNow + timeout).Ticks);
 
         byte[] pcm;
+        Task<byte[]>? saying = null;
+
+        // Set when the render is given up on while it is still going: the
+        // gate is then let go only once it really stops (6 Nov 2026). It
+        // used to be let go at once, and the next line - the recap's live
+        // try, a Test Voice - rendered beside the abandoned one, both of
+        // them slower for it, until they ran out of time too.
+        var stillRendering = false;
+
         try
         {
             // On the pool, still inside the gate. It used to start right
@@ -459,11 +525,18 @@ internal static class KokoroSpeech
             // up on releases the gate, and the voice list must not still be
             // loading then (see VoiceFor).
             var voice = await Task.Run(() => findVoice(voiceName)).ConfigureAwait(false);
-            pcm = await Task.Run(() => say(spoken, voice)).WaitAsync(RenderTimeout, cancel).ConfigureAwait(false);
+            saying = Task.Run(() => say(spoken, voice));
+            pcm = await saying.WaitAsync(timeout, cancel).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
-            throw new InvalidOperationException($"The Kokoro voice took longer than {RenderTimeout.TotalSeconds:0} s to say that line.");
+            stillRendering = true;
+            throw new InvalidOperationException($"The Kokoro voice took longer than {timeout.TotalSeconds:0} s to say that line.");
+        }
+        catch (OperationCanceledException) when (saying is { IsCompleted: false })
+        {
+            stillRendering = true;
+            throw;
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not InvalidOperationException)
         {
@@ -471,7 +544,24 @@ internal static class KokoroSpeech
         }
         finally
         {
-            Gate.Release();
+            if (stillRendering && saying is not null)
+            {
+                // Observed, so a render that fails after being given up on
+                // is not reported as an unobserved exception.
+                _ = saying.ContinueWith(
+                    done =>
+                    {
+                        _ = done.Exception;
+                        Gate.Release();
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+            else
+            {
+                Gate.Release();
+            }
         }
 
         // A tenth of a second at 24 kHz, 16-bit mono. Anything shorter isn't a line.
@@ -483,6 +573,41 @@ internal static class KokoroSpeech
         var wav = EncodeWav(pcm, KokoroPlayback.waveFormat);
         LineCache.Put(key, wav);
         return LineCache.Copy(wav);
+    }
+
+    /// <summary>
+    /// Waits for the gate. A line in the voice queue waits GateWait at most,
+    /// as it always has: it holds the voice loop while it waits. A line
+    /// rendered ahead waits as long as the render holding the gate is still
+    /// allowed, and GateWait past that - so it is never failed for waiting
+    /// behind the recap, and gives up GateWait after a stuck render should
+    /// have finished. A line that took the gate meanwhile, with a limit of
+    /// its own, is waited for in turn.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">When the line before this one is still going past all of that.</exception>
+    private static async Task WaitForGateAsync(bool patient, CancellationToken cancel)
+    {
+        var started = DateTime.UtcNow;
+
+        while (true)
+        {
+            var busyUntil = Interlocked.Read(ref _gateBusyUntilTicks);
+            var left = new DateTime(busyUntil, DateTimeKind.Utc) - DateTime.UtcNow;
+            var wait = patient && left > TimeSpan.Zero ? left + GateWait : GateWait;
+
+            if (await Gate.WaitAsync(wait, cancel).ConfigureAwait(false))
+            {
+                return;
+            }
+
+            var busyNow = Interlocked.Read(ref _gateBusyUntilTicks);
+
+            if (!patient || busyNow == busyUntil || new DateTime(busyNow, DateTimeKind.Utc) <= DateTime.UtcNow)
+            {
+                throw new InvalidOperationException(
+                    $"The Kokoro voice was still busy with the line before this one after {(DateTime.UtcNow - started).TotalSeconds:0} s.");
+            }
+        }
     }
 
     /// <summary>
