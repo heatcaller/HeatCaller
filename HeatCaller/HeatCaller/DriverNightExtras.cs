@@ -143,14 +143,25 @@ internal static class DriverNightExtras
             // up ahead (AchievementEvaluator.GridPlace, no ghosts, no DQs),
             // and a slot past the field - left over from a bigger race - is
             // no grid position at all.
-            var gridField = results.Count(r => r is not null && !string.IsNullOrWhiteSpace(r.Transponder));
+            //
+            // WHY (6 Nov 2026, Bug hunt 11b review): that last rule capped the
+            // slot at the number of result rows, and the rows are not the
+            // slots. A heat from a stated roster of six with a normal start
+            // where slot 3 never shows files five rows (a no-show gets a
+            // standing only in a hand-released start, and a stated roster is
+            // never renumbered), so the slot-6 driver lost their Start and
+            // "Gained N places" although they plainly started 5th of the real
+            // cars. GridPlace counts only the real cars ahead that turned a
+            // lap, so it never ranks anyone past the field, and the leftover
+            // slot the cap was for (a borrowed grid's slot 8 in a five-car
+            // heat) is now numbered over the starters at source
+            // (RaceControlSession.RenumberStartPositionsOverStarters). So no
+            // cap, here or in NightMoments' Charge moment: the two agree.
             var realCars = results
                 .Where(r => r is not null && !string.IsNullOrWhiteSpace(r.Transponder) && !Ghosts.IsGhost(r.Transponder))
                 .Where(r => !string.Equals((r.Outcome ?? string.Empty).Trim(), ResultEditor.Dq, StringComparison.OrdinalIgnoreCase))
                 .ToList();
-            var grid = row.StartPosition > 0 && row.StartPosition <= gridField
-                ? AchievementEvaluator.GridPlace(realCars, row)
-                : 0;
+            var grid = AchievementEvaluator.GridPlace(realCars, row);
 
             races.Add(new NightRace
             {

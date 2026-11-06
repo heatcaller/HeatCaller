@@ -91,7 +91,20 @@ public sealed class PaceWatch
     /// </summary>
     public Func<string, bool>? CanHoldRecord { get; set; }
 
+    /// <summary>
+    /// Whether Race Control would write this lap onto the layout as its new
+    /// record: (driver, lap seconds, the record it beats in seconds). False
+    /// in a demo or practice run, and for a lap RecordPlausibility doubts.
+    /// Unset, every lap that beats the record would (Bug hunt 11b).
+    /// </summary>
+    public Func<string, double, double, bool>? RecordWouldStand { get; set; }
+
     private (double Seconds, string Holder)? _layoutAtGreen;
+
+    // The laps this race Race Control would have written onto the layout,
+    // per driver - only kept while RecordWouldStand is wired. See
+    // RecordEligibleBest.
+    private readonly Dictionary<string, List<double>> _recordLapsTaken = new(StringComparer.Ordinal);
 
     /// <summary>
     /// How much faster a lap has to be before it counts as beating
@@ -178,12 +191,38 @@ public sealed class PaceWatch
         // LayoutAtGreen), this race's own best is counted only from drivers
         // who can hold it, and a driver who cannot hold it is never told
         // they broke it.
+        //
+        // WHY (6 Nov 2026, Bug hunt 11b review): CanHoldRecord was only half
+        // of Race Control's rule. CheckAndAnnounceTrackRecord also refuses
+        // every lap of a demo or practice run, and a lap it cannot believe
+        // ("All-time record NOT taken" in the log). So a misread 7.2 s under
+        // a 9.8 s record, never written to the layout, was still called "the
+        // fastest lap ever set on this layout", and so was every demo lap
+        // that beat the real record. Now a lap is called a record only when
+        // Race Control would take it (RecordWouldStand, wired to
+        // RecordPlausibility - the one rule both use), judged here against
+        // the record as it stood when the lap was driven, because the layout
+        // has already moved on by the time the announcer reads the lap.
         if (LayoutAtGreen() is { } layout && CanHoldRecord?.Invoke(lap.DriverId) != false)
         {
             var (eligibleBest, eligibleHolder) = RecordEligibleBest(sessionBest, sessionHolder);
             var (mark, holder) = Standing(layout.Seconds, layout.Holder, eligibleBest, eligibleHolder);
 
-            if (Beats(lap.LapSeconds, mark))
+            var wouldStand = mark > 0
+                && lap.LapSeconds < mark
+                && RecordWouldStand?.Invoke(lap.DriverId, lap.LapSeconds, mark) != false;
+
+            if (wouldStand && RecordWouldStand is not null)
+            {
+                if (!_recordLapsTaken.TryGetValue(lap.DriverId, out var taken))
+                {
+                    _recordLapsTaken[lap.DriverId] = taken = new List<double>();
+                }
+
+                taken.Add(lap.LapSeconds);
+            }
+
+            if (wouldStand && Beats(lap.LapSeconds, mark))
             {
                 return new PaceNote(lap.DriverId, lap.LapSeconds, PaceNoteKind.LayoutRecord, mark, holder);
             }
@@ -255,6 +294,29 @@ public sealed class PaceWatch
     /// </summary>
     private (double Seconds, string? Holder) RecordEligibleBest(double sessionBest, string? sessionHolder)
     {
+        // With RecordWouldStand wired, only the laps Race Control would have
+        // taken (Bug hunt 11b, 6 Nov 2026): a refused phantom is not the
+        // record, and must not become the bar a real record has to beat.
+        if (RecordWouldStand is not null)
+        {
+            var bestTaken = double.MaxValue;
+            string? takenBy = null;
+
+            foreach (var (driver, laps) in _recordLapsTaken)
+            {
+                foreach (var seconds in laps)
+                {
+                    if (seconds > 0 && seconds < bestTaken)
+                    {
+                        bestTaken = seconds;
+                        takenBy = driver;
+                    }
+                }
+            }
+
+            return (bestTaken, takenBy);
+        }
+
         if (CanHoldRecord is not { } canHold)
         {
             return (sessionBest, sessionHolder);
@@ -308,10 +370,17 @@ public sealed class PaceWatch
 
         _bestThisSession.Remove(driverId);
 
-        var best = survivingLapSeconds
+        var surviving = survivingLapSeconds
             .Where(s => s > 0 && s <= LongestCredibleLap)
-            .DefaultIfEmpty(0)
-            .Min();
+            .ToList();
+
+        var best = surviving.DefaultIfEmpty(0).Min();
+
+        // A record lap taken off stops being the record this race holds.
+        if (_recordLapsTaken.TryGetValue(driverId, out var taken))
+        {
+            taken.RemoveAll(t => !surviving.Any(s => Math.Abs(s - t) < 1e-9));
+        }
 
         if (best > 0)
         {
@@ -341,11 +410,114 @@ public sealed class PaceWatch
     {
         _bestThisSession.Clear();
         _personalBestSaid.Clear();
+        _recordLapsTaken.Clear();
         _sessionBest = double.MaxValue;
         _sessionBestHolder = null;
         _lapsSeen = 0;
 
         // The record as it stands now, at the green - see LayoutAtGreen.
         _layoutAtGreen = LayoutRecord?.Invoke();
+    }
+}
+
+/// <summary>
+/// Whether a lap that beats a layout's all-time record is one Race Control
+/// will write onto the layout - the one rule its record
+/// (RaceControlControl.CheckAndAnnounceTrackRecord) and the announcer's
+/// PaceWatch both follow.
+///
+/// WHY (6 Nov 2026, Bug hunt 11b review): the plausibility questions lived
+/// inside Race Control as IsPlausibleRecord, so the announcer could not ask
+/// them, and called laps "the fastest ever on this layout" that the layout
+/// never took. Moved here unchanged, so the two cannot drift apart.
+///
+/// The two possible mistakes do not cost the same. Refusing a real record
+/// costs one lap: the driver is on the pace and will do it again. Accepting
+/// a phantom writes a time nobody drove into the club's permanent record,
+/// where it becomes a ghost pace source, an achievement and an announcement
+/// - and nothing in the app ever questions it again. The only way back is
+/// to clear the record by hand on the track layout.
+///
+/// A transponder left sitting under the bridge retriggers, and any two of
+/// those reads far enough apart to clear the minimum lap time are counted
+/// as a lap. That is what the minimum is for, and the operator sets it. But
+/// a lap wildly off the pace of everything around it is not a record,
+/// whatever the decoder said.
+///
+/// Three questions, any one of which is enough to leave the record alone.
+/// They are deliberately loose - each is asking whether the time is
+/// possible, not whether it is impressive.
+/// </summary>
+public static class RecordPlausibility
+{
+    /// <summary>
+    /// Whether Race Control would write this lap onto the layout: never in a
+    /// demo or practice run (simulated lap times are fake), otherwise only
+    /// when <see cref="Doubt(RaceTiming, string, long, long)"/> finds
+    /// nothing. Who may hold a record at all is asked separately
+    /// (AchievementEvaluator.CanHoldTrackRecord).
+    /// </summary>
+    public static bool WouldTake(RaceTiming race, string transponder, long lapMs, long recordLapMs) =>
+        !race.IsDemoMode && !race.IsPracticeMode && Doubt(race, transponder, lapMs, recordLapMs) is null;
+
+    /// <summary>
+    /// Why this lap is not believable as a record, judged against the race
+    /// it was driven in, or null when it is. recordLapMs is the record it
+    /// beats (0 for none).
+    /// </summary>
+    public static string? Doubt(RaceTiming race, string transponder, long lapMs, long recordLapMs)
+    {
+        var own = race.GetOrderedStandings()
+            .FirstOrDefault(s => string.Equals(s.TransponderId, transponder, StringComparison.OrdinalIgnoreCase));
+
+        // Recovery laps are left out too (RaceGaps.PaceLaps): one spans a
+        // whole stoppage, and a few of them would lift the median until an
+        // ordinary lap looked like a phantom.
+        return Doubt(lapMs, race.MinLapTimeMs, recordLapMs, own is null ? null : RaceGaps.PaceLaps(own));
+    }
+
+    /// <summary>
+    /// The rule on plain numbers: why a lap of lapMs beating recordLapMs
+    /// (0 for none) is not believable, or null when it is.
+    /// driverPaceLapsMs are the driver's pace laps this race.
+    /// </summary>
+    public static string? Doubt(long lapMs, int minLapTimeMs, long recordLapMs, IEnumerable<long>? driverPaceLapsMs)
+    {
+        // 1. Sitting on top of the minimum is the shape of a retrigger, not
+        //    of a lap. The operator sets the minimum just under a real lap
+        //    for the class, so a tenth above it is inside the very noise
+        //    that setting exists to describe.
+        if (minLapTimeMs > 0 && lapMs < minLapTimeMs * 1.1)
+        {
+            return $"it is within a tenth of the {minLapTimeMs / 1000.0:0.000}s minimum lap time, which is what a retriggering transponder looks like";
+        }
+
+        // 2. Against the record it claims to beat. Track records fall by
+        //    hundredths and occasionally by tenths. A quarter of a lap is
+        //    not an improvement, it is a different event.
+        if (recordLapMs > 0 && lapMs < recordLapMs * 0.75)
+        {
+            return $"it beats the standing record of {recordLapMs / 1000.0:0.000}s by more than a quarter";
+        }
+
+        // 3. Against the driver's own laps - which is what catches a single
+        //    bad read on a layout that has no record yet. A median rather
+        //    than a best, so one phantom cannot drag down the figure it is
+        //    being judged against, and only once there are enough laps for
+        //    a median to mean anything. (PaceLaps leaves out index 0, the
+        //    start lap, which is not a lap of the circuit.)
+        var theirLaps = driverPaceLapsMs?.Where(t => t > 0).OrderBy(t => t).ToList();
+
+        if (theirLaps is { Count: >= 3 })
+        {
+            var median = theirLaps[theirLaps.Count / 2];
+
+            if (lapMs < median * 0.5)
+            {
+                return $"it is less than half this driver's typical {median / 1000.0:0.000}s lap this race";
+            }
+        }
+
+        return null;
     }
 }

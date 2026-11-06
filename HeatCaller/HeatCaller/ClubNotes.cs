@@ -511,22 +511,30 @@ internal sealed class ClubNotes
             // Forget, 5 Nov 2026, Bug hunt 11 review): already handled, so
             // answered as filed and on disk - the collector then confirms
             // the relay's copy instead of filing it as a new note again.
-            if (_goneWhileHeldOnRelay.Contains(said))
+            //
+            // WHY ONE-SHOT (6 Nov 2026, Bug hunt 11b review): the entry stayed
+            // for the rest of the process, so once "Go Sam!" had been removed
+            // while held, every later "Go Sam!" anybody sent was answered as
+            // filed, confirmed and deleted from the relay - never seen. The
+            // entry stands for ONE leftover relay copy; matched, it is spent.
+            if (_goneWhileHeldOnRelay.Remove(said))
             {
                 return null;
             }
 
-            if (_file.Notes.Count(one => !WasTyped(one)) >= MostFromTheRoom)
-            {
-                return "The announcer has plenty to get through already tonight. Try again in a while.";
-            }
+            // ALREADY ON THE LIST BEFORE THE CAPS (6 Nov 2026, Bug hunt 11b
+            // review): a note already held is not a new note, so it is never
+            // refused for room. The caps were asked first, and with the file
+            // unreadable (or a write failed) a full list - twelve from the
+            // room - answered every held note's relay copy with "plenty to get
+            // through" and notOnDisk false. The collector counted that a
+            // refusal and confirmed it, and the relay deleted the only copy
+            // that would survive a restart.
+            var already = _file.Notes
+                .Where(one => string.Equals(Tidy(one.Text), said, StringComparison.CurrentCultureIgnoreCase))
+                .ToList();
 
-            if (_file.Notes.Count >= MostNotes)
-            {
-                return "The announcer has plenty to get through already tonight. Try again in a while.";
-            }
-
-            if (_file.Notes.Any(one => string.Equals(Tidy(one.Text), said, StringComparison.CurrentCultureIgnoreCase)))
+            if (already.Count > 0)
             {
                 // Said as though it worked, because it did: somebody pressing
                 // send twice has got their message in, and telling them it
@@ -539,7 +547,37 @@ internal sealed class ClubNotes
                 }
 
                 notOnDisk = LoadedUnreadable || !_onDisk;
+
+                // ON DISK NOW, AND THE RELAY'S COPY IS ABOUT TO BE CONFIRMED
+                // (6 Nov 2026, Bug hunt 11b review): it is no longer held on
+                // the relay, so removing it later must not leave a
+                // _goneWhileHeldOnRelay entry that swallows the next
+                // shout-out with the same words. Cleared here, when the relay
+                // copy is matched, rather than on any good save: a save that
+                // works and then a removal before the next poll would
+                // otherwise let the leftover copy be filed again.
+                if (!notOnDisk)
+                {
+                    foreach (var one in already)
+                    {
+                        if (one.Id is not null)
+                        {
+                            _heldOnRelay.Remove(one.Id);
+                        }
+                    }
+                }
+
                 return null;
+            }
+
+            if (_file.Notes.Count(one => !WasTyped(one)) >= MostFromTheRoom)
+            {
+                return "The announcer has plenty to get through already tonight. Try again in a while.";
+            }
+
+            if (_file.Notes.Count >= MostNotes)
+            {
+                return "The announcer has plenty to get through already tonight. Try again in a while.";
             }
 
             var id = Guid.NewGuid().ToString("N");

@@ -356,7 +356,19 @@ internal static class NightMoments
         // its charge. DriverCut.ChargeFromARealSlot counts real cars only and
         // so is the stricter of the two; a driver's own piece never says
         // more than this does.
-        var field = record.Results.Count(one => !string.IsNullOrWhiteSpace(one.Transponder));
+        //
+        // WHY (6 Nov 2026, Bug hunt 11b review): but the rows are not the
+        // slots. A stated roster of six with a normal start where slot 3
+        // never shows files five rows (a no-show gets a standing only in a
+        // hand-released start, and a stated roster is never renumbered), so
+        // the slot-6 driver's charge was thrown away although GridPlace puts
+        // them 5th of the real cars - and the night page, which copied this
+        // cap, lost their Start too. GridPlace counts only real cars ahead
+        // that turned a lap, so it never ranks anyone past the field, and
+        // the leftover slot this was for (a borrowed grid's slot 8 in a
+        // five-car heat) is now numbered over the starters at source
+        // (RaceControlSession.RenumberStartPositionsOverStarters). The cap is
+        // gone here and on the night page alike, so the two still agree.
 
         foreach (var row in scored)
         {
@@ -364,7 +376,7 @@ internal static class NightMoments
             // they started - a race run without a grid - and "up from
             // nowhere" is not a fact. A car that never turned a lap made up
             // nothing, and the badge does not look at it either.
-            if (row.StartPosition <= 0 || row.StartPosition > field || row.Position <= 0 || row.Laps < 1)
+            if (row.StartPosition <= 0 || row.Position <= 0 || row.Laps < 1)
             {
                 continue;
             }

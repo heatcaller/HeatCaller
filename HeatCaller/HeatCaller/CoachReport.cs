@@ -127,8 +127,16 @@ internal static class CoachReport
         var clean = laps.Where(l => l <= best * CleanLapFactor).ToList();
         var lines = new List<string>();
 
+        // 6 Nov 2026, Bug hunt 11b review: a session saved with the bare
+        // sector count before bug hunt 11 keyed the cut on the tiles is read
+        // as the layout's first placed cut (SectorCutHistory), so a night
+        // that spans the upgrade - or a rival's earlier heat - is not split
+        // off although the loops never moved. Every saved session, so the
+        // first placement is the layout's, not just tonight's.
+        var cuts = new SectorCutHistory(input.History);
+
         // 1. Best lap, and the ideal lap.
-        var bestSectors = BestSectors(mine);
+        var bestSectors = BestSectors(mine, cuts);
         var where = layout.Length > 0 ? $" on {layout}" : string.Empty;
 
         if (bestSectors is { } sectors && sectors.Bests.Sum() < best)
@@ -158,7 +166,7 @@ internal static class CoachReport
         }
 
         // 3. The sector that costs the most.
-        if (bestSectors is { } bests && CostliestSector(mine, bests.Bests, bests.Cut, best) is { } costly)
+        if (bestSectors is { } bests && CostliestSector(mine, bests.Bests, bests.Cut, best, cuts) is { } costly)
         {
             lines.Add($"Sector {Words.Number(costly.Index + 1)} is where most of your time goes: "
                       + $"on a clean lap you are {Gap(costly.LossMs)}s slower through it than your best.");
@@ -184,7 +192,7 @@ internal static class CoachReport
         }
 
         // 6. Against the quickest driver they raced with.
-        if (Benchmark(who, mine, best, bestSectors, input.NameOf, input.NightWord) is { } benchmark)
+        if (Benchmark(who, mine, best, bestSectors, cuts, input.NameOf, input.NightWord) is { } benchmark)
         {
             lines.Add(benchmark);
         }
@@ -236,7 +244,7 @@ internal static class CoachReport
     /// layout they measured laps (and a rival's sectors) cut one way against
     /// bests cut another, and could blame the wrong stretch of track.
     /// </summary>
-    private static (long[] Bests, string Cut)? BestSectors(IReadOnlyList<Run> runs)
+    private static (long[] Bests, string Cut)? BestSectors(IReadOnlyList<Run> runs, SectorCutHistory cuts)
     {
         var withSectors = runs
             .Select(r => (Run: r, Bests: Sectors.Bests(r.Entry)))
@@ -248,12 +256,12 @@ internal static class CoachReport
             return null;
         }
 
-        var cut = withSectors[^1].Run.Session.SectorCutOf(withSectors[^1].Bests!);
+        var cut = withSectors[^1].Run.Session.SectorCutOf(withSectors[^1].Bests!, cuts);
         long[]? best = null;
 
         foreach (var (run, bests) in withSectors)
         {
-            if (bests!.Length != withSectors[^1].Bests!.Length || run.Session.SectorCutOf(bests) != cut)
+            if (bests!.Length != withSectors[^1].Bests!.Length || run.Session.SectorCutOf(bests, cuts) != cut)
             {
                 continue;
             }
@@ -274,7 +282,7 @@ internal static class CoachReport
     /// own best through it, on average - or null with too few clean laps that
     /// carry sectors, or when no sector loses as much as a hundredth.
     /// </summary>
-    private static (int Index, long LossMs)? CostliestSector(IReadOnlyList<Run> runs, long[] bests, string cut, long bestLap)
+    private static (int Index, long LossMs)? CostliestSector(IReadOnlyList<Run> runs, long[] bests, string cut, long bestLap, SectorCutHistory cuts)
     {
         var losses = new long[bests.Length];
         var counted = 0;
@@ -289,7 +297,7 @@ internal static class CoachReport
                     || run.Entry.SectorsOf(lap) is not { } sectors || sectors.Length != bests.Length
                     // WHY (22 Oct 2026): a lap cut differently from the bests (the
                     // split loop moved) is a different stretch of track per sector.
-                    || run.Session.SectorCutOf(sectors) != cut)
+                    || run.Session.SectorCutOf(sectors, cuts) != cut)
                 {
                     continue;
                 }
@@ -385,7 +393,7 @@ internal static class CoachReport
     /// layout - and, with sector times cut the same way on both, which
     /// sector most of the gap is in. Ghost cars are not drivers.
     /// </summary>
-    private static string? Benchmark(string who, IReadOnlyList<Run> mine, long best, (long[] Bests, string Cut)? mineSectors, Func<string, string> nameOf, string nightWord)
+    private static string? Benchmark(string who, IReadOnlyList<Run> mine, long best, (long[] Bests, string Cut)? mineSectors, SectorCutHistory cuts, Func<string, string> nameOf, string nightWord)
     {
         var rivals = mine
             .Select(r => r.Session)
@@ -430,7 +438,7 @@ internal static class CoachReport
         if (mineSectors is { } ms
             && Sectors.Bests(quickest.Run.Entry) is { } theirs
             && theirs.Length == ms.Bests.Length
-            && quickest.Run.Session.SectorCutOf(theirs) == ms.Cut)
+            && quickest.Run.Session.SectorCutOf(theirs, cuts) == ms.Cut)
         {
             var behind = ms.Bests.Select((mineMs, i) => mineMs - theirs[i]).ToArray();
             var worst = Array.IndexOf(behind, behind.Max());

@@ -350,12 +350,55 @@ public partial class MainForm
             // it: the announcer says an unnamed car's number, and a
             // transponder number must never go online.
             .Where(l => namesACarByNumber?.Invoke(l.Said) != true)
-            .Select(l => new CaptionLine(l.N, register.Redact(l.Text), l.AtUtc))
-            // "Shorten published names" (23 Oct 2026, bug hunt 10): the
-            // pages showed "Sam S." while this showed "Sam Smith".
-            .Select(l => shorten is null ? l : new CaptionLine(l.N, shorten(l.Text), l.AtUtc))
+            .Select(l => PublicPiece(l, register, shorten))
             .Where(l => l.Text.Length > 0)
             .ToList();
+    }
+
+    /// <summary>
+    /// One captioned piece as it goes online: redacted, and with "Shorten
+    /// published names" (23 Oct 2026, bug hunt 10 - the pages showed "Sam S."
+    /// while this showed "Sam Smith") shortened. Keeps the piece's number and
+    /// time; its text may come out empty, and is then left out.
+    /// </summary>
+    private static CaptionLine PublicPiece(CaptionLine l, PublicPrivacy register, Func<string, string>? shorten)
+    {
+        var redacted = register.Redact(l.Text);
+
+        if (shorten is null)
+        {
+            return new CaptionLine(l.N, redacted, l.AtUtc);
+        }
+
+        // 6 Nov 2026, Bug hunt 11b review: shortened piece by piece, a long
+        // line cut inside a name ("...third is Sam" / "Smith in the...") gave
+        // the shortener neither piece with the full name in it, so it changed
+        // nothing and the full surname went online. A piece of a longer line
+        // is now taken from the WHOLE line shortened (and redacted) first and
+        // then cut again by CaptionLog's own rule - the piece at the same
+        // place. A shortened line is never longer, so it cuts into as many
+        // pieces or fewer: a later piece with nothing left comes out empty and
+        // is left out, and the numbering of the rest is untouched. The room's
+        // own captions keep the pieces as heard.
+        var whole = l.WholeText is null ? null : CaptionLog.Pieces(l.WholeText);
+
+        if (whole is null || whole.Count <= 1)
+        {
+            return new CaptionLine(l.N, shorten(redacted), l.AtUtc);
+        }
+
+        var cut = CaptionLog.Pieces(shorten(register.Redact(l.WholeText!)));
+        var i = l.PieceIndex;
+
+        var text = i >= cut.Count || i >= whole.Count
+            ? string.Empty
+            // The line's last piece carries whatever is left, should a
+            // shortener ever make a line longer: nothing is dropped unseen.
+            : i == whole.Count - 1 ? string.Join(" ", cut.Skip(i)) : cut[i];
+
+        // Redacted again as the second layer it always was - the cut can't
+        // join a name back together, but it costs nothing to be sure.
+        return new CaptionLine(l.N, register.Redact(text), l.AtUtc);
     }
 
     /// <summary>A UTC time as the relay's documents write it, to the second: "2026-10-22T19:40:10Z".</summary>

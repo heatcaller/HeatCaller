@@ -216,12 +216,20 @@ internal static class DriverCut
             // used to take its grid from the previous race's whole field, so
             // results already saved can carry "8th on the grid" in a five-car
             // heat - and "up from 8th" is a climb that never happened.
-            if (row.StartPosition > 0 && row.Position > 0 && row.StartPosition != row.Position
-                && row.StartPosition <= field)
+            //
+            // 6 Nov 2026, Bug hunt 11b review: the slot is ranked over the
+            // real cars (AchievementEvaluator.GridPlace), as the night page
+            // and NightMoments now do, instead of refusing any slot past the
+            // number of result rows. A stated roster keeps a no-show's slot,
+            // so slot 6 in a five-row heat is a real start - 5th on the grid
+            // that actually formed - not a slot left over from a bigger race.
+            var grid = AchievementEvaluator.GridPlace(RealCars(race), row);
+
+            if (grid > 0 && row.Position > 0 && grid != row.Position)
             {
-                said.Append(row.StartPosition > row.Position
-                    ? $", up from {Ordinal(row.StartPosition)} on the grid"
-                    : $", having started {Ordinal(row.StartPosition)}");
+                said.Append(grid > row.Position
+                    ? $", up from {Ordinal(grid)} on the grid"
+                    : $", having started {Ordinal(grid)}");
             }
 
             said.Append('.');
@@ -397,11 +405,19 @@ internal static class DriverCut
             return false;
         }
 
-        var field = race.Results.Count(one =>
-            !string.IsNullOrWhiteSpace(one.Transponder) && !GhostService.IsGhost(one.Transponder));
-
-        return row.StartPosition > 0 && row.StartPosition <= field;
+        // 6 Nov 2026, Bug hunt 11b review: the same rule as the sentence
+        // above and NightMoments - a slot ranked over the real cars - so a
+        // driver behind a no-show on a stated roster keeps the charge the
+        // night page shows.
+        return AchievementEvaluator.GridPlace(RealCars(race), row) > 0;
     }
+
+    /// <summary>The cars that held a real place on the grid: no ghosts, no blank rows, no disqualified cars - the set the night page ranks a slot over.</summary>
+    private static List<SessionResultEntry> RealCars(SessionRecord race) =>
+        race.Results
+            .Where(one => one is not null && !string.IsNullOrWhiteSpace(one.Transponder) && !GhostService.IsGhost(one.Transponder))
+            .Where(one => !string.Equals((one.Outcome ?? string.Empty).Trim(), ResultEditor.Dq, StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
     /// <summary>This driver's row in a race, or null when they were not in it.</summary>
     private static SessionResultEntry? Rowed(SessionRecord race, string transponder) =>
