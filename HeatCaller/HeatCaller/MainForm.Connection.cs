@@ -218,6 +218,20 @@ public partial class MainForm
         btnConnect.Enabled = state is DecoderConnectionState.Disconnected or DecoderConnectionState.Error;
         btnDisconnect.Enabled = !btnConnect.Enabled;
 
+        // WHY (2026-11-05, Bug hunt 11: Disconnect greyed out while a decoder
+        // from 3 up keeps retrying): their client goes on trying every few
+        // seconds after an Error ("press Disconnect to stop"), so Disconnect
+        // stays usable then - it greyed out, and the only way to stop the
+        // retries was to switch decoder or close the app. Connect stays too,
+        // to try again at once with a corrected address.
+        if (state == DecoderConnectionState.Error
+            && DecoderConnection.IsStream(SelectedDecoder)
+            && _streamClient.Decoder == SelectedDecoder
+            && _streamClient.State == DecoderConnectionState.Error)
+        {
+            btnDisconnect.Enabled = true;
+        }
+
         if (state == DecoderConnectionState.Connected)
         {
             var known = _profiles.All;
@@ -385,6 +399,16 @@ public partial class MainForm
         // measured between (1 Nov 2026): a decoder from 3 up as the line in
         // the meantime leaves it as it was, rather than turning it round on
         // the way there and again on the way back to the same one.
+        //
+        // WHY (2026-11-05, Bug hunt 11: the offset was not turned round after
+        // a restart): _classicLine started each run empty, so a run that
+        // began on a decoder from 3 up never turned it round on the way to
+        // the other of the two. It starts from the one saved instead.
+        if (_classicLine is null && _settings.SplitLoopOffsetLine is DecoderConnection.EasyLap or DecoderConnection.ILap)
+        {
+            _classicLine = _settings.SplitLoopOffsetLine;
+        }
+
         if (!DecoderConnection.IsStream(decoder) && _classicLine is { } classic && classic != decoder && _settings.SplitLoopOffsetMs != 0)
         {
             _settings.SplitLoopOffsetMs = -_settings.SplitLoopOffsetMs;
@@ -403,6 +427,9 @@ public partial class MainForm
         if (!lineIsStream)
         {
             _classicLine = decoder;
+
+            // Saved with LastConnectionType below - Bug hunt 11 (2026-11-05), see above.
+            _settings.SplitLoopOffsetLine = decoder;
         }
 
         // A decoder from 3 up can't have a split loop beside it yet (see
