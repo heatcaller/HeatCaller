@@ -4,6 +4,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The standard first-night guide is club rules (6 November).** **Your first night - what happens** now covers checking in, safety in the pits, batteries, the driver stand, racing clean, the start, marshalling, race control and leaving the place tidy, instead of how the page works. A club's own guide is unchanged. A club that had sent the old standard guide unchanged gets the new one; the **Club Website** page shows it in the box. Update HeatCaller on the race PC and redeploy the relay (`fly deploy --ha=false`).
+
 - **The first-night guide on Home (6 November).** **Your first night - what happens** is now the first thing on Home, for every phone, folded until tapped. **Got it - hide this** hides it for good on that phone, here and on the check-in and night pages.
 
 - **A shorter Home (6 November).** The **You** card (a remembered driver's best finish, standings place and newest achievement) is gone, since **Me** has all of it. So is the **Up next** card at the top while the next race is only waiting: **On track now** still shows while a race is running, and **Schedule** has the running order.

@@ -8667,16 +8667,21 @@ function clubParts(name) {
   }
 }
 
+// THE STANDARD GUIDE AS CLUB RULES (6 Nov 2026, Asher: "rework the default
+// first night. make it about general club rules"): how to race at a club
+// rather than how this page works. RelayDocuments.cs in the app has it word
+// for word (FirstNightGuideTests checks), so no apostrophes or quotes in it.
 const STANDARD_GUIDE = [
-  ['This page', 'When a time like "about 7 min (19:42)" shows, that is when your race should start. Turn on alerts and keep the page open: your phone beeps twice and buzzes when your race is next, and again when it is staged.'],
-  ['Heats and mains', 'You race a few short heats first. How you do in them decides which main (final) you race in later, with drivers of a similar pace.'],
-  ['Your grid slot', 'Every race gives you a grid slot - where your car starts. Slot 1 is the front.'],
-  ['Staged', 'When your race is staged, go to the driver stand with your radio, put your car on the track and wait for the start.'],
-  ['The start', 'A countdown runs before every start. Wait for the start signal - going early is a jump start, and it can add time to your race.'],
-  ['Your transponder', 'The small transponder on your car counts your laps. Make sure it is switched on and mounted before every race, and drive past the timing line once to check it is seen.'],
-  ['Warnings', 'Race control can give a warning for blocking or rough driving. More warnings add time to your race.'],
-  ['Marshal after your race', 'After you race, you marshal the next one: stand at your post beside the track and put back any car that flips or gets stuck. Everybody takes a turn.'],
-  ['Questions', 'Ask at the timing desk. Everybody was new once.'],
+  ['Welcome', 'Everybody here was new once. If you are not sure about anything, ask anyone in the pits or at the timing desk.'],
+  ['Check in first', 'Check in before you race so the timing desk can put you in the heats. Fit your transponder, switch it on, and make sure its number matches the one the desk has.'],
+  ['Safety in the pits', 'Cars run on the track only - never in the pits, the car park or the walkways. Switch your radio on before your car, and your car off before your radio.'],
+  ['Batteries', 'Charge LiPo packs in a LiPo bag or a safe box, and never leave them charging on their own. Stop using any pack that is puffed up, dented or damaged.'],
+  ['On the driver stand', 'Stay on the stand for the whole race. If your car breaks down, say so and park it off the racing line.'],
+  ['Race clean', 'Give other cars room and do not block. If you knock someone out of a place, wait and let them back past. When the leaders come up to lap you, hold your line and let them through.'],
+  ['The start', 'Wait for the start signal. Going early is a jump start, and it can add time to your race.'],
+  ['Marshal after your race', 'After you race, you marshal the next one: stand at your post, get to a flipped or stuck car quickly and put it back where it left the track. Watch for cars coming.'],
+  ['Race control', 'Race control has the last word on the night. If you think something was wrong, ask at the desk after the race, not during it.'],
+  ['Leave it tidy', 'Keep your pit space tidy, take your rubbish home, and leave the track as you found it.'],
 ];
 
 const OWN_GUIDE = clubGuide();

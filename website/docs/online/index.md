@@ -245,15 +245,18 @@ On a driver's first night at the club (HeatCaller has no result for them before 
 
 | Heading | What it covers |
 |---|---|
-| This page | What the start time means, and turning on alerts. |
-| Heats and mains | Heats first; how they do decides which main (final) they race in. |
-| Your grid slot | Where the car starts. Slot 1 is the front. |
-| Staged | Go to the driver stand with the radio, put the car on the track and wait for the start. |
-| The start | The countdown, and why going early is a jump start that can add time. |
-| Your transponder | Switched on and mounted before every race, and drive past the timing line once to check it. |
-| Warnings | Race control can warn for blocking or rough driving, and more warnings add time. |
-| Marshal after your race | Stand at your post and put back any car that flips or gets stuck. Everybody takes a turn. |
-| Questions | "Ask at the timing desk. Everybody was new once." |
+| Welcome | Everybody was new once; ask anyone in the pits or at the timing desk. |
+| Check in first | Check in so the desk can put them in the heats, with their transponder fitted, on and matching the desk's number. |
+| Safety in the pits | Cars on the track only. Radio on before the car, car off before the radio. |
+| Batteries | Charge LiPo packs in a LiPo bag or safe box, never unattended, and stop using a damaged pack. |
+| On the driver stand | Stay on the stand for the whole race; park a broken car off the racing line. |
+| Race clean | Give room, don't block, give back a place you took by contact, and let the leaders through. |
+| The start | Wait for the signal; going early is a jump start that can add time. |
+| Marshal after your race | Get to a flipped or stuck car quickly and put it back where it left the track. |
+| Race control | Race control has the last word; ask at the desk after the race, not during it. |
+| Leave it tidy | Tidy pit space, rubbish home, the track as they found it. |
+
+Since 6 November the standard guide is general club rules. Until then it explained the page itself, heats and mains, grid slots, staging, transponders and warnings. A club can write its own on the **Club Website** page; a club that had sent the old standard guide unchanged gets the new one.
 
 Under the guide, "Timing and race calls by HeatCaller." with **What's that?**, which opens the same short card about HeatCaller as the footer's mark.
 
