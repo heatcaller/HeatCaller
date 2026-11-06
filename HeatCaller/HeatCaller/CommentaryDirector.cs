@@ -318,12 +318,16 @@ public sealed class CommentaryDirector
         Budget.Release(waiting.Ticket, written: true);
         Account.DroppedAfterWriting();
 
+        // WHY (2026-11-05, Bug hunt 11): its sponsor credit was never heard,
+        // so it is not counted for the report and the ration goes back.
+        waiting.Sponsors.Unheard();
+
         // Nobody heard it, so it is not the line Repeat offers.
         _commentary.ForgetLine(segment!.Text);
     }
 
     /// <summary>A segment written and waiting for the host's word. See CommitWhenSpoken.</summary>
-    private sealed record AwaitingWord(Action Commit, long Ticket, IReadOnlyList<string> Keys, DateTime WrittenAt);
+    private sealed record AwaitingWord(Action Commit, long Ticket, IReadOnlyList<string> Keys, DateTime WrittenAt, SponsorCreditsHeld Sponsors);
 
     /// <summary>
     /// How long a written segment waits for Spoken or Dropped before it is
@@ -2062,6 +2066,11 @@ public sealed class CommentaryDirector
         // describing a race that has moved on.
         var asked = _clock();
 
+        // WHY (2026-11-05, Bug hunt 11): the segment's sponsor credit, counted
+        // for the report only once the line is said (Commit) and given back on
+        // every drop below - BuildSegmentAsync used to count it as written.
+        var sponsors = new SponsorCreditsHeld();
+
         try
         {
             Writing = true;
@@ -2073,11 +2082,12 @@ public sealed class CommentaryDirector
             // club's brain yet, and the local model is all it has.
             FallbackCommentaryBrain.RelayOnly = verdict.Fallback == BrainFallback.None && Budget.AllowanceKnown;
 
-            var written = await WriteAsync(kind, spec, pack, ct).ConfigureAwait(false);
+            var written = await WriteAsync(kind, spec, pack, ct, sponsors).ConfigureAwait(false);
 
             if (written is null)
             {
                 Budget.Release(verdict.Ticket);
+                sponsors.Unheard();
                 return null;
             }
 
@@ -2086,6 +2096,7 @@ public sealed class CommentaryDirector
                 // WHY (23 Oct 2026, bug hunt 10): the relay kept the charge for this written line, so the budget keeps it too.
                 Budget.Release(verdict.Ticket, written: true);
                 Account.DroppedAfterWriting();
+                sponsors.Unheard();
 
                 // Nobody heard it, so it is not the line Repeat offers.
                 _commentary.ForgetLine(written.Text);
@@ -2104,6 +2115,7 @@ public sealed class CommentaryDirector
                 // WHY (23 Oct 2026, bug hunt 10): the relay kept the charge for this written line, so the budget keeps it too.
                 Budget.Release(verdict.Ticket, written: true);
                 Account.DroppedAfterWriting();
+                sponsors.Unheard();
                 _commentary.ForgetLine(written.Text);
 
                 Say($"[brain] Dropped {spec.Title.ToLowerInvariant()} - the segments were held while it was being written.");
@@ -2121,6 +2133,7 @@ public sealed class CommentaryDirector
                 // WHY (23 Oct 2026, bug hunt 10): the relay kept the charge for this written line, so the budget keeps it too.
                 Budget.Release(verdict.Ticket, written: true);
                 Account.DroppedAfterWriting();
+                sponsors.Unheard();
 
                 // Nobody heard this one either - see the two drops above.
                 _commentary.ForgetLine(written.Text);
@@ -2142,6 +2155,7 @@ public sealed class CommentaryDirector
                 // WHY (23 Oct 2026, bug hunt 10): the relay kept the charge for this written line, so the budget keeps it too.
                 Budget.Release(verdict.Ticket, written: true);
                 Account.DroppedAfterWriting();
+                sponsors.Unheard();
                 _commentary.ForgetLine(written.Text);
 
                 Say("[brain] Dropped club notes - the note was taken off the list while it was being written.");
@@ -2187,6 +2201,10 @@ public sealed class CommentaryDirector
             void Commit()
             {
                 Budget.Settle(ticket);
+
+                // Its sponsor credit was heard: counted for the report now
+                // (2026-11-05, Bug hunt 11).
+                sponsors.Aired();
 
                 // IT WENT OUT, with the facts it was built from, at the same
                 // instant as everything else that is settled here - so a
@@ -2261,7 +2279,7 @@ public sealed class CommentaryDirector
 
             lock (_awaitingGate)
             {
-                _awaiting[written] = new AwaitingWord(Commit, ticket, pack.Keys, _clock());
+                _awaiting[written] = new AwaitingWord(Commit, ticket, pack.Keys, _clock(), sponsors);
             }
 
             return written;
@@ -2269,6 +2287,7 @@ public sealed class CommentaryDirector
         catch (Exception ex)
         {
             Budget.Release(verdict.Ticket);
+            sponsors.Unheard();
             Say($"[brain] {spec.Title} failed: {ex.GetType().Name}: {ex.Message}");
 
             return null;
@@ -2289,7 +2308,7 @@ public sealed class CommentaryDirector
     /// it is worth saying plainly: it only happens when the model ignored
     /// the format, and silence would cost more.
     /// </summary>
-    private async Task<SpokenSegment?> WriteAsync(SegmentKind kind, SegmentSpec spec, PackedFacts pack, CancellationToken ct)
+    private async Task<SpokenSegment?> WriteAsync(SegmentKind kind, SegmentSpec spec, PackedFacts pack, CancellationToken ct, SponsorCreditsHeld sponsors)
     {
         // ON THE RECAP SHOW THE SPONSOR IS CREDITED AT THE TOP of the
         // segment (21 Oct 2026), not at its end - see
@@ -2359,7 +2378,7 @@ public sealed class CommentaryDirector
             var turns = await _commentary
                 .BuildExchangeAsync(
                     kind, pack, host, _settings.CommentaryCoHostName,
-                    _settings.CommentaryExchangeTurns, ct, creditFirst)
+                    _settings.CommentaryExchangeTurns, ct, creditFirst, sponsors)
                 .ConfigureAwait(false);
 
             if (turns.Count > 0)
@@ -2382,7 +2401,7 @@ public sealed class CommentaryDirector
             Say($"[brain] {spec.Title} came back in one piece rather than two - saying it in one voice.");
         }
 
-        var line = await _commentary.BuildSegmentAsync(kind, pack, ct, creditFirst).ConfigureAwait(false);
+        var line = await _commentary.BuildSegmentAsync(kind, pack, ct, creditFirst, sponsors).ConfigureAwait(false);
 
         return string.IsNullOrWhiteSpace(line)
             ? null

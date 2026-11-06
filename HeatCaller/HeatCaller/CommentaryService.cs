@@ -3439,7 +3439,7 @@ public sealed class CommentaryService
     /// neither uses the ration nor goes in the report. Null when nobody
     /// presents it or the ration is holding it back.
     /// </summary>
-    private string? TakeLeadCredit(SegmentKind kind) => TakeSegmentCredit(kind, atTop: true);
+    private string? TakeLeadCredit(SegmentKind kind, SponsorCreditsHeld? holdCredit = null) => TakeSegmentCredit(kind, atTop: true, holdCredit);
 
     /// <summary>
     /// The sponsor's credit for a written segment of this kind, taken and
@@ -3448,7 +3448,7 @@ public sealed class CommentaryService
     /// hunt 10: a live two-hander's credit). One method so the two cannot
     /// drift apart.
     /// </summary>
-    private string? TakeSegmentCredit(SegmentKind kind, bool atTop)
+    private string? TakeSegmentCredit(SegmentKind kind, bool atTop, SponsorCreditsHeld? holdCredit = null)
     {
         string? asWritten;
         Action? count = null;
@@ -3480,13 +3480,22 @@ public sealed class CommentaryService
             return null;
         }
 
-        try
+        // WHY (2026-11-05, Bug hunt 11): a caller that can still drop the line
+        // after it is written (the director) holds the count until it is said.
+        if (holdCredit is not null && count is not null)
         {
-            count?.Invoke();
+            holdCredit.Hold(count, release);
         }
-        catch
+        else
         {
-            // The report is a courtesy; a failing count never costs the credit.
+            try
+            {
+                count?.Invoke();
+            }
+            catch
+            {
+                // The report is a courtesy; a failing count never costs the credit.
+            }
         }
 
         return atTop
@@ -4989,7 +4998,12 @@ public sealed class CommentaryService
     /// writes - the model is not told about them. False for everywhere else,
     /// where the model ends the segment with the credit.
     /// </param>
-    public async Task<string?> BuildSegmentAsync(SegmentKind kind, PackedFacts facts, CancellationToken ct = default, bool creditFirst = false)
+    /// <param name="holdCredit">
+    /// Where the sponsor's count for the report (and the ration's give-back)
+    /// waits until the caller knows whether the line was said - see
+    /// <see cref="SponsorCreditsHeld"/>. Null counts it once written, as before.
+    /// </param>
+    public async Task<string?> BuildSegmentAsync(SegmentKind kind, PackedFacts facts, CancellationToken ct = default, bool creditFirst = false, SponsorCreditsHeld? holdCredit = null)
     {
         if (Client is null || facts.Empty)
         {
@@ -5061,13 +5075,24 @@ public sealed class CommentaryService
         // recorded, so the line held (and compared by ForgetLine) is the one
         // spoken.
         var line = await RecordAndReturn(LabelFor(kind), creditFirst
-            ? CreditFirstAsync(writing, () => TakeLeadCredit(kind))
+            ? CreditFirstAsync(writing, () => TakeLeadCredit(kind, holdCredit))
             : sponsor.Length > 0
                 ? CreditLastAsync(writing, SponsoredMoments.Credit(SponsoredMoments.ForSegment(kind), sponsor, TaglineFor(sponsorAsWritten)))
                 : writing);
 
         if (taken is { } t && sponsor.Length > 0 && !string.IsNullOrWhiteSpace(line))
         {
+            // WHY (2026-11-05, Bug hunt 11): counting here put a segment the
+            // director or the announcer then dropped (next race called, Hold,
+            // too late) in the sponsor report and kept the ration over a line
+            // nobody heard. A caller that can drop it counts it when said and
+            // gives the ration back if not.
+            if (holdCredit is not null)
+            {
+                holdCredit.Hold(t.Count, t.Release);
+                return line;
+            }
+
             try
             {
                 t.Count();
@@ -5301,7 +5326,8 @@ public sealed class CommentaryService
         string? coHost,
         int turns = 2,
         CancellationToken ct = default,
-        bool creditFirst = false)
+        bool creditFirst = false,
+        SponsorCreditsHeld? holdCredit = null)
     {
         if (Client is null || facts.Empty || !CommentaryBudget.Spec(kind).CanBeExchange)
         {
@@ -5344,7 +5370,7 @@ public sealed class CommentaryService
         // lead voice, as a one-voice segment there has it. Before this a
         // two-hander carried no sponsor at all, so a club with a co-host
         // lost the credit on every segment that went to two voices.
-        if (creditFirst && TakeLeadCredit(kind) is { } credit)
+        if (creditFirst && TakeLeadCredit(kind, holdCredit) is { } credit)
         {
             split = SponsoredMoments.WithLeadIn(credit, split);
         }
@@ -5354,7 +5380,7 @@ public sealed class CommentaryService
         // where the same segment in one voice ends with the credit. Now it
         // ends with it too, in the lead voice - taken only once the split
         // has come back, so an exchange that failed uses no ration.
-        else if (!creditFirst && TakeSegmentCredit(kind, atTop: false) is { } endCredit)
+        else if (!creditFirst && TakeSegmentCredit(kind, atTop: false, holdCredit) is { } endCredit)
         {
             split = WithEndCredit(endCredit, split);
         }
@@ -5740,5 +5766,90 @@ public sealed class CommentaryService
         return profile is not null && !string.IsNullOrWhiteSpace(profile.SpokenName)
             ? profile.SpokenName
             : transponder;
+    }
+}
+
+/// <summary>
+/// A written segment's sponsor credit, held until the line is known to have
+/// gone out: <see cref="Aired"/> counts it for the sponsor report (which also
+/// starts the ration again from now), <see cref="Unheard"/> gives the ration
+/// back. Whichever comes first wins; the other then does nothing.
+///
+/// WHY (2026-11-05, Bug hunt 11): BuildSegmentAsync counted the credit the
+/// moment the line was written, and the director and the announcer can still
+/// drop it after that - the next race called to the grid, Hold pressed, the
+/// moment gone. The report then showed a "presented by" nobody heard, and the
+/// ration stayed spent, so the announcer's own calls went uncredited for it.
+/// </summary>
+public sealed class SponsorCreditsHeld
+{
+    private readonly object _gate = new();
+    private readonly List<(Action Count, Action? Release)> _held = new();
+    private bool? _aired;
+
+    /// <summary>Keeps one credit's count and give-back until the line is settled.</summary>
+    internal void Hold(Action count, Action? release)
+    {
+        bool? settled;
+
+        lock (_gate)
+        {
+            settled = _aired;
+
+            if (settled is null)
+            {
+                _held.Add((count, release));
+                return;
+            }
+        }
+
+        // Settled already: the same answer for this credit too.
+        Run(settled == true ? count : release);
+    }
+
+    /// <summary>The line went out: every credit in it is counted.</summary>
+    public void Aired()
+    {
+        foreach (var (count, _) in Settle(true))
+        {
+            Run(count);
+        }
+    }
+
+    /// <summary>The line was dropped unheard: every credit's ration goes back.</summary>
+    public void Unheard()
+    {
+        foreach (var (_, release) in Settle(false))
+        {
+            Run(release);
+        }
+    }
+
+    private List<(Action Count, Action? Release)> Settle(bool aired)
+    {
+        lock (_gate)
+        {
+            if (_aired is not null)
+            {
+                return new List<(Action Count, Action? Release)>();
+            }
+
+            _aired = aired;
+            var held = _held.ToList();
+            _held.Clear();
+            return held;
+        }
+    }
+
+    private static void Run(Action? action)
+    {
+        try
+        {
+            action?.Invoke();
+        }
+        catch
+        {
+            // The report is a courtesy; a failing count or give-back never costs the segment.
+        }
     }
 }
