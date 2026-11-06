@@ -3939,8 +3939,12 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        plan.Started = true;
-
+        // WHY (5 Nov 2026, Bug hunt 11: Started was set here, before the
+        // render wait and the AI hand-over wait). A Skip or Hold in that
+        // silence - nothing of the segment heard yet - counted as the
+        // segment started, so the sequence's finally skipped the
+        // one-at-a-time calls and none of the race's badges was ever said.
+        // Now set just before the first line is queued, below.
         var (timedOut, lines) = await WithinAsync(rendered, FollowOnWait, nextRace);
 
         if (nextRace.IsCancellationRequested)
@@ -3964,6 +3968,9 @@ public sealed partial class RaceControlControl
                 : $"{AppTime.LogStampNow()}  [achievements] Achievements skipped - their lines could not be rendered. "
                   + "The achievements are on the drivers' records.");
 
+            // As before Bug hunt 11 (5 Nov 2026): a segment that could not
+            // be rendered is not then called one at a time by a later stop.
+            plan.Started = true;
             return;
         }
 
@@ -4004,6 +4011,12 @@ public sealed partial class RaceControlControl
         // wrong the day a three-way exchange exists. This is that day.
         var handoffs = CommentaryExchange.Handoffs(plan.Turns).ToHashSet();
         var treatment = ShowMusic?.Invoke();
+
+        // Bug hunt 11 (5 Nov 2026): the segment starts with its first line,
+        // nothing awaited between here and that Say(). A stop while the
+        // throw plays is a stop of the segment the room is hearing, so the
+        // badges are not then called one at a time.
+        plan.Started = true;
 
         for (var i = 0; i < lines.Count; i++)
         {
