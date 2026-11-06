@@ -98,14 +98,12 @@ public sealed class SettingsRestoreTests : IDisposable
     }
 
     [Fact]
-    public void The_commentary_pieces_and_the_sidebar_go_back()
+    public void The_commentary_pieces_go_back()
     {
         var json = Json(new AppSettings
         {
             CommentaryRaceIntros = false,
             CommentarySegmentsOff = "BattleWatch,FormGuide",
-            NavOrder = new List<string> { "Venues", "Race Day" },
-            HiddenTabs = new List<string> { "Garage" },
         });
 
         var back = JsonSerializer.Deserialize<AppSettings>(SettingsRestore.ResetJson(File("App"), json, alsoShown: false).Json)!;
@@ -113,6 +111,26 @@ public sealed class SettingsRestoreTests : IDisposable
 
         Assert.Equal(shipped.CommentaryRaceIntros, back.CommentaryRaceIntros);
         Assert.Equal(shipped.CommentarySegmentsOff, back.CommentarySegmentsOff);
+    }
+
+    [Fact]
+    public void The_sidebar_goes_back_only_with_the_shown_settings()
+    {
+        // Manage Navigation shows in Simple (6 Nov 2026), so the sidebar is a
+        // shown setting: kept by a tuning-only restore, put back by a full one.
+        var json = Json(new AppSettings
+        {
+            NavOrder = new List<string> { "Venues", "Race Day" },
+            HiddenTabs = new List<string> { "Garage" },
+        });
+
+        var kept = JsonSerializer.Deserialize<AppSettings>(SettingsRestore.ResetJson(File("App"), json, alsoShown: false).Json)!;
+
+        Assert.Equal(new[] { "Venues", "Race Day" }, kept.NavOrder);
+        Assert.Equal(new[] { "Garage" }, kept.HiddenTabs);
+
+        var back = JsonSerializer.Deserialize<AppSettings>(SettingsRestore.ResetJson(File("App"), json, alsoShown: true).Json)!;
+
         Assert.Empty(back.NavOrder);
         Assert.Empty(back.HiddenTabs);
     }

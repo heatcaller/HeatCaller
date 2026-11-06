@@ -101,6 +101,15 @@ internal static class SettingsTable
 
             // Backup & Restore shows in full.
             nameof(AppSettings.UpdateChecksOn),
+
+            // The sidebar: Manage Navigation's order, hidden pages and choices.
+            // Its footer button shows in Simple too (6 Nov 2026) - a club
+            // re-orders or hides pages whichever mode it is in.
+            nameof(AppSettings.HiddenTabs),
+            nameof(AppSettings.NavOrder),
+            nameof(AppSettings.NavConnectionAboveBackup),
+            nameof(AppSettings.RaceNightFocus),
+            nameof(AppSettings.HideUntestedPages),
         },
         hidden: new[]
         {
@@ -281,13 +290,6 @@ internal static class SettingsTable
             nameof(AppSettings.ChainStartSequence),
             nameof(AppSettings.AutoAdvanceScope),
             nameof(AppSettings.AutoAdvanceClassName),
-
-            // The sidebar: Manage Navigation's order, hidden pages and choices.
-            nameof(AppSettings.HiddenTabs),
-            nameof(AppSettings.NavOrder),
-            nameof(AppSettings.NavConnectionAboveBackup),
-            nameof(AppSettings.RaceNightFocus),
-            nameof(AppSettings.HideUntestedPages),
 
             // The Columns buttons and the KPI columns.
             nameof(AppSettings.RaceControlKpis),
