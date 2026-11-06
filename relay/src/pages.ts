@@ -10604,7 +10604,9 @@ function chargeWords(next, now) {
   const ready = left <= 0 ? 'Charged' : 'Ready at ' + hm(charge.until) + ' (' + left + ' min)';
   const due = next && typeof next === 'object' && typeof next.eta === 'string' ? Date.parse(next.eta) : NaN;
   if (left <= 0 || !Number.isFinite(due)) return ready;
-  const spare = Math.round((due - charge.until) / 60000);
+  // Bug hunt 11 (2026-11-05): the ETA is on the relay's clock and until on
+  // the phone's, so the ETA goes onto the phone's clock (less skew) first.
+  const spare = Math.round((due - skew - charge.until) / 60000);
   return ready + (spare >= 0 ? ' - ' + spare + ' min before your race' : ' - ' + (-spare) + ' min after your race is due');
 }
 
@@ -10613,7 +10615,8 @@ function chargePart(next) {
   part.appendChild(el('b', '', 'Charging'));
   const now = Date.now();
   const due = next && typeof next === 'object' && typeof next.eta === 'string' ? Date.parse(next.eta) : NaN;
-  const late = !!charge && Number.isFinite(due) && charge.until > due;
+  // Bug hunt 11 (2026-11-05): on one clock, as chargeWords.
+  const late = !!charge && Number.isFinite(due) && charge.until > due - skew;
   part.appendChild(el('div', 'when' + (late ? ' lc-late' : ''), chargeWords(next, now)));
   if (charge) {
     part.appendChild(tapButton('Off the charger', 'go quiet', () => { charge = null; saveCharge(); drawLive(); }));
@@ -11301,6 +11304,9 @@ function fieldFor(sid, done) {
   };
   grab('/collection/results?ids=' + encodeURIComponent(sid)).then((answer) => {
     if (answer === null || answer === undefined) { fieldOf.delete(sid); fieldWaiting.delete(sid); return; }
+    // Bug hunt 11 (2026-11-05): busy or broken (a 429, a 5xx) is a failed
+    // read, not 'the relay has none' - left absent so the next redraw asks.
+    if (answer.missing && answer.status !== 404) { fieldOf.delete(sid); fieldWaiting.delete(sid); return; }
     const items = !answer.missing && answer.body && Array.isArray(answer.body.items) ? answer.body.items : [];
     const item = items.find((x) => x && String(x.id) === sid);
     const list = item && item.body && Array.isArray(item.body.results) ? item.body.results : null;
@@ -12350,7 +12356,10 @@ function paintNight() {
 
 function take(body) {
   night = body && typeof body.night === 'object' && body.night !== null ? body.night : null;
-  if (racesSeen < 0 && night && Array.isArray(night.races)) racesSeen = night.races.length;
+  // Bug hunt 11 (2026-11-05): any answer is the first answer - a night of
+  // null (a driver before their first race) is none seen, so their first
+  // result still says 'Your result is in' when refreshNight reads it.
+  if (racesSeen < 0) racesSeen = night && Array.isArray(night.races) ? night.races.length : 0;
   clips = Array.isArray(body && body.clips) ? body.clips : [];
   live = body && typeof body.live === 'object' && body.live !== null ? body.live : null;
   if ((night && night.firstNight === true) || (live && live.firstNight === true)) firstNight = true;
@@ -14796,9 +14805,16 @@ const APP_SHELL_JS = `
 const stage = document.getElementById('hcstage');
 const HOME = '/c/' + encodeURIComponent(CLUB);
 // Only the club's own pages are ever shown under the bar.
+// Bug hunt 11 (2026-11-05): and as the browser will load it - a path like
+// /c/club/../other resolves to another club's page - so the resolved
+// pathname must still be the club's own.
 function hcInside(path) {
-  return typeof path === 'string' && (path === HOME || ['/', '?', '#'].indexOf(path.charAt(HOME.length)) >= 0)
-    && path.indexOf(HOME) === 0 && path.indexOf('//') < 0 && path.indexOf('\\\\') < 0;
+  if (!(typeof path === 'string' && (path === HOME || ['/', '?', '#'].indexOf(path.charAt(HOME.length)) >= 0)
+    && path.indexOf(HOME) === 0 && path.indexOf('//') < 0 && path.indexOf('\\\\') < 0)) return false;
+  try {
+    const u = new URL(path, location.origin);
+    return u.origin === location.origin && (u.pathname === HOME || u.pathname.indexOf(HOME + '/') === 0);
+  } catch (e) { return false; }
 }
 let shown = null;
 let coming = null;
