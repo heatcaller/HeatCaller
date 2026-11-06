@@ -217,10 +217,16 @@ public sealed class TimePicker : Control
 
     private void DrawSegment(Graphics g, Rectangle rect, string value, Segment segment, Color textColor)
     {
+        // The segment the arrows and typed digits will change, in the
+        // primary colour with its own text colour - as a drop-down's
+        // highlighted item is. It was a faint tint (PrimaryTint) that was
+        // all but invisible on the dark looks, so clicking the hour or the
+        // minute looked like it did nothing (5 Nov 2026).
         if (_selected == segment && Enabled && Focused)
         {
-            using var highlight = new SolidBrush(AppTheme.PrimaryTint);
+            using var highlight = new SolidBrush(AppTheme.Primary);
             g.FillRectangle(highlight, rect.X, 3, rect.Width, Height - 6);
+            textColor = AppTheme.OnPrimary;
         }
 
         TextRenderer.DrawText(g, value, Font, rect, textColor,

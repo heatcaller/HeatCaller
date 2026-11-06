@@ -1028,6 +1028,14 @@ public sealed class AppSettings
     /// </summary>
     public bool CoHostKokoroAlways { get; set; }
 
+    /// <summary>
+    /// The co-host's Kokoro voice for when ElevenLabs runs out (5 Nov 2026),
+    /// picked under their voice on the Cast tab. Blank in a file from before
+    /// it, which reads as their Kokoro voice or else a default of their own -
+    /// see CastStandIns.Resolve.
+    /// </summary>
+    public string CoHostKokoroStandInVoiceName { get; set; } = string.Empty;
+
     // CoHostWindowsVoiceName was here, and MechanicWindowsVoiceName below
     // it. The free Windows voice was retired on 10 Oct 2026, so there is no
     // Windows voice to pick one of. An older settings.json still carries
@@ -1043,7 +1051,8 @@ public sealed class AppSettings
         CoHostHeatCallerVoiceName ?? string.Empty,
         CoHostHeatCallerRev ?? string.Empty,
         CoHostKokoroVoiceName ?? string.Empty,
-        CoHostKokoroAlways);
+        CoHostKokoroAlways,
+        CastStandIns.Resolve(CoHostKokoroStandInVoiceName, CoHostKokoroVoiceName, CastStandIns.CoHost));
     // Was 6 - too short for Ollama's own documented cold-load behaviour on
     // a model's first request (commonly 13s+, even for a small model on
     // modest hardware). The warm-up call in LocalLlmClient pays that cost
@@ -1390,6 +1399,14 @@ public sealed class AppSettings
     /// </summary>
     public bool MechanicKokoroAlways { get; set; }
 
+    /// <summary>
+    /// The Technical Lead's Kokoro voice for when ElevenLabs runs out (5 Nov 2026),
+    /// picked under their voice on the Cast tab. Blank in a file from before
+    /// it, which reads as their Kokoro voice or else a default of their own -
+    /// see CastStandIns.Resolve.
+    /// </summary>
+    public string MechanicKokoroStandInVoiceName { get; set; } = string.Empty;
+
     /// <summary>The mechanic's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
     [JsonIgnore]
     public SecondVoice MechanicVoice => new(
@@ -1399,7 +1416,8 @@ public sealed class AppSettings
         MechanicHeatCallerVoiceName ?? string.Empty,
         MechanicHeatCallerRev ?? string.Empty,
         MechanicKokoroVoiceName ?? string.Empty,
-        MechanicKokoroAlways);
+        MechanicKokoroAlways,
+        CastStandIns.Resolve(MechanicKokoroStandInVoiceName, MechanicKokoroVoiceName, CastStandIns.TechnicalLead));
 
     // --- The Team Principal (17 Oct 2026) ---------------------------------
     //
@@ -1441,6 +1459,14 @@ public sealed class AppSettings
     /// </summary>
     public bool PrincipalKokoroAlways { get; set; }
 
+    /// <summary>
+    /// The Team Principal's Kokoro voice for when ElevenLabs runs out (5 Nov 2026),
+    /// picked under their voice on the Cast tab. Blank in a file from before
+    /// it, which reads as their Kokoro voice or else a default of their own -
+    /// see CastStandIns.Resolve.
+    /// </summary>
+    public string PrincipalKokoroStandInVoiceName { get; set; } = string.Empty;
+
     /// <summary>The Team Principal's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
     [JsonIgnore]
     public SecondVoice PrincipalVoice => new(
@@ -1450,7 +1476,8 @@ public sealed class AppSettings
         PrincipalHeatCallerVoiceName ?? string.Empty,
         PrincipalHeatCallerRev ?? string.Empty,
         PrincipalKokoroVoiceName ?? string.Empty,
-        PrincipalKokoroAlways);
+        PrincipalKokoroAlways,
+        CastStandIns.Resolve(PrincipalKokoroStandInVoiceName, PrincipalKokoroVoiceName, CastStandIns.TeamPrincipal));
 
     // --- The honours (10 Oct 2026) ---------------------------------------
     //
@@ -1497,6 +1524,14 @@ public sealed class AppSettings
     /// </summary>
     public bool HonoursKokoroAlways { get; set; }
 
+    /// <summary>
+    /// The achievements reader's Kokoro voice for when ElevenLabs runs out (5 Nov 2026),
+    /// picked under their voice on the Cast tab. Blank in a file from before
+    /// it, which reads as their Kokoro voice or else a default of their own -
+    /// see CastStandIns.Resolve.
+    /// </summary>
+    public string HonoursKokoroStandInVoiceName { get; set; } = string.Empty;
+
     /// <summary>The honours reader's voices as one value, for AnnouncementService. A null left by a hand-edited file reads as blank.</summary>
     [JsonIgnore]
     public SecondVoice HonoursVoice => new(
@@ -1506,7 +1541,8 @@ public sealed class AppSettings
         HonoursHeatCallerVoiceName ?? string.Empty,
         HonoursHeatCallerRev ?? string.Empty,
         HonoursKokoroVoiceName ?? string.Empty,
-        HonoursKokoroAlways);
+        HonoursKokoroAlways,
+        CastStandIns.Resolve(HonoursKokoroStandInVoiceName, HonoursKokoroVoiceName, CastStandIns.AchievementsReader));
 
     // --- The race recap host (16 Oct 2026) -------------------------------
     //
@@ -1531,6 +1567,14 @@ public sealed class AppSettings
     /// from the Kokoro voices on the Cast tab's lists. See SecondVoice.KokoroAlways.
     /// </summary>
     public bool RecapHostKokoroAlways { get; set; }
+
+    /// <summary>
+    /// The recap host's Kokoro voice for when ElevenLabs runs out (5 Nov 2026),
+    /// picked under their voice on the Cast tab. Blank in a file from before
+    /// it, which reads as their Kokoro voice or else a default of their own -
+    /// see CastStandIns.Resolve.
+    /// </summary>
+    public string RecapHostKokoroStandInVoiceName { get; set; } = string.Empty;
 
     /// <summary>
     /// The recap host's name (16 Oct 2026), said when the recap show opens
@@ -1559,7 +1603,8 @@ public sealed class AppSettings
         RecapHostHeatCallerVoiceName ?? string.Empty,
         RecapHostHeatCallerRev ?? string.Empty,
         RecapHostKokoroVoiceName ?? string.Empty,
-        RecapHostKokoroAlways);
+        RecapHostKokoroAlways,
+        CastStandIns.Resolve(RecapHostKokoroStandInVoiceName, RecapHostKokoroVoiceName, CastStandIns.RecapHost));
 
     // --- The commercial break (10 Oct 2026) ------------------------------
     //
@@ -2570,6 +2615,16 @@ public sealed class AppSettings
     public List<LapWindowSpot> LapWindowSpots { get; set; } = new();
     public List<string> WebKpis { get; set; } = new();
 
+    /// <summary>
+    /// The live board's columns on the club's website (the relay), picked on
+    /// Club Website's "What gets published" card (5 Nov 2026, Asher: "add
+    /// column picker for the live board on the relay in website settings").
+    /// Empty means "the same as the Live Results page" (WebKpis), which is
+    /// what the relay always showed before this - so a club that never opens
+    /// the picker sees no change.
+    /// </summary>
+    public List<string> RelayKpis { get; set; } = new();
+
     // Remembered chart-export choices, so the same output doesn't have to
     // be re-picked on every save.
     public string ChartExportStyle { get; set; } = "print";
@@ -2812,6 +2867,7 @@ public sealed class AppSettings
         PracticeKpis = Clean(PracticeKpis);
         BigScreenKpis = Clean(BigScreenKpis);
         WebKpis = Clean(WebKpis);
+        RelayKpis = Clean(RelayKpis);
         // WHY (22 Oct 2026, driver experience): the night-email and privacy
         // republish work lists are read on every roster tick; a null in the
         // file means "none", not a crash.

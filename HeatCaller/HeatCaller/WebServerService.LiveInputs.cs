@@ -26,6 +26,7 @@ public sealed partial class WebServerService
     /// </summary>
     private sealed record UiSide(
         IReadOnlyList<string> WebKpis,
+        IReadOnlyList<string> RelayKpis,
         string OnDeck,
         int SponsorCount,
         int SponsorLeaderboardSecs,
@@ -44,6 +45,7 @@ public sealed partial class WebServerService
     private UiSide UiSideNow()
     {
         var webKpis = (_settings?.WebKpis ?? new List<string>()).ToList();
+        var relayKpis = (_settings?.RelayKpis ?? new List<string>()).ToList();
 
         string onDeck = string.Empty;
         var next = _schedule?.NextUp;
@@ -97,7 +99,7 @@ public sealed partial class WebServerService
             presented = null;
         }
 
-        return new UiSide(webKpis, onDeck, sponsorCount, leaderboardSecs, slideSecs, pauseDuringRace, sponsorVideos, presented);
+        return new UiSide(webKpis, relayKpis, onDeck, sponsorCount, leaderboardSecs, slideSecs, pauseDuringRace, sponsorVideos, presented);
     }
 
     /// <summary>

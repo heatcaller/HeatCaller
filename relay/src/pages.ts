@@ -840,8 +840,7 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .flagbar .lp-bar > i.now { background: var(--flag); box-shadow: 0 0 12px var(--flag); }
 .flagbar .lp-bar > i.done { background: var(--muted); }
 .flagbar .lp-track { flex: 1; height: 14px; border-radius: 4px; background: var(--border); overflow: hidden; }
-.flagbar .lp-track b { display: block; height: 100%; border-radius: 4px; background: var(--flag); }
-.flagbar.over .lp-track b { background: var(--muted); }
+.flagbar .lp-track b { display: block; height: 100%; border-radius: 4px; background: var(--flag); }.flagbar.over .lp-track b { background: var(--muted); }
 .flagbar .lp-fin { width: 26px; height: 26px; flex: none; margin-left: 4px; border-radius: 4px; opacity: 0.45;
   background: repeating-conic-gradient(#111 0 25%, #FFF 0 50%) 0 0 / 13px 13px; }
 .flagbar.over .lp-fin { opacity: 1; box-shadow: 0 0 14px rgba(255, 255, 255, 0.45); }
@@ -4885,9 +4884,13 @@ let boardHtml = '';
 // What the race is doing under the flag's name, the leader's lap against
 // the race's length, and a bar of the race's laps filling towards the
 // finish. The length is the leader's lap plus the laps the countdown says
-// are left ("5 LAPS TO GO"); a timed race's countdown is minutes, not
-// laps, so it has the lap and the time left and no bar. The look is the
-// stylesheet's (.flagbar); this only picks the classes and writes the words.
+// are left ("5 LAPS TO GO"). A timed race's countdown is the time left
+// ("07:30 REMAINING"), so its bar is one track filling with the time gone,
+// measured against the race's length the laptop sends as raceSecs (5 Nov
+// 2026, Asher: "make a progress bar for a timed race as well as the lap
+// number race"); from a laptop that does not send it, no bar, as before.
+// The look is the stylesheet's (.flagbar); this only picks the classes and
+// writes the words.
 const LB_FLAG_WORDS = {
   green: 'Green flag', yellow: 'Caution', red: 'Red flag \\u00B7 stopped',
   white: 'White flag \\u00B7 last lap', checkered: 'Chequered flag', chequered: 'Chequered flag',
@@ -4907,6 +4910,21 @@ function lbToGo(text) {
   if (/^last lap$/i.test(t)) return 1;
   const m = /^(\\d+)\\s*laps?\\s*to\\s*go$/i.exec(t);
   return m ? Number(m[1]) : null;
+}
+
+// "07:30 REMAINING" (minutes may run past 59): the seconds left. null for
+// a countdown that is not a time.
+function lbTimeLeft(text) {
+  const m = /^(\\d+):(\\d{2})\\s*remaining$/i.exec(String(text || '').trim());
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+// A timed race's bar: one track, filled with the share of the race gone.
+function lbTimeBar(secsLeft, raceSecs) {
+  if (!(raceSecs > 0) || secsLeft === null) return '';
+  const gone = Math.min(1, Math.max(0, (raceSecs - secsLeft) / raceSecs));
+  return '<div class="lp-bar lp-timed" aria-hidden="true"><span class="lp-track"><b style="width:'
+    + Math.round(gone * 1000) / 10 + '%"></b></span><span class="lp-fin"></span></div>';
 }
 
 function lbPlural(n, one) {
@@ -4946,6 +4964,8 @@ function drawBar(state, over, at, rows) {
   const done = lead ? lbLaps(lead) : 0;
   const left = over ? null : lbToGo(state.countdown);
   const total = over ? done : left !== null && done > 0 ? done + left : 0;
+  const secsLeft = over ? null : lbTimeLeft(state.countdown);
+  const raceSecs = Number(state.raceSecs) > 0 ? Number(state.raceSecs) : 0;
   const who = lead && lead.name ? esc(String(lead.name)) : '';
 
   let right = '';
@@ -4975,7 +4995,7 @@ function drawBar(state, over, at, rows) {
 
   bar.innerHTML = '<div class="lp-top"><span class="lp-id"><span class="kick"><i></i>' + esc(kick) + '</span>'
     + '<span class="state">' + esc(said) + '</span></span>' + right + '</div>'
-    + lbBar(done, total, over)
+    + (total > 0 ? lbBar(done, total, over) : lbTimeBar(secsLeft, raceSecs))
     + (over ? '' : lbFollow(state, list, left))
     + (info || next ? '<div class="lp-foot"><span>' + info + '</span>' + next + '</div>' : '');
 }

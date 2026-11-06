@@ -188,10 +188,12 @@ internal static class SettingsTable
             nameof(AppSettings.ShowRejoinEnabled),
             nameof(AppSettings.RaceStartWithOnAir),
 
-            // Cast: the Co-host's "What they're like", and the Recap host,
+            // Cast: the Co-host's "What they're like", every "If ElevenLabs
+            // runs out" Kokoro voice (5 Nov 2026), and the Recap host,
             // Technical Lead, Team Principal and Achievements reader cards.
             nameof(AppSettings.CoHostStance),
             nameof(AppSettings.CoHostKokoroAlways),
+            nameof(AppSettings.CoHostKokoroStandInVoiceName),
             nameof(AppSettings.RecapShowName),
             nameof(AppSettings.RecapHostName),
             nameof(AppSettings.RecapHostElevenLabsVoiceId),
@@ -200,6 +202,7 @@ internal static class SettingsTable
             nameof(AppSettings.RecapHostHeatCallerVoiceName),
             nameof(AppSettings.RecapHostKokoroVoiceName),
             nameof(AppSettings.RecapHostKokoroAlways),
+            nameof(AppSettings.RecapHostKokoroStandInVoiceName),
             nameof(AppSettings.RecapMechanicInterview),
             nameof(AppSettings.RecapMechanicInterviewHeats),
             nameof(AppSettings.RecapMechanicName),
@@ -209,6 +212,7 @@ internal static class SettingsTable
             nameof(AppSettings.MechanicHeatCallerVoiceName),
             nameof(AppSettings.MechanicKokoroVoiceName),
             nameof(AppSettings.MechanicKokoroAlways),
+            nameof(AppSettings.MechanicKokoroStandInVoiceName),
             nameof(AppSettings.PrincipalBeforeRace),
             nameof(AppSettings.PrincipalAfterRace),
             nameof(AppSettings.PrincipalInHeats),
@@ -220,6 +224,7 @@ internal static class SettingsTable
             nameof(AppSettings.PrincipalHeatCallerVoiceName),
             nameof(AppSettings.PrincipalKokoroVoiceName),
             nameof(AppSettings.PrincipalKokoroAlways),
+            nameof(AppSettings.PrincipalKokoroStandInVoiceName),
             nameof(AppSettings.RecapBadgeHonours),
             nameof(AppSettings.RecapHonoursName),
             nameof(AppSettings.HonoursElevenLabsVoiceId),
@@ -228,6 +233,7 @@ internal static class SettingsTable
             nameof(AppSettings.HonoursHeatCallerVoiceName),
             nameof(AppSettings.HonoursKokoroVoiceName),
             nameof(AppSettings.HonoursKokoroAlways),
+            nameof(AppSettings.HonoursKokoroStandInVoiceName),
 
             // Voice: Race Calls (the between-races calls) and the voice's tuning.
             nameof(AppSettings.BetweenRacesLevel),
@@ -288,6 +294,7 @@ internal static class SettingsTable
             nameof(AppSettings.PracticeKpis),
             nameof(AppSettings.BigScreenKpis),
             nameof(AppSettings.WebKpis),
+            nameof(AppSettings.RelayKpis),
 
             // Themes: animated header, the synthwave crowd screen.
             nameof(AppSettings.AnimateHeader),

@@ -1141,7 +1141,18 @@ public sealed partial class AnnouncementService
     /// Whether <paramref name="Audio"/> says the names shortened, for
     /// listen-along - see AudioFromShortenedText (23 Oct 2026, bug hunt 10).
     /// </param>
-    public sealed record PreparedSpeech(string Text, byte[] Audio, string DisplayText, bool StandIn = false, bool AudioShortened = false);
+    public sealed record PreparedSpeech(string Text, byte[] Audio, string DisplayText, bool StandIn = false, bool AudioShortened = false)
+    {
+        /// <summary>
+        /// Made by ElevenLabs, or read from its saved lines (5 Nov 2026) - so
+        /// passed over if its quota has run out by the time it is played. See
+        /// SpeakPrepared and ElevenLabsSavedLinesPassedOver.
+        /// </summary>
+        internal bool InElevenLabs { get; init; }
+
+        /// <summary>Renders the line again as it would be live now, with whether that audio says the names shortened. Set by PrepareReminderAsync.</summary>
+        internal Func<Task<(byte[] Audio, bool Shortened)>>? RenderAgain { get; init; }
+    }
 
     /// <summary>
     /// Renders a line now and hands the audio back instead of speaking it.
@@ -1211,7 +1222,15 @@ public sealed partial class AnnouncementService
             RenderingAhead.Value = true;
             var rendered = await RenderCastLineAsync(withoutVoice, profile, voice, spoken, cancel);
             return new PreparedSpeech(spoken, rendered.Audio, text, rendered.Source == LineSource.StandIn,
-                AudioShortened: AudioFromShortenedText(rendered.Source, spoken));
+                AudioShortened: AudioFromShortenedText(rendered.Source, spoken))
+            {
+                InElevenLabs = rendered.Source is LineSource.ElevenLabs or LineSource.Library,
+                RenderAgain = async () =>
+                {
+                    var again = await RenderCastLineAsync(withoutVoice, profile, voice, spoken);
+                    return (again.Audio, AudioFromShortenedText(again.Source, spoken));
+                },
+            };
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {
@@ -1328,6 +1347,28 @@ public sealed partial class AnnouncementService
 
             StatusMessage?.Invoke($"[voice] Reminder (prepared): \"{prepared.Text}\"");
 
+            // Made in ElevenLabs before its quota ran out, and played after
+            // (5 Nov 2026): said again now, the way a live line would be -
+            // Kokoro standing in, in the speaker's own stand-in voice - so a
+            // recap prepared during the teaser is not the one ElevenLabs
+            // line on a night the rest is Kokoro's. See
+            // ElevenLabsSavedLinesPassedOver.
+            var audio = prepared.Audio;
+            var shortened = prepared.AudioShortened;
+
+            if (prepared.InElevenLabs && prepared.RenderAgain is { } again && ElevenLabsSavedLinesPassedOver(_voiceStore.Current))
+            {
+                try
+                {
+                    (audio, shortened) = await again();
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - it was made in ElevenLabs, whose quota is used up, and couldn't be said again ({ex.Message}).");
+                    return;
+                }
+            }
+
             await _audioPlaybackLock.WaitAsync();
             try
             {
@@ -1374,13 +1415,13 @@ public sealed partial class AnnouncementService
                 // WHY (23 Oct 2026, bug hunt 10): with whether its audio says
                 // the names shortened, so the line is not held back from
                 // listeners just because this path could not say.
-                var onAir = OfferLineToListeners(prepared.Text, prepared.Audio, prepared.AudioShortened);
+                var onAir = OfferLineToListeners(prepared.Text, audio, shortened);
 
                 // Noting when its last word lands, so a piece of imaging
                 // can hit the post on it (17 Oct 2026) - see TalkUp. Plays
                 // exactly as PlayAsync did.
                 // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
-                await PlayNotingLastWordAsync(prepared.Audio, volume, trailing, leading, StillWantedUnlessOvertaken(honourMute: true), onAir);
+                await PlayNotingLastWordAsync(audio, volume, trailing, leading, StillWantedUnlessOvertaken(honourMute: true), onAir);
             }
             finally
             {

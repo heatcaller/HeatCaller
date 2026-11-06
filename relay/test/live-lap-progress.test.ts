@@ -51,6 +51,54 @@ describe("the Live flag card's lap progress", () => {
 });
 
 /**
+ * A TIMED RACE'S BAR (5 Nov 2026, Asher: "on flag card on relay make a
+ * progress bar for a timed race as well as the lap number race"). The
+ * countdown is the time left; raceSecs, the race's length, comes with it.
+ */
+describe("the Live flag card's time progress", () => {
+  it("reads the time left from the countdown, minutes past the hour included", () => {
+    const left = pageFunction("lbTimeLeft");
+    assert.equal(left("07:30 REMAINING"), 450);
+    assert.equal(left("00:00 REMAINING"), 0);
+    assert.equal(left("125:05 remaining"), 7505);
+    assert.equal(left("5 LAPS TO GO"), null);
+    assert.equal(left(""), null);
+  });
+
+  it("fills one track with the share of the race gone, and draws nothing without a length", () => {
+    const bar = pageFunction("lbTimeBar");
+    assert.match(String(bar(450, 600)), /<span class="lp-track"><b style="width:25%"><\/b><\/span><span class="lp-fin">/);
+    assert.match(String(bar(0, 600)), /width:100%/);
+    assert.match(String(bar(900, 600)), /width:0%/, "never below empty");
+    assert.equal(bar(450, 0), "");
+    assert.equal(bar(null, 600), "");
+  });
+
+  it("shows the bar on a timed race as the laptop sends it", async () => {
+    const STATE = "/api/v1/c/acme-rc/snapshot/state";
+    const { html, script } = pageParts(livePage("acme-rc", "Acme RC", DEFAULT_CONTEXT));
+    let frame: Record<string, unknown> = {
+      state: "Racing", flag: "Green", countdown: "03:00 REMAINING", raceSecs: 300,
+      standings: [{ name: "Sam P.", laps: [9000, 9100], best: 9000, lap: 3, cells: [{ text: "Sam P.", emphasis: "none" }] }],
+    };
+    const p: FakePage = new FakePage(html, async (url: string) => url === STATE
+      ? { status: 200, body: { seq: 1, publishedAt: new Date(p.clock).toISOString(), body: frame } }
+      : { status: 404 });
+    p.run(script);
+    await p.settle();
+
+    assert.match(p.get("bar").innerHTML, /lp-timed[\s\S]*width:40%/);
+    assert.match(p.get("bar").innerHTML, /Lap 3/);
+
+    // From a laptop that does not send the length: no bar, as before.
+    frame = { ...frame, raceSecs: undefined, countdown: "02:00 REMAINING" };
+    await p.advance(2000);
+    await p.settle();
+    assert.doesNotMatch(p.get("bar").innerHTML, /lp-bar/);
+  });
+});
+
+/**
  * A RACE AS THE LAPTOP SENDS IT (4 Nov 2026, Asher: "it didn't show the
  * stages as they updated and at one point went back to race over"). The
  * laptop empties the board when a race is staged and again at the green

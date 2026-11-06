@@ -303,10 +303,12 @@ public partial class MainForm
         var show = _settings.SettingsMode == SettingsMode.Advanced;
 
         // Manage Navigation is tuning too: Simple keeps the sidebar as it ships.
-        if (btnManageNav.Visible != show)
-        {
-            btnManageNav.Visible = show;
-        }
+        // Set every time, never compared first: Visible reads false while the
+        // window is hidden, so at startup in Simple a "!= show" check saw
+        // false == false, skipped the hide, and the button came up anyway -
+        // left at its Designer spot over the two-button row PlaceSidebar laid
+        // out for Simple (5 Nov 2026).
+        btnManageNav.Visible = show;
 
         if (show == _advancedChipShown)
         {

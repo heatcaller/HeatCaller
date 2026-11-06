@@ -410,7 +410,11 @@ public sealed partial class AnnouncementService
             // come out in the HeatCaller voice on a night everything else is
             // in the Kokoro voice. Each goes line by line below, where
             // Kokoro says it.
-            var passOverSaved = onThisPc || HeatCallerSavedLinesPassedOver(renderProfile);
+            // And ElevenLabs' own used-up quota (5 Nov 2026), the same way -
+            // see ElevenLabsSavedLinesPassedOver.
+            var passOverSaved = onThisPc
+                || HeatCallerSavedLinesPassedOver(renderProfile)
+                || ElevenLabsSavedLinesPassedOver(renderProfile);
 
             // Otherwise whatever the saved-voice library already has first.
             // Those need no request at all, and on a regular club night that
@@ -477,7 +481,9 @@ public sealed partial class AnnouncementService
             // is. Those go line by line below, through the relay.
             var tryBatch = renderProfile.EffectiveEngine == VoiceEngine.ElevenLabs
                            && ElevenLabsReady(renderProfile)
-                           && !(StandInAllowed(renderProfile) && ElevenLabsRestingFor(renderProfile));
+                           && !(StandInAllowed(renderProfile) && ElevenLabsRestingFor(renderProfile))
+                           // Nor with the usage chip at 100% (5 Nov 2026): Kokoro says them line by line.
+                           && !(StandInAllowed(renderProfile) && ElevenLabsMeterSpent());
 
             // The voice chosen again since these were set going - Kokoro
             // picked while the grid was being rendered, say: what is left is

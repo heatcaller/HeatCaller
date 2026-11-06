@@ -991,6 +991,11 @@ internal sealed class ChassisTypesForm : Form
             return;
         }
 
+        if (!type.Retired && !RetireConfirm.Ask(this, type.DisplayName))
+        {
+            return;
+        }
+
         type.Retired = !type.Retired;
         _types.Upsert(type);
         Reload(type.Id);
@@ -1516,6 +1521,11 @@ internal sealed class CarDetailForm : Form
 
     private void RetireCar()
     {
+        if (!_car.Retired && !RetireConfirm.Ask(this, _car.DisplayName))
+        {
+            return;
+        }
+
         var before = _car.CloneForUndo();
 
         // Retiring the car its owner is announced in moves them to another

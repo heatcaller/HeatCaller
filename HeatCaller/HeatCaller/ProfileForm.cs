@@ -1058,6 +1058,11 @@ public sealed class ProfileForm : Form
 
         var entry = EntryHere(picked.Id);
 
+        if (entry is not { Retired: true } && !RetireConfirm.Ask(this, $"transponder {picked.Id}"))
+        {
+            return;
+        }
+
         if (entry is null)
         {
             // The main transponder has an entry only once it is retired or
