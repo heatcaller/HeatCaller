@@ -901,74 +901,17 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
-    /// Whether a lap that beats the all-time record is believable as a lap.
-    ///
-    /// The two possible mistakes do not cost the same. Refusing a real
-    /// record costs one lap: the driver is on the pace and will do it
-    /// again, and the log line above says it happened. Accepting a phantom
-    /// writes a time nobody drove into the club's permanent record, where
-    /// it becomes a ghost pace source, an achievement and an announcement -
-    /// and nothing in the app ever questions it again. The only way back is
-    /// to clear the record by hand on the track layout.
-    ///
-    /// A transponder left sitting under the bridge retriggers, and any two
-    /// of those reads far enough apart to clear the minimum lap time are
-    /// counted as a lap. That is what the minimum is for, and the operator
-    /// sets it. But a lap wildly off the pace of everything around it is
-    /// not a record, whatever the decoder said.
-    ///
-    /// Three questions, any one of which is enough to leave the record
-    /// alone. They are deliberately loose - each is asking whether the time
-    /// is possible, not whether it is impressive.
+    /// Whether a lap that beats the all-time record is believable as a lap
+    /// - see RecordPlausibility for the three questions and why they are
+    /// asked.
     /// </summary>
+    // WHY (6 Nov 2026, Bug hunt 11b review): the rule now lives in
+    // RecordPlausibility (PaceWatch.cs), unchanged, so the announcer's
+    // PaceWatch asks exactly what this asks and never calls a lap "the
+    // fastest ever on this layout" that was refused here.
     private bool IsPlausibleRecord(long lapMs, string transponder, TrackLayout track, out string doubt)
     {
-        doubt = string.Empty;
-
-        // 1. Sitting on top of the minimum is the shape of a retrigger, not
-        //    of a lap. The operator sets the minimum just under a real lap
-        //    for the class, so a tenth above it is inside the very noise
-        //    that setting exists to describe.
-        if (_race.MinLapTimeMs > 0 && lapMs < _race.MinLapTimeMs * 1.1)
-        {
-            doubt = $"it is within a tenth of the {_race.MinLapTimeMs / 1000.0:0.000}s minimum lap time, which is what a retriggering transponder looks like";
-            return false;
-        }
-
-        // 2. Against the record it claims to beat. Track records fall by
-        //    hundredths and occasionally by tenths. A quarter of a lap is
-        //    not an improvement, it is a different event.
-        if (track.RecordLapMs > 0 && lapMs < track.RecordLapMs * 0.75)
-        {
-            doubt = $"it beats the standing record of {track.RecordLapMs / 1000.0:0.000}s by more than a quarter";
-            return false;
-        }
-
-        // 3. Against the driver's own laps - which is what catches a single
-        //    bad read on a layout that has no record yet. A median rather
-        //    than a best, so one phantom cannot drag down the figure it is
-        //    being judged against, and only once there are enough laps for
-        //    a median to mean anything. Index 0 is the start lap, which is
-        //    not a lap of the circuit.
-        var own = _race.GetOrderedStandings()
-            .FirstOrDefault(s => string.Equals(s.TransponderId, transponder, StringComparison.OrdinalIgnoreCase));
-
-        // Recovery laps are left out too (RaceGaps.PaceLaps): one spans a
-        // whole stoppage, and a few of them would lift the median until an
-        // ordinary lap looked like a phantom.
-        var theirLaps = own is null ? null : RaceGaps.PaceLaps(own).Where(t => t > 0).OrderBy(t => t).ToList();
-
-        if (theirLaps is { Count: >= 3 })
-        {
-            var median = theirLaps[theirLaps.Count / 2];
-
-            if (lapMs < median * 0.5)
-            {
-                doubt = $"it is less than half this driver's typical {median / 1000.0:0.000}s lap this race";
-                return false;
-            }
-        }
-
-        return true;
+        doubt = RecordPlausibility.Doubt(_race, transponder, lapMs, track.RecordLapMs) ?? string.Empty;
+        return doubt.Length == 0;
     }
 }

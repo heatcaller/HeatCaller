@@ -241,6 +241,14 @@ public sealed class SessionRecord
             : sectors.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
+    /// The cut a lap of these sectors had, as <paramref name="cuts"/> reads
+    /// it: <see cref="SectorCutOf(long[])"/>, except that a bare count saved
+    /// before the layout's first placed cut is that placed cut (see
+    /// <see cref="SectorCutHistory"/>).
+    /// </summary>
+    public string SectorCutOf(long[] sectors, SectorCutHistory cuts) => cuts.Resolve(this, SectorCutOf(sectors));
+
+    /// <summary>
     /// How long the race was set to run, in seconds - null for a race with
     /// no time limit, or saved before 28 Oct 2026. The relay's results say
     /// "Length: 3:00 Timed" from it, and a driver's lap list works out its
@@ -313,4 +321,73 @@ public sealed class SessionRecord
     /// file loads as this empty one.
     /// </summary>
     public List<ResultEdit> Edits { get; set; } = new();
+}
+
+/// <summary>
+/// Which placed cut a bare sector count ("2") saved on a layout stands for.
+///
+/// 6 Nov 2026, Bug hunt 11b review: bug hunt 11 keyed TrackLayout.CutFor on
+/// the tiles for a multi-tile finish, so every session saved before it has
+/// SectorCut "2" and the first one filed after has "2:c,r;c,r". The best
+/// sectors (DriverStats, CoachReport) compared cuts Ordinal and so ignored
+/// all the earlier nights although the loops never moved - while the
+/// layout's own sector records carried over on purpose (OfferSectors,
+/// IsCarriedOverBareCut). Read the same way: the bare count stands for the
+/// layout's FIRST placed cut of that many sectors - the earliest session
+/// saved with one, which is the placement OfferSectors carried the records
+/// to - for sessions started no later than it. A bare count saved after
+/// that (the loops taken off the plan) stays its own cut, and a later
+/// placement (a loop moved) never takes the bare-count nights.
+/// </summary>
+public sealed class SectorCutHistory
+{
+    // Layout (trimmed, upper invariant) + "\n" + count -> the first placed cut and when it was saved.
+    private readonly Dictionary<string, (string Cut, DateTime StartedUtc)> _firstPlaced = new(StringComparer.Ordinal);
+
+    public SectorCutHistory(IEnumerable<SessionRecord?> sessions)
+    {
+        foreach (var session in sessions)
+        {
+            if (session?.SectorCut is not { } cut
+                || !cut.Contains(':')
+                || string.IsNullOrWhiteSpace(session.TrackLayoutName))
+            {
+                continue;
+            }
+
+            var count = TrackLayout.CountOfCut(cut);
+
+            if (count < 2)
+            {
+                continue;
+            }
+
+            var key = KeyOf(session.TrackLayoutName, count);
+
+            if (!_firstPlaced.TryGetValue(key, out var first) || session.StartedAtUtc < first.StartedUtc)
+            {
+                _firstPlaced[key] = (cut, session.StartedAtUtc);
+            }
+        }
+    }
+
+    /// <summary><paramref name="cut"/> (one of <paramref name="session"/>'s), or the placed cut it stands for.</summary>
+    public string Resolve(SessionRecord session, string cut)
+    {
+        var count = TrackLayout.CountOfCut(cut);
+
+        if (cut.Contains(':')
+            || count < 2
+            || string.IsNullOrWhiteSpace(session.TrackLayoutName)
+            || !_firstPlaced.TryGetValue(KeyOf(session.TrackLayoutName, count), out var first)
+            || session.StartedAtUtc > first.StartedUtc)
+        {
+            return cut;
+        }
+
+        return first.Cut;
+    }
+
+    private static string KeyOf(string layout, int count) =>
+        layout.Trim().ToUpperInvariant() + "\n" + count.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }

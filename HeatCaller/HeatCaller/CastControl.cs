@@ -110,14 +110,27 @@ public sealed class CastControl : UserControl
     private readonly ComboBox _cmbPrincipalStandIn = new();
     private readonly ComboBox _cmbHonoursStandIn = new();
 
+    // Test Voice beside each of them (6 Nov 2026, asked for by Asher), so a
+    // club can hear the stand-in without running ElevenLabs dry first.
+    private readonly Button _btnTestRecapHostStandIn = new();
+    private readonly Button _btnTestCoHostStandIn = new();
+    private readonly Button _btnTestMechanicStandIn = new();
+    private readonly Button _btnTestPrincipalStandIn = new();
+    private readonly Button _btnTestHonoursStandIn = new();
+
     /// <summary>Each stand-in picker with the voice picker above it, what it shows and where a pick is saved - set up in BuildLayout.</summary>
     private StandInRow[] _standIns = Array.Empty<StandInRow>();
 
     /// <summary>The stand-in pickers' widths as last measured, one each - see Pieces.PickerWidth.</summary>
     private readonly (Font Font, int Count, int Width)?[] _standInWidths = new (Font Font, int Count, int Width)?[5];
 
-    /// <summary>One "If ElevenLabs runs out" picker: its own list, the voice picker above it, the voice it shows, and the setting a pick goes to.</summary>
-    private sealed record StandInRow(ComboBox Picker, ComboBox VoicePicker, Func<SecondVoice> Voice, Action<string> Save);
+    /// <summary>
+    /// One "If ElevenLabs runs out" picker: its own list and Test Voice, the
+    /// voice picker above it, the voice it shows, the setting a pick goes
+    /// to, and the host's hook that says that speaker's test line.
+    /// </summary>
+    private sealed record StandInRow(
+        ComboBox Picker, Button Test, ComboBox VoicePicker, Func<SecondVoice> Voice, Action<string> Save, Func<Action<SecondVoice>?> Speak);
 
     /// <summary>The caption of every stand-in row, kept in one place.</summary>
     internal const string StandInCaption = "If ElevenLabs runs out:";
@@ -144,8 +157,6 @@ public sealed class CastControl : UserControl
     private const string LoadVoicesCaption = "Load Voices";
 
     /// <summary>The boxes' and pickers' widths at the normal text size - see SizeFields. The ones they had on the Commentary page.</summary>
-    private const int LongNameWidth = 280;
-    private const int NameWidth = 200;
     private const int VoicePickerWidth = 260;
 
     /// <summary>The engine the lists were last filled for - what a pick is saved against.</summary>
@@ -481,9 +492,7 @@ public sealed class CastControl : UserControl
 
         Flush(recapHostGrid.AddRow("Recap host's name:", Line(_txtRecapHostName, Suffix("said when the recap opens and at its sign-off; blank and the host is never named"))));
         Flush(recapHostGrid.AddRow("Recap host's voice:", Line(_cmbRecapHostVoice, _btnTestRecapHost)));
-        Stepped(recapHostGrid.AddRow(StandInCaption, Line(_cmbRecapHostStandIn)));
-        recapHostGrid.AddHint(
-            "Reads the recap, the questions to the Technical Lead and the sign-off; the announcer keeps the race calls.");
+        Stepped(recapHostGrid.AddRow(StandInCaption, Line(_cmbRecapHostStandIn, _btnTestRecapHostStandIn)));
 
         // Stability and style on lines of their own, so neither is ever
         // placed from the width of the other's note.
@@ -498,8 +507,11 @@ public sealed class CastControl : UserControl
         // speaker's name first, then their voice, then what they do and the
         // settings for it.
         recapHost.Add(recapHostGrid);
+        // What they do under the card's fields, from its left edge, as every
+        // other card has it - it used to sit in the field column (6 Nov 2026).
         recapHost.Add(Hint(
-            "Heard only when race recaps are switched on, on the AI Commentary tab's Recap show card."), gapBelow: UiLayout.SectionGap);
+            "Reads the recap, the questions to the Technical Lead and the sign-off; the announcer keeps the race calls. "
+            + "Heard only when race recaps are switched on, on the AI Commentary tab's Recap show card."), gapBelow: UiLayout.SectionGap);
         recapHost.Add(_chkBroadcastVoice, stretch: false, gapBelow: UiLayout.HintGap);
         recapHost.Add(Hint(
             "Overrides the Voice tab's stability and style for the recap only, so lap calls aren't over-acted. "
@@ -596,7 +608,7 @@ public sealed class CastControl : UserControl
 
         Flush(coHostVoiceGrid.AddRow("Co-host's name:", Line(_txtCoHostName, Suffix("blank and they are talked to but never named - the model never makes one up"))));
         Flush(coHostVoiceGrid.AddRow("Co-host's voice:", Line(_cmbCoHostVoice, _btnTestCoHost)));
-        Stepped(coHostVoiceGrid.AddRow(StandInCaption, Line(_cmbCoHostStandIn)));
+        Stepped(coHostVoiceGrid.AddRow(StandInCaption, Line(_cmbCoHostStandIn, _btnTestCoHostStandIn)));
 
         var coHostGrid = new FieldGrid();
 
@@ -663,7 +675,7 @@ public sealed class CastControl : UserControl
 
         Flush(mechanicGrid.AddRow("Technical Lead's name:", Line(_txtMechanicName, Suffix("blank for \"the team's technical lead\" - the model never makes a name up"))));
         Flush(mechanicGrid.AddRow("Technical Lead's voice:", Line(_cmbMechanicVoice, _btnTestMechanic)));
-        Stepped(mechanicGrid.AddRow(StandInCaption, Line(_cmbMechanicStandIn)));
+        Stepped(mechanicGrid.AddRow(StandInCaption, Line(_cmbMechanicStandIn, _btnTestMechanicStandIn)));
 
         var mechanic = new Section("Technical Lead");
 
@@ -733,7 +745,7 @@ public sealed class CastControl : UserControl
 
         Flush(principalGrid.AddRow("Team Principal's name:", Line(_txtPrincipalName, Suffix("blank for \"the team principal\" - the model never makes a name up"))));
         Flush(principalGrid.AddRow("Team Principal's voice:", Line(_cmbPrincipalVoice, _btnTestPrincipal)));
-        Stepped(principalGrid.AddRow(StandInCaption, Line(_cmbPrincipalStandIn)));
+        Stepped(principalGrid.AddRow(StandInCaption, Line(_cmbPrincipalStandIn, _btnTestPrincipalStandIn)));
 
         var principal = new Section("Team Principal");
 
@@ -788,7 +800,7 @@ public sealed class CastControl : UserControl
 
         Flush(honoursGrid.AddRow("Reader's name:", Line(_txtHonoursName, Suffix("blank and they are thrown to but never named - no name is made up"))));
         Flush(honoursGrid.AddRow("Reader's voice:", Line(_cmbHonoursVoice, _btnTestHonours)));
-        Stepped(honoursGrid.AddRow(StandInCaption, Line(_cmbHonoursStandIn)));
+        Stepped(honoursGrid.AddRow(StandInCaption, Line(_cmbHonoursStandIn, _btnTestHonoursStandIn)));
 
         var honours = new Section("Achievements reader");
 
@@ -835,17 +847,20 @@ public sealed class CastControl : UserControl
 
         _standIns = new[]
         {
-            new StandInRow(_cmbRecapHostStandIn, _cmbRecapHostVoice, () => _settings.RecapHostVoice, name => _settings.RecapHostKokoroStandInVoiceName = name),
-            new StandInRow(_cmbCoHostStandIn, _cmbCoHostVoice, () => _settings.CoHostVoice, name => _settings.CoHostKokoroStandInVoiceName = name),
-            new StandInRow(_cmbMechanicStandIn, _cmbMechanicVoice, () => _settings.MechanicVoice, name => _settings.MechanicKokoroStandInVoiceName = name),
-            new StandInRow(_cmbPrincipalStandIn, _cmbPrincipalVoice, () => _settings.PrincipalVoice, name => _settings.PrincipalKokoroStandInVoiceName = name),
-            new StandInRow(_cmbHonoursStandIn, _cmbHonoursVoice, () => _settings.HonoursVoice, name => _settings.HonoursKokoroStandInVoiceName = name),
+            new StandInRow(_cmbRecapHostStandIn, _btnTestRecapHostStandIn, _cmbRecapHostVoice, () => _settings.RecapHostVoice, name => _settings.RecapHostKokoroStandInVoiceName = name, () => SpeakAsRecapHost),
+            new StandInRow(_cmbCoHostStandIn, _btnTestCoHostStandIn, _cmbCoHostVoice, () => _settings.CoHostVoice, name => _settings.CoHostKokoroStandInVoiceName = name, () => SpeakAsCoHost),
+            new StandInRow(_cmbMechanicStandIn, _btnTestMechanicStandIn, _cmbMechanicVoice, () => _settings.MechanicVoice, name => _settings.MechanicKokoroStandInVoiceName = name, () => SpeakAsMechanic),
+            new StandInRow(_cmbPrincipalStandIn, _btnTestPrincipalStandIn, _cmbPrincipalVoice, () => _settings.PrincipalVoice, name => _settings.PrincipalKokoroStandInVoiceName = name, () => SpeakAsPrincipal),
+            new StandInRow(_cmbHonoursStandIn, _btnTestHonoursStandIn, _cmbHonoursVoice, () => _settings.HonoursVoice, name => _settings.HonoursKokoroStandInVoiceName = name, () => SpeakAsHonours),
         };
 
         foreach (var row in _standIns)
         {
             row.Picker.DropDownStyle = ComboBoxStyle.DropDownList;
             row.Picker.SelectedIndexChanged += (_, _) => SaveStandIn(row);
+
+            row.Test.Text = "Test Voice";
+            row.Test.Click += (_, _) => TestStandIn(row);
 
             // Whether the row means anything follows the voice picked above it.
             row.VoicePicker.SelectedIndexChanged += (_, _) => RefreshEnabledState();
@@ -933,30 +948,43 @@ public sealed class CastControl : UserControl
     /// </summary>
     private void SizeFields()
     {
-        Fit(_txtAnnouncerName, UiLayout.AtTextSize(LongNameWidth));
-        Fit(_txtRecapHostName, UiLayout.AtTextSize(LongNameWidth));
-        Fit(_txtMechanicName, UiLayout.AtTextSize(NameWidth));
-        Fit(_txtPrincipalName, UiLayout.AtTextSize(NameWidth));
-        Fit(_txtCoHostName, UiLayout.AtTextSize(NameWidth));
-        Fit(_txtHonoursName, UiLayout.AtTextSize(NameWidth));
-
         var voice = UiLayout.AtTextSize(VoicePickerWidth);
 
-        Fit(_cmbMechanicVoice, Math.Max(voice, Pieces.PickerWidth(_cmbMechanicVoice, ref _mechanicVoiceWidth)));
-        Fit(_cmbPrincipalVoice, Math.Max(voice, Pieces.PickerWidth(_cmbPrincipalVoice, ref _principalVoiceWidth)));
-        Fit(_cmbCoHostVoice, Math.Max(voice, Pieces.PickerWidth(_cmbCoHostVoice, ref _coHostVoiceWidth)));
-        Fit(_cmbCoHostStance, Math.Max(voice, Pieces.PickerWidth(_cmbCoHostStance, ref _coHostStanceWidth)));
-
-        // Sized to its longest choice like the stance picker above - left at
-        // the default width, "Conversational - three turns" was cut off.
-        Fit(_cmbExchangeTurns, Math.Max(voice, Pieces.PickerWidth(_cmbExchangeTurns, ref _exchangeTurnsWidth)));
-        Fit(_cmbHonoursVoice, Math.Max(voice, Pieces.PickerWidth(_cmbHonoursVoice, ref _honoursVoiceWidth)));
-        Fit(_cmbRecapHostVoice, Math.Max(voice, Pieces.PickerWidth(_cmbRecapHostVoice, ref _recapHostVoiceWidth)));
-
-        for (var i = 0; i < _standIns.Length; i++)
+        // EVERY VOICE PICKER ONE WIDTH (6 Nov 2026, asked for by Asher): each
+        // speaker's voice and their "If ElevenLabs runs out" voice, on every
+        // card, as wide as the longest choice on any of them - so every
+        // Test Voice sits in one column down the page instead of wherever
+        // its own list happened to end.
+        var widest = new[]
         {
-            Fit(_standIns[i].Picker, Math.Max(voice, Pieces.PickerWidth(_standIns[i].Picker, ref _standInWidths[i])));
+            Pieces.PickerWidth(_cmbMechanicVoice, ref _mechanicVoiceWidth),
+            Pieces.PickerWidth(_cmbPrincipalVoice, ref _principalVoiceWidth),
+            Pieces.PickerWidth(_cmbCoHostVoice, ref _coHostVoiceWidth),
+            Pieces.PickerWidth(_cmbHonoursVoice, ref _honoursVoiceWidth),
+            Pieces.PickerWidth(_cmbRecapHostVoice, ref _recapHostVoiceWidth),
+        }.Concat(_standIns.Select((row, i) => Pieces.PickerWidth(row.Picker, ref _standInWidths[i])))
+            .Append(voice)
+            .Max();
+
+        foreach (var picker in new[] { _cmbMechanicVoice, _cmbPrincipalVoice, _cmbCoHostVoice, _cmbHonoursVoice, _cmbRecapHostVoice }
+                     .Concat(_standIns.Select(row => row.Picker)))
+        {
+            Fit(picker, widest);
         }
+
+        // Every name box the same width as the voices under it (6 Nov 2026):
+        // they were two widths, so each note after a name started somewhere
+        // else, and no name box ended where its card's voice pickers did.
+        foreach (var name in new[] { _txtAnnouncerName, _txtRecapHostName, _txtCoHostName, _txtMechanicName, _txtPrincipalName, _txtHonoursName })
+        {
+            Fit(name, widest);
+        }
+
+        // The co-host's settings line up with the voices above them too, and
+        // only grow past them for a longer choice of their own - left at the
+        // default width, "Conversational - three turns" was cut off.
+        Fit(_cmbCoHostStance, Math.Max(widest, Pieces.PickerWidth(_cmbCoHostStance, ref _coHostStanceWidth)));
+        Fit(_cmbExchangeTurns, Math.Max(widest, Pieces.PickerWidth(_cmbExchangeTurns, ref _exchangeTurnsWidth)));
 
         Fit(_numStability, NumberWidth(_numStability));
         Fit(_numStyleEx, NumberWidth(_numStyleEx));
@@ -1073,6 +1101,7 @@ public sealed class CastControl : UserControl
         foreach (var row in _standIns)
         {
             row.Picker.Enabled = row.VoicePicker.Enabled && StandInApplies(row);
+            row.Test.Enabled = row.Picker.Enabled;
         }
 
         // Load Voices fills every list in one pass (FillVoices) - and the
@@ -1322,6 +1351,21 @@ public sealed class CastControl : UserControl
 
         row.Save(choice.Id);
         _settings.Save();
+    }
+
+    /// <summary>
+    /// Says the speaker's test line in the Kokoro voice picked on the row -
+    /// their voice with that Kokoro voice for every engine, which is how
+    /// they sound once ElevenLabs has run out.
+    /// </summary>
+    private void TestStandIn(StandInRow row)
+    {
+        if (row.Picker.SelectedItem is not VoiceChoice choice || choice.Id.Length == 0)
+        {
+            return;
+        }
+
+        row.Speak()?.Invoke(row.Voice() with { KokoroVoiceName = choice.Id, KokoroAlways = true });
     }
 
     /// <summary>

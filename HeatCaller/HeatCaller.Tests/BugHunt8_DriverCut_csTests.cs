@@ -46,15 +46,21 @@ public sealed class BugHunt8_DriverCut_csTests : IDisposable
         };
 
     [Fact]
-    public void A_stale_grid_slot_bigger_than_the_field_is_not_a_charge()
+    public void A_stale_grid_slot_bigger_than_the_field_is_ranked_over_the_real_cars()
     {
         // Eighth on the grid of a five-car heat is left over from a bigger
         // race before it - "made up 7 places" never happened.
+        // 6 Nov 2026, Bug hunt 11b review: the slot is now ranked over the
+        // real cars, as the night page does - so slot 8 behind four cars is
+        // 5th, "up from fifth" and four places, never "up from eighth" or seven.
+        // (A stated roster keeps a no-show's slot, so a slot past the rows
+        // is not always stale.)
         var facts = DriverCut.FactsFor("sam", "Sam", new List<SessionRecord> { FiveCarHeat(8) });
 
         Assert.False(facts.Empty);
-        Assert.DoesNotContain("places from the grid", facts.Text, StringComparison.Ordinal);
-        Assert.DoesNotContain("up from", facts.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("7 places", facts.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("eighth", facts.Text, StringComparison.Ordinal);
+        Assert.Contains("up from fifth", facts.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -76,6 +82,9 @@ public sealed class BugHunt8_DriverCut_csTests : IDisposable
         Assert.True(DriverCut.ChargeFromARealSlot(charge, new[] { heat }, "sam"));
         Assert.False(DriverCut.ChargeFromARealSlot(charge with { SessionId = "elsewhere" }, new[] { heat }, "sam"));
         Assert.False(DriverCut.ChargeFromARealSlot(charge, new[] { heat }, "nobody"));
-        Assert.False(DriverCut.ChargeFromARealSlot(charge, new[] { FiveCarHeat(6) }, "sam"));
+        // 6 Nov 2026, Bug hunt 11b review: a slot past the rows is ranked
+        // over the real cars, not refused; only no slot at all is no charge.
+        Assert.True(DriverCut.ChargeFromARealSlot(charge, new[] { FiveCarHeat(6) }, "sam"));
+        Assert.False(DriverCut.ChargeFromARealSlot(charge, new[] { FiveCarHeat(0) }, "sam"));
     }
 }

@@ -184,8 +184,7 @@ public partial class MainForm
 
         var top = UiLayout.AtDpi(14) + chip;
 
-        // The buttons there are in this mode, kept in the middle together -
-        // two in Simple, which has no Manage Navigation (FooterButtons).
+        // The footer's buttons (FooterButtons), kept in the middle together.
         var buttons = FooterButtons();
         var row = buttons.Count * size.Width + (buttons.Count - 1) * UiLayout.AtDpi(8);
         var left = UiLayout.AtDpi(12) + shift + (UiLayout.AtDpi(196) - row) / 2;
@@ -201,25 +200,11 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The footer's buttons in this mode, left to right: Manage Navigation
-    /// only in Advanced (it is tuning - SimpleMode), then Mute and Undo.
-    /// From the setting rather than the button's Visible, which reads false
-    /// until the window is shown.
+    /// The footer's buttons, left to right: Manage Navigation, Mute and Undo.
+    /// The same in both modes - Simple used to drop Manage Navigation as
+    /// tuning, which left a club no way to re-order or hide a page (6 Nov 2026).
     /// </summary>
-    private List<Button> FooterButtons()
-    {
-        var buttons = new List<Button>();
-
-        if (_settings.SettingsMode == SettingsMode.Advanced)
-        {
-            buttons.Add(btnManageNav);
-        }
-
-        buttons.Add(btnMuteToggle);
-        buttons.Add(btnUndo);
-
-        return buttons;
-    }
+    private List<Button> FooterButtons() => new() { btnManageNav, btnMuteToggle, btnUndo };
 
     /// <summary>
     /// The same three buttons stacked down the rail, centred in it, in the

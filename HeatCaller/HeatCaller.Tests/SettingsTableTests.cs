@@ -141,13 +141,27 @@ public sealed class SettingsTableTests
     [Fact]
     public void A_hidden_list_compares_by_what_is_in_it()
     {
-        var settings = new AppSettings { NavOrder = new List<string>(new AppSettings().NavOrder) };
+        var settings = new AppSettings { RaceControlKpis = new List<string>(new AppSettings().RaceControlKpis) };
 
         Assert.Empty(SettingsModes.ChangedHidden(settings));
 
-        settings.NavOrder.Add("Race Day");
+        settings.RaceControlKpis.Add("Best Lap");
 
-        Assert.Equal(new[] { nameof(AppSettings.NavOrder) }, SettingsModes.ChangedHidden(settings));
+        Assert.Equal(new[] { nameof(AppSettings.RaceControlKpis) }, SettingsModes.ChangedHidden(settings));
+    }
+
+    [Fact]
+    public void The_sidebar_order_and_hidden_pages_are_not_counted()
+    {
+        // Manage Navigation shows in Simple too (6 Nov 2026), so a club that
+        // re-ordered or hid a page has not tuned anything Simple hides.
+        var settings = new AppSettings
+        {
+            NavOrder = new List<string> { "Venues", "Race Day" },
+            HiddenTabs = new List<string> { "Garage" },
+        };
+
+        Assert.Empty(SettingsModes.ChangedHidden(settings));
     }
 
     [Fact]

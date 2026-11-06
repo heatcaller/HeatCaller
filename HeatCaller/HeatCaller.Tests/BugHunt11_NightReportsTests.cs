@@ -47,9 +47,14 @@ public sealed class BugHunt11_NightReportsTests
     }
 
     [Fact]
-    public void A_slot_past_the_field_is_no_grid_place()
+    public void A_slot_past_the_rows_is_ranked_among_the_real_cars()
     {
-        // Slot 8 left over from a bigger race, in a two-car heat.
+        // WHY (6 Nov 2026, Bug hunt 11b review): this used to assert no
+        // Start at all, from a cap on the number of result rows. The rows
+        // are not the slots (see the stated-roster test below), and a
+        // borrowed grid's leftover slot is renumbered over the starters at
+        // source now, so a slot past the rows is ranked like any other:
+        // behind Kim on slot 1, Sam started 2nd of the real cars.
         var race = Assert.Single(DriverNightExtras.Races(Sam, new[]
         {
             Race(
@@ -57,7 +62,31 @@ public sealed class BugHunt11_NightReportsTests
                 Row(Sam, 2, start: 8, 1500, 9500, 9400)),
         }, null));
 
-        Assert.Null(race.Start);
+        Assert.Equal(2, race.Start);
+    }
+
+    [Fact]
+    public void A_no_show_on_a_stated_roster_does_not_cost_the_back_slot_its_grid_place()
+    {
+        // Bug hunt 11b review (6 Nov 2026): a stated roster of six, a normal
+        // start, slot 3 never shows - so only five rows are filed (a no-show
+        // gets a standing only in a hand-released start) and the slots are
+        // not renumbered. Sam from slot 6 is 5th of the real cars and wins.
+        var heat = Race(
+            Row(Sam, 1, start: 6, 1500, 9000, 8800),
+            Row("3011111", 2, start: 1, 1500, 9100, 8900),
+            Row("3022222", 3, start: 2, 1500, 9200, 9000),
+            Row("3044444", 4, start: 4, 1500, 9300, 9100),
+            Row("3055555", 5, start: 5, 1500, 9400, 9200));
+
+        var race = Assert.Single(DriverNightExtras.Races(Sam, new[] { heat }, null));
+
+        Assert.Equal(5, race.Start);
+
+        // And the night's moments agree: 5th to 1st is a four-place charge.
+        var charge = Assert.Single(NightMoments.ForRace(heat), one => one.What is NightMoments.Kind.Charge);
+        Assert.Equal(Sam, charge.Transponder);
+        Assert.Equal(4, charge.Places);
     }
 
     private static SessionResultEntry Row(string who, int pos, int start, params long[] laps) => new()

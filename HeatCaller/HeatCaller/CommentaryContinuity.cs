@@ -593,14 +593,20 @@ public static class CommentaryContinuity
         // host knows no estimate still gets the whole rotation.
         var tails = new List<string> { string.Empty };
 
-        if (inAbout is { } until && until.TotalMinutes >= LeastMinutes && until.TotalMinutes < MostMinutes)
+        // 6 Nov 2026, Bug hunt 11b: the limits are checked on the minutes as
+        // they will be said, not the raw estimate. 119.6 minutes passed the
+        // raw "< 120" check and was then said as "about 120 minutes", past the
+        // cap - the same rule CommentaryFacts.ComingUpNext now applies.
+        if (inAbout is { } until
+            && Math.Round(until.TotalMinutes, MidpointRounding.AwayFromZero) is var rounded
+            && rounded >= LeastMinutes && rounded < MostMinutes)
         {
             // A decimal POINT whatever the PC's region, like every other
             // number that reaches the voice. On a comma-decimal laptop the
             // fact layer wrote "12,345s" and the PA read out "twelve
             // thousand three hundred forty-five seconds" - see
             // CommentaryFacts.Invariant, which is the one guard for this.
-            var minutes = CommentaryFacts.Invariant(until.TotalMinutes, "0");
+            var minutes = CommentaryFacts.Invariant(rounded, "0");
 
             foreach (var soon in Soons)
             {

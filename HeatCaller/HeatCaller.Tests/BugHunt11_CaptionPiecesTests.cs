@@ -112,4 +112,77 @@ public sealed class BugHunt11_CaptionPiecesTests
         Assert.All(pieces, p => Assert.True(p.Text.Length <= CaptionLog.PieceChars));
         Assert.StartsWith("Black flag, Sam Smith.", pieces[0].Text);
     }
+
+    // 6 Nov 2026, Bug hunt 11b review: "Shorten published names" shortened
+    // each piece on its own, so a long line cut between "Sam" and "Smith" put
+    // the full surname online - neither piece held the full name to shorten.
+
+    private static string Shorten(string text) =>
+        AnnouncementService.ShortenNames(text, new Dictionary<string, string> { ["Sam Smith"] = "Sam S." });
+
+    /// <summary>One long sentence (no full stop to cut at) whose first piece ends on "Sam" and whose second starts "Smith".</summary>
+    private static string NameSplitAcrossPieces()
+    {
+        var lead = "Moving up into third place after a long hard chase through the whole field of the A main with a lovely move at the hairpin";
+
+        // As close to a full piece as " again" lets it get, with "Sam" still in it and " Smith" not.
+        while (lead.Length + " again".Length + " is Sam".Length <= CaptionLog.PieceChars)
+        {
+            lead += " again";
+        }
+
+        return lead + " is Sam Smith in the blue car who started from the very back of the grid and has been the quickest driver on the track for the last three laps of the race.";
+    }
+
+    [Fact]
+    public void A_name_split_across_two_pieces_is_still_shortened_online()
+    {
+        var pieces = Captioned(NameSplitAcrossPieces());
+
+        // The test is only worth anything if the cut really falls inside the name.
+        Assert.EndsWith(" Sam", pieces[0].Text);
+        Assert.StartsWith("Smith ", pieces[1].Text);
+
+        var published = MainForm.PublicCaptionLines(pieces, PublicPrivacy.Empty, shorten: Shorten);
+
+        Assert.NotEmpty(published);
+        Assert.All(published, p => Assert.DoesNotContain("Smith", p.Text));
+        Assert.Contains(published, p => p.Text.Contains("Sam S."));
+        Assert.All(published, p => Assert.True(p.Text.Length <= CaptionLog.PieceChars));
+        // Every word of the line still goes out, shortened, in order, under the pieces' own numbers.
+        Assert.Equal(Shorten(NameSplitAcrossPieces()), string.Join(" ", published.Select(p => p.Text)));
+        Assert.All(published, p => Assert.Contains(p.N, pieces.Select(q => q.N)));
+        Assert.Equal(published.Select(p => p.N).OrderBy(n => n), published.Select(p => p.N));
+
+        // The room's own captions are untouched.
+        Assert.Contains(pieces, p => p.Text.Contains("Smith"));
+    }
+
+    [Fact]
+    public void A_name_split_across_two_pieces_is_left_as_said_when_shortening_is_off()
+    {
+        var pieces = Captioned(NameSplitAcrossPieces());
+
+        var published = MainForm.PublicCaptionLines(pieces, PublicPrivacy.Empty);
+
+        Assert.Equal(pieces.Select(p => p.Text), published.Select(p => p.Text));
+        Assert.Equal(pieces.Select(p => p.N), published.Select(p => p.N));
+    }
+
+    [Fact]
+    public void A_short_line_is_still_shortened_as_before()
+    {
+        var log = new CaptionLog();
+        var line = log.Add("Sam Smith takes the win in the A main.", At)!;
+
+        var published = MainForm.PublicCaptionLines(new[] { line }, PublicPrivacy.Empty, shorten: Shorten);
+
+        var only = Assert.Single(published);
+        Assert.Equal("Sam S. takes the win in the A main.", only.Text);
+        Assert.Equal(line.N, only.N);
+
+        // A line made by hand, with no whole line behind it, too.
+        var byHand = MainForm.PublicCaptionLines(new[] { new CaptionLine(7, "Well driven, Sam Smith!", At) }, PublicPrivacy.Empty, shorten: Shorten);
+        Assert.Equal("Well driven, Sam S.!", Assert.Single(byHand).Text);
+    }
 }

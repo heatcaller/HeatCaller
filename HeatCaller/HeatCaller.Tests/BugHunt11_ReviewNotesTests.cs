@@ -112,6 +112,112 @@ public sealed class BugHunt11_ReviewNotesTests : IDisposable
     }
 
     /// <summary>
+    /// 6 Nov 2026, Bug hunt 11b review: the room's cap was asked before the
+    /// duplicate check, so with the file unreadable and the list full every
+    /// held note's relay copy was refused for room, confirmed and deleted.
+    /// </summary>
+    [Fact]
+    public void A_full_list_of_held_shout_outs_is_never_confirmed_while_the_file_is_unreadable()
+    {
+        var notes = LoadUnreadableNotes();
+
+        var items = string.Join(",", Enumerable.Range(1, ClubNotes.MostFromTheRoom)
+            .Select(i => $"{{\"id\":\"n{i}\",\"m\":\"Shout-out number {i}\",\"n\":\"Jess\"}}"));
+
+        using var relay = new FakeRelay((_, path) =>
+            path.EndsWith("/notes/inbox", StringComparison.Ordinal)
+                ? (200, $"{{\"items\":[{items}]}}")
+                : (200, "{}"));
+        using var publisher = new RelayPublisher(Relay(relay.Root));
+        publisher.TonightsNotes = () => notes;
+
+        Call(publisher, "CollectClubNotes", CancellationToken.None);
+        Assert.Equal(ClubNotes.MostFromTheRoom, notes.All.Count);
+        Assert.True(notes.NoRoomFromTheRoom);
+
+        // Offered again with the list full: still held, still on the relay.
+        Call(publisher, "CollectClubNotes", CancellationToken.None);
+        Call(publisher, "CollectClubNotes", CancellationToken.None);
+
+        Assert.Equal(ClubNotes.MostFromTheRoom, notes.All.Count);
+        Assert.DoesNotContain(relay.Requests, r => r.Contains("/notes/collected", StringComparison.Ordinal));
+
+        // And the store says so directly.
+        Assert.Null(notes.AddFromTheRoom("Shout-out number 1", "Jess", out var notOnDisk));
+        Assert.True(notOnDisk);
+    }
+
+    /// <summary>
+    /// 6 Nov 2026, Bug hunt 11b review: a note held after a failed write,
+    /// then on disk after a later save and confirmed, stayed in the held set;
+    /// removing it later swallowed every new shout-out with the same words.
+    /// </summary>
+    [Fact]
+    public void After_a_write_recovers_a_removed_shout_out_does_not_swallow_a_new_one_with_the_same_words()
+    {
+        var notes = ClubNotes.Load();
+        Assert.Null(notes.Add("Raffle closes at eight"));
+
+        var inbox = "{\"items\":[{\"id\":\"n1\",\"m\":\"Go Sam!\",\"n\":\"Jess\"}]}";
+
+        using var relay = new FakeRelay((_, path) =>
+            path.EndsWith("/notes/inbox", StringComparison.Ordinal) ? (200, Volatile.Read(ref inbox)) : (200, "{}"));
+        using var publisher = new RelayPublisher(Relay(relay.Root));
+        publisher.TonightsNotes = () => notes;
+
+        // The write fails: held in memory, left on the relay.
+        using (new FileStream(_data.PathOf("club-notes.json"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Call(publisher, "CollectClubNotes", CancellationToken.None);
+        }
+
+        var held = Assert.Single(notes.All, n => n.Text == "Go Sam!");
+        Assert.DoesNotContain(relay.Requests, r => r.Contains("/notes/collected", StringComparison.Ordinal));
+
+        // A later save works, and the next poll confirms the relay's copy.
+        Assert.Null(notes.Add("Track closes at ten"));
+        Call(publisher, "CollectClubNotes", CancellationToken.None);
+        Assert.Contains(relay.Requests, r => r.Contains("/notes/collected", StringComparison.Ordinal) && r.Contains("n1", StringComparison.Ordinal));
+
+        // Read out and removed; the relay's inbox is now empty.
+        notes.Remove(held.Id);
+        Volatile.Write(ref inbox, "{\"items\":[]}");
+        Call(publisher, "CollectClubNotes", CancellationToken.None);
+        Assert.DoesNotContain(notes.All, n => n.Text == "Go Sam!");
+
+        // Later somebody else sends the same words: a new shout-out, filed.
+        Volatile.Write(ref inbox, "{\"items\":[{\"id\":\"n2\",\"m\":\"Go Sam!\",\"n\":\"Kim\"}]}");
+        Call(publisher, "CollectClubNotes", CancellationToken.None);
+
+        Assert.Contains(notes.All, n => n.Text == "Go Sam!" && n.From == "Kim");
+    }
+
+    /// <summary>
+    /// 6 Nov 2026, Bug hunt 11b review: a note removed while held swallows
+    /// its one leftover relay copy, and only that one.
+    /// </summary>
+    [Fact]
+    public void A_removed_held_note_swallows_only_its_one_leftover_relay_copy()
+    {
+        var notes = LoadUnreadableNotes();
+
+        Assert.Null(notes.AddFromTheRoom("Go Sam!", "Jess", out var notOnDisk));
+        Assert.True(notOnDisk);
+
+        notes.Remove(Assert.Single(notes.All).Id);
+
+        // The leftover copy: handled.
+        Assert.Null(notes.AddFromTheRoom("Go Sam!", "Jess", out notOnDisk));
+        Assert.False(notOnDisk);
+        Assert.Empty(notes.All);
+
+        // A new one with the same words: filed (held, the file being unreadable).
+        Assert.Null(notes.AddFromTheRoom("Go Sam!", "Kim", out notOnDisk));
+        Assert.True(notOnDisk);
+        Assert.Single(notes.All);
+    }
+
+    /// <summary>
     /// A relay on the loopback that answers each request from a rule and
     /// records "METHOD path body" for every one it was sent. (A copy of
     /// BugHunt11_RelayPublisherTests' private one.)

@@ -778,28 +778,103 @@ public sealed partial class AnnouncementService
     /// standing updates as they arrive. Lets the position report measure a
     /// gap against the moment the car ahead crossed the SAME lap, rather
     /// than comparing lap counts at an instant when they're bound to differ.
+    /// Also holds the copy of the board the position report reads off the
+    /// timing thread - see LapCrossingBook.
     /// </summary>
-    private readonly Dictionary<string, Dictionary<int, long>> _lapCrossings = new(StringComparer.OrdinalIgnoreCase);
+    private readonly LapCrossingBook _lapCrossings = new();
 
-    private void RecordCrossing(RaceStanding standing)
+    /// <summary>
+    /// The lap crossings, and a copy of the board as of the last crossing,
+    /// under one lock.
+    ///
+    /// WHY (6 Nov 2026, Bug hunt 11b): these were two plain dictionaries,
+    /// written on the timing thread as each car crossed and read, with no
+    /// lock, by the position report - from a thread-pool timer when its wait
+    /// ran out and from the voice thread just before it was spoken
+    /// (RunningOrderNow). A read that caught a dictionary growing could throw
+    /// IndexOutOfRangeException, and a new car joining while the board was
+    /// copied threw ArgumentException; only InvalidOperationException was
+    /// caught, so the timer's report died in an unobserved task and the
+    /// voice lost the one it was about to say. Every touch now goes through
+    /// here: each one is a lookup or a reference swap, so the timing thread
+    /// never waits behind anything long. The board is a fresh array per
+    /// crossing, never changed after, so a reader can rank it at leisure.
+    /// OnStandingRemoved and ResetSession forget a car (or everything) here
+    /// through Remove and Clear, so the copy drops it when _standings does.
+    /// </summary>
+    private sealed class LapCrossingBook
     {
-        if (standing.Laps <= 0 || standing.ElapsedMs <= 0)
+        private readonly object _lock = new();
+        private readonly Dictionary<string, Dictionary<int, long>> _crossings = new(StringComparer.OrdinalIgnoreCase);
+        private RaceStanding[] _board = [];
+
+        /// <summary>A car's crossing, and the board with it on, as one change.</summary>
+        public void Record(RaceStanding standing, RaceStanding[] board)
         {
-            return;
+            lock (_lock)
+            {
+                _board = board;
+
+                if (standing.Laps <= 0 || standing.ElapsedMs <= 0)
+                {
+                    return;
+                }
+
+                if (!_crossings.TryGetValue(standing.Transponder, out var laps))
+                {
+                    laps = new Dictionary<int, long>();
+                    _crossings[standing.Transponder] = laps;
+                }
+
+                laps[standing.Laps] = standing.ElapsedMs;
+            }
         }
 
-        if (!_lapCrossings.TryGetValue(standing.Transponder, out var laps))
+        /// <summary>Race time at which a car completed a lap, or null.</summary>
+        public long? CrossingMs(string transponder, int lap)
         {
-            laps = new Dictionary<int, long>();
-            _lapCrossings[standing.Transponder] = laps;
+            lock (_lock)
+            {
+                return _crossings.TryGetValue(transponder, out var laps) && laps.TryGetValue(lap, out var t) ? t : null;
+            }
         }
 
-        laps[standing.Laps] = standing.ElapsedMs;
+        /// <summary>Every standing as of the last crossing. Never changed once handed out.</summary>
+        public RaceStanding[] Board
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _board;
+                }
+            }
+        }
+
+        public void Remove(string transponder)
+        {
+            lock (_lock)
+            {
+                _crossings.Remove(transponder);
+                // Ordinal, as _standings itself is keyed.
+                _board = _board
+                    .Where(s => !string.Equals(s.Transponder, transponder, StringComparison.Ordinal))
+                    .ToArray();
+            }
+        }
+
+        public void Clear()
+        {
+            lock (_lock)
+            {
+                _crossings.Clear();
+                _board = [];
+            }
+        }
     }
 
     /// <summary>Race time at which a car completed a lap, from the crossings seen this session, or null.</summary>
-    private long? CrossingMs(string transponder, int lap) =>
-        _lapCrossings.TryGetValue(transponder, out var laps) && laps.TryGetValue(lap, out var t) ? t : null;
+    private long? CrossingMs(string transponder, int lap) => _lapCrossings.CrossingMs(transponder, lap);
 
     /// <summary>
     /// The top <paramref name="depth"/> of the running order as the board
@@ -816,7 +891,10 @@ public sealed partial class AnnouncementService
                 ? transponder => MutedGhost(transponder)
                 : null;
 
-            var ranked = PositionReportOrder.Rank(_standings.Values.ToList(), leaveOut);
+            // The board as of the last crossing, not _standings itself: this
+            // runs on a timer or the voice thread while the timing thread
+            // writes _standings (6 Nov 2026, Bug hunt 11b - see LapCrossingBook).
+            var ranked = PositionReportOrder.Rank(_lapCrossings.Board, leaveOut);
 
             return PositionReportOrder.Read(ranked, depth, CrossingMs);
         }
@@ -826,18 +904,17 @@ public sealed partial class AnnouncementService
         }
     }
 
-    private RaceGap GapBetween(RaceStanding car, RaceStanding ahead)
-    {
-        _lapCrossings.TryGetValue(ahead.Transponder, out var aheadLaps);
-
-        return RaceGaps.Compute(car.Laps, car.ElapsedMs, ahead.Laps, ahead.ElapsedMs,
-            lap => aheadLaps is not null && aheadLaps.TryGetValue(lap, out var t) ? (long?)t : null);
-    }
+    private RaceGap GapBetween(RaceStanding car, RaceStanding ahead) =>
+        RaceGaps.Compute(car.Laps, car.ElapsedMs, ahead.Laps, ahead.ElapsedMs,
+            lap => CrossingMs(ahead.Transponder, lap));
 
     private void HandleStandingUpdated(RaceStanding standing)
     {
         _standings[standing.Transponder] = standing;
-        RecordCrossing(standing);
+
+        // The copy for readers off this thread is taken here, on the one
+        // thread that writes _standings (6 Nov 2026, Bug hunt 11b).
+        _lapCrossings.Record(standing, _standings.Values.ToArray());
 
         // Same ranking rule as the leaderboard: most laps, then lowest elapsed.
         var ordered = _standings.Values

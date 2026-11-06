@@ -424,6 +424,13 @@ public sealed class DriverStats
         // Laps with sector times: layout, when, sectors.
         var sectorLaps = new List<(string Layout, DateTime StartedUtc, int Lap, string Cut, long[] Sectors)>();
 
+        // 6 Nov 2026, Bug hunt 11b review: a session saved with the bare
+        // count before the cut was keyed on the tiles is read as the layout's
+        // first placed cut (SectorCutHistory), so the upgrade does not throw
+        // away every earlier night's sectors. Every driver's sessions, not
+        // just theirs: the first placement is the layout's.
+        var cuts = new SectorCutHistory(snapshot.Sessions);
+
         foreach (var session in snapshot.Sessions)
         {
             if (session.IsNotScored())
@@ -459,7 +466,7 @@ public sealed class DriverStats
                     {
                         if (result.SectorsOf(i) is { } sectors)
                         {
-                            sectorLaps.Add((session.TrackLayoutName.Trim(), session.StartedAtUtc, i, session.SectorCutOf(sectors), sectors));
+                            sectorLaps.Add((session.TrackLayoutName.Trim(), session.StartedAtUtc, i, session.SectorCutOf(sectors, cuts), sectors));
                         }
                     }
                 }

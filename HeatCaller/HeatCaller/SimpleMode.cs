@@ -77,7 +77,7 @@ internal static class SimpleMode
         // Themes, Sponsors, Local Screens, Club Website, the sidebar.
         "new look", "edit look", "colors", "colours", "animated header", "rotation timing", "video sound", "port",
         "race-day manager", "manager", "result editing", "relay address", "what gets published", "publish",
-        "personal pins", "racer pins", "email", "room & web", "room and web", "venues", "manage navigation",
+        "personal pins", "racer pins", "email", "room & web", "room and web", "venues",
     };
 
     /// <summary>Whether a search in Simple mode should offer the Advanced mode settings row. Three letters at least, as the tab search asks.</summary>

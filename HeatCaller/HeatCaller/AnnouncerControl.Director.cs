@@ -254,6 +254,16 @@ public partial class AnnouncerControl
             // the Track Layouts page does not show.
             _director.Pace.CanHoldRecord = transponder => AchievementEvaluator.CanHoldTrackRecord(transponder, _profiles);
 
+            // WHY (6 Nov 2026, Bug hunt 11b review): and the rest of that
+            // rule - no record from a demo or practice run, nor from a lap
+            // Race Control cannot believe (a misread 7.2 s under a 9.8 s
+            // record). Asked of the record as it stood when the lap was
+            // driven (PaceWatch passes it), since the layout has already
+            // moved on by the time this reads the lap.
+            _director.Pace.RecordWouldStand = (transponder, lapSeconds, recordSeconds) =>
+                RecordPlausibility.WouldTake(_race, transponder,
+                    (long)Math.Round(lapSeconds * 1000), (long)Math.Round(recordSeconds * 1000));
+
             _director.Pace.NightBest = () =>
                 PaceHistory.NightBestFor(RacesTonight?.Invoke(), _settings.LastRaceControlTrackName);
 
