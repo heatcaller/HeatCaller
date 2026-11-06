@@ -92,7 +92,9 @@ describe("relay navigation, round 3: Your next race on Home", () => {
   // driver's whole night, every five minutes, for its "You" strip.
   const nightReads = (page: FakePage) => page.sent.filter((s) => s.url.endsWith("/night") && (s.body as { part?: string }).part === "live");
 
-  it("shows their next race, with their night and Watch live, when the phone remembers them", async () => {
+  // No "Open your night" since 5 Nov 2026 (Asher: "remove open your night
+  // and check in from home screen"): Me is on the bar.
+  it("shows their next race, with Watch live, when the phone remembers them", async () => {
     const page = await openHome({ [ME]: CODE }, relay({ race: "Q2 Heat 1 (Stock Buggy)", away: 0, now: true }));
     const mine = page.get("mine");
 
@@ -101,7 +103,6 @@ describe("relay navigation, round 3: Your next race on Home", () => {
     assert.match(mine.textContent, /On track now/);
     assert.match(mine.textContent, /Q2 Heat 1 \(Stock Buggy\)/);
     assert.deepEqual(links(mine), [
-      { words: "Open your night", href: `/c/acme-rc/night#d=${CODE}` },
       { words: "Watch live", href: "/c/acme-rc/live" },
     ]);
     assert.deepEqual(nightReads(page).map((s) => s.body), [{ id: CODE, part: "live" }]);
@@ -110,12 +111,12 @@ describe("relay navigation, round 3: Your next race on Home", () => {
   it("says how far off it is, and points at the running order when it is next", async () => {
     const off = (await openHome({ [ME]: CODE }, relay({ race: "A", away: 2 }))).get("mine");
     assert.match(off.textContent, /2 races before yours/);
-    assert.deepEqual(links(off).map((l) => l.words), ["Open your night"]);
+    assert.deepEqual(links(off).map((l) => l.words), []);
 
     const next = (await openHome({ [ME]: CODE }, relay({ race: "A", away: 0 }))).get("mine");
     assert.match(next.textContent, /You're up next/);
     assert.equal(next.className, "lc next");
-    assert.deepEqual(links(next).map((l) => l.words), ["Open your night", "See the running order"]);
+    assert.deepEqual(links(next).map((l) => l.words), ["See the running order"]);
   });
 
   it("asks nothing and shows nothing for a phone that remembers nobody, or keeps something that is not a code", async () => {

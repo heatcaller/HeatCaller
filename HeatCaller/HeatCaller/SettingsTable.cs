@@ -310,6 +310,7 @@ internal static class SettingsTable
             nameof(AppSettings.ListenAlongOnTheRelay),
             nameof(AppSettings.RelayCaptions),
             nameof(AppSettings.RelayDriverRequests),
+            nameof(AppSettings.RelayResultQueries),
             nameof(AppSettings.ClubNotesFromTheRelay),
             nameof(AppSettings.RoomVoteFromTheRelay),
             nameof(AppSettings.RelaySiteTheme),

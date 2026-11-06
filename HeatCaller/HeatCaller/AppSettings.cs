@@ -863,6 +863,16 @@ public sealed class AppSettings
     public bool RelayDriverRequests { get; set; }
 
     /// <summary>
+    /// Under driver requests: whether a driver can query a result
+    /// ("Something wrong?" under each race on their night page). On by
+    /// default, as it always was with driver requests on (5 Nov 2026, Asher:
+    /// "can you turn off the something wrong with a result from the app?").
+    /// Off, the relay hides it and refuses a query; packs, details and the
+    /// garage carry on.
+    /// </summary>
+    public bool RelayResultQueries { get; set; } = true;
+
+    /// <summary>
     /// Publish what the announcer says as text captions on the club's live
     /// page, for drivers who can't hear the PA. Names of drivers who asked
     /// for initials only are redacted.

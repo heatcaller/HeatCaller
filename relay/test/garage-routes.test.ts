@@ -137,7 +137,9 @@ describe("the garage document", () => {
 });
 
 describe("changes the laptop applies by itself", () => {
-  it("need the personal PIN of a driver who has one", async () => {
+  it("need no personal PIN, even from a driver who has one (5 Nov 2026)", async () => {
+    // Asher: "remove the pin requirement for the garage. keep it for
+    // changing called and shown".
     await openEverything(h);
 
     for (const [kind, f] of [
@@ -146,13 +148,14 @@ describe("changes the laptop applies by itself", () => {
       ["car", { op: "add", car: CAR, name: "Red" }],
       ["setup", { car: CAR, tires: "Soft" }],
     ] as const) {
-      const without = await ask({ id: SAM, kind, f });
-      assert.equal(without.status, 403, kind);
-      assert.equal(without.body.error, "Sign in with your personal PIN first.");
+      const sent = await ask({ id: SAM, kind, f });
+      assert.equal(sent.status, 200, `${kind} ${JSON.stringify(sent.body)}`);
     }
 
-    const pass = await samPass(h);
-    assert.equal((await ask({ id: SAM, pass, kind: "car", f: { op: "add", car: CAR, name: "Red" } })).status, 200);
+    // Changing how they are called and shown still needs it.
+    const details = await ask({ id: SAM, kind: "details", f: { pronouns: "she/her" } });
+    assert.equal(details.status, 403);
+    assert.equal(details.body.error, "Sign in with your personal PIN first.");
 
     // A driver with no PIN uses the badge, as before.
     assert.equal((await ask({ id: BILL, kind: "packedit", f: { op: "add", pack: PACK, label: "Blue" } })).status, 200);
@@ -210,10 +213,11 @@ describe("car photos on their way to the laptop", () => {
     assert.equal((await photo({ id: OFF, car: CAR, data: JPEG })).status, 404);
   });
 
-  it("need the PIN of a driver who has one, and hold six per driver", async () => {
+  it("need no PIN, even from a driver who has one, and hold six per driver", async () => {
     await openEverything(h);
 
-    assert.equal((await photo({ id: SAM, car: CAR, data: JPEG })).status, 403);
+    // The garage needs no PIN (5 Nov 2026, Asher).
+    assert.equal((await photo({ id: SAM, car: CAR, data: JPEG })).status, 200);
 
     for (let i = 0; i < 6; i++) {
       assert.equal((await photo({ id: BILL, car: CAR, data: JPEG })).status, 200);

@@ -144,14 +144,14 @@ describe("who can ask", () => {
     assert.match(right.body.ref, /^[0-9A-F]{6}$/);
     h.advance(1000);
 
-    // A pack changes by itself since 5 Nov 2026, so for Sam it needs her PIN too.
-    assert.equal((await ask({ id: SAM, kind: "pack", f: { pack: PACK } })).status, 403);
-    assert.equal((await ask({ id: SAM, pass, kind: "pack", f: { pack: PACK } })).status, 200);
+    // A pack is the garage's, and the garage needs no PIN (5 Nov 2026,
+    // Asher: "remove the pin requirement for the garage").
+    assert.equal((await ask({ id: SAM, kind: "pack", f: { pack: PACK } })).status, 200);
 
     const items = (await inbox()).body.items;
     assert.equal(items[0].v, "pin");
     assert.equal(items[0].f.email, "sam@example.com");
-    assert.equal(items[1].v, "pin");
+    assert.equal(items[1].v, "badge", "sent without the pass, on the badge alone");
   });
 
   it("lets a driver with no PIN change details by badge - but not their email", async () => {

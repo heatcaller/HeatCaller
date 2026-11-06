@@ -182,20 +182,13 @@ describe("My Night on race night: charging and the setup log (4 Nov 2026)", () =
     assert.match(charging().textContent, /Put a pack on charge/);
   });
 
-  it("sends a setup change for their setup log, the parts they filled and nothing else", async () => {
-    const { page, asks } = await open();
-    const form = page.get("yd").find((n) => n.className.includes("setuplog"))[0]!;
-    assert.ok(form, "the setup form");
-    const boxes = form.find((n) => n.tagName === "INPUT" || n.tagName === "TEXTAREA");
-    assert.equal(boxes.length, 6, "tires, gearing, springs, ride height, motor, notes");
-    (boxes[0] as unknown as { value: string }).value = " Soft rears ";
-    (boxes[5] as unknown as { value: string }).value = "Up a tooth";
-
-    page.button(form, /Add to my setup log/)!.click();
-    await page.settle();
-
-    const sent = asks.find((a) => a["kind"] === "setup");
-    assert.ok(sent, "a setup ask");
-    assert.deepEqual(sent["f"], { tires: "Soft rears", notes: "Up a tooth" });
+  it("has no setup form or Garage link in Your details (5 Nov 2026)", async () => {
+    // Asher: "remove links on your details for your packs, cars, setups and
+    // log a setup change" - the Garage space has them.
+    const { page } = await open();
+    const yd = page.get("yd");
+    assert.equal(yd.find((n) => n.className.includes("setuplog")).length, 0);
+    assert.doesNotMatch(yd.textContent, /Log a setup change|Your packs, cars and setups/);
+    assert.match(yd.textContent, /Change how you are called and shown/);
   });
 });

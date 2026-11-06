@@ -10,8 +10,8 @@ import { FakePage, pageParts, type Answerer, type FakeNode, type Sent } from "./
  * sheet - run as the whole page script against the RP1 fake browser, with
  * the relay's answers stubbed. What matters most: the code only ever goes
  * into POST bodies, every request has the contract's shape, a driver with
- * a PIN sends nothing until signed in, and a poll never takes away what is
- * being typed.
+ * a PIN needs no sign-in here (5 Nov 2026), and a poll never takes away
+ * what is being typed.
  */
 
 const CODE = "a1b2c3d4e5f60718293a";
@@ -491,28 +491,16 @@ describe("garage page: status, polling and the PIN", () => {
     assert.match(page.get("gr").textContent, /Blue 2 renamed/);
   });
 
-  it("with a PIN and not signed in: nothing is sent until the PIN signs them in", async () => {
-    let signed = false;
+  it("with a PIN and not signed in: no PIN box, and changes go with the badge alone (5 Nov 2026)", async () => {
+    // Asher: "remove the pin requirement for the garage".
     const page = await open(relay({
-      read: (body) => {
-        signed = body["pass"] === PASS;
-        return { status: 200, body: { ok: true, garage: garage(), pin: true, signedIn: signed, asks: [] } };
-      },
-      list: { status: 200, body: { ok: true, mode: "racer", driver: { id: CODE }, pass: PASS } },
+      read: () => ({ status: 200, body: { ok: true, garage: garage(), pin: true, signedIn: false, asks: [] } }),
     }));
-    assert.match(page.get("gh").textContent, /changes here need it/);
+    assert.doesNotMatch(page.get("gh").textContent, /personal PIN|changes here need it/);
     const row = () => page.get("gp").find((n) => n.className.startsWith("grow") && n.textContent.includes("Red 1"))[0]!;
     await press(page, row(), /^Retire$/);
-    assert.equal(asks(page).length, 0);
-    assert.match(said(row()), /Sign in with your personal PIN/);
-
-    type(field(page.get("gh"), /^Your personal PIN/), "1234");
-    await press(page, page.get("gh"), /^Sign in$/);
-    assert.deepEqual(page.sent.find((s) => s.url.endsWith("/checkin/list"))?.body, { pin: "1234" });
-    assert.equal(page.store.get("hg-night-pass-acme-rc"), PASS);
-    assert.ok(signed, "the next read carries the pass");
-    await press(page, row(), /^Retire$/);
-    assert.deepEqual(asks(page)[0]?.body, { id: CODE, kind: "packedit", f: { op: "retire", pack: PACK_B }, pass: PASS });
+    assert.deepEqual(asks(page)[0]?.body, { id: CODE, kind: "packedit", f: { op: "retire", pack: PACK_B } });
+    assert.match(said(row()), /Sent — HeatCaller will have it/);
   });
 
   it("a pass from the night page is sent with every change", async () => {

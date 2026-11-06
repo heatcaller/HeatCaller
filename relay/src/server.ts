@@ -6633,6 +6633,7 @@ export class Relay {
     const checkin = await this.askGateOf(club, id);
     const meEntry = checkin === undefined ? undefined : (await this.driverDocOf(club, DRIVER_ME_CHANNEL))?.drivers.get(id);
     const me = checkin === undefined || meEntry === undefined ? {} : { me: { ...meEntry, pin: hasRacerPin(checkin, id) } };
+    const queriesOff = checkin !== undefined && await this.resultQueriesOffFor(club);
 
     sendJson(response, 200, {
       ok: true,
@@ -6641,6 +6642,7 @@ export class Relay {
       ...liveField,
       ...me,
       ...(checkin !== undefined ? { asksOpen: true } : {}),
+      ...(queriesOff ? { queriesOff: true } : {}),
     });
   }
 
@@ -6966,6 +6968,13 @@ export class Relay {
     return isPlainObject(body) && body["open"] === true;
   }
 
+  /** Whether the laptop has switched result queries ("Something wrong?") off. Absent means on. */
+  private async resultQueriesOffFor(club: string): Promise<boolean> {
+    const body = (await this.store.getSnapshot(club, DRIVER_ASKS_OPEN_DOC))?.body;
+
+    return isPlainObject(body) && body["queries"] === false;
+  }
+
   /**
    * The check-in roster, when this driver may ask the desk for something
    * right now - nights open, asks open, check-in open and them on its list
@@ -7029,6 +7038,11 @@ export class Relay {
       return;
     }
 
+    if (kind === "query" && await this.resultQueriesOffFor(club)) {
+      sendJson(response, 403, { ok: false, error: "Your club is not taking result queries online. Ask at the desk." });
+      return;
+    }
+
     // The personal PIN's proof is the pass checkin/list answered it with,
     // checked against this driver's own in constant time (racerByPass).
     const pass = typeof body["pass"] === "string" && PASS.test(body["pass"]) ? body["pass"] : "";
@@ -7037,12 +7051,14 @@ export class Relay {
     // A driver who HAS a personal PIN changes their details only with it:
     // the badge code alone is printed on a lanyard. A driver without one
     // can use the badge - but not for their email (askFieldsFrom).
-    // The same holds for everything the laptop now applies by itself (5
-    // Nov 2026, Asher: "go with your suggestions"): packs, cars and
-    // setups change with no desk in between, so the PIN is the check.
+    // The garage - packs, cars and setups, which the laptop applies by
+    // itself - asked for it too for an afternoon, until (5 Nov 2026, Asher)
+    // "remove the pin requirement for the garage. keep it for changing
+    // called and shown". The badge code is enough there; the per-driver
+    // write limit below still holds.
     const write = isWriteKind(kind);
 
-    if ((kind === "details" || write) && hasRacerPin(checkin, id) && !withPin) {
+    if (kind === "details" && hasRacerPin(checkin, id) && !withPin) {
       sendJson(response, 403, { ok: false, error: "Sign in with your personal PIN first." });
       return;
     }
@@ -7314,14 +7330,11 @@ export class Relay {
     }
 
     const pass = typeof body["pass"] === "string" && PASS.test(body["pass"]) ? body["pass"] : "";
+    // A car's photo is the garage's, so the badge code is enough (5 Nov
+    // 2026, Asher: "remove the pin requirement for the garage").
     const withPin = pass !== "" && racerByPass(checkin, pass)?.id === id;
 
-    if (hasRacerPin(checkin, id) && !withPin) {
-      sendJson(response, 403, { ok: false, error: "Sign in with your personal PIN first." });
-      return;
-    }
-
-    const car = typeof body["car"] === "string" ? body["car"].trim().toLowerCase() : "";
+    const car =typeof body["car"] === "string" ? body["car"].trim().toLowerCase() : "";
 
     if (!/^[0-9a-f]{32}$/.test(car)) {
       sendJson(response, 400, { ok: false, error: "Which car is the photo of?" });
@@ -7502,11 +7515,16 @@ export class Relay {
     }
 
     const open = body["open"] === true;
+    // Result queries on their own switch (5 Nov 2026, Asher: "can you turn
+    // off the something wrong with a result from the app?"). Only an
+    // explicit false turns them off, so a laptop from before the switch
+    // keeps them as they were.
+    const queriesOff = open && body["queries"] === false;
 
     await this.store.putSnapshot(club, DRIVER_ASKS_OPEN_DOC, {
       seq: this.now().getTime(),
       publishedAt: this.now().toISOString(),
-      body: { open },
+      body: queriesOff ? { open, queries: false } : { open },
     });
 
     if (!open) {

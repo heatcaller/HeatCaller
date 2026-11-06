@@ -17,8 +17,10 @@
  *   Your details) and Stats (report card, driver score, progress,
  *   achievements);
  *
- *   and a QUICK button on every space: swap the pack, log a setup,
- *   "Something wrong?", check the transponder.
+ *   (A QUICK button on every space - swap the pack, log a setup,
+ *   "Something wrong?", check the transponder - came out on 5 Nov 2026,
+ *   Asher: "I don't think it adds enough value". The pack swap and the
+ *   setup are still a tap away on the strip and the Tonight tiles.)
  *
  * LAID OVER THE NIGHT, NOT WRITTEN INTO IT. Every card the night already
  * draws is drawn exactly as before; this only says which space each one
@@ -45,7 +47,7 @@ export const ME_CSS = `
 
 .me-moment { margin: 14px 0 6px; }
 .me-moment:empty { display: none; }
-.me-hero { border-radius: 20px; padding: 16px; display: grid; gap: 10px; text-align: left;
+.me-hero { border-radius: 16px; padding: 16px; display: grid; gap: 10px; text-align: left;
   background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 60%),
               linear-gradient(160deg, color-mix(in srgb, var(--primary) 30%, var(--surface)), var(--surface));
   border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); }
@@ -62,16 +64,19 @@ export const ME_CSS = `
 .me-hero .acts button { flex: 1 1 8rem; }
 
 .me-switch { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 46px); z-index: 5; display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 10px 0 12px; padding: 4px; border-radius: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 10px 0 12px; padding: 4px; border-radius: 16px;
   background: var(--surface); border: 1px solid var(--border); box-shadow: 0 8px 18px -12px rgba(0, 0, 0, 0.6); }
-.me-switch button { border: 0; background: none; color: var(--muted); padding: 9px 0; border-radius: 10px; font: inherit;
-  font-weight: 700; font-size: 0.9rem; cursor: pointer; min-height: 40px; position: relative; }
-.me-switch button[aria-selected="true"] { background: var(--text); color: var(--bg); }
+/* The relay's segmented control (Pit Wall, 5 Nov 2026): the chosen space
+   filled with the club's primary, as Results' own tabs and a race's tabs are. */
+.me-switch button { border: 0; background: none; color: var(--muted); padding: 9px 0; border-radius: 12px; font: inherit;
+  font-weight: 700; font-size: 0.9rem; cursor: pointer; min-height: 44px; position: relative; }
+@media (hover: hover) { .me-switch button:hover { color: var(--text); background: var(--row-alt); } }
+.me-switch button[aria-selected="true"] { background: var(--primary); color: var(--on-primary); }
 .me-switch button .me-dot { position: absolute; top: 6px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
 .me-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
 .me-tiles:empty { display: none; }
-.me-tile { text-align: left; border: 1px solid var(--border); border-radius: 18px; padding: 12px; background: var(--surface);
+.me-tile { text-align: left; border: 1px solid var(--border); border-radius: 16px; padding: 12px; background: var(--surface);
   color: var(--text); display: grid; gap: 4px; align-content: start; min-height: 6.5rem; cursor: pointer; font: inherit; min-width: 0; }
 .me-tile.w { grid-column: span 2; min-height: 0; }
 .me-tile.hot { background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 26%, var(--surface)), var(--surface));
@@ -100,15 +105,17 @@ body[data-me="stats"] [data-sp]:not([data-sp="stats"]) { display: none !importan
   @keyframes me-in-r { from { transform: translateX(-28px); opacity: 0.3; } }
 }
 
-.me-fab { position: fixed; z-index: 20; right: calc(16px + env(safe-area-inset-right, 0px));
-  bottom: calc(84px + env(safe-area-inset-bottom, 0px)); border: 0; border-radius: 999px; padding: 13px 18px;
-  background: var(--accent); color: #fff; font: inherit; font-weight: 800; cursor: pointer;
-  box-shadow: 0 12px 26px -10px color-mix(in srgb, var(--accent) 80%, transparent); }
-.me-fab[hidden] { display: none !important; }
 .me-sheet { position: fixed; inset: 0; z-index: 40; background: rgba(5, 3, 12, 0.55); display: flex; align-items: flex-end; justify-content: center; }
 .me-sheet[hidden] { display: none !important; }
 .me-sheet .in { width: 100%; max-width: 34rem; max-height: 84%; overflow-y: auto; background: var(--surface); border-radius: 24px 24px 0 0;
   border: 1px solid var(--border); border-bottom: 0; padding: 10px 16px calc(22px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 12px; }
+/* CLEAR OF THE ONE BAR (5 Nov 2026, Asher on the home-screen icon: the
+   Quick sheet, since removed - the pack swap uses the same sheet - "barely came above the tab bar... I couldn't see the label on
+   the button... nothing happened"). Opened from its icon, Me runs inside the
+   one page that holds the bar (html.framed), and that bar is drawn over this
+   page's foot - so the sheet's last buttons sat under it, and a tap on them
+   landed on the bar. Room for the bar, as the About sheet keeps. */
+html.framed .me-sheet .in { padding-bottom: calc(22px + 58px + var(--sa-b, 0px)); }
 .me-sheet .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--border); justify-self: center; }
 .me-sheet h3 { margin: 0; font-size: 1.4rem; }
 .me-sheet .x { justify-self: end; }
@@ -118,10 +125,28 @@ body[data-me="stats"] [data-sp]:not([data-sp="stats"]) { display: none !importan
 .me-swap button[aria-pressed="true"] { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
 .me-swap b { font-size: 1rem; }
 .me-toast { position: fixed; z-index: 45; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
-  bottom: calc(140px + env(safe-area-inset-bottom, 0px)); margin: 0 auto; max-width: 30rem; background: #0f3a2b; color: #6ee7b0;
-  border: 1px solid #1e6b4f; border-radius: 14px; padding: 11px 14px; font-weight: 700; }
-.me-toast.bad { background: #3a0f1c; color: #ff9fb3; border-color: #6b1e33; }
+  bottom: calc(140px + env(safe-area-inset-bottom, 0px)); margin: 0 auto; max-width: 30rem;
+  background: var(--surface); color: var(--good); border: 1px solid var(--good);
+  background: color-mix(in srgb, var(--good) 18%, var(--surface)); border-color: color-mix(in srgb, var(--good) 45%, transparent);
+  border-radius: 14px; padding: 11px 14px; font-weight: 700; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); }
+.me-toast.bad { color: var(--bad); border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 18%, var(--surface)); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 .me-toast[hidden] { display: none !important; }
+
+/* PIT WALL ON ME (5 Nov 2026, Asher: "pit wall for all... for the me tab
+   just update the look"). The relay kit's focus ring and small press on
+   every control the Me spaces added; nothing here moves or hides anything. */
+.me-chip, .me-switch button, .me-tile, .me-swap button {
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s ease, background-color 0.15s ease, border-color 0.15s ease; }
+.me-chip:active, .me-switch button:active, .me-tile:active, .me-swap button:active { transform: scale(0.97); }
+.me-chip:focus-visible, .me-switch button:focus-visible, .me-tile:focus-visible,
+.me-swap button:focus-visible { outline: 3px solid var(--ring, var(--accent)); outline-offset: 2px; }
+@media (hover: hover) { .me-tile:hover, .me-swap button:hover, .me-chip:hover { border-color: var(--primary); } }
+@media (prefers-reduced-motion: reduce) {
+  .me-chip, .me-switch button, .me-tile, .me-swap button { transition: none; }
+  .me-chip:active, .me-switch button:active, .me-tile:active, .me-swap button:active { transform: none; }
+}
 `;
 
 /** Under their name: the strip, the moment card, the switch and the tiles. */
@@ -131,10 +156,9 @@ export const ME_BODY_TOP =
   '<div class="me-switch" id="me-switch" role="tablist" aria-label="Parts of Me"></div>' +
   '<div class="me-tiles" id="me-tiles" data-sp="tonight"></div>';
 
-/** At the foot: a space with nothing in it yet says so; the Quick button, its sheet and the toast. */
+/** At the foot: a space with nothing in it yet says so; the sheet (the pack swap) and the toast. */
 export const ME_BODY_END =
   '<p class="me-empty" id="me-empty" hidden></p>' +
-  '<button type="button" class="me-fab" id="me-fab" hidden>+ Quick</button>' +
   '<div class="me-sheet" id="me-sheet" hidden><div class="in" role="dialog" aria-modal="true" aria-labelledby="me-sheet-h">' +
   '<span class="grab"></span><div id="me-sheet-body"></div></div></div>' +
   '<div class="me-toast" id="me-toast" role="status" hidden></div>';
@@ -264,7 +288,8 @@ function meSwitch() {
 // that scrolls sideways itself, and only when it is clearly sideways.
 function meSideways(target) {
   for (let n = target; n && n !== document.body; n = n.parentElement) {
-    if (n.matches && n.matches('input, textarea, select, .me-strip, .me-switch, .me-sheet, [data-noswipe], .gcars, details[open] .gset')) return true;
+    // nav.tabs: a swipe along the bottom bar changes tab instead (5 Nov 2026).
+    if (n.matches && n.matches('input, textarea, select, nav.tabs, .me-strip, .me-switch, .me-sheet, [data-noswipe], .gcars, details[open] .gset')) return true;
     if (n.scrollWidth > n.clientWidth + 4) {
       const ox = getComputedStyle(n).overflowX;
       if (ox === 'auto' || ox === 'scroll') return true;
@@ -529,7 +554,7 @@ function meTiles() {
   }
 }
 
-// ---- sheets: swapping the pack, and Quick
+// ---- the sheet: swapping the pack
 
 function meToast(words, bad) {
   const t = document.getElementById('me-toast');
@@ -610,26 +635,6 @@ function meToSetup() {
   meSetSpace('garage', 'l');
   const s = document.getElementById('gs');
   if (s) s.scrollIntoView({ block: 'start', behavior: 'smooth' });
-}
-
-function meQuick() {
-  meOpenSheet('Quick', (body) => {
-    if (me && me.packs && Array.isArray(me.packs.choices) && me.packs.choices.length > 0) body.appendChild(tapButton('Swap the pack in the car', 'go', mePackSheet));
-    if (meGarage) body.appendChild(tapButton('Log a setup', 'go quiet', meToSetup));
-    if (meRacesReal().length > 0) body.appendChild(tapButton('Something wrong with a result?', 'go quiet', () => {
-      meCloseSheet();
-      meSetSpace('races', 'l');
-      const r = document.getElementById('n-races');
-      if (r) r.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    }));
-    if (live && typeof startCheck === 'function') body.appendChild(tapButton('Check my transponder', 'go quiet', () => {
-      meCloseSheet();
-      meSetSpace('tonight', 'r');
-      startCheck();
-      const lv = document.getElementById('lv');
-      if (lv) lv.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    }));
-  });
 }
 
 // ---- HeatCaller's answer to a pack swap
@@ -731,8 +736,6 @@ function meRefresh() {
   if (strip && sw) sw.style.top = 'calc(env(safe-area-inset-top, 0px) + ' + (strip.offsetHeight || 0) + 'px)';
   meMoment();
   meTiles();
-  const fab = document.getElementById('me-fab');
-  if (fab) fab.hidden = !(live || (asksOpen && me) || meGarage);
 }
 
 let meQueued = false;
@@ -785,8 +788,6 @@ function meStart() {
     if (top) top.scrollIntoView({ block: 'start', behavior: 'smooth' });
   });
 
-  const fab = document.getElementById('me-fab');
-  if (fab) fab.addEventListener('click', meQuick);
   const sheet = document.getElementById('me-sheet');
   if (sheet) sheet.addEventListener('click', (e) => { if (e.target === sheet) meCloseSheet(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheet && !sheet.hidden) meCloseSheet(); });

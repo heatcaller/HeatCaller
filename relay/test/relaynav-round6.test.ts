@@ -142,8 +142,17 @@ describe("relay navigation, round 6: New here? and the club's tracks on Home", (
 
     assert.ok(tracks.indexOf("<b>Tight</b>") < tracks.indexOf("<b>Long</b>"));
     assert.match(tracks, /Racing here today/);
-    assert.match(tracks, /Lap record 9\.120 &middot; Jo Rivera/);
-    assert.match(tracks, /href="\/c\/acme-rc\/tracks">Lap records and the quickest drivers/);
+    // The record on the right in big figures, who holds it under (5 Nov 2026).
+    assert.match(tracks, /<span class="trk-rec"><span class="trk-k">Lap record<\/span><b>9\.120<\/b><span class="trk-who">Jo Rivera<\/span><\/span>/);
+    assert.match(tracks, /<a class="page wide trk-all" href="\/c\/acme-rc\/tracks">Lap records and the quickest drivers<\/a>/);
+    assert.equal(page.get("tracks-h").hidden, false, "the card shows");
+  });
+
+  it("gives a layout with no picture a track mark, and one with no record says so (5 Nov 2026)", async () => {
+    const page = await open(homeWith(), relay());
+    const tracks = page.get("tracks").innerHTML;
+    assert.match(tracks, /class="trk-img trk-mark"/);
+    assert.match(tracks, /No record yet/);
   });
 
   it("lights Home on the Tracks page, which is no longer one of Results' tabs", () => {

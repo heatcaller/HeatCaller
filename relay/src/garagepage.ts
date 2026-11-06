@@ -47,12 +47,20 @@ export const GARAGE_CSS = `
 .gname b { display: block; overflow-wrap: anywhere; }
 .gname .when { display: block; }
 .gbtns { display: flex; flex-wrap: wrap; gap: 6px; }
-.gb { font: inherit; font-size: 0.9rem; font-weight: 600; color: var(--text); background: var(--bg);
-      border: 1px solid var(--border); border-radius: 12px; padding: 8px 14px; min-height: 44px; min-width: 44px; cursor: pointer; }
-.gb.on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
-.gb.warn { color: var(--bad); border-color: var(--bad); }
+/* The relay kit's outline button (Pit Wall, 5 Nov 2026): filled with the
+   club's primary when it is on, and Remove tinted from the look's own red. */
+.gb { font: inherit; font-size: 0.9rem; font-weight: 700; color: var(--text); background: transparent;
+      border: 1px solid var(--border); border-radius: 14px; padding: 8px 14px; min-height: 44px; min-width: 44px; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.08s ease, background-color 0.15s ease, border-color 0.15s ease; }
+@media (hover: hover) { .gb:hover:not(:disabled) { border-color: var(--primary); } }
+.gb:active:not(:disabled) { transform: scale(0.97); }
+.gb.on { color: var(--on-primary, #FFFFFF); background: var(--primary); border-color: transparent; }
+.gb.warn { color: var(--bad); border-color: var(--bad); background: var(--surface);
+           background: color-mix(in srgb, var(--bad) 16%, var(--surface)); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
 .gb:disabled { opacity: 0.5; cursor: default; }
-.gb:focus-visible { outline: 2px solid var(--ring, var(--accent)); outline-offset: 2px; }
+.gb:focus-visible, .gphoto:focus-visible, .gdots button:focus-visible { outline: 3px solid var(--ring, var(--accent)); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .gb { transition: none; } .gb:active:not(:disabled) { transform: none; } }
 .gfull { flex: 1 1 100%; }
 .gform { flex: 1 1 100%; margin-top: 4px; padding: 12px; border: 1px dashed var(--border); border-radius: 12px; }
 .gform .go, .gx .su .go { margin: 4px 0 0; max-width: none; }
@@ -68,7 +76,7 @@ export const GARAGE_CSS = `
          scrollbar-width: none; overscroll-behavior-x: contain; }
 .gcars::-webkit-scrollbar { display: none; }
 .gcars > .gcar { flex: 0 0 86%; scroll-snap-align: center; grid-template-columns: minmax(0, 1fr); align-content: start;
-                 padding: 12px; border: 1px solid var(--border); border-radius: 18px; background: var(--bg); }
+                 padding: 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg); }
 .glist.gcars > .gcar:first-child { border-top: 1px solid var(--border); }
 .gcars .gthumb { width: 100%; height: auto; aspect-ratio: 4 / 3; border-radius: 12px; }
 .gcars div.gthumb { display: grid; place-items: center; }
@@ -317,9 +325,10 @@ function carName(c) {
   return str(c.name) || 'Unnamed car';
 }
 
-function needsPin() {
-  return hasPin && !signedIn;
-}
+// The garage needs no personal PIN (5 Nov 2026, Asher: "remove the pin
+// requirement for the garage. keep it for changing called and shown"): the
+// badge code is enough, and the PIN stays with Your details. A pass the
+// night page earned still goes with each change, so the desk can see it.
 
 // ---- what is being typed: one draft per form, kept across redraws
 
@@ -509,7 +518,7 @@ function askTrouble(a) {
   if (a === null) return 'Could not reach the club. Check your connection and try again.';
   const said = a.body && typeof a.body.error === 'string' && a.body.error.trim() !== '' ? a.body.error.trim() : '';
   if (a.status === 400) return said || 'That could not be sent. Check what you typed and try again.';
-  if (a.status === 403) return said || 'Sign in with your personal PIN first.';
+  if (a.status === 403) return said || 'The club could not take that from this phone. Ask at the desk.';
   if (a.status === 404) return "HeatCaller is not taking changes from phones just now, or you are not on tonight's check-in list. Ask at the desk.";
   if (a.status === 413) return 'That is too big to send.';
   if (a.status === 429) return said || 'You have sent too many changes for now. Wait a few minutes and try again.';
@@ -517,24 +526,9 @@ function askTrouble(a) {
   return 'The club could not take that just now. Try again in a minute.';
 }
 
-const PIN_FIRST = 'Sign in with your personal PIN at the top of this page first.';
-
-// After a 403 the pass is no good: back to the PIN box, saying why.
-function lostPin(a) {
-  if (a && a.status === 403 && hasPin) {
-    setPass('');
-    signedIn = false;
-    paint('head', true);
-  }
-}
-
 // One change, sent to driver/ask. Answers true when the relay took it.
 async function change(kind, f, key) {
   if (!CODE) return false;
-  if (needsPin()) {
-    setStatus(key, PIN_FIRST, '', 'gno');
-    return false;
-  }
   setStatus(key, 'Saving…');
   const payload = { id: CODE, kind: kind, f: f };
   const p = pass();
@@ -551,7 +545,6 @@ async function change(kind, f, key) {
     return true;
   }
 
-  lostPin(a);
   setStatus(key, askTrouble(a), '', 'gno');
   return false;
 }
@@ -649,19 +642,10 @@ async function readGarage() {
   schedule();
 }
 
-// ---- 1. their name, the way back, and the PIN
-
-function pinTrouble(a) {
-  if (a === null) return 'Could not reach the club. Check your connection and try again.';
-  const said = a.body && typeof a.body.error === 'string' && a.body.error.trim() !== '' ? a.body.error.trim() : '';
-  if (a.status === 200 && a.body.mode === 'staff') return "That is the club's PIN, not your own. Use the personal PIN the club sent you.";
-  if (a.status === 200 && a.body.mode === 'racer') return 'That PIN belongs to a different driver. Use your own personal PIN.';
-  if (a.status === 200) return 'That PIN did not sign you in. Ask at the desk.';
-  if (a.status === 403) return said || 'That PIN is not right.';
-  if (a.status === 409) return 'Online check-in is closed just now, and PIN sign-in with it. Ask at the desk.';
-  if (a.status === 429) return said || 'Too many tries. Wait a few minutes and try again.';
-  return 'The club could not answer just now. Try again in a minute.';
-}
+// ---- 1. their name and the way back
+//
+// No PIN box here any more (5 Nov 2026, Asher: "remove the pin requirement
+// for the garage"). The PIN signs in for Your details on the night page.
 
 function buildHead(box) {
   if (!EMBED) {
@@ -669,66 +653,6 @@ function buildHead(box) {
     head.appendChild(el('h2', '', garage ? (str(garage.driver) || 'Your garage') : 'Your garage'));
     if (typeof backLink === 'function') head.appendChild(backLink());
     box.appendChild(head);
-  }
-
-  if (!loaded) return;
-
-  if (needsPin()) {
-    const card = el('section', 'gx');
-    const part = el('div', 'su');
-    part.appendChild(el('p', '', 'You have a personal PIN, so changes here need it. You can look at everything without it. '
-      + 'This phone remembers it only until you close this tab.'));
-    const label = el('label', 'f', 'Your personal PIN');
-    const input = document.createElement('input');
-    input.type = 'password';
-    input.setAttribute('inputmode', 'numeric');
-    input.setAttribute('autocomplete', 'off');
-    input.setAttribute('maxlength', '8');
-    label.appendChild(input);
-    part.appendChild(label);
-    const said = statusLine('pin');
-
-    const go = tapButton('Sign in', 'go', async () => {
-      const p = String(input.value || '').trim();
-      if (!/^[0-9]{4,8}$/.test(p)) {
-        setStatus('pin', 'A personal PIN is 4 to 8 digits.', '', 'gno');
-        return;
-      }
-      go.disabled = true;
-      setStatus('pin', 'Checking…');
-      let a = null;
-      try { a = await post('/checkin/list', { pin: p }); } catch (e) { a = null; }
-      go.disabled = false;
-      input.value = '';
-      // Only their OWN racer pass, as the night page's "Your details".
-      if (a !== null && a.status === 200 && a.body.mode === 'racer' && a.body.driver && a.body.driver.id === CODE
-        && typeof a.body.pass === 'string' && a.body.pass !== '') {
-        setPass(a.body.pass);
-        signedIn = true;
-        setStatus('pin', 'Signed in.', '', 'gok');
-        paint('head', true);
-        readGarage();
-        return;
-      }
-      setStatus('pin', pinTrouble(a), '', 'gno');
-    });
-    part.appendChild(go);
-    part.appendChild(said);
-    card.appendChild(part);
-    box.appendChild(card);
-    return;
-  }
-
-  if (hasPin && signedIn) {
-    const p = el('p', 'ghead');
-    p.appendChild(tapButton('Forget my PIN on this phone', 'linkish', () => {
-      setPass('');
-      signedIn = false;
-      setStatus('pin', 'Signed out on this phone.');
-      paint('head', true);
-    }));
-    p.appendChild(statusLine('pin'));
-    box.appendChild(p);
   }
 }
 
@@ -1429,7 +1353,6 @@ async function shrinkPhoto(file, maxBytes) {
 }
 
 async function addPhoto(car, file, key) {
-  if (needsPin()) { setStatus(key, PIN_FIRST, '', 'gno'); return; }
   const most = limits().photosPerCar;
   if (photosOf(car).length + pendingPhotos(car.id) >= most) {
     setStatus(key, carName(car) + ' has ' + most + ' photos already. Remove one first.', '', 'gno');
@@ -1449,7 +1372,6 @@ async function addPhoto(car, file, key) {
 }
 
 async function sendPhoto(car, data, key) {
-  if (needsPin()) { setStatus(key, PIN_FIRST, '', 'gno'); return false; }
   setStatus(key, 'Saving…');
   const payload = { id: CODE, car: car, data: data };
   const p = pass();
@@ -1463,7 +1385,6 @@ async function sendPhoto(car, data, key) {
     soon();
     return true;
   }
-  lostPin(a);
   setStatus(key, a !== null && a.status === 413 ? 'That photo is too big to send. Try another one.' : askTrouble(a), '', 'gno');
   return false;
 }

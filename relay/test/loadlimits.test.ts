@@ -569,11 +569,9 @@ describe("club look and icon", () => {
       assert.equal(siteReads, readsBefore + 1);
       assert.deepEqual(Buffer.from(second), Buffer.from(first), "the same sun in any colours");
 
-      // Home's check-in line follows the check-in document straight away
-      // (a tile until 30 Oct 2026, relay navigation round 5).
-      assert.doesNotMatch((await call(harness, "GET", "/c/acme-rc")).text, /Check in: tap Me and type your PIN/);
-      await call(harness, "POST", "/api/v1/c/acme-rc/publish/checkin", { token: ACME_TOKEN, json: checkinDoc() });
-      assert.match((await call(harness, "GET", "/c/acme-rc")).text, /Check in: tap Me and type your PIN/);
+      // Home's check-in line, which followed the check-in document, came
+      // out on 5 Nov 2026 (Asher: "remove open your night and check in from
+      // home screen"), so there is nothing on Home left to check here.
     } finally {
       await harness.close();
     }
