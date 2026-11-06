@@ -312,7 +312,15 @@ public sealed partial class RaceControlControl
             // well: a skipped replay lets go of the floor straight away
             // rather than when its last twenty seconds would have ended,
             // while the gain glides what is left of it down to nothing.
-            var playing = AudioBus.PlayAsync(sound, 0.9f);
+            //
+            // WHY (2026-11-05, Bug hunt 11: the replay leaked off-air lines):
+            // RaceReplayBuffer is fed from the room's full mix, so it holds
+            // every line kept from listeners at home - a name the club
+            // shortens online, a penalty call, a car said by its number, a
+            // driver's own clip. Played on air, the replay sent all of them
+            // to the listen-along stream. It is the race's recorded call,
+            // like the driver's own clip, so it stays in the room too.
+            var playing = AudioBus.PlayAsync(sound, 0.9f, offAir: true);
 
             // Race Control's Now Playing (25 Oct 2026), until the bus lets it go.
             var playingId = NowPlaying.Started(NowPlayingKind.Piece, $"Replay of {what}");
