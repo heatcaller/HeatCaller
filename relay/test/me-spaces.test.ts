@@ -20,10 +20,14 @@ function scriptOf(page: string): string {
 }
 
 describe("Me as a pit wall", () => {
-  it("has the strip, the moment card, the switch, the tiles, the Garage space and the pack sheet", () => {
-    for (const id of ["me-strip", "me-moment", "me-switch", "me-tiles", "me-garage", "me-sheet", "me-empty"]) {
+  it("has the moment card, the switch, the tiles, the Garage space and the pack sheet", () => {
+    for (const id of ["me-moment", "me-switch", "me-tiles", "me-garage", "me-sheet", "me-empty"]) {
       assert.match(html, new RegExp(`id="${id}"`), id);
     }
+
+    // No status strip (6 Nov 2026, Asher: "get rid of the swipe left right
+    // next and transponder buttons bar just below the driver name at the top").
+    assert.doesNotMatch(html, /me-strip|meStrip/);
 
     // No Quick button (5 Nov 2026, Asher: "remove the quick menu").
     assert.doesNotMatch(html, /me-fab|\+ Quick|meQuick/);
@@ -46,9 +50,11 @@ describe("Me as a pit wall", () => {
     assert.match(html, /html\.framed \.hcabout \.sheet \{ padding-bottom: calc\(28px \+ 58px/);
   });
 
-  it("puts the strip and the switch above the night's own parts, and the Garage before Your details", () => {
+  it("puts the moment card and the switch above the night's own parts, and the Garage before Your details", () => {
     const at = (id: string) => html.indexOf(`id="${id}"`);
-    assert.ok(at("nh") < at("me-strip") && at("me-strip") < at("me-moment") && at("me-moment") < at("me-switch"));
+    assert.ok(at("nh") < at("me-moment") && at("me-moment") < at("me-switch"));
+    // With the strip gone, the switch sticks to the very top.
+    assert.ok(html.includes(".me-switch { position: sticky; top: env(safe-area-inset-top, 0px);"));
     assert.ok(at("me-switch") < at("me-tiles") && at("me-tiles") < at("nx"));
     assert.ok(at("nt") < at("me-garage") && at("me-garage") < at("yd"));
   });
@@ -71,8 +77,10 @@ describe("Me as a pit wall", () => {
     // The rule as written: the ids the night draws, each named.
     for (const [id, sp] of [
       ["lv", "tonight"], ["ea", "tonight"], ["gd", "tonight"], ["me-tiles", "tonight"],
+      // Your details moved from the Garage to Tonight on 6 Nov 2026.
+      ["yd", "tonight"],
       ["ng", "races"], ["nt", "races"], ["n-races", "races"], ["n-calls", "races"], ["n-car-0", "races"],
-      ["yd", "garage"], ["meout", "garage"], ["me-garage", "garage"],
+      ["meout", "garage"], ["me-garage", "garage"],
       ["n-how", "stats"], ["n-score", "stats"], ["n-prog", "stats"],
     ]) {
       const spaceOf = new Function(`${/function meSpaceOf[\s\S]*?\n}\n/.exec(ME_JS)?.[0] ?? ""}; return meSpaceOf;`)() as (n: unknown) => string;

@@ -4,6 +4,24 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The first-night guide on Home (6 November).** **Your first night - what happens** is now the first thing on Home, for every phone, folded until tapped. **Got it - hide this** hides it for good on that phone, here and on the check-in and night pages.
+
+- **A shorter Home (6 November).** The **You** card (a remembered driver's best finish, standings place and newest achievement) is gone, since **Me** has all of it. So is the **Up next** card at the top while the next race is only waiting: **On track now** still shows while a race is running, and **Schedule** has the running order.
+
+- **A shorter Your details card on Me (6 November).** It now lists what's on file for the driver, a line each, with an **Ask the desk to change** button. The form opens from the bottom of the screen instead of unfolding inside the card, so the card is about a third as tall. See [Your details](online/driver-requests.md#your-details).
+
+- **Your details on Tonight (6 November).** On **Me**, **Your details** (asking the desk to change how you are called and shown) is now at the bottom of **Tonight**, under **Right now**, instead of in **Garage**.
+
+- **Me starts higher up (6 November).** **Signed in** sits on the same line as the driver's name instead of a row of its own above it, and the card under the name is closer to it, so everything on **Me** starts nearer the top.
+
+- **No status strip on Me (6 November).** The row of chips under the driver's name (their next race, the pack in the car, the transponder) is gone: the card under it says the same. The **Tonight**, **Races**, **Garage** and **Stats** switch now sticks to the very top as you scroll. Redeploy the relay (`fly deploy --ha=false`).
+
+- **Every lap stat at once (6 November).** On a driver's night, each race's **Lap stats** shows **Avg. top 5**, **Avg. top 10**, **Avg. top 15**, **Top 2 consec.** and **Std. deviation** straight under the first four. The **More stats** button is gone. Redeploy the relay (`fly deploy --ha=false`).
+
+- **A shorter Right now card on Me (6 November).** The **Check in** button and the pack charge timer are gone from the **Right now** card. The top of **Me** still offers **Check in** until the driver is checked in, and signing in on **Me** with a personal PIN checks them in too. Home's **Your next race** no longer shows **On charge**. Redeploy the relay (`fly deploy --ha=false`).
+
+- **Signing out of Me asks first, and forgets everything (6 November).** A driver's night on the relay shows **Signed in** at the top once the phone remembers them. Tapping it asks "Sign out on this phone?". **Sign out** forgets the driver and everything Me kept on that phone for them, including their PIN sign-in, and **Me** asks for a personal PIN again. **Back** and reloading go to the PIN too. **Sign out on this phone** at the bottom asks the same question. See [Getting around](online/index.md#getting-around). Redeploy the relay (`fly deploy --ha=false`).
+
 - **Relay page changes (4 November).**
     - **Make a picture to share** on a driver's night does something on a phone now. It used to save the picture as a download, which a phone quietly drops, always from the home-screen icon. Now it opens the phone's share sheet with the picture in it. Where the browser can't share a picture, the picture opens on the page to press and hold, with a **Save picture** button.
     - **Save as a text file** is gone from the night page. The picture is the way to share a night.

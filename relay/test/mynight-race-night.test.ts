@@ -94,8 +94,10 @@ describe("My Night on race night: the jobs in one row", () => {
     const { page } = await open();
     const cells = row(page).children.map((c) => c.find((n) => n.tagName === "B" || n.tagName === "H4")[0]?.textContent);
 
-    // The charge timer joined them on 4 Nov 2026 (the relay roadmap).
-    assert.deepEqual(cells, ["Your transponder", "Your battery pack", "Charging"]);
+    // The charge timer joined them on 4 Nov 2026 and went on 6 Nov 2026
+    // (Asher: "remove the check in button and the pack charge from the right
+    // now tile on the me tab").
+    assert.deepEqual(cells, ["Your transponder", "Your battery pack"]);
     assert.match(page.get("ea").textContent, /^Lap times in my ear/);
   });
 
@@ -103,7 +105,7 @@ describe("My Night on race night: the jobs in one row", () => {
     const { page } = await open();
 
     assert.doesNotMatch(page.get("yd").textContent, /Your battery pack/);
-    assert.match(page.get("yd").textContent, /Change how you are called and shown/);
+    assert.match(page.get("yd").textContent, /Ask the desk to change/);
   });
 
   it("keeps the pack they picked through the card's next redraw", async () => {
@@ -165,21 +167,12 @@ describe("My Night on race night: back up to Right now", () => {
 });
 
 describe("My Night on race night: charging and the setup log (4 Nov 2026)", () => {
-  it("times a pack on charge, against the race, and says when it is done", async () => {
+  it("has no charge timer and no Check in button on the Right now card (6 Nov 2026)", async () => {
     const { page } = await open({ live: { ...LIVE, next: { race: "A Main (Stock)", away: 2, eta: "2026-10-22T19:45:00.000Z" } } });
-    const charging = () => row(page).children.find((c) => c.className.includes("lc-charge"))!;
-    assert.match(charging().textContent, /Put a pack on charge/);
-
-    page.button(charging(), /On charge/)!.click();
-    assert.match(charging().textContent, /Ready at .* \(30 min\)/);
-    assert.match(charging().textContent, /min before your race|min after your race is due/);
-    assert.ok(page.store.get("hg-charge-acme-rc"), "kept on this phone");
-
-    await page.advance(31 * 60 * 1000);
-    assert.match(charging().textContent, /Charged/);
-
-    page.button(charging(), /Off the charger/)!.click();
-    assert.match(charging().textContent, /Put a pack on charge/);
+    const lv = page.get("lv");
+    assert.equal(lv.find((n) => n.className.includes("lc-charge")).length, 0);
+    assert.doesNotMatch(lv.textContent, /on charge|Charging|Check in/i);
+    assert.equal(page.button(lv, /On charge|Check(ed)? in/), undefined);
   });
 
   it("has no setup form or Garage link in Your details (5 Nov 2026)", async () => {
@@ -189,6 +182,6 @@ describe("My Night on race night: charging and the setup log (4 Nov 2026)", () =
     const yd = page.get("yd");
     assert.equal(yd.find((n) => n.className.includes("setuplog")).length, 0);
     assert.doesNotMatch(yd.textContent, /Log a setup change|Your packs, cars and setups/);
-    assert.match(yd.textContent, /Change how you are called and shown/);
+    assert.match(yd.textContent, /Ask the desk to change/);
   });
 });

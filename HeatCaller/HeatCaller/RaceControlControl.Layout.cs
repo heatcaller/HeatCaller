@@ -281,6 +281,21 @@ public sealed partial class RaceControlControl
         _btnBroadcast.Click += (_, _) => ShowBroadcastWindow();
         body.AddSide(_btnBroadcast);
 
+        // THE LEVEL METERS UNDER BROADCAST (6 Nov 2026, asked for by Asher:
+        // "move the VU meters to underneath the broadcast button on the right
+        // column"). They stood at the right of the flag card, the height of
+        // the card - which they kept taller than its buttons and On Air bar
+        // needed. Spread across the column's width, and down the height it
+        // has left - so the column ends level with the board, and a taller
+        // window has taller bars rather than a page that scrolls. They ask
+        // for no height of their own: at 1280x800 the clock and the seven
+        // buttons already fill the column, and a least of any size made the
+        // whole page scroll. Too short to read, they draw nothing (ChannelStrips).
+        if (_flagRow is { } row)
+        {
+            body.AddSideFill(row.Meters, _ => 0, gapBelow: 0);
+        }
+
         _page.Add(_nextUpBar, gapBelow: UiLayout.RowGap);
 
         // Under the Next Up bar, where the race director's eye already

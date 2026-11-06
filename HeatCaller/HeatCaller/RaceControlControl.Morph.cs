@@ -31,7 +31,10 @@ public partial class RaceControlControl
     {
         // The card's title too, and the On Air bar under the buttons - see
         // FlagRow, and BuildLayout's card.
-        _flagRow = new FlagRow(bar, "Race Control", _holdStrip);
+        // The meters out of the row since 6 Nov 2026 - under Broadcast, in
+        // the right-hand column (BuildLayout) - so the buttons and the On Air
+        // bar have the card's width, and the card is no taller than they are.
+        _flagRow = new FlagRow(bar, "Race Control", _holdStrip, metersInRow: false);
         return _flagRow;
     }
 

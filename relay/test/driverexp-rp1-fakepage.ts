@@ -205,6 +205,11 @@ export class FakePage {
       getItem: (k: string) => page.store.get(k) ?? null,
       setItem: (k: string, v: string) => page.store.set(k, String(v)),
       removeItem: (k: string) => page.store.delete(k),
+      // As a browser's, for a page that walks what it kept (Me's sign-out).
+      get length() {
+        return page.store.size;
+      },
+      key: (i: number) => [...page.store.keys()][i] ?? null,
     };
 
     const document = {

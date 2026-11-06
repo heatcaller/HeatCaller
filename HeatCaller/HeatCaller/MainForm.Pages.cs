@@ -2195,7 +2195,7 @@ public partial class MainForm
         // and shown at the top of Cast (22 Oct 2026) - see
         // CastControl.HostAnnouncerVoice, and RebuildVoiceAndSoundTabs for
         // handing them over again when a soundscape rebuilds this tab.
-        cast.HostAnnouncerVoice(voiceSettings.AnnouncerVoiceGrid);
+        cast.HostAnnouncerVoice(voiceSettings);
 
         // The announcement rows, built by the same control so they stay part
         // of the one voice profile it saves, but parented here so they get a

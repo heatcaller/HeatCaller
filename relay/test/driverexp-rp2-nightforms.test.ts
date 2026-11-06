@@ -130,6 +130,20 @@ async function press(page: FakePage, under: FakeNode, words: RegExp): Promise<vo
   await page.settle();
 }
 
+/**
+ * The details form. Since 6 Nov 2026 (Asher: "rework the your details card")
+ * it is in Me's bottom sheet, opened by Ask the desk to change on the card.
+ */
+function form(page: FakePage): FakeNode {
+  const body = page.get("me-sheet-body");
+  if (body.find((n) => n.id === "yd-sheet").length === 0) {
+    const b = page.button(page.get("yd"), /^Ask the desk to change$/);
+    assert.ok(b, "Ask the desk to change, on the card");
+    b.click();
+  }
+  return body;
+}
+
 function said(root: FakeNode): string {
   return root.find((n) => n.className === "yd-said").map((n) => n.textContent).join(" | ");
 }
@@ -147,36 +161,61 @@ describe("Your details: when it shows", () => {
   it("asksOpen without the laptop's details offers no form, but still the race query", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), asksOpen: true } }));
     assert.equal(page.get("yd").children.length, 0);
+    assert.equal(page.button(page.get("yd"), /Ask the desk to change/), undefined);
     assert.ok(page.button(page.get("nx"), /Something wrong/));
   });
 
   it("shows their details: name, masked email, pronouns, packs - all as text", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me(), asksOpen: true } }));
-    const yd = page.get("yd");
+    const card = page.get("yd");
 
+    // The pack stays on the card; the form is in the sheet.
+    assert.match(card.textContent, /Red 2S #3/);
+    assert.equal(field(card, /^The pack in your car now/).value, PACK_A);
+
+    const yd = form(page);
     assert.match(yd.textContent, /Sam Parker - the desk changes this one/);
     assert.match(yd.textContent, /On file: s•••@gmail\.com/);
     assert.equal(field(yd, /^Pronouns/).value, "she/her");
     assert.match(yd.textContent, /Changing your email needs your personal PIN/);
-    assert.match(yd.textContent, /Red 2S #3/);
-    assert.equal(field(yd, /^The pack in your car now/).value, PACK_A);
-    assert.deepEqual(yd.find((n) => n !== yd && n.hadMarkup), [], "built with createElement, never markup");
+    assert.deepEqual(card.find((n) => n !== card && n.hadMarkup), [], "built with createElement, never markup");
+    assert.deepEqual(yd.find((n) => n !== yd && n.hadMarkup), [], "the sheet too");
+  });
+
+  it("the card is what is on file, a line each, and the form waits behind one button (6 Nov 2026)", async () => {
+    const page = await open(relay({ full: { ok: true, night: night(), me: me({ announcer: "Sam Rocket", emailMyNight: true, privacy: { initials: true, noVideo: true } }), asksOpen: true } }));
+    const card = page.get("yd");
+    const lines = card.find((n) => n.tagName === "DT").map((n) => [n.textContent, card.find((d) => d.tagName === "DD")[card.find((x) => x.tagName === "DT").indexOf(n)]!.textContent]);
+
+    assert.deepEqual(lines, [
+      ["Name", "Sam Parker"], ["Announcer", "Sam Rocket"], ["Pronouns", "she/her"], ["About you", "Nothing yet"],
+      ["Email", "s•••@gmail.com"], ["Night email", "On"], ["Online", "Not in videos · Initials only"],
+    ]);
+    assert.equal(card.find((n) => n.tagName === "INPUT" || n.tagName === "TEXTAREA").length, 0, "no form boxes on the card itself");
+    assert.equal(card.find((n) => n.tagName === "DETAILS").length, 0, "no fold");
+    assert.ok(page.button(card, /^Ask the desk to change$/));
+    assert.match(card.textContent, /Nothing changes until the desk checks it\./);
+
+    page.button(card, /^Ask the desk to change$/)!.click();
+    assert.equal(page.get("me-sheet").hidden, false);
+    assert.match(page.get("me-sheet-body").textContent, /^Change your details/);
+    assert.ok(page.button(page.get("me-sheet-body"), /^Send to the desk$/));
   });
 
   it("a privacy flag already on is drawn on, fixed, and says ask at the desk", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me({ privacy: { initials: true } }), asksOpen: true } }));
-    const box = field(page.get("yd"), /^Show only my initials online/) as unknown as { checked: boolean; disabled: boolean };
+    const box = field(form(page), /^Show only my initials online/) as unknown as { checked: boolean; disabled: boolean };
 
     assert.equal(box.checked, true);
     assert.equal(box.disabled, true);
-    assert.match(page.get("yd").textContent, /On - ask at the desk to undo/);
+    assert.match(form(page).textContent, /On - ask at the desk to undo/);
   });
 });
 
 describe("sending a details change", () => {
   it("sends only the changed fields, with the code in the body", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me(), asksOpen: true } }));
-    const yd = page.get("yd");
+    const yd = form(page);
 
     type(field(yd, /^Announcer name/), "  Sam   'Rocket'  Parker ");
     type(field(yd, /^Pronouns/), "she/her");
@@ -195,14 +234,14 @@ describe("sending a details change", () => {
 
   it("an emptied field is sent as an empty string, which clears it", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me(), asksOpen: true } }));
-    type(field(page.get("yd"), /^Pronouns/), "   ");
-    await press(page, page.get("yd"), /^Send to the desk$/);
+    type(field(form(page), /^Pronouns/), "   ");
+    await press(page, form(page), /^Send to the desk$/);
     assert.deepEqual(asks(page)[0]?.body["f"], { pronouns: "" });
   });
 
   it("privacy ticks go only as true, the guardian tick with them", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me({ privacy: { noVideo: true } }), asksOpen: true } }));
-    const yd = page.get("yd");
+    const yd = form(page);
 
     tickBox(field(yd, /^Leave my photo off/), true);
     // Ticked and unticked again: never sent at all, let alone as false.
@@ -218,12 +257,12 @@ describe("sending a details change", () => {
 
   it("emailMyNight goes both ways, and is offered only with an address on file", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me({ emailMyNight: true }), asksOpen: true } }));
-    tickBox(field(page.get("yd"), /^Email me my night/), false);
-    await press(page, page.get("yd"), /^Send to the desk$/);
+    tickBox(field(form(page), /^Email me my night/), false);
+    await press(page, form(page), /^Send to the desk$/);
     assert.deepEqual(asks(page)[0]?.body["f"], { emailMyNight: false });
 
     const none = await open(relay({ full: { ok: true, night: night(), me: me({ email: "" }), asksOpen: true } }));
-    assert.equal((field(none.get("yd"), /^Email me my night/) as unknown as { disabled: boolean }).disabled, true);
+    assert.equal((field(form(none), /^Email me my night/) as unknown as { disabled: boolean }).disabled, true);
   });
 
   it("refuses an over-long query and an empty one before sending", async () => {
@@ -247,7 +286,7 @@ describe("the personal PIN", () => {
       full: { ok: true, night: night(), me: me({ pin: true }), asksOpen: true },
       list: { status: 200, body: { ok: true, mode: "racer", driver: { id: CODE, name: "Sam Parker" }, pass: PASS } },
     }));
-    const yd = page.get("yd");
+    const yd = form(page);
 
     assert.ok(page.button(yd, /^Sign in$/));
     assert.equal(page.button(yd, /^Send to the desk$/), undefined, "no form before the PIN");
@@ -275,10 +314,10 @@ describe("the personal PIN", () => {
       { ok: true, mode: "racer", driver: { id: "ffffffffffffffffffff" }, pass: PASS },
     ]) {
       const page = await open(relay({ full: { ok: true, night: night(), me: me({ pin: true }), asksOpen: true }, list: { status: 200, body } }));
-      type(field(page.get("yd"), /^Your personal PIN/), "1234");
-      await press(page, page.get("yd"), /^Sign in$/);
+      type(field(form(page), /^Your personal PIN/), "1234");
+      await press(page, form(page), /^Sign in$/);
 
-      assert.match(said(page.get("yd")), body.mode === "staff" ? /the club's PIN, not your own/ : /different driver/);
+      assert.match(said(form(page)), body.mode === "staff" ? /the club's PIN, not your own/ : /different driver/);
       assert.deepEqual(writes(page).filter(([, , v]) => v === PASS), []);
     }
   });
@@ -293,15 +332,15 @@ describe("the personal PIN", () => {
 
     for (const [list, words] of cases) {
       const page = await open(relay({ full: { ok: true, night: night(), me: me({ pin: true }), asksOpen: true }, list }));
-      type(field(page.get("yd"), /^Your personal PIN/), "1234");
-      await press(page, page.get("yd"), /^Sign in$/);
-      assert.match(said(page.get("yd")), words);
+      type(field(form(page), /^Your personal PIN/), "1234");
+      await press(page, form(page), /^Sign in$/);
+      assert.match(said(form(page)), words);
     }
 
     const page = await open(relay({ full: { ok: true, night: night(), me: me({ pin: true }), asksOpen: true } }));
-    type(field(page.get("yd"), /^Your personal PIN/), "12");
-    await press(page, page.get("yd"), /^Sign in$/);
-    assert.match(said(page.get("yd")), /4 to 8 digits/);
+    type(field(form(page), /^Your personal PIN/), "12");
+    await press(page, form(page), /^Sign in$/);
+    assert.match(said(form(page)), /4 to 8 digits/);
     assert.equal(page.sent.filter((s) => s.url.endsWith("/checkin/list")).length, 0);
   });
 
@@ -311,7 +350,7 @@ describe("the personal PIN", () => {
       list: { status: 200, body: { ok: true, mode: "racer", driver: { id: CODE }, pass: PASS } },
       ask: () => ({ status: 403, body: { ok: false, error: "Sign in with your personal PIN first." } }),
     }));
-    const yd = page.get("yd");
+    const yd = form(page);
     type(field(yd, /^Your personal PIN/), "123456");
     await press(page, yd, /^Sign in$/);
     type(field(yd, /^Announcer name/), "Rocket");
@@ -345,10 +384,10 @@ describe("every refusal from driver/ask, in plain words", () => {
           return answer;
         },
       }));
-      type(field(page.get("yd"), /^Announcer name/), "Rocket");
-      await press(page, page.get("yd"), /^Send to the desk$/);
+      type(field(form(page), /^Announcer name/), "Rocket");
+      await press(page, form(page), /^Send to the desk$/);
 
-      const text = said(page.get("yd"));
+      const text = said(form(page));
       assert.match(text, words);
       assert.doesNotMatch(text, /Not found/);
     });
@@ -358,6 +397,7 @@ describe("every refusal from driver/ask, in plain words", () => {
 describe("the pack and the race query", () => {
   it("the pack select sends kind pack with the pick, and a no-change pick sends nothing", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me(), asksOpen: true } }));
+    // The pack is on the card itself, not in the sheet.
     const yd = page.get("yd");
 
     await press(page, yd, /^Save$/);
@@ -422,8 +462,8 @@ describe("request status on the live card", () => {
 
   it("shows a request just sent as waiting until the live entry lists it", async () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me(), asksOpen: true, live: {} } }));
-    type(field(page.get("yd"), /^Announcer name/), "Rocket");
-    await press(page, page.get("yd"), /^Send to the desk$/);
+    type(field(form(page), /^Announcer name/), "Rocket");
+    await press(page, form(page), /^Send to the desk$/);
 
     assert.match(page.get("lv").textContent, /Your details \(ref A1B2C3\) - waiting for the desk/);
   });
@@ -435,13 +475,14 @@ describe("what never leaves the page the wrong way", () => {
       full: { ok: true, night: night(), me: me({ pin: true }), asksOpen: true },
       list: { status: 200, body: { ok: true, mode: "racer", driver: { id: CODE }, pass: PASS } },
     }));
-    const yd = page.get("yd");
+    const yd = form(page);
     type(field(yd, /^Your personal PIN/), "123456");
     await press(page, yd, /^Sign in$/);
     type(field(yd, /^Announcer name/), "Rocket");
     await press(page, yd, /^Send to the desk$/);
-    field(yd, /^The pack in your car now/).value = PACK_B;
-    await press(page, yd, /^Save$/);
+    // The pack is on the card, not in the sheet.
+    field(page.get("yd"), /^The pack in your car now/).value = PACK_B;
+    await press(page, page.get("yd"), /^Save$/);
     await press(page, page.get("nx"), /Something wrong/);
     type(field(page.get("nx"), /^What looks wrong/), "Wrong.");
     await press(page, page.get("nx"), /^Send to the desk$/);
@@ -494,7 +535,7 @@ describe("against the real relay", () => {
     page.run(script);
     await page.settle();
 
-    const yd = page.get("yd");
+    const yd = form(page);
     assert.ok(page.button(yd, /^Sign in$/), "Sam has a personal PIN, so the relay says pin: true");
 
     type(field(yd, /^Your personal PIN/), SAM_PIN);

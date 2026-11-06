@@ -192,11 +192,13 @@ describe("#98 Your details with a long announcer name from the desk", () => {
       if (url.endsWith("/driver/ask")) return { status: 200, body: { ok: true, ref: "A1B2C3" } };
       return { status: 409, body: { ok: false } };
     }, `#d=${CODE}`);
+    // The form is in Me's sheet since 6 Nov 2026, behind Ask the desk to change.
+    page.button(page.get("yd"), /^Ask the desk to change$/)!.click();
     return { page, asks: () => page.sent.filter((s) => s.url.endsWith("/driver/ask")).map((s) => s.body) };
   }
 
   async function send(page: FakePage): Promise<void> {
-    const b = page.button(page.get("yd"), /^Send to the desk$/);
+    const b = page.button(page.get("me-sheet-body"), /^Send to the desk$/);
     assert.ok(b);
     b.click();
     await page.settle();
@@ -205,7 +207,7 @@ describe("#98 Your details with a long announcer name from the desk", () => {
   it("a privacy tick still goes when the announcer name is untouched", async () => {
     const { page, asks } = await openDetails();
     assert.ok(long.length > 40);
-    const box = field(page.get("yd"), /^Leave my photo off/);
+    const box = field(page.get("me-sheet-body"), /^Leave my photo off/);
     (box as unknown as { checked: boolean }).checked = true;
     box.fire("change");
     await send(page);
@@ -214,11 +216,11 @@ describe("#98 Your details with a long announcer name from the desk", () => {
 
   it("an edited name still over 40 is refused, naming the box", async () => {
     const { page, asks } = await openDetails();
-    const name = field(page.get("yd"), /^Announcer name/);
+    const name = field(page.get("me-sheet-body"), /^Announcer name/);
     name.value = long + "s";
     name.fire("input");
     await send(page);
     assert.equal(asks().length, 0);
-    assert.match(page.get("yd").textContent, /announcer name is over 40 characters/);
+    assert.match(page.get("me-sheet-body").textContent, /announcer name is over 40 characters/);
   });
 });

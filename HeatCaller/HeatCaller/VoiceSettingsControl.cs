@@ -178,6 +178,29 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// </summary>
     internal FieldGrid AnnouncerVoiceGrid => _announcerVoiceGrid;
 
+    /// <summary>The width the Cast tab gives every voice picker on it - see UseCastPickerWidth.</summary>
+    private int? _castPickerWidth;
+
+    /// <summary>
+    /// The announcer's voice pickers, for the Cast tab to measure along with
+    /// its own (CastControl.SizeFields).
+    /// </summary>
+    internal IReadOnlyList<ComboBox> AnnouncerVoicePickers => new[] { _cmbHeatCallerVoice, _cmbVoice, _cmbKokoroVoice };
+
+    /// <summary>
+    /// Sizes the announcer's voice pickers to the Cast tab's one width for
+    /// every voice picker (6 Nov 2026), so their Test buttons line up with
+    /// the rest of the cast's. Null goes back to this page's own sizing.
+    /// </summary>
+    internal void UseCastPickerWidth(int? width)
+    {
+        if (_castPickerWidth != width)
+        {
+            _castPickerWidth = width;
+            SizeFields();
+        }
+    }
+
     /// <summary>While the Kokoro test is speaking, so a change of engine doesn't re-enable its button part-way.</summary>
     private bool _kokoroTestRunning;
 
@@ -724,14 +747,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         _kokoroVoiceRow.AddRange(new Control[] { kokoroCaption, kokoroLine, _lblKokoroTestStatus });
         _kokoroCaption = kokoroCaption;
 
-        // (22 Oct 2026, page tidy): the captions keep the Cast tab's step on
-        // their right, as its own flush captions do (CastControl's Flush) -
-        // without it these fields started a step left of every other field
-        // on the Cast tab, even with the caption column lined up.
-        foreach (var caption in new[] { heatCallerCaption, wordsCaption, elevenLabsCaption, kokoroCaption })
-        {
-            caption.Margin = new Padding(caption.Margin.Left, caption.Margin.Top, caption.Margin.Right + UiLayout.Indent, caption.Margin.Bottom);
-        }
+        // The Cast tab's captions have no step on either side since 6 Nov
+        // 2026, so neither do these - the caption column lined up is enough.
 
         // The ElevenLabs row also follows the key typed (ShowAnnouncerVoiceRows).
         _txtApiKey.TextChanged += (_, _) => ShowAnnouncerVoiceRows();
@@ -878,7 +895,10 @@ public sealed partial class VoiceSettingsControl : UserControl
         {
             var wants = Pieces.PickerWidth(picker, ref kept);
 
-            Fit(picker, Math.Min(most, Math.Max(field, wants)));
+            // On the Cast tab, every voice picker there is one width (6 Nov
+            // 2026) - the announcer's too, so its Test Voice lines up with the
+            // rest of the cast's. See CastControl.SizeFields.
+            Fit(picker, _castPickerWidth ?? Math.Min(most, Math.Max(field, wants)));
             OpenTo(picker, Math.Max(picker.Width, wants));
         }
 

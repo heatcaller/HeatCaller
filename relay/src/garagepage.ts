@@ -141,6 +141,16 @@ function backLink() {
 }
 `;
 
+/**
+ * Signed out of on Me (6 Nov 2026): Back or a reload onto this driver's
+ * garage in the same tab goes to the PIN, as the night does (meSignedOut,
+ * in the shared script).
+ */
+const GARAGE_OUT_JS = String.raw`
+if (meSignedOut(CODE)) meToPin();
+try { window.addEventListener('pageshow', (e) => { if (e && e.persisted && meSignedOut(CODE, true)) meToPin(); }); } catch (e) { /* reloads instead */ }
+`;
+
 const GARAGE_JS = String.raw`
 // ---- who the driver is (exactly as NIGHT_JS)
 
@@ -1759,7 +1769,7 @@ export function garagePage(club: string, clubName: string, context: PageContext 
     body: `<style>${GARAGE_CSS}</style>` +
       '<div id="gh"></div><div id="gm"><p class="note">Loading&hellip;</p></div>' +
       '<div id="gp"></div><div id="gr"></div><div id="gc"></div><div id="gg"></div><div id="gs"></div>',
-    script: GARAGE_PAGE_JS + GARAGE_JS,
+    script: GARAGE_PAGE_JS + GARAGE_JS + GARAGE_OUT_JS,
     noindex: true,
   }, context);
 }

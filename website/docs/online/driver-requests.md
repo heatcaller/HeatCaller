@@ -28,7 +28,7 @@ All of this is on the driver's night page, which only their badge code opens. Se
 
 ### Your details
 
-At the foot of the night page, a **Your details** card says "Ask the timing desk to change how you are called and shown. Nothing changes until the desk checks it." It shows what's on file now, so the driver changes only what they need:
+On **Me**, under **Tonight**, a **Your details** card lists what's on file now, a line each: **Name**, **Announcer**, **Pronouns**, **About you**, **Email** (partly hidden), **Night email** (On or Off) and **Online** (which privacy choices are on, or "Shown as normal"). **Ask the desk to change** under it opens **Change your details** from the bottom of the screen, which says "Nothing changes until the timing desk checks it." A driver with a personal PIN signs in there first. The form shows what's on file, so the driver changes only what they need, then taps **Send to the desk**, or **Done** to close it. (Until 6 November the form opened inside the card, under **Change how you are called and shown**.)
 
 | Field | What it's for | Longest |
 |---|---|---|

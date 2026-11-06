@@ -3,24 +3,26 @@
  * their time in the app so it has to be wiz bang!", then "Yes, build it" to
  * the mix on the Me tab review). The night page, regrouped:
  *
- *   a STATUS STRIP under their name - the next race, the pack in the car,
- *   the transponder - that never scrolls away;
+ *   (a STATUS STRIP under their name - the next race, the pack in the car,
+ *   the transponder - came out on 6 Nov 2026, Asher: "get rid of the swipe
+ *   left right next and transponder buttons bar just below the driver name
+ *   at the top. it's redundant": the moment card says the same;)
  *
  *   the MOMENT CARD, which knows where the evening is: Check in when they
  *   arrive, the countdown and the car's readiness while they wait, On track,
  *   and their place the moment a race is filed;
  *
  *   FOUR SPACES behind a sticky switch, a sideways swipe apart: Tonight (the
- *   tiles, then Right now and Lap times in my ear), Races (the night at a
- *   glance, every race, its laps and charts, the calls), Garage (packs, pack
- *   charts, cars, photos, setup sheets - the Garage page folded in - then
- *   Your details) and Stats (report card, driver score, progress,
+ *   tiles, then Right now, Lap times in my ear and - since 6 Nov 2026 -
+ *   Your details), Races (the night at a glance, every race, its laps and
+ *   charts, the calls), Garage (packs, pack charts, cars, photos, setup
+ *   sheets - the Garage page folded in) and Stats (report card, driver score, progress,
  *   achievements);
  *
  *   (A QUICK button on every space - swap the pack, log a setup,
  *   "Something wrong?", check the transponder - came out on 5 Nov 2026,
  *   Asher: "I don't think it adds enough value". The pack swap and the
- *   setup are still a tap away on the strip and the Tonight tiles.)
+ *   setup are still a tap away on the moment card and the Tonight tiles.)
  *
  * LAID OVER THE NIGHT, NOT WRITTEN INTO IT. Every card the night already
  * draws is drawn exactly as before; this only says which space each one
@@ -34,10 +36,6 @@
  */
 
 export const ME_CSS = `
-.me-strip { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 6; display: flex; gap: 6px; overflow-x: auto;
-  margin: 0; padding: 8px 0; background: var(--bg); border-bottom: 1px solid var(--border); scrollbar-width: none; }
-.me-strip::-webkit-scrollbar { display: none; }
-.me-strip:empty { display: none; }
 .me-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 0.82rem;
   font-weight: 600; white-space: nowrap; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; }
 .me-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
@@ -45,7 +43,7 @@ export const ME_CSS = `
 .me-chip.wait::before { background: var(--warn); }
 .me-chip.hot::before { background: var(--accent); }
 
-.me-moment { margin: 14px 0 6px; }
+.me-moment { margin: 8px 0 6px; }
 .me-moment:empty { display: none; }
 .me-hero { border-radius: 16px; padding: 16px; display: grid; gap: 10px; text-align: left;
   background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 60%),
@@ -63,7 +61,7 @@ export const ME_CSS = `
 .me-hero .acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .me-hero .acts button { flex: 1 1 8rem; }
 
-.me-switch { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 46px); z-index: 5; display: grid;
+.me-switch { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 10px 0 12px; padding: 4px; border-radius: 16px;
   background: var(--surface); border: 1px solid var(--border); box-shadow: 0 8px 18px -12px rgba(0, 0, 0, 0.6); }
 /* The relay's segmented control (Pit Wall, 5 Nov 2026): the chosen space
@@ -90,7 +88,7 @@ export const ME_CSS = `
   vertical-align: middle; background: var(--c, var(--muted)); }
 
 /* One space at a time. Everything the night draws is given its space by
-   ME_JS; what has none (their name, the strip, the switch) shows on all. */
+   ME_JS; what has none (their name, the switch) shows on all. */
 body.me-on #nj, body.me-on .mvfoot, body.me-on .mv, body.me-on .lc-pack { display: none !important; }
 body[data-me="tonight"] [data-sp]:not([data-sp="tonight"]),
 body[data-me="races"] [data-sp]:not([data-sp="races"]),
@@ -105,6 +103,15 @@ body[data-me="stats"] [data-sp]:not([data-sp="stats"]) { display: none !importan
   @keyframes me-in-r { from { transform: translateX(-28px); opacity: 0.3; } }
 }
 
+/* Signed in, top right of Me (6 Nov 2026): a tap asks before signing out.
+   On the same line as their name rather than a row of its own above it
+   (6 Nov 2026, Asher: "move the driver name and everything below it up
+   and closer to the top"); the name keeps clear of it. */
+.me-top { position: relative; max-width: 42rem; margin: 0 auto; }
+.me-si { position: absolute; top: -6px; right: 0; z-index: 2; margin: 0; }
+.me-si[hidden] { display: none !important; }
+.me-si .me-chip { min-height: 44px; cursor: pointer; }
+.me-top[data-si="1"] #nh h2 { padding-right: 7.5rem; }
 .me-sheet { position: fixed; inset: 0; z-index: 40; background: rgba(5, 3, 12, 0.55); display: flex; align-items: flex-end; justify-content: center; }
 .me-sheet[hidden] { display: none !important; }
 .me-sheet .in { width: 100%; max-width: 34rem; max-height: 84%; overflow-y: auto; background: var(--surface); border-radius: 24px 24px 0 0;
@@ -149,9 +156,8 @@ html.framed .me-sheet .in { padding-bottom: calc(22px + 58px + var(--sa-b, 0px))
 }
 `;
 
-/** Under their name: the strip, the moment card, the switch and the tiles. */
+/** Under their name: the moment card, the switch and the tiles. */
 export const ME_BODY_TOP =
-  '<div class="me-strip" id="me-strip" aria-label="Your car and your next race"></div>' +
   '<div class="me-moment" id="me-moment" aria-live="polite"></div>' +
   '<div class="me-switch" id="me-switch" role="tablist" aria-label="Parts of Me"></div>' +
   '<div class="me-tiles" id="me-tiles" data-sp="tonight"></div>';
@@ -184,9 +190,11 @@ let meHeroKind = '';
 // adds later and this does not know goes to Stats, never nowhere.
 function meSpaceOf(node) {
   const id = String(node.id || '');
-  if (id === 'lv' || id === 'ea' || id === 'gd' || id === 'me-tiles') return 'tonight';
+  // Your details is on Tonight, under Right now, since 6 Nov 2026 (Asher:
+  // "move more details from garage to tonight tab").
+  if (id === 'lv' || id === 'ea' || id === 'gd' || id === 'me-tiles' || id === 'yd') return 'tonight';
   if (id === 'ng' || id === 'nt' || id === 'n-races' || id === 'n-calls' || id.indexOf('n-car-') === 0) return 'races';
-  if (id === 'yd' || id === 'meout' || id === 'me-garage') return 'garage';
+  if (id === 'meout' || id === 'me-garage') return 'garage';
   if (id === 'n-how' || id === 'n-score' || id === 'n-prog') return 'stats';
   const cls = String(node.className || '');
   if (/\brlist\b|\brace/.test(cls)) return 'races';
@@ -289,7 +297,7 @@ function meSwitch() {
 function meSideways(target) {
   for (let n = target; n && n !== document.body; n = n.parentElement) {
     // nav.tabs: a swipe along the bottom bar changes tab instead (5 Nov 2026).
-    if (n.matches && n.matches('input, textarea, select, nav.tabs, .me-strip, .me-switch, .me-sheet, [data-noswipe], .gcars, details[open] .gset')) return true;
+    if (n.matches && n.matches('input, textarea, select, nav.tabs, .me-switch, .me-sheet, [data-noswipe], .gcars, details[open] .gset')) return true;
     if (n.scrollWidth > n.clientWidth + 4) {
       const ox = getComputedStyle(n).overflowX;
       if (ox === 'auto' || ox === 'scroll') return true;
@@ -314,7 +322,7 @@ function meSwipe() {
   }, { passive: true });
 }
 
-// ---- what the strip, the moment and the tiles read
+// ---- what the moment and the tiles read
 
 function meNext() {
   return live && live.next && typeof live.next === 'object' ? live.next : null;
@@ -360,24 +368,6 @@ function meChip(text, state, onTap) {
   c.type = 'button';
   if (onTap) c.addEventListener('click', onTap); else c.tabIndex = -1;
   return c;
-}
-
-function meStrip() {
-  const at = document.getElementById('me-strip');
-  if (!at) return;
-  at.textContent = '';
-  if (!live) return;
-  const n = meNext();
-  if (n) {
-    const eta = n.now === true ? 'on track' : n.staged === true ? 'staged' : num(n.away) === 0 ? 'next' : plural(num(n.away), 'race', 'races') + ' away';
-    at.appendChild(meChip(String(n.race || 'Your race') + ' · ' + eta, n.staged === true || n.now === true ? 'hot' : 'wait', () => meSetSpace('tonight')));
-  }
-  const pack = mePackNow();
-  if (pack !== '') at.appendChild(meChip(pack + ' in the car', 'ok', mePackSheet));
-  else if (me && me.packs && Array.isArray(me.packs.choices) && me.packs.choices.length > 0) at.appendChild(meChip('No pack set', 'wait', mePackSheet));
-  const seen = meSeen();
-  at.appendChild(meChip(Number.isFinite(seen) ? 'Transponder heard ' + hm(seen) : 'Transponder not heard yet', Number.isFinite(seen) ? 'ok' : 'wait',
-    () => { meSetSpace('tonight'); const lv = document.getElementById('lv'); if (lv) lv.scrollIntoView({ block: 'start', behavior: 'smooth' }); }));
 }
 
 // ---- the moment card
@@ -568,7 +558,8 @@ function meToast(words, bad) {
 
 let meSheetFrom = null;
 
-function meOpenSheet(title, fill) {
+// noDone: the sheet carries its own way out (Sign out's Stay signed in).
+function meOpenSheet(title, fill, noDone) {
   const sheet = document.getElementById('me-sheet');
   const body = document.getElementById('me-sheet-body');
   if (!sheet || !body) return;
@@ -578,8 +569,7 @@ function meOpenSheet(title, fill) {
   h.id = 'me-sheet-h';
   body.appendChild(h);
   fill(body);
-  const done = tapButton('Done', 'go quiet x', meCloseSheet);
-  body.appendChild(done);
+  if (!noDone) body.appendChild(tapButton('Done', 'go quiet x', meCloseSheet));
   sheet.hidden = false;
   const first = body.querySelector('button');
   if (first) first.focus();
@@ -729,11 +719,6 @@ function meRefresh() {
   meAnswers();
   meDots();
   meClassify();
-  meStrip();
-  // The switch sticks right under the strip, however tall the strip is.
-  const strip = document.getElementById('me-strip');
-  const sw = document.getElementById('me-switch');
-  if (strip && sw) sw.style.top = 'calc(env(safe-area-inset-top, 0px) + ' + (strip.offsetHeight || 0) + 'px)';
   meMoment();
   meTiles();
 }

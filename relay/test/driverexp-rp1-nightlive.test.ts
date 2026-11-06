@@ -92,9 +92,9 @@ describe("the code stays out of every address", () => {
     }));
 
     await page.advance(45000);
-    const tap = page.button(page.get("lv"), /^Check in$/);
-    assert.ok(tap, "the check-in button is offered");
-    tap.click();
+    // Check in is on Me's moment card since 6 Nov 2026; its button calls this.
+    assert.equal(page.eval("ci.shown"), true, "check-in is offered");
+    void page.eval("tapCheckIn()");
     await page.settle();
 
     assert.ok(page.sent.length >= 4, "the read, check-in, two polls and a tap");
@@ -277,35 +277,57 @@ describe("marshal duty", () => {
 });
 
 describe("check-in from the night page", () => {
-  it("is hidden when check-in is closed (409)", async () => {
+  // Since 6 Nov 2026 (Asher: "remove the check in button and the pack charge
+  // from the right now tile on the me tab") the Right now card has no Check
+  // in button; Me's moment card offers it and calls tapCheckIn.
+  it("is not offered when check-in is closed (409)", async () => {
     const page = await open(relay({ ok: true, night: night() }, { one: { status: 409, body: { ok: false } } }));
 
+    assert.equal(page.eval("ci.shown"), false);
     assert.equal(page.button(page.get("lv"), /Check in/), undefined);
   });
 
-  it("checks in with the code and shows it at once", async () => {
+  it("has no Check in button on the Right now card, open or not", async () => {
+    const page = await open(relay({ ok: true, night: night(), live: { next: { race: "A", away: 1 } } }, {
+      one: { status: 200, body: { ok: true, driver: { id: CODE, name: "Bill", checkedIn: false }, nights: true } },
+    }));
+
+    assert.equal(page.eval("ci.shown"), true);
+    assert.match(page.get("lv").textContent, /Right now/);
+    assert.equal(page.button(page.get("lv"), /Check(ed)? in/), undefined);
+  });
+
+  it("draws no Right now card before they have a live entry", async () => {
     const page = await open(relay({ ok: true, night: night() }, {
       one: { status: 200, body: { ok: true, driver: { id: CODE, name: "Bill", checkedIn: false }, nights: true } },
     }));
 
-    page.button(page.get("lv"), /^Check in$/)!.click();
+    assert.equal(page.get("lv").textContent, "");
+  });
+
+  it("checks in with the code", async () => {
+    const page = await open(relay({ ok: true, night: night() }, {
+      one: { status: 200, body: { ok: true, driver: { id: CODE, name: "Bill", checkedIn: false }, nights: true } },
+    }));
+
+    void page.eval("tapCheckIn()");
     await page.settle();
 
     const tap = page.sent.find((s) => s.url.endsWith("/checkin/tap"));
     assert.deepEqual(tap?.body, { id: CODE, wanted: true });
-    assert.ok(page.button(page.get("lv"), /Checked in/));
+    assert.equal(page.eval("checkedIn()"), true);
   });
 
-  it("a tap answered 409 takes the button away", async () => {
+  it("a tap answered 409 stops offering check-in", async () => {
     const page = await open(relay({ ok: true, night: night() }, {
       one: { status: 200, body: { ok: true, driver: { id: CODE, name: "Bill", checkedIn: false } } },
       tap: { status: 409, body: { ok: false } },
     }));
 
-    page.button(page.get("lv"), /^Check in$/)!.click();
+    void page.eval("tapCheckIn()");
     await page.settle();
 
-    assert.equal(page.button(page.get("lv"), /Check in/), undefined);
+    assert.equal(page.eval("ci.shown"), false);
   });
 
   it("the live entry says checked in without another call", async () => {
@@ -313,7 +335,7 @@ describe("check-in from the night page", () => {
       one: { status: 200, body: { ok: true, driver: { id: CODE, name: "Bill", checkedIn: false } } },
     }));
 
-    assert.ok(page.button(page.get("lv"), /Checked in/));
+    assert.equal(page.eval("checkedIn()"), true);
   });
 });
 
@@ -782,7 +804,8 @@ describe("against R1's relay", () => {
     assert.match(lv, /Turn 3/);
     assert.match(lv, /Last seen at/);
     assert.match(page.get("gd").textContent, /Your first night/, "the guide, under their name");
-    assert.ok(page.button(page.get("lv"), /^Check in$/), "checkin/one said check-in is open");
+    assert.equal(page.eval("ci.shown"), true, "checkin/one said check-in is open");
+    assert.equal(page.button(page.get("lv"), /Check in/), undefined, "offered on the moment card, not Right now");
     assert.match(page.get("nt").textContent, /Nothing is filed for you yet/);
 
     // And the live poll reads the same entry.

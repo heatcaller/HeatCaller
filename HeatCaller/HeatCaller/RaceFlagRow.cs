@@ -49,7 +49,10 @@ internal sealed class FlagRow : Panel
     private readonly ButtonBar _bar;
 
     /// <summary>The level meters at the right (26 Oct 2026) - see ChannelStrips.ForRaceControl.</summary>
-    private readonly ChannelStrips _meters = ChannelStrips.ForRaceControl();
+    private readonly ChannelStrips _meters;
+
+    /// <summary>Whether the meters are in the row, or the caller's to place - see the constructor.</summary>
+    private readonly bool _metersInRow;
 
     private string _phase = string.Empty;
     private Color _phaseInk = Color.Empty;
@@ -75,11 +78,20 @@ internal sealed class FlagRow : Panel
     /// as Section draws its own - give the card none (26 Oct 2026). Empty for
     /// no title.
     /// </param>
-    public FlagRow(ButtonBar bar, string caption = "", HoldStrip? strip = null)
+    /// <param name="metersInRow">
+    /// False to leave the meters out of the row for the caller to place
+    /// (<see cref="Meters"/>, built spread - ChannelStrips.Spread): Race
+    /// Control has them under Broadcast in its right-hand column since 6 Nov
+    /// 2026 (asked for by Asher), and the buttons and the On Air bar have the
+    /// card's whole width.
+    /// </param>
+    public FlagRow(ButtonBar bar, string caption = "", HoldStrip? strip = null, bool metersInRow = true)
     {
         LayoutFreeze.Adopt(this);
 
         _bar = bar;
+        _metersInRow = metersInRow;
+        _meters = metersInRow ? ChannelStrips.ForRaceControl() : ChannelStrips.ForRaceControl(spread: true);
 
         // As Section words its title.
         var title = (caption ?? string.Empty).Trim().ToUpperInvariant();
@@ -110,9 +122,12 @@ internal sealed class FlagRow : Panel
 
         Controls.Add(bar);
 
-        _meters.Anchor = AnchorStyles.Left | AnchorStyles.Top;
-        _meters.Margin = Padding.Empty;
-        Controls.Add(_meters);
+        if (metersInRow)
+        {
+            _meters.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+            _meters.Margin = Padding.Empty;
+            Controls.Add(_meters);
+        }
 
         if (strip is not null)
         {
@@ -260,7 +275,7 @@ internal sealed class FlagRow : Panel
             return (RaceBar.MostShown + perLine - 1) / perLine;
         }
 
-        var nowWidth = _meters.Measure().Width;
+        var nowWidth = _metersInRow ? _meters.Measure().Width : 0;
         // No gap kept for the word when there is none (phaseWidth is 0).
         var phaseGap = phaseWidth > 0 ? phaseWidth + Gap : 0;
         var middle = width - phaseGap - nowWidth - Gap;
@@ -325,7 +340,7 @@ internal sealed class FlagRow : Panel
         // should match bottom of on air bar"): the card is drawn
         // HoldStrip.CardInsetBelow up from the foot, the panel one up from its own.
         var metersFit = stripHeight > 0 ? content - (HoldStrip.CardInsetBelow - 1) : content;
-        var metersHeight = _meters.HeightFor(metersFit);
+        var metersHeight = _metersInRow ? _meters.HeightFor(metersFit) : 0;
 
         // Meters at their least can be taller than all that. Then with the
         // strip the row grows UNDER the buttons, so the strip still ends
@@ -401,6 +416,13 @@ internal sealed class FlagRow : Panel
         // The meters at their box, or off the row when it is too narrow for
         // them - their timer stops while they cannot be seen (ChannelStrips).
         var showMeters = now.Width > 0;
+
+        // Not this row's to place, show or hide when the caller has them.
+        if (!_metersInRow)
+        {
+            Invalidate();
+            return;
+        }
 
         if (showMeters)
         {

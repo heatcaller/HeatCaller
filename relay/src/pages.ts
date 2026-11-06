@@ -476,7 +476,7 @@ a.go { text-align: center; text-decoration: none; }
 .night li:first-child { border-top: 0; }
 #nt h2, #nh h2 { margin: 0 0 2px; font-size: 1.3rem; }
 #nt .sub, #nh .sub { margin-bottom: 4px; }
-#nh:not(:empty) { margin: 0 auto 14px; max-width: 42rem; }
+#nh:not(:empty) { margin: 0 auto 8px; max-width: 42rem; }
 /* A driver's evening as it happens (22 Oct 2026, driver experience): the
    live card on top of their night page - next race, marshal duty, check-in
    and their transponder - and, under the night's facts, one card per race
@@ -589,6 +589,17 @@ table.lxt tr.best td { background: var(--good); color: var(--bg); font-weight: 7
 .yd h3 { margin: 0 0 6px; font-size: 1rem; }
 .yd h4 { margin: 22px 0 8px; font-size: 0.95rem; }
 .yd .su { max-width: none; }
+/* Your details as a profile (6 Nov 2026): what is on file, a line each. */
+.yd-sum { margin: 8px 0 0; display: grid; }
+.yd-sum div { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
+.yd-sum div:first-child { border-top: 0; }
+.yd-sum dt { color: var(--muted); font-size: 0.85rem; }
+.yd-sum dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.yd-sum dd.none { color: var(--muted); font-weight: 400; }
+.yd .go.yd-ask { margin: 14px auto 6px; }
+.yd .yd-foot { text-align: center; margin: 0; }
+.yd-sheet { display: grid; gap: 12px; }
+.yd-sheet .su { max-width: none; }
 .yd-change { margin-top: 18px; background: none; border: none; }
 .yd-change > summary { color: var(--accent); padding: 6px 0; }
 /* My Night laid out to be found (28 Oct 2026, asked for by Asher): a jump
@@ -956,10 +967,6 @@ details .eta { display: block; color: var(--muted); font-size: 0.8rem; font-weig
 .wt .wt-in { color: var(--good); }
 .wt .wt-out { color: var(--muted); }
 .wt .wt-crown { font-weight: 700; color: var(--accent); }
-/* The charge timer on the Right now card (4 Nov 2026). */
-.lc-chargeset { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
-.lc-chargeset select { margin: 0; min-height: 44px; }
-.lc-late { color: var(--bad); font-weight: 600; }
 .setuplog textarea { display: block; width: 100%; min-height: 72px; margin: 6px 0 0; padding: 10px; font: inherit; font-size: 1rem; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); resize: vertical; }
 /* Just me and Compare with, side by side over the charts (4 Nov 2026). */
 .mesay { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 4px 0 0; }
@@ -1656,6 +1663,70 @@ function meRemember(code) {
 
 function meForget() {
   try { localStorage.removeItem(ME_KEY); } catch (e) { /* nothing was kept */ }
+}
+
+// SIGNING OUT FORGETS THE DRIVER (6 Nov 2026, Asher: "If you then sign out
+// the app should forget the pin and require a pin entry to sign back in to
+// anyone's me tab. if signed out the app should forget all of the info for
+// that driver that populated in the app when they signed in for privacy").
+// Everything this phone kept because a driver was on Me goes: the code,
+// the pass their PIN earned (Your details and the Garage), a racer's PIN on
+// the check-in page (never a desk's staff PIN), Me's own leftovers - which
+// space was open, what was seen, the card order and chart picks, the pack
+// on charge, lap times in their ear - and every page's kept copies of what
+// the relay answered, their night among them. The code they signed out of
+// is noted for this tab only, so Back or a reload onto their night goes to
+// the PIN instead of opening it again (meSignedOut).
+const ME_OUT_KEY = 'hg-me-out-' + CLUB;
+const ME_LEFTOVERS = ['hg-me-seen-' + CLUB, 'hg-charge-' + CLUB, 'hg-me-space', 'hg-night-order', 'hg-night-just-me',
+  'hg-night-hide-runs', 'hg-nighttalk-' + CLUB, 'hg-nighttalk-short-' + CLUB, 'hg-nighttalk-say-' + CLUB];
+
+function meSignOut(code) {
+  meForget();
+  for (const k of ME_LEFTOVERS) {
+    try { localStorage.removeItem(k); } catch (e) { /* nothing was kept */ }
+  }
+  try { sessionStorage.removeItem('hg-night-pass-' + CLUB); } catch (e) { /* nothing was kept */ }
+  try {
+    const pin = 'hg-pin-' + CLUB;
+    if (sessionStorage.getItem(pin + '-racer') === '1') {
+      sessionStorage.removeItem(pin);
+      sessionStorage.removeItem(pin + '-pass');
+      sessionStorage.removeItem(pin + '-racer');
+    }
+  } catch (e) { /* nothing was kept */ }
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (k && (k.indexOf(SEEN) === 0 || k.indexOf(READS) === 0)) sessionStorage.removeItem(k);
+    }
+  } catch (e) { /* the copies age out by themselves */ }
+  try { if (/^[0-9a-f]{20}$/.test(String(code))) sessionStorage.setItem(ME_OUT_KEY, String(code)); } catch (e) { /* not noted */ }
+}
+
+// Whether this tab signed out of this code and is being taken back to it -
+// Back, Forward, a reload, or a page the browser kept (restored). A badge
+// link opened afresh is the driver's own way in, so it clears the note.
+function meSignedOut(code, restored) {
+  let out = '';
+  try { out = sessionStorage.getItem(ME_OUT_KEY) || ''; } catch (e) { return false; }
+  if (!code || out !== code) return false;
+  if (restored) return true;
+  let how = '';
+  try {
+    const n = performance.getEntriesByType('navigation');
+    how = n && n[0] ? String(n[0].type) : '';
+  } catch (e) { /* not known: treated as going back */ }
+  if (how === 'navigate') {
+    try { sessionStorage.removeItem(ME_OUT_KEY); } catch (e) { /* stays noted */ }
+    return false;
+  }
+  return true;
+}
+
+function meToPin() {
+  const to = '/c/' + encodeURIComponent(CLUB) + '/mynight';
+  try { location.replace(to); } catch (e) { location.href = to; }
 }
 
 // THE TAPPED TAB LIGHTS AT ONCE, AND ITS PAGE IS READ AHEAD (1 Nov 2026,
@@ -7072,13 +7143,7 @@ function mineExtras(entry) {
     out.push(['Marshal duty', m.race + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : '') +
       (away <= 0 ? ' - next' : away === 1 ? ' - 1 race away' : ' - ' + away + ' races away')]);
   }
-  try {
-    const c = JSON.parse(localStorage.getItem('hg-charge-' + CLUB) || 'null');
-    if (c && typeof c.until === 'number' && isFinite(c.until)) {
-      const left = Math.round((c.until - Date.now()) / 60000);
-      out.push(['On charge', left <= 0 ? 'Charged' : 'Ready in ' + left + ' min']);
-    }
-  } catch (e) { /* none on charge */ }
+  // No "On charge" line since 6 Nov 2026: the charge timer it read went.
   const tags = entry && Array.isArray(entry.cars) ? entry.cars.map((x) => x && x.tag).filter((x) => typeof x === 'string' && x !== '') : [];
   const classes = mineQual && Array.isArray(mineQual.classes) ? mineQual.classes : [];
   for (const cls of classes) {
@@ -7176,89 +7241,10 @@ async function readMine() {
 
 if (mine && MINE) poll(readMine, 60000);
 
-// THE "YOU" STRIP (30 Oct 2026, relay navigation round 6): for a phone
-// that remembers a driver, on every state of Home - their last night's
-// best finish, where they stand, and the newest achievement they earned,
-// with their night a tap away. Their night is the full read (the live
-// poll above carries only the next race), so it is asked for once on
-// opening and then every five minutes, well inside the relay's allowance.
-const you = document.getElementById('you');
-let youNight = null;
-
-function youLine(label, text) {
-  const p = document.createElement('p');
-  p.className = 'you-l';
-  const k = document.createElement('span');
-  k.className = 'gl-k';
-  k.textContent = label;
-  const v = document.createElement('b');
-  v.textContent = text;
-  p.appendChild(k);
-  p.appendChild(v);
-  return p;
-}
-
-function drawYou() {
-  if (!you) return;
-
-  const night = youNight;
-  const who = night && typeof night.driver === 'string' ? night.driver : '';
-
-  you.textContent = '';
-  you.hidden = night === null;
-  if (night === null) return;
-
-  const h = document.createElement('h3');
-  h.textContent = who ? 'You, ' + who : 'You';
-  you.appendChild(h);
-
-  // A demo race is never a best finish (3 Nov 2026).
-  const races = Array.isArray(night.races) ? night.races.filter((r) => r && Number(r.pos) > 0 && !r.kind) : [];
-  const best = races.slice().sort((a, b) => Number(a.pos) - Number(b.pos))[0];
-  const when = [night.title, night.when].filter(Boolean).join(' · ');
-
-  if (best) {
-    you.appendChild(youLine('Best finish' + (when ? ', ' + when : ''), ordinal(best.pos) + (best.label ? ' · ' + best.label : '')));
-  }
-
-  const seasons = standingsDoc && Array.isArray(standingsDoc.seasons) ? standingsDoc.seasons : [];
-  for (const season of seasons) {
-    const row = (Array.isArray(season.standings) ? season.standings : []).find((r) => r && sameName(r.name, who));
-    if (row && who) {
-      you.appendChild(youLine('Standings' + (season.name ? ', ' + season.name : ''), ordinal(row.pos) + ' · ' + row.points + ' pts'));
-      break;
-    }
-  }
-
-  const recent = achievementsDoc && Array.isArray(achievementsDoc.recent) ? achievementsDoc.recent : [];
-  const earned = who ? recent.find((r) => r && sameName(r.name, who)) : null;
-  if (earned) you.appendChild(youLine('Newest achievement', badgeName(earned.id)));
-  // No "Open your night" here either (5 Nov 2026) - Me is on the bar.
-}
-
-async function readYou() {
-  let r = null;
-  try {
-    r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/night', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: MINE }),
-      cache: 'no-store',
-    });
-  } catch (e) { return; }
-
-  // Not found is a phone remembering a night the relay no longer has;
-  // anything else (a busy relay) keeps what is on screen.
-  if (r.status === 404) { youNight = null; drawYou(); }
-  if (r.status !== 200) return;
-
-  let body = {};
-  try { body = await r.json(); } catch (e) { return; }
-  youNight = body && body.night && typeof body.night === 'object' ? body.night : null;
-  drawYou();
-}
-
-if (you && MINE) poll(readYou, 300000);
+// THE "YOU" STRIP that was here (30 Oct 2026, relay navigation round 6:
+// a remembered driver's best finish, standings place and newest
+// achievement) went on 6 Nov 2026, asked for by Asher: "remove the You,
+// driver card from home". Me has all three.
 `;
 
 
@@ -7752,10 +7738,14 @@ async function load() {
       ' &middot; follow it live &rarr;</span>' + heroLeader(s) + '</a>';
   } else if (coming) {
     now.innerHTML = coming;
-  } else if (running || next) {
-    const l = running || next;
+  } else if (next && !running) {
+    // No Up next card (6 Nov 2026, Asher: "remove the up next card right
+    // below the hero card on home"): Schedule has the running order.
+    now.innerHTML = '';
+  } else if (running) {
+    const l = running;
     now.innerHTML = '<a class="hero next" href="' + BASE + '/schedule">' +
-      '<span class="kicker">' + (running ? 'On now' : 'Up next') + '</span>' +
+      '<span class="kicker">On now</span>' +
       '<span class="big">' + esc(lineTitle(l)) + '</span>' +
       '<span class="when">' + (l.time ? esc(l.time) + ' &middot; ' : '') + 'see the full schedule &rarr;</span>' + heroLineup(l) + '</a>';
   } else if (doneTonight(lines)) {
@@ -7968,7 +7958,6 @@ async function loadRecap() {
   if (achievements && !achievements.missing) achievementsDoc = achievements.body.body || null;
 
   drawRecap();
-  if (typeof drawYou === 'function') drawYou();
   drawTonight();
   drawMoments();
   drawSeason();
@@ -8056,9 +8045,9 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     active: "home",
     heading: "Home",
     sub: look.tagline || "Live timing, the day's running order, results and more - straight from the club's timing laptop.",
-    // "mine" is Your next race (29 Oct 2026, relay navigation round 3) and
-    // "you" the driver's own strip (round 6), both empty and hidden unless
-    // this phone remembers a driver. Then what is on now - or the club's
+    // "mine" is Your next race (29 Oct 2026, relay navigation round 3),
+    // empty and hidden unless this phone remembers a driver (the "you"
+    // strip beside it went on 6 Nov 2026). Then what is on now - or the club's
     // preview of the next night - and, while nothing is, the last race
     // night (round 6: the Up next and Latest results lists went, as
     // Schedule and Results show both in full).
@@ -8067,14 +8056,15 @@ export function homePage(club: string, clubName: string, context: PageContext = 
     // Tonight in numbers, Moments, Season at a glance and Sponsor of the
     // night - each hidden until it has something to say - and New here?
     // further down, for the visitor who has scrolled to find out more.
+    // The first-night guide first of all (6 Nov 2026), in "gd".
     body:
+      '<div id="gd"></div>' +
       '<section class="lc" id="mine" hidden></section>' +
       `<div id="now" data-when="${escapeHtml(n.when)}"><p class="note">Loading&hellip;</p></div>` +
       '<div id="up"></div>' +
       // No "Check in: tap Me and type your PIN" line any more (5 Nov 2026,
       // Asher: "remove open your night and check in from home screen"):
       // checking in is on Me, a tap away on the bar.
-      '<section class="lc you" id="you" hidden></section>' +
       '<section class="card hp" id="tonight" hidden></section>' +
       '<section class="card hp" id="moments" hidden></section>' +
       '<section class="card hp" id="season" hidden></section>' +
@@ -8086,7 +8076,7 @@ export function homePage(club: string, clubName: string, context: PageContext = 
       // something with our tracks and lap records. it looks off").
       '<section class="card hp trkcard" id="tracks-h" hidden><h3>Our tracks</h3><div id="tracks" style="display:none"></div></section>' +
       social,
-    script: HOME_JS + HOME_ME_JS + HOME_PLUS_JS,
+    script: HOME_JS + HOME_ME_JS + HOME_PLUS_JS + HOME_GUIDE_JS,
   }, context);
 }
 
@@ -8771,6 +8761,21 @@ function firstNightGuide() {
 // Club updates moved to Home on 5 Nov 2026 (Asher: "club news already
 // exists. move that card from the me tab to the home tab") - see
 // HOME_PLUS_JS.
+`;
+
+/**
+ * THE FIRST-NIGHT GUIDE ON HOME (6 Nov 2026, Asher: "add first night guide
+ * to top of home page"). At the very top, for every phone - Home cannot
+ * tell a newcomer from a regular before they sign in - folded until
+ * tapped, and gone for good once they tap Got it: the same key as the
+ * check-in and night pages, so hiding it on one hides it on all.
+ */
+const HOME_GUIDE_JS = GUIDE_JS + `
+(function () {
+  const at = document.getElementById('gd');
+  const guide = at ? firstNightGuide() : null;
+  if (guide) at.appendChild(guide);
+})();
 `;
 
 /**
@@ -10583,78 +10588,10 @@ function qualPart() {
   return part;
 }
 
-// THE CHARGE TIMER (4 Nov 2026, from the relay roadmap Asher asked to have
-// built): a driver puts a pack on charge, says how long it takes, and the
-// card says when it is ready against when their next race is due - the
-// scramble at the charging table, answered before it starts. Kept on this
-// phone only: nothing about it goes to the relay or the laptop. With
-// alerts on it beeps and buzzes once when the time is up.
-const CHARGE_KEY = 'hg-charge-' + CLUB;
-const CHARGE_MINUTES = [15, 20, 30, 45, 60, 90];
-let charge = null;
-try {
-  const raw = JSON.parse(localStorage.getItem(CHARGE_KEY) || 'null');
-  if (raw && typeof raw.until === 'number' && isFinite(raw.until)) charge = { until: raw.until, told: raw.told === true };
-} catch (e) { /* none on charge */ }
-
-function saveCharge() {
-  try { if (charge) localStorage.setItem(CHARGE_KEY, JSON.stringify(charge)); else localStorage.removeItem(CHARGE_KEY); } catch (e) { /* this visit only */ }
-}
-
-// When it is ready, against when their race is due: the words for the card.
-function chargeWords(next, now) {
-  if (!charge) return 'Put a pack on charge and say how long it takes.';
-  const left = Math.round((charge.until - now) / 60000);
-  const ready = left <= 0 ? 'Charged' : 'Ready at ' + hm(charge.until) + ' (' + left + ' min)';
-  const due = next && typeof next === 'object' && typeof next.eta === 'string' ? Date.parse(next.eta) : NaN;
-  if (left <= 0 || !Number.isFinite(due)) return ready;
-  // Bug hunt 11 (2026-11-05): the ETA is on the relay's clock and until on
-  // the phone's, so the ETA goes onto the phone's clock (less skew) first.
-  const spare = Math.round((due - skew - charge.until) / 60000);
-  return ready + (spare >= 0 ? ' - ' + spare + ' min before your race' : ' - ' + (-spare) + ' min after your race is due');
-}
-
-function chargePart(next) {
-  const part = el('div', 'lc-part lc-charge');
-  part.appendChild(el('b', '', 'Charging'));
-  const now = Date.now();
-  const due = next && typeof next === 'object' && typeof next.eta === 'string' ? Date.parse(next.eta) : NaN;
-  // Bug hunt 11 (2026-11-05): on one clock, as chargeWords.
-  const late = !!charge && Number.isFinite(due) && charge.until > due - skew;
-  part.appendChild(el('div', 'when' + (late ? ' lc-late' : ''), chargeWords(next, now)));
-  if (charge) {
-    part.appendChild(tapButton('Off the charger', 'go quiet', () => { charge = null; saveCharge(); drawLive(); }));
-  } else {
-    const row = el('div', 'lc-chargeset');
-    const pick = document.createElement('select');
-    for (const m of CHARGE_MINUTES) {
-      const o = document.createElement('option');
-      o.value = String(m);
-      o.textContent = m + ' min';
-      if (m === 30) o.selected = true;
-      pick.appendChild(o);
-    }
-    pick.value = '30';
-    row.appendChild(pick);
-    row.appendChild(tapButton('On charge', 'go quiet', () => {
-      const mins = Math.max(1, Math.min(240, Number(pick.value) || 30));
-      charge = { until: Date.now() + mins * 60000, told: false };
-      saveCharge();
-      drawLive();
-    }));
-    part.appendChild(row);
-  }
-  return part;
-}
-
-// Once a quarter-minute: the time is up - say so once, and redraw the card.
-setInterval(() => {
-  if (!charge || charge.told || Date.now() < charge.until) return;
-  charge.told = true;
-  saveCharge();
-  if (alertsOn) alertNow('Your pack is charged', '');
-  try { drawLive(); } catch (e) { /* the card catches up on the next poll */ }
-}, 15000);
+// THE CHARGE TIMER that was here (4 Nov 2026) went on 6 Nov 2026, asked for by
+// Asher: "remove the check in button and the pack charge from the right now
+// tile on the me tab". It lived only on that card, so it went whole; Me's
+// sign-out still clears a timer an older page kept (ME_LEFTOVERS).
 
 function hm(ms) {
   return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -10950,22 +10887,13 @@ function liveCard() {
   }
 
   // The race-day jobs in one row (28 Oct 2026, My Night laid out to be
-  // found; lap times and the battery pack joined them on 29 Oct): check-in,
-  // the transponder, lap times in my ear and the pack in the car - side by
-  // side on a wide screen, one under the other on a phone.
+  // found; lap times and the battery pack joined them on 29 Oct): the
+  // transponder and the pack in the car - side by side on a wide screen,
+  // one under the other on a phone. No Check in button here since 6 Nov
+  // 2026 (Asher: "remove the check in button and the pack charge from the
+  // right now tile on the me tab"): Me's moment card above still offers
+  // Check in until they are in, and signing in with the PIN checks them in.
   const jobs = el('div', 'lc-row');
-
-  if (ci.shown) {
-    const on = checkedIn();
-    const part = el('div', 'lc-part');
-    const b = tapButton(on ? 'Checked in \\u2713' : 'Check in', 'go' + (on ? ' on' : ''), tapCheckIn);
-    b.disabled = ci.busy;
-    part.appendChild(b);
-    part.appendChild(el('div', 'when', on ? 'Tap again if you need to check out.' : 'One tap and the timing desk knows you are here.'));
-    jobs.appendChild(part);
-  } else if (live && live.checkedIn === true) {
-    jobs.appendChild(el('div', 'lc-part', 'You are checked in.'));
-  }
 
   if (live) {
     const tp = el('div', 'lc-part');
@@ -10985,9 +10913,6 @@ function liveCard() {
       jobs.appendChild(pack);
     }
 
-    // The charge timer (4 Nov 2026) - see chargePart.
-    jobs.appendChild(chargePart(live.next));
-
     // Where they stand in qualifying (4 Nov 2026) - see qualMine.
     const standing = qualPart();
     if (standing) jobs.appendChild(standing);
@@ -11006,7 +10931,9 @@ function drawLive() {
 
   lvBox.textContent = '';
 
-  if (live || ci.shown) lvBox.appendChild(liveCard());
+  // Only while they have a live entry: with Check in gone (6 Nov 2026) the
+  // card has nothing to say before that.
+  if (live) lvBox.appendChild(liveCard());
 
   // Lap times in my ear as a card of its own (4 Nov 2026, Asher: "lap
   // times in my ear should be it's own card"), out of the Right now card's
@@ -11034,7 +10961,7 @@ function drawLive() {
 
   // The jump bar has a Right now or Lap times button only while that card
   // is there.
-  const now = (live || ci.shown ? 'n' : '') + (ears ? 'e' : '');
+  const now = (live ? 'n' : '') + (ears ? 'e' : '');
   if (now !== jumpNow) {
     jumpNow = now;
     drawJump();
@@ -11650,7 +11577,7 @@ function listPart(title, said) {
 // view.race is the race open in the list: '' until they choose, which
 // opens their latest race (the one they came to look at after a heat), and
 // 'none' once they close it.
-const view = { race: '', tab: 'stats', pick: 'best', more: false, asks: false, details: false, scroll: '', hideRuns: false };
+const view = { race: '', tab: 'stats', pick: 'best', asks: false, details: false, scroll: '', hideRuns: false };
 
 // Demo races and practice runs (3 Nov 2026, asked for by Asher: "marked as
 // demo, and do the same for practice. make a tick mark to remove both
@@ -11694,7 +11621,8 @@ let jumps = [];
 // change it; it went on 4 Nov 2026 (Asher: "aren't needed as they are
 // contained as info revealed with the Lap Stats button").
 
-// The four lap stats a race shows first; the rest wait behind More stats.
+// The four lap stats a race shows first; the rest follow them in the same
+// grid (behind a More stats fold until 6 Nov 2026).
 const HEADLINE = ['Fast lap', 'Avg. lap', 'Top 3 consec.', 'Consistency'];
 
 // Which race a row is: its race id and car, or for a race sent without an
@@ -11869,16 +11797,10 @@ function raceDetail(r, stats, own) {
         }
         return dl;
       };
-      p.appendChild(grid(all.filter((x) => HEADLINE.includes(x[0]))));
-      const rest = all.filter((x) => !HEADLINE.includes(x[0]));
-      if (rest.length > 0) {
-        const more = el('details', 'lx');
-        more.open = view.more;
-        more.addEventListener('toggle', () => { view.more = more.open; });
-        more.appendChild(el('summary', '', 'More stats'));
-        more.appendChild(grid(rest));
-        p.appendChild(more);
-      }
+      // Every stat at once, the headline four first (6 Nov 2026, Asher: "the
+      // four additional KPIs under more stats should show by default.
+      // remove the more stats button").
+      p.appendChild(grid(all.filter((x) => HEADLINE.includes(x[0])).concat(all.filter((x) => !HEADLINE.includes(x[0])))));
       tabs.push(['stats', 'Lap stats', p]);
     }
 
@@ -12636,12 +12558,41 @@ function drawAsks(message) {
   // No details off the laptop yet: nothing to show them, so no form - a
   // race's "Something wrong?" still works, needing only asksOpen.
   if (!asksOpen || !me) {
+    if (ydSheetShowing() && typeof meCloseSheet === 'function') meCloseSheet();
     drawJump();
     return;
   }
 
   const sec = el('section', 'yd');
   sec.appendChild(el('h3', '', 'Your details'));
+
+  // A PROFILE AND AN EDIT SHEET (6 Nov 2026, Asher: "rework the your
+  // details card", the profile-and-sheet pick). The card says what the desk
+  // has on file; the form that used to open under it, about 1,260px of a
+  // phone, is in Me's bottom sheet behind one button. A page without the
+  // sheet keeps the fold below.
+  if (ydSheetCan()) {
+    const packsNow = live ? null : packBox();
+    if (packsNow) {
+      packsNow.className = 'su';
+      sec.appendChild(packsNow);
+    }
+    sec.appendChild(ydSummary());
+    sec.appendChild(tapButton('Ask the desk to change', 'go yd-ask', () => ydOpenSheet('')));
+    sec.appendChild(el('p', 'when yd-foot', 'Nothing changes until the desk checks it.'));
+    const sheetOn = ydSheetShowing();
+    if (message && !sheetOn) {
+      const said = el('p', 'yd-said', message);
+      said.setAttribute('role', 'status');
+      sec.appendChild(said);
+    }
+    ydBox.appendChild(sec);
+    drawJump();
+    // Signed in, or sent back to the PIN, from inside the sheet: it follows.
+    if (message && sheetOn) ydFillSheet(message);
+    return;
+  }
+
   sec.appendChild(el('p', 'when', 'Ask the timing desk to change how you are called and shown. Nothing changes until the desk checks it.'));
 
   // No link to the Garage and no "Log a setup change" here any more (5 Nov
@@ -12668,6 +12619,61 @@ function drawAsks(message) {
 
   ydBox.appendChild(sec);
   drawJump();
+}
+
+// ---- Your details as a profile, and its edit sheet (6 Nov 2026)
+
+function ydSheetCan() {
+  return typeof meOpenSheet === 'function' && !!document.getElementById('me-sheet');
+}
+
+function ydSheetShowing() {
+  const sheet = document.getElementById('me-sheet');
+  return !!sheet && !sheet.hidden && !!document.getElementById('yd-sheet');
+}
+
+// What the desk has on file, as text, one line each.
+function ydSummary() {
+  const dl = el('dl', 'yd-sum');
+  const line = (k, v, none) => {
+    const d = el('div');
+    d.appendChild(el('dt', '', k));
+    d.appendChild(el('dd', v ? '' : 'none', v || none));
+    dl.appendChild(d);
+  };
+  const pv = me.privacy && typeof me.privacy === 'object' ? me.privacy : {};
+  const hidden = [pv.noPhoto === true ? 'No photo' : '', pv.noVideo === true ? 'Not in videos' : '', pv.initials === true ? 'Initials only' : ''].filter(Boolean);
+  line('Name', cleanText(me.name), 'Not set');
+  line('Announcer', cleanText(me.announcer), 'Your name as it is');
+  line('Pronouns', cleanText(me.pronouns), 'None');
+  line('About you', cleanText(me.about), 'Nothing yet');
+  line('Email', typeof me.email === 'string' ? cleanText(me.email) : '', 'None on file');
+  line('Night email', me.emailMyNight === true ? 'On' : '', 'Off');
+  line('Online', hidden.join(' \\u00b7 '), 'Shown as normal');
+  return dl;
+}
+
+function ydOpenSheet(message) {
+  meOpenSheet('Change your details', (body) => {
+    const box = el('div', 'yd-sheet');
+    box.id = 'yd-sheet';
+    body.appendChild(box);
+    ydFillSheet(message);
+  });
+  // From the top, on its heading: the sheet's own first-button focus would
+  // be Send, at the foot of the form.
+  const h = document.getElementById('me-sheet-h');
+  if (h) { h.tabIndex = -1; h.focus(); }
+  const inner = h && h.closest ? h.closest('.in') : null;
+  if (inner) inner.scrollTop = 0;
+}
+
+function ydFillSheet(message) {
+  const box = document.getElementById('yd-sheet');
+  if (!box) return;
+  box.textContent = '';
+  box.appendChild(el('p', 'when', 'Nothing changes until the timing desk checks it.'));
+  box.appendChild(me.pin === true && pass() === '' ? pinGate(message) : detailsForm(message));
 }
 
 // ---- signing in with the personal PIN
@@ -13184,20 +13190,62 @@ load();
  */
 const NIGHT_ME_JS = `
 function meRemembered(code) {
+  // Signed out of in this tab and come back to by Back or a reload: the
+  // PIN again, never remembered again.
+  if (meSignedOut(code)) { meToPin(); return; }
   meRemember(code);
+  if (meCode() !== code) return;
   const out = document.getElementById('meout');
-  if (out && meCode() === code) out.hidden = false;
+  if (out) out.hidden = false;
+  meSignedInButton();
+}
+
+// THE SIGNED IN BUTTON (6 Nov 2026, Asher: "when signed in if you hit the
+// signed in button you should get a popup asking to confirming signing
+// out"). Top of Me, on every space, once this phone remembers the night it
+// is showing; Sign out at the foot asks the same question.
+function meSignedInButton() {
+  const at = document.getElementById('mesi');
+  if (!at) return;
+  if (at.getAttribute('data-on') !== '1') {
+    const b = tapButton('Signed in', 'me-chip ok', meAskSignOut);
+    b.setAttribute('aria-label', 'Signed in on this phone. Tap to sign out.');
+    at.appendChild(b);
+    at.setAttribute('data-on', '1');
+  }
+  at.hidden = false;
+  // Their name makes room for it on the same line (6 Nov 2026).
+  const top = document.getElementById('metop');
+  if (top) top.setAttribute('data-si', '1');
+}
+
+function meAskSignOut() {
+  const code = CODE;
+  const out = () => { meSignOut(code); meToPin(); };
+  const words = 'This phone forgets you: your night, your PIN sign-in and everything Me kept here. '
+    + 'To open Me again on this phone, a personal PIN is needed.';
+  if (!document.getElementById('me-sheet') || typeof meOpenSheet !== 'function') {
+    let yes = false;
+    try { yes = window.confirm('Sign out on this phone? ' + words); } catch (e) { yes = false; }
+    if (yes) out();
+    return;
+  }
+  meOpenSheet('Sign out on this phone?', (body) => {
+    body.appendChild(el('p', 'note', words));
+    body.appendChild(tapButton('Sign out', 'go', out));
+    body.appendChild(tapButton('Stay signed in', 'go quiet', meCloseSheet));
+  }, true);
 }
 
 (function () {
+  if (meSignedOut(CODE)) { meToPin(); return; }
+  // A page the browser kept and shows again on Back.
+  try { window.addEventListener('pageshow', (e) => { if (e && e.persisted && meSignedOut(CODE, true)) meToPin(); }); } catch (e) { /* reloads instead */ }
   const link = document.getElementById('meoutlink');
   if (!link) return;
   link.addEventListener('click', (e) => {
     e.preventDefault();
-    meForget();
-    // "Your details" is signed out with it, so a borrowed phone keeps nothing.
-    try { sessionStorage.removeItem('hg-night-pass-' + CLUB); } catch (err) { /* nothing was kept */ }
-    try { location.assign('/c/' + encodeURIComponent(CLUB) + '/mynight'); } catch (err) { location.href = '/c/' + encodeURIComponent(CLUB) + '/mynight'; }
+    meAskSignOut();
   });
 })();
 `;
@@ -13253,12 +13301,12 @@ export function nightPage(club: string, clubName: string, context: PageContext =
     // night's own - with the night's facts and Share in "nt" under them.
     //
     // Since 5 Nov 2026 (Asher: "Yes, build it", the Pit Wall mix) Me is a
-    // pit wall laid over all of that - see mespaces.ts: the status strip,
-    // the moment card, the switch and the Tonight tiles under their name;
+    // pit wall laid over all of that - see mespaces.ts: the moment card
+    // (the status strip above it went on 6 Nov 2026), the switch and the Tonight tiles under their name;
     // the Garage folded in as a space ("me-garage", the Garage page's own
     // sections and script); the pack-swap sheet and the empty note at the foot.
     body: `<style>${ME_CSS}${GARAGE_CSS}</style>` +
-      '<div id="nh"></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="gd"></div><div id="ng"></div>' +
+      '<div class="me-top" id="metop"><div class="me-si" id="mesi" hidden></div><div id="nh"></div></div><div id="nj"></div>' + ME_BODY_TOP + '<div id="gd"></div><div id="ng"></div>' +
       '<div id="nx"><div id="lv"></div><div id="ea"></div></div><div id="nt"><p class="note">Loading&hellip;</p></div>' +
       GARAGE_EMBED_BODY + '<div id="yd"></div>' +
       '<p class="note" id="meout" hidden><a class="more" href="#" id="meoutlink">Sign out on this phone</a></p>' + ME_BODY_END,
@@ -13394,6 +13442,8 @@ function draw(message) {
     if (a !== null && a.status === 200 && code !== '') {
       const pass = typeof b.pass === 'string' ? b.pass : '';
       if (pass !== '') keepPass(pass);
+      // Signed in again with the PIN: an earlier sign-out here is over.
+      try { sessionStorage.removeItem(ME_OUT_KEY); } catch (e) { /* the badge link clears it too */ }
 
       // A RIGHT PIN CHECKS THEM IN (30 Oct 2026, asked for by Asher: "On
       // the relays me tab; entering in a correct pin should check you in.

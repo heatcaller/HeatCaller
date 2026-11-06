@@ -110,6 +110,27 @@ internal sealed class ChannelStrips : Control
     /// </summary>
     internal static ChannelStrips ForRaceControl() => new(true, Board);
 
+    /// <summary>
+    /// The compact board spread across whatever size it is given - for Race
+    /// Control's right-hand column, under Broadcast (6 Nov 2026, asked for by
+    /// Asher), where it takes the height the column has left
+    /// (Beside.AddSideFill, never less than <see cref="LeastSpreadHeight"/>):
+    /// each strip has an equal share of the width, centred in its share, and
+    /// the bars run the height.
+    /// </summary>
+    internal static ChannelStrips ForRaceControl(bool spread) => new(true, Board) { _spread = spread };
+
+    /// <summary>Spread across the size given rather than drawn at its own - see ForRaceControl(bool).</summary>
+    private bool _spread;
+
+    /// <summary>The least a spread board can be drawn in: its shortest bars, their captions and the room round them.</summary>
+    /// Shorter bars than the flag row's least: Race Control's column at
+    /// 1280x800 had 50px under Broadcast before the page would scroll, and
+    /// the column gives them all the height it has spare on top of this.
+    internal int LeastSpreadHeight => (2 * Pad) + LeastSpreadBar + CaptionGap + CaptionFont.Height;
+
+    private static int LeastSpreadBar => UiLayout.AtTextSize(14);
+
     /// <summary>For the tests: any meters.</summary>
     internal ChannelStrips(params AudioLevels.Meter[] meters)
         : this(false, meters)
@@ -237,6 +258,8 @@ internal sealed class ChannelStrips : Control
     private int StripGap => UiLayout.AtTextSize(_compact ? 8 : 12);
     private int BarHeight => !_compact
         ? UiLayout.AtTextSize(72)
+        : _spread
+        ? Math.Max(LeastSpreadBar, Height - (2 * Pad) - CaptionGap - CaptionFont.Height)
         : Math.Max(LeastCompactBar, (_fitHeight > 0 ? _fitHeight : UiLayout.AtTextSize(56)) - (2 * Pad) - CaptionGap - CaptionFont.Height);
 
     /// <summary>The shortest a compact bar is drawn, however short the row: below this the colours stop reading.</summary>
@@ -293,10 +316,19 @@ internal sealed class ChannelStrips : Control
     {
         var width = Pad + ScaleWidth + ScaleGap + (_meters.Length * StripWidth) + ((_meters.Length - 1) * StripGap) + Pad;
         var height = Pad + BarHeight + CaptionGap + CaptionFont.Height + Pad;
-        return new Size(width, height);
+
+        // Spread: as wide as it has been made, never narrower than it needs.
+        return new Size(_spread ? Math.Max(width, Width) : width, height);
     }
 
-    public override Size GetPreferredSize(Size proposedSize) => Measure();
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        var size = Measure();
+
+        return _spread && proposedSize.Width is > 0 and < int.MaxValue / 4
+            ? new Size(proposedSize.Width, size.Height)
+            : size;
+    }
 
     protected override void OnFontChanged(EventArgs e)
     {
@@ -374,6 +406,14 @@ internal sealed class ChannelStrips : Control
     {
         var g = e.Graphics;
         g.Clear(Parent?.BackColor ?? BackColor);
+
+        // Spread and given too little height to read (Race Control's column
+        // in a short window): nothing, rather than bars squashed flat.
+        if (_spread && Height < LeastSpreadHeight)
+        {
+            return;
+        }
+
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
         var size = Measure();
@@ -405,18 +445,26 @@ internal sealed class ChannelStrips : Control
 
         var x = scaleRight + ScaleGap;
 
+        // Spread: each strip an equal share of the width, centred in it.
+        var share = _spread && _meters.Length > 0
+            ? Math.Max(StripWidth, (size.Width - x - Pad) / _meters.Length)
+            : StripWidth + StripGap;
+        var stripLeft = _spread ? (share - StripWidth) / 2 : 0;
+
         for (var i = 0; i < _meters.Length; i++)
         {
             var pairWidth = (BarWidth * 2) + BarGap;
-            var barsLeft = x + ((StripWidth - pairWidth) / 2);
+            var barsLeft = x + stripLeft + ((StripWidth - pairWidth) / 2);
 
             DrawBar(g, _bars[i * 2], new Rectangle(barsLeft, top, BarWidth, BarHeight));
             DrawBar(g, _bars[(i * 2) + 1], new Rectangle(barsLeft + BarWidth + BarGap, top, BarWidth, BarHeight));
 
-            var captionBox = new Rectangle(x - (StripGap / 2), foot + CaptionGap, StripWidth + StripGap, CaptionFont.Height);
+            var captionBox = _spread
+                ? new Rectangle(x, foot + CaptionGap, share, CaptionFont.Height)
+                : new Rectangle(x - (StripGap / 2), foot + CaptionGap, StripWidth + StripGap, CaptionFont.Height);
             TextRenderer.DrawText(g, _meters[i].Name, CaptionFont, captionBox, Caption, TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPadding);
 
-            x += StripWidth + StripGap;
+            x += share;
         }
     }
 

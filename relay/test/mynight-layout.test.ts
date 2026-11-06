@@ -124,16 +124,19 @@ describe("My Night: the races, one open at a time", () => {
     assert.equal(tabs[2]!.getAttribute("aria-selected"), "true");
   });
 
-  it("shows four stats first and the rest behind More stats", async () => {
+  it("shows every stat at once, the four headline stats first, with no More stats fold", async () => {
+    // 6 Nov 2026, Asher: "the four additional KPIs under more stats should
+    // show by default. remove the more stats button".
     const page = await open(NIGHT);
     const stats = byClass(page.get("nx"), "nlx")[0]!;
-    const first = stats.children[0]!.find((n) => n.tagName === "DT").map((n) => n.textContent);
+    assert.equal(stats.children.length, 1, "one grid");
+    const names = stats.children[0]!.find((n) => n.tagName === "DT").map((n) => n.textContent);
 
-    assert.deepEqual(first, ["Fast lap", "Avg. lap", "Top 3 consec.", "Consistency"]);
-    const more = stats.find((n) => n.tagName === "DETAILS")[0]!;
-    assert.match(more.textContent, /^More stats/);
-    assert.match(more.textContent, /Avg\. top 5/);
-    assert.match(more.textContent, /Std\. deviation/);
+    assert.deepEqual(names.slice(0, 4), ["Fast lap", "Avg. lap", "Top 3 consec.", "Consistency"]);
+    assert.ok(names.includes("Avg. top 5"));
+    assert.ok(names.includes("Std. deviation"));
+    assert.equal(stats.find((n) => n.tagName === "DETAILS").length, 0);
+    assert.doesNotMatch(stats.textContent, /More stats/);
   });
 
   it("shows each race's best lap, the night's best marked, and no stat picker", async () => {
