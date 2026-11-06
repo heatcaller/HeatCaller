@@ -164,14 +164,29 @@ internal sealed class ClubNotes
         return new ClubNotes(new NotesFile()) { LoadedUnreadable = unreadable };
     }
 
+    /// <summary>
+    /// Whether the last save reached the disk, so everything held in memory
+    /// is in the file too. The whole file is written every time, so one
+    /// good save puts every note on disk at once.
+    /// </summary>
+    private bool _onDisk = true;
+
     private void Save()
     {
+        // WHY IT KEEPS THE ANSWER (2026-11-05, Bug hunt 11: RelayPublisher):
+        // a note from the club's page is confirmed to the relay - deleted
+        // there - once it is filed here, and "filed" was any note added to
+        // memory, written or not. With the file unreadable at start-up, or
+        // a write that failed, the dedication was then in memory only; a
+        // restart before it was read out lost it from both places. See
+        // AddFromTheRoom's onDisk and RelayPublisher.CollectClubNotes.
         if (LoadedUnreadable)
         {
+            _onDisk = false;
             return;
         }
 
-        SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(
+        _onDisk = SafeFile.WriteAllText(FilePath, JsonSerializer.Serialize(
             _file,
             new JsonSerializerOptions { WriteIndented = true }));
     }
@@ -391,8 +406,20 @@ internal sealed class ClubNotes
     /// </summary>
     /// <param name="text">The aside, in their words.</param>
     /// <param name="from">Who sent it, if they said. Never trusted for anything but being read out.</param>
-    internal string? AddFromTheRoom(string? text, string? from = null)
+    internal string? AddFromTheRoom(string? text, string? from = null) => AddFromTheRoom(text, from, out _);
+
+    /// <summary>
+    /// <see cref="AddFromTheRoom(string?, string?)"/>, also saying whether
+    /// the note is in memory but NOT on disk - added, or already held, while
+    /// club-notes.json is unreadable from start-up or the last write failed.
+    /// A collector that deletes the sender's copy once a note is filed must
+    /// not do so then (2026-11-05, Bug hunt 11: RelayPublisher). False for a
+    /// note refused, which was never going to be kept.
+    /// </summary>
+    internal string? AddFromTheRoom(string? text, string? from, out bool notOnDisk)
     {
+        notOnDisk = false;
+
         lock (_gate)
         {
             var said = Tidy(text);
@@ -423,6 +450,14 @@ internal sealed class ClubNotes
                 // Said as though it worked, because it did: somebody pressing
                 // send twice has got their message in, and telling them it
                 // was a duplicate invites them to reword it and send it again.
+                // Held but not yet written: try the write again, so a disk
+                // that has come back lets the relay's copy go.
+                if (!_onDisk)
+                {
+                    Save();
+                }
+
+                notOnDisk = LoadedUnreadable || !_onDisk;
                 return null;
             }
 
@@ -440,6 +475,7 @@ internal sealed class ClubNotes
             });
 
             Save();
+            notOnDisk = LoadedUnreadable || !_onDisk;
 
             return null;
         }
