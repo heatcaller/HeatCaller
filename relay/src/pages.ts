@@ -1777,7 +1777,10 @@ if (FRAMED) {
     try { url = new URL(a.href, location.href); } catch (err) { return; }
     const home = '/c/' + encodeURIComponent(CLUB);
     if (url.origin !== location.origin || (url.pathname !== home && url.pathname.indexOf(home + '/') !== 0)) return;
-    if (/\.[A-Za-z0-9]+$/.test(url.pathname) || url.pathname.indexOf(home + '/clip/') === 0) return;
+    // WHY (2026-11-05, Bug hunt 11: a doubled backslash): this sits in a
+    // template literal, where a lone backslash-dot cooks to a bare dot, so
+    // "looks like a file" matched every club page and no link reached hcGo.
+    if (/\\.[A-Za-z0-9]+$/.test(url.pathname) || url.pathname.indexOf(home + '/clip/') === 0) return;
     if (url.pathname === location.pathname && url.search === location.search) return;
     let go = null;
     try { go = parent.hcGo; } catch (err) { return; }
@@ -3118,8 +3121,19 @@ function moreFor(left) {
 // many drivers came and how many a night, first-timers and how many of them
 // came back - and a bar for each night. Counted from the results index the
 // page already has, by driver as the index lists them; no names shown.
+//
+// WHY (2026-11-05, Bug hunt 11: oldest night first): the laptop's index
+// lists days newest first (RelayResultsIndex), but everything below reads
+// index 0 as the oldest night - first-timers were each driver's newest
+// night and the bars ran backwards under "oldest first". Put in date
+// order here, whichever way round they arrive.
 function clubHealth() {
-  const days = Array.isArray(idx.days) ? idx.days : [];
+  const days = (Array.isArray(idx.days) ? idx.days : []).slice()
+    .sort((a, b) => {
+      const x = String(a && a.day ? a.day : '');
+      const y = String(b && b.day ? b.day : '');
+      return x < y ? -1 : x > y ? 1 : 0;
+    });
   const raced = Array.isArray(idx.raced) ? idx.raced : [];
   if (days.length < 2) return '';
   const dayOf = new Map();
@@ -3206,18 +3220,37 @@ async function drawDays() {
 // finished ahead how often - the head-to-head a driver checks after a
 // night. Only drivers met at least twice, the five met most; a race whose
 // result does not have them (by the name on it) counts for nobody.
+//
+// WHY (2026-11-05, Bug hunt 11: rivals by the index's name): the driver's
+// own row was found by exact name, but each heat shortens names among its
+// own drivers only, so the index's "Alex Ken" is "Alex K" in a heat Alex
+// Kemp did not race - that race was skipped. Found with myRow() now, as
+// the cards below are, and each rival tallied under the index's name for
+// them (the one the alike() rule picks out, when only one does), so a
+// rival shortened two ways in two heats is still one rival.
+function rivalKey(name) {
+  const list = idx && Array.isArray(idx.drivers)
+    ? idx.drivers.map((d) => (d !== null && typeof d === 'object' ? String(d.n ?? '') : '')).filter((n) => n !== '')
+    : [];
+  const exact = list.filter((n) => n.toLowerCase() === name.toLowerCase());
+  if (exact.length === 1) return exact[0];
+  const close = list.filter((n) => alike(n, name));
+  return close.length === 1 ? close[0] : name;
+}
+
 function rivalsOf(lines, got, who) {
   const met = new Map();
   for (const line of lines) {
     const body = got.get(line.id);
-    const rows = body && Array.isArray(body.results) ? body.results : [];
-    const me = rows.find((r) => r && r.name === who);
+    const rows = body && Array.isArray(body.results) ? body.results.filter((r) => r !== null && typeof r === 'object') : [];
+    const me = myRow(rows, who);
     if (!me || !(Number(me.pos) > 0)) continue;
     for (const r of rows) {
       if (!r || r === me || !(Number(r.pos) > 0) || typeof r.name !== 'string' || r.name === '' || r.name === 'Unnamed driver') continue;
-      const tally = met.get(r.name) || { name: r.name, ahead: 0, behind: 0 };
+      const key = rivalKey(r.name);
+      const tally = met.get(key) || { name: key, ahead: 0, behind: 0 };
       if (Number(me.pos) < Number(r.pos)) tally.ahead++; else tally.behind++;
-      met.set(r.name, tally);
+      met.set(key, tally);
     }
   }
   const top = [...met.values()].filter((t) => t.ahead + t.behind >= 2)
@@ -3805,6 +3838,10 @@ async function loadFlat() {
 
   for (const item of sorted) {
     const body = item.body || {};
+    // WHY (2026-11-05, Bug hunt 11: View laps in the flat listing): the
+    // toggle writes a driver's lap panel from bodyOf, which only bodies()
+    // filled - here View laps opened empty until the next redraw.
+    bodyOf.set(item.id, body);
     const d = when(body, item.publishedAt);
     const iso = d ? isoOf(d) : '';
     const label = d ? dayLabel(iso) : 'Undated';
