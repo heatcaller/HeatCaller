@@ -104,12 +104,20 @@ public sealed record DriverOnLayout(
 /// which is most of the time and is not a fact.
 /// </param>
 /// <param name="WinnerRun">How many in a row. Below <see cref="CommentaryRaceFacts.LeastRunToCall"/> this is not a run, it is a coincidence.</param>
+/// <param name="RunEndedTonight">
+/// A race on this layout tonight has already gone to somebody other than
+/// <paramref name="WinnerName"/> - the run's own <see cref="DriverOnLayout.BeatenTonight"/>.
+/// The run stays what it was before tonight; the builder refuses it,
+/// because "the last four here have all gone to Bill" said after the room
+/// watched Sam win here is false.
+/// </param>
 public sealed record LayoutLegend(
     string LayoutName,
     int RacesOnLayout,
     IReadOnlyList<DriverOnLayout> Bests,
     string WinnerName,
-    int WinnerRun);
+    int WinnerRun,
+    bool RunEndedTonight = false);
 /// <summary>
 /// Who has been winning one class's MAINS on this layout, counted in
 /// MEETINGS - see <see cref="CommentaryReaders.MainsHere"/>.
@@ -735,6 +743,16 @@ public static class CommentaryRaceFacts
         }
 
         if (legend.WinnerRun < LeastRunToCall || legend.RacesOnLayout < LeastRacesOnLayout)
+        {
+            return null;
+        }
+
+        // 5 Nov 2026, Bug Hunt 11: somebody else has already won here
+        // tonight, so the run is over even though the history before
+        // tonight still shows it. The key is per night, so a line not
+        // spent at the first intro used to go out after the room had
+        // watched it end - the same guard BeatenTonight and SetTonight keep.
+        if (legend.RunEndedTonight)
         {
             return null;
         }
