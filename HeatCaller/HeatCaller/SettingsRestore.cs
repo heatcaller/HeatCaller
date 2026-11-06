@@ -115,6 +115,15 @@ internal static class SettingsRestore
     {
         var changed = new List<string>();
 
+        // 2026-11-05, Bug hunt 11: every file read and reset first, and only
+        // then any written. Read and written one at a time, a damaged
+        // imaging.json (last in Files, and never rewritten by the pre-restore
+        // save) threw JsonException after the other four were already reset
+        // on disk - past the caller's catch, with no restart, so the running
+        // app saved its old values back over them. A locked file part-way
+        // did the same under "nothing was changed".
+        var writes = new List<(string Path, string Json)>();
+
         foreach (var file in Files)
         {
             var path = Path.Combine(folder, file.Name);
@@ -124,10 +133,28 @@ internal static class SettingsRestore
                 continue;
             }
 
-            var (json, names) = ResetJson(file, File.ReadAllText(path), alsoShown);
+            string json;
+            IReadOnlyList<string> names;
 
-            SafeFile.WriteAllText(path, json);
+            try
+            {
+                (json, names) = ResetJson(file, File.ReadAllText(path), alsoShown);
+            }
+            catch (JsonException)
+            {
+                // Damaged: left as it is. Its store already runs on the
+                // defaults and keeps a copy of it aside, and the zip saved
+                // first holds it too.
+                continue;
+            }
+
+            writes.Add((path, json));
             changed.AddRange(names.Select(name => $"{file.Label}: {name}"));
+        }
+
+        foreach (var (path, json) in writes)
+        {
+            SafeFile.WriteAllText(path, json);
         }
 
         return changed;
@@ -147,7 +174,7 @@ internal static class SettingsRestore
     /// be put back. The oldest past <see cref="CopiesKept"/> are deleted.
     /// Hands back the zip's path.
     /// </summary>
-    internal static string SaveCopy(string root, DateTime when)
+    internal static string SaveCopy(string root, DateTime when, string? keep = null)
     {
         var folder = CopiesFolder(root);
         Directory.CreateDirectory(folder);
@@ -173,7 +200,11 @@ internal static class SettingsRestore
             }
         }
 
-        foreach (var old in Copies(root).Skip(CopiesKept))
+        // 2026-11-05, Bug hunt 11: never the copy being put back. With ten
+        // already there, Put Back's own copy pruned the oldest - and when
+        // that was the one picked, it was deleted before it was read.
+        foreach (var old in Copies(root).Skip(CopiesKept)
+            .Where(old => keep is null || !string.Equals(Path.GetFullPath(old.Path), Path.GetFullPath(keep), StringComparison.OrdinalIgnoreCase)))
         {
             try
             {
@@ -206,17 +237,146 @@ internal static class SettingsRestore
     /// the five settings files, whatever else a zip holds. The caller freezes
     /// writes and restarts after.
     /// </summary>
-    internal static void PutBack(string root, string zip)
+    internal static void PutBack(string root, string zip) => WriteBack(root, ReadCopy(zip));
+
+    /// <summary>
+    /// Put Back Earlier Settings' whole job on the files: the picked copy
+    /// read, the settings as they are now saved as a copy of their own, then
+    /// the picked one put back. Hands back the new copy's path.
+    /// </summary>
+    internal static string PutBackWithCopy(string root, string zip, DateTime when)
     {
-        var names = Files.Select(file => file.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // 2026-11-05, Bug hunt 11: read before the new copy is saved - that
+        // save prunes to CopiesKept, and the oldest copy was the one picked.
+        var files = ReadCopy(zip);
+        var saved = SaveCopy(root, when, keep: zip);
+
+        WriteBack(root, files);
+        return saved;
+    }
+
+    /// <summary>A copy's settings files, by name - only the five, whatever else the zip holds.</summary>
+    private static IReadOnlyList<(SettingsFile File, string Json)> ReadCopy(string zip)
+    {
+        var read = new List<(SettingsFile, string)>();
 
         using var archive = ZipFile.OpenRead(zip);
 
-        foreach (var entry in archive.Entries.Where(entry => names.Contains(entry.FullName)))
+        foreach (var entry in archive.Entries)
         {
+            if (Files.FirstOrDefault(file => string.Equals(file.Name, entry.FullName, StringComparison.OrdinalIgnoreCase)) is not { } file)
+            {
+                continue;
+            }
+
             using var reader = new StreamReader(entry.Open());
-            SafeFile.WriteAllText(Path.Combine(root, entry.FullName), reader.ReadToEnd());
+            read.Add((file, reader.ReadToEnd()));
         }
+
+        return read;
+    }
+
+    /// <summary>
+    /// 2026-11-05, Bug hunt 11: a copy is put back the way a restore resets -
+    /// only what a restore would put back (ShownInSimple and HiddenInSimple,
+    /// less <see cref="LeftAlone"/>) comes from the copy; the live file's
+    /// KeptOnRestore and Memory stay as they are. Written whole, a copy
+    /// brought back PINs and racer PINs rotated since (with the sealed
+    /// Secrets that still open here), a revoked consent, the relay
+    /// bookkeeping, Advanced mode past the manager-PIN lock (or the lock
+    /// itself off), and - from a copy planted in a restored backup - relay
+    /// and mail addresses no RestoredSettings check ever saw. Every file is
+    /// worked out before any is written.
+    /// </summary>
+    private static void WriteBack(string root, IReadOnlyList<(SettingsFile File, string Json)> copy)
+    {
+        var writes = new List<(string Path, string Json)>();
+        var hold = RestoredSettings.Part.None;
+
+        foreach (var (file, copyJson) in copy)
+        {
+            var path = Path.Combine(root, file.Name);
+            var liveJson = File.Exists(path) ? File.ReadAllText(path) : null;
+            var json = MergeJson(file, liveJson, copyJson);
+
+            if (file.Type == typeof(AppSettings))
+            {
+                // Belt and braces: an address new to this laptop - possible
+                // only when the live file could not be read - is held as a
+                // restored backup's would be.
+                hold |= RestoredSettings.WhatNeedsConfirming(liveJson, json);
+            }
+
+            writes.Add((path, json));
+        }
+
+        RestoredSettings.Hold(hold);
+
+        foreach (var (path, json) in writes)
+        {
+            SafeFile.WriteAllText(path, json);
+        }
+    }
+
+    /// <summary>
+    /// One file as Put Back writes it: the live JSON with what a restore
+    /// would reset taken from the copy. A live file that is missing or
+    /// cannot be read leaves the copy as it is, its mode Simple. A copy
+    /// that comes out the same is handed back word for word.
+    /// </summary>
+    internal static string MergeJson(SettingsFile file, string? liveJson, string copyJson)
+    {
+        JsonObject copyNode;
+
+        try
+        {
+            copyNode = JsonNode.Parse(copyJson) as JsonObject
+                ?? throw new InvalidDataException($"The copy's {file.Name} isn't settings HeatCaller can read.");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"The copy's {file.Name} can't be read: {ex.Message}", ex);
+        }
+
+        JsonObject? live = null;
+
+        try
+        {
+            live = string.IsNullOrWhiteSpace(liveJson) ? null : JsonNode.Parse(liveJson) as JsonObject;
+        }
+        catch (JsonException)
+        {
+        }
+
+        JsonObject merged;
+
+        if (live is null)
+        {
+            merged = (JsonObject)copyNode.DeepClone();
+
+            if (file.Type == typeof(AppSettings))
+            {
+                merged[nameof(AppSettings.SettingsMode)] = JsonSerializer.SerializeToNode(SettingsMode.Simple, file.Json);
+            }
+        }
+        else
+        {
+            merged = live;
+
+            foreach (var property in file.Type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+            {
+                if (!file.Table.TryGetValue(property.Name, out var group)
+                    || !Resets(file, property.Name, group, alsoShown: true)
+                    || !copyNode.TryGetPropertyValue(property.Name, out var value))
+                {
+                    continue;
+                }
+
+                merged[property.Name] = value?.DeepClone();
+            }
+        }
+
+        return JsonNode.DeepEquals(merged, copyNode) ? copyJson : merged.ToJsonString(file.Json);
     }
 
     // ==================== Words ====================

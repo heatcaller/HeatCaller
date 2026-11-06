@@ -205,19 +205,37 @@ public partial class MainForm
 
         SaveEverySettingsStore();
 
+        string copy;
+
         try
         {
-            var copy = SettingsRestore.SaveCopy(AppPaths.Root, DateTime.Now);
-            var changed = SettingsRestore.ResetFiles(AppPaths.Root, alsoShown);
-
-            SessionLog.Write($"[settings] Restored default settings{(alsoShown ? ", with what Simple mode shows" : string.Empty)}: "
-                + $"{changed.Count} changed. Copy saved as {Path.GetFileName(copy)}.");
+            copy = SettingsRestore.SaveCopy(AppPaths.Root, DateTime.Now);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
             AppDialog.Show(this, "HeatCaller couldn't save a copy of the settings, so nothing was changed.\r\n\r\n" + ex.Message,
                 SettingsRestore.ConfirmTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
+        }
+
+        // 2026-11-05, Bug hunt 11: the reset caught on its own, JsonException
+        // too. "Nothing was changed" is true only of the copy failing; once
+        // ResetFiles has begun writing, some files may be reset, so HeatCaller
+        // says so and restarts anyway - running on, it would save its old
+        // values back over the files that were.
+        try
+        {
+            var changed = SettingsRestore.ResetFiles(AppPaths.Root, alsoShown);
+
+            SessionLog.Write($"[settings] Restored default settings{(alsoShown ? ", with what Simple mode shows" : string.Empty)}: "
+                + $"{changed.Count} changed. Copy saved as {Path.GetFileName(copy)}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            SessionLog.Write($"[settings] Restore default settings stopped part-way: {ex.Message} Copy saved as {Path.GetFileName(copy)}.");
+            AppDialog.Show(this, "HeatCaller couldn't put back every setting, so some may be reset and some not. "
+                + "Your settings were saved first: Put Back Earlier Settings puts them back. HeatCaller restarts now.\r\n\r\n" + ex.Message,
+                SettingsRestore.ConfirmTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         RestartForRestoredSettings();
@@ -247,8 +265,9 @@ public partial class MainForm
         try
         {
             // The settings as they are now, first - this is reversible too.
-            SettingsRestore.SaveCopy(AppPaths.Root, DateTime.Now);
-            SettingsRestore.PutBack(AppPaths.Root, picked);
+            // 2026-11-05, Bug hunt 11: one call that reads the picked copy
+            // before that save can prune it (it was the oldest of ten).
+            SettingsRestore.PutBackWithCopy(AppPaths.Root, picked, DateTime.Now);
 
             SessionLog.Write($"[settings] Put back the settings saved in {Path.GetFileName(picked)}.");
         }
