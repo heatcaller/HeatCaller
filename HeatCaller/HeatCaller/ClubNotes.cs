@@ -152,6 +152,24 @@ internal sealed class ClubNotes
                 {
                     file.Notes ??= new List<ClubNote>();
 
+                    // WHY (2026-11-05, Bug hunt 11: a hand-edited or
+                    // damaged club-notes.json): valid JSON can still say
+                    // "DayId": null or hold a null note, and both got past
+                    // this - StartUp's filedOn.Length and NewMeeting's
+                    // RemoveAll then threw in MainForm's constructor, so
+                    // the app would not start until the file was fixed.
+                    // Cleaned here the way VenueStore and ThemeStore clean
+                    // theirs.
+                    file.DayId ??= string.Empty;
+                    file.Notes.RemoveAll(one => one is null);
+
+                    foreach (var one in file.Notes)
+                    {
+                        one.Id ??= Guid.NewGuid().ToString("N");
+                        one.Text ??= string.Empty;
+                        one.From ??= string.Empty;
+                    }
+
                     return new ClubNotes(file);
                 }
             }
