@@ -253,7 +253,7 @@ public partial class MainForm
         // last few thousand lines, and has been cleared if somebody pressed
         // the item above - with names taken out. See SupportInfo.
         var saveSupport = new ToolStripMenuItem("Save support info...");
-        saveSupport.Click += (_, _) => SupportInfo.Save(this, _settings, _profiles, OnClientRawMessage);
+        saveSupport.Click += (_, _) => SupportInfo.Save(this, _settings, _voiceStore, _profiles, OnClientRawMessage);
 
         menu.Items.AddRange(new ToolStripItem[]
         {
