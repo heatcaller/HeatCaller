@@ -1116,9 +1116,15 @@ function carForm(parent, sec, form, car) {
 
   const known = chassisChoices();
   const own = car ? str(car.chassis) : '';
-  const chassisStart = own !== '' && known.some((c) => c.id === own) ? own : '';
+  // 2026-11-05, Bug hunt 11: a car whose chassis the club has since retired
+  // is not in the published list, so it started on 'Not set' and Save sent
+  // chassis:'' - wiping the car's chassis and its setup sheet. Like the
+  // desktop editor, the car's own chassis is added back as a choice.
+  const ownMissing = OBJECT_ID.test(own) && !known.some((c) => c.id === own);
+  const ownChoice = ownMissing ? [[own, str(car && car.chassisName) || 'Current chassis']] : [];
+  const chassisStart = own !== '' && (ownMissing || known.some((c) => c.id === own)) ? own : '';
   const chassis = selectBox(box, sec, form, 'chassis', 'Chassis',
-    [['', 'Not set']].concat(known.map((c) => [c.id, str(c.name) || 'Chassis'])).concat([['other', 'Not listed']]),
+    [['', 'Not set']].concat(ownChoice, known.map((c) => [c.id, str(c.name) || 'Chassis'])).concat([['other', 'Not listed']]),
     chassisStart, (v) => { other.label.hidden = v !== 'other'; });
   const other = textBox(box, sec, form, 'chassisOther', 'Which chassis is it?', '', 60, { hint: 'The desk adds it to the club’s list.' });
   other.label.hidden = chassis.input.value !== 'other';
