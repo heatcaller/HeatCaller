@@ -78,6 +78,14 @@ public partial class MainForm
             return;
         }
 
+        // Bug hunt 11 (2026-11-05): a club rental unit is never one
+        // driver's - see UnknownTransponders.RentalRefusal.
+        if (UnknownTransponders.RentalRefusal(_rentals.Get(transponder), choice) is { } refusal)
+        {
+            AppDialog.Show(this, refusal, "Club rental unit", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
         switch (choice)
         {
             case UnknownTransponders.Choice.BelongsTo:
