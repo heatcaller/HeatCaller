@@ -468,6 +468,13 @@ public sealed partial class AnnouncementService
             return new SynthesisResult(saved, LineSource.Library);
         }
 
+        // The usage chip at 100% (5 Nov 2026 - see ElevenLabsAllowanceUsedUp):
+        // ElevenLabs isn't asked at all; the meter says when it is back.
+        if (ElevenLabsMeterSpent())
+        {
+            return await RenderWithStandInAsync(profile, asWritten);
+        }
+
         if (!ElevenLabsReady(profile))
         {
             LogStandInOnce("setup", $"[voice] {Capitalised(NotConfiguredReason(profile))} - the free Kokoro voice is speaking instead.");
@@ -1242,6 +1249,12 @@ public sealed partial class AnnouncementService
             return "the ElevenLabs quota is used up";
         }
 
+        // The usage chip at 100% (5 Nov 2026) - see ElevenLabsAllowanceUsedUp.
+        if (ElevenLabsMeterSpent())
+        {
+            return "the ElevenLabs allowance is at 100%";
+        }
+
         // One look, under one lock: taken twice, the rest could end in
         // between and still be described.
         lock (_voiceHealthLock)
@@ -1286,8 +1299,9 @@ public sealed partial class AnnouncementService
 
     /// <summary>
     /// Whether saved ElevenLabs takes are passed over for this profile right
-    /// now: ElevenLabs chosen, Kokoro standing in for it, and its quota used
-    /// up. The one rule behind the saved-line and recorded-line checks in
+    /// now: ElevenLabs chosen, Kokoro standing in for it, and its allowance
+    /// used up - the usage chip at 100%, or a quota refusal (see
+    /// ElevenLabsAllowanceUsedUp). The one rule behind the saved-line and recorded-line checks in
     /// RenderLineAsync, the release calls read straight from the library,
     /// and the prepared flag and release takes.
     ///
@@ -1306,7 +1320,63 @@ public sealed partial class AnnouncementService
     /// from ElevenLabs, NoteElevenLabsAnswered - ends it by itself.
     /// </summary>
     private bool ElevenLabsSavedLinesPassedOver(VoiceProfile profile) =>
-        PassesOverSavedElevenLabs(profile, _voiceQuotaExceeded, KokoroSpeech.IsAvailable);
+        PassesOverSavedElevenLabs(profile, ElevenLabsAllowanceUsedUp(profile), KokoroSpeech.IsAvailable);
+
+    /// <summary>
+    /// Whether the ElevenLabs meter on the usage chip says the club's own
+    /// key is at 100% this month (UsageMeters, MeterKind.ElevenLabsKey -
+    /// the chip's percentage rounds down, so 100% there is exactly Spent).
+    /// Settable so the tests can say so without a plan to read; the app
+    /// never sets it.
+    /// </summary>
+    internal Func<bool> ElevenLabsMeterSpent { get; set; } =
+        () => UsageMeters.Shared.Get(MeterKind.ElevenLabsKey) is { Spent: true };
+
+    /// <summary>Whether "the chip says 100%" was last said - so it is said once going in and once coming out.</summary>
+    private bool _meterSpentSaid;
+
+    /// <summary>
+    /// THE USAGE CHIP AT 100% IS WHEN IT KICKS OVER (5 Nov 2026, Asher: "it
+    /// should be usage chip 100%"). With the ElevenLabs meter used up, every
+    /// line goes to Kokoro - each of the cast in their own stand-in voice -
+    /// without ElevenLabs being asked at all, and no saved ElevenLabs line
+    /// plays. ElevenLabs may well go on answering past the plan's figure
+    /// (overage), which is exactly why the refusal could not be the trigger:
+    /// the chip is the club's own line in the sand. The meter is read again
+    /// every few minutes (UsageMeters.RefreshAsync), so a new month or a
+    /// bigger plan brings ElevenLabs, and its saved lines, back by itself.
+    ///
+    /// A quota refusal from ElevenLabs still counts as well - the meter can
+    /// be a few minutes behind, or unreadable for this key - so a night that
+    /// has actually run out is one voice either way.
+    /// </summary>
+    private bool ElevenLabsAllowanceUsedUp(VoiceProfile profile)
+    {
+        if (profile.EffectiveEngine != VoiceEngine.ElevenLabs)
+        {
+            return false;
+        }
+
+        var spent = ElevenLabsMeterSpent();
+        bool say;
+
+        lock (_voiceHealthLock)
+        {
+            say = spent != _meterSpentSaid;
+            _meterSpentSaid = spent;
+        }
+
+        if (say)
+        {
+            StatusMessage?.Invoke(spent
+                ? "[voice] The ElevenLabs allowance is at 100% on the usage chip - the free Kokoro voice is speaking from here, each of "
+                  + "the cast in their own Kokoro voice, and saved ElevenLabs lines are held back so the night is in one set of voices. "
+                  + "ElevenLabs speaks again once the chip is under 100% (a new month or a bigger plan)."
+                : "[voice] The ElevenLabs allowance is under 100% again - ElevenLabs and its saved lines speak from the next line.");
+        }
+
+        return spent || _voiceQuotaExceeded;
+    }
 
     /// <summary>
     /// The rule behind ElevenLabsSavedLinesPassedOver, with what it reads

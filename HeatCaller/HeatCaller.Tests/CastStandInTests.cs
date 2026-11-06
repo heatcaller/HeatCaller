@@ -28,8 +28,47 @@ public sealed class CastStandInTests : IDisposable
             VoiceLibrary.Shared.Forget(profile, text);
         }
 
+        KokoroSpeech.ModelForTests = null;
+        KokoroSpeech.RecordLoadFailureForTests(null, default);
         _data.Dispose();
     }
+
+    /// <summary>
+    /// A Kokoro "model" on this PC that answers each line with the name of
+    /// the voice that said it - the 310 MB model can't be loaded in a test
+    /// (see BugHunt4VoiceTests), and the name is what these tests are about.
+    /// </summary>
+    /// <remarks>
+    /// Only once the announcer is built: an AnnouncementService warms the
+    /// real Kokoro up as it starts whenever a model is on the PC, and that
+    /// warm-up loading this empty file records "the model wouldn't load"
+    /// for a minute - Kokoro unable to speak for whatever test comes next.
+    /// </remarks>
+    private static void FakeKokoro()
+    {
+        KokoroSpeech.RecordLoadFailureForTests(null, default);
+        Directory.CreateDirectory(KokoroSpeech.Folder);
+
+        using (var file = new FileStream(KokoroSpeech.ModelPath, FileMode.Create, FileAccess.Write))
+        {
+            file.SetLength(60L * 1024 * 1024);
+        }
+
+        KokoroSpeech.ModelForTests = (name => name, (_, voice, _) => Task.FromResult(SaidBy((string)voice)));
+    }
+
+    /// <summary>A tenth of a second of "audio" - the least Kokoro takes for a line - starting with who said it.</summary>
+    private static byte[] SaidBy(string voice)
+    {
+        var pcm = new byte[9600];
+        Marker(voice).CopyTo(pcm, 0);
+        return pcm;
+    }
+
+    private static byte[] Marker(string voice) => System.Text.Encoding.UTF8.GetBytes("kokoro:" + voice + "|");
+
+    /// <summary>Whether this rendered line was said by that Kokoro voice - its PCM is inside the WAV Kokoro wraps it in.</summary>
+    private static bool SpokenBy(byte[] audio, string voice) => audio.AsSpan().IndexOf(Marker(voice)) >= 0;
 
     private static VoiceProfile ElevenLabsAnnouncer() => new()
     {
@@ -263,20 +302,29 @@ public sealed class CastStandInTests : IDisposable
             new VoiceProfile { Engine = VoiceEngine.HeatCaller, HeatCallerVoice = "clubhouse", KokoroStandsIn = true }, quotaUsedUp: true, kokoroReady: true));
     }
 
-    [Fact]
-    public async Task A_saved_elevenlabs_take_plays_until_the_quota_runs_out_then_kokoro_says_it_and_it_plays_again_once_the_quota_is_back()
+    /// <summary>
+    /// An ElevenLabs announcer with a take of <paramref name="text"/> in the
+    /// saved-voice library, and the usage chip's ElevenLabs meter as
+    /// <paramref name="meterSpent"/> says.
+    /// </summary>
+    private async Task<(AnnouncementService Announcer, VoiceProfile Profile, byte[] Take)> AnnouncerWithSavedTakeAsync(
+        string text, string apiKey, Func<bool> meterSpent)
     {
-        const string text = "Drivers, this is the quota stand in check, bring your cars to the grid please";
 
-        // No key: so nothing here goes to the network - with the saved take
-        // passed over, the line goes straight to the stand-in.
         var voices = VoiceSettingsStore.Load();
         voices.Current.Engine = VoiceEngine.ElevenLabs;
-        voices.Current.ApiKey = string.Empty;
+        voices.Current.ApiKey = apiKey;
         voices.Current.VoiceId = "quota-test-voice";
         voices.Current.KokoroStandsIn = true;
 
-        var announcer = new AnnouncementService(ProfileStore.Load(), voices, SoundEffectsStore.Load());
+        var announcer = new AnnouncementService(ProfileStore.Load(), voices, SoundEffectsStore.Load())
+        {
+            ElevenLabsMeterSpent = meterSpent,
+        };
+
+        // After the announcer - see FakeKokoro.
+        FakeKokoro();
+
         var profile = voices.Current.CloneForDelivery(0.4, 0.2);
 
         // Looks like an MP3 to the library, which keeps nothing else.
@@ -295,38 +343,92 @@ public sealed class CastStandInTests : IDisposable
         }
 
         Assert.True(VoiceLibrary.Shared.Contains(profile, text));
+        return (announcer, profile, take);
+    }
+
+    [Fact]
+    public async Task At_100_percent_on_the_usage_chip_kokoro_says_a_saved_line_and_at_under_100_the_saved_take_plays_again()
+    {
+        const string text = "Drivers, this is the usage chip stand in check, bring your cars to the grid please";
+
+        var spent = false;
+        var (announcer, profile, take) = await AnnouncerWithSavedTakeAsync(text, "not-a-real-key", () => spent);
+
+        var log = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        announcer.StatusMessage += log.Enqueue;
 
         var (source, audio) = await RenderAsync(announcer, profile, text);
         Assert.Equal("Library", source);
         Assert.Equal(take, audio);
 
-        if (!KokoroSpeech.IsAvailable)
-        {
-            // No Kokoro on this PC: nothing could stand in, so the saved take
-            // rightly goes on playing - the rule itself is checked above.
-            return;
-        }
-
-        // ElevenLabs refuses for quota: the saved take stands aside.
-        typeof(AnnouncementService).GetField("_voiceQuotaExceeded", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(announcer, true);
+        // The chip reaches 100%.
+        spent = true;
 
         (source, audio) = await RenderAsync(announcer, profile, text);
         Assert.Equal("StandIn", source);
-        Assert.NotEqual(take, audio);
+        Assert.True(SpokenBy(audio, KokoroSpeech.DefaultVoice), $"not said by {KokoroSpeech.DefaultVoice}");
+        Assert.Contains(log, line => line.Contains("100% on the usage chip", StringComparison.Ordinal));
 
-        // A prepared ElevenLabs take stops counting too.
+        // And each of the cast in their own Kokoro voice - here the Technical
+        // Lead's default, from a settings file that never picked one.
+        var mechanic = profile.CloneWithVoice(ElevenLabsCast().MechanicVoice, kokoroReady: true);
+        (source, audio) = await RenderAsync(announcer, mechanic, "Thanks, the car was mega tonight");
+        Assert.Equal("StandIn", source);
+        Assert.True(SpokenBy(audio, CastStandIns.TechnicalLead), $"not said by {CastStandIns.TechnicalLead}");
+
+        // ElevenLabs was never asked - a key this fake would have been turned down.
+        Assert.DoesNotContain(log, line => line.Contains("turned the API key down", StringComparison.Ordinal)
+            || line.Contains("Can't reach ElevenLabs", StringComparison.Ordinal));
+
+        // A prepared ElevenLabs take stops counting too, and the Mixer says why Kokoro speaks.
         Assert.False(PreparedTakeMatches(announcer, "Library", profile));
         Assert.False(PreparedTakeMatches(announcer, "ElevenLabs", profile));
+        Assert.Contains("100%", announcer.DescribeStandIn());
 
-        // ElevenLabs answers again - a new month, a top-up - and the saved take is back.
+        // A new month (or a bigger plan): under 100%, and the saved take is back.
+        spent = false;
+
+        (source, audio) = await RenderAsync(announcer, profile, text);
+        Assert.Equal("Library", source);
+        Assert.Equal(take, audio);
+        Assert.True(PreparedTakeMatches(announcer, "Library", profile));
+        Assert.Contains(log, line => line.Contains("under 100% again", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_quota_refusal_with_the_chip_behind_also_holds_the_saved_take_back_until_elevenlabs_answers()
+    {
+        const string text = "Drivers, this is the quota refusal stand in check, bring your cars to the grid please";
+
+        // No key: so nothing here goes to the network - with the saved take
+        // passed over, the line goes straight to the stand-in.
+        var (announcer, profile, take) = await AnnouncerWithSavedTakeAsync(text, string.Empty, () => false);
+
+        typeof(AnnouncementService).GetField("_voiceQuotaExceeded", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(announcer, true);
+
+        var (source, audio) = await RenderAsync(announcer, profile, text);
+        Assert.Equal("StandIn", source);
+        Assert.True(SpokenBy(audio, KokoroSpeech.DefaultVoice), $"not said by {KokoroSpeech.DefaultVoice}");
+
         typeof(AnnouncementService).GetMethod("NoteElevenLabsAnswered", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(announcer, null);
 
         (source, audio) = await RenderAsync(announcer, profile, text);
         Assert.Equal("Library", source);
         Assert.Equal(take, audio);
-        Assert.True(PreparedTakeMatches(announcer, "Library", profile));
+    }
+
+    [Theory]
+    [InlineData(9_999, 10_000, false)]
+    [InlineData(10_000, 10_000, true)]
+    [InlineData(10_450, 10_000, true)]
+    public void The_trigger_is_exactly_when_the_chip_says_100_percent(long used, long allowance, bool spent)
+    {
+        var meter = new Meter(MeterKind.ElevenLabsKey, true, used, allowance, 0, null, DateTime.UtcNow, 0, null);
+
+        Assert.Equal(spent, meter.Spent);
+        Assert.Equal(spent, meter.ShortPercent() is var shown && int.Parse(shown.TrimEnd('%')) >= 100);
     }
 
     /// <summary>AnnouncementService.RenderLineAsync, by reflection - it and what it returns are private.</summary>

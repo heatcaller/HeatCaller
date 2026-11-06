@@ -481,7 +481,9 @@ public sealed partial class AnnouncementService
             // is. Those go line by line below, through the relay.
             var tryBatch = renderProfile.EffectiveEngine == VoiceEngine.ElevenLabs
                            && ElevenLabsReady(renderProfile)
-                           && !(StandInAllowed(renderProfile) && ElevenLabsRestingFor(renderProfile));
+                           && !(StandInAllowed(renderProfile) && ElevenLabsRestingFor(renderProfile))
+                           // Nor with the usage chip at 100% (5 Nov 2026): Kokoro says them line by line.
+                           && !(StandInAllowed(renderProfile) && ElevenLabsMeterSpent());
 
             // The voice chosen again since these were set going - Kokoro
             // picked while the grid was being rendered, say: what is left is
