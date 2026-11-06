@@ -665,7 +665,18 @@ public static class HandicapCalculator
     /// </summary>
     private static List<Adjusted> ApplyTimeCredit(List<SessionResultEntry> raw, HandicapStore handicaps)
     {
-        var leaderLaps = raw.Count > 0 ? raw.Max(r => r.Laps) : 0;
+        // 6 Nov 2026, Bug hunt 11: the winner's distance and the end of the
+        // racing come from the finishers only - the same group-0 drivers who
+        // are the only ones ever projected below. They used to be taken over
+        // every entry, so a car disqualified after a lap more than the winner
+        // re-scaled every finisher to a distance nobody who counts drove, and
+        // could change who won on handicap; and a DQ'd car timed after the
+        // flag pushed the end of the racing out, so finishers who were still
+        // running no longer counted as running. A DNF stops early and a DQ
+        // does not count, so neither may set the yardstick. With no finisher
+        // nobody is projected and the figures are not used.
+        var finishers = raw.Where(r => OutcomeGroup(r) == 0).ToList();
+        var leaderLaps = finishers.Count > 0 ? finishers.Max(r => r.Laps) : 0;
 
         var measured = raw.Select((r, i) =>
         {
@@ -678,8 +689,10 @@ public static class HandicapCalculator
             return (Result: r, RawPosition: i + 1, PenaltyMs: penaltyMs, DrivenMs: r.ElapsedMs - penaltyMs);
         }).ToList();
 
-        // How long the racing lasted - the latest anybody was still timed.
-        var raceSpanMs = measured.Count > 0 ? measured.Max(m => m.DrivenMs) : 0;
+        // How long the racing lasted - the latest any finisher was still timed
+        // (see above: a DNF or DQ does not set it).
+        var finishersMeasured = measured.Where(m => OutcomeGroup(m.Result) == 0).ToList();
+        var raceSpanMs = finishersMeasured.Count > 0 ? finishersMeasured.Max(m => m.DrivenMs) : 0;
 
         var scored = measured.Select(m =>
         {
