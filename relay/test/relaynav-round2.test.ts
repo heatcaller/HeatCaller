@@ -65,6 +65,8 @@ describe("relay navigation, round 2: the night page remembers the driver", () =>
     const page = await openNight(relay({ ok: true, night: night() }), `#d=${CODE}`, { "hg-night-pass-acme-rc": "ef".repeat(32) });
 
     page.get("meoutlink").click();
+    // Since 6 Nov 2026 it asks first (me-signout.test.ts).
+    page.button(page.get("me-sheet-body"), /^Sign out$/)!.click();
 
     assert.equal(stored(page, ME), null);
     assert.equal(page.eval("sessionStorage.getItem('hg-night-pass-acme-rc')"), null);

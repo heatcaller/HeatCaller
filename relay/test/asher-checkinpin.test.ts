@@ -180,7 +180,8 @@ describe("the pages that tap by badge code ask for the PIN", () => {
     const PASS = "cd".repeat(32);
     const page = await nightWithPinTap(CODE, PASS);
 
-    page.button(page.get("lv"), /^Check in$/)!.click();
+    // Me's moment card is where Check in is since 6 Nov 2026; its button calls this.
+    void page.eval("tapCheckIn()");
     await page.settle();
 
     // A wrong one first: the box asks again with the relay's words.
@@ -200,7 +201,7 @@ describe("the pages that tap by badge code ask for the PIN", () => {
       { id: CODE, wanted: true, pin: "975318" },
     ]);
     assert.equal(page.sent.some((s) => s.url.endsWith("/checkin/list")), false, "never through checkin/list");
-    assert.ok(page.button(page.get("lv"), /Checked in/));
+    assert.equal(page.eval("checkedIn()"), true);
     assert.equal(page.button(page.body, /^Continue$/), undefined, "the box is gone");
     assert.equal(page.eval("sessionStorage.getItem('hg-night-pass-acme-rc')"), PASS);
     assert.equal(JSON.stringify(page.eval("Object.assign({}, sessionStorage)")).includes("975318"), false, "the PIN is never kept");
@@ -209,13 +210,14 @@ describe("the pages that tap by badge code ask for the PIN", () => {
   it("Cancel changes nothing", async () => {
     const page = await nightWithPinTap("a1b2c3d4e5f60718293a", "cd".repeat(32));
 
-    page.button(page.get("lv"), /^Check in$/)!.click();
+    // Me's moment card is where Check in is since 6 Nov 2026; its button calls this.
+    void page.eval("tapCheckIn()");
     await page.settle();
     page.button(page.body, /^Cancel$/)!.click();
     await page.settle();
 
     assert.equal(page.sent.filter((s) => s.url.endsWith("/checkin/tap")).length, 1);
-    assert.ok(page.button(page.get("lv"), /^Check in$/));
+    assert.equal(page.eval("checkedIn()"), false);
   });
 
   it("the check-in card never keeps a desk PIN's pass - only a racer pass the tap hands back", () => {

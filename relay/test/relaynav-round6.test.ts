@@ -198,25 +198,16 @@ describe("relay navigation, round 6: Home changes with the night", () => {
     assert.doesNotMatch(html, /id="upnext"|id="latest"|Latest results/);
   });
 
-  it("gives a remembered driver their own strip: best finish, standings and newest achievement", async () => {
+  it("has no You card for a remembered driver, and asks for no night for it (6 Nov 2026)", async () => {
+    // Asher: "remove the You, driver card from home".
+    assert.doesNotMatch(homeWith(), /id="you"/);
     const page = await open(homeWith(), relay(), true);
-    const you = page.get("you");
-
-    assert.equal(you.hidden, false);
-    assert.match(you.textContent, /You, Asher Kent/);
-    assert.match(you.textContent, /Best finish, Club Night · Tue 21 Oct1st · A Main - Stock/);
-    assert.match(you.textContent, /Standings, Winter Series2nd · 141 pts/);
-    assert.match(you.textContent, /Newest achievementTrack Record/);
-    assert.equal(you.find((n) => n.hadMarkup).length, 0, "built as text, never markup");
-
-    const full = page.sent.filter((s) => s.url.endsWith("/night") && s.body["part"] === undefined);
-    assert.deepEqual(full.map((s) => s.body), [{ id: CODE }]);
+    assert.equal(page.sent.filter((s) => s.url.endsWith("/night") && s.body["part"] === undefined).length, 0);
   });
 
   it("asks a visitor's phone for no night at all", async () => {
     const page = await open(homeWith(), relay());
     assert.equal(page.sent.filter((s) => s.url.endsWith("/night")).length, 0);
-    assert.equal(page.get("you").hidden, true);
   });
 });
 

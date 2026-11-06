@@ -107,8 +107,15 @@ describe("Home's hero card follows the night", () => {
     assert.match(page.get("now").innerHTML, /Leading: Jo Rivera/);
   });
 
-  it("names who is on the line up next", async () => {
+  it("shows no Up next card for a race that is only next (6 Nov 2026)", async () => {
+    // Asher: "remove the up next card right below the hero card on home".
     const page = await open(relay({ lines: [{ status: "next", className: "Stock", description: "Heat 2", drivers: ["Jo Rivera", "Sam Parker"] }] }));
+    assert.equal(page.get("now").innerHTML, "");
+  });
+
+  it("still names who is on the line for a race on now", async () => {
+    const page = await open(relay({ lines: [{ status: "running", className: "Stock", description: "Heat 2", drivers: ["Jo Rivera", "Sam Parker"] }] }));
+    assert.match(page.get("now").innerHTML, /On now/);
     assert.match(page.get("now").innerHTML, /2 drivers: Jo Rivera, Sam Parker/);
   });
 
@@ -166,7 +173,7 @@ describe("Tonight in numbers, Moments and Season at a glance", () => {
 });
 
 describe("Your next race carries the rest of the night", () => {
-  it("adds marshal duty and the pack on charge", async () => {
+  it("adds marshal duty, and no pack on charge since the timer went (6 Nov 2026)", async () => {
     const answer = relay();
     const { html, script } = pageParts(homePage("acme-rc", "Acme RC", DEFAULT_CONTEXT));
     const page = new FakePage(html, answer, {});
@@ -180,7 +187,7 @@ describe("Your next race carries the rest of the night", () => {
     const mine = page.get("mine").textContent;
     assert.match(mine, /Marshal duty/);
     assert.match(mine, /Heat 2 - Post 1 - 1 race away/);
-    assert.match(mine, /Ready in 1[12] min/);
+    assert.doesNotMatch(mine, /On charge|Ready in/, "a timer an older page kept is not shown");
   });
 });
 
@@ -197,5 +204,34 @@ describe("Sponsor of the night", () => {
   it("is no card for a club with no sponsors", async () => {
     const page = await open(relay());
     assert.equal(page.get("spnight").hidden, true);
+  });
+});
+
+describe("the first-night guide on Home (6 Nov 2026)", () => {
+  // Asher: "add first night guide to top of home page".
+  it("is the first thing on Home, before Your next race and the hero", () => {
+    const html = homePage("acme-rc", "Acme RC", DEFAULT_CONTEXT);
+    const at = (id: string) => html.indexOf(`id="${id}"`);
+    assert.ok(at("gd") > 0 && at("gd") < at("mine") && at("mine") < at("now"));
+  });
+
+  it("is drawn for any phone, folded, and Got it hides it here and on every other page", async () => {
+    const page = await open(relay());
+    const guide = page.get("gd").find((n) => n.className === "guide")[0];
+    assert.ok(guide, "the guide");
+    assert.match(guide.textContent, /^Your first night - what happens/);
+    assert.equal((guide as unknown as { open: boolean }).open, false);
+
+    page.button(guide, /Got it - hide this/)!.click();
+    const kept = [...page.store.keys()].filter((k) => k.startsWith("hc-guide-done:acme-rc:"));
+    assert.equal(kept.length, 1, "kept under the same key the check-in and night pages use");
+
+    // A phone that hid it before opening Home.
+    const { html, script } = pageParts(homePage("acme-rc", "Acme RC", DEFAULT_CONTEXT));
+    const fresh = new FakePage(html, relay(), {});
+    fresh.store.set(kept[0]!, "1");
+    fresh.run(script);
+    await fresh.settle();
+    assert.equal(fresh.get("gd").find((n) => n.className === "guide").length, 0);
   });
 });

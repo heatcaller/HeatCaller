@@ -6,7 +6,7 @@ import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js"
 
 /**
  * BUG HUNT 11 - RELAY PAGES 3 (5 Nov 2026). The night page's alerts, its
- * charge timer and its race field, and the home-screen shell's own-club
+ * charge timer (gone since 6 Nov 2026) and its race field, and the home-screen shell's own-club
  * rule. Each test failed before its fix.
  */
 
@@ -86,31 +86,9 @@ describe("bug hunt 11: a busy read of a race's field is asked again", () => {
   });
 });
 
-describe("bug hunt 11: the charge timer counts on one clock", () => {
-  it("a phone five minutes fast still says the pack is ready before the race", async () => {
-    // The phone reads 19:00; the relay 18:55. The race is due at 19:28 on
-    // the relay's clock - 33 minutes away. A 30-minute charge is ready 3
-    // minutes before it.
-    const relayNow = () => new Date(Date.parse("2026-10-22T18:55:00Z")).toUTCString();
-    const live = { at: "2026-10-22T18:55:00Z", next: { race: "A Main (Stock)", away: 2, eta: "2026-10-22T19:28:00.000Z" }, cars: [{ tag: "0123456789abcdef" }] };
-
-    const page = await open(async (url, body) => {
-      if (url.endsWith("/night")) {
-        if (body["part"] === "live") return { status: 200, body: { ok: true, live }, date: relayNow() };
-        return { status: 200, body: { ok: true, night: night(), live }, date: relayNow() };
-      }
-      if (url.endsWith("/checkin/one")) return { status: 409, body: { ok: false } };
-      return { status: 404 };
-    });
-
-    const charging = () => page.get("lv").find((n) => n.className.includes("lc-charge"))[0]!;
-    assert.ok(charging(), "the charging part");
-    page.button(charging(), /On charge/)!.click();
-
-    assert.match(charging().textContent, /Ready at .* \(30 min\) - 3 min before your race/);
-    assert.equal(charging().find((n) => n.className.includes("lc-late")).length, 0, "not late");
-  });
-});
+// "bug hunt 11: the charge timer counts on one clock" went with the charge
+// timer itself on 6 Nov 2026 (Asher: "remove the check in button and the
+// pack charge from the right now tile on the me tab").
 
 describe("bug hunt 11: the shell frames only the club's own pages", () => {
   function hcInside(): (path: string) => boolean {
