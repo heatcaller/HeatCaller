@@ -1143,6 +1143,15 @@ internal sealed class CarDetailForm : Form
     {
         _car = car;
         _cars = cars;
+
+        // WHY (2026-11-05, Bug hunt 11: a stale car written back whole): a
+        // wall built before a phone change hands over the car as it was, and
+        // the store now holds a newer object - so the window opens on that.
+        if (cars.Get(car.Id) is { } live && !ReferenceEquals(live, car))
+        {
+            CopyOnto(car, live);
+        }
+
         _chassisTypes = chassisTypes;
         _profiles = profiles;
         _raceClasses = raceClasses;
@@ -1458,37 +1467,122 @@ internal sealed class CarDetailForm : Form
 
     private void EditCar()
     {
-        var before = _car.CloneForUndo();
+        CatchUp();
 
-        using var form = new CarForm(_car.CloneForUndo(), _chassisTypes, _profiles, _raceClasses, isNew: false);
+        var opened = _car.CloneForUndo();
+
+        using var form = new CarForm(opened.CloneForUndo(), _chassisTypes, _profiles, _raceClasses, isNew: false);
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {
             return;
         }
 
+        var (before, after) = OverWhatIsStoredNow(opened, form.Result);
+
         _undo.Capture($"Edit {before.DisplayName}", () => _cars.Upsert(before));
 
-        Apply(form.Result);
+        Apply(after);
     }
 
     private void EditPhotos()
     {
-        var before = _car.CloneForUndo();
+        CatchUp();
 
-        using var form = new CarPhotosForm(_car.CloneForUndo());
+        var opened = _car.CloneForUndo();
+
+        using var form = new CarPhotosForm(opened.CloneForUndo());
 
         if (form.ShowDialog(this) != DialogResult.OK)
         {
             return;
         }
+
+        var (before, after) = OverWhatIsStoredNow(opened, form.Result);
 
         // Pictures dropped from the car are left on disk - the undo puts
         // the NAMES back, and a name whose file had been deleted would put
         // back a broken picture.
         _undo.Capture($"Change {before.DisplayName}'s photos", () => _cars.Upsert(before));
 
-        Apply(form.Result);
+        Apply(after);
+    }
+
+    /// <summary>
+    /// WHY (2026-11-05, Bug hunt 11: a stale car written back whole): a
+    /// phone's change to this car (a photo, its name, notes, chassis) is
+    /// applied on the roster tick, which runs while this window - and the
+    /// dialogs it opens - are up, and it puts a NEW object in the store. The
+    /// window's own copy was then stale, and Retire, Edit and Photos wrote
+    /// that copy back whole: the phone's photo dropped off the car and its
+    /// edits were undone, without a word, after the phone was told "added".
+    /// So the window catches up with the store before it starts one.
+    /// </summary>
+    private void CatchUp()
+    {
+        if (_cars.Get(_car.Id) is { } live && !ReferenceEquals(live, _car))
+        {
+            CopyOnto(_car, live);
+            RefreshAll();
+        }
+    }
+
+    /// <summary>
+    /// What a dialog's edit writes, and what its undo puts back, when the
+    /// store may have changed while the dialog was open (a phone's change -
+    /// see CatchUp): the desk's changes over what is stored now (MergeEdit).
+    /// Undo puts back what was stored just before the save, not what the
+    /// dialog opened on, so it does not take the phone's change away too.
+    /// </summary>
+    private (Car Before, Car After) OverWhatIsStoredNow(Car opened, Car edited)
+    {
+        if (_cars.Get(_car.Id) is not { } live)
+        {
+            return (opened, edited);
+        }
+
+        return (live.CloneForUndo(), MergeEdit(opened, edited, live));
+    }
+
+    /// <summary>
+    /// The desk's edit (<paramref name="edited"/>, made from
+    /// <paramref name="opened"/>) laid over the car as it is stored now
+    /// (<paramref name="live"/>): each field the desk changed takes the
+    /// desk's value, every other field keeps what is stored now. Photos the
+    /// desk did not touch stay as stored; when it did touch them, its list
+    /// stands, plus photos added since it opened and minus any taken off
+    /// since. Bug hunt 11 (2026-11-05) - see CatchUp.
+    /// </summary>
+    internal static Car MergeEdit(Car opened, Car edited, Car live)
+    {
+        static string Pick(string was, string desk, string now) =>
+            string.Equals(was, desk, StringComparison.Ordinal) ? now : desk;
+
+        var merged = live.CloneForUndo();
+
+        merged.Name = Pick(opened.Name, edited.Name, live.Name);
+        merged.OwnerTransponder = Pick(opened.OwnerTransponder, edited.OwnerTransponder, live.OwnerTransponder);
+        merged.ClassName = Pick(opened.ClassName, edited.ClassName, live.ClassName);
+        merged.ChassisTypeId = Pick(opened.ChassisTypeId, edited.ChassisTypeId, live.ChassisTypeId);
+        merged.Bodyshell = Pick(opened.Bodyshell, edited.Bodyshell, live.Bodyshell);
+        merged.RaceNumber = Pick(opened.RaceNumber, edited.RaceNumber, live.RaceNumber);
+        merged.Notes = Pick(opened.Notes, edited.Notes, live.Notes);
+        merged.LoanedToTransponder = Pick(opened.LoanedToTransponder, edited.LoanedToTransponder, live.LoanedToTransponder);
+        merged.LoanedForEventId = Pick(opened.LoanedForEventId, edited.LoanedForEventId, live.LoanedForEventId);
+        merged.Retired = opened.Retired == edited.Retired ? live.Retired : edited.Retired;
+
+        if (!opened.PhotoFileNames.SequenceEqual(edited.PhotoFileNames, StringComparer.Ordinal))
+        {
+            bool Was(string p) => opened.PhotoFileNames.Contains(p, StringComparer.Ordinal);
+            bool IsNow(string p) => live.PhotoFileNames.Contains(p, StringComparer.Ordinal);
+
+            merged.PhotoFileNames = edited.PhotoFileNames
+                .Where(p => IsNow(p) || !Was(p))
+                .Concat(live.PhotoFileNames.Where(p => !Was(p) && !edited.PhotoFileNames.Contains(p, StringComparer.Ordinal)))
+                .ToList();
+        }
+
+        return merged;
     }
 
     private void LendCar()
@@ -1521,6 +1615,10 @@ internal sealed class CarDetailForm : Form
 
     private void RetireCar()
     {
+        // Bug hunt 11 (2026-11-05): the car as stored now, not as it was
+        // when the window opened - see CatchUp.
+        CatchUp();
+
         if (!_car.Retired && !RetireConfirm.Ask(this, _car.DisplayName))
         {
             return;
@@ -1584,20 +1682,26 @@ internal sealed class CarDetailForm : Form
     {
         _cars.Upsert(edited);
 
-        _car.Name = edited.Name;
-        _car.OwnerTransponder = edited.OwnerTransponder;
-        _car.ClassName = edited.ClassName;
-        _car.ChassisTypeId = edited.ChassisTypeId;
-        _car.Bodyshell = edited.Bodyshell;
-        _car.RaceNumber = edited.RaceNumber;
-        _car.Notes = edited.Notes;
-        _car.PhotoFileNames = new List<string>(edited.PhotoFileNames);
-        _car.LoanedToTransponder = edited.LoanedToTransponder;
-        _car.LoanedForEventId = edited.LoanedForEventId;
-        _car.Retired = edited.Retired;
-        _car.Transfers = edited.Transfers.Select(t => t with { }).ToList();
+        CopyOnto(_car, edited);
 
         RefreshAll();
+    }
+
+    /// <summary>Everything the window shows of a car, from <paramref name="source"/> onto <paramref name="target"/>.</summary>
+    private static void CopyOnto(Car target, Car source)
+    {
+        target.Name = source.Name;
+        target.OwnerTransponder = source.OwnerTransponder;
+        target.ClassName = source.ClassName;
+        target.ChassisTypeId = source.ChassisTypeId;
+        target.Bodyshell = source.Bodyshell;
+        target.RaceNumber = source.RaceNumber;
+        target.Notes = source.Notes;
+        target.PhotoFileNames = new List<string>(source.PhotoFileNames);
+        target.LoanedToTransponder = source.LoanedToTransponder;
+        target.LoanedForEventId = source.LoanedForEventId;
+        target.Retired = source.Retired;
+        target.Transfers = source.Transfers.Select(t => t with { }).ToList();
     }
 
     /// <summary>Gives the car to someone else for good (CarTransferring), and shows it as it now is.</summary>
@@ -1788,6 +1892,19 @@ internal sealed class CarDetailForm : Form
         }
 
         var id = saved.Id;
+
+        // WHY (2026-11-05, Bug hunt 11: a desk save over a phone's fix): a
+        // driver's phone can fix tonight's entry while this sheet is open
+        // (the roster tick applies it under the dialog), and the save wrote
+        // the copy taken at open back whole - the fix gone, after the phone
+        // was told "Setup fixed". So what the desk changed goes over the
+        // entry as it is stored now, and Undo puts back that, not the
+        // version from before the fix.
+        if (beforeCopy is not null && _setups.Get(id) is { } now)
+        {
+            saved = SetupLogStore.MergeEdit(beforeCopy, saved, now);
+            beforeCopy = SetupLogStore.CopyOf(now);
+        }
 
         _undo.Capture(isNew ? "Log a setup" : "Edit a setup", () => _setups.UndoUpsert(id, beforeCopy));
 
