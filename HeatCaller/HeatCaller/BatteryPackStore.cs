@@ -145,8 +145,7 @@ public sealed class BatteryPackStore
 
         foreach (var pack in _packs)
         {
-            pack.OwnerTransponder = pack.OwnerTransponder?.Trim() ?? string.Empty;
-            pack.Transfers ??= new();
+            Repair(pack);
         }
 
         _sessionPacks = new Dictionary<string, string>(file.SessionPacks ?? new(), StringComparer.OrdinalIgnoreCase);
@@ -163,6 +162,25 @@ public sealed class BatteryPackStore
 
         _currentPacks = new Dictionary<string, string>(file.CurrentPacks ?? new(), StringComparer.OrdinalIgnoreCase);
         _perDriver = file.PerDriverTags;
+    }
+
+    /// <summary>
+    /// Fills in what every pack must have, on load and on every Upsert.
+    /// WHY (2026-11-05, Bug hunt 11): a hand-edited or restored
+    /// battery-packs.json can say "Notes": null where the app never writes
+    /// one, and it loaded as it was - then Driver Hub's Batteries tab and
+    /// Garage's Club Batteries both threw on pack.Notes.Replace, so neither
+    /// could be opened until the file was fixed by hand. Repaired as
+    /// RentalTransponderStore (bug hunt 10), RivalryStore, ThemeStore and
+    /// VenueStore do; Label and Chemistry with it, to their defaults.
+    /// </summary>
+    private static void Repair(BatteryPack pack)
+    {
+        pack.OwnerTransponder = pack.OwnerTransponder?.Trim() ?? string.Empty;
+        pack.Transfers ??= new();
+        pack.Label ??= string.Empty;
+        pack.Chemistry ??= "NiMH";
+        pack.Notes ??= string.Empty;
     }
 
     private sealed class PackFile
@@ -348,8 +366,7 @@ public sealed class BatteryPackStore
     /// <summary>Adds a pack, or saves one edited (by id). Retired, it stops being in anybody's car.</summary>
     public void Upsert(BatteryPack pack)
     {
-        pack.OwnerTransponder = pack.OwnerTransponder?.Trim() ?? string.Empty;
-        pack.Transfers ??= new();
+        Repair(pack);
 
         lock (_gate)
         {

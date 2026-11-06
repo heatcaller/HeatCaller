@@ -38,6 +38,18 @@ internal static class DriverGarage
     /// <summary>The types a pack can be, offered on the phone - and whatever their packs already say.</summary>
     internal static readonly string[] Chemistries = { "NiMH", "LiPo", "LiFe", "LiHV" };
 
+    /// <summary>
+    /// How every time on the garage document is written - always with the
+    /// invariant culture.
+    ///
+    /// WHY (2026-11-05, Bug hunt 11: garage times in the PC's culture): ':'
+    /// in a format is the culture's time separator and yyyy its calendar's
+    /// year, so a Finnish PC wrote "19.30.00" (the phone's Date.parse gave
+    /// up: blank dates, empty pack charts) and a Thai one the year 2569 -
+    /// as DriverLive and the other wire formats already guard against.
+    /// </summary>
+    private const string WireTime = "yyyy-MM-dd'T'HH':'mm':'ss'Z'";
+
     /// <summary>Everything one garage is built from.</summary>
     internal sealed record Sources(
         ProfileStore Profiles,
@@ -59,7 +71,7 @@ internal static class DriverGarage
         var doc = new Dictionary<string, object?>
         {
             ["v"] = 1,
-            ["at"] = nowUtc.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            ["at"] = nowUtc.ToString(WireTime, System.Globalization.CultureInfo.InvariantCulture),
             ["driver"] = name,
         };
 
@@ -82,7 +94,7 @@ internal static class DriverGarage
             ["club"] = p.IsClubPack,
             ["inCar"] = p.Id == inCar?.Id,
             ["sessions"] = from.Packs.SessionsOn(p.Id),
-            ["added"] = p.AddedUtc.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            ["added"] = p.AddedUtc.ToUniversalTime().ToString(WireTime, System.Globalization.CultureInfo.InvariantCulture),
             ["mine"] = !p.IsClubPack,
         }).ToList();
 
@@ -105,7 +117,7 @@ internal static class DriverGarage
         {
             ["id"] = x.Session.Id,
             ["label"] = RaceLabel(x.Session),
-            ["at"] = x.Session.StartedAtUtc.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            ["at"] = x.Session.StartedAtUtc.ToUniversalTime().ToString(WireTime, System.Globalization.CultureInfo.InvariantCulture),
             ["layout"] = x.Session.TrackLayoutName ?? string.Empty,
             ["best"] = x.Row!.FastLapMs > 0 ? Math.Round(x.Row.FastLapMs / 1000.0, 3) : null,
             ["pack"] = from.Packs.PackIdFor(x.Session.Id, key),
@@ -155,7 +167,7 @@ internal static class DriverGarage
                 .Select(e => new Dictionary<string, object?>
                 {
                     ["id"] = e.Id,
-                    ["at"] = e.RecordedAtUtc.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    ["at"] = e.RecordedAtUtc.ToUniversalTime().ToString(WireTime, System.Globalization.CultureInfo.InvariantCulture),
                     ["track"] = e.TrackLayoutName ?? string.Empty,
                     ["race"] = e.LinkedSessionId,
                     ["raceLabel"] = e.LinkedSessionId is { } sid && from.History.Get(sid) is { } s ? RaceLabel(s) : string.Empty,
@@ -239,7 +251,7 @@ internal static class DriverGarage
             ["enough"] = p.Enough,
             ["trend"] = p.Runs.Where(r => r.MedianLap > 0).TakeLast(TrendPoints).Select(r => new Dictionary<string, object?>
             {
-                ["at"] = r.StartedUtc.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["at"] = r.StartedUtc.ToUniversalTime().ToString(WireTime, System.Globalization.CultureInfo.InvariantCulture),
                 ["best"] = Math.Round(r.BestLap, 3),
                 ["median"] = Math.Round(r.MedianLap, 3),
             }).ToList(),

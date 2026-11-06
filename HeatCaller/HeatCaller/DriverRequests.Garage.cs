@@ -50,6 +50,18 @@ internal sealed partial class DriverRequestDesk
     /// </summary>
     public int FileWaitingWrites()
     {
+        // WHY (2026-11-05, Bug hunt 11): with profiles.json unreadable at
+        // launch (held by a backup or sync tool) the profile store is empty,
+        // so every badge looked like nobody's and every queued pack, car,
+        // photo and setup change was declined for good - after the relay had
+        // already dropped its copy. "Can't read who anybody is" is not "this
+        // badge is nobody's": they are left waiting, like a store this laptop
+        // doesn't have yet.
+        if (_profiles.LoadedUnreadable)
+        {
+            return 0;
+        }
+
         var answered = 0;
         var changed = false;
 
@@ -708,12 +720,20 @@ internal sealed partial class DriverRequestDesk
 
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         var skipped = 0;
+        var refused = new List<string>();
 
         foreach (var (key, raw) in request.Texts.Where(kv => DriverRequestStore.IsSheetValue(kv.Key)).Take(DriverAsk.SheetValuesMost))
         {
-            if (sheet.FindField(key[DriverAsk.SheetValuePrefix.Length..]) is not { } field || SheetValue(field, raw) is not { } value)
+            if (sheet.FindField(key[DriverAsk.SheetValuePrefix.Length..]) is not { } field)
             {
                 skipped++;
+                continue;
+            }
+
+            if (SheetValue(field, raw) is not { } value)
+            {
+                skipped++;
+                refused.Add(field.Id);
                 continue;
             }
 
@@ -752,6 +772,22 @@ internal sealed partial class DriverRequestDesk
         entry.CarModel = car.DisplayName;
         entry.ChassisTemplateId = sheet.Id;
         entry.Values = values;
+
+        // WHY (2026-11-05, Bug hunt 11): a fix replaces the entry's values
+        // wholesale, so a value the phone sent back that this laptop
+        // refused used to delete what the entry already held for that
+        // field. A refused value now leaves the entry's own one in place.
+        if (editing is not null)
+        {
+            foreach (var fieldId in refused)
+            {
+                if (!values.ContainsKey(fieldId) && editing.Values is { } old && old.TryGetValue(fieldId, out var kept) && !string.IsNullOrWhiteSpace(kept))
+                {
+                    values[fieldId] = kept;
+                }
+            }
+        }
+
         entry.Notes = notes;
         entry.LinkedSessionId = race?.Id;
         entry.TrackLayoutName = (race?.TrackLayoutName is { Length: > 0 } layout ? layout : TrackName?.Invoke() ?? string.Empty).Trim();
@@ -842,11 +878,50 @@ internal sealed partial class DriverRequestDesk
                 return text is "true" or "True" or "yes" or "Yes" or "1" ? "true" : string.Empty;
 
             case SetupFieldKind.Number:
-                return double.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out _) ? text : null;
+                // WHY (2026-11-05, Bug hunt 11): the desk's Number box is
+                // free text, and "23T" or "4mm" - a number with its unit
+                // typed after it - is stored as typed (SetupDiff expects
+                // it). The phone starts from that entry and sends it back
+                // unchanged, and a bare-number check dropped it, so the new
+                // entry lost the pinion. A value that starts with a number
+                // is kept as typed, as the desk keeps it.
+                return StartsWithNumber(text) ? text : null;
 
             default:
                 return text;
         }
+    }
+
+    /// <summary>Whether text begins with a number ("23", "-1.5", "4,5", ".8", "23T", "4 mm") - Bug hunt 11, see SheetValue.</summary>
+    private static bool StartsWithNumber(string text)
+    {
+        var at = 0;
+
+        if (at < text.Length && text[at] is '+' or '-')
+        {
+            at++;
+        }
+
+        var digits = 0;
+
+        while (at < text.Length && char.IsAsciiDigit(text[at]))
+        {
+            at++;
+            digits++;
+        }
+
+        if (at < text.Length && text[at] is '.' or ',')
+        {
+            at++;
+
+            while (at < text.Length && char.IsAsciiDigit(text[at]))
+            {
+                at++;
+                digits++;
+            }
+        }
+
+        return digits > 0;
     }
 
     /// <summary>

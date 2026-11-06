@@ -55,6 +55,18 @@ public sealed partial class RelayPublisher
     /// <summary>When the open flag may be tried again, after a failure.</summary>
     private long _nextListenOpenTick;
 
+    /// <summary>
+    /// The relay, club and token the backoff above was earned against.
+    /// WHY (2026-11-05, Bug hunt 11: RelayPublisher): the drivers'-nights
+    /// flag got this in #85 and listening, the same shape, did not. A club
+    /// id typed wrong got a 404, was fixed and saved - and the corrected
+    /// club was not asked for up to thirty seconds, so it drew no Listen
+    /// button, the stale 404 stayed on the page, and the announcer's lines
+    /// and room sound of that half-minute were never sent. Now a backoff
+    /// only holds back the target that failed.
+    /// </summary>
+    private RelayTarget? _listenOpenBackoffFor;
+
     /// <summary>What went wrong sending the announcer's lines, for the page to show. Null while it is working.</summary>
     private volatile string? _listenProblem;
 
@@ -413,12 +425,13 @@ public sealed partial class RelayPublisher
 
         // Backing off a flag that has already failed. Not applied to the
         // first attempt of a session, which is why the tick starts at zero.
-        if (Environment.TickCount64 < _nextListenOpenTick)
+        if (Environment.TickCount64 < _nextListenOpenTick && target == _listenOpenBackoffFor)
         {
             return false;
         }
 
         _nextListenOpenTick = Environment.TickCount64 + (long)ListenOpenRetryEvery.TotalMilliseconds;
+        _listenOpenBackoffFor = target;
 
         try
         {

@@ -45,6 +45,18 @@ internal static class RelaySponsors
         return System.Text.Json.JsonSerializer.Serialize(new { sponsors = shown });
     }
 
+    /// <summary>
+    /// Whether the store's sponsors may go to the relay at all.
+    ///
+    /// WHY (2026-11-05, Bug hunt 11: sponsors): a store loaded from a
+    /// sponsors.json that could not be read is empty only because the file
+    /// was held, not because the club has no sponsors. Publishing it replaced
+    /// the relay's good snapshot with {"sponsors":[]} for the whole session,
+    /// the same thing bug hunt 10 stopped for the badges page. Nothing is sent
+    /// instead, so the relay keeps the last list it had.
+    /// </summary>
+    internal static bool Publishable(SponsorStore store) => !store.LoadedUnreadable;
+
     /// <summary>The name as it is written on the page: the web name where one was given, else the name the announcer says.</summary>
     internal static string NameOnTheWeb(SponsorBooking sponsor) =>
         (string.IsNullOrWhiteSpace(sponsor.WebName) ? sponsor.Name ?? string.Empty : sponsor.WebName).Trim();

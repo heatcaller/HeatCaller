@@ -193,6 +193,7 @@ public sealed partial class RelayPublisher
             var collected = new List<string>();
             var filed = 0;
             var refused = 0;
+            var leftOnRelay = 0;
 
             using (var doc = JsonDocument.Parse(text))
             {
@@ -216,7 +217,24 @@ public sealed partial class RelayPublisher
                         // be refused again next poll for the same reason,
                         // and leaving it on the relay forever is how an
                         // inbox stops being emptied at all.
-                        if (notes.AddFromTheRoom(message.GetString(), from) is not null)
+                        var refusal = notes.AddFromTheRoom(message.GetString(), from, out var notOnDisk);
+
+                        // ONLY WHAT IS ON DISK IS CONFIRMED (2026-11-05,
+                        // Bug hunt 11: RelayPublisher). Filed into memory
+                        // with club-notes.json unreadable or unwritable,
+                        // confirming deleted the relay's copy of a note a
+                        // restart then lost - the crash this class's header
+                        // says must never cost a dedication. Left on the
+                        // relay it comes again, and is confirmed once a
+                        // save works (the in-memory copy refuses the
+                        // duplicate). Driver requests do the same.
+                        if (notOnDisk)
+                        {
+                            leftOnRelay++;
+                            continue;
+                        }
+
+                        if (refusal is not null)
                         {
                             refused++;
                         }
@@ -230,9 +248,17 @@ public sealed partial class RelayPublisher
                 }
             }
 
+            var heldBack = leftOnRelay == 0
+                ? null
+                : notes.LoadedUnreadable
+                    ? "club-notes.json couldn't be read at start-up, so shout-outs are being left on the relay until "
+                      + "HeatCaller is restarted and can read it. They are still on Race Control to approve."
+                    : "club-notes.json couldn't be written, so shout-outs are being left on the relay until it can be. "
+                      + "They are still on Race Control to approve.";
+
             if (collected.Count == 0)
             {
-                NotesTrouble(null);
+                NotesTrouble(heldBack);
                 return;
             }
 
@@ -244,7 +270,7 @@ public sealed partial class RelayPublisher
                 return;
             }
 
-            NotesTrouble(null);
+            NotesTrouble(heldBack);
 
             // Through Log, which is this class's one way of saying
             // anything - it has no StatusMessage of its own, and the

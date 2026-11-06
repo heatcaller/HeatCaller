@@ -377,7 +377,7 @@ public sealed class SupportBundleTests : IDisposable
             RelayClub = "acme",
         };
 
-        var text = SupportBundle.DescribeSettings(settings);
+        var text = SupportBundle.DescribeSettings(settings, elevenLabsKeySet: true);
 
         Assert.DoesNotContain("SECRET", text, StringComparison.Ordinal);
         Assert.DoesNotContain("918273", text, StringComparison.Ordinal);

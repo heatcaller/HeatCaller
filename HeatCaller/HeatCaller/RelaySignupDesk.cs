@@ -503,9 +503,12 @@ internal sealed class RelaySignupDesk
             throw new InvalidOperationException($"{receipt.Name}'s sign-up has changed since, so it was left as it is.");
         }
 
-        RollBack(receipt);
-
+        // Reopened (and saved) first: Reopen throws when signups.json can't
+        // be written (Bug hunt 11, 2026-11-05), and the approval's
+        // check-in, rental and profile must then stay as the invite says.
         Reopen(invite, newCode: true);
+
+        RollBack(receipt);
 
         _log($"[signup] Undid approving an online sign-up. Their phone was already told they're in"
             + " - that can't be taken back, so let them know in person. " + NewCodeNote);
@@ -624,6 +627,9 @@ internal sealed class RelaySignupDesk
     /// </summary>
     private void Reopen(SignupInvite invite, bool newCode)
     {
+        var was = (invite.Code, invite.Club, invite.Salt, invite.EmailedUtc, invite.State, invite.AnsweredUtc,
+            invite.Transponder, invite.AnswerMessage, invite.AnswerCheckedIn);
+
         if (newCode)
         {
             Store.NewCode(invite, _settings);
@@ -634,12 +640,30 @@ internal sealed class RelaySignupDesk
         invite.Transponder = string.Empty;
         invite.AnswerMessage = string.Empty;
         invite.AnswerCheckedIn = false;
-        Store.Save();
+
+        // WHY (2026-11-05, Bug hunt 11): the save's result used to be
+        // ignored, as Approve's was before bug hunt 10. With signups.json
+        // held by a sync or backup tool the new code lived only in memory,
+        // was published and could be emailed - and after a restart the
+        // invite was back under its old code, so the code sent never
+        // worked. Now everything is put back and the undo reports it failed.
+        if (!Store.Save())
+        {
+            (invite.Code, invite.Club, invite.Salt, invite.EmailedUtc, invite.State, invite.AnsweredUtc,
+                invite.Transponder, invite.AnswerMessage, invite.AnswerCheckedIn) = was;
+
+            throw new InvalidOperationException("the invite couldn't be saved, so it was left as it was. "
+                + "Close anything that might have signups.json open (a backup or sync tool is the usual cause) and try again.");
+        }
+
         Changed?.Invoke();
     }
 
-    /// <summary>Turns a sign-up down, with a line for their phone.</summary>
-    public void Reject(RelaySignupRequest request, string message)
+    /// <summary>
+    /// Turns a sign-up down, with a line for their phone. False, with
+    /// nothing changed or sent, when the invite's new state couldn't be saved.
+    /// </summary>
+    public bool Reject(RelaySignupRequest request, string message)
     {
         var text = string.IsNullOrWhiteSpace(message)
             ? "The timing desk couldn't take this sign-up."
@@ -647,10 +671,29 @@ internal sealed class RelaySignupDesk
 
         if (Store.ByHash(request.Hash, Club) is { State: SignupInviteState.Open } invite)
         {
+            var wasAnsweredUtc = invite.AnsweredUtc;
+            var wasMessage = invite.AnswerMessage;
+
             invite.State = SignupInviteState.Rejected;
             invite.AnsweredUtc = DateTime.UtcNow;
             invite.AnswerMessage = text;
-            Store.Save();
+
+            // WHY (2026-11-05, Bug hunt 11): as Approve (bug hunt 10). The
+            // save's result used to be ignored, and the "no" went to the
+            // relay anyway - which then refuses the code for good - while
+            // the next launch read the invite back as Open. Now a failed
+            // save puts the invite back, the sign-up stays waiting, and
+            // nothing is sent.
+            if (!Store.Save())
+            {
+                invite.State = SignupInviteState.Open;
+                invite.AnsweredUtc = wasAnsweredUtc;
+                invite.AnswerMessage = wasMessage;
+                _log("[signup] Couldn't save turning down an online sign-up, so it is still waiting and nothing was sent. "
+                    + "Close anything that might have signups.json open (a backup or sync tool is the usual cause) and try again.");
+                Changed?.Invoke();
+                return false;
+            }
         }
 
         Answer(request.Hash, approved: false, text, checkedIn: false, driver: null);
@@ -661,6 +704,7 @@ internal sealed class RelaySignupDesk
         // undone has none, so its name went out in plain text.
         _log("[signup] Turned down an online sign-up.");
         Changed?.Invoke();
+        return true;
     }
 
     // ------------------------------------------------------------ invites
@@ -761,17 +805,35 @@ internal sealed class RelaySignupDesk
         }
     }
 
-    /// <summary>Cancels an invite that has not been used. A sign-up already made with it is turned down.</summary>
-    public void Cancel(SignupInvite invite)
+    /// <summary>
+    /// Cancels an invite that has not been used. A sign-up already made with
+    /// it is turned down. False, with nothing changed or sent, when it isn't
+    /// open or the cancel couldn't be saved.
+    /// </summary>
+    public bool Cancel(SignupInvite invite)
     {
         if (invite.State != SignupInviteState.Open)
         {
-            return;
+            return false;
         }
+
+        var wasAnsweredUtc = invite.AnsweredUtc;
 
         invite.State = SignupInviteState.Cancelled;
         invite.AnsweredUtc = DateTime.UtcNow;
-        Store.Save();
+
+        // WHY (2026-11-05, Bug hunt 11): as Reject. A cancel that couldn't be
+        // saved came back Open after a restart and its code worked again,
+        // while a sign-up made with it had already been told it was canceled.
+        if (!Store.Save())
+        {
+            invite.State = SignupInviteState.Open;
+            invite.AnsweredUtc = wasAnsweredUtc;
+            _log("[signup] Couldn't save canceling an invite, so it is still open and nothing was sent. "
+                + "Close anything that might have signups.json open (a backup or sync tool is the usual cause) and try again.");
+            Changed?.Invoke();
+            return false;
+        }
 
         var waiting = _waiting.FirstOrDefault(w => string.Equals(w.Hash, invite.Hash, StringComparison.OrdinalIgnoreCase));
 
@@ -782,6 +844,7 @@ internal sealed class RelaySignupDesk
         }
 
         Changed?.Invoke();
+        return true;
     }
 
     private static string NameOf(DriverProfile profile) =>

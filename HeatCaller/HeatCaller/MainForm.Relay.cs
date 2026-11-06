@@ -1409,8 +1409,16 @@ public partial class MainForm
 
         // The club's sponsors, for the foot of Live (5 Nov 2026) - see
         // RelaySponsors. Logos are encoded once and cached.
-        SendToRelayIfChanged(RelayChannel.Sponsors, "the sponsors", () => RelaySponsors.Document(
-            _sponsors.Sponsors, file => RelaySponsors.Picture(_sponsors, file, _relaySponsorImages)));
+        //
+        // WHY (2026-11-05, Bug hunt 11: sponsors): not from a store that was
+        // never read - a sponsors.json held by a backup tool at launch loaded
+        // empty and published {"sponsors":[]}, wiping every sponsor card off
+        // the Live page for the night. See RelaySponsors.Publishable.
+        if (RelaySponsors.Publishable(_sponsors))
+        {
+            SendToRelayIfChanged(RelayChannel.Sponsors, "the sponsors", () => RelaySponsors.Document(
+                _sponsors.Sponsors, file => RelaySponsors.Picture(_sponsors, file, _relaySponsorImages)));
+        }
 
         SendToRelayIfChanged(RelayChannel.Tracks, "the tracks", () => RelayDocuments.Tracks(
             _trackLayouts, _sessionHistory.SavedView(), _profiles, _pbResets, _raceEvents.Current.TrackLayoutName, abbreviate, _relayTrackImages));

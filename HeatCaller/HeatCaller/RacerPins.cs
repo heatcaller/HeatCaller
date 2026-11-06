@@ -77,6 +77,18 @@ internal static class RacerPins
     /// </summary>
     public static bool EnsurePins(AppSettings settings, ProfileStore profiles)
     {
+        // WHY (2026-11-05, Bug hunt 11: an unreadable profile store is not an
+        // empty club): profiles.json held by a backup or sync tool at launch
+        // loads as an empty store marked LoadedUnreadable. Every PIN then
+        // looked like a deleted driver's and was dropped, and settings.json -
+        // readable and writable - was saved without them; the next launch
+        // gave every racer a new PIN and every one already handed out
+        // stopped working. Nothing changes until the drivers can be read.
+        if (profiles.LoadedUnreadable)
+        {
+            return false;
+        }
+
         var changed = false;
         var current = Racers(profiles);
         var pins = settings.RacerPins;
@@ -180,7 +192,9 @@ internal static class RacerPins
     /// </param>
     public static bool RotateIfDue(AppSettings settings, ProfileStore profiles, DateTime nowUtc, DateTime? lastRaceActivityUtc = null)
     {
-        if (!settings.RelayRacerPinsEnabled || settings.RacerPinRotation == PinRotation.Never)
+        // Bug hunt 11 (2026-11-05): never over an unreadable profile store -
+        // a "new set" for nobody would cancel every racer's PIN. See EnsurePins.
+        if (!settings.RelayRacerPinsEnabled || settings.RacerPinRotation == PinRotation.Never || profiles.LoadedUnreadable)
         {
             return false;
         }
@@ -279,8 +293,19 @@ internal static class RacerPins
     }
 
     /// <summary>A brand-new set now, whatever the rotation says - the "New PINs now" button. Returns how many were made.</summary>
-    public static int RegenerateAll(AppSettings settings, ProfileStore profiles) =>
-        IssueNewSet(settings, profiles, DateTime.UtcNow);
+    public static int RegenerateAll(AppSettings settings, ProfileStore profiles)
+    {
+        // Bug hunt 11 (2026-11-05): refused over an unreadable profile store,
+        // where it would make a set for nobody and cancel every PIN. The
+        // "New PINs" button shows this as "Couldn't make new PINs: ...".
+        if (profiles.LoadedUnreadable)
+        {
+            throw new InvalidOperationException("the drivers file (profiles.json) couldn't be read when HeatCaller started. "
+                + "Close anything that might have it open (a backup or sync tool is the usual cause) and restart HeatCaller.");
+        }
+
+        return IssueNewSet(settings, profiles, DateTime.UtcNow);
+    }
 
     private static int IssueNewSet(AppSettings settings, ProfileStore profiles, DateTime nowUtc)
     {
