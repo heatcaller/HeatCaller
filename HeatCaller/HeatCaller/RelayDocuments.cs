@@ -700,6 +700,26 @@ internal static class RelayDocuments
     /// </summary>
     internal static readonly (string Heading, string Words)[] StandardGuide =
     {
+        ("Welcome", "Everybody here was new once. If you are not sure about anything, ask anyone in the pits or at the timing desk."),
+        ("Check in first", "Check in before you race so the timing desk can put you in the heats. Fit your transponder, switch it on, and make sure its number matches the one the desk has."),
+        ("Safety in the pits", "Cars run on the track only - never in the pits, the car park or the walkways. Switch your radio on before your car, and your car off before your radio."),
+        ("Batteries", "Charge LiPo packs in a LiPo bag or a safe box, and never leave them charging on their own. Stop using any pack that is puffed up, dented or damaged."),
+        ("On the driver stand", "Stay on the stand for the whole race. If your car breaks down, say so and park it off the racing line."),
+        ("Race clean", "Give other cars room and do not block. If you knock someone out of a place, wait and let them back past. When the leaders come up to lap you, hold your line and let them through."),
+        ("The start", "Wait for the start signal. Going early is a jump start, and it can add time to your race."),
+        ("Marshal after your race", "After you race, you marshal the next one: stand at your post, get to a flipped or stuck car quickly and put it back where it left the track. Watch for cars coming."),
+        ("Race control", "Race control has the last word on the night. If you think something was wrong, ask at the desk after the race, not during it."),
+        ("Leave it tidy", "Keep your pit space tidy, take your rubbish home, and leave the track as you found it."),
+    };
+
+    /// <summary>
+    /// The standard guide before 6 Nov 2026, when it became club rules. A club
+    /// that sent it unchanged has it saved word for word; it is still the
+    /// standard guide, so it gets the new words rather than keeping the old
+    /// ones as a guide of its own.
+    /// </summary>
+    internal static readonly (string Heading, string Words)[] StandardGuideBefore6Nov2026 =
+    {
         ("This page", "When a time like \"about 7 min (19:42)\" shows, that is when your race should start. Turn on alerts and keep the page open: your phone beeps twice and buzzes when your race is next, and again when it is staged."),
         ("Heats and mains", "You race a few short heats first. How you do in them decides which main (final) you race in later, with drivers of a similar pace."),
         ("Your grid slot", "Every race gives you a grid slot - where your car starts. Slot 1 is the front."),
@@ -773,7 +793,11 @@ internal static class RelayDocuments
 
     /// <summary>Whether the box holds the standard guide, give or take spacing - which is kept as no guide of the club's own.</summary>
     internal static bool IsStandardGuide(string? text) =>
-        GuideParts(text).SequenceEqual(StandardGuide);
+        IsStandard(GuideParts(text));
+
+    /// <summary>The standard guide's parts, today's or the one before 6 Nov 2026.</summary>
+    private static bool IsStandard(List<(string Heading, string Words)> parts) =>
+        parts.SequenceEqual(StandardGuide) || parts.SequenceEqual(StandardGuideBefore6Nov2026);
 
     /// <summary>
     /// The site document's "guide" part, or null for the standard guide - an
@@ -784,7 +808,7 @@ internal static class RelayDocuments
     {
         var parts = GuideParts(text);
 
-        if (parts.Count == 0 || parts.SequenceEqual(StandardGuide))
+        if (parts.Count == 0 || IsStandard(parts))
         {
             return null;
         }

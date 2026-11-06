@@ -1330,7 +1330,8 @@ public sealed class RelaySettingsControl : UserControl
     /// <summary>The guide in the box: the club's own, or the standard one for a club that has none.</summary>
     private void ShowGuide(string saved)
     {
-        _txtGuide.Text = string.IsNullOrWhiteSpace(saved) ? RelayDocuments.StandardGuideText() : saved;
+        // The old standard words, saved unchanged, show as today's (6 Nov 2026).
+        _txtGuide.Text = string.IsNullOrWhiteSpace(saved) || RelayDocuments.IsStandardGuide(saved) ? RelayDocuments.StandardGuideText() : saved;
         RefreshGuideState();
     }
 

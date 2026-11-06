@@ -185,15 +185,16 @@ Under the card:
 
 When a driver opens their card from their QR check-in on their first night at the club (HeatCaller has no result for them before tonight, demo races aside), a folded section, **Your first night - what happens**, appears under the card. Tapping it opens a short guide written for drivers, not for the desk:
 
-- **This page**: when a time like "about 7 min (19:42)" shows, that's when their race should start; turning on alerts makes the phone beep twice and buzz when their race is next, and again when it's staged.
-- **Heats and mains**: a few short heats first, which decide which main (final) they race in later, with drivers of a similar pace.
-- **Your grid slot**: where the car starts. Slot 1 is the front.
-- **Staged**: go to the driver stand with the radio, put the car on the track and wait for the start.
-- **The start**: a countdown runs before every start; going early is a jump start, and it can add time.
-- **Your transponder**: make sure it's switched on and mounted before every race, and drive past the timing line once to check it's seen.
-- **Warnings**: race control can warn for blocking or rough driving, and more warnings add time.
-- **Marshal after your race**: stand at your post beside the track and put back any car that flips or gets stuck. Everybody takes a turn.
-- **Questions**: "Ask at the timing desk. Everybody was new once."
+- **Welcome**: everybody was new once; ask anyone in the pits or at the timing desk.
+- **Check in first**: so the desk can put them in the heats, with their transponder fitted, switched on and matching the number the desk has.
+- **Safety in the pits**: cars run on the track only. Radio on before the car, and the car off before the radio.
+- **Batteries**: charge LiPo packs in a LiPo bag or safe box, never leave them charging on their own, and stop using a puffed, dented or damaged pack.
+- **On the driver stand**: stay on the stand for the whole race, and park a broken-down car off the racing line.
+- **Race clean**: give room and don't block, let back past anyone knocked out of a place, and hold your line while the leaders lap you.
+- **The start**: wait for the start signal; going early is a jump start, and it can add time.
+- **Marshal after your race**: get to a flipped or stuck car quickly and put it back where it left the track, watching for cars coming.
+- **Race control**: has the last word on the night; ask at the desk after the race, not during it.
+- **Leave it tidy**: keep the pit space tidy, take rubbish home, and leave the track as they found it.
 
 Under the guide, "Timing and race calls by HeatCaller." with **What's that?**, which opens a short card about HeatCaller.
 

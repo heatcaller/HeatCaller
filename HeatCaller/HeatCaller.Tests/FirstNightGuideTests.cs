@@ -52,6 +52,20 @@ public sealed class FirstNightGuideTests
     }
 
     [Fact]
+    public void The_standard_guide_from_before_the_club_rules_is_still_the_standard_and_never_sent()
+    {
+        // 6 Nov 2026: the standard guide became club rules. A club that sent
+        // the old standard words unchanged has them saved; they get the new ones.
+        var old = string.Join("\n\n", RelayDocuments.StandardGuideBefore6Nov2026.Select(p => p.Heading + ": " + p.Words));
+
+        Assert.NotEqual(RelayDocuments.StandardGuide, RelayDocuments.StandardGuideBefore6Nov2026);
+        Assert.Equal("Welcome", RelayDocuments.StandardGuide[0].Heading);
+        Assert.True(RelayDocuments.IsStandardGuide(old));
+        Assert.Null(RelayDocuments.FirstNightGuide(old));
+        Assert.NotNull(RelayDocuments.FirstNightGuide(old + "\n\nParking: round the back."));
+    }
+
+    [Fact]
     public void A_clubs_own_guide_goes_in_the_site_document_and_a_new_settings_file_sends_none()
     {
         var settings = new AppSettings();
