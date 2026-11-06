@@ -233,14 +233,22 @@ public sealed partial class AnnouncementService
     /// <summary>The standing for a car, or null - for HasPassed off the timing thread, where _standings may be mid-write.</summary>
     private RaceStanding? StandingOrNull(string transponder)
     {
-        try
+        // 6 Nov 2026, Bug hunt 11b: read from the crossing book's board, not
+        // the live _standings. This runs when a line is queued, off the timing
+        // thread too, and a TryGetValue that caught _standings growing could
+        // throw IndexOutOfRangeException past the old InvalidOperationException
+        // catch. The board is copied straight after every _standings write
+        // (HandleStandingUpdated), before anything is queued, so it holds the
+        // same standings, and it is never changed once handed out.
+        foreach (var standing in _lapCrossings.Board)
         {
-            return _standings.TryGetValue(transponder, out var standing) ? standing : null;
+            if (string.Equals(standing.Transponder, transponder, StringComparison.Ordinal))
+            {
+                return standing;
+            }
         }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
+
+        return null;
     }
 
     /// <summary>

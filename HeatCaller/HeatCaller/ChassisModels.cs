@@ -313,6 +313,12 @@ public sealed class ChassisTemplateStore
             if (File.Exists(FilePath))
             {
                 var loaded = JsonSerializer.Deserialize<List<ChassisTemplate>>(SafeFile.ReadAllTextWithRetry(FilePath));
+
+                if (loaded is not null)
+                {
+                    Repair(loaded);
+                }
+
                 if (loaded is { Count: > 0 })
                 {
                     return new ChassisTemplateStore(loaded);
@@ -342,6 +348,66 @@ public sealed class ChassisTemplateStore
         var store = new ChassisTemplateStore(new List<ChassisTemplate> { ChassisTemplate.CreateKyoshoDefault() });
         store.Save();
         return store;
+    }
+
+    /// <summary>
+    /// 6 Nov 2026, Bug hunt 11b: an explicit JSON null overrides the
+    /// initialisers above, so a restored or hand-edited file with
+    /// "Sections": null, "Fields": null, "Options": null or a null element
+    /// in any of those lists loaded "fine" and then threw a
+    /// NullReferenceException from AllFields, Get, SetupField.Clone and the
+    /// setup entry form - opening a car's setups, the Setup Sheet, the phone
+    /// garage (DriverGarage.Build stopped silently) and the coach and
+    /// commentary setup diffs. Repaired the way SetupLogStore and CarStore
+    /// are (Bug Hunt 8, A27-2): a null element is nothing to keep and is
+    /// dropped; a null list or string is put back to what a new one starts
+    /// with. A missing id is given a fresh one, not dropped - nothing can
+    /// point at a null id (setup entries key their values by field id, and
+    /// a JSON key is never null), so a new one breaks no reference, where
+    /// dropping the sheet or field would have the next save delete it. A
+    /// list left with no sheet at all falls through to the seeded default,
+    /// exactly as an empty file does.
+    /// </summary>
+    private static void Repair(List<ChassisTemplate> templates)
+    {
+        templates.RemoveAll(t => t is null);
+
+        foreach (var template in templates)
+        {
+            if (string.IsNullOrWhiteSpace(template.Id))
+            {
+                template.Id = Guid.NewGuid().ToString("N");
+            }
+
+            template.Name ??= string.Empty;
+            template.Sections ??= new List<SetupSection>();
+            template.Sections.RemoveAll(s => s is null);
+
+            foreach (var section in template.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section.Id))
+                {
+                    section.Id = Guid.NewGuid().ToString("N")[..8];
+                }
+
+                section.Name ??= string.Empty;
+                section.Fields ??= new List<SetupField>();
+                section.Fields.RemoveAll(f => f is null);
+
+                foreach (var field in section.Fields)
+                {
+                    if (string.IsNullOrWhiteSpace(field.Id))
+                    {
+                        field.Id = Guid.NewGuid().ToString("N")[..8];
+                    }
+
+                    field.Label ??= string.Empty;
+                    field.Unit ??= string.Empty;
+                    field.Options ??= new List<string>();
+                    field.Options.RemoveAll(o => o is null);
+                }
+            }
+        }
     }
 
     public void Save()

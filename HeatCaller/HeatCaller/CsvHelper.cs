@@ -160,7 +160,8 @@ public static class CsvHelper
     /// of the note was imported as a junk driver. A quote only opens a
     /// quoted field at the start of one (as CSV has it), and a quote never
     /// closed by the end of the file joins nothing - those lines are read
-    /// one by one, as they always were.
+    /// one by one, as they always were. Nor does one "closed" by a quote
+    /// that is not the end of a field (see EndsInQuotes).
     /// </summary>
     public static List<(string Text, int LineNumber)> NonBlankLines(string text)
     {
@@ -181,17 +182,19 @@ public static class CsvHelper
             // How many lines this record spans: one, unless it ends inside
             // a quoted field and a later line closes it.
             var span = 1;
-            var inQuotes = EndsInQuotes(lines[index], false);
+            var inQuotes = EndsInQuotes(lines[index], false, out _);
+            var strayClose = false;
 
-            while (inQuotes && index + span < lines.Count)
+            while (inQuotes && !strayClose && index + span < lines.Count)
             {
-                inQuotes = EndsInQuotes(lines[index + span], true);
+                inQuotes = EndsInQuotes(lines[index + span], true, out strayClose);
                 span++;
             }
 
-            if (inQuotes)
+            if (inQuotes || strayClose)
             {
-                // Never closed: not a field over several lines after all.
+                // Never closed, or "closed" by a quote in the middle of a
+                // later row's field: not a field over several lines after all.
                 span = 1;
             }
 
@@ -216,10 +219,15 @@ public static class CsvHelper
     /// field only at its start: the start of the line, or after a comma,
     /// semicolon or tab (any of the separators an import accepts), spaces
     /// aside. "" inside quotes is a quote, not the end.
+    /// <paramref name="strayClose"/> is set when the field the line starts
+    /// inside is closed by a quote that is not followed (spaces aside) by a
+    /// separator or the end of the line.
     /// </summary>
-    private static bool EndsInQuotes(string line, bool inQuotes)
+    private static bool EndsInQuotes(string line, bool inQuotes, out bool strayClose)
     {
         var atFieldStart = !inQuotes;
+        var openedEarlier = inQuotes;
+        strayClose = false;
 
         for (var i = 0; i < line.Length; i++)
         {
@@ -236,6 +244,32 @@ public static class CsvHelper
                     else
                     {
                         inQuotes = false;
+
+                        // 6 Nov 2026, Bug hunt 11b: a stray opening quote
+                        // (8467BE,Sam,"Stock) used to stay open until ANY
+                        // later quote - "Ann" two rows down - and every row
+                        // in between became part of Sam's class: Bob and Ann
+                        // vanished with no row problem reported. A field that
+                        // really runs over several lines ends with its quote
+                        // at the end of the field; a quote followed by more
+                        // text opens some later row's own quoted field, so
+                        // the stray quote's line is read on its own instead.
+                        if (openedEarlier)
+                        {
+                            openedEarlier = false;
+                            var next = i + 1;
+
+                            while (next < line.Length && line[next] == ' ')
+                            {
+                                next++;
+                            }
+
+                            if (next < line.Length && line[next] is not (',' or ';' or '\t'))
+                            {
+                                strayClose = true;
+                                return false;
+                            }
+                        }
                     }
                 }
             }

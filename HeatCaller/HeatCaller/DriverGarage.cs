@@ -335,7 +335,13 @@ internal static class DriverGarage
 
             try
             {
-                using var image = _photos.Thumb(fileName, ThumbSize);
+                // 6 Nov 2026, Bug hunt 11b: not disposed - PhotoStore.Thumb's
+                // image belongs to its cache and is handed back on every later
+                // ask. Disposing it here meant the next ask (after the memo
+                // below clears, or from any other caller at this size) got a
+                // dead bitmap, Save threw, and the car photo vanished from the
+                // relay garage page for the rest of the session.
+                var image = _photos.Thumb(fileName, ThumbSize);
 
                 if (image is not null)
                 {

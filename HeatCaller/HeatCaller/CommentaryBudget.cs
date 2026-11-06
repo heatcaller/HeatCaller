@@ -500,8 +500,12 @@ public sealed class CommentaryBudget
     // no relay lines, so they are kept out of the night's headroom: a
     // top-up landing mid-night must find the night's share of it still
     // there, not already eaten by the local lines written before it came.
-    // In memory only - a restart charges them again, which is the old,
-    // cautious behaviour, never an overspend.
+    // 6 Nov 2026, Bug hunt 11b: saved with the night (SavedNight.Free).
+    // It used to be in memory only, on the idea that charging them again
+    // after a restart was merely cautious - but MonthlyUsage seeds where
+    // the month stood before tonight from the relay's count minus what
+    // tonight has charged, and the relay never counted these lines, so the
+    // seed came out low and the rest of the night was mis-paced.
     private double _freeTonight;
 
     private readonly HashSet<SegmentKind> _off = new();
@@ -1596,7 +1600,8 @@ public sealed class CommentaryBudget
         double Spent,
         double HighWater,
         Dictionary<string, int>? PerMeeting,
-        Dictionary<string, int>? PerClass);
+        Dictionary<string, int>? PerClass,
+        double Free = 0);
 
     /// <summary>Tonight's spend, for AppSettings to hold across a restart. See Restore.</summary>
     public string Save()
@@ -1636,7 +1641,11 @@ public sealed class CommentaryBudget
                 _spentTonight,
                 _entitledHighWater,
                 perMeeting.ToDictionary(p => p.Key.ToString(), p => p.Value),
-                new Dictionary<string, int>(perClass)));
+                new Dictionary<string, int>(perClass),
+                // 6 Nov 2026, Bug hunt 11b: the free local lines go with the
+                // spend they are part of - see _freeTonight. Settled only,
+                // like Spent: a free hold still open is not in either.
+                _freeTonight));
         }
     }
 
@@ -1705,6 +1714,12 @@ public sealed class CommentaryBudget
 
         _spentTonight = Math.Max(0, night.Spent);
         _entitledHighWater = Math.Max(0, night.HighWater);
+
+        // 6 Nov 2026, Bug hunt 11b: the free local lines come back too, or
+        // a restart charges them as relay lines - see _freeTonight. A file
+        // saved before this has no Free and reads as 0, the old behaviour.
+        // Never more than the spend it is part of.
+        _freeTonight = Math.Clamp(night.Free, 0, _spentTonight);
 
         // The relay's next count is taken against the spend just picked
         // back up, not against the empty night that was there a moment ago.

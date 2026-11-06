@@ -722,7 +722,9 @@ public static class CommentaryFacts
             var cls = Clean(round.ClassName);
             var who = cls.Length > 0 ? $"{label} ({cls})" : label;
 
-            parts.Add(round.Entries > 0 ? $"{who}, {round.Entries} cars" : who);
+            // 6 Nov 2026, Bug hunt 11b: a one-car round read "1 cars". The
+            // count goes through Plural like every other fact's car count.
+            parts.Add(round.Entries > 0 ? $"{who}, {Plural.Of(round.Entries, "car")}" : who);
         }
 
         if (parts.Count == 0)
@@ -730,8 +732,19 @@ public static class CommentaryFacts
             return null;
         }
 
-        var when = inAbout is { TotalMinutes: >= 1 and < 120 }
-            ? $" The next one is about {Invariant(inAbout.Value.TotalMinutes, "0")} minutes away."
+        // 6 Nov 2026, Bug hunt 11b: the gate used to look at the RAW minutes
+        // (1 to under 120) and the sentence then rounded them, so 1m10s read
+        // "about 1 minutes away" and 119.6 rounded past the cap to "about
+        // 120 minutes". Now the number that is said is the number that is
+        // checked, and the floor is two minutes - the same rule as
+        // CommentaryContinuity.Ahead (LeastMinutes / MostMinutes), whose
+        // doc explains why "1 minute" is dropped rather than special-cased.
+        var minutes = inAbout is { } until
+            ? Math.Round(until.TotalMinutes, MidpointRounding.AwayFromZero)
+            : 0;
+
+        var when = minutes is >= 2 and < 120
+            ? $" The next one is about {Invariant(minutes, "0")} minutes away."
             : string.Empty;
 
         return new FactBlock(
