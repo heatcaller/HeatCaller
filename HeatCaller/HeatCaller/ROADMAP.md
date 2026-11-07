@@ -5308,22 +5308,20 @@ fits.
 
 ## Known open issues
 
-**All but two closed on 22 Oct 2026** - see "The known-issues round
-(22 Oct)" and "The roadmap round (22 Oct)" in the 18-22 Oct section. What
-is left:
+**All but one closed** - on 22 Oct 2026 (see "The known-issues round
+(22 Oct)" and "The roadmap round (22 Oct)" in the 18-22 Oct section) and on
+7 Nov 2026, when `RecordWatch` got a segment of its own (**Record in
+danger**, `SegmentKind.RecordWatch`, still never driving
+`NotifyRecordPace`/`NotifyTrackRecord`), the relay board started marking
+hand-counted laps (`handCounted`), and the three commentary silences that
+needed a club-typed field got one each: `DriverProfile.Visitor`,
+`Season.AnnouncerNote`, and `CommentaryReaders.ChampionshipAfter` filling
+`StillAlive` from `Season.PlannedRounds`. What is left:
 
 - **The releases repo doesn't exist yet**, so the installer has nowhere
   public to download from and the update feed points at nothing.
   `getting-started\install.md` was rewritten around the installer the same
   day and says to get it from the HeatCaller team for now.
-- **`RecordWatch` only writes to the console.** It is fed every lap and
-  reset each race since 22 Oct, but by design it must not drive
-  `NotifyRecordPace`/`NotifyTrackRecord`; it needs a segment of its own
-  before anything is spoken.
-- **The club's website doesn't mark hand-counted laps.** The laptop's
-  pages, printouts and exports do ("12*" with its legend); the relay copy
-  of the board is sent unmarked, since the relay draws its own pages and
-  has no legend. Needs a relay change.
 
 Decided and closed rather than fixed: the relay's three voice routes that
 name no club stay a deliberate exception (the security page states it);

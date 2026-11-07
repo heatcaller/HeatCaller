@@ -452,6 +452,15 @@ public sealed class DriverProfile
     public bool ExcludeFromRecords { get; set; }
 
     /// <summary>
+    /// A driver visiting from another club (7 Nov 2026, known issues) - set
+    /// by the club, never inferred. The cold open's "seven of them visiting"
+    /// counts these and nothing else: HomeTrack is free text and cannot be
+    /// compared with a venue, and ExcludeFromRecords covers staff cars too.
+    /// False on every profile saved before it existed, which says nothing.
+    /// </summary>
+    public bool Visitor { get; set; }
+
+    /// <summary>
     /// File name of their photo inside the DriverPhotos folder, or empty
     /// for none. A name, not a path: the app-data folder can move between
     /// machines with a backup, and the profiles file should not care

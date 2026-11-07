@@ -958,6 +958,9 @@ public sealed class CommentaryDirector
         Battles.Reset();
         Pace.Reset();
         Horizons.Reset();
+
+        // Last race's record threat is not this race's.
+        _threat = null;
     }
 
     /// <summary>
@@ -1124,6 +1127,29 @@ public sealed class CommentaryDirector
 
     private PaceNote? _pending;
     private DateTime _pendingAt;
+
+    /// <summary>
+    /// A record coming, seen by the race's RecordWatch (7 Nov 2026, known
+    /// issues) - held for the RecordWatch segment, one slot, as the pace
+    /// note is. The watch only ever escalates, so a newer threat is always
+    /// the bigger one and simply replaces what is waiting.
+    /// </summary>
+    public void RecordThreatened(RecordThreat threat)
+    {
+        if (!_racing || threat.Level == RecordThreatLevel.None)
+        {
+            return;
+        }
+
+        _threat = threat;
+        _threatAt = _clock();
+    }
+
+    private RecordThreat? _threat;
+    private DateTime _threatAt;
+
+    /// <summary>The threat the pass is writing, so Spent clears that one - see _paceCalling.</summary>
+    private RecordThreat? _threatCalling;
 
     /// <summary>
     /// The note the pass is writing, so Spent clears that one and not a
@@ -1932,7 +1958,10 @@ public sealed class CommentaryDirector
             // its own deadline and be thrown away. A record falling or a
             // fight being called is the thing happening; the horizon is the
             // thing about to, and it waits for them.
-            .ThenBy(spec => spec.Kind == SegmentKind.Horizon)
+            //
+            // AND SO DOES THE RECORD WATCH (7 Nov 2026), for the same reason:
+            // a record coming waits for a record gone.
+            .ThenBy(spec => spec.Kind == SegmentKind.Horizon || spec.Kind == SegmentKind.RecordWatch)
             .ThenBy(spec => spec.NeedsBy)
             .Select(spec => spec.Kind);
 
@@ -1951,7 +1980,7 @@ public sealed class CommentaryDirector
 
     /// <summary>True for the segments that only make sense while cars are on track.</summary>
     internal static bool InRace(SegmentKind kind) =>
-        kind is SegmentKind.BattleWatch or SegmentKind.PaceNote or SegmentKind.Horizon;
+        kind is SegmentKind.BattleWatch or SegmentKind.PaceNote or SegmentKind.Horizon or SegmentKind.RecordWatch;
 
     private async Task<SpokenSegment?> TryAsync(SegmentKind kind, SynchronizationContext? ui, CancellationToken ct)
     {
@@ -2178,6 +2207,7 @@ public sealed class CommentaryDirector
             var calling = _calling;
             var paceCalling = _paceCalling;
             var horizonCalling = _horizonCalling;
+            var threatCalling = _threatCalling;
             _marks.TryGetValue(kind, out var mark);
 
             // A battle line carries the two cars it is about, so the
@@ -2261,7 +2291,7 @@ public sealed class CommentaryDirector
                 // segment written and then dropped costs the night neither its
                 // facts nor its variety.
                 Said.Mark(pack);
-                Spent(kind, calling, paceCalling, horizonCalling);
+                Spent(kind, calling, paceCalling, horizonCalling, threatCalling);
                 SaveOn(ui);
 
                 LastSaid = spokenLine;
@@ -2467,6 +2497,40 @@ public sealed class CommentaryDirector
                 _paceCalling = note;
 
                 return new[] { CommentaryFacts.Pace(note, names, _raceKey) };
+            }
+
+            case SegmentKind.RecordWatch:
+            {
+                if (_threat is not { } threat)
+                {
+                    return Array.Empty<FactBlock>();
+                }
+
+                // Stale is wrong here, not just late: "on the record's
+                // doorstep" three laps after the driver dropped off it.
+                if (_clock() - _threatAt > CommentaryBudget.Spec(SegmentKind.RecordWatch).NeedsBy)
+                {
+                    _threat = null;
+
+                    return Array.Empty<FactBlock>();
+                }
+
+                // A layout record waiting to be called for this driver means
+                // it has GONE - PaceNote's story now, and "one more like that"
+                // beside "he has just set it" is two voices disagreeing.
+                if (_pending is { Kind: PaceNoteKind.LayoutRecord } gone
+                    && string.Equals(gone.DriverId, threat.DriverId, StringComparison.Ordinal))
+                {
+                    _threat = null;
+
+                    return Array.Empty<FactBlock>();
+                }
+
+                _threatCalling = threat;
+
+                return CommentaryFacts.RecordThreat(threat, names, _raceKey) is { } block
+                    ? new[] { block }
+                    : Array.Empty<FactBlock>();
             }
 
             case SegmentKind.ComingUpNext:
@@ -2749,10 +2813,20 @@ public sealed class CommentaryDirector
     /// written, because by the time a held line is said the next pass may
     /// be calling on others. See TryAsync.
     /// </summary>
-    private void Spent(SegmentKind kind, Battle? calling, PaceNote? paceCalling, Horizon? horizonCalling = null)
+    private void Spent(SegmentKind kind, Battle? calling, PaceNote? paceCalling, Horizon? horizonCalling = null, RecordThreat? threatCalling = null)
     {
         switch (kind)
         {
+            case SegmentKind.RecordWatch:
+                // Only if it is still the one that was said - a bigger
+                // threat seen while it was written is a new line.
+                if (threatCalling is { } threat)
+                {
+                    Interlocked.CompareExchange(ref _threat, null, threat);
+                }
+
+                break;
+
             case SegmentKind.Horizon:
             {
                 // Left alone for RaceHorizon's cooldown, so a gap coming

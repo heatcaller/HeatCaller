@@ -4,15 +4,11 @@ Reviewed at 0.52.0, and again on 10 Oct 2026 after the show round, the voice rou
 
 ## Still open
 
-Checked again on 22 Oct 2026, after the known-issues round fixed everything else that was on this list (see "Fixed in 0.60.0 (22 Oct, known issues)"). Re-checked against the code on 6 Nov 2026: the five below still hold; the phone-pages one is fixed (see "Fixed since 0.60.0").
+Re-checked against the code on 7 Nov 2026, after the known-issues round of that day fixed everything else (see "Fixed since 0.60.0").
 
 | Issue | Where it's documented |
 |---|---|
-| **The installer has nowhere public to download from yet.** getting-started/install.md was rewritten around the installer on 22 Oct 2026 and says to get it from the HeatCaller team for now. The releases repo has to exist with the signed assets on it before the page can give a download link - the update feed points there too. | getting-started/install.md. Knock-ons still to check in reference/faq.md, getting-started/index.md, first-race-night.md and admin/troubleshooting.md |
-| **The rolling record watch only writes to the console.** Since 22 Oct `RecordWatch` is fed every lap and reset each race, but it only writes `[pace]` lines. By design it must not drive `NotifyRecordPace`/`NotifyTrackRecord`; it needs a segment of its own before anything is spoken. | Not documented |
-| Low: **a saved take from before "Shorten published names" was ticked still holds the full names.** The race no longer asks for it (it looks the shortened text up), so it is never played, but **Re-roll Line...** on it would send the full names to the relay once more and make a take the race won't use. **Forget Line** clears it. A fix is for Re-roll to refuse a line whose text the shortening would change. | Not documented |
-| Low: **the club's website doesn't show which laps were counted by hand.** Since 22 Oct the laptop's own pages, printouts and exports mark a lap count that includes hand-counted laps ("12\*", with "\* includes laps counted by hand"). The relay's copy of the board is sent without the mark, because the relay draws its pages itself and has no legend; adding it needs a relay change. | race-control/results-and-championships.md (Laps counted by hand) says so |
-| Wording only: the internal guard in the app refuses a test with `Choose "My own ElevenLabs account" on the Voice tab`, but the radio button reads **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)**. The message shouldn't be reachable, so it isn't documented. | Not documented |
+| **The installer has nowhere public to download from yet.** getting-started/install.md was rewritten around the installer on 22 Oct 2026 and says to get it from the HeatCaller team for now. The releases repo has to exist with the signed assets on it before the page can give a download link - the update feed points there too. Not a code fix: it needs the repo made and a signed release published. | getting-started/install.md. Knock-ons still to check in reference/faq.md, getting-started/index.md, first-race-night.md and admin/troubleshooting.md |
 
 ## Documented states, not bugs
 
@@ -20,83 +16,20 @@ Checked again on 22 Oct 2026, after the known-issues round fixed everything else
 |---|---|
 | **A PC with no Kokoro voice file has nothing underneath it.** The installer ships the 310 MB file, so this only happens to a club that lost it or declined the download on an older build. It is said loudly - the console's `[voice] NO VOICE - ...`, the Mixer's red **NO VOICE:** and a red line on Voice Settings - with one button that fixes it. Re-checked 22 Oct 2026; the old code comments that still said the Windows voice stands in were corrected the same day. | announcer/voice.md (When nothing can speak) |
 | **The relay's voice routes name no club** (`/voice/samples`, `/voice/sample/<id>`, `/voice/preview`). Decided 22 Oct 2026: they stay a deliberate exception - a club has to hear a voice before it signs up, the two sample routes read and write nothing a club published, and `/voice/preview` carries the publish token. The `previewDailyChars` comment now says the 1,000,000 bound is only a sanity ceiling. | admin/security-and-privacy.md ("Every club is separate"), admin/relay-hosting.md |
-
-## Still open: found on 11 Oct 2026, wiring the commentary depth
-
-The four silences below are not bugs, and they are written down because each one looks exactly like one from the floor. The scoring bug found the same day (negative points) was fixed on 22 Oct 2026 - see below.
-
-### Not bugs - four silences at the ends of the night
-
-Each of these is the announcer deciding to say nothing rather than say
-something a driver in the room could correct, and each is a club-side gap
-rather than a code one. Recorded so the next person to hear the gap does
-not go looking for the fault.
-
-- **Practice rounds are not counted in the cold open's "races to run".**
-  `CommentaryReaders.NightAhead` filters tonight's programme to
-  `round.Kind != RoundKind.Practice` before it counts anything, the same
-  judgement `RacesIn` makes about the history. A club whose evening is ten
-  heats and twenty practice slots is told ten, and that is correct: "thirty
-  races to run" would be the app reading out its own booking sheet as a race
-  meeting. **What it would take to change:** nothing a club can type - it is
-  a decision about what the word "race" means in that sentence, and the
-  present answer is the defensible one.
-- **There is no count of visiting drivers, and there cannot be one yet.**
-  `NightAhead.TravelledFrom` is returned null on purpose. There is no notion
-  of club membership anywhere in HeatCaller: no member list, no club
-  identity of its own for a driver to be outside of, and nothing on a
-  profile that says guest. The nearest thing is `DriverProfile.HomeTrack`,
-  free text a club types for intro colour, and turning it into a count means
-  comparing free text with the day's free-text venue name - "Brighton MRC"
-  against "Brighton Indoor" makes a member a visitor, and every regular who
-  never filled the box in makes himself a local by accident.
-  `ExcludeFromRecords` is not it either: it covers guests, staff demo cars
-  and anyone running outside the competition under one tick, so counting it
-  would announce the club's own marshal's demo car as a visiting driver.
-  **What it would take:** a visitor tick on a driver's profile - one
-  explicit field, set by the club, with no inference anywhere near it.
-- **There is no championship sentence in the caller's own words at either
-  bookend.** `NightAhead.ChampionshipNote` and `NightDone.ChampionshipNote`
-  both exist, both are documented as "the caller's words, because only the
-  season knows", and both are returned null - because there is nowhere in
-  the app to type that sentence. There is no note on a `Season`, none on a
-  championship, and `RaceEvent.Notes` is the day's own scratch pad for
-  weather and admin, which must never be read to a room. Nor is it a thing
-  for a reader to work out: "two rounds left and four points covering the top
-  three" needs the rounds remaining and the points still on offer, which is
-  the one sum `CommentaryReaders` says out loud it does not do, and a line
-  assembled there would be a second opinion against the **Championship
-  check** segment. **What it would take:** one field to type the season note
-  into - on a season, or on the race day's own setup - read out as typed and
-  never generated.
-- **"Nobody can catch him now" remains unsayable.**
-  `CommentaryReportFacts.ChampionshipCheck` has the line written
-  (`champdecided`) and fires it on `alive == 1`, where `alive` counts
-  `ChampionshipStanding.StillAlive`. That field defaults to `true` and
-  neither caller ever sets it to anything else - `CommentaryReaders.Championship`
-  and `ChampionshipBefore` both construct the row with six arguments and both
-  say in their own comments why: whether a title is mathematically settled
-  needs the rounds left and the points still on offer, and a `Season` is a
-  set of races that have happened plus a rule that takes more as they are
-  recorded. There is no planned round count anywhere on it -
-  `CountBestRounds` is the drop cap, not the length of the season - and the
-  championship conditional refused the same claim for the same reason.
-  **What it would take:** a planned round count on a season - how many
-  rounds the championship will run - after which "that settles it" and the
-  title permutations both become provable instead of guessed.
-
-  One edge worth knowing while it stays like this, since it is the one way
-  the line is reachable: with every row alive, `alive == 1` is true for a
-  table with exactly ONE driver in it - a season only one driver has scored
-  in. The line then goes out, and nothing proved it. It is a narrow case and
-  a real one, and a `ranked.Count > 1` guard beside the existing
-  `alive == 1` would close it without waiting for the round count. (The
-  neighbouring `alive is >= 2 and <= 4` branch - "N drivers can still win" -
-  fires for any table of two to four and is likewise unproved, which
-  `CommentaryReaders.Championship`'s own remarks admit: "it is still a claim
-  this cannot stand behind".)
+| **Practice rounds are not counted in the cold open's "races to run".** `CommentaryReaders.NightAhead` filters tonight's programme to `round.Kind != RoundKind.Practice`, the same judgement `RacesIn` makes about the history. A club whose evening is ten heats and twenty practice slots is told ten, and that is correct: "thirty races to run" would be the app reading out its own booking sheet as a race meeting. Kept on 7 Nov 2026 as the defensible answer. | announcer/commentary.md (The top and tail of the night) |
+| **The after-flag "who can still win it" stays quiet on some nights on purpose.** `CommentaryReaders.ChampionshipAfter` marks nobody out unless it can prove it: no planned length, a race not on a race day, two counting races on one day, another counting round still on tonight's programme (a B-main), a scheme that takes points away, or a table over forty drivers. Each is the proof refusing rather than guessing. | announcer/commentary.md (What the championship still has riding on it) |
 
 ## Fixed since 0.60.0 (Unreleased)
+
+Fixed on 7 Nov 2026 (tests in `KnownIssues4Tests`):
+
+- **The rolling record watch speaks.** A new segment, **Record in danger** (`SegmentKind.RecordWatch`), takes each threat `RecordWatch` sees through `CommentaryDirector.RecordThreatened` and says `RecordWatch.Say`'s sentence. Still never wired to `NotifyRecordPace`/`NotifyTrackRecord`, and dropped once a layout record for that driver is waiting for **Record laps**. announcer/commentary.md.
+- **Re-roll refuses a take the shortening would change.** `VoiceSettingsControl.WhyNoReroll` compares the saved words with `AnnouncementService.TextForCloudVoice` and sends the club to **Forget Line**. announcer/voice.md.
+- **The club's live board marks laps counted by hand.** The relay copy keeps "12\*" and carries `handCounted`; the relay's `drawBoard` writes "\* includes laps counted by hand" under the board in `.hint`. Needs the relay redeployed. race-control/results-and-championships.md.
+- **The ElevenLabs guard names the radio button as it reads.**
+- **Visiting drivers are counted** - from a new **Visiting from another club** tick on a profile (`DriverProfile.Visitor`), never from HomeTrack. race-day/drivers-and-classes.md, announcer/commentary.md.
+- **The season sentence at both bookends** - a new **Announcer's note** on Scoring Rules (`Season.AnnouncerNote`, 60 characters, what `CleanLong` keeps), read as typed via `CommentaryReaders.SeasonNoteFor`. race-control/results-and-championships.md.
+- **"Nobody can catch him now" is sayable after the flag.** `CommentaryReaders.ChampionshipAfter` fills `StillAlive` with `TitleOnTheLine`'s `CanStillCatch` proof, played out from the table with the filed race in it against `Season.PlannedRounds`; the app caches it for 30 s per filed race. The one-driver-table edge was already closed by the `ranked.Count > 1` guard. announcer/commentary.md.
 
 - **screens/phone-and-web.md documents the Set up phone pages button** (on the **Server** card), with the manual `netsh` commands kept for a laptop where the button isn't allowed. Fixed in the user-guide update of 2 Nov 2026 (99563b4).
 

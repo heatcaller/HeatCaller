@@ -56,6 +56,13 @@ public sealed class SeasonRulesForm : Form
     /// </summary>
     private readonly NumericUpDown _numPlanned = new();
 
+    /// <summary>
+    /// The announcer's season note (7 Nov 2026, known issues) - one sentence,
+    /// read out as typed at the night's opening and sign-off. See
+    /// Season.AnnouncerNote.
+    /// </summary>
+    private readonly TextBox _txtNote = new() { MaxLength = Season.AnnouncerNoteMaxLength };
+
     private readonly Label _lblPlannedHint = new();
     private readonly Label _lblBestHint = new();
 
@@ -264,6 +271,19 @@ public sealed class SeasonRulesForm : Form
             Font = AppTheme.SmallFont,
         };
 
+        var noteRow = new FieldGrid();
+        _txtNote.Font = AppTheme.BodyFont;
+        noteRow.AddRow("Announcer's note:", _txtNote, stretch: true);
+
+        var lblNoteWhy = new Label
+        {
+            Text = "Read out as typed when the night opens and signs off, on a race day this championship counts: "
+                 + "\"two rounds left and four points covering the top three\". Leave it empty to say nothing.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
         var lblDropHint = new Label
         {
             Text = "A driver who has raced fewer rounds than this drops nothing - "
@@ -334,7 +354,12 @@ public sealed class SeasonRulesForm : Form
         // of the season, and it is the one field on this window that
         // changes no points at all - see Season.PlannedRounds.
         body.Add(plannedRow, gapBelow: UiLayout.HintGap);
-        body.Add(lblPlannedWhy, gapBelow: 0);
+        body.Add(lblPlannedWhy, gapBelow: UiLayout.SectionGap);
+
+        // THE SEASON'S OWN SENTENCE (7 Nov 2026, known issues), under its
+        // length: the two things on this window only the announcer reads.
+        body.Add(noteRow, gapBelow: UiLayout.HintGap);
+        body.Add(lblNoteWhy, gapBelow: 0);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to left,
@@ -377,6 +402,7 @@ public sealed class SeasonRulesForm : Form
         _chkMainsOnly.Checked = _season.MainsOnly;
         _numBest.Value = Math.Clamp(_season.CountBestRounds, 0, 60);
         _numPlanned.Value = Math.Clamp(_season.PlannedRounds, 0, 60);
+        _txtNote.Text = _season.AnnouncerNote ?? string.Empty;
 
         _cmbClass.SelectedIndex = ClassIndexFor(_season.ClassName);
 
@@ -404,6 +430,7 @@ public sealed class SeasonRulesForm : Form
         season.MainsOnly = _chkMainsOnly.Checked;
         season.CountBestRounds = (int)_numBest.Value;
         season.PlannedRounds = (int)_numPlanned.Value;
+        season.AnnouncerNote = _txtNote.Text.Trim();
 
         season.ClassName = _cmbClass.SelectedItem switch
         {

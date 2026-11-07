@@ -942,7 +942,13 @@ public partial class MainForm
             // nothing else off it is read. Null when no day is open, and
             // then the opening is said without a place, which is what most
             // clubs want anyway: they race where they always race.
-            _raceEvents.Active);
+            _raceEvents.Active,
+
+            // The visitors the club has ticked, and the season's own note
+            // (7 Nov 2026, known issues) - both typed, never worked out.
+            _profiles,
+            _seasonStore,
+            _raceEvents);
 
         // The sign-off takes no scope at all, and that is not an omission -
         // see the reader. A race the club ran tonight counts towards the
@@ -952,7 +958,10 @@ public partial class MainForm
         // what was planned.
         director.NightDone = () => CommentaryReaders.NightDone(
             _sessionHistory,
-            _profiles);
+            _profiles,
+            seasons: _seasonStore,
+            rounds: _rounds,
+            events: _raceEvents);
 
         // How far through tonight's programme we are, which is what the
         // budget releases the night's allotment against. Counted from the
@@ -1021,21 +1030,44 @@ public partial class MainForm
         // this runs the active round has often moved on to the next race,
         // and then the filed race stayed in the counted table AND was added
         // again as the "live" one, and its points went to air doubled.
+        //
+        // WHO CAN STILL WIN IT is proved here too (7 Nov 2026, known issues)
+        // - see CommentaryReaders.ChampionshipAfter - and the proof replays
+        // the season once per rival, so it is kept for the filed race for
+        // half a minute rather than worked out again on every tick the
+        // director asks. A result corrected in that time is picked up on
+        // the next ask after it.
+        IReadOnlyList<ChampionshipStanding>? keptTable = null;
+        string? keptFor = null;
+        var keptAt = DateTime.MinValue;
+
         director.Championship = () =>
         {
             var filed = LastFiled();
+            var key = filed?.Id ?? string.Empty;
+
+            if (keptTable is not null
+                && string.Equals(keptFor, key, StringComparison.Ordinal)
+                && DateTime.UtcNow - keptAt < TimeSpan.FromSeconds(30))
+            {
+                return keptTable;
+            }
+
             var filedRound = filed?.RoundId is { } roundId ? _rounds.Get(roundId) : null;
 
-            return CommentaryReaders.Championship(
-                ChampionshipLive.Compute(
-                    LastFiledResults(),
-                    filedRound,
-                    _seasonStore,
-                    _rounds,
-                    _raceEvents,
-                    _sessionHistory,
-                    _profiles,
-                    filed?.Id));
+            keptTable = CommentaryReaders.ChampionshipAfter(
+                LastFiledResults(),
+                filedRound,
+                _seasonStore,
+                _rounds,
+                _raceEvents,
+                _sessionHistory,
+                _profiles,
+                filed?.Id);
+            keptFor = key;
+            keptAt = DateTime.UtcNow;
+
+            return keptTable;
         };
     }
 

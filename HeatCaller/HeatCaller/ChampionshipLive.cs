@@ -134,7 +134,7 @@ public static class ChampionshipLive
     }
 
     /// <summary>The race on track as the result it would be filed as.</summary>
-    private static SessionRecord Live(IReadOnlyList<SessionResultEntry> results, RoundDefinition? round) => new()
+    internal static SessionRecord Live(IReadOnlyList<SessionResultEntry> results, RoundDefinition? round) => new()
     {
         Id = LiveSessionId,
         SessionType = RaceSessionType.Race,

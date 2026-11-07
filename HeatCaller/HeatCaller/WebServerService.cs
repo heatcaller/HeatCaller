@@ -3344,6 +3344,16 @@ public sealed partial class WebServerService
                 }
             }
 
+            // WHAT THE * MEANS (7 Nov 2026, known issues): the Laps column
+            // reads "12*" for a count with laps race control counted by hand,
+            // and the relay draws its own pages, so it is told there is a
+            // mark to explain and writes the legend itself. Only when the
+            // column is on the board and somebody's count carries the mark.
+            if (columns.Any(k => k.Key == "laps") && ordered.Any(s => HandCountedLaps.During(s) > 0))
+            {
+                relayNode["handCounted"] = true;
+            }
+
             // A timed race's length in seconds (5 Nov 2026, Asher: "on flag
             // card on relay make a progress bar for a timed race as well as
             // the lap number race"). The countdown says only the time left

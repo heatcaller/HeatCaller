@@ -732,7 +732,8 @@ public static partial class CommentaryReaders
     /// "not known" and says neither "that settles it" nor "N drivers can
     /// still win" (14 Oct 2026 - before that, a one-row table after round
     /// one had "nobody can catch" its only driver). A reader that knows the
-    /// season's rules is what would let those lines back.
+    /// season's rules is what would let those lines back - and since 7 Nov
+    /// 2026 that is <see cref="ChampionshipAfter"/>, which the app uses.
     /// </summary>
     public static IReadOnlyList<ChampionshipStanding> Championship(IfItEndedNow? table)
     {
@@ -768,6 +769,184 @@ public static partial class CommentaryReaders
         }
 
         return standings;
+    }
+
+    /// <summary>
+    /// THE CHAMPIONSHIP AFTER A FILED RACE, with who can still win it
+    /// marked where that can be PROVED (7 Nov 2026, known issues).
+    ///
+    /// The table is <see cref="Championship(IfItEndedNow?)"/>'s, built the
+    /// way ChampionshipLive.Compute builds it. What this adds is StillAlive:
+    /// "that settles it: nobody can catch him now" and "three drivers can
+    /// still win it" were written into ChampionshipCheck and could never be
+    /// said, because nothing filled it in. It needs the rounds left, which
+    /// Season.PlannedRounds now gives, and a proof that survives the drop
+    /// rule - <see cref="CanStillCatch"/>, the same one the race intro's
+    /// <see cref="TitleOnTheLine"/> uses, played out from the table WITH
+    /// tonight's race in it.
+    ///
+    /// Everybody is left marked alive - "not known", which ChampionshipCheck
+    /// says nothing about - wherever the proof cannot stand: see
+    /// <see cref="WhoCanStillWin"/> for each refusal.
+    /// </summary>
+    /// <param name="results">The filed race's result.</param>
+    /// <param name="round">The round it was filed under - not the active one, which may have moved on.</param>
+    /// <param name="filedSessionId">The filed race's id, so it is not counted twice - see ChampionshipLive.Candidates.</param>
+    public static IReadOnlyList<ChampionshipStanding> ChampionshipAfter(
+        IReadOnlyList<SessionResultEntry> results,
+        RoundDefinition? round,
+        SeasonStore? seasons,
+        RoundDefinitionStore? rounds,
+        RaceEventStore? events,
+        SessionHistoryStore history,
+        ProfileStore? profiles = null,
+        string? filedSessionId = null)
+    {
+        var candidates = ChampionshipLive.Candidates(round, seasons, rounds, events, history, filedSessionId);
+
+        if (!results.Any(r => r.Laps > 0))
+        {
+            return Array.Empty<ChampionshipStanding>();
+        }
+
+        var live = ChampionshipLive.Live(results, round);
+
+        // The first championship with a table, as FromCandidates picks it -
+        // so the rows and the proof are about the same season.
+        foreach (var (season, counted) in candidates)
+        {
+            if (ChampionshipLive.Table(season, counted, live, profiles) is not { } table)
+            {
+                continue;
+            }
+
+            var standings = Championship(table);
+
+            if (standings.Count < 2
+                || WhoCanStillWin(season, counted, live, round, rounds, events, profiles) is not { } stillIn)
+            {
+                return standings;
+            }
+
+            // Somebody below the rows the table shows who can still win it
+            // would go uncounted in "N drivers can still win", so that is
+            // "not known" too.
+            var shown = standings.Select(s => s.DriverId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (stillIn.Any(name => !shown.Contains(name)))
+            {
+                return standings;
+            }
+
+            return standings.Select(s => s with { StillAlive = stillIn.Contains(s.DriverId) }).ToList();
+        }
+
+        return Array.Empty<ChampionshipStanding>();
+    }
+
+    /// <summary>
+    /// Who can still win <paramref name="season"/> once <paramref name="live"/>
+    /// is in it - the leader, and every rival <see cref="CanStillCatch"/>
+    /// cannot shut out - or null where it cannot be proved.
+    ///
+    /// The refusals are TitleOnTheLine's, for its reasons, plus one of this
+    /// moment's own:
+    /// <list type="bullet">
+    /// <item>a race this app cannot place on a race day, or a season whose
+    /// races do not come to one a day - see RoundsCountedSoFar;</item>
+    /// <item>ANOTHER ROUND TONIGHT THE SEASON WOULD COUNT. The proof plays
+    /// out each remaining round as one race, and a B-main still to run
+    /// tonight is a race it would not price - a false shut-out;</item>
+    /// <item>too few rounds in, or no planned length;</item>
+    /// <item>with rounds still to run: a scheme where nothing scores, one
+    /// that takes points away, or a best-paying place too far down the
+    /// field to build;</item>
+    /// <item>a table too long to prove.</item>
+    /// </list>
+    ///
+    /// With NO rounds left the season is over and the table is the answer:
+    /// only a driver level with the leader is still "in it", because level
+    /// is not beaten.
+    /// </summary>
+    private static HashSet<string>? WhoCanStillWin(
+        Season season,
+        IReadOnlyList<SessionRecord> counted,
+        SessionRecord live,
+        RoundDefinition? round,
+        RoundDefinitionStore? rounds,
+        RaceEventStore? events,
+        ProfileStore? profiles)
+    {
+        if (round is null || rounds is null || events is null || events.EventForRound(round.Id) is not { } today)
+        {
+            return null;
+        }
+
+        // RoundsCountedSoFar answers null for an empty list too, and then
+        // this race is simply the first round.
+        int roundsBefore;
+
+        if (counted.Count == 0)
+        {
+            roundsBefore = 0;
+        }
+        else if (RoundsCountedSoFar(counted, events, round) is { } soFar)
+        {
+            roundsBefore = soFar;
+        }
+        else
+        {
+            return null;
+        }
+
+        foreach (var otherId in today.RoundIds)
+        {
+            if (!string.Equals(otherId, round.Id, StringComparison.Ordinal)
+                && EventSpine.RuleAccepts(season, ProbeFor(otherId), rounds, events))
+            {
+                return null;
+            }
+        }
+
+        var roundsAfter = roundsBefore + 1;
+
+        if (roundsAfter < CommentaryStakesFacts.LeastRoundsCounted
+            || season.RoundsRemainingAfter(roundsAfter) is not { } left)
+        {
+            return null;
+        }
+
+        var bestPaying = season.BestPayingPosition();
+
+        if (left > 0 && (bestPaying < 1 || season.PenalisesAnyone() || bestPaying > MostFillersToProve + 1))
+        {
+            return null;
+        }
+
+        var played = new List<SessionRecord>(counted) { live };
+        var after = SeasonStore.ComputeStandings(season, played, profiles);
+
+        if (after.Count < 2 || after.Count > MostInTableToProve)
+        {
+            return null;
+        }
+
+        var leader = after[0];
+        var stillIn = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { leader.DriverName };
+
+        foreach (var rival in after.Skip(1))
+        {
+            var catches = left == 0
+                ? rival.TotalPoints >= leader.TotalPoints
+                : CanStillCatch(season, played, left, bestPaying, leader.DriverName, rival.DriverName, profiles);
+
+            if (catches)
+            {
+                stillIn.Add(rival.DriverName);
+            }
+        }
+
+        return stillIn;
     }
 
     /// <summary>
@@ -4007,10 +4186,15 @@ public static partial class CommentaryReaders
     /// <param name="rounds">Tonight's programme. Null at a club that has none, which is a night with no shape to describe.</param>
     /// <param name="scope">The round ids belonging to the race day in hand, or null for the legacy holder where every round is tonight's - see <see cref="Upcoming"/>.</param>
     /// <param name="day">The race day in hand, for the venue the club typed on it. Null when no day is open, and then the opening is said without a place.</param>
+    /// <param name="profiles">For who the club has ticked "Visiting from another club". Null counts nobody.</param>
+    /// <param name="seasons">For the season's "Announcer's note", with <paramref name="events"/> for its rule. Null says no note.</param>
     public static NightAhead NightAhead(
         RoundDefinitionStore? rounds,
         IReadOnlySet<string>? scope = null,
-        RaceEvent? day = null)
+        RaceEvent? day = null,
+        ProfileStore? profiles = null,
+        SeasonStore? seasons = null,
+        RaceEventStore? events = null)
     {
         // Tonight's rounds, counted the way NightStory and NightProgress
         // count them: a null scope is the legacy holder, where every round
@@ -4076,60 +4260,92 @@ public static partial class CommentaryReaders
             // then the builder opens with "Tonight:" instead.
             venue.Length > 0 ? venue : null,
 
-            // TRAVELLED FROM: NULL, AND NOT BECAUSE IT WAS FORGOTTEN.
+            // TRAVELLED FROM (7 Nov 2026, known issues): the drivers the club
+            // has ticked "Visiting from another club" on, and nothing else.
             //
-            // The field asks how many drivers came from outside the club's
-            // own membership, "where that is known" - and at this app it is
-            // not known. There is no membership anywhere in HeatCaller: no
-            // member list, no club identity of its own to be outside of,
-            // and nothing on a profile that says guest. The nearest thing
-            // is DriverProfile.HomeTrack, which is free text a club types
-            // for intro colour at an open meeting, and the only way to turn
-            // it into a count is to compare it with the day's venue name -
-            // free text against free text. "Brighton MRC" against "Brighton
-            // Indoor" makes a member a visitor; every regular who never
-            // filled the box in makes themselves a local by accident.
-            //
-            // "Seven of them visiting" goes out over the PA as a fact, and
-            // the people it is about are standing in the room able to count
-            // themselves. A SHAPE may be invented in this layer; a NUMBER
-            // never is - the rule NightThread states at length. So the cold
-            // open says nothing about where anybody came from, and
-            // CommentaryShowFacts.ColdOpen drops the clause it would have
-            // gone in.
-            //
-            // ExcludeFromRecords is not it either: it means guests, staff
-            // demo cars and anyone running outside the competition, all
-            // under one tick, so counting it would announce the club's own
-            // marshal's demo car as a visiting driver.
-            null,
+            // It was null until a profile could say so, and the reason still
+            // stands for anything other than that tick: there is no
+            // membership in HeatCaller, DriverProfile.HomeTrack is free text
+            // that cannot honestly be compared with the venue ("Brighton MRC"
+            // against "Brighton Indoor" makes a member a visitor), and
+            // ExcludeFromRecords covers staff demo cars too. "Seven of them
+            // visiting" goes over the PA to people who can count themselves,
+            // so the number is only ever the club's own ticks. Null with no
+            // profiles to read, and zero says nothing - the builder drops the
+            // clause.
+            profiles is null ? null : drivers.Count(who => profiles.Get(who) is { Visitor: true }),
 
-            // CHAMPIONSHIP NOTE: NULL, AND THIS IS THE FIELD TO LEAVE
-            // ALONE.
-            //
-            // Its own doc comment says what it is - "the caller's words,
-            // because only the season knows". It is a sentence a person
-            // types, "two rounds left and four points covering the top
-            // three", and there is nowhere in this app to type it: no note
-            // on a Season, none on a championship, and RaceEvent.Notes is
-            // the day's own scratch pad for weather and admin, which must
-            // never be read out to a room.
-            //
-            // IT IS ALSO NOT FOR A READER TO WORK OUT. That sentence needs
-            // the rounds remaining and the points still on offer, which is
-            // precisely the one sum this file says out loud it does not do -
-            // see "WHAT IT DELIBERATELY DOES NOT WORK OUT" at the top, and
-            // Championship. A season line assembled here would also be a
-            // second opinion against the ChampionshipCheck segment, which
-            // has a reader and a builder of its own; two segments
-            // disagreeing about who is leading in the same evening is worse
-            // than one of them saying nothing.
-            //
-            // So: null, at both ends of the night. The builders drop the
-            // clause, the opening and the sign-off are shorter, and nothing
-            // is said that the club did not say first.
-            null);
+            // CHAMPIONSHIP NOTE (7 Nov 2026, known issues): the caller's own
+            // sentence, typed on the season's Scoring Rules as "Announcer's
+            // note" and read out as typed. Still never WORKED OUT here: the
+            // sum behind "two rounds left and four points covering the top
+            // three" is the one this file refuses, and a line assembled here
+            // would be a second opinion against the Championship check. See
+            // SeasonNoteFor for which season's note a night takes.
+            SeasonNoteFor(seasons, rounds, events, racing.Select(round => ProbeFor(round.Id))));
     }
+
+    /// <summary>
+    /// The announcer's note of the first championship that would count one
+    /// of <paramref name="races"/>, or null - for the night's bookends.
+    ///
+    /// The FIRST, in the order the club's seasons are listed, rather than
+    /// every one: the note is a single typed sentence, the builders carry one,
+    /// and a night that counts towards two championships is told about the
+    /// one the club listed first. A season ticks a race in either by its
+    /// rule or by hand, and both are honoured.
+    /// </summary>
+    internal static string? SeasonNoteFor(
+        SeasonStore? seasons,
+        RoundDefinitionStore? rounds,
+        RaceEventStore? events,
+        IEnumerable<SessionRecord> races)
+    {
+        if (seasons is null)
+        {
+            return null;
+        }
+
+        var tonight = races.ToList();
+
+        if (tonight.Count == 0)
+        {
+            return null;
+        }
+
+        foreach (var season in seasons.All)
+        {
+            var note = Typed(season.AnnouncerNote);
+
+            if (note.Length == 0)
+            {
+                continue;
+            }
+
+            var counts = tonight.Any(race =>
+                season.IncludedSessionIds.Contains(race.Id, StringComparer.Ordinal)
+                || (season.AutoInclude
+                    && rounds is not null
+                    && !season.ExcludedSessionIds.Contains(race.Id, StringComparer.Ordinal)
+                    && EventSpine.RuleAccepts(season, race, rounds, events)));
+
+            if (counts)
+            {
+                return note;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>A race not yet run, as a season's rule sees it - only its round matters.</summary>
+    private static SessionRecord ProbeFor(string roundId) => new()
+    {
+        Id = "night-ahead-" + roundId,
+        SessionType = RaceSessionType.Race,
+        RoundId = roundId,
+        StartedAtUtc = DateTime.UtcNow,
+    };
 
     /// <summary>
     /// THE EVENING'S NUMBERS, for the sign-off: how many races ran, how
@@ -4177,12 +4393,16 @@ public static partial class CommentaryReaders
     /// Call it on the UI thread, like everything else here.
     /// </summary>
     /// <param name="history">Every session the club has filed.</param>
+    /// <param name="seasons">For the season's "Announcer's note", with <paramref name="rounds"/> and <paramref name="events"/> for its rule. Null says no note.</param>
     /// <param name="profiles">For the driver behind a transponder, and the name the announcer calls them.</param>
     /// <param name="nowLocal">Now, in local time, for which night counts as tonight. Defaults to now.</param>
     public static NightDone NightDone(
         SessionHistoryStore history,
         ProfileStore profiles,
-        DateTime? nowLocal = null)
+        DateTime? nowLocal = null,
+        SeasonStore? seasons = null,
+        RoundDefinitionStore? rounds = null,
+        RaceEventStore? events = null)
     {
         var today = nowLocal ?? DateTime.Now;
         var tonight = TonightAtTheTrack.NightOf(today);
@@ -4342,11 +4562,10 @@ public static partial class CommentaryReaders
                 ? null
                 : (int?)tonightsDrivers.Count(who => !racedBefore.Contains(who)),
 
-            // THE CALLER'S WORDS, and this app has nowhere for them. The
-            // whole of the argument is on NightAhead above; it applies
-            // unchanged to the way out. Null, and the sign-off is one block
-            // shorter for it.
-            null);
+            // THE CALLER'S WORDS (7 Nov 2026, known issues): the season's
+            // "Announcer's note", read out as typed, for a championship one
+            // of tonight's filed races counts towards - see SeasonNoteFor.
+            SeasonNoteFor(seasons, rounds, events, races));
     }
 
     /// <summary>

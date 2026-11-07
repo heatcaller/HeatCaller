@@ -34,8 +34,21 @@ public sealed partial class VoiceSettingsControl
     /// voice and settings can be: the new take has to replace the old one,
     /// not sit beside it under another key the race would never ask for.
     /// </summary>
-    internal static string? WhyNoReroll(VoiceProfile profile, VoiceLibrary.SavedLine line, string expectedKey)
+    internal static string? WhyNoReroll(VoiceProfile profile, VoiceLibrary.SavedLine line, string expectedKey, string? textTheRaceSends = null)
     {
+        // A take saved before "Shorten published names" was ticked (7 Nov
+        // 2026, known issues): the race now asks for the shortened words, so
+        // re-rolling the full ones would send full names to the relay once
+        // more and keep a take the race never plays.
+        if (profile.EffectiveEngine != VoiceEngine.Kokoro
+            && textTheRaceSends is not null
+            && !string.IsNullOrWhiteSpace(line.Text)
+            && !string.Equals(textTheRaceSends, line.Text, StringComparison.Ordinal))
+        {
+            return "That line has drivers' full names in it, and the club now shortens names for the online voices - "
+                   + "the race asks for the short form, so this take is never played. Use Forget Line instead.";
+        }
+
         if (profile.EffectiveEngine == VoiceEngine.Kokoro)
         {
             return "Kokoro lines are made on this laptop every time - there is no saved take to re-roll.";
@@ -87,7 +100,9 @@ public sealed partial class VoiceSettingsControl
         var profile = _store.Current;
         var line = item.Line;
 
-        if (WhyNoReroll(profile, line, VoiceLibrary.KeyFor(profile, line.Text)) is { } why)
+        var textTheRaceSends = Announcer?.TextForCloudVoice(line.Text);
+
+        if (WhyNoReroll(profile, line, VoiceLibrary.KeyFor(profile, line.Text), textTheRaceSends) is { } why)
         {
             RerollSays(why, AppTheme.Danger);
             return;

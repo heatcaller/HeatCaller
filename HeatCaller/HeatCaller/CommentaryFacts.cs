@@ -979,6 +979,30 @@ public static class CommentaryFacts
             FactTheme.Driver(note.DriverId));
     }
 
+    /// <summary>
+    /// A driver whose running pace is closing on the layout record, BEFORE
+    /// it falls (7 Nov 2026, known issues) - RecordWatch's own sentence, so
+    /// the wording cannot drift from what the console has said since 22 Oct.
+    /// Every part of it is a subtraction, never a forecast: see RecordWatch.
+    /// The level is in the key, so a watch that escalates is a fresh line
+    /// and the same level twice is not.
+    /// </summary>
+    public static FactBlock? RecordThreat(RecordThreat threat, Func<string, string?> nameFor, string raceKey)
+    {
+        var who = Clean(nameFor(threat.DriverId));
+
+        if (who.Length == 0)
+        {
+            who = "that car";
+        }
+
+        var line = HeatCaller.RecordWatch.Say(threat, who);
+
+        return line.Length == 0
+            ? null
+            : new FactBlock($"recordwatch:{raceKey}:{threat.Level}:{threat.DriverId}", line, FactTheme.Driver(threat.DriverId));
+    }
+
     /// <summary>A pair of drivers as one key, whichever way round they currently are.</summary>
     internal static string Pair(string a, string b) =>
         string.CompareOrdinal(a, b) <= 0 ? $"{a}+{b}" : $"{b}+{a}";

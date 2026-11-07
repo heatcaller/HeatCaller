@@ -63,11 +63,12 @@ public partial class AnnouncerControl
     /// <summary>
     /// The rolling record watch (22 Oct 2026, known issues) - RecordWatch,
     /// built and tested and fed by nothing until now. Fed the same laps as
-    /// the director's PaceWatch and against the same layout record, and
-    /// heard in the CONSOLE only: the ROADMAP is plain that it must not be
-    /// wired to NotifyRecordPace or NotifyTrackRecord, which have callers of
-    /// their own, and that a spoken line wants a segment of its own. Reset
-    /// with each race, as the laps fed are.
+    /// the director's PaceWatch and against the same layout record. It is
+    /// NOT wired to NotifyRecordPace or NotifyTrackRecord, which have callers
+    /// of their own: since 7 Nov 2026 it speaks through a segment of its own,
+    /// "Record in danger" (SegmentKind.RecordWatch), handed each threat by
+    /// CommentaryDirector.RecordThreatened, and still writes its [pace] line
+    /// to the console. Reset with each race, as the laps fed are.
     /// </summary>
     private RecordWatch? _recordWatch;
 
@@ -2193,11 +2194,14 @@ public partial class AnnouncerControl
 
                 director.Lap(standing.TransponderId, laps[i] / 1000.0);
 
-                // The console only - see _recordWatch.
+                // The console, and the director's Record in danger segment
+                // (7 Nov 2026, known issues) - see _recordWatch.
                 if (watch.Saw(new LapSeen(standing.TransponderId, laps[i] / 1000.0)) is { } threat)
                 {
                     StatusMessage?.Invoke(
                         $"{AppTime.LogStampNow()}  [pace] {RecordWatch.Say(threat, NameFor(standing.TransponderId))}");
+
+                    director.RecordThreatened(threat);
                 }
             }
 

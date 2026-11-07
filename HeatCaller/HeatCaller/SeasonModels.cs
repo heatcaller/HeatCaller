@@ -131,6 +131,24 @@ public sealed class Season
     public int PlannedRounds { get; set; }
 
     /// <summary>
+    /// One sentence about the season in the club's own words - "two rounds
+    /// left and four points covering the top three" - read out as typed at
+    /// the night's opening and sign-off (7 Nov 2026, known issues). Empty,
+    /// as every season saved before then is, says nothing.
+    ///
+    /// TYPED, NEVER WORKED OUT. The sum behind that sentence is the one the
+    /// commentary readers refuse to do by arithmetic (see
+    /// CommentaryReaders.TitleOnTheLine), so the only way it reaches the PA
+    /// is somebody at the club saying it first. Kept apart from
+    /// RaceEvent.Notes, which is the day's scratch pad and must never be
+    /// read to a room.
+    /// </summary>
+    public string AnnouncerNote { get; set; } = string.Empty;
+
+    /// <summary>The longest note the box takes - what CommentaryFacts.CleanLong keeps, so nothing typed is cut off.</summary>
+    public const int AnnouncerNoteMaxLength = 60;
+
+    /// <summary>
     /// How many rounds are still to come after the ones counted so far,
     /// or null when the club has not said how long the season is.
     ///

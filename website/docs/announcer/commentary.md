@@ -295,6 +295,7 @@ The rest of the card is the segments. They come switched on, and they're grouped
 | **Battle watch** | Calls a fight when two cars have been locked together for a while. If the car behind gets past while the line is being said, the line stops and the announcer calls the pass instead: "And Sam takes the lead!", or "And Sam is through, up into third!" for any other place. |
 | **What's still to decide** | Points the room at a gap that's coming down, or going out, and how much of the race is left to settle it. A timed race gets the time left ("about a minute and a half"), never a count of laps; a race run to a lap count gets the laps left; a race with both gets whichever ends it first. It gives the gap and the rate, never who will win. Like a battle line, it stops if the car behind gets past while it is being said, and the pass is called instead. |
 | **Record laps** | Calls a lap when a record falls - the race's, the night's or the layout's. |
+| **Record in danger** | Calls a driver whose last few laps are closing on the layout record, *before* it falls: "Keep an eye on Dave - 5.081 best so far against Jen's record of 5.042, and the laps are still coming down." It goes on pace, not one lap: two of their last three laps have to be inside the band. It steps up at most three times per driver per race ("keep an eye on", "on the record's doorstep", "one more like that"), never goes back down, and stops once the record actually goes, when **Record laps** calls it. It says what the laps have been and what the record is, never that it will fall. |
 | **Coming up next** | Says what is on next, in the gap between races. |
 | **Championship check** | Where the season stands, after a class's last main. |
 
@@ -1030,7 +1031,9 @@ The two bookends read your club's own figures.
 
 **Cold open** reads tonight's **program**: how many classes are racing, how many drivers are in, how many races are still to run, and the venue typed on the race day. It's said before a wheel has turned, so there's nothing filed to count and nothing about it waits for a result:
 
-> "Tonight at Brighton Indoor: 41 drivers across 6 classes, 30 races to run."
+> "Tonight at Brighton Indoor: 41 drivers across 6 classes, 7 of them visiting, 30 races to run. Two rounds left and four points covering the top three."
+
+"7 of them visiting" counts the drivers in tonight's program with **Visiting from another club** ticked on their profile (see [Drivers](../race-day/drivers-and-classes.md)), and nothing else; with nobody ticked the clause is left out. The last sentence is the championship's **Announcer's note**, typed on its **Scoring Rules** window (see [Championships](../race-control/results-and-championships.md)), read out as typed on a night that championship counts; with no note it is left out. Both are your club's own words: HeatCaller never works either one out.
 
 With no venue typed on the day it opens with "Tonight:" instead, which is what most clubs want. It's offered until it has actually been said, so it can land in the second gap of the night rather than the first - which is why the classes and drivers describe the whole evening while the races are counted over what's **left** to run.
 
@@ -1043,6 +1046,7 @@ What counts as racing is the program, not the check-in sheet: a driver ticked in
 | "That is 14 races and 412 laps tonight." | At least one race filed tonight. Laps are left off when there are none. |
 | "The fastest lap of the night went to Billy: 11.150s." | A fastest lap with a name on it. A disqualified result's lap and one from a driver kept out of records don't count - the same two filters the Big Screen's fastest-lap figure uses, so the two can't disagree. With no name on file for the quickest lap the whole line is dropped, rather than handing the night's fastest lap to a slower one. |
 | "The closest finish all night was Dot's, by 0.06s." | A margin of **0.5s or less** - only when it was actually close. Both cars have to have covered the same distance, so a winner a lap clear has no margin in seconds. |
+| "Two rounds left and four points covering the top three." | An **Announcer's note** on a championship one of tonight's races counts towards, read out as typed. When a night counts towards more than one, the first one on the **Championship** page is used. |
 | "3 drivers raced here for the first time tonight." | At least **4** earlier race nights on file. In a club's first month every driver's first filed race is this week, so without that bar a club racing for fifteen years would be told nineteen drivers were new. It goes by filed results, not by when somebody typed a profile in. |
 
 "Tonight" is the race night, 6 a.m. to 6 a.m., so a club night that runs its mains past midnight is one night. The sign-off counts every race the club ran tonight whether it was filed against one of tonight's rounds or not, because it's about what happened rather than what was planned. An evening with nothing filed gets no sign-off at all.
@@ -1197,6 +1201,14 @@ In the race intro, when a season has enough left to decide:
 > "This is the last round of the Winter Series. It is between Bill Hargrove and Sam Teague today, and nobody else can take it."
 
 > "Bill Hargrove has already won the Winter Series on 148 points. Nobody left can reach that, even winning all two remaining rounds."
+
+And in the **Championship check** after the flag, worked out from the table with that race in it:
+
+> "That settles it: nobody can catch Bill Hargrove in Box Stock now."
+
+> "3 drivers can still win the Box Stock championship."
+
+After the flag it stays quiet on a night with another race still to run that the championship counts (a B-main as well as the A-main, say), because it proves each round left as one race.
 
 ### It needs one thing from you
 
@@ -1364,11 +1376,11 @@ So a club doesn't hear about the same driver three segments running, and the rac
 
 Some of these have been asked for. Each is left out on purpose, and knowing which is quicker than filing it as a fault.
 
-**No count of visiting drivers.** The cold open says nothing about where anybody came from. HeatCaller has no idea of club membership - no member list, and nothing on a profile that says guest - so there's no honest way to count it. The nearest thing is the home track a club types for intro color at an open meeting, and turning that into a number means comparing free text with free text: one spelling of the venue makes a member a visitor, and every regular who left the box empty makes themselves a local. "Seven of them visiting" goes out over the PA as a fact, and the people it's about are standing in the room able to count themselves.
+**No guessed count of visiting drivers.** The cold open's "7 of them visiting" counts only the profiles you've ticked **Visiting from another club** on. It never reads the home track: turning that into a number means comparing free text with free text, so one spelling of the venue makes a member a visitor, and every regular who left the box empty makes themselves a local. "Seven of them visiting" goes out over the PA as a fact, and the people it's about are standing in the room able to count themselves.
 
-**No championship sentence in your own words at either bookend.** "Two rounds left and four points covering the top three" is a sentence a person types, and there's nowhere in HeatCaller to type it. It isn't worked out either - that needs the rounds remaining and the points still on offer - and it would be a second opinion against the **Championship check** segment, which has figures of its own.
+**No championship sentence it wrote itself at either bookend.** "Two rounds left and four points covering the top three" is only ever said as your club typed it, in a championship's **Announcer's note**. It isn't worked out: it would be a second opinion against the **Championship check** segment, which has figures of its own.
 
-**No "nobody can catch him now".** Whether a title is mathematically settled needs the rounds left in the season and the points still on offer, and HeatCaller doesn't know how many rounds a season will run. So nothing is ever claimed about a title being decided, and no driver is written off.
+**No "nobody can catch him now" without the season's length.** Whether a title is settled needs the rounds left, and HeatCaller only knows that when **Rounds in the season** is filled in. With it, the race intro and the **Championship check** after the flag prove the claim by playing the rounds left out, as described in [What the championship still has riding on it](#what-the-championship-still-has-riding-on-it). Without it, nothing is ever claimed about a title being decided, and no driver is written off.
 
 **No flat conditional.** "A win here and he leads the championship" is deliberately never said. It isn't a shorter way of saying the conditional above, it's a different claim: it's true for one finishing order out of many, and the room has no way of telling which one it's been given. Said over the PA and falsified forty minutes later, that's the timing system telling forty people something untrue - and the timing is the one thing a club trusts HeatCaller with, so it doesn't say things that might be wrong.
 
