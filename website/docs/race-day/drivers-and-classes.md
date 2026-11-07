@@ -60,7 +60,7 @@ Their garage is where their cars come from. If you rename a car, the driver is a
 
 When a car changes hands for good — sold or given — transfer it. A car lent for one night is **Lend Out** instead.
 
-1. Open the car (on the **Garage** page or in the driver's garage) and click **Transfer**. In a driver's garage you can also right-click the car.
+1. Open the car (on the **Garage** page or in the driver's garage), click **More** and pick **Transfer**. In a driver's garage you can also right-click the car.
 2. Pick who gets it: a driver, or **The club**. Type in **Find:** to narrow the list.
 3. If any of the owner's transponders are fitted to the car, they're listed with a tick. Untick any that stay with the owner. A transponder that stays with them moves between their cars from now on. The owner's main transponder always stays with them, because their results are filed under it. A transponder can't go to the club. Split transponders fitted to the car always go with it to a driver; going to the club, they stay with the owner.
 4. Click **Transfer to *name***.
@@ -637,25 +637,28 @@ The **Garage** page shows the club's cars as cards, grouped under their class. A
 
 ![Garage page: Everyone's cars, grouped under Box Stock 2, Mod 2 and Stock 4, two with photos and the rest on numbered plates, with Add a Car, Chassis Types, Chassis Sheets and Club Batteries below](../assets/images/garage.png)
 
-Click a car to open it: its photos (**Photos**), its details (**Edit**), **Lend Out**, **Transfer** (see [Transfer a car](#transfer-a-car)), **Retire** and **Delete**, and every setup logged for it.
+Click a car to open it. Across the top is the car: a small picture, its details, and the buttons **Edit**, **Photos** and **More**. **More** holds **Lend Out**, **Transfer** (see [Transfer a car](#transfer-a-car)), **Retire** and **Delete Car**. Under that is every setup logged for the car.
 
+- Click the picture to see the car's next photo. When there's more than one, its corner says which one is showing, such as **2 / 5**. A car with no photos says **Add a photo**, and clicking it opens **Photos**.
 - **Photos** adds pictures with **Add a Photo**, takes one off with **Remove**, and **Make it First** makes the selected one the car's main picture. Pictures are copied into HeatCaller, so they stay with the car.
 - **Edit** (or **Add a Car**) has the car's **Name:**, **Owner:**, **Class:**, **Chassis:**, **Shell:**, **Race number:** and **Notes:**. **Owner:** can only be picked when the car is added.
-- **Lend Out** lends the car to another driver for the race day you have open, in **Lend it to:**. The loan is for that day only: the car goes back to its owner when the day ends, and **Nobody - it stays with its owner** takes it back sooner. It's grayed out while no race day is open. The car shows who has it as **On loan to:**.
+- **Lend Out** lends the car to another driver for the race day you have open, in **Lend it to:**. The loan is for that day only: the car goes back to its owner when the day ends, and **Nobody - it stays with its owner** takes it back sooner. While no race day is open it's grayed out and reads **Lend Out (open a race day first)**. The car shows who has it as **On loan to:**.
 - **Retire** keeps a car you no longer run out of the way without losing it. It asks "Are you sure?" first, with **No** as the default. On a retired car it reads **Put Back**, which is one click.
-- **Delete** asks first. Setups logged against the car stay in the log, without the car.
+- **Delete Car** asks first. Setups logged against the car stay in the log, without the car.
 
 Each of these can be undone. A driver can also change their own cars from their phone; see [A driver's garage from their phone](#a-drivers-garage-from-their-phone). A car window left open on the laptop doesn't save an older copy over a change made from the phone.
 
 **Chassis Types** on the **Garage** page is the club's list of chassis a car can be. Each has a **Name**, a **Maker** and a **Setup sheet to use**: logging a setup for a car on that chassis opens on that sheet. **Add** makes a new one, **Save Changes** keeps your edits, **Retire** keeps one nobody runs any more (after an "Are you sure?"), and **Delete** removes it.
 
-Setups are logged against a car: open a car, and its setups are listed under **Setups logged for this car**. A setup records what was in the car and can be linked to the session it ran in, so the session's best lap shows right next to it. Over time it shows which changes actually made the car quicker.
+Setups are logged against a car: open a car, and its setups are listed under **Setups**. A setup records what was in the car and can be linked to the session it ran in, so the session's best lap shows right next to it. Over time it shows which changes actually made the car quicker.
 
-<!-- screenshot: a car in the Garage, its setups listed with Changed Since Last and Best Lap -->
+<!-- screenshot: a car in the Garage, its setups as a timeline of cards, each with what changed -->
 
-The list shows the car's setups newest first, with the columns **Date**, **Driver**, **Track**, **Chassis Sheet**, **Filled** (how many fields are filled in), **Best Lap**, **Changed Since Last** and **Setup** (the first few filled values).
+The setups are cards down a timeline, newest first. Each card shows the date, then the driver, the track, the chassis sheet, how many fields are **filled** and the **best lap**, leaving out any that are empty. Under that it shows what changed. Click a card to open it and see **Whole setup**, every value filled in. Click it again to close it.
 
-**Changed Since Last** shows what's different from the setup logged before it, so a run of tuning sessions reads as a run of changes at a glance: for example "Pinion 22T → 23T, Front springs Soft → Medium". A value that was set for the first time shows as "Front springs → Hard", and one that was cleared as "Pinion 22T → (none)". Up to three changes are shown, then "and 2 more"; point at the cell to see them all. A setup identical to the one before it says **no changes**, and the oldest says **(first setup)**. Notes aren't counted, and neither are differences in capitals or spaces, or the same options ticked in a different order. A setup filled in on a chassis sheet isn't compared with one from before chassis sheets, since they share no fields: the first sheet setup after an older one says **(first on a setup sheet)**.
+Each card's **⋯** (or a right-click on the card) has **Edit**, **Duplicate** and **Delete Setup**. Double-clicking a card also opens it for editing. With the list selected, the arrow keys move between cards, **Space** opens or closes one, **Enter** edits it and **Delete** deletes it.
+
+**Changed:** shows what's different from the setup logged before it, so a run of tuning sessions reads as a run of changes at a glance: for example "Pinion 22T → 23T, Front springs Soft → Medium". A value that was set for the first time shows as "Front springs → Hard", and one that was cleared as "Pinion 22T → (none)". Every change is listed, wrapping onto more lines when there are many. A setup identical to the one before it says **No changes from the one before**, and the oldest says **First setup for this car**. Notes aren't counted, and neither are differences in capitals or spaces, or the same options ticked in a different order. A setup filled in on a chassis sheet isn't compared with one from before chassis sheets, since they share no fields: the first sheet setup after an older one says **First on a setup sheet**.
 
 The same changes are what the winner's Technical Lead talks about in pit lane at the flag, after a main (and after heats, if that's ticked). See [Technical Lead and Team Principal](../announcer/commentary.md#technical-lead-and-team-principal).
 
@@ -668,9 +671,9 @@ The same changes are what the winner's Technical Lead talks about in pit lane at
 5. Fill in the fields. Click a callout on the chassis diagram to jump to its field; filled callouts are highlighted.
 6. Click **Save**.
 
-Most changes are small tweaks, so **Duplicate** copies the selected setup as a starting point for the next one. The copy keeps the driver, track, car, chassis sheet and values, but not the date or the session link. **Delete** removes the selected setups (you can select several); **Undo** brings them back.
+Most changes are small tweaks, so **Duplicate** copies a setup as a starting point for the next one. The copy keeps the driver, track, car, chassis sheet and values, but not the date or the session link. **Delete Setup** removes one setup after asking; **Undo** brings it back.
 
-Setups saved before chassis sheets existed show **(older entry)** in the **Chassis Sheet** column. When you open one, its old values are copied into the matching fields of the sheet.
+Setups saved before chassis sheets existed say **(older entry)** where the chassis sheet would be. When you open one, its old values are copied into the matching fields of the sheet.
 
 ### Setups without a car
 
@@ -688,7 +691,7 @@ Any driver can run a club pack: put it in their car on their **Batteries** tab, 
 
 A chassis sheet is the template a setup is filled in against: a diagram of the car with callouts, plus a list of fields. HeatCaller comes with a **Kyosho MR-04 / MR-03** sheet.
 
-Click **Chassis Sheets** to manage them. **New** starts a new sheet from the Kyosho one, **Duplicate** copies the selected sheet, **Edit** opens it, and **Delete** removes it (setups that used it are kept, with "(sheet deleted)" in their **Chassis Sheet** column; Undo can restore the sheet).
+Click **Chassis Sheets** to manage them. **New** starts a new sheet from the Kyosho one, **Duplicate** copies the selected sheet, **Edit** opens it, and **Delete** removes it (setups that used it are kept, and say "(sheet deleted)" where the chassis sheet would be; Undo can restore the sheet).
 
 In the sheet editor (**Chassis Diagram**):
 
