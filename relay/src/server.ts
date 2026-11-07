@@ -75,7 +75,7 @@ import { LapVoiceLibrary } from "./lapvoice.js";
 import { VOICE_PLAN_OFF, type MeterUsage, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
-import { pushSubFrom, SERVICE_WORKER_JS, type PushService } from "./push.js";
+import { PUSH_CHANNEL, pushSubFrom, SERVICE_WORKER_JS, type PushService } from "./push.js";
 
 /** The public pages under /c/<club>/, by their last path segment. */
 const PAGES: Readonly<Record<string, (club: string, clubName: string, context: PageContext) => string>> = Object.freeze({
@@ -277,6 +277,13 @@ const NIGHTS_OPEN_DOC = "nightsopen";
 
 /** The channel one driver's night lives in - see CHANNELS.nights. */
 const NIGHTS_CHANNEL = "nights";
+
+/**
+ * Car photos read at once, across every club - each up to
+ * DRIVER_PHOTO_MAX_BODY held in memory while it arrives. A few drivers at
+ * one moment is plenty; the rest are told to try again in a minute.
+ */
+const PHOTO_UPLOADS_IN_FLIGHT_MAX = 6;
 
 /** The collection the announcer's lines arrive in - see CHANNELS.listen. */
 const LISTEN_CHANNEL = "listen";
@@ -1118,6 +1125,8 @@ export class Relay {
   private readonly clipUploads: Limiter;
   /** Clip uploads being read right now, across every club. */
   private clipUploadsInFlight = 0;
+  /** Car photos being read right now, across every club - see driverPhoto. */
+  private photoUploadsInFlight = 0;
   /**
    * How many times each club's clips have been wiped - by closing nights or
    * deleting everything. An upload that started before and finishes after
@@ -2079,8 +2088,9 @@ export class Relay {
     // WHY (22 Oct 2026, Bug Hunt 9): the server-wide requestTimeout is now
     // five minutes for the laptop's uploads (see listen()), so every request
     // gets the old 30-second ceiling back here: a body still arriving after
-    // 30 s is cut off. Only receiveClip lifts it (liftCeiling), and only
-    // once an upload has passed every check - so a POST with no token, or
+    // 30 s is cut off. Only receiveClip and driverPhoto lift it
+    // (liftCeiling), and only once an upload has passed every check it can
+    // be given before its body arrives - so a POST with no token, or
     // one refused as busy, still cannot trickle for minutes while it is
     // drained. The upload then gets an idle timeout instead.
     const cut = setTimeout(() => {
@@ -2571,7 +2581,16 @@ export class Relay {
         return;
       }
 
-      sendJson(response, 200, { ok: true, key: await this.push.publicKey() });
+      // A key that will not read is not made over (push.ts vapid), so it
+      // is said here rather than answered as a fault.
+      const key = await this.push.publicKey().catch(() => undefined);
+
+      if (key === undefined) {
+        sendJson(response, 503, { ok: false, error: "Alerts are not working on this relay just now. Try again later." });
+        return;
+      }
+
+      sendJson(response, 200, { ok: true, key });
       return;
     }
 
@@ -3117,7 +3136,7 @@ export class Relay {
     const channel = spec.name;
     const maxItems = spec.maxItems ?? Number.POSITIVE_INFINITY;
 
-    const [items, used, tunnel, signups, votes, notes, inbox, asks, photos] = await Promise.all([
+    const [items, used, tunnel, signups, votes, notes, inbox, asks, photos, pushSubs] = await Promise.all([
       this.store.itemSizes(club, channel),
       this.store.usage(club),
       this.store.snapshotBytes(club, MANAGE_QUEUE),
@@ -3131,6 +3150,9 @@ export class Relay {
       // And their car photos on the way to the laptop (5 Nov 2026), with
       // a ceiling of their own (DRIVER_PHOTOS_PER_CLUB).
       this.store.itemSizes(club, DRIVER_PHOTOS_CHANNEL),
+      // And phones signed up for alerts (7 Nov 2026, Bug Hunt 13): written
+      // by phones, with a ceiling of their own (PUSH_SUBS_PER_CLUB).
+      this.store.itemSizes(club, PUSH_CHANNEL),
     ]);
     const replaced = items.find((item) => item.id === id);
     const others = items.filter((item) => item.id !== id).sort((a, b) => a.at - b.at);
@@ -3224,7 +3246,8 @@ export class Relay {
     const offQuota = await this.offQuotaBytes(club);
     const phoneWritten =
       votes.reduce((sum, item) => sum + item.bytes, 0) + notes.reduce((sum, item) => sum + item.bytes, 0) + inbox +
-      asks.reduce((sum, item) => sum + item.bytes, 0) + photos.reduce((sum, item) => sum + item.bytes, 0);
+      asks.reduce((sum, item) => sum + item.bytes, 0) + photos.reduce((sum, item) => sum + item.bytes, 0) +
+      pushSubs.reduce((sum, item) => sum + item.bytes, 0);
 
     let total = used - tunnel - signups - phoneWritten - offQuota - (replaced?.bytes ?? 0) + bytes;
     let count = others.length + 1;
@@ -4739,7 +4762,7 @@ export class Relay {
       // held in memory to forget.
       await this.pinGuard.forget(club, () =>
         this.managePinGuard.forget(club, () =>
-          this.signupPinGuard.forget(club, () => this.store.deleteClub(club)),
+          this.signupPinGuard.forget(club, () => this.forgetPushSubs(club, () => this.store.deleteClub(club))),
         ),
       );
 
@@ -6573,6 +6596,13 @@ export class Relay {
         // written over with nothing, which every reader takes as absent;
         // seq 0, so the laptop's next publish after reopening always wins.
         await this.blankSnapshot(club, DRIVER_LIVE_CHANNEL);
+
+        // AND THE PHONES SIGNED UP FOR ALERTS (7 Nov 2026, Bug Hunt 13) -
+        // each one's push address and keys, under the driver's badge id.
+        // Nothing else ever took them off, and a phone cannot sign itself
+        // off while nights are closed, so they stayed until Delete
+        // everything and were buzzed again the night the switch went back on.
+        await this.forgetPushSubs(club);
       });
 
       // And their clips - the announcer calling a named driver's race.
@@ -6639,9 +6669,11 @@ export class Relay {
       return;
     }
 
+    const push = this.push;
+
     if (!on) {
       const endpoint = isPlainObject(body["sub"]) && typeof body["sub"]["endpoint"] === "string" ? body["sub"]["endpoint"] : "";
-      await this.push.unsubscribe(club, id, endpoint);
+      await this.withLock(club, () => push.unsubscribe(club, id, endpoint));
       sendJson(response, 200, { ok: true });
       return;
     }
@@ -6661,7 +6693,21 @@ export class Relay {
       return;
     }
 
-    if ((await this.push.subscribe(club, id, sub)) === "full") {
+    // Written inside the club's lock, with the switch looked at again there
+    // (7 Nov 2026, Bug Hunt 13), as driverAsk and signupSubmit do: closing
+    // nights and Delete everything both take the lock, so a sign-up that
+    // read "open" before either cannot land after it and put a phone's
+    // push address back in a club that had just let them go.
+    const outcome = await this.withLock(club, async () =>
+      (await this.nightsOpenFor(club)) ? push.subscribe(club, id, sub) : ("closed" as const),
+    );
+
+    if (outcome === "closed") {
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    if (outcome === "full") {
       sendJson(response, 507, { ok: false, error: "This club cannot take any more phones for alerts." });
       return;
     }
@@ -6967,6 +7013,28 @@ export class Relay {
   }
 
   /** Every one of a club's clips, gone - when nights close or the club is deleted. Anything on its way keeps nothing. */
+  /**
+   * Every phone signed up for a club's alerts, forgotten. Called inside the
+   * club's lock. With `wipe`, that is what forgets them (Delete everything
+   * takes the whole folder), run while no alert being sent can write a
+   * driver's list back - see PushService.forget.
+   */
+  private async forgetPushSubs(club: string, wipe?: () => Promise<void>): Promise<void> {
+    if (this.push !== undefined) {
+      await this.push.forget(club, wipe);
+      return;
+    }
+
+    if (wipe !== undefined) {
+      await wipe();
+      return;
+    }
+
+    for (const item of await this.store.itemSizes(club, PUSH_CHANNEL)) {
+      await this.store.deleteItem(club, PUSH_CHANNEL, item.id).catch(() => undefined);
+    }
+  }
+
   private async wipeClips(club: string): Promise<void> {
     this.clipWipes.set(club, (this.clipWipes.get(club) ?? 0) + 1);
     const vault = this.clips;
@@ -7414,9 +7482,29 @@ export class Relay {
       return;
     }
 
+    // WHY (7 Nov 2026, Bug Hunt 13): the ceiling was lifted before anything
+    // was checked, so any address could hold a connection for the whole
+    // five minutes, half a megabyte buffered, with no badge code and on a
+    // club not taking photos at all - a couple of hundred of them filled
+    // the relay. The badge code is inside the body, so it cannot be looked
+    // at first; what can be is: the club taking asks at all, and how many
+    // photos are being read right now across every club (as clips have).
+    if (!(await this.nightsOpenFor(club)) || !(await this.driverAsksOpenFor(club))) {
+      await discardRest(request, response);
+      sendJson(response, 404, { ok: false, error: "Not found" });
+      return;
+    }
+
+    if (this.photoUploadsInFlight >= PHOTO_UPLOADS_IN_FLIGHT_MAX) {
+      await discardRest(request, response);
+      sendJson(response, 429, { ok: false, error: "Busy with other photos. Try again in a minute." });
+      return;
+    }
+
     // A phone on the venue's Wi-Fi can take more than the 30-second
     // ceiling to send half a megabyte - an idle timeout instead, as a
     // clip has.
+    this.photoUploadsInFlight += 1;
     liftCeiling();
     request.setTimeout(30_000, () => request.destroy());
 
@@ -7428,6 +7516,7 @@ export class Relay {
       if (!request.destroyed) {
         request.setTimeout(0);
       }
+      this.photoUploadsInFlight -= 1;
     }
 
     if (body === "too-big") {

@@ -1,5 +1,5 @@
 import { createECDH, createPrivateKey, generateKeyPairSync, hkdfSync, randomBytes, sign, createCipheriv, type KeyObject } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Store } from "./store.js";
 
@@ -338,6 +338,15 @@ export class PushService {
   private readonly post: PushPoster;
   private keys: VapidKeys | undefined;
   private loading: Promise<VapidKeys> | undefined;
+  /**
+   * One club's sign-ups changed one at a time (7 Nov 2026, Bug Hunt 13).
+   * Each change reads a driver's list and writes it back, and an alert
+   * being sent writes back what it read before its posts - up to ten
+   * seconds a phone - so without this a phone signing up meanwhile was
+   * written over, and lost, when another phone turned out to be gone.
+   * Only the reading and writing is held, never a post.
+   */
+  private readonly locks = new Map<string, Promise<void>>();
 
   constructor(options: PushOptions) {
     this.store = options.store;
@@ -366,17 +375,43 @@ export class PushService {
       return this.keys;
     }
 
+    // WHY (7 Nov 2026, Bug Hunt 13): any failure to read the key used to
+    // count as "not made yet", so a passing EIO or EMFILE on a later start
+    // made a new key and wrote it over the good one - and every phone
+    // already signed up, in every club, is bound to the old one, so the
+    // push services refused every alert from then on. Only a missing file
+    // is "not made yet" now, as for every other file the relay keeps; one
+    // that is there but will not read stops push for this attempt, and
+    // the next attempt reads it again.
     this.loading ??= (async () => {
       let jwk: { x: string; y: string; d: string } | undefined;
 
       if (this.keyFile !== undefined) {
+        let text: string | undefined;
+
         try {
-          const kept = JSON.parse(await readFile(this.keyFile, "utf8")) as { x?: unknown; y?: unknown; d?: unknown };
-          if (typeof kept.x === "string" && typeof kept.y === "string" && typeof kept.d === "string") {
-            jwk = { x: kept.x, y: kept.y, d: kept.d };
+          text = await readFile(this.keyFile, "utf8");
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+            throw new Error(`the relay's push key could not be read: ${String(e)}`);
           }
-        } catch {
-          // Not made yet.
+        }
+
+        if (text !== undefined) {
+          let kept: { x?: unknown; y?: unknown; d?: unknown } | undefined;
+
+          try {
+            kept = JSON.parse(text) as { x?: unknown; y?: unknown; d?: unknown };
+          } catch {
+            kept = undefined;
+          }
+
+          if (kept === undefined || typeof kept !== "object" || kept === null
+            || typeof kept.x !== "string" || typeof kept.y !== "string" || typeof kept.d !== "string") {
+            throw new Error("the relay's push key is there but is not a key - left as it is");
+          }
+
+          jwk = { x: kept.x, y: kept.y, d: kept.d };
         }
       }
 
@@ -384,8 +419,12 @@ export class PushService {
         jwk = freshVapidJwk();
 
         if (this.keyFile !== undefined) {
+          // Written to a file beside it and renamed over, so a crash
+          // part-way leaves no half a key for the next start to refuse.
+          const temp = `${this.keyFile}.${randomBytes(6).toString("hex")}.tmp`;
           await mkdir(dirname(this.keyFile), { recursive: true });
-          await writeFile(this.keyFile, JSON.stringify(jwk), { mode: 0o600 });
+          await writeFile(temp, JSON.stringify(jwk), { mode: 0o600 });
+          await rename(temp, this.keyFile);
           this.log("[push] made the relay's push key");
         }
       }
@@ -394,7 +433,20 @@ export class PushService {
       return this.keys;
     })();
 
-    return this.loading;
+    const loading = this.loading;
+
+    try {
+      return await loading;
+    } catch (e) {
+      // Not kept: a failed attempt would otherwise be the answer until
+      // the relay restarted.
+      if (this.loading === loading) {
+        this.loading = undefined;
+      }
+
+      this.log(`[push] ${String(e)}`);
+      throw e;
+    }
   }
 
   /** The public key the page hands the browser, base64url. */
@@ -417,12 +469,55 @@ export class PushService {
     await this.store.putItem(club, PUSH_CHANNEL, id, { seq: 0, publishedAt: this.now().toISOString(), body: { subs } });
   }
 
+  private async withLock<T>(club: string, work: () => Promise<T>): Promise<T> {
+    const previous = this.locks.get(club) ?? Promise.resolve();
+    const run = previous.then(work);
+    const settled = run.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    this.locks.set(club, settled);
+
+    try {
+      return await run;
+    } finally {
+      if (this.locks.get(club) === settled) {
+        this.locks.delete(club);
+      }
+    }
+  }
+
+  /**
+   * Every phone signed up for a club, forgotten - the club closing
+   * drivers' nights. With `wipe`, that is what forgets them instead (Delete
+   * everything takes the club's whole folder). Either way no alert still
+   * being sent can write a driver's list back afterwards: it reads the
+   * list again, inside the same lock, and finds nothing.
+   */
+  async forget(club: string, wipe?: () => Promise<void>): Promise<void> {
+    await this.withLock(club, async () => {
+      if (wipe !== undefined) {
+        await wipe();
+        return;
+      }
+
+      for (const item of await this.store.itemSizes(club, PUSH_CHANNEL)) {
+        await this.store.deleteItem(club, PUSH_CHANNEL, item.id).catch(() => undefined);
+      }
+    });
+  }
+
   /** Signs a phone up for a driver's alerts. "full" when the club has reached its ceiling. */
   async subscribe(club: string, id: string, sub: PushSub): Promise<"ok" | "full"> {
     if (!DRIVER_ID.test(id)) {
       return "full";
     }
 
+    return this.withLock(club, () => this.subscribeHeld(club, id, sub));
+  }
+
+  private async subscribeHeld(club: string, id: string, sub: PushSub): Promise<"ok" | "full"> {
     const mine = await this.subsOf(club, id);
 
     if (!mine.some((s) => s.endpoint === sub.endpoint)) {
@@ -445,12 +540,14 @@ export class PushService {
       return;
     }
 
-    const mine = await this.subsOf(club, id);
-    const left = mine.filter((s) => s.endpoint !== endpoint);
+    await this.withLock(club, async () => {
+      const mine = await this.subsOf(club, id);
+      const left = mine.filter((s) => s.endpoint !== endpoint);
 
-    if (left.length !== mine.length) {
-      await this.keep(club, id, left);
-    }
+      if (left.length !== mine.length) {
+        await this.keep(club, id, left);
+      }
+    });
   }
 
   /** Every driver of the club with a phone signed up. */
@@ -544,8 +641,17 @@ export class PushService {
       }
     }
 
+    // The list read again, inside the lock: what was read before the posts
+    // may since have gained a phone, or gone with the club.
     if (gone.length > 0) {
-      await this.keep(club, id, subs.filter((s) => !gone.includes(s.endpoint)));
+      await this.withLock(club, async () => {
+        const now = await this.subsOf(club, id);
+        const left = now.filter((s) => !gone.includes(s.endpoint));
+
+        if (left.length !== now.length) {
+          await this.keep(club, id, left);
+        }
+      });
     }
 
     // Accepted ones logged too (7 Nov 2026): with only refusals in the log,
