@@ -109,6 +109,40 @@ describe("Me as a pit wall", () => {
     assert.match(body, /HeatCaller did not take the pack swap/);
   });
 
+  it("takes the Garage's packs for the moment card and the quick swap when the desk has sent none", () => {
+    // 7 Nov 2026, Asher: the pack "doesn't recognize there are packs
+    // available and doesn't load the quick picker" - me.packs comes only
+    // while they are on tonight's check-in list, the Garage always.
+    const at = ME_JS.indexOf("function mePacks");
+    assert.ok(at > 0);
+    const end = ME_JS.indexOf("\n}\n", ME_JS.indexOf("function mePackNow"));
+    const src = ME_JS.slice(at, end + 2);
+    const run = (me: unknown, meGarage: unknown) => new Function("me", "meGarage", "OBJECT_ID",
+      src + "return { packs: mePacks(), now: mePackNow() };")(me, meGarage, /^[0-9a-f]{32}$/) as
+      { packs: { choices: { id: string; label: string }[]; current: string }; now: string };
+    const a = "a".repeat(32), b = "b".repeat(32), c = "c".repeat(32);
+    const garage = { packs: [
+      { id: a, label: "Red 2S" },
+      { id: b, label: "Blue 2S", inCar: true },
+      { id: c, label: "Old one", retired: true },
+    ] };
+
+    const off = run(null, garage);
+    assert.deepEqual(off.packs.choices.map((x) => x.id), [a, b]);
+    assert.equal(off.packs.current, b);
+    assert.equal(off.now, "Blue 2S");
+
+    // An empty list from the desk is no list: the Garage's still count.
+    assert.equal(run({ packs: { choices: [] } }, garage).packs.choices.length, 2);
+
+    // The desk's own choices, when it sent some, win.
+    const desk = run({ packs: { current: a, choices: [{ id: a, label: "Red 2S" }] } }, garage);
+    assert.deepEqual(desk.packs.choices.map((x) => x.id), [a]);
+    assert.equal(desk.now, "Red 2S");
+
+    assert.deepEqual(run(null, null).packs, { choices: [], current: "" });
+  });
+
   it("puts a dot on a space only when something new came in since it was last open", () => {
     // meDots and meSigOf, run against a pretend switch.
     const run = new Function("state", `

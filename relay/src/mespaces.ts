@@ -339,12 +339,34 @@ function meNext() {
   return live && live.next && typeof live.next === 'object' ? live.next : null;
 }
 
+// The packs they can put in the car and the one in it now (7 Nov 2026,
+// Asher: the moment card's pack "doesn't recognize there are packs
+// available and doesn't load the quick picker"). The desk's own choices
+// (me.packs) come only while they are on tonight's check-in list, but the
+// Garage lists their packs whenever it is open - so when the desk has sent
+// none, the Garage's packs, not retired, are the choices, and its In the
+// car is the one in it.
+function mePacks() {
+  const valid = (c) => c && typeof c.id === 'string' && OBJECT_ID.test(c.id) && typeof c.label === 'string' && c.label !== '';
+  const fromMe = me && me.packs && Array.isArray(me.packs.choices) ? me.packs.choices.filter(valid) : [];
+  if (fromMe.length > 0) {
+    const cur = typeof me.packs.current === 'string' && fromMe.some((c) => c.id === me.packs.current) ? me.packs.current : '';
+    return { choices: fromMe, current: cur };
+  }
+  const garage = meGarage && Array.isArray(meGarage.packs) ? meGarage.packs : [];
+  const ok = (p) => p && typeof p.id === 'string' && OBJECT_ID.test(p.id);
+  const choices = garage.filter((p) => ok(p) && p.retired !== true)
+    .map((p) => ({ id: p.id, label: typeof p.label === 'string' && p.label.trim() !== '' ? p.label : 'Unnamed pack' }));
+  const inCar = garage.find((p) => ok(p) && p.inCar === true);
+  return { choices: choices, current: inCar ? inCar.id : '' };
+}
+
 function mePackNow() {
-  const choices = me && me.packs && Array.isArray(me.packs.choices) ? me.packs.choices : [];
-  const cur = me && me.packs && typeof me.packs.current === 'string' ? me.packs.current : '';
-  const fromMe = choices.find((c) => c && c.id === cur);
-  if (fromMe) return String(fromMe.label || '');
-  const g = meGarage && Array.isArray(meGarage.packs) ? meGarage.packs.find((p) => p && p.inCar === true) : null;
+  const p = mePacks();
+  const now = p.choices.find((c) => c.id === p.current);
+  if (now) return String(now.label);
+  // In the car but no longer a choice (retired since): still named.
+  const g = meGarage && Array.isArray(meGarage.packs) ? meGarage.packs.find((x) => x && x.inCar === true) : null;
   return g ? String(g.label || '') : '';
 }
 
@@ -548,8 +570,7 @@ function meTiles() {
     at.appendChild(meTile('w hot', 'Next race', String(n.race || 'Your race'), [callWords(n), eta, num(n.slot) > 0 ? 'grid ' + nth(n.slot) : ''].filter(Boolean).join(' · '),
       () => { const lv = document.getElementById('lv'); if (lv) lv.scrollIntoView({ block: 'start', behavior: 'smooth' }); }));
   }
-  const choices = me && me.packs && Array.isArray(me.packs.choices) ? me.packs.choices : [];
-  if (choices.length > 0 || mePackNow() !== '') {
+  if (mePacks().choices.length > 0 || mePackNow() !== '') {
     at.appendChild(meTile('', 'Pack in the car', mePackNow() || 'None set', 'Tap to swap', mePackSheet));
   }
   const car = meCarTonight();
@@ -629,15 +650,15 @@ function meCloseSheet() {
 }
 
 function mePackSheet() {
-  const choices = me && me.packs && Array.isArray(me.packs.choices)
-    ? me.packs.choices.filter((c) => c && typeof c.id === 'string' && OBJECT_ID.test(c.id) && typeof c.label === 'string') : [];
+  const packs = mePacks();
+  const choices = packs.choices;
   meOpenSheet('Pack in the car', (body) => {
     if (choices.length === 0) {
       body.appendChild(el('p', 'note', 'No packs of yours in HeatCaller yet. Add them in Garage.'));
       body.appendChild(tapButton('Open Garage', 'go', () => { meCloseSheet(); meSetSpace('garage', 'l'); }));
       return;
     }
-    const cur = me.packs && typeof me.packs.current === 'string' ? me.packs.current : '';
+    const cur = packs.current;
     const grid = el('div', 'me-swap');
     for (const c of choices.concat([{ id: 'none', label: 'No pack' }])) {
       const b = el('button', '');
@@ -648,7 +669,12 @@ function mePackSheet() {
         for (const x of grid.querySelectorAll('button')) x.disabled = true;
         const got = await sendAsk('pack', { pack: c.id });
         if (got.ok) {
-          if (me.packs) me.packs.current = c.id === 'none' ? '' : c.id;
+          if (me && me.packs) me.packs.current = c.id === 'none' ? '' : c.id;
+          // The Garage's In the car too, so the card says the new pack
+          // before the Garage is sent again.
+          if (meGarage && Array.isArray(meGarage.packs)) {
+            for (const p of meGarage.packs) if (p) p.inCar = c.id !== 'none' && p.id === c.id;
+          }
           // sendAsk has buzzed once for "sent"; HeatCaller's answer buzzes again.
           const sent = sentAsks.length > 0 ? sentAsks[sentAsks.length - 1] : null;
           if (sent && sent.kind === 'pack') mePackRefs.set(sent.ref, c.id === 'none' ? '' : String(c.label));
