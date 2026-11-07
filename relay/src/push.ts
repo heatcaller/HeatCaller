@@ -544,6 +544,13 @@ export class PushService {
       await this.keep(club, id, subs.filter((s) => !gone.includes(s.endpoint)));
     }
 
+    // Accepted ones logged too (7 Nov 2026): with only refusals in the log,
+    // "no alert came" could not be told apart from "none was sent". The
+    // kind of alert (its tag) and a count - no name, no race.
+    if (sent > 0) {
+      this.log(`[push] "${club}": ${message.tag} accepted for ${sent} phone${sent === 1 ? "" : "s"}`);
+    }
+
     return sent;
   }
 }
