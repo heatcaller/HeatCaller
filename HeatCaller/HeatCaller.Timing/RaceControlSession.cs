@@ -2382,11 +2382,18 @@ public sealed partial class RaceControlSession
     /// ghost ahead of it - a ghost can never end the race, so its laps are
     /// not the ones counting down to the flag. In a field of nothing but
     /// ghosts, simply the first of them. Null before anyone has crossed.
+    ///
+    /// A black-flagged car is passed over too, for the same reason (bug
+    /// hunt 13): it cannot end the race either, so laps to go and laps led
+    /// are not counted from it. Only when every real car is black-flagged
+    /// is the first of those the leader.
     /// </summary>
     public RacerStanding? RaceLeader()
     {
         var ordered = GetOrderedStandings();
-        return ordered.FirstOrDefault(s => !Ghosts.IsGhost(s.TransponderId)) ?? ordered.FirstOrDefault();
+        return ordered.FirstOrDefault(s => !Ghosts.IsGhost(s.TransponderId) && !s.IsBlackFlagged)
+            ?? ordered.FirstOrDefault(s => !Ghosts.IsGhost(s.TransponderId))
+            ?? ordered.FirstOrDefault();
     }
 
     /// <summary>
@@ -3257,8 +3264,8 @@ public sealed partial class RaceControlSession
         IReadOnlyList<int>? Generations = null,
 
         // Whether the grid is the last race's order, numbered over the cars
-        // that race - see RenumberStartPositionsOverStarters. Null - the
-        // journal - leaves it as it is.
+        // that race - see RenumberStartPositionsOverStarters. Null - a
+        // journal written before it was stored - leaves it as it is.
         bool? RenumberGridOverStarters = null);
 
     public SessionSnapshot CreateSnapshot()

@@ -333,6 +333,14 @@ public sealed class RaceJournal
         public List<string>? JumpStarters { get; set; }
         public Dictionary<string, long>? PendingJumpStartPenalties { get; set; }
 
+        // Whether the grid is the last race's finishing order, numbered over
+        // the cars that actually race (bug hunt 13). Without it a restored
+        // race came back with the renumbering off, and a car counting its
+        // first lap after the restore kept its slot on the borrowed grid -
+        // 8th in a five-car heat. Null in an older journal, which leaves the
+        // session as it is - what happened before.
+        public bool? RenumberGridOverStarters { get; set; }
+
         // Which alternate transponders were being filed under their owner's
         // main one, so a driver on their second car stays in one row after a
         // restore. Null in older journals - see RaceControlSession.
@@ -485,6 +493,7 @@ public sealed class RaceJournal
                 ReleaseCalled = snapshot.ReleaseCalled?.ToList(),
                 StartPositions = snapshot.StartPositions?.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase),
                 JumpStarters = snapshot.JumpStarters?.ToList(),
+                RenumberGridOverStarters = snapshot.RenumberGridOverStarters,
                 PendingJumpStartPenalties = snapshot.PendingJumpStartPenalties?.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase),
                 AlternateMerged = snapshot.AlternateMerged?.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase),
                 MergedInto = snapshot.MergedInto?.ToList(),
@@ -1196,6 +1205,7 @@ public sealed class RaceJournal
             StartPositions: entry.StartPositions,
             JumpStarters: entry.JumpStarters,
             PendingJumpStartPenalties: entry.PendingJumpStartPenalties,
+            RenumberGridOverStarters: entry.RenumberGridOverStarters,
             AlternateMerged: entry.AlternateMerged,
             MergedInto: entry.MergedInto,
             HeardThisRace: entry.HeardThisRace,
