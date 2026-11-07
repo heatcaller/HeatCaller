@@ -9973,6 +9973,35 @@ function sunTile(ctx, x, y, size) {
   ctx.restore();
 }
 
+// DEMO RACES AND PRACTICE ON THE PICTURE TOO (6 Nov 2026, Asher: "allow
+// make a picture to include demos and practice. just label them as such").
+// The laptop's facts (night.lines) leave them out, so they are added here
+// from the race list, each one starting with Demo or Practice - and left
+// off while "Hide demo and practice" is ticked, as the list leaves them.
+// With any on the card, the laptop's "only demo races or practice" line
+// goes: the runs themselves say it.
+const ONLY_RUNS_LINE = 'No races filed for you tonight - only demo races or practice.';
+
+function runLines() {
+  const races = Array.isArray(night && night.races) ? night.races : [];
+  return shownRaces(races).filter((r) => runKind(r) !== '').map((r) => {
+    const word = RUN_WORDS[runKind(r)];
+    const label = typeof r.label === 'string' ? r.label.trim() : '';
+    const bits = [word];
+    if (label !== '' && label.toLowerCase() !== word.toLowerCase()) bits.push(label);
+    bits.push(finishWords(r));
+    if (num(r.laps) > 0) bits.push(plural(num(r.laps), 'lap', 'laps'));
+    if (num(r.bestMs) > 0) bits.push('best ' + lap(Math.round(num(r.bestMs))));
+    return bits.filter(Boolean).join(' · ');
+  });
+}
+
+function pictureLines() {
+  const runs = runLines();
+  const facts = lines(night.lines);
+  return (runs.length > 0 ? facts.filter((l) => l.trim() !== ONLY_RUNS_LINE) : facts).concat(runs);
+}
+
 function picture() {
   const canvas = document.createElement('canvas');
 
@@ -10019,7 +10048,7 @@ function picture() {
   ctx.font = '400 26px ' + face;
 
   const room = CARD_W - CARD_PAD * 2;
-  const fitted = fitLines(lines(night.lines), room, CARD_ROWS, (v) => ctx.measureText(v).width);
+  const fitted = fitLines(pictureLines(), room, CARD_ROWS, (v) => ctx.measureText(v).width);
 
   let y = CARD_FACTS_TOP;
 

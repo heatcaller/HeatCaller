@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createContext, runInContext, Script } from "node:vm";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
 
@@ -686,6 +687,48 @@ describe("the picture", () => {
 
     assert.equal(got.blocks.length, 0);
     assert.equal(got.more, 0);
+  });
+
+  // --- demo races and practice (6 Nov 2026, Asher: "allow make a picture
+  // to include demos and practice. just label them as such") -----------
+
+  const RUN_FNS = ["lines", "runKind", "shownRaces", "num", "nth", "plural", "lap", "finishWords", "runLines", "pictureLines"];
+  const ONLY = "No races filed for you tonight - only demo races or practice.";
+  const runsNight = {
+    lines: ["Heat 1: 2nd of 5", ONLY],
+    races: [
+      { label: "Heat 1", pos: 2, of: 5, laps: 12, bestMs: 9204 },
+      { label: "Heat 2", kind: "demo", pos: 1, of: 4, laps: 11, bestMs: 9310 },
+      { label: "Practice", kind: "practice", laps: 22, bestMs: 9188 },
+    ],
+  };
+
+  it("puts demo races and practice on the picture, each labelled", async () => {
+    const run = lifted((await page()).text, RUN_FNS, {
+      night: runsNight, view: { hideRuns: false }, RUN_WORDS: { demo: "Demo", practice: "Practice" }, ONLY_RUNS_LINE: ONLY,
+    });
+    const got = [...(run("pictureLines()") as string[])];
+
+    assert.equal(got[0], "Heat 1: 2nd of 5", "the laptop's facts first");
+    assert.match(got[1] ?? "", /^Demo · Heat 2 · 1st of 4 · 11 laps · best 9\.31/);
+    assert.match(got[2] ?? "", /^Practice · 22 laps · best 9\.18/, "no 'Practice · Practice'");
+    assert.ok(!got.includes(ONLY), "the runs say it themselves");
+    assert.equal(got.length, 3);
+  });
+
+  it("leaves them off while Hide demo and practice is ticked", async () => {
+    const run = lifted((await page()).text, RUN_FNS, {
+      night: runsNight, view: { hideRuns: true }, RUN_WORDS: { demo: "Demo", practice: "Practice" }, ONLY_RUNS_LINE: ONLY,
+    });
+
+    assert.deepEqual([...(run("pictureLines()") as string[])], runsNight.lines);
+  });
+
+  it("carries the laptop's own only-runs line word for word, so it can take it off", async () => {
+    const text = (await page()).text;
+    assert.ok(text.includes(`const ONLY_RUNS_LINE = '${ONLY}';`));
+    const cs = readFileSync(new URL("../../../HeatCaller/HeatCaller/DriverNight.cs", import.meta.url), "utf8");
+    assert.ok(cs.includes(`OnlyRunsLine = "${ONLY}"`), "the same words as DriverNight.OnlyRunsLine");
   });
 
   // --- the club's own look -----------------------------------------------
