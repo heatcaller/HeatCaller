@@ -3,7 +3,7 @@
 HeatCaller is a Windows app for running an RC car race night from one laptop. It reads lap crossings from your timing decoder, runs the race, calls it out loud, and keeps the results. This section gets you from nothing to a first race.
 
 !!! note "HeatCaller is in beta"
-    The current version is **BETA 0.60.0**. The version number is shown on the startup screen and in the window's title bar. Please quote it in any bug report. Expect some rough edges, and back up before a big event (see [Backups](../admin/backups.md)).
+    The current version is **BETA 0.61.0**. The version number is shown on the startup screen and in the window's title bar. Please quote it in any bug report. Expect some rough edges, and back up before a big event (see [Backups](../admin/backups.md)).
 
 ## What it does
 
@@ -38,7 +38,7 @@ HeatCaller started as a Mini-Z tool, but nothing in it is specific to one scale.
 HeatCaller is a Windows desktop app built on .NET 10 (`net10.0-windows`). It needs a Windows version that .NET 10 supports, which means Windows 11 or Windows 10. Windows 10 itself left Microsoft's support in October 2025, and Microsoft now lists only its long-term Enterprise and IoT editions as supported for .NET 10, so a laptop still on Windows 10 Home or Pro should move to Windows 11 when it can. Microsoft keeps the full list on its [.NET 10 supported operating systems](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md) page.
 <!-- TODO: confirm the minimum Windows version and whether 32-bit/ARM PCs are tested -->
 
-HeatCaller comes as an installer that carries everything it needs, .NET included, so there's nothing to install from Microsoft first. Allow about 1 GB of disk space. See [Installing and running](install.md).
+HeatCaller comes as an installer that carries everything it needs, .NET included, so there's nothing to install from Microsoft first. [Download it](https://github.com/asherizm/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi) (about 1.3 GB) and allow about 3 GB of disk space. See [Installing and running](install.md).
 
 The app is laid out at fixed pixel sizes and doesn't use Windows display scaling. On a high-resolution screen, text can look slightly soft. You can make everything bigger or smaller with <kbd>Ctrl</kbd>+<kbd>+</kbd> and <kbd>Ctrl</kbd>+<kbd>-</kbd> (see [Keyboard shortcuts](../reference/keyboard-shortcuts.md)).
 
