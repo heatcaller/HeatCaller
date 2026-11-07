@@ -81,6 +81,9 @@ public sealed class MixerControl : UserControl
     /// </summary>
     private bool _auditionStartedAmbience;
     private bool _auditionStartedMusic;
+
+    /// <summary>True when a race session took over the crowd this audition was playing - see SessionAdoptedAudio.</summary>
+    private bool _auditionAdoptedBySession;
     private readonly System.Windows.Forms.Timer _meterTimer = new() { Interval = 120 };
 
     /// <summary>
@@ -1204,6 +1207,7 @@ public sealed class MixerControl : UserControl
         _musicWasPlaying = _music.IsPlaying;
         _auditionStartedAmbience = false;
         _auditionStartedMusic = false;
+        _auditionAdoptedBySession = false;
 
         _auditioning = true;
         _btnAuditionAll.Text = "Stop Everything";
@@ -1279,6 +1283,43 @@ public sealed class MixerControl : UserControl
         RefreshMeters();
     }
 
+    /// <summary>
+    /// Called by the session start when it finds the crowd or the music
+    /// already playing and keeps it as the session's own instead of
+    /// starting one.
+    ///
+    /// WHY (7 Nov 2026, Bug Hunt 13): the same trap the Ambience page's
+    /// Preview had (see AmbienceControl.SessionAdoptedAmbience). Play
+    /// Everything pressed between races and left on became the race's
+    /// sound, and Stop Everything, Mute Everything or leaving the page
+    /// mid-race then dropped the crowd to Idle and stopped the crowd and
+    /// music dead. Now the audition gives up what the race took: stopping
+    /// it leaves those, and the crowd's mood, to the session. The "Level
+    /// check" line stops too - it has no place in a real race.
+    /// </summary>
+    public void SessionAdoptedAudio(bool ambience, bool music)
+    {
+        if (!_auditioning)
+        {
+            return;
+        }
+
+        if (ambience)
+        {
+            _auditionStartedAmbience = false;
+            _auditionAdoptedBySession = true;
+        }
+
+        if (music)
+        {
+            _auditionStartedMusic = false;
+        }
+
+        _auditionVoice.Stop();
+        _lblStatus.Text = "A race has started, so the level check has stopped. Stop Everything leaves the race's own sound playing.";
+        _lblStatus.ForeColor = AppTheme.TextMuted;
+    }
+
     private void StopAudition()
     {
         _auditioning = false;
@@ -1292,7 +1333,11 @@ public sealed class MixerControl : UserControl
         // playing: the audition set race level, and a crowd it then stopped
         // kept that level, so the next start between races came up at race
         // level (the same fix as the Ambience page's Preview).
-        if (_ambience.CurrentIntensity == AmbienceService.Intensity.Racing)
+        //
+        // Not when a race session has since taken the crowd over (7 Nov
+        // 2026, Bug Hunt 13) - the race owns the mood now, and Racing is
+        // what it reads for most of a real race.
+        if (!_auditionAdoptedBySession && _ambience.CurrentIntensity == AmbienceService.Intensity.Racing)
         {
             // The audition set the crowd to race level to balance against.
             // Put the mood back, or a between-races crowd stays at race
@@ -1315,6 +1360,7 @@ public sealed class MixerControl : UserControl
 
         _auditionStartedAmbience = false;
         _auditionStartedMusic = false;
+        _auditionAdoptedBySession = false;
 
         _lblStatus.Text = "Audition stopped.";
         _lblStatus.ForeColor = AppTheme.TextMuted;

@@ -220,13 +220,13 @@ public sealed partial class RelayPublisher
 
             return true;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             return false;
         }
         catch (Exception ex)
         {
-            NightsTrouble($"Could not reach the relay about drivers' own nights: {ex.Message}");
+            NightsTrouble($"Could not reach the relay about drivers' own nights: {Plain(ex)}");
             return false;
         }
     }

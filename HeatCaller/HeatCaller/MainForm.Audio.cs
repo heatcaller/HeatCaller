@@ -675,6 +675,13 @@ public partial class MainForm
             _ambienceControl?.SessionAdoptedAmbience();
         }
 
+        // WHY (7 Nov 2026, Bug Hunt 13): the same for the Mixer's Play
+        // Everything, which can be holding the crowd and the music both - or
+        // its Stop Everything mid-race cuts the race's sound dead.
+        _mixerControl?.SessionAdoptedAudio(
+            ambience: _settings.AudioStartAmbience && _ambience.IsRunning && !_ambience.IsHeld,
+            music: _settings.AudioStartMusic && _music.IsPlaying);
+
         if (_settings.AudioStartAmbience && !_ambience.IsRunning && staysMuted)
         {
             // Not started: the unmute starts whatever the mute's record

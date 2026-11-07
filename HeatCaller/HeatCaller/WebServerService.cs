@@ -2685,6 +2685,10 @@ public sealed partial class WebServerService
             return;
         }
 
+        // Set once the image starts going out. From then on a 500 cannot be
+        // sent - see the catches below.
+        var sending = false;
+
         try
         {
             // Only a slide the Sponsors page would take in, sized from its
@@ -2706,11 +2710,32 @@ public sealed partial class WebServerService
                 : bytes is [0x42, 0x4D, ..] ? "image/bmp"
                 : "image/jpeg";
             context.Response.ContentLength64 = bytes.Length;
+            sending = true;
             context.Response.OutputStream.Write(bytes, 0, bytes.Length);
             context.Response.OutputStream.Close();
         }
+        catch when (sending)
+        {
+            // WHY (7 Nov 2026, Bug Hunt 13): nearly always a phone or TV
+            // that moved on, or dropped off the Wi-Fi, partway through a
+            // big slide. The headers have gone, so a 500 and a body now
+            // would throw again - and that reached the console as a
+            // "Request failed" line for an ordinary disconnect, over and
+            // over with enough screens. Let go of it instead, the way
+            // HandleSponsorVideo does.
+            try
+            {
+                context.Response.Abort();
+            }
+            catch
+            {
+                // Already gone.
+            }
+        }
         catch
         {
+            // Before anything went out - the slide could not be read - so
+            // there is still time to say so.
             context.Response.StatusCode = 500;
             WriteText(context, "Error");
         }

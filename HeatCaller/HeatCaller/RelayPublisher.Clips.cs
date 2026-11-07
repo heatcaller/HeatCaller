@@ -177,13 +177,13 @@ public sealed partial class RelayPublisher
                     GiveUp: status is 401 or 403 or 404);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {
             return new ClipUploadResult(null, null, GiveUp: true);
         }
         catch (Exception ex)
         {
-            return new ClipUploadResult(null, $"could not send {driverName}'s clip: {ex.Message}", GiveUp: false);
+            return new ClipUploadResult(null, $"could not send {driverName}'s clip: {Plain(ex)}", GiveUp: false);
         }
     }
 

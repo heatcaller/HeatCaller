@@ -130,13 +130,13 @@ public sealed partial class RelayPublisher
 
             using var cleared = Send(clear, token);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             // Shutting down, or the pass was cancelled.
         }
         catch (Exception ex)
         {
-            Log?.Invoke($"[relay] Could not collect drivers' car photos: {ex.Message}");
+            Log?.Invoke($"[relay] Could not collect drivers' car photos: {Plain(ex)}");
         }
     }
 }
