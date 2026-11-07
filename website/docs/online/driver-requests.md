@@ -1,26 +1,29 @@
 # Driver requests
 
-Driver requests let drivers ask the timing desk for small changes from their own phone, instead of queuing at the desk. From their night page a driver (or a parent) can ask to change how the announcer says their name, their pronouns, a line about them for the commentary, their email address, whether they're emailed their night, how private they are online, or which battery pack is in their car. They can also ask the desk to look at a result.
+Driver requests let drivers ask the timing desk for small changes from their own phone, instead of queuing at the desk. From their night page a driver (or a parent) can ask to change how the announcer says their name, their pronouns, a line about them for the commentary, their email address, whether they're emailed their night, or how private they are online. They can also ask the desk to look at a result.
 
-Every request is only a request. Nothing about the driver changes until somebody at the desk approves it, in the **Driver Requests** window on **Race Day → Who's Racing**, and the driver's phone shows the answer.
+These are only requests. Nothing about the driver changes until somebody at the desk approves it, in the **Driver Requests** window on **Race Day → Who's Racing**, and the driver's phone shows the answer.
+
+The same switch also lets drivers look after their own garage from their phone: which battery pack is in their car, the pack they ran each race on, their own packs and cars, photos of their cars and their setup sheets. Since 5 November 2026 HeatCaller applies those by itself, straight into the **Driver Hub**, with no approval at the desk (see [Changes HeatCaller makes by itself](#changes-heatcaller-makes-by-itself)).
 
 ## Before you start
 
 - Publishing to the relay must be working. See [Setting up the Club Website page](setup.md).
 - Online check-in must be on. See [Online check-in](check-in.md).
 - **Give each driver their own night at a private address** must be ticked on the Club Website page, because requests are sent from the driver's night page. See [A driver's own night](index.md#a-drivers-own-night).
-- The relay must have been redeployed since 22 Oct 2026. An older relay doesn't know about requests, and the **Driver Requests** window says "The relay does not know about driver requests yet - redeploy it (fly deploy --ha=false)." See [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
+- The relay must have been redeployed since 22 Oct 2026. An older relay doesn't know about requests, and the **Driver Requests** window says "The relay does not know about driver requests yet - redeploy it (fly deploy --ha=false)." See [Updating the relay](../admin/relay-hosting.md#updating-the-relay). The garage from the phone and **Let drivers query a result** need it redeployed since 5 Nov 2026.
 - For a driver to change their own email address, they need a personal PIN. See [Personal PINs](check-in.md#personal-pins).
 
 ## Turn it on
 
 1. Open the **Club Website** page.
 2. In the **What gets published** card, under **Give each driver their own night at a private address**, tick **Let drivers send changes from their phone**. It's grayed out until drivers' nights and online check-in are both on.
-3. Go to **Race Day → Who's Racing**. A **Driver Requests** button is now under the list on the **Drivers** card, beside **Online Sign-ups**.
+3. Under it, **Let drivers query a result** is ticked by default. Untick it if you'd rather drivers asked about results at the desk (see [Querying a result](#querying-a-result)).
+4. Go to **Race Day → Who's Racing**. A **Driver Requests** button is now under the list on the **Drivers** card, beside **Online Sign-ups**.
 
-The hint under the tick says: "Off by default. From their night page a driver can ask to change their details or battery pack, ask to be kept more private online, or query a result. Nothing changes until the desk approves it. Needs online check-in and the box above. Unticking throws away any requests still on the relay."
+The hint under the tick says: "Off by default. From their night page a driver can ask to change their details or battery pack, ask to be kept more private online, or query a result. Nothing changes until the desk approves it. Needs online check-in and the box above. Unticking throws away any requests still on the relay." (Since 5 November a battery pack, and the rest of the driver's garage, change without the desk; see [Changes HeatCaller makes by itself](#changes-heatcaller-makes-by-itself).)
 
-Unticking **Let drivers send changes from their phone** stops the night pages offering requests and throws away any the relay is still holding. Requests the laptop has already collected stay in the **Driver Requests** window, and you can still answer them. Unticking drivers' nights does the same.
+Unticking **Let drivers send changes from their phone** stops the night pages offering requests and their garage, and throws away any requests the relay is still holding. Requests the laptop has already collected stay in the **Driver Requests** window, and you can still answer them. Unticking drivers' nights does the same.
 
 ## What the driver sees
 
@@ -52,6 +55,8 @@ A driver who has a personal PIN has to sign in with it before the details form a
 
 A driver with no personal PIN can send everything except an email change with their badge code alone. That's why an email change needs the PIN: a badge code can be on a lanyard or in a photo, but the PIN arrives in the driver's own inbox.
 
+The PIN is only for **Your details**. A query, the pack in the car and everything in the driver's garage go with the badge code alone, PIN or not (for an afternoon on 5 November the garage asked for the PIN too).
+
 | Message | What it means |
 |---|---|
 | "That is the club's PIN, not your own. Use the personal PIN the club sent you." | They typed the staff PIN. |
@@ -61,7 +66,16 @@ A driver with no personal PIN can send everything except an email change with th
 
 ### Your battery pack
 
-When the desk has battery packs recorded for this driver, **Your details** also has **Your battery pack**: **The pack in your car now**, a list of their packs and **No pack**, and a **Tell the desk** button. The badge code is enough for this one; no PIN is needed. See [A driver's batteries](../race-day/drivers-and-classes.md#a-drivers-batteries).
+When HeatCaller has battery packs of the driver's own, they can say which one is in the car. The badge code is enough; no PIN is needed, and nobody at the desk has to approve it. See [A driver's batteries](../race-day/drivers-and-classes.md#a-drivers-batteries).
+
+- On **Me**, the **Tonight** tiles have **Pack in the car**, with the pack in now (or "None set") and "Tap to swap". Tapping it opens **Pack in the car** from the bottom of the screen: a button for each of their packs and **No pack**, with "Every race you run is recorded on the pack in the car." Tapping one sends it, and the phone says, for example, "Red 2S #3 is in the car - HeatCaller will have it in a few seconds".
+- A few seconds later, once HeatCaller has taken it, the phone buzzes and says "HeatCaller has it: Red 2S #3 is in the car", or "HeatCaller did not take the pack swap - *why*" if it couldn't (for example "That pack isn't one of yours any more.").
+- With no packs of theirs in HeatCaller yet, the sheet says "No packs of yours in HeatCaller yet. Add them in Garage." with **Open Garage**.
+- On a night with no live card, **Your details** also starts with **Your battery pack**: **The pack in your car now**, a list of their packs and **No pack**, and **Save**. It answers "Sent - HeatCaller will have it in a few seconds (ref D4E5F6)".
+
+### Their garage
+
+The **Garage** space on **Me** lets a driver keep their own packs, cars, car photos and setup sheets up to date, and say which pack they ran each race on. Each change goes into their garage in HeatCaller's **Driver Hub** a few seconds after they send it, with no approval at the desk. For what the driver sees there, see [Garage](index.md#garage); for what happens on the laptop, see [Changes HeatCaller makes by itself](#changes-heatcaller-makes-by-itself).
 
 ### Querying a result
 
@@ -71,14 +85,18 @@ A query never changes a result by itself. The desk reads it and, if it's about a
 
 A driver can send at most 10 queries in a night. One more is declined at once with "Too many".
 
+**Let drivers query a result** on the Club Website page turns this off on its own. Unticked, **Something wrong?** goes from every race card within a few seconds, a query sent from a page that still shows it is refused with "Your club is not taking result queries online. Ask at the desk.", and the driver's other requests carry on.
+
 ### How each request is getting on
 
-Once a driver has sent something, the **Right now** card at the top of their night page lists **Your requests to the desk**, for up to a day afterward:
+Once a driver has sent something, the **Right now** card on their night page lists **Your requests to the desk**, for up to a day afterward, folded to a count such as **Your requests to the desk (2, 1 answered)**. Each line gives the reference, how it stands, and any answer:
 
 - "Your details (ref A1B2C3) - waiting for the desk"
-- "Battery pack (ref D4E5F6) - approved"
+- "Battery pack (ref D4E5F6) - approved: Pack Red 2S #3 is in the car"
 - "Race query (ref 0A1B2C) - noted by the desk"
 - "Your details (ref A1B2C3) - declined: *the desk's reason*"
+
+A setup change shows as "Setup log", and a change to their packs or cars as "Request".
 
 ### Messages a driver might see
 
@@ -90,6 +108,10 @@ Once a driver has sent something, the **Right now** card at the top of their nig
 | "That email address does not look right." | The new email address isn't one. |
 | "You have asked a few times already - wait a while, or ask at the desk." | A driver can send six requests an hour (three of them queries). |
 | "You have 5 waiting already - the desk will get to them." | At most five of one driver's requests wait at once. |
+| "That is a lot of changes in one hour - wait a little and try again." | Garage changes, the pack in the car included, are limited to 120 an hour per driver. |
+| "HeatCaller has not picked up your last changes yet - is the timing desk's laptop on? Try again in a minute." | 30 of the driver's garage changes are waiting on the relay for the laptop to collect them. |
+| "That is a lot of photos in one hour - wait a little and try again." | A driver can send 30 car photos an hour. |
+| "Your club is not taking result queries online. Ask at the desk." | **Let drivers query a result** is unticked. |
 | "The desk has a lot to get through right now. Try again in a while, or ask at the desk." | 200 requests from the club are waiting on the relay for the laptop to collect them. |
 | "The desk is not taking requests from phones just now, or you are not on tonight's check-in list. Ask at the desk." | Requests are switched off, online check-in or drivers' nights are off, or the driver isn't on the check-in list. |
 | "Could not reach the club. Check your connection and try again." | The phone can't reach the relay. |
@@ -114,7 +136,7 @@ The line at the top says whether requests are working, for example "On. Requests
 |---|---|
 | **Sent** | When the driver sent it, for example "Tue 19:42". |
 | **Driver** | Their full name, or "Unknown driver". |
-| **Asked about** | "Their details", "Battery pack" or "Result query". |
+| **Asked about** | "Their details", "Battery pack" or "Result query"; for a garage change, "Their packs", "Their garage", "Car photo" or "Setup sheet". |
 | **What they asked for** | Each change, with what it is now, for example "Announcer name: 'Zhock' (was 'Jacques')", "No photo online: yes (was no)", "Battery pack: 'Red 2S #3' (was 'Blue 2S #1')" or "Query about Q1 Heat 2: "...". |
 | **Note** | "Checked by their personal PIN" or "Checked by their badge code", "A parent or guardian sent it", and for a query "Not in that race" or "A race this laptop doesn't have" when it applies. |
 | **Ref** | The reference the driver's phone shows. |
@@ -140,9 +162,22 @@ What happens next:
 - **A new email address** gets a note sent to the **old** address, "Your email address at the race club was changed", saying it was changed at the desk as asked from their phone, and to tell the desk if they didn't ask. It goes through the club mailbox (see [Emailing racer PINs](email.md)).
 - **A privacy tick** takes effect on the club's pages within a few seconds. HeatCaller re-sends that driver's results so older pages follow it too. (No podium video goes on the relay any more, so there is none to take down.) The console says "[privacy] A driver's online privacy changed - the club's page is being brought in line." and, when it's done, "[privacy] The club's page now shows the drivers' latest privacy choices." See [Online privacy](../race-day/drivers-and-classes.md#online-privacy).
 
-### Approving a battery pack
+### Changes HeatCaller makes by itself
 
-Select the request and click **Approve**. HeatCaller asks, for example, "Battery pack: 'Red 2S #3' (was 'Blue 2S #1') - for Sam Parker. Approve it?". Click **Yes** and that pack is put in their car, exactly as if you'd picked it in the **Pack** column on **Who's Racing**. If the pack has been retired or given to someone else since, it says "That pack isn't one *name* can run any more (retired, or somebody else's now). Decline it and ask them which."
+Since 5 November 2026, a driver's garage changes from their phone are applied by HeatCaller without waiting for the desk, a few seconds after the laptop collects them:
+
+- the pack in their car, and the pack they ran a race on;
+- their own battery packs: added, edited, retired, back in use, or removed (a pack with races on it is retired instead of removed);
+- their own cars: added, edited, retired or back in use, the car they're racing tonight, and car photos (up to 6 a car), including which is the cover;
+- setup sheets and the short setup log, filed in their setup log in the **Driver Hub**.
+
+Only the driver's own packs and cars are changed: ones whose owner is that driver's transponder, never a club pack or car, or one lent to them. A race's pack the desk set after the phone asked is left as the desk set it.
+
+Each change appears under **Answered (kept 30 days)** in the **Driver Requests** window, "Approved" or "Declined: *why*" (for example "Declined: That car isn't one of yours."), and the phone shows the same answer. The console says what was done, for example "[driver requests] A driver changed the pack in their car from their phone." Each one is a step of its own in **Undo**, headed "Phone:", for example "Phone: Add pack Red 2S #3 for Sam Parker".
+
+A driver naming a chassis that isn't on the club's list has it kept in the car's notes, and the console says "[driver requests] A driver named a chassis that isn't on the club's list - it is in their car's notes; add it under Chassis Types if it's real."
+
+A change HeatCaller can't apply yet, such as one sent while it couldn't read the driver profiles when it started, stays under **Waiting for you** until it can. A battery pack change still waiting can be approved by hand: select it and click **Approve**. HeatCaller asks, for example, "Battery pack: 'Red 2S #3' (was 'Blue 2S #1') - for Sam Parker. Approve it?". Click **Yes** and that pack is put in their car, exactly as if you'd picked it in the **Pack** column on **Who's Racing**. If the pack has been retired or given to someone else since, it says "That pack isn't one *name* can run any more (retired, or somebody else's now). Decline it and ask them which." Any waiting change can be declined.
 
 ### Noting a query
 

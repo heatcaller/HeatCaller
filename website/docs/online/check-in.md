@@ -16,7 +16,7 @@ Since 26 Oct 2026, a driver who has a personal PIN can only be checked in or out
 
 - Tapping **Check in** (or **Checked in ✓** to check out) on a card opened from a QR check-in opens a small box on the page: "Type your own check-in PIN (the one the club emailed you) to check in or out." The PIN shows as dots, and the phone's number pad comes up. Type the six digits and tap **Continue** (or press Enter) and the tap goes through. A wrong PIN asks again, with the relay's reason, for example "That PIN is not right. Try again:". **Cancel** (or Escape) changes nothing. The PIN is never kept; the phone keeps only the sign-in it earns, until the tab is closed, so the next tap doesn't ask again.
 - A card opened by typing the personal PIN in the PIN box doesn't ask again: the PIN was already given.
-- The same goes for the **Check in** button on a driver's night page.
+- The same goes for the **Check in** button at the top of a driver's night page on **Me**, shown until they're checked in.
 - The relay checks this itself, so it can't be got round by changing the page. The PIN is checked against that driver's own PIN only, never anyone else's.
 - **Its own limit, apart from the lockouts.** Each driver's QR check-in allows five wrong PINs in ten minutes; after that it says "Too many wrong PINs for this driver. Wait ten minutes, or check in at the desk." These don't count toward the club's [lockouts](#lockouts), and a lockout someone else caused (the whole club's, or one on the venue's shared connection) doesn't stop a driver checking in with their own PIN.
 - **The staff PIN still checks anyone in or out**, from the full list (staff PIN), as before. Typed into a driver's card, the staff PIN is just a wrong PIN: use the full list at the desk.
@@ -45,7 +45,7 @@ New drivers who aren't on your books yet can sign themselves up with an invite; 
 
 In Simple mode, **Include photos** and the **Personal PINs** and **Email (for racer PINs)** cards are hidden; they keep working as set. Turn on Advanced mode to change them (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
 
-While online check-in is on, the home page shows **Check in: tap Me and type your PIN** (a **Check in** tile until 30 October), and a driver who types their personal PIN on the **Me** tab is checked in there and then (see [Opening your night with your PIN](index.md#opening-your-night-with-your-pin)). (Until 29 October 2026 check-in had a tab of its own, and until 30 October **Me** linked to this page instead.)
+While online check-in is on, a driver who types their personal PIN on the **Me** tab is checked in there and then (see [Opening your night with your PIN](index.md#opening-your-night-with-your-pin)). (Until 29 October 2026 check-in had a tab of its own, and until 30 October **Me** linked to this page instead. From 30 October to 5 November the home page also had a **Check in: tap Me and type your PIN** line; Home no longer mentions check-in.)
 
 When you untick **Let drivers check in from their own phones**, the check-in page says it's closed and the list of names is taken back off the relay.
 
@@ -179,11 +179,11 @@ Under the card:
 
 - From a QR check-in: **Not you? Open the full list**, which goes to the PIN box.
 - From a personal PIN: **Not you? Sign out**, which forgets the PIN on that phone and goes back to the PIN box.
-- When the club gives drivers their own nights, a QR check-in's card also has **See your racing from last time**, which opens that driver's night page. See [A driver's own night](index.md#a-drivers-own-night).
+- When the club gives drivers their own nights, the card also has **See your racing from last time**, which opens that driver's night page, whether the card was opened from a QR check-in or a personal PIN. See [A driver's own night](index.md#a-drivers-own-night).
 
 ### The first-night guide
 
-When a driver opens their card from their QR check-in on their first night at the club (HeatCaller has no result for them before tonight, demo races aside), a folded section, **Your first night - what happens**, appears under the card. Tapping it opens a short guide written for drivers, not for the desk:
+When a driver opens their card from their QR check-in on their first night at the club (HeatCaller has no result for them before tonight, demo races aside), a folded section, **Your first night - what happens**, appears under the card. Tapping it opens a short guide written for drivers, not for the desk. The club can write its own on the **Club Website** page (see [Your first night guide](setup.md#your-first-night-guide)); otherwise it's HeatCaller's standard guide, the club rules:
 
 - **Welcome**: everybody was new once; ask anyone in the pits or at the timing desk.
 - **Check in first**: so the desk can put them in the heats, with their transponder fitted, switched on and matching the number the desk has.
@@ -196,12 +196,9 @@ When a driver opens their card from their QR check-in on their first night at th
 - **Race control**: has the last word on the night; ask at the desk after the race, not during it.
 - **Leave it tidy**: keep the pit space tidy, take rubbish home, and leave the track as they found it.
 
-Under the guide, "Timing and race calls by HeatCaller." with **What's that?**, which opens a short card about HeatCaller.
+Under the guide are **Got it - hide this**, which hides it for good on that phone, and "Timing and race calls by HeatCaller." with **What's that?**, which opens a short card about HeatCaller. A guide the club has changed since shows again on a phone that had hidden the old one.
 
-The guide only shows on a card opened from a QR check-in, not from a personal PIN, and only on their first night. The same guide is on their night page, where it also shows before they've checked in (see [Your first night](index.md#your-first-night)). It needs the relay redeployed since 22 Oct 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)).
-
-!!! tip
-    The alerts and start times the guide mentions are on the driver's night page, not the check-in card. Point new drivers at **See your racing from last time** once they've checked in.
+On the check-in page the guide only shows on a card opened from a QR check-in, not from a personal PIN, and only on their first night. Since 6 November 2026 the same guide is also the first thing on the club's **Home** page, for every phone, folded into a **New here?** strip until tapped; hiding it on one page hides it on the other (see [Your club's pages](index.md#your-clubs-pages)). It is no longer on the driver's night page. It needs the relay redeployed since 6 Nov 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)).
 
 Messages a racer might see:
 

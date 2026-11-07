@@ -186,7 +186,7 @@ If HeatCaller can't write the copy (a locked-down PC, a full disk), the console 
 The next time HeatCaller opens after a crash, power cut or forced close, it asks **Restore the unfinished race?** It describes the race, for example how many drivers, how many laps and what time it started.
 
 - **Yes.** The race comes back as it was: laps, penalties, positions, the fastest lap, the start type and grid, and any jump starts. The race clock picks up where it stopped, rather than counting the time the app was closed. A race that was under a red flag comes back with the clock where it froze, so the time under red still isn't counted. The race is saved again straight away with its original start time and track.
-- **No.** The race isn't restored, but HeatCaller keeps a copy on disk, so this isn't your last chance. See [Data files](../admin/data-files.md).
+- **No.** The race isn't restored, but HeatCaller keeps a copy on disk, each declined race under its own name, so this isn't your last chance. See [Data files](../admin/data-files.md). If the copy can't be made (another program has the file open), the log says "Unfinished race not restored, and it could not be set aside", and the race is offered again the next time HeatCaller opens.
 
 A restored race comes back **stopped, under a red flag**, so nothing counts while the cars are put back on the track. Then:
 

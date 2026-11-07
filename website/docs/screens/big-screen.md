@@ -101,7 +101,7 @@ While a race is staged, counting down or warming up, the Big Screen shows a card
 The headline counts them in, for example "ROLL CALL - 6 OF 8 CARS HEARD", and reads "ALL 8 CARS HEARD - READY" once everyone is in.
 
 - The cars are the same ones the [pre-race check](../race-day/events-and-entries.md#pre-race-check) checks: the selected round's roster, or the drivers on the leaderboard when no round is selected.
-- A car counts as heard if it crossed the line after the roll call began, or up to two minutes before. A car heard in the heat before doesn't count, in case its transponder has died since.
+- A car counts as heard if it crossed the line after the roll call began, or up to two minutes before, but never before the last race finished. A car heard in the heat before doesn't count, in case its transponder has died since. Mission Control's **Next race** tile counts the same way.
 - Sponsor slides wait while the roll call is up.
 - At the green the leaderboard comes back.
 
@@ -276,6 +276,9 @@ Each leaderboard in HeatCaller keeps its own choice of columns, because what's u
 | Practice | **Choose Columns** on the **Practice** page | Driver, Laps, Last Lap, vs Best, Best Lap, Rolling Avg, Std Dev, Streak, Best Streak, Streak Pace, Trend, PBs |
 | Big Screen | **Choose Big Screen Columns** on the **Local Screens** page | Pos, Driver, Laps, Best Lap, Gap to P1 |
 | Live Results web page | **Choose Web Columns** on the **Local Screens** page | Pos, Driver, Laps, Last Lap, Best Lap, Gap to P1, Trend |
+| The live board on the club's website | **Choose Live Board Columns** on the **What gets published** card of the **Club Website** page | The Live Results web page's columns |
+
+The club's website follows the Live Results web page's columns until you pick its own. **Transponder** isn't offered for it, and is never shown online. The line under the button says which columns it shows. A pick that comes out the same as the Live Results page's (which is what **Restore Defaults** gives) goes back to following that page.
 
 To change the columns:
 
@@ -286,9 +289,9 @@ To change the columns:
 
 **Restore Defaults** puts back that leaderboard's default set. If you untick everything, the defaults are used.
 
-In Simple mode these buttons are hidden: **Columns** on Race Control, **Choose Columns** on Practice, and both column choosers on **Local Screens**. Turn on Advanced mode to change the columns; the leaderboards keep the columns you chose either way. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
+In Simple mode these buttons are hidden: **Columns** on Race Control, **Choose Columns** on Practice, both column choosers on **Local Screens**, and the **What gets published** card on **Club Website** with its own. Turn on Advanced mode to change the columns; the leaderboards keep the columns you chose either way. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
-Race Control and Practice update as soon as you press **OK**. The web page updates straight away. The Big Screen picks up the change the next time you open it, so close it and open it again.
+Race Control and Practice update as soon as you press **OK**. The web page updates straight away, and the club's website with its next update. The Big Screen picks up the change the next time you open it, so close it and open it again.
 
 <!-- screenshot: Choose columns - Big Screen window with a few columns ticked -->
 

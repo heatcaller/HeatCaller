@@ -177,7 +177,7 @@ They can be the start/finish line, but not a split loop. Choosing one turns **Sp
 
 ![The Connection page with MyLaps / AMB P3 (Beta) chosen, Source set to Network (TCP), and the decoder's address 192.168.1.50 and port 5403 filled in](../assets/images/connection-beta-decoder-network.png)
 
-Each decoder remembers its own source, port, address and baud rate, so switching between decoders and back loses nothing.
+Each decoder remembers its own source, port, address and baud rate, so switching between decoders and back loses nothing. An address and port you've typed but not yet connected with are kept when you change **Source:**.
 
 | Decoder | Sources | Usual settings |
 |---|---|---|
@@ -195,7 +195,7 @@ When you connect a ZRound decoder, HeatCaller sends the handshake and the race s
 |---|---|---|
 | Amber | "Connecting to the ... decoder on ..." | Opening the port or connection. |
 | Green | "Connected to the ... decoder on .... Every byte it sends is also captured to decoder-raw-*name*-*date*.log." | Connected. |
-| Red | "The ... decoder on ...: ... Trying again every 3 seconds - press Disconnect to stop." | It couldn't connect, or the connection dropped. It keeps trying by itself. |
+| Red | "The ... decoder on ...: ... Trying again every 3 seconds - press Disconnect to stop." | It couldn't connect, or the connection dropped. It keeps trying by itself; **Disconnect** stops it, and **Connect** tries again at once, for example after you've corrected the address. |
 | Gray | "Disconnected." | You disconnected. |
 
 The console says "[decoder] The ... decoder is talking." when the first data arrives, and every pass appears as `[LAP EVENT] transponder=...`. If nothing arrives in 10 seconds, the console says so once. A Cano sends nothing until a car crosses, so drive one over the loop.

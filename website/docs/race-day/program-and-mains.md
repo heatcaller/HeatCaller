@@ -29,7 +29,7 @@ Each class also needs drivers: a driver is in a class when their profile says so
 
 Drag the bar between the two halves to give either more room. HeatCaller remembers where you leave it. The bottom half never gets so short that its buttons go out of sight; on a small screen the top half scrolls instead.
 
-![Race Day, Next Steps tab: the ALL DONE card saying the program is complete, Ready to race at 5 of 6, the day so far tiles, and Tonight's program listing recorded heats](../assets/images/race-day-next-steps.png)
+![Race Day, Next Steps tab: the Next step card with Next up: A-Main and Start A-Main, Ready to race at 5 of 6, the day so far tiles, and Tonight's program listing recorded heats](../assets/images/race-day-next-steps.png)
 
 At the top, under the day's name, a line gives the date, whether it's a race day or a club night, the venue, the track layout, "closed" if the day is closed, and "running 12 min late" (or early) once the day is 5 minutes or more off the timetable. With no race day open it says "No race day is open".
 
@@ -184,7 +184,7 @@ When the list is filtered to one class, moves are made relative to what you can 
 
 ### Delete rounds
 
-Select one or more rounds, right-click them and choose **Delete**, then confirm. Deleting a round removes it from the program but doesn't delete any recorded results. A round that's on track can't be deleted until it has finished. Undo puts the rounds back in their original places in the running order.
+Select one or more rounds, right-click them and choose **Delete**, then confirm. Deleting a round removes it from the program but doesn't delete any recorded results. A round that's on track can't be deleted until it has finished. Undo puts the rounds back in their original places in the running order, and their lines on [the timetable](#the-timetable) come back with the time and tick they had.
 
 ## Start a round
 

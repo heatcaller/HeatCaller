@@ -30,11 +30,11 @@ A saved demo race shows **Demo** as its type, and its detail title reads "Demo r
 
 Use Ctrl+click or Shift+click to select several sessions, for exporting, printing or deleting.
 
-After the checkered flag, **Results** and **Edit Result** on Race Control's flag row open the race just run here, already selected. See [The flag row after the flag](running-a-race.md#the-flag-row-after-the-flag).
+After the checkered flag, **Edit Result** on Race Control's flag row opens the race just run here, already selected, with **Edit Result** open. See [The flag row after the flag](running-a-race.md#the-flag-row-after-the-flag).
 
 Below the results is a notes box, for the weather, the track surface, incidents or anything else worth remembering. Notes are saved when you click away from the box, or when you close HeatCaller.
 
-![Race History with a demo race selected: its results with laps, fastest laps, best sectors and ideal laps, and the action buttons below](../assets/images/race-history.png)
+![Race History listing saved demo races, none selected yet, with the results columns and the action buttons below](../assets/images/race-history.png)
 
 | Button | What it does |
 |---|---|
@@ -121,7 +121,7 @@ What to know:
 
 - **It never scores.** A pasted race is kept for the record only. It doesn't count toward personal bests, track records, badges, championships, qualifying, the **Overview**, **Head to Head** and **Trends** on Race Analytics, or the Event Report, the commentary never talks about it, and it isn't sent to the online results. It isn't linked to a round on **Race Day** either, so no round is marked as run.
 - **Drivers are matched by name.** A driver whose name is the same as one profile's (capitals don't matter) gets that profile's name, transponder and car. One with no profile, or a name two profiles share, comes in by name alone. Names in capitals ("COLTON FURNARI") are written the usual way, a car number in front of the name is left off, and a name LiveRC shows twice ("FURNARI, COLTONCOLTON FURNARI") is put back to one.
-- **What comes in.** Finishing order, laps, total time and fast lap. Lap-by-lap times and transponders aren't in LiveRC's results table, so they don't come in.
+- **What comes in.** Finishing order, laps, total time and fast lap. A time written with a decimal comma ("17,234", "10:10,631") is read whole, the same as one with a point. Lap-by-lap times and transponders aren't in LiveRC's results table, so they don't come in.
 - **It can't be corrected with Edit Result.** To change a pasted race, delete it and paste it again.
 - **Nothing is fetched.** HeatCaller only reads what you copied. It never opens LiveRC or signs in to it.
 
@@ -395,6 +395,7 @@ Some notes on how badges are earned:
 - **A race alone isn't a win.** First place counts as a win, and the top three as a podium, only with another real car in the race.
 - **Ghosts are left out** before badges are worked out. A ghost can't earn badges or take one away from a real driver.
 - **A driver needs at least one lap** in a race for it to count toward anything. Cars that never turned a lap don't count as opponents or grid places either.
+- **A disqualified driver's laps don't count against anyone.** A DQ keeps its fast lap in the result, but it's never the race's fastest lap, its record lap or the quickest opening lap for badges, so the driver with the best legal lap still earns **Quickest of the Day** and the badges built on it.
 - **Record Holder follows Track Layouts.** It goes to the driver whose lap is the record shown on **Track Layouts**, so a lap Race Control refused as a phantom never earns it, and after **Reset Record** the next record does. The first race on a new layout doesn't earn it.
 - **Some badges need newer races.** **Spotless**, **Wire to Wire**, **Through the Field**, **Converted**, **Late Show**, **Quick and Tidy**, **Grand Slam** and **Clean Slate** need data that only races saved by newer versions carry (rejected passes, laps led and grid positions).
 - **Some badges need a grid.** Badges about where a driver started (**Through the Field**, **Converted**, **Through the Pack**, **Rocket Start**, **Comeback Kid**, **Grand Slam**) need a known grid, which comes from the round's roster or the previous race's result.
@@ -403,4 +404,4 @@ Some notes on how badges are earned:
 - **Earned before you updated?** Badges aren't worked out again for old races. Most of the career badges (such as **Globetrotter**, **Car Collector** and **Old Friends**) count your earlier races, so they arrive at your next race that qualifies.
 - **Badges are tied to the transponder.** They follow the transponder, not the name on the profile.
 
-The number of badges a driver has can be shown on the leaderboard with the **Badges** column. See [Running a race](running-a-race.md#columns).
+The number of badges a driver has can be shown on the leaderboard with the **Achievements** column. See [Running a race](running-a-race.md#columns).

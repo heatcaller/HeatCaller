@@ -4,7 +4,7 @@ Reviewed at 0.52.0, and again on 10 Oct 2026 after the show round, the voice rou
 
 ## Still open
 
-Checked again on 22 Oct 2026, after the known-issues round fixed everything else that was on this list (see "Fixed in 0.60.0 (22 Oct, known issues)").
+Checked again on 22 Oct 2026, after the known-issues round fixed everything else that was on this list (see "Fixed in 0.60.0 (22 Oct, known issues)"). Re-checked against the code on 6 Nov 2026: the five below still hold; the phone-pages one is fixed (see "Fixed since 0.60.0").
 
 | Issue | Where it's documented |
 |---|---|
@@ -12,8 +12,7 @@ Checked again on 22 Oct 2026, after the known-issues round fixed everything else
 | **The rolling record watch only writes to the console.** Since 22 Oct `RecordWatch` is fed every lap and reset each race, but it only writes `[pace]` lines. By design it must not drive `NotifyRecordPace`/`NotifyTrackRecord`; it needs a segment of its own before anything is spoken. | Not documented |
 | Low: **a saved take from before "Shorten published names" was ticked still holds the full names.** The race no longer asks for it (it looks the shortened text up), so it is never played, but **Re-roll Line...** on it would send the full names to the relay once more and make a take the race won't use. **Forget Line** clears it. A fix is for Re-roll to refuse a line whose text the shortening would change. | Not documented |
 | Low: **the club's website doesn't show which laps were counted by hand.** Since 22 Oct the laptop's own pages, printouts and exports mark a lap count that includes hand-counted laps ("12\*", with "\* includes laps counted by hand"). The relay's copy of the board is sent without the mark, because the relay draws its pages itself and has no legend; adding it needs a relay change. | race-control/results-and-championships.md (Laps counted by hand) says so |
-| Wording only: the internal guard in the app refuses a test with `Choose "My own ElevenLabs account" on Voice Settings`, but the radio button reads **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)**. The message shouldn't be reachable, so it isn't documented. | Not documented |
-| screens/phone-and-web.md still describes only the manual `netsh` commands and never mentions the **Set up phone pages** button. | screens/phone-and-web.md |
+| Wording only: the internal guard in the app refuses a test with `Choose "My own ElevenLabs account" on the Voice tab`, but the radio button reads **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)**. The message shouldn't be reachable, so it isn't documented. | Not documented |
 
 ## Documented states, not bugs
 
@@ -96,6 +95,10 @@ not go looking for the fault.
   fires for any table of two to four and is likewise unproved, which
   `CommentaryReaders.Championship`'s own remarks admit: "it is still a claim
   this cannot stand behind".)
+
+## Fixed since 0.60.0 (Unreleased)
+
+- **screens/phone-and-web.md documents the Set up phone pages button** (on the **Server** card), with the manual `netsh` commands kept for a laptop where the button isn't allowed. Fixed in the user-guide update of 2 Nov 2026 (99563b4).
 
 ## Fixed in 0.60.0 (11 Oct)
 

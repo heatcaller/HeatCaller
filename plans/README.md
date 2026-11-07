@@ -4,5 +4,6 @@ Design plans kept with the code. The working copies also live in the HeatCaller 
 
 - [timing-layer-plan.md](timing-layer-plan.md): moving timing into a layer of its own (P0 to P7), with status.
 - [timing-layer-remaining-plan.md](timing-layer-remaining-plan.md): the last pieces moved off the window (P8), with status.
-- [track-designer-overhaul-plan.md](track-designer-overhaul-plan.md): the Track Designer overhaul (Phases 1 to 8), from 25 Oct 2026.
+- [track-designer-overhaul-plan.md](track-designer-overhaul-plan.md): the Track Designer overhaul (Phases 1 to 8), from 25 Oct 2026, with status.
+- [track-designer-next-plan.md](track-designer-next-plan.md): the round after the overhaul (Phases A to G), from 25 Oct 2026; not started.
 - [decoder-support-plan.md](decoder-support-plan.md): decoders added without buying one (P3, ZRound, Cano, OpenStint, serial EasyLap), from 27 Oct 2026, with status.

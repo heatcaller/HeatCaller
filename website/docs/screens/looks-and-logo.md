@@ -9,7 +9,7 @@ You can open the page in two ways:
 
 Typing `look`, `theme`, `colour`, `color`, `dark mode`, `light mode`, `synthwave`, `logo`, `appearance`, `24-hour` or `military time` in the **Search pages...** box also opens it.
 
-In Simple mode, **New Look**, **Edit** and **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** are hidden. Everything else on the page works the same in both modes. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
+In Simple mode, **New Look**, **Edit** and **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** are hidden, double-clicking one of your own looks doesn't open the editor, and a **More settings in Advanced mode** line sits at the foot of the page. Everything else on the page works the same in both modes. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
 How the app sounds, rather than how it looks, is on **Sounds → Soundscapes**, which was the **Announcer Style** tab on this page before 0.56. See [Soundscapes](../announcer/sounds-and-music.md#soundscapes).
 

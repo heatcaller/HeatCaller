@@ -1,6 +1,6 @@
 # HeatCaller: decoders we can add without buying one (plan, 27 Oct 2026)
 
-## Status (1 Nov 2026): BUILT, all Beta (branch decoder-support)
+## Status (1 Nov 2026): BUILT, all Beta (branch decoder-support; on main since ede0702, 2 Nov)
 
 Built: groundwork, MyLaps P3, ZRound open protocol, Cano / RCHourglass,
 OpenStint (native, over ZeroMQ) and EasyLap / Robitronic serial. Not built:

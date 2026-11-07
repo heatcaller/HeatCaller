@@ -70,7 +70,7 @@ Every step can be skipped, and **Skip setup** leaves the wizard at any point. A 
 
 **Setup** is the race day itself: which day the app is working on, what the day is, and how its program gets built.
 
-![Race Day, Setup tab: Race Day 31 Oct 2026 picked under Which race day, About the day with the venue and track layout, and Building the program with Classes racing below](../assets/images/race-day-setup.png)
+![Race Day, Setup tab: Race Day 6 Nov 2026 picked under Which race day, About the day, and Building the program with Classes racing below](../assets/images/race-day-setup.png)
 
 There's no Save button. Every change saves itself as you make it, and a **Saved** note appears for a moment after the **Close Day** and **Delete Day** buttons. Typing in a box is saved when you pause or move to another field, and a run of typing is one step for **Undo**.
 
@@ -154,7 +154,7 @@ Each row is a driver profile. The class shown is the class on the driver's profi
 | **Checked In** | Tick when the driver arrives. |
 | **Driver** | The driver's name. |
 | **Class** | The driver's class. |
-| **Tech** | The result of the inspection that counts for this driver in their class: **Passed**, **FAILED**, **Passed (note)**, or **-** if they haven't been inspected. Passes are green, fails red. Double-click the cell to inspect the car. |
+| **Tech** | The result of the inspection that counts for this driver: **Passed**, **FAILED**, **Passed (note)**, or **-** if they haven't been inspected. A driver in more than one class that runs tech shows as cleared only once they're cleared in each (see [A driver in more than one class](drivers-and-classes.md#a-driver-in-more-than-one-class)). Passes are green, fails red. Double-click the cell to inspect the car. |
 | **Pack** | The battery pack in the driver's car, which each race they run tonight is recorded on. Click the cell to pick one of their packs or the club's, or **No pack in the car**. It reads **Pick...** when they have packs and none is in, and is blank when there are none to pick. See [A driver's batteries](drivers-and-classes.md#a-drivers-batteries). |
 
 A single click on a checkbox ticks or unticks it straight away. Check-ins are kept per race day, so a new race day starts with an empty sheet.
@@ -292,7 +292,7 @@ When a line of cars goes through tech together, or a batch is turned back for th
 
 One inspection is filed for each car, with the same result, inspector and notes:
 
-- Each car is inspected in the class its **Tech** cell shows, the same class **Inspect Selected Car** would open.
+- Each car is inspected in every class its **Tech** cell is still waiting on. A driver racing two classes that both run tech, and not yet cleared in either, gets an inspection in each, so their **Tech** cell reads cleared afterwards. The undo step still counts drivers, for example "Record tech inspection for 3 drivers".
 - **Passed** marks every check on that class's checklist **OK**, so the inspection reads "All checks passed" if you open it later. **Passed with a note** and **FAILED** mark no checks, because nothing says which one it was. Open a car's inspection afterwards to mark the check that failed.
 - A car already inspected today (or in the last 6 hours) has that inspection updated, as **Inspect Selected Car** would, rather than a second one filed beside it. The window says how many that is.
 - Leave **Inspector:** or **Notes:** blank to keep what an inspection already says, so a quick pass doesn't wipe notes made at the bench.
@@ -367,7 +367,7 @@ For more on signal strength and transponder problems, see [Transponders](../timi
 
 The **Calendar** tab, on the **Championship** page, lists every race day with what it covered. It's where you look back at past race days, and another place to switch which one is current.
 
-![Championship, Calendar tab: the current race day, Race Day 31 Oct 2026, open with 4 rounds recorded, and the buttons for managing race days](../assets/images/championship-calendar.png)
+![Championship, Calendar tab: the current race day, Race Day 6 Nov 2026, open with 4 rounds and 3 recorded, and the buttons for managing race days](../assets/images/championship-calendar.png)
 
 The line above the list names the current race day ("Current: *name*"), adds "(closed - nothing new joins it)" when that day is closed, or says "No race day is open - rounds aren't being grouped". The list has these columns: **Race day**, **State** (**Open** or **Closed**), **Started**, **Days run** (worked out from when its rounds were actually raced), **Rounds**, **Recorded** and **Notes**. The current race day is marked **[CURRENT]**.
 

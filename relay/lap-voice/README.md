@@ -4,9 +4,12 @@ Spoken laps on the relay's Live page and on a driver's own night play short
 clips from this folder, in ElevenLabs' Daniel voice ("Steady Broadcaster"),
 for every club. See src/lapvoice.ts.
 
-The clips are not in git. Make them on your own PC, on your own ElevenLabs
-key, with lap-voice-render.cmd in the relay folder, then run fly deploy from
-the relay folder: the deploy carries this folder up with it.
+The clips are not in git, all but lap6.mp3 (a recut take, force-added so a
+fresh copy keeps it). Make them on your own PC, on your own ElevenLabs key,
+with lap-voice-render.cmd in the relay folder, then run fly deploy from the
+relay folder: the deploy carries this folder up with it. The full set is
+2,744 clips, 45,755 characters (about $1.83 on Flash); lap-voice-render.cmd
+count says what is missing and what it would cost, and spends nothing.
 
 A relay with no clips here still reads out laps, in the phone's own voice.
 

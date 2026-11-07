@@ -28,7 +28,11 @@ What follows from that:
 
 - **The decoder is a core dependency, not an integration.** EasyLap (USB
   HID, `DirectDecoderClient`) and I-Lap (serial, `ILapClient`) must be as
-  tested and as recoverable as the results store.
+  tested and as recoverable as the results store. Since 1 Nov 2026 five
+  more run through `StreamDecoderClient` - MyLaps P3, ZRound, Cano /
+  RCHourglass, OpenStint and serial EasyLap - all labelled Beta until each
+  has timed a real session (`DecoderConnection.Beta`,
+  plans/decoder-support-plan.md).
 - **Correct results beat new features.** Qualifying, mains, corrections and
   saving are covered by tests; anything that changes them needs a test.
 - **Kokoro is the floor, and it is 310 MB.** The Windows voice was retired on
@@ -48,8 +52,8 @@ What follows from that:
 | | |
 |---|---|
 | Version | 0.60.0 BETA. The number lives in `HeatCaller.csproj` `<Version>` and `AppVersion` reads it from the assembly (5 Oct) - one place, so the package, the updater and the title bar agree. 0.60.0 was cut on 22 Oct 2026 from everything since 0.59.0 (28 Sep); its notes are in `website\docs\release-notes.md`, with a fresh empty "Unreleased" above it. **Not yet packed or uploaded** - that needs `publish.cmd`, `pack.cmd` and the releases repo (Beta readiness 3, Feed) |
-| App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 362 source files, ~259k lines with the tests, 25 pages |
-| Tests | `HeatCaller.Tests`: **3,710 tests, measured** (`check.cmd`, 22 Oct 2026 - 3,710 passed, 0 failed, 0 warnings; 12 to 23 minutes on the dev laptop, the layout sweep being most of it), including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes and once with the text size changed while the window is up (`LayoutTests`, `WindowLayoutTests`). **Only ever write a figure `check.cmd` has actually measured, with its date**: the row carried 1,921 for a day after the suite had grown, and a number nobody measured is worse than an old one, because it reads as current |
+| App | C# / .NET 10 WinForms (since 1 Oct; was .NET 8), about 597 source files in the app plus 25 in `HeatCaller.Timing` (the timing layer, a plain net10.0 library since 24 Oct - plans/timing-layer-plan.md), ~528k lines with the tests (counted 6 Nov 2026), 25 pages (not recounted) |
+| Tests | `HeatCaller.Tests`: **3,710 tests, measured** (`check.cmd`, 22 Oct 2026 - 3,710 passed, 0 failed, 0 warnings; 12 to 23 minutes on the dev laptop, the layout sweep being most of it). Full runs in the shared folder now take up to ~44 minutes. About 540 test files, including a whole race night (`RaceNightTests`), a real EasyLap night played back (`EasyLapCaptureTests`), and every page's and every converted window's layout measured at five sizes and once with the text size changed while the window is up (`LayoutTests`, `WindowLayoutTests`). **Only ever write a figure `check.cmd` has actually measured, with its date**: the row carried 1,921 for a day after the suite had grown, and a number nobody measured is worse than an old one, because it reads as current |
 | Relay | TypeScript on Fly.io (`relay\`), **770 tests, measured 22 Oct 2026** (770 passed, 0 failed). **Deployed 22 Oct 2026** (`fly deploy --ha=false`) with everything to date - the nights, the night-before preview, the voice samples and Preview, the usage and top-up routes, the podium videos (since removed, #3) and the 22 Oct bug-hunt fixes. **Changed since and needing a redeploy each time:** #3, #7 to #13, #15, #17, #19 to #21, #23, #28 and #39 to #44 (28 Oct to 1 Nov 2026); test count not measured again here. **Undeployed: the known-issues round's re-roll (`fresh` takes), the `previewDailyChars` comment, and the coaching round's report card on a driver's night page** - relay tests 772, measured 22 Oct 2026 in the container, not yet by `check.cmd`. The rule still stands: a relay change does nothing for a club until it is deployed, and the laptop's console says "redeploy it" when it meets a route the relay doesn't have |
 | Docs | MkDocs site in `website\`; unpublished issues list in `website\KNOWN-ISSUES.md` |
 | Build | `check.cmd` at the root builds and tests the app and the relay; git since 26 Sep, pushed to GitHub (`asherizm/HeatCaller`), where every push runs `check.cmd` again |
@@ -4765,7 +4769,12 @@ from. Ranked by what decides whether a club switches, and stays.
 7. **Less on screen for a new club.** 25 pages is a lot for a volunteer on
    a race night. The Next Steps banner is the right idea: make the race-night
    path all a new club sees, and the rest one click away. (The beta tier,
-   Beta readiness 4, is the first step.)
+   Beta readiness 4, is the first step.) **Built 1 Nov 2026** as Simple and
+   Advanced mode (five rounds, the last e498d26): a new install starts in
+   Simple mode, which hides the tuning but changes nothing the app does;
+   Advanced is turned on per PC from Backup & Restore
+   (website/docs/getting-started/simple-and-advanced-mode.md). To be
+   re-judged after the first beta nights.
 8. **The fixed-pixel layout.** Most recent small UI bugs - clipped buttons,
    stray scrollbars - come from fixed coordinates and `DpiUnaware`. Check it
    on a small screen and a high-DPI one in a rehearsal; start the change

@@ -32,7 +32,7 @@ The **Red**, **Checkered** and **Reset** buttons have to be pressed and held for
 
 **Only the bare key counts.** If you hold <kbd>Alt</kbd>, <kbd>Ctrl</kbd> or <kbd>Shift</kbd>, the F-keys do nothing. For example, <kbd>Alt</kbd>+<kbd>F4</kbd> closes the window as usual and never throws a yellow flag on its way out.
 
-The F-keys work even while you're typing in a box on the page. The letter keys and <kbd>0</kbd> don't: while a text box, a number box, a drop-down list or a grid cell you're editing has the focus, a letter is typing, not a shortcut. None of them work on any other page, or while a dialog is open. Two windows pass the F-keys on to Race Control: the **Broadcast** window takes <kbd>F1</kbd> to <kbd>F10</kbd> and <kbd>F12</kbd>, and a driver's lap breakdown window takes <kbd>F1</kbd> to <kbd>F8</kbd>, so you can throw a flag without clicking back to the main window first.
+The F-keys work even while you're typing in a box on the page. The letter keys and <kbd>0</kbd> don't: while a text box, a number box, a time box, a drop-down list or a grid cell you're editing has the focus, a letter is typing, not a shortcut. None of them work on any other page, or while a dialog is open. Two windows pass the F-keys on to Race Control: the **Broadcast** window takes <kbd>F1</kbd> to <kbd>F10</kbd> and <kbd>F12</kbd>, and a driver's lap breakdown window takes <kbd>F1</kbd> to <kbd>F8</kbd>, so you can throw a flag without clicking back to the main window first.
 
 !!! tip "Flag buttons and the Space bar"
     After you click a flag button, the focus moves off it. So a stray <kbd>Space</kbd> or <kbd>Enter</kbd> can't press the same flag again, and restart a race that's already running.

@@ -36,6 +36,8 @@ Inline mode is unchanged except for B1. The On Air hold fixes the same bug inlin
 
 ## Status (24 Oct 2026): ALL BUILT (cloud repo; not yet on the PC)
 
+**6 Nov 2026:** on the PC since 5baec70 (24 Oct 2026), with P0 to P7. The commit hashes below are the cloud repo's and are not in this one.
+
 **Commits:**
 - 962ae19: P8a (B1, B2 and E)
 - 26e1988: P8b (A)

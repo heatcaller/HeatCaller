@@ -381,7 +381,7 @@ The live results page, the overlay, the phone remote and the check-in page all u
 
 | Setting | What it does |
 |---|---|
-| **Choose Web Columns** | Picks the columns on the live results page, the overlay and the remote's table. |
+| **Choose Web Columns** | Picks the columns on the live results page, the overlay and the remote's table. The live board on the club's website uses them too, until you choose its own with **Choose Live Board Columns** on the **Club Website** page (see [Choose the leaderboard columns](big-screen.md#choose-the-leaderboard-columns)). A transponder column never goes online. |
 | **Choose Big Screen Columns** | Picks the columns on the Big Screen window. |
 | **Open Big Screen** | Opens the Big Screen window. |
 | **Club Website Settings** | Opens the **Club Website** page. |

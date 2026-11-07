@@ -33,7 +33,7 @@ If any setting you're about to hide has been changed from how HeatCaller ships, 
 
 | Where | Hidden in Simple mode |
 |---|---|
-| Sidebar | The **Venues** page and the **Manage Navigation** button |
+| Sidebar | The **Venues** page. **Manage Navigation** shows in both modes, so you can reorder or hide pages in Simple mode too |
 | **Race Control** | **Start races On Air** and **Columns**. In **Race Format**, only the lap limit, time limit and start type show |
 | **Race Day → Setup** | Which race **Start the next race automatically** reaches for. The tick itself stays |
 | **Championship** | **Scoring Rules** |
@@ -44,7 +44,7 @@ If any setting you're about to hide has been changed from how HeatCaller ships, 
 | **Local Screens** | **Port**, the **Race-day manager (phone)** card and the column choosers |
 | **Club Website** | The **Recording** tab, the relay **Address**, **Include photos**, and the **What gets published**, **Look**, **Personal PINs**, **Email (for racer PINs)**, **Race-day manager** and **Room & Web** cards |
 | **Voice → Voice** | The ElevenLabs **Model**, **Voice parameters**, **Saved voice lines**, the voice relay rows and the consent rows |
-| **Voice → Cast** | The **Recap host**, **Technical Lead**, **Team Principal** and **Achievements reader** cards, and the co-host's **What they're like** and **How much they talk** |
+| **Voice → Cast** | The **Recap host**, **Technical Lead**, **Team Principal** and **Achievements reader** cards, and the co-host's **If ElevenLabs runs out**, **What they're like** and **How much they talk**. Each of the cast still has a Kokoro stand-in voice of their own |
 | **Voice** | The **Race Calls** tab. The **Race calls:** row on the **Voice** tab turns them all on or off (see below) |
 | **Voice → AI Commentary** | Every card, in place of the section switches (see below) |
 | **Sounds** | The **Imaging**, **Effects**, **Ambience** and **Lap Beeps** tabs. They still play as the soundscape sets them |
@@ -80,7 +80,7 @@ How the switches behave:
 - **After the flag** shows **needs Recap show** while the recaps are off, since everything after the result needs them.
 - With **Enable AI commentary** off, the switches are greyed out rather than hidden, so you can see what you'd get.
 
-**Talking points on the Announcer screen** sits under the switches. Talking points are never spoken.
+**Talking points on the Announcer screen - never spoken** sits under the switches. It's the same setting as the talking points tick in Advanced mode.
 
 ## Restore default settings
 
@@ -112,6 +112,10 @@ Each restore first saves your settings to a dated copy in a **Settings Backups**
 3. Click **Put Back**.
 
 Your current settings are saved as a copy first, so this can be undone the same way. HeatCaller restarts to use them.
+
+Putting a copy back changes the same settings a restore does, what Simple mode shows included. Everything in the list above stays as it is now, and so do Simple or Advanced mode and the manager-PIN tick (see below).
+
+If a settings file can't be written part-way through a restore or a put-back, HeatCaller says some settings may have changed and some not, and restarts. Your settings were saved as a copy first, so **Put Back Earlier Settings** puts them back.
 
 !!! note
     A restore can't be undone with **Undo** at the bottom of the sidebar, because it restarts the app. **Put Back Earlier Settings** is the way back.
