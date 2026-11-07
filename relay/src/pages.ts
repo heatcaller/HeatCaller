@@ -13204,7 +13204,10 @@ function detailsForm(message) {
   form.appendChild(said);
 
   if (withPin) {
-    form.appendChild(tapButton('Forget my PIN on this phone', 'linkish', () => {
+    // A full-size button, the kit's tonal one, since 7 Nov 2026 (Asher:
+    // "make the forget pin on this phone on your details menu a larger
+    // button") - it was a small text link under Send.
+    form.appendChild(tapButton('Forget my PIN on this phone', 'go quiet', () => {
       setPass('');
       drawAsks('Signed out on this phone.');
     }));
