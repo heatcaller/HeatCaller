@@ -6,7 +6,7 @@ Short answers to the questions race directors and club admins ask most, with lin
 
 ### Does HeatCaller run on a Mac or Linux?
 
-No. HeatCaller is a Windows desktop app. It needs a 64-bit Windows 11 (or Windows 10) PC; the installer brings everything else it needs. See [What you need](../getting-started/index.md#what-you-need).
+No. HeatCaller is a Windows desktop app. It needs a 64-bit Windows 11 (or Windows 10) PC; the installer brings everything else it needs. [Download the installer](https://github.com/asherizm/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi), and see [What you need](../getting-started/index.md#what-you-need).
 
 ### Which timing systems does it work with?
 
@@ -211,7 +211,7 @@ No. Your data isn't kept with the app, so replacing the app leaves it alone. Hea
 
 Email **support@heatcaller.com**, and include these:
 
-- The version, from the title bar, the startup screen or **About HeatCaller** (for example **BETA 0.60.0**).
+- The version, from the title bar, the startup screen or **About HeatCaller** (for example **BETA 0.61.0**).
 - What you were doing.
 - The support file: **Save Support Info** on the **Getting help** card of the **Backup & Restore** page. It has the console, the crash log, the version and the PC in it already, with driver names and email addresses taken out. See [Save Support Info](../admin/backups.md#save-support-info).
 

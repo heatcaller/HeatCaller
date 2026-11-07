@@ -2,7 +2,9 @@
 
 HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whole feature lands, *c* for fixes and smaller additions.
 
-## Unreleased
+## 0.61.0
+
+Released 7 Nov 2026. Everything since 0.60.0, newest first.
 
 - **The known issues, again (7 November).**
     - **Record in danger**, a new **During the race** segment on **Voice → Commentary**: the announcer calls a driver whose last few laps are closing on the layout record, before it falls. Until now this was only written to the console. See [Commentary](announcer/commentary.md).

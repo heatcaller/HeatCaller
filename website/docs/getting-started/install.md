@@ -2,21 +2,21 @@
 
 This page covers getting HeatCaller onto a Windows PC with its installer: what it puts where, what happens the first time it starts, where it keeps your data, and how it updates and comes off again.
 
-!!! note "Getting the installer during the beta"
-    HeatCaller's installer is a single file, **HeatCallerApp-beta.msi**. The public download page for it isn't open yet, so during the beta the installer comes to your club directly from the HeatCaller team. Ask them for the latest one. Once the download page is up, this page will link to it. Updates already know where to look (see [Updates](#updates)).
+!!! note "Getting the installer"
+    HeatCaller's installer is a single file, **HeatCallerApp-beta.msi**. Download the latest one from **[github.com/asherizm/HeatCaller-releases](https://github.com/asherizm/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi)**. It's about 1.3 GB, so download it at home or work rather than on the track's Wi-Fi, and copy it to the race laptop. Every release, with its notes, is listed on the [releases page](https://github.com/asherizm/HeatCaller-releases/releases). Once it's installed, HeatCaller fetches its own updates (see [Updates](#updates)).
 
 ## Before you start
 
 You need:
 
 - A Windows 10 or Windows 11 PC, 64-bit (see [What you need](index.md#what-you-need)). That covers almost every laptop.
-- About 1 GB of free disk space. Most of the installer is the built-in natural voice (Kokoro), which comes with it so the announcer works at a track with no internet.
+- About 3 GB of free disk space. HeatCaller takes about 1.5 GB once installed, most of it the built-in natural voice (Kokoro), the commentary model and the music, which come with it so the announcer works at a track with no internet. An update downloads up to another 1.3 GB while it installs.
 - Nothing else. The installer carries everything HeatCaller needs, including .NET, so you don't install anything from Microsoft first.
 - No administrator password. HeatCaller installs for the Windows user who runs the installer.
 
 ## Install
 
-1. Copy **HeatCallerApp-beta.msi** to the race laptop and double-click it.
+1. [Download **HeatCallerApp-beta.msi**](https://github.com/asherizm/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi), copy it to the race laptop and double-click it.
 2. **If Windows SmartScreen says "Windows protected your PC"**, click **More info**, check that the publisher is HeatCaller's, then click **Run anyway**. The installer is signed, but SmartScreen warns about any program it hasn't seen downloaded many times yet. This goes away as more clubs install it.
 3. Read the **license agreement and privacy notice**, tick the box to accept them, and click **Next**. HeatCaller can't be installed without accepting them. The privacy notice says what happens to your drivers' information, including the names sent to ElevenLabs when you use an online voice.
 4. Click **Install** and wait. It takes a minute or so. Then click **Finish**, and HeatCaller starts.
@@ -53,7 +53,7 @@ If you put it somewhere else, use the full path to the `HeatCaller.csproj` in it
 
 ## The startup screen
 
-A dark startup screen with the **HEATCALLER** name and the version (for example **BETA 0.60.0**) shows while the app loads its pages. It shows short progress lines:
+A dark startup screen with the **HEATCALLER** name and the version (for example **BETA 0.61.0**) shows while the app loads its pages. It shows short progress lines:
 
 - "Starting up..."
 - "Loading settings and driver profiles..."
