@@ -854,12 +854,21 @@ internal static class BroadcastImaging
             var number = current.Count + 1;
             string into;
 
+            // A club's piece never takes a shipped piece's file name (6 Nov
+            // 2026): post and out marks are kept by file name alone, so the
+            // two would share them.
+            var shipped = DefaultFiles(theme, element)
+                .Select(Path.GetFileName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             do
             {
                 into = Path.Combine(folder, $"{stem} {number}{extension.ToLowerInvariant()}");
                 number++;
             }
-            while (File.Exists(into) || current.Contains(into, StringComparer.OrdinalIgnoreCase));
+            while (File.Exists(into)
+                || current.Contains(into, StringComparer.OrdinalIgnoreCase)
+                || shipped.Contains(Path.GetFileName(into)));
 
             File.Copy(from, into, overwrite: false);
 

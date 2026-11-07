@@ -773,7 +773,8 @@ public sealed partial class RaceControlControl
                     _rounds,
                     _profiles,
                     ranOn,
-                    round?.ClassName);
+                    round?.ClassName,
+                    withinRoundIds: _events?.ActiveRoundScope());
             }
             catch (Exception ex)
             {
@@ -5780,7 +5781,8 @@ public sealed partial class RaceControlControl
                     _txtSessionLabel.Text,
                     DateTime.UtcNow,
                     message => StatusMessage?.Invoke(message),
-                    withVideoBed: store.MusicUnderVideos);
+                    withVideoBed: store.MusicUnderVideos,
+                    isRace: true);
 
                 // The highlight videos' captions (21 Oct 2026): every line
                 // the announcer is about to say, noted against whichever

@@ -612,13 +612,19 @@ public sealed class SoundEffectsControl : UserControl
             // A pending edit must not be lost because the window closed
             // half a second after it was made.
             //
-            // But only onto the profile this page was showing. This page is
-            // also disposed to be REBUILT, straight after a soundscape (or a
-            // venue's soundscape) has saved a whole new profile - and the
-            // flush then wrote the old page's rows back over it, undoing the
-            // soundscape's sounds. A different profile in the store means
-            // someone else has saved since, and theirs is the newer one.
-            if (_saveDebounce.Enabled && ReferenceEquals(_store.Current, _profileShown))
+            // This page is also disposed to be REBUILT, straight after a
+            // soundscape (or a venue's soundscape) has saved a whole new
+            // profile - and the flush then wrote the old page's rows back
+            // over it, undoing the soundscape's sounds. That rebuild drops
+            // the pending edit first (DropPendingEdit), so a timer still
+            // running here is an edit to keep.
+            //
+            // No longer "only while the store holds the profile this page
+            // showed" (6 Nov 2026): the Voice tab's streak thresholds save a
+            // new profile object too, and that test then lost a tick made
+            // just before the window closed. BuildProfile already takes the
+            // thresholds and volume from the store, so nothing is undone.
+            if (_saveDebounce.Enabled)
             {
                 SaveNow();
             }
@@ -1475,6 +1481,13 @@ public sealed class SoundEffectsControl : UserControl
         _saveDebounce.Stop();
         _saveDebounce.Start();
     }
+
+    /// <summary>
+    /// Forgets an edit still waiting to save, so disposing the page doesn't
+    /// write it. For the rebuild after a soundscape has saved a whole new
+    /// profile - the old page's rows would undo the soundscape's sounds.
+    /// </summary>
+    internal void DropPendingEdit() => _saveDebounce.Stop();
 
     private void SaveNow()
     {

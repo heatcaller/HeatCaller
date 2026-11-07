@@ -202,6 +202,34 @@ public sealed class BugHunt11_RelayAppAuthTests : IDisposable
         Assert.Equal("~23", fixedEntry.Values["pinion"]);
     }
 
+    [Fact]
+    public void A_fix_from_the_phone_keeps_a_desk_value_too_long_for_the_phone_to_send_back()
+    {
+        var g = WithSheet(out var sheet);
+        var tooLong = new string('9', DriverAsk.SheetValueMaxChars + 5);
+        var desk = new SetupEntry
+        {
+            DriverName = "Sam Parker",
+            CarId = CarId,
+            CarModel = "Mine",
+            ChassisTemplateId = sheet.Id,
+            RecordedAtUtc = DateTime.UtcNow,
+            Values = new Dictionary<string, string> { ["ride"] = tooLong, ["spring"] = "Soft" },
+        };
+        g.Setups.Upsert(desk);
+
+        // As the phone sends it: the long value it started from left out.
+        var ask = g.Ask(DriverAsk.Setup, new()
+        {
+            ["car"] = CarId, ["sheet"] = sheet.Id, ["entry"] = desk.Id, ["v.spring"] = "Hard",
+        });
+
+        Assert.Equal(DriverAsk.Approved, ask.State);
+        var fixedEntry = Assert.Single(g.Setups.All);
+        Assert.Equal("Hard", fixedEntry.Values["spring"]);
+        Assert.Equal(tooLong, fixedEntry.Values["ride"]);
+    }
+
     // ------------------------------------------------------ sign-up desk
 
     private static AppSettings SignupSettings() => new()

@@ -845,11 +845,14 @@ public sealed class MixerControl : UserControl
             // Ends an audition properly rather than just silencing it -
             // otherwise the button still reads "Stop Everything" and the
             // repeat timer keeps firing announcements into a mute.
+            //
+            // Through StopAudition, before the mute records what is playing
+            // (6 Nov 2026): clearing the flag by hand skipped its restore, so
+            // the sidebar's unmute brought back a crowd and music the
+            // audition had started, the crowd still at race level.
             if (_auditioning)
             {
-                _auditioning = false;
-                _auditionVoice.Stop();
-                _btnAuditionAll.Text = "Play Everything";
+                StopAudition();
             }
 
             // Through the sidebar's mute whenever it is wired up - already

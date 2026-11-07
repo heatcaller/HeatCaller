@@ -151,6 +151,12 @@ public sealed class AmbienceService : IDisposable
         get { lock (_lock) { return _running; } }
     }
 
+    /// <summary>True while the crowd is fading out to stop - see FadeOutAndStopAsync.</summary>
+    public bool IsFadingOut
+    {
+        get { lock (_lock) { return _fadingOut && _running; } }
+    }
+
     /// <summary>The underlying race-state mood, ignoring any momentary surge.</summary>
     public Intensity CurrentIntensity => _current;
 

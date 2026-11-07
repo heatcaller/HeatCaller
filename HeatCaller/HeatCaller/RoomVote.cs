@@ -459,7 +459,8 @@ internal sealed class RoomVote
 
     /// <summary>
     /// Raised once when a vote stops taking votes by being closed - by the
-    /// race director (Close) or at its green flag (StartedRace). Not raised
+    /// race director (Close), at its green flag (StartedRace) or by its
+    /// result being filed while still open (Finished). Not raised
     /// when nothing was open or it was already closed. Raised on whichever
     /// thread closed it, outside the lock.
     ///
@@ -861,6 +862,8 @@ internal sealed class RoomVote
     /// <param name="winnerName">And their name, for the announcer to say.</param>
     internal void Finished(string? raceKey, string? winnerId, string? winnerName)
     {
+        var closedHere = false;
+
         lock (_gate)
         {
             if (_file.Current is not { } poll || poll.Finished)
@@ -883,9 +886,19 @@ internal sealed class RoomVote
             if (poll.ClosedUtc is null)
             {
                 poll.ClosedUtc = DateTime.UtcNow;
+                closedHere = true;
             }
 
             Save();
+        }
+
+        // 6 Nov 2026: closing it here raises Closed too, as Close and
+        // StartedRace do. A vote opened after the green is only closed by
+        // the result, and without this the relay went on taking votes and
+        // telling phones they counted until its next fifteen-second tick.
+        if (closedHere)
+        {
+            Closed?.Invoke();
         }
     }
 

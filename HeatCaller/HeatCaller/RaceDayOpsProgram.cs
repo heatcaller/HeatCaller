@@ -149,7 +149,11 @@ public sealed partial class RaceDayService
 
         // Who could be put in: the class's roster for today, less anyone
         // already in this heat - the "not in a heat" column of the form.
-        var inHeat = round.AssignedTransponders.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // A driver seated under his alternate transponder is in it by his
+        // main one too (2026-11-06: he was offered as available for it).
+        var inHeat = round.AssignedTransponders
+            .Concat(round.AssignedTransponders.Select(t => _host.Profiles.PrimaryForAlternate(t)).OfType<string>())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var available = _host.Program.ClassRoster(round.ClassName)
             .Where(p => !inHeat.Contains(p.Transponder))
@@ -388,8 +392,10 @@ public sealed partial class RaceDayService
 
         // The driver is found among the heat they are leaving first - a car
         // with no profile can still be in a heat - then among the drivers
-        // on file.
-        var transponder = (from is not null ? TransponderForDriverId(context.Text("driverId"), from.AssignedTransponders) : null)
+        // on file. In the heat, a driver seated under his alternate
+        // transponder answers to his main one's id, the id program.heat
+        // sent (2026-11-06: he couldn't be moved or taken out).
+        var transponder = (from is not null ? RosterEntryForDriverId(context.Text("driverId"), from.AssignedTransponders) : null)
                           ?? TransponderForDriverId(context.Text("driverId"))
                           ?? throw new OpRefused("That driver isn't on the laptop any more - reload the list.");
 
@@ -459,6 +465,24 @@ public sealed partial class RaceDayService
         return OpResult.Done(
             $"{Said(NameOfTransponder(transponder))} ({className})",
             $"{Said(ShownNameOfTransponder(transponder, context.Channel))}.");
+    }
+
+    /// <summary>
+    /// The heat entry behind a driver id: the entry itself, or an entry that
+    /// is a driver's alternate transponder when the id is his main one's -
+    /// program.heat sends a driver by his main transponder's id.
+    /// </summary>
+    private string? RosterEntryForDriverId(string? driverId, IReadOnlyCollection<string> roster)
+    {
+        if (TransponderForDriverId(driverId, roster) is { } entry)
+        {
+            return entry;
+        }
+
+        return string.IsNullOrWhiteSpace(driverId)
+            ? null
+            : roster.FirstOrDefault(t => _host.Profiles.PrimaryForAlternate(t) is { } primary
+                                         && string.Equals(DriverIdFor(primary), driverId.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

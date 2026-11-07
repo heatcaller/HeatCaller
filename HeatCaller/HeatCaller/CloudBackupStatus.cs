@@ -138,9 +138,20 @@ internal static class CloudBackupStatus
     /// later - after the console line has scrolled away and the club has
     /// gone home. Does NOT save the settings; the caller does, as it saves
     /// LastAutoBackupUtc in the same breath.
+    ///
+    /// Judged against the services switched on NOW, not when the round
+    /// started (2026-11-06). A backup zips the whole data folder before it
+    /// copies, which can take minutes, and the switches on the Backup &amp;
+    /// Restore page stay usable all that time. A service ticked on mid-round
+    /// got no copy, so a round that worked everywhere else is not a success
+    /// for it - the light used to go green and name it anyway. A service
+    /// ticked off mid-round is no longer the club's concern, so its failure
+    /// line is not written back beside a red light that names it.
     /// </summary>
     public static void Record(AppSettings settings, IReadOnlyList<CloudBackup.CopyOutcome> outcomes, DateTime nowUtc)
     {
+        outcomes = outcomes.Where(o => CloudBackup.IsEnabled(settings, o.Service)).ToList();
+
         if (outcomes.Count == 0)
         {
             return;
@@ -150,8 +161,20 @@ internal static class CloudBackupStatus
 
         if (failed.Count == 0)
         {
-            settings.LastCloudBackupUtc = nowUtc;
             settings.LastCloudBackupProblem = string.Empty;
+
+            // Every service it covered got a copy, but one ticked on since
+            // it started has none yet: leave the time as ServiceSwitched
+            // left it, so the light reads "Not yet" rather than green.
+            var coveredAll = Enum.GetValues<CloudService>()
+                .Where(s => CloudBackup.IsEnabled(settings, s))
+                .All(s => outcomes.Any(o => o.Service == s));
+
+            if (coveredAll)
+            {
+                settings.LastCloudBackupUtc = nowUtc;
+            }
+
             return;
         }
 

@@ -125,6 +125,45 @@ public sealed class BugHunt11_AchievementsTests : IDisposable
         Assert.Null(watch.Saw(new LapSeen("SAM", 9.955)));
     }
 
+    [Fact]
+    public void The_record_watch_counts_the_first_record_on_a_new_layout_as_gone()
+    {
+        // No record stands at the green; Sam's first timed lap is the
+        // quickest and Race Control writes it as the layout's first record.
+        var layout = new TrackLayout { Name = "Infield" };
+        var watch = new RecordWatch
+        {
+            LayoutRecord = () => PaceHistory.LayoutRecordFor(new[] { layout }, "Infield"),
+        };
+        watch.Reset();
+
+        layout.RecordLapMs = 12_000;
+        layout.RecordHolderName = "Sam";
+        Assert.Null(watch.Saw(new LapSeen("SAM", 12.000)));
+
+        Assert.Null(watch.Saw(new LapSeen("SAM", 12.020)));
+        Assert.Null(watch.Saw(new LapSeen("SAM", 12.010)));
+        Assert.Null(watch.Saw(new LapSeen("SAM", 12.005)));
+    }
+
+    [Fact]
+    public void The_record_watch_never_reset_still_counts_the_lap_that_set_the_record()
+    {
+        // The console makes its watch on the first lap fed, so Reset has not
+        // run when the first mark it ever reads is the lap that set it.
+        var layout = new TrackLayout { Name = "Infield", RecordLapMs = 12_000, RecordHolderName = "Sam" };
+        var watch = new RecordWatch
+        {
+            LayoutRecord = () => PaceHistory.LayoutRecordFor(new[] { layout }, "Infield"),
+        };
+
+        Assert.Null(watch.Saw(new LapSeen("SAM", 12.000)));
+
+        Assert.Null(watch.Saw(new LapSeen("SAM", 12.020)));
+        Assert.Null(watch.Saw(new LapSeen("SAM", 12.010)));
+        Assert.Null(watch.Saw(new LapSeen("SAM", 12.005)));
+    }
+
     // --- 3. A disqualified car's fast lap in the badges -----------------------
 
     [Fact]
@@ -162,6 +201,24 @@ public sealed class BugHunt11_AchievementsTests : IDisposable
         var unlocks = AchievementEvaluator.EvaluateFinishedRace(race, Array.Empty<SessionRecord>(), AchievementStore.Load());
 
         Assert.Contains(unlocks, u => u.Transponder == "EVE" && u.Badge.Id == AchievementCatalogue.RocketStart);
+    }
+
+    [Fact]
+    public void A_disqualified_cars_fast_lap_is_not_a_quicker_rival_for_Slow_and_Steady()
+    {
+        // 6 Nov 2026: only Dave's legal lap was quicker than Sam's.
+        var jen = Entry("JEN", 3, 9_700);
+        jen.Outcome = ResultEditor.Dq;
+        jen.Laps = 0;
+
+        var race = Race(
+            Entry("SAM", 1, 10_200),
+            Entry("DAVE", 2, 10_000),
+            jen);
+
+        var unlocks = AchievementEvaluator.EvaluateFinishedRace(race, Array.Empty<SessionRecord>(), AchievementStore.Load());
+
+        Assert.DoesNotContain(unlocks, u => u.Transponder == "SAM" && u.Badge.Id == AchievementCatalogue.SlowAndSteady);
     }
 
     // --- 4. A disqualified car's fast lap in the night's best -----------------

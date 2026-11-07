@@ -506,6 +506,29 @@ public sealed class RecapBroadcastTests : IDisposable
     }
 
     [Fact]
+    public async Task The_winners_team_and_sponsor_keep_their_capitals_in_a_calmed_recap()
+    {
+        var profiles = ProfileStore.Load();
+
+        profiles.Upsert(new DriverProfile { Transponder = "Sam", DriverName = "Sam", Team = "HFCC", Sponsors = "TEKNO RC" });
+
+        var (desk, model) = Desk(profiles);
+
+        // Shouting elsewhere in it, so CalmShouting has something to calm.
+        model.Answer = "WHAT A RACE! Sam wins for HFCC with TEKNO RC behind him.";
+
+        var recap = await desk.BuildRaceSummaryAsync(ARace(Finisher("Sam", 1, 12), Finisher("Bill", 2, 12, 300_450)));
+
+        // The team and sponsor are in the facts "exactly as written"; the
+        // recap's keep-list left them off, so they came back "hfcc" and
+        // "tekno rc" and the PA read the team as a word (6 Nov 2026).
+        Assert.NotNull(recap);
+        Assert.Contains("What a race!", recap);
+        Assert.Contains("HFCC", recap);
+        Assert.Contains("TEKNO RC", recap);
+    }
+
+    [Fact]
     public async Task A_comma_decimal_PC_still_writes_the_recaps_numbers_with_a_point()
     {
         var was = CultureInfo.CurrentCulture;

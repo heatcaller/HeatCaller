@@ -167,6 +167,13 @@ describe("push: when to say something - the page's own rules", () => {
     assert.equal(nightAlerts(one, { races: [...one.races, { label: "Q1 Heat 1", pos: 1, of: 4, kind: "demo" }] }, url)[0]?.title, "Your result is in (demo)");
     assert.equal(nightAlerts(one, { races: [...one.races, { label: "Q3", out: "DNF" }] }, url)[0]?.body, "Q3 - DNF");
   });
+
+  it("the first race of a new night, after a longer night last week", () => {
+    const lastWeek = { night: "2026-10-31", races: [1, 2, 3, 4, 5, 6].map((i) => ({ label: `Q${i}`, pos: 1, of: 6 })) };
+    const tonight = { night: "2026-11-07", races: [{ label: "Q1 Heat 2", pos: 3, of: 5 }] };
+    assert.deepEqual(nightAlerts(lastWeek, tonight, url)[0]?.body, "Q1 Heat 2 - 3rd of 5");
+    assert.deepEqual(nightAlerts(tonight, tonight, url), [], "a republish of tonight");
+  });
 });
 
 describe("push: through the relay", () => {

@@ -4171,56 +4171,86 @@ public sealed partial class VoiceSettingsControl : UserControl
                 : ReferenceEquals(previousItem, _voiceNotInAccount) ? _voiceNotInAccountName
                 : previousItem.Name;
 
-            _cmbVoice.Items.Clear();
-            _voiceNotInAccount = null;
-            _voiceNotInAccountName = string.Empty;
+            // WHY (6 Nov 2026): every Clear and SelectedIndex below fired a
+            // plain auto-save, which read the ElevenLabs boxes kept out of
+            // auto-save as they were on screen - so a voice list answering
+            // while a model id was half typed made "eleven_tur" the live
+            // model. Refilled under the guard; saved once below, the way
+            // FillHeatCallerVoices does.
+            var reloading = _loadingSettings;
+            _loadingSettings = true;
 
-            foreach (var v in voices)
+            try
             {
-                _cmbVoice.Items.Add(v);
-            }
+                _cmbVoice.Items.Clear();
+                _voiceNotInAccount = null;
+                _voiceNotInAccountName = string.Empty;
 
-            if (previouslySelected is not null)
-            {
-                var found = false;
-                for (var i = 0; i < _cmbVoice.Items.Count; i++)
+                foreach (var v in voices)
                 {
-                    if (((ElevenLabsClient.VoiceInfo)_cmbVoice.Items[i]!).VoiceId == previouslySelected)
+                    _cmbVoice.Items.Add(v);
+                }
+
+                if (previouslySelected is not null)
+                {
+                    var found = false;
+                    for (var i = 0; i < _cmbVoice.Items.Count; i++)
                     {
-                        _cmbVoice.SelectedIndex = i;
-                        found = true;
-                        break;
+                        if (((ElevenLabsClient.VoiceInfo)_cmbVoice.Items[i]!).VoiceId == previouslySelected)
+                        {
+                            _cmbVoice.SelectedIndex = i;
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found)
+                    {
+                        // The voice that was chosen is not in this account's list -
+                        // the usual way here is pasting another account's key. It
+                        // is kept, chosen, with a note, the way the HeatCaller
+                        // voice list keeps a voice the relay stopped offering.
+                        // Left blank, the box said "no voice" while every save
+                        // went on writing the old voice's id behind it, so races
+                        // asked the new account for a voice it does not have and
+                        // Test Voice got past its own "select a voice" check only
+                        // to fail. Dropping the voice instead would throw away a
+                        // choice that may still be wanted (a key pasted by
+                        // mistake, to be put back), so the page shows exactly
+                        // what is saved and the club picks again from the list.
+                        _voiceNotInAccountName = previousName;
+                        _voiceNotInAccount = new ElevenLabsClient.VoiceInfo(
+                            previouslySelected,
+                            $"{(string.IsNullOrWhiteSpace(previousName) ? previouslySelected : previousName)} (not in this account)");
+                        _cmbVoice.SelectedIndex = _cmbVoice.Items.Add(_voiceNotInAccount);
                     }
                 }
-
-                if (!found)
+                else if (_cmbVoice.Items.Count > 0)
                 {
-                    // The voice that was chosen is not in this account's list -
-                    // the usual way here is pasting another account's key. It
-                    // is kept, chosen, with a note, the way the HeatCaller
-                    // voice list keeps a voice the relay stopped offering.
-                    // Left blank, the box said "no voice" while every save
-                    // went on writing the old voice's id behind it, so races
-                    // asked the new account for a voice it does not have and
-                    // Test Voice got past its own "select a voice" check only
-                    // to fail. Dropping the voice instead would throw away a
-                    // choice that may still be wanted (a key pasted by
-                    // mistake, to be put back), so the page shows exactly
-                    // what is saved and the club picks again from the list.
-                    _voiceNotInAccountName = previousName;
-                    _voiceNotInAccount = new ElevenLabsClient.VoiceInfo(
-                        previouslySelected,
-                        $"{(string.IsNullOrWhiteSpace(previousName) ? previouslySelected : previousName)} (not in this account)");
-                    _cmbVoice.SelectedIndex = _cmbVoice.Items.Add(_voiceNotInAccount);
+                    _cmbVoice.SelectedIndex = 0;
                 }
             }
-            else if (_cmbVoice.Items.Count > 0)
+            finally
             {
-                _cmbVoice.SelectedIndex = 0;
+                _loadingSettings = reloading;
             }
 
             // The longest voice may have come or gone - see SizeFields.
             RefitPickers();
+
+            // Outside the guard: a voice picked for a club that had none, or
+            // a saved id now shown under its real name, is worth saving. The
+            // four ElevenLabs boxes are saved as they were.
+            if (!reloading && _cmbVoice.SelectedItem is ElevenLabsClient.VoiceInfo chosen)
+            {
+                var chosenName = ReferenceEquals(chosen, _voiceNotInAccount) ? _voiceNotInAccountName : chosen.Name;
+
+                if (!string.Equals(chosen.VoiceId, _store.Current.VoiceId, StringComparison.Ordinal)
+                    || !string.Equals(chosenName, _store.Current.VoiceName, StringComparison.Ordinal))
+                {
+                    AutoSave(keepTypedElevenLabsBoxes: true);
+                }
+            }
 
             _lblTestStatus.Text = $"Loaded {Plural.Of(voices.Count, "voice")}.";
         }

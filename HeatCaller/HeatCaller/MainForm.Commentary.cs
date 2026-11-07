@@ -369,7 +369,7 @@ public partial class MainForm
             // AFTER the file, and not instead of it: the file is the thing
             // the club asked for and it is already on disk by the time
             // anything touches the network.
-            var published = PublishTheNightBefore(day.Name, whenLocal, day.FirstRaceLocalTime, script);
+            var published = PublishTheNightBefore(day.Id, day.Name, whenLocal, day.FirstRaceLocalTime, script);
 
             return $"Saved to Documents\\HeatCaller Previews\\{name}{published} - and written out in the developer console.";
         }
@@ -392,6 +392,7 @@ public partial class MainForm
     /// read nothing about a relay.
     /// </summary>
     private string PublishTheNightBefore(
+        string? dayId,
         string? dayName,
         DateTime whenLocal,
         TimeSpan? firstRaceLocal,
@@ -442,9 +443,16 @@ public partial class MainForm
             // tense, for hours after. What it was built from is kept too,
             // so a driver who asks for initials only afterwards is redacted
             // on the page as well (RedactTheNightBeforeAgain).
+            //
+            // WHY (6 Nov 2026): the id of the day the preview was written
+            // for, passed in, not the active day read again here. The AI
+            // call takes seconds and the club can open, switch or close a
+            // day meanwhile; the preview was then stored against the wrong
+            // day, so its own first heat never took it down and another
+            // day's race took it down early.
             _settings.NightBeforeOnThePage = new NightBeforePreviewUp
             {
-                DayId = _raceEvents.Active?.Id ?? string.Empty,
+                DayId = dayId ?? string.Empty,
                 DayName = dayName,
                 WhenLocal = DateTime.SpecifyKind(whenLocal, DateTimeKind.Unspecified),
                 FirstRaceLocal = firstRaceLocal,
@@ -1026,7 +1034,8 @@ public partial class MainForm
                     _rounds,
                     _raceEvents,
                     _sessionHistory,
-                    _profiles));
+                    _profiles,
+                    filed?.Id));
         };
     }
 

@@ -146,6 +146,39 @@ public sealed class BugHunt11_RelayPublisherTests : IDisposable
         Assert.Contains(ClubNotes.Load().All, n => n.Text == "Happy birthday Dad");
     }
 
+    // Bug hunt 12, #25: a Save landing while the old club's open was in
+    // flight had its reset overwritten, and the new club was never opened.
+    [Fact]
+    public void A_club_saved_while_shout_outs_open_on_the_old_one_is_still_opened()
+    {
+        RelayPublisher? publisher = null;
+        var settings = Relay("http://127.0.0.1:1", "old-club");
+
+        using var relay = new FakeRelay((method, path) =>
+        {
+            if (path.Contains("/c/old-club/notes/open", StringComparison.Ordinal))
+            {
+                // The operator saves a different club mid-request.
+                settings.RelayClub = "new-club";
+                publisher!.SettingsChanged();
+            }
+
+            return (200, "{}");
+        });
+
+        settings.RelayBaseUrl = relay.Root;
+        using var made = new RelayPublisher(settings);
+        publisher = made;
+
+        var old = Field(made, "_target");
+        Assert.Equal(true, Call(made, "TellTheRelayNotesAreOpen", old, "old-club", true, false, CancellationToken.None));
+
+        var current = Field(made, "_target");
+        Assert.NotEqual(old, current);
+        Assert.Equal(true, Call(made, "TellTheRelayNotesAreOpen", current, "new-club", true, false, CancellationToken.None));
+        Assert.Contains(relay.Requests, r => r.Contains("/c/new-club/notes/open", StringComparison.Ordinal));
+    }
+
     // ------------------------------------------------ listening along
 
     [Fact]

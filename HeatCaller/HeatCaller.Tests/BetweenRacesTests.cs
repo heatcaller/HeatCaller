@@ -108,6 +108,25 @@ public sealed class BetweenRacesTests : IDisposable
     }
 
     [Fact]
+    public void A_filed_race_with_no_round_is_not_counted_twice()
+    {
+        var rounds = RoundDefinitionStore.Load();
+        var seasons = SeasonStore.Load();
+        seasons.Upsert(new Season { Name = "Club Points", AutoInclude = true, MainsOnly = false });
+
+        // A freeform race, already filed: the championship check scores it
+        // again as the "live" one, so it must not also be in the counted table.
+        var earlier = Race(null, DateTime.UtcNow.AddDays(-7), Result(1, "Alex"), Result(2, "Sam"));
+        var filed = Race(null, DateTime.UtcNow, Result(1, "Sam"), Result(2, "Alex"));
+        var history = SessionHistoryStore.FromSessions(new[] { filed, earlier });
+
+        var table = ChampionshipLive.Compute(filed.Results, null, seasons, rounds, null, history, null, filed.Id);
+
+        Assert.NotNull(table);
+        Assert.Equal("Alex and Sam would be level at the top of the Club Points", table!.Headline);
+    }
+
+    [Fact]
     public void A_heat_run_again_counts_once_in_a_championship()
     {
         var rounds = RoundDefinitionStore.Load();

@@ -332,4 +332,48 @@ public sealed class BugHunt7FactsBTests : IDisposable
         Assert.True(RaceStature.Of(main, rounds, events.ActiveRoundScope()).LastOfTheNight);
         Assert.False(RaceStature.Of(heat, rounds, events.ActiveRoundScope()).LastOfTheNight);
     }
+
+    // --- Another day's unrun A-main is not tonight's next leg (6 Nov 2026) --
+
+    [Fact]
+    public void Another_days_unrun_main_does_not_hold_back_tonights_run_of_mains()
+    {
+        var rounds = RoundDefinitionStore.Load();
+        var events = RaceEventStore.Load();
+
+        var tonight = new RaceEvent { Name = "Tonight" };
+        events.Upsert(tonight);
+        events.SetActive(tonight.Id);
+
+        var main = new RoundDefinition { ClassName = Stock, RoundLabel = "A-Main", Kind = RoundKind.Main, MainTier = 0 };
+        rounds.Add(main);
+        events.AddRoundsToActive(new[] { main.Id });
+
+        // Next week's A-main, built in advance - later in Order, unrun, and
+        // not part of tonight's race day.
+        var nextWeek = new RoundDefinition { ClassName = Stock, RoundLabel = "A-Main", Kind = RoundKind.Main, MainTier = 0 };
+        rounds.Add(nextWeek);
+
+        var won = new[] { ("A", 1, 12), ("B", 2, 12), ("C", 3, 12) };
+        var history = SessionHistoryStore.FromSessions(new List<SessionRecord>
+        {
+            Raced(Now.AddDays(-14), main.Id, won),
+            Raced(Now.AddDays(-7), main.Id, won),
+            Raced(Now.AddMinutes(-10), main.Id, won),
+        });
+
+        var mains = CommentaryReaders.MainsHere(
+            history, rounds, Sam(), "Club Oval", Stock, Now, events.ActiveRoundScope());
+
+        Assert.NotNull(mains);
+        Assert.Equal(2, mains!.HolderMeetings);
+
+        // A leg of tonight's own day still to run does hold it back.
+        var secondLeg = new RoundDefinition { ClassName = Stock, RoundLabel = "A-Main 2", Kind = RoundKind.Main, MainTier = 0 };
+        rounds.Add(secondLeg);
+        events.AddRoundsToActive(new[] { secondLeg.Id });
+
+        Assert.Null(CommentaryReaders.MainsHere(
+            history, rounds, Sam(), "Club Oval", Stock, Now, events.ActiveRoundScope()));
+    }
 }

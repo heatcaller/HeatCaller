@@ -113,11 +113,15 @@ public partial class MainForm
             OnClientRawMessage($"{AppTime.LogStampNow()}  [timing] WARNING: {problem.Text}");
         }
         else if (racing && _timingProblemKey is not null && _timingProblemKey != "check-failed"
-                 && !_timingProblemKey.StartsWith("missed-lap:", StringComparison.Ordinal))
+                 && !_timingProblemKey.StartsWith("missed-lap:", StringComparison.Ordinal)
+                 && !(_timingProblemKey == "split-down" && _splitDownSince is not null))
         {
             // Only while racing: a warning that ends because the race did
             // (the flag, a red, a reset) hasn't been put right. Nor has a
             // possible missed lap that has simply been shown long enough.
+            // Nor, since 2026-11-06, a split loop still unplugged once its
+            // 15 seconds on the bar are up - SplitLoopDown has just said
+            // "still not connected", and "cleared" under it was wrong.
             OnClientRawMessage($"{AppTime.LogStampNow()}  [timing] That's cleared - timing looks normal again.");
         }
 

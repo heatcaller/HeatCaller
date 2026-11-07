@@ -318,10 +318,12 @@ public static partial class AchievementEvaluator
 
                 // The tortoise and the hare: won it, though at least two
                 // others had a quicker lap in them. Somebody who kept it on
-                // the track while the quicker cars didn't.
+                // the track while the quicker cars didn't. A disqualified
+                // car keeps its fast lap but is no rival here (2026-11-06),
+                // as it is not for Fastest Lap.
                 if (entry.FastLapMs > 0)
                 {
-                    var quicker = results.Count(o => !ReferenceEquals(o, entry) && o.FastLapMs > 0 && o.FastLapMs < entry.FastLapMs);
+                    var quicker = results.Count(o => !ReferenceEquals(o, entry) && Counted(o) && o.FastLapMs > 0 && o.FastLapMs < entry.FastLapMs);
 
                     if (quicker >= 2)
                     {
@@ -783,11 +785,14 @@ public static partial class AchievementEvaluator
             // the live record only ever takes a lap under the one standing,
             // and with it a phantom Race Control refused, quicker than
             // everyone, no longer stops the driver who really set the record.
+            // Nor does the setter's own phantom later in the race
+            // (2026-11-06): it becomes his best, so the record is looked for
+            // among all his laps, not only his fastest.
             if (entry.FastLapMs > 0
                 && CanHoldTrackRecord(entry.Transponder, profiles)
                 && !string.IsNullOrWhiteSpace(record.TrackLayoutName)
                 && (context?.TrackLayoutNamed is { } layoutNamed
-                    ? IsLiveTrackRecord(layoutNamed(record.TrackLayoutName), record, entry.FastLapMs)
+                    ? IsLiveTrackRecord(layoutNamed(record.TrackLayoutName), record, entry.LapTimesMs)
                       && BestEverOn(earlier, record.TrackLayoutName, profiles) > 0
                     : entry.FastLapMs == recordLapOfRace
                       && IsTrackRecord(earlier, record.TrackLayoutName, entry.FastLapMs, profiles)))
@@ -1169,11 +1174,12 @@ public static partial class AchievementEvaluator
     /// Reset Record on a re-laid track the old layout's laps were the bar,
     /// so the new record was announced but never earned the badge. Ties on
     /// the record lap still share it. A layout that is not on Track Layouts
-    /// has no record to hold, so earns nothing.
+    /// has no record to hold, so earns nothing. Any of the driver's laps may
+    /// be the record: a phantom refused after he set it stays his best.
     /// </summary>
-    private static bool IsLiveTrackRecord(TrackLayout? layout, SessionRecord race, long lapMs) =>
+    private static bool IsLiveTrackRecord(TrackLayout? layout, SessionRecord race, IReadOnlyCollection<long> laps) =>
         layout is { RecordLapMs: > 0, RecordSetUtc: { } setUtc }
-        && layout.RecordLapMs == lapMs
+        && laps.Contains(layout.RecordLapMs)
         && setUtc >= race.StartedAtUtc;
 
     /// <summary>Three races in a row on this layout, each quicker than the last.</summary>

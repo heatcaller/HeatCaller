@@ -245,6 +245,23 @@ public sealed class BugHunt4ResultsPointsTests : IDisposable
     }
 
     [Fact]
+    public void The_record_holder_keeps_record_holder_when_his_own_later_phantom_was_refused()
+    {
+        // 6 Nov 2026: Alice set 9.800, then her transponder retriggered a
+        // 5.100 that Race Control refused but that stays her best lap.
+        var now = DateTime.UtcNow;
+        var alice = Entry("ALICE", position: 1, fast: 9_800);
+        alice.LapTimesMs.Add(5_100);
+        alice.FastLapMs = 5_100;
+        var tonight = Race(now, alice, Entry("BOB", position: 2, fast: 10_200));
+
+        var unlocks = Evaluate(tonight, Live(9_800, now.AddMinutes(-3)), OldRace(10_000));
+
+        Assert.Contains(unlocks, u => u.Transponder == "ALICE" && u.Badge.Id == AchievementCatalogue.TrackRecordHolder);
+        Assert.DoesNotContain(unlocks, u => u.Transponder == "BOB" && u.Badge.Id == AchievementCatalogue.TrackRecordHolder);
+    }
+
+    [Fact]
     public void Record_holder_is_awarded_again_after_the_record_is_reset()
     {
         var now = DateTime.UtcNow;

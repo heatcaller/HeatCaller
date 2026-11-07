@@ -339,6 +339,15 @@ public sealed partial class RelayPublisher
                 return false;
             }
 
+            // Told the club it was sent to, which may not be this one any
+            // more (2026-11-06, Bug hunt 12, #25): a Save while this was in
+            // flight cleared the flag for the new club, and marking it told
+            // here put it back, so the new club was never opened.
+            if (target != _target)
+            {
+                return true;
+            }
+
             _notesOpenAsTold = wanted;
             _notesFullAsTold = full;
             _notesOpenTold = true;

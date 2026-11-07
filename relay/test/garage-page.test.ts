@@ -489,6 +489,31 @@ describe("garage page: what it sends", () => {
     assert.equal(f["v.sway"], "Yes");
   });
 
+  it("bug hunt: a desk value over 80 characters, untouched, stays out of the request instead of stopping the save", async () => {
+    const long = "Short-course rear wing with the gurney flap trimmed down and two shims under the mount";
+    assert.ok(long.length > 80);
+    const stored = garage();
+    const cars = stored["cars"] as Record<string, unknown>[];
+    const setups = cars[0]!["setups"] as Record<string, unknown>[];
+    setups[0]!["values"] = { "front-spring": "Soft", camber: long };
+    const page = await open(relay({ read: () => ({ status: 200, body: { ok: true, garage: stored, asks: [] } }) }));
+    const box = page.get("gs");
+    type(field(box, /^Front spring/), "Hard");
+    await press(page, box, /^Add to my setup log$/);
+    const f = asks(page)[0]?.body["f"] as Record<string, string>;
+    assert.ok(f, "sent");
+    assert.equal(f["v.front-spring"], "Hard");
+    assert.equal(f["v.camber"], undefined);
+  });
+
+  it("bug hunt: a value over 80 characters the driver typed is still refused", async () => {
+    const page = await open(relay({}));
+    const box = page.get("gs");
+    type(field(box, /^Camber/), "x".repeat(81));
+    await press(page, box, /^Add to my setup log$/);
+    assert.equal(asks(page).length, 0);
+  });
+
   it("fixing the last entry sends its id", async () => {
     const page = await open(relay({}));
     const box = page.get("gs");

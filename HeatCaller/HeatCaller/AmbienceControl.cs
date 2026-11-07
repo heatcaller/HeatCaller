@@ -1337,6 +1337,9 @@ public sealed class AmbienceControl : UserControl
             _ambience.Stop();
         }
 
+        // Read before the preview's Racing mood calls the fade off.
+        var wasFadingOut = _ambience.IsFadingOut;
+
         _pagePreviewStartedAmbience = !_ambience.IsRunning;
 
         if (_pagePreviewStartedAmbience)
@@ -1351,6 +1354,18 @@ public sealed class AmbienceControl : UserControl
         if (_ambience.IsRunning)
         {
             _pagePreviewing = true;
+
+            // WHY (6 Nov 2026, bug hunt): Preview pressed during the fade at
+            // the end of a session called that fade off, and Stop Preview then
+            // left the crowd alone - it hadn't started it - so it played on
+            // between races though the club asked for it to stop. The crowd
+            // was on its way out, so stopping the preview finishes the job,
+            // unless a session takes it over first.
+            if (wasFadingOut)
+            {
+                _pagePreviewStartedAmbience = true;
+            }
+
             _ambience.SetIntensity(AmbienceService.Intensity.Racing);
             btnPreview.Text = "Stop Preview";
         }

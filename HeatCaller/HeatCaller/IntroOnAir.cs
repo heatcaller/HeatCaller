@@ -58,6 +58,13 @@ internal sealed class IntroOnAir
     /// </summary>
     internal static readonly TimeSpan ArmedFor = TimeSpan.FromMinutes(6);
 
+    /// <summary>
+    /// How long heard introductions wait to start playing - far longer than
+    /// decoding and padding even a long intro MP3 takes between the two, so
+    /// only a line that was dropped unplayed lets it run out.
+    /// </summary>
+    internal static readonly TimeSpan HeardFor = TimeSpan.FromSeconds(10);
+
     private readonly object _gate = new();
 
     private Armed? _armed;
@@ -67,7 +74,7 @@ internal sealed class IntroOnAir
 
     private sealed record Armed(IReadOnlyList<IntroCard> Cards, string Words, DateTime AtUtc);
 
-    private sealed record Planned(IReadOnlyList<IntroCard> Cards, IReadOnlyList<IntroCards.Placement> Plan, int Length);
+    private sealed record Planned(IReadOnlyList<IntroCard> Cards, IReadOnlyList<IntroCards.Placement> Plan, int Length, DateTime AtUtc);
 
     /// <summary>A show on air: each card's time, and when it all ends.</summary>
     private sealed record Show(int Token, IReadOnlyList<(IntroCard Card, DateTime FromUtc)> Cards, DateTime UntilUtc);
@@ -188,7 +195,7 @@ internal sealed class IntroOnAir
 
             if (plan.Count > 0)
             {
-                _heard = new Planned(armed.Cards, plan, words.Length);
+                _heard = new Planned(armed.Cards, plan, words.Length, now);
             }
         }
     }
@@ -210,6 +217,19 @@ internal sealed class IntroOnAir
             }
 
             _heard = null;
+
+            // WHY (6 Nov 2026, bug hunt): the introductions can be heard and
+            // then dropped before they play - a flag, the countdown or the
+            // mute landing while the MP3 decodes (PlayPcmAsync's second
+            // stillWanted check), or the decode throwing. Nothing told this
+            // so, and the plan sat here until the next line to play took it:
+            // a test line or a preview, which never pass through Heard, put
+            // every driver's card up over the wrong words. A plan that has
+            // waited longer than any decode takes was never played.
+            if (now - heard.AtUtc > HeardFor)
+            {
+                return 0;
+            }
 
             var starts = now + (lead > TimeSpan.Zero ? lead : TimeSpan.Zero);
             var length = Math.Max(1, heard.Length);

@@ -319,7 +319,7 @@ public sealed class RecapBedTests : IDisposable
     [Fact]
     public void Only_a_race_asks_for_a_bed_and_only_when_its_videos_are_made()
     {
-        Assert.Contains("message => StatusMessage?.Invoke(message),\n                    withVideoBed: store.MusicUnderVideos);", Source("RaceControlControl.AfterRace.cs"));
+        Assert.Contains("message => StatusMessage?.Invoke(message),\n                    withVideoBed: store.MusicUnderVideos,\n                    isRace: true);", Source("RaceControlControl.AfterRace.cs"));
         Assert.DoesNotContain("withVideoBed", Source("BookendRecording.cs"));
 
         var recorder = Source("RaceAudioRecorder.cs");

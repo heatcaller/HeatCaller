@@ -18,7 +18,7 @@ public sealed class BugHunt11_AudioTests
 
         Assert.Contains("AudioBus.Listen(", recorder);
         Assert.DoesNotContain("AudioBus.ListenOnAir(", recorder);
-        Assert.Contains("replay.Put(", recorder);
+        Assert.Contains("replay?.Put(", recorder);
     }
 
     [Fact]

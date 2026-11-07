@@ -53,34 +53,43 @@ public sealed class TrackLine
             return null;
         }
 
-        if (design.Decals.FirstOrDefault(d => d is not null && d.Kind == RcpDecalKind.FinishLine) is not { } finish)
-        {
-            return null;
-        }
-
         var loop = design.Route.Select(p => p.Point).ToList();
         loop.Add(loop[0]);
 
         // Where the finish line crosses the line, and the lap rebuilt to
-        // start there.
-        if (Nearest(loop, new PointF(finish.Col + 0.5f, finish.Row + 0.5f)) is not { } start)
+        // start there. 6 Nov 2026: a finish line across a wide lane is one
+        // decal per tile; try them top-left first (lowest Row, then Col) and
+        // take the first the line passes over, as RcpPlan.MeasureSectors
+        // does - not just the first in the list, which may be an outer tile
+        // the line never comes near.
+        var start = design.Decals
+            .Where(d => d is not null && d.Kind == RcpDecalKind.FinishLine)
+            .OrderBy(d => d.Row)
+            .ThenBy(d => d.Col)
+            .Select(f => Nearest(loop, new PointF(f.Col + 0.5f, f.Row + 0.5f)))
+            .FirstOrDefault(s => s is not null);
+
+        if (start is not { } found)
         {
             return null;
         }
 
-        var points = new List<PointF> { start.Point };
+        var startPoint = found.Point;
+        var startSegment = found.Segment;
 
-        for (var i = start.Segment + 1; i < loop.Count; i++)
+        var points = new List<PointF> { startPoint };
+
+        for (var i = startSegment + 1; i < loop.Count; i++)
         {
             points.Add(loop[i]);
         }
 
-        for (var i = 1; i <= start.Segment; i++)
+        for (var i = 1; i <= startSegment; i++)
         {
             points.Add(loop[i]);
         }
 
-        points.Add(start.Point);
+        points.Add(startPoint);
 
         var splits = Array.Empty<float>();
 

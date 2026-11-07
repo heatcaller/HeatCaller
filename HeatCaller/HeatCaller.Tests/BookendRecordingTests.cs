@@ -120,7 +120,7 @@ public sealed class BookendRecordingTests : IDisposable
         // fix the assertion below pins.
         var body = MethodBody(
             Source("AnnouncerControl.Director.cs"),
-            "private async Task RunAsShowAsync(ShowTreatment treatment, SpokenSegment said, CommentaryDirector director)",
+            "private async Task<bool> RunAsShowAsync(ShowTreatment treatment, SpokenSegment said, CommentaryDirector director)",
             "private void SayContinuityLine(");
 
         // THE CODE, WITH THE PROSE TAKEN OUT, because this test is about

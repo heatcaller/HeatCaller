@@ -2596,7 +2596,9 @@ public sealed class RcpTrackCanvas : Control
         // one cell: invisible, counted twice by the inventory and the kit
         // check, and saved that way. A nudge run waiting to settle is the
         // same case.
-        if ((_movingSelection && _moved) || _nudgeSettle.Enabled)
+        var settled = (_movingSelection && _moved) || _nudgeSettle.Enabled;
+
+        if (settled)
         {
             _selection.Settle(_design);
             _moved = false;
@@ -2607,6 +2609,18 @@ public sealed class RcpTrackCanvas : Control
         _selection = new RcpSelection();
 
         SelectionChanged?.Invoke();
+
+        // 6 Nov 2026: the settle changes the plan, and a nudge run's own
+        // settle (SettleNudgeRun) is what works out its rails and line again
+        // and tells the readouts. Escape or a tool key inside the run's
+        // 350 ms stopped that timer here and told nobody - the moved lane
+        // kept its old rails, the line went untraced, and Save wrote it so.
+        if (settled)
+        {
+            RaiseChanged();
+            return;
+        }
+
         Invalidate();
     }
 
