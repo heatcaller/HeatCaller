@@ -66,6 +66,22 @@ describe("Me tonight: Alerts, and qualifying on the moment card", () => {
     assert.doesNotMatch(page.get("lv").textContent, /Qualifying|Best 17/);
   });
 
+  it("puts Lap times in my ear above Alerts (7 Nov 2026)", () => {
+    const html = nightPage("acme-rc", "Acme RC");
+    assert.ok(html.indexOf('id="ea"') < html.indexOf('id="lv"'));
+  });
+
+  it("makes the moment card's pack and transponder chips go where they are fixed (7 Nov 2026)", async () => {
+    const page = await open();
+    const hero = page.get("me-moment");
+
+    page.button(hero, /^Transponder not heard$/)!.click();
+    assert.equal(page.eval("document.body.getAttribute('data-me')"), "tonight");
+
+    page.button(hero, /^No pack set$/)!.click();
+    assert.equal(page.get("me-sheet").hidden, false, "the quick pack change");
+  });
+
   it("says nothing about qualifying before the laptop has published it", async () => {
     const page = await open(false);
     assert.doesNotMatch(page.get("me-moment").textContent, /Qualifying/);

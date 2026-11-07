@@ -89,7 +89,7 @@ describe("Me tab: rearranging the cards", () => {
 
     assert.deepEqual(cards(page), ["Driver score", "Your races", "Your report card", "Your progress on Club Oval"]);
     assert.deepEqual(jumpNames(page), ["Driver score", "Races", "Report card", "Progress", "Done"]);
-    assert.equal(page.eval("localStorage.getItem('hg-night-order')"), JSON.stringify(["now", "ear", "score", "races", "how", "prog"]));
+    assert.equal(page.eval("localStorage.getItem('hg-night-order')"), JSON.stringify(["ear", "now", "score", "races", "how", "prog"]));
 
     page.button(page.get("nx"), /^Done$/)!.click();
     assert.equal(page.button(page.get("nx"), /^Up$/), undefined);

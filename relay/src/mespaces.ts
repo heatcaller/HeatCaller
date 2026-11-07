@@ -53,7 +53,7 @@ export const ME_CSS = `
 .me-hero .big { font-size: 2.3rem; line-height: 0.98; font-weight: 800; letter-spacing: -0.01em; }
 .me-hero .big small { font-size: 1.05rem; color: var(--muted); font-weight: 700; }
 .me-hero .row { display: flex; gap: 6px; flex-wrap: wrap; }
-.me-hero .row .me-chip { cursor: default; }
+.me-hero .row .me-chip[tabindex="-1"] { cursor: default; }
 .me-mini { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .me-mini div { background: color-mix(in srgb, var(--bg) 55%, transparent); border-radius: 12px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
 .me-mini small { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -115,7 +115,14 @@ body[data-me="stats"] [data-sp]:not([data-sp="stats"]) { display: none !importan
 .me-top { position: relative; max-width: 42rem; margin: 0 auto; }
 .me-si { margin: 0; }
 .me-si[hidden] { display: none !important; }
-.me-si .me-chip { min-height: 44px; cursor: pointer; }
+.me-si .me-chip { min-height: 36px; cursor: pointer; }
+/* A TIGHTER TOP (7 Nov 2026, Asher: "tighten up the top of the me tab.
+   reduce the space"): less room above the club's name, the byline only as
+   tall as its words now Signed in sits above it, and the moment card
+   closer under them. */
+body.me-on header { padding-top: 10px; }
+body.me-on .hcside { gap: 2px; }
+body.me-on .hcby { min-height: 0; }
 .me-sheet { position: fixed; inset: 0; z-index: 40; background: rgba(5, 3, 12, 0.55); display: flex; align-items: flex-end; justify-content: center; }
 .me-sheet[hidden] { display: none !important; }
 .me-sheet .in { width: 100%; max-width: 34rem; max-height: 84%; overflow-y: auto; background: var(--surface); border-radius: 24px 24px 0 0;
@@ -198,7 +205,7 @@ function meSpaceOf(node) {
   // "move more details from garage to tonight tab").
   if (id === 'lv' || id === 'ea' || id === 'gd' || id === 'me-tiles' || id === 'yd') return 'tonight';
   if (id === 'ng' || id === 'nt' || id === 'n-races' || id === 'n-calls' || id.indexOf('n-car-') === 0) return 'races';
-  if (id === 'meout' || id === 'me-garage') return 'garage';
+  if (id === 'me-garage') return 'garage';
   if (id === 'n-how' || id === 'n-score' || id === 'n-prog') return 'stats';
   const cls = String(node.className || '');
   if (/\brlist\b|\brace/.test(cls)) return 'races';
@@ -206,7 +213,7 @@ function meSpaceOf(node) {
 }
 
 function meClassify() {
-  const parts = ['gd', 'ng', 'nt', 'yd', 'meout', 'me-garage'].map((id) => document.getElementById(id)).filter(Boolean);
+  const parts = ['gd', 'ng', 'nt', 'yd', 'me-garage'].map((id) => document.getElementById(id)).filter(Boolean);
   const nx = document.getElementById('nx');
   if (nx) for (const c of Array.from(nx.children)) parts.push(c);
   for (const n of parts) {
@@ -218,7 +225,7 @@ function meClassify() {
 
 function meHas(sp) {
   return Array.from(document.querySelectorAll('[data-sp="' + sp + '"]')).some((n) => {
-    if (n.id === 'meout' || n.hidden) return false;
+    if (n.hidden) return false;
     return n.textContent.trim() !== '' || n.querySelector('svg, input, button, audio, img') !== null;
   });
 }
@@ -453,10 +460,13 @@ function meMoment() {
     hero.appendChild(big);
     const row = el('div', 'row');
     const pack = mePackNow();
-    row.appendChild(meChip(pack !== '' ? pack + ' in the car' : 'No pack set', pack !== '' ? 'ok' : 'wait'));
-    row.appendChild(meChip(Number.isFinite(meSeen()) ? 'Transponder heard' : 'Transponder not heard', Number.isFinite(meSeen()) ? 'ok' : 'wait'));
+    // Each one a way to fix what it says (7 Nov 2026, Asher): the pack to
+    // the quick pack change, the transponder to its check on Tonight, the
+    // setup to Log setup in the Garage.
+    row.appendChild(meChip(pack !== '' ? pack + ' in the car' : 'No pack set', pack !== '' ? 'ok' : 'wait', mePackSheet));
+    row.appendChild(meChip(Number.isFinite(meSeen()) ? 'Transponder heard' : 'Transponder not heard', Number.isFinite(meSeen()) ? 'ok' : 'wait', meToTransponder));
     const car = meCarTonight();
-    if (car) row.appendChild(meChip(meSetupLoggedTonight(car) ? 'Setup logged' : 'No setup logged', meSetupLoggedTonight(car) ? 'ok' : 'wait'));
+    if (car) row.appendChild(meChip(meSetupLoggedTonight(car) ? 'Setup logged' : 'No setup logged', meSetupLoggedTonight(car) ? 'ok' : 'wait', meLogSetup));
     hero.appendChild(row);
     const best = races.reduce((b, r) => (num(r.bestMs) > 0 && (b === 0 || num(r.bestMs) < b) ? num(r.bestMs) : b), 0);
     const m = live && live.marshal && typeof live.marshal === 'object' && typeof live.marshal.race === 'string' ? live.marshal : null;
@@ -662,6 +672,27 @@ function meToSetup() {
   meSetSpace('garage', 'l');
   const s = document.getElementById('gs');
   if (s) s.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+// The moment card's "No setup logged" (7 Nov 2026, Asher: "if you tap the
+// no setup it goes to log a setup"): the Garage's own Log setup on the car
+// racing tonight - the sheet opened on that car - else just the sheet.
+function meLogSetup() {
+  meCloseSheet();
+  meSetSpace('garage', 'l');
+  const at = document.getElementById('me-garage');
+  const log = at ? Array.from(at.querySelectorAll('button')).find((b) => b.textContent.trim() === 'Log setup') : null;
+  if (log) log.click(); else meToSetup();
+}
+
+// The moment card's "Transponder not heard" (7 Nov 2026, Asher: "it should
+// go to the transponder check on the tonight card"): Tonight, scrolled to
+// Your transponder and its Check my transponder button.
+function meToTransponder() {
+  meCloseSheet();
+  meSetSpace('tonight', 'r');
+  const tp = document.getElementById('lc-tp') || document.getElementById('lv');
+  if (tp) tp.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 // ---- HeatCaller's answer to a pack swap

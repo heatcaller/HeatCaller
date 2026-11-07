@@ -124,13 +124,8 @@ describe("Me: the Signed in button asks before signing out", () => {
     assert.equal(stored(page, "hg-pin-acme-rc-pass"), "cd".repeat(32));
   });
 
-  it("Sign out on this phone at the foot asks the same question", async () => {
-    const page = await openNight();
-
-    page.get("meoutlink").click();
-
-    assert.equal(page.get("me-sheet").hidden, false);
-    assert.equal(stored(page, ME), CODE);
+  it("has no Sign out link at the foot of the Garage - Signed in is the way (7 Nov 2026)", () => {
+    assert.doesNotMatch(nightPage("acme-rc", "Acme RC"), /id="meout"|meoutlink|Sign out on this phone<\/a>/);
   });
 });
 

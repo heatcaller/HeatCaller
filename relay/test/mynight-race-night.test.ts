@@ -151,11 +151,11 @@ describe("My Night on race night: marshal duty", () => {
 });
 
 describe("My Night on race night: back up to Alerts", () => {
-  it("puts Alerts first on the jump bar", async () => {
+  it("puts Lap times then Alerts first on the jump bar (Lap times above since 7 Nov 2026)", async () => {
     const { page } = await open();
     const names = page.get("nj").find((n) => n.tagName === "BUTTON").map((n) => n.textContent);
 
-    assert.deepEqual(names, ["Alerts", "Lap times", "Races", "Report card", "Driver score", "Progress", "Your details", "Rearrange"]);
+    assert.deepEqual(names, ["Lap times", "Alerts", "Races", "Report card", "Driver score", "Progress", "Your details", "Rearrange"]);
   });
 
   it("has no Alerts button when there is no card", async () => {
