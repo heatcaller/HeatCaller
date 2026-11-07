@@ -1239,6 +1239,25 @@ public sealed class CommentaryBudget
     }
 
     /// <summary>
+    /// The relay charged this many lines for the segment (7 Nov 2026, Bug
+    /// hunt 13). A two-hander that came back untagged is asked for again in
+    /// one voice, and the relay keeps both charges, where the reservation
+    /// held only the segment's own share. Grows the held share to match, so
+    /// the settle or the release that follows counts what the relay counted.
+    /// Never shrinks it, and unknown tickets are ignored.
+    /// </summary>
+    public void Charged(long ticket, int lines)
+    {
+        lock (_gate)
+        {
+            if (_open.TryGetValue(ticket, out var held) && lines > held.Lines)
+            {
+                _open[ticket] = held with { Lines = lines };
+            }
+        }
+    }
+
+    /// <summary>
     /// The line has come back from the writer and is waiting for the host
     /// to say it (14 Oct 2026). Still held - it is settled when it is SAID
     /// and released if the host drops it - but no longer counted as a

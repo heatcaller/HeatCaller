@@ -4,7 +4,8 @@ namespace HeatCaller;
 /// <param name="Change">Places gained (positive) or lost (negative) against the table before this race; 0 for no change or a first appearance.</param>
 /// <param name="New">Not in the table before this race - their first scoring round.</param>
 /// <param name="InThisRace">On track in the race now.</param>
-public sealed record LiveChampionRow(int Position, string DriverName, int Points, int Change, bool New, bool InThisRace);
+/// <param name="LevelAtTopBefore">The top of the table was level on points before this race, and this driver was one of those level there - so whoever the tie-break put first did not lead on their own.</param>
+public sealed record LiveChampionRow(int Position, string DriverName, int Points, int Change, bool New, bool InThisRace, bool LevelAtTopBefore = false);
 
 /// <summary>The championship this race counts towards, as it would stand if the race ended now.</summary>
 /// <param name="Headline">One line for a ticker: who would lead, and by how much - or who would take the lead from whom.</param>
@@ -161,6 +162,16 @@ public static class ChampionshipLive
 
         int Was(string name) => before.FindIndex(e => string.Equals(e.DriverName, name, StringComparison.OrdinalIgnoreCase));
 
+        // WHY (7 Nov 2026, Bug hunt 13): who was level at the top before the
+        // race. Was() reads the tie-break as a place, so of two drivers on
+        // 40 one "was first" - and ChampionshipCheck said the new leader
+        // took the lead from him. Level is level, whichever way it falls.
+        var levelAtTop = before.Count > 1 && before[1].TotalPoints == before[0].TotalPoints
+            ? before.TakeWhile(e => e.TotalPoints == before[0].TotalPoints)
+                .Select(e => e.DriverName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         var rows = after.Take(Rows).Select((entry, i) =>
         {
             var was = Was(entry.DriverName);
@@ -171,7 +182,8 @@ public static class ChampionshipLive
                 entry.TotalPoints,
                 was < 0 ? 0 : was - i,
                 was < 0,
-                onTrack.Contains(entry.DriverName));
+                onTrack.Contains(entry.DriverName),
+                levelAtTop.Contains(entry.DriverName));
         }).ToList();
 
         return new IfItEndedNow(season.Name, rows, Headline(season.Name, before, after));

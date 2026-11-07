@@ -58,6 +58,7 @@ public sealed record MeetingSoFar(
 /// <param name="Points">Their total now, after drops.</param>
 /// <param name="BehindLeader">Points off the lead, or zero for the leader.</param>
 /// <param name="StillAlive">Whether the title is still mathematically theirs to win.</param>
+/// <param name="LevelAtTopBefore">Level on points at the top before the race, with someone else - see LiveChampionRow.LevelAtTopBefore. A PositionBefore of 1 is then only the tie-break.</param>
 public readonly record struct ChampionshipStanding(
     string DriverId,
     string Name,
@@ -69,7 +70,8 @@ public readonly record struct ChampionshipStanding(
     int DroppedRounds = 0,
     int DroppedPoints = 0,
     int CarriedIn = 0,
-    int Dnfs = 0);
+    int Dnfs = 0,
+    bool LevelAtTopBefore = false);
 
 /// <summary>
 /// The two segments that only make sense once a block of racing has
@@ -391,7 +393,13 @@ public static class CommentaryReportFacts
         else if (leader.PositionBefore != 1)
         {
             var displaced = ranked.FirstOrDefault(c => c.PositionBefore == 1);
-            var displacedName = CommentaryFacts.Clean(displaced.Name);
+
+            // WHY (7 Nov 2026, Bug hunt 13): nobody is named where the top
+            // was level before the race. Alex and Dot both on 40, Alex
+            // first on the tie-break, and Dot's win had "Dot takes over the
+            // lead from Alex" - a lead Alex never had on his own. The rule
+            // above, applied to the table before the race as well as after.
+            var displacedName = displaced.LevelAtTopBefore ? string.Empty : CommentaryFacts.Clean(displaced.Name);
 
             found.Add(new FactBlock($"champlead:{raceKey}",
                 displacedName.Length > 0
@@ -402,9 +410,13 @@ public static class CommentaryReportFacts
         {
             var second = ranked.Count > 1 ? ranked[1] : (ChampionshipStanding?)null;
 
+            // Not "still" where he was only level at the top before it - the
+            // same rule again.
+            var still = leader.LevelAtTopBefore ? string.Empty : "still ";
+
             found.Add(new FactBlock($"champlead:{raceKey}",
                 second is { } next && next.BehindLeader > 0
-                    ? $"{leaderName} still leads the {cls} championship on {leader.Points} points, {next.BehindLeader} clear of {CommentaryFacts.Clean(next.Name)}."
+                    ? $"{leaderName} {still}leads the {cls} championship on {leader.Points} points, {next.BehindLeader} clear of {CommentaryFacts.Clean(next.Name)}."
                     : $"{leaderName} leads the {cls} championship on {leader.Points} points."));
         }
 

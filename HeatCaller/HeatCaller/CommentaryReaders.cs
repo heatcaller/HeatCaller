@@ -765,7 +765,8 @@ public static partial class CommentaryReaders
                 row.Position,
                 row.New ? 0 : Math.Max(1, row.Position + row.Change),
                 row.Points,
-                Math.Max(0, leaderPoints - row.Points)));
+                Math.Max(0, leaderPoints - row.Points),
+                LevelAtTopBefore: row.LevelAtTopBefore));
         }
 
         return standings;
