@@ -7012,7 +7012,6 @@ export class Relay {
     sendJson(response, 200, { ok: true, clip: `/c/${club}/clip/${id}.mp3` });
   }
 
-  /** Every one of a club's clips, gone - when nights close or the club is deleted. Anything on its way keeps nothing. */
   /**
    * Every phone signed up for a club's alerts, forgotten. Called inside the
    * club's lock. With `wipe`, that is what forgets them (Delete everything
@@ -7035,6 +7034,7 @@ export class Relay {
     }
   }
 
+  /** Every one of a club's clips, gone - when nights close or the club is deleted. Anything on its way keeps nothing. */
   private async wipeClips(club: string): Promise<void> {
     this.clipWipes.set(club, (this.clipWipes.get(club) ?? 0) + 1);
     const vault = this.clips;

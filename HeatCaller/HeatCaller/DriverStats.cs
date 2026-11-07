@@ -992,10 +992,10 @@ public sealed class DriverStats
                 {
                     // Among all their laps, not only their best (the badge's
                     // IsLiveTrackRecord rule): a phantom Race Control refused
-                    // as a record, run later by the setter himself, still
-                    // becomes his best lap. Matched on the best alone, the
-                    // card left out a record he still holds, and listed it
-                    // as one he held before.
+                    // as a record, run later by the setter themselves, still
+                    // becomes their best lap. Matched on the best alone, the
+                    // card left out a record they still hold, and listed it
+                    // as one they held before.
                     if (result.FastLapMs != lapMs && !(result.LapTimesMs?.Contains(lapMs) ?? false))
                     {
                         continue;
