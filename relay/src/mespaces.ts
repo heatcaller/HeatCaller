@@ -121,6 +121,12 @@ body[data-me="stats"] [data-sp]:not([data-sp="stats"]) { display: none !importan
    tall as its words now Signed in sits above it, and the moment card
    closer under them. */
 body.me-on header { padding-top: 10px; }
+/* Tighter again (7 Nov 2026, Asher: "reduce the space above the driver
+   name on the top of the me tab"): the club's name - two lines on a phone,
+   beside Signed in - set closer, and their name nearer under it. */
+body.me-on header { padding-top: 4px; }
+body.me-on .hcname { padding-bottom: 4px; }
+body.me-on .hcname h1 { line-height: 1.15; }
 body.me-on .hcside { gap: 2px; }
 body.me-on .hcby { min-height: 0; }
 .me-sheet { position: fixed; inset: 0; z-index: 40; background: rgba(5, 3, 12, 0.55); display: flex; align-items: flex-end; justify-content: center; }
