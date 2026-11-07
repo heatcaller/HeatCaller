@@ -149,23 +149,28 @@ public sealed class TrackDesignerLaneToolTests
             canvas.LaneRing = true;
             Drag(canvas, CellCentre(0, 0), CellCentre(7, 5));
 
+            // The lane's one-tile turn, clicked: square - and square by hand,
+            // since the one-tile turn is the only other step (railed tiles,
+            // Phase 2, 7 Nov 2026; it went to a two-tile turn before).
             canvas.Tool = RcpTool.Corner;
             Click(canvas, GridPoint(0, 0));
 
-            var turn = canvas.Design.CurveAt(0, 0);
+            var squared = canvas.Design.CurveAt(0, 0) is null;
+            var across = canvas.Design.WallAt(0, 0, false);
 
             // Another edit of the lane: a tile added to the far side.
             canvas.Tool = RcpTool.Lane;
             canvas.LaneRing = false;
             Drag(canvas, CellCentre(7, 2), CellCentre(8, 2));
 
-            var kept = canvas.Design.CurveAt(0, 0);
+            var stillSquare = canvas.Design.CurveAt(0, 0) is null;
 
-            return (radius: turn?.Radius, auto: turn?.Auto, same: ReferenceEquals(turn, kept));
+            return (squared, auto: across?.Auto, stillSquare, same: ReferenceEquals(across, canvas.Design.WallAt(0, 0, false)));
         });
 
-        Assert.Equal(2f, seen.radius);
+        Assert.True(seen.squared);
         Assert.Equal(false, seen.auto);
+        Assert.True(seen.stillSquare);
         Assert.True(seen.same);
     }
 

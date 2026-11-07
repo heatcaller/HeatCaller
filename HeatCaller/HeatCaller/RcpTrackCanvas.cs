@@ -41,8 +41,15 @@ public enum RcpTool
     /// </summary>
     Lane,
 
-    /// <summary>Cycle a corner: a one-tile turn, a two-tile turn, square. Appended.</summary>
+    /// <summary>Cycle a corner: a one-tile turn or square. Appended.</summary>
     Corner,
+
+    /// <summary>
+    /// Lay a whole piece - a tile with its rail already on, as it goes down
+    /// on a real track (railed tiles, Phase 2, 7 Nov 2026): a rail tile, an
+    /// outer curve tile, a finish or arched rail tile, a blank. Appended.
+    /// </summary>
+    Piece,
 }
 
 /// <summary>One thing that can be picked out of the palette.</summary>
@@ -64,6 +71,24 @@ public enum RcpPaletteItem
 
     /// <summary>A tile's name - "Pit lane", "Marshal" - typed in (Phase 8). Appended.</summary>
     Label,
+
+    // The pieces (railed tiles, Phase 2, 7 Nov 2026): a tile with its rail
+    // already on. Appended.
+
+    /// <summary>A tile with a straight rail on one edge.</summary>
+    RailTile,
+
+    /// <summary>The quarter-circle outer curve tile with its one-tile turn rail.</summary>
+    CurveTile,
+
+    /// <summary>A tile with the finish-line rail.</summary>
+    FinishTile,
+
+    /// <summary>A tile whose rail arches into the lane, for a straight.</summary>
+    ArchedTile,
+
+    /// <summary>A tile with no bolt holes.</summary>
+    BlankTile,
 }
 
 /// <summary>
@@ -98,6 +123,9 @@ public sealed class RcpTrackCanvas : Control
     private Point? _hoverCell;
     private (int Col, int Row, bool Vertical)? _hoverEdge;
     private (Point At, RcpQuadrant Quadrant)? _hoverCorner;
+
+    /// <summary>The edge and corner the next piece would take at the pointer (the Pieces tool's ghost).</summary>
+    private (RcpEdge Facing, RcpQuadrant Corner) _hoverPiece;
 
     private int _draggingRoutePoint = -1;
     private bool _painting;
@@ -324,6 +352,22 @@ public sealed class RcpTrackCanvas : Control
 
     /// <summary>Radius of the next turn rail, in tiles.</summary>
     public float CurveRadius { get; set; } = 1f;
+
+    /// <summary>
+    /// Which edge the next rail tile's rail goes on, when the pointer isn't
+    /// near one edge of the tile (R turns it). Near an edge, that edge.
+    /// </summary>
+    public RcpEdge PieceFacing { get; set; } = RcpEdge.North;
+
+    /// <summary>Which corner the next outer curve tile's arc goes across, when the pointer isn't in one corner of the tile (R turns it).</summary>
+    public RcpQuadrant PieceCorner { get; set; } = RcpQuadrant.NorthWest;
+
+    /// <summary>
+    /// What the plan's rails come to as pieces, as of the last edit: the
+    /// custom tiles - a second rail on a tile, cut for it by hand - are
+    /// marked on the board, and the window reports the rest.
+    /// </summary>
+    public RcpPieces.Report PieceReport { get; private set; } = RcpPieces.Report.None;
 
     /// <summary>How wide the Lane tool paints, in tiles: 1, 2 or 3.</summary>
     public int LaneWidth
@@ -1038,7 +1082,7 @@ public sealed class RcpTrackCanvas : Control
         // Which tile each rail is bolted to (railed tiles, Phase 1, 7 Nov
         // 2026) - worked out from the rails after every edit, and saved with
         // the plan, ready for the editor to lay tiles and rails as one piece.
-        RcpPieces.Adopt(_design);
+        PieceReport = RcpPieces.Adopt(_design);
 
         if (!_strokeOpen && _design.RouteAuto)
         {
@@ -1536,6 +1580,152 @@ public sealed class RcpTrackCanvas : Control
         }
 
         RaiseChanged();
+    }
+
+    // --- Pieces (railed tiles, Phase 2, 7 Nov 2026) --------------------------
+    // A tile and its rail go down together, as they do on a real RCP track:
+    // the rail is bolted to its tile and stays on (Asher, 7 Nov 2026).
+
+    /// <summary>The piece the palette has picked, for the Pieces tool.</summary>
+    private RcpPiece PieceFor(RcpPaletteItem item) => item switch
+    {
+        RcpPaletteItem.RailTile => RcpPiece.Rail,
+        RcpPaletteItem.CurveTile => RcpPiece.OuterCurve,
+        RcpPaletteItem.FinishTile => RcpPiece.Finish,
+        RcpPaletteItem.ArchedTile => RcpPiece.Arched,
+        RcpPaletteItem.BlankTile => RcpPiece.Blank,
+        _ => RcpPiece.Plain,
+    };
+
+    /// <summary>
+    /// Which edge of its tile a rail laid at the pointer goes on: the edge
+    /// the pointer is near, or - in the middle of the tile, and all along a
+    /// drag - the one R has set.
+    /// </summary>
+    private RcpEdge FacingAt(Point pixel, bool dragging)
+    {
+        if (dragging)
+        {
+            return PieceFacing;
+        }
+
+        var tile = ToTile(pixel);
+        var dx = tile.X - MathF.Floor(tile.X);
+        var dy = tile.Y - MathF.Floor(tile.Y);
+
+        var nearest = new[] { (dy, RcpEdge.North), (1 - dy, RcpEdge.South), (dx, RcpEdge.West), (1 - dx, RcpEdge.East) }
+            .OrderBy(o => o.Item1)
+            .First();
+
+        return nearest.Item1 <= EdgeGrab ? nearest.Item2 : PieceFacing;
+    }
+
+    /// <summary>Which corner of its tile an outer curve laid at the pointer has its arc across: the corner the pointer is in, or the one R has set.</summary>
+    private RcpQuadrant CornerAtPointer(Point pixel, bool dragging)
+    {
+        if (dragging)
+        {
+            return PieceCorner;
+        }
+
+        var tile = ToTile(pixel);
+        var dx = tile.X - MathF.Floor(tile.X) - 0.5f;
+        var dy = tile.Y - MathF.Floor(tile.Y) - 0.5f;
+
+        // Only well into a corner; in the middle, what R set.
+        if (MathF.Abs(dx) < 0.15f && MathF.Abs(dy) < 0.15f)
+        {
+            return PieceCorner;
+        }
+
+        return dx >= 0
+            ? dy >= 0 ? RcpQuadrant.SouthEast : RcpQuadrant.NorthEast
+            : dy >= 0 ? RcpQuadrant.SouthWest : RcpQuadrant.NorthWest;
+    }
+
+    /// <summary>
+    /// Lays the picked piece on a cell - the tile with its rail on, in one
+    /// go. Clicked on a tile that already is exactly that piece, it goes
+    /// back to a plain tile: a click both lays and takes off.
+    /// </summary>
+    private void LayPiece(Point cell, Point pixel, bool dragging)
+    {
+        var piece = PieceFor(Item);
+        var facing = FacingAt(pixel, dragging);
+        var corner = CornerAtPointer(pixel, dragging);
+        var existing = _design.At(cell.X, cell.Y);
+
+        var same = existing is not null && existing.Kind != RcpTileKind.Infield && existing.Piece == piece
+            && (!RcpPieces.HasStraight(piece) || existing.Facing == facing)
+            && (piece != RcpPiece.OuterCurve || existing.Corner == corner);
+
+        if (same && dragging)
+        {
+            return;
+        }
+
+        // A drag carries on the way the press set it: pressed near the
+        // north edge, the whole run has its rails along the north.
+        if (!dragging)
+        {
+            PieceFacing = facing;
+            PieceCorner = corner;
+        }
+
+        Remember();
+
+        var (walls, curves) = RcpPieces.Lay(_design, cell.X, cell.Y, same ? RcpPiece.Plain : piece, facing, corner);
+        var forgot = false;
+
+        foreach (var wall in walls)
+        {
+            forgot |= _selection.Forget(wall);
+        }
+
+        foreach (var curve in curves)
+        {
+            forgot |= _selection.Forget(curve);
+        }
+
+        Unpick(forgot);
+
+        if (same)
+        {
+            StatusChanged?.Invoke("Back to a plain tile.");
+        }
+
+        RaiseChanged();
+    }
+
+    /// <summary>A corner as the status line says it: "north-west".</summary>
+    private static string Words(RcpQuadrant corner) => corner switch
+    {
+        RcpQuadrant.NorthEast => "north-east",
+        RcpQuadrant.SouthEast => "south-east",
+        RcpQuadrant.SouthWest => "south-west",
+        _ => "north-west",
+    };
+
+    /// <summary>R with the Pieces tool: turns the next piece a quarter clockwise.</summary>
+    private void TurnPiece()
+    {
+        PieceFacing = PieceFacing switch
+        {
+            RcpEdge.North => RcpEdge.East,
+            RcpEdge.East => RcpEdge.South,
+            RcpEdge.South => RcpEdge.West,
+            _ => RcpEdge.North,
+        };
+
+        PieceCorner = PieceCorner switch
+        {
+            RcpQuadrant.NorthWest => RcpQuadrant.NorthEast,
+            RcpQuadrant.NorthEast => RcpQuadrant.SouthEast,
+            RcpQuadrant.SouthEast => RcpQuadrant.SouthWest,
+            _ => RcpQuadrant.NorthWest,
+        };
+
+        Invalidate();
     }
 
     // --- Lanes (Track Designer overhaul, Phase 3, 25 Oct 2026) ---------------
@@ -2206,11 +2396,27 @@ public sealed class RcpTrackCanvas : Control
             return;
         }
 
+        // The whole piece: the tile, and the rail bolted to it (railed
+        // tiles, Phase 2, 7 Nov 2026). A rail can be taken off its tile on
+        // its own by erasing on the rail itself, above.
         if (_design.At(cell.X, cell.Y) is { } tile)
         {
             Remember();
-            _design.Tiles.Remove(tile);
-            Unpick(_selection.Forget(tile));
+
+            var (takenWalls, takenCurves) = RcpPieces.TakeUp(_design, tile);
+            var forgot = _selection.Forget(tile);
+
+            foreach (var taken in takenWalls)
+            {
+                forgot |= _selection.Forget(taken);
+            }
+
+            foreach (var taken in takenCurves)
+            {
+                forgot |= _selection.Forget(taken);
+            }
+
+            Unpick(forgot);
             RaiseChanged();
         }
     }
@@ -2252,16 +2458,25 @@ public sealed class RcpTrackCanvas : Control
         }
     }
 
-    /// <summary>Rails all the way round the outside of the floor, in one go.</summary>
+    /// <summary>
+    /// Rail the edge: the outside tiles of the floor become rail tiles
+    /// facing out, and its outside corners outer curve tiles - a square
+    /// outside corner would be two rails on one tile, which is custom work
+    /// (railed tiles, Phase 2, 7 Nov 2026). Corners already rounded or
+    /// railed by hand are left as they are.
+    /// </summary>
     public void WallThePerimeter()
     {
         Remember();
 
         var added = RcpPlan.WallThePerimeter(_design);
+        var rounded = RcpPieces.RoundOutsideCorners(_design);
 
-        StatusChanged?.Invoke(added == 0
-            ? "The floor is already walled in."
-            : $"{Plural.Of(added, "rail")} added round the edge of the floor.");
+        StatusChanged?.Invoke(added == 0 && rounded == 0
+            ? "The floor already has rails all round."
+            : rounded == 0
+                ? $"{Plural.Of(added, "rail tile")} round the edge of the floor."
+                : $"{Plural.Of(Math.Max(0, added - rounded * 2), "rail tile")} round the edge of the floor, and {Plural.Of(rounded, "outer curve tile")} at its corners.");
 
         RaiseChanged();
     }
@@ -3195,6 +3410,14 @@ public sealed class RcpTrackCanvas : Control
                 PaintTile(_lastPaintedCell.Value);
                 break;
 
+            case RcpTool.Piece:
+                // One stroke: a click lays one piece, a drag a run of them.
+                _painting = true;
+                BeginStroke();
+                _lastPaintedCell = ToCell(e.Location);
+                LayPiece(_lastPaintedCell.Value, e.Location, dragging: false);
+                break;
+
             case RcpTool.Wall:
                 _painting = true;
                 BeginStroke();
@@ -3415,6 +3638,19 @@ public sealed class RcpTrackCanvas : Control
 
         _hoverCell = cell;
 
+        // The piece's ghost follows the edge or corner the pointer is near,
+        // inside the cell as well as from one cell to the next.
+        if (Tool == RcpTool.Piece && !_painting)
+        {
+            var piece = (FacingAt(e.Location, dragging: false), CornerAtPointer(e.Location, dragging: false));
+
+            if (piece != _hoverPiece)
+            {
+                _hoverPiece = piece;
+                changed = true;
+            }
+        }
+
         var edge = Tool is RcpTool.Wall or RcpTool.Erase ? EdgeAt(e.Location) : null;
         var corner = Tool is RcpTool.Curve or RcpTool.Erase or RcpTool.Corner ? CornerAt(e.Location) : null;
 
@@ -3544,6 +3780,18 @@ public sealed class RcpTrackCanvas : Control
                     foreach (var step in CellsBetween(_lastPaintedCell ?? cell, cell))
                     {
                         PaintTile(step);
+                    }
+
+                    _lastPaintedCell = cell;
+                    break;
+
+                case RcpTool.Piece when _lastPaintedCell != cell:
+                    // A run: every cell the drag crosses, each with its rail
+                    // on the side R set - the cell pressed on keeps the edge
+                    // it was pressed near.
+                    foreach (var step in CellsBetween(_lastPaintedCell ?? cell, cell))
+                    {
+                        LayPiece(step, e.Location, dragging: true);
                     }
 
                     _lastPaintedCell = cell;
@@ -3844,6 +4092,15 @@ public sealed class RcpTrackCanvas : Control
                 e.Handled = true;
                 break;
 
+            // With the Pieces tool, R turns the next piece instead.
+            case Keys.R when Tool == RcpTool.Piece:
+                TurnPiece();
+                StatusChanged?.Invoke(Item == RcpPaletteItem.CurveTile
+                    ? $"The next outer curve tile has its turn across the {Words(PieceCorner)} corner."
+                    : $"The next rail goes on the {PieceFacing.ToString().ToLowerInvariant()} edge.");
+                e.Handled = true;
+                break;
+
             case Keys.R:
                 MarkerTurns = (MarkerTurns + 1) % 4;
                 StatusChanged?.Invoke($"Markings turned to {MarkerTurns * 90} degrees.");
@@ -4003,6 +4260,7 @@ public sealed class RcpTrackCanvas : Control
 
         RcpTrackPainter.Draw(g, _design, _scale, _origin, ShowRoute, showLabels: true, backdrop: _backdrop);
 
+        DrawCustomTiles(g);
         DrawSelection(g);
         DrawHover(g);
 
@@ -4259,10 +4517,73 @@ public sealed class RcpTrackCanvas : Control
         }
     }
 
+    /// <summary>
+    /// The custom tiles marked on the board (railed tiles, Phase 2): a tile
+    /// carrying a second rail, which no piece RCP sells does - the club cuts
+    /// two more bolt holes and trims a rail to fit (Asher, 7 Nov 2026), as
+    /// where a divider meets the outside wall. A dashed amber ring and a
+    /// small "custom" tag, so it can't be missed and can't be mistaken for
+    /// a mistake.
+    /// </summary>
+    private void DrawCustomTiles(Graphics g)
+    {
+        if (PieceReport.CustomTiles.Count == 0)
+        {
+            return;
+        }
+
+        var colour = AppTheme.Warning;
+
+        using var ring = new Pen(colour, Math.Max(2f, _scale / 24f)) { DashStyle = DashStyle.Dash };
+        using var tagBack = new SolidBrush(Color.FromArgb(220, BoardFloor));
+        using var font = new Font(AppTheme.SmallFont.FontFamily, Math.Clamp(_scale / 7f, 7f, 11f), FontStyle.Bold, GraphicsUnit.Pixel);
+
+        var inset = Math.Max(2f, _scale * 0.08f);
+
+        foreach (var (col, row) in PieceReport.CustomTiles)
+        {
+            var rect = new RectangleF(_origin.X + col * _scale + inset, _origin.Y + row * _scale + inset, _scale - inset * 2, _scale - inset * 2);
+            g.DrawRectangle(ring, rect.X, rect.Y, rect.Width, rect.Height);
+
+            // The tag only once the tile is big enough to carry it.
+            if (_scale >= 40f)
+            {
+                var size = TextRenderer.MeasureText("custom", font);
+                var tag = new Rectangle((int)(rect.X + (rect.Width - size.Width) / 2f), (int)(rect.Y + (rect.Height - size.Height) / 2f), size.Width, size.Height);
+
+                g.FillRectangle(tagBack, tag);
+                TextRenderer.DrawText(g, "custom", font, tag, colour, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            }
+        }
+    }
+
     private void DrawHover(Graphics g)
     {
         switch (Tool)
         {
+            case RcpTool.Piece when _hoverCell is { } pieceCell:
+            {
+                // The whole piece that would go down: the tile, and the rail
+                // on it - on the edge or across the corner it would take.
+                var (facing, corner) = _painting ? (PieceFacing, PieceCorner) : _hoverPiece;
+
+                DrawGhostCells(g, new[] { pieceCell }, AppTheme.Accent);
+
+                switch (PieceFor(Item))
+                {
+                    case RcpPiece.Rail or RcpPiece.Finish or RcpPiece.Arched:
+                        DrawGhostRail(g, RcpPlan.EdgeLine(pieceCell.X, pieceCell.Y, facing), AppTheme.Accent);
+                        break;
+
+                    case RcpPiece.OuterCurve:
+                        var turn = RcpPieces.TurnFor(pieceCell.X, pieceCell.Y, corner);
+                        DrawGhostTurn(g, turn.At, turn.Quadrant, 1f, AppTheme.Accent);
+                        break;
+                }
+
+                break;
+            }
+
             case RcpTool.Wall when _hoverEdge is { } edge:
             {
                 // The rail that would go in, with a halo and its two ends
@@ -4566,12 +4887,22 @@ public static class RcpTiles
         RcpPaletteItem.Split2 => "Split 2 loop",
         RcpPaletteItem.Split3 => "Split 3 loop",
         RcpPaletteItem.Label => "Tile label",
+        RcpPaletteItem.RailTile => "Rail tile",
+        RcpPaletteItem.CurveTile => "Outer curve tile",
+        RcpPaletteItem.FinishTile => "Finish rail tile",
+        RcpPaletteItem.ArchedTile => "Arched rail tile",
+        RcpPaletteItem.BlankTile => "Blank tile",
         _ => "Rostrum / table",
     };
 
     public static string HintOf(RcpPaletteItem item) => item switch
     {
-        RcpPaletteItem.Floor => "The foam. Drag to lay the whole floor first.",
+        RcpPaletteItem.Floor => "A plain tile, no rail. Drag to lay a stretch of floor. (1)",
+        RcpPaletteItem.RailTile => "A tile with its rail on - click near the edge you want it on, or drag a row. R turns it. (2)",
+        RcpPaletteItem.CurveTile => "The quarter-circle tile with its one-tile turn. Click in the corner the turn goes across. (3)",
+        RcpPaletteItem.FinishTile => "A tile with the finish-line rail on it.",
+        RcpPaletteItem.ArchedTile => "A rail tile whose rail arches into the lane, for a straight.",
+        RcpPaletteItem.BlankTile => "A tile with no bolt holes - infield, lane widening. It takes no rail.",
         RcpPaletteItem.Blocked => "Floor you can't use - a pillar, a table leg.",
         RcpPaletteItem.Rail => "Drag to run rail. Corners turn themselves.",
         RcpPaletteItem.Divider => "Two back to back, for racing on both sides.",
@@ -4591,7 +4922,25 @@ public static class RcpTiles
         RcpPaletteItem.Floor or RcpPaletteItem.Blocked => RcpTool.Floor,
         RcpPaletteItem.Rail or RcpPaletteItem.Divider => RcpTool.Wall,
         RcpPaletteItem.Turn => RcpTool.Curve,
+        RcpPaletteItem.RailTile or RcpPaletteItem.CurveTile or RcpPaletteItem.FinishTile
+            or RcpPaletteItem.ArchedTile or RcpPaletteItem.BlankTile => RcpTool.Piece,
         _ => RcpTool.Marker,
+    };
+
+    /// <summary>
+    /// The pieces, each a tile with its rail already on, as they go down on
+    /// a real track (railed tiles, Phase 2). The inner corner tile isn't
+    /// among them: it is worked out at the inside of every bend.
+    /// </summary>
+    public static IReadOnlyList<RcpPaletteItem> Pieces { get; } = new[]
+    {
+        RcpPaletteItem.Floor,
+        RcpPaletteItem.RailTile,
+        RcpPaletteItem.CurveTile,
+        RcpPaletteItem.FinishTile,
+        RcpPaletteItem.ArchedTile,
+        RcpPaletteItem.BlankTile,
+        RcpPaletteItem.Blocked,
     };
 
     public static IReadOnlyList<RcpPaletteItem> Floor { get; } = new[]
@@ -4685,6 +5034,28 @@ public static class RcpTiles
 
             case RcpPaletteItem.Label:
                 design.Tiles[0].Label = "Pit";
+                break;
+
+            // The pieces, drawn as Lay puts them down.
+            case RcpPaletteItem.RailTile:
+                RcpPieces.Lay(design, 0, 0, RcpPiece.Rail, RcpEdge.South, RcpQuadrant.NorthWest);
+                break;
+
+            case RcpPaletteItem.FinishTile:
+                RcpPieces.Lay(design, 0, 0, RcpPiece.Finish, RcpEdge.South, RcpQuadrant.NorthWest);
+                design.Decals.Add(new RcpDecal { Col = 0, Row = 0, Kind = RcpDecalKind.FinishLine });
+                break;
+
+            case RcpPaletteItem.ArchedTile:
+                RcpPieces.Lay(design, 0, 0, RcpPiece.Arched, RcpEdge.South, RcpQuadrant.NorthWest);
+                break;
+
+            case RcpPaletteItem.CurveTile:
+                RcpPieces.Lay(design, 0, 0, RcpPiece.OuterCurve, RcpEdge.North, RcpQuadrant.NorthWest);
+                break;
+
+            case RcpPaletteItem.BlankTile:
+                design.Tiles[0].Piece = RcpPiece.Blank;
                 break;
         }
 

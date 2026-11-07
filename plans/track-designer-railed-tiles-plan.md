@@ -306,6 +306,44 @@ Each phase is one commit, with the full suite green before the next. 2 and 3 can
   Only the 30cm Double Oval Wide is clean. They are reconstructions (their own header says so), and the test now holds that every rail is either on a tile or reported, never lost. Redrawing them from pieces belongs with Phase 2.
 - **Every layout Build me a track offers** goes onto tiles cleanly and comes back exactly.
 
+## Phase 2 - as built (7 Nov 2026)
+
+**One change of approach from the plan:** the seams (`Walls`, `Curves`) are still what is saved. Laying or taking up a piece changes the tile and its seams together, in one step (`RcpPieces.Lay`, `RcpPieces.TakeUp`). `Adopt` works the pieces out after every edit, as in Phase 1. So everything still built on seams carries on unchanged and the pieces stay right: Select, stretch, paste, Lane, Corners and the starter layouts. Making the pieces themselves what is saved can come with Phase 3, when Select and stretch move pieces.
+
+- **Corner field fixed from Phase 1:** `RcpTile.Corner` on an outer curve tile now names the corner its pink arc runs across, which is where the turn is anchored. It used to name the way the turn bulged. An inner corner tile's piece uses the same rule.
+- **`RcpPieces`:**
+  - `Adopt` keeps a rail on the tile that had it, so an edit elsewhere never moves it across its seam.
+  - Its report now lists where the custom tiles are (`CustomTiles`).
+  - `Lay` puts down a tile with its rail, replacing whatever piece was there. A rail tile laid against a neighbour's rail on the same seam makes a divider.
+  - `TakeUp` takes up a tile with its rail or turn, any custom second rail left with no tile under it, and its half of a divider.
+  - `RoundOutsideCorners` turns square outside corners into outer curve tiles.
+- **The board (`RcpTrackCanvas`):**
+  - **The Pieces tool** (`RcpTool.Piece`, added on the end of the list):
+    - near an edge of a tile, the rail goes on that edge; in a corner, an outer curve tile's arc goes across that corner; in the middle of a tile, the way R last set it;
+    - a drag lays a row, all on the side it was pressed near;
+    - clicking a piece again makes it plain;
+    - one action is one undo step.
+  - **The ghost** shows the whole piece under the pointer, tile and rail together.
+  - **Custom tiles** get a dashed amber ring and a **custom** tag.
+  - **Erase** takes up the whole piece. Erasing right on a rail still takes only the rail.
+  - **Rail the edge** (was Wall the edge) also rounds the floor's outside corners.
+- **The Corners tool** goes between a 1-tile turn and square. The 2-tile step is gone.
+- **The window (`RcpTrackEditorForm`):**
+  - the **Pieces** card replaces the Floor and Barriers cards (and the turn-radius buttons): Floor tile, Rail tile, Outer curve tile, Finish rail tile, Arched rail tile, Blank tile, Blocked out;
+  - the inner corner tile isn't on the card: it is worked out at every bend;
+  - the toolbar's Floor, Rails and Turns buttons became one **Pieces** button;
+  - **1, 2 and 3** pick a plain tile, a rail tile and an outer curve tile;
+  - the Lanes card lost its turn choices;
+  - the readout counts custom tiles;
+  - the Keys card, tooltips and status hints all talk about pieces now.
+- **The user guide:** `website\docs\race-day\track-designer.md` has a new "Lay pieces" section and updated toolbar, Lanes and Corners sections, and the keyboard shortcuts page is updated.
+- **Not done yet (Phase 5):** the arched rail tile is drawn as a plain rail tile, without its arch, and the outer curve tile is still drawn square. The starter layouts aren't redrawn from pieces yet; they now show their custom tiles and report their two-tile turns.
+- **Tests:**
+  - `RcpPieceToolTests` (16, ten of them pure and six driving the real board with the mouse);
+  - `RcpPiecesTests` updated for the corner change;
+  - three earlier Corners tests changed from the 2-tile step to "goes square".
+  - 339 designer, map, sector and window-layout tests pass, and 94 docs and keyboard-shortcut tests.
+
 ## Answers (Asher, 7 Nov 2026)
 
 - **The rails stay on** between race nights. The cupboard holds pieces (Phase 4).
@@ -321,4 +359,17 @@ Each phase is one commit, with the full suite green before the next. 2 and 3 can
 
 1. **How many arched rail tiles the club has,** and whether RCP gives them a name. "Arched rail tile" is a stand-in. Not needed before Phase 1.
 2. **A close photo of the inner corner tile,** for Phase 5's drawing. Not needed before then.
-3. **Where a divider meets the outside wall** (found building Phase 1). The tile in that corner would need the wall's rail and the divider's last rail. On the floor, does the divider stop a tile short of the wall, does an inner corner piece go there, or is it built some other way? This decides how Phase 2 lays a divider that runs into a wall.
+## Custom tiles (Asher, 7 Nov 2026)
+
+**Where a divider meets the outside wall,** the corner tile on each side of the divider needs two rails: the wall's and the divider's. No standard piece does that. A club makes it: **cut two more bolt holes in the tile, and put a rail on it, trimmed to fit with a knife.**
+
+So a second rail on a tile is **custom work, not impossible.** What changes:
+- **Phase 1's report** keeps counting these (`Report.SecondRails`). From Phase 2 the designer calls them **custom tiles** on the board, not errors.
+- **Phase 2:**
+  - a tile can carry a second, custom rail;
+  - the Lane tool and Rail the edge lay one where a divider runs into a wall, rather than refusing or leaving a gap;
+  - the tile is drawn with a mark so it stands out.
+- **Phase 3, the build list:** each custom tile gets a line of its own, for example "Custom: tile C3 - cut two more bolt holes on its west edge and fit a rail trimmed to length". It also counts the extra rails those use.
+- **Phase 4, stock:** a custom tile uses one rail tile plus one more rail. It can be counted as made once the club has made it, since it stays made.
+- **The same treatment** applies to any other tile that needs a second rail: a one-tile spur, or a square outside corner. Each is custom, and each is said so. Turns other than the 1-tile one stay as reported, since a turn rail can't be cut from a straight.
+- **The starter layouts:** the serpentines and the Wide L keep their dividers, now with custom tiles where the divider meets the wall. The other problems (one-tile-wide lanes, two-tile turns) are still redrawn from pieces in Phase 2.

@@ -135,9 +135,11 @@ public sealed class RcpTile
     public RcpEdge Facing { get; set; }
 
     /// <summary>
-    /// The corner of the tile an outer curve tile's turn rail or an inner
-    /// corner tile's piece is at. For an outer curve tile it is the same
-    /// quadrant as its turn rail's (RcpCurve.Quadrant).
+    /// The corner of the tile its rail is in: where an outer curve tile's
+    /// pink arc runs across (the bare room beyond it is that corner), or
+    /// where an inner corner tile's small red piece sits. An outer curve
+    /// tile's turn rail is anchored at this corner and bulges the opposite
+    /// way (RcpCurve.Quadrant is the opposite quadrant).
     /// </summary>
     public RcpQuadrant Corner { get; set; }
 

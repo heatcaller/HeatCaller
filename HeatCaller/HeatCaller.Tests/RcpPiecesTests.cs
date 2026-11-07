@@ -69,7 +69,11 @@ public sealed class RcpPiecesTests
 
             Assert.True(RcpPieces.Adopt(design).AllOnTiles);
             Assert.Equal(RcpPiece.OuterCurve, TileAt(design, col, row).Piece);
-            Assert.Equal(quadrant, TileAt(design, col, row).Corner);
+
+            // The tile's corner is where the arc runs across - the turn's
+            // anchor - which is across the tile from the way it bulges.
+            Assert.Equal(RcpPieces.Opposite(quadrant), TileAt(design, col, row).Corner);
+            Assert.Equal(curve.At, RcpPieces.CornerPoint(col, row, TileAt(design, col, row).Corner));
 
             var (_, curves) = RcpPieces.Project(design);
             Assert.Equal(CurveSet(design.Curves), CurveSet(curves));

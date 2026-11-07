@@ -2,7 +2,9 @@ namespace HeatCaller.Tests;
 
 /// <summary>
 /// The Corners tool's rule (Track Designer overhaul, Phase 3, 25 Oct 2026):
-/// a one-tile turn, a two-tile turn, square, and round again.
+/// a one-tile turn, square, and round again. It went one tile, two tiles,
+/// square until railed tiles, Phase 2 (7 Nov 2026): the club has only the
+/// one-tile turn.
 /// </summary>
 public sealed class RcpCornersTests
 {
@@ -31,25 +33,20 @@ public sealed class RcpCornersTests
     }
 
     [Fact]
-    public void A_lanes_turn_goes_round_one_tile_two_tiles_square_and_back()
+    public void A_lanes_turn_goes_square_and_back_to_a_one_tile_turn()
     {
+        // No two-tile step (railed tiles, Phase 2, 7 Nov 2026): the one-tile
+        // outer curve tile is the only turn a club has.
         var design = RingLane();
         var corner = new Point(0, 0);
 
         Assert.Equal(1f, design.CurveAt(0, 0)!.Radius);
 
-        Assert.Equal(2, Click(design, corner).Radius);
-        var turn = design.CurveAt(0, 0)!;
-        Assert.Equal(2f, turn.Radius);
-        Assert.False(turn.Auto);
-        Assert.Null(design.WallAt(1, 0, false));
-        Assert.Null(design.WallAt(0, 1, true));
-
         Assert.Equal(0, Click(design, corner).Radius);
         Assert.Null(design.CurveAt(0, 0));
 
         // Square, by hand: the straights are back and stay back.
-        foreach (var (col, row, vertical) in new[] { (0, 0, false), (1, 0, false), (0, 0, true), (0, 1, true) })
+        foreach (var (col, row, vertical) in new[] { (0, 0, false), (0, 0, true) })
         {
             var wall = design.WallAt(col, row, vertical);
 
@@ -66,26 +63,17 @@ public sealed class RcpCornersTests
     }
 
     [Fact]
-    public void A_two_tile_turn_needs_two_tiles_of_straight_each_way()
+    public void A_two_tile_turn_from_an_old_plan_goes_square_on_a_click()
     {
-        // A 1-wide ring three tiles across, with the far corner of its top
-        // made a two-tile turn: that takes two of the three seams along
-        // the top, leaving one - room for a one-tile turn here, no more.
-        var design = new RcpTrackDesign();
+        // Kept as it was when the plan opens (railed tiles, Phase 1); the
+        // Corners tool then takes it to square, and from there to the
+        // one-tile turn, like any other.
+        var design = RingLane(turns: 2);
+        var corner = new Point(0, 0);
 
-        foreach (var cell in RcpAutoRails.Ring(new Point(0, 0), new Point(2, 5), 1)!)
-        {
-            design.Tiles.Add(new RcpTile { Col = cell.X, Row = cell.Y, Lane = 1 });
-        }
-
-        RcpAutoRails.Apply(design);
-        Assert.Equal(2, Click(design, new Point(3, 0)).Radius);
-
-        var step = RcpCorners.Next(design, new Point(0, 0), out _);
-
-        Assert.NotNull(step);
-        Assert.Equal(0, step!.Radius);
-        Assert.Contains("No room", step.Said);
+        Assert.Equal(2f, design.CurveAt(0, 0)!.Radius);
+        Assert.Equal(0, Click(design, corner).Radius);
+        Assert.Equal(1, Click(design, corner).Radius);
     }
 
     [Fact]
