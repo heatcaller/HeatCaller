@@ -153,6 +153,17 @@ const STYLE = `
   --sa-l: env(safe-area-inset-left, 0px);
 }
 * { box-sizing: border-box; }
+/* PORTRAIT ONLY (7 Nov 2026, Asher: "disable landscape mode web app
+   wide"). A page cannot stop a phone turning - iPhones ignore the
+   manifest's orientation and the screen lock PORTRAIT_JS asks for - so a
+   phone held sideways is asked to turn back instead, over the whole page.
+   Touch screens no taller than a phone on its side only: a laptop window
+   or a tablet is left alone. */
+@media (orientation: landscape) and (max-height: 500px) and (hover: none) and (pointer: coarse) {
+  body::after { content: "Turn your phone upright"; position: fixed; inset: 0; z-index: 9999;
+                display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center;
+                background: var(--bg); color: var(--text); font-size: 1.2rem; font-weight: 600; }
+}
 /* CLEAR OF THE CLOCK (30 Oct 2026, Asher: "all the pages on the relay load
    scrolled down a bit... hides the title of page"). viewport-fit=cover lets
    a phone draw the page under its status bar - always on a home-screen
@@ -1342,8 +1353,21 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('gesturechange', (e) => e.preventDefault());
 `;
 
+// Portrait only (7 Nov 2026, Asher: "disable landscape mode web app wide"):
+// ask the screen to stay upright. Only an installed app on Android grants
+// it; everywhere else it is refused, quietly, and the style's "Turn your
+// phone upright" covers a phone held sideways.
+const PORTRAIT_JS = `
+try {
+  if (screen.orientation && typeof screen.orientation.lock === 'function') {
+    const asked = screen.orientation.lock('portrait');
+    if (asked && typeof asked.catch === 'function') asked.catch(() => {});
+  }
+} catch (e) { /* not allowed here */ }
+`;
+
 /** Shared by every page: escaping, time formatting, and polling that stops when nobody is looking. */
-const COMMON_JS = NO_ZOOM_JS + `
+const COMMON_JS = NO_ZOOM_JS + PORTRAIT_JS + `
 const CLUB = document.body.dataset.club;
 // What a person reads, where CLUB is what addresses are built from. Only
 // the night's card draws it so far; it is here rather than in that page's
@@ -15261,6 +15285,11 @@ export function manifest(club: string, clubName: string, look: Look): string {
     // not inside "/c/x/" - a browser would refuse to install it at all.
     scope: base,
     display: "standalone",
+    // Portrait only (7 Nov 2026, Asher: "disable landscape mode web app
+    // wide"): every page is laid out for a phone held upright. Android
+    // keeps the installed app upright; iPhones ignore this, so the pages
+    // also ask the screen to stay upright (PORTRAIT_JS).
+    orientation: "portrait",
     background_color: look.themeColor,
     theme_color: look.themeColor,
     // HeatCaller's sun for every club (sun.ts), always this size. A

@@ -129,6 +129,12 @@ body.me-on .hcname { padding-bottom: 4px; }
 body.me-on .hcname h1 { line-height: 1.15; }
 body.me-on .hcside { gap: 2px; }
 body.me-on .hcby { min-height: 0; }
+/* The byline on their name's line, at its right (7 Nov 2026): the name's
+   own height (1.3rem at the page's 1.5 line height), the name kept clear
+   of it, and the line kept even before the name has loaded. */
+body.me-on .me-top { min-height: 1.95rem; }
+body.me-on .me-top > .hcby { position: absolute; top: 0; right: 0; height: 1.95rem; }
+body.me-on #nh h2 { padding-right: 8.5rem; }
 .me-sheet { position: fixed; inset: 0; z-index: 40; background: rgba(5, 3, 12, 0.55); display: flex; align-items: flex-end; justify-content: center; }
 .me-sheet[hidden] { display: none !important; }
 .me-sheet .in { width: 100%; max-width: 34rem; max-height: 84%; overflow-y: auto; background: var(--surface); border-radius: 24px 24px 0 0;
@@ -850,6 +856,15 @@ function meStart() {
   let kept = '';
   try { kept = localStorage.getItem(ME_SPACE_KEY) || ''; } catch (e) { /* none kept */ }
   meSetSpace(asked ? asked[1] : kept || 'tonight');
+
+  // The byline beside their name (7 Nov 2026, Asher: "drop the byline on
+  // me tab to the match the height of the driver name keeping a little
+  // more space between it and signed in"): moved out of the page's head,
+  // under Signed in, to the right of their name's line - level with it
+  // however many lines the club's name above takes.
+  const by = document.querySelector('header .hcby');
+  const top = document.getElementById('metop');
+  if (by && top) top.appendChild(by);
 
   // Whatever the night redraws, the spaces follow.
   const watch = new MutationObserver(meSoon);

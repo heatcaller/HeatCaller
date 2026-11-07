@@ -378,6 +378,7 @@ describe("the club's look", () => {
     assert.equal(answer.body.start_url, "/c/acme-rc");
     assert.ok(answer.body.start_url.startsWith(answer.body.scope), "start_url sits inside scope");
     assert.equal(answer.body.display, "standalone");
+    assert.equal(answer.body.orientation, "portrait", "portrait only (7 Nov 2026)");
     assert.match(answer.body.icons[0].src, /^\/c\/acme-rc\/icon\.png\?v=[0-9a-f]{12}$/);
   });
 

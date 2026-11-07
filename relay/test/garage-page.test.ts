@@ -315,8 +315,10 @@ describe("garage page: what it sends", () => {
 
   it("adding a pack makes its own 32-hex id", async () => {
     const page = await open(relay({}));
-    const box = page.get("gp");
-    const add = box.find((n) => n.tagName === "DETAILS")[0]!;
+    // A real button that opens the form (7 Nov 2026).
+    page.button(page.get("gp"), /^Add a pack$/)!.click();
+    const add = page.get("gp").find((n) => n.className === "gpadd")[0]!;
+    assert.ok(page.button(add, /^Cancel$/), "a way back out");
     type(field(add, /^Label/), "  Green   3 ");
     type(field(add, /^Type/), "LiHV");
     type(field(add, /^Notes/), "new");
@@ -639,7 +641,8 @@ describe("garage page: status, polling and the PIN", () => {
         return { status: 200, body: { ok: true, garage: g, asks: [] } };
       },
     }));
-    const add = page.get("gp").find((n) => n.tagName === "DETAILS")[0]!;
+    page.button(page.get("gp"), /^Add a pack$/)!.click();
+    const add = page.get("gp").find((n) => n.className === "gpadd")[0]!;
     const input = field(add, /^Label/);
     type(input, "Half typ");
     label = "Blue 2 renamed";

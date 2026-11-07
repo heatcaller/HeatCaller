@@ -205,11 +205,15 @@ button.sx-c::after { content: ""; flex: none; width: 7px; height: 7px; margin: -
                 display: flex; justify-content: space-between; align-items: center; min-height: 44px; padding: 0 14px; text-align: left; cursor: pointer; }
 .sx-ml button:first-child { border-top: 0; }
 .sx-ml button[aria-pressed="true"]::after { content: "\\2713"; color: var(--accent); font-weight: 800; }
-.sx-save { position: sticky; bottom: 0; z-index: 5; display: grid; gap: 6px; margin: 12px -16px -18px; padding: 10px 16px 12px;
-           background: var(--surface); border-top: 1px solid var(--border); border-radius: 0 0 14px 14px; }
-@media (max-width: 640px) { .sx-save { bottom: calc(57px + var(--sa-b, 0px)); } }
-html.framed .sx-save { bottom: calc(58px + var(--sa-b, 0px)); }
+/* Save in its place under the notes, not floating over the sheet (7 Nov
+   2026, Asher: "make the add to my setup log button stationary"). */
+.sx-save { display: grid; gap: 6px; margin: 12px 0 4px; }
 .sx-save .go { width: 100%; margin: 0; }
+/* Add a pack as the kit's tonal button (7 Nov 2026), full width like the
+   card's other buttons, its form's two buttons stacked under it. */
+.gpadd { margin-top: 12px; }
+.gpadd h3 { margin: 4px 0 6px; }
+.gpadd .go { display: block; width: 100%; margin: 8px 0 0; }
 .sx-save .go:disabled { background: var(--tonal, var(--surface)); color: var(--on-tonal, var(--muted)); opacity: 1; }
 `;
 
@@ -884,21 +888,26 @@ function buildPacks(box, sec) {
   }
   card.appendChild(list);
 
-  // Add a pack.
-  const add = el('details', 'yd-change');
-  add.open = view.packAdd;
-  add.addEventListener('toggle', () => { view.packAdd = add.open; });
-  add.appendChild(el('summary', '', 'Add a pack'));
-  const fields = packForm(add, sec, 'pack-add', null);
-  fields.appendChild(tapButton('Add the pack', 'go', async () => {
-    const f = packFields('pack-add', null);
-    if (f.label === '') { setStatus('pack-add', 'Give the pack a label - what is written on it.', '', 'gno'); return; }
-    if (await change('packedit', { op: 'add', pack: newId(), label: f.label, chem: f.chem, notes: f.notes }, 'pack-add')) {
-      drop('pack-add');
-      view.packAdd = false;
-      paint(sec, true);
-    }
-  }));
+  // Add a pack: a real button since 7 Nov 2026 (Asher: "make add a pack a
+  // real button. all pit wall") - the kit's tonal one, where a text link
+  // opened a fold - and the form under it with Add the pack and Cancel.
+  const add = el('div', 'gpadd');
+  if (!view.packAdd) {
+    add.appendChild(tapButton('Add a pack', 'go quiet', () => { view.packAdd = true; paint(sec, true); }));
+  } else {
+    add.appendChild(el('h3', '', 'Add a pack'));
+    const fields = packForm(add, sec, 'pack-add', null);
+    fields.appendChild(tapButton('Add the pack', 'go', async () => {
+      const f = packFields('pack-add', null);
+      if (f.label === '') { setStatus('pack-add', 'Give the pack a label - what is written on it.', '', 'gno'); return; }
+      if (await change('packedit', { op: 'add', pack: newId(), label: f.label, chem: f.chem, notes: f.notes }, 'pack-add')) {
+        drop('pack-add');
+        view.packAdd = false;
+        paint(sec, true);
+      }
+    }));
+    fields.appendChild(tapButton('Cancel', 'go quiet', () => { drop('pack-add'); view.packAdd = false; paint(sec, true); }));
+  }
   card.appendChild(add);
   card.appendChild(statusLine('pack-add'));
   box.appendChild(card);
@@ -2174,6 +2183,9 @@ function buildSetup(box, sec) {
   }
   save.appendChild(statusLine(key));
   card.appendChild(body);
+  // Save right under the notes, in its place on the card (7 Nov 2026, Asher:
+  // "make the add to my setup log button stationary and not floating").
+  card.appendChild(save);
 
   // The car's recent setups, with what changed from the one before.
   if (setups.length > 0) {
@@ -2201,7 +2213,6 @@ function buildSetup(box, sec) {
     hist.appendChild(ul);
     card.appendChild(hist);
   }
-  card.appendChild(save);
   box.appendChild(card);
 }
 
